@@ -106,7 +106,7 @@
       lines.map((ln) => '<span class="line" data-reveal><span>' + md(ln) + "</span></span>").join(""));
 
     set("heroIntro", md(L.intro));
-    set("heroNowText", esc(L.presence));
+    set("heroNowText", md(L.presence));
 
     const one = caps.map((c) => "<span>" + esc(c) + '</span><span class="dot">✦</span>').join("");
     set("marqueeTrack", one + one);

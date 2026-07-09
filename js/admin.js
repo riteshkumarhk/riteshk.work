@@ -9,14 +9,18 @@
 (function () {
   "use strict";
 
+  // The live-preview iframe loads this very file — it must stay inert there.
+  if (new URLSearchParams(location.search).has("preview")) return;
+
   const HASH_KEY = "rk:admin:hash";
   const SESSION_KEY = "rk:admin:session";
   const DRAFT_KEY = "rk:content:draft";
   const EDIT_URL = "https://github.com/riteshkumarhk/riteshk.work/edit/main/content.json";
+  const PREVIEW_SRC = "index.html?preview=1&lite=1";
 
   let data = null;
   let activeTab = "landing";
-  let root = null, body = null;
+  let root = null, body = null, frame = null;
   let saveTimer = null;
 
   const TABS = [
@@ -52,10 +56,13 @@
     o[last] = val;
   }
 
-  /* ---------- live preview + persist ---------- */
+  /* ---------- live preview (iframe) + persist ---------- */
   function apply(immediate) {
-    window.RK.render(data);
-    forceReveal();
+    previewApply();
+    saveDraft(immediate);
+  }
+
+  function saveDraft(immediate) {
     clearTimeout(saveTimer);
     const save = () => {
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(data)); } catch (e) {}
@@ -65,15 +72,129 @@
     else saveTimer = setTimeout(save, 400);
   }
 
-  function forceReveal() {
-    document.querySelectorAll("[data-reveal]").forEach((el) => el.classList.add("is-in"));
-    document.querySelectorAll(".hero__title .line, .contact__mail-line").forEach((el) => el.classList.add("is-in"));
-    document.querySelectorAll(".count").forEach((c) => { c.textContent = c.dataset.count; });
+  function readDraft() {
+    try { const d = localStorage.getItem(DRAFT_KEY); return d ? JSON.parse(d) : null; }
+    catch (e) { return null; }
   }
 
+  // Push the working data into the same-origin live-preview iframe.
+  function previewApply() {
+    const w = frame && frame.contentWindow;
+    if (w && w.RK && w.RK.render) {
+      try { w.RK.render(data); forceRevealDoc(w.document); } catch (e) {}
+    }
+  }
+
+  function forceRevealDoc(doc) {
+    if (!doc) return;
+    if (doc.body) doc.body.classList.remove("site-loading");
+    doc.querySelectorAll("[data-reveal]").forEach((el) => el.classList.add("is-in"));
+    doc.querySelectorAll(".hero__title .line, .contact__mail-line").forEach((el) => el.classList.add("is-in"));
+    doc.querySelectorAll(".count").forEach((c) => { c.textContent = c.dataset.count; });
+  }
+  function forceReveal() { forceRevealDoc(document); }
+
   function status(msg, ok) {
-    const s = root && root.querySelector(".admin__status");
+    const s = root && root.querySelector(".adm__status");
     if (s) { s.textContent = msg; s.classList.toggle("ok", !!ok); }
+  }
+
+  /* =================================================================
+     SMART AUTO-STYLE — turns plain landing copy into the editorial
+     palette: bronze on products/brands, bold on "leading …" phrases,
+     italic on the rhetorical closing word (why / how / what).
+     ================================================================= */
+  const ACCENT_TERMS = [
+    "Microsoft AI", "Microsoft Edge", "Microsoft Search", "Microsoft 365",
+    "Microsoft Account", "Microsoft Copilot", "Microsoft Teams", "Windows Hello",
+    "Copilot", "SharePoint", "Outlook", "Windows", "Bing", "Teams",
+    "FIDO Alliance", "FIDO", "Passkeys", "Jaguar Land Rover", "Tata Elxsi", "Microsoft"
+  ].sort((a, b) => b.length - a.length);
+  const EM_WORDS = ["why", "how", "what", "who", "when", "where"];
+  const LEAD_VERBS =
+    "leading|led|lead|owning|owned|own|driving|drove|drive|shaping|shaped|shape|" +
+    "heading|headed|head|building|built|build|designing|designed|design|" +
+    "championing|championed|delivering|delivered|running|ran";
+
+  function escapeRe(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+  function stripMarks(s) {
+    return String(s == null ? "" : s)
+      .replace(/\[\[(.+?)\]\]/g, "$1")
+      .replace(/\*\*(.+?)\*\*/g, "$1")
+      .replace(/\*(.+?)\*/g, "$1");
+  }
+  function hasMarks(s) { return /\[\[|\*/.test(String(s == null ? "" : s)); }
+
+  function accentSpans(text) {
+    const out = [];
+    ACCENT_TERMS.forEach((term) => {
+      const re = new RegExp("\\b" + escapeRe(term) + "\\b", "g");
+      let m; while ((m = re.exec(text))) out.push([m.index, m.index + m[0].length, "accent"]);
+    });
+    return out;
+  }
+  function boldSpans(text) {
+    const out = [];
+    const cap = "[A-Z][\\w’'&-]*";
+    const re = new RegExp(
+      "\\b(?:" + LEAD_VERBS + ")\\s+(?:the\\s+)?" +
+      "(" + cap + "(?:\\s+(?:for|of|and|to|the|&|in|on|at|with)\\s+" + cap + "|\\s+" + cap + ")*)",
+      "g"
+    );
+    let m; while ((m = re.exec(text))) {
+      const phrase = m[1];
+      const start = m.index + m[0].length - phrase.length;
+      out.push([start, start + phrase.length, "bold"]);
+    }
+    return out;
+  }
+  function emSpan(text) {
+    const m = text.match(/([A-Za-z]+)([.!?…]*)\s*$/);
+    if (m && EM_WORDS.indexOf(m[1].toLowerCase()) !== -1) {
+      return [m.index, m.index + m[1].length + m[2].length, "em"];
+    }
+    return null;
+  }
+  function resolveSpans(spans) {
+    spans.sort((a, b) => a[0] - b[0] || (b[1] - b[0]) - (a[1] - a[0]));
+    const kept = []; let end = -1;
+    spans.forEach((s) => { if (s[0] >= end) { kept.push(s); end = s[1]; } });
+    return kept;
+  }
+  function markup(text, spans) {
+    spans = resolveSpans(spans);
+    let out = "", pos = 0;
+    spans.forEach((s) => {
+      out += text.slice(pos, s[0]);
+      const seg = text.slice(s[0], s[1]);
+      out += s[2] === "accent" ? "[[" + seg + "]]" : s[2] === "bold" ? "**" + seg + "**" : "*" + seg + "*";
+      pos = s[1];
+    });
+    return out + text.slice(pos);
+  }
+  function styleField(kind, value) {
+    const plain = stripMarks(value);
+    if (!plain.trim()) return value;
+    let spans;
+    if (kind === "statement") { spans = accentSpans(plain); const e = emSpan(plain); if (e) spans.push(e); }
+    else if (kind === "intro") { spans = boldSpans(plain).concat(accentSpans(plain)); }
+    else if (kind === "accent") { spans = accentSpans(plain); }
+    else return value;
+    return markup(plain, spans);
+  }
+  // force = re-derive everything; otherwise only style fields still left plain.
+  function autoStyleLanding(force) {
+    const L = data.landing || (data.landing = {});
+    const fields = [["statement", "statement"], ["intro", "intro"], ["presence", "accent"]];
+    let changed = 0;
+    fields.forEach((f) => {
+      const key = f[0], kind = f[1];
+      if (!force && hasMarks(L[key])) return;
+      const next = styleField(kind, L[key]);
+      if (next !== L[key]) { L[key] = next; changed++; }
+    });
+    return changed;
   }
 
   /* ---------- field builders ---------- */
@@ -127,11 +248,12 @@
   const sections = {
     landing() {
       return (
-        secHead("Landing", "The first screen. Markdown: <em>*word*</em> = accent italic, <em>**word**</em> = bold, <em>[[word]]</em> = bronze.") +
+        secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
+        '<div class="adm__autobar"><button class="btn btn--auto" data-act="autostyle">Auto-style landing</button><span class="adm__auto-note">One click applies the bronze / bold / italic accents. You can still fine-tune by hand.</span></div>' +
         input("Eyebrow", "landing.eyebrow") +
         input("Domains", "landing.domains", { hint: "e.g. Growth · AI · Identity" }) +
-        input("Main statement", "landing.statement", { type: "textarea", rows: 3, hint: "One line per row. Use *word* for the accent." }) +
-        input("Description", "landing.intro", { type: "textarea", rows: 4, hint: "**bold** and [[bronze]] supported." }) +
+        input("Main statement", "landing.statement", { type: "textarea", rows: 3, hint: "One line per row. The closing word (why / how) gets the italic accent." }) +
+        input("Description", "landing.intro", { type: "textarea", rows: 4, hint: "Products auto-bronze; “leading …” phrases auto-bold." }) +
         input("Footer line", "landing.presence", { hint: "e.g. Currently at Microsoft — Hyderabad, India" })
       );
     },
@@ -225,12 +347,12 @@
   }
 
   function secHead(title, note) {
-    return '<div class="admin__sec-title">' + title + '</div><div class="admin__sec-note">' + note + "</div>";
+    return '<div class="adm__sec-title">' + title + '</div><div class="adm__sec-note">' + note + "</div>";
   }
 
   function renderBody() {
     body.innerHTML = sections[activeTab]();
-    root.querySelectorAll(".admin__tab").forEach((t) => t.classList.toggle("is-active", t.dataset.tab === activeTab));
+    root.querySelectorAll(".adm__tab").forEach((t) => t.classList.toggle("is-active", t.dataset.tab === activeTab));
   }
 
   /* ---------- blank templates ---------- */
@@ -284,6 +406,12 @@
     const b = e.target.closest("[data-act]");
     if (!b) return;
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
+    if (act === "autostyle") {
+      const n = autoStyleLanding(true);
+      apply(true); renderBody();
+      status(n ? "Auto-styled — bronze products, bold phrases, italic closing word." : "Add some copy first, then Auto-style.", n > 0);
+      return;
+    }
     if (act === "add") { data[list].push(blank(list)); apply(true); renderBody(); }
     else if (act === "remove") { data[list].splice(i, 1); apply(true); renderBody(); }
     else if (act === "up" && i > 0) { const a = data[list]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; apply(true); renderBody(); }
@@ -292,6 +420,8 @@
 
   /* ---------- publish / revert ---------- */
   function publish() {
+    const styled = autoStyleLanding(false);
+    if (styled) { if (activeTab === "landing") renderBody(); apply(true); }
     const json = JSON.stringify(data, null, 2);
     try {
       const blob = new Blob([json], { type: "application/json" });
@@ -311,43 +441,70 @@
     location.reload();
   }
 
-  /* ---------- open / close ---------- */
-  function buildPanel() {
+  /* ---------- shell / open / exit ---------- */
+  function buildShell() {
     root = document.createElement("div");
-    root.className = "admin";
+    root.className = "adm";
     root.innerHTML =
-      '<div class="admin__scrim" data-close></div>' +
-      '<aside class="admin__panel" role="dialog" aria-label="Content editor">' +
-      '<div class="admin__head"><div class="admin__brand"><b>Admin</b><span>content editor</span></div>' +
-      '<button class="admin__close" data-close aria-label="Close">✕</button></div>' +
-      '<div class="admin__tabs">' + TABS.map((t) => '<button class="admin__tab" data-tab="' + t[0] + '">' + t[1] + "</button>").join("") + "</div>" +
-      '<div class="admin__body"></div>' +
-      '<div class="admin__foot"><span class="admin__status">Editing local draft</span>' +
-      '<button class="btn btn--ghost" data-revert>Revert</button>' +
-      '<button class="btn btn--primary" data-publish>Publish</button></div>' +
-      "</aside>";
+      '<header class="adm__bar">' +
+        '<div class="adm__brand"><span class="adm__pulse"></span>Admin Mode <small>content studio</small></div>' +
+        '<nav class="adm__tabs">' + TABS.map((t) => '<button class="adm__tab" data-tab="' + t[0] + '">' + t[1] + "</button>").join("") + "</nav>" +
+        '<div class="adm__actions">' +
+          '<span class="adm__status">Editing local draft</span>' +
+          '<button class="btn btn--ghost adm__viewtoggle" data-view>Preview</button>' +
+          '<button class="btn btn--ghost" data-revert>Revert</button>' +
+          '<button class="btn btn--primary" data-publish>Publish</button>' +
+          '<button class="btn adm__exit" data-exit aria-label="Exit admin">Exit ✕</button>' +
+        "</div>" +
+      "</header>" +
+      '<div class="adm__main">' +
+        '<div class="adm__editor"><div class="adm__body"></div></div>' +
+        '<section class="adm__preview" aria-label="Live preview">' +
+          '<div class="adm__preview-head"><span class="adm__preview-dot"></span>Live preview<small>riteshk.work</small></div>' +
+          '<iframe class="adm__frame" title="Live preview of your site" src="' + PREVIEW_SRC + '"></iframe>' +
+        "</section>" +
+      "</div>";
     document.body.appendChild(root);
-    body = root.querySelector(".admin__body");
+    body = root.querySelector(".adm__body");
+    frame = root.querySelector(".adm__frame");
 
     root.addEventListener("input", onInput);
     root.addEventListener("change", onChange);
     root.addEventListener("click", onClick);
-    root.querySelectorAll(".admin__tab").forEach((t) =>
+    root.querySelectorAll(".adm__tab").forEach((t) =>
       t.addEventListener("click", () => { activeTab = t.dataset.tab; renderBody(); })
     );
-    root.querySelectorAll("[data-close]").forEach((el) => el.addEventListener("click", close));
     root.querySelector("[data-publish]").addEventListener("click", publish);
     root.querySelector("[data-revert]").addEventListener("click", revert);
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && root.classList.contains("is-open")) close(); });
+    root.querySelector("[data-exit]").addEventListener("click", exit);
+    root.querySelector("[data-view]").addEventListener("click", (e) => {
+      root.classList.toggle("is-preview");
+      e.currentTarget.textContent = root.classList.contains("is-preview") ? "Edit" : "Preview";
+    });
+    frame.addEventListener("load", previewApply);
+    document.addEventListener("keydown", onKey);
   }
 
+  function onKey(e) { if (e.key === "Escape" && root && root.classList.contains("is-open")) exit(); }
+
   function open() {
-    data = clone(window.RK.data);
-    if (!root) buildPanel();
+    data = readDraft() || clone(window.RK.data);
+    if (!root) buildShell();
+    activeTab = "landing";
     renderBody();
+    document.documentElement.classList.add("adm-lock");
+    document.body.classList.add("adm-lock");
     requestAnimationFrame(() => root.classList.add("is-open"));
+    if (frame && frame.contentWindow && frame.contentWindow.RK) previewApply();
   }
-  function close() { if (root) root.classList.remove("is-open"); }
+
+  function exit() {
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(data)); } catch (e) {}
+    if (window.RK) { window.RK.data = clone(data); try { window.RK.render(data); } catch (e) {} forceReveal(); }
+    if (root) root.classList.remove("is-open");
+    document.documentElement.classList.remove("adm-lock");
+    document.body.classList.remove("adm-lock");
+  }
 
   /* ---------- passphrase gate ---------- */
   function gate() {
