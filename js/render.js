@@ -63,12 +63,19 @@
   function caseEl(w, idx) {
     const n = String(idx + 1).padStart(2, "0");
     const tags = (w.tags || []).map((t) => "<span>" + esc(t) + "</span>").join("");
+    const imgSrc = esc(w.image).replace(/"/g, "&quot;");
+    const media = w.image
+      ? '<div class="case__media case__media--photo" aria-hidden="true">' +
+          '<img class="case__img" src="' + imgSrc + '" alt="" loading="lazy" />' +
+          '<span class="plate__idx">' + n + '</span>' +
+          '<span class="plate__tag">' + esc(w.plateTag) + '</span></div>'
+      : '<div class="case__media case__media--' + esc(w.theme) + '" aria-hidden="true">' +
+          '<div class="plate"><span class="plate__idx">' + n + "</span>" +
+          plateInner(w.theme) +
+          '<span class="plate__tag">' + esc(w.plateTag) + "</span></div></div>";
     return (
       '<li class="case" data-reveal><a class="case__link" href="#contact" data-cursor="view">' +
-      '<div class="case__media case__media--' + esc(w.theme) + '" aria-hidden="true">' +
-      '<div class="plate"><span class="plate__idx">' + n + "</span>" +
-      plateInner(w.theme) +
-      '<span class="plate__tag">' + esc(w.plateTag) + "</span></div></div>" +
+      media +
       '<div class="case__body"><div class="case__meta"><span>' + esc(w.client) +
       "</span><span>" + esc(w.period) + "</span></div>" +
       '<h3 class="case__title">' + esc(w.title) + "</h3>" +

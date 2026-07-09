@@ -214,3 +214,21 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
   .nav__meta { display: flex; }
   .nav__status, .nav__place { display: none; }
 }
+
+/* fix: the public site uses cursor:none for its custom cursor — restore a normal
+   pointer inside admin mode and modal dialogs, and hide the custom dot in admin. */
+.adm, .pass { cursor: auto; }
+body.adm-lock .cursor { display: none !important; }
+
+/* ---------- project imagery controls (Work tab) ---------- */
+.imgblk { border: 1px solid var(--line); border-radius: 10px; padding: .8rem; margin-top: .3rem; background: var(--bg); }
+.imgblk__preview { aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: var(--bg-elev); display: grid; place-items: center; border: 1px dashed var(--line); margin-bottom: .6rem; }
+.imgblk__preview.has { border-style: solid; }
+.imgblk__preview img { width: 100%; height: 100%; object-fit: cover; }
+.imgblk__preview span { font-size: .7rem; color: var(--text-faint); padding: 1rem; text-align: center; }
+.imgblk__row { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+.imgblk__samples { display: grid; grid-template-columns: repeat(6, 1fr); gap: .4rem; margin-top: .6rem; }
+.imgblk__sample { aspect-ratio: 1; border-radius: 6px; border: 1px solid var(--line); background-size: cover; background-position: center; cursor: pointer; transition: border-color .2s, transform .2s; }
+.imgblk__sample:hover { border-color: var(--accent); transform: translateY(-1px); }
+.imgblk__ai { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+.imgblk__hint { font-size: .66rem; color: var(--text-faint); margin-top: .5rem; line-height: 1.45; }

@@ -18,6 +18,7 @@
   const EDIT_URL = "https://github.com/riteshkumarhk/riteshk.work/edit/main/content.json";
   const PREVIEW_SRC = "index.html?preview=1&lite=1";
   const ADMIN_MIN = 900; // below this the split editor can't fit — admin is disabled
+  const AI_KEY = "rk:ai:key", AI_MODEL = "rk:ai:model", AI_BASE = "rk:ai:base";
 
   let data = null;
   let activeTab = "landing";
@@ -36,8 +37,27 @@
     ["education", "Education"],
     ["contact", "Contact"],
     ["special", "Special Views"],
+    ["ai", "AI"],
   ];
   const THEMES = ["edge", "auth", "search", "auto", "grid"];
+
+  /* self-contained sample textures (SVG data URIs — no external assets) */
+  function svgSample(stops) {
+    const svg =
+      "<svg xmlns='http://www.w3.org/2000/svg' width='640' height='400'>" +
+      "<defs><radialGradient id='g' cx='32%' cy='26%' r='95%'>" + stops + "</radialGradient>" +
+      "<linearGradient id='v' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#000' stop-opacity='0'/><stop offset='1' stop-color='#000' stop-opacity='.5'/></linearGradient></defs>" +
+      "<rect width='640' height='400' fill='url(#g)'/><rect width='640' height='400' fill='url(#v)'/></svg>";
+    return "data:image/svg+xml," + encodeURIComponent(svg);
+  }
+  const SAMPLE_IMAGES = [
+    svgSample("<stop offset='0' stop-color='#1c4a70'/><stop offset='.55' stop-color='#0b1522'/><stop offset='1' stop-color='#08080a'/>"),
+    svgSample("<stop offset='0' stop-color='#c8892f'/><stop offset='.55' stop-color='#241a0c'/><stop offset='1' stop-color='#08080a'/>"),
+    svgSample("<stop offset='0' stop-color='#5b3aa6'/><stop offset='.55' stop-color='#1b1130'/><stop offset='1' stop-color='#08080a'/>"),
+    svgSample("<stop offset='0' stop-color='#2f7d6b'/><stop offset='.55' stop-color='#0e211d'/><stop offset='1' stop-color='#08080a'/>"),
+    svgSample("<stop offset='0' stop-color='#b0475e'/><stop offset='.55' stop-color='#2a1017'/><stop offset='1' stop-color='#08080a'/>"),
+    svgSample("<stop offset='0' stop-color='#3a4a63'/><stop offset='.55' stop-color='#12161f'/><stop offset='1' stop-color='#08080a'/>"),
+  ];
 
   /* ---------- utils ---------- */
   const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -248,6 +268,24 @@
     return '<button class="btn btn--add" data-act="add" data-list="' + list + '">+ ' + label + "</button>";
   }
 
+  function imageryBlock(w, i) {
+    const has = !!w.image;
+    const keyed = !!localStorage.getItem(AI_KEY);
+    const samples = SAMPLE_IMAGES.map(function (s, si) {
+      return '<button class="imgblk__sample" data-act="img-sample" data-index="' + i + '" data-sample="' + si + '" style="background-image:url(&quot;' + s + '&quot;)" title="Use sample ' + (si + 1) + '"></button>';
+    }).join("");
+    return '<div class="imgblk"><div class="af__label">Project image</div>' +
+      '<div class="imgblk__preview' + (has ? " has" : "") + '">' + (has ? '<img src="' + escAttr(w.image) + '" alt="" />' : "<span>No image \u2014 the animated placeholder is shown</span>") + "</div>" +
+      '<input type="text" data-list="work" data-index="' + i + '" data-field="image" value="' + escAttr(w.image || "") + '" placeholder="Paste an image URL\u2026" />' +
+      '<div class="imgblk__row"><button class="btn btn--ghost" data-act="img-upload" data-index="' + i + '">Upload\u2026</button>' +
+      (has ? '<button class="btn btn--ghost" data-act="img-clear" data-index="' + i + '">Remove</button>' : "") + "</div>" +
+      '<div class="imgblk__samples">' + samples + "</div>" +
+      '<div class="imgblk__ai"><input type="text" data-aiprompt="' + i + '" placeholder="' + (keyed ? "Describe an image to generate\u2026" : "Add an API key in the AI tab to enable this") + '"' + (keyed ? "" : " disabled") + " />" +
+      '<div class="imgblk__row"><button class="btn btn--auto" data-act="img-generate" data-index="' + i + '"' + (keyed ? "" : " disabled") + ">Generate</button>" +
+      '<button class="btn btn--ghost" data-act="img-modify" data-index="' + i + '"' + (keyed && has ? "" : " disabled") + ">Modify current</button></div>" +
+      '<div class="imgblk__hint">Uploaded &amp; generated images are embedded in your published file \u2014 a URL keeps it lighter.</div></div></div>';
+  }
+
   /* ---------- section renderers ---------- */
   const sections = {
     landing() {
@@ -310,6 +348,7 @@
           itemField("work", i, "title", "Title") +
           itemField("work", i, "desc", "Description", { type: "textarea", rows: 3 }) +
           itemField("work", i, "tags", "Tags", { hint: "comma-separated" }) +
+          imageryBlock(w, i) +
           "</div>";
       });
       html += addBtn("work", "Add work");
@@ -346,6 +385,19 @@
       if (list.length < 6) html += '<button class="btn btn--add" data-act="sv-add">+ New special view</button>';
       else html += '<div class="af__hint">Maximum of 6 special views reached.</div>';
       return html;
+    },
+    ai() {
+      const key = localStorage.getItem(AI_KEY) || "";
+      const model = localStorage.getItem(AI_MODEL) || "gpt-image-1";
+      const base = localStorage.getItem(AI_BASE) || "https://api.openai.com/v1";
+      const masked = key ? (key.slice(0, 3) + "\u2022\u2022\u2022\u2022\u2022\u2022" + key.slice(-4)) : "";
+      return secHead("AI",
+        "Connect an image model to generate and reimagine project imagery. <em>Your key is stored only in this browser and is never written to your published file.</em>") +
+        '<div class="af"><label class="af__label">API key</label><input type="password" id="aiKey" placeholder="' + (key ? "Saved \u2014 paste to replace" : "sk-\u2026") + '" autocomplete="off" /><div class="af__hint">' + (key ? ("In use: " + escHtml(masked)) : "Not set") + "</div></div>" +
+        '<div class="af__row"><div class="af"><label class="af__label">Model</label><input type="text" id="aiModel" value="' + escAttr(model) + '" /><div class="af__hint">gpt-image-1, dall-e-3, dall-e-2\u2026</div></div>' +
+        '<div class="af"><label class="af__label">API base URL</label><input type="text" id="aiBase" value="' + escAttr(base) + '" /><div class="af__hint">OpenAI-compatible</div></div></div>' +
+        '<div class="imgblk__row"><button class="btn btn--primary" data-act="ai-save">Save</button>' + (key ? '<button class="btn btn--ghost" data-act="ai-clear">Remove key</button>' : "") + "</div>" +
+        '<div class="adm__empty" style="text-align:left;margin-top:1.1rem;line-height:1.6">Security: the key lives only in this browser, is sent only to the API base above, and is never committed to your site. Calling an image API from the browser exposes the key to that provider \u2014 use a limited key. Some providers block browser calls (CORS); OpenAI works directly.</div>';
     },
   };
 
@@ -408,7 +460,7 @@
     switch (list) {
       case "highlights": return { value: "0+", label: "New metric" };
       case "capabilities": return "New capability";
-      case "work": return { id: "w" + Date.now(), featured: false, theme: "grid", plateTag: "Tag", client: "Client", period: "Year", title: "Project title", desc: "What you did and the impact.", tags: ["Tag"] };
+      case "work": return { id: "w" + Date.now(), featured: false, theme: "grid", plateTag: "Tag", client: "Client", period: "Year", title: "Project title", desc: "What you did and the impact.", tags: ["Tag"], image: "" };
       case "path": return { years: "Year", present: false, role: "Role", org: "Organisation", desc: "What you did." };
       case "recognition":
       case "education": return { title: "New entry", meta: "" };
@@ -505,6 +557,13 @@
     }
     if (act === "sv-remove") { (data.specialViews || []).splice(i, 1); saveDraft(true); renderBody(); return; }
     if (act === "sv-preview") { svPreview(i); return; }
+    if (act === "img-sample") { data.work[i].image = SAMPLE_IMAGES[+b.dataset.sample]; apply(true); renderBody(); status("Sample image applied."); return; }
+    if (act === "img-clear") { data.work[i].image = ""; apply(true); renderBody(); status("Image removed."); return; }
+    if (act === "img-upload") { pickImage(function (uri) { data.work[i].image = uri; apply(true); renderBody(); status("Image uploaded.", true); }); return; }
+    if (act === "img-generate") { imgGenerate(i); return; }
+    if (act === "img-modify") { imgModify(i); return; }
+    if (act === "ai-save") { aiSave(); return; }
+    if (act === "ai-clear") { localStorage.removeItem(AI_KEY); renderBody(); status("Key removed."); return; }
     if (act === "autostyle") {
       const n = autoStyleLanding(true);
       apply(true); renderBody();
@@ -538,6 +597,101 @@
     if (!confirm("Discard local changes and reload the published content?")) return;
     localStorage.removeItem(DRAFT_KEY);
     location.reload();
+  }
+
+  /* ---------- imagery + AI ---------- */
+  function pickImage(cb) {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "image/*";
+    inp.onchange = function () { const f = inp.files && inp.files[0]; if (!f) return; fileToDataUri(f).then(compressDataUri).then(cb); };
+    inp.click();
+  }
+  function fileToDataUri(file) {
+    return new Promise(function (resolve, reject) {
+      const r = new FileReader();
+      r.onload = function () { resolve(r.result); };
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+  function compressDataUri(uri, maxW, quality) {
+    maxW = maxW || 1280; quality = quality || 0.82;
+    return new Promise(function (resolve) {
+      if (!/^data:image\//.test(uri) || /^data:image\/svg/.test(uri)) return resolve(uri);
+      const img = new Image();
+      img.onload = function () {
+        let w = img.width, h = img.height;
+        if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+        const c = document.createElement("canvas"); c.width = w; c.height = h;
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        try { resolve(c.toDataURL("image/jpeg", quality)); } catch (e) { resolve(uri); }
+      };
+      img.onerror = function () { resolve(uri); };
+      img.src = uri;
+    });
+  }
+  function aiCfg() {
+    return {
+      key: localStorage.getItem(AI_KEY) || "",
+      model: (localStorage.getItem(AI_MODEL) || "gpt-image-1").trim(),
+      base: (localStorage.getItem(AI_BASE) || "https://api.openai.com/v1").trim().replace(/\/+$/, ""),
+    };
+  }
+  function aiSave() {
+    const k = root.querySelector("#aiKey"), m = root.querySelector("#aiModel"), bs = root.querySelector("#aiBase");
+    if (k && k.value.trim()) localStorage.setItem(AI_KEY, k.value.trim());
+    if (m) localStorage.setItem(AI_MODEL, m.value.trim() || "gpt-image-1");
+    if (bs) localStorage.setItem(AI_BASE, bs.value.trim() || "https://api.openai.com/v1");
+    renderBody();
+    status("AI settings saved \u2014 local only.", true);
+  }
+  function aiPromptFor(i) {
+    const el = root.querySelector('[data-aiprompt="' + i + '"]');
+    return el ? el.value.trim() : "";
+  }
+  async function imgGenerate(i) {
+    const cfg = aiCfg();
+    if (!cfg.key) return status("Add your API key in the AI tab first.");
+    const p = aiPromptFor(i);
+    if (!p) return status("Type a prompt to generate an image.");
+    status("Generating image\u2026 this can take a moment.");
+    try {
+      const uri = await compressDataUri(await aiImage(cfg, p, null));
+      data.work[i].image = uri; apply(true); renderBody(); status("Image generated.", true);
+    } catch (e) { status("Generate failed: " + e.message); }
+  }
+  async function imgModify(i) {
+    const cfg = aiCfg();
+    if (!cfg.key) return status("Add your API key in the AI tab first.");
+    const cur = data.work[i].image;
+    if (!cur) return status("No current image to modify.");
+    const p = aiPromptFor(i);
+    if (!p) return status("Describe how to change the image.");
+    status("Reimagining the image\u2026");
+    try {
+      const uri = await compressDataUri(await aiImage(cfg, p, cur));
+      data.work[i].image = uri; apply(true); renderBody(); status("Image updated.", true);
+    } catch (e) { status("Modify failed: " + e.message); }
+  }
+  async function aiImage(cfg, prompt, sourceImage) {
+    let res;
+    if (sourceImage) {
+      const blob = await (await fetch(sourceImage)).blob();
+      const fd = new FormData();
+      fd.append("model", cfg.model); fd.append("prompt", prompt);
+      fd.append("image", blob, "image.png"); fd.append("n", "1"); fd.append("size", "1024x1024");
+      res = await fetch(cfg.base + "/images/edits", { method: "POST", headers: { Authorization: "Bearer " + cfg.key }, body: fd });
+    } else {
+      const body = { model: cfg.model, prompt: prompt, n: 1, size: "1024x1024" };
+      if (/^dall-e/.test(cfg.model)) body.response_format = "b64_json";
+      res = await fetch(cfg.base + "/images/generations", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + cfg.key }, body: JSON.stringify(body) });
+    }
+    let j; try { j = await res.json(); } catch (e) { throw new Error("HTTP " + res.status); }
+    if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
+    const d = (j.data && j.data[0]) || {};
+    if (d.b64_json) return "data:image/png;base64," + d.b64_json;
+    if (d.url) return d.url;
+    throw new Error("No image returned");
   }
 
   /* ---------- shell / open / exit ---------- */
