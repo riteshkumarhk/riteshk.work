@@ -18,9 +18,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
   <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/admin.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90' font-family='serif' fill='%23ECE7E1'>R</text></svg>" />
 </head>
-<body>
+<body class="site-loading">
   <!-- Custom cursor -->
   <div class="cursor" aria-hidden="true">
     <div class="cursor__dot"></div>
@@ -66,32 +67,18 @@
       <a href="#path"><span class="idx">03</span> Path</a>
       <a href="#contact"><span class="idx">04</span> Contact</a>
     </nav>
-    <div class="menu__foot">
-      <a href="mailto:riteshkumarhk@gmail.com">riteshkumarhk@gmail.com</a>
-      <a href="https://linkedin.com/in/riteshkumarhk" target="_blank" rel="noopener">LinkedIn</a>
-    </div>
+    <div class="menu__foot" id="menuFoot"></div>
   </div>
 
   <main id="top">
     <!-- ============ HERO ============ -->
     <section class="hero" id="hero">
-      <div class="hero__label reveal" data-reveal>
-        <span class="tick">◦</span> Product Design Leadership
-        <span class="hero__label-sep">/</span> Growth · AI · Identity
-      </div>
+      <div class="hero__label reveal" data-reveal id="heroLabel"></div>
 
-      <h1 class="hero__title">
-        <span class="line" data-reveal><span>I shape</span></span>
-        <span class="line" data-reveal><span>what gets built,</span></span>
-        <span class="line" data-reveal><span>and <em>why.</em></span></span>
-      </h1>
+      <h1 class="hero__title" id="heroTitle"></h1>
 
       <div class="hero__foot">
-        <p class="hero__intro reveal" data-reveal>
-          11+ years shaping how millions discover, trust and stay with products —
-          currently leading <strong>Growth Design for Microsoft&nbsp;Edge</strong>,
-          part of <strong class="accent">Microsoft&nbsp;AI</strong>.
-        </p>
+        <p class="hero__intro reveal" data-reveal id="heroIntro"></p>
         <a href="#work" class="hero__cue reveal" data-reveal data-cursor="hover">
           <span>Selected work</span>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
@@ -100,52 +87,17 @@
 
       <div class="hero__now reveal" data-reveal>
         <span class="hero__now-dot"></span>
-        Currently at Microsoft — Hyderabad, India
+        <span id="heroNowText"></span>
       </div>
     </section>
 
     <!-- ============ MARQUEE ============ -->
     <div class="marquee" aria-hidden="true">
-      <div class="marquee__track">
-        <span>Growth Strategy</span><span class="dot">✦</span>
-        <span>Activation &amp; Onboarding</span><span class="dot">✦</span>
-        <span>AI Product Design</span><span class="dot">✦</span>
-        <span>Identity &amp; Authentication</span><span class="dot">✦</span>
-        <span>Experimentation</span><span class="dot">✦</span>
-        <span>Personalization</span><span class="dot">✦</span>
-        <span>Retention</span><span class="dot">✦</span>
-        <span>Systems Thinking</span><span class="dot">✦</span>
-        <!-- duplicate for seamless loop -->
-        <span>Growth Strategy</span><span class="dot">✦</span>
-        <span>Activation &amp; Onboarding</span><span class="dot">✦</span>
-        <span>AI Product Design</span><span class="dot">✦</span>
-        <span>Identity &amp; Authentication</span><span class="dot">✦</span>
-        <span>Experimentation</span><span class="dot">✦</span>
-        <span>Personalization</span><span class="dot">✦</span>
-        <span>Retention</span><span class="dot">✦</span>
-        <span>Systems Thinking</span><span class="dot">✦</span>
-      </div>
+      <div class="marquee__track" id="marqueeTrack"></div>
     </div>
 
     <!-- ============ STATS ============ -->
-    <section class="stats" aria-label="At a glance">
-      <div class="stat reveal" data-reveal>
-        <div class="stat__num"><span class="count" data-count="11">0</span><i>+</i></div>
-        <div class="stat__label">Years of craft</div>
-      </div>
-      <div class="stat reveal" data-reveal>
-        <div class="stat__num stat__num--word">Billions</div>
-        <div class="stat__label">Windows sign-ins supported</div>
-      </div>
-      <div class="stat reveal" data-reveal>
-        <div class="stat__num stat__num--word">Millions</div>
-        <div class="stat__label">Edge customers reached</div>
-      </div>
-      <div class="stat reveal" data-reveal>
-        <div class="stat__num"><span class="count" data-count="6">0</span><i>+</i></div>
-        <div class="stat__label">Awards &amp; recognitions</div>
-      </div>
-    </section>
+    <section class="stats" aria-label="At a glance" id="stats"></section>
 
     <!-- ============ WORK ============ -->
     <section class="work" id="work">
@@ -156,120 +108,7 @@
         </h2>
       </div>
 
-      <ol class="cases">
-        <!-- Case 01 -->
-        <li class="case" data-reveal>
-          <a class="case__link" href="#contact" data-cursor="view">
-            <div class="case__media case__media--edge" aria-hidden="true">
-              <div class="plate">
-                <span class="plate__idx">01</span>
-                <div class="plate__grid"></div>
-                <div class="plate__glow"></div>
-                <span class="plate__tag">First Run Experience</span>
-              </div>
-            </div>
-            <div class="case__body">
-              <div class="case__meta">
-                <span>Microsoft Edge</span>
-                <span>2024 — Present</span>
-              </div>
-              <h3 class="case__title">Onboarding that earns the second session</h3>
-              <p class="case__desc">
-                Owning the strategy and design of Edge's First Run Experience — the browser's most
-                critical acquisition and activation journey. Setup, imports, personalization and
-                retention, designed end-to-end and validated through experimentation.
-              </p>
-              <div class="case__tags">
-                <span>Growth</span><span>Activation</span><span>Experimentation</span>
-              </div>
-            </div>
-          </a>
-        </li>
-
-        <!-- Case 02 -->
-        <li class="case" data-reveal>
-          <a class="case__link" href="#contact" data-cursor="view">
-            <div class="case__media case__media--auth" aria-hidden="true">
-              <div class="plate">
-                <span class="plate__idx">02</span>
-                <div class="plate__rings"></div>
-                <span class="plate__tag">Passwordless · Passkeys</span>
-              </div>
-            </div>
-            <div class="case__body">
-              <div class="case__meta">
-                <span>Windows Identity</span>
-                <span>2021 — 2024</span>
-              </div>
-              <h3 class="case__title">A passwordless future for billions of sign-ins</h3>
-              <p class="case__desc">
-                Led UX strategy for foundational Windows passkey experiences across Windows Hello,
-                Microsoft Account and FIDO — reducing authentication friction while strengthening trust.
-                Established scalable patterns adopted across identity journeys.
-              </p>
-              <div class="case__tags">
-                <span>Identity</span><span>Security UX</span><span>Systems</span>
-              </div>
-            </div>
-          </a>
-        </li>
-
-        <!-- Case 03 -->
-        <li class="case" data-reveal>
-          <a class="case__link" href="#contact" data-cursor="view">
-            <div class="case__media case__media--search" aria-hidden="true">
-              <div class="plate">
-                <span class="plate__idx">03</span>
-                <div class="plate__bars"></div>
-                <span class="plate__tag">Intelligent Answers</span>
-              </div>
-            </div>
-            <div class="case__body">
-              <div class="case__meta">
-                <span>Microsoft Search &amp; AI</span>
-                <span>2019 — 2021</span>
-              </div>
-              <h3 class="case__title">Finding the answer, not just the results</h3>
-              <p class="case__desc">
-                Designed AI-powered search and discovery across Outlook, Teams, SharePoint, Bing and
-                Microsoft 365 — intelligent answers that help people find information faster, with
-                accessibility and platform consistency built in.
-              </p>
-              <div class="case__tags">
-                <span>AI Design</span><span>Discovery</span><span>Accessibility</span>
-              </div>
-            </div>
-          </a>
-        </li>
-
-        <!-- Case 04 -->
-        <li class="case" data-reveal>
-          <a class="case__link" href="#contact" data-cursor="view">
-            <div class="case__media case__media--auto" aria-hidden="true">
-              <div class="plate">
-                <span class="plate__idx">04</span>
-                <div class="plate__road"></div>
-                <span class="plate__tag">In-vehicle HMI</span>
-              </div>
-            </div>
-            <div class="case__body">
-              <div class="case__meta">
-                <span>Jaguar Land Rover · Tata Elxsi</span>
-                <span>2014 — 2018</span>
-              </div>
-              <h3 class="case__title">Interfaces for the road, at premium standard</h3>
-              <p class="case__desc">
-                Designed next-generation infotainment, connected-vehicle and in-vehicle interaction
-                experiences — HMI concepts, interaction models and production-ready validation for
-                premium automotive platforms.
-              </p>
-              <div class="case__tags">
-                <span>HMI</span><span>Interaction</span><span>Automotive</span>
-              </div>
-            </div>
-          </a>
-        </li>
-      </ol>
+      <ol class="cases" id="cases"></ol>
     </section>
 
     <!-- ============ ABOUT ============ -->
@@ -305,25 +144,7 @@
       <!-- Capabilities -->
       <div class="caps" id="caps">
         <span class="caps__label reveal" data-reveal>Capabilities</span>
-        <ul class="caps__list">
-          <li data-reveal>Growth Strategy</li>
-          <li data-reveal>Product Strategy</li>
-          <li data-reveal>User Acquisition</li>
-          <li data-reveal>Activation &amp; Onboarding</li>
-          <li data-reveal>Retention &amp; Engagement</li>
-          <li data-reveal>Experimentation</li>
-          <li data-reveal>AI Product Design</li>
-          <li data-reveal>Generative AI</li>
-          <li data-reveal>AI Prototyping</li>
-          <li data-reveal>Agentic Workflows</li>
-          <li data-reveal>Identity &amp; Authentication</li>
-          <li data-reveal>Personalization</li>
-          <li data-reveal>Consumer Product Design</li>
-          <li data-reveal>Cross-functional Leadership</li>
-          <li data-reveal>Data-Informed Design</li>
-          <li data-reveal>Accessibility</li>
-          <li data-reveal>Stakeholder Management</li>
-        </ul>
+        <ul class="caps__list" id="capsList"></ul>
       </div>
     </section>
 
@@ -336,68 +157,17 @@
         </h2>
       </div>
 
-      <ol class="timeline">
-        <li class="tl reveal" data-reveal>
-          <div class="tl__year">2024 — Now</div>
-          <div class="tl__main">
-            <h3>Senior Designer — Edge Growth</h3>
-            <span class="tl__org">Microsoft AI · Microsoft Corporation</span>
-            <p>Leading growth design across onboarding, activation, retention and personalization.
-              Owning Edge's First Run Experience and influencing roadmap through experimentation and
-              customer insight.</p>
-          </div>
-        </li>
-        <li class="tl reveal" data-reveal>
-          <div class="tl__year">2021 — 2024</div>
-          <div class="tl__main">
-            <h3>Senior Designer — Windows Auth &amp; Identity</h3>
-            <span class="tl__org">Microsoft Corporation · FIDO Alliance Member</span>
-            <p>Advanced Microsoft's passwordless strategy through Windows Hello, Microsoft Account,
-              FIDO and Passkeys. Represented Microsoft at Authenticate 2024.</p>
-          </div>
-        </li>
-        <li class="tl reveal" data-reveal>
-          <div class="tl__year">2019 — 2021</div>
-          <div class="tl__main">
-            <h3>Product Designer II — Microsoft Search (MSAI)</h3>
-            <span class="tl__org">Microsoft Corporation</span>
-            <p>Designed AI-powered search and discovery across Outlook, Teams, SharePoint, Bing and
-              Microsoft 365, championing inclusive and accessible design.</p>
-          </div>
-        </li>
-        <li class="tl reveal" data-reveal>
-          <div class="tl__year">2015 — 2018</div>
-          <div class="tl__main">
-            <h3>Designer — Automotive HMI</h3>
-            <span class="tl__org">Jaguar Land Rover, UK · Tata Elxsi, India</span>
-            <p>Led UX for next-generation infotainment and connected-vehicle experiences — from HMI
-              concepts to production-ready interaction models for premium platforms.</p>
-          </div>
-        </li>
-      </ol>
+      <ol class="timeline" id="timeline"></ol>
 
       <!-- Recognition + Education -->
       <div class="extra">
         <div class="extra__col reveal" data-reveal>
           <span class="extra__label">Recognition</span>
-          <ul class="awards">
-            <li><span>Microsoft Design Thinking Award</span><i>Aug 2024</i></li>
-            <li><span>Speaker — Authenticate 2024</span><i>Oct 2024</i></li>
-            <li><span>SPACE Fix·Hack·Learn Winner</span><i>Feb 2023</i></li>
-            <li><span>MSAI Fix·Hack·Learn Winner</span><i>Nov 2020</i></li>
-            <li><span>28th — National XC MTB Championship</span><i>Oct 2021</i></li>
-            <li><span>Top-distinction UX Certified — IxDF</span><i>—</i></li>
-          </ul>
+          <ul class="awards" id="recognitionList"></ul>
         </div>
         <div class="extra__col reveal" data-reveal>
           <span class="extra__label">Education</span>
-          <ul class="awards">
-            <li><span>B.Des — Fashion Communication</span><i>NIFT Bangalore</i></li>
-            <li><span>2010 — 2014</span><i></i></li>
-            <li class="awards__spacer"></li>
-            <li><span>CISCE (ICSE + ISC), Computer Science</span><i>MNPS</i></li>
-            <li><span>1998 — 2010</span><i></i></li>
-          </ul>
+          <ul class="awards" id="educationList"></ul>
         </div>
       </div>
     </section>
@@ -405,18 +175,13 @@
     <!-- ============ CONTACT ============ -->
     <section class="contact" id="contact">
       <span class="section-head__idx reveal" data-reveal>04 — Let's talk</span>
-      <a href="mailto:riteshkumarhk@gmail.com" class="contact__mail" data-cursor="hover" data-magnetic>
+      <a href="mailto:riteshkumarhk@gmail.com" class="contact__mail" data-cursor="hover" data-magnetic id="contactMail">
         <span class="contact__mail-line" data-reveal><span>Let's build</span></span>
         <span class="contact__mail-line" data-reveal><span>something <em>worth</em></span></span>
         <span class="contact__mail-line" data-reveal><span>staying for.</span></span>
       </a>
 
-      <div class="contact__row reveal" data-reveal>
-        <a href="mailto:riteshkumarhk@gmail.com" class="contact__pill" data-cursor="hover">
-          riteshkumarhk@gmail.com
-        </a>
-        <a href="tel:+918197809767" class="contact__pill" data-cursor="hover">+91 81978 09767</a>
-      </div>
+      <div class="contact__row reveal" data-reveal id="contactRow"></div>
     </section>
   </main>
 
@@ -424,11 +189,7 @@
   <footer class="footer">
     <div class="footer__top">
       <span class="footer__big">Ritesh Kumar</span>
-      <div class="footer__links">
-        <a href="https://linkedin.com/in/riteshkumarhk" target="_blank" rel="noopener" data-cursor="hover">LinkedIn ↗</a>
-        <a href="https://riteshk.work" target="_blank" rel="noopener" data-cursor="hover">riteshk.work ↗</a>
-        <a href="mailto:riteshkumarhk@gmail.com" data-cursor="hover">Email ↗</a>
-      </div>
+      <div class="footer__links" id="footerLinks"></div>
     </div>
     <div class="footer__bottom">
       <span>Hyderabad, India</span>
@@ -438,6 +199,8 @@
   </footer>
 
   <script src="js/lenis.min.js"></script>
+  <script src="js/render.js"></script>
   <script src="js/main.js"></script>
+  <script src="js/admin.js"></script>
 </body>
 </html>

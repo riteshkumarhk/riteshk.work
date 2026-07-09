@@ -1,0 +1,129 @@
+{
+  "landing": {
+    "eyebrow": "Product Design Leadership",
+    "domains": "Growth · AI · Identity",
+    "statement": "I shape\nwhat gets built,\nand *why.*",
+    "intro": "11+ years shaping how millions discover, trust and stay with products — currently leading **Growth Design for Microsoft Edge**, part of [[Microsoft AI]].",
+    "presence": "Currently at Microsoft — Hyderabad, India"
+  },
+  "contact": {
+    "email": "riteshkumarhk@gmail.com",
+    "phone": "+91 81978 09767",
+    "phoneRaw": "+918197809767",
+    "linkedin": "https://linkedin.com/in/riteshkumarhk",
+    "website": "https://riteshk.work"
+  },
+  "highlights": [
+    { "value": "11+", "label": "Years of craft" },
+    { "value": "Billions", "label": "Windows sign-ins supported" },
+    { "value": "Millions", "label": "Edge customers reached" },
+    { "value": "6+", "label": "Awards & recognitions" }
+  ],
+  "capabilities": [
+    "Growth Strategy",
+    "Product Strategy",
+    "User Acquisition",
+    "Activation & Onboarding",
+    "Retention & Engagement",
+    "Experimentation",
+    "AI Product Design",
+    "Generative AI",
+    "AI Prototyping",
+    "Agentic Workflows",
+    "Identity & Authentication",
+    "Personalization",
+    "Consumer Product Design",
+    "Cross-functional Leadership",
+    "Data-Informed Design",
+    "Accessibility",
+    "Stakeholder Management"
+  ],
+  "work": [
+    {
+      "id": "edge",
+      "featured": true,
+      "theme": "edge",
+      "plateTag": "First Run Experience",
+      "client": "Microsoft Edge",
+      "period": "2024 — Present",
+      "title": "Onboarding that earns the second session",
+      "desc": "Owning the strategy and design of Edge's First Run Experience — the browser's most critical acquisition and activation journey. Setup, imports, personalization and retention, designed end-to-end and validated through experimentation.",
+      "tags": ["Growth", "Activation", "Experimentation"]
+    },
+    {
+      "id": "auth",
+      "featured": true,
+      "theme": "auth",
+      "plateTag": "Passwordless · Passkeys",
+      "client": "Windows Identity",
+      "period": "2021 — 2024",
+      "title": "A passwordless future for billions of sign-ins",
+      "desc": "Led UX strategy for foundational Windows passkey experiences across Windows Hello, Microsoft Account and FIDO — reducing authentication friction while strengthening trust. Established scalable patterns adopted across identity journeys.",
+      "tags": ["Identity", "Security UX", "Systems"]
+    },
+    {
+      "id": "search",
+      "featured": true,
+      "theme": "search",
+      "plateTag": "Intelligent Answers",
+      "client": "Microsoft Search & AI",
+      "period": "2019 — 2021",
+      "title": "Finding the answer, not just the results",
+      "desc": "Designed AI-powered search and discovery across Outlook, Teams, SharePoint, Bing and Microsoft 365 — intelligent answers that help people find information faster, with accessibility and platform consistency built in.",
+      "tags": ["AI Design", "Discovery", "Accessibility"]
+    },
+    {
+      "id": "auto",
+      "featured": true,
+      "theme": "auto",
+      "plateTag": "In-vehicle HMI",
+      "client": "Jaguar Land Rover · Tata Elxsi",
+      "period": "2014 — 2018",
+      "title": "Interfaces for the road, at premium standard",
+      "desc": "Designed next-generation infotainment, connected-vehicle and in-vehicle interaction experiences — HMI concepts, interaction models and production-ready validation for premium automotive platforms.",
+      "tags": ["HMI", "Interaction", "Automotive"]
+    }
+  ],
+  "path": [
+    {
+      "years": "2024 — Now",
+      "present": true,
+      "role": "Senior Designer — Edge Growth",
+      "org": "Microsoft AI · Microsoft Corporation",
+      "desc": "Leading growth design across onboarding, activation, retention and personalization. Owning Edge's First Run Experience and influencing roadmap through experimentation and customer insight."
+    },
+    {
+      "years": "2021 — 2024",
+      "present": false,
+      "role": "Senior Designer — Windows Auth & Identity",
+      "org": "Microsoft Corporation · FIDO Alliance Member",
+      "desc": "Advanced Microsoft's passwordless strategy through Windows Hello, Microsoft Account, FIDO and Passkeys. Represented Microsoft at Authenticate 2024."
+    },
+    {
+      "years": "2019 — 2021",
+      "present": false,
+      "role": "Product Designer II — Microsoft Search (MSAI)",
+      "org": "Microsoft Corporation",
+      "desc": "Designed AI-powered search and discovery across Outlook, Teams, SharePoint, Bing and Microsoft 365, championing inclusive and accessible design."
+    },
+    {
+      "years": "2015 — 2018",
+      "present": false,
+      "role": "Designer — Automotive HMI",
+      "org": "Jaguar Land Rover, UK · Tata Elxsi, India",
+      "desc": "Led UX for next-generation infotainment and connected-vehicle experiences — from HMI concepts to production-ready interaction models for premium platforms."
+    }
+  ],
+  "recognition": [
+    { "title": "Microsoft Design Thinking Award", "meta": "Aug 2024" },
+    { "title": "Speaker — Authenticate 2024", "meta": "Oct 2024" },
+    { "title": "SPACE Fix·Hack·Learn Winner", "meta": "Feb 2023" },
+    { "title": "MSAI Fix·Hack·Learn Winner", "meta": "Nov 2020" },
+    { "title": "28th — National XC MTB Championship", "meta": "Oct 2021" },
+    { "title": "Top-distinction UX Certified — IxDF", "meta": "—" }
+  ],
+  "education": [
+    { "title": "B.Des — Fashion Communication", "meta": "NIFT Bangalore · 2010–2014" },
+    { "title": "CISCE (ICSE + ISC), Computer Science", "meta": "MNPS · 1998–2010" }
+  ]
+}

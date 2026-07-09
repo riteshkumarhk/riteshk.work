@@ -5,6 +5,7 @@
 (function () {
   "use strict";
 
+  function initInteractions() {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const isTouch = window.matchMedia("(pointer: coarse)").matches;
 
@@ -125,12 +126,12 @@
   /* -------------------------------------------------
      3. Hero line reveal on load
   ------------------------------------------------- */
-  window.addEventListener("load", () => {
+  (function heroReveal() {
     const lines = document.querySelectorAll(".hero__title .line");
     lines.forEach((line, i) => {
       setTimeout(() => line.classList.add("is-in"), 150 + i * 110);
     });
-  });
+  })();
 
   /* -------------------------------------------------
      4. Count-up stats
@@ -251,4 +252,8 @@
   ------------------------------------------------- */
   const year = document.getElementById("year");
   if (year) year.textContent = new Date().getFullYear();
+  } // end initInteractions
+
+  if (window.__siteRendered) initInteractions();
+  else document.addEventListener("site:rendered", initInteractions, { once: true });
 })();

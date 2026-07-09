@@ -61,6 +61,10 @@ html.lenis, html.lenis body { height: auto; }
 .lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
 .lenis.lenis-stopped { overflow: hidden; }
 
+/* Data-driven content: fade in once rendered (avoids a flash of empty containers) */
+body.site-loading main, body.site-loading .footer { opacity: 0; }
+main, .footer { transition: opacity .45s ease; }
+
 /* ---------- Custom cursor ---------- */
 .cursor { position: fixed; top: 0; left: 0; z-index: 9999; pointer-events: none; mix-blend-mode: difference; }
 .cursor__dot {
