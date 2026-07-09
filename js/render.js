@@ -113,7 +113,7 @@
 
     set("stats", (data.highlights || []).slice(0, 8).map(highlightEl).join(""));
 
-    set("cases", (data.work || []).filter((w) => w.featured).slice(0, 4).map(caseEl).join(""));
+    set("cases", (data.work || []).filter((w) => w.featured).slice(0, 6).map(caseEl).join(""));
 
     set("capsList", caps.map((c) => '<li data-reveal>' + esc(c) + "</li>").join(""));
 
@@ -138,6 +138,82 @@
       '<a href="mailto:' + esc(C.email) + '" data-cursor="hover">Email ↗</a>');
   }
 
+  /* ---------- special (curated) views ---------- */
+  const SV_KEY = "rk:sv:active";
+  let DATA = null;
+  function baseData() { return (window.RK && window.RK.data) || DATA; }
+
+  function svById(id) {
+    const b = baseData();
+    return (((b && b.specialViews) || [])).filter(function (v) { return v && v.id === id; })[0] || null;
+  }
+  function svExpired(sv) {
+    return !!(sv && sv.days > 0 && Date.now() > (sv.createdAt || 0) + sv.days * 86400000);
+  }
+  function svDaysLeft(sv) {
+    if (!sv || !sv.days) return Infinity;
+    return Math.max(0, Math.ceil(((sv.createdAt || 0) + sv.days * 86400000 - Date.now()) / 86400000));
+  }
+  function deriveSpecialData(base, sv) {
+    const d = JSON.parse(JSON.stringify(base));
+    if (sv.workIds && sv.workIds.length) {
+      const byId = {};
+      (base.work || []).forEach(function (w) { byId[w.id] = w; });
+      d.work = sv.workIds.map(function (id) { return byId[id]; }).filter(Boolean).map(function (w) {
+        const c = JSON.parse(JSON.stringify(w)); c.featured = true; return c;
+      });
+    }
+    if (sv.highlightIdx && sv.highlightIdx.length) {
+      d.highlights = sv.highlightIdx.map(function (i) { return (base.highlights || [])[i]; }).filter(Boolean);
+    }
+    if (sv.capabilityIdx && sv.capabilityIdx.length) {
+      d.capabilities = sv.capabilityIdx.map(function (i) { return (base.capabilities || [])[i]; }).filter(Boolean);
+    }
+    if (sv.audience) d.landing = Object.assign({}, d.landing || {}, { eyebrow: sv.audience });
+    return d;
+  }
+  function revealAll() {
+    document.querySelectorAll("[data-reveal]").forEach(function (el) { el.classList.add("is-in"); });
+    document.querySelectorAll(".hero__title .line, .contact__mail-line").forEach(function (el) { el.classList.add("is-in"); });
+    document.querySelectorAll(".count").forEach(function (c) { c.textContent = c.dataset.count; });
+  }
+  function applySpecialView(id) {
+    const sv = svById(id);
+    if (!sv) return { ok: false, reason: "not-found" };
+    if (svExpired(sv)) return { ok: false, reason: "expired" };
+    try { sessionStorage.setItem(SV_KEY, id); } catch (e) {}
+    render(deriveSpecialData(baseData(), sv));
+    showSvBanner(sv);
+    revealAll();
+    return { ok: true, view: sv };
+  }
+  function clearSpecialView() {
+    try { sessionStorage.removeItem(SV_KEY); } catch (e) {}
+    removeSvBanner();
+    render(baseData());
+    revealAll();
+  }
+  function showSvBanner(sv) {
+    removeSvBanner();
+    const left = svDaysLeft(sv);
+    const exp = isFinite(left) ? (left <= 0 ? "expires today" : left + " day" + (left > 1 ? "s" : "") + " left") : "";
+    const b = document.createElement("div");
+    b.className = "sv-banner";
+    b.innerHTML =
+      '<span class="sv-banner__dot"></span>' +
+      '<span class="sv-banner__txt">Curated view' + (sv.name ? " \u2014 " + esc(sv.name) : "") + "</span>" +
+      (exp ? '<span class="sv-banner__exp">' + exp + "</span>" : "") +
+      '<button class="sv-banner__exit" type="button">Exit \u2715</button>';
+    b.querySelector(".sv-banner__exit").addEventListener("click", clearSpecialView);
+    document.body.appendChild(b);
+    document.body.classList.add("has-sv");
+  }
+  function removeSvBanner() {
+    const b = document.querySelector(".sv-banner");
+    if (b) b.remove();
+    document.body.classList.remove("has-sv");
+  }
+
   /* ---------- data loading ---------- */
   async function loadData() {
     try {
@@ -158,14 +234,34 @@
       document.body.classList.remove("site-loading");
       return;
     }
+    DATA = data;
     window.RK = Object.assign(window.RK || {}, {
       data: data,
       render: render,
       md: md,
       esc: esc,
       DRAFT_KEY: DRAFT_KEY,
+      applySpecialView: applySpecialView,
+      clearSpecialView: clearSpecialView,
+      deriveSpecialData: deriveSpecialData,
+      svById: svById,
+      svExpired: svExpired,
+      svDaysLeft: svDaysLeft,
     });
-    render(data);
+
+    // If a curated view is active (e.g. after a refresh), render it as the initial view.
+    let initial = data, activeSv = null;
+    try {
+      const activeId = sessionStorage.getItem(SV_KEY);
+      if (activeId) {
+        const sv = svById(activeId);
+        if (sv && !svExpired(sv)) { activeSv = sv; initial = deriveSpecialData(data, sv); }
+        else sessionStorage.removeItem(SV_KEY);
+      }
+    } catch (e) {}
+
+    render(initial);
+    if (activeSv) showSvBanner(activeSv);
     document.body.classList.remove("site-loading");
     window.__siteRendered = true;
     document.dispatchEvent(new Event("site:rendered"));

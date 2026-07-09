@@ -13,15 +13,18 @@
   if (new URLSearchParams(location.search).has("preview")) return;
 
   const HASH_KEY = "rk:admin:hash";
-  const SESSION_KEY = "rk:admin:session";
   const DRAFT_KEY = "rk:content:draft";
+  const THEME_KEY = "rk:theme";
   const EDIT_URL = "https://github.com/riteshkumarhk/riteshk.work/edit/main/content.json";
   const PREVIEW_SRC = "index.html?preview=1&lite=1";
+  const ADMIN_MIN = 900; // below this the split editor can't fit — admin is disabled
 
   let data = null;
   let activeTab = "landing";
   let root = null, body = null, frame = null;
   let saveTimer = null;
+  let menuEl = null;
+  const ticketPlain = {}; // owner-only plaintext tickets, never published
 
   const TABS = [
     ["landing", "Landing"],
@@ -32,6 +35,7 @@
     ["recognition", "Recognition"],
     ["education", "Education"],
     ["contact", "Contact"],
+    ["special", "Special Views"],
   ];
   const THEMES = ["edge", "auth", "search", "auto", "grid"];
 
@@ -333,7 +337,48 @@
     education() {
       return titleMetaList("education", "Education", "Degrees and schooling.");
     },
+    special() {
+      const list = data.specialViews || (data.specialViews = []);
+      let html = secHead("Special Views",
+        "Curated, ticketed versions of the site for one audience (say an automotive company). Choose the work, numbers and skills they see, set a ticket phrase and an optional expiry. Up to 6. <em>Tickets are a soft gate — the curated content still ships in your published file, so don't put anything confidential here.</em>");
+      if (!list.length) html += '<div class="adm__empty">No special views yet.</div>';
+      list.forEach(function (sv, i) { html += svCard(sv, i); });
+      if (list.length < 6) html += '<button class="btn btn--add" data-act="sv-add">+ New special view</button>';
+      else html += '<div class="af__hint">Maximum of 6 special views reached.</div>';
+      return html;
+    },
   };
+
+  function svCard(sv, i) {
+    const works = data.work || [], highs = data.highlights || [], caps = data.capabilities || [];
+    const expired = window.RK.svExpired(sv), left = window.RK.svDaysLeft(sv);
+    const status = !sv.days ? "No expiry" : expired ? "Expired" : (left <= 0 ? "Expires today" : left + " day" + (left > 1 ? "s" : "") + " left");
+    const tv = ticketPlain[sv.id] || "";
+    const wItems = works.map(function (w, wi) { return { on: (sv.workIds || []).indexOf(w.id) !== -1, val: w.id, label: (w.client || w.title || ("Work " + (wi + 1))) }; });
+    const hItems = highs.map(function (h, hi) { return { on: (sv.highlightIdx || []).indexOf(hi) !== -1, val: hi, label: ((h.value || "") + " \u00b7 " + (h.label || "")) }; });
+    const cItems = caps.map(function (c, ci) { return { on: (sv.capabilityIdx || []).indexOf(ci) !== -1, val: ci, label: c }; });
+    return '<div class="card sv-card' + (expired ? " sv-card--exp" : "") + '">' +
+      '<div class="card__bar"><span class="card__idx">' + escHtml(sv.name || ("View " + (i + 1))) + (expired ? ' <b class="sv-badge">expired</b>' : "") + "</span>" +
+        '<div class="card__ops"><button class="iconbtn iconbtn--danger" data-act="sv-remove" data-index="' + i + '" title="Remove">\u2715</button></div></div>' +
+      '<div class="af"><label class="af__label">Name (only you see this)</label><input type="text" data-sv="' + i + '" data-field="name" value="' + escAttr(sv.name) + '" /></div>' +
+      '<div class="af"><label class="af__label">Audience line (replaces the hero eyebrow)</label><input type="text" data-sv="' + i + '" data-field="audience" value="' + escAttr(sv.audience) + '" placeholder="e.g. Prepared for Jaguar Land Rover" /></div>' +
+      '<div class="af__row">' +
+        '<div class="af"><label class="af__label">Ticket phrase</label><input type="text" data-sv="' + i + '" data-field="ticket" value="' + escAttr(tv) + '" placeholder="' + (sv.ticketHash && !tv ? "Set \u2014 type to change" : "e.g. jaguar-2026") + '" /><div class="af__hint">' + (sv.ticketHash ? "Ticket set \u2713" : "Not set") + " \u00b7 case-insensitive</div></div>" +
+        '<div class="af"><label class="af__label">Auto-hide after (days)</label><input type="number" min="0" step="1" data-sv="' + i + '" data-field="days" value="' + (sv.days || 0) + '" /><div class="af__hint">' + escHtml(status) + " \u00b7 0 = never</div></div>" +
+      "</div>" +
+      svChecklist(i, "work", "Work shown", wItems) +
+      svChecklist(i, "highlights", "Numbers shown", hItems) +
+      svChecklist(i, "capabilities", "Capabilities shown", cItems) +
+      '<div class="sv-card__foot"><button class="btn btn--ghost" data-act="sv-preview" data-index="' + i + '">Preview in panel \u2192</button><span class="af__hint">Publish to make it live.</span></div>' +
+      "</div>";
+  }
+
+  function svChecklist(i, kind, label, items) {
+    const boxes = items.map(function (it) {
+      return '<label class="svchk"><input type="checkbox" data-sv="' + i + '" data-sel="' + kind + '" data-val="' + escAttr(String(it.val)) + '"' + (it.on ? " checked" : "") + " /><span>" + escHtml(it.label) + "</span></label>";
+    }).join("");
+    return '<div class="sv-sel"><div class="sv-sel__label">' + label + ' <span>(none = show default)</span></div><div class="svchk__grid">' + (boxes || '<span class="af__hint">Nothing to choose yet.</span>') + "</div></div>";
+  }
 
   function titleMetaList(list, name, note) {
     const items = data[list] || [];
@@ -356,6 +401,9 @@
   }
 
   /* ---------- blank templates ---------- */
+  function blankSv() {
+    return { id: "sv" + Date.now().toString(36), name: "New view", audience: "", ticketHash: "", createdAt: Date.now(), days: 3, workIds: [], highlightIdx: [], capabilityIdx: [] };
+  }
   function blank(list) {
     switch (list) {
       case "highlights": return { value: "0+", label: "New metric" };
@@ -372,6 +420,7 @@
   function onInput(e) {
     const t = e.target;
     if (t.dataset.path) { setPath(data, t.dataset.path, t.value); apply(); return; }
+    if (t.dataset.sv !== undefined && t.dataset.field) { onSvInput(t); return; }
     if (t.dataset.list && t.dataset.scalar) { data[t.dataset.list][+t.dataset.index] = t.value; apply(); return; }
     if (t.dataset.list && t.dataset.field) {
       let v = t.value;
@@ -381,8 +430,26 @@
     }
   }
 
+  function onSvInput(t) {
+    const sv = (data.specialViews || [])[+t.dataset.sv];
+    if (!sv) return;
+    const f = t.dataset.field;
+    if (f === "days") { sv.days = Math.max(0, parseInt(t.value, 10) || 0); if (!sv.createdAt) sv.createdAt = Date.now(); saveDraft(); status("Expiry updated"); return; }
+    if (f === "ticket") { ticketPlain[sv.id] = t.value; setSvTicket(sv, t.value); return; }
+    sv[f] = t.value;
+    saveDraft();
+  }
+
+  async function setSvTicket(sv, phrase) {
+    phrase = String(phrase || "").trim().toLowerCase();
+    sv.ticketHash = phrase ? await sha256(phrase) : "";
+    saveDraft(true);
+    status(phrase ? "Ticket set" : "Ticket cleared", !!phrase);
+  }
+
   function onChange(e) {
     const t = e.target;
+    if (t.dataset.sv !== undefined && t.dataset.sel) { onSvToggle(t); return; }
     if (t.dataset.act === "feature") {
       const i = +t.dataset.index;
       if (t.checked && data.work.filter((w) => w.featured).length >= 4) {
@@ -402,10 +469,42 @@
     }
   }
 
+  function onSvToggle(t) {
+    const sv = (data.specialViews || [])[+t.dataset.sv];
+    if (!sv) return;
+    const sel = t.dataset.sel;
+    const key = sel === "work" ? "workIds" : sel === "highlights" ? "highlightIdx" : "capabilityIdx";
+    const val = sel === "work" ? t.dataset.val : +t.dataset.val;
+    sv[key] = sv[key] || [];
+    const at = sv[key].indexOf(val);
+    if (t.checked && at === -1) sv[key].push(val);
+    else if (!t.checked && at !== -1) sv[key].splice(at, 1);
+    if (sel === "work") { const order = (data.work || []).map(function (w) { return w.id; }); sv.workIds.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); }); }
+    else sv[key].sort(function (a, b) { return a - b; });
+    saveDraft();
+  }
+
+  function svPreview(i) {
+    const sv = (data.specialViews || [])[i];
+    const w = frame && frame.contentWindow;
+    if (w && w.RK && sv) {
+      try { w.RK.render(w.RK.deriveSpecialData(data, sv)); forceRevealDoc(w.document); } catch (e) {}
+      status("Previewing \u201c" + (sv.name || "view") + "\u201d \u2014 edit anything to return to the full site.");
+    }
+  }
+
   function onClick(e) {
     const b = e.target.closest("[data-act]");
     if (!b) return;
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
+    if (act === "sv-add") {
+      data.specialViews = data.specialViews || [];
+      if (data.specialViews.length >= 6) { status("Up to 6 special views."); return; }
+      data.specialViews.push(blankSv());
+      saveDraft(true); renderBody(); return;
+    }
+    if (act === "sv-remove") { (data.specialViews || []).splice(i, 1); saveDraft(true); renderBody(); return; }
+    if (act === "sv-preview") { svPreview(i); return; }
     if (act === "autostyle") {
       const n = autoStyleLanding(true);
       apply(true); renderBody();
@@ -506,20 +605,20 @@
     document.body.classList.remove("adm-lock");
   }
 
-  /* ---------- passphrase gate ---------- */
+  /* ---------- passphrase gate (always asks) ---------- */
   function gate() {
-    if (sessionStorage.getItem(SESSION_KEY) === "1") return open();
+    if (window.innerWidth < ADMIN_MIN) { flash("Admin mode needs a wider screen — open it on a laptop or desktop."); return; }
     const stored = localStorage.getItem(HASH_KEY);
     const creating = !stored;
     const modal = document.createElement("div");
     modal.className = "pass";
     modal.innerHTML =
-      '<div class="pass__box"><div class="pass__title">' + (creating ? "Set admin passphrase" : "Admin") + "</div>" +
+      '<div class="pass__box"><div class="pass__title">' + (creating ? "Set admin key" : "Admin mode") + "</div>" +
       '<div class="pass__sub">' + (creating
-        ? "Create a passphrase for this browser. (It only guards this editor — publishing still requires your repo.)"
-        : "Enter your passphrase to edit the site.") + "</div>" +
-      '<input type="password" placeholder="Passphrase" autofocus />' +
-      (creating ? '<input type="password" placeholder="Confirm passphrase" data-confirm />' : "") +
+        ? "Create a key for this browser. (It guards this editor only — publishing still requires your repo.)"
+        : "Enter your key to open the studio. Required every time.") + "</div>" +
+      '<input type="password" placeholder="Key" autofocus />' +
+      (creating ? '<input type="password" placeholder="Confirm key" data-confirm />' : "") +
       '<div class="pass__err"></div>' +
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
       '<button class="btn btn--primary" data-go>' + (creating ? "Create" : "Enter") + "</button></div></div>";
@@ -535,28 +634,124 @@
 
     async function submit() {
       const val = pass.value;
-      if (!val) { err.textContent = "Enter a passphrase"; return; }
+      if (!val) { err.textContent = "Enter your key"; return; }
       if (creating) {
         if (val.length < 4) { err.textContent = "Use at least 4 characters"; return; }
-        if (confirm2 && confirm2.value !== val) { err.textContent = "Passphrases don't match"; return; }
+        if (confirm2 && confirm2.value !== val) { err.textContent = "Keys don't match"; return; }
         localStorage.setItem(HASH_KEY, await sha256(val));
-        sessionStorage.setItem(SESSION_KEY, "1");
         done(); open();
       } else {
-        if ((await sha256(val)) === stored) {
-          sessionStorage.setItem(SESSION_KEY, "1");
-          done(); open();
-        } else { err.textContent = "Incorrect passphrase"; }
+        if ((await sha256(val)) === stored) { done(); open(); }
+        else { err.textContent = "Incorrect key"; }
       }
     }
     modal.querySelector("[data-go]").addEventListener("click", submit);
     modal.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });
   }
 
+  /* ---------- control menu (clock flyout) ---------- */
+  function buildMenu() {
+    const theme = localStorage.getItem(THEME_KEY) || "night";
+    const narrow = window.innerWidth < ADMIN_MIN;
+    menuEl = document.createElement("div");
+    menuEl.className = "cmenu";
+    menuEl.innerHTML =
+      '<div class="cmenu__grp"><div class="cmenu__head">Appearance <span class="cmenu__soon">soon</span></div>' +
+        '<div class="cmenu__themes">' +
+          ["day", "night", "system", "local"].map(function (t) {
+            return '<button class="cmenu__theme' + (t === theme ? " is-on" : "") + '" data-theme="' + t + '">' + t.charAt(0).toUpperCase() + t.slice(1) + "</button>";
+          }).join("") +
+        "</div></div>" +
+      '<div class="cmenu__sep"></div>' +
+      '<button class="cmenu__item" data-open="special"><span class="cmenu__ico">\u25c7</span><span><b>Special view</b><i>Enter a ticket for a curated view</i></span></button>' +
+      '<button class="cmenu__item" data-open="admin"' + (narrow ? " disabled" : "") + '><span class="cmenu__ico">\u2726</span><span><b>Admin mode</b><i>' + (narrow ? "Needs a wider screen" : "Edit &amp; curate the site") + "</i></span></button>";
+    document.body.appendChild(menuEl);
+    positionMenu();
+    menuEl.addEventListener("click", onMenuClick);
+    window.addEventListener("resize", positionMenu);
+    setTimeout(function () { document.addEventListener("click", onDocClick); }, 0);
+  }
+  function positionMenu() {
+    const clock = document.getElementById("clock");
+    if (!clock || !menuEl) return;
+    const r = clock.getBoundingClientRect();
+    menuEl.style.top = (r.bottom + 12) + "px";
+    menuEl.style.right = Math.max(12, Math.round(window.innerWidth - r.right)) + "px";
+  }
+  function closeMenu() {
+    if (!menuEl) return;
+    menuEl.remove(); menuEl = null;
+    document.removeEventListener("click", onDocClick);
+    window.removeEventListener("resize", positionMenu);
+  }
+  function onDocClick(e) { if (menuEl && !menuEl.contains(e.target) && e.target.id !== "clock") closeMenu(); }
+  function toggleMenu(e) { if (e) e.stopPropagation(); if (menuEl) closeMenu(); else buildMenu(); }
+  function onMenuClick(e) {
+    const th = e.target.closest(".cmenu__theme");
+    if (th) {
+      localStorage.setItem(THEME_KEY, th.dataset.theme);
+      document.documentElement.setAttribute("data-theme", th.dataset.theme);
+      menuEl.querySelectorAll(".cmenu__theme").forEach(function (b) { b.classList.toggle("is-on", b === th); });
+      flash("Theme saved — visual themes are coming soon.");
+      return;
+    }
+    const it = e.target.closest("[data-open]");
+    if (!it || it.disabled) return;
+    const which = it.dataset.open;
+    closeMenu();
+    if (which === "special") ticketDialog();
+    else if (which === "admin") gate();
+  }
+
+  /* ---------- ticket entry (visitor) ---------- */
+  function ticketDialog() {
+    const modal = document.createElement("div");
+    modal.className = "pass";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">Special view</div>' +
+      '<div class="pass__sub">Enter the ticket you were given to unlock a curated view of the work.</div>' +
+      '<input type="text" placeholder="Your ticket" autocomplete="off" autofocus />' +
+      '<div class="pass__err"></div>' +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
+      '<button class="btn btn--primary" data-go>Enter</button></div></div>';
+    document.body.appendChild(modal);
+    const inp = modal.querySelector("input");
+    const err = modal.querySelector(".pass__err");
+    inp.focus();
+    const done = () => modal.remove();
+    modal.querySelector("[data-cancel]").addEventListener("click", done);
+    modal.addEventListener("click", (e) => { if (e.target === modal) done(); });
+    async function submit() {
+      const val = inp.value.trim();
+      if (!val) { err.textContent = "Enter your ticket"; return; }
+      const h = await sha256(val.toLowerCase());
+      const views = (window.RK && window.RK.data && window.RK.data.specialViews) || [];
+      const match = views.filter(function (v) { return v.ticketHash === h; })[0];
+      if (!match) { err.textContent = "That ticket doesn't match anything."; return; }
+      if (window.RK.svExpired(match)) { err.textContent = "This curated view has expired."; return; }
+      done();
+      window.RK.applySpecialView(match.id);
+    }
+    modal.querySelector("[data-go]").addEventListener("click", submit);
+    modal.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });
+  }
+
+  /* ---------- tiny toast ---------- */
+  let flashTimer = null;
+  function flash(msg) {
+    let el = document.querySelector(".rk-flash");
+    if (!el) { el = document.createElement("div"); el.className = "rk-flash"; document.body.appendChild(el); }
+    el.textContent = msg;
+    requestAnimationFrame(function () { el.classList.add("is-on"); });
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(function () { el.classList.remove("is-on"); }, 2600);
+  }
+
   /* ---------- bootstrap ---------- */
   function init() {
+    document.documentElement.setAttribute("data-theme", localStorage.getItem(THEME_KEY) || "night");
     const clock = document.getElementById("clock");
-    if (clock) clock.addEventListener("click", gate);
+    if (clock) clock.addEventListener("click", toggleMenu);
   }
   if (window.__siteRendered) init();
   else document.addEventListener("site:rendered", init, { once: true });
