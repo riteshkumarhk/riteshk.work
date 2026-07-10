@@ -1314,7 +1314,7 @@
 
   /* ---------- control menu (clock flyout) ---------- */
   /* ---------- ambient music player (Web Audio synth, with optional audio files) ---------- */
-  let audioEl = null, synth = null, musCur = 0, musArmed = false, musPlaying = false, musLastLight = null, musAnnounced = false;
+  let audioEl = null, synth = null, musCur = 0, musArmed = false, musPlaying = false, musLastLight = null, musAnnounced = false, musVisArmed = false;
   function musTracks() {
     var m = window.RK && window.RK.data && window.RK.data.music;
     var ok = Array.isArray(m) ? m.filter(function (t) { return t && (t.src || t.gen); }) : [];
@@ -1407,28 +1407,21 @@
   }
   function musAutoStart() {
     var t = musCurTrack(); if (!t) return;
-    if (t.src) {
-      var a = audioEnsure();
-      a.muted = true;                             // muted autoplay is allowed by browsers (YouTube-style)
-      var p = a.play();
-      if (p && p.catch) p.catch(function () {});   // if even muted is blocked, the unmute-arm still starts it
-      musArmUnmute();                             // the visitor's first interaction unmutes -> audible
-    } else {
-      musArm();                                   // synth fallback needs a gesture anyway
-    }
+    if (!t.src) { musArm(); return; }
+    musPlay();          // try TRUE audible autoplay now (succeeds if the browser already trusts this site)
+    musArmVisible();    // ...and retry when the tab gains focus (opened-in-a-background-tab then switched to — YouTube-style)
   }
-  function musArmUnmute() {
-    if (musArmed) return; musArmed = true;
-    var act = ["pointerdown", "mousedown", "keydown", "touchstart"];
-    var opts = { capture: true, passive: true };
-    function disarm() { musArmed = false; act.forEach(function (ev) { window.removeEventListener(ev, go, opts); }); }
-    function go() {
+  function musArmVisible() {
+    if (musVisArmed) return; musVisArmed = true;
+    function disarm() { musVisArmed = false; document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", onVis); }
+    function onVis() {
+      if (document.hidden) return;
       if (localStorage.getItem(MUSIC_ON_KEY) === "0") { disarm(); return; }
-      var a = audioEnsure(); a.muted = false;                   // unmuting during a real gesture is allowed
-      if (a.paused) { var p = a.play(); if (p && p.catch) p.catch(function () { musArm(); }); }
-      disarm();
+      if (audioEl && !audioEl.paused && !audioEl.muted) { disarm(); return; }   // already audible
+      musPlay();   // focus counts for browsers that trust the site (engagement/MEI); otherwise it stays paused until a click
     }
-    act.forEach(function (ev) { window.addEventListener(ev, go, opts); });
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", onVis);
   }
   function musPlay() {
     var t = musCurTrack(); if (!t) return;
