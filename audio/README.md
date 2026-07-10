@@ -5,21 +5,19 @@ play/pause and next/previous controls.
 
 ## Tracks that ship with the site
 
-Three calm, immersive tracks by **Chris Zabriskie**, licensed
+Two calm, immersive tracks by **Chris Zabriskie**, licensed
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (free to use with
 attribution — the player shows "Chris Zabriskie · CC BY" and links back):
 
-| File                  | Track         | Album (year)   | Plays in      |
-| --------------------- | ------------- | -------------- | ------------- |
-| `cylinder-eight.mp3`  | Cylinder Eight | Cylinders (2014) | dark theme  |
-| `cylinder-two.mp3`    | Cylinder Two   | Cylinders (2014) | light theme |
-| `oxygen-garden.mp3`   | Oxygen Garden  | Divider (2011)   | manual only |
+| File                | Track         | Album (year)     | Plays in    |
+| ------------------- | ------------- | ---------------- | ----------- |
+| `cylinder-two.mp3`  | Cylinder Two  | Cylinders (2014) | dark theme  |
+| `oxygen-garden.mp3` | Oxygen Garden | Divider (2011)   | light theme |
 
 Source: [chriszabriskie.com](https://chriszabriskie.com) · downloaded from the
 [Internet Archive](https://archive.org/details/Cylinders-15736) and re-encoded to
 128 kbps. The mood follows the appearance: switching the theme swaps the track
-(dark → track 1, light → track 2); switching the track by hand never changes the
-theme; **Oxygen Garden** is only reached via next / previous.
+(dark → Cylinder Two, light → Oxygen Garden).
 
 ## Swapping tracks
 
