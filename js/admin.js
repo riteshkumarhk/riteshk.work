@@ -27,13 +27,19 @@
   const AI_DEFAULT_MODEL = { openai: "gpt-image-1", gemini: "gemini-2.0-flash-preview-image-generation", anthropic: "claude-3-5-sonnet-latest", custom: "" };
   const AI_DEFAULT_BASE = { openai: "https://api.openai.com/v1", gemini: "https://generativelanguage.googleapis.com/v1beta", anthropic: "https://api.anthropic.com/v1", custom: "" };
   const AI_IMAGE_PROVIDERS = ["openai", "gemini", "custom"];
+  const STUDY_BLOCK_TYPES = [
+    ["text", "Text"], ["statement", "Statement"], ["metrics", "Metrics"],
+    ["steps", "Steps"], ["media", "Media"], ["split", "Before / after"], ["faq", "FAQ"],
+  ];
 
   let data = null;
   let activeTab = "landing";
+  let openStudy = -1; // index of the work item whose case-study editor is expanded
   let root = null, body = null, frame = null;
   let saveTimer = null;
   let menuEl = null;
   const ticketPlain = {}; // owner-only plaintext tickets, never published
+  const studyUnlockPlain = {}; // owner-only plaintext deeper-cut passes, never published
 
   const TABS = [
     ["landing", "Landing"],
@@ -298,6 +304,132 @@
       '<div class="imgblk__hint">Uploaded &amp; generated images are embedded in your published file \u2014 a URL keeps it lighter.</div></div></div>';
   }
 
+  /* ---------- case study (L2) authoring ---------- */
+  function blankStudy() {
+    return { tagline: "", role: "", team: "", timeline: "", scope: "", cover: "", unlockHash: "", blocks: [] };
+  }
+  function blankBlock(type) {
+    switch (type) {
+      case "statement": return { type: "statement", nav: "", kicker: "", body: "", sub: "" };
+      case "metrics": return { type: "metrics", nav: "", kicker: "", heading: "", items: [] };
+      case "steps": return { type: "steps", nav: "", kicker: "", heading: "", items: [] };
+      case "media": return { type: "media", nav: "", kicker: "", heading: "", items: [] };
+      case "split": return { type: "split", nav: "", kicker: "", heading: "", leftLabel: "Before", left: [], rightLabel: "After", right: [] };
+      case "faq": return { type: "faq", nav: "", kicker: "", items: [] };
+      default: return { type: "text", nav: "Section", kicker: "", heading: "", body: "", list: [] };
+    }
+  }
+  function studyLines(text) { return String(text || "").split("\n").map(function (s) { return s.trim(); }).filter(Boolean); }
+  function studyPipe(line) { var k = line.indexOf("|"); return k === -1 ? [line.trim(), ""] : [line.slice(0, k).trim(), line.slice(k + 1).trim()]; }
+  function parseItems(type, text) {
+    return studyLines(text).map(function (line) {
+      var p = studyPipe(line);
+      if (type === "metrics") return { value: p[0], label: p[1] };
+      if (type === "steps") return { title: p[0], body: p[1] };
+      if (type === "faq") return { q: p[0], a: p[1] };
+      if (type === "media") return p[0] ? { src: p[0], caption: p[1] } : { caption: p[1] };
+      return {};
+    });
+  }
+  function itemsToText(type, items) {
+    return (items || []).map(function (it) {
+      if (type === "metrics") return (it.value || "") + " | " + (it.label || "");
+      if (type === "steps") return (it.title || "") + " | " + (it.body || "");
+      if (type === "faq") return (it.q || "") + " | " + (it.a || "");
+      if (type === "media") return (it.src || it.image || "") + " | " + (it.caption || "");
+      return "";
+    }).join("\n");
+  }
+  function listToText(arr) { return (arr || []).join("\n"); }
+
+  function sfInput(i, j, field, label, hint) {
+    var b = data.work[i].study.blocks[j];
+    return '<div class="af"><label class="af__label">' + label + '</label><input type="text" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '" value="' + escAttr(b[field] || "") + '" />' + (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
+  }
+  function sfArea(i, j, field, label, value, rows, hint) {
+    return '<div class="af"><label class="af__label">' + label + '</label><textarea data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '" rows="' + (rows || 3) + '">' + escHtml(value) + "</textarea>" + (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
+  }
+  function blockEditor(i, b, j, len) {
+    var head = '<div class="card__bar"><span class="card__idx">' + (j + 1) + " \u00b7 " + escHtml(b.type) + "</span>" +
+      '<div class="card__ops">' +
+      '<button class="iconbtn" data-act="study-blockup" data-index="' + i + '" data-bindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
+      '<button class="iconbtn" data-act="study-blockdown" data-index="' + i + '" data-bindex="' + j + '"' + (j === len - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+      '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">\u2715</button>' +
+      "</div></div>";
+    var common = sfInput(i, j, "nav", "Section label", "Shows in the left nav \u2014 leave blank to hide it there") + sfInput(i, j, "kicker", "Kicker", "small label above the block");
+    var body = "";
+    if (b.type === "text") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "body", "Body", b.body, 4) + sfArea(i, j, "list", "Bullets \u2014 one per line", listToText(b.list), 3);
+    else if (b.type === "statement") body = sfArea(i, j, "body", "Statement", b.body, 3) + sfArea(i, j, "sub", "Sub-line", b.sub, 2);
+    else if (b.type === "metrics") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Metrics \u2014 one per line:  value | label", itemsToText("metrics", b.items), 4);
+    else if (b.type === "steps") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Steps \u2014 one per line:  title | body", itemsToText("steps", b.items), 5);
+    else if (b.type === "media") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Media \u2014 one per line:  url | caption", itemsToText("media", b.items), 4, "URL may be an image, gif or video. Leave the url blank for a redacted placeholder.");
+    else if (b.type === "split") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + sfInput(i, j, "leftLabel", "Left label") + sfInput(i, j, "rightLabel", "Right label") + "</div>" + sfArea(i, j, "left", "Left items \u2014 one per line", listToText(b.left), 3) + sfArea(i, j, "right", "Right items \u2014 one per line", listToText(b.right), 3);
+    else if (b.type === "faq") body = sfArea(i, j, "items", "Q&A \u2014 one per line:  question | answer", itemsToText("faq", b.items), 4);
+    var locked = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="locked"' + (b.locked ? " checked" : "") + " /> Locked \u2014 only after the deeper-cut pass</label>";
+    return '<div class="card study__block">' + head + common + body + locked + "</div>";
+  }
+  function smeta(i, field, label, hint) {
+    var st = data.work[i].study;
+    return '<div class="af"><label class="af__label">' + label + '</label><input type="text" data-study="' + i + '" data-sfield="' + field + '" value="' + escAttr(st[field] || "") + '" />' + (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
+  }
+  function studyEditor(w, i) {
+    var st = w.study;
+    var blocks = st.blocks || (st.blocks = []);
+    var cover = typeof st.cover === "string" ? st.cover : (st.cover && (st.cover.src || st.cover.image)) || "";
+    var isVid = /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i.test(cover) || /^data:video\//i.test(cover);
+    var unlockVal = studyUnlockPlain[w.id] || "";
+    var meta = smeta(i, "tagline", "Tagline", "one line under the title") +
+      '<div class="af__row">' + smeta(i, "role", "Role") + smeta(i, "timeline", "Timeline") + "</div>" +
+      '<div class="af__row">' + smeta(i, "team", "Team") + smeta(i, "scope", "Scope") + "</div>";
+    var coverPrev = cover ? (isVid ? '<video src="' + escAttr(cover) + '" muted loop autoplay playsinline></video>' : '<img src="' + escAttr(cover) + '" alt="" />') : "<span>No cover \u2014 a themed title card is shown</span>";
+    var coverBlock = '<div class="imgblk"><div class="af__label">Cover \u2014 image, gif or video</div>' +
+      '<div class="imgblk__preview' + (cover ? " has" : "") + '">' + coverPrev + "</div>" +
+      '<input type="text" data-study="' + i + '" data-sfield="cover" value="' + escAttr(cover) + '" placeholder="Paste an image / gif / video URL\u2026" />' +
+      '<div class="imgblk__row"><button class="btn btn--ghost" data-act="study-cover-upload" data-index="' + i + '">Upload\u2026</button>' + (cover ? '<button class="btn btn--ghost" data-act="study-cover-clear" data-index="' + i + '">Remove</button>' : "") + "</div>" +
+      '<div class="imgblk__hint">Video &amp; gif are best pasted as a URL \u2014 uploads embed into your published file.</div></div>';
+    var unlockBlock = '<div class="af"><label class="af__label">Deeper-cut pass</label>' +
+      '<input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
+      '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks \u00b7 case-insensitive \u00b7 locked content still ships in your file (soft gate)</div></div>";
+    var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length); }).join("") || '<div class="adm__empty">No sections yet \u2014 add one below.</div>';
+    var add = '<div class="study__add">' + STUDY_BLOCK_TYPES.map(function (t) { return '<button class="btn btn--add study__addbtn" data-act="study-addblock" data-index="' + i + '" data-type="' + t[0] + '">+ ' + t[1] + "</button>"; }).join("") + "</div>";
+    return '<div class="study__panel">' +
+      '<div class="adm__sec-note" style="margin:.2rem 0 1rem">Compose the case study as a stack of sections. Each <em>Section label</em> becomes a left-nav item on the project page.</div>' +
+      meta + coverBlock + unlockBlock +
+      '<div class="study__blocks">' + list + "</div>" + add +
+      '<div class="study__foot"><button class="btn btn--ghost" data-act="study-preview" data-index="' + i + '">Preview case study \u2197</button><button class="btn btn--ghost" data-act="study-close" data-index="' + i + '">Done</button></div>' +
+      "</div>";
+  }
+  function studyToggle(w, i) {
+    var n = (w.study && w.study.blocks && w.study.blocks.length) || 0;
+    var label = openStudy === i ? "\u25be Case study" : "\u25b8 Case study";
+    var meta = openStudy === i ? "" : (n ? " \u00b7 " + n + " section" + (n > 1 ? "s" : "") : w.study ? " \u00b7 empty" : " \u00b7 none yet");
+    return '<div class="study__toggle"><button class="btn btn--ghost" data-act="study-toggle" data-index="' + i + '">' + label + '</button><span class="study__meta">' + meta + "</span></div>";
+  }
+  function setStudyUnlock(st, phrase) {
+    phrase = String(phrase || "").trim().toLowerCase();
+    return sha256(phrase ? phrase : "\u0000").then(function (h) {
+      st.unlockHash = phrase ? h : "";
+      saveDraft(true);
+      status(phrase ? "Deeper-cut pass set" : "Pass cleared", !!phrase);
+    });
+  }
+  function onStudyMeta(t) {
+    var i = +t.dataset.study; var w = data.work[i]; if (!w || !w.study) return;
+    var f = t.dataset.sfield;
+    if (f === "unlock") { studyUnlockPlain[w.id] = t.value; setStudyUnlock(w.study, t.value); return; }
+    w.study[f] = t.value;
+    saveDraft();
+  }
+  function onStudyBlock(t) {
+    var i = +t.dataset.sblock, j = +t.dataset.bindex, f = t.dataset.bfield;
+    var st = data.work[i] && data.work[i].study; if (!st || !st.blocks[j]) return;
+    var b = st.blocks[j];
+    if (f === "list" || f === "left" || f === "right") b[f] = studyLines(t.value);
+    else if (f === "items") b.items = parseItems(b.type, t.value);
+    else b[f] = t.value;
+    saveDraft();
+  }
+
   /* ---------- section renderers ---------- */
   const sections = {
     landing() {
@@ -361,6 +493,7 @@
           itemField("work", i, "desc", "Description", { type: "textarea", rows: 3 }) +
           itemField("work", i, "tags", "Tags", { hint: "comma-separated" }) +
           imageryBlock(w, i) +
+          studyToggle(w, i) + (openStudy === i ? studyEditor(w, i) : "") +
           "</div>";
       });
       html += addBtn("work", "Add work");
@@ -487,6 +620,8 @@
   /* ---------- events ---------- */
   function onInput(e) {
     const t = e.target;
+    if (t.dataset.study !== undefined && t.dataset.sfield) { onStudyMeta(t); return; }
+    if (t.dataset.sblock !== undefined && t.dataset.bfield && t.dataset.bfield !== "locked") { onStudyBlock(t); return; }
     if (t.dataset.path) { setPath(data, t.dataset.path, t.value); apply(); return; }
     if (t.dataset.sv !== undefined && t.dataset.field) { onSvInput(t); return; }
     if (t.dataset.list && t.dataset.scalar) { data[t.dataset.list][+t.dataset.index] = t.value; apply(); return; }
@@ -517,6 +652,14 @@
 
   function onChange(e) {
     const t = e.target;
+    if (t.dataset.sblock !== undefined && t.dataset.bfield === "locked") {
+      const wi = +t.dataset.sblock, bj = +t.dataset.bindex;
+      if (data.work[wi] && data.work[wi].study && data.work[wi].study.blocks[bj]) {
+        data.work[wi].study.blocks[bj].locked = t.checked;
+        saveDraft(true);
+      }
+      return;
+    }
     if (t.id === "aiSame") { aiPersistVisible(); localStorage.setItem("rk:ai:same", t.checked ? "1" : "0"); renderBody(); return; }
     if (t.dataset.aiscope) { aiPickProvider(t.dataset.aiscope, t.value); return; }
     if (t.dataset.sv !== undefined && t.dataset.sel) { onSvToggle(t); return; }
@@ -588,6 +731,24 @@
       status(n ? "Auto-styled — bronze products, bold phrases, italic closing word." : "Add some copy first, then Auto-style.", n > 0);
       return;
     }
+    if (act === "study-toggle") {
+      if (openStudy === i) openStudy = -1;
+      else { if (!data.work[i].study) data.work[i].study = blankStudy(); openStudy = i; }
+      saveDraft(); renderBody(); return;
+    }
+    if (act === "study-close") { openStudy = -1; renderBody(); return; }
+    if (act === "study-addblock") {
+      const st = data.work[i].study || (data.work[i].study = blankStudy());
+      st.blocks = st.blocks || [];
+      st.blocks.push(blankBlock(b.dataset.type));
+      saveDraft(true); renderBody(); return;
+    }
+    if (act === "study-blockup") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j > 0) { [s[j - 1], s[j]] = [s[j], s[j - 1]]; saveDraft(true); renderBody(); } return; }
+    if (act === "study-blockdown") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j < s.length - 1) { [s[j + 1], s[j]] = [s[j], s[j + 1]]; saveDraft(true); renderBody(); } return; }
+    if (act === "study-blockremove") { data.work[i].study.blocks.splice(+b.dataset.bindex, 1); saveDraft(true); renderBody(); return; }
+    if (act === "study-cover-upload") { pickImage(function (uri) { const st = data.work[i].study || (data.work[i].study = blankStudy()); st.cover = uri; saveDraft(true); renderBody(); status("Cover set.", true); }); return; }
+    if (act === "study-cover-clear") { if (data.work[i].study) data.work[i].study.cover = ""; saveDraft(true); renderBody(); return; }
+    if (act === "study-preview") { saveDraft(true); window.open("/work/" + data.work[i].id, "_blank", "noopener"); status("Opened the case study in a new tab (using your draft)."); return; }
     if (act === "add") { data[list].push(blank(list)); apply(true); renderBody(); }
     else if (act === "remove") { data[list].splice(i, 1); apply(true); renderBody(); }
     else if (act === "up" && i > 0) { const a = data[list]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; apply(true); renderBody(); }
@@ -860,6 +1021,7 @@
     data = readDraft() || clone(window.RK.data);
     if (!root) buildShell();
     activeTab = "landing";
+    openStudy = -1;
     renderBody();
     document.documentElement.classList.add("adm-lock");
     document.body.classList.add("adm-lock");
