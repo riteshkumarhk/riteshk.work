@@ -15,6 +15,19 @@
   const HASH_KEY = "rk:admin:hash";
   const DRAFT_KEY = "rk:content:draft";
   const THEME_KEY = "rk:theme";
+  const MUSIC_ON_KEY = "rk:music:on";
+  const MUSIC_TRACK_KEY = "rk:music:track";
+  const DEFAULT_TRACKS = [
+    { title: "After Hours", src: "/audio/1.mp3" },
+    { title: "Velvet", src: "/audio/2.mp3" },
+    { title: "Slow Burn", src: "/audio/3.mp3" }
+  ];
+  const MUS_ICON = {
+    play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>',
+    prev: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6zM9.5 12l8.5 6V6z"/></svg>',
+    next: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 6h2v12h-2zM6 6v12l8.5-6z"/></svg>'
+  };
   const EDIT_URL = "https://github.com/riteshkumarhk/riteshk.work/edit/main/content.json";
   const GH_OWNER = "riteshkumarhk";
   const GH_REPO = "riteshk.work";
@@ -1300,12 +1313,86 @@
   }
 
   /* ---------- control menu (clock flyout) ---------- */
+  /* ---------- ambient music player ---------- */
+  let audioEl = null, musCur = 0, musArmed = false;
+  function musTracks() {
+    var m = window.RK && window.RK.data && window.RK.data.music;
+    var ok = Array.isArray(m) ? m.filter(function (t) { return t && t.src; }) : [];
+    return ok.length ? ok : DEFAULT_TRACKS;
+  }
+  function musEnsure() {
+    if (audioEl) return audioEl;
+    audioEl = new Audio();
+    audioEl.preload = "auto";
+    audioEl.volume = 0.55;
+    audioEl.addEventListener("ended", function () { musLoad(musCur + 1, true); });
+    ["play", "pause", "error"].forEach(function (ev) { audioEl.addEventListener(ev, musSync); });
+    return audioEl;
+  }
+  function musLoad(i, play) {
+    var list = musTracks(); if (!list.length) return;
+    musCur = ((i % list.length) + list.length) % list.length;
+    var a = musEnsure();
+    var src = list[musCur].src;
+    if (a.getAttribute("src") !== src) a.src = src;
+    try { localStorage.setItem(MUSIC_TRACK_KEY, String(musCur)); } catch (e) {}
+    if (play) musPlay();
+    musSync();
+  }
+  function musArm() {
+    if (musArmed) return; musArmed = true;
+    var go = function () {
+      musArmed = false;
+      ["pointerdown", "keydown", "touchstart"].forEach(function (ev) { document.removeEventListener(ev, go, true); });
+      if (localStorage.getItem(MUSIC_ON_KEY) !== "0") { var a = musEnsure(); var p = a.play(); if (p && p.catch) p.catch(function () {}); }
+    };
+    ["pointerdown", "keydown", "touchstart"].forEach(function (ev) { document.addEventListener(ev, go, true); });
+  }
+  function musPlay() {
+    var a = musEnsure();
+    if (!a.getAttribute("src")) musLoad(musCur, false);
+    try { localStorage.setItem(MUSIC_ON_KEY, "1"); } catch (e) {}
+    var p = a.play();
+    if (p && p.catch) p.catch(function () { musArm(); });
+  }
+  function musPause() {
+    if (audioEl) audioEl.pause();
+    try { localStorage.setItem(MUSIC_ON_KEY, "0"); } catch (e) {}
+    musSync();
+  }
+  function musToggle() { var a = musEnsure(); if (a.paused) musPlay(); else musPause(); }
+  function musSync() {
+    if (!menuEl) return;
+    var playing = !!(audioEl && !audioEl.paused && !audioEl.ended);
+    var btn = menuEl.querySelector('[data-mus="toggle"]');
+    if (btn) { btn.innerHTML = playing ? MUS_ICON.pause : MUS_ICON.play; btn.setAttribute("aria-label", playing ? "Pause" : "Play"); }
+    var title = menuEl.querySelector(".mus__title");
+    if (title) { var t = musTracks()[musCur]; title.textContent = (t && t.title) || "Ambient"; }
+    var sub = menuEl.querySelector(".mus__sub");
+    if (sub) sub.textContent = (audioEl && audioEl.error) ? "Add tracks to /audio/" : "Deep ambient \u00b7 loops";
+  }
+  function musInit() {
+    try { musCur = parseInt(localStorage.getItem(MUSIC_TRACK_KEY), 10) || 0; } catch (e) { musCur = 0; }
+    var list = musTracks(); if (!list.length) return;
+    if (musCur < 0 || musCur >= list.length) musCur = 0;
+    musLoad(musCur, false);
+    if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musPlay();
+  }
+
   function buildMenu() {
     const theme = (window.__theme ? window.__theme.mode() : (localStorage.getItem(THEME_KEY) || "system"));
     const narrow = window.innerWidth < ADMIN_MIN;
     menuEl = document.createElement("div");
     menuEl.className = "cmenu";
     menuEl.innerHTML =
+      '<div class="cmenu__grp"><div class="cmenu__head">Ambience</div>' +
+        '<div class="mus">' +
+          '<button class="mus__btn" data-mus="prev" aria-label="Previous track">' + MUS_ICON.prev + "</button>" +
+          '<button class="mus__btn mus__btn--play" data-mus="toggle" aria-label="Play">' + MUS_ICON.play + "</button>" +
+          '<button class="mus__btn" data-mus="next" aria-label="Next track">' + MUS_ICON.next + "</button>" +
+          '<div class="mus__meta"><div class="mus__title">Ambient</div><div class="mus__sub">Deep ambient \u00b7 loops</div></div>' +
+        "</div></div>" +
+      '<div class="cmenu__sep"></div>' +
       '<div class="cmenu__grp"><div class="cmenu__head">Appearance</div>' +
         '<div class="cmenu__themes">' +
           [["day", "Light", "Always light"], ["night", "Dark", "Always dark"], ["system", "System", "Match your device"], ["local", "Local", "Light by day, dark by night \u2014 your local time"]].map(function (t) {
@@ -1317,6 +1404,7 @@
       '<button class="cmenu__item" data-open="admin"' + (narrow ? " disabled" : "") + '><span class="cmenu__ico">\u2726</span><span><b>Admin mode</b><i>' + (narrow ? "Needs a wider screen" : "Edit &amp; curate the site") + "</i></span></button>";
     document.body.appendChild(menuEl);
     positionMenu();
+    musSync();
     menuEl.addEventListener("click", onMenuClick);
     window.addEventListener("resize", positionMenu);
     setTimeout(function () { document.addEventListener("click", onDocClick); }, 0);
@@ -1337,6 +1425,14 @@
   function onDocClick(e) { if (menuEl && !menuEl.contains(e.target) && e.target.id !== "clock") closeMenu(); }
   function toggleMenu(e) { if (e) e.stopPropagation(); if (menuEl) closeMenu(); else buildMenu(); }
   function onMenuClick(e) {
+    const mus = e.target.closest("[data-mus]");
+    if (mus) {
+      const m = mus.dataset.mus;
+      if (m === "toggle") musToggle();
+      else if (m === "next") musLoad(musCur + 1, true);
+      else if (m === "prev") musLoad(musCur - 1, true);
+      return;
+    }
     const th = e.target.closest(".cmenu__theme");
     if (th) {
       if (window.__theme) window.__theme.set(th.dataset.theme);
@@ -1402,6 +1498,7 @@
     if (clock) clock.addEventListener("click", toggleMenu);
     const more = document.getElementById("moreBtn");
     if (more) more.addEventListener("click", toggleMenu);
+    musInit();
   }
   if (window.__siteRendered) init();
   else document.addEventListener("site:rendered", init, { once: true });
