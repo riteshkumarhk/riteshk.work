@@ -1366,7 +1366,9 @@
   function synthEnsure() { if (synth === null) synth = makeSynth(); return synth; }
   function audioEnsure() {
     if (audioEl) return audioEl;
-    audioEl = new Audio(); audioEl.preload = "none"; audioEl.volume = 0.1; audioEl.loop = true;
+    audioEl = new Audio(); audioEl.preload = "none"; audioEl.volume = 0.07; audioEl.loop = true;
+    audioEl.addEventListener("playing", function () { musPlaying = true; musSync(); });
+    audioEl.addEventListener("pause", function () { musPlaying = false; musSync(); });
     audioEl.addEventListener("error", musSync);
     return audioEl;
   }
@@ -1392,20 +1394,20 @@
   function musPlay() {
     var t = musCurTrack(); if (!t) return;
     try { localStorage.setItem(MUSIC_ON_KEY, "1"); } catch (e) {}
-    musPlaying = true;
     if (t.src) {
       if (synth) synth.pause();
       var a = audioEnsure();
       var p = a.play();
       if (p && p.catch) p.catch(function () { musArm(); });
+      // musPlaying flips true via the audio 'playing' event once sound actually starts
     } else {
       if (audioEl) audioEl.pause();
       var s = synthEnsure();
       if (!s) { musArm(); musSync(); return; }
       s.play(t.gen || "midnight");
-      if (!s.running()) musArm();
+      if (s.running()) musPlaying = true; else musArm();
+      musSync();
     }
-    musSync();
   }
   function musPause() { musStop(); musPlaying = false; try { localStorage.setItem(MUSIC_ON_KEY, "0"); } catch (e) {} musSync(); }
   function musToggle() { if (musPlaying) musPause(); else musPlay(); }
