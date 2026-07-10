@@ -224,10 +224,18 @@
 
   /* ---------- data loading ---------- */
   async function loadData() {
-    try {
-      const draft = localStorage.getItem(DRAFT_KEY);
-      if (draft) return JSON.parse(draft);
-    } catch (e) { /* ignore bad draft */ }
+    // The local draft is a PRIVATE working copy for the admin editor — it must
+    // never silently override the published site, or the owner's browser would
+    // keep showing a stale draft forever after editing once. Only honour it when
+    // explicitly previewing (?draft) or inside the admin live-preview iframe
+    // (?preview). The public site always renders the committed content.json.
+    const params = new URLSearchParams(location.search);
+    if (params.has("draft") || params.has("preview")) {
+      try {
+        const draft = localStorage.getItem(DRAFT_KEY);
+        if (draft) return JSON.parse(draft);
+      } catch (e) { /* ignore bad draft */ }
+    }
     const res = await fetch("content.json?v=" + Date.now());
     if (!res.ok) throw new Error("content.json " + res.status);
     return await res.json();
