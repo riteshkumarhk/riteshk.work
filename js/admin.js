@@ -1314,7 +1314,7 @@
 
   /* ---------- control menu (clock flyout) ---------- */
   /* ---------- ambient music player (Web Audio synth, with optional audio files) ---------- */
-  let audioEl = null, synth = null, musCur = 0, musArmed = false, musPlaying = false, musLastLight = null, musAnnounced = false, musVisArmed = false;
+  let audioEl = null, synth = null, musCur = 0, musArmed = false, musPlaying = false, musLastLight = null, musAnnounced = false, musVisArmed = false, soundToastTimer = 0;
   function musTracks() {
     var m = window.RK && window.RK.data && window.RK.data.music;
     var ok = Array.isArray(m) ? m.filter(function (t) { return t && (t.src || t.gen); }) : [];
@@ -1413,26 +1413,31 @@
     setTimeout(function () {   // if the browser blocked autoplay, invite the one tap that unlocks sound
       if (localStorage.getItem(MUSIC_ON_KEY) === "0") return;
       if (audioEl && !audioEl.paused && !audioEl.muted) return;   // already audible — the browser trusted it
-      musCue(true);
+      musAttract(true);
     }, 1000);
   }
-  function musCue(show) {
-    var el = document.querySelector(".soundcue");
-    if (show) {
-      if (menuEl) return;   // don't overlap the open flyout
-      if (!el) {
-        el = document.createElement("button");
-        el.className = "soundcue";
-        el.setAttribute("aria-label", "Turn on sound");
-        el.innerHTML = '<span class="soundcue__eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="soundcue__lbl">Sound on</span>';
-        el.addEventListener("click", function (e) { e.stopPropagation(); musPlay(); musCue(false); });
-        document.body.appendChild(el);
-      }
-      requestAnimationFrame(function () { if (el) el.classList.add("is-on"); });
-    } else if (el) {
-      el.classList.remove("is-on");
-      setTimeout(function () { if (el && !el.classList.contains("is-on") && el.parentNode) el.parentNode.removeChild(el); }, 600);
+  function musAttract(show) {
+    var cue = document.querySelector(".hero__cue");
+    if (cue) cue.classList.toggle("is-attract", !!show);
+  }
+  function musToast() {
+    var el = document.querySelector(".soundtoast");
+    if (!el) {
+      el = document.createElement("button");
+      el.className = "soundtoast";
+      el.setAttribute("aria-label", "Sound on");
+      el.innerHTML = '<span class="soundtoast__eq" aria-hidden="true"><i></i><i></i><i></i></span><span>Sound on</span>';
+      el.addEventListener("click", function () { musToastHide(); });
+      document.body.appendChild(el);
     }
+    requestAnimationFrame(function () { el.classList.add("is-on"); });
+    clearTimeout(soundToastTimer);
+    soundToastTimer = setTimeout(musToastHide, 3000);
+  }
+  function musToastHide() {
+    var el = document.querySelector(".soundtoast");
+    if (el) el.classList.remove("is-on");
+    clearTimeout(soundToastTimer);
   }
   function musArmVisible() {
     if (musVisArmed) return; musVisArmed = true;
@@ -1465,15 +1470,15 @@
       musSync();
     }
   }
-  function musPause() { musStop(); musPlaying = false; try { localStorage.setItem(MUSIC_ON_KEY, "0"); } catch (e) {} musCue(false); musSync(); }
+  function musPause() { musStop(); musPlaying = false; try { localStorage.setItem(MUSIC_ON_KEY, "0"); } catch (e) {} musAttract(false); musToastHide(); musSync(); }
   function musToggle() { if (musPlaying) musPause(); else musPlay(); }
   function musRefresh() {
     var ct = musCurTrack();
     if (ct && ct.src) {
       var audible = !!(audioEl && !audioEl.paused && !audioEl.muted);
       if (audible) {
-        if (!musAnnounced) { musAnnounced = true; if (ct.title) flash("\u266a " + ct.title + (ct.artist ? " \u2014 " + ct.artist : "")); }
-        musCue(false);
+        musAttract(false);
+        if (!musAnnounced) { musAnnounced = true; musToast(); }
       }
       musPlaying = audible;
     }
