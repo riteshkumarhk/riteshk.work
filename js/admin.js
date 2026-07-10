@@ -48,6 +48,14 @@
   const AI_TEXT_MODEL = { openai: "gpt-4o", gemini: "gemini-2.0-flash", anthropic: "claude-3-5-sonnet-latest", custom: "" };
   const AI_DEFAULT_BASE = { openai: "https://api.openai.com/v1", gemini: "https://generativelanguage.googleapis.com/v1beta", anthropic: "https://api.anthropic.com/v1", custom: "" };
   const AI_IMAGE_PROVIDERS = ["openai", "gemini", "custom"];
+  // Ranked preferences (best first) used to auto-pick the strongest AVAILABLE model per provider.
+  const AI_MODEL_RANK = {
+    openai: { txt: [/^gpt-4o$/, /^gpt-4\.1$/, /^gpt-4o-\d{4}/, /^chatgpt-4o-latest$/, /^gpt-4-turbo$/, /^o3$/, /^o1$/, /^gpt-4o-mini$/, /^gpt-4/], img: [/^gpt-image-1$/, /^dall-e-3$/, /^dall-e-2$/] },
+    anthropic: { txt: [/sonnet-4/, /3-7-sonnet/, /3-5-sonnet-\d{8}$/, /3-5-sonnet/, /opus-4/, /3-opus/, /sonnet/, /haiku/], img: [] },
+    gemini: { txt: [/^gemini-2\.\d-flash$/, /^gemini-2\.\d-pro/, /^gemini-1\.5-pro$/, /^gemini-1\.5-flash$/, /flash$/, /pro$/], img: [/flash.*image/, /imagen/] },
+  };
+  const AI_TEXT_FALLBACK = { openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"], anthropic: ["claude-3-5-sonnet-latest", "claude-3-5-sonnet-20241022", "claude-3-7-sonnet-latest", "claude-sonnet-4-20250514", "claude-3-haiku-20240307"], gemini: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"], custom: [] };
+  const AI_IMG_FALLBACK = { openai: ["gpt-image-1", "dall-e-3", "dall-e-2"], gemini: ["gemini-2.0-flash-preview-image-generation", "imagen-3.0-generate-002"], anthropic: [], custom: [] };
   const STUDY_BLOCK_TYPES = [
     ["text", "Text"], ["statement", "Statement"], ["metrics", "Metrics"],
     ["steps", "Steps"], ["media", "Media"], ["split", "Before / after"], ["faq", "FAQ"],
@@ -1121,9 +1129,11 @@
     } catch (e) { status("Modify failed: " + e.message); }
   }
   async function aiImage(cfg, prompt, sourceImage) {
-    if (cfg.provider === "gemini") return aiImageGemini(cfg, prompt, sourceImage);
     if (cfg.provider === "anthropic") throw new Error("Claude can't generate images \u2014 pick OpenAI or Gemini.");
-    return aiImageOpenAI(cfg, prompt, sourceImage);
+    const cands = await aiModelCandidates(cfg, "img");
+    const c2 = Object.assign({}, cfg, { model: cands[0] || cfg.model });
+    if (c2.provider === "gemini") return aiImageGemini(c2, prompt, sourceImage);
+    return aiImageOpenAI(c2, prompt, sourceImage);
   }
   async function aiImageOpenAI(cfg, prompt, sourceImage) {
     let res;
@@ -1184,38 +1194,82 @@
 
   /* ---------- AI text generation (writing) ---------- */
   function aiHasKey(purpose) { return !!aiCfg(purpose).key; }
-  async function aiText(cfg, system, user, opts) {
-    opts = opts || {};
-    var p = cfg.provider, key = cfg.key, base = cfg.base, model = cfg.model;
-    if (!model || /image|dall[- ]?e|imagen/i.test(model)) model = AI_TEXT_MODEL[p] || model;   // image models can't write
+  // ---- model auto-resolution: list what the key can actually use, pick the best, fall back gracefully ----
+  const aiModelsCache = {};
+  async function aiListModels(cfg) {
+    const ck = cfg.provider + "|" + cfg.base;
+    if (aiModelsCache[ck]) return aiModelsCache[ck];
+    let ids = [];
+    try {
+      if (cfg.provider === "anthropic") {
+        const r = await fetch(cfg.base + "/models?limit=1000", { headers: { "x-api-key": cfg.key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" } });
+        const j = await r.json(); ids = ((j && j.data) || []).map(function (m) { return m.id; });
+      } else if (cfg.provider === "gemini") {
+        const r = await fetch(cfg.base + "/models?pageSize=1000&key=" + encodeURIComponent(cfg.key));
+        const j = await r.json(); ids = ((j && j.models) || []).map(function (m) { return String(m.name || "").replace(/^models\//, ""); });
+      } else if (cfg.provider === "openai") {
+        const r = await fetch(cfg.base + "/models", { headers: { Authorization: "Bearer " + cfg.key } });
+        const j = await r.json(); ids = ((j && j.data) || []).map(function (m) { return m.id; });
+      }
+    } catch (e) { ids = []; }
+    aiModelsCache[ck] = ids || [];
+    return aiModelsCache[ck];
+  }
+  async function aiModelCandidates(cfg, purpose) {
+    if (cfg.provider === "custom") return cfg.model ? [cfg.model] : [];
+    const list = [];
+    const ids = await aiListModels(cfg);
+    const ranks = (AI_MODEL_RANK[cfg.provider] || {})[purpose] || [];
+    if (ids && ids.length) {
+      ranks.forEach(function (rx) { ids.forEach(function (id) { if (rx.test(id) && list.indexOf(id) === -1) list.push(id); }); });
+      if (purpose === "txt") ids.forEach(function (id) { if (list.indexOf(id) === -1 && !/image|dall|imagen|embed|whisper|tts|audio|moderation|realtime|search|vision/i.test(id)) list.push(id); });
+    }
+    (((purpose === "txt" ? AI_TEXT_FALLBACK : AI_IMG_FALLBACK)[cfg.provider]) || []).forEach(function (m) { if (m && list.indexOf(m) === -1) list.push(m); });
+    const def = purpose === "txt" ? AI_TEXT_MODEL[cfg.provider] : AI_DEFAULT_MODEL[cfg.provider];
+    if (def && list.indexOf(def) === -1) list.push(def);
+    return list;
+  }
+  function aiIsModelErr(r) { return r && (r.status === 404 || /model|not[ ._-]?found|does not exist|unknown|deprecat|unsupported/i.test(r.err || "")); }
+  async function aiChatOnce(cfg, model, system, user, opts) {
+    var p = cfg.provider, key = cfg.key, base = cfg.base;
     var maxTokens = opts.maxTokens || 4096;
     var temp = opts.temperature != null ? opts.temperature : 0.7;
     var res, j;
     if (p === "anthropic") {
-      res = await fetch(base + "/messages", { method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({ model: model, max_tokens: maxTokens, temperature: temp, system: system, messages: [{ role: "user", content: user }] }) });
-      j = await res.json().catch(function () { throw new Error("HTTP " + res.status); });
-      if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
-      return ((j.content || []).map(function (b) { return b.text || ""; }).join("")).trim();
+      res = await fetch(base + "/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: model, max_tokens: maxTokens, temperature: temp, system: system, messages: [{ role: "user", content: user }] }) });
+      j = await res.json().catch(function () { return null; });
+      if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
+      return { ok: true, text: ((((j && j.content) || [])).map(function (b) { return b.text || ""; }).join("")).trim() };
     }
     if (p === "gemini") {
       var url = base + "/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key);
       var gb = { contents: [{ role: "user", parts: [{ text: user }] }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: maxTokens, temperature: temp } };
       if (opts.json) gb.generationConfig.responseMimeType = "application/json";
       res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(gb) });
-      j = await res.json().catch(function () { throw new Error("HTTP " + res.status); });
-      if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
-      var cand = (j.candidates && j.candidates[0]) || {};
-      return (((cand.content && cand.content.parts) || []).map(function (x) { return x.text || ""; }).join("")).trim();
+      j = await res.json().catch(function () { return null; });
+      if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
+      var cand = (j && j.candidates && j.candidates[0]) || {};
+      return { ok: true, text: ((((cand.content && cand.content.parts) || [])).map(function (x) { return x.text || ""; }).join("")).trim() };
     }
-    // openai + custom (OpenAI-compatible /chat/completions)
     var ob = { model: model, messages: [{ role: "system", content: system }, { role: "user", content: user }], temperature: temp, max_tokens: maxTokens };
     if (opts.json) ob.response_format = { type: "json_object" };
     res = await fetch(base + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify(ob) });
-    j = await res.json().catch(function () { throw new Error("HTTP " + res.status); });
-    if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
-    return ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim();
+    j = await res.json().catch(function () { return null; });
+    if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
+    return { ok: true, text: ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim() };
+  }
+  async function aiText(cfg, system, user, opts) {
+    opts = opts || {};
+    var candidates = await aiModelCandidates(cfg, "txt");
+    if (!candidates.length) throw new Error("No model available \u2014 check your API key.");
+    var lastErr = "";
+    for (var i = 0; i < candidates.length; i++) {
+      var r = await aiChatOnce(cfg, candidates[i], system, user, opts);
+      if (r.ok) return r.text;
+      lastErr = r.err;
+      if (!aiIsModelErr(r)) throw new Error(r.err); // real problem (auth, rate limit, network) \u2014 don't keep trying models
+    }
+    throw new Error(lastErr || "No usable model for this key.");
   }
   // Inline "connect an AI service" dialog, shown from a feature when its key is missing.
   // Lets the author pick a provider + key and choose ONE shared key (text + image) or a separate one.
