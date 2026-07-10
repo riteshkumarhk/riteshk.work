@@ -1301,15 +1301,15 @@
 
   /* ---------- control menu (clock flyout) ---------- */
   function buildMenu() {
-    const theme = localStorage.getItem(THEME_KEY) || "night";
+    const theme = (window.__theme ? window.__theme.mode() : (localStorage.getItem(THEME_KEY) || "system"));
     const narrow = window.innerWidth < ADMIN_MIN;
     menuEl = document.createElement("div");
     menuEl.className = "cmenu";
     menuEl.innerHTML =
-      '<div class="cmenu__grp"><div class="cmenu__head">Appearance <span class="cmenu__soon">soon</span></div>' +
+      '<div class="cmenu__grp"><div class="cmenu__head">Appearance</div>' +
         '<div class="cmenu__themes">' +
-          ["day", "night", "system", "local"].map(function (t) {
-            return '<button class="cmenu__theme' + (t === theme ? " is-on" : "") + '" data-theme="' + t + '">' + t.charAt(0).toUpperCase() + t.slice(1) + "</button>";
+          [["day", "Light", "Always light"], ["night", "Dark", "Always dark"], ["system", "System", "Match your device"], ["local", "Local", "Light by day, dark by night \u2014 your local time"]].map(function (t) {
+            return '<button class="cmenu__theme' + (t[0] === theme ? " is-on" : "") + '" data-theme="' + t[0] + '" title="' + t[2] + '">' + t[1] + "</button>";
           }).join("") +
         "</div></div>" +
       '<div class="cmenu__sep"></div>' +
@@ -1339,10 +1339,9 @@
   function onMenuClick(e) {
     const th = e.target.closest(".cmenu__theme");
     if (th) {
-      localStorage.setItem(THEME_KEY, th.dataset.theme);
-      document.documentElement.setAttribute("data-theme", th.dataset.theme);
+      if (window.__theme) window.__theme.set(th.dataset.theme);
+      else localStorage.setItem(THEME_KEY, th.dataset.theme);
       menuEl.querySelectorAll(".cmenu__theme").forEach(function (b) { b.classList.toggle("is-on", b === th); });
-      flash("Theme saved — visual themes are coming soon.");
       return;
     }
     const it = e.target.closest("[data-open]");
@@ -1399,7 +1398,6 @@
 
   /* ---------- bootstrap ---------- */
   function init() {
-    document.documentElement.setAttribute("data-theme", localStorage.getItem(THEME_KEY) || "night");
     const clock = document.getElementById("clock");
     if (clock) clock.addEventListener("click", toggleMenu);
     const more = document.getElementById("moreBtn");

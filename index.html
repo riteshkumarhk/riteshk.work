@@ -3,6 +3,38 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Appearance: resolve light/dark before first paint (no flash). Modes: night | day | system | local. -->
+  <script>
+    (function () {
+      var KEY = "rk:theme";
+      var mql = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
+      function mode() { try { return localStorage.getItem(KEY) || "system"; } catch (e) { return "system"; } }
+      function light(m) {
+        m = m || mode();
+        if (m === "day") return true;
+        if (m === "night") return false;
+        if (m === "local") { var h = new Date().getHours(); return h >= 7 && h < 19; }
+        return mql ? mql.matches : false;
+      }
+      var timer = 0;
+      function apply(m) {
+        m = m || mode();
+        var el = document.documentElement;
+        el.setAttribute("data-appearance", light(m) ? "light" : "dark");
+        el.setAttribute("data-theme-mode", m);
+      }
+      function schedule() { clearInterval(timer); if (mode() === "local") timer = setInterval(function () { apply(); }, 60000); }
+      function emit() { try { window.dispatchEvent(new CustomEvent("theme:change", { detail: { mode: mode(), light: light() } })); } catch (e) {} }
+      window.__theme = {
+        mode: mode,
+        isLight: function () { return light(); },
+        set: function (m) { try { localStorage.setItem(KEY, m); } catch (e) {} apply(m); schedule(); emit(); },
+        apply: apply
+      };
+      if (mql) { var onSys = function () { if (mode() === "system") { apply(); emit(); } }; mql.addEventListener ? mql.addEventListener("change", onSys) : mql.addListener(onSys); }
+      apply(); schedule();
+    })();
+  </script>
   <title>Ritesh Kumar — Senior Product Designer</title>
   <meta name="description" content="Ritesh Kumar — Senior Product Designer working on growth, AI and identity experiences across Microsoft Edge, Windows and Microsoft Search. Thoughtful, strategic product design." />
   <meta name="author" content="Ritesh Kumar" />

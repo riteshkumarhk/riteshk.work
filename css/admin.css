@@ -46,6 +46,10 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 
 .adm {
   position: fixed; inset: 0; z-index: 10000; font-family: var(--sans);
+  --bg: #08080a; --bg-2: #0d0d10; --bg-elev: #111116;
+  --text: #ECE7E1; --text-dim: #8f8a84; --text-faint: #5a5650;
+  --line: rgba(236,231,225,0.12); --line-soft: rgba(236,231,225,0.06);
+  --accent: #D8A657; --accent-2: #b8843a;
   background: var(--bg); color: var(--text);
   display: flex; flex-direction: column;
   opacity: 0; visibility: hidden; transition: opacity .4s var(--ease), visibility .4s;
