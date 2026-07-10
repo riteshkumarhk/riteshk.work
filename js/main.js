@@ -315,6 +315,7 @@
       if (!running) return;
       ctx.clearRect(0, 0, W, H);
       const col = accent(), mx = mX * DPR, my = mY * DPR, near = 150 * DPR;
+      const aMul = document.documentElement.getAttribute("data-appearance") === "light" ? 2.1 : 1; // dark-gold on cream needs more presence than bronze on black
       for (let i = 0; i < parts.length; i++) {
         const p = parts[i];
         p.x += p.vx; p.y += p.vy;
@@ -322,7 +323,7 @@
         if (dx * dx + dy * dy < near * near) { p.x += dx * 0.0009; p.y += dy * 0.0009; }
         if (p.x < 0) p.x += W; else if (p.x > W) p.x -= W;
         if (p.y < 0) p.y += H; else if (p.y > H) p.y -= H;
-        ctx.globalAlpha = p.a; ctx.fillStyle = col;
+        ctx.globalAlpha = Math.min(0.62, p.a * aMul); ctx.fillStyle = col;
         ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.283); ctx.fill();
       }
       ctx.globalAlpha = 1;

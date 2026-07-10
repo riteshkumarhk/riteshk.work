@@ -670,7 +670,6 @@ html.lite .cursor { display: none; }
 html.lite .bg-field { display: none; }
 /* Ambient background particle field */
 .bg-field { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
-html[data-appearance="light"] .bg-field { opacity: .85; }
 /* ---------- Light appearance ---------- */
 html[data-appearance="light"] {
   --bg: #f2eee6; --bg-2: #eae5db; --bg-elev: #e2dcd0;
