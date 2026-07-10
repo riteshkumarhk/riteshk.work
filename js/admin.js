@@ -1384,12 +1384,21 @@
   }
   function musArm() {
     if (musArmed) return; musArmed = true;
-    var go = function () {
+    var evs = ["pointerdown", "mousedown", "keydown", "touchstart", "touchmove", "wheel", "scroll"];
+    var opts = { capture: true, passive: true };
+    var last = 0;
+    function disarm() {
       musArmed = false;
-      ["pointerdown", "keydown", "touchstart"].forEach(function (ev) { document.removeEventListener(ev, go, true); });
-      if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musPlay();
-    };
-    ["pointerdown", "keydown", "touchstart"].forEach(function (ev) { document.addEventListener(ev, go, true); });
+      evs.forEach(function (ev) { window.removeEventListener(ev, go, opts); });
+      if (audioEl) audioEl.removeEventListener("playing", disarm);
+    }
+    function go() {
+      if (localStorage.getItem(MUSIC_ON_KEY) === "0") { disarm(); return; }
+      var now = Date.now(); if (now - last < 400) return; last = now;  // throttle repeated scroll/wheel attempts
+      musPlay();
+    }
+    evs.forEach(function (ev) { window.addEventListener(ev, go, opts); });
+    var a = audioEnsure(); if (a) a.addEventListener("playing", disarm);  // stop retrying once sound truly starts
   }
   function musPlay() {
     var t = musCurTrack(); if (!t) return;
