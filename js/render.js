@@ -271,36 +271,45 @@
   }
 
   /* ---------- data loading ---------- */
-  async function loadData() {
-    // The local draft is a PRIVATE working copy for the admin editor — it must
-    // never silently override the published site, or the owner's browser would
-    // keep showing a stale draft forever after editing once. Only honour it when
-    // explicitly previewing (?draft) or inside the admin live-preview iframe
-    // (?preview). The public site always renders the committed content.json.
-    const params = new URLSearchParams(location.search);
-    if (params.has("draft") || params.has("preview")) {
-      try {
-        const draft = localStorage.getItem(DRAFT_KEY);
-        if (draft) return JSON.parse(draft);
-      } catch (e) { /* ignore bad draft */ }
-    }
+  // Fast, stable signature of the published content so the admin can tell when a
+  // saved draft is stale (i.e. content.json changed under it) and discard it.
+  function sig(str) {
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+  }
+  async function fetchPublished() {
     const res = await fetch("content.json?v=" + Date.now());
     if (!res.ok) throw new Error("content.json " + res.status);
     return await res.json();
   }
 
   async function bootstrap() {
-    let data;
+    let published;
     try {
-      data = await loadData();
+      published = await fetchPublished();
     } catch (e) {
       console.error("Content load failed:", e);
       document.body.classList.remove("site-loading");
       return;
     }
+    const publishedSig = sig(JSON.stringify(published));
+
+    // The local draft is a PRIVATE admin working copy. Only render it when
+    // explicitly previewing (?draft) or inside the admin live-preview iframe
+    // (?preview). The public site always renders the committed content.json.
+    let data = published;
+    const params = new URLSearchParams(location.search);
+    if (params.has("draft") || params.has("preview")) {
+      try { const d = localStorage.getItem(DRAFT_KEY); if (d) data = JSON.parse(d); } catch (e) { /* ignore bad draft */ }
+    }
+
     DATA = data;
     window.RK = Object.assign(window.RK || {}, {
       data: data,
+      published: published,
+      publishedSig: publishedSig,
+      sig: sig,
       render: render,
       md: md,
       esc: esc,

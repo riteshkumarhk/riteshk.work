@@ -16,6 +16,12 @@
   const DRAFT_KEY = "rk:content:draft";
   const THEME_KEY = "rk:theme";
   const EDIT_URL = "https://github.com/riteshkumarhk/riteshk.work/edit/main/content.json";
+  const GH_OWNER = "riteshkumarhk";
+  const GH_REPO = "riteshk.work";
+  const GH_BRANCH = "main";
+  const GH_API = "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/content.json";
+  const GH_TOKEN_KEY = "rk:gh:token";
+  const DRAFT_SIG_KEY = "rk:content:draft:sig";
   const PREVIEW_SRC = "index.html?preview=1&lite=1";
   const ADMIN_MIN = 900; // below this the split editor can't fit — admin is disabled
   const AI_PROVIDERS = [
@@ -103,7 +109,10 @@
   function saveDraft(immediate) {
     clearTimeout(saveTimer);
     const save = () => {
-      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(data)); } catch (e) {}
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+        localStorage.setItem(DRAFT_SIG_KEY, (window.RK && window.RK.publishedSig) || "");
+      } catch (e) {}
       status("Draft saved locally");
     };
     if (immediate) save();
@@ -772,10 +781,56 @@
   }
 
   /* ---------- publish / revert ---------- */
+  /* ---------- publish ---------- */
   function publish() {
+    const token = localStorage.getItem(GH_TOKEN_KEY);
+    if (token) ghPublish(token);
+    else publishModal();
+  }
+
+  function beforePublish() {
     const styled = autoStyleLanding(false);
     if (styled) { if (activeTab === "landing") renderBody(); apply(true); }
-    const json = JSON.stringify(data, null, 2);
+    return JSON.stringify(data, null, 2);
+  }
+
+  function ghHeaders(token) {
+    return {
+      Authorization: "Bearer " + token,
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    };
+  }
+  function b64(str) { return btoa(unescape(encodeURIComponent(str))); }
+
+  async function ghPublish(token) {
+    const json = beforePublish();
+    status("Publishing to GitHub\u2026");
+    try {
+      let sha;
+      const getRes = await fetch(GH_API + "?ref=" + GH_BRANCH + "&t=" + Date.now(), { headers: ghHeaders(token) });
+      if (getRes.status === 401 || getRes.status === 403) { publishModal("That token was rejected. Paste a token with Contents write access to this repo, or publish manually."); return; }
+      if (getRes.ok) { const j = await getRes.json(); sha = j.sha; }
+      else if (getRes.status !== 404) throw new Error("read HTTP " + getRes.status);
+      const body = { message: "Update content.json via admin", content: b64(json), branch: GH_BRANCH };
+      if (sha) body.sha = sha;
+      const putRes = await fetch(GH_API, { method: "PUT", headers: ghHeaders(token), body: JSON.stringify(body) });
+      const pj = await putRes.json().catch(() => ({}));
+      if (putRes.status === 401 || putRes.status === 403) { publishModal("That token can\u2019t write to this repo. Use a token with Contents: write, or publish manually."); return; }
+      if (!putRes.ok) throw new Error((pj && pj.message) || ("HTTP " + putRes.status));
+      // Success: this data is now the published content — clear the draft so it can't go stale.
+      localStorage.removeItem(DRAFT_KEY);
+      localStorage.removeItem(DRAFT_SIG_KEY);
+      if (window.RK) { window.RK.published = clone(data); if (window.RK.sig) window.RK.publishedSig = window.RK.sig(JSON.stringify(data)); }
+      status("Published \u2014 your site updates in about a minute.", true);
+    } catch (e) {
+      status("Publish failed: " + (e && e.message) + " \u2014 try again, or use Publish manually.");
+    }
+  }
+
+  function publishManual() {
+    const json = beforePublish();
     try {
       const blob = new Blob([json], { type: "application/json" });
       const a = document.createElement("a");
@@ -785,12 +840,47 @@
     } catch (e) {}
     if (navigator.clipboard) navigator.clipboard.writeText(json).catch(() => {});
     window.open(EDIT_URL, "_blank", "noopener");
-    status("Downloaded + copied. Paste into the GitHub tab and Commit to publish.", true);
+    status("Downloaded + copied \u2014 paste into the GitHub tab and Commit.", true);
+  }
+
+  function publishModal(msg) {
+    const saved = localStorage.getItem(GH_TOKEN_KEY);
+    const modal = document.createElement("div");
+    modal.className = "pass";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">Publish</div>' +
+      '<div class="pass__sub">' + (msg ? escHtml(msg) :
+        "One-click publish commits <b>content.json</b> straight to your repo. Paste a GitHub token with <b>Contents: write</b> on this repo \u2014 it\u2019s stored only in this browser and sent only to GitHub.") + "</div>" +
+      '<input type="password" placeholder="' + (saved ? "Saved \u2014 paste to replace" : "GitHub token (github_pat_\u2026 or ghp_\u2026)") + '" autocomplete="off" />' +
+      '<div class="pass__err"></div>' +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-manual>Publish manually</button>' +
+      '<button class="btn btn--primary" data-go>Publish now</button></div>' +
+      (saved ? '<button class="pass__link" data-forget>Forget saved token</button>' : "") +
+      '<div class="pass__note">Tip: use a fine-grained token limited to this one repository, with Contents: Read and write.</div></div>';
+    document.body.appendChild(modal);
+    const inp = modal.querySelector("input"), err = modal.querySelector(".pass__err");
+    setTimeout(() => { try { inp.focus(); } catch (e) {} }, 30);
+    const done = () => modal.remove();
+    modal.addEventListener("click", (e) => { if (e.target === modal) done(); });
+    const forget = modal.querySelector("[data-forget]");
+    if (forget) forget.addEventListener("click", () => { localStorage.removeItem(GH_TOKEN_KEY); done(); status("Saved token forgotten."); });
+    modal.querySelector("[data-manual]").addEventListener("click", () => { done(); publishManual(); });
+    function go() {
+      const typed = inp.value.trim();
+      const t = typed || saved;
+      if (!t) { err.textContent = "Paste a token, or choose Publish manually."; return; }
+      if (typed) localStorage.setItem(GH_TOKEN_KEY, typed);
+      done();
+      ghPublish(t);
+    }
+    modal.querySelector("[data-go]").addEventListener("click", go);
+    modal.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); if (e.key === "Escape") done(); });
   }
 
   function revert() {
     if (!confirm("Discard local changes and reload the published content?")) return;
     localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem(DRAFT_SIG_KEY);
     location.reload();
   }
 
@@ -992,6 +1082,7 @@
           '<span class="adm__status">Editing local draft</span>' +
           '<button class="btn btn--ghost adm__viewtoggle" data-view>Preview</button>' +
           '<button class="btn btn--ghost" data-revert>Revert</button>' +
+          '<button class="btn btn--ghost adm__pubcfg" data-pubcfg title="Publishing settings" aria-label="Publishing settings">\u2699</button>' +
           '<button class="btn btn--primary" data-publish>Publish</button>' +
           '<button class="btn adm__exit" data-exit aria-label="Exit admin">Exit ✕</button>' +
         "</div>" +
@@ -1027,6 +1118,7 @@
       t.addEventListener("click", () => { activeTab = t.dataset.tab; renderBody(); })
     );
     root.querySelector("[data-publish]").addEventListener("click", publish);
+    root.querySelector("[data-pubcfg]").addEventListener("click", () => publishModal());
     root.querySelector("[data-revert]").addEventListener("click", revert);
     root.querySelector("[data-exit]").addEventListener("click", exit);
     root.querySelector("[data-view]").addEventListener("click", (e) => {
@@ -1040,7 +1132,21 @@
   function onKey(e) { if (e.key === "Escape" && root && root.classList.contains("is-open")) exit(); }
 
   function open() {
-    data = readDraft() || clone(window.RK.data);
+    // Always base the editor on the latest PUBLISHED content. Only resume a saved
+    // draft if it was built on that same published content (matching signature);
+    // otherwise it's stale (content.json changed under it) and is discarded so the
+    // admin never shows outdated modules or republishes over newer content.
+    const pub = (window.RK && window.RK.published) ? window.RK.published : (window.RK && window.RK.data);
+    const draft = readDraft();
+    const draftSig = localStorage.getItem(DRAFT_SIG_KEY);
+    const pubSig = (window.RK && window.RK.publishedSig) || "";
+    let staleDiscarded = false;
+    if (draft && draftSig && pubSig && draftSig === pubSig) {
+      data = draft;
+    } else {
+      if (draft) { localStorage.removeItem(DRAFT_KEY); localStorage.removeItem(DRAFT_SIG_KEY); staleDiscarded = true; }
+      data = clone(pub);
+    }
     if (!root) buildShell();
     activeTab = "landing";
     openStudy = -1;
@@ -1049,6 +1155,7 @@
     document.body.classList.add("adm-lock");
     requestAnimationFrame(() => root.classList.add("is-open"));
     if (frame && frame.contentWindow && frame.contentWindow.RK) previewApply();
+    if (staleDiscarded) status("Loaded the latest published content (an old local draft was discarded).", true);
   }
 
   function exit() {

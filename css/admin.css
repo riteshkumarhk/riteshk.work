@@ -27,6 +27,10 @@
 .pass__err { color: #ff7a7a; font-size: .74rem; min-height: 1.1em; margin-bottom: .6rem; }
 .pass__actions { display: flex; gap: .6rem; }
 .pass__actions .btn { flex: 1; }
+.pass__link { display: block; width: 100%; text-align: center; background: none; border: 0; color: var(--text-dim); font-family: var(--mono); font-size: .66rem; text-decoration: underline; cursor: pointer; margin-top: .7rem; }
+.pass__link:hover { color: var(--text); }
+.pass__note { font-size: .64rem; color: var(--text-faint); margin-top: .7rem; line-height: 1.45; }
+.adm__pubcfg { padding-left: .6rem; padding-right: .6rem; }
 
 /* ---------- full-screen admin studio ---------- */
 html.adm-lock, body.adm-lock { overflow: hidden !important; }
