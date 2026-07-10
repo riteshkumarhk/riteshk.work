@@ -30,6 +30,15 @@
 .pass__link { display: block; width: 100%; text-align: center; background: none; border: 0; color: var(--text-dim); font-family: var(--mono); font-size: .66rem; text-decoration: underline; cursor: pointer; margin-top: .7rem; }
 .pass__link:hover { color: var(--text); }
 .pass__note { font-size: .64rem; color: var(--text-faint); margin-top: .7rem; line-height: 1.45; }
+.pass__note a { color: var(--accent); text-decoration: underline; }
+.pass__note a:hover { color: var(--text); }
+.pass__steps { text-align: left; margin: 0 0 1rem; padding: .8rem .9rem .8rem 2.4rem; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; font-size: .74rem; color: var(--text-dim); line-height: 1.5; list-style: decimal outside; }
+.pass__steps li { margin: .3rem 0; padding-left: .2rem; }
+.pass__steps li::marker { color: var(--accent); font-family: var(--mono); font-size: .72rem; }
+.pass__steps a { color: var(--accent); text-decoration: underline; }
+.pass__steps a:hover { color: var(--text); }
+.pass__steps b, .pass__note b { color: var(--text); font-weight: 500; }
+.pass__actions .btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 .adm__pubcfg { padding-left: .6rem; padding-right: .6rem; }
 
 /* ---------- full-screen admin studio ---------- */

@@ -21,6 +21,7 @@
   const GH_BRANCH = "main";
   const GH_API = "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/content.json";
   const GH_TOKEN_KEY = "rk:gh:token";
+  const GH_NEW_TOKEN_URL = "https://github.com/settings/tokens/new?description=riteshk.work%20publishing&scopes=public_repo";
   const DRAFT_SIG_KEY = "rk:content:draft:sig";
   const PREVIEW_SRC = "index.html?preview=1&lite=1";
   const ADMIN_MIN = 900; // below this the split editor can't fit — admin is disabled
@@ -855,15 +856,23 @@
     const modal = document.createElement("div");
     modal.className = "pass";
     modal.innerHTML =
-      '<div class="pass__box"><div class="pass__title">Sign in to GitHub to publish</div>' +
+      '<div class="pass__box"><div class="pass__title">Connect GitHub to publish</div>' +
       '<div class="pass__sub">' + (msg ? escHtml(msg) :
-        "Publishing saves your changes straight to your live site. Connect once with a GitHub token that has <b>Contents: write</b> on this repo \u2014 it\u2019s stored only in this browser and sent only to GitHub. After that, Publish is one click.") + "</div>" +
-      '<input type="password" placeholder="' + (saved ? "Saved \u2014 paste to replace" : "GitHub token (github_pat_\u2026 or ghp_\u2026)") + '" autocomplete="off" />' +
+        "This publishes your changes to your live site. It needs a GitHub token once \u2014 stored only in this browser and sent only to GitHub.") + "</div>" +
+      (saved ? "" :
+        '<ol class="pass__steps">' +
+          '<li>Click <b>Create token</b> below \u2014 GitHub opens with the right access already filled in.</li>' +
+          '<li>On that page, scroll down and click <b>Generate token</b>, then copy it.</li>' +
+          '<li>Come back here, paste it, and press <b>Connect &amp; publish</b>.</li>' +
+        "</ol>") +
+      '<input type="password" placeholder="' + (saved ? "Saved \u2014 paste to replace" : "Paste your token (ghp_\u2026)") + '" autocomplete="off" />' +
       '<div class="pass__err"></div>' +
-      '<div class="pass__actions"><button class="btn btn--primary" data-go>Connect &amp; publish</button></div>' +
+      '<div class="pass__actions">' +
+        '<a class="btn btn--ghost" href="' + GH_NEW_TOKEN_URL + '" target="_blank" rel="noopener">Create token \u2197</a>' +
+        '<button class="btn btn--primary" data-go>Connect &amp; publish</button></div>' +
       '<button class="pass__link" data-manual>Publish manually instead</button>' +
       (saved ? '<button class="pass__link" data-forget>Forget saved token</button>' : "") +
-      '<div class="pass__note">Tip: create a fine-grained token limited to this one repository, with Contents: Read and write.</div></div>';
+      '<div class="pass__note">Prefer tighter access? Create a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">fine-grained token</a> limited to just this repo (Contents: Read and write).</div></div>';
     document.body.appendChild(modal);
     const inp = modal.querySelector("input"), err = modal.querySelector(".pass__err");
     setTimeout(() => { try { inp.focus(); } catch (e) {} }, 30);
