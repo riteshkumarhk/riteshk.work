@@ -824,6 +824,19 @@
     body = root.querySelector(".adm__body");
     frame = root.querySelector(".adm__frame");
 
+    // Guaranteed wheel scrolling for the editor pane. The site's Lenis smooth-scroll
+    // captures the page wheel and preventDefaults it (even data-lenis-prevent can be
+    // unreliable across builds), so we scroll the editor ourselves and stop the event
+    // before it reaches Lenis. Scoped to the editor side; the preview iframe scrolls itself.
+    root.addEventListener("wheel", function (e) {
+      const ed = root.querySelector(".adm__editor");
+      if (!ed || !ed.contains(e.target)) return;
+      const factor = e.deltaMode === 1 ? 32 : (e.deltaMode === 2 ? Math.round(ed.clientHeight * 0.9) : 1);
+      ed.scrollTop += e.deltaY * factor;
+      e.preventDefault();
+      e.stopPropagation();
+    }, { passive: false, capture: true });
+
     root.addEventListener("input", onInput);
     root.addEventListener("change", onChange);
     root.addEventListener("click", onClick);
