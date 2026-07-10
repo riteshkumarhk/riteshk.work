@@ -149,6 +149,12 @@
     set("heroIntro", md(L.intro));
     set("heroNowText", md(L.presence));
 
+    if (L.aboutLead) set("aboutLead", md(L.aboutLead));
+    const aboutParas = String(L.about || "").split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+    if (aboutParas.length || L.aboutSign) set("aboutBody",
+      aboutParas.map((p) => "<p>" + md(p) + "</p>").join("") +
+      (L.aboutSign ? '<p class="about__sign">' + md(L.aboutSign) + "</p>" : ""));
+
     const one = caps.map((c) => "<span>" + esc(c) + '</span><span class="dot">✦</span>').join("");
     set("marqueeTrack", one + one);
 

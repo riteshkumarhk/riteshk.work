@@ -288,6 +288,53 @@ body.adm-lock .cursor { display: none !important; }
 .imgblk__plate .case__media { aspect-ratio: 16 / 10; }
 .imgblk__plate:hover .imgblk__plate-media { border-color: var(--accent); transform: translateY(-1px); }
 .imgblk__plate.is-on .imgblk__plate-media { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* ---- form controls inside modals (modals render outside .adm) ---- */
+.pass textarea, .pass select {
+  width: 100%; background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px; padding: .6rem .65rem;
+  font-family: var(--sans); font-size: .85rem; margin-bottom: .2rem;
+}
+.pass textarea { resize: vertical; min-height: 64px; line-height: 1.55; }
+.pass select { cursor: pointer; }
+.pass textarea:focus, .pass select:focus { outline: none; border-color: var(--accent); }
+
+/* ---- AI key dialog (shared vs separate) ---- */
+.aikm__same { margin: 0 0 1rem; justify-content: center; }
+.aikm { text-align: left; }
+.aikm .aiblk { margin-bottom: .2rem; }
+.aikm input { text-align: left; margin-bottom: .2rem; }
+
+/* ---- landing formatter modal ---- */
+.pass--wide .pass__box { width: min(680px, 94vw); max-height: 88vh; overflow: auto; text-align: left; }
+.pass--wide .pass__title, .pass--wide .pass__sub { text-align: left; }
+.laig, .laig__review { text-align: left; }
+.laig input { text-align: left; margin-bottom: .2rem; }
+.laig__picks { display: flex; flex-wrap: wrap; gap: .5rem 1rem; padding-top: .35rem; }
+.laig__review { border-top: 1px solid var(--line); margin-top: .3rem; padding-top: .9rem; }
+.laig__review input { text-align: left; margin-bottom: .2rem; }
+.laig__reviewhd { font-family: var(--mono); font-size: .64rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); margin-bottom: .8rem; }
+.laig__grp { border: 1px solid var(--line); border-radius: 10px; padding: .9rem; margin-bottom: .9rem; }
+.laig__grptitle { font-family: var(--mono); font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: .7rem; }
+.laig__grp .af:last-child { margin-bottom: 0; }
+
+/* ---- case-study generator panel (in the L2 editor) ---- */
+.csgen { border: 1px solid var(--line); border-radius: 12px; margin: 0 0 1.4rem; background: var(--bg-2); overflow: hidden; }
+.csgen__head { display: flex; align-items: baseline; flex-wrap: wrap; gap: .5rem; padding: .85rem 1rem; font-family: var(--mono); font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text); border-bottom: 1px solid var(--line); }
+.csgen__spark { font-size: .9rem; }
+.csgen__note { text-transform: none; letter-spacing: 0; font-family: var(--sans); font-size: .72rem; color: var(--text-faint); }
+.csgen__body { padding: 1rem; }
+.csgen__ref { margin: .2rem 0 1rem; }
+.csgen__reftoggle { background: none; border: 0; color: var(--accent); font-family: var(--mono); font-size: .66rem; cursor: pointer; padding: .2rem 0; }
+.csgen__reftoggle:hover { color: var(--text); }
+.csgen__reffield { display: none; margin-top: .5rem; }
+.csgen__ref.is-open .csgen__reffield { display: block; }
+.csgen__actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.csgen__pdf { width: 100%; }
+.csgen__status { font-size: .72rem; color: var(--text-faint); flex: 1 1 100%; margin-top: .1rem; }
+.csgen__status.is-run { color: var(--accent); }
+.csgen__status.is-ok { color: #7ac77a; }
+.csgen__status.is-err { color: #ff7a7a; }
 .imgblk__plate-name { display: block; font-family: var(--mono); font-size: .58rem; letter-spacing: .02em; color: var(--text-faint); margin-top: .32rem; }
 .imgblk__plate.is-on .imgblk__plate-name { color: var(--accent); }
 .imgblk__ai { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--line); }

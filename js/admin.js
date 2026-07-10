@@ -45,6 +45,7 @@
     ["custom", "Custom (OpenAI-compatible)"],
   ];
   const AI_DEFAULT_MODEL = { openai: "gpt-image-1", gemini: "gemini-2.0-flash-preview-image-generation", anthropic: "claude-3-5-sonnet-latest", custom: "" };
+  const AI_TEXT_MODEL = { openai: "gpt-4o", gemini: "gemini-2.0-flash", anthropic: "claude-3-5-sonnet-latest", custom: "" };
   const AI_DEFAULT_BASE = { openai: "https://api.openai.com/v1", gemini: "https://generativelanguage.googleapis.com/v1beta", anthropic: "https://api.anthropic.com/v1", custom: "" };
   const AI_IMAGE_PROVIDERS = ["openai", "gemini", "custom"];
   const STUDY_BLOCK_TYPES = [
@@ -311,9 +312,9 @@
   function imageryBlock(w, i) {
     const has = !!w.image;
     const cfg = aiCfg("img");
-    const canGen = !!cfg.key && aiSupportsImages();
-    const aiHint = !cfg.key ? "Add an API key in the AI tab to enable this"
-      : !aiSupportsImages() ? "This service (Claude) can't generate images"
+    const canGen = aiSupportsImages();
+    const aiHint = !aiSupportsImages() ? "This service (Claude) can't generate images \u2014 pick OpenAI or Gemini"
+      : !cfg.key ? "Describe an image \u2014 you'll be asked for a key"
       : "Describe an image to generate\u2026";
     const plates = PLATE_THEMES.map(function (t) {
       const th = t[0];
@@ -435,6 +436,7 @@
     var add = '<div class="study__add">' + STUDY_BLOCK_TYPES.map(function (t) { return '<button class="btn btn--add study__addbtn" data-act="study-addblock" data-index="' + i + '" data-type="' + t[0] + '">+ ' + t[1] + "</button>"; }).join("") + "</div>";
     return '<div class="study__panel">' +
       '<div class="adm__sec-note" style="margin:.2rem 0 1rem">Compose the case study as a stack of sections. Each <em>Section label</em> becomes a left-nav item on the project page.</div>' +
+      csgenPanel(w, i) +
       meta + coverBlock + unlockBlock +
       '<div class="study__blocks">' + list + "</div>" + add +
       '<div class="study__foot"><button class="btn btn--ghost" data-act="study-preview" data-index="' + i + '">Preview case study \u2197</button><button class="btn btn--ghost" data-act="study-close" data-index="' + i + '">Done</button></div>' +
@@ -484,12 +486,15 @@
     landing() {
       return (
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
-        '<div class="adm__autobar"><button class="btn btn--auto" data-act="autostyle">Auto-style landing</button><span class="adm__auto-note">One click applies the bronze / bold / italic accents. You can still fine-tune by hand.</span></div>' +
+        '<div class="adm__autobar"><button class="btn btn--auto" data-act="autostyle">Auto-style landing</button><button class="btn btn--auto" data-act="landing-ai" style="margin-left:.5rem">\u2728 Draft with AI</button><span class="adm__auto-note">Auto-style paints the accents; <em>Draft with AI</em> writes the hero, highlights, capabilities &amp; about from a brief \u2014 preview before applying.</span></div>' +
         input("Eyebrow", "landing.eyebrow") +
         input("Domains", "landing.domains", { hint: "e.g. Growth · AI · Identity" }) +
         input("Main statement", "landing.statement", { type: "textarea", rows: 3, hint: "One line per row. The closing word (why / how) gets the italic accent." }) +
         input("Description", "landing.intro", { type: "textarea", rows: 4, hint: "Products auto-bronze; “leading …” phrases auto-bold." }) +
-        input("Footer line", "landing.presence", { hint: "e.g. Currently at Microsoft — Hyderabad, India" })
+        input("Footer line", "landing.presence", { hint: "e.g. Currently at Microsoft — Hyderabad, India" }) +
+        input("About — lead line", "landing.aboutLead", { type: "textarea", rows: 2, hint: "The big opening line of the About section. *italic* for emphasis." }) +
+        input("About — paragraphs", "landing.about", { type: "textarea", rows: 7, hint: "Separate paragraphs with a blank line. **bold**, *italic*, [[Product]] bronze." }) +
+        input("About — sign-off", "landing.aboutSign", { hint: "The closing personal line, e.g. an off-the-clock note." })
       );
     },
     contact() {
@@ -719,6 +724,7 @@
   /* ---------- events ---------- */
   function onInput(e) {
     const t = e.target;
+    if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
     if (t.dataset.study !== undefined && t.dataset.sfield) { onStudyMeta(t); return; }
     if (t.dataset.sblock !== undefined && t.dataset.bfield && t.dataset.bfield !== "locked") { onStudyBlock(t); return; }
     if (t.dataset.path) { setPath(data, t.dataset.path, t.value); apply(); return; }
@@ -751,6 +757,7 @@
 
   function onChange(e) {
     const t = e.target;
+    if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
     if (t.dataset.sblock !== undefined && t.dataset.bfield === "locked") {
       const wi = +t.dataset.sblock, bj = +t.dataset.bindex;
       if (data.work[wi] && data.work[wi].study && data.work[wi].study.blocks[bj]) {
@@ -833,6 +840,11 @@
       status(n ? "Auto-styled — bronze products, bold phrases, italic closing word." : "Add some copy first, then Auto-style.", n > 0);
       return;
     }
+    if (act === "landing-ai") { landingAiModal(); return; }
+    if (act === "csgen-run") { csgenRun(i, false); return; }
+    if (act === "csgen-variant") { csgenRun(i, true); return; }
+    if (act === "csgen-pdf") { csgenAddPdf(i); return; }
+    if (act === "csgen-ref-toggle") { const wrap = b.closest(".csgen__ref"); if (wrap) { const open = wrap.classList.toggle("is-open"); b.textContent = (open ? "\u2212" : "+") + " Paste a reference case study to echo (optional)"; const cw = data.work[i]; if (cw) csgenState(cw.id).refShow = open; } return; }
     if (act === "study-toggle") { openL2(i); return; }
     if (act === "study-close") { closeL2(); return; }
     if (act === "study-addblock") {
@@ -1072,8 +1084,9 @@
     return el ? el.value.trim() : "";
   }
   async function imgGenerate(i) {
+    if (!aiHasKey("img")) { aiKeyModal("img", function () { imgGenerate(i); }); return; }
     const cfg = aiCfg("img");
-    if (!cfg.key) return status("Add your API key in the AI tab first.");
+    if (!aiSupportsImages()) return status("This service can\u2019t generate images \u2014 pick OpenAI or Gemini.");
     const p = aiPromptFor(i);
     if (!p) return status("Type a prompt to generate an image.");
     status("Generating image\u2026 this can take a moment.");
@@ -1083,8 +1096,9 @@
     } catch (e) { status("Generate failed: " + e.message); }
   }
   async function imgModify(i) {
+    if (!aiHasKey("img")) { aiKeyModal("img", function () { imgModify(i); }); return; }
     const cfg = aiCfg("img");
-    if (!cfg.key) return status("Add your API key in the AI tab first.");
+    if (!aiSupportsImages()) return status("This service can\u2019t generate images \u2014 pick OpenAI or Gemini.");
     const cur = data.work[i].image;
     if (!cur) return status("No current image to modify.");
     const p = aiPromptFor(i);
@@ -1154,6 +1168,374 @@
           fr.readAsDataURL(blob);
         }).catch(function () { resolve({ mime: "image/png", b64: "" }); });
       }
+    });
+  }
+
+  /* ---------- AI text generation (writing) ---------- */
+  function aiHasKey(purpose) { return !!aiCfg(purpose).key; }
+  async function aiText(cfg, system, user, opts) {
+    opts = opts || {};
+    var p = cfg.provider, key = cfg.key, base = cfg.base, model = cfg.model;
+    if (!model || /image|dall[- ]?e|imagen/i.test(model)) model = AI_TEXT_MODEL[p] || model;   // image models can't write
+    var maxTokens = opts.maxTokens || 4096;
+    var temp = opts.temperature != null ? opts.temperature : 0.7;
+    var res, j;
+    if (p === "anthropic") {
+      res = await fetch(base + "/messages", { method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({ model: model, max_tokens: maxTokens, temperature: temp, system: system, messages: [{ role: "user", content: user }] }) });
+      j = await res.json().catch(function () { throw new Error("HTTP " + res.status); });
+      if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
+      return ((j.content || []).map(function (b) { return b.text || ""; }).join("")).trim();
+    }
+    if (p === "gemini") {
+      var url = base + "/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key);
+      var gb = { contents: [{ role: "user", parts: [{ text: user }] }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: maxTokens, temperature: temp } };
+      if (opts.json) gb.generationConfig.responseMimeType = "application/json";
+      res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(gb) });
+      j = await res.json().catch(function () { throw new Error("HTTP " + res.status); });
+      if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
+      var cand = (j.candidates && j.candidates[0]) || {};
+      return (((cand.content && cand.content.parts) || []).map(function (x) { return x.text || ""; }).join("")).trim();
+    }
+    // openai + custom (OpenAI-compatible /chat/completions)
+    var ob = { model: model, messages: [{ role: "system", content: system }, { role: "user", content: user }], temperature: temp, max_tokens: maxTokens };
+    if (opts.json) ob.response_format = { type: "json_object" };
+    res = await fetch(base + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify(ob) });
+    j = await res.json().catch(function () { throw new Error("HTTP " + res.status); });
+    if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
+    return ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim();
+  }
+  // Inline "connect an AI service" dialog, shown from a feature when its key is missing.
+  // Lets the author pick a provider + key and choose ONE shared key (text + image) or a separate one.
+  function aiKeyModal(purpose, onReady) {
+    var modal = document.createElement("div");
+    modal.className = "pass";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">Connect an AI service</div>' +
+      '<div class="pass__sub">This uses AI to ' + (purpose === "img" ? "generate imagery" : "write copy") + '. Add an API key once \u2014 it\u2019s stored only in this browser and sent only to the service you choose.</div>' +
+      '<label class="chk aikm__same"><input type="checkbox" id="aikmSame"' + (aiSameKey() ? " checked" : "") + " /> Use one key for both writing and image generation</label>" +
+      '<div class="aikm"></div>' +
+      '<div class="pass__err"></div>' +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button><button class="btn btn--primary" data-go>Save &amp; continue</button></div>' +
+      '<div class="pass__note">Keys never touch your published site. Some providers block browser calls (CORS); OpenAI &amp; Gemini work directly.</div></div>';
+    document.body.appendChild(modal);
+    var err = modal.querySelector(".pass__err");
+    var sameBox = modal.querySelector("#aikmSame");
+    var holder = modal.querySelector(".aikm");
+    function scopeNow() { return sameBox.checked ? "all" : (purpose || "img"); }
+    function paint() {
+      var scope = scopeNow();
+      var textScope = scope !== "all" && purpose !== "img"; // writing-only key -> default to a chat model
+      var defModel = function (p) { return (textScope ? AI_TEXT_MODEL[p] : AI_DEFAULT_MODEL[p]) || ""; };
+      var hintFor = function (p) { return textScope ? "e.g. gpt-4o, claude-3-5-sonnet, gemini-2.0-flash" : modelHint(p); };
+      var label = scope === "all" ? "AI service" : (purpose === "img" ? "Image AI" : "Writing AI");
+      var note = scope === "all" ? "content + image" : (purpose === "img" ? "imagery" : "text");
+      holder.innerHTML = aiBlock(scope, label, note);
+      var mEl0 = holder.querySelector("#aiModel_" + scope), pNow = aiGet(scope, "provider") || "openai";
+      if (mEl0) {
+        if (!aiGet(scope, "model")) mEl0.value = defModel(pNow);
+        var h0 = mEl0.parentElement.querySelector(".af__hint"); if (h0) h0.textContent = hintFor(pNow);
+      }
+      var sel = holder.querySelector("#aiProvider_" + scope);
+      if (sel) sel.addEventListener("change", function () {
+        var p = sel.value;
+        var m = holder.querySelector("#aiModel_" + scope), b = holder.querySelector("#aiBase_" + scope), k = holder.querySelector("#aiKey_" + scope);
+        if (m) { m.value = defModel(p); var h = m.parentElement.querySelector(".af__hint"); if (h) h.textContent = hintFor(p); }
+        if (b) b.value = AI_DEFAULT_BASE[p] || "";
+        if (k) k.value = "";
+      });
+    }
+    paint();
+    sameBox.addEventListener("change", paint);
+    var close = function () { modal.remove(); };
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    modal.querySelector("[data-go]").addEventListener("click", function () {
+      var scope = scopeNow();
+      localStorage.setItem("rk:ai:same", sameBox.checked ? "1" : "0");
+      var sel = holder.querySelector("#aiProvider_" + scope), p = sel ? sel.value : "openai";
+      localStorage.setItem("rk:ai:" + scope + ":provider", p);
+      var k = holder.querySelector("#aiKey_" + scope), m = holder.querySelector("#aiModel_" + scope), b = holder.querySelector("#aiBase_" + scope);
+      if (k && k.value.trim()) localStorage.setItem("rk:ai:" + scope + ":key", k.value.trim());
+      if (m) localStorage.setItem("rk:ai:" + scope + ":model", m.value.trim() || AI_DEFAULT_MODEL[p] || "");
+      if (b) localStorage.setItem("rk:ai:" + scope + ":base", b.value.trim() || AI_DEFAULT_BASE[p] || "");
+      if (!aiHasKey(purpose)) { err.textContent = "Paste a key to continue."; return; }
+      close();
+      if (onReady) onReady();
+    });
+    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+  }
+
+  /* ---------- AI case-study generator (per project, into the editable blocks) ---------- */
+  const csgen = {}; // per work-id draft inputs
+  function csgenState(id) { return csgen[id] || (csgen[id] = { material: "", links: "", tone: "senior", reference: "", refShow: false }); }
+  function csgenStatus(i, msg, kind) {
+    var el = root && root.querySelector('[data-csgen-status="' + i + '"]');
+    if (el) { el.textContent = msg || ""; el.className = "csgen__status" + (kind ? " is-" + kind : ""); }
+  }
+  function csgenPanel(w, i) {
+    var g = csgenState(w.id);
+    var toneOpts = [["senior", "Senior"], ["principal", "Principal"], ["executive", "Executive"]].map(function (t) {
+      return '<option value="' + t[0] + '"' + (g.tone === t[0] ? " selected" : "") + ">" + t[1] + "</option>";
+    }).join("");
+    var hasStudy = !!(w.study && w.study.blocks && w.study.blocks.length);
+    return '<div class="csgen"><div class="csgen__head"><span class="csgen__spark">\u2728</span> Generate case study with AI<span class="csgen__note">Turn notes, a deck &amp; links into a full, editable case study.</span></div>' +
+      '<div class="csgen__body">' +
+      '<div class="af"><label class="af__label">Source material</label>' +
+      '<textarea data-csgen="material" data-csid="' + escAttr(w.id) + '" rows="5" placeholder="Paste context, notes, a deck\u2019s text, research findings, metrics, the decisions you made\u2026 the more the better.">' + escHtml(g.material) + "</textarea>" +
+      '<div class="af__hint">Nothing here is published until you save. Images stay yours \u2014 the AI writes the words and leaves captioned image slots.</div></div>' +
+      '<div class="af"><label class="af__label">Reference links</label>' +
+      '<input type="text" data-csgen="links" data-csid="' + escAttr(w.id) + '" value="' + escAttr(g.links) + '" placeholder="Live URLs, articles, Figma\u2026 (comma separated)" />' +
+      '<div class="af__hint">Sent as text context only \u2014 the AI can\u2019t open them, so summarise anything important in the notes above.</div></div>' +
+      '<div class="af__row">' +
+      '<div class="af"><label class="af__label">Tone</label><select data-csgen="tone" data-csid="' + escAttr(w.id) + '">' + toneOpts + '</select><div class="af__hint">Altitude of the storytelling voice.</div></div>' +
+      '<div class="af"><label class="af__label">Deck / PDF</label><button class="btn btn--ghost csgen__pdf" data-act="csgen-pdf" data-index="' + i + '">Add PDF / deck\u2026</button><div class="af__hint">Extracts the text and appends it above.</div></div>' +
+      "</div>" +
+      '<div class="csgen__ref' + (g.refShow ? " is-open" : "") + '">' +
+      '<button class="csgen__reftoggle" data-act="csgen-ref-toggle" data-index="' + i + '">' + (g.refShow ? "\u2212" : "+") + ' Paste a reference case study to echo (optional)</button>' +
+      '<div class="af csgen__reffield"><textarea data-csgen="reference" data-csid="' + escAttr(w.id) + '" rows="4" placeholder="Paste a case study whose structure and voice you admire. The AI mirrors its shape, never its content.">' + escHtml(g.reference) + "</textarea></div>" +
+      "</div>" +
+      '<div class="csgen__actions"><button class="btn btn--auto" data-act="csgen-run" data-index="' + i + '">' + (hasStudy ? "Regenerate case study" : "Generate case study") + "</button>" +
+      (hasStudy ? '<button class="btn btn--ghost" data-act="csgen-variant" data-index="' + i + '">Try a variant</button>' : "") +
+      '<span class="csgen__status" data-csgen-status="' + i + '"></span></div>' +
+      "</div></div>";
+  }
+  function csgenParse(raw) {
+    if (!raw) return null;
+    var s = String(raw).trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+    try { return JSON.parse(s); } catch (e) {}
+    var a = s.indexOf("{"), b = s.lastIndexOf("}");
+    if (a !== -1 && b > a) { try { return JSON.parse(s.slice(a, b + 1)); } catch (e2) {} }
+    return null;
+  }
+  function csgenSystem(tone) {
+    var toneGuide = {
+      senior: "Voice: a Senior Product Designer. Confident, craft-forward and specific. Show the hands-on decisions and the reasoning behind them.",
+      principal: "Voice: a Principal Product Designer. Strategic and systemic \u2014 frame the problem space, the bets, the tradeoffs and the influence across teams. Fewer pixels, more leverage.",
+      executive: "Voice: a design executive / Head of Design. Business outcomes first, org and strategy altitude, crisp and declarative. Lead with impact and the shape of the decision, not process detail.",
+    }[tone] || "";
+    return [
+      "You are a world-class product-design storyteller who ghost-writes portfolio case studies for senior designers. You write with restraint, specificity and momentum \u2014 no filler, no buzzwords, no AI throat-clearing.",
+      toneGuide,
+      "Follow this proven narrative arc (adapt it, don\u2019t label it mechanically): Overview \u2192 Impact snapshot \u2192 Quick context for outsiders \u2192 The problem (a sharp, surprising truth) \u2192 What we got wrong at first \u2192 Approach / research \u2192 The reframe \u2192 Design goal (a How-might-we) \u2192 Key decisions \u2192 Before / after \u2192 Outcome & impact \u2192 Reflection (with an \u2018if I had more time\u2019).",
+      "Rules:",
+      "- Ground everything in the material provided. NEVER invent specific numbers. If impact isn\u2019t given, use honest qualitative or clearly-directional phrasing (\u2018directional lift\u2019, \u2018double-digit\u2019, \u2018millions of sessions\u2019).",
+      "- Short, declarative sentences. Vary the rhythm. Write like a person, not a deck.",
+      "- nav labels are 1\u20132 words; kickers are tiny (\u2018Overview\u2019, \u2018The problem\u2019).",
+      "- Leave imagery to the author: media blocks carry captions only, never URLs.",
+      "Return ONLY valid JSON (no markdown, no commentary) matching EXACTLY this shape:",
+      '{"tagline":string,"role":string,"team":string,"timeline":string,"scope":string,"blocks":[Block]}',
+      "Block is one of:",
+      '{"type":"text","nav":string,"kicker":string,"heading":string,"body":string,"list":[string]}',
+      '{"type":"statement","nav":string,"kicker":string,"body":string,"sub":string}',
+      '{"type":"metrics","nav":string,"kicker":string,"heading":string,"items":[{"value":string,"label":string}]}',
+      '{"type":"steps","nav":string,"kicker":string,"heading":string,"items":[{"title":string,"body":string}]}',
+      '{"type":"media","nav":string,"kicker":string,"heading":string,"items":[{"caption":string}]}',
+      '{"type":"split","nav":string,"kicker":string,"heading":string,"leftLabel":string,"left":[string],"rightLabel":string,"right":[string]}',
+      '{"type":"faq","nav":string,"kicker":string,"items":[{"q":string,"a":string}]}',
+      "body supports light markdown (**bold**, *italic*). Aim for 8\u201312 blocks. Open with a text overview then a metrics snapshot; close with a reflection statement.",
+    ].join("\n");
+  }
+  function csgenUser(w, g, variant) {
+    var lines = ["PROJECT", "Title: " + (w.title || "")];
+    if (w.client) lines.push("Client / context: " + w.client);
+    if (w.period) lines.push("Period: " + w.period);
+    if (w.desc) lines.push("One-liner: " + w.desc);
+    if (w.tags && w.tags.length) lines.push("Themes: " + w.tags.join(", "));
+    lines.push("", "SOURCE MATERIAL", g.material.trim() || "(none provided \u2014 infer a credible, non-fabricated narrative from the project fields above, keeping specifics vague where unknown.)");
+    if (g.links.trim()) lines.push("", "REFERENCE LINKS (context only, cannot be opened): " + g.links.trim());
+    if (g.reference.trim()) lines.push("", "STYLE REFERENCE (echo its structure and voice, NOT its content):", g.reference.trim());
+    lines.push("", "TASK: Write the full case study as JSON per the schema. Tone: " + g.tone + ".");
+    if (variant) lines.push("This is an ALTERNATE take \u2014 find a different angle, hook and structure from the obvious one, while staying faithful to the facts.");
+    return lines.join("\n");
+  }
+  function csgenNormalize(obj, prev) {
+    prev = prev || {};
+    var str = function (v) { return typeof v === "string" ? v : (v == null ? "" : String(v)); };
+    var arr = function (v) { return Array.isArray(v) ? v.map(str).map(function (x) { return x.trim(); }).filter(Boolean) : []; };
+    var out = blankStudy();
+    out.cover = typeof prev.cover === "string" ? prev.cover : (prev.cover ? prev.cover : "");
+    out.unlockHash = prev.unlockHash || "";
+    ["tagline", "role", "team", "timeline", "scope"].forEach(function (k) { out[k] = str(obj[k]).trim() || prev[k] || ""; });
+    var allowed = ["text", "statement", "metrics", "steps", "media", "split", "faq"];
+    out.blocks = (Array.isArray(obj.blocks) ? obj.blocks : []).map(function (raw) {
+      raw = raw || {};
+      var b = blankBlock(allowed.indexOf(raw.type) !== -1 ? raw.type : "text");
+      b.nav = str(raw.nav).trim(); b.kicker = str(raw.kicker).trim();
+      if (b.type === "text") { b.heading = str(raw.heading).trim(); b.body = str(raw.body).trim(); b.list = arr(raw.list); }
+      else if (b.type === "statement") { b.body = str(raw.body).trim(); b.sub = str(raw.sub).trim(); }
+      else if (b.type === "metrics") { b.heading = str(raw.heading).trim(); b.items = (Array.isArray(raw.items) ? raw.items : []).map(function (it) { it = it || {}; return { value: str(it.value).trim(), label: str(it.label).trim() }; }).filter(function (it) { return it.value || it.label; }); }
+      else if (b.type === "steps") { b.heading = str(raw.heading).trim(); b.items = (Array.isArray(raw.items) ? raw.items : []).map(function (it) { it = it || {}; return { title: str(it.title).trim(), body: str(it.body).trim() }; }).filter(function (it) { return it.title || it.body; }); }
+      else if (b.type === "media") { b.heading = str(raw.heading).trim(); b.items = (Array.isArray(raw.items) ? raw.items : []).map(function (it) { return { caption: str(it && (it.caption != null ? it.caption : it)).trim() }; }).filter(function (it) { return it.caption; }); }
+      else if (b.type === "split") { b.heading = str(raw.heading).trim(); b.leftLabel = str(raw.leftLabel).trim() || "Before"; b.rightLabel = str(raw.rightLabel).trim() || "After"; b.left = arr(raw.left); b.right = arr(raw.right); }
+      else if (b.type === "faq") { b.items = (Array.isArray(raw.items) ? raw.items : []).map(function (it) { it = it || {}; return { q: str(it.q).trim(), a: str(it.a).trim() }; }).filter(function (it) { return it.q || it.a; }); }
+      return b;
+    });
+    var locked = (prev.blocks || []).filter(function (b) { return b && b.locked; });
+    out.blocks = out.blocks.concat(locked);
+    return out;
+  }
+  async function csgenRun(i, variant) {
+    var w = data.work[i]; if (!w) return;
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { csgenRun(i, variant); }); return; }
+    var g = csgenState(w.id);
+    if (!g.material.trim() && !g.links.trim() && !g.reference.trim()) { csgenStatus(i, "Add some notes or links first.", "err"); return; }
+    var sel = '[data-act="csgen-run"][data-index="' + i + '"],[data-act="csgen-variant"][data-index="' + i + '"]';
+    root.querySelectorAll(sel).forEach(function (b) { b.disabled = true; });
+    csgenStatus(i, variant ? "Writing a fresh variant\u2026" : "Writing the case study\u2026 this can take a moment.", "run");
+    try {
+      var raw = await aiText(aiCfg("txt"), csgenSystem(g.tone), csgenUser(w, g, variant), { json: true, maxTokens: 4096, temperature: variant ? 0.95 : 0.65 });
+      var obj = csgenParse(raw);
+      if (!obj || !Array.isArray(obj.blocks) || !obj.blocks.length) throw new Error("The AI didn\u2019t return usable sections \u2014 try again or add more detail.");
+      data.work[i].study = csgenNormalize(obj, w.study);
+      saveDraft(true);
+      renderL2();
+      csgenStatus(i, "Done \u2014 every section below is editable.", "ok");
+      status("Case study generated \u2014 review and edit anything.", true);
+    } catch (e) {
+      csgenStatus(i, (e && e.message) || "Generation failed.", "err");
+      root.querySelectorAll(sel).forEach(function (b) { b.disabled = false; });
+    }
+  }
+  function ensurePdfJs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (ensurePdfJs._p) return ensurePdfJs._p;
+    ensurePdfJs._p = new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+      s.onload = function () { try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; } catch (e) {} resolve(window.pdfjsLib); };
+      s.onerror = function () { ensurePdfJs._p = null; reject(new Error("Couldn\u2019t load the PDF reader.")); };
+      document.head.appendChild(s);
+    });
+    return ensurePdfJs._p;
+  }
+  function csgenAddPdf(i) {
+    var w = data.work[i]; if (!w) return;
+    var inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "application/pdf,.pdf,.txt,.md,.markdown";
+    inp.onchange = async function () {
+      var f = inp.files && inp.files[0]; if (!f) return;
+      var g = csgenState(w.id);
+      csgenStatus(i, "Reading " + f.name + "\u2026", "run");
+      try {
+        var text = "";
+        if (/\.pdf$/i.test(f.name) || f.type === "application/pdf") {
+          var pdfjs = await ensurePdfJs();
+          var pdf = await pdfjs.getDocument({ data: await f.arrayBuffer() }).promise;
+          var parts = [];
+          for (var p = 1; p <= pdf.numPages; p++) {
+            var page = await pdf.getPage(p);
+            var content = await page.getTextContent();
+            parts.push(content.items.map(function (it) { return it.str; }).join(" "));
+          }
+          text = parts.join("\n\n");
+        } else { text = await f.text(); }
+        text = (text || "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+        if (!text) throw new Error("No selectable text found (a scanned PDF has no text layer).");
+        g.material = (g.material.trim() ? g.material.trim() + "\n\n" : "") + "\u2014 From " + f.name + " \u2014\n" + text;
+        renderL2();
+        csgenStatus(i, "Added text from " + f.name + ".", "ok");
+      } catch (e) { csgenStatus(i, (e && e.message) || "Couldn\u2019t read that file.", "err"); }
+    };
+    inp.click();
+  }
+
+  /* ---------- AI landing formatter (propose \u2192 preview \u2192 accept) ---------- */
+  function landingBrief() {
+    var L = data.landing || {}, lines = ["CURRENT SITE (improve on this \u2014 don\u2019t just copy):",
+      "Eyebrow: " + (L.eyebrow || ""), "Domains: " + (L.domains || ""),
+      "Statement: " + String(L.statement || "").replace(/\n/g, " / "),
+      "Intro: " + (L.intro || ""), "Presence: " + (L.presence || "")];
+    if (L.aboutLead) lines.push("About lead: " + L.aboutLead);
+    if (L.about) lines.push("About: " + String(L.about).replace(/\n+/g, " "));
+    if (data.highlights && data.highlights.length) lines.push("Highlights: " + data.highlights.map(function (h) { return h.value + " " + h.label; }).join("; "));
+    if (data.capabilities && data.capabilities.length) lines.push("Capabilities: " + data.capabilities.join(", "));
+    return lines.join("\n");
+  }
+  function landingSystem(tone, picks) {
+    var toneGuide = {
+      senior: "Voice: a Senior Product Designer \u2014 confident, craft-forward, specific.",
+      principal: "Voice: a Principal Product Designer \u2014 strategic, systemic, high-leverage.",
+      executive: "Voice: a design executive \u2014 outcomes-first, crisp, declarative.",
+    }[tone] || "";
+    var want = [];
+    if (picks.hero) want.push('"eyebrow": 2\u20134 word label; "domains": 2\u20134 dot-separated domains like "Growth \u00b7 AI \u00b7 Identity"; "statement": a 2\u20134 line hero headline using \\n between lines and *italics* on the final why/how word; "intro": one vivid sentence using **bold** for a leading role phrase and [[Name]] for products/companies; "presence": a short "Currently at [[Company]] \u2014 City" line');
+    if (picks.about) want.push('"aboutLead": one strong opening line (may use *italics*); "about": 2\u20133 paragraphs separated by \\n\\n (use **bold**, *italics*, [[Name]]); "aboutSign": one personal closing line');
+    if (picks.highlights) want.push('"highlights": 4\u20138 objects {"value","label"} \u2014 value is a punchy stat ("11+", "Billions", "2B+"), label is 2\u20134 words');
+    if (picks.capabilities) want.push('"capabilities": 8\u201316 short capability phrases, 2\u20134 words each');
+    return [
+      "You are an elite portfolio copywriter for senior product designers. Precision and restraint \u2014 editorial, confident, zero fluff or AI clich\u00e9s.",
+      toneGuide,
+      "Site markdown: **bold** for a leading role phrase, *italics* for an emphasised closing word, [[Name]] to accent a product or company. Use them tastefully.",
+      "Never fabricate employers, titles or numbers that contradict the brief. Improve clarity and impact while staying truthful.",
+      "Return ONLY valid JSON with EXACTLY these keys: " + want.join("; ") + ".",
+    ].join("\n");
+  }
+  function landingAiModal() {
+    if (!aiHasKey("txt")) { aiKeyModal("txt", landingAiModal); return; }
+    var modal = document.createElement("div");
+    modal.className = "pass pass--wide";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">Draft your landing with AI</div>' +
+      '<div class="pass__sub">Give it a brief, choose what to write, and preview before anything changes.</div>' +
+      '<div class="laig">' +
+      '<div class="af"><label class="af__label">Brief \u2014 who you are, what to emphasise</label><textarea id="laigBrief" rows="6">' + escHtml(landingBrief()) + "</textarea>" +
+      '<div class="af__hint">Paste a bio, r\u00e9sum\u00e9 highlights or notes \u2014 edit the pre-filled context freely.</div></div>' +
+      '<div class="af__row"><div class="af"><label class="af__label">Voice</label><select id="laigTone"><option value="senior">Senior</option><option value="principal">Principal</option><option value="executive">Executive</option></select></div>' +
+      '<div class="af"><label class="af__label">Write</label><div class="laig__picks">' +
+      '<label class="chk"><input type="checkbox" data-laig="hero" checked /> Hero</label>' +
+      '<label class="chk"><input type="checkbox" data-laig="highlights" checked /> Highlights</label>' +
+      '<label class="chk"><input type="checkbox" data-laig="capabilities" checked /> Capabilities</label>' +
+      '<label class="chk"><input type="checkbox" data-laig="about" checked /> About</label>' +
+      "</div></div></div></div>" +
+      '<div class="laig__review" hidden></div>' +
+      '<div class="pass__err"></div>' +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button><button class="btn btn--auto" data-gen>Generate draft</button><button class="btn btn--primary" data-apply hidden>Apply to site</button></div>' +
+      '<div class="pass__note">Keys stay in this browser. Nothing is published \u2014 you still hit Publish when ready.</div></div>';
+    document.body.appendChild(modal);
+    var err = modal.querySelector(".pass__err");
+    var review = modal.querySelector(".laig__review");
+    var close = function () { modal.remove(); };
+    function fld(label, id, val, area, rows) {
+      return '<div class="af"><label class="af__label">' + label + "</label>" +
+        (area ? '<textarea id="' + id + '" rows="' + (rows || 3) + '">' + escHtml(val || "") + "</textarea>" : '<input type="text" id="' + id + '" value="' + escAttr(val || "") + '" />') + "</div>";
+    }
+    function renderReview(o, picks) {
+      var h = '<div class="laig__reviewhd">Review &amp; edit \u2014 nothing changes until you Apply.</div>';
+      if (picks.hero) h += '<div class="laig__grp"><div class="laig__grptitle">Hero</div>' + fld("Eyebrow", "rvEyebrow", o.eyebrow) + fld("Domains", "rvDomains", o.domains) + fld("Statement (one line per row)", "rvStatement", Array.isArray(o.statement) ? o.statement.join("\n") : o.statement, true, 3) + fld("Intro", "rvIntro", o.intro, true, 3) + fld("Presence", "rvPresence", o.presence) + "</div>";
+      if (picks.about) h += '<div class="laig__grp"><div class="laig__grptitle">About</div>' + fld("Lead line", "rvAboutLead", o.aboutLead, true, 2) + fld("Paragraphs (blank line between)", "rvAbout", Array.isArray(o.about) ? o.about.join("\n\n") : o.about, true, 6) + fld("Sign-off", "rvAboutSign", o.aboutSign) + "</div>";
+      if (picks.highlights) h += '<div class="laig__grp"><div class="laig__grptitle">Highlights</div>' + fld("value | label per line", "rvHighlights", (o.highlights || []).map(function (x) { x = x || {}; return (x.value || "") + " | " + (x.label || ""); }).join("\n"), true, 5) + "</div>";
+      if (picks.capabilities) h += '<div class="laig__grp"><div class="laig__grptitle">Capabilities</div>' + fld("one per line", "rvCaps", (o.capabilities || []).join("\n"), true, 6) + "</div>";
+      review.innerHTML = h;
+    }
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    modal.querySelector("[data-gen]").addEventListener("click", async function () {
+      var picks = {}; modal.querySelectorAll("[data-laig]").forEach(function (c) { picks[c.dataset.laig] = c.checked; });
+      if (!picks.hero && !picks.highlights && !picks.capabilities && !picks.about) { err.textContent = "Pick at least one section."; return; }
+      err.textContent = "";
+      var brief = modal.querySelector("#laigBrief").value.trim(), tone = modal.querySelector("#laigTone").value;
+      var genBtn = modal.querySelector("[data-gen]"); genBtn.disabled = true; genBtn.textContent = "Writing\u2026";
+      try {
+        var obj = csgenParse(await aiText(aiCfg("txt"), landingSystem(tone, picks), "BRIEF / CONTEXT:\n" + (brief || "(none \u2014 infer tastefully from a senior product designer profile)") + "\n\nWrite the requested sections as JSON.", { json: true, maxTokens: 2048, temperature: 0.7 }));
+        if (!obj) throw new Error("The AI didn\u2019t return usable copy \u2014 try again.");
+        renderReview(obj, picks);
+        review.hidden = false; modal.querySelector(".laig").hidden = true; genBtn.hidden = true;
+        modal.querySelector("[data-apply]").hidden = false;
+      } catch (e) { err.textContent = (e && e.message) || "Failed."; genBtn.disabled = false; genBtn.textContent = "Generate draft"; }
+    });
+    modal.querySelector("[data-apply]").addEventListener("click", function () {
+      var g = function (id) { var el = modal.querySelector("#" + id); return el ? el.value : null; };
+      var L = data.landing || (data.landing = {});
+      if (g("rvEyebrow") != null) { L.eyebrow = g("rvEyebrow").trim(); L.domains = g("rvDomains").trim(); L.statement = g("rvStatement").replace(/\r/g, "").trim(); L.intro = g("rvIntro").trim(); L.presence = g("rvPresence").trim(); }
+      if (g("rvAboutLead") != null) { L.aboutLead = g("rvAboutLead").trim(); L.about = g("rvAbout").replace(/\r/g, "").trim(); L.aboutSign = g("rvAboutSign").trim(); }
+      if (g("rvHighlights") != null) data.highlights = g("rvHighlights").split("\n").map(function (ln) { return ln.trim(); }).filter(Boolean).map(function (ln) { var k = ln.indexOf("|"); return k === -1 ? { value: ln, label: "" } : { value: ln.slice(0, k).trim(), label: ln.slice(k + 1).trim() }; });
+      if (g("rvCaps") != null) data.capabilities = g("rvCaps").split("\n").map(function (x) { return x.trim(); }).filter(Boolean);
+      close();
+      renderBody(); apply(true);
+      status("AI draft applied to your landing \u2014 review it, then Publish when ready.", true);
     });
   }
 
