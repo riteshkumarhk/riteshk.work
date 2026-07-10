@@ -245,6 +245,27 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 }
 .rk-flash.is-on { opacity: 1; transform: translate(-50%, 0); }
 
+/* ---------- "sound on" landing cue ---------- */
+.soundcue {
+  position: fixed; left: 50%; bottom: 26px; z-index: 10040;
+  transform: translate(-50%, 10px);
+  display: inline-flex; align-items: center; gap: .6rem;
+  background: var(--bg-elev); border: 1px solid var(--accent); color: var(--text);
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase;
+  padding: .58rem 1.05rem; border-radius: 100px; cursor: pointer;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .45);
+  opacity: 0; pointer-events: none; transition: opacity .5s var(--ease), transform .5s var(--ease);
+}
+.soundcue.is-on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.soundcue:hover { background: var(--bg-2); }
+.soundcue__eq { display: inline-flex; align-items: flex-end; gap: 2.5px; height: 13px; }
+.soundcue__eq i { width: 3px; height: 5px; background: var(--accent); border-radius: 2px; animation: sceq 1.1s var(--ease-io) infinite; }
+.soundcue__eq i:nth-child(2) { animation-delay: .22s; }
+.soundcue__eq i:nth-child(3) { animation-delay: .44s; }
+.soundcue__eq i:nth-child(4) { animation-delay: .12s; }
+.soundcue__lbl { line-height: 1; }
+@keyframes sceq { 0%, 100% { height: 4px; } 50% { height: 13px; } }
+
 /* keep the clock reachable on mobile so visitors can open a Special view (admin stays disabled there) */
 @media (max-width: 720px) {
   .nav__meta { display: flex; }

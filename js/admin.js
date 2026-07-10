@@ -1410,6 +1410,29 @@
     if (!t.src) { musArm(); return; }
     musPlay();          // try TRUE audible autoplay now (succeeds if the browser already trusts this site)
     musArmVisible();    // ...and retry when the tab gains focus (opened-in-a-background-tab then switched to — YouTube-style)
+    setTimeout(function () {   // if the browser blocked autoplay, invite the one tap that unlocks sound
+      if (localStorage.getItem(MUSIC_ON_KEY) === "0") return;
+      if (audioEl && !audioEl.paused && !audioEl.muted) return;   // already audible — the browser trusted it
+      musCue(true);
+    }, 1000);
+  }
+  function musCue(show) {
+    var el = document.querySelector(".soundcue");
+    if (show) {
+      if (menuEl) return;   // don't overlap the open flyout
+      if (!el) {
+        el = document.createElement("button");
+        el.className = "soundcue";
+        el.setAttribute("aria-label", "Turn on sound");
+        el.innerHTML = '<span class="soundcue__eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="soundcue__lbl">Sound on</span>';
+        el.addEventListener("click", function (e) { e.stopPropagation(); musPlay(); musCue(false); });
+        document.body.appendChild(el);
+      }
+      requestAnimationFrame(function () { if (el) el.classList.add("is-on"); });
+    } else if (el) {
+      el.classList.remove("is-on");
+      setTimeout(function () { if (el && !el.classList.contains("is-on") && el.parentNode) el.parentNode.removeChild(el); }, 600);
+    }
   }
   function musArmVisible() {
     if (musVisArmed) return; musVisArmed = true;
@@ -1442,15 +1465,15 @@
       musSync();
     }
   }
-  function musPause() { musStop(); musPlaying = false; try { localStorage.setItem(MUSIC_ON_KEY, "0"); } catch (e) {} musSync(); }
+  function musPause() { musStop(); musPlaying = false; try { localStorage.setItem(MUSIC_ON_KEY, "0"); } catch (e) {} musCue(false); musSync(); }
   function musToggle() { if (musPlaying) musPause(); else musPlay(); }
   function musRefresh() {
     var ct = musCurTrack();
     if (ct && ct.src) {
       var audible = !!(audioEl && !audioEl.paused && !audioEl.muted);
-      if (audible && !musAnnounced) {
-        musAnnounced = true;
-        if (ct.title) flash("\u266a " + ct.title + (ct.artist ? " \u2014 " + ct.artist : ""));
+      if (audible) {
+        if (!musAnnounced) { musAnnounced = true; if (ct.title) flash("\u266a " + ct.title + (ct.artist ? " \u2014 " + ct.artist : "")); }
+        musCue(false);
       }
       musPlaying = audible;
     }
