@@ -299,37 +299,6 @@ main, .footer { transition: opacity .45s ease; }
 @keyframes cueGlow { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
 @keyframes cueSparkAmbient { 0% { transform: translateY(3px) scale(.4); opacity: 0; } 32% { opacity: .5; } 100% { transform: translateY(-15px) scale(.85); opacity: 0; } }
 
-/* Alive gold accent text on the landing — a subtle twinkle on the inline accents… */
-.hero .accent { position: relative; }
-.hero .accent::after {
-  content: ""; position: absolute; top: -.1em; right: -.3em; width: .3em; height: .3em; border-radius: 50%;
-  color: var(--accent); background: radial-gradient(circle, currentColor 0%, rgba(0,0,0,0) 62%);
-  opacity: 0; pointer-events: none; animation: accentTwinkle 5.2s var(--ease-io) infinite;
-}
-.hero__now .accent::after { animation-delay: 2.6s; }
-@keyframes accentTwinkle { 0%, 100% { opacity: 0; transform: scale(.3); } 7% { opacity: .85; transform: scale(1); } 16% { opacity: 0; transform: scale(.5); } }
-
-/* …and rising bronze sparks over the big title accent word ("why.") — particles, not a colour shift */
-.hero__title em { position: relative; }
-.hero__title.is-sparked .line { overflow: visible; }
-.accent-spark { position: absolute; left: -.05em; right: -.05em; top: 0; bottom: 0; pointer-events: none; }
-.accent-spark i {
-  position: absolute; top: 0; width: 4px; height: 4px; border-radius: 50%;
-  background: var(--accent); box-shadow: 0 0 8px rgba(216,166,87,.95);
-  opacity: 0; animation: accentEmber 3.8s var(--ease-io) infinite;
-}
-.accent-spark i:nth-child(1) { left: 14%; animation-delay: 0s; }
-.accent-spark i:nth-child(2) { left: 42%; animation-delay: .95s; }
-.accent-spark i:nth-child(3) { left: 66%; animation-delay: 1.9s; }
-.accent-spark i:nth-child(4) { left: 88%; animation-delay: 2.85s; }
-@keyframes accentEmber {
-  0% { transform: translateY(4px) scale(.4); opacity: 0; }
-  25% { opacity: .95; }
-  100% { transform: translateY(-24px) scale(1); opacity: 0; }
-}
-html.lite .hero .accent::after { animation: none; }
-html.lite .accent-spark { display: none; }
-
 .hero__now {
   position: absolute; bottom: 2.2rem; right: var(--pad);
   font-family: var(--mono); font-size: .68rem; letter-spacing: .06em; color: var(--text-faint);

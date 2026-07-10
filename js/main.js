@@ -258,29 +258,7 @@
   if (year) year.textContent = new Date().getFullYear();
 
   /* -------------------------------------------------
-     10. Accent word ("why.") — rising bronze sparks (particles, not a colour shimmer)
-  ------------------------------------------------- */
-  if (!lite) {
-    const sparkAccent = () => {
-      document.querySelectorAll(".hero__title em").forEach((em) => {
-        if (em.querySelector(".accent-spark")) return;
-        const s = document.createElement("span");
-        s.className = "accent-spark";
-        s.setAttribute("aria-hidden", "true");
-        s.innerHTML = "<i></i><i></i><i></i><i></i>";
-        em.appendChild(s);
-      });
-    };
-    sparkAccent();
-    document.addEventListener("site:rendered", sparkAccent);
-    // release the reveal clip once the line-by-line intro has finished so the
-    // sparks can rise above the tightly-set title without being cut off.
-    const heroTitleEl = document.querySelector(".hero__title");
-    if (heroTitleEl) setTimeout(() => heroTitleEl.classList.add("is-sparked"), 1500);
-  }
-
-  /* -------------------------------------------------
-     11. Ambient background particle field — auto-off on low-power / software GPUs
+     10. Ambient background particle field — auto-off on low-power / software GPUs
   ------------------------------------------------- */
   const bgCapable = () => {
     if ((navigator.hardwareConcurrency || 8) <= 2 || (navigator.deviceMemory || 8) <= 2) return false;
