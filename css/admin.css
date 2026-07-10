@@ -252,8 +252,13 @@ body.adm-lock .cursor { display: none !important; }
 .aiblk__same { margin-bottom: 1rem; }
 
 /* ---------- case study (L2) authoring ---------- */
-.study__toggle { display: flex; align-items: center; gap: .6rem; margin-top: .85rem; }
-.study__meta { font-family: var(--mono); font-size: .62rem; color: var(--text-faint); }
+.study__toggle { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.study__editbtn { flex: 1; text-align: center; border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.study__editbtn:hover { background: var(--accent); color: #0a0a0a; border-color: var(--accent); }
+.study__editbtn.is-open { color: var(--text-dim); border-color: var(--line); font-weight: 400; }
+.study__editbtn.is-open:hover { background: none; color: var(--text); border-color: var(--accent); }
+.study__previewbtn { flex: 0 0 auto; }
+.study__meta { font-family: var(--mono); font-size: .62rem; color: var(--text-faint); flex: 0 0 auto; }
 .study__panel { margin-top: .9rem; padding: 1rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); }
 .study__blocks { margin-top: .4rem; }
 .study__block { background: var(--bg-elev); }

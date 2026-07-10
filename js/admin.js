@@ -423,9 +423,15 @@
   }
   function studyToggle(w, i) {
     var n = (w.study && w.study.blocks && w.study.blocks.length) || 0;
-    var label = openStudy === i ? "\u25be Case study" : "\u25b8 Case study";
-    var meta = openStudy === i ? "" : (n ? " \u00b7 " + n + " section" + (n > 1 ? "s" : "") : w.study ? " \u00b7 empty" : " \u00b7 none yet");
-    return '<div class="study__toggle"><button class="btn btn--ghost" data-act="study-toggle" data-index="' + i + '">' + label + '</button><span class="study__meta">' + meta + "</span></div>";
+    if (openStudy === i) {
+      return '<div class="study__toggle is-open"><button class="btn study__editbtn is-open" data-act="study-toggle" data-index="' + i + '">\u25be Close case-study editor</button></div>';
+    }
+    var count = n ? n + " section" + (n > 1 ? "s" : "") + " \u00b7 click to edit" : (w.study ? "empty \u2014 add sections" : "no page yet \u2014 click to build one");
+    var preview = n ? '<button class="btn btn--ghost study__previewbtn" data-act="study-preview" data-index="' + i + '" title="Open this project page in a new tab">Preview \u2197</button>' : "";
+    return '<div class="study__toggle">' +
+      '<button class="btn study__editbtn" data-act="study-toggle" data-index="' + i + '">\u270e Edit case-study page</button>' +
+      '<span class="study__meta">' + count + "</span>" + preview +
+      "</div>";
   }
   function setStudyUnlock(st, phrase) {
     phrase = String(phrase || "").trim().toLowerCase();
