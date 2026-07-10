@@ -38,6 +38,6 @@ music you own or that is licensed for the web (royalty-free / Creative Commons).
 
 ## Notes
 
-- Browsers block audio autoplay, so playback begins on the visitor's **first
-  interaction** (a click, tap or key press). Their play/pause choice is remembered.
+- The ambience starts the first time you open the menu (the ··· button) — never
+  automatically on page load — and remembers your play/pause choice after that.
 - To make the site silent by default, set `localStorage["rk:music:on"] = "0"`.

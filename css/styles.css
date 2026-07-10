@@ -622,6 +622,15 @@ html[data-appearance="light"] .nav.is-scrolled { background: rgba(242,238,230,0.
 html[data-appearance="light"] .dock__btn { background: rgba(242,238,230,0.6); }
 html[data-appearance="light"] .dock__btn:hover { background: rgba(242,238,230,0.85); }
 html[data-appearance="light"] .skip-link { color: #fff; }
+/* Keep the project thumbnails as premium dark plates in light mode: pin the dark
+   palette inside them so their labels/grid stay visible, and lift them off the cream. */
+html[data-appearance="light"] .case__media {
+  --bg: #08080a; --bg-2: #0d0d10; --bg-elev: #111116;
+  --text: #ECE7E1; --text-dim: #8f8a84; --text-faint: #5a5650;
+  --line: rgba(236,231,225,0.12); --line-soft: rgba(236,231,225,0.06);
+  --accent: #D8A657; --accent-2: #b8843a;
+  box-shadow: 0 2px 10px rgba(28,24,18,0.08), 0 14px 36px rgba(28,24,18,0.12);
+}
 
 html.lite .nav { mix-blend-mode: normal; }
 html.lite .nav.is-scrolled { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(8, 8, 10, 0.94); }

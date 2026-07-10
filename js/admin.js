@@ -1314,7 +1314,7 @@
 
   /* ---------- control menu (clock flyout) ---------- */
   /* ---------- ambient music player (Web Audio synth, with optional audio files) ---------- */
-  let audioEl = null, synth = null, musCur = 0, musArmed = false, musPlaying = false, musLastLight = null;
+  let audioEl = null, synth = null, musCur = 0, musArmed = false, musPlaying = false, musLastLight = null, musOpened = false;
   function musTracks() {
     var m = window.RK && window.RK.data && window.RK.data.music;
     var ok = Array.isArray(m) ? m.filter(function (t) { return t && (t.src || t.gen); }) : [];
@@ -1329,34 +1329,37 @@
   function makeSynth() {
     var Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return null;
-    var ctx, master, filter, lfo, lfoGain, voices = [], vol = 0.15;
+    var ctx, master, filter, lfo, lfoGain, voices = [], vol = 0.16, pending = "midnight";
     var P = {
-      midnight: { f: [55, 82.41, 110, 164.81], t: "sine", cut: 520, vol: 0.16, sweep: 240, rate: 0.05 },
-      ember: { f: [65.41, 98, 130.81, 196], t: "triangle", cut: 780, vol: 0.14, sweep: 320, rate: 0.07 },
-      undertow: { f: [49, 73.42, 98, 130.81], t: "sine", cut: 400, vol: 0.17, sweep: 300, rate: 0.04 }
+      midnight: { f: [55, 82.41, 110, 164.81], cut: 620, vol: 0.17, sweep: 130, rate: 0.035 },
+      ember: { f: [65.41, 98, 130.81, 164.81], cut: 850, vol: 0.15, sweep: 150, rate: 0.05 },
+      undertow: { f: [49, 73.42, 110, 146.83], cut: 470, vol: 0.17, sweep: 120, rate: 0.03 }
     };
     function build() {
       ctx = new Ctx();
       master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
-      filter = ctx.createBiquadFilter(); filter.type = "lowpass"; filter.frequency.value = 600; filter.Q.value = 4; filter.connect(master);
-      lfo = ctx.createOscillator(); lfo.type = "sine"; lfo.frequency.value = 0.05;
-      lfoGain = ctx.createGain(); lfoGain.gain.value = 250; lfo.connect(lfoGain); lfoGain.connect(filter.frequency); lfo.start();
+      filter = ctx.createBiquadFilter(); filter.type = "lowpass"; filter.frequency.value = 600; filter.Q.value = 0.8; filter.connect(master);
+      lfo = ctx.createOscillator(); lfo.type = "sine"; lfo.frequency.value = 0.04;
+      lfoGain = ctx.createGain(); lfoGain.gain.value = 130; lfo.connect(lfoGain); lfoGain.connect(filter.frequency); lfo.start();
     }
     function preset(name) {
       if (!ctx) build();
       var p = P[name] || P.midnight;
       voices.forEach(function (o) { try { o.stop(); } catch (e) {} }); voices = [];
-      p.f.forEach(function (freq, i) {
-        var o = ctx.createOscillator(); o.type = p.t; o.frequency.value = freq; o.detune.value = (i % 2 ? 6 : -6) * (i + 1);
-        var g = ctx.createGain(); g.gain.value = 1 / (p.f.length + 1);
-        o.connect(g); g.connect(filter); o.start(); voices.push(o);
+      var g0 = 1 / (p.f.length * 2 + 1);
+      p.f.forEach(function (freq) {
+        [-6, 6].forEach(function (dt) {
+          var o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = freq; o.detune.value = dt;
+          var g = ctx.createGain(); g.gain.value = g0;
+          o.connect(g); g.connect(filter); o.start(); voices.push(o);
+        });
       });
       filter.frequency.value = p.cut; lfoGain.gain.value = p.sweep; lfo.frequency.value = p.rate; vol = p.vol;
     }
     return {
-      play: function (name) { if (!ctx) build(); if (name) preset(name); else if (!voices.length) preset("midnight"); if (ctx.state === "suspended") ctx.resume(); master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setTargetAtTime(vol, ctx.currentTime, 1.4); },
+      play: function (name) { if (!ctx) build(); if (name) preset(name); else if (!voices.length) preset(pending); if (ctx.state === "suspended") ctx.resume(); master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setTargetAtTime(vol, ctx.currentTime, 2.2); },
       pause: function () { if (!ctx) return; master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setTargetAtTime(0, ctx.currentTime, 0.5); },
-      set: function (name) { preset(name); },
+      set: function (name) { pending = name; if (ctx) preset(name); },
       running: function () { return !!ctx && ctx.state === "running"; }
     };
   }
@@ -1429,7 +1432,6 @@
     musCur = musDefaultTrack();
     musLoad(musCur, false);
     window.addEventListener("theme:change", musThemeChange);
-    if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musPlay();
   }
 
   function buildMenu() {
@@ -1458,6 +1460,7 @@
     document.body.appendChild(menuEl);
     positionMenu();
     musSync();
+    if (!musOpened) { musOpened = true; if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musPlay(); }
     menuEl.addEventListener("click", onMenuClick);
     window.addEventListener("resize", positionMenu);
     setTimeout(function () { document.addEventListener("click", onDocClick); }, 0);
