@@ -18,7 +18,16 @@
   const EDIT_URL = "https://github.com/riteshkumarhk/riteshk.work/edit/main/content.json";
   const PREVIEW_SRC = "index.html?preview=1&lite=1";
   const ADMIN_MIN = 900; // below this the split editor can't fit — admin is disabled
-  const AI_KEY = "rk:ai:key", AI_MODEL = "rk:ai:model", AI_BASE = "rk:ai:base";
+  const AI_PROVIDER = "rk:ai:provider";
+  const AI_PROVIDERS = [
+    ["openai", "OpenAI"],
+    ["gemini", "Google Gemini"],
+    ["anthropic", "Anthropic (Claude)"],
+    ["custom", "Custom (OpenAI-compatible)"],
+  ];
+  const AI_DEFAULT_MODEL = { openai: "gpt-image-1", gemini: "gemini-2.0-flash-preview-image-generation", anthropic: "claude-3-5-sonnet-latest", custom: "" };
+  const AI_DEFAULT_BASE = { openai: "https://api.openai.com/v1", gemini: "https://generativelanguage.googleapis.com/v1beta", anthropic: "https://api.anthropic.com/v1", custom: "" };
+  const AI_IMAGE_PROVIDERS = ["openai", "gemini", "custom"];
 
   let data = null;
   let activeTab = "landing";
@@ -270,7 +279,11 @@
 
   function imageryBlock(w, i) {
     const has = !!w.image;
-    const keyed = !!localStorage.getItem(AI_KEY);
+    const cfg = aiCfg();
+    const canGen = !!cfg.key && aiSupportsImages();
+    const aiHint = !cfg.key ? "Add an API key in the AI tab to enable this"
+      : !aiSupportsImages() ? "This service (Claude) can't generate images"
+      : "Describe an image to generate\u2026";
     const samples = SAMPLE_IMAGES.map(function (s, si) {
       return '<button class="imgblk__sample" data-act="img-sample" data-index="' + i + '" data-sample="' + si + '" style="background-image:url(&quot;' + s + '&quot;)" title="Use sample ' + (si + 1) + '"></button>';
     }).join("");
@@ -280,9 +293,9 @@
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="img-upload" data-index="' + i + '">Upload\u2026</button>' +
       (has ? '<button class="btn btn--ghost" data-act="img-clear" data-index="' + i + '">Remove</button>' : "") + "</div>" +
       '<div class="imgblk__samples">' + samples + "</div>" +
-      '<div class="imgblk__ai"><input type="text" data-aiprompt="' + i + '" placeholder="' + (keyed ? "Describe an image to generate\u2026" : "Add an API key in the AI tab to enable this") + '"' + (keyed ? "" : " disabled") + " />" +
-      '<div class="imgblk__row"><button class="btn btn--auto" data-act="img-generate" data-index="' + i + '"' + (keyed ? "" : " disabled") + ">Generate</button>" +
-      '<button class="btn btn--ghost" data-act="img-modify" data-index="' + i + '"' + (keyed && has ? "" : " disabled") + ">Modify current</button></div>" +
+      '<div class="imgblk__ai"><input type="text" data-aiprompt="' + i + '" placeholder="' + aiHint + '"' + (canGen ? "" : " disabled") + " />" +
+      '<div class="imgblk__row"><button class="btn btn--auto" data-act="img-generate" data-index="' + i + '"' + (canGen ? "" : " disabled") + ">Generate</button>" +
+      '<button class="btn btn--ghost" data-act="img-modify" data-index="' + i + '"' + (canGen && has ? "" : " disabled") + ">Modify current</button></div>" +
       '<div class="imgblk__hint">Uploaded &amp; generated images are embedded in your published file \u2014 a URL keeps it lighter.</div></div></div>';
   }
 
@@ -387,17 +400,19 @@
       return html;
     },
     ai() {
-      const key = localStorage.getItem(AI_KEY) || "";
-      const model = localStorage.getItem(AI_MODEL) || "gpt-image-1";
-      const base = localStorage.getItem(AI_BASE) || "https://api.openai.com/v1";
-      const masked = key ? (key.slice(0, 3) + "\u2022\u2022\u2022\u2022\u2022\u2022" + key.slice(-4)) : "";
+      const p = aiProvider();
+      const cfg = aiCfg();
+      const masked = cfg.key ? (cfg.key.slice(0, 3) + "\u2022\u2022\u2022\u2022\u2022\u2022" + cfg.key.slice(-4)) : "";
+      const imgOK = aiSupportsImages();
+      const opts = AI_PROVIDERS.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === p ? " selected" : "") + ">" + x[1] + "</option>"; }).join("");
       return secHead("AI",
-        "Connect an image model to generate and reimagine project imagery. <em>Your key is stored only in this browser and is never written to your published file.</em>") +
-        '<div class="af"><label class="af__label">API key</label><input type="password" id="aiKey" placeholder="' + (key ? "Saved \u2014 paste to replace" : "sk-\u2026") + '" autocomplete="off" /><div class="af__hint">' + (key ? ("In use: " + escHtml(masked)) : "Not set") + "</div></div>" +
-        '<div class="af__row"><div class="af"><label class="af__label">Model</label><input type="text" id="aiModel" value="' + escAttr(model) + '" /><div class="af__hint">gpt-image-1, dall-e-3, dall-e-2\u2026</div></div>' +
-        '<div class="af"><label class="af__label">API base URL</label><input type="text" id="aiBase" value="' + escAttr(base) + '" /><div class="af__hint">OpenAI-compatible</div></div></div>' +
-        '<div class="imgblk__row"><button class="btn btn--primary" data-act="ai-save">Save</button>' + (key ? '<button class="btn btn--ghost" data-act="ai-clear">Remove key</button>' : "") + "</div>" +
-        '<div class="adm__empty" style="text-align:left;margin-top:1.1rem;line-height:1.6">Security: the key lives only in this browser, is sent only to the API base above, and is never committed to your site. Calling an image API from the browser exposes the key to that provider \u2014 use a limited key. Some providers block browser calls (CORS); OpenAI works directly.</div>';
+        "Connect a provider for AI features like project imagery. <em>Keys are stored only in this browser, per service, and are never written to your published file.</em>") +
+        '<div class="af"><label class="af__label">Service</label><select id="aiProvider">' + opts + "</select><div class=\"af__hint\">" + (imgOK ? "Supports image generation." : "Claude is text / vision only \u2014 the image tools stay disabled.") + "</div></div>" +
+        '<div class="af"><label class="af__label">API key <span class="af__prov">' + escHtml(providerLabel(p)) + "</span></label><input type=\"password\" id=\"aiKey\" placeholder=\"" + (cfg.key ? "Saved \u2014 paste to replace" : "Paste your key") + '" autocomplete="off" /><div class="af__hint">' + (cfg.key ? ("In use: " + escHtml(masked)) : "Not set for this service") + "</div></div>" +
+        '<div class="af__row"><div class="af"><label class="af__label">Model</label><input type="text" id="aiModel" value="' + escAttr(cfg.model) + '" /><div class="af__hint">' + escHtml(modelHint(p)) + "</div></div>" +
+        '<div class="af"><label class="af__label">API base URL</label><input type="text" id="aiBase" value="' + escAttr(cfg.base) + '" /><div class="af__hint">' + (p === "custom" ? "Your OpenAI-compatible endpoint" : "Default for this service") + "</div></div></div>" +
+        '<div class="imgblk__row"><button class="btn btn--primary" data-act="ai-save">Save</button>' + (cfg.key ? '<button class="btn btn--ghost" data-act="ai-clear">Remove key</button>' : "") + "</div>" +
+        '<div class="adm__empty" style="text-align:left;margin-top:1.1rem;line-height:1.6">Security: keys live only in this browser, are sent only to the service you pick, and are never committed to your site. Calling these APIs from the browser exposes the key to that provider \u2014 use a limited key. Some providers block browser calls (CORS); OpenAI and Gemini generally work directly.</div>';
     },
   };
 
@@ -501,6 +516,7 @@
 
   function onChange(e) {
     const t = e.target;
+    if (t.id === "aiProvider") { localStorage.setItem(AI_PROVIDER, t.value); renderBody(); return; }
     if (t.dataset.sv !== undefined && t.dataset.sel) { onSvToggle(t); return; }
     if (t.dataset.act === "feature") {
       const i = +t.dataset.index;
@@ -563,7 +579,7 @@
     if (act === "img-generate") { imgGenerate(i); return; }
     if (act === "img-modify") { imgModify(i); return; }
     if (act === "ai-save") { aiSave(); return; }
-    if (act === "ai-clear") { localStorage.removeItem(AI_KEY); renderBody(); status("Key removed."); return; }
+    if (act === "ai-clear") { localStorage.removeItem("rk:ai:key:" + aiProvider()); renderBody(); status("Key removed."); return; }
     if (act === "autostyle") {
       const n = autoStyleLanding(true);
       apply(true); renderBody();
@@ -630,18 +646,31 @@
       img.src = uri;
     });
   }
+  function aiProvider() { return localStorage.getItem(AI_PROVIDER) || "openai"; }
+  function aiSupportsImages() { return AI_IMAGE_PROVIDERS.indexOf(aiProvider()) !== -1; }
+  function providerLabel(p) { for (var i = 0; i < AI_PROVIDERS.length; i++) if (AI_PROVIDERS[i][0] === p) return AI_PROVIDERS[i][1]; return p; }
+  function modelHint(p) {
+    return p === "openai" ? "gpt-image-1, dall-e-3, dall-e-2"
+      : p === "gemini" ? "gemini-2.0-flash-preview-image-generation, imagen-3.0-generate-002"
+      : p === "anthropic" ? "claude-3-5-sonnet-latest (no image generation)"
+      : "your model id";
+  }
   function aiCfg() {
+    const p = aiProvider();
     return {
-      key: localStorage.getItem(AI_KEY) || "",
-      model: (localStorage.getItem(AI_MODEL) || "gpt-image-1").trim(),
-      base: (localStorage.getItem(AI_BASE) || "https://api.openai.com/v1").trim().replace(/\/+$/, ""),
+      provider: p,
+      key: localStorage.getItem("rk:ai:key:" + p) || "",
+      model: (localStorage.getItem("rk:ai:model:" + p) || AI_DEFAULT_MODEL[p] || "").trim(),
+      base: (localStorage.getItem("rk:ai:base:" + p) || AI_DEFAULT_BASE[p] || "").trim().replace(/\/+$/, ""),
     };
   }
   function aiSave() {
+    const p = root.querySelector("#aiProvider") ? root.querySelector("#aiProvider").value : aiProvider();
+    localStorage.setItem(AI_PROVIDER, p);
     const k = root.querySelector("#aiKey"), m = root.querySelector("#aiModel"), bs = root.querySelector("#aiBase");
-    if (k && k.value.trim()) localStorage.setItem(AI_KEY, k.value.trim());
-    if (m) localStorage.setItem(AI_MODEL, m.value.trim() || "gpt-image-1");
-    if (bs) localStorage.setItem(AI_BASE, bs.value.trim() || "https://api.openai.com/v1");
+    if (k && k.value.trim()) localStorage.setItem("rk:ai:key:" + p, k.value.trim());
+    if (m) localStorage.setItem("rk:ai:model:" + p, m.value.trim() || AI_DEFAULT_MODEL[p] || "");
+    if (bs) localStorage.setItem("rk:ai:base:" + p, bs.value.trim() || AI_DEFAULT_BASE[p] || "");
     renderBody();
     status("AI settings saved \u2014 local only.", true);
   }
@@ -674,6 +703,11 @@
     } catch (e) { status("Modify failed: " + e.message); }
   }
   async function aiImage(cfg, prompt, sourceImage) {
+    if (cfg.provider === "gemini") return aiImageGemini(cfg, prompt, sourceImage);
+    if (cfg.provider === "anthropic") throw new Error("Claude can't generate images \u2014 pick OpenAI or Gemini.");
+    return aiImageOpenAI(cfg, prompt, sourceImage);
+  }
+  async function aiImageOpenAI(cfg, prompt, sourceImage) {
     let res;
     if (sourceImage) {
       const blob = await (await fetch(sourceImage)).blob();
@@ -692,6 +726,42 @@
     if (d.b64_json) return "data:image/png;base64," + d.b64_json;
     if (d.url) return d.url;
     throw new Error("No image returned");
+  }
+  async function aiImageGemini(cfg, prompt, sourceImage) {
+    const url = cfg.base + "/models/" + encodeURIComponent(cfg.model) + ":generateContent?key=" + encodeURIComponent(cfg.key);
+    const parts = [{ text: prompt }];
+    if (sourceImage) {
+      const sp = await dataUriParts(sourceImage);
+      if (sp.b64) parts.push({ inlineData: { mimeType: sp.mime, data: sp.b64 } });
+    }
+    const body = { contents: [{ parts: parts }], generationConfig: { responseModalities: ["TEXT", "IMAGE"] } };
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    let j; try { j = await res.json(); } catch (e) { throw new Error("HTTP " + res.status); }
+    if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
+    const cand = (j.candidates && j.candidates[0]) || {};
+    const outParts = (cand.content && cand.content.parts) || [];
+    for (var i = 0; i < outParts.length; i++) {
+      const d = outParts[i].inlineData || outParts[i].inline_data;
+      if (d && d.data) return "data:" + (d.mimeType || d.mime_type || "image/png") + ";base64," + d.data;
+    }
+    throw new Error("No image returned by Gemini");
+  }
+  function dataUriParts(uri) {
+    return new Promise(function (resolve) {
+      if (/^data:/.test(uri)) {
+        const m = uri.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+        resolve({ mime: (m && m[1]) || "image/png", b64: (m && m[2]) ? m[3] : "" });
+      } else {
+        fetch(uri).then(function (r) { return r.blob(); }).then(function (blob) {
+          const fr = new FileReader();
+          fr.onload = function () {
+            const res = String(fr.result), c = res.indexOf(",");
+            resolve({ mime: res.slice(5, res.indexOf(";")) || "image/png", b64: res.slice(c + 1) });
+          };
+          fr.readAsDataURL(blob);
+        }).catch(function () { resolve({ mime: "image/png", b64: "" }); });
+      }
+    });
   }
 
   /* ---------- shell / open / exit ---------- */

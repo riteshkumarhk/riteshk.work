@@ -232,3 +232,4 @@ body.adm-lock .cursor { display: none !important; }
 .imgblk__sample:hover { border-color: var(--accent); transform: translateY(-1px); }
 .imgblk__ai { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--line); }
 .imgblk__hint { font-size: .66rem; color: var(--text-faint); margin-top: .5rem; line-height: 1.45; }
+.af__prov { font-family: var(--mono); font-size: .56rem; text-transform: none; letter-spacing: .02em; color: var(--text-faint); border: 1px solid var(--line); border-radius: 100px; padding: .05rem .4rem; margin-left: .4rem; vertical-align: middle; }
