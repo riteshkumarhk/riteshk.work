@@ -85,6 +85,11 @@
       case "auto": return '<div class="plate__road"></div>';
       case "xbox": return '<div class="plate__grid"></div>';
       case "grid": return '<div class="plate__grid"></div>';
+      case "aurora": return '<div class="plate__aurora"></div>';
+      case "orbit": return '<div class="plate__orbit"></div>';
+      case "wave": return '<div class="plate__wave"></div>';
+      case "mesh": return '<div class="plate__mesh"></div>';
+      case "ember": return '<div class="plate__ember"></div>';
       default: return '<div class="plate__grid"></div><div class="plate__glow"></div>';
     }
   }
@@ -317,6 +322,7 @@
       md: md,
       esc: esc,
       openResume: openResume,
+      plateInner: plateInner,
       DRAFT_KEY: DRAFT_KEY,
       applySpecialView: applySpecialView,
       clearSpecialView: clearSpecialView,

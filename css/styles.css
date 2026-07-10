@@ -406,6 +406,36 @@ main, .footer { transition: opacity .45s ease; }
 }
 @keyframes road { to { background-position-y: 64px; } }
 
+/* Extra premium motion placeholders */
+.case__media--aurora .plate { background: radial-gradient(130% 130% at 28% 24%, #123038 0%, #0d1a22 48%, #08080a 100%); }
+.plate__aurora { position: absolute; inset: 0; }
+.plate__aurora::before, .plate__aurora::after { content: ""; position: absolute; width: 62%; aspect-ratio: 1; border-radius: 50%; filter: blur(40px); opacity: .5; animation: aurora 12s var(--ease-io) infinite; }
+.plate__aurora::before { background: radial-gradient(circle, rgba(72,206,190,.6), transparent 70%); top: -12%; left: -6%; }
+.plate__aurora::after { background: radial-gradient(circle, rgba(150,110,240,.5), transparent 70%); bottom: -16%; right: -6%; animation-delay: -6s; }
+@keyframes aurora { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(16%,12%) scale(1.28); } }
+
+.case__media--orbit .plate { background: radial-gradient(120% 120% at 50% 42%, #241a0b 0%, #150e06 50%, #08080a 100%); }
+.plate__orbit { position: absolute; width: 54%; aspect-ratio: 1; animation: orbit 15s linear infinite; }
+.plate__orbit::before { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1px solid rgba(216,166,87,.28); }
+.plate__orbit::after { content: ""; position: absolute; top: -5px; left: 50%; width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; background: rgba(216,166,87,.95); box-shadow: 0 0 14px rgba(216,166,87,.7); }
+@keyframes orbit { to { transform: rotate(360deg); } }
+
+.case__media--wave .plate { background: radial-gradient(120% 120% at 24% 28%, #141d3a 0%, #0c1120 52%, #08080a 100%); }
+.plate__wave { position: absolute; inset: 0; background-image: linear-gradient(115deg, transparent 45%, rgba(120,150,240,.18) 50%, transparent 55%); background-size: 64px 64px; animation: wave 4.2s linear infinite; -webkit-mask-image: radial-gradient(82% 82% at 50% 45%, #000 42%, transparent 100%); mask-image: radial-gradient(82% 82% at 50% 45%, #000 42%, transparent 100%); }
+@keyframes wave { to { background-position: 64px 64px; } }
+
+.case__media--mesh .plate { background: radial-gradient(120% 120% at 30% 26%, #0f2e22 0%, #0b1a14 50%, #08080a 100%); }
+.plate__mesh { position: absolute; inset: 0; background-image: radial-gradient(rgba(80,210,150,.5) 1.4px, transparent 1.7px); background-size: 30px 30px; -webkit-mask-image: radial-gradient(70% 70% at 50% 45%, #000 30%, transparent 100%); mask-image: radial-gradient(70% 70% at 50% 45%, #000 30%, transparent 100%); animation: mesh 8s linear infinite, twinkle 4s var(--ease-io) infinite; }
+@keyframes mesh { to { background-position: 30px 30px; } }
+@keyframes twinkle { 0%,100% { opacity: .5; } 50% { opacity: .95; } }
+
+.case__media--ember .plate { background: radial-gradient(120% 120% at 50% 82%, #3a1420 0%, #1c0c12 50%, #08080a 100%); }
+.plate__ember { position: absolute; inset: 0; overflow: hidden; }
+.plate__ember::before, .plate__ember::after { content: ""; position: absolute; bottom: -20%; width: 42%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(230,110,140,.5), transparent 70%); filter: blur(26px); animation: ember 7s var(--ease-io) infinite; }
+.plate__ember::before { left: 16%; }
+.plate__ember::after { right: 12%; animation-delay: -3.5s; }
+@keyframes ember { 0% { transform: translateY(12%) scale(.9); opacity: 0; } 30% { opacity: .7; } 100% { transform: translateY(-62%) scale(1.3); opacity: 0; } }
+
 .case__meta {
   display: flex; justify-content: space-between; align-items: center;
   font-family: var(--mono); font-size: .72rem; letter-spacing: .04em; color: var(--text-dim);
@@ -589,6 +619,13 @@ html.lite .plate__rings::after,
 html.lite .plate__bars::before,
 html.lite .plate__bars::after,
 html.lite .plate__road::before,
+html.lite .plate__aurora::before,
+html.lite .plate__aurora::after,
+html.lite .plate__orbit,
+html.lite .plate__wave,
+html.lite .plate__mesh,
+html.lite .plate__ember::before,
+html.lite .plate__ember::after,
 html.lite .nav__status,
 html.lite .hero__cue svg { animation: none; }
 html.lite .dock__btn { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(8, 8, 10, 0.9); }

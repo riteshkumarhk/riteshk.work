@@ -148,6 +148,11 @@ video.pjb__media-el { background: #000; }
 .pjb__shot-ph--search { background: radial-gradient(120% 120% at 30% 70%, #2a1840 0%, #140d20 50%, #08080a 100%); }
 .pjb__shot-ph--auto { background: linear-gradient(160deg, #1a1c22 0%, #0c0d10 60%, #08080a 100%); }
 .pjb__shot-ph--xbox { background: radial-gradient(120% 120% at 25% 22%, #1a7a1a 0%, #0c2410 48%, #08080a 100%); }
+.pjb__shot-ph--aurora { background: radial-gradient(130% 130% at 28% 24%, #123038 0%, #0d1a22 48%, #08080a 100%); }
+.pjb__shot-ph--orbit { background: radial-gradient(120% 120% at 50% 42%, #241a0b 0%, #150e06 50%, #08080a 100%); }
+.pjb__shot-ph--wave { background: radial-gradient(120% 120% at 24% 28%, #141d3a 0%, #0c1120 52%, #08080a 100%); }
+.pjb__shot-ph--mesh { background: radial-gradient(120% 120% at 30% 26%, #0f2e22 0%, #0b1a14 50%, #08080a 100%); }
+.pjb__shot-ph--ember { background: radial-gradient(120% 120% at 50% 82%, #3a1420 0%, #1c0c12 50%, #08080a 100%); }
 .pjb__shot-tag { font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-dim); padding: .4rem .8rem; border: 1px solid var(--line); border-radius: 100px; background: rgba(8, 8, 10, .4); }
 .pjb__cap { margin-top: .9rem; display: flex; gap: .8rem; align-items: baseline; font-size: .9rem; color: var(--text-dim); line-height: 1.5; }
 .pjb__cap-n { font-family: var(--mono); font-size: .68rem; color: var(--text-faint); white-space: nowrap; }

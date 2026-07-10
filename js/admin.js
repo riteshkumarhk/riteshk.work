@@ -61,40 +61,24 @@
     ["special", "Special Views"],
     ["ai", "AI"],
   ];
-  const THEMES = ["edge", "auth", "search", "auto", "xbox", "grid"];
+  const THEMES = ["edge", "auth", "search", "auto", "xbox", "grid", "aurora", "orbit", "wave", "mesh", "ember"];
 
-  /* self-contained animated sample textures (SVG data URIs — shapes + motion, no external assets) */
-  function svgSample(stops, accent, accent2) {
-    const c2 = accent2 || accent;
-    const svg =
-      "<svg xmlns='http://www.w3.org/2000/svg' width='640' height='400' viewBox='0 0 640 400'>" +
-      "<defs><radialGradient id='g' cx='32%' cy='26%' r='95%'>" + stops + "</radialGradient>" +
-      "<linearGradient id='v' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#000' stop-opacity='0'/><stop offset='1' stop-color='#000' stop-opacity='.55'/></linearGradient>" +
-      "<filter id='soft' x='-60%' y='-60%' width='220%' height='220%'><feGaussianBlur stdDeviation='34'/></filter>" +
-      "<style>*{transform-box:fill-box;transform-origin:center}" +
-      "@keyframes a{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(54px,-34px) scale(1.22)}}" +
-      "@keyframes b{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-46px,32px) scale(1.15)}}" +
-      "@keyframes r{to{transform:rotate(360deg)}}" +
-      ".s1{animation:a 9s ease-in-out infinite}.s2{animation:b 12s ease-in-out infinite}.r1{animation:r 30s linear infinite}.r2{animation:r 22s linear infinite reverse}" +
-      "</style></defs>" +
-      "<rect width='640' height='400' fill='url(#g)'/>" +
-      "<g filter='url(#soft)'>" +
-      "<circle class='s1' cx='215' cy='150' r='104' fill='" + accent + "' opacity='.55'/>" +
-      "<circle class='s2' cx='470' cy='255' r='80' fill='" + c2 + "' opacity='.42'/>" +
-      "</g>" +
-      "<circle class='r1' cx='320' cy='200' r='128' fill='none' stroke='" + accent + "' stroke-width='1.5' stroke-dasharray='5 12' opacity='.4'/>" +
-      "<circle class='r2' cx='320' cy='200' r='86' fill='none' stroke='" + c2 + "' stroke-width='1' stroke-dasharray='3 10' opacity='.3'/>" +
-      "<rect width='640' height='400' fill='url(#v)'/></svg>";
-    return "data:image/svg+xml," + encodeURIComponent(svg);
-  }
-  const SAMPLE_IMAGES = [
-    svgSample("<stop offset='0' stop-color='#1c4a70'/><stop offset='.55' stop-color='#0b1522'/><stop offset='1' stop-color='#08080a'/>", "#2f80c4", "#1c4a70"),
-    svgSample("<stop offset='0' stop-color='#c8892f'/><stop offset='.55' stop-color='#241a0c'/><stop offset='1' stop-color='#08080a'/>", "#e0a94a", "#c8892f"),
-    svgSample("<stop offset='0' stop-color='#5b3aa6'/><stop offset='.55' stop-color='#1b1130'/><stop offset='1' stop-color='#08080a'/>", "#7c5ad0", "#5b3aa6"),
-    svgSample("<stop offset='0' stop-color='#2f7d6b'/><stop offset='.55' stop-color='#0e211d'/><stop offset='1' stop-color='#08080a'/>", "#3fae90", "#2f7d6b"),
-    svgSample("<stop offset='0' stop-color='#b0475e'/><stop offset='.55' stop-color='#2a1017'/><stop offset='1' stop-color='#08080a'/>", "#d3647c", "#b0475e"),
-    svgSample("<stop offset='0' stop-color='#3a4a63'/><stop offset='.55' stop-color='#12161f'/><stop offset='1' stop-color='#08080a'/>", "#6079a0", "#3a4a63"),
+  /* Premium animated placeholder plates — the real site plates, offered as ready thumbnails. */
+  const PLATE_THEMES = [
+    ["edge", "Signal grid"],
+    ["aurora", "Aurora"],
+    ["auth", "Sonar"],
+    ["orbit", "Orbit"],
+    ["search", "Equalizer"],
+    ["wave", "Light wave"],
+    ["mesh", "Constellation"],
+    ["auto", "Highway"],
+    ["ember", "Embers"],
+    ["xbox", "Neon grid"],
   ];
+  function platePreview(th) {
+    return (window.RK && window.RK.plateInner) ? window.RK.plateInner(th) : "";
+  }
 
   /* ---------- utils ---------- */
   const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -318,15 +302,18 @@
     const aiHint = !cfg.key ? "Add an API key in the AI tab to enable this"
       : !aiSupportsImages() ? "This service (Claude) can't generate images"
       : "Describe an image to generate\u2026";
-    const samples = SAMPLE_IMAGES.map(function (s, si) {
-      return '<button class="imgblk__sample" data-act="img-sample" data-index="' + i + '" data-sample="' + si + '" title="Use motion texture ' + (si + 1) + '"><img src="' + s + '" alt="" loading="lazy" /></button>';
+    const plates = PLATE_THEMES.map(function (t) {
+      const th = t[0];
+      const on = (!w.image && (w.theme || "edge") === th) ? " is-on" : "";
+      return '<button class="imgblk__plate' + on + '" data-act="plate-sample" data-index="' + i + '" data-theme="' + th + '" title="' + escAttr(t[1]) + ' \u2014 animated placeholder"><span class="imgblk__plate-media case__media case__media--' + th + '"><span class="plate">' + platePreview(th) + "</span></span><span class=\"imgblk__plate-name\">" + escHtml(t[1]) + "</span></button>";
     }).join("");
     return '<div class="imgblk"><div class="af__label">Project image</div>' +
       '<div class="imgblk__preview' + (has ? " has" : "") + '">' + (has ? '<img src="' + escAttr(w.image) + '" alt="" />' : "<span>No image \u2014 the animated placeholder is shown</span>") + "</div>" +
       '<input type="text" data-list="work" data-index="' + i + '" data-field="image" value="' + escAttr(w.image || "") + '" placeholder="Paste an image URL\u2026" />' +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="img-upload" data-index="' + i + '">Upload\u2026</button>' +
       (has ? '<button class="btn btn--ghost" data-act="img-clear" data-index="' + i + '">Remove</button>' : "") + "</div>" +
-      '<div class="imgblk__samples">' + samples + "</div>" +
+      '<div class="af__label" style="margin:.7rem 0 .2rem">Or use an animated placeholder \u2014 no upload, always on-brand</div>' +
+      '<div class="imgblk__plates">' + plates + "</div>" +
       '<div class="imgblk__ai"><input type="text" data-aiprompt="' + i + '" placeholder="' + aiHint + '"' + (canGen ? "" : " disabled") + " />" +
       '<div class="imgblk__row"><button class="btn btn--auto" data-act="img-generate" data-index="' + i + '"' + (canGen ? "" : " disabled") + ">Generate</button>" +
       '<button class="btn btn--ghost" data-act="img-modify" data-index="' + i + '"' + (canGen && has ? "" : " disabled") + ">Modify current</button></div>" +
@@ -817,7 +804,7 @@
     }
     if (act === "sv-remove") { (data.specialViews || []).splice(i, 1); saveDraft(true); renderBody(); return; }
     if (act === "sv-preview") { svPreview(i); return; }
-    if (act === "img-sample") { data.work[i].image = SAMPLE_IMAGES[+b.dataset.sample]; apply(true); renderBody(); status("Sample image applied."); return; }
+    if (act === "plate-sample") { data.work[i].theme = b.dataset.theme; data.work[i].image = ""; apply(true); renderBody(); status("Motion placeholder applied.", true); return; }
     if (act === "img-clear") { data.work[i].image = ""; apply(true); renderBody(); status("Image removed."); return; }
     if (act === "img-upload") { pickImage(function (uri) { data.work[i].image = uri; apply(true); renderBody(); status("Image uploaded.", true); }); return; }
     if (act === "img-generate") { imgGenerate(i); return; }
