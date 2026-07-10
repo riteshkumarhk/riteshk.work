@@ -72,7 +72,7 @@
     {
       "id": "edge",
       "featured": true,
-      "theme": "edge",
+      "theme": "auth",
       "plateTag": "First Run Experience",
       "client": "Microsoft Edge",
       "period": "2024 — Present",
@@ -226,12 +226,13 @@
             "sub": "If I had more time: push personalization earlier, and close the loop from first-run choices to week-four retention."
           }
         ]
-      }
+      },
+      "image": ""
     },
     {
       "id": "auth",
       "featured": true,
-      "theme": "auth",
+      "theme": "aurora",
       "plateTag": "Passwordless · Passkeys",
       "client": "Windows Identity",
       "period": "2022 — 2024",
@@ -380,7 +381,8 @@
             "sub": "If I had more time: push passkey education earlier, and close the loop from enrollment to long-term retention."
           }
         ]
-      }
+      },
+      "image": ""
     },
     {
       "id": "search",
