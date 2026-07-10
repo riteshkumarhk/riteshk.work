@@ -1384,21 +1384,25 @@
   }
   function musArm() {
     if (musArmed) return; musArmed = true;
-    var evs = ["pointerdown", "mousedown", "keydown", "touchstart", "touchmove", "wheel", "scroll"];
+    // These count as a user gesture, so the browser lets audio start: a click/tap anywhere,
+    // keyboard scrolling (Space / arrows / PageDown), touch scrolling, or dragging the scrollbar.
+    var act = ["pointerdown", "mousedown", "keydown", "touchstart"];
     var opts = { capture: true, passive: true };
-    var last = 0;
+    var triedWheel = false;
     function disarm() {
       musArmed = false;
-      evs.forEach(function (ev) { window.removeEventListener(ev, go, opts); });
+      act.forEach(function (ev) { window.removeEventListener(ev, go, opts); });
+      window.removeEventListener("wheel", onWheel, opts);
       if (audioEl) audioEl.removeEventListener("playing", disarm);
     }
     function go() {
       if (localStorage.getItem(MUSIC_ON_KEY) === "0") { disarm(); return; }
-      var now = Date.now(); if (now - last < 400) return; last = now;  // throttle repeated scroll/wheel attempts
       musPlay();
     }
-    evs.forEach(function (ev) { window.addEventListener(ev, go, opts); });
-    var a = audioEnsure(); if (a) a.addEventListener("playing", disarm);  // stop retrying once sound truly starts
+    function onWheel() { if (triedWheel) return; triedWheel = true; go(); }  // one attempt (a mouse wheel usually isn't a valid unlock gesture)
+    act.forEach(function (ev) { window.addEventListener(ev, go, opts); });
+    window.addEventListener("wheel", onWheel, opts);
+    var a = audioEnsure(); if (a) a.addEventListener("playing", disarm);  // stop once sound truly starts
   }
   function musPlay() {
     var t = musCurTrack(); if (!t) return;
