@@ -84,15 +84,17 @@
       requestAnimationFrame(loop);
     })();
 
-    // Hover / view states
-    document.querySelectorAll("[data-cursor], a, button").forEach((el) => {
-      const type = el.getAttribute("data-cursor");
-      el.addEventListener("mouseenter", () => {
-        cursor.classList.add(type === "view" ? "is-view" : "is-hover");
-      });
-      el.addEventListener("mouseleave", () => {
+    // Hover / view states — delegated on the document so it also covers the
+    // work cards & contact pills that render asynchronously from content.json.
+    document.addEventListener("mouseover", (e) => {
+      const el = e.target.closest && e.target.closest("[data-cursor], a, button");
+      if (el) {
+        const view = el.getAttribute("data-cursor") === "view";
+        cursor.classList.toggle("is-view", view);
+        cursor.classList.toggle("is-hover", !view);
+      } else {
         cursor.classList.remove("is-hover", "is-view");
-      });
+      }
     });
 
     document.addEventListener("mouseleave", () => (dot.style.opacity = ring.style.opacity = "0"));
@@ -256,23 +258,25 @@
   if (year) year.textContent = new Date().getFullYear();
 
   /* -------------------------------------------------
-     10. Hero title — subtle cursor parallax (mirrors the contact magnetic feel)
+     10. Accent word ("why.") — rising bronze sparks (particles, not a colour shimmer)
   ------------------------------------------------- */
-  if (!isTouch && !lite) {
-    const heroSec = document.querySelector(".hero");
-    const heroLines = heroSec ? heroSec.querySelectorAll(".hero__title .line") : [];
-    if (heroSec && heroLines.length) {
-      heroSec.addEventListener("mousemove", (e) => {
-        const r = heroSec.getBoundingClientRect();
-        const hx = (e.clientX - (r.left + r.width / 2)) / r.width;
-        const hy = (e.clientY - (r.top + r.height / 2)) / r.height;
-        heroLines.forEach((line, i) => {
-          const depth = (i + 1) * 16;
-          line.style.transform = `translate(${(hx * depth).toFixed(2)}px, ${(hy * depth * 0.5).toFixed(2)}px)`;
-        });
+  if (!lite) {
+    const sparkAccent = () => {
+      document.querySelectorAll(".hero__title em").forEach((em) => {
+        if (em.querySelector(".accent-spark")) return;
+        const s = document.createElement("span");
+        s.className = "accent-spark";
+        s.setAttribute("aria-hidden", "true");
+        s.innerHTML = "<i></i><i></i><i></i><i></i>";
+        em.appendChild(s);
       });
-      heroSec.addEventListener("mouseleave", () => { heroLines.forEach((line) => { line.style.transform = ""; }); });
-    }
+    };
+    sparkAccent();
+    document.addEventListener("site:rendered", sparkAccent);
+    // release the reveal clip once the line-by-line intro has finished so the
+    // sparks can rise above the tightly-set title without being cut off.
+    const heroTitleEl = document.querySelector(".hero__title");
+    if (heroTitleEl) setTimeout(() => heroTitleEl.classList.add("is-sparked"), 1500);
   }
 
   /* -------------------------------------------------
