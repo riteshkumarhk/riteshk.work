@@ -53,7 +53,7 @@
     ["special", "Special Views"],
     ["ai", "AI"],
   ];
-  const THEMES = ["edge", "auth", "search", "auto", "grid"];
+  const THEMES = ["edge", "auth", "search", "auto", "xbox", "grid"];
 
   /* self-contained sample textures (SVG data URIs — no external assets) */
   function svgSample(stops) {

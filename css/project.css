@@ -147,6 +147,7 @@ video.pjb__media-el { background: #000; }
 .pjb__shot-ph--auth { background: radial-gradient(120% 120% at 80% 30%, #3a2a12 0%, #1a140a 50%, #08080a 100%); }
 .pjb__shot-ph--search { background: radial-gradient(120% 120% at 30% 70%, #2a1840 0%, #140d20 50%, #08080a 100%); }
 .pjb__shot-ph--auto { background: linear-gradient(160deg, #1a1c22 0%, #0c0d10 60%, #08080a 100%); }
+.pjb__shot-ph--xbox { background: radial-gradient(120% 120% at 25% 22%, #1a7a1a 0%, #0c2410 48%, #08080a 100%); }
 .pjb__shot-tag { font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-dim); padding: .4rem .8rem; border: 1px solid var(--line); border-radius: 100px; background: rgba(8, 8, 10, .4); }
 .pjb__cap { margin-top: .9rem; display: flex; gap: .8rem; align-items: baseline; font-size: .9rem; color: var(--text-dim); line-height: 1.5; }
 .pjb__cap-n { font-family: var(--mono); font-size: .68rem; color: var(--text-faint); white-space: nowrap; }

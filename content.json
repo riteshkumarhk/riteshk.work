@@ -174,10 +174,29 @@
       "theme": "auth",
       "plateTag": "Passwordless · Passkeys",
       "client": "Windows Identity",
-      "period": "2021 — 2024",
+      "period": "2022 — 2024",
       "title": "A passwordless future for billions of sign-ins",
       "desc": "Led UX strategy for foundational Windows passkey experiences across Windows Hello, Microsoft Account and FIDO — reducing authentication friction while strengthening trust. Established scalable patterns adopted across identity journeys.",
-      "tags": ["Identity", "Security UX", "Systems"]
+      "tags": ["Identity", "Security UX", "Systems"],
+      "study": {
+        "tagline": "Making the safest way to sign in also the easiest.",
+        "role": "Senior Designer — Windows Auth & Identity",
+        "team": "Design · Engineering · Security · Product · Compliance · Standards",
+        "timeline": "2022 — 2024",
+        "scope": "Identity · Authentication · Consent · Passkeys",
+        "unlockHash": "58cb14ecb20ae8dcbf55d3d96c449dee408f523548325b61e368d92d1613880c",
+        "blocks": [
+          { "type": "text", "nav": "Overview", "kicker": "Overview", "heading": "Making the safest way to sign in also the easiest.", "body": "I owned UX for passwordless sign-in across Windows Hello, Microsoft Account, FIDO and Passkeys — authentication that has to feel effortless while protecting billions of sign-ins. The goal: make the most secure option the one people actually reach for.", "list": ["Led UX for foundational Windows passkey experiences", "Advanced passwordless across Windows Hello, Microsoft Account and FIDO", "Designed third-party credential-manager support for Windows", "Represented Microsoft at the FIDO Alliance and Authenticate 2024"] },
+          { "type": "metrics", "nav": "Impact", "kicker": "Impact", "heading": "Security that reaches the whole Windows ecosystem.", "items": [ { "value": "689M+", "label": "consented Microsoft accounts" }, { "value": "175K+", "label": "passkeys enrolled in the first 10 days" }, { "value": "250M+", "label": "addressable Windows users" } ] },
+          { "type": "faq", "kicker": "Quick context", "items": [ { "q": "What is a passkey?", "a": "A phishing-resistant sign-in bound to your device — nothing to type, remember or leak." }, { "q": "What is Unified Consent?", "a": "The moment you grant an app access to your Microsoft account — standardized into one clear pattern across the ecosystem." }, { "q": "Why go passwordless?", "a": "Passwords are the single biggest source of account compromise; removing them lifts security and cuts friction at the same time." } ] },
+          { "type": "statement", "nav": "Problem", "kicker": "The problem", "body": "Security and ease usually pull in opposite directions. Passwordless only wins if the safe path is also the fast one.", "sub": "At billions of sign-ins, one confusing step becomes millions of failed logins and support calls." },
+          { "type": "steps", "nav": "Approach", "kicker": "Approach", "heading": "Turning a security mandate into an experience people choose.", "items": [ { "title": "Design for trust, not just tasks", "body": "Make the safer choice legible and reassuring at the exact moment of decision." }, { "title": "Establish reusable patterns", "body": "Define authentication patterns that scale across Windows Hello, passkeys and consent journeys." }, { "title": "Partner with standards", "body": "Work across Security, Compliance and the FIDO Alliance so the UX and the spec evolve together." } ] },
+          { "type": "media", "nav": "Design", "kicker": "The work", "items": [ { "caption": "Passkey enrollment and sign-in flows across Windows. Visuals abstracted; shipping UI is confidential." }, { "caption": "Unified Consent patterns standardized across the Microsoft account ecosystem." } ] },
+          { "type": "split", "nav": "Outcome", "kicker": "Before / after", "heading": "From passwords to passkeys.", "leftLabel": "Before", "left": ["Passwords — phishable, forgettable, costly to support", "Consent fragmented across surfaces", "Passkeys unfamiliar to most people"], "rightLabel": "After", "right": ["Phishing-resistant passkeys as a first-class choice", "Consent standardized across the ecosystem", "175K+ enrollments in the first 10 days"] },
+          { "type": "text", "locked": true, "nav": "Deep dive", "kicker": "Deeper cut", "heading": "80+ SSO issues across 200+ workflows.", "body": "Beyond new features, a large part of the work was reliability — auditing sign-in journeys end to end and fixing the trust-breaking moments. The full breakdown is shared on request.", "list": ["The audit method across 200+ sign-in workflows", "How we prioritized 80+ reliability and trust fixes", "Patterns that measurably reduced authentication friction"] },
+          { "type": "statement", "nav": "Reflection", "kicker": "Reflection", "body": "The best security disappears — you feel safe without being asked to think about it.", "sub": "If I had more time: push passkey education earlier, and close the loop from enrollment to long-term retention." }
+        ]
+      }
     },
     {
       "id": "search",
@@ -188,7 +207,26 @@
       "period": "2019 — 2021",
       "title": "Finding the answer, not just the results",
       "desc": "Designed AI-powered search and discovery across Outlook, Teams, SharePoint, Bing and Microsoft 365 — intelligent answers that help people find information faster, with accessibility and platform consistency built in.",
-      "tags": ["AI Design", "Discovery", "Accessibility"]
+      "tags": ["AI Design", "Discovery", "Accessibility"],
+      "study": {
+        "tagline": "Finding the answer, not just a list of results.",
+        "role": "Product Designer II — Microsoft Search (MSAI)",
+        "team": "Design · Engineering · Research · Content · Data Science",
+        "timeline": "2019 — 2021",
+        "scope": "AI Search · Answers · Discovery · Accessibility",
+        "unlockHash": "31880b04d10c6ffc8d09eb9c80f459cb0faa841516ff4c0559ed8d655dcf23f7",
+        "blocks": [
+          { "type": "text", "nav": "Overview", "kicker": "Overview", "heading": "Answers, in the flow of work.", "body": "I led UX for Microsoft Search Answer experiences across Outlook, Teams, SharePoint, Bing and Microsoft 365 — turning search from a list of links into direct, trustworthy answers that meet people where they already work.", "list": ["Led UX for Microsoft Search Answer experiences", "Shipped Acronym, Calendar, Link, Knowledge and People answers", "Standardized people and profile-card experiences", "Championed inclusive, accessible design across surfaces"] },
+          { "type": "metrics", "nav": "Impact", "kicker": "Impact", "heading": "Answers people actually use.", "items": [ { "value": "6.2M", "label": "monthly users reached" }, { "value": "2.0M", "label": "successful answer interactions" }, { "value": "5", "label": "answer types shipped" } ] },
+          { "type": "statement", "nav": "Problem", "kicker": "The problem", "body": "Search that returns ten blue links makes people do the work the system should have done for them.", "sub": "In the enterprise, the answer is often a person, a policy or a definition — not a webpage." },
+          { "type": "steps", "nav": "Approach", "kicker": "Approach", "heading": "Designing answers, not results.", "items": [ { "title": "Model the question types", "body": "Identify the recurring things people actually ask — acronyms, people, events — and answer them directly." }, { "title": "Design for confidence", "body": "Show the source and context so people trust the answer without leaving the page." }, { "title": "Make it consistent", "body": "Define patterns that read the same across Outlook, Teams, SharePoint and Bing." } ] },
+          { "type": "faq", "kicker": "Quick context", "items": [ { "q": "What is an answer?", "a": "A direct, structured response — a definition, a person card, a meeting — instead of a link to go read." }, { "q": "What are Shy Answers?", "a": "Answers that only appear when confidence is high, staying out of the way otherwise." }, { "q": "Why accessibility here?", "a": "Search is the front door to work — it has to work for everyone, on every surface." } ] },
+          { "type": "media", "nav": "Design", "kicker": "The work", "items": [ { "caption": "Answer patterns — Acronym, Calendar, Link, Knowledge and People. Visuals abstracted; shipping UI is confidential." }, { "caption": "People and profile-card standardization across Microsoft 365." } ] },
+          { "type": "split", "nav": "Outcome", "kicker": "Before / after", "leftLabel": "Before", "left": ["Results lists that offload work to the user", "Inconsistent people info across surfaces", "Answers that interrupt more than they help"], "rightLabel": "After", "right": ["Direct answers reaching 6.2M monthly users", "Standardized people and profile cards", "2.0M successful answer interactions"] },
+          { "type": "text", "locked": true, "nav": "Deep dive", "kicker": "Deeper cut", "heading": "How we decided what earns an answer.", "body": "The deeper cut covers the confidence bar for surfacing an answer, the Shy Answers logic, and what the interaction data taught us. Shared on request.", "list": ["The bar for surfacing an answer versus staying quiet", "Balancing relevance, accessibility and platform consistency", "What the interaction data changed about the design"] },
+          { "type": "statement", "nav": "Reflection", "kicker": "Reflection", "body": "A great answer respects your attention — it shows up when it is sure, and gets out of the way when it is not.", "sub": "If I had more time: expand answer coverage and tune confidence thresholds per surface." }
+        ]
+      }
     },
     {
       "id": "auto",
@@ -199,7 +237,55 @@
       "period": "2014 — 2018",
       "title": "Interfaces for the road, at premium standard",
       "desc": "Designed next-generation infotainment, connected-vehicle and in-vehicle interaction experiences — HMI concepts, interaction models and production-ready validation for premium automotive platforms.",
-      "tags": ["HMI", "Interaction", "Automotive"]
+      "tags": ["HMI", "Interaction", "Automotive"],
+      "study": {
+        "tagline": "Interfaces for the road, at premium standard.",
+        "role": "Designer — Automotive HMI",
+        "team": "Design · Engineering · User Research · OEM partners",
+        "timeline": "2014 — 2018",
+        "scope": "HMI · Infotainment · Interaction · Validation",
+        "unlockHash": "2507f70fc04aad6c0b3bb3657ec6b3b836d77ed57a356c4e0b43b22b5a4b4e73",
+        "blocks": [
+          { "type": "text", "nav": "Overview", "kicker": "Overview", "heading": "Designing for a screen you can only half look at.", "body": "Across Jaguar Land Rover and Tata Elxsi, I designed next-generation infotainment and connected-vehicle experiences for premium automotive platforms — from HMI concepts and interaction models through to production-ready validation.", "list": ["Designed next-generation infotainment and connected-vehicle experiences", "Led HMI concepts, interaction models and design validation", "Delivered production-ready designs for premium platforms", "Partnered closely with product, engineering and user research"] },
+          { "type": "metrics", "nav": "Impact", "kicker": "Impact", "items": [ { "value": "4+", "label": "years in automotive HMI" }, { "value": "Premium", "label": "JLR and connected-vehicle platforms" }, { "value": "Production", "label": "shipped interaction models" } ] },
+          { "type": "statement", "nav": "Problem", "kicker": "The problem", "body": "In a car, the interface competes with the one task that actually matters: driving.", "sub": "Every glance has a cost measured in metres — clarity is not a nicety, it is safety." },
+          { "type": "steps", "nav": "Approach", "kicker": "Approach", "heading": "Designing for glanceable, safe interaction.", "items": [ { "title": "Reduce glance time", "body": "Structure information so a driver can understand it in a fraction of a second." }, { "title": "Model the whole journey", "body": "Design interaction models across infotainment and connected-vehicle contexts, not single screens." }, { "title": "Validate for production", "body": "Work with engineering to take concepts through to production-ready, testable designs." } ] },
+          { "type": "media", "nav": "Design", "kicker": "The work", "items": [ { "caption": "Infotainment and connected-vehicle HMI concepts. Visuals abstracted; client work is confidential." }, { "caption": "Interaction models and production-ready validation." } ] },
+          { "type": "split", "nav": "Outcome", "kicker": "Before / after", "leftLabel": "Before", "left": ["Interfaces that demand too much attention", "Concepts that stall before production", "Screens designed in isolation"], "rightLabel": "After", "right": ["Glanceable, safety-first interaction", "Production-ready, validated designs", "Coherent models across the vehicle"] },
+          { "type": "text", "locked": true, "nav": "Deep dive", "kicker": "Deeper cut", "heading": "From HMI concept to the dashboard.", "body": "The deeper cut covers how concepts were validated for real driving conditions and taken to production within OEM constraints. Shared on request.", "list": ["How concepts were validated for real driving", "Working within OEM and platform constraints", "What automotive taught me about high-stakes clarity"] },
+          { "type": "statement", "nav": "Reflection", "kicker": "Reflection", "body": "Automotive taught me that the highest form of design is the one you barely notice while it keeps you safe.", "sub": "It is the same instinct I bring to growth and identity today: clarity at the moment that matters." }
+        ]
+      }
+    },
+    {
+      "id": "xbox",
+      "featured": true,
+      "theme": "xbox",
+      "plateTag": "Subscription Growth",
+      "client": "Xbox Game Pass",
+      "period": "2021 — 2022",
+      "title": "Growth and retention for Game Pass",
+      "desc": "Led growth and retention design for Xbox Game Pass — turning acquisition, cancellation and lifecycle moments into experiments that helped people see the value and stay.",
+      "tags": ["Growth", "Retention", "Experimentation"],
+      "study": {
+        "tagline": "Turning cancellation moments into reasons to stay.",
+        "role": "Product Designer II — Growth & Retention",
+        "team": "Design · Product · Engineering · Data Science",
+        "timeline": "2021 — 2022",
+        "scope": "Subscription Growth · Retention · Experimentation",
+        "unlockHash": "56217d22aca7a9d6b581d4d5b3a92e1f44441d3584dcb629b2281d58545d1244",
+        "blocks": [
+          { "type": "text", "nav": "Overview", "kicker": "Overview", "heading": "The subscription is the product — so is leaving it.", "body": "I led growth and retention experience work for Xbox Game Pass across acquisition, plan evaluation, cancellation and the lifecycle in between — designing the moments that decide whether a player subscribes, stays, or comes back.", "list": ["Led growth and retention experience work for Game Pass", "Redesigned the cancellation and lifecycle journeys", "Ran experimentation-led retention interventions", "Partnered with Data Science on every bet"] },
+          { "type": "metrics", "nav": "Impact", "kicker": "Impact", "heading": "Small lifecycle changes, real revenue.", "items": [ { "value": "$15M", "label": "revenue influenced" }, { "value": "136K", "label": "new subscriptions" }, { "value": "130K+", "label": "users retained annually" } ] },
+          { "type": "statement", "nav": "Problem", "kicker": "The problem", "body": "Most products treat cancellation as a door. It is actually the most honest conversation you will ever have with a customer.", "sub": "The moment someone tries to leave is the moment they tell you exactly what value they are missing." },
+          { "type": "steps", "nav": "Approach", "kicker": "Approach", "heading": "Designing the whole subscription lifecycle.", "items": [ { "title": "Meet doubt with value", "body": "At cancellation, surface the value the customer has not used yet — not a guilt trip." }, { "title": "Experiment, do not assume", "body": "Treat retention as a series of measured bets with Data Science, not opinions." }, { "title": "Fix the fundamentals", "body": "Make plan evaluation and acquisition legible so people choose with confidence." } ] },
+          { "type": "faq", "kicker": "Quick context", "items": [ { "q": "What is Game Pass?", "a": "A subscription that gives players a rotating library of games for a monthly fee." }, { "q": "What is a lifecycle experience?", "a": "Everything from signing up, to evaluating plans, to pausing or cancelling." }, { "q": "Why focus on cancellation?", "a": "It is the highest-signal, highest-leverage moment to understand and retain a customer." } ] },
+          { "type": "media", "nav": "Design", "kicker": "The work", "items": [ { "caption": "Cancellation and lifecycle flows for Game Pass. Visuals abstracted; shipping UI is confidential." }, { "caption": "Plan-evaluation and retention-intervention explorations." } ] },
+          { "type": "split", "nav": "Outcome", "kicker": "Before / after", "leftLabel": "Before", "left": ["Cancellation treated as a dead end", "Retention driven by guesswork", "Value hidden until after churn"], "rightLabel": "After", "right": ["Cancellation reframed as a value conversation", "Retention driven by experimentation", "130K+ users retained annually"] },
+          { "type": "text", "locked": true, "nav": "Deep dive", "kicker": "Deeper cut", "heading": "The experiments behind the numbers.", "body": "The full case study covers the specific retention experiments, the framing we brought to each, and the tradeoffs between revenue and genuine customer value. Shared on request.", "list": ["Hypotheses and guardrail metrics", "What each cancellation-flow variant taught us", "How we balanced revenue with real customer value"] },
+          { "type": "statement", "nav": "Reflection", "kicker": "Reflection", "body": "Retention is not a dark pattern. It is making the value you already deliver impossible to overlook.", "sub": "If I had more time: feed the cancellation insights back into acquisition and onboarding." }
+        ]
+      }
     }
   ],
   "path": [

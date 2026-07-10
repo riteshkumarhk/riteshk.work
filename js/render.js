@@ -55,6 +55,7 @@
       case "auth": return '<div class="plate__rings"></div>';
       case "search": return '<div class="plate__bars"></div>';
       case "auto": return '<div class="plate__road"></div>';
+      case "xbox": return '<div class="plate__grid"></div>';
       case "grid": return '<div class="plate__grid"></div>';
       default: return '<div class="plate__grid"></div><div class="plate__glow"></div>';
     }
