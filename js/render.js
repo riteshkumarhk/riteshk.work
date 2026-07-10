@@ -74,7 +74,7 @@
           plateInner(w.theme) +
           '<span class="plate__tag">' + esc(w.plateTag) + "</span></div></div>";
     return (
-      '<li class="case" data-reveal><a class="case__link" href="#contact" data-cursor="view">' +
+      '<li class="case" data-reveal><a class="case__link" href="/work/' + esc(w.id) + '" data-work="' + esc(w.id) + '" data-cursor="view">' +
       media +
       '<div class="case__body"><div class="case__meta"><span>' + esc(w.client) +
       "</span><span>" + esc(w.period) + "</span></div>" +

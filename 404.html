@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ritesh Kumar</title>
+  <meta name="robots" content="noindex" />
+  <style>html,body{margin:0;height:100%;background:#08080a;color:#8f8a84;font-family:system-ui,-apple-system,sans-serif}</style>
+  <!--
+    SPA fallback. GitHub Pages serves this file for any unknown path.
+    A clean project link like /work/edge is turned into /?work=edge so the
+    single-page app (project.js) can open the matching case study and then
+    restore the clean URL. Everything else falls back to the home page.
+  -->
+  <script>
+    (function () {
+      var base = location.origin;
+      var m = (location.pathname || "").match(/\/work\/([^\/?#]+)/);
+      if (m) location.replace(base + "/?work=" + encodeURIComponent(m[1]) + location.hash);
+      else location.replace(base + "/");
+    })();
+  </script>
+</head>
+<body>
+  <noscript>Page not found. <a href="/">Return to riteshk.work</a>.</noscript>
+</body>
+</html>

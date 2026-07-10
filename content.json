@@ -48,7 +48,120 @@
       "period": "2024 — Present",
       "title": "Onboarding that earns the second session",
       "desc": "Owning the strategy and design of Edge's First Run Experience — the browser's most critical acquisition and activation journey. Setup, imports, personalization and retention, designed end-to-end and validated through experimentation.",
-      "tags": ["Growth", "Activation", "Experimentation"]
+      "tags": ["Growth", "Activation", "Experimentation"],
+      "study": {
+        "tagline": "The browser's most important ten minutes — designed to earn the second session.",
+        "role": "Lead Product Designer — Growth",
+        "team": "PM · Engineering · Research · Data Science · Content",
+        "timeline": "2024 — Present",
+        "scope": "Onboarding · Activation · Retention · Experimentation",
+        "unlockHash": "04682cd1c4a14b89a631da52a52577332e1c7794bdbdb5a640c885ac349f9711",
+        "blocks": [
+          {
+            "type": "text",
+            "nav": "Overview",
+            "kicker": "Overview",
+            "heading": "The first run is the whole relationship, compressed.",
+            "body": "Edge's First Run Experience is the first thing tens of millions of people see after choosing — or being nudged toward — a new browser. It's the highest-leverage moment in the entire growth funnel: setup, sign-in, import, personalization and the first taste of value all happen before anyone has decided to stay. I own the strategy and design for this journey end-to-end.",
+            "list": [
+              "Framing the first run as an activation problem, not a setup wizard",
+              "Designing the flow from launch → import → personalize → first value",
+              "Partnering with Data Science to instrument and read every step",
+              "Running the experiments that decide what ships"
+            ]
+          },
+          {
+            "type": "metrics",
+            "nav": "Impact",
+            "kicker": "Impact",
+            "heading": "Small changes to the first minute move millions of sessions.",
+            "items": [
+              { "value": "Millions", "label": "customers through the journey" },
+              { "value": "Double-digit", "label": "lift in early activation (directional)" },
+              { "value": "End-to-end", "label": "ownership of the funnel" }
+            ]
+          },
+          {
+            "type": "faq",
+            "kicker": "Quick context",
+            "items": [
+              { "q": "What is a \"first run\"?", "a": "The very first session after install — the setup and onboarding flow, before someone starts browsing normally." },
+              { "q": "Why does it matter so much?", "a": "It's the single most-seen surface in the product and the biggest lever on whether a new user returns for a second session." },
+              { "q": "What does \"activation\" mean here?", "a": "A new user reaching real value — signed in, set up and actually using the browser — not just having installed it." }
+            ]
+          },
+          {
+            "type": "statement",
+            "nav": "Problem",
+            "kicker": "The problem",
+            "body": "A setup flow optimized for completion isn't the same as an onboarding designed for retention.",
+            "sub": "Every extra step in the first minute is paid for in people who never come back."
+          },
+          {
+            "type": "text",
+            "kicker": "What we got wrong at first",
+            "body": "The instinct on a setup flow is to ask for everything up front — sign in, import, pin, set defaults — because each one is \"good for the user.\" But stacking asks in the first minute quietly trades the second session for a more complete first one. We had to reframe the goal from \"finish setup\" to \"earn the next visit.\""
+          },
+          {
+            "type": "steps",
+            "nav": "Approach",
+            "kicker": "Approach",
+            "heading": "Three moves that reframed onboarding as growth.",
+            "items": [
+              { "title": "Sequence for momentum", "body": "Order the asks so the fastest path to value comes first, and defer everything that can wait until the browser has already proven useful." },
+              { "title": "Make value legible early", "body": "Show, don't tell — surface a real, personal reason to keep the browser open inside the first session rather than promising benefits later." },
+              { "title": "Instrument every step", "body": "Treat the flow as a measurable funnel with Data Science, so each screen earns its place through experimentation, not opinion." }
+            ]
+          },
+          {
+            "type": "media",
+            "nav": "Design",
+            "kicker": "The work",
+            "items": [
+              { "caption": "Flow architecture — launch → import → personalize → first value. Visuals abstracted; shipping UI is confidential." },
+              { "caption": "Sequencing explorations for the first-minute asks." }
+            ]
+          },
+          {
+            "type": "split",
+            "nav": "Outcome",
+            "kicker": "Before / after",
+            "heading": "From a checklist to a welcome.",
+            "leftLabel": "Before",
+            "left": [
+              "Setup optimized for completion, not retention",
+              "Asks stacked into the first minute",
+              "Success measured at \"finished setup\""
+            ],
+            "rightLabel": "After",
+            "right": [
+              "Onboarding sequenced to earn the second session",
+              "Value shown before friction is introduced",
+              "Success measured on activation and return"
+            ]
+          },
+          {
+            "type": "text",
+            "locked": true,
+            "nav": "Deep dive",
+            "kicker": "Deeper cut",
+            "heading": "The experiment program behind the flow.",
+            "body": "The full case study covers the specific hypotheses, the experiment design, the metrics we moved and the tradeoffs we made screen by screen. This deeper cut is shared on request — enter the pass you were given to read it.",
+            "list": [
+              "Hypothesis framing and guardrail metrics",
+              "Variant design and what each experiment taught us",
+              "Balancing early activation against long-term retention"
+            ]
+          },
+          {
+            "type": "statement",
+            "nav": "Reflection",
+            "kicker": "Reflection",
+            "body": "The best onboarding doesn't feel like onboarding. It feels like the product being immediately worth it.",
+            "sub": "If I had more time: push personalization earlier, and close the loop from first-run choices to week-four retention."
+          }
+        ]
+      }
     },
     {
       "id": "auth",

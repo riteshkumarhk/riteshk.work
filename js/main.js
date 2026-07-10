@@ -30,6 +30,8 @@
     const raf = (time) => { lenis.raf(time); requestAnimationFrame(raf); };
     requestAnimationFrame(raf);
   }
+  // Expose the Lenis instance so the project overlay can pause/resume page scroll.
+  window.__lenis = lenis;
 
   const smoothTo = (target) => {
     if (lenis) lenis.scrollTo(target, { offset: 0, duration: 1.2 });
