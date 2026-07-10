@@ -17,7 +17,6 @@
   const THEME_KEY = "rk:theme";
   const MUSIC_ON_KEY = "rk:music:on";
   const MUSIC_TRACK_KEY = "rk:music:track";
-  const MENU_SEEN_KEY = "rk:menu:seen";
   const DEFAULT_TRACKS = [
     { title: "Midnight", gen: "midnight" },
     { title: "Ember Glow", gen: "ember" },
@@ -1315,7 +1314,7 @@
 
   /* ---------- control menu (clock flyout) ---------- */
   /* ---------- ambient music player (Web Audio synth, with optional audio files) ---------- */
-  let audioEl = null, synth = null, musCur = 0, musArmed = false, musPlaying = false, musLastLight = null, musOpened = false;
+  let audioEl = null, synth = null, musCur = 0, musArmed = false, musPlaying = false, musLastLight = null;
   function musTracks() {
     var m = window.RK && window.RK.data && window.RK.data.music;
     var ok = Array.isArray(m) ? m.filter(function (t) { return t && (t.src || t.gen); }) : [];
@@ -1367,7 +1366,7 @@
   function synthEnsure() { if (synth === null) synth = makeSynth(); return synth; }
   function audioEnsure() {
     if (audioEl) return audioEl;
-    audioEl = new Audio(); audioEl.preload = "auto"; audioEl.volume = 0.55; audioEl.loop = true;
+    audioEl = new Audio(); audioEl.preload = "none"; audioEl.volume = 0.55; audioEl.loop = true;
     audioEl.addEventListener("error", musSync);
     return audioEl;
   }
@@ -1411,13 +1410,23 @@
   function musPause() { musStop(); musPlaying = false; try { localStorage.setItem(MUSIC_ON_KEY, "0"); } catch (e) {} musSync(); }
   function musToggle() { if (musPlaying) musPause(); else musPlay(); }
   function musSync() {
+    var mw = document.querySelector(".nav__morewrap");
+    if (mw) mw.classList.toggle("is-hint", musPlaying);
     if (!menuEl) return;
     var btn = menuEl.querySelector('[data-mus="toggle"]');
     if (btn) { btn.innerHTML = musPlaying ? MUS_ICON.pause : MUS_ICON.play; btn.setAttribute("aria-label", musPlaying ? "Pause" : "Play"); }
     var title = menuEl.querySelector(".mus__title");
     if (title) { var t = musCurTrack(); title.textContent = (t && t.title) || "Ambient"; }
     var sub = menuEl.querySelector(".mus__sub");
-    if (sub) { var ct = musCurTrack(); sub.textContent = (ct && ct.src && audioEl && audioEl.error) ? "Track unavailable" : "Deep ambient \u00b7 loops"; }
+    if (sub) {
+      var ct = musCurTrack();
+      var E = (window.RK && window.RK.esc) || function (s) { return String(s); };
+      if (ct && ct.src && audioEl && audioEl.error) { sub.textContent = "Track unavailable"; }
+      else if (ct && ct.artist) {
+        var who = ct.url ? '<a href="' + E(ct.url) + '" target="_blank" rel="noopener">' + E(ct.artist) + "</a>" : E(ct.artist);
+        sub.innerHTML = who + (ct.license ? ' \u00b7 <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">' + E(ct.license) + "</a>" : "");
+      } else { sub.textContent = "Deep ambient \u00b7 loops"; }
+    }
   }
   function musThemeChange(e) {
     var light = (e && e.detail && typeof e.detail.light === "boolean") ? e.detail.light : (window.__theme ? window.__theme.isLight() : false);
@@ -1433,6 +1442,7 @@
     musCur = musDefaultTrack();
     musLoad(musCur, false);
     window.addEventListener("theme:change", musThemeChange);
+    if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musPlay();
   }
 
   function buildMenu() {
@@ -1461,9 +1471,6 @@
     document.body.appendChild(menuEl);
     positionMenu();
     musSync();
-    if (!musOpened) { musOpened = true; if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musPlay(); }
-    try { localStorage.setItem(MENU_SEEN_KEY, "1"); } catch (e) {}
-    var mw = document.querySelector(".nav__morewrap"); if (mw) mw.classList.remove("is-hint");
     menuEl.addEventListener("click", onMenuClick);
     window.addEventListener("resize", positionMenu);
     setTimeout(function () { document.addEventListener("click", onDocClick); }, 0);
@@ -1557,8 +1564,6 @@
     if (clock) clock.addEventListener("click", toggleMenu);
     const more = document.getElementById("moreBtn");
     if (more) more.addEventListener("click", toggleMenu);
-    const mw = more && more.closest(".nav__morewrap");
-    if (mw && localStorage.getItem(MENU_SEEN_KEY) !== "1") mw.classList.add("is-hint");
     musInit();
   }
   if (window.__siteRendered) init();

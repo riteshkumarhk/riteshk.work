@@ -201,6 +201,8 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .mus__meta { min-width: 0; margin-left: .25rem; }
 .mus__title { font-family: var(--mono); font-size: .68rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mus__sub { font-family: var(--mono); font-size: .53rem; color: var(--text-faint); letter-spacing: .03em; margin-top: .12rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mus__sub a { color: var(--text-dim); text-decoration: none; border-bottom: 1px solid var(--line); transition: color .25s, border-color .25s; }
+.mus__sub a:hover { color: var(--accent); border-color: var(--accent); }
 
 /* ---------- curated-view banner (visitor) ---------- */
 .sv-banner {

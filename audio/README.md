@@ -3,41 +3,46 @@
 The flyout ("···" menu → **Ambience**) plays a looping ambient soundscape with
 play/pause and next/previous controls.
 
-## Built-in synth (no files needed)
+## Tracks that ship with the site
 
-By default the player generates its own deep ambient pad in the browser with the
-Web Audio API — nothing to download or host. Three moods ship in:
+Three calm, immersive tracks by **Chris Zabriskie**, licensed
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (free to use with
+attribution — the player shows "Chris Zabriskie · CC BY" and links back):
 
-| Track      | Mood | Auto-plays in |
-| ---------- | ---- | ------------- |
-| Midnight   | dark | dark theme    |
-| Ember Glow | warm | light theme   |
-| Undertow   | deep | manual only   |
+| File                  | Track         | Album (year)   | Plays in      |
+| --------------------- | ------------- | -------------- | ------------- |
+| `cylinder-eight.mp3`  | Cylinder Eight | Cylinders (2014) | dark theme  |
+| `cylinder-two.mp3`    | Cylinder Two   | Cylinders (2014) | light theme |
+| `oxygen-garden.mp3`   | Oxygen Garden  | Divider (2011)   | manual only |
 
-The mood follows the appearance: switching the theme (Light / Dark / System /
-Local) swaps the track automatically. Switching the track by hand never changes
-the theme. **Undertow** is only reached via next / previous.
+Source: [chriszabriskie.com](https://chriszabriskie.com) · downloaded from the
+[Internet Archive](https://archive.org/details/Cylinders-15736) and re-encoded to
+128 kbps. The mood follows the appearance: switching the theme swaps the track
+(dark → track 1, light → track 2); switching the track by hand never changes the
+theme; **Oxygen Garden** is only reached via next / previous.
 
-## Using your own tracks instead
+## Swapping tracks
 
-Add a `music` array to `content.json` and the player uses your files instead of
-the synth (order is preserved; the theme still picks track 1 for dark and track 2
-for light):
+Edit the `music` array in `content.json` — each entry takes `title`, `artist`,
+`license`, `url` (credit link) and `src`:
 
 ```json
 "music": [
-  { "title": "Midnight",   "src": "/audio/1.mp3" },
-  { "title": "Ember Glow", "src": "/audio/2.mp3" },
-  { "title": "Undertow",   "src": "/audio/3.mp3" }
+  { "title": "Cylinder Eight", "artist": "Chris Zabriskie", "license": "CC BY", "url": "https://chriszabriskie.com", "src": "/audio/cylinder-eight.mp3" }
 ]
 ```
 
-Then drop the files here (`audio/1.mp3`, …). Any web audio format works
-(`.mp3`, `.m4a`, `.ogg`); keep files a few MB for fast loading, and only use
-music you own or that is licensed for the web (royalty-free / Creative Commons).
+Any web audio format works (`.mp3`, `.m4a`, `.ogg`). Keep files small (a few MB)
+and only use music that's licensed for the web (CC BY / CC0 / royalty-free). If
+`content.json` has no `music` array, the player falls back to a built-in Web
+Audio synth (three moods: Midnight / Ember Glow / Undertow) so it still works
+with no files.
 
 ## Notes
 
-- The ambience starts the first time you open the menu (the ··· button) — never
-  automatically on page load — and remembers your play/pause choice after that.
+- Playback starts as soon as the site opens. Browsers block audio until the
+  visitor interacts, so if autoplay is blocked it begins on the first
+  click / tap / key press. The play/pause choice is remembered.
+- The bronze particles around the ··· button loop while music is playing and
+  stop when it's paused.
 - To make the site silent by default, set `localStorage["rk:music:on"] = "0"`.

@@ -1,4 +1,9 @@
 {
+  "music": [
+    { "title": "Cylinder Eight", "artist": "Chris Zabriskie", "license": "CC BY", "url": "https://chriszabriskie.com", "src": "/audio/cylinder-eight.mp3" },
+    { "title": "Cylinder Two", "artist": "Chris Zabriskie", "license": "CC BY", "url": "https://chriszabriskie.com", "src": "/audio/cylinder-two.mp3" },
+    { "title": "Oxygen Garden", "artist": "Chris Zabriskie", "license": "CC BY", "url": "https://chriszabriskie.com", "src": "/audio/oxygen-garden.mp3" }
+  ],
   "landing": {
     "eyebrow": "Product Design Leadership",
     "domains": "Growth · AI · Identity",
