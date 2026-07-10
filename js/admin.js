@@ -304,6 +304,18 @@
       '<div class="imgblk__hint">Uploaded &amp; generated images are embedded in your published file \u2014 a URL keeps it lighter.</div></div></div>';
   }
 
+  function resumeBlock() {
+    const url = (data.contact && data.contact.resume) || "";
+    const has = !!url;
+    const isData = /^data:/.test(url);
+    return '<div class="imgblk"><div class="af__label">R\u00e9sum\u00e9 (PDF)</div>' +
+      '<div class="af__hint" style="margin-bottom:.5rem">When set, a <em>R\u00e9sum\u00e9</em> button appears in the floating dock (bottom-left) and opens this file. Uploading embeds the PDF into your published file \u2014 for a large PDF, commit it to the repo and paste its path instead (e.g. /resume.pdf).</div>' +
+      '<input type="text" data-path="contact.resume" value="' + escAttr(url) + '" placeholder="Paste a r\u00e9sum\u00e9 URL\u2026 e.g. /resume.pdf" />' +
+      '<div class="imgblk__row"><button class="btn btn--ghost" data-act="resume-upload">Upload PDF\u2026</button>' +
+      (has ? '<button class="btn btn--ghost" data-act="resume-open">Open</button><button class="btn btn--ghost" data-act="resume-clear">Remove</button>' : "") + "</div>" +
+      '<div class="imgblk__hint">' + (has ? ("In use: " + escHtml(isData ? "embedded PDF" : url) + " \u00b7 the dock button is now visible") : "Not set \u2014 the r\u00e9sum\u00e9 button stays hidden until you add one.") + "</div></div>";
+  }
+
   /* ---------- case study (L2) authoring ---------- */
   function blankStudy() {
     return { tagline: "", role: "", team: "", timeline: "", scope: "", cover: "", unlockHash: "", blocks: [] };
@@ -445,14 +457,15 @@
     },
     contact() {
       return (
-        secHead("Contact", "Used across the contact section, menu and footer.") +
+        secHead("Contact", "Used across the contact section, menu, footer and the floating dock.") +
         input("Email", "contact.email") +
         '<div class="af__row">' +
         input("Phone (display)", "contact.phone") +
         input("Phone (dial)", "contact.phoneRaw", { hint: "no spaces, e.g. +918197809767" }) +
         "</div>" +
         input("LinkedIn URL", "contact.linkedin") +
-        input("Website URL", "contact.website")
+        input("Website URL", "contact.website") +
+        resumeBlock()
       );
     },
     highlights() {
@@ -723,6 +736,9 @@
     if (act === "img-upload") { pickImage(function (uri) { data.work[i].image = uri; apply(true); renderBody(); status("Image uploaded.", true); }); return; }
     if (act === "img-generate") { imgGenerate(i); return; }
     if (act === "img-modify") { imgModify(i); return; }
+    if (act === "resume-upload") { pickResume(function (uri) { setPath(data, "contact.resume", uri); apply(true); renderBody(); status("R\u00e9sum\u00e9 embedded \u2014 the dock button is now visible.", true); }); return; }
+    if (act === "resume-clear") { setPath(data, "contact.resume", ""); apply(true); renderBody(); status("R\u00e9sum\u00e9 removed."); return; }
+    if (act === "resume-open") { const u = data.contact && data.contact.resume; if (u && window.RK && window.RK.openResume) window.RK.openResume(u); else if (u) window.open(u, "_blank", "noopener"); return; }
     if (act === "ai-save") { aiSave(); return; }
     if (act === "ai-clear") { Object.keys(localStorage).forEach(function (k) { if (/^rk:ai:[a-z]+:key$/.test(k)) localStorage.removeItem(k); }); renderBody(); status("Keys removed."); return; }
     if (act === "autostyle") {
@@ -783,6 +799,12 @@
     const inp = document.createElement("input");
     inp.type = "file"; inp.accept = "image/*";
     inp.onchange = function () { const f = inp.files && inp.files[0]; if (!f) return; fileToDataUri(f).then(compressDataUri).then(cb); };
+    inp.click();
+  }
+  function pickResume(cb) {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "application/pdf,.pdf";
+    inp.onchange = function () { const f = inp.files && inp.files[0]; if (!f) return; fileToDataUri(f).then(cb); };
     inp.click();
   }
   function fileToDataUri(file) {
@@ -1104,9 +1126,9 @@
     setTimeout(function () { document.addEventListener("click", onDocClick); }, 0);
   }
   function positionMenu() {
-    const clock = document.getElementById("clock");
-    if (!clock || !menuEl) return;
-    const r = clock.getBoundingClientRect();
+    const anchor = document.getElementById("moreBtn") || document.getElementById("clock");
+    if (!anchor || !menuEl) return;
+    const r = anchor.getBoundingClientRect();
     menuEl.style.top = (r.bottom + 12) + "px";
     menuEl.style.right = Math.max(12, Math.round(window.innerWidth - r.right)) + "px";
   }
@@ -1184,6 +1206,8 @@
     document.documentElement.setAttribute("data-theme", localStorage.getItem(THEME_KEY) || "night");
     const clock = document.getElementById("clock");
     if (clock) clock.addEventListener("click", toggleMenu);
+    const more = document.getElementById("moreBtn");
+    if (more) more.addEventListener("click", toggleMenu);
   }
   if (window.__siteRendered) init();
   else document.addEventListener("site:rendered", init, { once: true });

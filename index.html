@@ -53,6 +53,9 @@
       <span class="nav__status" aria-hidden="true"></span>
       <span class="nav__time" id="clock">—:—</span>
       <span class="nav__place">HYD</span>
+      <button class="nav__more" id="moreBtn" data-cursor="hover" aria-label="More — themes, views, admin" aria-haspopup="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+      </button>
     </div>
 
     <button class="nav__toggle" id="navToggle" aria-label="Open menu" aria-expanded="false">
@@ -198,6 +201,19 @@
       <a href="#top" data-cursor="hover" class="footer__back">Back to top ↑</a>
     </div>
   </footer>
+
+  <!-- Floating quick-contact dock (bottom-left) -->
+  <div class="dock" id="dock" aria-label="Quick contact">
+    <a class="dock__btn" id="dockResume" data-label="Résumé" data-cursor="hover" href="#" target="_blank" rel="noopener" aria-label="Open résumé" hidden>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
+    </a>
+    <a class="dock__btn" id="dockEmail" data-label="Email" data-cursor="hover" href="mailto:" aria-label="Email me">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>
+    </a>
+    <a class="dock__btn" id="dockPhone" data-label="Call" data-cursor="hover" href="tel:" aria-label="Call me">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h3l1.5 4-2 1.3a11 11 0 0 0 5 5l1.3-2 4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7 2 2 0 0 1 6.5 3.5z"/></svg>
+    </a>
+  </div>
 
   <script src="js/lenis.min.js"></script>
   <script src="js/render.js"></script>

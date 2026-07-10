@@ -31,6 +31,34 @@
     if (el) el.innerHTML = html;
   };
 
+  /* Open a résumé from a URL or an embedded data: URI. Browsers block top-level
+     navigation to data: URLs, so convert those to a Blob URL first. */
+  function openResume(src) {
+    if (!src) return;
+    try {
+      if (/^data:/.test(src)) {
+        const m = src.match(/^data:([^;,]+)?(;base64)?,([\s\S]*)$/);
+        const mime = (m && m[1]) || "application/pdf";
+        const payload = m ? m[3] : "";
+        let bytes;
+        if (m && m[2]) {
+          const bin = atob(payload);
+          bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        } else {
+          bytes = new TextEncoder().encode(decodeURIComponent(payload));
+        }
+        const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+        window.open(url, "_blank", "noopener");
+        setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+      } else {
+        window.open(src, "_blank", "noopener");
+      }
+    } catch (e) {
+      try { window.open(src, "_blank", "noopener"); } catch (e2) {}
+    }
+  }
+
   /* ---------- section renderers ---------- */
   function highlightEl(h) {
     const m = String(h.value || "").match(/^(\d+)(.*)$/);
@@ -144,6 +172,26 @@
       '<a href="' + esc(C.linkedin) + '" target="_blank" rel="noopener" data-cursor="hover">LinkedIn ↗</a>' +
       '<a href="' + esc(C.website) + '" target="_blank" rel="noopener" data-cursor="hover">' + esc(site) + " ↗</a>" +
       '<a href="mailto:' + esc(C.email) + '" data-cursor="hover">Email ↗</a>');
+
+    // ---- floating dock (bottom-left): résumé (conditional) · email · phone ----
+    const dEmail = byId("dockEmail");
+    if (dEmail) dEmail.setAttribute("href", "mailto:" + (C.email || ""));
+    const dPhone = byId("dockPhone");
+    if (dPhone) {
+      if (C.phoneRaw) { dPhone.setAttribute("href", "tel:" + C.phoneRaw); dPhone.hidden = false; }
+      else dPhone.hidden = true;
+    }
+    const dRes = byId("dockResume");
+    if (dRes) {
+      if (C.resume) {
+        dRes.hidden = false;
+        dRes.setAttribute("href", /^data:/.test(C.resume) ? "#" : C.resume);
+        dRes.onclick = function (e) { e.preventDefault(); openResume(C.resume); };
+      } else {
+        dRes.hidden = true;
+        dRes.onclick = null;
+      }
+    }
   }
 
   /* ---------- special (curated) views ---------- */
@@ -256,6 +304,7 @@
       render: render,
       md: md,
       esc: esc,
+      openResume: openResume,
       DRAFT_KEY: DRAFT_KEY,
       applySpecialView: applySpecialView,
       clearSpecialView: clearSpecialView,
