@@ -1954,6 +1954,14 @@
     musLastLight = window.__theme ? window.__theme.isLight() : (document.documentElement.getAttribute("data-appearance") === "light");
     musCur = musDefaultTrack();
     musLoad(musCur, false);
+    var heroCue = document.querySelector(".hero__cue");
+    if (heroCue && !heroCue.__musBound) {
+      heroCue.__musBound = true;
+      heroCue.addEventListener("click", function () {
+        if (localStorage.getItem(MUSIC_ON_KEY) === "0") return;          // respect an explicit “off”
+        if (!(audioEl && !audioEl.paused && !audioEl.muted)) musPlay();  // start / keep the music going, never pause
+      });
+    }
     window.addEventListener("theme:change", musThemeChange);
     if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musAutoStart();
   }

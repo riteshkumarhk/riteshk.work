@@ -28,15 +28,49 @@
     if (/^data:image\//i.test(url)) return false;
     return VIDEO_RE.test(url || "");
   }
+  var FS_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+  function figmaEmbed(url) { return /embed/i.test(url) && /figma\.com/i.test(url) ? url : ("https://www.figma.com/embed?embed_host=ritesh&url=" + encodeURIComponent(url)); }
+  function officeEmbed(url) { return "https://view.officeapps.live.com/op/embed.aspx?src=" + encodeURIComponent(url); }
+  function ytEmbed(url) {
+    var y = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
+    if (y) return "https://www.youtube.com/embed/" + y[1];
+    var v = url.match(/vimeo\.com\/(\d+)/);
+    if (v) return "https://player.vimeo.com/video/" + v[1];
+    return url;
+  }
+  function mediaKind(m) {
+    var k = m && m.kind;
+    if (k === "figma" || k === "pdf" || k === "office" || k === "embed" || k === "video") return k;
+    if (k === "image" || k === "gif") return "image";
+    var url = mediaSrc(m);
+    if (!url) return "image";
+    if (/figma\.com/i.test(url)) return "figma";
+    if (/\.pdf($|\?|#)/i.test(url)) return "pdf";
+    if (/\.(pptx?|docx?|xlsx?|key)($|\?|#)/i.test(url)) return "office";
+    if (/(youtube\.com|youtu\.be|vimeo\.com)/i.test(url)) return "embed";
+    if (isVideo(url, k)) return "video";
+    return "image";
+  }
+  function frameEl(src, cls, label) {
+    return '<div class="pjb__frame ' + cls + '">' +
+      '<iframe class="pjb__frame-el" src="' + attr(src) + '" loading="lazy" allow="fullscreen; autoplay; clipboard-read; clipboard-write" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>' +
+      '<button class="pjb__fs" type="button" data-fs aria-label="Toggle fullscreen \u2014 ' + attr(label) + '" title="Fullscreen">' + FS_SVG + '<span>Fullscreen</span></button></div>';
+  }
   function mediaEl(m, cls) {
     var url = mediaSrc(m);
     if (!url) return "";
-    if (isVideo(url, m.kind)) {
+    var kind = mediaKind(m);
+    if (kind === "figma") return frameEl(figmaEmbed(url), cls, "prototype");
+    if (kind === "office") return frameEl(/^https?:/i.test(url) ? officeEmbed(url) : url, cls, "document");
+    if (kind === "pdf") return frameEl(url + (/[#?]/.test(url) ? "" : "#view=FitH"), cls, "PDF");
+    if (kind === "embed") return frameEl(ytEmbed(url), cls, "video");
+    if (kind === "video") {
       var poster = m.poster ? ' poster="' + attr(m.poster) + '"' : "";
       if (m.controls) return '<video class="' + cls + '" src="' + attr(url) + '"' + poster + ' controls playsinline preload="metadata"></video>';
       return '<video class="' + cls + '" src="' + attr(url) + '"' + poster + ' autoplay muted loop playsinline preload="metadata"></video>';
     }
-    return '<img class="' + cls + '" src="' + attr(url) + '" alt="' + attr(m.caption || "") + '" loading="lazy" />';
+    var cap = attr(m.caption || "");
+    return '<img class="' + cls + '" src="' + attr(url) + '" alt="' + cap + '" data-cap="' + cap + '"' + (m.title ? ' data-title="' + attr(m.title) + '"' : "") + ' data-zoom loading="lazy" />';
   }
 
   var overlay = null, scroller = null, activeId = null;
@@ -221,6 +255,88 @@
     return cover + hero + '<div class="pj__body">' + bodyBlocks + "</div>" + navFoot(prevW, nextW);
   }
 
+  /* ---------- media lightbox (image zoom / pan) + fullscreen ---------- */
+  function reqFs(el) { var fn = el && (el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen); if (fn) { try { fn.call(el); } catch (e) {} } }
+  function fsEl() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  function exitFs() { var fn = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen; if (fn) { try { fn.call(document); } catch (e) {} } }
+  function toggleElFs(el) { if (fsEl() === el) exitFs(); else reqFs(el); }
+  function toggleFrameFs(btn) { var f = btn.closest(".pjb__frame"); toggleElFs((f && f.querySelector(".pjb__frame-el")) || f); }
+
+  var lbx = null, lbxImg = null, lbxCap = null, lbxScale = 1, lbxX = 0, lbxY = 0, lbxReturn = null;
+  function lbxApply() {
+    lbxImg.style.transform = "translate(" + lbxX.toFixed(1) + "px," + lbxY.toFixed(1) + "px) scale(" + lbxScale.toFixed(3) + ")";
+    lbx.classList.toggle("is-zoomed", lbxScale > 1.001);
+  }
+  function lbxZoom(f) {
+    var prev = lbxScale;
+    lbxScale = Math.max(1, Math.min(6, lbxScale * f));
+    if (lbxScale <= 1.001) { lbxScale = 1; lbxX = 0; lbxY = 0; }
+    else { var r = lbxScale / prev; lbxX *= r; lbxY *= r; }
+    lbxApply();
+  }
+  function lbxReset() { lbxScale = 1; lbxX = 0; lbxY = 0; lbxApply(); }
+  function buildLbx() {
+    lbx = document.createElement("div");
+    lbx.className = "pjx";
+    lbx.setAttribute("role", "dialog"); lbx.setAttribute("aria-modal", "true"); lbx.setAttribute("aria-label", "Image viewer");
+    lbx.innerHTML =
+      '<div class="pjx__ctrl">' +
+        '<button class="pjx__btn" type="button" data-lz="out" aria-label="Zoom out" title="Zoom out">\u2212</button>' +
+        '<button class="pjx__btn" type="button" data-lz="in" aria-label="Zoom in" title="Zoom in">+</button>' +
+        '<button class="pjx__btn" type="button" data-lz="reset" aria-label="Reset zoom" title="Reset">\u21ba</button>' +
+        '<button class="pjx__btn pjx__btn--close" type="button" data-lx aria-label="Close" title="Close">\u2715</button>' +
+      '</div>' +
+      '<figure class="pjx__stage"><img class="pjx__img" alt="" draggable="false" /></figure>' +
+      '<div class="pjx__cap"></div>';
+    document.body.appendChild(lbx);
+    lbxImg = lbx.querySelector(".pjx__img");
+    lbxCap = lbx.querySelector(".pjx__cap");
+    var stage = lbx.querySelector(".pjx__stage");
+    lbx.addEventListener("click", function (e) {
+      if (e.target.closest("[data-lx]")) { closeLbx(); return; }
+      var z = e.target.closest("[data-lz]");
+      if (z) { var k = z.getAttribute("data-lz"); if (k === "in") lbxZoom(1.4); else if (k === "out") lbxZoom(1 / 1.4); else lbxReset(); return; }
+      if (e.target === lbx || e.target === stage) closeLbx();
+    });
+    stage.addEventListener("wheel", function (e) { e.preventDefault(); lbxZoom(e.deltaY < 0 ? 1.18 : 1 / 1.18); }, { passive: false });
+    var dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+    lbxImg.addEventListener("pointerdown", function (e) {
+      if (lbxScale <= 1) return;
+      dragging = true; sx = e.clientX; sy = e.clientY; ox = lbxX; oy = lbxY;
+      try { lbxImg.setPointerCapture(e.pointerId); } catch (er) {}
+      lbx.classList.add("is-grab");
+    });
+    lbxImg.addEventListener("pointermove", function (e) { if (!dragging) return; lbxX = ox + (e.clientX - sx); lbxY = oy + (e.clientY - sy); lbxApply(); });
+    var endDrag = function () { dragging = false; lbx.classList.remove("is-grab"); };
+    lbxImg.addEventListener("pointerup", endDrag);
+    lbxImg.addEventListener("pointercancel", endDrag);
+    lbxImg.addEventListener("dblclick", function () { if (lbxScale > 1) lbxReset(); else lbxZoom(2.2); });
+    document.addEventListener("keydown", function (e) {
+      if (!lbx || !lbx.classList.contains("is-open")) return;
+      if (e.key === "Escape") { e.stopPropagation(); closeLbx(); }
+      else if (e.key === "+" || e.key === "=") lbxZoom(1.4);
+      else if (e.key === "-" || e.key === "_") lbxZoom(1 / 1.4);
+      else if (e.key === "0") lbxReset();
+    }, true);
+  }
+  function openLbx(src, cap, title) {
+    if (!src) return;
+    if (!lbx) buildLbx();
+    lbxScale = 1; lbxX = 0; lbxY = 0; lbxImg.src = src; lbxApply();
+    var html = (title ? '<b class="pjx__cap-t">' + esc(title) + "</b>" : "") + (cap ? '<span class="pjx__cap-d">' + esc(cap) + "</span>" : "");
+    lbxCap.innerHTML = html; lbxCap.style.display = html ? "" : "none";
+    lbxReturn = document.activeElement;
+    void lbx.offsetWidth;                 // reflow so the open transition plays (rAF is throttled in background tabs)
+    lbx.classList.add("is-open");
+    var c = lbx.querySelector(".pjx__btn--close"); if (c) { try { c.focus(); } catch (e) {} }
+  }
+  function closeLbx() {
+    if (!lbx) return;
+    lbx.classList.remove("is-open", "is-zoomed", "is-grab");
+    setTimeout(function () { if (lbx && !lbx.classList.contains("is-open")) lbxImg.src = ""; }, 300);
+    if (lbxReturn && lbxReturn.focus) { try { lbxReturn.focus(); } catch (e) {} }
+  }
+
   /* ---------- overlay shell ---------- */
   function buildOverlay() {
     overlay = document.createElement("div");
@@ -265,10 +381,18 @@
     }, { passive: true });
 
     overlay.addEventListener("click", onOverlayClick);
+    overlay.addEventListener("dblclick", function (e) {
+      var v = e.target.closest("video.pjb__media-el, video.pj__cover-el");
+      if (v) { e.preventDefault(); toggleElFs(v); }
+    });
     overlay.addEventListener("keydown", onOverlayKey);
   }
 
   function onOverlayClick(e) {
+    var fsB = e.target.closest("[data-fs]");
+    if (fsB) { e.preventDefault(); toggleFrameFs(fsB); return; }
+    var zoomImg = e.target.closest("[data-zoom]");
+    if (zoomImg) { e.preventDefault(); openLbx(zoomImg.currentSrc || zoomImg.src, zoomImg.getAttribute("data-cap"), zoomImg.getAttribute("data-title")); return; }
     var goto = e.target.closest("[data-goto]");
     if (goto) { gotoSection(goto.getAttribute("data-goto")); return; }
     var open = e.target.closest("[data-open]");

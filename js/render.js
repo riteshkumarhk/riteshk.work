@@ -206,6 +206,15 @@
       if (C.linkedin) { dLi.setAttribute("href", C.linkedin); dLi.hidden = false; }
       else dLi.hidden = true;
     }
+    // ---- résumé links in the top nav + mobile menu (same behaviour as the dock) ----
+    [byId("navResume"), byId("menuResume")].forEach(function (nr) {
+      if (!nr) return;
+      if (C.resume) {
+        nr.hidden = false;
+        nr.setAttribute("href", /^data:/.test(C.resume) ? "#" : C.resume);
+        nr.onclick = function (e) { e.preventDefault(); openResume(C.resume); };
+      } else { nr.hidden = true; nr.onclick = null; }
+    });
   }
 
   /* ---------- special (curated) views ---------- */

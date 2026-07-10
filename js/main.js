@@ -254,6 +254,77 @@
   ------------------------------------------------- */
   const year = document.getElementById("year");
   if (year) year.textContent = new Date().getFullYear();
+
+  /* -------------------------------------------------
+     10. Hero title — subtle cursor parallax (mirrors the contact magnetic feel)
+  ------------------------------------------------- */
+  if (!isTouch && !lite && !reduceMotion) {
+    const heroSec = document.querySelector(".hero");
+    const heroLines = heroSec ? heroSec.querySelectorAll(".hero__title .line") : [];
+    if (heroSec && heroLines.length) {
+      heroSec.addEventListener("mousemove", (e) => {
+        const r = heroSec.getBoundingClientRect();
+        const hx = (e.clientX - (r.left + r.width / 2)) / r.width;
+        const hy = (e.clientY - (r.top + r.height / 2)) / r.height;
+        heroLines.forEach((line, i) => {
+          const depth = (i + 1) * 7;
+          line.style.transform = `translate(${(hx * depth).toFixed(2)}px, ${(hy * depth * 0.4).toFixed(2)}px)`;
+        });
+      });
+      heroSec.addEventListener("mouseleave", () => { heroLines.forEach((line) => { line.style.transform = ""; }); });
+    }
+  }
+
+  /* -------------------------------------------------
+     11. Ambient background particle field (very subtle, GPU-light)
+  ------------------------------------------------- */
+  if (!lite && !reduceMotion) {
+    const canvas = document.createElement("canvas");
+    canvas.className = "bg-field";
+    canvas.setAttribute("aria-hidden", "true");
+    document.body.insertBefore(canvas, document.body.firstChild);
+    const ctx = canvas.getContext("2d");
+    let W = 0, H = 0, DPR = 1, parts = [], mX = -9999, mY = -9999, rafId = 0, running = true;
+    const accent = () => (getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#D8A657");
+    const resize = () => {
+      DPR = Math.min(window.devicePixelRatio || 1, 2);
+      W = canvas.width = Math.floor(window.innerWidth * DPR);
+      H = canvas.height = Math.floor(window.innerHeight * DPR);
+      canvas.style.width = window.innerWidth + "px";
+      canvas.style.height = window.innerHeight + "px";
+      const count = Math.max(18, Math.min(70, Math.round(window.innerWidth * window.innerHeight / 26000)));
+      parts = new Array(count).fill(0).map(() => ({
+        x: Math.random() * W, y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.12 * DPR, vy: (Math.random() - 0.5) * 0.12 * DPR,
+        r: (Math.random() * 1.3 + 0.5) * DPR, a: Math.random() * 0.32 + 0.05,
+      }));
+    };
+    const step = () => {
+      if (!running) return;
+      ctx.clearRect(0, 0, W, H);
+      const col = accent(), mx = mX * DPR, my = mY * DPR, near = 150 * DPR;
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        p.x += p.vx; p.y += p.vy;
+        const dx = mx - p.x, dy = my - p.y;
+        if (dx * dx + dy * dy < near * near) { p.x += dx * 0.0009; p.y += dy * 0.0009; }
+        if (p.x < 0) p.x += W; else if (p.x > W) p.x -= W;
+        if (p.y < 0) p.y += H; else if (p.y > H) p.y -= H;
+        ctx.globalAlpha = p.a; ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.283); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      rafId = requestAnimationFrame(step);
+    };
+    window.addEventListener("resize", resize, { passive: true });
+    window.addEventListener("mousemove", (e) => { mX = e.clientX; mY = e.clientY; }, { passive: true });
+    document.addEventListener("visibilitychange", () => {
+      running = !document.hidden;
+      if (running) { if (!rafId) rafId = requestAnimationFrame(step); }
+      else if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+    });
+    resize(); step();
+  }
   } // end initInteractions
 
   if (window.__siteRendered) initInteractions();
