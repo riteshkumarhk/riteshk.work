@@ -648,7 +648,7 @@
       img.src = uri;
     });
   }
-  function aiSameKey() { return localStorage.getItem("rk:ai:same") !== "0"; }
+  function aiSameKey() { return localStorage.getItem("rk:ai:same") === "1"; }
   function aiScope(purpose) { return aiSameKey() ? "all" : (purpose || "img"); }
   function aiSupportsImages() { return AI_IMAGE_PROVIDERS.indexOf(aiCfg("img").provider) !== -1; }
   function modelHint(p) {
@@ -800,6 +800,7 @@
   function buildShell() {
     root = document.createElement("div");
     root.className = "adm";
+    root.setAttribute("data-lenis-prevent", ""); // let the editor pane scroll natively (Lenis owns the page wheel)
     root.innerHTML =
       '<header class="adm__bar">' +
         '<div class="adm__brand"><span class="adm__pulse"></span>Admin Mode <small>content studio</small></div>' +
