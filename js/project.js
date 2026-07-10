@@ -9,8 +9,9 @@
 (function () {
   "use strict";
 
-  // Stay completely inert inside the admin live-preview iframe.
-  if (new URLSearchParams(location.search).has("preview")) return;
+  // Inside the admin live-preview iframe we stay inert to global routing/history,
+  // but still expose openProject/closeProject so the editor can drive the preview.
+  var PREVIEW = new URLSearchParams(location.search).has("preview");
 
   var UNLOCK_KEY = "rk:study:unlocked:"; // + workId  (session-scoped)
   var DEFAULT_TITLE = document.title;
@@ -366,13 +367,14 @@
       setSiteInert(true);
     }
     activeId = id;
+    var prevScroll = scroller ? scroller.scrollTop : 0;
     fillContent(w);
-    document.title = w.title ? (plain(w.title) + " — Ritesh Kumar") : DEFAULT_TITLE;
+    document.title = w.title ? (plain(w.title) + " \u2014 Ritesh Kumar") : DEFAULT_TITLE;
     if (opts.push !== false) { try { history.pushState({ rkWork: id }, "", "/work/" + id); } catch (e) {} }
-    scroller.scrollTop = 0;
+    scroller.scrollTop = opts.keepScroll ? prevScroll : 0;
     if (firstOpen) requestAnimationFrame(function () { overlay.classList.add("is-open"); requestAnimationFrame(updateSpy); });
     else updateSpy();
-    focusOverlay();
+    if (!opts.silent) focusOverlay();
   }
   function focusOverlay() { var f = overlay && overlay.querySelector(".pj__icon--close"); if (f) { try { f.focus(); } catch (e) {} } }
 
@@ -472,9 +474,11 @@
 
   /* ---------- bootstrap ---------- */
   function init() {
+    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; }
+    window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) updateSpy(); });
+    if (PREVIEW) return; // the admin editor drives the overlay; skip link/history/deep-link wiring
     document.addEventListener("click", onDocLinkClick);
     window.addEventListener("popstate", route);
-    window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) updateSpy(); });
     initDeepLink();
   }
   if (window.__siteRendered) init();

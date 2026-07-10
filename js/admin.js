@@ -43,6 +43,7 @@
   let activeTab = "landing";
   let openStudy = -1; // index of the work item whose case-study editor is expanded
   let root = null, body = null, frame = null;
+  let l2 = null, l2body = null, l2title = null, l2PreviewTimer = 0;
   let saveTimer = null;
   let menuEl = null;
   const ticketPlain = {}; // owner-only plaintext tickets, never published
@@ -62,22 +63,37 @@
   ];
   const THEMES = ["edge", "auth", "search", "auto", "xbox", "grid"];
 
-  /* self-contained sample textures (SVG data URIs — no external assets) */
-  function svgSample(stops) {
+  /* self-contained animated sample textures (SVG data URIs — shapes + motion, no external assets) */
+  function svgSample(stops, accent, accent2) {
+    const c2 = accent2 || accent;
     const svg =
-      "<svg xmlns='http://www.w3.org/2000/svg' width='640' height='400'>" +
+      "<svg xmlns='http://www.w3.org/2000/svg' width='640' height='400' viewBox='0 0 640 400'>" +
       "<defs><radialGradient id='g' cx='32%' cy='26%' r='95%'>" + stops + "</radialGradient>" +
-      "<linearGradient id='v' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#000' stop-opacity='0'/><stop offset='1' stop-color='#000' stop-opacity='.5'/></linearGradient></defs>" +
-      "<rect width='640' height='400' fill='url(#g)'/><rect width='640' height='400' fill='url(#v)'/></svg>";
+      "<linearGradient id='v' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#000' stop-opacity='0'/><stop offset='1' stop-color='#000' stop-opacity='.55'/></linearGradient>" +
+      "<filter id='soft' x='-60%' y='-60%' width='220%' height='220%'><feGaussianBlur stdDeviation='34'/></filter>" +
+      "<style>*{transform-box:fill-box;transform-origin:center}" +
+      "@keyframes a{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(54px,-34px) scale(1.22)}}" +
+      "@keyframes b{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-46px,32px) scale(1.15)}}" +
+      "@keyframes r{to{transform:rotate(360deg)}}" +
+      ".s1{animation:a 9s ease-in-out infinite}.s2{animation:b 12s ease-in-out infinite}.r1{animation:r 30s linear infinite}.r2{animation:r 22s linear infinite reverse}" +
+      "</style></defs>" +
+      "<rect width='640' height='400' fill='url(#g)'/>" +
+      "<g filter='url(#soft)'>" +
+      "<circle class='s1' cx='215' cy='150' r='104' fill='" + accent + "' opacity='.55'/>" +
+      "<circle class='s2' cx='470' cy='255' r='80' fill='" + c2 + "' opacity='.42'/>" +
+      "</g>" +
+      "<circle class='r1' cx='320' cy='200' r='128' fill='none' stroke='" + accent + "' stroke-width='1.5' stroke-dasharray='5 12' opacity='.4'/>" +
+      "<circle class='r2' cx='320' cy='200' r='86' fill='none' stroke='" + c2 + "' stroke-width='1' stroke-dasharray='3 10' opacity='.3'/>" +
+      "<rect width='640' height='400' fill='url(#v)'/></svg>";
     return "data:image/svg+xml," + encodeURIComponent(svg);
   }
   const SAMPLE_IMAGES = [
-    svgSample("<stop offset='0' stop-color='#1c4a70'/><stop offset='.55' stop-color='#0b1522'/><stop offset='1' stop-color='#08080a'/>"),
-    svgSample("<stop offset='0' stop-color='#c8892f'/><stop offset='.55' stop-color='#241a0c'/><stop offset='1' stop-color='#08080a'/>"),
-    svgSample("<stop offset='0' stop-color='#5b3aa6'/><stop offset='.55' stop-color='#1b1130'/><stop offset='1' stop-color='#08080a'/>"),
-    svgSample("<stop offset='0' stop-color='#2f7d6b'/><stop offset='.55' stop-color='#0e211d'/><stop offset='1' stop-color='#08080a'/>"),
-    svgSample("<stop offset='0' stop-color='#b0475e'/><stop offset='.55' stop-color='#2a1017'/><stop offset='1' stop-color='#08080a'/>"),
-    svgSample("<stop offset='0' stop-color='#3a4a63'/><stop offset='.55' stop-color='#12161f'/><stop offset='1' stop-color='#08080a'/>"),
+    svgSample("<stop offset='0' stop-color='#1c4a70'/><stop offset='.55' stop-color='#0b1522'/><stop offset='1' stop-color='#08080a'/>", "#2f80c4", "#1c4a70"),
+    svgSample("<stop offset='0' stop-color='#c8892f'/><stop offset='.55' stop-color='#241a0c'/><stop offset='1' stop-color='#08080a'/>", "#e0a94a", "#c8892f"),
+    svgSample("<stop offset='0' stop-color='#5b3aa6'/><stop offset='.55' stop-color='#1b1130'/><stop offset='1' stop-color='#08080a'/>", "#7c5ad0", "#5b3aa6"),
+    svgSample("<stop offset='0' stop-color='#2f7d6b'/><stop offset='.55' stop-color='#0e211d'/><stop offset='1' stop-color='#08080a'/>", "#3fae90", "#2f7d6b"),
+    svgSample("<stop offset='0' stop-color='#b0475e'/><stop offset='.55' stop-color='#2a1017'/><stop offset='1' stop-color='#08080a'/>", "#d3647c", "#b0475e"),
+    svgSample("<stop offset='0' stop-color='#3a4a63'/><stop offset='.55' stop-color='#12161f'/><stop offset='1' stop-color='#08080a'/>", "#6079a0", "#3a4a63"),
   ];
 
   /* ---------- utils ---------- */
@@ -291,6 +307,9 @@
   function addBtn(list, label) {
     return '<button class="btn btn--add" data-act="add" data-list="' + list + '">+ ' + label + "</button>";
   }
+  function addBar(list, label, disabled) {
+    return '<div class="adm__addbar"><button class="btn btn--add" data-act="add" data-list="' + list + '"' + (disabled ? " disabled" : "") + ">+ " + label + "</button></div>";
+  }
 
   function imageryBlock(w, i) {
     const has = !!w.image;
@@ -300,7 +319,7 @@
       : !aiSupportsImages() ? "This service (Claude) can't generate images"
       : "Describe an image to generate\u2026";
     const samples = SAMPLE_IMAGES.map(function (s, si) {
-      return '<button class="imgblk__sample" data-act="img-sample" data-index="' + i + '" data-sample="' + si + '" style="background-image:url(&quot;' + s + '&quot;)" title="Use sample ' + (si + 1) + '"></button>';
+      return '<button class="imgblk__sample" data-act="img-sample" data-index="' + i + '" data-sample="' + si + '" title="Use motion texture ' + (si + 1) + '"><img src="' + s + '" alt="" loading="lazy" /></button>';
     }).join("");
     return '<div class="imgblk"><div class="af__label">Project image</div>' +
       '<div class="imgblk__preview' + (has ? " has" : "") + '">' + (has ? '<img src="' + escAttr(w.image) + '" alt="" />' : "<span>No image \u2014 the animated placeholder is shown</span>") + "</div>" +
@@ -447,6 +466,7 @@
     if (f === "unlock") { studyUnlockPlain[w.id] = t.value; setStudyUnlock(w.study, t.value); return; }
     w.study[f] = t.value;
     saveDraft();
+    refreshL2Preview();
   }
   function onStudyBlock(t) {
     var i = +t.dataset.sblock, j = +t.dataset.bindex, f = t.dataset.bfield;
@@ -456,6 +476,7 @@
     else if (f === "items") b.items = parseItems(b.type, t.value);
     else b[f] = t.value;
     saveDraft();
+    refreshL2Preview();
   }
 
   /* ---------- section renderers ---------- */
@@ -486,28 +507,26 @@
     },
     highlights() {
       const list = data.highlights || [];
-      let html = secHead("Highlights", "The numbers after the reel. Up to 8 (stack 4×2). Values like <em>11+</em>, <em>Billions</em>, <em>2B+</em> — leading digits count up.");
+      let html = secHead("Highlights", "The numbers after the reel. Up to 8 (stack 4×2). Values like <em>11+</em>, <em>Billions</em>, <em>2B+</em> — leading digits count up.") + addBar("highlights", "Add highlight", list.length >= 8);
       list.forEach((h, i) => {
         html += '<div class="card">' + cardHead("Highlight " + (i + 1), "highlights", i, list.length) +
           '<div class="af__row">' + itemField("highlights", i, "value", "Value") + itemField("highlights", i, "label", "Label") + "</div></div>";
       });
-      if (list.length < 8) html += addBtn("highlights", "Add highlight");
       return html;
     },
     capabilities() {
       const list = data.capabilities || [];
-      let html = secHead("Capabilities", "Drives the Capabilities list AND the scrolling reel.");
+      let html = secHead("Capabilities", "Drives the Capabilities list AND the scrolling reel.") + addBar("capabilities", "Add capability");
       list.forEach((c, i) => {
         html += '<div class="card"><div class="card__bar" style="margin-bottom:.5rem"><span class="card__idx">' + (i + 1) + "</span>" + ops("capabilities", i, list.length) + "</div>" +
           '<input type="text" data-list="capabilities" data-index="' + i + '" data-scalar="1" value="' + escAttr(c) + '" /></div>';
       });
-      html += addBtn("capabilities", "Add capability");
       return html;
     },
     work() {
       const list = data.work || [];
       const featured = list.filter((w) => w.featured).length;
-      let html = secHead("Selected Work", "Add any number. Tick up to 4 to feature on the homepage (currently " + featured + "/4).");
+      let html = secHead("Selected Work", "Add any number. Tick up to 4 to feature on the homepage (currently " + featured + "/4).") + addBar("work", "Add work");
       list.forEach((w, i) => {
         html += '<div class="card">' + cardHead(w.client || "Work " + (i + 1), "work", i, list.length) +
           '<label class="chk" style="margin-bottom:.7rem"><input type="checkbox" data-act="feature" data-index="' + i + '"' + (w.featured ? " checked" : "") + " /> Feature on homepage</label>" +
@@ -522,15 +541,14 @@
           itemField("work", i, "desc", "Description", { type: "textarea", rows: 3 }) +
           itemField("work", i, "tags", "Tags", { hint: "comma-separated" }) +
           imageryBlock(w, i) +
-          studyToggle(w, i) + (openStudy === i ? studyEditor(w, i) : "") +
+          studyToggle(w, i) +
           "</div>";
       });
-      html += addBtn("work", "Add work");
       return html;
     },
     path() {
       const list = data.path || [];
-      let html = secHead("The Path", "Your experience timeline.");
+      let html = secHead("The Path", "Your experience timeline.") + addBar("path", "Add experience");
       list.forEach((p, i) => {
         html += '<div class="card">' + cardHead(p.role || "Role " + (i + 1), "path", i, list.length) +
           '<div class="af__row">' + itemField("path", i, "years", "Years") +
@@ -541,7 +559,6 @@
           itemField("path", i, "desc", "Description", { type: "textarea", rows: 3 }) +
           "</div>";
       });
-      html += addBtn("path", "Add experience");
       return html;
     },
     recognition() {
@@ -553,11 +570,11 @@
     special() {
       const list = data.specialViews || (data.specialViews = []);
       let html = secHead("Special Views",
-        "Curated, ticketed versions of the site for one audience (say an automotive company). Choose the work, numbers and skills they see, set a ticket phrase and an optional expiry. Up to 6. <em>Tickets are a soft gate — the curated content still ships in your published file, so don't put anything confidential here.</em>");
+        "Curated, ticketed versions of the site for one audience (say an automotive company). Choose the work, numbers and skills they see, set a ticket phrase and an optional expiry. Up to 6. <em>Tickets are a soft gate — the curated content still ships in your published file, so don't put anything confidential here.</em>") +
+        '<div class="adm__addbar"><button class="btn btn--add" data-act="sv-add"' + (list.length >= 6 ? " disabled" : "") + ">+ New special view</button></div>";
       if (!list.length) html += '<div class="adm__empty">No special views yet.</div>';
       list.forEach(function (sv, i) { html += svCard(sv, i); });
-      if (list.length < 6) html += '<button class="btn btn--add" data-act="sv-add">+ New special view</button>';
-      else html += '<div class="af__hint">Maximum of 6 special views reached.</div>';
+      if (list.length >= 6) html += '<div class="af__hint">Maximum of 6 special views reached.</div>';
       return html;
     },
     ai() {
@@ -612,12 +629,11 @@
 
   function titleMetaList(list, name, note) {
     const items = data[list] || [];
-    let html = secHead(name, note);
+    let html = secHead(name, note) + addBar(list, "Add " + name.toLowerCase());
     items.forEach((a, i) => {
       html += '<div class="card">' + cardHead(name + " " + (i + 1), list, i, items.length) +
         itemField(list, i, "title", "Title") + itemField(list, i, "meta", "Meta / date") + "</div>";
     });
-    html += addBtn(list, "Add " + name.toLowerCase());
     return html;
   }
 
@@ -628,6 +644,60 @@
   function renderBody() {
     body.innerHTML = sections[activeTab]();
     root.querySelectorAll(".adm__tab").forEach((t) => t.classList.toggle("is-active", t.dataset.tab === activeTab));
+  }
+
+  /* ---------- L2 case-study editor + auto live preview ---------- */
+  function frameWin() { return frame && frame.contentWindow; }
+  function previewProject(id, keep) {
+    const w = frameWin();
+    if (!(w && w.RK)) return;
+    try { w.RK.data = clone(data); } catch (e) {}
+    if (!keep) { try { w.RK.render(data); forceRevealDoc(w.document); } catch (e) {} }
+    if (w.RK.openProject) { try { w.RK.openProject(id, { push: false, keepScroll: !!keep, silent: !!keep }); } catch (e) {} }
+  }
+  function previewLanding() {
+    const w = frameWin();
+    if (!(w && w.RK)) return;
+    if (w.RK.closeProject) { try { w.RK.closeProject({ push: false }); } catch (e) {} }
+    try { w.RK.data = clone(data); w.RK.render(data); forceRevealDoc(w.document); } catch (e) {}
+  }
+  function refreshL2Preview() {
+    if (openStudy < 0) return;
+    clearTimeout(l2PreviewTimer);
+    l2PreviewTimer = setTimeout(function () {
+      if (openStudy < 0 || !data.work[openStudy]) return;
+      previewProject(data.work[openStudy].id, true);
+    }, 180);
+  }
+  function openL2(i) {
+    if (!data.work[i]) return;
+    if (!data.work[i].study) data.work[i].study = blankStudy();
+    openStudy = i;
+    const w = data.work[i];
+    if (l2title) l2title.textContent = w.client || w.title || "Case study";
+    l2body.innerHTML = studyEditor(w, i);
+    body.hidden = true;
+    l2.hidden = false;
+    requestAnimationFrame(function () { l2.classList.add("is-open"); });
+    const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0;
+    saveDraft();
+    previewProject(w.id, false);
+  }
+  function renderL2() {
+    if (openStudy < 0 || !data.work[openStudy]) return;
+    const w = data.work[openStudy];
+    l2body.innerHTML = studyEditor(w, openStudy);
+    if (l2title) l2title.textContent = w.client || w.title || "Case study";
+    previewProject(w.id, true);
+  }
+  function closeL2(opts) {
+    opts = opts || {};
+    openStudy = -1;
+    if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
+    if (body) body.hidden = false;
+    const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0;
+    previewLanding();
+    if (opts.render !== false) renderBody();
   }
 
   /* ---------- blank templates ---------- */
@@ -763,23 +833,19 @@
       status(n ? "Auto-styled — bronze products, bold phrases, italic closing word." : "Add some copy first, then Auto-style.", n > 0);
       return;
     }
-    if (act === "study-toggle") {
-      if (openStudy === i) openStudy = -1;
-      else { if (!data.work[i].study) data.work[i].study = blankStudy(); openStudy = i; }
-      saveDraft(); renderBody(); return;
-    }
-    if (act === "study-close") { openStudy = -1; renderBody(); return; }
+    if (act === "study-toggle") { openL2(i); return; }
+    if (act === "study-close") { closeL2(); return; }
     if (act === "study-addblock") {
       const st = data.work[i].study || (data.work[i].study = blankStudy());
       st.blocks = st.blocks || [];
       st.blocks.push(blankBlock(b.dataset.type));
-      saveDraft(true); renderBody(); return;
+      saveDraft(true); renderL2(); return;
     }
-    if (act === "study-blockup") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j > 0) { [s[j - 1], s[j]] = [s[j], s[j - 1]]; saveDraft(true); renderBody(); } return; }
-    if (act === "study-blockdown") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j < s.length - 1) { [s[j + 1], s[j]] = [s[j], s[j + 1]]; saveDraft(true); renderBody(); } return; }
-    if (act === "study-blockremove") { data.work[i].study.blocks.splice(+b.dataset.bindex, 1); saveDraft(true); renderBody(); return; }
-    if (act === "study-cover-upload") { pickImage(function (uri) { const st = data.work[i].study || (data.work[i].study = blankStudy()); st.cover = uri; saveDraft(true); renderBody(); status("Cover set.", true); }); return; }
-    if (act === "study-cover-clear") { if (data.work[i].study) data.work[i].study.cover = ""; saveDraft(true); renderBody(); return; }
+    if (act === "study-blockup") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j > 0) { [s[j - 1], s[j]] = [s[j], s[j - 1]]; saveDraft(true); renderL2(); } return; }
+    if (act === "study-blockdown") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j < s.length - 1) { [s[j + 1], s[j]] = [s[j], s[j + 1]]; saveDraft(true); renderL2(); } return; }
+    if (act === "study-blockremove") { data.work[i].study.blocks.splice(+b.dataset.bindex, 1); saveDraft(true); renderL2(); return; }
+    if (act === "study-cover-upload") { pickImage(function (uri) { const st = data.work[i].study || (data.work[i].study = blankStudy()); st.cover = uri; saveDraft(true); renderL2(); status("Cover set.", true); }); return; }
+    if (act === "study-cover-clear") { if (data.work[i].study) data.work[i].study.cover = ""; saveDraft(true); renderL2(); return; }
     if (act === "study-preview") { saveDraft(true); window.open("/work/" + data.work[i].id, "_blank", "noopener"); status("Opened the case study in a new tab (using your draft)."); return; }
     if (act === "add") { data[list].push(blank(list)); apply(true); renderBody(); }
     else if (act === "remove") { data[list].splice(i, 1); apply(true); renderBody(); }
@@ -1110,7 +1176,15 @@
         "</div>" +
       "</header>" +
       '<div class="adm__main">' +
-        '<div class="adm__editor"><div class="adm__body"></div></div>' +
+        '<div class="adm__editor"><div class="adm__body"></div>' +
+          '<div class="adm__l2" hidden>' +
+            '<div class="adm__l2-bar">' +
+              '<button class="btn btn--ghost adm__l2-back" data-l2-back><span aria-hidden="true">\u2039</span> Back to projects</button>' +
+              '<span class="adm__l2-title"></span>' +
+            "</div>" +
+            '<div class="adm__l2-body"></div>' +
+          "</div>" +
+        "</div>" +
         '<section class="adm__preview" aria-label="Live preview">' +
           '<div class="adm__preview-head"><span class="adm__preview-dot"></span>Live preview<small>riteshk.work</small></div>' +
           '<iframe class="adm__frame" title="Live preview of your site" src="' + PREVIEW_SRC + '"></iframe>' +
@@ -1118,6 +1192,9 @@
       "</div>";
     document.body.appendChild(root);
     body = root.querySelector(".adm__body");
+    l2 = root.querySelector(".adm__l2");
+    l2body = root.querySelector(".adm__l2-body");
+    l2title = root.querySelector(".adm__l2-title");
     frame = root.querySelector(".adm__frame");
 
     // Guaranteed wheel scrolling for the editor pane. The site's Lenis smooth-scroll
@@ -1137,12 +1214,13 @@
     root.addEventListener("change", onChange);
     root.addEventListener("click", onClick);
     root.querySelectorAll(".adm__tab").forEach((t) =>
-      t.addEventListener("click", () => { activeTab = t.dataset.tab; renderBody(); })
+      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); activeTab = t.dataset.tab; renderBody(); })
     );
     root.querySelector("[data-publish]").addEventListener("click", publish);
     root.querySelector("[data-pubcfg]").addEventListener("click", () => publishModal());
     root.querySelector("[data-revert]").addEventListener("click", revert);
     root.querySelector("[data-exit]").addEventListener("click", exit);
+    root.querySelector("[data-l2-back]").addEventListener("click", () => closeL2());
     root.querySelector("[data-view]").addEventListener("click", (e) => {
       root.classList.toggle("is-preview");
       e.currentTarget.textContent = root.classList.contains("is-preview") ? "Edit" : "Preview";
@@ -1172,6 +1250,8 @@
     if (!root) buildShell();
     activeTab = "landing";
     openStudy = -1;
+    if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
+    if (body) body.hidden = false;
     renderBody();
     document.documentElement.classList.add("adm-lock");
     document.body.classList.add("adm-lock");
