@@ -276,15 +276,27 @@
   }
 
   /* -------------------------------------------------
-     11. Ambient background particle field (very subtle, GPU-light)
+     11. Ambient background particle field — auto-off on low-power / software GPUs
   ------------------------------------------------- */
-  if (!lite && !reduceMotion) {
+  const bgCapable = () => {
+    if ((navigator.hardwareConcurrency || 8) <= 2 || (navigator.deviceMemory || 8) <= 2) return false;
+    try {
+      const gc = document.createElement("canvas");
+      const gl = gc.getContext("webgl") || gc.getContext("experimental-webgl");
+      if (!gl) return false;
+      const ext = gl.getExtension("WEBGL_debug_renderer_info");
+      const r = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "").toLowerCase() : "";
+      if (r && /swiftshader|llvmpipe|software|basic render|microsoft basic|paravirtual|mesa offscreen/.test(r)) return false;
+    } catch (e) { return false; }
+    return true;
+  };
+  if (!lite && !reduceMotion && bgCapable()) {
     const canvas = document.createElement("canvas");
     canvas.className = "bg-field";
     canvas.setAttribute("aria-hidden", "true");
     document.body.insertBefore(canvas, document.body.firstChild);
     const ctx = canvas.getContext("2d");
-    let W = 0, H = 0, DPR = 1, parts = [], mX = -9999, mY = -9999, rafId = 0, running = true;
+    let W = 0, H = 0, DPR = 1, parts = [], mX = -9999, mY = -9999, rafId = 0, running = true, f = 0, sampleT0 = 0, checked = false;
     const accent = () => (getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#D8A657");
     const resize = () => {
       DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -314,13 +326,19 @@
         ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.283); ctx.fill();
       }
       ctx.globalAlpha = 1;
+      // Measure real FPS over a warm window; if the device can't keep up, switch the field off.
+      f++;
+      if (f === 30) sampleT0 = performance.now();
+      else if (!checked && f === 90) { checked = true; if ((60000 / (performance.now() - sampleT0)) < 38) { disableBg(); return; } }
       rafId = requestAnimationFrame(step);
     };
+    const disableBg = () => { running = false; if (rafId) cancelAnimationFrame(rafId); rafId = 0; window.removeEventListener("resize", resize); if (canvas.parentNode) canvas.remove(); };
     window.addEventListener("resize", resize, { passive: true });
     window.addEventListener("mousemove", (e) => { mX = e.clientX; mY = e.clientY; }, { passive: true });
     document.addEventListener("visibilitychange", () => {
+      if (!canvas.parentNode) return;
       running = !document.hidden;
-      if (running) { if (!rafId) rafId = requestAnimationFrame(step); }
+      if (running) { f = 0; checked = false; sampleT0 = 0; if (!rafId) rafId = requestAnimationFrame(step); }  // re-measure fresh after returning
       else if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
     });
     resize(); step();
