@@ -1314,7 +1314,7 @@
 
   /* ---------- control menu (clock flyout) ---------- */
   /* ---------- ambient music player (Web Audio synth, with optional audio files) ---------- */
-  let audioEl = null, synth = null, musCur = 0, musArmed = false, musPlaying = false, musLastLight = null;
+  let audioEl = null, synth = null, musCur = 0, musArmed = false, musPlaying = false, musLastLight = null, musAnnounced = false;
   function musTracks() {
     var m = window.RK && window.RK.data && window.RK.data.music;
     var ok = Array.isArray(m) ? m.filter(function (t) { return t && (t.src || t.gen); }) : [];
@@ -1367,8 +1367,9 @@
   function audioEnsure() {
     if (audioEl) return audioEl;
     audioEl = new Audio(); audioEl.preload = "none"; audioEl.volume = 0.07; audioEl.loop = true;
-    audioEl.addEventListener("playing", function () { musPlaying = true; musSync(); });
-    audioEl.addEventListener("pause", function () { musPlaying = false; musSync(); });
+    audioEl.addEventListener("playing", musRefresh);
+    audioEl.addEventListener("pause", musRefresh);
+    audioEl.addEventListener("volumechange", musRefresh);  // fires on mute/unmute
     audioEl.addEventListener("error", musSync);
     return audioEl;
   }
@@ -1404,15 +1405,41 @@
     window.addEventListener("wheel", onWheel, opts);
     var a = audioEnsure(); if (a) a.addEventListener("playing", disarm);  // stop once sound truly starts
   }
+  function musAutoStart() {
+    var t = musCurTrack(); if (!t) return;
+    if (t.src) {
+      var a = audioEnsure();
+      a.muted = true;                             // muted autoplay is allowed by browsers (YouTube-style)
+      var p = a.play();
+      if (p && p.catch) p.catch(function () {});   // if even muted is blocked, the unmute-arm still starts it
+      musArmUnmute();                             // the visitor's first interaction unmutes -> audible
+    } else {
+      musArm();                                   // synth fallback needs a gesture anyway
+    }
+  }
+  function musArmUnmute() {
+    if (musArmed) return; musArmed = true;
+    var act = ["pointerdown", "mousedown", "keydown", "touchstart"];
+    var opts = { capture: true, passive: true };
+    function disarm() { musArmed = false; act.forEach(function (ev) { window.removeEventListener(ev, go, opts); }); }
+    function go() {
+      if (localStorage.getItem(MUSIC_ON_KEY) === "0") { disarm(); return; }
+      var a = audioEnsure(); a.muted = false;                   // unmuting during a real gesture is allowed
+      if (a.paused) { var p = a.play(); if (p && p.catch) p.catch(function () { musArm(); }); }
+      disarm();
+    }
+    act.forEach(function (ev) { window.addEventListener(ev, go, opts); });
+  }
   function musPlay() {
     var t = musCurTrack(); if (!t) return;
     try { localStorage.setItem(MUSIC_ON_KEY, "1"); } catch (e) {}
     if (t.src) {
       if (synth) synth.pause();
       var a = audioEnsure();
+      a.muted = false;
       var p = a.play();
       if (p && p.catch) p.catch(function () { musArm(); });
-      // musPlaying flips true via the audio 'playing' event once sound actually starts
+      // musPlaying flips true via the audio 'playing'/'volumechange' events when sound is audible
     } else {
       if (audioEl) audioEl.pause();
       var s = synthEnsure();
@@ -1424,6 +1451,18 @@
   }
   function musPause() { musStop(); musPlaying = false; try { localStorage.setItem(MUSIC_ON_KEY, "0"); } catch (e) {} musSync(); }
   function musToggle() { if (musPlaying) musPause(); else musPlay(); }
+  function musRefresh() {
+    var ct = musCurTrack();
+    if (ct && ct.src) {
+      var audible = !!(audioEl && !audioEl.paused && !audioEl.muted);
+      if (audible && !musAnnounced) {
+        musAnnounced = true;
+        if (ct.title) flash("\u266a " + ct.title + (ct.artist ? " \u2014 " + ct.artist : ""));
+      }
+      musPlaying = audible;
+    }
+    musSync();
+  }
   function musSync() {
     var mw = document.querySelector(".nav__morewrap");
     if (mw) mw.classList.toggle("is-hint", musPlaying);
@@ -1457,7 +1496,7 @@
     musCur = musDefaultTrack();
     musLoad(musCur, false);
     window.addEventListener("theme:change", musThemeChange);
-    if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musPlay();
+    if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musAutoStart();
   }
 
   function buildMenu() {

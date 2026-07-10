@@ -38,9 +38,11 @@ with no files.
 
 ## Notes
 
-- Playback starts as soon as the site opens. Browsers block audio until the
-  visitor interacts, so if autoplay is blocked it begins on the first
-  click / tap / key press. The play/pause choice is remembered.
-- The bronze particles around the ··· button loop while music is playing and
-  stop when it's paused.
+- The track begins **muted** on load (YouTube-style) and unmutes on the visitor's
+  first interaction — a click/tap, key press, or dragging the scrollbar — because
+  browsers block *audible* autoplay until then (a plain mouse-wheel scroll does
+  not count as an unlock gesture). A small "♪ now playing" toast names the track
+  the moment sound starts, and the play/pause choice is remembered.
+- The bronze particles around the ··· button loop while music is audibly playing
+  and stop when it's muted/paused.
 - To make the site silent by default, set `localStorage["rk:music:on"] = "0"`.
