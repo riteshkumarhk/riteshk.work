@@ -211,7 +211,7 @@
     }).join("");
   }
   function coverHtml(w, st) {
-    var cov = st.cover;
+    var cov = w.image || (st && st.cover);   // unified: the project image doubles as the case-study cover
     var c = typeof cov === "string" ? { src: cov } : (cov || null);
     if (c && mediaSrc(c)) return '<div class="pj__cover">' + mediaEl(c, "pj__cover-el") + "</div>";
     return '<div class="pj__cover pj__cover--ph pjb__shot-ph--' + esc(w.theme || "edge") + '"><span class="pj__cover-card">' + esc(w.plateTag || w.client || "") + "</span></div>";

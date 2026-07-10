@@ -64,6 +64,7 @@
   let data = null;
   let activeTab = "landing";
   let openStudy = -1; // index of the work item whose case-study editor is expanded
+  let openBlock = -1; // which section (block) is expanded in the L2 sections accordion
   let root = null, body = null, frame = null;
   let l2 = null, l2body = null, l2title = null, l2PreviewTimer = 0;
   let saveTimer = null;
@@ -329,13 +330,15 @@
       const on = (!w.image && (w.theme || "edge") === th) ? " is-on" : "";
       return '<button class="imgblk__plate' + on + '" data-act="plate-sample" data-index="' + i + '" data-theme="' + th + '" title="' + escAttr(t[1]) + ' \u2014 animated placeholder"><span class="imgblk__plate-media case__media case__media--' + th + '"><span class="plate">' + platePreview(th) + "</span></span><span class=\"imgblk__plate-name\">" + escHtml(t[1]) + "</span></button>";
     }).join("");
-    return '<div class="imgblk"><div class="af__label">Project image</div>' +
+    return '<div class="imgblk"><div class="af__label">Cover image</div>' +
+      '<div class="af__hint" style="margin:-.15rem 0 .5rem">Used as the case-study cover AND the homepage card thumbnail. Leave empty to show an animated plate below.</div>' +
       '<div class="imgblk__preview' + (has ? " has" : "") + '">' + (has ? '<img src="' + escAttr(w.image) + '" alt="" />' : "<span>No image \u2014 the animated placeholder is shown</span>") + "</div>" +
       '<input type="text" data-list="work" data-index="' + i + '" data-field="image" value="' + escAttr(w.image || "") + '" placeholder="Paste an image URL\u2026" />' +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="img-upload" data-index="' + i + '">Upload\u2026</button>' +
       (has ? '<button class="btn btn--ghost" data-act="img-clear" data-index="' + i + '">Remove</button>' : "") + "</div>" +
       '<div class="af__label" style="margin:.7rem 0 .2rem">Or use an animated placeholder \u2014 no upload, always on-brand</div>' +
       '<div class="imgblk__plates">' + plates + "</div>" +
+      itemField("work", i, "plateTag", "Tag on the cover / plate", { hint: "the small label shown on the card & cover, e.g. \u201cFirst Run Experience\u201d" }) +
       '<div class="imgblk__ai"><input type="text" data-aiprompt="' + i + '" placeholder="' + aiHint + '"' + (canGen ? "" : " disabled") + " />" +
       '<div class="imgblk__row"><button class="btn btn--auto" data-act="img-generate" data-index="' + i + '"' + (canGen ? "" : " disabled") + ">Generate</button>" +
       '<button class="btn btn--ghost" data-act="img-modify" data-index="' + i + '"' + (canGen && has ? "" : " disabled") + ">Modify current</button></div>" +
@@ -399,13 +402,21 @@
   function sfArea(i, j, field, label, value, rows, hint) {
     return '<div class="af"><label class="af__label">' + label + '</label><textarea data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '" rows="' + (rows || 3) + '">' + escHtml(value) + "</textarea>" + (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
   }
-  function blockEditor(i, b, j, len) {
-    var head = '<div class="card__bar"><span class="card__idx">' + (j + 1) + " \u00b7 " + escHtml(b.type) + "</span>" +
-      '<div class="card__ops">' +
+  function blockEditor(i, b, j, len, open) {
+    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ" })[b.type] || b.type;
+    var raw = b.nav || b.kicker || b.heading || b.body || (b.items && b.items[0] && (b.items[0].q || b.items[0].title || b.items[0].value || b.items[0].caption)) || "Untitled";
+    var label = String(raw).replace(/[\*\[\]]/g, "").replace(/\s+/g, " ").trim();
+    if (label.length > 48) label = label.slice(0, 48) + "\u2026";
+    var head = '<div class="study__block-head" data-act="study-blocktoggle" data-index="' + i + '" data-bindex="' + j + '">' +
+      '<span class="study__block-badge">' + escHtml(typeName) + "</span>" +
+      '<span class="study__block-label">' + escHtml(label) + "</span>" +
+      '<span class="study__block-ops">' +
       '<button class="iconbtn" data-act="study-blockup" data-index="' + i + '" data-bindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
       '<button class="iconbtn" data-act="study-blockdown" data-index="' + i + '" data-bindex="' + j + '"' + (j === len - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
       '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">\u2715</button>' +
-      "</div></div>";
+      "</span>" +
+      '<span class="study__block-chev" aria-hidden="true">\u203a</span>' +
+      "</div>";
     var common = sfInput(i, j, "nav", "Section label", "Shows in the left nav \u2014 leave blank to hide it there") + sfInput(i, j, "kicker", "Kicker", "small label above the block");
     var body = "";
     if (b.type === "text") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "body", "Body", b.body, 4) + sfArea(i, j, "list", "Bullets \u2014 one per line", listToText(b.list), 3);
@@ -416,7 +427,8 @@
     else if (b.type === "split") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + sfInput(i, j, "leftLabel", "Left label") + sfInput(i, j, "rightLabel", "Right label") + "</div>" + sfArea(i, j, "left", "Left items \u2014 one per line", listToText(b.left), 3) + sfArea(i, j, "right", "Right items \u2014 one per line", listToText(b.right), 3);
     else if (b.type === "faq") body = sfArea(i, j, "items", "Q&A \u2014 one per line:  question | answer", itemsToText("faq", b.items), 4);
     var locked = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="locked"' + (b.locked ? " checked" : "") + " /> Locked \u2014 only after the deeper-cut pass</label>";
-    return '<div class="card study__block">' + head + common + body + locked + "</div>";
+    return '<div class="card study__block' + (open ? " is-open" : "") + '">' + head +
+      '<div class="study__block-body">' + common + body + locked + "</div></div>";
   }
   function smeta(i, field, label, hint) {
     var st = data.work[i].study;
@@ -425,29 +437,30 @@
   function studyEditor(w, i) {
     var st = w.study;
     var blocks = st.blocks || (st.blocks = []);
-    var cover = typeof st.cover === "string" ? st.cover : (st.cover && (st.cover.src || st.cover.image)) || "";
-    var isVid = /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i.test(cover) || /^data:video\//i.test(cover);
     var unlockVal = studyUnlockPlain[w.id] || "";
-    var meta = smeta(i, "tagline", "Tagline", "one line under the title") +
+    var header = '<section class="l2grp"><div class="l2grp__head">Project header <span>\u2014 the homepage card &amp; case-study hero</span></div>' +
+      itemField("work", i, "title", "Title") +
+      itemField("work", i, "desc", "Description", { type: "textarea", rows: 3, hint: "The card summary and the case-study intro fallback." }) +
+      itemField("work", i, "tags", "Tags", { hint: "comma-separated" }) +
+      imageryBlock(w, i) +
+      "</section>";
+    var meta = '<section class="l2grp"><div class="l2grp__head">Story header</div>' +
+      smeta(i, "tagline", "Tagline", "one line under the title") +
       '<div class="af__row">' + smeta(i, "role", "Role") + smeta(i, "timeline", "Timeline") + "</div>" +
-      '<div class="af__row">' + smeta(i, "team", "Team") + smeta(i, "scope", "Scope") + "</div>";
-    var coverPrev = cover ? (isVid ? '<video src="' + escAttr(cover) + '" muted loop autoplay playsinline></video>' : '<img src="' + escAttr(cover) + '" alt="" />') : "<span>No cover \u2014 a themed title card is shown</span>";
-    var coverBlock = '<div class="imgblk"><div class="af__label">Cover \u2014 image, gif or video</div>' +
-      '<div class="imgblk__preview' + (cover ? " has" : "") + '">' + coverPrev + "</div>" +
-      '<input type="text" data-study="' + i + '" data-sfield="cover" value="' + escAttr(cover) + '" placeholder="Paste an image / gif / video URL\u2026" />' +
-      '<div class="imgblk__row"><button class="btn btn--ghost" data-act="study-cover-upload" data-index="' + i + '">Upload\u2026</button>' + (cover ? '<button class="btn btn--ghost" data-act="study-cover-clear" data-index="' + i + '">Remove</button>' : "") + "</div>" +
-      '<div class="imgblk__hint">Video &amp; gif are best pasted as a URL \u2014 uploads embed into your published file.</div></div>';
-    var unlockBlock = '<div class="af"><label class="af__label">Deeper-cut pass</label>' +
-      '<input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
-      '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks \u00b7 case-insensitive \u00b7 locked content still ships in your file (soft gate)</div></div>";
-    var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length); }).join("") || '<div class="adm__empty">No sections yet \u2014 add one below.</div>';
+      '<div class="af__row">' + smeta(i, "team", "Team") + smeta(i, "scope", "Scope") + "</div>" +
+      "</section>";
+    var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
     var add = '<div class="study__add">' + STUDY_BLOCK_TYPES.map(function (t) { return '<button class="btn btn--add study__addbtn" data-act="study-addblock" data-index="' + i + '" data-type="' + t[0] + '">+ ' + t[1] + "</button>"; }).join("") + "</div>";
+    var unlockBlock = '<section class="l2grp"><div class="l2grp__head">Deeper-cut pass <span>\u2014 optional gate for \u201cLocked\u201d sections</span></div>' +
+      '<div class="af"><input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
+      '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks \u00b7 case-insensitive \u00b7 locked content still ships in your file (soft gate)</div></div></section>";
     return '<div class="study__panel">' +
-      '<div class="adm__sec-note" style="margin:.2rem 0 1rem">Compose the case study as a stack of sections. Each <em>Section label</em> becomes a left-nav item on the project page.</div>' +
       csgenPanel(w, i) +
-      meta + coverBlock + unlockBlock +
-      '<div class="study__blocks">' + list + "</div>" + add +
-      '<div class="study__foot"><button class="btn btn--ghost" data-act="study-preview" data-index="' + i + '">Preview case study \u2197</button><button class="btn btn--ghost" data-act="study-close" data-index="' + i + '">Done</button></div>' +
+      header + meta +
+      '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span></div>' +
+      '<div class="study__blocks">' + list + "</div>" + add + "</section>" +
+      unlockBlock +
+      '<div class="study__foot"><button class="btn btn--ghost" data-act="study-preview" data-index="' + i + '">Preview case study \u2197</button><button class="btn btn--primary" data-act="study-close" data-index="' + i + '">Done</button></div>' +
       "</div>";
   }
   function studyToggle(w, i) {
@@ -539,21 +552,12 @@
     work() {
       const list = data.work || [];
       const featured = list.filter((w) => w.featured).length;
-      let html = secHead("Selected Work", "Add any number. Tick up to 4 to feature on the homepage (currently " + featured + "/4).") + addBar("work", "Add work");
+      let html = secHead("Selected Work", "Your projects. Tick up to 4 to feature on the homepage (currently " + featured + "/4). Title, story, images, tags &amp; theme all live inside each project\u2019s case-study editor.") + addBar("work", "Add work");
       list.forEach((w, i) => {
-        html += '<div class="card">' + cardHead(w.client || "Work " + (i + 1), "work", i, list.length) +
-          '<label class="chk" style="margin-bottom:.7rem"><input type="checkbox" data-act="feature" data-index="' + i + '"' + (w.featured ? " checked" : "") + " /> Feature on homepage</label>" +
-          '<div class="af__row">' +
-          '<div class="af"><label class="af__label">Theme</label><select data-list="work" data-index="' + i + '" data-field="theme">' +
-          THEMES.map((t) => '<option value="' + t + '"' + (w.theme === t ? " selected" : "") + ">" + t + "</option>").join("") +
-          "</select></div>" +
-          itemField("work", i, "plateTag", "Plate tag") +
-          "</div>" +
+        html += '<div class="card workcard">' + cardHead(w.client || w.title || ("Work " + (i + 1)), "work", i, list.length) +
+          '<label class="chk workcard__feat"><input type="checkbox" data-act="feature" data-index="' + i + '"' + (w.featured ? " checked" : "") + " /> Feature on homepage</label>" +
           '<div class="af__row">' + itemField("work", i, "client", "Client") + itemField("work", i, "period", "Period") + "</div>" +
-          itemField("work", i, "title", "Title") +
-          itemField("work", i, "desc", "Description", { type: "textarea", rows: 3 }) +
-          itemField("work", i, "tags", "Tags", { hint: "comma-separated" }) +
-          imageryBlock(w, i) +
+          '<div class="workcard__name">' + escHtml(w.title || "Untitled project") + "</div>" +
           studyToggle(w, i) +
           "</div>";
       });
@@ -686,11 +690,13 @@
     if (!data.work[i]) return;
     if (!data.work[i].study) data.work[i].study = blankStudy();
     openStudy = i;
+    openBlock = -1;
     const w = data.work[i];
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
     l2body.innerHTML = studyEditor(w, i);
     body.hidden = true;
     l2.hidden = false;
+    if (root) root.classList.add("is-l2");
     requestAnimationFrame(function () { l2.classList.add("is-open"); });
     const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0;
     saveDraft();
@@ -706,9 +712,12 @@
   function closeL2(opts) {
     opts = opts || {};
     openStudy = -1;
+    openBlock = -1;
     if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
+    if (root) { root.classList.remove("is-l2"); root.classList.remove("is-preview"); }
     if (body) body.hidden = false;
     const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0;
+    const vt = root && root.querySelector("[data-view]"); if (vt) vt.textContent = "Preview";
     previewLanding();
     if (opts.render !== false) renderBody();
   }
@@ -832,9 +841,9 @@
     }
     if (act === "sv-remove") { (data.specialViews || []).splice(i, 1); saveDraft(true); renderBody(); return; }
     if (act === "sv-preview") { svPreview(i); return; }
-    if (act === "plate-sample") { data.work[i].theme = b.dataset.theme; data.work[i].image = ""; apply(true); renderBody(); status("Motion placeholder applied.", true); return; }
-    if (act === "img-clear") { data.work[i].image = ""; apply(true); renderBody(); status("Image removed."); return; }
-    if (act === "img-upload") { pickImage(function (uri) { data.work[i].image = uri; apply(true); renderBody(); status("Image uploaded.", true); }); return; }
+    if (act === "plate-sample") { data.work[i].theme = b.dataset.theme; data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Motion placeholder applied.", true); return; }
+    if (act === "img-clear") { data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Image removed."); return; }
+    if (act === "img-upload") { pickImage(function (uri) { data.work[i].image = uri; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Image uploaded.", true); }); return; }
     if (act === "img-generate") { imgGenerate(i); return; }
     if (act === "img-modify") { imgModify(i); return; }
     if (act === "resume-upload") { pickResume(function (uri) { setPath(data, "contact.resume", uri); apply(true); renderBody(); status("R\u00e9sum\u00e9 embedded \u2014 the dock button is now visible.", true); }); return; }
@@ -855,17 +864,23 @@
     if (act === "csgen-ref-toggle") { const wrap = b.closest(".csgen__ref"); if (wrap) { const open = wrap.classList.toggle("is-open"); b.textContent = (open ? "\u2212" : "+") + " Paste a reference case study to echo (optional)"; const cw = data.work[i]; if (cw) csgenState(cw.id).refShow = open; } return; }
     if (act === "study-toggle") { openL2(i); return; }
     if (act === "study-close") { closeL2(); return; }
+    if (act === "study-blocktoggle") {
+      const j = +b.dataset.bindex;
+      openBlock = (openBlock === j) ? -1 : j;
+      const wrap = b.closest(".study__blocks");
+      if (wrap) wrap.querySelectorAll(".study__block").forEach(function (x, k) { x.classList.toggle("is-open", k === openBlock); });
+      return;
+    }
     if (act === "study-addblock") {
       const st = data.work[i].study || (data.work[i].study = blankStudy());
       st.blocks = st.blocks || [];
       st.blocks.push(blankBlock(b.dataset.type));
+      openBlock = st.blocks.length - 1;
       saveDraft(true); renderL2(); return;
     }
-    if (act === "study-blockup") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j > 0) { [s[j - 1], s[j]] = [s[j], s[j - 1]]; saveDraft(true); renderL2(); } return; }
-    if (act === "study-blockdown") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j < s.length - 1) { [s[j + 1], s[j]] = [s[j], s[j + 1]]; saveDraft(true); renderL2(); } return; }
-    if (act === "study-blockremove") { data.work[i].study.blocks.splice(+b.dataset.bindex, 1); saveDraft(true); renderL2(); return; }
-    if (act === "study-cover-upload") { pickImage(function (uri) { const st = data.work[i].study || (data.work[i].study = blankStudy()); st.cover = uri; saveDraft(true); renderL2(); status("Cover set.", true); }); return; }
-    if (act === "study-cover-clear") { if (data.work[i].study) data.work[i].study.cover = ""; saveDraft(true); renderL2(); return; }
+    if (act === "study-blockup") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j > 0) { [s[j - 1], s[j]] = [s[j], s[j - 1]]; if (openBlock === j) openBlock = j - 1; else if (openBlock === j - 1) openBlock = j; saveDraft(true); renderL2(); } return; }
+    if (act === "study-blockdown") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j < s.length - 1) { [s[j + 1], s[j]] = [s[j], s[j + 1]]; if (openBlock === j) openBlock = j + 1; else if (openBlock === j + 1) openBlock = j; saveDraft(true); renderL2(); } return; }
+    if (act === "study-blockremove") { const j = +b.dataset.bindex; data.work[i].study.blocks.splice(j, 1); if (openBlock === j) openBlock = -1; else if (openBlock > j) openBlock--; saveDraft(true); renderL2(); return; }
     if (act === "study-preview") { saveDraft(true); window.open("/work/" + data.work[i].id, "_blank", "noopener"); status("Opened the case study in a new tab (using your draft)."); return; }
     if (act === "add") { data[list].push(blank(list)); apply(true); renderBody(); }
     else if (act === "remove") { data[list].splice(i, 1); apply(true); renderBody(); }
@@ -1111,7 +1126,7 @@
     status("Generating image\u2026 this can take a moment.");
     try {
       const uri = await compressDataUri(await aiImage(cfg, p, null));
-      data.work[i].image = uri; apply(true); renderBody(); status("Image generated.", true);
+      data.work[i].image = uri; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Image generated.", true);
     } catch (e) { status("Generate failed: " + e.message); }
   }
   async function imgModify(i) {
@@ -1125,7 +1140,7 @@
     status("Reimagining the image\u2026");
     try {
       const uri = await compressDataUri(await aiImage(cfg, p, cur));
-      data.work[i].image = uri; apply(true); renderBody(); status("Image updated.", true);
+      data.work[i].image = uri; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Image updated.", true);
     } catch (e) { status("Modify failed: " + e.message); }
   }
   async function aiImage(cfg, prompt, sourceImage) {
@@ -1660,8 +1675,9 @@
     root.querySelector("[data-exit]").addEventListener("click", exit);
     root.querySelector("[data-l2-back]").addEventListener("click", () => closeL2());
     root.querySelector("[data-view]").addEventListener("click", (e) => {
-      root.classList.toggle("is-preview");
-      e.currentTarget.textContent = root.classList.contains("is-preview") ? "Edit" : "Preview";
+      const on = root.classList.toggle("is-preview");
+      e.currentTarget.textContent = on ? "Edit" : "Preview";
+      if (on) { if (openStudy >= 0 && data.work[openStudy]) previewProject(data.work[openStudy].id, false); else previewLanding(); }
     });
     frame.addEventListener("load", previewApply);
     document.addEventListener("keydown", onKey);

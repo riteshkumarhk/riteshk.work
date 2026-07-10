@@ -354,9 +354,38 @@ body.adm-lock .cursor { display: none !important; }
 .study__editbtn.is-open:hover { background: none; color: var(--text); border-color: var(--accent); }
 .study__previewbtn { flex: 0 0 auto; }
 .study__meta { font-family: var(--mono); font-size: .62rem; color: var(--text-faint); flex: 0 0 auto; }
-.study__panel { margin-top: .9rem; padding: 1rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); }
-.study__blocks { margin-top: .4rem; }
-.study__block { background: var(--bg-elev); }
+/* ---------- L2 (case study) — full-width, focused editor ---------- */
+.adm.is-l2 .adm__main { grid-template-columns: 1fr; }
+.adm.is-l2 .adm__preview { display: none; }
+.adm.is-l2 .adm__editor { border-right: 0; }
+.adm.is-l2 .adm__viewtoggle { display: inline-block; }
+.adm.is-l2 .adm__l2 { max-width: 900px; }
+.adm.is-l2.is-preview .adm__editor { display: none; }
+.adm.is-l2.is-preview .adm__preview { display: flex; }
+
+.study__panel { margin-top: .3rem; padding: 0; border: 0; background: none; }
+.l2grp { border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem 1.1rem; margin-bottom: 1rem; background: var(--bg-2); }
+.l2grp__head { font-family: var(--mono); font-size: .64rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); margin-bottom: .85rem; }
+.l2grp__head span { color: var(--text-faint); text-transform: none; letter-spacing: 0; }
+
+/* sections accordion — one section at a time */
+.study__blocks { margin-top: .2rem; display: flex; flex-direction: column; gap: .5rem; }
+.study__block { margin: 0; padding: 0; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.study__block-head { display: flex; align-items: center; gap: .6rem; padding: .6rem .75rem; cursor: pointer; -webkit-user-select: none; user-select: none; }
+.study__block-head:hover { background: rgba(255, 255, 255, .02); }
+.study__block-badge { font-family: var(--mono); font-size: .58rem; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--line); border-radius: 5px; padding: .16rem .4rem; flex: 0 0 auto; }
+.study__block-label { flex: 1 1 auto; min-width: 0; font-size: .85rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.study__block-ops { display: flex; gap: .2rem; flex: 0 0 auto; opacity: 0; transition: opacity .2s; }
+.study__block-head:hover .study__block-ops, .study__block.is-open .study__block-ops { opacity: 1; }
+.study__block-chev { flex: 0 0 auto; color: var(--text-faint); font-size: 1.1rem; line-height: 1; transition: transform .25s var(--ease), color .25s; }
+.study__block.is-open .study__block-chev { transform: rotate(90deg); color: var(--accent); }
+.study__block-body { display: none; padding: .35rem .85rem 1rem; border-top: 1px solid var(--line); }
+.study__block.is-open .study__block-body { display: block; }
+.study__block-body .af:last-child { margin-bottom: 0; }
+
+/* compact work card (L1) */
+.workcard__name { font-family: var(--serif); font-weight: 300; font-size: 1.05rem; color: var(--text); margin: .5rem 0 .2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workcard__feat { margin-bottom: .7rem; }
 .study__add { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .8rem; }
 .study__addbtn { width: auto; flex: 1 1 28%; margin-top: 0; }
 .study__foot { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .9rem; }
