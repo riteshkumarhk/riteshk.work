@@ -161,7 +161,10 @@
     if (mail) mail.setAttribute("href", "mailto:" + (C.email || ""));
     set("contactRow",
       '<a href="mailto:' + esc(C.email) + '" class="contact__pill" data-cursor="hover">' + esc(C.email) + "</a>" +
-      (C.phone ? '<a href="tel:' + esc(C.phoneRaw || "") + '" class="contact__pill" data-cursor="hover">' + esc(C.phone) + "</a>" : ""));
+      (C.phone ? '<a href="tel:' + esc(C.phoneRaw || "") + '" class="contact__pill" data-cursor="hover">' + esc(C.phone) + "</a>" : "") +
+      (C.resume ? '<a id="contactResume" href="' + (/^data:/.test(C.resume) ? "#" : esc(C.resume)) + '" class="contact__pill contact__pill--resume" data-cursor="hover">R\u00e9sum\u00e9 \u2193</a>' : ""));
+    const cRes = byId("contactResume");
+    if (cRes) cRes.onclick = function (e) { e.preventDefault(); openResume(C.resume); };
 
     set("menuFoot",
       '<a href="mailto:' + esc(C.email) + '">' + esc(C.email) + "</a>" +

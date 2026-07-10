@@ -511,6 +511,8 @@ main, .footer { transition: opacity .45s ease; }
   transition: color .4s, border-color .4s, background .4s;
 }
 .contact__pill:hover { color: var(--text); border-color: var(--accent); background: var(--line-soft); }
+.contact__pill--resume { color: var(--accent); border-color: var(--accent); }
+.contact__pill--resume:hover { color: #0a0a0a; background: var(--accent); border-color: var(--accent); }
 
 /* =================================================================
    FOOTER
