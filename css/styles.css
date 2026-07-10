@@ -553,7 +553,7 @@ main, .footer { transition: opacity .45s ease; }
 .footer__links { display: flex; flex-direction: column; gap: .6rem; text-align: right; }
 .footer__links a { font-family: var(--mono); font-size: .82rem; color: var(--text-dim); transition: color .35s; }
 .footer__links a:hover { color: var(--accent); }
-.footer__bottom { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; padding-top: 1.5rem; border-top: 1px solid var(--line-soft); font-family: var(--mono); font-size: .7rem; letter-spacing: .04em; color: var(--text-faint); }
+.footer__bottom { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; font-family: var(--mono); font-size: .7rem; letter-spacing: .04em; color: var(--text-faint); }
 .footer__back { transition: color .35s; }
 .footer__back:hover { color: var(--text); }
 

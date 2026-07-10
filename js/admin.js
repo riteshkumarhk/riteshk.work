@@ -18,9 +18,9 @@
   const MUSIC_ON_KEY = "rk:music:on";
   const MUSIC_TRACK_KEY = "rk:music:track";
   const DEFAULT_TRACKS = [
-    { title: "After Hours", src: "/audio/1.mp3" },
-    { title: "Velvet", src: "/audio/2.mp3" },
-    { title: "Slow Burn", src: "/audio/3.mp3" }
+    { title: "Midnight", gen: "midnight" },
+    { title: "Ember Glow", gen: "ember" },
+    { title: "Undertow", gen: "undertow" }
   ];
   const MUS_ICON = {
     play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
@@ -1313,69 +1313,122 @@
   }
 
   /* ---------- control menu (clock flyout) ---------- */
-  /* ---------- ambient music player ---------- */
-  let audioEl = null, musCur = 0, musArmed = false;
+  /* ---------- ambient music player (Web Audio synth, with optional audio files) ---------- */
+  let audioEl = null, synth = null, musCur = 0, musArmed = false, musPlaying = false, musLastLight = null;
   function musTracks() {
     var m = window.RK && window.RK.data && window.RK.data.music;
-    var ok = Array.isArray(m) ? m.filter(function (t) { return t && t.src; }) : [];
+    var ok = Array.isArray(m) ? m.filter(function (t) { return t && (t.src || t.gen); }) : [];
     return ok.length ? ok : DEFAULT_TRACKS;
   }
-  function musEnsure() {
+  function musCurTrack() { var l = musTracks(); return l[musCur] || l[0]; }
+  function musDefaultTrack() {
+    var light = window.__theme ? window.__theme.isLight() : (document.documentElement.getAttribute("data-appearance") === "light");
+    return Math.min(light ? 1 : 0, Math.max(0, musTracks().length - 1));
+  }
+  /* Evolving low ambient pad synthesised in the browser — one preset per mood. */
+  function makeSynth() {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    var ctx, master, filter, lfo, lfoGain, voices = [], vol = 0.15;
+    var P = {
+      midnight: { f: [55, 82.41, 110, 164.81], t: "sine", cut: 520, vol: 0.16, sweep: 240, rate: 0.05 },
+      ember: { f: [65.41, 98, 130.81, 196], t: "triangle", cut: 780, vol: 0.14, sweep: 320, rate: 0.07 },
+      undertow: { f: [49, 73.42, 98, 130.81], t: "sine", cut: 400, vol: 0.17, sweep: 300, rate: 0.04 }
+    };
+    function build() {
+      ctx = new Ctx();
+      master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
+      filter = ctx.createBiquadFilter(); filter.type = "lowpass"; filter.frequency.value = 600; filter.Q.value = 4; filter.connect(master);
+      lfo = ctx.createOscillator(); lfo.type = "sine"; lfo.frequency.value = 0.05;
+      lfoGain = ctx.createGain(); lfoGain.gain.value = 250; lfo.connect(lfoGain); lfoGain.connect(filter.frequency); lfo.start();
+    }
+    function preset(name) {
+      if (!ctx) build();
+      var p = P[name] || P.midnight;
+      voices.forEach(function (o) { try { o.stop(); } catch (e) {} }); voices = [];
+      p.f.forEach(function (freq, i) {
+        var o = ctx.createOscillator(); o.type = p.t; o.frequency.value = freq; o.detune.value = (i % 2 ? 6 : -6) * (i + 1);
+        var g = ctx.createGain(); g.gain.value = 1 / (p.f.length + 1);
+        o.connect(g); g.connect(filter); o.start(); voices.push(o);
+      });
+      filter.frequency.value = p.cut; lfoGain.gain.value = p.sweep; lfo.frequency.value = p.rate; vol = p.vol;
+    }
+    return {
+      play: function (name) { if (!ctx) build(); if (name) preset(name); else if (!voices.length) preset("midnight"); if (ctx.state === "suspended") ctx.resume(); master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setTargetAtTime(vol, ctx.currentTime, 1.4); },
+      pause: function () { if (!ctx) return; master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setTargetAtTime(0, ctx.currentTime, 0.5); },
+      set: function (name) { preset(name); },
+      running: function () { return !!ctx && ctx.state === "running"; }
+    };
+  }
+  function synthEnsure() { if (synth === null) synth = makeSynth(); return synth; }
+  function audioEnsure() {
     if (audioEl) return audioEl;
-    audioEl = new Audio();
-    audioEl.preload = "auto";
-    audioEl.volume = 0.55;
-    audioEl.addEventListener("ended", function () { musLoad(musCur + 1, true); });
-    ["play", "pause", "error"].forEach(function (ev) { audioEl.addEventListener(ev, musSync); });
+    audioEl = new Audio(); audioEl.preload = "auto"; audioEl.volume = 0.55; audioEl.loop = true;
+    audioEl.addEventListener("error", musSync);
     return audioEl;
   }
+  function musStop() { if (audioEl) audioEl.pause(); if (synth) synth.pause(); }
   function musLoad(i, play) {
     var list = musTracks(); if (!list.length) return;
     musCur = ((i % list.length) + list.length) % list.length;
-    var a = musEnsure();
-    var src = list[musCur].src;
-    if (a.getAttribute("src") !== src) a.src = src;
     try { localStorage.setItem(MUSIC_TRACK_KEY, String(musCur)); } catch (e) {}
-    if (play) musPlay();
-    musSync();
+    var t = list[musCur];
+    if (t.src) { var a = audioEnsure(); if (a.getAttribute("src") !== t.src) a.src = t.src; if (synth) synth.pause(); }
+    else { if (audioEl) audioEl.pause(); var s = synthEnsure(); if (s) s.set(t.gen || "midnight"); }
+    if (play) musPlay(); else musSync();
   }
   function musArm() {
     if (musArmed) return; musArmed = true;
     var go = function () {
       musArmed = false;
       ["pointerdown", "keydown", "touchstart"].forEach(function (ev) { document.removeEventListener(ev, go, true); });
-      if (localStorage.getItem(MUSIC_ON_KEY) !== "0") { var a = musEnsure(); var p = a.play(); if (p && p.catch) p.catch(function () {}); }
+      if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musPlay();
     };
     ["pointerdown", "keydown", "touchstart"].forEach(function (ev) { document.addEventListener(ev, go, true); });
   }
   function musPlay() {
-    var a = musEnsure();
-    if (!a.getAttribute("src")) musLoad(musCur, false);
+    var t = musCurTrack(); if (!t) return;
     try { localStorage.setItem(MUSIC_ON_KEY, "1"); } catch (e) {}
-    var p = a.play();
-    if (p && p.catch) p.catch(function () { musArm(); });
-  }
-  function musPause() {
-    if (audioEl) audioEl.pause();
-    try { localStorage.setItem(MUSIC_ON_KEY, "0"); } catch (e) {}
+    musPlaying = true;
+    if (t.src) {
+      if (synth) synth.pause();
+      var a = audioEnsure();
+      var p = a.play();
+      if (p && p.catch) p.catch(function () { musArm(); });
+    } else {
+      if (audioEl) audioEl.pause();
+      var s = synthEnsure();
+      if (!s) { musArm(); musSync(); return; }
+      s.play(t.gen || "midnight");
+      if (!s.running()) musArm();
+    }
     musSync();
   }
-  function musToggle() { var a = musEnsure(); if (a.paused) musPlay(); else musPause(); }
+  function musPause() { musStop(); musPlaying = false; try { localStorage.setItem(MUSIC_ON_KEY, "0"); } catch (e) {} musSync(); }
+  function musToggle() { if (musPlaying) musPause(); else musPlay(); }
   function musSync() {
     if (!menuEl) return;
-    var playing = !!(audioEl && !audioEl.paused && !audioEl.ended);
     var btn = menuEl.querySelector('[data-mus="toggle"]');
-    if (btn) { btn.innerHTML = playing ? MUS_ICON.pause : MUS_ICON.play; btn.setAttribute("aria-label", playing ? "Pause" : "Play"); }
+    if (btn) { btn.innerHTML = musPlaying ? MUS_ICON.pause : MUS_ICON.play; btn.setAttribute("aria-label", musPlaying ? "Pause" : "Play"); }
     var title = menuEl.querySelector(".mus__title");
-    if (title) { var t = musTracks()[musCur]; title.textContent = (t && t.title) || "Ambient"; }
+    if (title) { var t = musCurTrack(); title.textContent = (t && t.title) || "Ambient"; }
     var sub = menuEl.querySelector(".mus__sub");
-    if (sub) sub.textContent = (audioEl && audioEl.error) ? "Add tracks to /audio/" : "Deep ambient \u00b7 loops";
+    if (sub) { var ct = musCurTrack(); sub.textContent = (ct && ct.src && audioEl && audioEl.error) ? "Track unavailable" : "Deep ambient \u00b7 loops"; }
+  }
+  function musThemeChange(e) {
+    var light = (e && e.detail && typeof e.detail.light === "boolean") ? e.detail.light : (window.__theme ? window.__theme.isLight() : false);
+    if (musLastLight === light) return;
+    musLastLight = light;
+    var target = Math.min(light ? 1 : 0, musTracks().length - 1);
+    if (target === musCur) { musSync(); return; }
+    musLoad(target, musPlaying);
   }
   function musInit() {
-    try { musCur = parseInt(localStorage.getItem(MUSIC_TRACK_KEY), 10) || 0; } catch (e) { musCur = 0; }
-    var list = musTracks(); if (!list.length) return;
-    if (musCur < 0 || musCur >= list.length) musCur = 0;
+    if (!musTracks().length) return;
+    musLastLight = window.__theme ? window.__theme.isLight() : (document.documentElement.getAttribute("data-appearance") === "light");
+    musCur = musDefaultTrack();
     musLoad(musCur, false);
+    window.addEventListener("theme:change", musThemeChange);
     if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musPlay();
   }
 
@@ -1429,8 +1482,8 @@
     if (mus) {
       const m = mus.dataset.mus;
       if (m === "toggle") musToggle();
-      else if (m === "next") musLoad(musCur + 1, true);
-      else if (m === "prev") musLoad(musCur - 1, true);
+      else if (m === "next") musLoad(musCur + 1, musPlaying);
+      else if (m === "prev") musLoad(musCur - 1, musPlaying);
       return;
     }
     const th = e.target.closest(".cmenu__theme");

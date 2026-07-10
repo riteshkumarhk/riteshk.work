@@ -167,6 +167,7 @@
     set("contactRow",
       '<a href="mailto:' + esc(C.email) + '" class="contact__pill" data-cursor="hover">' + esc(C.email) + "</a>" +
       (C.phone ? '<a href="tel:' + esc(C.phoneRaw || "") + '" class="contact__pill" data-cursor="hover">' + esc(C.phone) + "</a>" : "") +
+      (C.linkedin ? '<a href="' + esc(C.linkedin) + '" class="contact__pill" target="_blank" rel="noopener" data-cursor="hover">LinkedIn \u2197</a>' : "") +
       (C.resume ? '<a id="contactResume" href="' + (/^data:/.test(C.resume) ? "#" : esc(C.resume)) + '" class="contact__pill contact__pill--resume" data-cursor="hover">R\u00e9sum\u00e9 \u2193</a>' : ""));
     const cRes = byId("contactResume");
     if (cRes) cRes.onclick = function (e) { e.preventDefault(); openResume(C.resume); };
@@ -175,13 +176,7 @@
       '<a href="mailto:' + esc(C.email) + '">' + esc(C.email) + "</a>" +
       '<a href="' + esc(C.linkedin) + '" target="_blank" rel="noopener">LinkedIn</a>');
 
-    const site = String(C.website || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
-    set("footerLinks",
-      '<a href="' + esc(C.linkedin) + '" target="_blank" rel="noopener" data-cursor="hover">LinkedIn ↗</a>' +
-      '<a href="' + esc(C.website) + '" target="_blank" rel="noopener" data-cursor="hover">' + esc(site) + " ↗</a>" +
-      '<a href="mailto:' + esc(C.email) + '" data-cursor="hover">Email ↗</a>');
-
-    // ---- floating dock (bottom-left): résumé (conditional) · email · phone ----
+    // ---- floating dock (bottom-left): linkedin · résumé (conditional) · email · phone ----
     const dEmail = byId("dockEmail");
     if (dEmail) dEmail.setAttribute("href", "mailto:" + (C.email || ""));
     const dPhone = byId("dockPhone");
@@ -199,6 +194,11 @@
         dRes.hidden = true;
         dRes.onclick = null;
       }
+    }
+    const dLi = byId("dockLinkedin");
+    if (dLi) {
+      if (C.linkedin) { dLi.setAttribute("href", C.linkedin); dLi.hidden = false; }
+      else dLi.hidden = true;
     }
   }
 

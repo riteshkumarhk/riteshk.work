@@ -16,22 +16,24 @@
         if (m === "local") { var h = new Date().getHours(); return h >= 7 && h < 19; }
         return mql ? mql.matches : false;
       }
-      var timer = 0;
+      var timer = 0, lastLit = null;
       function apply(m) {
         m = m || mode();
         var el = document.documentElement;
-        el.setAttribute("data-appearance", light(m) ? "light" : "dark");
+        var lit = light(m);
+        el.setAttribute("data-appearance", lit ? "light" : "dark");
         el.setAttribute("data-theme-mode", m);
+        if (lastLit !== lit) { var was = lastLit !== null; lastLit = lit; if (was) emit(); }
       }
       function schedule() { clearInterval(timer); if (mode() === "local") timer = setInterval(function () { apply(); }, 60000); }
       function emit() { try { window.dispatchEvent(new CustomEvent("theme:change", { detail: { mode: mode(), light: light() } })); } catch (e) {} }
       window.__theme = {
         mode: mode,
         isLight: function () { return light(); },
-        set: function (m) { try { localStorage.setItem(KEY, m); } catch (e) {} apply(m); schedule(); emit(); },
+        set: function (m) { try { localStorage.setItem(KEY, m); } catch (e) {} apply(m); schedule(); },
         apply: apply
       };
-      if (mql) { var onSys = function () { if (mode() === "system") { apply(); emit(); } }; mql.addEventListener ? mql.addEventListener("change", onSys) : mql.addListener(onSys); }
+      if (mql) { var onSys = function () { if (mode() === "system") apply(); }; mql.addEventListener ? mql.addEventListener("change", onSys) : mql.addListener(onSys); }
       apply(); schedule();
     })();
   </script>
@@ -223,10 +225,6 @@
 
   <!-- ============ FOOTER ============ -->
   <footer class="footer">
-    <div class="footer__top">
-      <span class="footer__big">Ritesh Kumar</span>
-      <div class="footer__links" id="footerLinks"></div>
-    </div>
     <div class="footer__bottom">
       <span>Hyderabad, India</span>
       <span>© <span id="year">2026</span> — Designed &amp; built with intent</span>
@@ -236,6 +234,9 @@
 
   <!-- Floating quick-contact dock (bottom-left) -->
   <div class="dock" id="dock" aria-label="Quick contact">
+    <a class="dock__btn" id="dockLinkedin" data-label="LinkedIn" data-cursor="hover" href="#" target="_blank" rel="noopener" aria-label="LinkedIn" hidden>
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor" aria-hidden="true"><path d="M4.98 3.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM3.2 9h3.6v11.5H3.2zM9 9h3.45v1.57h.05c.48-.9 1.65-1.85 3.4-1.85 3.64 0 4.3 2.4 4.3 5.5v6.28h-3.6v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9z"/></svg>
+    </a>
     <a class="dock__btn" id="dockResume" data-label="Résumé" data-cursor="hover" href="#" target="_blank" rel="noopener" aria-label="Open résumé" hidden>
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
     </a>
