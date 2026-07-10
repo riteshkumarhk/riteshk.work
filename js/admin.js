@@ -17,6 +17,7 @@
   const THEME_KEY = "rk:theme";
   const MUSIC_ON_KEY = "rk:music:on";
   const MUSIC_TRACK_KEY = "rk:music:track";
+  const MENU_SEEN_KEY = "rk:menu:seen";
   const DEFAULT_TRACKS = [
     { title: "Midnight", gen: "midnight" },
     { title: "Ember Glow", gen: "ember" },
@@ -1461,6 +1462,8 @@
     positionMenu();
     musSync();
     if (!musOpened) { musOpened = true; if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musPlay(); }
+    try { localStorage.setItem(MENU_SEEN_KEY, "1"); } catch (e) {}
+    var mw = document.querySelector(".nav__morewrap"); if (mw) mw.classList.remove("is-hint");
     menuEl.addEventListener("click", onMenuClick);
     window.addEventListener("resize", positionMenu);
     setTimeout(function () { document.addEventListener("click", onDocClick); }, 0);
@@ -1554,6 +1557,8 @@
     if (clock) clock.addEventListener("click", toggleMenu);
     const more = document.getElementById("moreBtn");
     if (more) more.addEventListener("click", toggleMenu);
+    const mw = more && more.closest(".nav__morewrap");
+    if (mw && localStorage.getItem(MENU_SEEN_KEY) !== "1") mw.classList.add("is-hint");
     musInit();
   }
   if (window.__siteRendered) init();
