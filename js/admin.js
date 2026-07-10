@@ -810,14 +810,14 @@
     try {
       let sha;
       const getRes = await fetch(GH_API + "?ref=" + GH_BRANCH + "&t=" + Date.now(), { headers: ghHeaders(token) });
-      if (getRes.status === 401 || getRes.status === 403) { publishModal("That token was rejected. Paste a token with Contents write access to this repo, or publish manually."); return; }
+      if (getRes.status === 401 || getRes.status === 403) { authFailed(); return; }
       if (getRes.ok) { const j = await getRes.json(); sha = j.sha; }
       else if (getRes.status !== 404) throw new Error("read HTTP " + getRes.status);
       const body = { message: "Update content.json via admin", content: b64(json), branch: GH_BRANCH };
       if (sha) body.sha = sha;
       const putRes = await fetch(GH_API, { method: "PUT", headers: ghHeaders(token), body: JSON.stringify(body) });
       const pj = await putRes.json().catch(() => ({}));
-      if (putRes.status === 401 || putRes.status === 403) { publishModal("That token can\u2019t write to this repo. Use a token with Contents: write, or publish manually."); return; }
+      if (putRes.status === 401 || putRes.status === 403) { authFailed(); return; }
       if (!putRes.ok) throw new Error((pj && pj.message) || ("HTTP " + putRes.status));
       // Success: this data is now the published content — clear the draft so it can't go stale.
       localStorage.removeItem(DRAFT_KEY);
@@ -825,8 +825,15 @@
       if (window.RK) { window.RK.published = clone(data); if (window.RK.sig) window.RK.publishedSig = window.RK.sig(JSON.stringify(data)); }
       status("Published \u2014 your site updates in about a minute.", true);
     } catch (e) {
-      status("Publish failed: " + (e && e.message) + " \u2014 try again, or use Publish manually.");
+      // Transient/network hiccup — keep the connection, just ask them to retry.
+      status("Couldn\u2019t reach GitHub just now. Hit Publish again to retry.");
     }
+  }
+
+  // GitHub rejected the saved token: drop it so the next Publish re-prompts sign-in.
+  function authFailed() {
+    localStorage.removeItem(GH_TOKEN_KEY);
+    status("GitHub didn\u2019t accept that sign-in. Hit Publish again to reconnect.");
   }
 
   function publishManual() {
@@ -848,15 +855,15 @@
     const modal = document.createElement("div");
     modal.className = "pass";
     modal.innerHTML =
-      '<div class="pass__box"><div class="pass__title">Publish</div>' +
+      '<div class="pass__box"><div class="pass__title">Sign in to GitHub to publish</div>' +
       '<div class="pass__sub">' + (msg ? escHtml(msg) :
-        "One-click publish commits <b>content.json</b> straight to your repo. Paste a GitHub token with <b>Contents: write</b> on this repo \u2014 it\u2019s stored only in this browser and sent only to GitHub.") + "</div>" +
+        "Publishing saves your changes straight to your live site. Connect once with a GitHub token that has <b>Contents: write</b> on this repo \u2014 it\u2019s stored only in this browser and sent only to GitHub. After that, Publish is one click.") + "</div>" +
       '<input type="password" placeholder="' + (saved ? "Saved \u2014 paste to replace" : "GitHub token (github_pat_\u2026 or ghp_\u2026)") + '" autocomplete="off" />' +
       '<div class="pass__err"></div>' +
-      '<div class="pass__actions"><button class="btn btn--ghost" data-manual>Publish manually</button>' +
-      '<button class="btn btn--primary" data-go>Publish now</button></div>' +
+      '<div class="pass__actions"><button class="btn btn--primary" data-go>Connect &amp; publish</button></div>' +
+      '<button class="pass__link" data-manual>Publish manually instead</button>' +
       (saved ? '<button class="pass__link" data-forget>Forget saved token</button>' : "") +
-      '<div class="pass__note">Tip: use a fine-grained token limited to this one repository, with Contents: Read and write.</div></div>';
+      '<div class="pass__note">Tip: create a fine-grained token limited to this one repository, with Contents: Read and write.</div></div>';
     document.body.appendChild(modal);
     const inp = modal.querySelector("input"), err = modal.querySelector(".pass__err");
     setTimeout(() => { try { inp.focus(); } catch (e) {} }, 30);
@@ -868,10 +875,10 @@
     function go() {
       const typed = inp.value.trim();
       const t = typed || saved;
-      if (!t) { err.textContent = "Paste a token, or choose Publish manually."; return; }
+      if (!t) { err.textContent = "Paste a token to connect, or choose Publish manually."; return; }
       if (typed) localStorage.setItem(GH_TOKEN_KEY, typed);
       done();
-      ghPublish(t);
+      ghPublish(t);   // once connected, publish runs automatically
     }
     modal.querySelector("[data-go]").addEventListener("click", go);
     modal.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); if (e.key === "Escape") done(); });
