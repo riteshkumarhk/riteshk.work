@@ -16,27 +16,32 @@
   "highlights": [
     { "value": "11+", "label": "Years of craft" },
     { "value": "Billions", "label": "Windows sign-ins supported" },
-    { "value": "Millions", "label": "Edge customers reached" },
-    { "value": "6+", "label": "Awards & recognitions" }
+    { "value": "689M+", "label": "Consented Microsoft accounts" },
+    { "value": "26M", "label": "New devices reached monthly" },
+    { "value": "6M+", "label": "Monthly Search users" },
+    { "value": "$15M", "label": "Game Pass revenue influenced" },
+    { "value": "136K", "label": "New Game Pass subscriptions" },
+    { "value": "175K+", "label": "Passkeys in the first 10 days" }
   ],
   "capabilities": [
     "Growth Strategy",
     "Product Strategy",
+    "Personalization",
     "User Acquisition",
     "Activation & Onboarding",
     "Retention & Engagement",
+    "Conversion Optimization",
     "Experimentation",
-    "AI Product Design",
-    "Generative AI",
-    "AI Prototyping",
-    "Agentic Workflows",
+    "Subscription Growth",
     "Identity & Authentication",
-    "Personalization",
     "Consumer Product Design",
     "Cross-functional Leadership",
+    "AI Product Design",
     "Data-Informed Design",
-    "Accessibility",
-    "Stakeholder Management"
+    "Stakeholder Management",
+    "Generative AI",
+    "AI Prototyping",
+    "Agentic Workflows"
   ],
   "work": [
     {
@@ -203,28 +208,35 @@
       "present": true,
       "role": "Senior Designer — Edge Growth",
       "org": "Microsoft AI · Microsoft Corporation",
-      "desc": "Leading growth design across onboarding, activation, retention and personalization. Owning Edge's First Run Experience and influencing roadmap through experimentation and customer insight."
+      "desc": "Leading growth design for Edge's First Run Experience — onboarding, activation and personalization across 26M new devices a month."
     },
     {
-      "years": "2021 — 2024",
+      "years": "2022 — 2024",
       "present": false,
       "role": "Senior Designer — Windows Auth & Identity",
       "org": "Microsoft Corporation · FIDO Alliance Member",
-      "desc": "Advanced Microsoft's passwordless strategy through Windows Hello, Microsoft Account, FIDO and Passkeys. Represented Microsoft at Authenticate 2024."
+      "desc": "Advanced Microsoft's passwordless future — Windows Hello, Passkeys and Unified Consent for 689M+ consented accounts."
+    },
+    {
+      "years": "2021 — 2022",
+      "present": false,
+      "role": "Product Designer II — Xbox Game Pass",
+      "org": "Microsoft Corporation",
+      "desc": "Grew and retained Game Pass subscriptions through experimentation — 136K new subs and $15M influenced revenue."
     },
     {
       "years": "2019 — 2021",
       "present": false,
       "role": "Product Designer II — Microsoft Search (MSAI)",
       "org": "Microsoft Corporation",
-      "desc": "Designed AI-powered search and discovery across Outlook, Teams, SharePoint, Bing and Microsoft 365, championing inclusive and accessible design."
+      "desc": "Designed AI-powered search and answers across Microsoft 365 — reaching 6.2M monthly users and 2.0M answer interactions."
     },
     {
-      "years": "2015 — 2018",
+      "years": "2014 — 2018",
       "present": false,
       "role": "Designer — Automotive HMI",
       "org": "Jaguar Land Rover, UK · Tata Elxsi, India",
-      "desc": "Led UX for next-generation infotainment and connected-vehicle experiences — from HMI concepts to production-ready interaction models for premium platforms."
+      "desc": "Led UX for next-generation infotainment and connected-vehicle HMI — concepts through production-ready interaction models."
     }
   ],
   "recognition": [
