@@ -1031,40 +1031,46 @@
       : "your model id";
   }
   function aiGet(scope, k) { return localStorage.getItem("rk:ai:" + scope + ":" + k); }
+  function providerName(p) { const x = AI_PROVIDERS.find(function (a) { return a[0] === p; }); return x ? x[1] : p; }
+  function bestModel(p, purpose) { return ((purpose === "txt" ? AI_TEXT_MODEL[p] : AI_DEFAULT_MODEL[p]) || "").trim(); }
+  function aiSetProvider(scope, p) {
+    localStorage.setItem("rk:ai:" + scope + ":provider", p);
+    localStorage.removeItem("rk:ai:" + scope + ":model"); // known providers auto-pick the best; custom re-enters it
+    localStorage.removeItem("rk:ai:" + scope + ":base");
+    localStorage.removeItem("rk:ai:" + scope + ":key");
+  }
   function aiCfg(purpose) {
     const scope = aiScope(purpose);
     const p = aiGet(scope, "provider") || "openai";
     return {
       purpose: purpose || "img", scope: scope, provider: p,
       key: aiGet(scope, "key") || "",
-      model: (aiGet(scope, "model") || AI_DEFAULT_MODEL[p] || "").trim(),
+      model: (aiGet(scope, "model") || bestModel(p, purpose) || AI_DEFAULT_MODEL[p] || "").trim(),
       base: (aiGet(scope, "base") || AI_DEFAULT_BASE[p] || "").trim().replace(/\/+$/, ""),
     };
   }
   function aiBlock(scope, label, note) {
     const p = aiGet(scope, "provider") || "openai";
     const key = aiGet(scope, "key") || "";
-    const model = aiGet(scope, "model") || AI_DEFAULT_MODEL[p] || "";
-    const base = aiGet(scope, "base") || AI_DEFAULT_BASE[p] || "";
     const masked = key ? (key.slice(0, 3) + "\u2022\u2022\u2022\u2022\u2022\u2022" + key.slice(-4)) : "";
     const opts = AI_PROVIDERS.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === p ? " selected" : "") + ">" + x[1] + "</option>"; }).join("");
+    let advanced;
+    if (p === "custom") {
+      const model = aiGet(scope, "model") || "";
+      const base = aiGet(scope, "base") || "";
+      advanced = '<div class="af__row"><div class="af"><label class="af__label">Model</label><input type="text" id="aiModel_' + scope + '" value="' + escAttr(model) + '" placeholder="your-model-id" /><div class="af__hint">' + escHtml(modelHint(p)) + '</div></div>' +
+        '<div class="af"><label class="af__label">API base URL</label><input type="text" id="aiBase_' + scope + '" value="' + escAttr(base) + '" placeholder="https://\u2026/v1" /></div></div>';
+    } else {
+      advanced = '<div class="af__hint aiblk__auto">\u2728 Model &amp; endpoint are chosen automatically \u2014 always the best available for ' + escHtml(providerName(p)) + '.</div>';
+    }
     return '<div class="aiblk"><div class="aiblk__head">' + label + (note ? ' <span>' + note + "</span>" : "") + "</div>" +
       '<div class="af"><label class="af__label">Service</label><select id="aiProvider_' + scope + '" data-aiscope="' + scope + '">' + opts + "</select></div>" +
       '<div class="af"><label class="af__label">API key</label><input type="password" id="aiKey_' + scope + '" placeholder="' + (key ? "Saved \u2014 paste to replace" : "Paste your key") + '" autocomplete="off" /><div class="af__hint">' + (key ? ("In use: " + escHtml(masked)) : "Not set") + "</div></div>" +
-      '<div class="af__row"><div class="af"><label class="af__label">Model</label><input type="text" id="aiModel_' + scope + '" value="' + escAttr(model) + '" /><div class="af__hint">' + escHtml(modelHint(p)) + "</div></div>" +
-      '<div class="af"><label class="af__label">API base URL</label><input type="text" id="aiBase_' + scope + '" value="' + escAttr(base) + '" /></div></div></div>';
+      advanced + "</div>";
   }
   function aiPickProvider(scope, p) {
-    localStorage.setItem("rk:ai:" + scope + ":provider", p);
-    localStorage.setItem("rk:ai:" + scope + ":model", AI_DEFAULT_MODEL[p] || "");
-    localStorage.setItem("rk:ai:" + scope + ":base", AI_DEFAULT_BASE[p] || "");
-    localStorage.removeItem("rk:ai:" + scope + ":key");
-    const mEl = root.querySelector("#aiModel_" + scope);
-    if (mEl) { mEl.value = AI_DEFAULT_MODEL[p] || ""; const h = mEl.parentElement.querySelector(".af__hint"); if (h) h.textContent = modelHint(p); }
-    const bEl = root.querySelector("#aiBase_" + scope);
-    if (bEl) bEl.value = AI_DEFAULT_BASE[p] || "";
-    const kEl = root.querySelector("#aiKey_" + scope);
-    if (kEl) { kEl.value = ""; kEl.placeholder = "Paste your key"; const h = kEl.parentElement.querySelector(".af__hint"); if (h) h.textContent = "Not set"; }
+    aiSetProvider(scope, p);
+    if (activeTab === "ai") renderBody();
   }
   function aiPersistVisible() {
     ["all", "txt", "img"].forEach(function (scope) {
@@ -1074,8 +1080,13 @@
       localStorage.setItem("rk:ai:" + scope + ":provider", p);
       const k = root.querySelector("#aiKey_" + scope), m = root.querySelector("#aiModel_" + scope), bs = root.querySelector("#aiBase_" + scope);
       if (k && k.value.trim()) localStorage.setItem("rk:ai:" + scope + ":key", k.value.trim());
-      if (m) localStorage.setItem("rk:ai:" + scope + ":model", m.value.trim() || AI_DEFAULT_MODEL[p] || "");
-      if (bs) localStorage.setItem("rk:ai:" + scope + ":base", bs.value.trim() || AI_DEFAULT_BASE[p] || "");
+      if (p === "custom") {
+        if (m) localStorage.setItem("rk:ai:" + scope + ":model", m.value.trim());
+        if (bs) localStorage.setItem("rk:ai:" + scope + ":base", bs.value.trim());
+      } else {
+        localStorage.removeItem("rk:ai:" + scope + ":model");
+        localStorage.removeItem("rk:ai:" + scope + ":base");
+      }
     });
   }
   function aiSave() { aiPersistVisible(); renderBody(); status("AI settings saved \u2014 local only.", true); }
@@ -1226,25 +1237,11 @@
     function scopeNow() { return sameBox.checked ? "all" : (purpose || "img"); }
     function paint() {
       var scope = scopeNow();
-      var textScope = scope !== "all" && purpose !== "img"; // writing-only key -> default to a chat model
-      var defModel = function (p) { return (textScope ? AI_TEXT_MODEL[p] : AI_DEFAULT_MODEL[p]) || ""; };
-      var hintFor = function (p) { return textScope ? "e.g. gpt-4o, claude-3-5-sonnet, gemini-2.0-flash" : modelHint(p); };
       var label = scope === "all" ? "AI service" : (purpose === "img" ? "Image AI" : "Writing AI");
       var note = scope === "all" ? "content + image" : (purpose === "img" ? "imagery" : "text");
       holder.innerHTML = aiBlock(scope, label, note);
-      var mEl0 = holder.querySelector("#aiModel_" + scope), pNow = aiGet(scope, "provider") || "openai";
-      if (mEl0) {
-        if (!aiGet(scope, "model")) mEl0.value = defModel(pNow);
-        var h0 = mEl0.parentElement.querySelector(".af__hint"); if (h0) h0.textContent = hintFor(pNow);
-      }
       var sel = holder.querySelector("#aiProvider_" + scope);
-      if (sel) sel.addEventListener("change", function () {
-        var p = sel.value;
-        var m = holder.querySelector("#aiModel_" + scope), b = holder.querySelector("#aiBase_" + scope), k = holder.querySelector("#aiKey_" + scope);
-        if (m) { m.value = defModel(p); var h = m.parentElement.querySelector(".af__hint"); if (h) h.textContent = hintFor(p); }
-        if (b) b.value = AI_DEFAULT_BASE[p] || "";
-        if (k) k.value = "";
-      });
+      if (sel) sel.addEventListener("change", function () { aiSetProvider(scope, sel.value); paint(); });
     }
     paint();
     sameBox.addEventListener("change", paint);
@@ -1258,8 +1255,13 @@
       localStorage.setItem("rk:ai:" + scope + ":provider", p);
       var k = holder.querySelector("#aiKey_" + scope), m = holder.querySelector("#aiModel_" + scope), b = holder.querySelector("#aiBase_" + scope);
       if (k && k.value.trim()) localStorage.setItem("rk:ai:" + scope + ":key", k.value.trim());
-      if (m) localStorage.setItem("rk:ai:" + scope + ":model", m.value.trim() || AI_DEFAULT_MODEL[p] || "");
-      if (b) localStorage.setItem("rk:ai:" + scope + ":base", b.value.trim() || AI_DEFAULT_BASE[p] || "");
+      if (p === "custom") {
+        if (m) localStorage.setItem("rk:ai:" + scope + ":model", m.value.trim());
+        if (b) localStorage.setItem("rk:ai:" + scope + ":base", b.value.trim());
+      } else {
+        localStorage.removeItem("rk:ai:" + scope + ":model");
+        localStorage.removeItem("rk:ai:" + scope + ":base");
+      }
       if (!aiHasKey(purpose)) { err.textContent = "Paste a key to continue."; return; }
       close();
       if (onReady) onReady();

@@ -344,6 +344,7 @@ body.adm-lock .cursor { display: none !important; }
 .aiblk__head { font-family: var(--mono); font-size: .64rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text); margin-bottom: .7rem; }
 .aiblk__head span { color: var(--text-faint); text-transform: none; letter-spacing: 0; margin-left: .3rem; }
 .aiblk__same { margin-bottom: 1rem; }
+.aiblk__auto { color: var(--text-dim); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: .55rem .7rem; margin-top: .1rem; line-height: 1.5; }
 
 /* ---------- case study (L2) authoring ---------- */
 .study__toggle { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
