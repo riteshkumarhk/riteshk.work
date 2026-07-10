@@ -1870,7 +1870,7 @@
     }
     requestAnimationFrame(function () { el.classList.add("is-on"); });
     clearTimeout(soundToastTimer);
-    soundToastTimer = setTimeout(musToastHide, 3000);
+    soundToastTimer = setTimeout(musToastHide, 8000);
   }
   function musToastHide() {
     var el = document.querySelector(".soundtoast");

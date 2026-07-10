@@ -258,7 +258,7 @@
   /* -------------------------------------------------
      10. Hero title — subtle cursor parallax (mirrors the contact magnetic feel)
   ------------------------------------------------- */
-  if (!isTouch && !lite && !reduceMotion) {
+  if (!isTouch && !lite) {
     const heroSec = document.querySelector(".hero");
     const heroLines = heroSec ? heroSec.querySelectorAll(".hero__title .line") : [];
     if (heroSec && heroLines.length) {
@@ -267,8 +267,8 @@
         const hx = (e.clientX - (r.left + r.width / 2)) / r.width;
         const hy = (e.clientY - (r.top + r.height / 2)) / r.height;
         heroLines.forEach((line, i) => {
-          const depth = (i + 1) * 7;
-          line.style.transform = `translate(${(hx * depth).toFixed(2)}px, ${(hy * depth * 0.4).toFixed(2)}px)`;
+          const depth = (i + 1) * 16;
+          line.style.transform = `translate(${(hx * depth).toFixed(2)}px, ${(hy * depth * 0.5).toFixed(2)}px)`;
         });
       });
       heroSec.addEventListener("mouseleave", () => { heroLines.forEach((line) => { line.style.transform = ""; }); });
@@ -290,7 +290,7 @@
     } catch (e) { return false; }
     return true;
   };
-  if (!lite && !reduceMotion && bgCapable()) {
+  if (!lite && bgCapable()) {
     const canvas = document.createElement("canvas");
     canvas.className = "bg-field";
     canvas.setAttribute("aria-hidden", "true");

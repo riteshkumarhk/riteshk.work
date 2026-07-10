@@ -256,7 +256,7 @@ main, .footer { transition: opacity .45s ease; }
   font-size: clamp(2.9rem, 11.5vw, 10rem);
   line-height: 0.95; letter-spacing: -0.02em;
 }
-.hero__title .line { display: block; overflow: hidden; transition: transform .5s var(--ease-io); }
+.hero__title .line { display: block; overflow: hidden; transition: transform .22s var(--ease-io); }
 .hero__title .line > span { display: block; transform: translateY(105%); }
 .hero__title em { color: var(--accent); font-weight: 300; }
 
@@ -298,6 +298,19 @@ main, .footer { transition: opacity .45s ease; }
 @keyframes cueSpark { 0% { transform: translateY(4px) scale(.5); opacity: 0; } 25% { opacity: .95; } 100% { transform: translateY(-20px) scale(1); opacity: 0; } }
 @keyframes cueGlow { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
 @keyframes cueSparkAmbient { 0% { transform: translateY(3px) scale(.4); opacity: 0; } 32% { opacity: .5; } 100% { transform: translateY(-15px) scale(.85); opacity: 0; } }
+
+/* Alive gold accent text on the landing — a subtle twinkle + shimmer */
+.hero .accent { position: relative; }
+.hero .accent::after {
+  content: ""; position: absolute; top: -.1em; right: -.3em; width: .3em; height: .3em; border-radius: 50%;
+  color: var(--accent); background: radial-gradient(circle, currentColor 0%, rgba(0,0,0,0) 62%);
+  opacity: 0; pointer-events: none; animation: accentTwinkle 5.2s var(--ease-io) infinite;
+}
+.hero__now .accent::after { animation-delay: 2.6s; }
+.hero__title em { animation: accentShimmer 4.8s var(--ease-io) infinite; }
+@keyframes accentTwinkle { 0%, 100% { opacity: 0; transform: scale(.3); } 7% { opacity: .85; transform: scale(1); } 16% { opacity: 0; transform: scale(.5); } }
+@keyframes accentShimmer { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.4); } }
+html.lite .hero .accent::after, html.lite .hero__title em { animation: none; }
 
 .hero__now {
   position: absolute; bottom: 2.2rem; right: var(--pad);
@@ -657,7 +670,7 @@ html.lite .cursor { display: none; }
 html.lite .bg-field { display: none; }
 /* Ambient background particle field */
 .bg-field { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
-html[data-appearance="light"] .bg-field { opacity: .5; }
+html[data-appearance="light"] .bg-field { opacity: .85; }
 /* ---------- Light appearance ---------- */
 html[data-appearance="light"] {
   --bg: #f2eee6; --bg-2: #eae5db; --bg-elev: #e2dcd0;
