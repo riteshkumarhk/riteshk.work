@@ -18,7 +18,6 @@
   const EDIT_URL = "https://github.com/riteshkumarhk/riteshk.work/edit/main/content.json";
   const PREVIEW_SRC = "index.html?preview=1&lite=1";
   const ADMIN_MIN = 900; // below this the split editor can't fit — admin is disabled
-  const AI_PROVIDER = "rk:ai:provider";
   const AI_PROVIDERS = [
     ["openai", "OpenAI"],
     ["gemini", "Google Gemini"],
@@ -279,7 +278,7 @@
 
   function imageryBlock(w, i) {
     const has = !!w.image;
-    const cfg = aiCfg();
+    const cfg = aiCfg("img");
     const canGen = !!cfg.key && aiSupportsImages();
     const aiHint = !cfg.key ? "Add an API key in the AI tab to enable this"
       : !aiSupportsImages() ? "This service (Claude) can't generate images"
@@ -400,19 +399,21 @@
       return html;
     },
     ai() {
-      const p = aiProvider();
-      const cfg = aiCfg();
-      const masked = cfg.key ? (cfg.key.slice(0, 3) + "\u2022\u2022\u2022\u2022\u2022\u2022" + cfg.key.slice(-4)) : "";
+      const same = aiSameKey();
       const imgOK = aiSupportsImages();
-      const opts = AI_PROVIDERS.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === p ? " selected" : "") + ">" + x[1] + "</option>"; }).join("");
-      return secHead("AI",
-        "Connect a provider for AI features like project imagery. <em>Keys are stored only in this browser, per service, and are never written to your published file.</em>") +
-        '<div class="af"><label class="af__label">Service</label><select id="aiProvider">' + opts + "</select><div class=\"af__hint\">" + (imgOK ? "Supports image generation." : "Claude is text / vision only \u2014 the image tools stay disabled.") + "</div></div>" +
-        '<div class="af"><label class="af__label">API key <span class="af__prov">' + escHtml(providerLabel(p)) + "</span></label><input type=\"password\" id=\"aiKey\" placeholder=\"" + (cfg.key ? "Saved \u2014 paste to replace" : "Paste your key") + '" autocomplete="off" /><div class="af__hint">' + (cfg.key ? ("In use: " + escHtml(masked)) : "Not set for this service") + "</div></div>" +
-        '<div class="af__row"><div class="af"><label class="af__label">Model</label><input type="text" id="aiModel" value="' + escAttr(cfg.model) + '" /><div class="af__hint">' + escHtml(modelHint(p)) + "</div></div>" +
-        '<div class="af"><label class="af__label">API base URL</label><input type="text" id="aiBase" value="' + escAttr(cfg.base) + '" /><div class="af__hint">' + (p === "custom" ? "Your OpenAI-compatible endpoint" : "Default for this service") + "</div></div></div>" +
-        '<div class="imgblk__row"><button class="btn btn--primary" data-act="ai-save">Save</button>' + (cfg.key ? '<button class="btn btn--ghost" data-act="ai-clear">Remove key</button>' : "") + "</div>" +
-        '<div class="adm__empty" style="text-align:left;margin-top:1.1rem;line-height:1.6">Security: keys live only in this browser, are sent only to the service you pick, and are never committed to your site. Calling these APIs from the browser exposes the key to that provider \u2014 use a limited key. Some providers block browser calls (CORS); OpenAI and Gemini generally work directly.</div>';
+      let html = secHead("AI",
+        "Connect providers for AI features. <em>Keys are stored only in this browser and are never written to your published file.</em>") +
+        '<label class="chk aiblk__same"><input type="checkbox" id="aiSame"' + (same ? " checked" : "") + " /> Use the same service &amp; key for content and image</label>";
+      if (same) {
+        html += aiBlock("all", "AI service", "content + image");
+      } else {
+        html += aiBlock("txt", "Content generation", "text");
+        html += aiBlock("img", "Image generation", "imagery");
+      }
+      html += '<div class="af__hint" style="margin:.1rem 0 1rem">' + (imgOK ? "Image service supports generation." : "Your image service (Claude) can't generate images \u2014 pick OpenAI or Gemini for imagery.") + "</div>";
+      html += '<div class="imgblk__row"><button class="btn btn--primary" data-act="ai-save">Save</button><button class="btn btn--ghost" data-act="ai-clear">Remove keys</button></div>';
+      html += '<div class="adm__empty" style="text-align:left;margin-top:1.1rem;line-height:1.6">Security: keys live only in this browser, are sent only to the service you pick, and are never committed to your site. Calling these APIs from the browser exposes the key to that provider \u2014 use a limited key. Some providers block browser calls (CORS); OpenAI and Gemini generally work directly.</div>';
+      return html;
     },
   };
 
@@ -516,7 +517,8 @@
 
   function onChange(e) {
     const t = e.target;
-    if (t.id === "aiProvider") { localStorage.setItem(AI_PROVIDER, t.value); renderBody(); return; }
+    if (t.id === "aiSame") { aiPersistVisible(); localStorage.setItem("rk:ai:same", t.checked ? "1" : "0"); renderBody(); return; }
+    if (t.dataset.aiscope) { aiPickProvider(t.dataset.aiscope, t.value); return; }
     if (t.dataset.sv !== undefined && t.dataset.sel) { onSvToggle(t); return; }
     if (t.dataset.act === "feature") {
       const i = +t.dataset.index;
@@ -579,7 +581,7 @@
     if (act === "img-generate") { imgGenerate(i); return; }
     if (act === "img-modify") { imgModify(i); return; }
     if (act === "ai-save") { aiSave(); return; }
-    if (act === "ai-clear") { localStorage.removeItem("rk:ai:key:" + aiProvider()); renderBody(); status("Key removed."); return; }
+    if (act === "ai-clear") { Object.keys(localStorage).forEach(function (k) { if (/^rk:ai:[a-z]+:key$/.test(k)) localStorage.removeItem(k); }); renderBody(); status("Keys removed."); return; }
     if (act === "autostyle") {
       const n = autoStyleLanding(true);
       apply(true); renderBody();
@@ -646,40 +648,70 @@
       img.src = uri;
     });
   }
-  function aiProvider() { return localStorage.getItem(AI_PROVIDER) || "openai"; }
-  function aiSupportsImages() { return AI_IMAGE_PROVIDERS.indexOf(aiProvider()) !== -1; }
-  function providerLabel(p) { for (var i = 0; i < AI_PROVIDERS.length; i++) if (AI_PROVIDERS[i][0] === p) return AI_PROVIDERS[i][1]; return p; }
+  function aiSameKey() { return localStorage.getItem("rk:ai:same") !== "0"; }
+  function aiScope(purpose) { return aiSameKey() ? "all" : (purpose || "img"); }
+  function aiSupportsImages() { return AI_IMAGE_PROVIDERS.indexOf(aiCfg("img").provider) !== -1; }
   function modelHint(p) {
     return p === "openai" ? "gpt-image-1, dall-e-3, dall-e-2"
       : p === "gemini" ? "gemini-2.0-flash-preview-image-generation, imagen-3.0-generate-002"
       : p === "anthropic" ? "claude-3-5-sonnet-latest (no image generation)"
       : "your model id";
   }
-  function aiCfg() {
-    const p = aiProvider();
+  function aiGet(scope, k) { return localStorage.getItem("rk:ai:" + scope + ":" + k); }
+  function aiCfg(purpose) {
+    const scope = aiScope(purpose);
+    const p = aiGet(scope, "provider") || "openai";
     return {
-      provider: p,
-      key: localStorage.getItem("rk:ai:key:" + p) || "",
-      model: (localStorage.getItem("rk:ai:model:" + p) || AI_DEFAULT_MODEL[p] || "").trim(),
-      base: (localStorage.getItem("rk:ai:base:" + p) || AI_DEFAULT_BASE[p] || "").trim().replace(/\/+$/, ""),
+      purpose: purpose || "img", scope: scope, provider: p,
+      key: aiGet(scope, "key") || "",
+      model: (aiGet(scope, "model") || AI_DEFAULT_MODEL[p] || "").trim(),
+      base: (aiGet(scope, "base") || AI_DEFAULT_BASE[p] || "").trim().replace(/\/+$/, ""),
     };
   }
-  function aiSave() {
-    const p = root.querySelector("#aiProvider") ? root.querySelector("#aiProvider").value : aiProvider();
-    localStorage.setItem(AI_PROVIDER, p);
-    const k = root.querySelector("#aiKey"), m = root.querySelector("#aiModel"), bs = root.querySelector("#aiBase");
-    if (k && k.value.trim()) localStorage.setItem("rk:ai:key:" + p, k.value.trim());
-    if (m) localStorage.setItem("rk:ai:model:" + p, m.value.trim() || AI_DEFAULT_MODEL[p] || "");
-    if (bs) localStorage.setItem("rk:ai:base:" + p, bs.value.trim() || AI_DEFAULT_BASE[p] || "");
-    renderBody();
-    status("AI settings saved \u2014 local only.", true);
+  function aiBlock(scope, label, note) {
+    const p = aiGet(scope, "provider") || "openai";
+    const key = aiGet(scope, "key") || "";
+    const model = aiGet(scope, "model") || AI_DEFAULT_MODEL[p] || "";
+    const base = aiGet(scope, "base") || AI_DEFAULT_BASE[p] || "";
+    const masked = key ? (key.slice(0, 3) + "\u2022\u2022\u2022\u2022\u2022\u2022" + key.slice(-4)) : "";
+    const opts = AI_PROVIDERS.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === p ? " selected" : "") + ">" + x[1] + "</option>"; }).join("");
+    return '<div class="aiblk"><div class="aiblk__head">' + label + (note ? ' <span>' + note + "</span>" : "") + "</div>" +
+      '<div class="af"><label class="af__label">Service</label><select id="aiProvider_' + scope + '" data-aiscope="' + scope + '">' + opts + "</select></div>" +
+      '<div class="af"><label class="af__label">API key</label><input type="password" id="aiKey_' + scope + '" placeholder="' + (key ? "Saved \u2014 paste to replace" : "Paste your key") + '" autocomplete="off" /><div class="af__hint">' + (key ? ("In use: " + escHtml(masked)) : "Not set") + "</div></div>" +
+      '<div class="af__row"><div class="af"><label class="af__label">Model</label><input type="text" id="aiModel_' + scope + '" value="' + escAttr(model) + '" /><div class="af__hint">' + escHtml(modelHint(p)) + "</div></div>" +
+      '<div class="af"><label class="af__label">API base URL</label><input type="text" id="aiBase_' + scope + '" value="' + escAttr(base) + '" /></div></div></div>';
   }
+  function aiPickProvider(scope, p) {
+    localStorage.setItem("rk:ai:" + scope + ":provider", p);
+    localStorage.setItem("rk:ai:" + scope + ":model", AI_DEFAULT_MODEL[p] || "");
+    localStorage.setItem("rk:ai:" + scope + ":base", AI_DEFAULT_BASE[p] || "");
+    localStorage.removeItem("rk:ai:" + scope + ":key");
+    const mEl = root.querySelector("#aiModel_" + scope);
+    if (mEl) { mEl.value = AI_DEFAULT_MODEL[p] || ""; const h = mEl.parentElement.querySelector(".af__hint"); if (h) h.textContent = modelHint(p); }
+    const bEl = root.querySelector("#aiBase_" + scope);
+    if (bEl) bEl.value = AI_DEFAULT_BASE[p] || "";
+    const kEl = root.querySelector("#aiKey_" + scope);
+    if (kEl) { kEl.value = ""; kEl.placeholder = "Paste your key"; const h = kEl.parentElement.querySelector(".af__hint"); if (h) h.textContent = "Not set"; }
+  }
+  function aiPersistVisible() {
+    ["all", "txt", "img"].forEach(function (scope) {
+      const sel = root.querySelector("#aiProvider_" + scope);
+      if (!sel) return;
+      const p = sel.value;
+      localStorage.setItem("rk:ai:" + scope + ":provider", p);
+      const k = root.querySelector("#aiKey_" + scope), m = root.querySelector("#aiModel_" + scope), bs = root.querySelector("#aiBase_" + scope);
+      if (k && k.value.trim()) localStorage.setItem("rk:ai:" + scope + ":key", k.value.trim());
+      if (m) localStorage.setItem("rk:ai:" + scope + ":model", m.value.trim() || AI_DEFAULT_MODEL[p] || "");
+      if (bs) localStorage.setItem("rk:ai:" + scope + ":base", bs.value.trim() || AI_DEFAULT_BASE[p] || "");
+    });
+  }
+  function aiSave() { aiPersistVisible(); renderBody(); status("AI settings saved \u2014 local only.", true); }
   function aiPromptFor(i) {
     const el = root.querySelector('[data-aiprompt="' + i + '"]');
     return el ? el.value.trim() : "";
   }
   async function imgGenerate(i) {
-    const cfg = aiCfg();
+    const cfg = aiCfg("img");
     if (!cfg.key) return status("Add your API key in the AI tab first.");
     const p = aiPromptFor(i);
     if (!p) return status("Type a prompt to generate an image.");
@@ -690,7 +722,7 @@
     } catch (e) { status("Generate failed: " + e.message); }
   }
   async function imgModify(i) {
-    const cfg = aiCfg();
+    const cfg = aiCfg("img");
     if (!cfg.key) return status("Add your API key in the AI tab first.");
     const cur = data.work[i].image;
     if (!cur) return status("No current image to modify.");
