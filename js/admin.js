@@ -1366,7 +1366,7 @@
   function synthEnsure() { if (synth === null) synth = makeSynth(); return synth; }
   function audioEnsure() {
     if (audioEl) return audioEl;
-    audioEl = new Audio(); audioEl.preload = "none"; audioEl.volume = 0.275; audioEl.loop = true;
+    audioEl = new Audio(); audioEl.preload = "none"; audioEl.volume = 0.25; audioEl.loop = true;
     audioEl.addEventListener("error", musSync);
     return audioEl;
   }
