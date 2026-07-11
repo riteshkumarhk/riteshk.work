@@ -448,3 +448,12 @@ body.adm-lock .cursor { display: none !important; }
 .secprev--figure .sp__ftx b { font-family: var(--serif); font-size: .78rem; font-weight: 400; color: var(--text); }
 .secprev--figure .sp__ftx i { display: block; height: 3px; border-radius: 2px; background: var(--line); }
 .secprev--figure .sp__ftx i:last-child { width: 60%; }
+.secprev--columns { flex-direction: row; gap: .5rem; align-items: flex-start; }
+.secprev--columns .sp__coln { flex: 1; display: flex; flex-direction: column; gap: .22rem; }
+.secprev--columns .sp__coln b { font-family: var(--mono); font-size: .46rem; letter-spacing: .06em; color: var(--accent); margin-bottom: .1rem; }
+.secprev--columns .sp__coln i { display: block; height: 3px; border-radius: 2px; background: var(--line); }
+.secprev--columns .sp__coln i:last-child { width: 70%; }
+.secprev--compare { justify-content: center; align-items: stretch; }
+.secprev--compare .sp__cmp { position: relative; flex: 1; border-radius: 5px; overflow: hidden; border: 1px solid var(--line); background: radial-gradient(120% 120% at 78% 30%, rgba(216,166,87,.16), transparent 60%), #0d0d10; }
+.secprev--compare .sp__cmp-l { position: absolute; inset: 0 50% 0 0; background: linear-gradient(135deg, rgba(255,255,255,.06), transparent); border-right: 2px solid rgba(255,255,255,.72); }
+.secprev--compare .sp__cmp-grip { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.8); background: rgba(8,8,10,.6); color: #fff; font-size: .5rem; display: grid; place-items: center; }

@@ -68,6 +68,8 @@
     { type: "cards", name: "Cards", tag: "Columns", desc: "A row of titled cards, each with a short line \u2014 no step numbers.", best: "Feature sets \u00b7 principles \u00b7 pillars" },
     { type: "gallery", name: "Gallery", tag: "Carousel", desc: "A swipeable strip of visuals with captions and a 1/N counter.", best: "Key features \u00b7 screen tours \u00b7 shots" },
     { type: "figure", name: "Figure", tag: "Image + text", desc: "A visual beside a short write-up \u2014 image left or right.", best: "A decision explained next to its screen" },
+    { type: "columns", name: "Columns", tag: "Text table", desc: "Multiple columns of titled text \u2014 add a heading or image to any column.", best: "Overview + What I did \u00b7 feature columns" },
+    { type: "compare", name: "Before / after slider", tag: "Compare", desc: "Two images overlaid with a divider you drag to reveal before vs after.", best: "Redesigns \u00b7 visual transformations" },
   ];
 
   let data = null;
@@ -373,16 +375,18 @@
   }
   function blankBlock(type) {
     switch (type) {
-      case "statement": return { type: "statement", nav: "", kicker: "", body: "", sub: "" };
+      case "statement": return { type: "statement", nav: "", kicker: "", body: "", sub: "", src: "", caption: "" };
       case "metrics": return { type: "metrics", nav: "", kicker: "", heading: "", items: [] };
       case "steps": return { type: "steps", nav: "", kicker: "", heading: "", items: [] };
       case "media": return { type: "media", nav: "", kicker: "", heading: "", items: [] };
-      case "split": return { type: "split", nav: "", kicker: "", heading: "", leftLabel: "Before", left: [], rightLabel: "After", right: [] };
+      case "split": return { type: "split", nav: "", kicker: "", heading: "", leftLabel: "Before", left: [], leftImg: "", rightLabel: "After", right: [], rightImg: "" };
       case "faq": return { type: "faq", nav: "", kicker: "", items: [] };
       case "cards": return { type: "cards", nav: "", kicker: "", heading: "", items: [] };
       case "gallery": return { type: "gallery", nav: "", kicker: "", heading: "", items: [] };
       case "figure": return { type: "figure", nav: "", kicker: "", heading: "", body: "", src: "", caption: "", flip: false };
-      default: return { type: "text", nav: "Section", kicker: "", heading: "", body: "", list: [] };
+      case "columns": return { type: "columns", nav: "", kicker: "", heading: "", items: [] };
+      case "compare": return { type: "compare", nav: "", kicker: "", heading: "", beforeSrc: "", afterSrc: "", beforeLabel: "Before", afterLabel: "After", body: "" };
+      default: return { type: "text", nav: "Section", kicker: "", heading: "", body: "", list: [], src: "", caption: "" };
     }
   }
   function studyLines(text) { return String(text || "").split("\n").map(function (s) { return s.trim(); }).filter(Boolean); }
@@ -390,17 +394,23 @@
   function parseItems(type, text) {
     return studyLines(text).map(function (line) {
       var p = studyPipe(line);
+      var parts = line.split("|").map(function (s) { return s.trim(); });
       if (type === "metrics") return { value: p[0], label: p[1] };
-      if (type === "steps" || type === "cards") return { title: p[0], body: p[1] };
+      if (type === "steps") return { title: p[0], body: p[1] };
+      if (type === "cards") return { title: parts[0] || "", body: parts[1] || "", icon: parts[2] || "", src: parts[3] || "" };
+      if (type === "columns") return { label: parts[0] || "", heading: parts[1] || "", body: parts[2] || "", src: parts[3] || "" };
       if (type === "faq") return { q: p[0], a: p[1] };
       if (type === "media" || type === "gallery") return p[0] ? { src: p[0], caption: p[1] } : { caption: p[1] };
       return {};
     });
   }
+  function joinPipes(arr) { var a = (arr || []).map(function (x) { return (x == null ? "" : String(x)); }); while (a.length > 1 && !a[a.length - 1]) a.pop(); return a.join(" | "); }
   function itemsToText(type, items) {
     return (items || []).map(function (it) {
       if (type === "metrics") return (it.value || "") + " | " + (it.label || "");
-      if (type === "steps" || type === "cards") return (it.title || "") + " | " + (it.body || "");
+      if (type === "steps") return (it.title || "") + " | " + (it.body || "");
+      if (type === "cards") return joinPipes([it.title, it.body, it.icon, it.src]);
+      if (type === "columns") return joinPipes([it.label, it.heading, it.body, it.src]);
       if (type === "faq") return (it.q || "") + " | " + (it.a || "");
       if (type === "media" || type === "gallery") return (it.src || it.image || "") + " | " + (it.caption || "");
       return "";
@@ -416,8 +426,8 @@
     return '<div class="af"><label class="af__label">' + label + '</label><textarea data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '" rows="' + (rows || 3) + '">' + escHtml(value) + "</textarea>" + (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
   }
   function blockEditor(i, b, j, len, open) {
-    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", figure: "Figure" })[b.type] || b.type;
-    var raw = b.nav || b.kicker || b.heading || b.body || (b.items && b.items[0] && (b.items[0].q || b.items[0].title || b.items[0].value || b.items[0].caption)) || "Untitled";
+    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", figure: "Figure", columns: "Columns", compare: "Before / after slider" })[b.type] || b.type;
+    var raw = b.nav || b.kicker || b.heading || b.body || (b.items && b.items[0] && (b.items[0].q || b.items[0].title || b.items[0].value || b.items[0].caption || b.items[0].heading || b.items[0].label)) || "Untitled";
     var label = String(raw).replace(/[\*\[\]]/g, "").replace(/\s+/g, " ").trim();
     if (label.length > 48) label = label.slice(0, 48) + "\u2026";
     var head = '<div class="study__block-head" data-act="study-blocktoggle" data-index="' + i + '" data-bindex="' + j + '">' +
@@ -432,16 +442,18 @@
       "</div>";
     var common = sfInput(i, j, "nav", "Section label", "Shows in the left nav \u2014 leave blank to hide it there") + sfInput(i, j, "kicker", "Kicker", "small label above the block");
     var body = "";
-    if (b.type === "text") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "body", "Body", b.body, 4) + sfArea(i, j, "list", "Bullets \u2014 one per line", listToText(b.list), 3);
-    else if (b.type === "statement") body = sfArea(i, j, "body", "Statement", b.body, 3) + sfArea(i, j, "sub", "Sub-line", b.sub, 2);
+    if (b.type === "text") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "body", "Body", b.body, 4) + sfArea(i, j, "list", "Bullets \u2014 one per line", listToText(b.list), 3) + sfInput(i, j, "src", "Media inset \u2014 image / video / embed URL (optional)") + sfInput(i, j, "caption", "Media caption");
+    else if (b.type === "statement") body = sfArea(i, j, "body", "Statement", b.body, 3) + sfArea(i, j, "sub", "Sub-line", b.sub, 2) + sfInput(i, j, "src", "Media inset \u2014 image / video / embed URL (optional)") + sfInput(i, j, "caption", "Media caption");
     else if (b.type === "metrics") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Metrics \u2014 one per line:  value | label", itemsToText("metrics", b.items), 4);
     else if (b.type === "steps") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Steps \u2014 one per line:  title | body", itemsToText("steps", b.items), 5);
     else if (b.type === "media") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Media \u2014 one per line:  url | caption", itemsToText("media", b.items), 4, "URL can be an image, gif, video, Figma prototype, PDF or slide deck \u2014 the type is auto-detected and interactive embeds get a Fullscreen button. For Figma, paste the Share link (turn on \u201cAnyone with the link\u201d). Leave the url blank for a redacted placeholder.");
-    else if (b.type === "split") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + sfInput(i, j, "leftLabel", "Left label") + sfInput(i, j, "rightLabel", "Right label") + "</div>" + sfArea(i, j, "left", "Left items \u2014 one per line", listToText(b.left), 3) + sfArea(i, j, "right", "Right items \u2014 one per line", listToText(b.right), 3);
+    else if (b.type === "split") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + sfInput(i, j, "leftLabel", "Left label") + sfInput(i, j, "rightLabel", "Right label") + "</div>" + '<div class="af__row">' + sfInput(i, j, "leftImg", "Left image URL (optional)") + sfInput(i, j, "rightImg", "Right image URL (optional)") + "</div>" + sfArea(i, j, "left", "Left items \u2014 one per line", listToText(b.left), 3) + sfArea(i, j, "right", "Right items \u2014 one per line", listToText(b.right), 3);
     else if (b.type === "faq") body = sfArea(i, j, "items", "Q&A \u2014 one per line:  question | answer", itemsToText("faq", b.items), 4);
-    else if (b.type === "cards") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Cards \u2014 one per line:  title | short line", itemsToText("cards", b.items), 5, "A row of titled cards \u2014 no step numbers.");
+    else if (b.type === "cards") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Cards \u2014 one per line:  title | body | icon | image-url", itemsToText("cards", b.items), 5, "Icon &amp; image are optional. Icon names: users, idea, coins, chart, target, lock, spark, clock, shield, check, bolt, layers. Add an image-url instead of an icon for a media card.");
     else if (b.type === "gallery") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Slides \u2014 one per line:  url | caption", itemsToText("gallery", b.items), 4, "Same URLs as Media (image, gif, video, Figma, PDF, deck) \u2014 shown as a swipeable carousel with 1/N counters.");
     else if (b.type === "figure") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "body", "Body", b.body, 4) + sfInput(i, j, "src", "Image / video / embed URL") + sfInput(i, j, "caption", "Caption") + '<label class="chk" style="margin-top:.2rem"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="flip"' + (b.flip ? " checked" : "") + " /> Image on the left</label>";
+    else if (b.type === "columns") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Columns \u2014 one per line:  label | heading | body | image-url", itemsToText("columns", b.items), 5, "Everything but the label is optional. Leave heading &amp; image blank for a plain text column (e.g. Overview | | your paragraph); add an image-url for a media column.");
+    else if (b.type === "compare") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + sfInput(i, j, "beforeSrc", "Before image URL") + sfInput(i, j, "afterSrc", "After image URL") + "</div>" + '<div class="af__row">' + sfInput(i, j, "beforeLabel", "Before label") + sfInput(i, j, "afterLabel", "After label") + "</div>" + sfArea(i, j, "body", "Description below \u2014 what changed", b.body, 3, "Both images should be the same size. Visitors drag the divider to compare.");
     var locked = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="locked"' + (b.locked ? " checked" : "") + " /> Locked \u2014 only after the deeper-cut pass</label>";
     return '<div class="card study__block' + (open ? " is-open" : "") + '">' + head +
       '<div class="study__block-body">' + common + body + locked + "</div></div>";
@@ -470,6 +482,10 @@
         return '<span class="secprev secprev--gallery"><span class="sp__gframe">\u25a4<span class="sp__gn">1 / 3</span></span><span class="sp__gdots"><i class="on"></i><i></i><i></i></span></span>';
       case "figure":
         return '<span class="secprev secprev--figure"><span class="sp__ffr">\u25a4</span><span class="sp__ftx"><b>Heading</b><i></i><i></i><i></i></span></span>';
+      case "columns":
+        return '<span class="secprev secprev--columns"><span class="sp__coln"><b>OVERVIEW</b><i></i><i></i><i></i></span><span class="sp__coln"><b>WHAT I DID</b><i></i><i></i></span></span>';
+      case "compare":
+        return '<span class="secprev secprev--compare"><span class="sp__cmp"><span class="sp__cmp-l"></span><span class="sp__cmp-grip">\u2039\u203a</span></span></span>';
       default:
         return '<span class="secprev secprev--text"><span class="sp__kick">Context</span><span class="sp__h">The problem</span><span class="sp__body">A short paragraph that sets up the situation and the stakes.</span><span class="sp__bul">Point one</span><span class="sp__bul">Point two</span></span>';
     }

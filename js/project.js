@@ -114,18 +114,39 @@
   /* ---------- block renderers ---------- */
   function kicker(k) { return k ? '<div class="pjb__kicker">' + esc(k) + "</div>" : ""; }
   function heading(h) { return h ? '<h2 class="pjb__h">' + md(h) + "</h2>" : ""; }
+  function mediaInset(b) {
+    if (!mediaSrc(b)) return "";
+    return '<figure class="pjb__inset">' + mediaEl(b, "pjb__media-el") + (b.caption ? '<figcaption class="pjb__cap">' + esc(b.caption) + "</figcaption>" : "") + "</figure>";
+  }
+  var ICONS = {
+    users: '<path d="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1"/><circle cx="9" cy="7" r="3"/><path d="M22 19v-1a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    idea: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2h6c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z"/>',
+    coins: '<circle cx="8" cy="8" r="5"/><path d="M13.5 5.2a5 5 0 0 1 0 9.6"/><path d="M16 16.6a5 5 0 0 1-3 1.2"/>',
+    chart: '<path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="7"/><rect x="12" y="7" width="3" height="11"/><rect x="17" y="4" width="3" height="14"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
+    lock: '<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+    spark: '<path d="M12 2l2.4 6.9L21 11l-6.6 2.1L12 20l-2.4-6.9L3 11l6.6-2.1z"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    shield: '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/>',
+    check: '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
+    bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+    layers: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>'
+  };
+  function iconSvg(name) {
+    return '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || ICONS.spark) + "</svg>";
+  }
 
   function textBlock(b) {
     var list = (b.list && b.list.length)
       ? '<ul class="pjb__list">' + b.list.map(function (x) { return "<li>" + md(x) + "</li>"; }).join("") + "</ul>"
       : "";
     return kicker(b.kicker) + heading(b.heading) +
-      (b.body ? '<div class="pjb__prose">' + paras(b.body) + "</div>" : "") + list;
+      (b.body ? '<div class="pjb__prose">' + paras(b.body) + "</div>" : "") + list + mediaInset(b);
   }
   function stmtBlock(b) {
     return kicker(b.kicker) +
       '<p class="pjb__quote">' + md(b.body) + "</p>" +
-      (b.sub ? '<p class="pjb__sub">' + md(b.sub) + "</p>" : "");
+      (b.sub ? '<p class="pjb__sub">' + md(b.sub) + "</p>" : "") + mediaInset(b);
   }
   function metricsBlock(b) {
     var items = (b.items || []).map(function (m) {
@@ -155,12 +176,13 @@
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__media">' + shots + "</div>";
   }
   function splitBlock(b) {
-    var col = function (label, arr, cls) {
-      return '<div class="pjb__col' + (cls || "") + '"><div class="pjb__col-label">' + esc(label) + "</div><ul>" +
-        (arr || []).map(function (x) { return "<li>" + md(x) + "</li>"; }).join("") + "</ul></div>";
+    var col = function (label, arr, img, cls) {
+      var media = (img && mediaSrc({ src: img })) ? '<div class="pjb__col-media">' + mediaEl({ src: img }, "pjb__media-el") + "</div>" : "";
+      var list = (arr && arr.length) ? "<ul>" + arr.map(function (x) { return "<li>" + md(x) + "</li>"; }).join("") + "</ul>" : "";
+      return '<div class="pjb__col' + (cls || "") + '"><div class="pjb__col-label">' + esc(label) + "</div>" + media + list + "</div>";
     };
     return kicker(b.kicker) + heading(b.heading) +
-      '<div class="pjb__split">' + col(b.leftLabel || "Before", b.left) + col(b.rightLabel || "After", b.right, " pjb__col--after") + "</div>";
+      '<div class="pjb__split">' + col(b.leftLabel || "Before", b.left, b.leftImg) + col(b.rightLabel || "After", b.right, b.rightImg, " pjb__col--after") + "</div>";
   }
   function faqBlock(b) {
     var items = (b.items || []).map(function (f) {
@@ -170,7 +192,9 @@
   }
   function cardsBlock(b) {
     var items = (b.items || []).map(function (c) {
-      return '<div class="pjb__card"><h3 class="pjb__card-h">' + md(c.title) + "</h3>" + (c.body ? '<p class="pjb__card-b">' + md(c.body) + "</p>" : "") + "</div>";
+      var top = mediaSrc(c) ? '<div class="pjb__card-media">' + mediaEl(c, "pjb__media-el") + "</div>"
+        : (c.icon ? '<div class="pjb__card-ico">' + iconSvg(c.icon) + "</div>" : "");
+      return '<div class="pjb__card' + (mediaSrc(c) ? " pjb__card--media" : "") + '">' + top + '<h3 class="pjb__card-h">' + md(c.title) + "</h3>" + (c.body ? '<p class="pjb__card-b">' + md(c.body) + "</p>" : "") + "</div>";
     }).join("");
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__cards">' + items + "</div>";
   }
@@ -193,6 +217,32 @@
     var txt = '<div class="pjb__figure-text">' + heading(b.heading) + (b.body ? '<div class="pjb__prose">' + paras(b.body) + "</div>" : "") + "</div>";
     return kicker(b.kicker) + '<div class="pjb__figure' + (b.flip ? " pjb__figure--flip" : "") + '">' + fig + txt + "</div>";
   }
+  function columnsBlock(b) {
+    var items = (b.items || []).map(function (c) {
+      var media = mediaSrc(c) ? '<div class="pjb__coln-media">' + mediaEl(c, "pjb__media-el") + "</div>" : "";
+      return '<div class="pjb__coln">' +
+        (c.label ? '<div class="pjb__coln-lbl">' + esc(c.label) + "</div>" : "") +
+        (c.heading ? '<h3 class="pjb__coln-h">' + md(c.heading) + "</h3>" : "") +
+        (c.body ? '<div class="pjb__prose">' + paras(c.body) + "</div>" : "") +
+        media + "</div>";
+    }).join("");
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__cols">' + items + "</div>";
+  }
+  function compareBlock(b) {
+    var note = b.body ? '<div class="pjb__prose pjb__cmp-note">' + paras(b.body) + "</div>" : "";
+    if (!mediaSrc({ src: b.beforeSrc }) || !mediaSrc({ src: b.afterSrc })) {
+      return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__shot-ph pjb__shot-ph--edge"><span class="pjb__shot-tag">Add a before &amp; after image</span></div>' + note;
+    }
+    var cmp = '<div class="pjb__cmp" style="--pos:50%">' +
+      '<img class="pjb__cmp-base" src="' + attr(b.afterSrc) + '" alt="" draggable="false" />' +
+      '<div class="pjb__cmp-top"><img src="' + attr(b.beforeSrc) + '" alt="" draggable="false" /></div>' +
+      '<span class="pjb__cmp-line" aria-hidden="true"></span>' +
+      '<button type="button" class="pjb__cmp-grip" data-cmp aria-label="Drag to compare before and after"><span>\u2039\u203a</span></button>' +
+      '<span class="pjb__cmp-lbl pjb__cmp-lbl--l">' + esc(b.beforeLabel || "Before") + "</span>" +
+      '<span class="pjb__cmp-lbl pjb__cmp-lbl--r">' + esc(b.afterLabel || "After") + "</span>" +
+      "</div>";
+    return kicker(b.kicker) + heading(b.heading) + cmp + note;
+  }
   var LOCK_SVG =
     '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.4">' +
     '<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
@@ -209,6 +259,7 @@
     text: textBlock, statement: stmtBlock, metrics: metricsBlock,
     steps: stepsBlock, media: mediaBlock, split: splitBlock, faq: faqBlock,
     cards: cardsBlock, gallery: galleryBlock, figure: figureBlock,
+    columns: columnsBlock, compare: compareBlock,
   };
   function renderBlock(b, i) {
     var navLabel = b.nav || "";
@@ -251,6 +302,16 @@
     var ty = Math.max(0, Math.min(h * 0.14, scroller.scrollTop * 0.2));
     el.style.transform = "translate3d(0," + ty.toFixed(1) + "px,0)";
   }
+  var cmpDrag = null;
+  function cmpMove(e) {
+    if (!cmpDrag) return;
+    var r = cmpDrag.getBoundingClientRect();
+    var x = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+    var pct = Math.max(2, Math.min(98, ((x - r.left) / r.width) * 100));
+    cmpDrag.style.setProperty("--pos", pct.toFixed(1) + "%");
+    if (e.cancelable) e.preventDefault();
+  }
+  function cmpEnd() { cmpDrag = null; document.removeEventListener("pointermove", cmpMove); document.removeEventListener("pointerup", cmpEnd); }
   function emptyStudy(w) {
     var tags = (w.tags || []).map(function (t) { return "<span>" + esc(t) + "</span>"; }).join("");
     return '<section class="pjb pjb--text" style="--i:0">' +
@@ -416,6 +477,13 @@
       spyRaf = requestAnimationFrame(function () { spyRaf = 0; updateSpy(); coverParallax(); });
     }, { passive: true });
 
+    overlay.addEventListener("pointerdown", function (e) {
+      var cmp = e.target.closest(".pjb__cmp");
+      if (!cmp) return;
+      cmpDrag = cmp; cmpMove(e);
+      document.addEventListener("pointermove", cmpMove);
+      document.addEventListener("pointerup", cmpEnd);
+    });
     overlay.addEventListener("click", onOverlayClick);
     overlay.addEventListener("dblclick", function (e) {
       var v = e.target.closest("video.pjb__media-el, video.pj__cover-el");
