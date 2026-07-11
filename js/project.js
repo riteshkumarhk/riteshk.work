@@ -168,6 +168,31 @@
     }).join("");
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__faq">' + items + "</div>";
   }
+  function cardsBlock(b) {
+    var items = (b.items || []).map(function (c) {
+      return '<div class="pjb__card"><h3 class="pjb__card-h">' + md(c.title) + "</h3>" + (c.body ? '<p class="pjb__card-b">' + md(c.body) + "</p>" : "") + "</div>";
+    }).join("");
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__cards">' + items + "</div>";
+  }
+  function galleryBlock(b) {
+    var items = b.items || [], n = items.length;
+    var slides = items.map(function (m, i) {
+      var body = mediaSrc(m)
+        ? mediaEl(m, "pjb__media-el")
+        : '<div class="pjb__shot-ph pjb__shot-ph--' + SHOT_THEMES[i % SHOT_THEMES.length] + '"><span class="pjb__shot-tag">Visual redacted</span></div>';
+      var cap = '<figcaption class="pjb__slide-cap"><span class="pjb__slide-n">' + String(i + 1).padStart(2, "0") + " / " + String(n).padStart(2, "0") + "</span>" + (m.caption ? esc(m.caption) : "") + "</figcaption>";
+      return '<figure class="pjb__slide">' + body + cap + "</figure>";
+    }).join("");
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__gallery" tabindex="0"><div class="pjb__gallery-track">' + slides + "</div></div>";
+  }
+  function figureBlock(b) {
+    var media = mediaSrc(b)
+      ? mediaEl(b, "pjb__media-el")
+      : '<div class="pjb__shot-ph pjb__shot-ph--' + esc(b.theme || "edge") + '"><span class="pjb__shot-tag">Visual redacted</span></div>';
+    var fig = '<figure class="pjb__figure-media">' + media + (b.caption ? '<figcaption class="pjb__cap">' + esc(b.caption) + "</figcaption>" : "") + "</figure>";
+    var txt = '<div class="pjb__figure-text">' + heading(b.heading) + (b.body ? '<div class="pjb__prose">' + paras(b.body) + "</div>" : "") + "</div>";
+    return kicker(b.kicker) + '<div class="pjb__figure' + (b.flip ? " pjb__figure--flip" : "") + '">' + fig + txt + "</div>";
+  }
   var LOCK_SVG =
     '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.4">' +
     '<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
@@ -183,6 +208,7 @@
   var RENDERERS = {
     text: textBlock, statement: stmtBlock, metrics: metricsBlock,
     steps: stepsBlock, media: mediaBlock, split: splitBlock, faq: faqBlock,
+    cards: cardsBlock, gallery: galleryBlock, figure: figureBlock,
   };
   function renderBlock(b, i) {
     var navLabel = b.nav || "";
@@ -215,6 +241,15 @@
     var c = typeof cov === "string" ? { src: cov } : (cov || null);
     if (c && mediaSrc(c)) return '<div class="pj__cover">' + mediaEl(c, "pj__cover-el") + "</div>";
     return '<div class="pj__cover pj__cover--ph pjb__shot-ph--' + esc(w.theme || "edge") + '"><span class="pj__cover-card">' + esc(w.plateTag || w.client || "") + "</span></div>";
+  }
+  function coverParallax() {
+    if (!scroller || document.documentElement.classList.contains("lite")) return;
+    var el = scroller.querySelector(".pj__cover-el");
+    if (!el) return;
+    var cov = el.parentNode;
+    var h = (cov && cov.clientHeight) || 300;
+    var ty = Math.max(0, Math.min(h * 0.14, scroller.scrollTop * 0.2));
+    el.style.transform = "translate3d(0," + ty.toFixed(1) + "px,0)";
   }
   function emptyStudy(w) {
     var tags = (w.tags || []).map(function (t) { return "<span>" + esc(t) + "</span>"; }).join("");
@@ -251,7 +286,8 @@
         metaGrid(st) +
       "</header>";
     var bodyBlocks = blocks.length ? blocks.map(renderBlock).join("") : emptyStudy(w);
-    var cover = blocks.length ? coverHtml(w, st) : "";
+    var hasCover = !!(w.image || (st && st.cover));
+    var cover = (hasCover || blocks.length) ? coverHtml(w, st) : "";
     return cover + hero + '<div class="pj__body">' + bodyBlocks + "</div>" + navFoot(prevW, nextW);
   }
 
@@ -377,7 +413,7 @@
 
     scroller.addEventListener("scroll", function () {
       if (spyRaf) return;
-      spyRaf = requestAnimationFrame(function () { spyRaf = 0; updateSpy(); });
+      spyRaf = requestAnimationFrame(function () { spyRaf = 0; updateSpy(); coverParallax(); });
     }, { passive: true });
 
     overlay.addEventListener("click", onOverlayClick);
@@ -424,7 +460,7 @@
     head.innerHTML = '<b>' + esc(w.client || "") + "</b>" + (w.plateTag ? "<span>" + esc(w.plateTag) + "</span>" : "");
     overlay.querySelector("[data-toc]").innerHTML = tocHtml((w.study && w.study.blocks) || []);
     overlay.querySelector("[data-content]").innerHTML = contentHtml(w);
-    requestAnimationFrame(updateSpy);
+    requestAnimationFrame(function () { updateSpy(); coverParallax(); });
   }
 
   function nav(dir) {

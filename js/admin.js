@@ -65,6 +65,9 @@
     { type: "media", name: "Media", tag: "Visuals", desc: "Images, video, Figma, PDF or slides with captions.", best: "Screens \u00b7 prototypes \u00b7 before/after shots" },
     { type: "split", name: "Before / after", tag: "Compare", desc: "Two labelled columns placed side by side.", best: "Before vs after \u00b7 problem vs solution" },
     { type: "faq", name: "FAQ", tag: "Q & A", desc: "A list of question-and-answer pairs.", best: "Objections \u00b7 context \u00b7 scope \u00b7 details" },
+    { type: "cards", name: "Cards", tag: "Columns", desc: "A row of titled cards, each with a short line \u2014 no step numbers.", best: "Feature sets \u00b7 principles \u00b7 pillars" },
+    { type: "gallery", name: "Gallery", tag: "Carousel", desc: "A swipeable strip of visuals with captions and a 1/N counter.", best: "Key features \u00b7 screen tours \u00b7 shots" },
+    { type: "figure", name: "Figure", tag: "Image + text", desc: "A visual beside a short write-up \u2014 image left or right.", best: "A decision explained next to its screen" },
   ];
 
   let data = null;
@@ -376,6 +379,9 @@
       case "media": return { type: "media", nav: "", kicker: "", heading: "", items: [] };
       case "split": return { type: "split", nav: "", kicker: "", heading: "", leftLabel: "Before", left: [], rightLabel: "After", right: [] };
       case "faq": return { type: "faq", nav: "", kicker: "", items: [] };
+      case "cards": return { type: "cards", nav: "", kicker: "", heading: "", items: [] };
+      case "gallery": return { type: "gallery", nav: "", kicker: "", heading: "", items: [] };
+      case "figure": return { type: "figure", nav: "", kicker: "", heading: "", body: "", src: "", caption: "", flip: false };
       default: return { type: "text", nav: "Section", kicker: "", heading: "", body: "", list: [] };
     }
   }
@@ -385,18 +391,18 @@
     return studyLines(text).map(function (line) {
       var p = studyPipe(line);
       if (type === "metrics") return { value: p[0], label: p[1] };
-      if (type === "steps") return { title: p[0], body: p[1] };
+      if (type === "steps" || type === "cards") return { title: p[0], body: p[1] };
       if (type === "faq") return { q: p[0], a: p[1] };
-      if (type === "media") return p[0] ? { src: p[0], caption: p[1] } : { caption: p[1] };
+      if (type === "media" || type === "gallery") return p[0] ? { src: p[0], caption: p[1] } : { caption: p[1] };
       return {};
     });
   }
   function itemsToText(type, items) {
     return (items || []).map(function (it) {
       if (type === "metrics") return (it.value || "") + " | " + (it.label || "");
-      if (type === "steps") return (it.title || "") + " | " + (it.body || "");
+      if (type === "steps" || type === "cards") return (it.title || "") + " | " + (it.body || "");
       if (type === "faq") return (it.q || "") + " | " + (it.a || "");
-      if (type === "media") return (it.src || it.image || "") + " | " + (it.caption || "");
+      if (type === "media" || type === "gallery") return (it.src || it.image || "") + " | " + (it.caption || "");
       return "";
     }).join("\n");
   }
@@ -410,7 +416,7 @@
     return '<div class="af"><label class="af__label">' + label + '</label><textarea data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '" rows="' + (rows || 3) + '">' + escHtml(value) + "</textarea>" + (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
   }
   function blockEditor(i, b, j, len, open) {
-    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ" })[b.type] || b.type;
+    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", figure: "Figure" })[b.type] || b.type;
     var raw = b.nav || b.kicker || b.heading || b.body || (b.items && b.items[0] && (b.items[0].q || b.items[0].title || b.items[0].value || b.items[0].caption)) || "Untitled";
     var label = String(raw).replace(/[\*\[\]]/g, "").replace(/\s+/g, " ").trim();
     if (label.length > 48) label = label.slice(0, 48) + "\u2026";
@@ -433,6 +439,9 @@
     else if (b.type === "media") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Media \u2014 one per line:  url | caption", itemsToText("media", b.items), 4, "URL can be an image, gif, video, Figma prototype, PDF or slide deck \u2014 the type is auto-detected and interactive embeds get a Fullscreen button. For Figma, paste the Share link (turn on \u201cAnyone with the link\u201d). Leave the url blank for a redacted placeholder.");
     else if (b.type === "split") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + sfInput(i, j, "leftLabel", "Left label") + sfInput(i, j, "rightLabel", "Right label") + "</div>" + sfArea(i, j, "left", "Left items \u2014 one per line", listToText(b.left), 3) + sfArea(i, j, "right", "Right items \u2014 one per line", listToText(b.right), 3);
     else if (b.type === "faq") body = sfArea(i, j, "items", "Q&A \u2014 one per line:  question | answer", itemsToText("faq", b.items), 4);
+    else if (b.type === "cards") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Cards \u2014 one per line:  title | short line", itemsToText("cards", b.items), 5, "A row of titled cards \u2014 no step numbers.");
+    else if (b.type === "gallery") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Slides \u2014 one per line:  url | caption", itemsToText("gallery", b.items), 4, "Same URLs as Media (image, gif, video, Figma, PDF, deck) \u2014 shown as a swipeable carousel with 1/N counters.");
+    else if (b.type === "figure") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "body", "Body", b.body, 4) + sfInput(i, j, "src", "Image / video / embed URL") + sfInput(i, j, "caption", "Caption") + '<label class="chk" style="margin-top:.2rem"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="flip"' + (b.flip ? " checked" : "") + " /> Image on the left</label>";
     var locked = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="locked"' + (b.locked ? " checked" : "") + " /> Locked \u2014 only after the deeper-cut pass</label>";
     return '<div class="card study__block' + (open ? " is-open" : "") + '">' + head +
       '<div class="study__block-body">' + common + body + locked + "</div></div>";
@@ -455,6 +464,12 @@
         return '<span class="secprev secprev--split"><span class="sp__col"><em>Before</em><i></i><i></i></span><span class="sp__col sp__col--after"><em>After</em><i></i><i></i></span></span>';
       case "faq":
         return '<span class="secprev secprev--faq"><span class="sp__qa"><b>Q</b> Why this approach?</span><span class="sp__qa"><b>A</b> Because it earns trust fast.</span><span class="sp__qa"><b>Q</b> What changed?</span></span>';
+      case "cards":
+        return '<span class="secprev secprev--cards"><span class="sp__card"><b>Discover</b><i>a short line</i></span><span class="sp__card"><b>Design</b><i>a short line</i></span><span class="sp__card"><b>Ship</b><i>a short line</i></span></span>';
+      case "gallery":
+        return '<span class="secprev secprev--gallery"><span class="sp__gframe">\u25a4<span class="sp__gn">1 / 3</span></span><span class="sp__gdots"><i class="on"></i><i></i><i></i></span></span>';
+      case "figure":
+        return '<span class="secprev secprev--figure"><span class="sp__ffr">\u25a4</span><span class="sp__ftx"><b>Heading</b><i></i><i></i><i></i></span></span>';
       default:
         return '<span class="secprev secprev--text"><span class="sp__kick">Context</span><span class="sp__h">The problem</span><span class="sp__body">A short paragraph that sets up the situation and the stakes.</span><span class="sp__bul">Point one</span><span class="sp__bul">Point two</span></span>';
     }
@@ -846,11 +861,11 @@
   function onChange(e) {
     const t = e.target;
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
-    if (t.dataset.sblock !== undefined && t.dataset.bfield === "locked") {
+    if (t.dataset.sblock !== undefined && t.type === "checkbox") {
       const wi = +t.dataset.sblock, bj = +t.dataset.bindex;
       if (data.work[wi] && data.work[wi].study && data.work[wi].study.blocks[bj]) {
-        data.work[wi].study.blocks[bj].locked = t.checked;
-        saveDraft(true);
+        data.work[wi].study.blocks[bj][t.dataset.bfield] = t.checked;
+        saveDraft(true); refreshL2Preview();
       }
       return;
     }

@@ -432,3 +432,19 @@ body.adm-lock .cursor { display: none !important; }
 .secprev--faq { gap: .3rem; }
 .secprev--faq .sp__qa { font-size: .56rem; color: var(--text-dim); line-height: 1.32; }
 .secprev--faq .sp__qa b { font-family: var(--mono); color: var(--accent); margin-right: .3rem; }
+.secprev--cards { flex-direction: row; gap: .3rem; align-items: stretch; }
+.secprev--cards .sp__card { flex: 1; display: flex; flex-direction: column; gap: .18rem; border: 1px solid var(--line); border-radius: 5px; padding: .35rem .4rem; }
+.secprev--cards .sp__card b { font-family: var(--serif); font-size: .6rem; font-weight: 400; color: var(--text); }
+.secprev--cards .sp__card i { font-style: normal; font-size: .46rem; color: var(--text-faint); }
+.secprev--gallery { justify-content: center; align-items: center; gap: .4rem; }
+.secprev--gallery .sp__gframe { position: relative; width: 76%; flex: 1; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 5px; background: linear-gradient(135deg, rgba(216,166,87,.12), transparent); color: var(--accent); font-size: 1.1rem; }
+.secprev--gallery .sp__gn { position: absolute; bottom: .22rem; right: .35rem; font-family: var(--mono); font-size: .46rem; color: var(--text-faint); }
+.secprev--gallery .sp__gdots { display: flex; gap: .25rem; justify-content: center; }
+.secprev--gallery .sp__gdots i { width: 4px; height: 4px; border-radius: 50%; background: var(--line); }
+.secprev--gallery .sp__gdots i.on { background: var(--accent); }
+.secprev--figure { flex-direction: row; align-items: center; gap: .45rem; }
+.secprev--figure .sp__ffr { flex: 0 0 42%; align-self: stretch; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 5px; background: linear-gradient(135deg, rgba(216,166,87,.12), transparent); color: var(--accent); font-size: 1rem; }
+.secprev--figure .sp__ftx { flex: 1; display: flex; flex-direction: column; gap: .22rem; }
+.secprev--figure .sp__ftx b { font-family: var(--serif); font-size: .78rem; font-weight: 400; color: var(--text); }
+.secprev--figure .sp__ftx i { display: block; height: 3px; border-radius: 2px; background: var(--line); }
+.secprev--figure .sp__ftx i:last-child { width: 60%; }
