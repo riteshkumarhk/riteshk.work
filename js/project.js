@@ -238,11 +238,23 @@
     }).join("");
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__faq">' + items + "</div>";
   }
+  // Balanced card rows: up to 4 in one row; otherwise rows of 3, with a single
+  // row of 4 when the count leaves a remainder of 1 (so 7→4,3 · 8→3,3,2 · 10→4,3,3).
+  function cardRows(n) {
+    if (n <= 4) return [n];
+    var rows = [], rem = n;
+    if (n % 3 === 1) { rows.push(4); rem -= 4; }
+    while (rem > 0) { rows.push(Math.min(3, rem)); rem -= 3; }
+    return rows;
+  }
   function cardsBlock(b) {
-    var items = (b.items || []).map(function (c) {
+    var list = b.items || [];
+    var spans = [];
+    cardRows(list.length).forEach(function (size) { for (var q = 0; q < size; q++) spans.push(size ? 12 / size : 12); });
+    var items = list.map(function (c, idx) {
       var top = mediaSrc(c) ? '<div class="pjb__card-media">' + mediaEl(c, "pjb__media-el") + "</div>"
         : (c.icon ? '<div class="pjb__card-ico">' + iconSvg(c.icon) + "</div>" : "");
-      return '<div class="pjb__card' + (mediaSrc(c) ? " pjb__card--media" : "") + '">' + top + '<h3 class="pjb__card-h">' + md(c.title) + "</h3>" + (c.body ? '<div class="pjb__card-b">' + richInline(c.body) + "</div>" : "") + "</div>";
+      return '<div class="pjb__card' + (mediaSrc(c) ? " pjb__card--media" : "") + '" style="--cspan:' + (spans[idx] || 4) + '">' + top + '<h3 class="pjb__card-h">' + md(c.title) + "</h3>" + (c.body ? '<div class="pjb__card-b">' + richInline(c.body) + "</div>" : "") + "</div>";
     }).join("");
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__cards">' + items + "</div>";
   }

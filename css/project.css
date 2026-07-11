@@ -239,8 +239,10 @@ video.pjb__media-el { background: #000; }
 .pjb__a li::marker { color: var(--accent); }
 
 /* cards / columns */
-.pjb__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-top: .5rem; }
-.pjb__card { border: 1px solid var(--line-soft); border-radius: 8px; padding: 1.1rem 1.2rem; background: linear-gradient(180deg, var(--line-soft), transparent); }
+.pjb__cards { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1rem; margin-top: .5rem; }
+.pjb__card { grid-column: span var(--cspan, 4); border: 1px solid var(--line-soft); border-radius: 8px; padding: 1.1rem 1.2rem; background: linear-gradient(180deg, var(--line-soft), transparent); }
+@media (max-width: 900px) { .pjb__cards { grid-template-columns: repeat(2, 1fr); } .pjb__card { grid-column: auto; } }
+@media (max-width: 560px) { .pjb__cards { grid-template-columns: 1fr; } }
 .pjb__card-h { font-family: var(--serif); font-weight: 400; font-size: 1.12rem; line-height: 1.25; color: var(--text); margin-bottom: .5rem; }
 .pjb__card-b { font-size: .92rem; line-height: 1.55; color: var(--text-dim); }
 .pjb__card-b p { margin: 0 0 .5rem; }
