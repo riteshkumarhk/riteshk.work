@@ -428,16 +428,26 @@
   /* ---------- rich-text editor (contenteditable toolbar) ---------- */
   var RT_IMG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5L5 20"/></svg>';
   var RT_CLEAR = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h11"/><path d="M14 4l6 6-8.5 8.5H7L3.5 15a1.6 1.6 0 0 1 0-2.3z"/><path d="M9 9l6 6"/></svg>';
+  var RT_UNDO = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6L4 11l5 5"/><path d="M4 11h10a6 6 0 0 1 0 12h-3"/></svg>';
+  var RT_REDO = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l5 5-5 5"/><path d="M20 11H10a6 6 0 0 0 0 12h3"/></svg>';
   function rtAlignIco(a) {
     var d = a === "center" ? "M6 6h12M4 11h16M6 16h12M4 21h16" : a === "right" ? "M8 6h12M4 11h16M8 16h12M4 21h16" : "M4 6h12M4 11h16M4 16h12M4 21h16";
     return '<svg viewBox="0 0 24 24" width="14" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="' + d + '"/></svg>';
   }
+  function rtIndentIco(dir) {
+    var lines = dir === "in" ? "M4 6h16M11 12h9M4 18h16" : "M20 6H4M20 12h-9M20 18H4";
+    var arrow = dir === "in" ? "M4 9l3 3-3 3" : "M7 9l-3 3 3 3";
+    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="' + lines + '"/><path d="' + arrow + '"/></svg>';
+  }
   function richTools() {
     function t(cmd, inner, title) { return '<button type="button" class="rt__b" data-rt="' + cmd + '" title="' + title + '" tabindex="-1">' + inner + "</button>"; }
     return '<div class="rt__bar">' +
+      t("undo", RT_UNDO, "Undo (Ctrl+Z)") + t("redo", RT_REDO, "Redo (Ctrl+Y)") +
+      '<span class="rt__sep"></span>' +
       t("bold", "<b>B</b>", "Bold") + t("italic", "<i>I</i>", "Italic") + t("strikeThrough", "<s>S</s>", "Strikethrough") +
       '<span class="rt__sep"></span>' +
       t("insertUnorderedList", "\u2022", "Bulleted list") + t("insertOrderedList", "1.", "Numbered list") +
+      t("outdent", rtIndentIco("out"), "Decrease indent") + t("indent", rtIndentIco("in"), "Increase indent") +
       '<span class="rt__sep"></span>' +
       t("justifyLeft", rtAlignIco("left"), "Align left") + t("justifyCenter", rtAlignIco("center"), "Align centre") + t("justifyRight", rtAlignIco("right"), "Align right") +
       '<span class="rt__sep"></span>' +
@@ -448,7 +458,7 @@
   }
   function escForRt(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
   function rtInlineMd(s) { return s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>").replace(/~~([^~]+)~~/g, "<s>$1</s>"); }
-  function isRtHtml(v) { return /<(p|ul|ol|li|strong|em|b|i|s|strike|br|div|h[1-6]|span|figure|img)\b/i.test(v || ""); }
+  function isRtHtml(v) { return /<(p|ul|ol|li|strong|em|b|i|s|strike|br|div|h[1-6]|span|figure|img|blockquote)\b/i.test(v || ""); }
   function richInit(v) {
     v = v == null ? "" : String(v);
     if (!v) return "";
@@ -494,18 +504,49 @@
     area.focus();
     if (cmd === "ai") { rtImprove(area, btn); return; }
     if (cmd === "clear") { rtClearFormat(area); return; }
+    if (cmd === "indent" || cmd === "outdent") {
+      try { document.execCommand("styleWithCSS", false, true); } catch (e) {}
+      try { document.execCommand(cmd, false, null); } catch (e) {}
+      try { document.execCommand("styleWithCSS", false, false); } catch (e) {}
+      rtStripMediaIndent(area);
+      rtSerialize(area); return;
+    }
     if (cmd === "image") { pickImage(function (uri) { area.insertAdjacentHTML("beforeend", '<figure class="rt__fig"><img src="' + escAttr(uri) + '" alt="" /></figure><p><br></p>'); rtSerialize(area); }); return; }
     try { document.execCommand(cmd, false, null); } catch (e) {}
     rtSerialize(area);
   }
-  // Strip every bit of formatting (bold/italic/lists/alignment/colour/pasted styles) — back to default body text.
+  // Indentation is for text only — lift any image/media back out of an indent wrapper.
+  function rtStripMediaIndent(area) {
+    area.querySelectorAll("img, svg, video, iframe").forEach(function (el) {
+      var node = el.closest("figure") || el;
+      if (node.style) { node.style.marginLeft = ""; node.style.paddingLeft = ""; }
+      var bq, guard = 0;
+      while ((bq = node.closest("blockquote")) && area.contains(bq) && bq !== node && guard++ < 12) {
+        bq.parentNode.insertBefore(node, bq.nextSibling);
+      }
+    });
+    area.querySelectorAll("blockquote").forEach(function (bq) {
+      if (!bq.textContent.trim() && !bq.querySelector("img, svg, video, iframe")) bq.remove();
+    });
+  }
+  // Replace the whole area in an UNDOABLE way so native Ctrl+Z and the Undo button restore the previous content.
+  function rtSetHtml(area, html) {
+    area.focus();
+    try {
+      var sel = window.getSelection();
+      var range = document.createRange();
+      range.selectNodeContents(area);
+      sel.removeAllRanges(); sel.addRange(range);
+      if (!document.execCommand("insertHTML", false, html || "<p><br></p>")) area.innerHTML = html;
+    } catch (e) { area.innerHTML = html; }
+  }
   function rtClearFormat(area) {
     area.focus();
     var txt = (area.innerText || "").replace(/\u00a0/g, " ");
     var blocks = txt.split(/\n{2,}/).map(function (b) { return b.replace(/[ \t]+$/gm, "").trim(); }).filter(function (b) { return b.length; });
-    area.innerHTML = blocks.map(function (b) {
+    rtSetHtml(area, blocks.map(function (b) {
       return "<p>" + b.split(/\n/).map(function (line) { return escForRt(line); }).join("<br>") + "</p>";
-    }).join("");
+    }).join(""));
     rtSerialize(area);
     status("Formatting cleared \u2014 back to default text.");
   }
@@ -534,7 +575,7 @@
         "You are a sharp product-design portfolio editor. Rewrite the case-study copy to fix grammar, tighten wording, and make it more confident and value/impact-oriented \u2014 keep the author's meaning and voice, and don't invent facts or numbers. Return ONLY the rewritten copy as clean minimal HTML using <p>, <strong>, <em> and <ul>/<li> where natural \u2014 no headings, no preamble, no markdown, no code fences.",
         text, { maxTokens: 900, temperature: 0.5 });
       var html = rtClean(String(out || "").replace(/```[a-z]*/gi, "").replace(/```/g, "").trim());
-      if (html) { area.innerHTML = html; rtSerialize(area); status("Improved \u2014 review and tweak.", true); }
+      if (html) { rtSetHtml(area, html); rtSerialize(area); status("Improved \u2014 not right? Press Ctrl+Z or the Undo button to revert.", true); }
       else status("The AI didn\u2019t return usable copy \u2014 try again.");
     } catch (e) { status("Improve failed: " + ((e && e.message) || "error")); }
     if (btn) { btn.disabled = false; btn.innerHTML = lbl || "\u2728 Improve"; }
@@ -733,7 +774,7 @@
       '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span></div>' +
       '<div class="study__blocks">' + list + "</div>" + add + "</section>" +
       unlockBlock +
-      '<div class="study__foot"><button class="btn btn--ghost" data-act="study-preview" data-index="' + i + '">Preview case study \u2197</button><button class="btn btn--primary" data-act="study-close" data-index="' + i + '">Done</button></div>' +
+      '<div class="study__foot"><a class="btn btn--ghost" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '">Preview case study \u2197</a><button class="btn btn--primary" data-act="study-close" data-index="' + i + '">Done</button></div>' +
       "</div>";
   }
   function studyToggle(w, i) {
@@ -742,7 +783,7 @@
       return '<div class="study__toggle is-open"><button class="btn study__editbtn is-open" data-act="study-toggle" data-index="' + i + '">\u25be Close case-study editor</button></div>';
     }
     var count = n ? n + " section" + (n > 1 ? "s" : "") + " \u00b7 click to edit" : (w.study ? "empty \u2014 add sections" : "no page yet \u2014 click to build one");
-    var preview = n ? '<button class="btn btn--ghost study__previewbtn" data-act="study-preview" data-index="' + i + '" title="Open this project page in a new tab">Preview \u2197</button>' : "";
+    var preview = n ? '<a class="btn btn--ghost study__previewbtn" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '" title="Open this project page in a new tab">Preview \u2197</a>' : "";
     return '<div class="study__toggle">' +
       '<button class="btn study__editbtn" data-act="study-toggle" data-index="' + i + '">\u270e Edit case-study page</button>' +
       '<span class="study__meta">' + count + "</span>" + preview +
@@ -1178,7 +1219,7 @@
     if (act === "item-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (bl && bl.items && bl.items[k]) { bl.items[k][b.dataset.ifield] = ""; saveDraft(true); renderL2(); } return; }
     if (act === "bfield-upload") { const bj = +b.dataset.bindex, f = b.dataset.bfield; pickImage(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl) { bl[f] = uri; saveDraft(true); renderL2(); status("Image added.", true); } }); return; }
     if (act === "bfield-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (bl) { bl[b.dataset.bfield] = ""; saveDraft(true); renderL2(); } return; }
-    if (act === "study-preview") { saveDraft(true); window.open("/work/" + data.work[i].id, "_blank", "noopener"); status("Opened the case study in a new tab (using your draft)."); return; }
+    if (act === "study-preview") { saveDraft(true); status("Opening your current draft in a new tab\u2026"); return; }
     if (act === "add") { data[list].unshift(blank(list)); apply(true); renderBody(); const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0; status("Added at the top \u2014 edit it right here.", true); }
     else if (act === "remove") { data[list].splice(i, 1); apply(true); renderBody(); }
     else if (act === "up" && i > 0) { const a = data[list]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; apply(true); renderBody(); }

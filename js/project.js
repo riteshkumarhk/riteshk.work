@@ -92,7 +92,7 @@
     return String(body || "").split(/\n\n+/).map(function (p) { return "<p>" + md(p) + "</p>"; }).join("");
   }
   // Rich body fields authored in the editor are stored as HTML; legacy fields are markdown/plain.
-  function isRichHtml(s) { return /<(p|ul|ol|li|strong|em|b|i|s|strike|br|div|h[1-6]|span|figure|img)\b/i.test(s || ""); }
+  function isRichHtml(s) { return /<(p|ul|ol|li|strong|em|b|i|s|strike|br|div|h[1-6]|span|figure|img|blockquote)\b/i.test(s || ""); }
   function safeHtml(s) {
     return String(s == null ? "" : s)
       .replace(/<script[\s\S]*?<\/script>/gi, "")

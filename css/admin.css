@@ -147,6 +147,7 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
   background: none; color: var(--text); transition: all .25s; white-space: nowrap;
 }
 .btn:hover { border-color: var(--accent); }
+a.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 .btn--primary { background: var(--accent); border-color: var(--accent); color: #0a0a0a; font-weight: 600; }
 .btn--primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
 .btn--ghost { color: var(--text-dim); }
