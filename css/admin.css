@@ -355,6 +355,12 @@ body.adm-lock .cursor { display: none !important; }
 .study__previewbtn { flex: 0 0 auto; }
 .study__meta { font-family: var(--mono); font-size: .62rem; color: var(--text-faint); flex: 0 0 auto; }
 /* ---------- L2 (case study) — side-by-side split, generously wide editor ---------- */
+.adm__l2-prev { margin-left: auto; flex: 0 0 auto; display: inline-flex; align-items: center; gap: .4rem; }
+.adm__l2-prev.is-off { color: var(--text-faint); }
+.adm.is-noprev .adm__main { grid-template-columns: 1fr; }
+.adm.is-noprev .adm__preview { display: none; }
+.adm.is-noprev .adm__editor { border-right: 0; }
+.adm.is-noprev .adm__l2 { max-width: 1040px; }
 .study__panel { margin-top: .3rem; padding: 0; border: 0; background: none; }
 .l2grp { border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem 1.1rem; margin-bottom: 1rem; background: var(--bg-2); }
 .l2grp__head { font-family: var(--mono); font-size: .64rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); margin-bottom: .85rem; }

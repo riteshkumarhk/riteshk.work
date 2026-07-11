@@ -17,6 +17,7 @@
   const THEME_KEY = "rk:theme";
   const MUSIC_ON_KEY = "rk:music:on";
   const MUSIC_TRACK_KEY = "rk:music:track";
+  const L2PREV_KEY = "rk:adm:l2prev"; // remember the L2 live-preview on/off choice
   const DEFAULT_TRACKS = [
     { title: "Midnight", gen: "midnight" },
     { title: "Ember Glow", gen: "ember" },
@@ -70,6 +71,7 @@
   let activeTab = "landing";
   let openStudy = -1; // index of the work item whose case-study editor is expanded
   let openBlock = -1; // which section (block) is expanded in the L2 sections accordion
+  let musResumeOnExit = false; // was music playing when admin opened? → resume on exit
   let root = null, body = null, frame = null;
   let l2 = null, l2body = null, l2title = null, l2PreviewTimer = 0;
   let saveTimer = null;
@@ -760,6 +762,7 @@
     const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0;
     saveDraft();
     previewProject(w.id, false);
+    l2PreviewApply();
   }
   function renderL2() {
     if (openStudy < 0 || !data.work[openStudy]) return;
@@ -773,12 +776,21 @@
     openStudy = -1;
     openBlock = -1;
     if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
-    if (root) { root.classList.remove("is-l2"); root.classList.remove("is-preview"); }
+    if (root) { root.classList.remove("is-l2"); root.classList.remove("is-preview"); root.classList.remove("is-noprev"); }
     if (body) body.hidden = false;
     const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0;
     const vt = root && root.querySelector("[data-view]"); if (vt) vt.textContent = "Preview";
     previewLanding();
     if (opts.render !== false) renderBody();
+  }
+  function l2PreviewApply() {
+    var off = localStorage.getItem(L2PREV_KEY) === "0";
+    if (root) root.classList.toggle("is-noprev", off && openStudy >= 0);
+    var btn = root && root.querySelector("[data-l2-prev]");
+    if (btn) {
+      btn.classList.toggle("is-off", off);
+      btn.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>' + (off ? '<line x1="3" y1="3" x2="21" y2="21"/>' : "") + "</svg>" + (off ? " Show preview" : " Hide preview");
+    }
   }
 
   /* ---------- blank templates ---------- */
@@ -942,7 +954,7 @@
     if (act === "study-blockdown") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j < s.length - 1) { [s[j + 1], s[j]] = [s[j], s[j + 1]]; if (openBlock === j) openBlock = j + 1; else if (openBlock === j + 1) openBlock = j; saveDraft(true); renderL2(); } return; }
     if (act === "study-blockremove") { const j = +b.dataset.bindex; data.work[i].study.blocks.splice(j, 1); if (openBlock === j) openBlock = -1; else if (openBlock > j) openBlock--; saveDraft(true); renderL2(); return; }
     if (act === "study-preview") { saveDraft(true); window.open("/work/" + data.work[i].id, "_blank", "noopener"); status("Opened the case study in a new tab (using your draft)."); return; }
-    if (act === "add") { data[list].push(blank(list)); apply(true); renderBody(); }
+    if (act === "add") { data[list].unshift(blank(list)); apply(true); renderBody(); const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0; status("Added at the top \u2014 edit it right here.", true); }
     else if (act === "remove") { data[list].splice(i, 1); apply(true); renderBody(); }
     else if (act === "up" && i > 0) { const a = data[list]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; apply(true); renderBody(); }
     else if (act === "down" && i < data[list].length - 1) { const a = data[list]; [a[i + 1], a[i]] = [a[i], a[i + 1]]; apply(true); renderBody(); }
@@ -1694,6 +1706,7 @@
             '<div class="adm__l2-bar">' +
               '<button class="btn btn--ghost adm__l2-back" data-l2-back><span aria-hidden="true">\u2039</span> Back to projects</button>' +
               '<span class="adm__l2-title"></span>' +
+              '<button class="btn btn--ghost adm__l2-prev" data-l2-prev aria-label="Toggle live preview"></button>' +
             "</div>" +
             '<div class="adm__l2-body"></div>' +
           "</div>" +
@@ -1734,6 +1747,12 @@
     root.querySelector("[data-revert]").addEventListener("click", revert);
     root.querySelector("[data-exit]").addEventListener("click", exit);
     root.querySelector("[data-l2-back]").addEventListener("click", () => closeL2());
+    root.querySelector("[data-l2-prev]").addEventListener("click", () => {
+      const wasOff = localStorage.getItem(L2PREV_KEY) === "0";
+      try { localStorage.setItem(L2PREV_KEY, wasOff ? "1" : "0"); } catch (e) {}
+      l2PreviewApply();
+      if (wasOff && openStudy >= 0 && data.work[openStudy]) previewProject(data.work[openStudy].id, false);
+    });
     root.querySelector("[data-view]").addEventListener("click", (e) => {
       const on = root.classList.toggle("is-preview");
       e.currentTarget.textContent = on ? "Edit" : "Preview";
@@ -1767,6 +1786,7 @@
     if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
     if (body) body.hidden = false;
     renderBody();
+    musResumeOnExit = musPlaying; musStop(); musPlaying = false; musAttract(false); musToastHide(); musSync(); // silence the ambient music while editing
     document.documentElement.classList.add("adm-lock");
     document.body.classList.add("adm-lock");
     requestAnimationFrame(() => root.classList.add("is-open"));
@@ -1780,6 +1800,7 @@
     if (root) root.classList.remove("is-open");
     document.documentElement.classList.remove("adm-lock");
     document.body.classList.remove("adm-lock");
+    if (musResumeOnExit) { musResumeOnExit = false; musPlay(); } // bring the music back if it was on before
   }
 
   /* ---------- passphrase gate (always asks) ---------- */
@@ -1966,6 +1987,7 @@
     window.addEventListener("focus", onVis);
   }
   function musPlay() {
+    if (document.documentElement.classList.contains("adm-lock")) return; // never play while the admin studio is open
     var t = musCurTrack(); if (!t) return;
     try { localStorage.setItem(MUSIC_ON_KEY, "1"); } catch (e) {}
     if (t.src) {
