@@ -427,6 +427,7 @@
   }
   /* ---------- rich-text editor (contenteditable toolbar) ---------- */
   var RT_IMG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5L5 20"/></svg>';
+  var RT_CLEAR = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h11"/><path d="M14 4l6 6-8.5 8.5H7L3.5 15a1.6 1.6 0 0 1 0-2.3z"/><path d="M9 9l6 6"/></svg>';
   function rtAlignIco(a) {
     var d = a === "center" ? "M6 6h12M4 11h16M6 16h12M4 21h16" : a === "right" ? "M8 6h12M4 11h16M8 16h12M4 21h16" : "M4 6h12M4 11h16M4 16h12M4 21h16";
     return '<svg viewBox="0 0 24 24" width="14" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="' + d + '"/></svg>';
@@ -440,6 +441,7 @@
       '<span class="rt__sep"></span>' +
       t("justifyLeft", rtAlignIco("left"), "Align left") + t("justifyCenter", rtAlignIco("center"), "Align centre") + t("justifyRight", rtAlignIco("right"), "Align right") +
       '<span class="rt__sep"></span>' +
+      t("clear", RT_CLEAR, "Clear formatting \u2014 reset to plain text") +
       t("image", RT_IMG, "Insert an image") +
       '<button type="button" class="rt__b rt__ai" data-rt="ai" title="Improve with AI \u2014 fix grammar, tighten, sharpen the value" tabindex="-1">\u2728 Improve</button>' +
       "</div>";
@@ -491,8 +493,34 @@
     var cmd = btn.dataset.rt;
     area.focus();
     if (cmd === "ai") { rtImprove(area, btn); return; }
+    if (cmd === "clear") { rtClearFormat(area); return; }
     if (cmd === "image") { pickImage(function (uri) { area.insertAdjacentHTML("beforeend", '<figure class="rt__fig"><img src="' + escAttr(uri) + '" alt="" /></figure><p><br></p>'); rtSerialize(area); }); return; }
     try { document.execCommand(cmd, false, null); } catch (e) {}
+    rtSerialize(area);
+  }
+  // Strip every bit of formatting (bold/italic/lists/alignment/colour/pasted styles) — back to default body text.
+  function rtClearFormat(area) {
+    area.focus();
+    var txt = (area.innerText || "").replace(/\u00a0/g, " ");
+    var blocks = txt.split(/\n{2,}/).map(function (b) { return b.replace(/[ \t]+$/gm, "").trim(); }).filter(function (b) { return b.length; });
+    area.innerHTML = blocks.map(function (b) {
+      return "<p>" + b.split(/\n/).map(function (line) { return escForRt(line); }).join("<br>") + "</p>";
+    }).join("");
+    rtSerialize(area);
+    status("Formatting cleared \u2014 back to default text.");
+  }
+  // Paste as plain text so copied source styling/colours never leak into the body.
+  function onRtPaste(e) {
+    var area = e.target && e.target.closest && e.target.closest(".rt__area");
+    if (!area) return;
+    var cd = e.clipboardData || window.clipboardData;
+    if (!cd) return;
+    e.preventDefault();
+    var text = cd.getData("text/plain") || "";
+    if (!document.execCommand("insertText", false, text)) {
+      var sel = window.getSelection();
+      if (sel && sel.rangeCount) { var r = sel.getRangeAt(0); r.deleteContents(); r.insertNode(document.createTextNode(text)); r.collapse(false); }
+    }
     rtSerialize(area);
   }
   async function rtImprove(area, btn) {
@@ -1938,6 +1966,8 @@
     root.addEventListener("click", onClick);
     // Keep the caret inside the rich-text area when a toolbar button is pressed.
     root.addEventListener("mousedown", function (e) { if (e.target.closest("[data-rt]")) e.preventDefault(); });
+    // Paste into a rich-text body as plain text (no foreign colours/fonts).
+    root.addEventListener("paste", onRtPaste);
     root.querySelectorAll(".adm__tab").forEach((t) =>
       t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); activeTab = t.dataset.tab; renderBody(); })
     );

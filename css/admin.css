@@ -398,7 +398,9 @@ body.adm-lock .cursor { display: none !important; }
 .rt__area:empty::before { content: attr(data-ph); color: var(--text-faint); pointer-events: none; }
 .rt__area p { margin: 0 0 .55rem; }
 .rt__area p:last-child { margin-bottom: 0; }
-.rt__area ul, .rt__area ol { margin: .4rem 0; padding-left: 1.3rem; }
+.rt__area ul { margin: .4rem 0; padding-left: 1.4rem; list-style: disc; }
+.rt__area ol { margin: .4rem 0; padding-left: 1.4rem; list-style: decimal; }
+.rt__area li { margin: .15rem 0; }
 .rt__area strong { color: var(--text); font-weight: 600; }
 .rt__area em { font-style: italic; }
 .rt__area img, .rt__fig img { max-width: 100%; height: auto; display: block; border-radius: 6px; border: 1px solid var(--line); margin: .5rem 0; }
