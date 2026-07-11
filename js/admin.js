@@ -425,6 +425,159 @@
   function sfArea(i, j, field, label, value, rows, hint) {
     return '<div class="af"><label class="af__label">' + label + '</label><textarea data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '" rows="' + (rows || 3) + '">' + escHtml(value) + "</textarea>" + (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
   }
+  /* ---------- rich-text editor (contenteditable toolbar) ---------- */
+  var RT_IMG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5L5 20"/></svg>';
+  function rtAlignIco(a) {
+    var d = a === "center" ? "M6 6h12M4 11h16M6 16h12M4 21h16" : a === "right" ? "M8 6h12M4 11h16M8 16h12M4 21h16" : "M4 6h12M4 11h16M4 16h12M4 21h16";
+    return '<svg viewBox="0 0 24 24" width="14" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="' + d + '"/></svg>';
+  }
+  function richTools() {
+    function t(cmd, inner, title) { return '<button type="button" class="rt__b" data-rt="' + cmd + '" title="' + title + '" tabindex="-1">' + inner + "</button>"; }
+    return '<div class="rt__bar">' +
+      t("bold", "<b>B</b>", "Bold") + t("italic", "<i>I</i>", "Italic") + t("strikeThrough", "<s>S</s>", "Strikethrough") +
+      '<span class="rt__sep"></span>' +
+      t("insertUnorderedList", "\u2022", "Bulleted list") + t("insertOrderedList", "1.", "Numbered list") +
+      '<span class="rt__sep"></span>' +
+      t("justifyLeft", rtAlignIco("left"), "Align left") + t("justifyCenter", rtAlignIco("center"), "Align centre") + t("justifyRight", rtAlignIco("right"), "Align right") +
+      '<span class="rt__sep"></span>' +
+      t("image", RT_IMG, "Insert an image") +
+      '<button type="button" class="rt__b rt__ai" data-rt="ai" title="Improve with AI \u2014 fix grammar, tighten, sharpen the value" tabindex="-1">\u2728 Improve</button>' +
+      "</div>";
+  }
+  function escForRt(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function rtInlineMd(s) { return s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>").replace(/~~([^~]+)~~/g, "<s>$1</s>"); }
+  function isRtHtml(v) { return /<(p|ul|ol|li|strong|em|b|i|s|strike|br|div|h[1-6]|span|figure|img)\b/i.test(v || ""); }
+  function richInit(v) {
+    v = v == null ? "" : String(v);
+    if (!v) return "";
+    if (isRtHtml(v)) return v;
+    return v.split(/\n\n+/).map(function (p) { return "<p>" + rtInlineMd(escForRt(p)).replace(/\n/g, "<br>") + "</p>"; }).join("");
+  }
+  function rtClean(html) {
+    return String(html == null ? "" : html)
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/ on\w+="[^"]*"/gi, "").replace(/ on\w+='[^']*'/gi, "")
+      .replace(/javascript:/gi, "").replace(/&nbsp;/g, " ");
+  }
+  function richArea(attrs, value) {
+    return '<div class="rt__area" contenteditable="true" spellcheck="true" data-ph="Write here\u2026 use the bar above to format" ' + attrs + ">" + richInit(value) + "</div>";
+  }
+  function richBlock(i, j, field, label, hint) {
+    var b = data.work[i].study.blocks[j];
+    return '<div class="af rt"><label class="af__label">' + label + "</label>" + richTools() +
+      richArea('data-sblock="' + i + '" data-bindex="' + j + '" data-rtfield="' + field + '"', b[field]) +
+      (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
+  }
+  function richItem(i, j, k, field, label) {
+    var it = (data.work[i].study.blocks[j].items[k]) || {};
+    return '<div class="af rt"><label class="af__label">' + label + "</label>" + richTools() +
+      richArea('data-sblock="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-rtifield="' + field + '"', it[field]) + "</div>";
+  }
+  function rtSerialize(area) {
+    var html = rtClean(area.innerHTML).trim();
+    if (/^(\s|<br\s*\/?>|<p>(\s|<br\s*\/?>)*<\/p>|<div>(\s|<br\s*\/?>)*<\/div>)*$/i.test(html)) html = "";
+    var i = +area.dataset.sblock, j = +area.dataset.bindex;
+    var b = data.work[i] && data.work[i].study && data.work[i].study.blocks[j];
+    if (!b) return;
+    if (area.dataset.rtfield !== undefined) b[area.dataset.rtfield] = html;
+    else if (area.dataset.rtifield !== undefined) { var k = +area.dataset.iindex; if (b.items && b.items[k]) b.items[k][area.dataset.rtifield] = html; }
+    saveDraft(); refreshL2Preview();
+  }
+  function rtAction(btn) {
+    var wrap = btn.closest(".rt");
+    var area = wrap && wrap.querySelector(".rt__area");
+    if (!area) return;
+    var cmd = btn.dataset.rt;
+    area.focus();
+    if (cmd === "ai") { rtImprove(area, btn); return; }
+    if (cmd === "image") { pickImage(function (uri) { area.insertAdjacentHTML("beforeend", '<figure class="rt__fig"><img src="' + escAttr(uri) + '" alt="" /></figure><p><br></p>'); rtSerialize(area); }); return; }
+    try { document.execCommand(cmd, false, null); } catch (e) {}
+    rtSerialize(area);
+  }
+  async function rtImprove(area, btn) {
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { rtImprove(area, btn); }); return; }
+    var text = (area.innerText || "").trim();
+    if (!text) { status("Write something first, then Improve."); return; }
+    var lbl = btn && btn.innerHTML; if (btn) { btn.disabled = true; btn.innerHTML = "\u2728 \u2026"; }
+    status("Improving with AI\u2026");
+    try {
+      var out = await aiText(aiCfg("txt"),
+        "You are a sharp product-design portfolio editor. Rewrite the case-study copy to fix grammar, tighten wording, and make it more confident and value/impact-oriented \u2014 keep the author's meaning and voice, and don't invent facts or numbers. Return ONLY the rewritten copy as clean minimal HTML using <p>, <strong>, <em> and <ul>/<li> where natural \u2014 no headings, no preamble, no markdown, no code fences.",
+        text, { maxTokens: 900, temperature: 0.5 });
+      var html = rtClean(String(out || "").replace(/```[a-z]*/gi, "").replace(/```/g, "").trim());
+      if (html) { area.innerHTML = html; rtSerialize(area); status("Improved \u2014 review and tweak.", true); }
+      else status("The AI didn\u2019t return usable copy \u2014 try again.");
+    } catch (e) { status("Improve failed: " + ((e && e.message) || "error")); }
+    if (btn) { btn.disabled = false; btn.innerHTML = lbl || "\u2728 Improve"; }
+  }
+
+  /* ---------- structured item repeaters ---------- */
+  var ITEM_SPEC = {
+    metrics: { title: "Metrics", one: "Metric", add: "Add metric", fields: [["value", "Value (e.g. +45%)", "input"], ["label", "Label", "input"]] },
+    steps: { title: "Steps", one: "Step", add: "Add step", fields: [["title", "Title", "input"], ["body", "Body", "rich"]] },
+    faq: { title: "Questions", one: "Q", add: "Add question", fields: [["q", "Question", "input"], ["a", "Answer", "rich"]] },
+    media: { title: "Media", one: "Item", add: "Add media", fields: [["src", "Image / video / Figma / PDF / deck URL", "media"], ["caption", "Caption", "input"]] },
+    gallery: { title: "Slides", one: "Slide", add: "Add slide", fields: [["src", "Image / video / embed URL", "media"], ["caption", "Caption", "input"]] },
+    cards: { title: "Cards", one: "Card", add: "Add card", fields: [["title", "Title", "input"], ["body", "Body", "rich"], ["icon", "Icon", "icon"], ["src", "Image (optional \u2014 replaces the icon)", "media"]] },
+    columns: { title: "Columns", one: "Column", add: "Add column", fields: [["label", "Label", "input"], ["heading", "Heading (optional)", "input"], ["body", "Body", "rich"], ["src", "Image (optional)", "media"]] }
+  };
+  var ICON_NAMES = ["users", "idea", "coins", "chart", "target", "lock", "spark", "clock", "shield", "check", "bolt", "layers"];
+  function blankItem(type) {
+    switch (type) {
+      case "metrics": return { value: "", label: "" };
+      case "steps": return { title: "", body: "" };
+      case "faq": return { q: "", a: "" };
+      case "media": case "gallery": return { src: "", caption: "" };
+      case "cards": return { title: "", body: "", icon: "", src: "" };
+      case "columns": return { label: "", heading: "", body: "", src: "" };
+      default: return {};
+    }
+  }
+  function itemFieldEl(i, j, k, it, f) {
+    var key = f[0], label = f[1], kind = f[2];
+    var da = 'data-sitem="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '"';
+    if (kind === "rich") return richItem(i, j, k, key, label);
+    if (kind === "icon") {
+      var opts = [""].concat(ICON_NAMES).map(function (n) { return '<option value="' + n + '"' + ((it[key] || "") === n ? " selected" : "") + ">" + (n || "\u2014 none") + "</option>"; }).join("");
+      return '<div class="af"><label class="af__label">' + label + '</label><select ' + da + ">" + opts + "</select></div>";
+    }
+    if (kind === "media") {
+      var v = it[key] || "";
+      return '<div class="af"><label class="af__label">' + label + '</label><input type="text" ' + da + ' value="' + escAttr(v) + '" placeholder="Paste a URL\u2026" />' +
+        '<div class="imgblk__row"><button class="btn btn--ghost" data-act="item-upload" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">Upload\u2026</button>' +
+        (v ? '<button class="btn btn--ghost" data-act="item-clear" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">Remove</button>' : "") + "</div></div>";
+    }
+    return '<div class="af"><label class="af__label">' + label + '</label><input type="text" ' + da + ' value="' + escAttr(it[key] || "") + '" /></div>';
+  }
+  function itemRepeater(i, j, b) {
+    var spec = ITEM_SPEC[b.type]; if (!spec) return "";
+    var items = b.items || (b.items = []);
+    var rows = items.map(function (it, k) {
+      var flds = spec.fields.map(function (f) { return itemFieldEl(i, j, k, it, f); }).join("");
+      return '<div class="rep__item"><div class="rep__bar"><span class="rep__n">' + escHtml(spec.one) + " " + (k + 1) + '</span><span class="rep__ops">' +
+        '<button class="iconbtn" data-act="item-up" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '"' + (k === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
+        '<button class="iconbtn" data-act="item-down" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '"' + (k === items.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+        '<button class="iconbtn iconbtn--danger" data-act="item-remove" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" title="Remove">\u2715</button>' +
+        "</span></div>" + flds + "</div>";
+    }).join("") || '<div class="rep__empty">No ' + escHtml(spec.title.toLowerCase()) + " yet.</div>";
+    return '<div class="rep"><div class="rep__head"><label class="af__label">' + spec.title + '</label><button class="btn btn--add rep__add" data-act="item-add" data-index="' + i + '" data-bindex="' + j + '">+ ' + spec.add + "</button></div>" + rows + "</div>";
+  }
+  function onItemInput(t) {
+    var i = +t.dataset.sitem, j = +t.dataset.bindex, k = +t.dataset.iindex, f = t.dataset.ifield;
+    var b = data.work[i] && data.work[i].study && data.work[i].study.blocks[j];
+    if (!b || !b.items || !b.items[k]) return;
+    b.items[k][f] = t.value;
+    saveDraft(); refreshL2Preview();
+  }
+  function mediaInputBlock(i, j, field, label, hint) {
+    var b = data.work[i].study.blocks[j]; var v = b[field] || "";
+    return '<div class="af"><label class="af__label">' + label + '</label><input type="text" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '" value="' + escAttr(v) + '" placeholder="Paste a URL\u2026" />' +
+      '<div class="imgblk__row"><button class="btn btn--ghost" data-act="bfield-upload" data-index="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '">Upload\u2026</button>' +
+      (v ? '<button class="btn btn--ghost" data-act="bfield-clear" data-index="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '">Remove</button>' : "") + "</div>" +
+      (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
+  }
+
   function blockEditor(i, b, j, len, open) {
     var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", figure: "Figure", columns: "Columns", compare: "Before / after slider" })[b.type] || b.type;
     var raw = b.nav || b.kicker || b.heading || b.body || (b.items && b.items[0] && (b.items[0].q || b.items[0].title || b.items[0].value || b.items[0].caption || b.items[0].heading || b.items[0].label)) || "Untitled";
@@ -442,18 +595,18 @@
       "</div>";
     var common = sfInput(i, j, "nav", "Section label", "Shows in the left nav \u2014 leave blank to hide it there") + sfInput(i, j, "kicker", "Kicker", "small label above the block");
     var body = "";
-    if (b.type === "text") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "body", "Body", b.body, 4) + sfArea(i, j, "list", "Bullets \u2014 one per line", listToText(b.list), 3) + sfInput(i, j, "src", "Media inset \u2014 image / video / embed URL (optional)") + sfInput(i, j, "caption", "Media caption");
-    else if (b.type === "statement") body = sfArea(i, j, "body", "Statement", b.body, 3) + sfArea(i, j, "sub", "Sub-line", b.sub, 2) + sfInput(i, j, "src", "Media inset \u2014 image / video / embed URL (optional)") + sfInput(i, j, "caption", "Media caption");
-    else if (b.type === "metrics") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Metrics \u2014 one per line:  value | label", itemsToText("metrics", b.items), 4);
-    else if (b.type === "steps") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Steps \u2014 one per line:  title | body", itemsToText("steps", b.items), 5);
-    else if (b.type === "media") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Media \u2014 one per line:  url | caption", itemsToText("media", b.items), 4, "URL can be an image, gif, video, Figma prototype, PDF or slide deck \u2014 the type is auto-detected and interactive embeds get a Fullscreen button. For Figma, paste the Share link (turn on \u201cAnyone with the link\u201d). Leave the url blank for a redacted placeholder.");
-    else if (b.type === "split") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + sfInput(i, j, "leftLabel", "Left label") + sfInput(i, j, "rightLabel", "Right label") + "</div>" + '<div class="af__row">' + sfInput(i, j, "leftImg", "Left image URL (optional)") + sfInput(i, j, "rightImg", "Right image URL (optional)") + "</div>" + sfArea(i, j, "left", "Left items \u2014 one per line", listToText(b.left), 3) + sfArea(i, j, "right", "Right items \u2014 one per line", listToText(b.right), 3);
-    else if (b.type === "faq") body = sfArea(i, j, "items", "Q&A \u2014 one per line:  question | answer", itemsToText("faq", b.items), 4);
-    else if (b.type === "cards") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Cards \u2014 one per line:  title | body | icon | image-url", itemsToText("cards", b.items), 5, "Icon &amp; image are optional. Icon names: users, idea, coins, chart, target, lock, spark, clock, shield, check, bolt, layers. Add an image-url instead of an icon for a media card.");
-    else if (b.type === "gallery") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Slides \u2014 one per line:  url | caption", itemsToText("gallery", b.items), 4, "Same URLs as Media (image, gif, video, Figma, PDF, deck) \u2014 shown as a swipeable carousel with 1/N counters.");
-    else if (b.type === "figure") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "body", "Body", b.body, 4) + sfInput(i, j, "src", "Image / video / embed URL") + sfInput(i, j, "caption", "Caption") + '<label class="chk" style="margin-top:.2rem"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="flip"' + (b.flip ? " checked" : "") + " /> Image on the left</label>";
-    else if (b.type === "columns") body = sfInput(i, j, "heading", "Heading") + sfArea(i, j, "items", "Columns \u2014 one per line:  label | heading | body | image-url", itemsToText("columns", b.items), 5, "Everything but the label is optional. Leave heading &amp; image blank for a plain text column (e.g. Overview | | your paragraph); add an image-url for a media column.");
-    else if (b.type === "compare") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + sfInput(i, j, "beforeSrc", "Before image URL") + sfInput(i, j, "afterSrc", "After image URL") + "</div>" + '<div class="af__row">' + sfInput(i, j, "beforeLabel", "Before label") + sfInput(i, j, "afterLabel", "After label") + "</div>" + sfArea(i, j, "body", "Description below \u2014 what changed", b.body, 3, "Both images should be the same size. Visitors drag the divider to compare.");
+    if (b.type === "text") body = sfInput(i, j, "heading", "Heading") + richBlock(i, j, "body", "Body", "Format with the bar above \u2014 bold, lists, alignment, insert an image, or hit \u2728 Improve.");
+    else if (b.type === "statement") body = richBlock(i, j, "body", "Statement", "The big pull-quote.") + sfInput(i, j, "sub", "Sub-line");
+    else if (b.type === "metrics") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
+    else if (b.type === "steps") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
+    else if (b.type === "media") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b) + '<div class="af__hint">URLs can be an image, gif, video, Figma prototype, PDF or slide deck \u2014 the type is auto-detected and interactive embeds get a Fullscreen button. For Figma, paste the Share link (turn on \u201cAnyone with the link\u201d). Leave the URL blank for a redacted placeholder.</div>';
+    else if (b.type === "split") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + sfInput(i, j, "leftLabel", "Left label") + sfInput(i, j, "rightLabel", "Right label") + "</div>" + '<div class="af__row">' + mediaInputBlock(i, j, "leftImg", "Left image (optional)") + mediaInputBlock(i, j, "rightImg", "Right image (optional)") + "</div>" + sfArea(i, j, "left", "Left items \u2014 one per line", listToText(b.left), 3) + sfArea(i, j, "right", "Right items \u2014 one per line", listToText(b.right), 3);
+    else if (b.type === "faq") body = itemRepeater(i, j, b);
+    else if (b.type === "cards") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
+    else if (b.type === "gallery") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b) + '<div class="af__hint">Same URLs as Media \u2014 shown as a swipeable carousel with 1/N counters.</div>';
+    else if (b.type === "figure") body = sfInput(i, j, "heading", "Heading") + richBlock(i, j, "body", "Body") + mediaInputBlock(i, j, "src", "Image / video / embed URL") + sfInput(i, j, "caption", "Caption") + '<label class="chk" style="margin-top:.2rem"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="flip"' + (b.flip ? " checked" : "") + " /> Image on the left</label>";
+    else if (b.type === "columns") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
+    else if (b.type === "compare") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + mediaInputBlock(i, j, "beforeSrc", "Before image") + mediaInputBlock(i, j, "afterSrc", "After image") + "</div>" + '<div class="af__row">' + sfInput(i, j, "beforeLabel", "Before label") + sfInput(i, j, "afterLabel", "After label") + "</div>" + richBlock(i, j, "body", "Description below \u2014 what changed", "Both images should be the same size. Visitors drag the divider to compare.");
     var locked = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="locked"' + (b.locked ? " checked" : "") + " /> Locked \u2014 only after the deeper-cut pass</label>";
     return '<div class="card study__block' + (open ? " is-open" : "") + '">' + head +
       '<div class="study__block-body">' + common + body + locked + "</div></div>";
@@ -843,6 +996,8 @@
   /* ---------- events ---------- */
   function onInput(e) {
     const t = e.target;
+    if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined) { rtSerialize(t); return; }
+    if (t.dataset.sitem !== undefined && t.dataset.ifield) { onItemInput(t); return; }
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
     if (t.dataset.study !== undefined && t.dataset.sfield) { onStudyMeta(t); return; }
     if (t.dataset.sblock !== undefined && t.dataset.bfield && t.dataset.bfield !== "locked") { onStudyBlock(t); return; }
@@ -877,6 +1032,7 @@
   function onChange(e) {
     const t = e.target;
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
+    if (t.dataset.sitem !== undefined && t.dataset.ifield) { onItemInput(t); return; }
     if (t.dataset.sblock !== undefined && t.type === "checkbox") {
       const wi = +t.dataset.sblock, bj = +t.dataset.bindex;
       if (data.work[wi] && data.work[wi].study && data.work[wi].study.blocks[bj]) {
@@ -932,6 +1088,8 @@
   }
 
   function onClick(e) {
+    const rtb = e.target.closest("[data-rt]");
+    if (rtb) { rtAction(rtb); return; }
     const b = e.target.closest("[data-act]");
     if (!b) return;
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
@@ -984,6 +1142,14 @@
     if (act === "study-blockup") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j > 0) { [s[j - 1], s[j]] = [s[j], s[j - 1]]; if (openBlock === j) openBlock = j - 1; else if (openBlock === j - 1) openBlock = j; saveDraft(true); renderL2(); } return; }
     if (act === "study-blockdown") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j < s.length - 1) { [s[j + 1], s[j]] = [s[j], s[j + 1]]; if (openBlock === j) openBlock = j + 1; else if (openBlock === j + 1) openBlock = j; saveDraft(true); renderL2(); } return; }
     if (act === "study-blockremove") { const j = +b.dataset.bindex; data.work[i].study.blocks.splice(j, 1); if (openBlock === j) openBlock = -1; else if (openBlock > j) openBlock--; saveDraft(true); renderL2(); return; }
+    if (act === "item-add") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items = bl.items || []; bl.items.push(blankItem(bl.type)); saveDraft(true); renderL2(); return; }
+    if (act === "item-remove") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items.splice(+b.dataset.iindex, 1); saveDraft(true); renderL2(); return; }
+    if (act === "item-up") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (k > 0) { [bl.items[k - 1], bl.items[k]] = [bl.items[k], bl.items[k - 1]]; saveDraft(true); renderL2(); } return; }
+    if (act === "item-down") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (k < bl.items.length - 1) { [bl.items[k + 1], bl.items[k]] = [bl.items[k], bl.items[k + 1]]; saveDraft(true); renderL2(); } return; }
+    if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickImage(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; saveDraft(true); renderL2(); status("Image added.", true); } }); return; }
+    if (act === "item-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (bl && bl.items && bl.items[k]) { bl.items[k][b.dataset.ifield] = ""; saveDraft(true); renderL2(); } return; }
+    if (act === "bfield-upload") { const bj = +b.dataset.bindex, f = b.dataset.bfield; pickImage(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl) { bl[f] = uri; saveDraft(true); renderL2(); status("Image added.", true); } }); return; }
+    if (act === "bfield-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (bl) { bl[b.dataset.bfield] = ""; saveDraft(true); renderL2(); } return; }
     if (act === "study-preview") { saveDraft(true); window.open("/work/" + data.work[i].id, "_blank", "noopener"); status("Opened the case study in a new tab (using your draft)."); return; }
     if (act === "add") { data[list].unshift(blank(list)); apply(true); renderBody(); const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0; status("Added at the top \u2014 edit it right here.", true); }
     else if (act === "remove") { data[list].splice(i, 1); apply(true); renderBody(); }
@@ -1770,6 +1936,8 @@
     root.addEventListener("input", onInput);
     root.addEventListener("change", onChange);
     root.addEventListener("click", onClick);
+    // Keep the caret inside the rich-text area when a toolbar button is pressed.
+    root.addEventListener("mousedown", function (e) { if (e.target.closest("[data-rt]")) e.preventDefault(); });
     root.querySelectorAll(".adm__tab").forEach((t) =>
       t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); activeTab = t.dataset.tab; renderBody(); })
     );

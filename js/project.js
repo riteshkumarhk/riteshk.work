@@ -91,6 +91,17 @@
   function paras(body) {
     return String(body || "").split(/\n\n+/).map(function (p) { return "<p>" + md(p) + "</p>"; }).join("");
   }
+  // Rich body fields authored in the editor are stored as HTML; legacy fields are markdown/plain.
+  function isRichHtml(s) { return /<(p|ul|ol|li|strong|em|b|i|s|strike|br|div|h[1-6]|span|figure|img)\b/i.test(s || ""); }
+  function safeHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/ on\w+="[^"]*"/gi, "").replace(/ on\w+='[^']*'/gi, "")
+      .replace(/javascript:/gi, "");
+  }
+  function prose(body, cls) { if (!body) return ""; return '<div class="pjb__prose' + (cls ? " " + cls : "") + '">' + (isRichHtml(body) ? safeHtml(body) : paras(body)) + "</div>"; }
+  function richInline(s) { s = s == null ? "" : String(s); return isRichHtml(s) ? safeHtml(s) : md(s); }
   function data() { return (window.RK && window.RK.data) || null; }
   function workById(id) {
     var d = data(); if (!d) return null;
@@ -141,11 +152,13 @@
       ? '<ul class="pjb__list">' + b.list.map(function (x) { return "<li>" + md(x) + "</li>"; }).join("") + "</ul>"
       : "";
     return kicker(b.kicker) + heading(b.heading) +
-      (b.body ? '<div class="pjb__prose">' + paras(b.body) + "</div>" : "") + list + mediaInset(b);
+      prose(b.body) + list + mediaInset(b);
   }
   function stmtBlock(b) {
-    return kicker(b.kicker) +
-      '<p class="pjb__quote">' + md(b.body) + "</p>" +
+    var quote = isRichHtml(b.body)
+      ? '<div class="pjb__quote pjb__quote--rich">' + safeHtml(b.body) + "</div>"
+      : '<p class="pjb__quote">' + md(b.body) + "</p>";
+    return kicker(b.kicker) + quote +
       (b.sub ? '<p class="pjb__sub">' + md(b.sub) + "</p>" : "") + mediaInset(b);
   }
   function metricsBlock(b) {
@@ -158,7 +171,7 @@
   function stepsBlock(b) {
     var items = (b.items || []).map(function (s, i) {
       return '<li class="pjb__step"><span class="pjb__step-n">' + String(i + 1).padStart(2, "0") +
-        '</span><div class="pjb__step-b"><h3 class="pjb__step-h">' + md(s.title) + "</h3><p>" + md(s.body) + "</p></div></li>";
+        '</span><div class="pjb__step-b"><h3 class="pjb__step-h">' + md(s.title) + '</h3><div class="pjb__step-p">' + richInline(s.body) + "</div></div></li>";
     }).join("");
     return kicker(b.kicker) + heading(b.heading) + '<ol class="pjb__steps">' + items + "</ol>";
   }
@@ -186,7 +199,7 @@
   }
   function faqBlock(b) {
     var items = (b.items || []).map(function (f) {
-      return '<div class="pjb__qa"><h3 class="pjb__q">' + md(f.q) + '</h3><p class="pjb__a">' + md(f.a) + "</p></div>";
+      return '<div class="pjb__qa"><h3 class="pjb__q">' + md(f.q) + '</h3><div class="pjb__a">' + richInline(f.a) + "</div></div>";
     }).join("");
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__faq">' + items + "</div>";
   }
@@ -194,7 +207,7 @@
     var items = (b.items || []).map(function (c) {
       var top = mediaSrc(c) ? '<div class="pjb__card-media">' + mediaEl(c, "pjb__media-el") + "</div>"
         : (c.icon ? '<div class="pjb__card-ico">' + iconSvg(c.icon) + "</div>" : "");
-      return '<div class="pjb__card' + (mediaSrc(c) ? " pjb__card--media" : "") + '">' + top + '<h3 class="pjb__card-h">' + md(c.title) + "</h3>" + (c.body ? '<p class="pjb__card-b">' + md(c.body) + "</p>" : "") + "</div>";
+      return '<div class="pjb__card' + (mediaSrc(c) ? " pjb__card--media" : "") + '">' + top + '<h3 class="pjb__card-h">' + md(c.title) + "</h3>" + (c.body ? '<div class="pjb__card-b">' + richInline(c.body) + "</div>" : "") + "</div>";
     }).join("");
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__cards">' + items + "</div>";
   }
@@ -214,7 +227,7 @@
       ? mediaEl(b, "pjb__media-el")
       : '<div class="pjb__shot-ph pjb__shot-ph--' + esc(b.theme || "edge") + '"><span class="pjb__shot-tag">Visual redacted</span></div>';
     var fig = '<figure class="pjb__figure-media">' + media + (b.caption ? '<figcaption class="pjb__cap">' + esc(b.caption) + "</figcaption>" : "") + "</figure>";
-    var txt = '<div class="pjb__figure-text">' + heading(b.heading) + (b.body ? '<div class="pjb__prose">' + paras(b.body) + "</div>" : "") + "</div>";
+    var txt = '<div class="pjb__figure-text">' + heading(b.heading) + prose(b.body) + "</div>";
     return kicker(b.kicker) + '<div class="pjb__figure' + (b.flip ? " pjb__figure--flip" : "") + '">' + fig + txt + "</div>";
   }
   function columnsBlock(b) {
@@ -223,13 +236,13 @@
       return '<div class="pjb__coln">' +
         (c.label ? '<div class="pjb__coln-lbl">' + esc(c.label) + "</div>" : "") +
         (c.heading ? '<h3 class="pjb__coln-h">' + md(c.heading) + "</h3>" : "") +
-        (c.body ? '<div class="pjb__prose">' + paras(c.body) + "</div>" : "") +
+        prose(c.body) +
         media + "</div>";
     }).join("");
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__cols">' + items + "</div>";
   }
   function compareBlock(b) {
-    var note = b.body ? '<div class="pjb__prose pjb__cmp-note">' + paras(b.body) + "</div>" : "";
+    var note = prose(b.body, "pjb__cmp-note");
     if (!mediaSrc({ src: b.beforeSrc }) || !mediaSrc({ src: b.afterSrc })) {
       return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__shot-ph pjb__shot-ph--edge"><span class="pjb__shot-tag">Add a before &amp; after image</span></div>' + note;
     }

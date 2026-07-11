@@ -381,6 +381,40 @@ body.adm-lock .cursor { display: none !important; }
 .study__block.is-open .study__block-body { display: block; }
 .study__block-body .af:last-child { margin-bottom: 0; }
 
+/* ---------- rich-text editor (contenteditable + toolbar) ---------- */
+.rt .af__label { margin-bottom: .35rem; }
+.rt__bar { display: flex; flex-wrap: wrap; align-items: center; gap: .16rem; padding: .3rem .35rem; border: 1px solid var(--line); border-bottom: 0; border-radius: 8px 8px 0 0; background: var(--bg-elev); }
+.rt__b { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 27px; padding: 0 .4rem; background: none; border: 1px solid transparent; border-radius: 6px; color: var(--text-dim); cursor: pointer; font-size: .82rem; line-height: 1; }
+.rt__b:hover { color: var(--text); border-color: var(--line); background: var(--bg); }
+.rt__b b, .rt__b s { font-size: .9rem; }
+.rt__b i { font-family: var(--serif); font-size: .95rem; }
+.rt__b svg { display: block; }
+.rt__b:disabled { opacity: .5; cursor: default; }
+.rt__sep { width: 1px; align-self: stretch; margin: .15rem .22rem; background: var(--line); }
+.rt__ai { margin-left: auto; gap: .3rem; font-family: var(--mono); font-size: .62rem; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); border-color: var(--line); padding: 0 .55rem; }
+.rt__ai:hover { color: var(--accent); border-color: var(--accent); background: rgba(198, 138, 74, .1); }
+.rt__area { min-height: 92px; padding: .6rem .7rem; border: 1px solid var(--line); border-radius: 0 0 8px 8px; background: var(--bg); color: var(--text); font-size: .9rem; line-height: 1.6; outline: none; }
+.rt__area:focus { border-color: var(--accent); }
+.rt__area:empty::before { content: attr(data-ph); color: var(--text-faint); pointer-events: none; }
+.rt__area p { margin: 0 0 .55rem; }
+.rt__area p:last-child { margin-bottom: 0; }
+.rt__area ul, .rt__area ol { margin: .4rem 0; padding-left: 1.3rem; }
+.rt__area strong { color: var(--text); font-weight: 600; }
+.rt__area em { font-style: italic; }
+.rt__area img, .rt__fig img { max-width: 100%; height: auto; display: block; border-radius: 6px; border: 1px solid var(--line); margin: .5rem 0; }
+.rt__fig { margin: .5rem 0; }
+
+/* ---------- structured item repeater ---------- */
+.rep { margin-bottom: 1rem; }
+.rep__head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: .5rem; }
+.rep__head .af__label { margin: 0; }
+.rep__add { flex: 0 0 auto; }
+.rep__item { border: 1px solid var(--line); border-radius: 10px; padding: .7rem .8rem .3rem; margin-bottom: .6rem; background: var(--bg-elev); }
+.rep__bar { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .5rem; }
+.rep__n { font-family: var(--mono); font-size: .6rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.rep__ops { display: flex; gap: .3rem; }
+.rep__empty { font-size: .78rem; color: var(--text-faint); padding: .4rem 0 .7rem; }
+
 /* compact work card (L1) */
 .workcard__name { font-family: var(--serif); font-weight: 300; font-size: 1.05rem; color: var(--text); margin: .5rem 0 .2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workcard__feat { margin-bottom: .7rem; }
