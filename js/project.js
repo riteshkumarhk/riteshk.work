@@ -282,7 +282,8 @@
     var navAttr = navLabel ? ' data-nav="' + attr(navLabel) + '"' : "";
     var locked = b.locked && !isUnlocked(activeId);
     var inner = locked ? lockedBlock(b) : ((RENDERERS[b.type] || function () { return ""; })(b));
-    return '<section class="pjb pjb--' + esc(b.type) + (locked ? " pjb--locked" : "") + '"' + idAttr + navAttr +
+    var hsize = b.hsize === "sm" ? " pjb--hsm" : b.hsize === "lg" ? " pjb--hlg" : "";
+    return '<section class="pjb pjb--' + esc(b.type) + (locked ? " pjb--locked" : "") + hsize + '"' + idAttr + navAttr +
       ' style="--i:' + i + '">' + inner + "</section>";
   }
 

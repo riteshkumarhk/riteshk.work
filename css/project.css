@@ -133,6 +133,11 @@ img[data-zoom] { cursor: zoom-in; }
 .pjb__h { font-family: var(--serif); font-weight: 300; font-size: clamp(1.6rem, 3.4vw, 2.6rem); line-height: 1.1; letter-spacing: -0.01em; margin-bottom: 1.4rem; max-width: 24ch; }
 .pjb__h em { color: var(--accent); font-style: italic; }
 .pjb__h--blur { filter: blur(6px); opacity: .5; user-select: none; margin-bottom: 0; }
+/* per-block heading-size control (Standard / Compact / Large) */
+.pjb--hsm .pjb__h { font-size: clamp(1.15rem, 2vw, 1.5rem); }
+.pjb--hlg .pjb__h { font-size: clamp(1.9rem, 4.6vw, 3.2rem); }
+.pjb--hsm .pjb__quote, .pjb--hsm .pjb__quote--rich p { font-size: clamp(1.25rem, 2.6vw, 1.8rem); }
+.pjb--hlg .pjb__quote, .pjb--hlg .pjb__quote--rich p { font-size: clamp(2rem, 5vw, 3.6rem); }
 
 .pjb__prose p { font-size: clamp(1rem, 1.25vw, 1.15rem); line-height: 1.7; color: var(--text-dim); max-width: 66ch; margin-bottom: 1.1rem; }
 .pjb__prose p:last-child { margin-bottom: 0; }
