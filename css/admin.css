@@ -408,7 +408,7 @@ body.adm-lock .cursor { display: none !important; }
 .rep { margin-bottom: 1rem; }
 .rep__head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: .5rem; }
 .rep__head .af__label { margin: 0; }
-.rep__add { flex: 0 0 auto; }
+.rep__add { flex: 0 0 auto; width: auto; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
 .rep__item { border: 1px solid var(--line); border-radius: 10px; padding: .7rem .8rem .3rem; margin-bottom: .6rem; background: var(--bg-elev); }
 .rep__bar { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .5rem; }
 .rep__n { font-family: var(--mono); font-size: .6rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
