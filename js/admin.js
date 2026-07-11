@@ -689,7 +689,7 @@
     else if (b.type === "statement") body = richBlock(i, j, "body", "Statement", "The big pull-quote.") + sfInput(i, j, "sub", "Sub-line");
     else if (b.type === "metrics") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
     else if (b.type === "steps") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
-    else if (b.type === "media") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b) + '<div class="af__hint">URLs can be an image, gif, video, Figma prototype, PDF or slide deck \u2014 the type is auto-detected and interactive embeds get a Fullscreen button. For Figma, paste the Share link (turn on \u201cAnyone with the link\u201d). Leave the URL blank for a redacted placeholder.</div>';
+    else if (b.type === "media") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b) + '<div class="af__hint">Upload or paste a URL \u2014 image, GIF, video, Figma, PDF or PowerPoint (.pptx). A .pptx renders as a live slideshow (Fullscreen button + the viewer\u2019s slide arrows); PowerPoint animations don\u2019t play in the embed, so for animation-perfect playback export the deck to MP4 and drop that in. Leave the URL blank for a redacted placeholder.</div>';
     else if (b.type === "split") {
       if (Array.isArray(b.left)) b.left = arrToListHtml(b.left);
       if (Array.isArray(b.right)) b.right = arrToListHtml(b.right);
@@ -1243,10 +1243,10 @@
     if (act === "item-remove") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items.splice(+b.dataset.iindex, 1); saveDraft(true); renderL2(); return; }
     if (act === "item-up") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (k > 0) { [bl.items[k - 1], bl.items[k]] = [bl.items[k], bl.items[k - 1]]; saveDraft(true); renderL2(); } return; }
     if (act === "item-down") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (k < bl.items.length - 1) { [bl.items[k + 1], bl.items[k]] = [bl.items[k], bl.items[k + 1]]; saveDraft(true); renderL2(); } return; }
-    if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickImage(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; saveDraft(true); renderL2(); } }); return; }
+    if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; if (isVideoVal(uri)) bl.items[k].controls = true; saveDraft(true); renderL2(); } }); return; }
     if (act === "item-icon") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield, name = b.dataset.icon; const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = name; saveDraft(true); refreshL2Preview(); const grid = b.closest(".iconpick"); if (grid) grid.querySelectorAll(".iconpick__b").forEach(function (x) { x.classList.toggle("is-on", x === b); }); const dd = b.closest(".icondd"); if (dd) { const cur = dd.querySelector(".icondd__cur"); if (cur) cur.innerHTML = name ? admIcon(name) : "\u2205"; const nm = dd.querySelector(".icondd__name"); if (nm) nm.textContent = name || "No icon"; if (dd.tagName === "DETAILS") dd.open = false; } } return; }
     if (act === "item-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (bl && bl.items && bl.items[k]) { bl.items[k][b.dataset.ifield] = ""; saveDraft(true); renderL2(); } return; }
-    if (act === "bfield-upload") { const bj = +b.dataset.bindex, f = b.dataset.bfield; pickImage(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl) { bl[f] = uri; saveDraft(true); renderL2(); } }); return; }
+    if (act === "bfield-upload") { const bj = +b.dataset.bindex, f = b.dataset.bfield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl) { bl[f] = uri; if (isVideoVal(uri)) bl.controls = true; saveDraft(true); renderL2(); } }); return; }
     if (act === "bfield-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (bl) { bl[b.dataset.bfield] = ""; saveDraft(true); renderL2(); } return; }
     if (act === "study-preview") { saveDraft(true); status("Opening your current draft in a new tab\u2026"); return; }
     if (act === "add") { data[list].unshift(blank(list)); apply(true); renderBody(); const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0; status("Added at the top \u2014 edit it right here.", true); }
@@ -1299,15 +1299,28 @@
     return Array.prototype.map.call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, "0"); }).join("");
   }
   function extForMime(mime) {
-    return ({ "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/svg+xml": "svg", "image/avif": "avif", "image/bmp": "bmp" })[String(mime).toLowerCase()] || "img";
+    return ({
+      "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/svg+xml": "svg", "image/avif": "avif", "image/bmp": "bmp",
+      "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov", "video/ogg": "ogv",
+      "application/pdf": "pdf",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+      "application/vnd.ms-powerpoint": "ppt",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+      "application/msword": "doc",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+      "application/vnd.ms-excel": "xls"
+    })[String(mime).toLowerCase()] || (/^image\//i.test(mime) ? "png" : "bin");
   }
   function isHostedPath(v) { return typeof v === "string" && v.indexOf("/" + UPLOAD_DIR) === 0; }
   function rawUrlFor(path) { return GH_RAW + String(path).replace(/^\//, ""); }
   // In the admin preview a hosted path can't load from localhost until it's pulled —
   // so show the in-memory bytes (instant) or the raw GitHub URL (works right after hosting).
   function previewSrc(v) {
-    if (isHostedPath(v)) return hostedBytes[v] || rawUrlFor(v);
-    return v;
+    if (!isHostedPath(v)) return v;
+    // Images & videos can preview from the in-memory bytes; documents go through an external
+    // viewer (Office/Google) that must fetch a PUBLIC URL, so hand those the raw GitHub URL.
+    if (/\.(png|jpe?g|webp|gif|avif|bmp|svg|mp4|webm|mov|m4v|ogv)$/i.test(v)) return hostedBytes[v] || rawUrlFor(v);
+    return rawUrlFor(v);
   }
   function resolvePreviewData(d) {
     const c = clone(d);
@@ -1333,16 +1346,16 @@
   }
   // Write one data-URI image to the repo; returns its root-relative path. Identical
   // files collapse to the same path (content hash), so re-uploads never duplicate.
-  async function hostDataUri(uri, token) {
+  async function hostDataUri(uri, token, extHint) {
     const parts = parseDataUri(uri);
-    if (!parts || !/^image\//i.test(parts.mime)) throw new Error("not an image");
+    if (!parts) throw new Error("not a file");
     const rawB64 = parts.base64 ? parts.data : b64(decodeURIComponent(parts.data));
     const hash = await sha256Hex(b64ToBytes(rawB64));
-    const name = hash + "." + extForMime(parts.mime);
+    const name = hash + "." + String(extHint || extForMime(parts.mime)).toLowerCase();
     const repoPath = UPLOAD_DIR + name;
     const webPath = "/" + repoPath;
     hostedBytes[webPath] = uri;
-    const put = await fetch(GH_FILE_API + repoPath, { method: "PUT", headers: ghHeaders(token), body: JSON.stringify({ message: "Add image " + name + " via admin", content: rawB64, branch: GH_BRANCH }) });
+    const put = await fetch(GH_FILE_API + repoPath, { method: "PUT", headers: ghHeaders(token), body: JSON.stringify({ message: "Add " + name + " via admin", content: rawB64, branch: GH_BRANCH }) });
     if (put.status === 422) return webPath; // identical file already hosted → reuse
     if (put.status === 401 || put.status === 403) { const e = new Error("auth"); e.auth = 1; throw e; }
     if (!put.ok) { const j = await put.json().catch(function () { return {}; }); throw new Error((j && j.message) || ("HTTP " + put.status)); }
@@ -1355,7 +1368,7 @@
       if (!o || typeof o !== "object") return;
       for (const k in o) {
         const v = o[k];
-        if (typeof v === "string") { if (/^data:image\//i.test(v)) targets.push([o, k]); }
+        if (typeof v === "string") { if (/^data:(image|video|application)\//i.test(v)) targets.push([o, k]); }
         else if (v && typeof v === "object") walk(v);
       }
     })(data);
@@ -1479,27 +1492,44 @@
     };
     inp.click();
   }
-  // Host the freshly-read image and, on success, swap the embedded data URI for its path.
+  function extFromName(name) { var m = /\.([a-z0-9]+)$/i.exec(name || ""); return m ? m[1].toLowerCase() : ""; }
+  function isVideoVal(v) { return /^data:video\//i.test(v) || /\.(mp4|webm|mov|m4v|ogv)($|\?|#)/i.test(v); }
+  var MEDIA_ACCEPT = "image/*,video/*,.pptx,.ppt,.pdf,.key,.mp4,.webm,.mov,.gif,.docx,.xlsx";
+  // Media slots accept images, video, PowerPoint & PDF — hosted in the repo just like images.
+  function pickMedia(cb) {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = MEDIA_ACCEPT;
+    inp.onchange = function () {
+      const f = inp.files && inp.files[0]; if (!f) return;
+      if (f.size > 45 * 1024 * 1024) { status("\u201c" + (f.name || "That file") + "\u201d is " + Math.round(f.size / 1048576) + " MB \u2014 too large to embed. Host it (YouTube, Vimeo, OneDrive/Stream) and paste the link instead."); return; }
+      fileToDataUri(f).then(function (uri) { cb(uri); hostUploaded(uri, f, cb); });
+    };
+    inp.click();
+  }
+  // Host the freshly-read file and, on success, swap the embedded data URI for its lean path.
   function hostUploaded(uri, file, cb) {
-    const nm = (file && file.name) || "Image";
-    imgDims(uri).then(function (d) {
-      const low = !!(d && d.w && d.w < 1400) && !/^data:image\/svg/i.test(uri);
-      const dims = d && d.w ? d.w + "\u00d7" + d.h + "px" : "";
-      const softNote = low ? " \u2014 heads up: " + dims + " is small for a full-width slot and may look soft when shown large." : (dims ? " (" + dims + ")" : "");
+    const nm = (file && file.name) || "File";
+    const ext = extFromName(nm);
+    const isImg = /^data:image\//i.test(uri);
+    const finish = function (low, note) {
       const token = localStorage.getItem(GH_TOKEN_KEY);
-      if (!token) {
-        status("\u201c" + nm + "\u201d added at full, original quality" + softNote + " It\u2019s embedded for now \u2014 connect GitHub on Publish and it becomes a hosted file automatically.");
-        return;
-      }
-      status("Hosting \u201c" + nm + "\u201d at full quality\u2026");
-      hostDataUri(uri, token).then(function (path) {
+      if (!token) { status("\u201c" + nm + "\u201d added" + note + " \u2014 embedded for now; connect GitHub on Publish and it becomes a hosted file automatically."); return; }
+      status("Hosting \u201c" + nm + "\u201d\u2026");
+      hostDataUri(uri, token, ext).then(function (path) {
         cb(path); // content.json + draft now carry just a lean path; the preview is the real file
-        status("\u201c" + nm + "\u201d hosted at full, original quality" + softNote, !low);
+        status("\u201c" + nm + "\u201d hosted" + (isImg ? " at full, original quality" : "") + note, !low);
       }).catch(function (e) {
-        if (e && e.auth) status("GitHub didn\u2019t accept your sign-in \u2014 \u201c" + nm + "\u201d stays embedded at full quality and will be hosted when you Publish.");
-        else status("Couldn\u2019t host \u201c" + nm + "\u201d just now \u2014 it\u2019s embedded at full quality and will be hosted on Publish.");
+        if (e && e.auth) status("GitHub didn\u2019t accept your sign-in \u2014 \u201c" + nm + "\u201d stays embedded and will be hosted when you Publish.");
+        else status("Couldn\u2019t host \u201c" + nm + "\u201d just now \u2014 it\u2019s embedded and will be hosted on Publish.");
       });
-    });
+    };
+    if (isImg) {
+      imgDims(uri).then(function (d) {
+        const low = !!(d && d.w && d.w < 1400) && !/^data:image\/svg/i.test(uri);
+        const dims = d && d.w ? d.w + "\u00d7" + d.h + "px" : "";
+        finish(low, low ? " \u2014 heads up: " + dims + " is small for a full-width slot and may look soft when shown large." : (dims ? " (" + dims + ")" : ""));
+      });
+    } else { finish(false, ""); }
   }
   function pickResume(cb) {
     const inp = document.createElement("input");

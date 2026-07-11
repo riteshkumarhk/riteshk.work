@@ -30,7 +30,8 @@
   }
   var FS_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
   function figmaEmbed(url) { return /embed/i.test(url) && /figma\.com/i.test(url) ? url : ("https://www.figma.com/embed?embed_host=ritesh&url=" + encodeURIComponent(url)); }
-  function officeEmbed(url) { return "https://view.officeapps.live.com/op/embed.aspx?src=" + encodeURIComponent(url); }
+  function absUrl(u) { try { return new URL(u, location.href).href; } catch (e) { return u; } }
+  function officeEmbed(url) { return "https://view.officeapps.live.com/op/embed.aspx?src=" + encodeURIComponent(absUrl(url)); }
   function ytEmbed(url) {
     var y = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
     if (y) return "https://www.youtube.com/embed/" + y[1];
@@ -61,7 +62,7 @@
     if (!url) return "";
     var kind = mediaKind(m);
     if (kind === "figma") return frameEl(figmaEmbed(url), cls, "prototype");
-    if (kind === "office") return frameEl(/^https?:/i.test(url) ? officeEmbed(url) : url, cls, "document");
+    if (kind === "office") return frameEl(officeEmbed(url), cls, "slideshow");
     if (kind === "pdf") return frameEl(url + (/[#?]/.test(url) ? "" : "#view=FitH"), cls, "PDF");
     if (kind === "embed") return frameEl(ytEmbed(url), cls, "video");
     if (kind === "video") {
