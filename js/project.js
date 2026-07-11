@@ -67,7 +67,7 @@
     if (kind === "embed") return frameEl(ytEmbed(url), cls, "video");
     if (kind === "video") {
       var poster = m.poster ? ' poster="' + attr(m.poster) + '"' : "";
-      if (m.controls) return '<video class="' + cls + '" src="' + attr(url) + '"' + poster + ' controls playsinline preload="metadata"></video>';
+      if (m.controls) return '<video class="' + cls + '" src="' + attr(url) + '"' + poster + ' controls controlsList="nodownload noplaybackrate" disablepictureinpicture playsinline preload="metadata"></video>';
       return '<video class="' + cls + '" src="' + attr(url) + '"' + poster + ' autoplay muted loop playsinline preload="metadata"></video>';
     }
     var cap = attr(m.caption || "");
