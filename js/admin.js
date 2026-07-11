@@ -56,9 +56,14 @@
   };
   const AI_TEXT_FALLBACK = { openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"], anthropic: ["claude-3-5-sonnet-latest", "claude-3-5-sonnet-20241022", "claude-3-7-sonnet-latest", "claude-sonnet-4-20250514", "claude-3-haiku-20240307"], gemini: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"], custom: [] };
   const AI_IMG_FALLBACK = { openai: ["gpt-image-1", "dall-e-3", "dall-e-2"], gemini: ["gemini-2.0-flash-preview-image-generation", "imagen-3.0-generate-002"], anthropic: [], custom: [] };
-  const STUDY_BLOCK_TYPES = [
-    ["text", "Text"], ["statement", "Statement"], ["metrics", "Metrics"],
-    ["steps", "Steps"], ["media", "Media"], ["split", "Before / after"], ["faq", "FAQ"],
+  const SECTION_GALLERY = [
+    { type: "text", name: "Text", tag: "Narrative", desc: "A heading, a paragraph and optional bullets \u2014 your everyday storytelling block.", best: "Context \u00b7 problem \u00b7 approach \u00b7 learnings" },
+    { type: "statement", name: "Statement", tag: "Pull-quote", desc: "One bold line that stands on its own, with an optional sub-line.", best: "A thesis \u00b7 a principle \u00b7 a takeaway" },
+    { type: "metrics", name: "Metrics", tag: "Impact", desc: "A row of big numbers, each with a small label.", best: "Results \u2014 users, growth, ratings, revenue" },
+    { type: "steps", name: "Steps", tag: "Process", desc: "A numbered sequence of titled steps.", best: "Your approach, method or timeline" },
+    { type: "media", name: "Media", tag: "Visuals", desc: "Images, video, Figma, PDF or slides with captions.", best: "Screens \u00b7 prototypes \u00b7 before/after shots" },
+    { type: "split", name: "Before / after", tag: "Compare", desc: "Two labelled columns placed side by side.", best: "Before vs after \u00b7 problem vs solution" },
+    { type: "faq", name: "FAQ", tag: "Q & A", desc: "A list of question-and-answer pairs.", best: "Objections \u00b7 context \u00b7 scope \u00b7 details" },
   ];
 
   let data = null;
@@ -434,6 +439,60 @@
     var st = data.work[i].study;
     return '<div class="af"><label class="af__label">' + label + '</label><input type="text" data-study="' + i + '" data-sfield="' + field + '" value="' + escAttr(st[field] || "") + '" />' + (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
   }
+  function sectionPreview(type) {
+    switch (type) {
+      case "statement":
+        return '<span class="secprev secprev--statement"><span class="sp__quote">\u201cOne line that lands the whole point.\u201d</span><span class="sp__sub">a short supporting sub-line</span></span>';
+      case "metrics":
+        return '<span class="secprev secprev--metrics"><span class="sp__metric"><b>3.2M</b><i>users</i></span><span class="sp__metric"><b>+18%</b><i>retention</i></span><span class="sp__metric"><b>4.8</b><i>rating</i></span></span>';
+      case "steps":
+        return '<span class="secprev secprev--steps"><span class="sp__step"><b>01</b><i>Discover</i></span><span class="sp__step"><b>02</b><i>Design</i></span><span class="sp__step"><b>03</b><i>Ship</i></span></span>';
+      case "media":
+        return '<span class="secprev secprev--media"><span class="sp__frame">\u25b6</span><span class="sp__cap">A caption for the visual</span></span>';
+      case "split":
+        return '<span class="secprev secprev--split"><span class="sp__col"><em>Before</em><i></i><i></i></span><span class="sp__col sp__col--after"><em>After</em><i></i><i></i></span></span>';
+      case "faq":
+        return '<span class="secprev secprev--faq"><span class="sp__qa"><b>Q</b> Why this approach?</span><span class="sp__qa"><b>A</b> Because it earns trust fast.</span><span class="sp__qa"><b>Q</b> What changed?</span></span>';
+      default:
+        return '<span class="secprev secprev--text"><span class="sp__kick">Context</span><span class="sp__h">The problem</span><span class="sp__body">A short paragraph that sets up the situation and the stakes.</span><span class="sp__bul">Point one</span><span class="sp__bul">Point two</span></span>';
+    }
+  }
+  function sectionPicker(i) {
+    var modal = document.createElement("div");
+    modal.className = "pass pass--wide secpick";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">Add a section</div>' +
+      '<div class="pass__sub">Pick the layout that fits your content \u2014 this is how each one looks on your live page.</div>' +
+      '<div class="secpick__grid">' +
+      SECTION_GALLERY.map(function (s) {
+        return '<button type="button" class="secpick__card" data-pick="' + s.type + '">' +
+          '<span class="secpick__prev">' + sectionPreview(s.type) + "</span>" +
+          '<span class="secpick__name">' + escHtml(s.name) + '<span class="secpick__tag">' + escHtml(s.tag) + "</span></span>" +
+          '<span class="secpick__desc">' + escHtml(s.desc) + "</span>" +
+          '<span class="secpick__best">' + escHtml(s.best) + "</span></button>";
+      }).join("") +
+      "</div>" +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button></div></div>';
+    document.body.appendChild(modal);
+    var onKey = function (e) { if (e.key === "Escape") close(); };
+    var close = function () { modal.remove(); document.removeEventListener("keydown", onKey); };
+    document.addEventListener("keydown", onKey);
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    modal.querySelectorAll("[data-pick]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var type = btn.getAttribute("data-pick");
+        var st = data.work[i].study || (data.work[i].study = blankStudy());
+        st.blocks = st.blocks || [];
+        st.blocks.push(blankBlock(type));
+        openBlock = st.blocks.length - 1;
+        close();
+        saveDraft(true); renderL2();
+        var meta = SECTION_GALLERY.filter(function (x) { return x.type === type; })[0] || { name: type };
+        status("Added a \u201c" + meta.name + "\u201d section \u2014 fill it in below.", true);
+      });
+    });
+  }
   function studyEditor(w, i) {
     var st = w.study;
     var blocks = st.blocks || (st.blocks = []);
@@ -450,7 +509,7 @@
       '<div class="af__row">' + smeta(i, "team", "Team") + smeta(i, "scope", "Scope") + "</div>" +
       "</section>";
     var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
-    var add = '<div class="study__add">' + STUDY_BLOCK_TYPES.map(function (t) { return '<button class="btn btn--add study__addbtn" data-act="study-addblock" data-index="' + i + '" data-type="' + t[0] + '">+ ' + t[1] + "</button>"; }).join("") + "</div>";
+    var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
     var unlockBlock = '<section class="l2grp"><div class="l2grp__head">Deeper-cut pass <span>\u2014 optional gate for \u201cLocked\u201d sections</span></div>' +
       '<div class="af"><input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
       '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks \u00b7 case-insensitive \u00b7 locked content still ships in your file (soft gate)</div></div></section>";
@@ -864,6 +923,7 @@
     if (act === "csgen-ref-toggle") { const wrap = b.closest(".csgen__ref"); if (wrap) { const open = wrap.classList.toggle("is-open"); b.textContent = (open ? "\u2212" : "+") + " Paste a reference case study to echo (optional)"; const cw = data.work[i]; if (cw) csgenState(cw.id).refShow = open; } return; }
     if (act === "study-toggle") { openL2(i); return; }
     if (act === "study-close") { closeL2(); return; }
+    if (act === "study-pick") { sectionPicker(i); return; }
     if (act === "study-blocktoggle") {
       const j = +b.dataset.bindex;
       openBlock = (openBlock === j) ? -1 : j;
