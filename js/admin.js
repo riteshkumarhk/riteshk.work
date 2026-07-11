@@ -36,6 +36,9 @@
   const GH_API = "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/content.json";
   const GH_TOKEN_KEY = "rk:gh:token";
   const GH_NEW_TOKEN_URL = "https://github.com/settings/tokens/new?description=riteshk.work%20publishing&scopes=public_repo";
+  const GH_RAW = "https://raw.githubusercontent.com/" + GH_OWNER + "/" + GH_REPO + "/" + GH_BRANCH + "/";
+  const GH_FILE_API = "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/";
+  const UPLOAD_DIR = "assets/uploads/";
   const DRAFT_SIG_KEY = "rk:content:draft:sig";
   const PREVIEW_SRC = "index.html?preview=1&lite=1";
   const ADMIN_MIN = 900; // below this the split editor can't fit — admin is disabled
@@ -83,6 +86,7 @@
   let menuEl = null;
   const ticketPlain = {}; // owner-only plaintext tickets, never published
   const studyUnlockPlain = {}; // owner-only plaintext deeper-cut passes, never published
+  const hostedBytes = {}; // "/assets/uploads/<hash>.<ext>" -> data URI (this session) for instant local preview
 
   const TABS = [
     ["landing", "Landing"],
@@ -148,8 +152,10 @@
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
         localStorage.setItem(DRAFT_SIG_KEY, (window.RK && window.RK.publishedSig) || "");
-      } catch (e) {}
-      status("Draft saved locally");
+        status("Draft saved locally");
+      } catch (e) {
+        status("\u26a0 Draft too big to auto-save locally \u2014 your images are safe at full quality here. Hit Publish to store them (large ones are hosted as files automatically).");
+      }
     };
     if (immediate) save();
     else saveTimer = setTimeout(save, 400);
@@ -164,7 +170,7 @@
   function previewApply() {
     const w = frame && frame.contentWindow;
     if (w && w.RK && w.RK.render) {
-      try { w.RK.render(data); forceRevealDoc(w.document); } catch (e) {}
+      try { w.RK.render(resolvePreviewData(data)); forceRevealDoc(w.document); } catch (e) {}
     }
   }
 
@@ -344,7 +350,7 @@
     }).join("");
     return '<div class="imgblk"><div class="af__label">Cover image</div>' +
       '<div class="af__hint" style="margin:-.15rem 0 .5rem">Used as the case-study cover AND the homepage card thumbnail. Leave empty to show an animated plate below.</div>' +
-      '<div class="imgblk__preview' + (has ? " has" : "") + '">' + (has ? '<img src="' + escAttr(w.image) + '" alt="" />' : "<span>No image \u2014 the animated placeholder is shown</span>") + "</div>" +
+      '<div class="imgblk__preview' + (has ? " has" : "") + '">' + (has ? '<img src="' + escAttr(previewSrc(w.image)) + '" alt="" />' : "<span>No image \u2014 the animated placeholder is shown</span>") + "</div>" +
       '<input type="text" data-list="work" data-index="' + i + '" data-field="image" value="' + escAttr(w.image || "") + '" placeholder="Paste an image URL\u2026" />' +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="img-upload" data-index="' + i + '">Upload\u2026</button>' +
       (has ? '<button class="btn btn--ghost" data-act="img-clear" data-index="' + i + '">Remove</button>' : "") + "</div>" +
@@ -1003,15 +1009,16 @@
   function previewProject(id, keep) {
     const w = frameWin();
     if (!(w && w.RK)) return;
-    try { w.RK.data = clone(data); } catch (e) {}
-    if (!keep) { try { w.RK.render(data); forceRevealDoc(w.document); } catch (e) {} }
+    const pd = resolvePreviewData(data);
+    try { w.RK.data = pd; } catch (e) {}
+    if (!keep) { try { w.RK.render(pd); forceRevealDoc(w.document); } catch (e) {} }
     if (w.RK.openProject) { try { w.RK.openProject(id, { push: false, keepScroll: !!keep, silent: !!keep }); } catch (e) {} }
   }
   function previewLanding() {
     const w = frameWin();
     if (!(w && w.RK)) return;
     if (w.RK.closeProject) { try { w.RK.closeProject({ push: false }); } catch (e) {} }
-    try { w.RK.data = clone(data); w.RK.render(data); forceRevealDoc(w.document); } catch (e) {}
+    try { const pd = resolvePreviewData(data); w.RK.data = pd; w.RK.render(pd); forceRevealDoc(w.document); } catch (e) {}
   }
   function refreshL2Preview() {
     if (openStudy < 0) return;
@@ -1172,7 +1179,7 @@
     const sv = (data.specialViews || [])[i];
     const w = frame && frame.contentWindow;
     if (w && w.RK && sv) {
-      try { w.RK.render(w.RK.deriveSpecialData(data, sv)); forceRevealDoc(w.document); } catch (e) {}
+      try { w.RK.render(resolvePreviewData(w.RK.deriveSpecialData(data, sv))); forceRevealDoc(w.document); } catch (e) {}
       status("Previewing \u201c" + (sv.name || "view") + "\u201d \u2014 edit anything to return to the full site.");
     }
   }
@@ -1193,7 +1200,7 @@
     if (act === "sv-preview") { svPreview(i); return; }
     if (act === "plate-sample") { data.work[i].theme = b.dataset.theme; data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Motion placeholder applied.", true); return; }
     if (act === "img-clear") { data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Image removed."); return; }
-    if (act === "img-upload") { pickImage(function (uri) { data.work[i].image = uri; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Image uploaded.", true); }); return; }
+    if (act === "img-upload") { pickImage(function (uri) { data.work[i].image = uri; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); }); return; }
     if (act === "img-generate") { imgGenerate(i); return; }
     if (act === "img-modify") { imgModify(i); return; }
     if (act === "resume-upload") { pickResume(function (uri) { setPath(data, "contact.resume", uri); apply(true); renderBody(); status("R\u00e9sum\u00e9 embedded \u2014 the dock button is now visible.", true); }); return; }
@@ -1236,10 +1243,10 @@
     if (act === "item-remove") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items.splice(+b.dataset.iindex, 1); saveDraft(true); renderL2(); return; }
     if (act === "item-up") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (k > 0) { [bl.items[k - 1], bl.items[k]] = [bl.items[k], bl.items[k - 1]]; saveDraft(true); renderL2(); } return; }
     if (act === "item-down") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (k < bl.items.length - 1) { [bl.items[k + 1], bl.items[k]] = [bl.items[k], bl.items[k + 1]]; saveDraft(true); renderL2(); } return; }
-    if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickImage(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; saveDraft(true); renderL2(); status("Image added.", true); } }); return; }
+    if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickImage(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; saveDraft(true); renderL2(); } }); return; }
     if (act === "item-icon") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield, name = b.dataset.icon; const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = name; saveDraft(true); refreshL2Preview(); const grid = b.closest(".iconpick"); if (grid) grid.querySelectorAll(".iconpick__b").forEach(function (x) { x.classList.toggle("is-on", x === b); }); const dd = b.closest(".icondd"); if (dd) { const cur = dd.querySelector(".icondd__cur"); if (cur) cur.innerHTML = name ? admIcon(name) : "\u2205"; const nm = dd.querySelector(".icondd__name"); if (nm) nm.textContent = name || "No icon"; if (dd.tagName === "DETAILS") dd.open = false; } } return; }
     if (act === "item-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (bl && bl.items && bl.items[k]) { bl.items[k][b.dataset.ifield] = ""; saveDraft(true); renderL2(); } return; }
-    if (act === "bfield-upload") { const bj = +b.dataset.bindex, f = b.dataset.bfield; pickImage(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl) { bl[f] = uri; saveDraft(true); renderL2(); status("Image added.", true); } }); return; }
+    if (act === "bfield-upload") { const bj = +b.dataset.bindex, f = b.dataset.bfield; pickImage(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl) { bl[f] = uri; saveDraft(true); renderL2(); } }); return; }
     if (act === "bfield-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (bl) { bl[b.dataset.bfield] = ""; saveDraft(true); renderL2(); } return; }
     if (act === "study-preview") { saveDraft(true); status("Opening your current draft in a new tab\u2026"); return; }
     if (act === "add") { data[list].unshift(blank(list)); apply(true); renderBody(); const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0; status("Added at the top \u2014 edit it right here.", true); }
@@ -1272,10 +1279,100 @@
   }
   function b64(str) { return btoa(unescape(encodeURIComponent(str))); }
 
+  /* ---------- image hosting: upload files to the repo, store lean paths ----------
+     Uploaded images are written to the repo as real, content-addressed files
+     (assets/uploads/<sha256>.<ext>) and referenced by a short path — so content.json
+     stays tiny, the file is served at full, original quality, and the editor preview
+     loads the very same file a visitor sees. No compression, ever. */
+  function parseDataUri(uri) {
+    const m = /^data:([^;,]+)?(;base64)?,([\s\S]*)$/i.exec(uri || "");
+    if (!m) return null;
+    return { mime: m[1] || "application/octet-stream", base64: !!m[2], data: m[3] };
+  }
+  function b64ToBytes(s) {
+    const bin = atob(s); const a = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+    return a;
+  }
+  async function sha256Hex(bytes) {
+    const buf = await crypto.subtle.digest("SHA-256", bytes);
+    return Array.prototype.map.call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+  }
+  function extForMime(mime) {
+    return ({ "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/svg+xml": "svg", "image/avif": "avif", "image/bmp": "bmp" })[String(mime).toLowerCase()] || "img";
+  }
+  function isHostedPath(v) { return typeof v === "string" && v.indexOf("/" + UPLOAD_DIR) === 0; }
+  function rawUrlFor(path) { return GH_RAW + String(path).replace(/^\//, ""); }
+  // In the admin preview a hosted path can't load from localhost until it's pulled —
+  // so show the in-memory bytes (instant) or the raw GitHub URL (works right after hosting).
+  function previewSrc(v) {
+    if (isHostedPath(v)) return hostedBytes[v] || rawUrlFor(v);
+    return v;
+  }
+  function resolvePreviewData(d) {
+    const c = clone(d);
+    (function walk(o) {
+      if (!o || typeof o !== "object") return;
+      for (const k in o) {
+        const v = o[k];
+        if (typeof v === "string") { if (isHostedPath(v)) o[k] = previewSrc(v); }
+        else if (v && typeof v === "object") walk(v);
+      }
+    })(c);
+    return c;
+  }
+  function imgDims(uri) {
+    return new Promise(function (resolve) {
+      try {
+        const im = new Image();
+        im.onload = function () { resolve({ w: im.naturalWidth, h: im.naturalHeight }); };
+        im.onerror = function () { resolve(null); };
+        im.src = uri;
+      } catch (e) { resolve(null); }
+    });
+  }
+  // Write one data-URI image to the repo; returns its root-relative path. Identical
+  // files collapse to the same path (content hash), so re-uploads never duplicate.
+  async function hostDataUri(uri, token) {
+    const parts = parseDataUri(uri);
+    if (!parts || !/^image\//i.test(parts.mime)) throw new Error("not an image");
+    const rawB64 = parts.base64 ? parts.data : b64(decodeURIComponent(parts.data));
+    const hash = await sha256Hex(b64ToBytes(rawB64));
+    const name = hash + "." + extForMime(parts.mime);
+    const repoPath = UPLOAD_DIR + name;
+    const webPath = "/" + repoPath;
+    hostedBytes[webPath] = uri;
+    const put = await fetch(GH_FILE_API + repoPath, { method: "PUT", headers: ghHeaders(token), body: JSON.stringify({ message: "Add image " + name + " via admin", content: rawB64, branch: GH_BRANCH }) });
+    if (put.status === 422) return webPath; // identical file already hosted → reuse
+    if (put.status === 401 || put.status === 403) { const e = new Error("auth"); e.auth = 1; throw e; }
+    if (!put.ok) { const j = await put.json().catch(function () { return {}; }); throw new Error((j && j.message) || ("HTTP " + put.status)); }
+    return webPath;
+  }
+  // Replace every still-embedded data:image in `data` with a hosted path (used at publish).
+  async function hostEmbeddedImages(token) {
+    const targets = [];
+    (function walk(o) {
+      if (!o || typeof o !== "object") return;
+      for (const k in o) {
+        const v = o[k];
+        if (typeof v === "string") { if (/^data:image\//i.test(v)) targets.push([o, k]); }
+        else if (v && typeof v === "object") walk(v);
+      }
+    })(data);
+    let done = 0;
+    for (const t of targets) {
+      try { t[0][t[1]] = await hostDataUri(t[0][t[1]], token); done++; }
+      catch (e) { if (e && e.auth) throw e; /* otherwise leave embedded, it still publishes */ }
+    }
+    return done;
+  }
+
   async function ghPublish(token) {
-    const json = beforePublish();
     status("Publishing to GitHub\u2026");
     try {
+      const hosted = await hostEmbeddedImages(token);
+      if (hosted) status("Hosted " + hosted + " image" + (hosted > 1 ? "s" : "") + " at full quality \u2014 finishing publish\u2026");
+      const json = beforePublish();
       let sha;
       const getRes = await fetch(GH_API + "?ref=" + GH_BRANCH + "&t=" + Date.now(), { headers: ghHeaders(token) });
       if (getRes.status === 401 || getRes.status === 403) { authFailed(); return; }
@@ -1293,6 +1390,7 @@
       if (window.RK) { window.RK.published = clone(data); if (window.RK.sig) window.RK.publishedSig = window.RK.sig(JSON.stringify(data)); }
       status("Published \u2014 your site updates in about a minute.", true);
     } catch (e) {
+      if (e && e.auth) { authFailed(); return; }
       // Transient/network hiccup — keep the connection, just ask them to retry.
       status("Couldn\u2019t reach GitHub just now. Hit Publish again to retry.");
     }
@@ -1373,16 +1471,35 @@
     inp.type = "file"; inp.accept = "image/*";
     inp.onchange = function () {
       const f = inp.files && inp.files[0]; if (!f) return;
-      // Embed the ORIGINAL file untouched — no downscaling, no re-encoding, no format change.
-      // Quality is preserved exactly (a design portfolio must never lose fidelity).
+      // Read the ORIGINAL bytes untouched — no downscaling, no re-encoding, no format change.
       fileToDataUri(f).then(function (uri) {
-        const mb = (f.size || 0) / (1024 * 1024);
-        if (mb > 4) status("\u201c" + (f.name || "Image") + "\u201d embedded at full, original quality (" + mb.toFixed(1) + " MB). It stays pixel-perfect \u2014 for very large images you can host them and paste a URL to keep the published file lean.");
-        else status("Image added at full, original quality \u2014 no compression.", true);
-        cb(uri);
+        cb(uri);                  // instant, full-quality preview + safe fallback value
+        hostUploaded(uri, f, cb); // then host it as a real file and swap in the lean path
       });
     };
     inp.click();
+  }
+  // Host the freshly-read image and, on success, swap the embedded data URI for its path.
+  function hostUploaded(uri, file, cb) {
+    const nm = (file && file.name) || "Image";
+    imgDims(uri).then(function (d) {
+      const low = !!(d && d.w && d.w < 1400) && !/^data:image\/svg/i.test(uri);
+      const dims = d && d.w ? d.w + "\u00d7" + d.h + "px" : "";
+      const softNote = low ? " \u2014 heads up: " + dims + " is small for a full-width slot and may look soft when shown large." : (dims ? " (" + dims + ")" : "");
+      const token = localStorage.getItem(GH_TOKEN_KEY);
+      if (!token) {
+        status("\u201c" + nm + "\u201d added at full, original quality" + softNote + " It\u2019s embedded for now \u2014 connect GitHub on Publish and it becomes a hosted file automatically.");
+        return;
+      }
+      status("Hosting \u201c" + nm + "\u201d at full quality\u2026");
+      hostDataUri(uri, token).then(function (path) {
+        cb(path); // content.json + draft now carry just a lean path; the preview is the real file
+        status("\u201c" + nm + "\u201d hosted at full, original quality" + softNote, !low);
+      }).catch(function (e) {
+        if (e && e.auth) status("GitHub didn\u2019t accept your sign-in \u2014 \u201c" + nm + "\u201d stays embedded at full quality and will be hosted when you Publish.");
+        else status("Couldn\u2019t host \u201c" + nm + "\u201d just now \u2014 it\u2019s embedded at full quality and will be hosted on Publish.");
+      });
+    });
   }
   function pickResume(cb) {
     const inp = document.createElement("input");
