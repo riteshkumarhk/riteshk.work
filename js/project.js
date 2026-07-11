@@ -20,7 +20,12 @@
 
   // Any media field accepts an image, gif or video (string URL/data-URI, or
   // an object { src, kind, poster, controls, caption }). We pick the element.
-  function mediaSrc(m) { return (m && (m.src || m.image)) || ""; }
+  function mediaSrc(m) {
+    var s = (m && (m.src || m.image)) || "";
+    // Allow pasting a whole embed snippet (e.g. OneDrive/YouTube <iframe src="...">) — pull the URL out.
+    var f = /<iframe[^>]*\ssrc=["']([^"']+)["']/i.exec(s);
+    return f ? f[1] : s;
+  }
   function isVideo(url, kind) {
     if (kind === "video") return true;
     if (kind === "image" || kind === "gif") return false;
