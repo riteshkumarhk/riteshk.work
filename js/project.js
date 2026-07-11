@@ -46,6 +46,7 @@
     var url = mediaSrc(m);
     if (!url) return "image";
     if (/figma\.com/i.test(url)) return "figma";
+    if (/(1drv\.ms|onedrive\.live\.com|onedrive\.com|\.sharepoint\.com)/i.test(url)) return "embed";
     if (/\.pdf($|\?|#)/i.test(url)) return "pdf";
     if (/\.(pptx?|docx?|xlsx?|key)($|\?|#)/i.test(url)) return "office";
     if (/(youtube\.com|youtu\.be|vimeo\.com)/i.test(url)) return "embed";
@@ -64,7 +65,7 @@
     if (kind === "figma") return frameEl(figmaEmbed(url), cls, "prototype");
     if (kind === "office") return frameEl(officeEmbed(url), cls, "slideshow");
     if (kind === "pdf") return frameEl(url + (/[#?]/.test(url) ? "" : "#view=FitH"), cls, "PDF");
-    if (kind === "embed") return frameEl(ytEmbed(url), cls, "video");
+    if (kind === "embed") return frameEl(ytEmbed(url), cls, /(1drv|onedrive|sharepoint)/i.test(url) ? "slideshow" : "video");
     if (kind === "video") {
       var poster = m.poster ? ' poster="' + attr(m.poster) + '"' : "";
       if (m.controls) return '<video class="' + cls + '" src="' + attr(url) + '"' + poster + ' controls controlsList="nodownload noplaybackrate" disablepictureinpicture playsinline preload="metadata"></video>';
