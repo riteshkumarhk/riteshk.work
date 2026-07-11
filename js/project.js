@@ -141,7 +141,40 @@
     shield: '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/>',
     check: '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
     bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
-    layers: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>'
+    layers: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
+    heart: '<path d="M20.8 5.6a5.4 5.4 0 0 0-7.7 0L12 6.7l-1.1-1.1a5.4 5.4 0 1 0-7.7 7.7L12 22l8.8-8.7a5.4 5.4 0 0 0 0-7.7z"/>',
+    leaf: '<path d="M11 20A7 7 0 0 1 4 13C4 6 9 3 20 3c0 11-3 16-9 16-2 0-3-.5-3-.5"/><path d="M4 20c1.5-4 4-6.5 8-8"/>',
+    star: '<path d="M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8l-5.8 3.1 1.1-6.5L2.6 9.8l6.5-.9z"/>',
+    rocket: '<path d="M5 13c-1.5 1.5-2 5-2 5s3.5-.5 5-2M9 11a10 10 0 0 1 9-6c1 5-1 8-6 9l-3-3z"/><circle cx="14.5" cy="9.5" r="1.4"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/>',
+    eye: '<path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/>',
+    flag: '<path d="M5 22V4"/><path d="M5 4h12l-2.5 4L17 12H5"/>',
+    gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M4.5 12v9h15v-9"/><path d="M12 8C12 5 13.5 3 15.5 3A2.5 2.5 0 0 1 15.5 8zM12 8C12 5 10.5 3 8.5 3A2.5 2.5 0 0 0 8.5 8z"/>',
+    edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 13a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 0 1-4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 13H4.4a2 2 0 0 1 0-4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 11 4.6V4.4a2 2 0 0 1 4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-1.3 2.9z"/>',
+    chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+    phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.6a16 16 0 0 0 6 6l1-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
+    calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+    pin: '<path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+    award: '<circle cx="12" cy="8" r="6"/><path d="M8.2 13.9 7 22l5-3 5 3-1.2-8.1"/>',
+    like: '<path d="M7 10v11H3V10zM7 10l4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.5l-1.6 7A2 2 0 0 1 17 21H7z"/>',
+    compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2.2 5.3-5.3 2.2 2.2-5.3z"/>',
+    book: '<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>',
+    code: '<path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/>',
+    cloud: '<path d="M18 10a5 5 0 0 0-9.6-1.6A4 4 0 1 0 7 18h10.5A3.5 3.5 0 0 0 18 10z"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    flame: '<path d="M12 22c3.9 0 7-3 7-7 0-3-2-5.5-3.5-7 0 2-1.5 3-2.5 3 0-3-1.5-5.5-4-7 .3 3-1.5 4.5-3 6.7C5.7 10.4 5 12.6 5 15c0 4 3.1 7 7 7z"/>',
+    key: '<circle cx="8" cy="9" r="5"/><path d="M11.5 12.5L21 22M17 18l2-2M14 15l2-2"/>',
+    tag: '<path d="M20.6 13.4 12 22l-9-9V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.3"/>',
+    trophy: '<path d="M8 21h8M12 17v4M6 4h12v5a6 6 0 0 1-12 0zM6 4H3v2a3 3 0 0 0 3 3M18 4h3v2a3 3 0 0 1-3 3"/>',
+    cart: '<circle cx="9" cy="21" r="1.3"/><circle cx="18" cy="21" r="1.3"/><path d="M2 3h3l2.5 12.5h11L21 7H6"/>',
+    hand: '<path d="M18 11V6a1.5 1.5 0 0 0-3 0M15 6V4a1.5 1.5 0 0 0-3 0v2M12 6.5V4a1.5 1.5 0 0 0-3 0v7M9 11V8.5a1.5 1.5 0 0 0-3 0V14c0 3.5 2.5 7 7 7s6-3 6-7v-3a1.5 1.5 0 0 0-3 0"/>',
+    puzzle: '<path d="M10 3h4v3a1.6 1.6 0 0 0 3 0V3h4v4h-3a1.6 1.6 0 0 0 0 3h3v4h-3a1.6 1.6 0 0 0 0 3h3v4h-4v-3a1.6 1.6 0 0 0-3 0v3h-4v-4H7a1.6 1.6 0 0 0 0-3h3v-4H7a1.6 1.6 0 0 0 0-3h3z"/>',
+    filter: '<path d="M3 4h18l-7 8v7l-4 2v-9z"/>',
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>'
   };
   function iconSvg(name) {
     return '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || ICONS.spark) + "</svg>";
@@ -733,7 +766,7 @@
 
   /* ---------- bootstrap ---------- */
   function init() {
-    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; }
+    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = function () { return Object.keys(ICONS); }; }
     window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) updateSpy(); });
     if (PREVIEW) return; // the admin editor drives the overlay; skip link/history/deep-link wiring
     document.addEventListener("click", onDocLinkClick);

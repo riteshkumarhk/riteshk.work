@@ -418,6 +418,14 @@ body.adm-lock .cursor { display: none !important; }
 .rep__ops { display: flex; gap: .3rem; }
 .rep__empty { font-size: .78rem; color: var(--text-faint); padding: .4rem 0 .7rem; }
 
+/* ---------- icon picker grid ---------- */
+.iconpick { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: .35rem; margin-top: .1rem; }
+.iconpick__b { display: grid; place-items: center; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text-dim); cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
+.iconpick__b:hover { color: var(--text); border-color: var(--accent); }
+.iconpick__b.is-on { color: var(--accent); border-color: var(--accent); background: rgba(216, 166, 87, .12); }
+.iconpick__b svg { width: 20px; height: 20px; }
+.iconpick__b--none { font-size: 1.05rem; color: var(--text-faint); }
+
 /* compact work card (L1) */
 .workcard__name { font-family: var(--serif); font-weight: 300; font-size: 1.05rem; color: var(--text); margin: .5rem 0 .2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workcard__feat { margin-bottom: .7rem; }
