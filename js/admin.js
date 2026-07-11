@@ -417,6 +417,7 @@
     }).join("\n");
   }
   function listToText(arr) { return (arr || []).join("\n"); }
+  function arrToListHtml(arr) { return (arr && arr.length) ? "<ul>" + arr.map(function (x) { return "<li>" + rtInlineMd(escForRt(x)) + "</li>"; }).join("") + "</ul>" : ""; }
 
   function sfInput(i, j, field, label, hint) {
     var b = data.work[i].study.blocks[j];
@@ -669,7 +670,11 @@
     else if (b.type === "metrics") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
     else if (b.type === "steps") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
     else if (b.type === "media") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b) + '<div class="af__hint">URLs can be an image, gif, video, Figma prototype, PDF or slide deck \u2014 the type is auto-detected and interactive embeds get a Fullscreen button. For Figma, paste the Share link (turn on \u201cAnyone with the link\u201d). Leave the URL blank for a redacted placeholder.</div>';
-    else if (b.type === "split") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + sfInput(i, j, "leftLabel", "Left label") + sfInput(i, j, "rightLabel", "Right label") + "</div>" + '<div class="af__row">' + mediaInputBlock(i, j, "leftImg", "Left image (optional)") + mediaInputBlock(i, j, "rightImg", "Right image (optional)") + "</div>" + sfArea(i, j, "left", "Left items \u2014 one per line", listToText(b.left), 3) + sfArea(i, j, "right", "Right items \u2014 one per line", listToText(b.right), 3);
+    else if (b.type === "split") {
+      if (Array.isArray(b.left)) b.left = arrToListHtml(b.left);
+      if (Array.isArray(b.right)) b.right = arrToListHtml(b.right);
+      body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + sfInput(i, j, "leftLabel", "Left label") + sfInput(i, j, "rightLabel", "Right label") + "</div>" + '<div class="af__row">' + mediaInputBlock(i, j, "leftImg", "Left image (optional)") + mediaInputBlock(i, j, "rightImg", "Right image (optional)") + "</div>" + richBlock(i, j, "left", "Left content", "Bold, italic, bullets, alignment \u2014 use the bar above.") + richBlock(i, j, "right", "Right content");
+    }
     else if (b.type === "faq") body = itemRepeater(i, j, b);
     else if (b.type === "cards") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
     else if (b.type === "gallery") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b) + '<div class="af__hint">Same URLs as Media \u2014 shown as a swipeable carousel with 1/N counters.</div>';

@@ -189,10 +189,12 @@
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__media">' + shots + "</div>";
   }
   function splitBlock(b) {
-    var col = function (label, arr, img, cls) {
+    var col = function (label, val, img, cls) {
       var media = (img && mediaSrc({ src: img })) ? '<div class="pjb__col-media">' + mediaEl({ src: img }, "pjb__media-el") + "</div>" : "";
-      var list = (arr && arr.length) ? "<ul>" + arr.map(function (x) { return "<li>" + md(x) + "</li>"; }).join("") + "</ul>" : "";
-      return '<div class="pjb__col' + (cls || "") + '"><div class="pjb__col-label">' + esc(label) + "</div>" + media + list + "</div>";
+      var body = Array.isArray(val)
+        ? (val.length ? "<ul>" + val.map(function (x) { return "<li>" + md(x) + "</li>"; }).join("") + "</ul>" : "")
+        : (val ? '<div class="pjb__col-body">' + (isRichHtml(val) ? safeHtml(val) : paras(val)) + "</div>" : "");
+      return '<div class="pjb__col' + (cls || "") + '"><div class="pjb__col-label">' + esc(label) + "</div>" + media + body + "</div>";
     };
     return kicker(b.kicker) + heading(b.heading) +
       '<div class="pjb__split">' + col(b.leftLabel || "Before", b.left, b.leftImg) + col(b.rightLabel || "After", b.right, b.rightImg, " pjb__col--after") + "</div>";

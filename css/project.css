@@ -211,6 +211,14 @@ video.pjb__media-el { background: #000; }
 .pjb__col li { position: relative; padding-left: 1.4rem; font-size: 1rem; line-height: 1.5; color: var(--text-dim); }
 .pjb__col li::before { content: ""; position: absolute; left: 0; top: .58em; width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); }
 .pjb__col--after li::before { background: var(--accent); }
+.pjb__col-body p { font-size: 1rem; line-height: 1.55; color: var(--text-dim); margin: 0 0 .7rem; }
+.pjb__col-body p:last-child { margin-bottom: 0; }
+.pjb__col-body strong { color: var(--text); font-weight: 500; }
+.pjb__col-body em { color: var(--accent); font-style: italic; }
+.pjb__col-body ul, .pjb__col-body ol { margin: .2rem 0; }
+.pjb__col-body ol { padding-left: 1.4rem; list-style: decimal; display: grid; gap: .8rem; }
+.pjb__col-body ol li { padding-left: .3rem; }
+.pjb__col-body ol li::before { display: none; }
 
 /* faq / quick context */
 .pjb__faq { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.6rem; }
