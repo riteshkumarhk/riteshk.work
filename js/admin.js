@@ -354,7 +354,7 @@
       '<div class="imgblk__ai"><input type="text" data-aiprompt="' + i + '" placeholder="' + aiHint + '"' + (canGen ? "" : " disabled") + " />" +
       '<div class="imgblk__row"><button class="btn btn--auto" data-act="img-generate" data-index="' + i + '"' + (canGen ? "" : " disabled") + ">Generate</button>" +
       '<button class="btn btn--ghost" data-act="img-modify" data-index="' + i + '"' + (canGen && has ? "" : " disabled") + ">Modify current</button></div>" +
-      '<div class="imgblk__hint">Uploaded &amp; generated images are embedded in your published file \u2014 a URL keeps it lighter.</div></div></div>';
+      '<div class="imgblk__hint">Uploads are embedded at full, original quality \u2014 no compression or resizing. For very large images, host them and paste a URL to keep the published file lean.</div></div></div>';
   }
 
   function resumeBlock() {
@@ -1369,7 +1369,17 @@
   function pickImage(cb) {
     const inp = document.createElement("input");
     inp.type = "file"; inp.accept = "image/*";
-    inp.onchange = function () { const f = inp.files && inp.files[0]; if (!f) return; fileToDataUri(f).then(compressDataUri).then(cb); };
+    inp.onchange = function () {
+      const f = inp.files && inp.files[0]; if (!f) return;
+      // Embed the ORIGINAL file untouched — no downscaling, no re-encoding, no format change.
+      // Quality is preserved exactly (a design portfolio must never lose fidelity).
+      fileToDataUri(f).then(function (uri) {
+        const mb = (f.size || 0) / (1024 * 1024);
+        if (mb > 4) status("\u201c" + (f.name || "Image") + "\u201d embedded at full, original quality (" + mb.toFixed(1) + " MB). It stays pixel-perfect \u2014 for very large images you can host them and paste a URL to keep the published file lean.");
+        else status("Image added at full, original quality \u2014 no compression.", true);
+        cb(uri);
+      });
+    };
     inp.click();
   }
   function pickResume(cb) {
