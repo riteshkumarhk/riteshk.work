@@ -443,6 +443,107 @@
               }
             ],
             "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "Rather than treating onboarding as separate experiences owned by different teams, the Unified FRE vision proposed a single onboarding framework where onboarding, activation, personalization, consent, and habit formation worked together as one cohesive system.<br><br>The goal wasn't simply to merge screens.<br><br>The goal was to create a continuous journey that helped users understand, personalize, and adopt Edge from day one.",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false
+          },
+          {
+            "type": "media",
+            "nav": "Bringing Vision Into Reality",
+            "kicker": "Bringing Vision Into Reality",
+            "heading": "Designing the Shipping Experience",
+            "items": [
+              {
+                "src": "/assets/uploads/d8a0b74b20edcf405a8ae82ed2f33352a853ac66416a655bc7c9f88d1b9e8483.png",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "type": "workflow",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "flow": "linear",
+            "items": [
+              {
+                "label": "Design LT reviews",
+                "note": ""
+              },
+              {
+                "label": "Product LT buy-in",
+                "note": ""
+              },
+              {
+                "label": "Funding",
+                "note": ""
+              },
+              {
+                "label": "Engineering realities",
+                "note": ""
+              },
+              {
+                "label": "Privacy constraints",
+                "note": ""
+              },
+              {
+                "label": "Designing production UX",
+                "note": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "Once leadership aligned on the opportunity, the work evolved from exploration into product development. <span style=\"font-size: 0.9rem;\">This required translating the vision into something that could actually ship.</span>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false
+          },
+          {
+            "type": "cards",
+            "nav": "",
+            "kicker": "",
+            "heading": "Principles That Survived",
+            "items": [
+              {
+                "title": "One Surface",
+                "body": "Users should experience onboarding as a single continuous journey rather than multiple disconnected flows.",
+                "icon": "layers",
+                "src": ""
+              },
+              {
+                "title": "Progressive Value",
+                "body": "Users should continuously discover value while onboarding instead of completing setup before seeing benefits.",
+                "icon": "gear",
+                "src": ""
+              },
+              {
+                "title": "Reduce Effort",
+                "body": "<p>The best onboarding experiences remove future work rather than create additional tasks, reducing friction beyond onboarding.</p>",
+                "icon": "clock",
+                "src": ""
+              },
+              {
+                "title": "Easy Experimentation",
+                "body": "Easy to reassembled, reordered, and optimize for the best business outcomes without sacrificing user satisfaction.",
+                "icon": "filter",
+                "src": ""
+              }
+            ],
+            "hsize": "sm"
           }
         ]
       }
@@ -587,8 +688,8 @@
             "type": "text",
             "locked": true,
             "encStub": true,
-            "iv": "nvyMt0DyiyLPv8R5",
-            "ct": "8OAeTK5R4M2Qd9Yyvzb0Sh5gPWjnidvm7fvZQFXI/CJ9TqD6HW++LxM6heGTIQ2buVkzIUkgxVBPdgcioTpZgtmqgzscw0gQxKQ6rNrBGWLTfXZ73MEyjbUOuwcu27q2qHy2Y5YNwMWBU+4sbKaSRqvE83vKXQlHkam2QsZY7hrnHt8pbADjtXtU0zTJ5+DiKNgIyrJAei4uRJX9SmD/vSYJJy2bnc7oRsSJbwS361EFgL0FMG1FtvKqZVYjbD1TumMMdoxcJfkaRLxstIVUspPfTT/Lj8kJvX1e/L19NG7LGZi0+23imsZpYBR8HTDqDpIFo9HKD8FF6xe8VKqpD5Me7bzkDHLQT7R/e8JUP1bhf7Zv3TLTYcnVURc6YUqT5km7Fx5Keb5TONxZ6S9I4/7rgjnnc5IryfKGYymdnuCVXFTG0Wfp38XB227X+SYqsVIKRIjU8pO6u3zpDjBOOV/d+MEuz1xSoH/W+AiUJ7AOuTyQQfiT0x4HZlK9r3knDAGsddmM34E0i2qWg2lv6JUnDYUFepw1Ylp0rH9QcVLfJSzPbf79mKB9j3BQNlbDJMypXEbE+sX/A8s3FAQZBgUm6B3PUvnlind9LlV5SIHUjl1oSyl4qmiM0M/USEcDtLlvtReiM/ad2kDt8apqwv/9YyxVi/IMU2mCDgrgua2+WevD5AcvdN/s8nrTTMTzMkg=",
+            "iv": "lgyFFs6naiOH432d",
+            "ct": "CiNz7AEAK07UgC12ujSFvGDUxceXe3Vwsq9vL5RFEqw13y+pI5FQutseHiAgNB02hugQ6kf3/E4LMpw6ty6TDjwY6j4+M+8JASt16NV2jCruX8GxTnFSNr0c5o3pFtqOrFSX8IpafCznbnFlb6SJNSmoQ8sLAfko3IzBaerigOb4xSVPlIoOVufrfsR7IkYfhHAm6f+qgSt4PawCoH3Hx/uCT4DWtpCccbzoOwmOZxt3PLq7jOxiaYQCek6PN9k5SLEwgwCWmgekvYmUija+Ce1J3R2DNr9jhAglpyLhBd3QhZ9mxZ3lUcVJXjOqt3puEerKUmW7znmzTjQYq4GyoD2msM8zyyxGbwXoK2nzF6qwNhApyknQHZTU5ILYnisylAscs4R533khsIlEKySPUsqC57R1YYmeMQde+wzTMV3xzj7bATX5aYNyxBmJhm5QqWpRiyxyGy8wwXuaa+ThYFUY+sM4GPDu+FZvw6CE6SGL8HvTg1JBHteMKLMES7YhYtGzLj7hlknqFEvuCxZxTmNC45mmzfd1EeHEUrexFhsOzIYv1Wh39yJjcI5PNO8F9YUS5zE8zDkcQC7ba/4WX2getMNu/7lrIaD124ldOPSIMrIDQJ4AIVstTRVnaPIOS4MbF4w4lRNMexKy1N0KxOlGO5Ud7IYLNpeSoJSLMogFeOiOE2CYkAlYV3ot4JNv4ho=",
             "kicker": "Deeper cut",
             "nav": "Deep dive"
           },
@@ -605,9 +706,9 @@
           "it": 210000,
           "wraps": {
             "owner": {
-              "salt": "Op+7duE1xf0LKN/+UMBTTQ==",
-              "iv": "afjgeM5gFIlgfEZB",
-              "ct": "pB+g76VFrW9lY4yfda2LdsBWqfW9zagiwUYHkiGyDOOFgydoGC+6aqmRW5nwzefk"
+              "salt": "Iao/BI/Gr0pLZQjZRxODaQ==",
+              "iv": "gL64+hrcX3lP0LB+",
+              "ct": "tq72gpW/g78rTQcwrRhakwudvgv5KzZyedqNb1QPCCgPdo9g9tfU01FwRMpn1GyD"
             }
           }
         }
@@ -749,8 +850,8 @@
             "type": "text",
             "locked": true,
             "encStub": true,
-            "iv": "hvfcNUrbZXprValZ",
-            "ct": "kzlm94AzglxE8jXbaqqMukIajtUBz+fkYLLtEJ8jFFScu56cCXvzzaQ6bD/C7pWJ/f7DRhtpjLlfkqujmWsdrIXe2CuoBWnlt43aCL5AC5e6O0Bc/yt+iLoesEJrs16w9cCWitk130Gq13Ys+IkLQWFhOd8TyzQ8qHkL6nNm/sET38WwMuTv6UhgalGzfZpgZDGcB/ktELg6tRmQTU0SQDkb9+5fscIKsjxlR2AfsIAx2VxLkHTM3I56ToiA8hnp23N+5+UBMTI9fRLmfz0yiiZOJAkdfmwpyUWEtflYXPsPHwI89hUgaHELMPvX31GeowG2e6zTpHqENq5GzxS2ULdOMIXZ0XgqO49XunXW9IcaFy9jkrsY7T3vywK5Hce6km0jtKy1/ztzSjXoX+wkCXtqW9OXEYEIlnZtTaSFFCANC9XnMpv1JpscRxzZcEMl/tsqlUIajYJqbZ+/M5DVPRLN4v/nCeeWyL60bg+bfxEHjqELP9PRdDdkabA35Q5Ns2HKDhqV1lWTorn7BETWOjuBLNZq1/SKfqJZfmBz7DNGmGBblTYlVJnHkNxR9lF0R6uNZ7RQMDAfDzKf5Ow4vRboAu7Ad1BeZXNKZwfzKPmeSwhkSmvwJ0jz4dGux3HIuQj+XjLLQL6ZJleLeIrBGrI=",
+            "iv": "SOlfXeLYxS9oIwup",
+            "ct": "Ty3XHC3F8uuJYGebxTVot/FoAmyzP9VPponNrhR6TaJ85b9eC85Um2z8Xbj5yaHjJNaElt5/L0zZQlZMq70J3FinqYDGZyMeMytFPn8shdJoGOwOQpE+t/2SUTXL3Yu9tRupkfB9IwtxafolxjekVAxf69mn6UNzCEefJvHsFMFOnbK1a9xWWmSwrlmtGe9sXTKgLbQ/UAEgqXro98mB5e3NuiMnRgn6JSBRBrX7xXDLKeaAwRVLoB1MxI6DAIyLVSq5or7Mmu9hqQ9i6xCSRbpuFmofk/1/P/4dIml+X3JQjbAoBwpZugG6cYyBaiqufyQNak5MyxiyWmq8S6YFm5e+eDY3ewMyqpvl3piYvRdH+4IlRWy5SCEaze1I0ca1QNUMuB2yT3aQEr87EfTK27AVXffz1dsgU4ROO+7klKPXEDhoxVMQlbIghZWp+nrNMBwBwhxaoQcMjAqRLzj1Y8q0f9WW1SzHAdMtFzP0haZcZZw5rejgoPfRIJ0svuj8mdvSGZL9qdJN046AdW/f2sFAKW1D25bPECDi4ZHlAGQVrsXNSwEGWryfC8QEXP5pYIvZRC1poT3hpQRj86sAXGS0Oo1QnawuCaSLGBCn/0lShD/vzVURtFjALFUUzs2trEFYTNusSJfoQRDOlM6/lPc=",
             "kicker": "Deeper cut",
             "nav": "Deep dive"
           },
@@ -767,9 +868,9 @@
           "it": 210000,
           "wraps": {
             "owner": {
-              "salt": "rKh/IWIfj3m+YGSL660FOA==",
-              "iv": "j5FBjqzmubc/9UGY",
-              "ct": "VzZhUKGgmTunHu7/OXBF/pQCVFyVfsTEShLz1u62PetaYVtiuMnI0EE4caPS3aoF"
+              "salt": "uipAOvjfBsu5xca8aGtXHQ==",
+              "iv": "z+3ChphhVvMfvScN",
+              "ct": "pQ1aBRD8MuEUL3ne+7H45qZ8tMdMEvYNvehpxFrD1SoE6smaVTXKDfKKYq0C2R75"
             }
           }
         }
@@ -910,8 +1011,8 @@
             "type": "text",
             "locked": true,
             "encStub": true,
-            "iv": "Dxp4mu04VakI1MFR",
-            "ct": "xZEbo0TkRYWOFEe6DqWw6WOEy7lqbvA7HC6qH3QMJapBRuEj1lfNrWAdovfPQ3QViRr8sR/H9S511DzVIf9Cvza6FAA/tE9iB0hsCVaz3BjVmDu8yaDabmLoT5kWwdu77nIt35h/NreJfqlL1gSDBDD3+zrtHgNWJ0a3O7neLoW1a8N8Fl9iVjfxQlS2TGx2yMRzeNnK6Hwpg9YEgj8u/Uu6NV3XDefr0nIceWsE26lfABjf2Hpeh7CioPEK3H3Kmx9BPpMTq7D6wzMJ9rLm3QlyhMq+uw5lK2D4YZ5KkZn1+BSWuBOpHV+/AKh2t0gnp+5UieWFzplLNEE9AxqtI9ZLdwevt7dzpSWoPvZtmHXxJ0dhVI9bxIWmM6zxWPoy+O2ls/g/m3fqvUGJvZfQLxkPIler/rcF2oQnFFV5ZxDDvT/zlR1YBYouK4XA5WE2xid0RBUMjNAHzf2RfDfA8xnAIXAUBjqdmcmKg11sTkn7o4KKoxl8ekg29YSLHsUmj38ZD9lcBGN5mOcC8cbBC+WOiDb90vt1660b5XyWdrS/l4z7uuVRxMlgtWnRaKUnAeN2lvtApfkcDxiMTO/YopssimtKBrD5/wMrU7vxznw7+mzka6Tw",
+            "iv": "oimiqkD0nOoI2n5Y",
+            "ct": "U3blVfDfABctCjpafC+Y58fQz65nazs0r+k8jF7p/qtatS1w0YEcRdjbAn6PntdVRHGOez13yO/nFakpz99gGSv5wxFxakWCak6XTOEGRHI4tK0O/f2xYWwNvt6KMTBLA6f+brEvHHywLZXHjcR+KtFoq3bk5+7VJodYL8GVVQOUbo5Orp8No84e3MS97zxbj9znjzHPuck1p+MgLfQSAyI43fZsxRoJBXUP0Yfm2mYvbu4rF/SpIiG8yO3/eKVsChkxdWTkAJlRBb5J+zmQChPa3GoYuxj2g6FMqXarM++TPWRBHP6KKd6v9xRpsA7nt9tNVmLN4aF8zSKijBlisLvcv3YgsC6n6lR9EVyK+e/NzhQFgGZfwwqcpU8kdlEs+jhsbEE1tZ8zW4ZPX/UH4vtaGbv4wLnlX6zBZZxArwtrpQZo89sjRAAVTk7JDljh+sY3wQZWKwCNTuyg7Oiv6XLeHhKajIJsdTA3BVntM4CRI/NR0AAIEqJDwmYWZX1Xp+QR22+vp5z0CS4mxblZ8gzjyIG/gIxUHnVUTKZQMwUSLtP8bdHgJ4T5PC2mR6GXkfAZM2Y6oFTuK57j9UdCIL9Izt9j8aScrLlwpdxJug7TmJ0mTxlB",
             "kicker": "Deeper cut",
             "nav": "Deep dive"
           },
@@ -928,9 +1029,9 @@
           "it": 210000,
           "wraps": {
             "owner": {
-              "salt": "U05mAJ6DoAzlaAEbi7PH4g==",
-              "iv": "CO6IHNi06XpF6FFa",
-              "ct": "MPq8hyuSMRfAAsILeoouzLHyUi3zhKJNPjukSgjX9Hb5pcSXQOC0DdlnEmFYniSu"
+              "salt": "zRo2Y9MSzrKhJbO4uPyb2A==",
+              "iv": "dRruUyRnOKrPnBMq",
+              "ct": "t3G9fIr6jTJiHb1F2+x4ggqbQbS6nXyHyAfk5aqj2IANiNJzPcaupzDExT7oXpLW"
             }
           }
         }
@@ -1051,8 +1152,8 @@
             "type": "text",
             "locked": true,
             "encStub": true,
-            "iv": "G9N2EI0PZZznjS7A",
-            "ct": "EeMT1AMl/nP7ayHKdgypBaDCGXz4I+UNFHoOj3gUJpMZZF69AEBwNK/qpnE6mKHCQmIJR4bbyGCIVNYvi7Rci+YK+JiESquJ+qrFhkb3e1pGTTWs9wxHcB4cLAwaIEWDsnz4l5bkOvXngLg5hm1cWmbOSfY3Fww5xmjbazVB1SK9qdho+pHHUmx/ngTRfJreltI6QRKzq2/23v4IywgQEV3DLERvSynv+CBbMM522K3Sb/y1m8pWoJilu+Huvdwrd8fOFviUVhn4BAFax0AL3ktNUNiQYdtUIfKCmvgSkC3svgw6Hl5ZGYaXW0bLY1PpuAq2Oogt1DtTARG37QvBfYjVuNW+xmgZpKn6/Fgsh2Iu29BJ24DI0ixpVTKboQgMRj118p8sdL8/kdnwztjOTlrTTjxdHlo0LJl5KZIkpDt+Eva9gkv3LVaz5L2t2uL/X4ayCfzmGYhlAEFQF292sS+0ptqipt/ZOaiDk/N2No+9ja6w09k6uU8RR3QMkh7V5xGfv89f9pfU4sPsgojYBMEDVuQRh73IQ0gddHxB/dkgZ2+sWzKqQq8egK5YvJO53norW0AuVU3WIw==",
+            "iv": "vbzbZ3xUpXya8JWC",
+            "ct": "yUNLCmajBkaZveQnS/ywvmbvXuQlrySJpRKa3Xmx6BdjBFxBGl1WQuD8x5YOQMlx8ONGeIOyr0/5vwO+zfh6A2ASJPFaDJ4aTK0YrIVPet6NWvsI2t5VXDod45L7nlb2/8ugiz7LG8uMgfdAM9SYXgMDAlKoZsQEhB1GmSnahINRUXDLAXfZi8dg1Bu+10UjuDaTKSSqDNmswL4RM1HFwxqqOv2aGoWp3UupfZglSagK4PzLBnz6JaNBDteNMyH3A2L9/y3dKGrnNiq2J4xqSGF5Hmv6Jfv0hyNUAhQ2gUC5n/h2abyBz3rluoYy+ulNZJfUbM6iXmmo8O1X8jN5sd5YgTw15l53iXeG3iXyL2U9Y1TUKY8n9VaXFWL0W0lCFwfU0ke1FT653OoEgKQZXtY3vuBzGDN6+j4hzoV+NlE3GhA7llontXtL56cCVTKaUSX1832SEJezWeqIiKwThq6T5jZWoPsjiCBYzPnQ/yR/o1xp4LL0be17Eod9vqK/sxHKBKSadI10N2nmJ8D1QUl4VzpnqithSU9kv1xE/ZzUvZhaPCLggtJUIx0wPz2/F2utzqP5s3PAdQ==",
             "kicker": "Deeper cut",
             "nav": "Deep dive"
           },
@@ -1069,9 +1170,9 @@
           "it": 210000,
           "wraps": {
             "owner": {
-              "salt": "WMbyJ1Jn9E7XBqa09vxT1w==",
-              "iv": "Q5hV26cTYdaoHwBk",
-              "ct": "Rwfp9tX6xEqIuTKccIxzELpl4S2enVBUE4rSnkhS4H2H7Lp6yZPU373C24utdiHl"
+              "salt": "DDlnUOREPkUijCzcWEWKpA==",
+              "iv": "BsvTYtyHwDE/VOdR",
+              "ct": "AtFiZl1/zww8sdmk0VHZZwURc4CzXj2/Vlb1tE7zbDOjOVxngDualkvV29Dmj+W1"
             }
           }
         }
@@ -1211,8 +1312,8 @@
             "type": "text",
             "locked": true,
             "encStub": true,
-            "iv": "kLC/iP+tYsKU3DJI",
-            "ct": "A95fK/InxZR+1VVPnZjMFRCtk2ae+4TFTcIoNtxJMiKjDNiTxDktfd19js++1wg9e+f3o7Eats0DBwdhgiPCFhMzBFwsBLKsnmSfQI2PuTrtKfcateSmM8hH0+0EF4y64V5iUmNvOJa6UFLTW+8N8zOB4jKjxCHSVzG3vPoNzF0dCttWE3kWyla2osS5nhzsXOcWo2PCEMa0FMIifQdzkDdQd6f8feoqA8fXbGOaYlHGzxVWRYsM1oPxSrgXaAayFbZKYc5QaqdvB786Uv0syoaQjyI4DL1uBf0yut2OnIP4ppG5QnabSL5hBqdyIAlECEdk7/2ktP7vuUFECqVTvt+aZWxhoCX2/a084r1HUCwm5Iy/mhFYpjYjDh12AGxnJr7HByXVD5LasiaNkcEMFVO9T23eZG4HdFODNDmrqxEXgEO0lmPPmP25bbcsmSkD6EIRlGOldyvS9VURPQnxajIlmp8yYimIXKP4iHBBa+BQpfGNGQnD/ZvAupkYDXQVP++TXHRBCgbTghXf9cYD3WuwQrGsklKNmdEPhrTNuCy4AAEduObuTX58YYBdTxIy6w1jL47z41qSqF2XYhHrsto4b1QuO4CIpa3KQVE=",
+            "iv": "RThO5RgQ1B42P/Dz",
+            "ct": "BHuGm05LBrVH9/uFhnNFw6LuyAEZCMSLfpW1htwZjNbli3dsmLLFMy4KE+3OTW8JkRL0ClVrNWVefHoUADFzxWaix0DXFy7s5SfQxByfrqyO1vsGdV5bcx5aiJrpIzjru+eSSxEGt+UAhXucVPyimSzG57Uyr1pK4OpDx6Lb1pebf/uIscb7bgE73tKviAGDpQZDNR1FJ9AzfqVWH1J1/99aWoUPJzPdJrwwjvqk2VT/kKphA8oM7OyyvwtMjqiD2AnRp6WWAlbpDQMxXMvyoxQ89mGeCsL2KIoJqYhiW2k7HnhIH1RlFQy/c0A44gYbiKrDOsN7kBRz3QY8YyDFP1lmv80+fzKup0qDl5kFXFd1e1yG9j5DxBDtyGzoqChKuwlaLVGdrrOgOZCSRNqzFlz+pV2Tr1hmHLJ4KF4KH/6JBq5k3xO3b16wvgUrfvnqR3aqBCqDwJBbk3K+YA1BlYq6ukCu4N6SnvQZTyCbjuunC4nnSvr+VLg54Nr2OYcG8NeZAJD6a3qwM2bsRCy1jJ/oe5zkDFCi3ws8e1cPKd/2L6Wcs57XQkUsrPilPxG+ii1OUEtJ94oBrMb+/u9Yt5gzYIDkwu+LO1m4tDQ=",
             "kicker": "Deeper cut",
             "nav": "Deep dive"
           },
@@ -1229,9 +1330,9 @@
           "it": 210000,
           "wraps": {
             "owner": {
-              "salt": "cPV9cqBcb6lD2xYKHijJow==",
-              "iv": "ecOx4IApX1lCrDup",
-              "ct": "DzlUEWWfiPTWVWEBFb9ZnB5FtrTbjnDkGdmKK6qb2ful3DDYlMJWaR1hQww5SFYs"
+              "salt": "VR9V6xERinzZOj4O7UiUkQ==",
+              "iv": "yZvnXPVASUQhKTXd",
+              "ct": "DR/3tVuNWzwqWaeUYN6Zs1rbUwK0tEZ5v8zLTMYkwEuMeQAU8f9F3sArgNW50KHI"
             }
           }
         }
