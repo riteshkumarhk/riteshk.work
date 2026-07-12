@@ -415,8 +415,18 @@ body.adm-lock .cursor { display: none !important; }
 .rep__item { border: 1px solid var(--line); border-radius: 10px; padding: .7rem .8rem .3rem; margin-bottom: .6rem; background: var(--bg-elev); }
 .rep__bar { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .5rem; }
 .rep__n { font-family: var(--mono); font-size: .6rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
-.rep__ops { display: flex; gap: .3rem; }
+.rep__ops { display: flex; gap: .3rem; flex: 0 0 auto; }
 .rep__empty { font-size: .78rem; color: var(--text-faint); padding: .4rem 0 .7rem; }
+.rep__grip { flex: 0 0 auto; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; color: var(--text-faint); cursor: grab; }
+.rep__grip:hover { color: var(--text); background: var(--bg); }
+.rep__grip:active { cursor: grabbing; }
+.rep__itemlabel { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: .72rem; color: var(--text-dim); }
+.rep__item.is-dragging { opacity: .45; }
+.rep__item.is-drop-before { box-shadow: inset 0 3px 0 -1px var(--accent); }
+.rep__item.is-drop-after { box-shadow: inset 0 -3px 0 -1px var(--accent); }
+.rep--ranking .rep__item { padding: .35rem .5rem; margin-bottom: .3rem; }
+.rep--ranking .rep__item > :not(.rep__bar) { display: none; }
+.rep--ranking .rep__item .rep__bar { margin-bottom: 0; }
 
 /* ---------- icon picker (collapsible dropdown + grid) ---------- */
 .icondd { position: relative; }
