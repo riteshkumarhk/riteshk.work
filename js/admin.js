@@ -506,6 +506,12 @@
     return '<div class="af rt"><label class="af__label">' + label + "</label>" + richTools() +
       richArea('data-sblock="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-rtifield="' + field + '"', it[field]) + "</div>";
   }
+  function richCell(i, j, k, c, field, label) {
+    var it = (data.work[i].study.blocks[j].items[k]) || {};
+    var cell = (it.cells && it.cells[c]) || {};
+    return '<div class="af rt"><label class="af__label">' + label + "</label>" + richTools() +
+      richArea('data-sblock="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ccell="' + c + '" data-rtcellfield="' + field + '"', cell[field]) + "</div>";
+  }
   function rtSerialize(area) {
     var html = rtClean(area.innerHTML).trim();
     if (/^(\s|<br\s*\/?>|<p>(\s|<br\s*\/?>)*<\/p>|<div>(\s|<br\s*\/?>)*<\/div>)*$/i.test(html)) html = "";
@@ -514,6 +520,7 @@
     if (!b) return;
     if (area.dataset.rtfield !== undefined) b[area.dataset.rtfield] = html;
     else if (area.dataset.rtifield !== undefined) { var k = +area.dataset.iindex; if (b.items && b.items[k]) b.items[k][area.dataset.rtifield] = html; }
+    else if (area.dataset.rtcellfield !== undefined) { var kc = +area.dataset.iindex, cc = +area.dataset.ccell; var itc = b.items && b.items[kc]; if (itc && itc.cells && itc.cells[cc]) itc.cells[cc][area.dataset.rtcellfield] = html; }
     saveDraft(); refreshL2Preview();
   }
   function rtAction(btn) {
@@ -609,7 +616,7 @@
     media: { title: "Media", one: "Item", add: "Add media", fields: [["src", "Image / video / Figma / PDF / deck URL", "media"], ["caption", "Caption", "input"]] },
     gallery: { title: "Slides", one: "Slide", add: "Add slide", fields: [["src", "Image / video / embed URL", "media"], ["caption", "Caption", "input"]] },
     cards: { title: "Cards", one: "Card", add: "Add card", fields: [["title", "Title", "input"], ["body", "Body", "rich"], ["icon", "Icon", "icon"], ["src", "Image (optional \u2014 replaces the icon)", "media"]] },
-    columns: { title: "Columns", one: "Column", add: "Add column", fields: [["label", "Label", "input"], ["heading", "Heading (optional)", "input"], ["body", "Body", "rich"], ["src", "Image (optional)", "media"]] },
+    columns: { title: "Columns", one: "Column", add: "Add column", fields: [["label", "Label (optional)", "input"], ["cells", "Cells", "cells"]] },
     stickies: { title: "Notes", one: "Note", add: "Add note", fields: [["label", "Label (e.g. 01)", "input"], ["heading", "Heading", "input"], ["body", "Body", "rich"], ["src", "Image (optional)", "media"]] },
     voices: { title: "Voices", one: "Voice", add: "Add voice", fields: [["side", "Side (chat only)", "select", [["left", "Left"], ["right", "Right"]]], ["heading", "Heading (verbatim, optional)", "input"], ["body", "Text / quote", "rich"], ["cite", "Attribution / label", "input"]] }
   };
@@ -623,7 +630,7 @@
       case "faq": return { q: "", a: "" };
       case "media": case "gallery": return { src: "", caption: "" };
       case "cards": return { title: "", body: "", icon: "", src: "" };
-      case "columns": return { label: "", heading: "", body: "", src: "" };
+      case "columns": return { label: "", cells: [{ heading: "", body: "", src: "" }] };
       case "stickies": return { label: "", heading: "", body: "", src: "" };
       case "voices": return { side: "left", heading: "", body: "", cite: "" };
       default: return {};
@@ -648,6 +655,7 @@
       var opts = (f[3] || []).map(function (o) { return '<option value="' + escAttr(o[0]) + '"' + (cur0 === o[0] ? " selected" : "") + ">" + escHtml(o[1]) + "</option>"; }).join("");
       return '<div class="af"><label class="af__label">' + label + '</label><select ' + da + ">" + opts + "</select></div>";
     }
+    if (kind === "cells") return cellsEditor(i, j, k, it);
     if (kind === "media") {
       var v = it[key] || "";
       return '<div class="af"><label class="af__label">' + label + '</label><input type="text" ' + da + ' value="' + escAttr(v) + '" placeholder="Paste a URL\u2026" />' +
@@ -684,7 +692,7 @@
      Keys: "list:<name>" (L1 lists) · "block:<i>" (case-study sections) ·
      "item:<i>:<j>" (repeater items). Pointer-based, so it's reliable across
      browsers and auto-scrolls the editor when you drag near an edge. */
-  var SORT_ROW_SEL = ".rep__item, .study__block, .card";
+  var SORT_ROW_SEL = ".rep__item, .study__block, .card, .cellrow";
   function sortRowsFor(key) {
     return [].slice.call(root.querySelectorAll('[data-grip][data-sortkey="' + key + '"]'))
       .map(function (g) { return g.closest(SORT_ROW_SEL); }).filter(Boolean);
@@ -752,6 +760,9 @@
     } else if (p[0] === "item") {
       var wi = +p[1], bj = +p[2], bl = data.work[wi] && data.work[wi].study && data.work[wi].study.blocks[bj];
       if (!bl) return; bl.items = bl.items || []; arr = bl.items; after = function () { saveDraft(true); renderL2(); };
+    } else if (p[0] === "cell") {
+      var cwi = +p[1], cbj = +p[2], cci = +p[3], cit = data.work[cwi] && data.work[cwi].study && data.work[cwi].study.blocks[cbj] && data.work[cwi].study.blocks[cbj].items[cci];
+      if (!cit || !cit.cells) return; arr = cit.cells; after = function () { saveDraft(true); renderL2(); };
     }
     if (!arr || from < 0 || from >= arr.length) return;
     to = Math.max(0, Math.min(arr.length - 1, to));
@@ -766,6 +777,38 @@
     if (!b || !b.items || !b.items[k]) return;
     b.items[k][f] = t.value;
     saveDraft(); refreshL2Preview();
+  }
+  function blankCell() { return { heading: "", body: "", src: "" }; }
+  function onCellInput(t) {
+    var i = +t.dataset.cell, j = +t.dataset.cbindex, k = +t.dataset.citem, c = +t.dataset.ccell, f = t.dataset.cfield;
+    var it = data.work[i] && data.work[i].study && data.work[i].study.blocks[j] && data.work[i].study.blocks[j].items[k];
+    if (!it || !it.cells || !it.cells[c]) return;
+    it.cells[c][f] = t.value;
+    saveDraft(); refreshL2Preview();
+  }
+  // A column can hold up to 5 stacked cells, each with a heading, rich body and image.
+  function cellsEditor(i, j, k, it) {
+    if (!Array.isArray(it.cells) || !it.cells.length) { it.cells = [{ heading: it.heading || "", body: it.body || "", src: it.src || "" }]; delete it.heading; delete it.body; delete it.src; }
+    var rows = it.cells.map(function (cell, c) {
+      var img = cell.src || "";
+      return '<div class="cellrow"><div class="cellrow__bar">' +
+        '<span class="sortgrip" data-grip data-sortkey="cell:' + i + ':' + j + ':' + k + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
+        '<span class="cellrow__n">Cell ' + (c + 1) + '</span><span class="rep__ops">' +
+        '<button class="iconbtn" data-act="cell-up" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '"' + (c === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
+        '<button class="iconbtn" data-act="cell-down" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '"' + (c === it.cells.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+        '<button class="iconbtn iconbtn--danger" data-act="cell-remove" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '" title="Remove">\u2715</button>' +
+        "</span></div>" +
+        '<div class="af"><label class="af__label">Heading</label><input type="text" data-cell="' + i + '" data-cbindex="' + j + '" data-citem="' + k + '" data-ccell="' + c + '" data-cfield="heading" value="' + escAttr(cell.heading || "") + '" /></div>' +
+        richCell(i, j, k, c, "body", "Body") +
+        '<div class="af"><label class="af__label">Image (optional)</label><input type="text" data-cell="' + i + '" data-cbindex="' + j + '" data-citem="' + k + '" data-ccell="' + c + '" data-cfield="src" value="' + escAttr(img) + '" placeholder="Paste a URL\u2026" />' +
+        '<div class="imgblk__row"><button class="btn btn--ghost" data-act="cell-upload" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '">Upload\u2026</button>' +
+        (img ? '<button class="btn btn--ghost" data-act="cell-clear" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '">Remove</button>' : "") +
+        "</div></div></div>";
+    }).join("");
+    var foot = it.cells.length < 5
+      ? '<button class="btn btn--add rep__add" data-act="cell-add" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '">+ Add cell</button>'
+      : '<span class="af__hint">Up to 5 cells per column.</span>';
+    return '<div class="cells">' + rows + '<div class="cells__foot">' + foot + "</div></div>";
   }
   function mediaInputBlock(i, j, field, label, hint) {
     var b = data.work[i].study.blocks[j]; var v = b[field] || "";
@@ -1207,8 +1250,9 @@
   /* ---------- events ---------- */
   function onInput(e) {
     const t = e.target;
-    if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined) { rtSerialize(t); return; }
+    if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined || t.dataset.rtcellfield !== undefined) { rtSerialize(t); return; }
     if (t.dataset.sitem !== undefined && t.dataset.ifield) { onItemInput(t); return; }
+    if (t.dataset.cell !== undefined && t.dataset.cfield) { onCellInput(t); return; }
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
     if (t.dataset.study !== undefined && t.dataset.sfield) { onStudyMeta(t); return; }
     if (t.dataset.sblock !== undefined && t.dataset.bfield && t.dataset.bfield !== "locked") { onStudyBlock(t); return; }
@@ -1361,6 +1405,12 @@
     if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; if (isVideoVal(uri)) bl.items[k].controls = true; saveDraft(true); renderL2(); } }); return; }
     if (act === "item-icon") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield, name = b.dataset.icon; const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = name; saveDraft(true); refreshL2Preview(); const grid = b.closest(".iconpick"); if (grid) grid.querySelectorAll(".iconpick__b").forEach(function (x) { x.classList.toggle("is-on", x === b); }); const dd = b.closest(".icondd"); if (dd) { const cur = dd.querySelector(".icondd__cur"); if (cur) cur.innerHTML = name ? admIcon(name) : "\u2205"; const nm = dd.querySelector(".icondd__name"); if (nm) nm.textContent = name || "No icon"; if (dd.tagName === "DETAILS") dd.open = false; } } return; }
     if (act === "item-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (bl && bl.items && bl.items[k]) { bl.items[k][b.dataset.ifield] = ""; saveDraft(true); renderL2(); } return; }
+    if (act === "cell-add") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex]; it.cells = it.cells || []; if (it.cells.length < 5) { it.cells.push(blankCell()); saveDraft(true); renderL2(); } return; }
+    if (act === "cell-remove") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex]; if (it.cells) { it.cells.splice(+b.dataset.cindex, 1); if (!it.cells.length) it.cells.push(blankCell()); saveDraft(true); renderL2(); } return; }
+    if (act === "cell-up") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex], c = +b.dataset.cindex; if (it.cells && c > 0) { const tmp = it.cells[c - 1]; it.cells[c - 1] = it.cells[c]; it.cells[c] = tmp; saveDraft(true); renderL2(); } return; }
+    if (act === "cell-down") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex], c = +b.dataset.cindex; if (it.cells && c < it.cells.length - 1) { const tmp = it.cells[c + 1]; it.cells[c + 1] = it.cells[c]; it.cells[c] = tmp; saveDraft(true); renderL2(); } return; }
+    if (act === "cell-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, c = +b.dataset.cindex; pickMedia(function (uri) { const it = data.work[i].study.blocks[bj].items[k]; if (it && it.cells && it.cells[c]) { it.cells[c].src = uri; saveDraft(true); renderL2(); } }); return; }
+    if (act === "cell-clear") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex], c = +b.dataset.cindex; if (it.cells && it.cells[c]) { it.cells[c].src = ""; saveDraft(true); renderL2(); } return; }
     if (act === "bfield-upload") { const bj = +b.dataset.bindex, f = b.dataset.bfield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl) { bl[f] = uri; if (isVideoVal(uri)) bl.controls = true; saveDraft(true); renderL2(); } }); return; }
     if (act === "bfield-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (bl) { bl[b.dataset.bfield] = ""; saveDraft(true); renderL2(); } return; }
     if (act === "study-preview") { saveDraft(true); status("Opening your current draft in a new tab\u2026"); return; }
