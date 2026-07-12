@@ -544,6 +544,216 @@
               }
             ],
             "hsize": "sm"
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Compromises & Reality",
+            "body": "The final experience wasn't a direct translation of the original vision.<div><br></div><div>Privacy requirements, engineering constraints, experimentation needs, and rollout realities all shaped the final product.</div><div><br></div><div>My role evolved from generating future-state concepts to helping teams identify which ideas delivered the most value while remaining feasible to ship.</div>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true,
+            "hsize": "sm"
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "beforeSrc": "",
+            "afterSrc": "",
+            "beforeLabel": "Before",
+            "afterLabel": "After",
+            "body": "",
+            "sep": false
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "beforeSrc": "",
+            "afterSrc": "",
+            "beforeLabel": "Before",
+            "afterLabel": "After",
+            "body": ""
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "beforeSrc": "",
+            "afterSrc": "",
+            "beforeLabel": "Before",
+            "afterLabel": "After",
+            "body": ""
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "beforeSrc": "",
+            "afterSrc": "",
+            "beforeLabel": "Before",
+            "afterLabel": "After",
+            "body": ""
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "beforeSrc": "",
+            "afterSrc": "",
+            "beforeLabel": "Before",
+            "afterLabel": "After",
+            "body": ""
+          },
+          {
+            "type": "text",
+            "nav": "Platform Foundations",
+            "kicker": "Supporting the Platform",
+            "heading": "Compliance",
+            "body": "Rather than treating compliance as isolated interruptions, the new framework worked well integrating world wide compliance requirements, reducing fragmentation and preserving flow continuity.",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "Section",
+            "kicker": "",
+            "heading": "Responsive by Default",
+            "body": "Framework was designed to scale across different window states, device configurations, and future onboarding modules, ensuring a consistent experience while supporting future extensibility.",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Motion with Purpose",
+            "body": "Aligned with MAI motion specifications, ensuring onboarding shared the same interaction language as other Microsoft AI experiences. Motion wasn't treated as decoration, but as part of the system that created continuity, trust, and familiarity across products.",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "",
+                "caption": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "Experimentation",
+            "kicker": "Experimentation",
+            "heading": "Designing for Learning",
+            "body": "Rather than hard-coding a single onboarding narrative, Unified FRE was designed as a framework capable of testing different theories about what drives adoption.",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "Experiment A",
+            "heading": "",
+            "items": [
+              {
+                "src": "",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "type": "rows",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "Setup First",
+                    "body": "<div><div><br></div><ul><li><span style=\"font-size: 0.9rem;\">Sign In → Lightning Import → Themes → Consent → Pinning</span></li></ul></div>",
+                    "src": ""
+                  },
+                  {
+                    "heading": "Traditional onboarding philosophy",
+                    "body": "<div><ul><li>Establish identity first</li><li>Bring browsing data into Edge</li><li>Complete required setup</li><li>Personalize later</li></ul></div>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "What we wanted to learn",
+                    "body": "<ul><li>Does reducing switching friction upfront increase onboarding completion?</li><li>Does completing setup tasks early improve activation?</li><li>Are users more likely to continue when onboarding begins with familiar migration actions?</li></ul>",
+                    "src": ""
+                  }
+                ]
+              }
+            ],
+            "sep": false
           }
         ]
       }
@@ -688,8 +898,8 @@
             "type": "text",
             "locked": true,
             "encStub": true,
-            "iv": "lgyFFs6naiOH432d",
-            "ct": "CiNz7AEAK07UgC12ujSFvGDUxceXe3Vwsq9vL5RFEqw13y+pI5FQutseHiAgNB02hugQ6kf3/E4LMpw6ty6TDjwY6j4+M+8JASt16NV2jCruX8GxTnFSNr0c5o3pFtqOrFSX8IpafCznbnFlb6SJNSmoQ8sLAfko3IzBaerigOb4xSVPlIoOVufrfsR7IkYfhHAm6f+qgSt4PawCoH3Hx/uCT4DWtpCccbzoOwmOZxt3PLq7jOxiaYQCek6PN9k5SLEwgwCWmgekvYmUija+Ce1J3R2DNr9jhAglpyLhBd3QhZ9mxZ3lUcVJXjOqt3puEerKUmW7znmzTjQYq4GyoD2msM8zyyxGbwXoK2nzF6qwNhApyknQHZTU5ILYnisylAscs4R533khsIlEKySPUsqC57R1YYmeMQde+wzTMV3xzj7bATX5aYNyxBmJhm5QqWpRiyxyGy8wwXuaa+ThYFUY+sM4GPDu+FZvw6CE6SGL8HvTg1JBHteMKLMES7YhYtGzLj7hlknqFEvuCxZxTmNC45mmzfd1EeHEUrexFhsOzIYv1Wh39yJjcI5PNO8F9YUS5zE8zDkcQC7ba/4WX2getMNu/7lrIaD124ldOPSIMrIDQJ4AIVstTRVnaPIOS4MbF4w4lRNMexKy1N0KxOlGO5Ud7IYLNpeSoJSLMogFeOiOE2CYkAlYV3ot4JNv4ho=",
+            "iv": "FUfYW2GHmBnM0qvw",
+            "ct": "+kAUaBdcY9PbG30GUn3L1h8bcIPc+zaBit77JXeNfOZ3dczYpGPF4+/S4K0eC29TSTDVMDSkpbdyzm67NWB/+pk+pamx87bTfo2qNWFL1eb9Xpa1iKz2wxlatLJKN5yq+cDm9G9m6O0seVZ7Ug/9Ov72MqfJjs13/SG2Py53bHnVE+ytPl9fsR10P93nvIMYuZFfWlaUNirXVUzrPdovIvJVrnznVKzjDEZ+iF/Ji7WLe/vPu5wfkk9CxJ0Wd8F6MGpNOQs55RWhN+3ecy0uMBn8ciBH1TiLoidfsKdomBS02BtbPRdsrgObheX6R4V4oFeniaqDQUqgFTqKeaCYeBhIShlZA0+FDPvvK6SsvVnisgoGTS2nyMEtcElvQsKvNaYUQsLmm2QdqC1WU+DTQYnUr8DSV9E4MzxfR058qJFU/5ItBEvTWJsD2V3036Nx34eiBt3urGLFVYmn+LctPJijjZ6o9zI6O+w3bnL3BToYquDjmRl1sGCWc90hIzC5FYfgGhYCyWlcCjA3o1PbPFuFBIiKBqer6chJq0zA6fDQsDyz1KeABEJxTL5LSi04+UMn156sglB3bpfaCdV5cFcZN4QUwd04p58+7xF4gkdzmiDbQR/KTJWVF+3U2j5cXrjS2a3wDkHTmmysV/nLcCptuR6s3UHq0+9t1IcMUrjbomkjHaoKdOew2TwRIRRgnLc=",
             "kicker": "Deeper cut",
             "nav": "Deep dive"
           },
@@ -706,9 +916,9 @@
           "it": 210000,
           "wraps": {
             "owner": {
-              "salt": "Iao/BI/Gr0pLZQjZRxODaQ==",
-              "iv": "gL64+hrcX3lP0LB+",
-              "ct": "tq72gpW/g78rTQcwrRhakwudvgv5KzZyedqNb1QPCCgPdo9g9tfU01FwRMpn1GyD"
+              "salt": "zTFNjJ169BfaleDLl4mJQg==",
+              "iv": "emhMFBrttl7A1dR/",
+              "ct": "mu87GyChS5h31IYYmMewjKcpun+VLspowC4szbR42xMeSLkCz7si6ynMlWEXvOg2"
             }
           }
         }
@@ -850,8 +1060,8 @@
             "type": "text",
             "locked": true,
             "encStub": true,
-            "iv": "SOlfXeLYxS9oIwup",
-            "ct": "Ty3XHC3F8uuJYGebxTVot/FoAmyzP9VPponNrhR6TaJ85b9eC85Um2z8Xbj5yaHjJNaElt5/L0zZQlZMq70J3FinqYDGZyMeMytFPn8shdJoGOwOQpE+t/2SUTXL3Yu9tRupkfB9IwtxafolxjekVAxf69mn6UNzCEefJvHsFMFOnbK1a9xWWmSwrlmtGe9sXTKgLbQ/UAEgqXro98mB5e3NuiMnRgn6JSBRBrX7xXDLKeaAwRVLoB1MxI6DAIyLVSq5or7Mmu9hqQ9i6xCSRbpuFmofk/1/P/4dIml+X3JQjbAoBwpZugG6cYyBaiqufyQNak5MyxiyWmq8S6YFm5e+eDY3ewMyqpvl3piYvRdH+4IlRWy5SCEaze1I0ca1QNUMuB2yT3aQEr87EfTK27AVXffz1dsgU4ROO+7klKPXEDhoxVMQlbIghZWp+nrNMBwBwhxaoQcMjAqRLzj1Y8q0f9WW1SzHAdMtFzP0haZcZZw5rejgoPfRIJ0svuj8mdvSGZL9qdJN046AdW/f2sFAKW1D25bPECDi4ZHlAGQVrsXNSwEGWryfC8QEXP5pYIvZRC1poT3hpQRj86sAXGS0Oo1QnawuCaSLGBCn/0lShD/vzVURtFjALFUUzs2trEFYTNusSJfoQRDOlM6/lPc=",
+            "iv": "7KaucIjzpAlV0LJt",
+            "ct": "7sPe4l+SGN0hMPFG0FoKi9mrr6wCrI/Zvf1MzJFbT/xEoJT5WVt/4vHrNHsErFGA9qle5laT7RpOR/LYVEqJBYQzB5BsFUb1x+0U1fBokSeXv1X1qoMIGzny5gzi2zc0XYDmo2IMwIX4lglKhT0vxdhFnAnftI4I4rrZKO0mf8kBKO3DahHm4U27FGWuWg4gX0yCqoun5KMgjESfu1s3UrHNMWiahfi5o+YYqwaQijh5XzYpK1KVLZCb/BfLTrx/gjjnHefinvRgiL4i1fEwvAeuUKcDgiJNfrPw1ZRR3ZIKvOjw6PvnAKCuOJ5nWjPpk/Tts0UX9N96Bui5jU6wu9yB7g/kZUOjmqKdOxk5MR/tVBXcwVf303UQLfmzY4R+LHMsFJJfLQClkdgtrPiO5xGbsBG6HR1TaJ5mcpSMLGGH8mVfg6n+An2psqA3XNR7Qdi7nvYYz1WJB+/fPM/bayqDTq/lYB+jzYIaBLAAO6BXuUTfSJHA4JNObSFiXThZuE6FNU4yMiSSshEsT3PjoG4sYp6yTl1HZTwmrQfLJbS512zvQB0MromEZd7CcsMMw+JW7hH4YJfJKwLf6YGxUVqfmuDmDB8wnGNLYX3+VLqytC4tUiCwwse51bV/E3mJqXrt72bD3YOrBbs8Ua2Z9bo=",
             "kicker": "Deeper cut",
             "nav": "Deep dive"
           },
@@ -868,9 +1078,9 @@
           "it": 210000,
           "wraps": {
             "owner": {
-              "salt": "uipAOvjfBsu5xca8aGtXHQ==",
-              "iv": "z+3ChphhVvMfvScN",
-              "ct": "pQ1aBRD8MuEUL3ne+7H45qZ8tMdMEvYNvehpxFrD1SoE6smaVTXKDfKKYq0C2R75"
+              "salt": "x/zIxNNT+SOapLyS9kYzkA==",
+              "iv": "VI6Y+AQkTVps0dPZ",
+              "ct": "uhpk+ne/MCQhcCnJED9A5BPiSf5wd3Syu0m4oB3EgmAK51PdV6c4mU/GHtzc3QYc"
             }
           }
         }
@@ -1011,8 +1221,8 @@
             "type": "text",
             "locked": true,
             "encStub": true,
-            "iv": "oimiqkD0nOoI2n5Y",
-            "ct": "U3blVfDfABctCjpafC+Y58fQz65nazs0r+k8jF7p/qtatS1w0YEcRdjbAn6PntdVRHGOez13yO/nFakpz99gGSv5wxFxakWCak6XTOEGRHI4tK0O/f2xYWwNvt6KMTBLA6f+brEvHHywLZXHjcR+KtFoq3bk5+7VJodYL8GVVQOUbo5Orp8No84e3MS97zxbj9znjzHPuck1p+MgLfQSAyI43fZsxRoJBXUP0Yfm2mYvbu4rF/SpIiG8yO3/eKVsChkxdWTkAJlRBb5J+zmQChPa3GoYuxj2g6FMqXarM++TPWRBHP6KKd6v9xRpsA7nt9tNVmLN4aF8zSKijBlisLvcv3YgsC6n6lR9EVyK+e/NzhQFgGZfwwqcpU8kdlEs+jhsbEE1tZ8zW4ZPX/UH4vtaGbv4wLnlX6zBZZxArwtrpQZo89sjRAAVTk7JDljh+sY3wQZWKwCNTuyg7Oiv6XLeHhKajIJsdTA3BVntM4CRI/NR0AAIEqJDwmYWZX1Xp+QR22+vp5z0CS4mxblZ8gzjyIG/gIxUHnVUTKZQMwUSLtP8bdHgJ4T5PC2mR6GXkfAZM2Y6oFTuK57j9UdCIL9Izt9j8aScrLlwpdxJug7TmJ0mTxlB",
+            "iv": "EKND1hjy+2yIVGFQ",
+            "ct": "W2ThUuboJfBm93EqqGz+MS8ZhZ9ZA34GpzrJOwHOB1NUDrwMLrnTLt5E7oFFs74/Llla0tP2dRN/SuxK/pzRVE4ZuEn4SWwOdDQn5qT0IfGwjF7EeKXUgrmEZBulbTMh+rPrDpTRNU1Js3bshshhOfx7MCqh+WJ3zIQlFem1G+eJz87mmG726JW6M2oPBUFwLBmsA4SD8KkpOMdxslXvyOCDAW3tUgN8gkFm94Awf5TBgjlNictA9tVx0Rl+eD4To1LjzS4XXxBSoWWuwuOXZr4id3MKMC3Y7yylCawJ1hQ49FpncQ6+LxmQkr42QpshRw2eQWTK9/gbhu0FOXPkrZCn2xEfyOpmHecyBO5oNhdoqTcjYyN4B9ToKLJfTTm3DiDiGdx2z6x/6KxbSJ8K4KUuWisuygvD3hLN1Pa5VCRAyPCxdaPnGSb+oFZ9dYj3F7ZxH3bKgo8SPXKbvkzilHGyCpyjaq+zPqDoB7HDwxyB8IpcVWYqddqj6o/M9yB9E9JOi9z/jBoHPGWJJAqZtWQMcdgNsX4KgAVcqlQ4MZ/a8x3J1Si24k9MSlqyvrTdRNGzu+WFOvhh5TC6UNfPC94ijfGki8auk5hh+4eTxIKS2iY4JMw6",
             "kicker": "Deeper cut",
             "nav": "Deep dive"
           },
@@ -1029,9 +1239,9 @@
           "it": 210000,
           "wraps": {
             "owner": {
-              "salt": "zRo2Y9MSzrKhJbO4uPyb2A==",
-              "iv": "dRruUyRnOKrPnBMq",
-              "ct": "t3G9fIr6jTJiHb1F2+x4ggqbQbS6nXyHyAfk5aqj2IANiNJzPcaupzDExT7oXpLW"
+              "salt": "wKR0KrIwzvgWoGVp1QGhfA==",
+              "iv": "9x25PjK9YIg+N2xH",
+              "ct": "DTyydLriLXzMAu44YfVtgrl3+Bv3gI23gBDYVIIG0xxzUQzM+8In0h7bA1wrsSym"
             }
           }
         }
@@ -1152,8 +1362,8 @@
             "type": "text",
             "locked": true,
             "encStub": true,
-            "iv": "vbzbZ3xUpXya8JWC",
-            "ct": "yUNLCmajBkaZveQnS/ywvmbvXuQlrySJpRKa3Xmx6BdjBFxBGl1WQuD8x5YOQMlx8ONGeIOyr0/5vwO+zfh6A2ASJPFaDJ4aTK0YrIVPet6NWvsI2t5VXDod45L7nlb2/8ugiz7LG8uMgfdAM9SYXgMDAlKoZsQEhB1GmSnahINRUXDLAXfZi8dg1Bu+10UjuDaTKSSqDNmswL4RM1HFwxqqOv2aGoWp3UupfZglSagK4PzLBnz6JaNBDteNMyH3A2L9/y3dKGrnNiq2J4xqSGF5Hmv6Jfv0hyNUAhQ2gUC5n/h2abyBz3rluoYy+ulNZJfUbM6iXmmo8O1X8jN5sd5YgTw15l53iXeG3iXyL2U9Y1TUKY8n9VaXFWL0W0lCFwfU0ke1FT653OoEgKQZXtY3vuBzGDN6+j4hzoV+NlE3GhA7llontXtL56cCVTKaUSX1832SEJezWeqIiKwThq6T5jZWoPsjiCBYzPnQ/yR/o1xp4LL0be17Eod9vqK/sxHKBKSadI10N2nmJ8D1QUl4VzpnqithSU9kv1xE/ZzUvZhaPCLggtJUIx0wPz2/F2utzqP5s3PAdQ==",
+            "iv": "vT7m4M+IxiKEIrGI",
+            "ct": "ciCguh8jOIlkw+9+Xnef1P8aojiE98O4znReZzk9/ivSwM/PYrAoyNEVNqOtXxOtjnJUj8HEr9yC2QDESGGqPg01AlIcp6PLSSDuk9wsdhy6Fo6H5GzSgaT2basjf6gJ4KreJo7aWfJGsV5GlnVuEYcqnAvTF15wBXgxwA5vtsJRupsEwJCLdcohZgVt6BW9YFXGHRVd5cLXDQGAAQGMk+4YsZZwRheQp3JQWibJH8fGI7CKgGe/TAUvF4mWcam78nrtjLc2uhQO4N7Fhkz+yX/czzECIoS5gG4et2/r7VR9qNa83VQYWrs75GS05USH6F2MeijVV/arEETh9hXVZ75J7H7LeYXBAXacUATEUhLWU1fCUDmZ41d/DLXKGNRFYpaR7t8rHdxqgdXw4upNxM41siWBdcHPIhFyOyHuM825F3koEZZyGiup0CdFmo9XHgIJWP+3ofgocX/Z95/1P0gLdkDTXbQNoFvMv3Xx/NlFNokkCeXAu1z97uejYpWJCUOQxBISm5DkVU+iATMG7k6MDzyu0W7Ui54oTCOdibv1/HdX97RVigVThqQAOjxHFESBQoKyXS2MLg==",
             "kicker": "Deeper cut",
             "nav": "Deep dive"
           },
@@ -1170,9 +1380,9 @@
           "it": 210000,
           "wraps": {
             "owner": {
-              "salt": "DDlnUOREPkUijCzcWEWKpA==",
-              "iv": "BsvTYtyHwDE/VOdR",
-              "ct": "AtFiZl1/zww8sdmk0VHZZwURc4CzXj2/Vlb1tE7zbDOjOVxngDualkvV29Dmj+W1"
+              "salt": "XcIqC202x4rx9imSvPJpJQ==",
+              "iv": "2pEB8vB8L2YO3ekq",
+              "ct": "b0VAi+YBM6/dHFxXxHDYtfl2+4LeC9wJ7d5c2mw3rqkaVZsOCV7y+FsTFwO5o7BV"
             }
           }
         }
@@ -1312,8 +1522,8 @@
             "type": "text",
             "locked": true,
             "encStub": true,
-            "iv": "RThO5RgQ1B42P/Dz",
-            "ct": "BHuGm05LBrVH9/uFhnNFw6LuyAEZCMSLfpW1htwZjNbli3dsmLLFMy4KE+3OTW8JkRL0ClVrNWVefHoUADFzxWaix0DXFy7s5SfQxByfrqyO1vsGdV5bcx5aiJrpIzjru+eSSxEGt+UAhXucVPyimSzG57Uyr1pK4OpDx6Lb1pebf/uIscb7bgE73tKviAGDpQZDNR1FJ9AzfqVWH1J1/99aWoUPJzPdJrwwjvqk2VT/kKphA8oM7OyyvwtMjqiD2AnRp6WWAlbpDQMxXMvyoxQ89mGeCsL2KIoJqYhiW2k7HnhIH1RlFQy/c0A44gYbiKrDOsN7kBRz3QY8YyDFP1lmv80+fzKup0qDl5kFXFd1e1yG9j5DxBDtyGzoqChKuwlaLVGdrrOgOZCSRNqzFlz+pV2Tr1hmHLJ4KF4KH/6JBq5k3xO3b16wvgUrfvnqR3aqBCqDwJBbk3K+YA1BlYq6ukCu4N6SnvQZTyCbjuunC4nnSvr+VLg54Nr2OYcG8NeZAJD6a3qwM2bsRCy1jJ/oe5zkDFCi3ws8e1cPKd/2L6Wcs57XQkUsrPilPxG+ii1OUEtJ94oBrMb+/u9Yt5gzYIDkwu+LO1m4tDQ=",
+            "iv": "MWrie22Hozx6eSnD",
+            "ct": "lt8aizeDy9o/xQTOBAfw6AtK5oCg89he/6Vl2NMH5Cmot3kAtRssmADh5FzCWLvpFDpa9HVQgiIqVTJmQXmRcTTY7jwmg3VCY6ZRa76oUWKn/0m7Snjfql8sgVVbdQ1BXWhapkPGbcsaJFQG497+nSbUPz097uhV6BBJfeLtT2kCDkQtPitwaVR/B5bS/BxhsWsVCji/j79NHFmsPPw/D5AycdFjOtRdq1XO+NnbTI/QbofX43gUr7qXgN+3tANMRN5R+hF0tJUxMIxxU0JpjD/CeJDfRCO5UwfXRm0VeftxoJxF09mgTXqt0KF/OmE37jC6djlxQX1oXvVRezfL2JSAb6vGAg0ZqUTOb8kS3c35IvoA8ET8xxKF4OMugGSuXDUFMz4gfNW/BWxAS6G4KeEgg9umyROSv384jCQ9KSEkI4tGnzVduT+VFW1RivCcdExkCPbPsTpo5Lf3qU4Ey+AkGMzbzjzyHbGd0y5lIJhoQ0xUtAZhJn1QUCYex4qbSfdejEi2qG9AvATvs8FTG0oeT+TEvh2iuwxUOJKo3r01iJCMO3oTi0kKzeteDps95p+/LkM2WjMqZEulTEHW1qw/DrmmY+W8U+y5UQk=",
             "kicker": "Deeper cut",
             "nav": "Deep dive"
           },
@@ -1330,9 +1540,9 @@
           "it": 210000,
           "wraps": {
             "owner": {
-              "salt": "VR9V6xERinzZOj4O7UiUkQ==",
-              "iv": "yZvnXPVASUQhKTXd",
-              "ct": "DR/3tVuNWzwqWaeUYN6Zs1rbUwK0tEZ5v8zLTMYkwEuMeQAU8f9F3sArgNW50KHI"
+              "salt": "7TVawgpaj1c7nWsWxBXxUw==",
+              "iv": "0iP6CR1XBhyzbM8m",
+              "ct": "152Ji+Ch8VmG0YV3eYZoh6rmvPt6L8kFLegPKjVzLlTHStoXZTVva2mPnfEt7iwV"
             }
           }
         }
