@@ -1069,7 +1069,7 @@
                 "caption": "DESIGN VISION"
               }
             ],
-            "locked": true
+            "locked": false
           },
           {
             "type": "columns",
@@ -1149,7 +1149,7 @@
                 "caption": "Acquisition from Windows: Vision"
               }
             ],
-            "locked": true
+            "locked": false
           },
           {
             "type": "cards",
