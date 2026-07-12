@@ -293,6 +293,16 @@ video.pjb__media-el { background: #000; }
 .pjb__cell .pjb__coln-media { margin-top: .85rem; }
 .pjb__coln-media { margin-top: 1rem; border-radius: 6px; overflow: hidden; border: 1px solid var(--line-soft); }
 .pjb__coln-media .pjb__media-el { display: block; width: 100%; }
+/* Rows — horizontal bands of titled cells (the transpose of Columns) */
+.pjb__rows { margin-top: .5rem; }
+.pjb__row { display: grid; grid-template-columns: minmax(110px, .7fr) 3fr; gap: clamp(1rem, 2.4vw, 1.8rem); align-items: start; padding: 1.4rem 0; border-top: 1px solid var(--line-soft); }
+.pjb__row:first-child { border-top: 0; padding-top: 0; }
+.pjb__rows--nolabel .pjb__row { grid-template-columns: 1fr; }
+.pjb__row-lbl { font-family: var(--mono); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); padding-top: .25rem; }
+.pjb__row-cells { display: grid; grid-template-columns: repeat(var(--rn, 1), minmax(0, 1fr)); gap: clamp(1.1rem, 2.4vw, 1.8rem); align-items: start; }
+.pjb__row-cell .pjb__coln-h { margin-bottom: .55rem; }
+.pjb__row-cell .pjb__prose { font-size: .98rem; }
+@media (max-width: 720px) { .pjb__row { grid-template-columns: 1fr; gap: .55rem; } .pjb__row-cells { grid-template-columns: 1fr; gap: 1.1rem; } }
 
 /* sticky notes — staggered cards with a gentle hover lift */
 .pjb__stickies { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; margin-top: 1.4rem; align-items: start; }

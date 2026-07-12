@@ -297,6 +297,23 @@
     }).join("");
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__cols">' + items + "</div>";
   }
+  // Rows are the transpose of Columns: stacked bands, each with a row label and cells laid out side by side.
+  function rowsBlock(b) {
+    var hasLabels = (b.items || []).some(function (r) { return r.label; });
+    var rows = (b.items || []).map(function (r) {
+      var cells = (Array.isArray(r.cells) && r.cells.length) ? r.cells : [{ heading: r.heading, body: r.body, src: r.src }];
+      var inner = cells.map(function (cell) {
+        var media = mediaSrc(cell) ? '<div class="pjb__coln-media">' + mediaEl(cell, "pjb__media-el") + "</div>" : "";
+        return '<div class="pjb__row-cell">' +
+          (cell.heading ? '<h3 class="pjb__coln-h">' + md(cell.heading) + "</h3>" : "") +
+          prose(cell.body) + media + "</div>";
+      }).join("");
+      return '<div class="pjb__row">' +
+        (hasLabels ? '<div class="pjb__row-lbl">' + esc(r.label || "") + "</div>" : "") +
+        '<div class="pjb__row-cells" style="--rn:' + cells.length + '">' + inner + "</div></div>";
+    }).join("");
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__rows' + (hasLabels ? "" : " pjb__rows--nolabel") + '">' + rows + "</div>";
+  }
   function compareBlock(b) {
     var note = prose(b.body, "pjb__cmp-note");
     if (!mediaSrc({ src: b.beforeSrc }) || !mediaSrc({ src: b.afterSrc })) {
@@ -365,7 +382,7 @@
     text: textBlock, statement: stmtBlock, metrics: metricsBlock,
     steps: stepsBlock, media: mediaBlock, split: splitBlock, faq: faqBlock,
     cards: cardsBlock, gallery: galleryBlock, figure: figureBlock,
-    columns: columnsBlock, compare: compareBlock, stickies: stickiesBlock, voices: voicesBlock,
+    columns: columnsBlock, rows: rowsBlock, compare: compareBlock, stickies: stickiesBlock, voices: voicesBlock,
   };
   function renderBlock(b, i) {
     var navLabel = b.nav || "";
