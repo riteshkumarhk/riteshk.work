@@ -156,7 +156,8 @@ img[data-zoom] { cursor: zoom-in; }
 .pjb__prose ol { list-style: decimal; }
 .pjb__prose li { font-size: 1rem; line-height: 1.6; color: var(--text-dim); }
 .pjb__prose figure { margin: 1.3rem 0; }
-.pjb__prose img { max-width: 100%; height: auto; display: block; border-radius: 6px; border: 1px solid var(--line-soft); margin: 1.3rem 0; }
+.pjb__prose img { max-width: 100%; height: auto; display: block; border-radius: 6px; border: 1px solid var(--line-soft); margin: 1.3rem 0; cursor: zoom-in; }
+.pjb figure.rt__fig img { max-width: 100%; height: auto; display: block; border-radius: 6px; border: 1px solid var(--line-soft); margin: 1.3rem 0; cursor: zoom-in; }
 .pjb__prose [style*="text-align: center"], .pjb__prose [style*="text-align:center"] { margin-left: auto; margin-right: auto; }
 .pjb__list { margin-top: 1.2rem; display: grid; gap: .7rem; }
 .pjb__list li { position: relative; padding-left: 1.5rem; font-size: 1rem; line-height: 1.5; color: var(--text-dim); }

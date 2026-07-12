@@ -538,7 +538,21 @@
       rtStripMediaIndent(area);
       rtSerialize(area); return;
     }
-    if (cmd === "image") { pickImage(function (uri) { area.insertAdjacentHTML("beforeend", '<figure class="rt__fig"><img src="' + escAttr(uri) + '" alt="" /></figure><p><br></p>'); rtSerialize(area); }); return; }
+    if (cmd === "image") {
+      // pickImage calls back TWICE (instant data-URI, then the hosted path) — insert once, then just swap the src so the image isn't added twice.
+      var imgFig = null;
+      pickImage(function (uri) {
+        if (imgFig && area.contains(imgFig)) {
+          var im = imgFig.querySelector("img"); if (im) im.setAttribute("src", uri);
+        } else {
+          area.insertAdjacentHTML("beforeend", '<figure class="rt__fig"><img src="' + escAttr(uri) + '" alt="" /></figure><p><br></p>');
+          var figs = area.querySelectorAll("figure.rt__fig");
+          imgFig = figs[figs.length - 1] || null;
+        }
+        rtSerialize(area);
+      });
+      return;
+    }
     try { document.execCommand(cmd, false, null); } catch (e) {}
     rtSerialize(area);
   }
@@ -569,13 +583,48 @@
   }
   function rtClearFormat(area) {
     area.focus();
-    var txt = (area.innerText || "").replace(/\u00a0/g, " ");
-    var blocks = txt.split(/\n{2,}/).map(function (b) { return b.replace(/[ \t]+$/gm, "").trim(); }).filter(function (b) { return b.length; });
-    rtSetHtml(area, blocks.map(function (b) {
-      return "<p>" + b.split(/\n/).map(function (line) { return escForRt(line); }).join("<br>") + "</p>";
-    }).join(""));
+    // With a highlighted selection, clear formatting on THAT text only (bold/italic/colour/alignment/indent) — images untouched.
+    var sel = window.getSelection();
+    var hasSel = sel && sel.rangeCount && !sel.isCollapsed && area.contains(sel.anchorNode) && area.contains(sel.focusNode);
+    if (hasSel) {
+      try { document.execCommand("removeFormat", false, null); } catch (e) {}
+      try { document.execCommand("justifyLeft", false, null); } catch (e) {}
+      try { document.execCommand("styleWithCSS", false, true); } catch (e) {}
+      for (var g = 0; g < 12; g++) { try { document.execCommand("outdent", false, null); } catch (e) {} }
+      try { document.execCommand("styleWithCSS", false, false); } catch (e) {}
+      rtSerialize(area);
+      status("Formatting cleared for the selected text.");
+      return;
+    }
+    // Nothing selected: strip formatting from ALL text, but keep images exactly where they are.
+    var parts = [], buf = [];
+    function figHtml(img) { return '<figure class="rt__fig"><img src="' + escAttr(img.getAttribute("src") || img.src || "") + '" alt="' + escAttr(img.getAttribute("alt") || "") + '" /></figure>'; }
+    function flush() {
+      if (!buf.length) return;
+      buf.join("\n").split(/\n{2,}/).forEach(function (para) {
+        var lines = para.split(/\n/).map(function (l) { return l.trim(); }).filter(function (l) { return l; });
+        if (lines.length) parts.push("<p>" + lines.map(escForRt).join("<br>") + "</p>");
+      });
+      buf = [];
+    }
+    Array.prototype.forEach.call(area.childNodes, function (node) {
+      if (node.nodeType === 3) { if (node.textContent.trim()) buf.push(node.textContent); return; }
+      if (node.nodeType !== 1) return;
+      var media = node.matches("img, video, iframe, svg") ? [node] : Array.prototype.slice.call(node.querySelectorAll("img, video, iframe, svg"));
+      if (media.length) {
+        var txt = (node.innerText || node.textContent || "").replace(/\u00a0/g, " ").trim();
+        if (txt) buf.push(txt);
+        flush();
+        media.forEach(function (m) { parts.push(m.tagName === "IMG" ? figHtml(m) : '<figure class="rt__fig">' + m.outerHTML + "</figure>"); });
+        return;
+      }
+      buf.push((node.innerText || node.textContent || "").replace(/\u00a0/g, " "));
+      buf.push("");
+    });
+    flush();
+    rtSetHtml(area, parts.join("") || "<p><br></p>");
     rtSerialize(area);
-    status("Formatting cleared \u2014 back to default text.");
+    status("Text formatting cleared \u2014 images kept.");
   }
   // Paste as plain text so copied source styling/colours never leak into the body.
   function onRtPaste(e) {
