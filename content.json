@@ -89,6 +89,325 @@
   ],
   "work": [
     {
+      "id": "w1783840785203",
+      "featured": false,
+      "theme": "grid",
+      "plateTag": "First Run Experience",
+      "client": "Microsoft AI: Edge browser",
+      "period": "Ongoing: Currently in development",
+      "title": "Reinventing Edge Onboarding Journey",
+      "desc": "After joining Microsoft Edge as the team's growth designer, I set out to rethink one of our most important customer moments: onboarding. What began as a design exploration evolved into a multi-year effort to redefine onboarding strategy, secure leadership investment, and build the next generation onboarding experience now in development.",
+      "tags": [
+        "Product Strategy",
+        "Growth Design",
+        "Onboarding",
+        "Activation & Retention",
+        "Platform Design",
+        "Systems Thinking",
+        "Personalization",
+        "Design Leadership",
+        "Browser Growth"
+      ],
+      "image": "/assets/uploads/3f4eacf62b981354ad308c6e03d2a6b0ee1e291aa4eed6992bd83363a3531136.webp",
+      "study": {
+        "tagline": "Transforming onboarding from a setup flow into a growth platform for activation, retention, and long-term engagement.",
+        "role": "Led onboarding vision, growth strategy, concept development, executive storytelling, product alignment, and final UX design for the next generation FRE",
+        "team": "Design • PM • Engineering • Research • Content Design • Privacy • Data Science",
+        "timeline": "2025 – Current",
+        "scope": "New Device First Run Experience • Activation • Retention • Personalization • Consent • Data Import",
+        "cover": "",
+        "unlockHash": "",
+        "blocks": [
+          {
+            "type": "statement",
+            "nav": "Why Onboarding Matters",
+            "kicker": "",
+            "body": "Why Onboarding Matters?",
+            "sub": "",
+            "src": "",
+            "caption": "",
+            "hsize": "lg"
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "Onboarding for growth",
+            "items": [
+              {
+                "src": "/assets/uploads/723f68cf77a3db66ddce6352a5c234e3afcefed70fd5c1330d9b1c7ff04ace9b.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/0270dead8082905d240029040611f8b39cddd905d96a35ff1a01a34bae67cfbc.png",
+                "caption": ""
+              }
+            ],
+            "locked": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Onboarding as a growth challenge",
+            "body": "<figure class=\"rt__fig\"><p>Most onboarding experiences are optimized for completion.</p></figure><p>I discovered Edge's onboarding challenge was fundamentally a growth challenge.</p><p><span style=\"font-size: 0.9rem;\">Different users entered Edge with dramatically different goals:</span></p><p></p><ul><li><span style=\"font-size: 0.9rem;\">MVUs wanted speed</span></li><li><span style=\"font-size: 0.9rem;\">Edge PBs needed retention</span></li><li><span style=\"font-size: 0.9rem;\">Dual-browser users needed conversion</span></li><li><span style=\"font-size: 0.9rem;\">Local-account users needed MSA adoption</span></li><li><span style=\"font-size: 0.9rem;\">Dormant users needed re-engagement</span></li></ul><p></p><p><span style=\"font-size: 0.9rem;\">Onboarding wasn't just helping users finish setup. It was helping them move up the Edge growth ladder.</span></p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "sm"
+          },
+          {
+            "type": "text",
+            "nav": "Understanding modern onboarding",
+            "kicker": "",
+            "heading": "Modern Onboarding",
+            "body": "While studying onboarding patterns across Windows OOBE and modern browsers, I noticed a common trend: successful onboarding experiences focused less on setup and more on helping users experience value quickly.",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "CHROME ONBOARDING",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/7438c8f38e67e8c476d93a8f8ccab13a85969d961eeb562568ebe4efe19d5290.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/6747063d92869b041b1c8ed9b1edce9fb2f0d407c48bf0e400841b3934dc8c56.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/b8e0e05c327fdd60d425ed2b39091465689704205260894d54b19409fd43d951.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/738c60f4f35294f919f0eb4ae3f045c64292a9237e6bd6fe7f39363fe3b1e637.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/09e7f338d45843f17de5ac0f888d6a6880d1da3cacdc49cc8e96ec8a75e1d37b.png",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "windows oobe (Out of box experience)",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/521802936b55fa9049de0f3977ba3e3e16fec6e64e0e27cdf0eccc9bacc7c9ed.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/84679c475ac02b1e3e1071aa8fd141e39a918ce2069ef19f873e1fa1bbb3f8cc.png",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "type": "media",
+            "nav": "Existing Experience",
+            "kicker": "EDGE ONBOARDING",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/217a7a63cf0ca17e19a5767e375261158a265d40214895d7972b683941389aa4.mp4",
+                "caption": "",
+                "controls": true
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "The existing onboarding experience had evolved organically over time.<div><br></div><div>Sign-in, consent, import, personalization, pinning and activation were spread across disconnected surfaces.</div><div><br></div><div>Users experienced onboarding as separate experiences rather than a coherent journey. This contributed to drop-off between stages and made future growth initiatives increasingly difficult to scale.</div>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "columns",
+            "nav": "Business justification",
+            "kicker": "Business justification",
+            "heading": "Why two surfaces? ",
+            "items": [
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "Hard surface",
+                    "body": "Ensure critical setup and compliance actions happen before users start browsing.<div><ul><li>Sign-in</li><li>Sync notice</li><li>Data import</li><li>Privacy consents</li></ul></div>",
+                    "src": ""
+                  },
+                  {
+                    "heading": "High-priority actions because they directly impacted:",
+                    "body": "<div><ul><li>User retention</li><li>Browser switching success</li><li>Compliance requirements</li><li>Microsoft account adoption</li></ul></div>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "Soft surface",
+                    "body": "Drive personalization and activation without introducing excessive friction.<div><br><div><ul><li><span style=\"font-size: 0.9rem;\">Themes</span></li><li>Layout preferences</li><li>Pinning</li><li>New tab customization</li></ul></div></div>",
+                    "src": ""
+                  },
+                  {
+                    "heading": "Important but not critical",
+                    "body": "These experiences were considered not critical enough to block users. They therefore lived in a separate, lighter-weight onboarding experience after the mandatory setup moments.",
+                    "src": ""
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "nav": "Design Perspective",
+            "kicker": "the turning point",
+            "heading": "My viewpoint",
+            "body": "I began to question whether onboarding should be organized around business priorities or customer psychology. The most delightful and identity-building experiences were treated as secondary steps, despite being the moments most likely to create confidence, preference, and retention.",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/61b3500e39510eaf85516058e66ef827ca83fce0052139c07238105e398f72cd.png",
+                "caption": "High business-value actions such as import and consent were surfaced early and prominently, while personalization experiences were deferred into a secondary onboarding flow.  My hypothesis was that personalization was not a secondary experience. It was one of the earliest opportunities to help users feel ownership, confidence, and attachment to Edge."
+              }
+            ],
+            "hsize": "",
+            "sep": false
+          },
+          {
+            "type": "stickies",
+            "nav": "",
+            "kicker": "",
+            "heading": "Problems Identified",
+            "items": [
+              {
+                "label": "01",
+                "heading": "",
+                "body": "<p>Fragmented in multiple surfaces - Hard / Soft increasing the overall step counts</p>",
+                "src": ""
+              },
+              {
+                "label": "02",
+                "heading": "",
+                "body": "<p>Multiple screens with similar objectives - Consents / Customize</p>",
+                "src": ""
+              },
+              {
+                "label": "03",
+                "heading": "",
+                "body": "<p>Prioritizes consents (blocking overlays) over personalization, and other growth opportunities</p>",
+                "src": ""
+              },
+              {
+                "label": "04",
+                "heading": "",
+                "body": "Follows outdated pattern and can be perceived as distracting or following dark patterns",
+                "src": ""
+              }
+            ],
+            "hsize": "sm"
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "",
+            "heading": "Solution: Unification",
+            "beforeSrc": "/assets/uploads/3edc64be5ca4a3fee098a26eab69846578fd712e1c77daaeedc7f258b6c7398a.png",
+            "afterSrc": "/assets/uploads/6a342292431811050d42b0a761d46ec086cce109de8f71dd343186a3644e476d.png",
+            "beforeLabel": "Before",
+            "afterLabel": "After",
+            "body": "",
+            "sep": true
+          },
+          {
+            "type": "steps",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "title": "Surface Unification",
+                "body": "A single continuous onboarding journey"
+              },
+              {
+                "title": "Layout Unification",
+                "body": "Create a common onboarding language.<div><br></div><div>Shared:</div><div><ul><li>visual structure</li><li>navigation model</li><li>progress model</li><li>CTA placement</li><li>interaction patterns</li></ul></div><div><br></div><div>The goal was to make every step feel like part of the same journey regardless of content.</div>"
+              },
+              {
+                "title": "Consent Unification",
+                "body": "Rather than treating consent as standalone interruptions, integrate them into the narrative of onboarding."
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "Exploring the future",
+            "kicker": "Exploring the future",
+            "heading": "Most ambitious directional concepts",
+            "body": "<p>The challenge was reimagining how onboarding should feel as a single cohesive journey.</p><p>Rather than jumping straight into a solution, I explored multiple future directions that challenged existing assumptions around surfaces, immersion, personalization, and activation.</p>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              }
+            ],
+            "sep": false
+          }
+        ]
+      }
+    },
+    {
       "id": "edge",
       "featured": false,
       "theme": "edge",
@@ -870,7 +1189,7 @@
       "image": "/assets/uploads/42d6e21daf6b701ae17ec68a85d784ee94504a9800ea6c52719040b568617152.png",
       "study": {
         "tagline": "A strategic vision for how Xbox could build stronger relationships with gamers across every stage of the subscription journey.",
-        "role": "Product Designer II",
+        "role": "Product Designer II | Leading the vision",
         "team": "3 Designers, 1 Product Manager, 1 Content Designer, 4 Engineer, 1 Data Science",
         "timeline": "4 months",
         "scope": "Growth · Acquisition · Retention · Churn Reduction · Re-activation · Personalization · Platform Strategy",
