@@ -955,7 +955,7 @@
     return '<div class="study__panel">' +
       csgenPanel(w, i) +
       header + meta +
-      '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span></div>' +
+      '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span>' + (blocks.length ? '<button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">\u2728 Review feedback</button>' : "") + "</div>" +
       '<div class="study__blocks">' + list + "</div>" + add + "</section>" +
       unlockBlock +
       '<div class="study__foot"><a class="btn btn--ghost" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '">Preview case study \u2197</a><button class="btn btn--primary" data-act="study-close" data-index="' + i + '">Done</button></div>' +
@@ -1377,6 +1377,7 @@
     if (act === "csgen-run") { csgenRun(i, false); return; }
     if (act === "csgen-variant") { csgenRun(i, true); return; }
     if (act === "csgen-pdf") { csgenAddPdf(i); return; }
+    if (act === "fbrev-open") { fbReviewModal(i); return; }
     if (act === "csgen-ref-toggle") { const wrap = b.closest(".csgen__ref"); if (wrap) { const open = wrap.classList.toggle("is-open"); b.textContent = (open ? "\u2212" : "+") + " Paste a reference case study to echo (optional)"; const cw = data.work[i]; if (cw) csgenState(cw.id).refShow = open; } return; }
     if (act === "study-toggle") { openL2(i); return; }
     if (act === "study-close") { closeL2(); return; }
@@ -2365,6 +2366,212 @@
       close();
       renderBody(); apply(true);
       status("AI draft applied to your landing \u2014 review it, then Publish when ready.", true);
+    });
+  }
+
+  /* ---------- AI feedback reviewer (map reviewer notes to the exact edits) ---------- */
+  var FB_TYPE_NAMES = { text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", figure: "Figure", columns: "Columns", compare: "Compare", stickies: "Sticky notes", voices: "Voices" };
+  var FB_FIELD_LABELS = { kicker: "kicker", nav: "nav label", heading: "heading", body: "body", sub: "sub-line", caption: "caption", leftLabel: "before label", rightLabel: "after label", beforeLabel: "before label", afterLabel: "after label", value: "value", label: "label", title: "title", q: "question", a: "answer", cite: "attribution" };
+  function fbPlain(s) { return String(s == null ? "" : s).replace(/<[^>]+>/g, " ").replace(/\*\*|\*|~~|\[\[|\]\]/g, "").replace(/\s+/g, " ").trim(); }
+  function fbBlockLoc(b) { return fbPlain(b.nav || b.kicker || b.heading || b.body || FB_TYPE_NAMES[b.type] || "Section").slice(0, 42) || "Section"; }
+  // Flat, addressable map of every editable TEXT field in a study, with a live setter per field.
+  function fbFieldMap(w) {
+    var st = w.study || {};
+    var out = [];
+    function push(addr, label, value, setter) {
+      if (typeof value !== "string" || !value.trim()) return;
+      out.push({ addr: addr, label: label, value: value, set: setter });
+    }
+    push("meta.title", "Project \u00b7 title", w.title, function (v) { w.title = v; });
+    push("meta.desc", "Project \u00b7 description", w.desc, function (v) { w.desc = v; });
+    ["tagline", "role", "team", "timeline", "scope"].forEach(function (f) { push("meta." + f, "Story header \u00b7 " + f, st[f], function (v) { st[f] = v; }); });
+    (st.blocks || []).forEach(function (b, j) {
+      var loc = fbBlockLoc(b);
+      function bf(f) { push("block." + j + "." + f, loc + " \u00b7 " + (FB_FIELD_LABELS[f] || f), b[f], function (v) { b[f] = v; }); }
+      ["kicker", "nav", "heading", "body", "sub", "caption", "leftLabel", "rightLabel", "beforeLabel", "afterLabel"].forEach(function (f) { if (typeof b[f] === "string") bf(f); });
+      if (Array.isArray(b.list)) b.list.forEach(function (v, n) { if (typeof v === "string") push("block." + j + ".list." + n, loc + " \u00b7 bullet " + (n + 1), v, function (nv) { b.list[n] = nv; }); });
+      ["left", "right"].forEach(function (f) {
+        if (Array.isArray(b[f])) b[f].forEach(function (v, n) { if (typeof v === "string") push("block." + j + "." + f + "." + n, loc + " \u00b7 " + f + " " + (n + 1), v, function (nv) { b[f][n] = nv; }); });
+        else if (typeof b[f] === "string") bf(f);
+      });
+      (b.items || []).forEach(function (it, k) {
+        ["value", "label", "title", "body", "q", "a", "caption", "heading", "cite"].forEach(function (f) {
+          push("block." + j + ".item." + k + "." + f, loc + " \u00b7 " + (k + 1) + " \u00b7 " + (FB_FIELD_LABELS[f] || f), it[f], function (v) { it[f] = v; });
+        });
+        (it.cells || []).forEach(function (cell, c) {
+          ["heading", "body"].forEach(function (f) { push("block." + j + ".item." + k + ".cell." + c + "." + f, loc + " \u00b7 col " + (k + 1) + " cell " + (c + 1) + " \u00b7 " + f, cell[f], function (v) { cell[f] = v; }); });
+        });
+      });
+    });
+    return out;
+  }
+  function ensureMammoth() {
+    if (window.mammoth) return Promise.resolve(window.mammoth);
+    if (ensureMammoth._p) return ensureMammoth._p;
+    ensureMammoth._p = new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js";
+      s.onload = function () { window.mammoth ? resolve(window.mammoth) : reject(new Error("Couldn\u2019t load the Word reader.")); };
+      s.onerror = function () { ensureMammoth._p = null; reject(new Error("Couldn\u2019t load the Word reader.")); };
+      document.head.appendChild(s);
+    });
+    return ensureMammoth._p;
+  }
+  async function fbExtractFile(f) {
+    if (/\.pdf$/i.test(f.name) || f.type === "application/pdf") {
+      var pdfjs = await ensurePdfJs();
+      var pdf = await pdfjs.getDocument({ data: await f.arrayBuffer() }).promise;
+      var parts = [];
+      for (var p = 1; p <= pdf.numPages; p++) {
+        var page = await pdf.getPage(p);
+        var content = await page.getTextContent();
+        parts.push(content.items.map(function (it) { return it.str; }).join(" "));
+      }
+      return parts.join("\n\n");
+    }
+    if (/\.docx$/i.test(f.name) || f.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      var mammoth = await ensureMammoth();
+      var res = await mammoth.extractRawText({ arrayBuffer: await f.arrayBuffer() });
+      return (res && res.value) || "";
+    }
+    if (/\.doc$/i.test(f.name)) throw new Error("Old .doc isn\u2019t supported \u2014 save as .docx or PDF, or paste the text.");
+    return await f.text();
+  }
+  function fbSystem() {
+    return [
+      "You are a meticulous product-design portfolio editor. You are given (A) the editable text fields of ONE case study \u2014 each with a unique \"addr\" and its current \"value\" \u2014 and (B) reviewer feedback on that case study.",
+      "Map each actionable feedback point to the specific field(s) it affects, and propose a concrete revised value for each.",
+      "Rules:",
+      "- Use ONLY \"addr\" values that appear in the provided fields list. Never invent an address.",
+      "- Include a field ONLY if the feedback calls for changing it. Leave everything else untouched.",
+      "- Preserve the author\u2019s voice and every factual specific. NEVER invent or alter metrics, numbers, names or dates unless the feedback explicitly provides them.",
+      "- If a field\u2019s current value contains HTML tags, return \"suggested\" as valid minimal HTML (<p>, <strong>, <em>, <ul>/<li>). Otherwise return plain text.",
+      "- \"reason\" = one short sentence naming the feedback point you are addressing.",
+      "- A single feedback point may touch several fields; emit one change per field.",
+      "Return ONLY valid JSON (no markdown, no commentary): {\"changes\":[{\"addr\":string,\"suggested\":string,\"reason\":string}]}. If nothing is actionable, return {\"changes\":[]}."
+    ].join("\n");
+  }
+  function fbUser(fields, feedback) {
+    return "REVIEWER FEEDBACK:\n" + String(feedback).trim() + "\n\nEDITABLE FIELDS (JSON array of {addr,label,value}):\n" + JSON.stringify(fields.map(function (f) { return { addr: f.addr, label: fbPlain(f.label), value: f.value }; }));
+  }
+  function fbReviewModal(i) {
+    var w = data.work[i]; if (!w || !w.study) return;
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { fbReviewModal(i); }); return; }
+    var fields = fbFieldMap(w);
+    var byAddr = {}; fields.forEach(function (f) { byAddr[f.addr] = f; });
+    var changes = [];
+    var modal = document.createElement("div");
+    modal.className = "pass pass--wide fbrev-modal";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">Review feedback with AI</div>' +
+      '<div class="pass__sub">Paste or upload the feedback (PDF, Word or text). The AI finds where each point applies and proposes edits \u2014 you approve what ships.</div>' +
+      '<div class="fbrev__input">' +
+        '<div class="af"><label class="af__label">Feedback</label><textarea id="fbrevText" rows="7" placeholder="Paste stakeholder notes, a design-review doc, comments\u2026 one point per line is ideal."></textarea>' +
+        '<div class="af__hint" id="fbrevFileHint">' + fields.length + ' editable field' + (fields.length === 1 ? "" : "s") + ' in this case study \u00b7 nothing changes until you approve.</div></div>' +
+        '<div class="fbrev__tools"><button class="btn btn--ghost" data-fbrev-file>Add PDF / Word / text\u2026</button></div>' +
+      "</div>" +
+      '<div class="fbrev__review" hidden></div>' +
+      '<div class="pass__err"></div>' +
+      '<div class="pass__actions fbrev__foot">' +
+        '<button class="btn btn--ghost" data-cancel>Cancel</button>' +
+        '<span class="fbrev__bulk" hidden><button class="btn btn--ghost" data-fbrev-all>Approve all</button><button class="btn btn--ghost" data-fbrev-none>Reject all</button></span>' +
+        '<button class="btn btn--auto" data-fbrev-run>Review against case study</button>' +
+        '<button class="btn btn--primary" data-fbrev-apply hidden>Apply approved</button>' +
+      "</div>" +
+      '<div class="pass__note">Keys stay in this browser. Applied edits go to your local draft \u2014 you still hit Publish when ready.</div></div>';
+    document.body.appendChild(modal);
+    var err = modal.querySelector(".pass__err");
+    var review = modal.querySelector(".fbrev__review");
+    var inputStage = modal.querySelector(".fbrev__input");
+    var runBtn = modal.querySelector("[data-fbrev-run]");
+    var applyBtn = modal.querySelector("[data-fbrev-apply]");
+    var bulk = modal.querySelector(".fbrev__bulk");
+    var ta = modal.querySelector("#fbrevText");
+    var close = function () { modal.remove(); };
+    function updateApplyCount() {
+      var n = review.querySelectorAll("input[data-fbc]:checked").length;
+      applyBtn.textContent = "Apply approved (" + n + ")";
+      applyBtn.disabled = !n;
+    }
+    function renderReview() {
+      if (!changes.length) {
+        review.innerHTML = '<div class="fbrev__empty">The AI didn\u2019t find anything to change from that feedback \u2014 add more detail or be more specific, then try again.</div>';
+        bulk.hidden = true; applyBtn.hidden = true; return;
+      }
+      review.innerHTML = '<div class="fbrev__reviewhd">' + changes.length + " proposed edit" + (changes.length > 1 ? "s" : "") + ' \u2014 approve the ones to apply, tweak any text, then Apply.</div>' +
+        changes.map(function (c, idx) {
+          return '<div class="fbrev__card">' +
+            '<label class="fbrev__approve"><input type="checkbox" data-fbc="' + idx + '" checked /> <span class="fbrev__loc">' + escHtml(c.field.label) + "</span></label>" +
+            '<div class="fbrev__reason">' + escHtml(c.reason || "") + "</div>" +
+            '<div class="fbrev__diff"><div class="fbrev__before"><span class="fbrev__tag">Now</span>' + escHtml(fbPlain(c.field.value) || "\u2014") + "</div>" +
+            '<div class="fbrev__after"><span class="fbrev__tag">Suggested</span><textarea class="fbrev__sug" data-fbs="' + idx + '" rows="3">' + escHtml(c.suggested) + "</textarea></div></div>" +
+            "</div>";
+        }).join("");
+      bulk.hidden = false; applyBtn.hidden = false;
+      updateApplyCount();
+    }
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+    modal.addEventListener("change", function (e) { if (e.target.matches("input[data-fbc]")) updateApplyCount(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    modal.querySelector("[data-fbrev-file]").addEventListener("click", function () {
+      var inp = document.createElement("input");
+      inp.type = "file";
+      inp.accept = ".pdf,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.txt,.md,.markdown,text/plain";
+      inp.onchange = async function () {
+        var f = inp.files && inp.files[0]; if (!f) return;
+        var hint = modal.querySelector("#fbrevFileHint");
+        hint.textContent = "Reading " + f.name + "\u2026";
+        try {
+          var text = ((await fbExtractFile(f)) || "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+          if (!text) throw new Error("No selectable text found in that file (a scanned PDF has no text layer).");
+          ta.value = (ta.value.trim() ? ta.value.trim() + "\n\n" : "") + text;
+          hint.textContent = "Added text from " + f.name + " \u2014 edit above if needed.";
+        } catch (e) { hint.textContent = (e && e.message) || "Couldn\u2019t read that file."; }
+      };
+      inp.click();
+    });
+    runBtn.addEventListener("click", async function () {
+      var feedback = ta.value.trim();
+      if (!feedback) { err.textContent = "Paste or upload some feedback first."; return; }
+      if (!fields.length) { err.textContent = "This case study has no editable text yet."; return; }
+      err.textContent = "";
+      runBtn.disabled = true; runBtn.textContent = "Reviewing\u2026";
+      try {
+        var obj = csgenParse(await aiText(aiCfg("txt"), fbSystem(), fbUser(fields, feedback), { json: true, maxTokens: 4096, temperature: 0.4 }));
+        var raw = obj && Array.isArray(obj.changes) ? obj.changes : (Array.isArray(obj) ? obj : null);
+        if (!raw) throw new Error("The AI didn\u2019t return usable suggestions \u2014 try again.");
+        changes = raw.map(function (c) {
+          if (!c || typeof c.addr !== "string") return null;
+          var f = byAddr[c.addr]; if (!f) return null;
+          var sug = typeof c.suggested === "string" ? c.suggested : "";
+          if (!sug.trim() || sug.trim() === String(f.value).trim()) return null;
+          return { addr: c.addr, suggested: sug, reason: typeof c.reason === "string" ? c.reason : "", field: f };
+        }).filter(Boolean);
+        inputStage.hidden = true; runBtn.hidden = true;
+        review.hidden = false;
+        renderReview();
+      } catch (e) {
+        err.textContent = (e && e.message) || "Review failed.";
+        runBtn.disabled = false; runBtn.textContent = "Review against case study";
+      }
+    });
+    modal.querySelector("[data-fbrev-all]").addEventListener("click", function () { review.querySelectorAll("input[data-fbc]").forEach(function (c) { c.checked = true; }); updateApplyCount(); });
+    modal.querySelector("[data-fbrev-none]").addEventListener("click", function () { review.querySelectorAll("input[data-fbc]").forEach(function (c) { c.checked = false; }); updateApplyCount(); });
+    applyBtn.addEventListener("click", function () {
+      var applied = 0;
+      review.querySelectorAll("input[data-fbc]:checked").forEach(function (cb) {
+        var idx = +cb.dataset.fbc; var c = changes[idx]; if (!c) return;
+        var sugEl = review.querySelector('textarea[data-fbs="' + idx + '"]');
+        c.field.set(sugEl ? sugEl.value : c.suggested);
+        applied++;
+      });
+      if (!applied) { err.textContent = "Approve at least one edit, or Cancel."; return; }
+      saveDraft(true);
+      renderL2();
+      refreshL2Preview();
+      close();
+      status(applied + " feedback edit" + (applied > 1 ? "s" : "") + " applied \u2014 review below, then Publish when ready.", true);
     });
   }
 
