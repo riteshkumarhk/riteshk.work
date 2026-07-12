@@ -83,6 +83,7 @@
   let root = null, body = null, frame = null;
   let l2 = null, l2body = null, l2title = null, l2PreviewTimer = 0;
   let saveTimer = null;
+  let dragSrc = null;
   let menuEl = null;
   const ticketPlain = {}; // owner-only plaintext tickets, never published
   const studyUnlockPlain = {}; // owner-only plaintext deeper-cut passes, never published
@@ -640,18 +641,75 @@
     }
     return '<div class="af"><label class="af__label">' + label + '</label><input type="text" ' + da + ' value="' + escAttr(it[key] || "") + '" /></div>';
   }
+  var GRIP_SVG = '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="3" r="1.4"/><circle cx="10.5" cy="3" r="1.4"/><circle cx="5.5" cy="8" r="1.4"/><circle cx="10.5" cy="8" r="1.4"/><circle cx="5.5" cy="13" r="1.4"/><circle cx="10.5" cy="13" r="1.4"/></svg>';
+  function itemLabel(it) {
+    var v = (it && (it.caption || it.value || it.q || it.title || it.label || it.heading || it.name || it.icon || it.src)) || "";
+    v = String(v).replace(/^data:[^,]*,.*$/, "\u2014").replace(/[\*\[\]#`]/g, "").replace(/\s+/g, " ").trim();
+    return v.length > 42 ? v.slice(0, 42) + "\u2026" : v;
+  }
   function itemRepeater(i, j, b) {
     var spec = ITEM_SPEC[b.type]; if (!spec) return "";
     var items = b.items || (b.items = []);
     var rows = items.map(function (it, k) {
       var flds = spec.fields.map(function (f) { return itemFieldEl(i, j, k, it, f); }).join("");
-      return '<div class="rep__item"><div class="rep__bar"><span class="rep__n">' + escHtml(spec.one) + " " + (k + 1) + '</span><span class="rep__ops">' +
+      return '<div class="rep__item" data-ri="' + i + '" data-rj="' + j + '" data-rk="' + k + '"><div class="rep__bar">' +
+        '<span class="rep__grip" data-grip title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
+        '<span class="rep__n">' + escHtml(spec.one) + " " + (k + 1) + '</span>' +
+        '<span class="rep__itemlabel">' + escHtml(itemLabel(it)) + '</span>' +
+        '<span class="rep__ops">' +
         '<button class="iconbtn" data-act="item-up" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '"' + (k === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
         '<button class="iconbtn" data-act="item-down" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '"' + (k === items.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
         '<button class="iconbtn iconbtn--danger" data-act="item-remove" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" title="Remove">\u2715</button>' +
         "</span></div>" + flds + "</div>";
     }).join("") || '<div class="rep__empty">No ' + escHtml(spec.title.toLowerCase()) + " yet.</div>";
     return '<div class="rep"><div class="rep__head"><label class="af__label">' + spec.title + '</label><button class="btn btn--add rep__add" data-act="item-add" data-index="' + i + '" data-bindex="' + j + '">+ ' + spec.add + "</button></div>" + rows + "</div>";
+  }
+  /* ---------- drag-to-reorder for repeater items (arrows still work) ---------- */
+  function repClearDrag() {
+    document.querySelectorAll(".rep__item.is-dragging, .rep__item.is-drop-before, .rep__item.is-drop-after").forEach(function (x) { x.classList.remove("is-dragging", "is-drop-before", "is-drop-after"); });
+    document.querySelectorAll(".rep--ranking").forEach(function (x) { x.classList.remove("rep--ranking"); });
+    document.querySelectorAll('.rep__item[draggable="true"]').forEach(function (x) { x.removeAttribute("draggable"); });
+  }
+  function repDragStart(e) {
+    var it = e.target.closest && e.target.closest(".rep__item");
+    if (!it || it.getAttribute("draggable") !== "true") return;
+    dragSrc = { i: +it.dataset.ri, j: +it.dataset.rj, k: +it.dataset.rk };
+    try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "rep"); } catch (er) { }
+    it.classList.add("is-dragging");
+    var rep = it.closest(".rep"); if (rep) rep.classList.add("rep--ranking");
+  }
+  function repDragOver(e) {
+    if (!dragSrc) return;
+    var over = e.target.closest && e.target.closest(".rep__item");
+    if (!over || +over.dataset.ri !== dragSrc.i || +over.dataset.rj !== dragSrc.j) return;
+    e.preventDefault(); try { e.dataTransfer.dropEffect = "move"; } catch (er) { }
+    var rep = over.closest(".rep");
+    if (rep) rep.querySelectorAll(".is-drop-before, .is-drop-after").forEach(function (x) { x.classList.remove("is-drop-before", "is-drop-after"); });
+    if (+over.dataset.rk === dragSrc.k) return;
+    var r = over.getBoundingClientRect();
+    over.classList.add((e.clientY - r.top) > r.height / 2 ? "is-drop-after" : "is-drop-before");
+  }
+  function repDrop(e) {
+    if (!dragSrc) { repClearDrag(); return; }
+    var over = e.target.closest && e.target.closest(".rep__item");
+    if (over && +over.dataset.ri === dragSrc.i && +over.dataset.rj === dragSrc.j) {
+      e.preventDefault();
+      var targetK = +over.dataset.rk;
+      var toBefore = over.classList.contains("is-drop-after") ? targetK + 1 : targetK;
+      repReorder(dragSrc.i, dragSrc.j, dragSrc.k, toBefore);
+    }
+    dragSrc = null; repClearDrag();
+  }
+  function repReorder(i, j, from, toBefore) {
+    if (toBefore === from || toBefore === from + 1) return; // dropped in place
+    var wk = data.work[i]; var bl = wk && wk.study && wk.study.blocks[j];
+    if (!bl || !bl.items) return;
+    var items = bl.items;
+    var moved = items.splice(from, 1)[0];
+    var insert = toBefore > from ? toBefore - 1 : toBefore;
+    insert = Math.max(0, Math.min(items.length, insert));
+    items.splice(insert, 0, moved);
+    saveDraft(true); renderL2();
   }
   function onItemInput(t) {
     var i = +t.dataset.sitem, j = +t.dataset.bindex, k = +t.dataset.iindex, f = t.dataset.ifield;
@@ -2184,6 +2242,13 @@
     root.addEventListener("input", onInput);
     root.addEventListener("change", onChange);
     root.addEventListener("click", onClick);
+    // Drag-to-reorder repeater items via the grip handle (arrows still work).
+    root.addEventListener("mousedown", function (e) { var g = e.target.closest && e.target.closest("[data-grip]"); if (g) { var it = g.closest(".rep__item"); if (it) it.setAttribute("draggable", "true"); } });
+    root.addEventListener("dragstart", repDragStart);
+    root.addEventListener("dragover", repDragOver);
+    root.addEventListener("drop", repDrop);
+    root.addEventListener("dragend", function () { dragSrc = null; repClearDrag(); });
+    document.addEventListener("mouseup", function () { if (!dragSrc) { document.querySelectorAll('.rep__item[draggable="true"]').forEach(function (x) { x.removeAttribute("draggable"); }); } });
     // Keep the caret inside the rich-text area when a toolbar button is pressed.
     root.addEventListener("mousedown", function (e) { if (e.target.closest("[data-rt]")) e.preventDefault(); });
     // Paste into a rich-text body as plain text (no foreign colours/fonts).

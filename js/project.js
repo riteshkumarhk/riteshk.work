@@ -305,10 +305,23 @@
       '<div class="pjb__cmp-top"><img src="' + attr(b.beforeSrc) + '" alt="" draggable="false" /></div>' +
       '<span class="pjb__cmp-line" aria-hidden="true"></span>' +
       '<button type="button" class="pjb__cmp-grip" data-cmp aria-label="Drag to compare before and after"><span>\u2039\u203a</span></button>' +
+      '<button type="button" class="pjb__cmp-zoom" data-cmp-zoom aria-label="View full screen" title="View full screen">' + FS_SVG + "</button>" +
       '<span class="pjb__cmp-lbl pjb__cmp-lbl--l">' + esc(b.beforeLabel || "Before") + "</span>" +
       '<span class="pjb__cmp-lbl pjb__cmp-lbl--r">' + esc(b.afterLabel || "After") + "</span>" +
       "</div>";
     return kicker(b.kicker) + heading(b.heading) + cmp + note;
+  }
+  // Open the before/after pair in the full-screen lightbox (double-click or expand button).
+  function openCmpLbx(cmp) {
+    if (!cmp) return;
+    var beforeImg = cmp.querySelector(".pjb__cmp-top img");
+    var afterImg = cmp.querySelector(".pjb__cmp-base");
+    var lblL = cmp.querySelector(".pjb__cmp-lbl--l");
+    var lblR = cmp.querySelector(".pjb__cmp-lbl--r");
+    var group = [];
+    if (beforeImg) group.push({ src: beforeImg.currentSrc || beforeImg.src, cap: (lblL && lblL.textContent) || "Before" });
+    if (afterImg) group.push({ src: afterImg.currentSrc || afterImg.src, cap: (lblR && lblR.textContent) || "After" });
+    if (group.length) openLbx(group, 0);
   }
   var LOCK_SVG =
     '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.4">' +
@@ -389,15 +402,40 @@
       '<div class="pjb__cta"><p>A detailed case study for this project is available on request.</p>' +
       '<a class="pj__btn pj__btn--primary" href="#contact" data-pj="contact">Get in touch →</a></div></section>';
   }
+  // Rounded contact + résumé controls (same as the home dock), laid out horizontally.
+  function contactDock() {
+    var d = data(); var c = (d && d.contact) || {};
+    var out = "";
+    if (c.resume) {
+      out += '<a class="dock__btn" data-pj="resume" href="' + (/^data:/.test(c.resume) ? "#" : attr(c.resume)) + '" target="_blank" rel="noopener" data-label="R\u00e9sum\u00e9" aria-label="Open r\u00e9sum\u00e9">' +
+        '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></a>';
+    }
+    if (c.linkedin) {
+      out += '<a class="dock__btn" href="' + attr(c.linkedin) + '" target="_blank" rel="noopener" data-label="LinkedIn" aria-label="LinkedIn">' +
+        '<svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor" aria-hidden="true"><path d="M4.98 3.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM3.2 9h3.6v11.5H3.2zM9 9h3.45v1.57h.05c.48-.9 1.65-1.85 3.4-1.85 3.64 0 4.3 2.4 4.3 5.5v6.28h-3.6v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9z"/></svg></a>';
+    }
+    if (c.email) {
+      out += '<a class="dock__btn" href="mailto:' + attr(c.email) + '" data-label="Email" aria-label="Email me">' +
+        '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg></a>';
+    }
+    var tel = c.phoneRaw || c.phone;
+    if (tel) {
+      out += '<a class="dock__btn" href="tel:' + attr(tel) + '" data-label="Call" aria-label="Call me">' +
+        '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h3l1.5 4-2 1.3a11 11 0 0 0 5 5l1.3-2 4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7 2 2 0 0 1 6.5 3.5z"/></svg></a>';
+    }
+    if (!out) return "";
+    return '<div class="pj__cta"><div class="pj__cta-dock">' + out + "</div></div>";
+  }
   function navFoot(prevW, nextW) {
     var card = function (w, dir) {
       if (!w) return '<div class="pj__foot-card pj__foot-card--empty"></div>';
       return '<button class="pj__foot-card" data-open="' + attr(w.id) + '">' +
-        '<span class="pj__foot-dir">' + (dir === "next" ? "Next project →" : "← Previous") + "</span>" +
+        '<span class="pj__foot-dir">' + (dir === "next" ? "Next project \u2192" : "\u2190 Previous") + "</span>" +
         '<span class="pj__foot-title">' + esc(w.title) + "</span>" +
         '<span class="pj__foot-client">' + esc(w.client) + "</span></button>";
     };
     return '<footer class="pj__foot">' +
+      contactDock() +
       '<div class="pj__foot-cards">' + card(prevW, "prev") + card(nextW, "next") + "</div>" +
       '<button class="pj__btn pj__btn--ghost pj__foot-back" data-pj="back">← All work</button></footer>';
   }
@@ -568,6 +606,7 @@
     }, { passive: true });
 
     overlay.addEventListener("pointerdown", function (e) {
+      if (e.target.closest("[data-cmp-zoom]")) return; // let the expand button receive its click
       var cmp = e.target.closest(".pjb__cmp");
       if (!cmp) return;
       cmpDrag = cmp; cmpMove(e);
@@ -577,7 +616,9 @@
     overlay.addEventListener("click", onOverlayClick);
     overlay.addEventListener("dblclick", function (e) {
       var v = e.target.closest("video.pjb__media-el, video.pj__cover-el");
-      if (v) { e.preventDefault(); toggleElFs(v); }
+      if (v) { e.preventDefault(); toggleElFs(v); return; }
+      var cmp = e.target.closest(".pjb__cmp");
+      if (cmp) { e.preventDefault(); openCmpLbx(cmp); }
     });
     overlay.addEventListener("keydown", onOverlayKey);
   }
@@ -585,6 +626,8 @@
   function onOverlayClick(e) {
     var fsB = e.target.closest("[data-fs]");
     if (fsB) { e.preventDefault(); toggleFrameFs(fsB); return; }
+    var cmpZoom = e.target.closest("[data-cmp-zoom]");
+    if (cmpZoom) { e.preventDefault(); openCmpLbx(cmpZoom.closest(".pjb__cmp")); return; }
     var zoomImg = e.target.closest("[data-zoom]");
     if (zoomImg) {
       e.preventDefault();
@@ -606,6 +649,7 @@
     else if (kind === "prev") nav(-1);
     else if (kind === "next") nav(1);
     else if (kind === "unlock") unlockFlow();
+    else if (kind === "resume") { e.preventDefault(); var dz = data(); var rz = dz && dz.contact && dz.contact.resume; if (rz) { if (window.RK && window.RK.openResume) window.RK.openResume(rz); else window.open(rz, "_blank", "noopener"); } }
     else if (kind === "contact") { e.preventDefault(); closeProject({ push: true }); setTimeout(function () { var c = document.getElementById("contact"); if (c) c.scrollIntoView({ behavior: "smooth" }); }, 320); }
   }
   function onOverlayKey(e) {
