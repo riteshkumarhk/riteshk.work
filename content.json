@@ -851,7 +851,7 @@
       "client": "Xbox Game Pass",
       "period": "2021-2022",
       "title": "Designing Growth Lifecycle for Xbox Customers",
-      "desc": "Rather than focusing on a single subscription experience, I stepped back to examine the entire Xbox Game Pass customer journey across Windows and the web. By mapping acquisition, onboarding, engagement, cancellation, and reactivation opportunities, I uncovered how Microsoft could create value beyond subscription management.\n\nThe work reframed cancellation as a symptom rather than the problem itself. Different players left for different reasons, revealing opportunities for personalized retention experiences, smarter recovery strategies, and deeper engagement through Windows. The resulting vision helped align product strategy, identify high-value growth opportunities, and establish a north star that informed future execution across multiple Game Pass initiatives.",
+      "desc": "Designed a growth lifecycle vision for Xbox Game Pass spanning acquisition, engagement, retention, and reactivation across Windows and web experiences. The work uncovered new opportunities to reduce churn through personalization, strengthen long-term engagement, and guide future product investments beyond traditional subscription management.",
       "tags": [
         "Product Strategy",
         "Vision Design",
@@ -1069,7 +1069,7 @@
                 "caption": "DESIGN VISION"
               }
             ],
-            "locked": false
+            "locked": true
           },
           {
             "type": "columns",
@@ -1149,7 +1149,7 @@
                 "caption": "Acquisition from Windows: Vision"
               }
             ],
-            "locked": false
+            "locked": true
           },
           {
             "type": "cards",
