@@ -309,6 +309,38 @@ video.pjb__media-el { background: #000; }
 @media (max-width: 860px) { .pjb__stickies { grid-template-columns: repeat(2, 1fr); } .pjb__stickies .pjb__sticky { margin-top: 0; } .pjb__stickies .pjb__sticky:nth-child(2n) { margin-top: 1.6rem; } }
 @media (max-width: 560px) { .pjb__stickies { grid-template-columns: 1fr; } .pjb__stickies .pjb__sticky { margin-top: 0 !important; } }
 
+/* voices — verbatims, thoughts & a chat thread from research */
+.pjb__voices { display: flex; flex-direction: column; gap: 1.5rem; margin-top: 1.4rem; }
+.pjb__voice-bubble { position: relative; border-radius: 16px; padding: 1.05rem 1.3rem; background: var(--bg-elev); border: 1px solid var(--line); }
+.pjb__voice-h { font-family: var(--serif); font-weight: 400; font-size: 1.3rem; line-height: 1.28; color: var(--text); margin-bottom: .55rem; }
+.pjb__voices--lg .pjb__voice-h { font-size: clamp(1.5rem, 2.6vw, 2.1rem); }
+.pjb__voice-b { font-size: 1.02rem; line-height: 1.5; color: var(--text); }
+.pjb__voice-b p { margin: 0 0 .5rem; } .pjb__voice-b p:last-child { margin: 0; }
+.pjb__voice-b ul, .pjb__voice-b ol { margin: .4rem 0; padding-left: 1.2rem; } .pjb__voice-b li::marker { color: var(--accent); }
+.pjb__voice-cite { font-family: var(--mono); font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); margin-top: .55rem; padding-left: .2rem; }
+/* verbatim — sharp speech-bubble tail (down-left) */
+.pjb__voices--verbatim .pjb__voice { max-width: 82%; }
+.pjb__voices--verbatim .pjb__voice-bubble::after { content: ""; position: absolute; left: 30px; bottom: -8px; width: 15px; height: 15px; background: var(--bg-elev); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: rotate(45deg); }
+/* thought — soft cloud tail (trailing circles) */
+.pjb__voices--thought .pjb__voice { max-width: 82%; padding-bottom: 14px; }
+.pjb__voices--thought .pjb__voice-bubble { border-radius: 22px; }
+.pjb__voices--thought .pjb__voice-bubble::before, .pjb__voices--thought .pjb__voice-bubble::after { content: ""; position: absolute; border-radius: 50%; background: var(--bg-elev); border: 1px solid var(--line); left: 26px; }
+.pjb__voices--thought .pjb__voice-bubble::after { width: 12px; height: 12px; bottom: -9px; }
+.pjb__voices--thought .pjb__voice-bubble::before { width: 6px; height: 6px; bottom: -19px; left: 21px; }
+/* chat — a conversation, tails point both ways */
+.pjb__voices--chat { gap: .55rem; }
+.pjb__voices--chat .pjb__voice { max-width: 68%; }
+.pjb__voices--chat .pjb__voice--left { align-self: flex-start; }
+.pjb__voices--chat .pjb__voice--right { align-self: flex-end; text-align: right; }
+.pjb__voices--chat .pjb__voice-bubble { border-radius: 18px; }
+.pjb__voices--chat .pjb__voice--left .pjb__voice-bubble { background: rgba(216, 166, 87, .13); border-color: rgba(216, 166, 87, .3); border-bottom-left-radius: 5px; }
+.pjb__voices--chat .pjb__voice--right .pjb__voice-bubble { border-bottom-right-radius: 5px; }
+.pjb__voices--chat .pjb__voice--left .pjb__voice-bubble::after { content: ""; position: absolute; left: 10px; bottom: -7px; width: 14px; height: 14px; background: rgba(216, 166, 87, .13); border-right: 1px solid rgba(216, 166, 87, .3); border-bottom: 1px solid rgba(216, 166, 87, .3); transform: rotate(45deg); }
+.pjb__voices--chat .pjb__voice--right .pjb__voice-bubble::after { content: ""; position: absolute; right: 10px; bottom: -7px; width: 14px; height: 14px; background: var(--bg-elev); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: rotate(45deg); }
+.pjb__voices--chat .pjb__voice-b { font-size: 1rem; }
+.pjb__voices--chat .pjb__voice-cite { color: var(--text-dim); margin-top: .35rem; }
+@media (max-width: 640px) { .pjb__voices--verbatim .pjb__voice, .pjb__voices--thought .pjb__voice { max-width: 100%; } .pjb__voices--chat .pjb__voice { max-width: 86%; } }
+
 /* split images */
 .pjb__col-media { margin-bottom: 1rem; border-radius: 6px; overflow: hidden; border: 1px solid var(--line-soft); }
 .pjb__col-media .pjb__media-el { display: block; width: 100%; }

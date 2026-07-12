@@ -347,11 +347,23 @@
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__stickies">' + items + "</div>";
   }
 
+  function voicesBlock(b) {
+    var mode = b.mode === "thought" ? "thought" : b.mode === "chat" ? "chat" : "verbatim";
+    var items = (b.items || []).map(function (v) {
+      var side = mode === "chat" ? (v.side === "right" ? "right" : "left") : "";
+      var head = (mode === "verbatim" && v.heading) ? '<div class="pjb__voice-h">' + md(v.heading) + "</div>" : "";
+      var body = v.body ? '<div class="pjb__voice-b">' + richInline(v.body) + "</div>" : "";
+      var cite = v.cite ? '<div class="pjb__voice-cite">' + esc(v.cite) + "</div>" : "";
+      return '<div class="pjb__voice' + (side ? " pjb__voice--" + side : "") + '"><div class="pjb__voice-bubble">' + head + body + "</div>" + cite + "</div>";
+    }).join("");
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__voices pjb__voices--' + mode + (b.vsize === "lg" ? " pjb__voices--lg" : "") + '">' + items + "</div>";
+  }
+
   var RENDERERS = {
     text: textBlock, statement: stmtBlock, metrics: metricsBlock,
     steps: stepsBlock, media: mediaBlock, split: splitBlock, faq: faqBlock,
     cards: cardsBlock, gallery: galleryBlock, figure: figureBlock,
-    columns: columnsBlock, compare: compareBlock, stickies: stickiesBlock,
+    columns: columnsBlock, compare: compareBlock, stickies: stickiesBlock, voices: voicesBlock,
   };
   function renderBlock(b, i) {
     var navLabel = b.nav || "";

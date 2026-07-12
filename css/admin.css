@@ -555,3 +555,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .secprev--stickies .sp__note b { font-family: var(--mono); font-size: .46rem; letter-spacing: .06em; color: var(--accent); }
 .secprev--stickies .sp__note i { font-family: var(--serif); font-size: .58rem; font-style: normal; color: var(--text-dim); }
 .secprev--stickies .sp__note u { height: 11px; border-radius: 3px; background: linear-gradient(135deg, rgba(216,166,87,.16), transparent); text-decoration: none; margin-top: .12rem; }
+.secprev--voices { flex-direction: column; gap: .26rem; align-items: stretch; }
+.secprev--voices .sp__vc { font-size: .54rem; line-height: 1.3; color: var(--text-dim); border: 1px solid var(--line); border-radius: 8px; padding: .26rem .4rem; max-width: 78%; }
+.secprev--voices .sp__vc--l { align-self: flex-start; border-bottom-left-radius: 2px; background: rgba(216,166,87,.12); border-color: rgba(216,166,87,.26); }
+.secprev--voices .sp__vc--r { align-self: flex-end; border-bottom-right-radius: 2px; background: var(--bg-2); }
