@@ -794,8 +794,52 @@
     var blocks = st.blocks || [];
     var showIntro = !!(w.image || st.cover) || blocks.length > 0;
     overlay.querySelector("[data-toc]").innerHTML = tocHtml(blocks, showIntro);
-    overlay.querySelector("[data-content]").innerHTML = contentHtml(w);
+    var contentEl = overlay.querySelector("[data-content]");
+    var html = contentHtml(w);
+    // In the admin live-preview, re-rendering the SAME project on every keystroke
+    // must not tear down embed iframes/videos (reparenting an iframe reloads it —
+    // a distracting flash). Morph the DOM instead, leaving unchanged media in place.
+    if (PREVIEW && contentEl.getAttribute("data-wid") === String(w.id) && contentEl.firstChild) {
+      morphInto(contentEl, html);
+    } else {
+      contentEl.innerHTML = html;
+    }
+    contentEl.setAttribute("data-wid", String(w.id));
     requestAnimationFrame(function () { updateSpy(); coverParallax(); });
+  }
+
+  // Minimal DOM morph: update text/attributes in place and add/remove nodes, but
+  // leave any <iframe>/<video> whose src is unchanged completely untouched, so the
+  // embed keeps playing and never reloads. Used only for same-project preview refreshes.
+  function morphInto(container, html) {
+    var tmp = document.createElement("div");
+    tmp.innerHTML = html;
+    morphChildren(container, tmp);
+  }
+  function morphChildren(oldParent, newParent) {
+    var oldKids = [].slice.call(oldParent.childNodes);
+    var newKids = [].slice.call(newParent.childNodes);
+    for (var i = 0; i < newKids.length; i++) {
+      var n = newKids[i], o = oldKids[i];
+      if (!o) { oldParent.appendChild(n); continue; }
+      if (o.nodeType !== n.nodeType || (o.nodeType === 1 && o.nodeName !== n.nodeName)) { oldParent.replaceChild(n, o); continue; }
+      morphNode(o, n);
+    }
+    for (var j = oldKids.length - 1; j >= newKids.length; j--) oldParent.removeChild(oldKids[j]);
+  }
+  function morphNode(o, n) {
+    if (o.nodeType === 3 || o.nodeType === 8) { if (o.nodeValue !== n.nodeValue) o.nodeValue = n.nodeValue; return; }
+    if (o.nodeType !== 1) return;
+    var tag = o.nodeName;
+    // Same embed (identical src) → keep the live node, sync only its other attributes.
+    if ((tag === "IFRAME" || tag === "VIDEO") && o.getAttribute("src") === n.getAttribute("src")) { morphAttrs(o, n); return; }
+    morphAttrs(o, n);
+    morphChildren(o, n);
+  }
+  function morphAttrs(o, n) {
+    var i, oa = o.attributes, na = n.attributes;
+    for (i = na.length - 1; i >= 0; i--) { if (o.getAttribute(na[i].name) !== na[i].value) o.setAttribute(na[i].name, na[i].value); }
+    for (i = oa.length - 1; i >= 0; i--) { if (!n.hasAttribute(oa[i].name)) o.removeAttribute(oa[i].name); }
   }
 
   function nav(dir) {
