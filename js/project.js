@@ -836,7 +836,7 @@
   function openProject(id, opts) {
     opts = opts || {};
     var w = workById(id);
-    if (!w) { closeProject(opts); return; }
+    if (!w || w.encWork) { closeProject(opts); return; }   // hidden/encrypted project — not viewable without its ticket
     var firstOpen = !overlay || !overlay.classList.contains("is-open");
     if (!overlay) buildOverlay();
     if (firstOpen) {
