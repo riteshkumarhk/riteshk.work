@@ -646,7 +646,7 @@
           },
           {
             "type": "text",
-            "nav": "Section",
+            "nav": "",
             "kicker": "",
             "heading": "Responsive by Default",
             "body": "Framework was designed to scale across different window states, device configurations, and future onboarding modules, ensuring a consistent experience while supporting future extensibility.",
@@ -732,7 +732,7 @@
                 "cells": [
                   {
                     "heading": "Setup First",
-                    "body": "<div><div><br></div><ul><li><span style=\"font-size: 0.9rem;\">Sign In → Lightning Import → Themes → Consent → Pinning</span></li></ul></div>",
+                    "body": "<div><ul><li><span style=\"font-size: 0.9rem;\">Sign In → Lightning Import → Themes → Consent → Pinning</span></li></ul></div>",
                     "src": ""
                   },
                   {
@@ -754,6 +754,61 @@
               }
             ],
             "sep": false
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "Experiment B",
+            "heading": "",
+            "items": [
+              {
+                "src": "",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "type": "rows",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "Delight First",
+                    "body": "<ul><li><span style=\"font-size: 0.9rem;\">Pinning → Themes → Sign In → Lightning Import → Consent</span></li></ul>",
+                    "src": ""
+                  },
+                  {
+                    "heading": "Tying up to the vision",
+                    "body": "<ul><li><span style=\"font-size: 0.9rem;\">Instead of starting with account setup and migration, onboarding begins by showing users the value of personalizing Edge.</span></li></ul>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "What we wanted to learn",
+                    "body": "<ul><li>Does leading with delight increase engagement and completion?</li><li>Do users form stronger impressions of Edge when personalization comes first?</li><li>Can value-building moments create enough momentum to carry users through later setup requirements?</li><li>Should onboarding optimize for excitement and ownership before configuration?</li></ul>",
+                    "src": ""
+                  }
+                ]
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "statement",
+            "nav": "",
+            "kicker": "",
+            "body": "Should onboarding ask users to invest in Edge first, or should Edge invest in the user first?",
+            "sub": "We are yet to get the answers...",
+            "src": "",
+            "caption": ""
           }
         ]
       }
