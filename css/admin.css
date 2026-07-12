@@ -146,7 +146,7 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 }
 .adm textarea { resize: vertical; min-height: 60px; line-height: 1.55; }
 .adm input:focus, .adm textarea:focus, .adm select:focus { outline: none; border-color: var(--accent); }
-.adm select { cursor: pointer; }
+.adm select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appearance: none; padding-right: 1.9rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238f8a84' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .7rem center; background-size: 12px; }
 
 .chk { display: inline-flex; align-items: center; gap: .45rem; font-size: .8rem; color: var(--text-dim); cursor: pointer; }
 .chk input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
@@ -318,7 +318,7 @@ body.adm-lock .cursor { display: none !important; }
   font-family: var(--sans); font-size: .85rem; margin-bottom: .2rem;
 }
 .pass textarea { resize: vertical; min-height: 64px; line-height: 1.55; }
-.pass select { cursor: pointer; }
+.pass select { cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appearance: none; padding-right: 1.9rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238f8a84' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .7rem center; background-size: 12px; }
 .pass textarea:focus, .pass select:focus { outline: none; border-color: var(--accent); }
 
 /* ---- AI key dialog (shared vs separate) ---- */
