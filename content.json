@@ -1645,15 +1645,23 @@
             "items": [
               {
                 "label": "Overview",
-                "heading": "",
-                "body": "<p>Xbox Game Pass was growing rapidly, but customer experiences were optimized around individual subscription scenarios such as acquisition, management, upgrades, and cancellation. The broader customer journey was fragmented, making it difficult to identify opportunities that spanned the entire lifecycle.</p>",
-                "src": ""
+                "cells": [
+                  {
+                    "heading": "",
+                    "body": "<p>Xbox Game Pass was growing rapidly, but customer experiences were optimized around individual subscription scenarios such as acquisition, management, upgrades, and cancellation. The broader customer journey was fragmented, making it difficult to identify opportunities that spanned the entire lifecycle.</p>",
+                    "src": ""
+                  }
+                ]
               },
               {
                 "label": "What I did",
-                "heading": "",
-                "body": "<p><ul><li>Mapped the end-to-end Game Pass customer lifecycle.</li><li>Developed the strategic vision for acquisition, retention, and reactivation.</li><li>Defined personalization principles for future subscription experiences.</li><li>Created north-star concepts that informed future execution and planning.</li></ul></p>",
-                "src": ""
+                "cells": [
+                  {
+                    "heading": "",
+                    "body": "<p><ul><li>Mapped the end-to-end Game Pass customer lifecycle.</li><li>Developed the strategic vision for acquisition, retention, and reactivation.</li><li>Defined personalization principles for future subscription experiences.</li><li>Created north-star concepts that informed future execution and planning.</li></ul></p>",
+                    "src": ""
+                  }
+                ]
               }
             ]
           },
@@ -1702,9 +1710,13 @@
             "items": [
               {
                 "label": "",
-                "heading": "We treated cancellation as a single problem.",
-                "body": "<p><span style=\"font-size: 0.9rem;\">After examining customer behaviour, it became clear that people left for fundamentally different reasons:</span></p><p><ul><li>Cost sensitivity</li><li>Lack of time</li><li>Lack of relevant content</li><li>Forgotten renewals</li><li>Temporary disengagement</li></ul></p><p>The real problem wasn't cancellation itself.</p><p>The real problem was that we weren't helping different users recognize and rediscover the value relevant to them.</p>",
-                "src": ""
+                "cells": [
+                  {
+                    "heading": "We treated cancellation as a single problem.",
+                    "body": "<p><span style=\"font-size: 0.9rem;\">After examining customer behaviour, it became clear that people left for fundamentally different reasons:</span></p><p><ul><li>Cost sensitivity</li><li>Lack of time</li><li>Lack of relevant content</li><li>Forgotten renewals</li><li>Temporary disengagement</li></ul></p><p>The real problem wasn't cancellation itself.</p><p>The real problem was that we weren't helping different users recognize and rediscover the value relevant to them.</p>",
+                    "src": ""
+                  }
+                ]
               }
             ]
           },
@@ -1769,9 +1781,13 @@
             "items": [
               {
                 "label": "",
-                "heading": "This shift expanded the conversation beyond cancellation and surfaced new opportunities in:",
-                "body": "<ul><li>Acquisition</li><li>Engagement</li><li>Retention</li><li>Family growth</li><li>Re-subscription</li><li>Customer reactivation</li></ul><div><br></div><div>\"How do we stop customers from cancelling?\"</div><div><br></div><div><i>to</i></div><div><br></div><div>\"How do we create value throughout the customer lifecycle?\"</div><div><br></div><div>Rather than designing a screen, I was helping define where the product should go next. </div>",
-                "src": ""
+                "cells": [
+                  {
+                    "heading": "This shift expanded the conversation beyond cancellation and surfaced new opportunities in:",
+                    "body": "<ul><li>Acquisition</li><li>Engagement</li><li>Retention</li><li>Family growth</li><li>Re-subscription</li><li>Customer reactivation</li></ul><div><br></div><div>\"How do we stop customers from cancelling?\"</div><div><br></div><div><i>to</i></div><div><br></div><div>\"How do we create value throughout the customer lifecycle?\"</div><div><br></div><div>Rather than designing a screen, I was helping define where the product should go next. </div>",
+                    "src": ""
+                  }
+                ]
               }
             ],
             "hsize": "sm"
@@ -1816,20 +1832,10 @@
           },
           {
             "type": "media",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "items": [
-              {
-                "src": "<iframe style=\"border: 1px solid rgba(0, 0, 0, 0.1);\" width=\"800\" height=\"450\" src=\"https://embed.figma.com/proto/5fRuVXEXtX6Vlfn3F3wJwS/From-SPACE?node-id=9-27228&viewport=463%2C831%2C0.2&scaling=contain&content-scaling=fixed&starting-point-node-id=9%3A27228&page-id=9%3A24256&embed-host=share\" allowfullscreen></iframe>",
-                "caption": "NORTH STAR"
-              },
-              {
-                "src": "<iframe src=\"https://1drv.ms/p/c/b56119de19897ac3/IQTMvytQk2O8Ra9Z7hHDfbGzARxsY2Qm7r9GG1LfBKpVB-4?em=2&amp;wdAr=1.7777777777777777\" width=\"476px\" height=\"565px\" frameborder=\"0\" title=\"PowerPoint Viewer\">This is an embedded <a target=\"_blank\" href=\"https://office.com\">Microsoft Office</a> presentation, powered by <a target=\"_blank\" href=\"https://office.com/webapps\">Office</a>.</iframe>",
-                "caption": "DESIGN VISION"
-              }
-            ],
-            "locked": false
+            "locked": true,
+            "encStub": true,
+            "iv": "T2Ux3XyoQZoRHvAM",
+            "ct": "yaybz6i14TwjE9re9RbcVyMAkKSjHlFe59lx5RoUTJXjE1BLCBwIOUBs/PJIB2WHJ9dEN41tYl2p72AqNK2h/8NXfGLYgpS7PffesTDd2WaK1apM8G7owkC6mDc+KI7UsPCR6NCF5atzgH4Q/womFOYussvSwuNyTGUQoluWUTY46wk4WSyaP9LNAS1GQZazD/ROkA8lioNXeG4B/x8PbnA4dFbD4WLTuR3/BHIF+xC/DStQZGOE20p+4Hbu7VCyZkHJV3e31ovj0/sIJZy0rqHVaOhkMxc15ym+JYwL+AlJOnyUwL10Qyi4ACsGhG4sPH9VusAxzJgra8CbGoMeMk0ycKLSRRyobpz4gWwpM3uww0H4+MJ2x6iGAwLuF+ZfG4JiS49deVtvponvG2b46gjmSrt90rWO8wRxyc3ZoyFd5u4gQYLEGNi1badYIrazd7OG4kmkQjRNAGt0sfsWtHHejWrgf1PaOXjXNOyG4GM/+HDGSy21KpxqVqjgDqNDOOvwA5xIF0yKDeWuWo/GADxz6cCXChT2x+XrjScwoNX3IgSCbNu5RqGfUK0pd12rOLSDgdpG1DxZc9uF93GJNpuc5HqN3B2sBEBJ/i6kMPXu3Cx1gnDFR8uwWoARJAg03EsGyap6OyGCwBnrufMxz3dBztxTFSuxg3btohqX0BQ7O9Jfxczmn6lLLDML5CB4A+ePkcQjQkf30ljCrZoD2GTTavUbthTOol7uv4PzOsxbk+8FUEKlhumZ7efbYDw6t0jnsGVLoOQNpYfFDptSKvXuAF6MzrvDtBEpWiCPNDgl8bGLe41x/kY9dzACGDiJHhxmjj274lxxiT5Bo3WlWBXs4SMG5cLIOolSgaur83sh48shGIreUBt+nQu8pyoYzyML4zDfSPC098+oaHj2W9QggH3Fsa/Gsr4shrBEpj1bpO4GHH/TFQitpXcBiHj/zjJUt0Bz3eejerCOs8Ch1qonrpkcOT/h/CEAzz6dDpmsz/AQn+t1ZUYLtBCj6H/7GsfikmBF8Rf2dP7u/x1YCtl9nzuLAaxsv3TtA8yHKQY85zbuAgq3A8vxPfuoFUix4j4pP1RopI/nyhd/WgA0WgVVt7aEDTcX/qDIYDye3J1UmOFe8wlOBLfcD4B7zt6SSj0Fwkwnrt59F4tyhOszGNngkPfCyFiXGP7uZ+7P/wkWJ/8p25CeMUj3"
           },
           {
             "type": "columns",
@@ -1839,39 +1845,63 @@
             "items": [
               {
                 "label": "TIER 3 ~40%",
-                "heading": "Value led Churn",
-                "body": "<p>Users questioned economic value.</p><p></p><ul><li>Can't afford it</li><li>Already played available games</li></ul>",
-                "src": ""
+                "cells": [
+                  {
+                    "heading": "Value led Churn",
+                    "body": "<p>Users questioned economic value.</p><p></p><ul><li>Can't afford it</li><li>Already played available games</li></ul>",
+                    "src": ""
+                  }
+                ]
               },
               {
                 "label": "TIER 2 ~30%",
-                "heading": "Engagement Churn",
-                "body": "<p>Users no longer saw reasons to stay.</p><p></p><ul><li>Not enough interesting games</li><li>Prefer another gaming service</li></ul>",
-                "src": ""
+                "cells": [
+                  {
+                    "heading": "Engagement Churn",
+                    "body": "<p>Users no longer saw reasons to stay.</p><p></p><ul><li>Not enough interesting games</li><li>Prefer another gaming service</li></ul>",
+                    "src": ""
+                  }
+                ]
               },
               {
                 "label": "TIER 1 ~20%",
-                "heading": "Operational Churn",
-                "body": "<p>Users no longer saw reasons to stay.</p><p><ul><li>Not enough interesting games</li><li>Prefer another gaming service</li></ul></p>",
-                "src": ""
+                "cells": [
+                  {
+                    "heading": "Operational Churn",
+                    "body": "<p>Users no longer saw reasons to stay.</p><p><ul><li>Not enough interesting games</li><li>Prefer another gaming service</li></ul></p>",
+                    "src": ""
+                  }
+                ]
               },
               {
                 "label": "",
-                "heading": "Business solution:",
-                "body": "<div><ul><li>Pause plans</li><li>Flexible subscriptions</li><li>Future game notifications</li></ul></div><div>This is where retention becomes product strategy rather than UX optimization.</div>",
-                "src": ""
+                "cells": [
+                  {
+                    "heading": "Business solution:",
+                    "body": "<div><ul><li>Pause plans</li><li>Flexible subscriptions</li><li>Future game notifications</li></ul></div><div>This is where retention becomes product strategy rather than UX optimization.</div>",
+                    "src": ""
+                  }
+                ]
               },
               {
                 "label": "",
-                "heading": "Business solution:",
-                "body": "<div><ul><li>Personalized recommendations</li><li>Better discovery</li><li>Upcoming catalogue visibility</li></ul></div><div>This shifts the conversation from subscription management to content marketing.</div>",
-                "src": ""
+                "cells": [
+                  {
+                    "heading": "Business solution:",
+                    "body": "<div><ul><li>Personalized recommendations</li><li>Better discovery</li><li>Upcoming catalogue visibility</li></ul></div><div>This shifts the conversation from subscription management to content marketing.</div>",
+                    "src": ""
+                  }
+                ]
               },
               {
                 "label": "",
-                "heading": "Business solution:",
-                "body": "<p><ul><li>Personalized recommendations</li><li>Better discovery</li><li>Upcoming catalogue visibility</li></ul>This shifts the conversation from subscription management to content marketing.</p>",
-                "src": ""
+                "cells": [
+                  {
+                    "heading": "Business solution:",
+                    "body": "<p><ul><li>Personalized recommendations</li><li>Better discovery</li><li>Upcoming catalogue visibility</li></ul>This shifts the conversation from subscription management to content marketing.</p>",
+                    "src": ""
+                  }
+                ]
               }
             ],
             "hsize": ""
@@ -1900,16 +1930,10 @@
           },
           {
             "type": "media",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "items": [
-              {
-                "src": "<iframe src=\"https://1drv.ms/p/c/b56119de19897ac3/IQSVCZySuUQnR7eVbk8hlWkGAW2Zq_zYGepHgpdMMEXJ1Zo?em=2&amp;wdAr=1.7777777777777777\" width=\"476px\" height=\"288px\" frameborder=\"0\" title=\"PowerPoint Viewer\">This is an embedded <a target=\"_blank\" href=\"https://office.com\">Microsoft Office</a> presentation, powered by <a target=\"_blank\" href=\"https://office.com/webapps\">Office</a>.</iframe>",
-                "caption": "Acquisition from Windows: Vision"
-              }
-            ],
-            "locked": false
+            "locked": true,
+            "encStub": true,
+            "iv": "Jh8Q978ixvDnffUF",
+            "ct": "WqUCFbZ3X7d2kEG7ucYbc6hzMXuhd1a057yZcsIfJ0Qrr3puJYtZCie6JeoJlN8uZnL0Bcy8qvmnh8Acg1+BYu0xkKmHSO0LGev0baG/cg8VpMFPVTCx5PhCpqap/s0TBf5EJ9lK1HJW6HUkp4FC2SnRazqKTKaSouTvD124wn3XODEKu64RKq1FF49ffujAE12cDYH5YZSwHvvlhUqskDXBlZ6FSIdqKKiryMe/d53Kz8DmYffwNsC/IOE95h/qnhCEnTUscBzhe63qaczzoWIPoQXNp3lkjkulTCZ12mAG9FMwGhxJfjIdXngQhd2oUZtOwNe/FNv/z0unK0BuyEjE4hAUyKiwzpu+1as869ZRcbzS4QxR0FH/HtCcpC81l1u4vayToIPK1RAUBHxBNG35+JHr+7dy0vWKdAJ3mLYZQA0hJ6Gng/izIjX4rD1dGP3cAI9hFazaBRfj0B0DHUc6824nQUswMkBBBUoneg9VvtRSjWXqGEghyj2t7ber8qSqIE51h7I8XBr4WWzCkpk4e2VHNFPtMZVvXscR/zWcguQ5GG8pEb8tBJOdDV8H7xSHVEWo0KuBFPAa6EaqmUPOK3paQf7F1pmTWZNlv6PL46WuNIwvV/XTgKYDIgJR+6tsDpKjWrw4YCA6ZSAj0K1/Li+TPn+OfRYcwK0XKydNFSCljxVToB4XVmtvVMX+KFGSRFgP0avjxRmrcAP7LfVljLvxAsc="
           },
           {
             "type": "cards",
@@ -2024,7 +2048,18 @@
             ],
             "hsize": "sm"
           }
-        ]
+        ],
+        "enc": {
+          "v": 1,
+          "it": 210000,
+          "wraps": {
+            "owner": {
+              "salt": "Ilf2a88ZDhalZ5V+jkQYDg==",
+              "iv": "Pa26vnL5Gb6Wq+to",
+              "ct": "uvSoFiuete6j82XIvRXjj3X28i+9G4KwUNsrgGS+G9tVEG9ZLLgmTeqGON9e/6VH"
+            }
+          }
+        }
       }
     }
   ],
