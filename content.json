@@ -90,7 +90,7 @@
   "work": [
     {
       "id": "edge",
-      "featured": true,
+      "featured": false,
       "theme": "edge",
       "plateTag": "First Run Experience",
       "client": "Microsoft Edge",
@@ -250,7 +250,7 @@
     },
     {
       "id": "auth",
-      "featured": true,
+      "featured": false,
       "theme": "aurora",
       "plateTag": "Passwordless · Passkeys",
       "client": "Windows Identity",
@@ -405,7 +405,7 @@
     },
     {
       "id": "search",
-      "featured": true,
+      "featured": false,
       "theme": "search",
       "plateTag": "Intelligent Answers",
       "client": "Microsoft Search & AI",
@@ -558,7 +558,7 @@
     },
     {
       "id": "auto",
-      "featured": true,
+      "featured": false,
       "theme": "auto",
       "plateTag": "In-vehicle HMI",
       "client": "Jaguar Land Rover · Tata Elxsi",
@@ -692,7 +692,7 @@
     },
     {
       "id": "xbox",
-      "featured": true,
+      "featured": false,
       "theme": "xbox",
       "plateTag": "Subscription Growth",
       "client": "Xbox Game Pass",
@@ -1069,7 +1069,7 @@
                 "caption": "DESIGN VISION"
               }
             ],
-            "locked": true
+            "locked": false
           },
           {
             "type": "columns",
@@ -1149,7 +1149,7 @@
                 "caption": "Acquisition from Windows: Vision"
               }
             ],
-            "locked": true
+            "locked": false
           },
           {
             "type": "cards",
