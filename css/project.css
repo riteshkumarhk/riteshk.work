@@ -132,6 +132,9 @@ img[data-zoom] { cursor: zoom-in; }
   animation: pjb-in .7s var(--ease) both; animation-delay: calc(var(--i, 0) * 55ms);
 }
 .pjb:first-child { border-top: 0; }
+/* Separator toggle — a "flush" block drops its divider + top gap so it flows from the previous section. */
+.pjb--flush { border-top: 0; padding-top: clamp(.4rem, 1.5vw, 1.1rem); }
+.pjb:has(+ .pjb--flush) { padding-bottom: clamp(.4rem, 1.5vw, 1.1rem); }
 @keyframes pjb-in { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
 
 .pjb__kicker { font-family: var(--mono); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 1.2rem; }
