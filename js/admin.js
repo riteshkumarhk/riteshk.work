@@ -914,7 +914,7 @@
     var sepCtl = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="sep"' + (b.sep !== false ? " checked" : "") + " /> Separator line above \u2014 uncheck to flow into the previous section</label>";
     var locked = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="locked"' + (b.locked ? " checked" : "") + " /> Locked \u2014 only after the deeper-cut pass</label>";
     return '<div class="card study__block' + (open ? " is-open" : "") + '">' + head +
-      '<div class="study__block-body">' + common + body + sizeCtl + sepCtl + locked + "</div></div>";
+      '<div class="study__block-body">' + common + body + sizeCtl + '<div class="block-flags">' + sepCtl + locked + "</div></div></div>";
   }
   function smeta(i, field, label, hint) {
     var st = data.work[i].study;
