@@ -1594,8 +1594,48 @@
     const styled = autoStyleLanding(false);
     if (styled) { if (activeTab === "landing") renderBody(); apply(true); }
     const pubData = JSON.parse(JSON.stringify(data));
+    await inlineProtectedImages(pubData);     // pull any hosted NDA/hidden image inline so it encrypts, not a public file
     await encryptLockedForPublish(pubData);
     return JSON.stringify(pubData, null, 2);
+  }
+  // Inline (as data URIs) any hosted image referenced inside a Locked block or a
+  // Hidden project, so its bytes get encrypted with that block/work rather than
+  // remaining a public /assets/uploads file. Best-effort: anything it can't fetch
+  // is left as-is.
+  async function inlineProtectedImages(pubData) {
+    var works = (pubData && pubData.work) || [];
+    var nodes = [];
+    (function collect(o, prot) {
+      if (!o || typeof o !== "object") return;
+      var p = prot || o.hidden === true || o.locked === true;
+      for (var k in o) {
+        var v = o[k];
+        if (typeof v === "string") { if (p && /assets\/uploads\//.test(v) && !/^data:/i.test(v)) nodes.push({ o: o, k: k }); }
+        else if (v && typeof v === "object") collect(v, p);
+      }
+    })({ work: works }, false);
+    var cache = {};
+    for (var i = 0; i < nodes.length; i++) {
+      var o = nodes[i].o, k = nodes[i].k, str = o[k];
+      var paths = str.match(/(?:\/)?assets\/uploads\/[A-Za-z0-9._\-]+\.[A-Za-z0-9]+/g);
+      if (!paths) continue;
+      var uniq = paths.filter(function (x, ix) { return paths.indexOf(x) === ix; });
+      for (var pi = 0; pi < uniq.length; pi++) {
+        var path = uniq[pi];
+        try {
+          if (!(path in cache)) {
+            var url = path.charAt(0) === "/" ? path : "/" + path;
+            var res = await fetch(url);
+            if (!res.ok) { cache[path] = null; }
+            else {
+              var blob = await res.blob();
+              cache[path] = await new Promise(function (resolve, reject) { var r = new FileReader(); r.onload = function () { resolve(r.result); }; r.onerror = reject; r.readAsDataURL(blob); });
+            }
+          }
+          if (cache[path]) o[k] = o[k].split(path).join(cache[path]);
+        } catch (e) { /* leave untouched */ }
+      }
+    }
   }
   async function encryptLockedForPublish(pubData) {
     var works = (pubData && pubData.work) || [];
@@ -1879,14 +1919,17 @@
   // Replace every still-embedded data:image in `data` with a hosted path (used at publish).
   async function hostEmbeddedImages(token, onProg) {
     const targets = [];
-    (function walk(o) {
+    // Skip media inside Locked blocks / Hidden projects: it must stay inline so it
+    // encrypts with that block/work instead of becoming a public /assets file.
+    (function walk(o, prot) {
       if (!o || typeof o !== "object") return;
+      const p = prot || o.hidden === true || o.locked === true;
       for (const k in o) {
         const v = o[k];
-        if (typeof v === "string") { if (/^data:(image|video|application)\//i.test(v)) targets.push([o, k]); }
-        else if (v && typeof v === "object") walk(v);
+        if (typeof v === "string") { if (!p && /^data:(image|video|application)\//i.test(v)) targets.push([o, k]); }
+        else if (v && typeof v === "object") walk(v, p);
       }
-    })(data);
+    })(data, false);
     const total = targets.length;
     let done = 0;
     if (onProg && total) onProg(0, total);
