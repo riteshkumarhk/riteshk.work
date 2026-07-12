@@ -1795,6 +1795,145 @@
   function extFromName(name) { var m = /\.([a-z0-9]+)$/i.exec(name || ""); return m ? m[1].toLowerCase() : ""; }
   function isVideoVal(v) { return /^data:video\//i.test(v) || /\.(mp4|webm|mov|m4v|ogv)($|\?|#)/i.test(v); }
   var MEDIA_ACCEPT = "image/*,video/*,.pptx,.ppt,.pdf,.key,.mp4,.webm,.mov,.gif,.docx,.xlsx";
+
+  /* ---------- video colour tagging ----------
+     Untagged H.264/SDR MP4s (common from screen recorders & editors) carry no
+     colour-space metadata, so wide-gamut / OLED displays render them
+     oversaturated. We insert the standard 19-byte BT.709 "colr" (nclx) box into
+     the video sample entry — a lossless, metadata-only edit — and fix up the
+     container box sizes + chunk-offset tables. On ANY structural uncertainty we
+     return null and the original file is used untouched. */
+  var VISUAL_SE = { avc1: 1, avc3: 1, hvc1: 1, hev1: 1, mp4v: 1, av01: 1, vp09: 1 };
+  function videoTagEnabled() { return localStorage.getItem("rk:vid:bt709") !== "0"; }
+  function mp4TagBt709(buf) {
+    try {
+      var dv = new DataView(buf), N = buf.byteLength;
+      if (N < 16) return null;
+      var u32 = function (o) { return dv.getUint32(o); };
+      var typeAt = function (o) { return String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3)); };
+      var find = function (list, t) { for (var i = 0; i < list.length; i++) if (list[i].type === t) return list[i]; return null; };
+      // Parse the child boxes of [start,end). Returns a list, or null on malformed data.
+      function boxes(start, end) {
+        var out = [], o = start;
+        while (o + 8 <= end) {
+          var size = u32(o), hdr = 8, big = false;
+          if (size === 1) {
+            if (o + 16 > end) return null;
+            var hi = u32(o + 8), lo = u32(o + 12);
+            if (hi !== 0) return null;                 // > 4 GB — out of scope
+            size = hi * 4294967296 + lo; hdr = 16; big = true;
+          } else if (size === 0) { size = end - o; }    // extends to container end
+          if (size < hdr || o + size > end) return null;
+          out.push({ type: typeAt(o + 4), start: o, size: size, hdr: hdr, big: big, pstart: o + hdr, pend: o + size });
+          o += size;
+        }
+        return out;
+      }
+      // Bail if an iloc box exists anywhere reachable — it carries its own absolute offsets.
+      function scanIloc(list) {
+        for (var i = 0; i < list.length; i++) {
+          var b = list[i];
+          if (b.type === "iloc") return true;
+          if (b.type === "meta") { var k = boxes(b.pstart + 4, b.pend); if (!k || scanIloc(k)) return true; }
+          else if (b.type === "moov" || b.type === "udta" || b.type === "trak") { var k2 = boxes(b.pstart, b.pend); if (k2 && scanIloc(k2)) return true; }
+        }
+        return false;
+      }
+
+      var top = boxes(0, N);
+      if (!top) return null;
+      for (var i = 0; i < top.length; i++) {
+        var tt = top[i].type;
+        if (tt === "moof" || tt === "sidx" || tt === "styp" || tt === "mfra") return null; // fragmented/streaming
+      }
+      if (scanIloc(top)) return null;
+      var moov = find(top, "moov");
+      if (!moov || find(top.filter(function (b) { return b.type === "moov"; }).slice(1), "moov")) return null;
+
+      var chunkTables = [];   // {big, pstart, count}
+      var videoEntries = [];  // untagged visual sample entries + their ancestor path
+      var moovKids = boxes(moov.pstart, moov.pend);
+      if (!moovKids) return null;
+      for (var mi = 0; mi < moovKids.length; mi++) {
+        var mk = moovKids[mi];
+        if (mk.type !== "trak") continue;
+        var trakKids = boxes(mk.pstart, mk.pend); if (!trakKids) return null;
+        var mdia = find(trakKids, "mdia"); if (!mdia) continue;
+        var mdiaKids = boxes(mdia.pstart, mdia.pend); if (!mdiaKids) return null;
+        var hdlr = find(mdiaKids, "hdlr");
+        var isVideo = hdlr ? typeAt(hdlr.pstart + 8) === "vide" : false;
+        var minf = find(mdiaKids, "minf"); if (!minf) continue;
+        var minfKids = boxes(minf.pstart, minf.pend); if (!minfKids) return null;
+        var stbl = find(minfKids, "stbl"); if (!stbl) continue;
+        var stblKids = boxes(stbl.pstart, stbl.pend); if (!stblKids) return null;
+        if (find(stblKids, "saio")) return null;        // aux-info offsets (encryption) — out of scope
+
+        var stco = find(stblKids, "stco"), co64 = find(stblKids, "co64");
+        if (stco) { var c = u32(stco.pstart + 4); if (stco.pstart + 8 + c * 4 > stco.pend) return null; chunkTables.push({ big: false, pstart: stco.pstart + 8, count: c }); }
+        if (co64) { var c2 = u32(co64.pstart + 4); if (co64.pstart + 8 + c2 * 8 > co64.pend) return null; chunkTables.push({ big: true, pstart: co64.pstart + 8, count: c2 }); }
+
+        if (!isVideo) continue;
+        var stsd = find(stblKids, "stsd"); if (!stsd) continue;
+        var entries = boxes(stsd.pstart + 8, stsd.pend); if (!entries) return null; // after version/flags + entry_count
+        for (var ei = 0; ei < entries.length; ei++) {
+          var se = entries[ei];
+          if (VISUAL_SE[se.type] !== 1) return null;     // unfamiliar entry — don't guess
+          var kids = boxes(se.start + 8 + 78, se.pend); if (!kids) return null; // child boxes follow the 78-byte visual header
+          if (find(kids, "colr")) return null;           // already colour-tagged — leave it
+          videoEntries.push({ se: se, path: [mk, mdia, minf, stbl, stsd] });
+        }
+      }
+      if (videoEntries.length !== 1) return null;         // 0 or many — avoid partial tagging
+      var target = videoEntries[0];
+
+      // Boxes whose size must grow by 19: moov + the path down to (and incl.) the sample entry.
+      var grow = [], seen = {}, chain = [moov].concat(target.path).concat([target.se]);
+      for (var gi = 0; gi < chain.length; gi++) { var gb = chain[gi]; if (!seen[gb.start]) { seen[gb.start] = 1; grow.push(gb); } }
+
+      var insPos = target.se.pend; // append colr as the last child of the sample entry
+      var COLR = new Uint8Array([0, 0, 0, 0x13, 0x63, 0x6f, 0x6c, 0x72, 0x6e, 0x63, 0x6c, 0x78, 0, 1, 0, 1, 0, 1, 0]);
+
+      var srcU8 = new Uint8Array(buf);
+      var out = new Uint8Array(N + 19);
+      out.set(srcU8.subarray(0, insPos), 0);
+      out.set(COLR, insPos);
+      out.set(srcU8.subarray(insPos), insPos + 19);
+      var odv = new DataView(out.buffer);
+
+      for (var wi = 0; wi < grow.length; wi++) {
+        var g = grow[wi];
+        if (g.big) { odv.setUint32(g.start + 8, 0); odv.setUint32(g.start + 12, g.size + 19); }
+        else { if (g.size + 19 > 0xffffffff) return null; odv.setUint32(g.start, g.size + 19); }
+      }
+      // Any chunk offset that points at/after the insertion shifts by +19. Table bytes
+      // living after the insertion are themselves relocated by +19 in the new buffer.
+      for (var ci = 0; ci < chunkTables.length; ci++) {
+        var tb = chunkTables[ci], base = tb.pstart >= insPos ? tb.pstart + 19 : tb.pstart;
+        for (var ri = 0; ri < tb.count; ri++) {
+          if (tb.big) {
+            var p = base + ri * 8, val = odv.getUint32(p) * 4294967296 + odv.getUint32(p + 4);
+            if (val >= insPos) { val += 19; odv.setUint32(p, Math.floor(val / 4294967296)); odv.setUint32(p + 4, val >>> 0); }
+          } else {
+            var p2 = base + ri * 4, v = odv.getUint32(p2);
+            if (v >= insPos) odv.setUint32(p2, v + 19);
+          }
+        }
+      }
+      return out;
+    } catch (e) { return null; }
+  }
+  // Return the file to upload — a BT.709-tagged copy for untagged MP4s, else the original.
+  function maybeTagVideo(file) {
+    if (!videoTagEnabled()) return Promise.resolve(file);
+    var nm = (file.name || "").toLowerCase();
+    if (!(file.type === "video/mp4" || /\.(mp4|m4v)$/.test(nm))) return Promise.resolve(file);
+    return file.arrayBuffer().then(function (b) {
+      var out = mp4TagBt709(b);
+      if (!out) return file;
+      return new File([out], file.name || "video.mp4", { type: "video/mp4", lastModified: file.lastModified || Date.now() });
+    }).catch(function () { return file; });
+  }
+
   // Media slots accept images, video, PowerPoint & PDF — hosted in the repo just like images.
   function pickMedia(cb) {
     const inp = document.createElement("input");
@@ -1802,7 +1941,10 @@
     inp.onchange = function () {
       const f = inp.files && inp.files[0]; if (!f) return;
       if (f.size > 45 * 1024 * 1024) { status("\u201c" + (f.name || "That file") + "\u201d is " + Math.round(f.size / 1048576) + " MB \u2014 too large to embed. Host it (YouTube, Vimeo, OneDrive/Stream) and paste the link instead."); return; }
-      fileToDataUri(f).then(function (uri) { cb(uri); hostUploaded(uri, f, cb); });
+      maybeTagVideo(f).then(function (file) {
+        if (file !== f) status("Tagged \u201c" + (f.name || "video") + "\u201d as BT.709 \u2014 true-to-life colour on OLED & wide-gamut screens.");
+        fileToDataUri(file).then(function (uri) { cb(uri); hostUploaded(uri, file, cb); });
+      });
     };
     inp.click();
   }
