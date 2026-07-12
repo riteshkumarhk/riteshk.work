@@ -129,6 +129,49 @@
   function isUnlocked(id) { try { return sessionStorage.getItem(UNLOCK_KEY + id) === "1"; } catch (e) { return false; } }
   function setUnlocked(id) { try { sessionStorage.setItem(UNLOCK_KEY + id, "1"); } catch (e) {} }
 
+  /* ---------- locked-section decryption (envelope) ----------
+     Protected blocks ship as ciphertext stubs. A credential (deeper-cut pass or a
+     curating ticket code) unwraps the project's content key, which decrypts them. */
+  function rkNormPass(p) { return String(p == null ? "" : p).trim().toLowerCase(); }
+  function rkUnb64(str) { var s = atob(str), u = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+  function rkImportSek(bytes) { return crypto.subtle.importKey("raw", bytes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]); }
+  async function rkDeriveKey(pass, salt, iters) {
+    var base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey({ name: "PBKDF2", salt: salt, iterations: iters, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  }
+  async function rkUnwrapSek(credential, wrap) {
+    var key = await rkDeriveKey(rkNormPass(credential), rkUnb64(wrap.salt), wrap.it || 210000);
+    var raw = await crypto.subtle.decrypt({ name: "AES-GCM", iv: rkUnb64(wrap.iv) }, key, rkUnb64(wrap.ct));
+    return new Uint8Array(raw);
+  }
+  async function rkDecWithSek(sekBytes, e) {
+    var key = await rkImportSek(sekBytes);
+    var pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: rkUnb64(e.iv) }, key, rkUnb64(e.ct));
+    return JSON.parse(new TextDecoder().decode(pt));
+  }
+  // Decrypt a study's ciphertext stubs in place with its content key. Atomic:
+  // returns true only if every stub decrypted, else leaves the study untouched.
+  async function decryptStudyBlocks(st, sekBytes) {
+    if (!st || !Array.isArray(st.blocks)) return false;
+    var out = st.blocks.slice(), any = false;
+    for (var i = 0; i < out.length; i++) {
+      var b = out[i];
+      if (b && b.encStub && b.iv && b.ct) {
+        try { out[i] = await rkDecWithSek(sekBytes, b); any = true; }
+        catch (e) { return false; }
+      }
+    }
+    if (any) st.blocks = out;
+    return any;
+  }
+  // Unlock a study with one credential against a specific key-wrap.
+  async function unlockStudyWithCred(st, credential, wrap) {
+    if (!st || !st.enc || !wrap) return false;
+    var sek;
+    try { sek = await rkUnwrapSek(credential, wrap); } catch (e) { return false; }
+    return decryptStudyBlocks(st, sek);
+  }
+
   /* ---------- block renderers ---------- */
   function kicker(k) { return k ? '<div class="pjb__kicker">' + esc(k) + "</div>" : ""; }
   function heading(h) { return h ? '<h2 class="pjb__h">' + md(h) + "</h2>" : ""; }
@@ -837,18 +880,25 @@
   function unlockFlow() {
     var w = workById(activeId);
     if (!w || !w.study) return;
-    var hash = w.study.unlockHash || "";
+    var st = w.study;
+    var passWrap = st.enc && st.enc.wraps && st.enc.wraps.pass;
+    var hash = st.unlockHash || "";
     passModal({
       title: "Unlock the full case study",
       sub: "Enter the pass you were given to reveal the deeper cut.",
       placeholder: "Your pass", cta: "Unlock", password: false,
       onSubmit: async function (v, err) {
-        if (!hash) { err.textContent = "No deeper cut is set for this project."; return false; }
-        var h = await sha256(v.toLowerCase());
-        if (h !== hash) { err.textContent = "That pass doesn't match."; return false; }
+        if (passWrap) {
+          var ok = await unlockStudyWithCred(st, v, passWrap);
+          if (!ok) { err.textContent = "That pass doesn't match."; return false; }
+        } else {
+          if (!hash) { err.textContent = "No deeper cut is set for this project."; return false; }
+          var h = await sha256(v.toLowerCase());
+          if (h !== hash) { err.textContent = "That pass doesn't match."; return false; }
+        }
         setUnlocked(activeId);
         fillContent(w);
-        var lb = (w.study.blocks || []).filter(function (b) { return b.locked; })[0];
+        var lb = (st.blocks || []).filter(function (b) { return b.locked; })[0];
         if (lb && lb.nav) requestAnimationFrame(function () { gotoSection("pjs-" + slug(lb.nav, 0)); });
         return true;
       },
@@ -910,7 +960,7 @@
 
   /* ---------- bootstrap ---------- */
   function init() {
-    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = function () { return Object.keys(ICONS); }; }
+    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = function () { return Object.keys(ICONS); }; window.RK.setStudyUnlocked = setUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; }
     window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) updateSpy(); });
     if (PREVIEW) return; // the admin editor drives the overlay; skip link/history/deep-link wiring
     document.addEventListener("click", onDocLinkClick);

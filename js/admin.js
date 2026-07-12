@@ -135,6 +135,45 @@
     return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
   }
 
+  /* ---------- locked-section encryption (envelope) ----------
+     Each protected project has its own random content key (SEK). Its locked
+     blocks publish as ciphertext stubs. The SEK is wrapped separately for every
+     credential that may open it — a curating ticket, the deeper-cut pass, and the
+     owner recovery passphrase — so any one decrypts, with per-ticket isolation.
+     No sensitive content and no SEK ever ships in the clear. Credentials are
+     normalised (trim + lowercase) to match the existing gate hashes. */
+  var RK_KDF_IT = 210000;
+  function rkNormPass(p) { return String(p == null ? "" : p).trim().toLowerCase(); }
+  function rkB64(bytes) { var s = "", u = new Uint8Array(bytes); for (var i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s); }
+  function rkUnb64(str) { var s = atob(str), u = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+  async function rkDeriveKey(pass, salt, iters) {
+    var base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey({ name: "PBKDF2", salt: salt, iterations: iters, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  }
+  function rkNewSek() { return crypto.getRandomValues(new Uint8Array(32)); }
+  function rkImportSek(bytes) { return crypto.subtle.importKey("raw", bytes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]); }
+  async function rkEncWithSek(sekBytes, obj) {
+    var key = await rkImportSek(sekBytes), iv = crypto.getRandomValues(new Uint8Array(12));
+    var ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, new TextEncoder().encode(JSON.stringify(obj)));
+    return { iv: rkB64(iv), ct: rkB64(ct) };
+  }
+  async function rkDecWithSek(sekBytes, e) {
+    var key = await rkImportSek(sekBytes);
+    var pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: rkUnb64(e.iv) }, key, rkUnb64(e.ct));
+    return JSON.parse(new TextDecoder().decode(pt));
+  }
+  async function rkWrapSek(credential, sekBytes) {
+    var salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+    var key = await rkDeriveKey(rkNormPass(credential), salt, RK_KDF_IT);
+    var ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, sekBytes);
+    return { salt: rkB64(salt), iv: rkB64(iv), ct: rkB64(ct) };
+  }
+  async function rkUnwrapSek(credential, wrap) {
+    var key = await rkDeriveKey(rkNormPass(credential), rkUnb64(wrap.salt), wrap.it || RK_KDF_IT);
+    var raw = await crypto.subtle.decrypt({ name: "AES-GCM", iv: rkUnb64(wrap.iv) }, key, rkUnb64(wrap.ct));
+    return new Uint8Array(raw);
+  }
+
   function getPath(obj, path) {
     return path.split(".").reduce((o, k) => (o == null ? o : o[k]), obj);
   }
@@ -873,8 +912,38 @@
       (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
   }
 
+  // Owner-only: turn a project's encrypted stubs back into editable plaintext using
+  // the recovery passphrase. On Publish they are re-encrypted automatically.
+  async function decryptStudyForEdit(i) {
+    const w = data.work[i]; if (!w || !w.study) return;
+    const st = w.study;
+    const wrap = st.enc && st.enc.wraps && st.enc.wraps.owner;
+    if (!wrap) { status("This project has no protected sections to unlock."); return; }
+    const recovery = await ensureRecoveryPass();
+    if (recovery === null) return;
+    let sek;
+    try { sek = await rkUnwrapSek(recovery, wrap); }
+    catch (e) { recoveryPassCache = null; status("That recovery passphrase didn\u2019t unlock this project."); return; }
+    try {
+      const out = st.blocks.slice();
+      for (let k = 0; k < out.length; k++) { const bk = out[k]; if (bk && bk.encStub && bk.iv && bk.ct) out[k] = await rkDecWithSek(sek, bk); }
+      st.blocks = out;
+    } catch (e) { status("Couldn\u2019t decrypt the protected sections."); return; }
+    saveDraft(true); renderL2();
+    status("Protected sections unlocked for editing \u2014 they\u2019ll be re-encrypted on Publish.", true);
+  }
   function blockEditor(i, b, j, len, open) {
     var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Before / after slider", stickies: "Sticky notes", voices: "Voices" })[b.type] || b.type;
+    if (b.encStub) {
+      return '<div class="card study__block study__block--enc">' +
+        '<div class="study__block-head study__block-head--enc">' +
+          '<span class="study__block-badge">\uD83D\uDD12 Protected</span>' +
+          '<span class="study__block-label">' + escHtml(typeName) + ' \u2014 encrypted at rest</span>' +
+          '<span class="study__block-ops"><button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">\u2715</button></span>' +
+        '</div>' +
+        '<div class="study__enc-note">Its content isn\u2019t in your published file. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
+      '</div>';
+    }
     var raw = b.nav || b.kicker || b.heading || b.body || (b.items && b.items[0] && (b.items[0].q || b.items[0].title || b.items[0].value || b.items[0].caption || b.items[0].heading || b.items[0].label)) || "Untitled";
     var label = String(raw).replace(/[\*\[\]]/g, "").replace(/\s+/g, " ").trim();
     if (label.length > 48) label = label.slice(0, 48) + "\u2026";
@@ -1440,6 +1509,7 @@
     if (act === "study-toggle") { openL2(i); return; }
     if (act === "study-close") { closeL2(); return; }
     if (act === "study-pick") { sectionPicker(i); return; }
+    if (act === "study-decrypt") { decryptStudyForEdit(i); return; }
     if (act === "study-blocktoggle") {
       const j = +b.dataset.bindex;
       openBlock = (openBlock === j) ? -1 : j;
@@ -1487,10 +1557,116 @@
     else publishModal();
   }
 
-  function beforePublish() {
+  // Build the JSON to publish: auto-style, then clone and encrypt every plaintext
+  // Locked block per project, wrapping its key for recovery + pass + curating tickets.
+  async function buildPublishJson() {
     const styled = autoStyleLanding(false);
     if (styled) { if (activeTab === "landing") renderBody(); apply(true); }
-    return JSON.stringify(data, null, 2);
+    const pubData = JSON.parse(JSON.stringify(data));
+    await encryptLockedForPublish(pubData);
+    return JSON.stringify(pubData, null, 2);
+  }
+  async function encryptLockedForPublish(pubData) {
+    var works = (pubData && pubData.work) || [];
+    var svAll = (pubData.specialViews || []);
+    for (var wi = 0; wi < works.length; wi++) {
+      var w = works[wi], st = w && w.study;
+      if (!st || !Array.isArray(st.blocks)) continue;
+      var plain = [], stubs = 0;
+      for (var bi = 0; bi < st.blocks.length; bi++) {
+        var b = st.blocks[bi];
+        if (!b || !b.locked) continue;
+        if (b.encStub) stubs++; else plain.push(bi);
+      }
+      if (!plain.length) continue;                              // stub-only preserved verbatim, or nothing locked
+      if (stubs) throw { rkEnc: true, mixed: true, work: w };    // never mix plaintext + already-encrypted
+      var recovery = await ensureRecoveryPass();
+      if (recovery === null) throw { rkEnc: true, cancelled: true };
+      var sek = rkNewSek();
+      for (var pi = 0; pi < plain.length; pi++) { var idx = plain[pi]; st.blocks[idx] = await makeStub(sek, st.blocks[idx]); }
+      var wraps = { owner: await rkWrapSek(recovery, sek) };
+      var deeper = await ensureStudyPass(w, st);
+      if (rkNormPass(deeper)) wraps.pass = await rkWrapSek(deeper, sek);
+      var tks = {};
+      for (var si = 0; si < svAll.length; si++) {
+        var sv = svAll[si];
+        if (!sv || !sv.ticketHash || (sv.workIds || []).indexOf(w.id) === -1) continue;
+        var code = await ensureTicketCode(sv);
+        if (code === null) throw { rkEnc: true, cancelled: true };
+        tks[sv.id] = await rkWrapSek(code, sek);
+      }
+      if (Object.keys(tks).length) wraps.tickets = tks;
+      st.enc = { v: 1, it: RK_KDF_IT, wraps: wraps };
+    }
+  }
+  function makeStub(sek, block) {
+    return rkEncWithSek(sek, block).then(function (e) {
+      var stub = { type: block.type, locked: true, encStub: true, iv: e.iv, ct: e.ct };
+      if (block.kicker) stub.kicker = block.kicker;
+      if (block.nav) stub.nav = block.nav;               // keep nav so the locked section still appears in the contents
+      if (block.sep === false) stub.sep = false;
+      return stub;
+    });
+  }
+  // Generic credential prompt — resolves to the plaintext value, or null if cancelled.
+  function credModal(opts) {
+    return new Promise(function (resolve) {
+      var modal = document.createElement("div");
+      modal.className = "pass";
+      modal.innerHTML =
+        '<div class="pass__box"><div class="pass__title">' + escHtml(opts.title) + '</div>' +
+        '<div class="pass__sub">' + escHtml(opts.sub) + '</div>' +
+        '<input type="password" placeholder="' + escAttr(opts.placeholder || "Passphrase") + '" autocomplete="off" />' +
+        (opts.confirm ? '<input type="password" placeholder="Confirm" data-confirm autocomplete="off" />' : "") +
+        '<div class="pass__err"></div>' +
+        '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
+        '<button class="btn btn--primary" data-go>' + escHtml(opts.cta || "Continue") + '</button></div></div>';
+      document.body.appendChild(modal);
+      var inp = modal.querySelector("input"), cf = modal.querySelector("[data-confirm]"), err = modal.querySelector(".pass__err");
+      setTimeout(function () { try { inp.focus(); } catch (e) {} }, 30);
+      var closed = false;
+      function finish(v) { if (closed) return; closed = true; modal.remove(); resolve(v); }
+      modal.querySelector("[data-cancel]").addEventListener("click", function () { finish(null); });
+      modal.addEventListener("click", function (e) { if (e.target === modal) finish(null); });
+      async function go() {
+        var v = inp.value.trim();
+        if (!v) { err.textContent = "Enter a value"; return; }
+        if (opts.minLen && v.length < opts.minLen) { err.textContent = "Use at least " + opts.minLen + " characters"; return; }
+        if (opts.confirm && cf && cf.value !== v) { err.textContent = "They don\u2019t match"; return; }
+        if (opts.verifyHash) { var h = await sha256(rkNormPass(v)); if (h !== opts.verifyHash) { err.textContent = opts.mismatch || "That doesn\u2019t match."; return; } }
+        finish(v);
+      }
+      modal.querySelector("[data-go]").addEventListener("click", go);
+      modal.addEventListener("keydown", function (e) { if (e.key === "Enter") go(); if (e.key === "Escape") finish(null); });
+    });
+  }
+  var RECOVERY_HASH_KEY = "rk:recovery:hash";
+  var recoveryPassCache = null;
+  async function ensureRecoveryPass() {
+    if (recoveryPassCache !== null) return recoveryPassCache;
+    var have = localStorage.getItem(RECOVERY_HASH_KEY);
+    var pass = await credModal(have
+      ? { title: "Recovery passphrase", sub: "Enter your recovery passphrase to protect and re-open your NDA content.", cta: "Unlock", verifyHash: have, mismatch: "That\u2019s not your recovery passphrase." }
+      : { title: "Set a recovery passphrase", sub: "Your master key for all NDA / protected content \u2014 it lets you always edit, even on a new device. Store it safely: it can\u2019t be reset without losing access to that content.", cta: "Set", confirm: true, minLen: 8 });
+    if (pass === null) return null;
+    if (!have) localStorage.setItem(RECOVERY_HASH_KEY, await sha256(rkNormPass(pass)));
+    recoveryPassCache = pass;
+    return pass;
+  }
+  async function ensureTicketCode(sv) {
+    if (rkNormPass(ticketPlain[sv.id])) return ticketPlain[sv.id];
+    var code = await credModal({ title: "Ticket code needed", sub: "Enter the code for \u201c" + (sv.name || "this ticket") + "\u201d so its holders can open the projects you assigned to it.", cta: "Use code", verifyHash: sv.ticketHash || "", mismatch: "That doesn\u2019t match this ticket." });
+    if (code === null) return null;
+    ticketPlain[sv.id] = code;
+    return code;
+  }
+  async function ensureStudyPass(w, st) {
+    if (rkNormPass(studyUnlockPlain[w.id])) return studyUnlockPlain[w.id];
+    if (!st.unlockHash) return "";                 // no deeper-cut pass set — tickets + recovery still open it
+    var code = await credModal({ title: "Deeper-cut pass", sub: "Enter this project\u2019s deeper-cut pass so it keeps working as a direct unlock (or Cancel to skip \u2014 tickets and recovery still open it).", cta: "Use pass", verifyHash: st.unlockHash, mismatch: "That doesn\u2019t match this project\u2019s pass." });
+    if (code === null) return "";
+    studyUnlockPlain[w.id] = code;
+    return code;
   }
 
   function ghHeaders(token) {
@@ -1678,7 +1854,7 @@
         pubProgress(6 + Math.round((n / Math.max(1, total)) * 40), "Uploading images at full quality \u2014 " + n + " of " + total + "\u2026");
       });
       pubProgress(50, "Saving your content to GitHub\u2026");
-      const json = beforePublish();
+      const json = await buildPublishJson();
       const mySig = (window.RK && window.RK.sig) ? window.RK.sig(JSON.stringify(JSON.parse(json))) : null;
       let sha;
       const getRes = await fetch(GH_API + "?ref=" + GH_BRANCH + "&t=" + Date.now(), { headers: ghHeaders(token) });
@@ -1703,6 +1879,12 @@
       else pubProgress(100, "Published. It can take another minute to appear \u2014 open your site to check.", { done: true, viewUrl: viewUrl });
     } catch (e) {
       pubStopCreep();
+      if (e && e.rkEnc) {
+        pubProgress(100, e.mixed
+          ? "Unlock this project\u2019s protected sections (enter its pass) before publishing."
+          : "Publish paused \u2014 a passphrase for a protected project wasn\u2019t provided.", { error: true });
+        return;
+      }
       if (e && e.auth) { authFailed(); pubProgress(100, "GitHub didn\u2019t accept that sign-in \u2014 hit Publish to reconnect.", { error: true }); return; }
       // Transient/network hiccup — keep the connection, just ask them to retry.
       pubProgress(100, "Couldn\u2019t reach GitHub just now. Hit Publish again to retry.", { error: true });
@@ -1715,8 +1897,10 @@
     status("GitHub didn\u2019t accept that sign-in. Hit Publish again to reconnect.");
   }
 
-  function publishManual() {
-    const json = beforePublish();
+  async function publishManual() {
+    let json;
+    try { json = await buildPublishJson(); }
+    catch (e) { status(e && e.rkEnc ? (e.mixed ? "Unlock the protected sections first, then publish." : "Publish paused \u2014 a protected project\u2019s passphrase wasn\u2019t provided.") : "Couldn\u2019t prepare content to publish."); return; }
     try {
       const blob = new Blob([json], { type: "application/json" });
       const a = document.createElement("a");
@@ -3304,10 +3488,31 @@
       if (!match) { err.textContent = "That ticket doesn't match anything."; return; }
       if (window.RK.svExpired(match)) { err.textContent = "This curated view has expired."; return; }
       done();
+      await unlockTicketProjects(match, val);   // auto-open the NDA sections this ticket authorises
       window.RK.applySpecialView(match.id);
+      ticketArrived(match);
     }
     modal.querySelector("[data-go]").addEventListener("click", submit);
     modal.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });
+  }
+  // A ticket only opens the projects it curates: unwrap each assigned project's key
+  // with the ticket code and decrypt its locked sections (per-ticket isolation).
+  async function unlockTicketProjects(sv, code) {
+    const d = window.RK && window.RK.data;
+    if (!d || !Array.isArray(d.work) || !window.RK.unlockStudyWithCred) return;
+    const ids = sv.workIds || [];
+    for (let i = 0; i < ids.length; i++) {
+      const w = d.work.filter(function (x) { return x && x.id === ids[i]; })[0];
+      const st = w && w.study;
+      const wrap = st && st.enc && st.enc.wraps && st.enc.wraps.tickets && st.enc.wraps.tickets[sv.id];
+      if (!wrap) continue;
+      try { if (await window.RK.unlockStudyWithCred(st, code, wrap)) window.RK.setStudyUnlocked(ids[i]); } catch (e) {}
+    }
+  }
+  function ticketArrived(sv) {
+    flash("Ticket accepted \u2014 your curated projects are in the Work section below.");
+    const el = document.getElementById("work");
+    if (el && el.scrollIntoView) requestAnimationFrame(function () { try { el.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) {} });
   }
 
   /* ---------- tiny toast ---------- */

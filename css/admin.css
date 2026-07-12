@@ -153,6 +153,9 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .chk { display: inline-flex; align-items: center; gap: .45rem; font-size: .8rem; color: var(--text-dim); cursor: pointer; }
 .chk input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 .block-flags { display: flex; flex-direction: column; gap: .5rem; margin-top: .55rem; align-items: flex-start; }
+.study__block--enc { border-style: dashed; opacity: .92; }
+.study__block-head--enc { display: flex; align-items: center; gap: .5rem; padding: .6rem .7rem; }
+.study__enc-note { padding: 0 .7rem .7rem; font-size: .8rem; color: var(--text-dim); display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 
 /* ---------- list item cards ---------- */
 .card { border: 1px solid var(--line); border-radius: 10px; padding: .85rem; margin-bottom: .85rem; background: var(--bg); }
