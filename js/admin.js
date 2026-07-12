@@ -85,7 +85,7 @@
   let root = null, body = null, frame = null;
   let l2 = null, l2body = null, l2title = null, l2PreviewTimer = 0;
   let saveTimer = null;
-  let dragSrc = null;
+  let sortState = null;
   let menuEl = null;
   const ticketPlain = {}; // owner-only plaintext tickets, never published
   const studyUnlockPlain = {}; // owner-only plaintext deeper-cut passes, never published
@@ -329,7 +329,7 @@
   }
 
   function cardHead(idxLabel, list, i, len) {
-    return '<div class="card__bar"><span class="card__idx">' + idxLabel + "</span>" + ops(list, i, len) + "</div>";
+    return '<div class="card__bar"><span class="sortgrip" data-grip data-sortkey="list:' + list + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span><span class="card__idx">' + idxLabel + "</span>" + ops(list, i, len) + "</div>";
   }
 
   function addBtn(list, label) {
@@ -654,8 +654,8 @@
     var items = b.items || (b.items = []);
     var rows = items.map(function (it, k) {
       var flds = spec.fields.map(function (f) { return itemFieldEl(i, j, k, it, f); }).join("");
-      return '<div class="rep__item" data-ri="' + i + '" data-rj="' + j + '" data-rk="' + k + '"><div class="rep__bar">' +
-        '<span class="rep__grip" data-grip title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
+      return '<div class="rep__item"><div class="rep__bar">' +
+        '<span class="rep__grip sortgrip" data-grip data-sortkey="item:' + i + ':' + j + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
         '<span class="rep__n">' + escHtml(spec.one) + " " + (k + 1) + '</span>' +
         '<span class="rep__itemlabel">' + escHtml(itemLabel(it)) + '</span>' +
         '<span class="rep__ops">' +
@@ -666,52 +666,86 @@
     }).join("") || '<div class="rep__empty">No ' + escHtml(spec.title.toLowerCase()) + " yet.</div>";
     return '<div class="rep"><div class="rep__head"><label class="af__label">' + spec.title + '</label><button class="btn btn--add rep__add" data-act="item-add" data-index="' + i + '" data-bindex="' + j + '">+ ' + spec.add + "</button></div>" + rows + "</div>";
   }
-  /* ---------- drag-to-reorder for repeater items (arrows still work) ---------- */
-  function repClearDrag() {
-    document.querySelectorAll(".rep__item.is-dragging, .rep__item.is-drop-before, .rep__item.is-drop-after").forEach(function (x) { x.classList.remove("is-dragging", "is-drop-before", "is-drop-after"); });
-    document.querySelectorAll(".rep--ranking").forEach(function (x) { x.classList.remove("rep--ranking"); });
-    document.querySelectorAll('.rep__item[draggable="true"]').forEach(function (x) { x.removeAttribute("draggable"); });
+  /* ---------- generic drag-to-reorder (grips; works alongside the up/down arrows) ----------
+     A list is sortable when each row carries a [data-grip][data-sortkey] handle.
+     Keys: "list:<name>" (L1 lists) · "block:<i>" (case-study sections) ·
+     "item:<i>:<j>" (repeater items). Pointer-based, so it's reliable across
+     browsers and auto-scrolls the editor when you drag near an edge. */
+  var SORT_ROW_SEL = ".rep__item, .study__block, .card";
+  function sortRowsFor(key) {
+    return [].slice.call(root.querySelectorAll('[data-grip][data-sortkey="' + key + '"]'))
+      .map(function (g) { return g.closest(SORT_ROW_SEL); }).filter(Boolean);
   }
-  function repDragStart(e) {
-    var it = e.target.closest && e.target.closest(".rep__item");
-    if (!it || it.getAttribute("draggable") !== "true") return;
-    dragSrc = { i: +it.dataset.ri, j: +it.dataset.rj, k: +it.dataset.rk };
-    try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "rep"); } catch (er) { }
-    it.classList.add("is-dragging");
-    var rep = it.closest(".rep"); if (rep) rep.classList.add("rep--ranking");
+  function sortStart(e) {
+    var grip = e.target.closest && e.target.closest("[data-grip]");
+    if (!grip) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    var key = grip.getAttribute("data-sortkey"); if (!key) return;
+    var row = grip.closest(SORT_ROW_SEL); if (!row) return;
+    var rows = sortRowsFor(key); if (rows.length < 2) return;
+    var from = rows.indexOf(row); if (from < 0) return;
+    e.preventDefault();
+    sortState = { key: key, rows: rows, row: row, from: from, to: from, y: e.clientY, scrollEl: root.querySelector(".adm__editor"), raf: 0 };
+    row.classList.add("is-sortdrag");
+    document.body.classList.add("adm-sorting");
+    sortMark(e.clientY);
+    document.addEventListener("pointermove", sortMove, true);
+    document.addEventListener("pointerup", sortEnd, true);
+    document.addEventListener("pointercancel", sortEnd, true);
+    sortState.raf = requestAnimationFrame(sortLoop);
   }
-  function repDragOver(e) {
-    if (!dragSrc) return;
-    var over = e.target.closest && e.target.closest(".rep__item");
-    if (!over || +over.dataset.ri !== dragSrc.i || +over.dataset.rj !== dragSrc.j) return;
-    e.preventDefault(); try { e.dataTransfer.dropEffect = "move"; } catch (er) { }
-    var rep = over.closest(".rep");
-    if (rep) rep.querySelectorAll(".is-drop-before, .is-drop-after").forEach(function (x) { x.classList.remove("is-drop-before", "is-drop-after"); });
-    if (+over.dataset.rk === dragSrc.k) return;
-    var r = over.getBoundingClientRect();
-    over.classList.add((e.clientY - r.top) > r.height / 2 ? "is-drop-after" : "is-drop-before");
+  function sortMark(y) {
+    var s = sortState; if (!s) return;
+    var insert = 0, rows = s.rows;
+    for (var k = 0; k < rows.length; k++) { var r = rows[k].getBoundingClientRect(); if (y > r.top + r.height / 2) insert = k + 1; }
+    s.to = insert > s.from ? insert - 1 : insert;
+    rows.forEach(function (r) { r.classList.remove("is-drop-above", "is-drop-below"); });
+    if (insert >= rows.length) rows[rows.length - 1].classList.add("is-drop-below");
+    else rows[insert].classList.add("is-drop-above");
   }
-  function repDrop(e) {
-    if (!dragSrc) { repClearDrag(); return; }
-    var over = e.target.closest && e.target.closest(".rep__item");
-    if (over && +over.dataset.ri === dragSrc.i && +over.dataset.rj === dragSrc.j) {
-      e.preventDefault();
-      var targetK = +over.dataset.rk;
-      var toBefore = over.classList.contains("is-drop-after") ? targetK + 1 : targetK;
-      repReorder(dragSrc.i, dragSrc.j, dragSrc.k, toBefore);
+  function sortMove(e) { if (!sortState) return; sortState.y = e.clientY; sortMark(e.clientY); }
+  function sortLoop() {
+    var s = sortState; if (!s) return;
+    var el = s.scrollEl;
+    if (el) {
+      var b = el.getBoundingClientRect(), y = s.y, edge = 54, sp = 0;
+      if (y < b.top + edge) sp = -Math.ceil((b.top + edge - y) / 5);
+      else if (y > b.bottom - edge) sp = Math.ceil((y - (b.bottom - edge)) / 5);
+      if (sp) { var was = el.scrollTop; el.scrollTop += sp; if (el.scrollTop !== was) sortMark(s.y); }
     }
-    dragSrc = null; repClearDrag();
+    s.raf = requestAnimationFrame(sortLoop);
   }
-  function repReorder(i, j, from, toBefore) {
-    if (toBefore === from || toBefore === from + 1) return; // dropped in place
-    var wk = data.work[i]; var bl = wk && wk.study && wk.study.blocks[j];
-    if (!bl || !bl.items) return;
-    var items = bl.items;
-    var moved = items.splice(from, 1)[0];
-    var insert = toBefore > from ? toBefore - 1 : toBefore;
-    insert = Math.max(0, Math.min(items.length, insert));
-    items.splice(insert, 0, moved);
-    saveDraft(true); renderL2();
+  function sortEnd() {
+    var s = sortState; if (!s) return;
+    sortState = null;
+    document.removeEventListener("pointermove", sortMove, true);
+    document.removeEventListener("pointerup", sortEnd, true);
+    document.removeEventListener("pointercancel", sortEnd, true);
+    if (s.raf) cancelAnimationFrame(s.raf);
+    s.rows.forEach(function (r) { r.classList.remove("is-drop-above", "is-drop-below", "is-sortdrag"); });
+    document.body.classList.remove("adm-sorting");
+    if (s.to !== s.from) sortApply(s.key, s.from, s.to);
+  }
+  function sortApply(key, from, to) {
+    var p = key.split(":"), arr = null, after = null;
+    if (p[0] === "list") { arr = data[p[1]]; after = function () { apply(true); renderBody(); }; }
+    else if (p[0] === "block") {
+      var bi = +p[1], st = data.work[bi] && data.work[bi].study; if (!st || !st.blocks) return; arr = st.blocks;
+      after = function () {
+        if (openBlock === from) openBlock = to;
+        else { var ob = openBlock; if (from < ob) ob--; if (to <= ob) ob++; openBlock = ob; }
+        saveDraft(true); renderL2();
+      };
+    } else if (p[0] === "item") {
+      var wi = +p[1], bj = +p[2], bl = data.work[wi] && data.work[wi].study && data.work[wi].study.blocks[bj];
+      if (!bl) return; bl.items = bl.items || []; arr = bl.items; after = function () { saveDraft(true); renderL2(); };
+    }
+    if (!arr || from < 0 || from >= arr.length) return;
+    to = Math.max(0, Math.min(arr.length - 1, to));
+    if (from === to) return;
+    var moved = arr.splice(from, 1)[0];
+    arr.splice(to, 0, moved);
+    if (after) after();
   }
   function onItemInput(t) {
     var i = +t.dataset.sitem, j = +t.dataset.bindex, k = +t.dataset.iindex, f = t.dataset.ifield;
@@ -734,6 +768,7 @@
     var label = String(raw).replace(/[\*\[\]]/g, "").replace(/\s+/g, " ").trim();
     if (label.length > 48) label = label.slice(0, 48) + "\u2026";
     var head = '<div class="study__block-head" data-act="study-blocktoggle" data-index="' + i + '" data-bindex="' + j + '">' +
+      '<span class="sortgrip study__block-grip" data-grip data-sortkey="block:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
       '<span class="study__block-badge">' + escHtml(typeName) + "</span>" +
       '<span class="study__block-label">' + escHtml(label) + "</span>" +
       '<span class="study__block-ops">' +
@@ -945,7 +980,7 @@
       const list = data.capabilities || [];
       let html = secHead("Capabilities", "Drives the Capabilities list AND the scrolling reel.") + addBar("capabilities", "Add capability");
       list.forEach((c, i) => {
-        html += '<div class="card"><div class="card__bar" style="margin-bottom:.5rem"><span class="card__idx">' + (i + 1) + "</span>" + ops("capabilities", i, list.length) + "</div>" +
+        html += '<div class="card"><div class="card__bar" style="margin-bottom:.5rem"><span class="sortgrip" data-grip data-sortkey="list:capabilities" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span><span class="card__idx">' + (i + 1) + "</span>" + ops("capabilities", i, list.length) + "</div>" +
           '<input type="text" data-list="capabilities" data-index="' + i + '" data-scalar="1" value="' + escAttr(c) + '" /></div>';
       });
       return html;
@@ -1247,6 +1282,7 @@
   function onClick(e) {
     const rtb = e.target.closest("[data-rt]");
     if (rtb) { rtAction(rtb); return; }
+    if (e.target.closest("[data-grip]")) return; // grip is a drag handle, not a click target
     const b = e.target.closest("[data-act]");
     if (!b) return;
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
@@ -2327,13 +2363,8 @@
     root.addEventListener("input", onInput);
     root.addEventListener("change", onChange);
     root.addEventListener("click", onClick);
-    // Drag-to-reorder repeater items via the grip handle (arrows still work).
-    root.addEventListener("mousedown", function (e) { var g = e.target.closest && e.target.closest("[data-grip]"); if (g) { var it = g.closest(".rep__item"); if (it) it.setAttribute("draggable", "true"); } });
-    root.addEventListener("dragstart", repDragStart);
-    root.addEventListener("dragover", repDragOver);
-    root.addEventListener("drop", repDrop);
-    root.addEventListener("dragend", function () { dragSrc = null; repClearDrag(); });
-    document.addEventListener("mouseup", function () { if (!dragSrc) { document.querySelectorAll('.rep__item[draggable="true"]').forEach(function (x) { x.removeAttribute("draggable"); }); } });
+    // Drag-to-reorder any list with a grip handle (arrows still work).
+    root.addEventListener("pointerdown", sortStart);
     // Keep the caret inside the rich-text area when a toolbar button is pressed.
     root.addEventListener("mousedown", function (e) { if (e.target.closest("[data-rt]")) e.preventDefault(); });
     // Paste into a rich-text body as plain text (no foreign colours/fonts).
