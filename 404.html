@@ -3,25 +3,58 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ritesh Kumar</title>
+  <title>Loading… — Ritesh Kumar</title>
   <meta name="robots" content="noindex" />
-  <style>html,body{margin:0;height:100%;background:#08080a;color:#8f8a84;font-family:system-ui,-apple-system,sans-serif}</style>
+  <meta name="theme-color" content="#08080a" />
   <!--
     SPA fallback. GitHub Pages serves this file for any unknown path.
     A clean project link like /work/edge is turned into /?work=edge so the
     single-page app (project.js) can open the matching case study and then
     restore the clean URL. Everything else falls back to the home page.
+    The redirect runs here in <head> so it fires before the page paints —
+    the loading screen below only appears while the next page is fetching,
+    so a direct case-study link reads as "loading", never as an error.
   -->
   <script>
     (function () {
-      var base = location.origin;
-      var m = (location.pathname || "").match(/\/work\/([^\/?#]+)/);
-      if (m) location.replace(base + "/?work=" + encodeURIComponent(m[1]) + location.hash);
-      else location.replace(base + "/");
+      try {
+        var base = location.origin;
+        var m = (location.pathname || "").match(/\/work\/([^\/?#]+)/);
+        location.replace(m ? (base + "/?work=" + encodeURIComponent(m[1]) + location.hash) : (base + "/"));
+      } catch (e) { location.replace("/"); }
     })();
   </script>
+  <style>
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: #08080a; color: #8f8a84;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-font-smoothing: antialiased;
+    }
+    .load {
+      display: flex; flex-direction: column; align-items: center; gap: 1.15rem;
+      opacity: 0; animation: load-in .5s .15s cubic-bezier(.22,.61,.36,1) forwards;
+    }
+    .load__mark { font-size: .74rem; letter-spacing: .3em; text-transform: uppercase; color: #ECE7E1; }
+    .load__ring {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 2px solid rgba(216, 166, 71, .22); border-top-color: #D8A657;
+      animation: load-spin 1s linear infinite;
+    }
+    .load__txt { font-size: .6rem; letter-spacing: .16em; text-transform: uppercase; color: #5a5650; }
+    .load__txt a { color: #D8A657; }
+    @keyframes load-spin { to { transform: rotate(360deg); } }
+    @keyframes load-in { to { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .load__ring { animation: none; } .load { animation-duration: .01s; } }
+  </style>
 </head>
 <body>
-  <noscript>Page not found. <a href="/">Return to riteshk.work</a>.</noscript>
+  <div class="load" role="status" aria-live="polite">
+    <span class="load__mark">Ritesh Kumar</span>
+    <span class="load__ring" aria-hidden="true"></span>
+    <span class="load__txt">Loading…</span>
+    <noscript><span class="load__txt">This page needs JavaScript — <a href="/">go to riteshk.work</a>.</span></noscript>
+  </div>
 </body>
 </html>
