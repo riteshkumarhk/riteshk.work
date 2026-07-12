@@ -655,13 +655,21 @@
     var cmpZoom = e.target.closest("[data-cmp-zoom]");
     if (cmpZoom) { e.preventDefault(); openCmpLbx(cmpZoom.closest(".pjb__cmp")); return; }
     var zoomImg = e.target.closest("[data-zoom]");
-    if (zoomImg) {
+    // Images inserted into a rich body (figure.rt__fig / .pjb__prose) are zoomable too, even without data-zoom.
+    var richImg = zoomImg ? null : e.target.closest("figure.rt__fig img, .pjb__prose img");
+    if (zoomImg || richImg) {
       e.preventDefault();
-      var groupRoot = zoomImg.closest(".pjb__gallery, .pjb__media");
-      var imgs = groupRoot ? [].slice.call(groupRoot.querySelectorAll("img[data-zoom]")) : [];
-      if (imgs.indexOf(zoomImg) < 0) imgs = [zoomImg];
+      var clickedImg = zoomImg || richImg, groupRoot, imgs;
+      if (zoomImg) {
+        groupRoot = zoomImg.closest(".pjb__gallery, .pjb__media");
+        imgs = groupRoot ? [].slice.call(groupRoot.querySelectorAll("img[data-zoom]")) : [];
+      } else {
+        groupRoot = richImg.closest(".pjb");
+        imgs = groupRoot ? [].slice.call(groupRoot.querySelectorAll("figure.rt__fig img, .pjb__prose img")) : [];
+      }
+      if (imgs.indexOf(clickedImg) < 0) imgs = [clickedImg];
       var group = imgs.map(function (im) { return { src: im.currentSrc || im.src, cap: im.getAttribute("data-cap"), title: im.getAttribute("data-title") }; });
-      openLbx(group, imgs.indexOf(zoomImg));
+      openLbx(group, imgs.indexOf(clickedImg));
       return;
     }
     var goto = e.target.closest("[data-goto]");
