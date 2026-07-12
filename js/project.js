@@ -391,7 +391,8 @@
     var locked = b.locked && !isUnlocked(activeId);
     var inner = locked ? lockedBlock(b) : ((RENDERERS[b.type] || function () { return ""; })(b));
     var hsize = b.hsize === "sm" ? " pjb--hsm" : b.hsize === "lg" ? " pjb--hlg" : "";
-    return '<section class="pjb pjb--' + esc(b.type) + (locked ? " pjb--locked" : "") + hsize + '"' + idAttr + navAttr +
+    var flush = b.sep === false ? " pjb--flush" : "";
+    return '<section class="pjb pjb--' + esc(b.type) + (locked ? " pjb--locked" : "") + hsize + flush + '"' + idAttr + navAttr +
       ' style="--i:' + i + '">' + inner + "</section>";
   }
 
