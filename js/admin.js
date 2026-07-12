@@ -932,6 +932,21 @@
     saveDraft(true); renderL2();
     status("Protected sections unlocked for editing \u2014 they\u2019ll be re-encrypted on Publish.", true);
   }
+  // Owner-only: turn a hidden encrypted project back into an editable one.
+  async function decryptWorkForEdit(i) {
+    const stub = data.work[i];
+    if (!stub || !stub.encWork) return;
+    const wrap = stub.enc && stub.enc.wraps && stub.enc.wraps.owner;
+    if (!wrap) { status("This project can only be recovered with a ticket."); return; }
+    const recovery = await ensureRecoveryPass();
+    if (recovery === null) return;
+    let full;
+    try { const sek = await rkUnwrapSek(recovery, wrap); full = await rkDecWithSek(sek, stub); }
+    catch (e) { recoveryPassCache = null; status("That recovery passphrase didn\u2019t unlock this project."); return; }
+    data.work[i] = full;
+    saveDraft(true); renderBody();
+    status("Hidden project unlocked for editing \u2014 it re-encrypts on Publish.", true);
+  }
   function blockEditor(i, b, j, len, open) {
     var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Before / after slider", stickies: "Sticky notes", voices: "Voices" })[b.type] || b.type;
     if (b.encStub) {
@@ -1179,8 +1194,18 @@
       const featured = list.filter((w) => w.featured).length;
       let html = secHead("Selected Work", "Your projects. Tick up to 4 to feature on the homepage (currently " + featured + "/4). Title, story, images, tags &amp; theme all live inside each project\u2019s case-study editor.") + addBar("work", "Add work");
       list.forEach((w, i) => {
+        if (w.encWork) {
+          html += '<div class="card workcard workcard--enc">' +
+            '<div class="workcard__enc-head"><span class="study__block-badge">\uD83D\uDD12 Hidden &amp; encrypted project</span></div>' +
+            '<div class="study__enc-note">Hidden from the default site \u2014 its content isn\u2019t in your published file. <button class="btn btn--ghost" data-act="work-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
+            '</div>';
+          return;
+        }
         html += '<div class="card workcard">' + cardHead(w.client || w.title || ("Work " + (i + 1)), "work", i, list.length) +
-          '<label class="chk workcard__feat"><input type="checkbox" data-act="feature" data-index="' + i + '"' + (w.featured ? " checked" : "") + " /> Feature on homepage</label>" +
+          '<div class="block-flags">' +
+            '<label class="chk workcard__feat"><input type="checkbox" data-act="feature" data-index="' + i + '"' + (w.featured ? " checked" : "") + " /> Feature on homepage</label>" +
+            '<label class="chk"><input type="checkbox" data-act="work-hidden" data-index="' + i + '"' + (w.hidden ? " checked" : "") + " /> Hidden from the default site \u2014 only shown via a ticket</label>" +
+          '</div>' +
           '<div class="af__row">' + itemField("work", i, "client", "Client") + itemField("work", i, "period", "Period") + "</div>" +
           '<div class="workcard__name">' + escHtml(w.title || "Untitled project") + "</div>" +
           studyToggle(w, i) +
@@ -1436,6 +1461,11 @@
       data.work[i].featured = t.checked;
       apply(true);
       renderBody();
+    } else if (t.dataset.act === "work-hidden") {
+      data.work[+t.dataset.index].hidden = t.checked;
+      saveDraft(true);
+      apply(true);
+      renderBody();
     } else if (t.dataset.act === "present") {
       data.path[+t.dataset.index].present = t.checked;
       apply(true);
@@ -1510,6 +1540,7 @@
     if (act === "study-close") { closeL2(); return; }
     if (act === "study-pick") { sectionPicker(i); return; }
     if (act === "study-decrypt") { decryptStudyForEdit(i); return; }
+    if (act === "work-decrypt") { decryptWorkForEdit(i); return; }
     if (act === "study-blocktoggle") {
       const j = +b.dataset.bindex;
       openBlock = (openBlock === j) ? -1 : j;
@@ -1571,6 +1602,27 @@
     var svAll = (pubData.specialViews || []);
     for (var wi = 0; wi < works.length; wi++) {
       var w = works[wi], st = w && w.study;
+      if (w && w.encWork) continue;                             // already an encrypted stub — preserve verbatim
+      // --- hidden whole-project encryption (ticket-only + owner recovery) ---
+      if (w && w.hidden) {
+        var wrecovery = await ensureRecoveryPass();
+        if (wrecovery === null) throw { rkEnc: true, cancelled: true };
+        var wsek = rkNewSek();
+        var wenc = await rkEncWithSek(wsek, w);
+        var wwraps = { owner: await rkWrapSek(wrecovery, wsek) };
+        var wtks = {};
+        for (var wsi = 0; wsi < svAll.length; wsi++) {
+          var wsv = svAll[wsi];
+          if (!wsv || !wsv.ticketHash || (wsv.workIds || []).indexOf(w.id) === -1) continue;
+          var wcode = await ensureTicketCode(wsv);
+          if (wcode === null) throw { rkEnc: true, cancelled: true };
+          wtks[wsv.id] = await rkWrapSek(wcode, wsek);
+        }
+        if (Object.keys(wtks).length) wwraps.tickets = wtks;
+        works[wi] = { id: w.id, hidden: true, encWork: true, enc: { v: 1, it: RK_KDF_IT, wraps: wwraps }, iv: wenc.iv, ct: wenc.ct };
+        continue;
+      }
+      // --- per-block locked-section encryption ---
       if (!st || !Array.isArray(st.blocks)) continue;
       var plain = [], stubs = 0;
       for (var bi = 0; bi < st.blocks.length; bi++) {
@@ -3488,26 +3540,13 @@
       if (!match) { err.textContent = "That ticket doesn't match anything."; return; }
       if (window.RK.svExpired(match)) { err.textContent = "This curated view has expired."; return; }
       done();
-      await unlockTicketProjects(match, val);   // auto-open the NDA sections this ticket authorises
+      try { sessionStorage.setItem("rk:sv:code", val); } catch (e) {}   // survive a reload
+      if (window.RK.decryptActiveTicket) { try { await window.RK.decryptActiveTicket(window.RK.data, match, val); } catch (e) {} }
       window.RK.applySpecialView(match.id);
       ticketArrived(match);
     }
     modal.querySelector("[data-go]").addEventListener("click", submit);
     modal.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });
-  }
-  // A ticket only opens the projects it curates: unwrap each assigned project's key
-  // with the ticket code and decrypt its locked sections (per-ticket isolation).
-  async function unlockTicketProjects(sv, code) {
-    const d = window.RK && window.RK.data;
-    if (!d || !Array.isArray(d.work) || !window.RK.unlockStudyWithCred) return;
-    const ids = sv.workIds || [];
-    for (let i = 0; i < ids.length; i++) {
-      const w = d.work.filter(function (x) { return x && x.id === ids[i]; })[0];
-      const st = w && w.study;
-      const wrap = st && st.enc && st.enc.wraps && st.enc.wraps.tickets && st.enc.wraps.tickets[sv.id];
-      if (!wrap) continue;
-      try { if (await window.RK.unlockStudyWithCred(st, code, wrap)) window.RK.setStudyUnlocked(ids[i]); } catch (e) {}
-    }
   }
   function ticketArrived(sv) {
     flash("Ticket accepted \u2014 your curated projects are in the Work section below.");

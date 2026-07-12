@@ -160,7 +160,7 @@
 
     set("stats", (data.highlights || []).slice(0, 8).map(highlightEl).join(""));
 
-    set("cases", (data.work || []).filter((w) => w.featured).slice(0, 6).map(caseEl).join(""));
+    set("cases", (data.work || []).filter((w) => w.featured && !w.encWork && !w.hidden).slice(0, 6).map(caseEl).join(""));
 
     set("capsList", caps.map((c) => '<li data-reveal>' + esc(c) + "</li>").join(""));
 
@@ -233,12 +233,65 @@
     if (!sv || !sv.days) return Infinity;
     return Math.max(0, Math.ceil(((sv.createdAt || 0) + sv.days * 86400000 - Date.now()) / 86400000));
   }
+
+  /* ---------- ticket decryption (envelope) ----------
+     A ticket carries the wrapped content key for only the projects it curates.
+     On entry (and on reload, from the session-stored code) we unwrap those keys
+     and decrypt: hidden whole-project stubs are replaced with the full project;
+     locked-section stubs are decrypted and the study marked unlocked. */
+  var RK_UNLOCK_PREFIX = "rk:study:unlocked:";
+  var RK_SV_CODE = "rk:sv:code";
+  function rkNormPass(p) { return String(p == null ? "" : p).trim().toLowerCase(); }
+  function rkUnb64(str) { var s = atob(str), u = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+  function rkImportSek(bytes) { return crypto.subtle.importKey("raw", bytes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]); }
+  async function rkDeriveKey(pass, salt, iters) {
+    var base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey({ name: "PBKDF2", salt: salt, iterations: iters, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  }
+  async function rkUnwrapSek(credential, wrap) {
+    var key = await rkDeriveKey(rkNormPass(credential), rkUnb64(wrap.salt), wrap.it || 210000);
+    var raw = await crypto.subtle.decrypt({ name: "AES-GCM", iv: rkUnb64(wrap.iv) }, key, rkUnb64(wrap.ct));
+    return new Uint8Array(raw);
+  }
+  async function rkDecWithSek(sekBytes, e) {
+    var key = await rkImportSek(sekBytes);
+    var pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: rkUnb64(e.iv) }, key, rkUnb64(e.ct));
+    return JSON.parse(new TextDecoder().decode(pt));
+  }
+  function rkMarkUnlocked(id) { try { sessionStorage.setItem(RK_UNLOCK_PREFIX + id, "1"); } catch (e) {} }
+  async function rkDecryptStudyBlocks(st, sek) {
+    if (!st || !Array.isArray(st.blocks)) return false;
+    var out = st.blocks.slice(), any = false;
+    for (var i = 0; i < out.length; i++) { var b = out[i]; if (b && b.encStub && b.iv && b.ct) { try { out[i] = await rkDecWithSek(sek, b); any = true; } catch (e) { return false; } } }
+    if (any) st.blocks = out;
+    return any;
+  }
+  // Decrypt everything a ticket authorises, in place on `data`.
+  async function decryptActiveTicket(data, sv, code) {
+    if (!data || !Array.isArray(data.work) || !sv) return;
+    var ids = sv.workIds || [];
+    for (var i = 0; i < ids.length; i++) {
+      var idx = -1;
+      for (var k = 0; k < data.work.length; k++) { if (data.work[k] && data.work[k].id === ids[i]) { idx = k; break; } }
+      if (idx === -1) continue;
+      var w = data.work[idx];
+      var wtkt = w.encWork && w.enc && w.enc.wraps && w.enc.wraps.tickets && w.enc.wraps.tickets[sv.id];
+      if (wtkt) {
+        try { var sek = await rkUnwrapSek(code, wtkt); var full = await rkDecWithSek(sek, w); data.work[idx] = full; rkMarkUnlocked(full.id); } catch (e) {}
+        continue;
+      }
+      var st = w.study;
+      var wrap = st && st.enc && st.enc.wraps && st.enc.wraps.tickets && st.enc.wraps.tickets[sv.id];
+      if (wrap) { try { var sek2 = await rkUnwrapSek(code, wrap); if (await rkDecryptStudyBlocks(st, sek2)) rkMarkUnlocked(w.id); } catch (e) {} }
+    }
+  }
+
   function deriveSpecialData(base, sv) {
     const d = JSON.parse(JSON.stringify(base));
     if (sv.workIds && sv.workIds.length) {
       const byId = {};
       (base.work || []).forEach(function (w) { byId[w.id] = w; });
-      d.work = sv.workIds.map(function (id) { return byId[id]; }).filter(Boolean).map(function (w) {
+      d.work = sv.workIds.map(function (id) { return byId[id]; }).filter(Boolean).filter(function (w) { return !w.encWork; }).map(function (w) {
         const c = JSON.parse(JSON.stringify(w)); c.featured = true; return c;
       });
     }
@@ -268,6 +321,7 @@
   }
   function clearSpecialView() {
     try { sessionStorage.removeItem(SV_KEY); } catch (e) {}
+    try { sessionStorage.removeItem(RK_SV_CODE); } catch (e) {}
     removeSvBanner();
     render(baseData());
     revealAll();
@@ -342,6 +396,7 @@
       applySpecialView: applySpecialView,
       clearSpecialView: clearSpecialView,
       deriveSpecialData: deriveSpecialData,
+      decryptActiveTicket: decryptActiveTicket,
       svById: svById,
       svExpired: svExpired,
       svDaysLeft: svDaysLeft,
@@ -353,8 +408,13 @@
       const activeId = sessionStorage.getItem(SV_KEY);
       if (activeId) {
         const sv = svById(activeId);
-        if (sv && !svExpired(sv)) { activeSv = sv; initial = deriveSpecialData(data, sv); }
-        else sessionStorage.removeItem(SV_KEY);
+        if (sv && !svExpired(sv)) {
+          activeSv = sv;
+          const code = sessionStorage.getItem(RK_SV_CODE);
+          if (code) { try { await decryptActiveTicket(data, sv, code); } catch (e) {} }
+          initial = deriveSpecialData(data, sv);
+        }
+        else { sessionStorage.removeItem(SV_KEY); sessionStorage.removeItem(RK_SV_CODE); }
       }
     } catch (e) {}
 
