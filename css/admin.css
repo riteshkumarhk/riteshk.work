@@ -549,3 +549,9 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .secprev--compare .sp__cmp { position: relative; flex: 1; border-radius: 5px; overflow: hidden; border: 1px solid var(--line); background: radial-gradient(120% 120% at 78% 30%, rgba(216,166,87,.16), transparent 60%), #0d0d10; }
 .secprev--compare .sp__cmp-l { position: absolute; inset: 0 50% 0 0; background: linear-gradient(135deg, rgba(255,255,255,.06), transparent); border-right: 2px solid rgba(255,255,255,.72); }
 .secprev--compare .sp__cmp-grip { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.8); background: rgba(8,8,10,.6); color: #fff; font-size: .5rem; display: grid; place-items: center; }
+.secprev--stickies { flex-direction: row; gap: .32rem; align-items: flex-start; }
+.secprev--stickies .sp__note { flex: 1; display: flex; flex-direction: column; gap: .16rem; border: 1px solid var(--line); border-radius: 6px; padding: .34rem; background: var(--bg-2); }
+.secprev--stickies .sp__note--low { margin-top: .5rem; }
+.secprev--stickies .sp__note b { font-family: var(--mono); font-size: .46rem; letter-spacing: .06em; color: var(--accent); }
+.secprev--stickies .sp__note i { font-family: var(--serif); font-size: .58rem; font-style: normal; color: var(--text-dim); }
+.secprev--stickies .sp__note u { height: 11px; border-radius: 3px; background: linear-gradient(135deg, rgba(216,166,87,.16), transparent); text-decoration: none; margin-top: .12rem; }
