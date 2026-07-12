@@ -39,6 +39,8 @@
   const GH_RAW = "https://raw.githubusercontent.com/" + GH_OWNER + "/" + GH_REPO + "/" + GH_BRANCH + "/";
   const GH_FILE_API = "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/";
   const UPLOAD_DIR = "assets/uploads/";
+  // Where a visitor actually sees the site — used to confirm a publish is live.
+  const LIVE_ORIGIN = (/(^|\.)riteshk\.work$/i.test(location.hostname) || /\.github\.io$/i.test(location.hostname)) ? location.origin : "https://riteshk.work";
   const DRAFT_SIG_KEY = "rk:content:draft:sig";
   const PREVIEW_SRC = "index.html?preview=1&lite=1";
   const ADMIN_MIN = 900; // below this the split editor can't fit — admin is disabled
@@ -1419,8 +1421,71 @@
     if (!put.ok) { const j = await put.json().catch(function () { return {}; }); throw new Error((j && j.message) || ("HTTP " + put.status)); }
     return webPath;
   }
+  /* ---------- publish progress bar + live-site confirmation ---------- */
+  let pubCreep = null;
+  function pubEl() { return root && root.querySelector(".adm__pub"); }
+  function pubProgress(pct, label, opts) {
+    opts = opts || {};
+    const el = pubEl();
+    status(label, !!opts.done);
+    if (!el) return;
+    el.hidden = false;
+    el.classList.toggle("is-done", !!opts.done);
+    el.classList.toggle("is-error", !!opts.error);
+    const p = Math.max(0, Math.min(100, Math.round(pct)));
+    const fill = el.querySelector(".adm__pub-fill");
+    const labEl = el.querySelector(".adm__pub-label");
+    const pctEl = el.querySelector(".adm__pub-pct");
+    const view = el.querySelector(".adm__pub-view");
+    const close = el.querySelector(".adm__pub-close");
+    const hint = el.querySelector(".adm__pub-hint");
+    if (fill) fill.style.width = p + "%";
+    if (pctEl) pctEl.textContent = p + "%";
+    if (labEl) labEl.textContent = label;
+    if (view) { if (opts.viewUrl) { view.href = opts.viewUrl; view.hidden = false; } else view.hidden = true; }
+    if (close) close.hidden = !(opts.done || opts.error);
+    if (hint) hint.hidden = !!(opts.done || opts.error);
+  }
+  function pubStopCreep() { if (pubCreep) { clearInterval(pubCreep); pubCreep = null; } }
+  function pubHide() { pubStopCreep(); const el = pubEl(); if (el) el.hidden = true; }
+  // Ease the bar toward a target over N seconds while we wait on GitHub Pages.
+  function pubCreepTo(target, seconds) {
+    pubStopCreep();
+    const el = pubEl(); if (!el) return;
+    const fill = el.querySelector(".adm__pub-fill"), pctEl = el.querySelector(".adm__pub-pct");
+    const from = parseFloat(fill && fill.style.width) || 0, span = Math.max(0, target - from), start = Date.now(), ms = seconds * 1000;
+    pubCreep = setInterval(function () {
+      const t = Math.min(1, (Date.now() - start) / ms);
+      const val = from + span * (1 - Math.pow(1 - t, 2)); // ease-out
+      if (fill) fill.style.width = val.toFixed(1) + "%";
+      if (pctEl) pctEl.textContent = Math.round(val) + "%";
+      if (t >= 1) pubStopCreep();
+    }, 200);
+  }
+  // Poll the live site until it serves exactly what we just published (true = confirmed live).
+  async function waitForLive(mySig) {
+    if (!mySig) return false;
+    const deadline = Date.now() + 120000; // give GitHub Pages up to 2 minutes
+    pubCreepTo(94, 75);
+    while (Date.now() < deadline) {
+      await new Promise(function (r) { setTimeout(r, 4000); });
+      const urls = [LIVE_ORIGIN + "/content.json?t=" + Date.now(), GH_RAW + "content.json?t=" + Date.now()];
+      for (const u of urls) {
+        try {
+          const res = await fetch(u, { cache: "no-store" });
+          if (!res.ok) continue;
+          const txt = await res.text();
+          let live = null;
+          try { live = (window.RK && window.RK.sig) ? window.RK.sig(JSON.stringify(JSON.parse(txt))) : null; } catch (e) { live = null; }
+          if (live && live === mySig) return true;
+        } catch (e) { /* CORS/network hiccup — keep polling */ }
+      }
+    }
+    return false;
+  }
+
   // Replace every still-embedded data:image in `data` with a hosted path (used at publish).
-  async function hostEmbeddedImages(token) {
+  async function hostEmbeddedImages(token, onProg) {
     const targets = [];
     (function walk(o) {
       if (!o || typeof o !== "object") return;
@@ -1430,40 +1495,53 @@
         else if (v && typeof v === "object") walk(v);
       }
     })(data);
+    const total = targets.length;
     let done = 0;
+    if (onProg && total) onProg(0, total);
     for (const t of targets) {
-      try { t[0][t[1]] = await hostDataUri(t[0][t[1]], token); done++; }
+      try { t[0][t[1]] = await hostDataUri(t[0][t[1]], token); }
       catch (e) { if (e && e.auth) throw e; /* otherwise leave embedded, it still publishes */ }
+      done++;
+      if (onProg && total) onProg(done, total);
     }
     return done;
   }
 
   async function ghPublish(token) {
-    status("Publishing to GitHub\u2026");
+    pubProgress(6, "Preparing your content\u2026");
     try {
-      const hosted = await hostEmbeddedImages(token);
-      if (hosted) status("Hosted " + hosted + " image" + (hosted > 1 ? "s" : "") + " at full quality \u2014 finishing publish\u2026");
+      await hostEmbeddedImages(token, function (n, total) {
+        pubProgress(6 + Math.round((n / Math.max(1, total)) * 40), "Uploading images at full quality \u2014 " + n + " of " + total + "\u2026");
+      });
+      pubProgress(50, "Saving your content to GitHub\u2026");
       const json = beforePublish();
+      const mySig = (window.RK && window.RK.sig) ? window.RK.sig(JSON.stringify(JSON.parse(json))) : null;
       let sha;
       const getRes = await fetch(GH_API + "?ref=" + GH_BRANCH + "&t=" + Date.now(), { headers: ghHeaders(token) });
-      if (getRes.status === 401 || getRes.status === 403) { authFailed(); return; }
+      if (getRes.status === 401 || getRes.status === 403) { authFailed(); pubProgress(100, "GitHub didn\u2019t accept that sign-in \u2014 hit Publish to reconnect.", { error: true }); return; }
       if (getRes.ok) { const j = await getRes.json(); sha = j.sha; }
       else if (getRes.status !== 404) throw new Error("read HTTP " + getRes.status);
       const body = { message: "Update content.json via admin", content: b64(json), branch: GH_BRANCH };
       if (sha) body.sha = sha;
       const putRes = await fetch(GH_API, { method: "PUT", headers: ghHeaders(token), body: JSON.stringify(body) });
       const pj = await putRes.json().catch(() => ({}));
-      if (putRes.status === 401 || putRes.status === 403) { authFailed(); return; }
+      if (putRes.status === 401 || putRes.status === 403) { authFailed(); pubProgress(100, "GitHub didn\u2019t accept that sign-in \u2014 hit Publish to reconnect.", { error: true }); return; }
       if (!putRes.ok) throw new Error((pj && pj.message) || ("HTTP " + putRes.status));
-      // Success: this data is now the published content — clear the draft so it can't go stale.
+      // Committed. This data is now the published content — clear the draft so it can't go stale.
       localStorage.removeItem(DRAFT_KEY);
       localStorage.removeItem(DRAFT_SIG_KEY);
       if (window.RK) { window.RK.published = clone(data); if (window.RK.sig) window.RK.publishedSig = window.RK.sig(JSON.stringify(data)); }
-      status("Published \u2014 your site updates in about a minute.", true);
+      pubProgress(64, "Saved to GitHub. Building your live site\u2026");
+      const live = await waitForLive(mySig);
+      pubStopCreep();
+      const viewUrl = LIVE_ORIGIN + "/?t=" + Date.now();
+      if (live) pubProgress(100, "Your site is live and ready to view.", { done: true, viewUrl: viewUrl });
+      else pubProgress(100, "Published. It can take another minute to appear \u2014 open your site to check.", { done: true, viewUrl: viewUrl });
     } catch (e) {
-      if (e && e.auth) { authFailed(); return; }
+      pubStopCreep();
+      if (e && e.auth) { authFailed(); pubProgress(100, "GitHub didn\u2019t accept that sign-in \u2014 hit Publish to reconnect.", { error: true }); return; }
       // Transient/network hiccup — keep the connection, just ask them to retry.
-      status("Couldn\u2019t reach GitHub just now. Hit Publish again to retry.");
+      pubProgress(100, "Couldn\u2019t reach GitHub just now. Hit Publish again to retry.", { error: true });
     }
   }
 
@@ -2203,6 +2281,13 @@
           '<button class="btn adm__exit" data-exit aria-label="Exit admin">Exit ✕</button>' +
         "</div>" +
       "</header>" +
+      '<div class="adm__pub" hidden aria-live="polite">' +
+        '<div class="adm__pub-head"><span class="adm__pub-label">Publishing\u2026</span><span class="adm__pub-pct">0%</span>' +
+          '<button class="adm__pub-close" data-pub-close type="button" aria-label="Dismiss" hidden>\u2715</button></div>' +
+        '<div class="adm__pub-track"><div class="adm__pub-fill"></div></div>' +
+        '<div class="adm__pub-foot"><span class="adm__pub-hint">Keep this tab open \u2014 confirming when your changes are live.</span>' +
+          '<a class="btn btn--primary adm__pub-view" target="_blank" rel="noopener" hidden>View site \u2197</a></div>' +
+      "</div>" +
       '<div class="adm__main">' +
         '<div class="adm__editor"><div class="adm__body"></div>' +
           '<div class="adm__l2" hidden>' +
@@ -2258,6 +2343,8 @@
     );
     root.querySelector("[data-publish]").addEventListener("click", publish);
     root.querySelector("[data-pubcfg]").addEventListener("click", () => publishModal());
+    const pubCloseBtn = root.querySelector("[data-pub-close]");
+    if (pubCloseBtn) pubCloseBtn.addEventListener("click", pubHide);
     root.querySelector("[data-revert]").addEventListener("click", revert);
     root.querySelector("[data-exit]").addEventListener("click", exit);
     root.querySelector("[data-l2-back]").addEventListener("click", () => closeL2());

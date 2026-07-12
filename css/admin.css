@@ -39,7 +39,28 @@
 .pass__steps a:hover { color: var(--text); }
 .pass__steps b, .pass__note b { color: var(--text); font-weight: 500; }
 .pass__actions .btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
-.adm__pubcfg { padding-left: .6rem; padding-right: .6rem; }
+.adm__actions .adm__pubcfg { padding: .22rem .5rem; font-size: 1.18rem; line-height: 1; }
+
+/* publish progress bar */
+.adm__pub { padding: .7rem 1.1rem .8rem; border-bottom: 1px solid var(--line); background: var(--bg-2); }
+.adm__pub[hidden] { display: none; }
+.adm__pub-head { display: flex; align-items: center; gap: .6rem; margin-bottom: .5rem; }
+.adm__pub-label { flex: 1 1 auto; font-family: var(--mono); font-size: .68rem; letter-spacing: .02em; color: var(--text); }
+.adm__pub-pct { font-family: var(--mono); font-size: .68rem; color: var(--accent); }
+.adm__pub.is-done .adm__pub-pct { color: #74d99f; }
+.adm__pub.is-error .adm__pub-pct { color: #ff7a7a; }
+.adm__pub-close { background: none; border: 0; color: var(--text-faint); font-size: .78rem; line-height: 1; cursor: pointer; padding: .1rem .3rem; }
+.adm__pub-close[hidden] { display: none; }
+.adm__pub-close:hover { color: var(--text); }
+.adm__pub-track { height: 5px; border-radius: 100px; background: var(--line); overflow: hidden; }
+.adm__pub-fill { height: 100%; width: 0; border-radius: 100px; background: linear-gradient(90deg, var(--accent-2), var(--accent)); transition: width .35s var(--ease); }
+.adm__pub.is-done .adm__pub-fill { background: #74d99f; }
+.adm__pub.is-error .adm__pub-fill { background: #ff7a7a; }
+.adm__pub-foot { display: flex; align-items: center; justify-content: space-between; gap: .8rem; margin-top: .5rem; }
+.adm__pub-hint { font-family: var(--mono); font-size: .6rem; color: var(--text-faint); }
+.adm__pub-hint[hidden] { display: none; }
+.adm__pub-view { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; padding: .34rem .75rem; font-size: .64rem; white-space: nowrap; }
+.adm__pub-view[hidden] { display: none; }
 
 /* ---------- full-screen admin studio ---------- */
 html.adm-lock, body.adm-lock { overflow: hidden !important; }
