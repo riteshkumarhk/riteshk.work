@@ -453,6 +453,12 @@ body.adm-lock .cursor { display: none !important; }
 .is-drop-above { box-shadow: inset 0 3px 0 -1px var(--accent); }
 .is-drop-below { box-shadow: inset 0 -3px 0 -1px var(--accent); }
 body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user-select: none !important; user-select: none !important; }
+/* nested cells inside a column */
+.cells { display: grid; gap: .7rem; margin-top: .3rem; }
+.cellrow { border: 1px solid var(--line-soft); border-radius: 9px; padding: .7rem .75rem .3rem; background: var(--bg); }
+.cellrow__bar { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+.cellrow__n { font-family: var(--mono); font-size: .58rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim); flex: 1 1 auto; }
+.cells__foot { margin-top: .1rem; }
 
 /* ---------- icon picker (collapsible dropdown + grid) ---------- */
 .icondd { position: relative; }

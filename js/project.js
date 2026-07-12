@@ -286,12 +286,14 @@
   }
   function columnsBlock(b) {
     var items = (b.items || []).map(function (c) {
-      var media = mediaSrc(c) ? '<div class="pjb__coln-media">' + mediaEl(c, "pjb__media-el") + "</div>" : "";
-      return '<div class="pjb__coln">' +
-        (c.label ? '<div class="pjb__coln-lbl">' + esc(c.label) + "</div>" : "") +
-        (c.heading ? '<h3 class="pjb__coln-h">' + md(c.heading) + "</h3>" : "") +
-        prose(c.body) +
-        media + "</div>";
+      var cells = (Array.isArray(c.cells) && c.cells.length) ? c.cells : [{ heading: c.heading, body: c.body, src: c.src }];
+      var inner = cells.map(function (cell) {
+        var media = mediaSrc(cell) ? '<div class="pjb__coln-media">' + mediaEl(cell, "pjb__media-el") + "</div>" : "";
+        return '<div class="pjb__cell">' +
+          (cell.heading ? '<h3 class="pjb__coln-h">' + md(cell.heading) + "</h3>" : "") +
+          prose(cell.body) + media + "</div>";
+      }).join("");
+      return '<div class="pjb__coln">' + (c.label ? '<div class="pjb__coln-lbl">' + esc(c.label) + "</div>" : "") + inner + "</div>";
     }).join("");
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__cols">' + items + "</div>";
   }
