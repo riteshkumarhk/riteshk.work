@@ -150,6 +150,7 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 
 .chk { display: inline-flex; align-items: center; gap: .45rem; font-size: .8rem; color: var(--text-dim); cursor: pointer; }
 .chk input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.block-flags { display: flex; flex-direction: column; gap: .5rem; margin-top: .55rem; align-items: flex-start; }
 
 /* ---------- list item cards ---------- */
 .card { border: 1px solid var(--line); border-radius: 10px; padding: .85rem; margin-bottom: .85rem; background: var(--bg); }
