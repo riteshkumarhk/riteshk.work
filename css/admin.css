@@ -40,6 +40,8 @@
 .pass__steps b, .pass__note b { color: var(--text); font-weight: 500; }
 .pass__actions .btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 .adm__actions .adm__pubcfg { padding: .22rem .5rem; font-size: 1.18rem; line-height: 1; }
+.adm__actions .adm__keycfg { padding: .32rem .55rem; display: inline-flex; align-items: center; }
+.adm__actions .adm__keycfg svg { display: block; }
 
 /* publish progress bar */
 .adm__pub { padding: .7rem 1.1rem .8rem; border-bottom: 1px solid var(--line); background: var(--bg-2); }
