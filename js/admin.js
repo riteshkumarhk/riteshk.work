@@ -1752,13 +1752,12 @@
     ticketPlain[sv.id] = code;
     return code;
   }
+  // Include a deeper-cut-pass unlock ONLY if the owner already has that pass on
+  // hand this session (typed into the study editor's Deeper-cut pass field). Never
+  // prompt at publish — tickets and the recovery passphrase already open protected
+  // sections, so nagging for a legacy pass the owner may not have set is just noise.
   async function ensureStudyPass(w, st) {
-    if (rkNormPass(studyUnlockPlain[w.id])) return studyUnlockPlain[w.id];
-    if (!st.unlockHash) return "";                 // no deeper-cut pass set — tickets + recovery still open it
-    var code = await credModal({ title: "Deeper-cut pass", sub: "Enter this project\u2019s deeper-cut pass so it keeps working as a direct unlock (or Cancel to skip \u2014 tickets and recovery still open it).", cta: "Use pass", verifyHash: st.unlockHash, mismatch: "That doesn\u2019t match this project\u2019s pass." });
-    if (code === null) return "";
-    studyUnlockPlain[w.id] = code;
-    return code;
+    return rkNormPass(studyUnlockPlain[w.id]) ? studyUnlockPlain[w.id] : "";
   }
 
   function ghHeaders(token) {
