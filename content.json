@@ -845,7 +845,7 @@
     },
     {
       "id": "w1783695671548",
-      "featured": false,
+      "featured": true,
       "theme": "grid",
       "plateTag": "Tag",
       "client": "Xbox Game Pass",
