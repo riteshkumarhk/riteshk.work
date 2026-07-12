@@ -67,6 +67,7 @@
     { type: "statement", name: "Statement", tag: "Pull-quote", desc: "One bold line that stands on its own, with an optional sub-line.", best: "A thesis \u00b7 a principle \u00b7 a takeaway" },
     { type: "metrics", name: "Metrics", tag: "Impact", desc: "A row of big numbers, each with a small label.", best: "Results \u2014 users, growth, ratings, revenue" },
     { type: "steps", name: "Steps", tag: "Process", desc: "A numbered sequence of titled steps.", best: "Your approach, method or timeline" },
+    { type: "workflow", name: "Workflow", tag: "Flow", desc: "A process as a left-to-right flow or a repeating loop \u2014 split a step with // to fork into parallel branches that merge back.", best: "Pipelines \u00b7 review cycles \u00b7 fork / merge" },
     { type: "media", name: "Media", tag: "Visuals", desc: "Images, video, Figma, PDF or slides with captions.", best: "Screens \u00b7 prototypes \u00b7 before/after shots" },
     { type: "split", name: "Before / after", tag: "Compare", desc: "Two labelled columns placed side by side.", best: "Before vs after \u00b7 problem vs solution" },
     { type: "faq", name: "FAQ", tag: "Q & A", desc: "A list of question-and-answer pairs.", best: "Objections \u00b7 context \u00b7 scope \u00b7 details" },
@@ -429,6 +430,7 @@
       case "statement": return { type: "statement", nav: "", kicker: "", body: "", sub: "", src: "", caption: "" };
       case "metrics": return { type: "metrics", nav: "", kicker: "", heading: "", items: [] };
       case "steps": return { type: "steps", nav: "", kicker: "", heading: "", items: [] };
+      case "workflow": return { type: "workflow", nav: "", kicker: "", heading: "", flow: "linear", items: [] };
       case "media": return { type: "media", nav: "", kicker: "", heading: "", items: [] };
       case "split": return { type: "split", nav: "", kicker: "", heading: "", leftLabel: "Before", left: [], leftImg: "", rightLabel: "After", right: [], rightImg: "" };
       case "faq": return { type: "faq", nav: "", kicker: "", items: [] };
@@ -451,6 +453,7 @@
       var parts = line.split("|").map(function (s) { return s.trim(); });
       if (type === "metrics") return { value: p[0], label: p[1] };
       if (type === "steps") return { title: p[0], body: p[1] };
+      if (type === "workflow") return { label: p[0], note: p[1] };
       if (type === "cards") return { title: parts[0] || "", body: parts[1] || "", icon: parts[2] || "", src: parts[3] || "" };
       if (type === "columns") return { label: parts[0] || "", heading: parts[1] || "", body: parts[2] || "", src: parts[3] || "" };
       if (type === "rows") return { label: parts[0] || "", heading: parts[1] || "", body: parts[2] || "", src: parts[3] || "" };
@@ -464,6 +467,7 @@
     return (items || []).map(function (it) {
       if (type === "metrics") return (it.value || "") + " | " + (it.label || "");
       if (type === "steps") return (it.title || "") + " | " + (it.body || "");
+      if (type === "workflow") return (it.label || "") + " | " + (it.note || "");
       if (type === "cards") return joinPipes([it.title, it.body, it.icon, it.src]);
       if (type === "columns") return joinPipes([it.label, it.heading, it.body, it.src]);
       if (type === "rows") return joinPipes([it.label, it.heading, it.body, it.src]);
@@ -704,6 +708,7 @@
   var ITEM_SPEC = {
     metrics: { title: "Metrics", one: "Metric", add: "Add metric", fields: [["value", "Value (e.g. +45%)", "input"], ["label", "Label", "input"]] },
     steps: { title: "Steps", one: "Step", add: "Add step", fields: [["title", "Title", "input"], ["body", "Body", "rich"]] },
+    workflow: { title: "Steps", one: "Step", add: "Add step", fields: [["label", "Step \u2014 use // to fork into parallel branches (e.g. Design // Eng // Legal)", "input"], ["note", "Note (optional)", "input"]] },
     faq: { title: "Questions", one: "Q", add: "Add question", fields: [["q", "Question", "input"], ["a", "Answer", "rich"]] },
     media: { title: "Media", one: "Item", add: "Add media", fields: [["src", "Image / video / Figma / PDF / deck URL", "media"], ["caption", "Caption", "input"]] },
     gallery: { title: "Slides", one: "Slide", add: "Add slide", fields: [["src", "Image / video / embed URL", "media"], ["caption", "Caption", "input"]] },
@@ -720,6 +725,7 @@
     switch (type) {
       case "metrics": return { value: "", label: "" };
       case "steps": return { title: "", body: "" };
+      case "workflow": return { label: "", note: "" };
       case "faq": return { q: "", a: "" };
       case "media": case "gallery": return { src: "", caption: "" };
       case "cards": return { title: "", body: "", icon: "", src: "" };
@@ -948,7 +954,7 @@
     status("Hidden project unlocked for editing \u2014 it re-encrypts on Publish.", true);
   }
   function blockEditor(i, b, j, len, open) {
-    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Before / after slider", stickies: "Sticky notes", voices: "Voices" })[b.type] || b.type;
+    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Before / after slider", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow" })[b.type] || b.type;
     if (b.encStub) {
       return '<div class="card study__block study__block--enc">' +
         '<div class="study__block-head study__block-head--enc">' +
@@ -990,10 +996,11 @@
     else if (b.type === "gallery") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b) + '<div class="af__hint">Same URLs as Media \u2014 shown as a swipeable carousel with 1/N counters.</div>';
     else if (b.type === "figure") body = sfInput(i, j, "heading", "Heading") + richBlock(i, j, "body", "Body") + mediaInputBlock(i, j, "src", "Image / video / embed URL") + sfInput(i, j, "caption", "Caption") + '<label class="chk" style="margin-top:.2rem"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="flip"' + (b.flip ? " checked" : "") + " /> Image on the left</label>";
     else if (b.type === "columns" || b.type === "rows") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
+    else if (b.type === "workflow") body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "flow", "Layout", [["linear", "Linear \u2014 left to right"], ["loop", "Loop \u2014 a repeating cycle"]], "How the steps connect.") + itemRepeater(i, j, b) + '<div class="af__hint">Steps flow left to right with arrows. Split a step with <b>//</b> to fork into parallel branches that merge back \u2014 e.g. <em>Design // Eng // Legal</em>.</div>';
     else if (b.type === "stickies") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b) + '<div class="af__hint">Cards stagger up and down automatically and lift on hover. Give each a short label (e.g. 01), a heading, a line or two, and an optional image.</div>';
     else if (b.type === "voices") body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "mode", "Style", [["verbatim", "Verbatim \u2014 sharp quote bubble"], ["thought", "Thought \u2014 soft bubble"], ["chat", "Chat \u2014 a two-way conversation"]], "Verbatim & thought stack as quote bubbles; chat lays them left/right like a conversation.") + sfSelect(i, j, "vsize", "Verbatim heading size", [["", "Standard"], ["lg", "Large"]]) + itemRepeater(i, j, b) + '<div class="af__hint">Side only applies to Chat. Heading only shows on Verbatim. Attribution is the small label under the bubble (e.g. \u201cWhat clients actually said\u201d).</div>';
     else if (b.type === "compare") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + mediaInputBlock(i, j, "beforeSrc", "Before image") + mediaInputBlock(i, j, "afterSrc", "After image") + "</div>" + '<div class="af__row">' + sfInput(i, j, "beforeLabel", "Before label") + sfInput(i, j, "afterLabel", "After label") + "</div>" + richBlock(i, j, "body", "Description below \u2014 what changed", "Both images should be the same size. Visitors drag the divider to compare.");
-    var hasHeading = /^(text|metrics|steps|media|split|cards|gallery|figure|columns|rows|compare|stickies|voices)$/.test(b.type);
+    var hasHeading = /^(text|metrics|steps|media|split|cards|gallery|figure|columns|rows|compare|stickies|voices|workflow)$/.test(b.type);
     var sizeCtl = (hasHeading || b.type === "statement") ? sfSelect(i, j, "hsize", (b.type === "statement" ? "Statement size" : "Heading size"), [["", "Standard"], ["sm", "Compact \u2014 easier to read"], ["lg", "Large \u2014 display"]], "Shrink it if the standard size feels too big for the copy.") : "";
     var sepCtl = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="sep"' + (b.sep !== false ? " checked" : "") + " /> Separator line above \u2014 uncheck to flow into the previous section</label>";
     var locked = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="locked"' + (b.locked ? " checked" : "") + " /> Locked \u2014 only after the deeper-cut pass</label>";
@@ -1034,6 +1041,8 @@
         return '<span class="secprev secprev--stickies"><span class="sp__note"><b>01</b><i>Heading</i><u></u></span><span class="sp__note sp__note--low"><b>02</b><i>Heading</i><u></u></span><span class="sp__note"><b>03</b><i>Heading</i><u></u></span></span>';
       case "voices":
         return '<span class="secprev secprev--voices"><span class="sp__vc sp__vc--l">“I wasn’t sure…”</span><span class="sp__vc sp__vc--r">“Where can I see it?”</span><span class="sp__vc sp__vc--l">“Is my balance usable?”</span></span>';
+      case "workflow":
+        return '<span class="secprev secprev--workflow"><span class="sp__wf">Review</span><span class="sp__wfa">\u2192</span><span class="sp__wf">Refine</span><span class="sp__wfa">\u2192</span><span class="sp__wf">Align</span><span class="sp__wfa">\u2192</span><span class="sp__wf">Ship</span></span>';
       default:
         return '<span class="secprev secprev--text"><span class="sp__kick">Context</span><span class="sp__h">The problem</span><span class="sp__body">A short paragraph that sets up the situation and the stakes.</span><span class="sp__bul">Point one</span><span class="sp__bul">Point two</span></span>';
     }
@@ -2848,7 +2857,7 @@
   }
 
   /* ---------- AI feedback reviewer (map reviewer notes to the exact edits) ---------- */
-  var FB_TYPE_NAMES = { text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Compare", stickies: "Sticky notes", voices: "Voices" };
+  var FB_TYPE_NAMES = { text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Compare", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow" };
   var FB_FIELD_LABELS = { kicker: "kicker", nav: "nav label", heading: "heading", body: "body", sub: "sub-line", caption: "caption", leftLabel: "before label", rightLabel: "after label", beforeLabel: "before label", afterLabel: "after label", value: "value", label: "label", title: "title", q: "question", a: "answer", cite: "attribution" };
   function fbPlain(s) { return String(s == null ? "" : s).replace(/<[^>]+>/g, " ").replace(/\*\*|\*|~~|\[\[|\]\]/g, "").replace(/\s+/g, " ").trim(); }
   function fbBlockLoc(b) { return fbPlain(b.nav || b.kicker || b.heading || b.body || FB_TYPE_NAMES[b.type] || "Section").slice(0, 42) || "Section"; }

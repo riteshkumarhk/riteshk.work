@@ -421,11 +421,38 @@
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__voices pjb__voices--' + mode + (b.vsize === "lg" ? " pjb__voices--lg" : "") + '">' + items + "</div>";
   }
 
+  // Workflow — a process shown as a linear left-to-right flow or a repeating loop,
+  // with optional fork/merge (a step split into parallel branches with "//").
+  function workflowBlock(b) {
+    var flow = b.flow === "loop" ? "loop" : "linear";
+    var items = b.items || [];
+    var branchesOf = function (label) { return String(label || "").split("//").map(function (s) { return s.trim(); }).filter(Boolean); };
+    var nodes = items.map(function (it, i) {
+      var parts = branchesOf(it.label);
+      var note = it.note ? '<span class="pjb__flow-note">' + esc(it.note) + "</span>" : "";
+      var node;
+      if (parts.length > 1) {
+        node = '<div class="pjb__flow-fork">' + parts.map(function (p) { return '<span class="pjb__flow-branch">' + md(p) + "</span>"; }).join("") + note + "</div>";
+      } else {
+        node = '<div class="pjb__flow-node"><span class="pjb__flow-lbl">' + md(parts[0] || it.label || "") + "</span>" + note + "</div>";
+      }
+      var arrow = i < items.length - 1 ? '<span class="pjb__flow-arrow" aria-hidden="true">\u2192</span>' : "";
+      return node + arrow;
+    }).join("");
+    var ret = "";
+    if (flow === "loop" && items.length) {
+      var first = branchesOf(items[0].label)[0] || items[0].label || "";
+      ret = '<div class="pjb__flow-return"><span class="pjb__flow-return-ico" aria-hidden="true">\u21ba</span><span>' + (first ? "Repeats from \u201c" + esc(first) + "\u201d" : "Repeats as a cycle") + "</span></div>";
+    }
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__flow pjb__flow--' + flow + '">' + nodes + "</div>" + ret;
+  }
+
   var RENDERERS = {
     text: textBlock, statement: stmtBlock, metrics: metricsBlock,
     steps: stepsBlock, media: mediaBlock, split: splitBlock, faq: faqBlock,
     cards: cardsBlock, gallery: galleryBlock, figure: figureBlock,
     columns: columnsBlock, rows: rowsBlock, compare: compareBlock, stickies: stickiesBlock, voices: voicesBlock,
+    workflow: workflowBlock,
   };
   function renderBlock(b, i) {
     var navLabel = b.nav || "";
