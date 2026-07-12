@@ -383,26 +383,55 @@
             "items": [
               {
                 "src": "",
-                "caption": ""
+                "caption": "Inspired by Windows OOBE, this direction explored a guided, distraction-free onboarding experience without the Edge Window in the background and onboarding becomes the primary focus."
               },
               {
                 "src": "",
-                "caption": ""
+                "caption": "Instead of hiding the browser entirely, a compact onboarding exists with the browser window.  Users can immediately see the results of their setup decisions."
               },
               {
                 "src": "",
-                "caption": ""
+                "caption": "This direction treated onboarding as an immersive product experience rather than a setup wizard.  Users could preview themes, layouts, pinning, and personalization in context."
               },
               {
                 "src": "",
-                "caption": ""
+                "caption": "I began questioning whether every activation moment should happen inside FRE at all.  Personalization, pinning, and discovery could appear naturally in workflow moments such as the New Tab Page instead of being compressed into setup."
               },
               {
                 "src": "",
-                "caption": ""
+                "caption": "As Microsoft AI experiences evolved, I explored onboarding concepts that unified Edge, Copilot, Bing, and personalization into a single setup experience."
               }
             ],
             "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "What Stayed Consistent",
+            "body": "While the concepts looked dramatically different, they all shared one belief:<div><br></div><div><ul><li>One onboarding journey</li><li>One visual language</li><li>One narrative</li><li>One activation strategy</li></ul></div><div><br></div><div>Regardless of whether onboarding was modal, immersive, AI-powered, or distributed across the product, the future felt strongest when users experienced Edge through a single cohesive surface rather than fragmented onboarding flows.</div><div><br></div><div>That realization became the foundation for Unified FRE.</div>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false,
+            "hsize": "sm"
+          },
+          {
+            "type": "text",
+            "nav": "Landing the vision",
+            "kicker": "",
+            "heading": "",
+            "body": "With alignment forming around unification, I shifted focus from exploring different surfaces to exploring the full potential of a unified onboarding experience.<div><br></div><div>The goal was no longer to redesign individual onboarding screens.</div><div><br></div><div>The goal was to rethink what onboarding could become if every critical setup, personalization, and activation moment lived within a single continuous journey.</div>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "media",
+            "nav": "Converging on a Product Vision",
+            "kicker": "",
+            "heading": "",
+            "items": []
           }
         ]
       }
@@ -546,15 +575,11 @@
           {
             "type": "text",
             "locked": true,
-            "nav": "Deep dive",
+            "encStub": true,
+            "iv": "tJYfDTQxTvqoWNXX",
+            "ct": "FCYVyI91D9+ayE2yN6LSoLOIMUEWIDPQczLDdzG9//utYjLdoBzywO4GbJ5JrtkFEFIk3tkfkSIzjCI5dvYuas6Uuoz7m+QRk7N8XMQfVLz2pyrBMBhiVbYgbZYRCIqB3d8bIcv7wjmxyaR7Y6QSjgDe/qghdUYYI3QEiEWwI9nak28INGG4+8A9pjuna3hVmmqzBzHeyyKy8d3MBIQ2+p8TO2WdCd2HPsb8/VN1ptZ2X5L37LI7LthsZ+O85xXs6fgpTko7aKm2XaivmaKJ5pdjrmNtMNHUwcLIa4vO+o5/7bTOgbKD3qhsLymLA+0hDCJvHNSKLohtsRviInWVljzKhX9IXUmBCdBEmcbUSYwY8eAbivxk/ohg2EvOAitU6Ui7mOWzUvDgf+8agCrGdbTgai/ekv5TrgjwdfU/T1vcEZRuyU68dWo0x9XNrUaaAUmG2Q8yY+sKEw6PpZOAYpgJ7NDeBfU37rrm0+naQL2udNX7XXbG8CePNPp8AtZlNp8n4tIE6/gudz7zPm6r5LHmAB55a2THwNVT/q2n9YKMKO1e0CqUDelpSzJD7yOCJ0Gc24GbBZ62bBRBZggAw+mtDC9IAapEBOvLHiGDztECQIoJDPl5HxFbxANgnUM3Ugd66b8F5mGofCiCXnDh/dJogTjF0uOJDfU0sctiCyQseGE/NcN4KOIgVHUoNzIO2As=",
             "kicker": "Deeper cut",
-            "heading": "The experiment program behind the flow.",
-            "body": "The full case study covers the specific hypotheses, the experiment design, the metrics we moved and the tradeoffs we made screen by screen. This deeper cut is shared on request — enter the pass you were given to read it.",
-            "list": [
-              "Hypothesis framing and guardrail metrics",
-              "Variant design and what each experiment taught us",
-              "Balancing early activation against long-term retention"
-            ]
+            "nav": "Deep dive"
           },
           {
             "type": "statement",
@@ -563,7 +588,18 @@
             "body": "The best onboarding doesn't feel like onboarding. It feels like the product being immediately worth it.",
             "sub": "If I had more time: push personalization earlier, and close the loop from first-run choices to week-four retention."
           }
-        ]
+        ],
+        "enc": {
+          "v": 1,
+          "it": 210000,
+          "wraps": {
+            "owner": {
+              "salt": "Ms/wXzd2Cc7YBTy1VADfXw==",
+              "iv": "RJhuVxN6i4NkWR5r",
+              "ct": "Q838yUz83T/yQkD3WVHsCwDOyOTF1Jo5bszxzAxefxv9QxZkuJ+SzHmnwj4V75YJ"
+            }
+          }
+        }
       },
       "image": ""
     },
@@ -701,15 +737,11 @@
           {
             "type": "text",
             "locked": true,
-            "nav": "Deep dive",
+            "encStub": true,
+            "iv": "zDIampWFcEunQDTr",
+            "ct": "ToEVjimyjibW+tDTcZCoVnUsNw545pqGEDg99kNsCzskcSbF0h0PynsZz5l+FlmD9WaglmBuJ3Bckfy6xXgsAMYvHhNdL3iSvc1ACaFMPRDdlp3coToy7GgbbKqrjTX+/r+WUQtfI2Fsypvso8f4ppW0MbqoHH5cYTx0IDIRK7URG7umPyGqpWef27BSGczENd1VIEegnfm+K3Jk5Ed70DeslmwICcE+zDWSlMdBo2Sct6XMNDCxm6s38ze2YBcAkhRM/w5iPodw2BTcGnyIbnGGYg5sb3MaxxaVTH2k92SI9kA0fea5pokGHsL1vVPGBXbGc02U6Oi+lV/39DgI0fMq0aq1f/jr2c+Hp2t3YEqfAtdGo4yCKV+bVf9fjqOk06GfMZy3dXYA4IpoUkTZ3+Qppxr5DaOHGK26MA0fi66Idpt0185ag/kkHciprcVezleGuuEJslpqmBRKnJEOKAao1Q7D3Sci1s+VYQzpszQO041c8kdICL/qEkpyBrwfHU4ogm5eb9gR7hfRd7huQEsWaS+qMDMV6VXxTlmzzL/juxipva7I4XNqglt8H60lbqg5b/PhALudBcXuBe/qSuTXFHigqUxGFR/LvTuF1qn52Ygpn4ivILuSW2mWsA0pobA4zvSWTmmKaD4DP3qtSt4=",
             "kicker": "Deeper cut",
-            "heading": "80+ SSO issues across 200+ workflows.",
-            "body": "Beyond new features, a large part of the work was reliability — auditing sign-in journeys end to end and fixing the trust-breaking moments. The full breakdown is shared on request.",
-            "list": [
-              "The audit method across 200+ sign-in workflows",
-              "How we prioritized 80+ reliability and trust fixes",
-              "Patterns that measurably reduced authentication friction"
-            ]
+            "nav": "Deep dive"
           },
           {
             "type": "statement",
@@ -718,7 +750,18 @@
             "body": "The best security disappears — you feel safe without being asked to think about it.",
             "sub": "If I had more time: push passkey education earlier, and close the loop from enrollment to long-term retention."
           }
-        ]
+        ],
+        "enc": {
+          "v": 1,
+          "it": 210000,
+          "wraps": {
+            "owner": {
+              "salt": "I0wxCdD8cTvxupMIK6Cbog==",
+              "iv": "GKKENzhTpjlzEm5r",
+              "ct": "ERDhvg4TRZP+RUt34FjJfrLpFU+OOE4LPbVYpotNjFnrajDpWKD4qdq7YIRKtuVs"
+            }
+          }
+        }
       },
       "image": ""
     },
@@ -855,15 +898,11 @@
           {
             "type": "text",
             "locked": true,
-            "nav": "Deep dive",
+            "encStub": true,
+            "iv": "APFTZhx6TOqfJ/Nn",
+            "ct": "feUbbzojEdnnFudQYuxFVrDw5UPF/ExR8orrYUdiUIe8DRRI/Jn6yYVuSyJbGwGi5gDyH6nUP4TW/yVjD2vCQLML5W8EZiEsPYDqwCw/0Y48UEPyUi8z0AagcrmAPefLsunhVbadAyVaTwiU969/ixvpMLRjoZYJ1UIm14UHh69cIfhvgnWEt8epjZpS1+IDoVyXSYn2XMCoCVNR0U8c474o1/emEMc+xF8vXvcGi/2VIXsUkci2A8NSEf+mn7nGvjNnnCCoLyHJpTKnvDmUXJ44rECHUWrP4Sh+6rHmzWd03ta9BPZ2JTESoHlvUmxFP0eVyqtHIFvzchYXcDqBBjdWg3MWXC0O3IPiO0oa3cQHBmnux6hKnCK3CHnkhdq6WNb2WWXUSWmO37FTi9Xhkpl4Xgg4p90u3Rv59nyxoi+npwf31Mfg1cO6VO4VfW8TIjt6CtNTDC3zPHf2OyMlu7jYb/R3glykI/c/BBUX2i8skXBCBNIRu64/lMVQtoW57Nwl9foLlQhix9Zx34jKc+SUf0r9LHC9zKB/AIyk5kT58Ng5ALFONmMk2zRc3c39mZFQ9uswqNBcpBh11teo1riBpFfKp72ZPMJt8I62c41KpJq6le9n",
             "kicker": "Deeper cut",
-            "heading": "How we decided what earns an answer.",
-            "body": "The deeper cut covers the confidence bar for surfacing an answer, the Shy Answers logic, and what the interaction data taught us. Shared on request.",
-            "list": [
-              "The bar for surfacing an answer versus staying quiet",
-              "Balancing relevance, accessibility and platform consistency",
-              "What the interaction data changed about the design"
-            ]
+            "nav": "Deep dive"
           },
           {
             "type": "statement",
@@ -872,7 +911,18 @@
             "body": "A great answer respects your attention — it shows up when it is sure, and gets out of the way when it is not.",
             "sub": "If I had more time: expand answer coverage and tune confidence thresholds per surface."
           }
-        ]
+        ],
+        "enc": {
+          "v": 1,
+          "it": 210000,
+          "wraps": {
+            "owner": {
+              "salt": "CSA+mPusdFUbk6ThfKKa4w==",
+              "iv": "3gTPS/3cCOwmngUx",
+              "ct": "mnyEO6SX0xwxuAkpLIhZSuSEMZtJyrUccHGPqyLxNsubqAGGT6B00qPJdmIBiYOL"
+            }
+          }
+        }
       }
     },
     {
@@ -989,15 +1039,11 @@
           {
             "type": "text",
             "locked": true,
-            "nav": "Deep dive",
+            "encStub": true,
+            "iv": "EGhey3CJZAT47k6P",
+            "ct": "4J09JXXfWyTCf5o/hyRdIMAOIweE96aLZicEPl0vDc+dPaD17GvbBnLOhOgaKNJPEKhWkoimLLffMM38hB39K8D3DlRFIoR5dmNgdcMSQ7GmhQvGV8AZW2M76Mcoo3mp7w7UjezgmjLNMe/hVc4sk4vQNCv5QLCu2sMs7u/wJfVyqUkJrzezu73CCZycuGTPiqMw44g3kzVmSLr/0UqRc8Gl2Xvs5j3QzfCoN/t74fVWMiZF9Q6BdOF7407CcrwA8OD8ESFtbzLyRotGElnI5mSYJnjFyOAR4+VYvRK95CJ24qbGL6GUXNh5xOhJI+mFalixfBPjGRPYHy406M0bUE65K98sPl+mfF4cq5GXtU3iIvVCXYwcGTAKFOLrA6uuBYELREVvm3AaO3CkVGrGIflEts+FPvTjfiPw77/zTcn5Y1fckBUgOIAT7hZg/eoYlMdbeqqfzJQpeG6FYtX1hTm9dkE1kNgvHE6ykjV6+QshVCGdIpI8QKQgsrNeIj/Pj8Pr7RbIZx6rwcdLPzAg2fyXLT9jumoKpEArKzasqsSyUrA8oIM41A56roo/mFh4bs9F6XwW6MP2bg==",
             "kicker": "Deeper cut",
-            "heading": "From HMI concept to the dashboard.",
-            "body": "The deeper cut covers how concepts were validated for real driving conditions and taken to production within OEM constraints. Shared on request.",
-            "list": [
-              "How concepts were validated for real driving",
-              "Working within OEM and platform constraints",
-              "What automotive taught me about high-stakes clarity"
-            ]
+            "nav": "Deep dive"
           },
           {
             "type": "statement",
@@ -1006,7 +1052,18 @@
             "body": "Automotive taught me that the highest form of design is the one you barely notice while it keeps you safe.",
             "sub": "It is the same instinct I bring to growth and identity today: clarity at the moment that matters."
           }
-        ]
+        ],
+        "enc": {
+          "v": 1,
+          "it": 210000,
+          "wraps": {
+            "owner": {
+              "salt": "hdBt9Eha3ttxJS7NLCzalQ==",
+              "iv": "H2W83R69tLsqhQ4A",
+              "ct": "EvDK9z6rsmWOYypNQppX3atAn7BRF3ygakuk0tjXA5jSLSGCJ8AG5UrzFB9RqwLc"
+            }
+          }
+        }
       }
     },
     {
@@ -1142,15 +1199,11 @@
           {
             "type": "text",
             "locked": true,
-            "nav": "Deep dive",
+            "encStub": true,
+            "iv": "T2cAh1N9HdEAr3SP",
+            "ct": "whNmcWSp4gT3Tz9wkOm7n1U8OjCKr6hzd77g7lsfWac2a6bN2nnfj2XnVVq4N7UtYnUYOw3MCwxVVlM+caUGMETSLawzZTjdL6wqRoKMNSnUQBjcHNv09I/MROiIcHs4nGiEVn8BRd+QYhxgjmrF0IckYEtaSqTmi2YXBamj6HPtFXCqdHfp/Y6WXzo/QNszMS06E0JhJMbaBo6u6IsGIA7y/BCVquALCcQ6llGBuEvpAnk7e9mbtXSkMO+mpNmLxgpyb0ByFnZcugb3+YAwIewQtOR4894aNpvPeYN8lPJG9KKSBa+TvTm96P82N4kFc2E+MNvnzsOU454PoPnfoF4W21fgOT7r8pPl3fpaLBm+63Cv2ZDjQwbc1ZkX8yCZ/61tK0YZn3Wsf8oKefjtngDxjaD25B2Q5d11ml7zOEtnnEn/WovVZ8nAfZpgtM8mjp800pCV2YcGlFOZ5qXFgEd+28qlhVwogqUPc5eRZq4wHPRWRsGoPPJrbaeM6yTiiO+K/MhJ++yVo6BlzLMRgV4fuPnc3vVdVf2Md/udmgEdpl8dk1o+5bm57163J8GqcgapP5JknQ9x6rO1LlNlnU14OTVv+T5RK1/gXMI=",
             "kicker": "Deeper cut",
-            "heading": "The experiments behind the numbers.",
-            "body": "The full case study covers the specific retention experiments, the framing we brought to each, and the tradeoffs between revenue and genuine customer value. Shared on request.",
-            "list": [
-              "Hypotheses and guardrail metrics",
-              "What each cancellation-flow variant taught us",
-              "How we balanced revenue with real customer value"
-            ]
+            "nav": "Deep dive"
           },
           {
             "type": "statement",
@@ -1159,7 +1212,18 @@
             "body": "Retention is not a dark pattern. It is making the value you already deliver impossible to overlook.",
             "sub": "If I had more time: feed the cancellation insights back into acquisition and onboarding."
           }
-        ]
+        ],
+        "enc": {
+          "v": 1,
+          "it": 210000,
+          "wraps": {
+            "owner": {
+              "salt": "yMjEZQvDoPpp4yLfqmzNKQ==",
+              "iv": "EL5CkWuM0RoZf5me",
+              "ct": "iB0Td+6+Gc/Ov4DX4N1QfiOMA0M8QBeLMTpM1KRiMuG67gDTHJasjJ51jbiKK5KN"
+            }
+          }
+        }
       }
     },
     {
