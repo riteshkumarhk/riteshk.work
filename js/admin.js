@@ -2788,6 +2788,7 @@
           '<span class="adm__status">Editing local draft</span>' +
           '<button class="btn btn--ghost adm__viewtoggle" data-view>Preview</button>' +
           '<button class="btn btn--ghost" data-revert>Revert</button>' +
+          '<button class="btn btn--ghost adm__keycfg" data-keycfg title="Change admin key" aria-label="Change admin key"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3z"/></svg></button>' +
           '<button class="btn btn--ghost adm__pubcfg" data-pubcfg title="Publishing settings" aria-label="Publishing settings">\u2699</button>' +
           '<button class="btn btn--primary" data-publish>Publish</button>' +
           '<button class="btn adm__exit" data-exit aria-label="Exit admin">Exit ✕</button>' +
@@ -2850,6 +2851,7 @@
     );
     root.querySelector("[data-publish]").addEventListener("click", publish);
     root.querySelector("[data-pubcfg]").addEventListener("click", () => publishModal());
+    root.querySelector("[data-keycfg]").addEventListener("click", () => changeKeyModal());
     const pubCloseBtn = root.querySelector("[data-pub-close]");
     if (pubCloseBtn) pubCloseBtn.addEventListener("click", pubHide);
     root.querySelector("[data-revert]").addEventListener("click", revert);
@@ -2950,6 +2952,40 @@
         if ((await sha256(val)) === stored) { done(); open(); }
         else { err.textContent = "Incorrect key"; }
       }
+    }
+    modal.querySelector("[data-go]").addEventListener("click", submit);
+    modal.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });
+  }
+
+  /* ---------- change the admin key (requires the current key) ---------- */
+  function changeKeyModal() {
+    const stored = localStorage.getItem(HASH_KEY);
+    const modal = document.createElement("div");
+    modal.className = "pass";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">Change admin key</div>' +
+      '<div class="pass__sub">Confirm your current key, then set a new one. This changes the key for this browser only.</div>' +
+      '<input type="password" placeholder="Current key" data-cur autocomplete="current-password" />' +
+      '<input type="password" placeholder="New key" data-new autocomplete="new-password" />' +
+      '<input type="password" placeholder="Confirm new key" data-confirm autocomplete="new-password" />' +
+      '<div class="pass__err"></div>' +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
+      '<button class="btn btn--primary" data-go>Update key</button></div></div>';
+    document.body.appendChild(modal);
+    const cur = modal.querySelector("[data-cur]"), nw = modal.querySelector("[data-new]"), cf = modal.querySelector("[data-confirm]"), err = modal.querySelector(".pass__err");
+    setTimeout(function () { try { cur.focus(); } catch (e) {} }, 30);
+    const done = () => modal.remove();
+    modal.querySelector("[data-cancel]").addEventListener("click", done);
+    modal.addEventListener("click", (e) => { if (e.target === modal) done(); });
+    async function submit() {
+      if (stored && (await sha256(cur.value)) !== stored) { err.textContent = "Current key is incorrect"; return; }
+      const val = nw.value;
+      if (val.length < 4) { err.textContent = "New key must be at least 4 characters"; return; }
+      if (cf.value !== val) { err.textContent = "New keys don\u2019t match"; return; }
+      if (stored && (await sha256(val)) === stored) { err.textContent = "That\u2019s already your current key"; return; }
+      localStorage.setItem(HASH_KEY, await sha256(val));
+      done();
+      status("Admin key updated \u2014 you\u2019ll use the new key next time you open admin.", true);
     }
     modal.querySelector("[data-go]").addEventListener("click", submit);
     modal.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });
