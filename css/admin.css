@@ -550,6 +550,9 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .secprev--steps .sp__step { display: flex; align-items: center; gap: .4rem; }
 .secprev--steps .sp__step b { font-family: var(--mono); font-size: .56rem; color: var(--accent); }
 .secprev--steps .sp__step i { font-style: normal; font-size: .62rem; color: var(--text-dim); }
+.secprev--workflow { flex-direction: row; align-items: center; flex-wrap: wrap; gap: .28rem; }
+.secprev--workflow .sp__wf { padding: .28rem .45rem; border: 1px solid var(--line); border-radius: 6px; font-size: .58rem; font-weight: 500; color: var(--text); }
+.secprev--workflow .sp__wfa { color: var(--text-dim); font-size: .62rem; }
 .secprev--media { justify-content: center; align-items: stretch; gap: .3rem; }
 .secprev--media .sp__frame { flex: 1; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 5px; background: linear-gradient(135deg, rgba(216,166,87,.12), transparent); color: var(--accent); font-size: .8rem; }
 .secprev--media .sp__cap { font-size: .52rem; color: var(--text-faint); text-align: center; }
