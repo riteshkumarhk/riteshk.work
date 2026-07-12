@@ -75,6 +75,7 @@
     { type: "figure", name: "Figure", tag: "Image + text", desc: "A visual beside a short write-up \u2014 image left or right.", best: "A decision explained next to its screen" },
     { type: "columns", name: "Columns", tag: "Text table", desc: "Multiple columns of titled text \u2014 add a heading or image to any column.", best: "Overview + What I did \u00b7 feature columns" },
     { type: "compare", name: "Before / after slider", tag: "Compare", desc: "Two images overlaid with a divider you drag to reveal before vs after.", best: "Redesigns \u00b7 visual transformations" },
+    { type: "stickies", name: "Sticky notes", tag: "Research", desc: "Staggered note cards \u2014 each with a label, heading, body and image, with a gentle hover lift.", best: "Research methods \u00b7 findings \u00b7 inspiration" },
   ];
 
   let data = null;
@@ -395,6 +396,7 @@
       case "figure": return { type: "figure", nav: "", kicker: "", heading: "", body: "", src: "", caption: "", flip: false };
       case "columns": return { type: "columns", nav: "", kicker: "", heading: "", items: [] };
       case "compare": return { type: "compare", nav: "", kicker: "", heading: "", beforeSrc: "", afterSrc: "", beforeLabel: "Before", afterLabel: "After", body: "" };
+      case "stickies": return { type: "stickies", nav: "", kicker: "", heading: "", items: [] };
       default: return { type: "text", nav: "Section", kicker: "", heading: "", body: "", list: [], src: "", caption: "" };
     }
   }
@@ -605,7 +607,8 @@
     media: { title: "Media", one: "Item", add: "Add media", fields: [["src", "Image / video / Figma / PDF / deck URL", "media"], ["caption", "Caption", "input"]] },
     gallery: { title: "Slides", one: "Slide", add: "Add slide", fields: [["src", "Image / video / embed URL", "media"], ["caption", "Caption", "input"]] },
     cards: { title: "Cards", one: "Card", add: "Add card", fields: [["title", "Title", "input"], ["body", "Body", "rich"], ["icon", "Icon", "icon"], ["src", "Image (optional \u2014 replaces the icon)", "media"]] },
-    columns: { title: "Columns", one: "Column", add: "Add column", fields: [["label", "Label", "input"], ["heading", "Heading (optional)", "input"], ["body", "Body", "rich"], ["src", "Image (optional)", "media"]] }
+    columns: { title: "Columns", one: "Column", add: "Add column", fields: [["label", "Label", "input"], ["heading", "Heading (optional)", "input"], ["body", "Body", "rich"], ["src", "Image (optional)", "media"]] },
+    stickies: { title: "Notes", one: "Note", add: "Add note", fields: [["label", "Label (e.g. 01)", "input"], ["heading", "Heading", "input"], ["body", "Body", "rich"], ["src", "Image (optional)", "media"]] }
   };
   var ICON_NAMES = ["users", "idea", "coins", "chart", "target", "lock", "spark", "clock", "shield", "check", "bolt", "layers"];
   function admIcon(n) { return (window.RK && window.RK.iconSvg) ? window.RK.iconSvg(n) : ""; }
@@ -618,6 +621,7 @@
       case "media": case "gallery": return { src: "", caption: "" };
       case "cards": return { title: "", body: "", icon: "", src: "" };
       case "columns": return { label: "", heading: "", body: "", src: "" };
+      case "stickies": return { label: "", heading: "", body: "", src: "" };
       default: return {};
     }
   }
@@ -763,7 +767,7 @@
   }
 
   function blockEditor(i, b, j, len, open) {
-    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", figure: "Figure", columns: "Columns", compare: "Before / after slider" })[b.type] || b.type;
+    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", figure: "Figure", columns: "Columns", compare: "Before / after slider", stickies: "Sticky notes" })[b.type] || b.type;
     var raw = b.nav || b.kicker || b.heading || b.body || (b.items && b.items[0] && (b.items[0].q || b.items[0].title || b.items[0].value || b.items[0].caption || b.items[0].heading || b.items[0].label)) || "Untitled";
     var label = String(raw).replace(/[\*\[\]]/g, "").replace(/\s+/g, " ").trim();
     if (label.length > 48) label = label.slice(0, 48) + "\u2026";
@@ -795,8 +799,9 @@
     else if (b.type === "gallery") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b) + '<div class="af__hint">Same URLs as Media \u2014 shown as a swipeable carousel with 1/N counters.</div>';
     else if (b.type === "figure") body = sfInput(i, j, "heading", "Heading") + richBlock(i, j, "body", "Body") + mediaInputBlock(i, j, "src", "Image / video / embed URL") + sfInput(i, j, "caption", "Caption") + '<label class="chk" style="margin-top:.2rem"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="flip"' + (b.flip ? " checked" : "") + " /> Image on the left</label>";
     else if (b.type === "columns") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
+    else if (b.type === "stickies") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b) + '<div class="af__hint">Cards stagger up and down automatically and lift on hover. Give each a short label (e.g. 01), a heading, a line or two, and an optional image.</div>';
     else if (b.type === "compare") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + mediaInputBlock(i, j, "beforeSrc", "Before image") + mediaInputBlock(i, j, "afterSrc", "After image") + "</div>" + '<div class="af__row">' + sfInput(i, j, "beforeLabel", "Before label") + sfInput(i, j, "afterLabel", "After label") + "</div>" + richBlock(i, j, "body", "Description below \u2014 what changed", "Both images should be the same size. Visitors drag the divider to compare.");
-    var hasHeading = /^(text|metrics|steps|media|split|cards|gallery|figure|columns|compare)$/.test(b.type);
+    var hasHeading = /^(text|metrics|steps|media|split|cards|gallery|figure|columns|compare|stickies)$/.test(b.type);
     var sizeCtl = (hasHeading || b.type === "statement") ? sfSelect(i, j, "hsize", (b.type === "statement" ? "Statement size" : "Heading size"), [["", "Standard"], ["sm", "Compact \u2014 easier to read"], ["lg", "Large \u2014 display"]], "Shrink it if the standard size feels too big for the copy.") : "";
     var locked = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="locked"' + (b.locked ? " checked" : "") + " /> Locked \u2014 only after the deeper-cut pass</label>";
     return '<div class="card study__block' + (open ? " is-open" : "") + '">' + head +
@@ -830,6 +835,8 @@
         return '<span class="secprev secprev--columns"><span class="sp__coln"><b>OVERVIEW</b><i></i><i></i><i></i></span><span class="sp__coln"><b>WHAT I DID</b><i></i><i></i></span></span>';
       case "compare":
         return '<span class="secprev secprev--compare"><span class="sp__cmp"><span class="sp__cmp-l"></span><span class="sp__cmp-grip">\u2039\u203a</span></span></span>';
+      case "stickies":
+        return '<span class="secprev secprev--stickies"><span class="sp__note"><b>01</b><i>Heading</i><u></u></span><span class="sp__note sp__note--low"><b>02</b><i>Heading</i><u></u></span><span class="sp__note"><b>03</b><i>Heading</i><u></u></span></span>';
       default:
         return '<span class="secprev secprev--text"><span class="sp__kick">Context</span><span class="sp__h">The problem</span><span class="sp__body">A short paragraph that sets up the situation and the stakes.</span><span class="sp__bul">Point one</span><span class="sp__bul">Point two</span></span>';
     }

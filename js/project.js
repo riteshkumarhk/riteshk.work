@@ -335,11 +335,23 @@
       '<div class="pjb__lock-hint">Enter the pass you were given.</div></div>';
   }
 
+  function stickiesBlock(b) {
+    var items = (b.items || []).map(function (n) {
+      var media = mediaSrc(n) ? '<div class="pjb__sticky-media">' + mediaEl(n, "pjb__media-el") + "</div>" : "";
+      return '<article class="pjb__sticky">' +
+        (n.label ? '<div class="pjb__sticky-lbl">' + esc(n.label) + "</div>" : "") +
+        (n.heading ? '<h3 class="pjb__sticky-h">' + md(n.heading) + "</h3>" : "") +
+        (n.body ? '<div class="pjb__sticky-b">' + richInline(n.body) + "</div>" : "") +
+        media + "</article>";
+    }).join("");
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__stickies">' + items + "</div>";
+  }
+
   var RENDERERS = {
     text: textBlock, statement: stmtBlock, metrics: metricsBlock,
     steps: stepsBlock, media: mediaBlock, split: splitBlock, faq: faqBlock,
     cards: cardsBlock, gallery: galleryBlock, figure: figureBlock,
-    columns: columnsBlock, compare: compareBlock,
+    columns: columnsBlock, compare: compareBlock, stickies: stickiesBlock,
   };
   function renderBlock(b, i) {
     var navLabel = b.nav || "";
