@@ -1024,13 +1024,14 @@
         '<div class="study__enc-note">Its content isn\u2019t in your published file. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
       '</div>';
     }
-    var raw = b.nav || b.kicker || b.heading || b.body || (b.items && b.items[0] && (b.items[0].q || b.items[0].title || b.items[0].value || b.items[0].caption || b.items[0].heading || b.items[0].label)) || "Untitled";
+    var custom = (typeof b.editorName === "string" && b.editorName.trim()) ? b.editorName.trim() : "";
+    var raw = custom || b.nav || b.kicker || b.heading || b.body || (b.items && b.items[0] && (b.items[0].q || b.items[0].title || b.items[0].value || b.items[0].caption || b.items[0].heading || b.items[0].label)) || "Untitled";
     var label = String(raw).replace(/[\*\[\]]/g, "").replace(/\s+/g, " ").trim();
     if (label.length > 48) label = label.slice(0, 48) + "\u2026";
     var head = '<div class="study__block-head" data-act="study-blocktoggle" data-index="' + i + '" data-bindex="' + j + '">' +
       '<span class="sortgrip study__block-grip" data-grip data-sortkey="block:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
       '<span class="study__block-badge">' + escHtml(typeName) + "</span>" +
-      '<span class="study__block-label">' + escHtml(label) + "</span>" +
+      '<span class="study__block-label' + (custom ? " is-custom" : "") + '" title="Double-click to rename">' + escHtml(label) + "</span>" +
       '<span class="study__block-ops">' +
       '<button class="iconbtn" data-act="study-blockup" data-index="' + i + '" data-bindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
       '<button class="iconbtn" data-act="study-blockdown" data-index="' + i + '" data-bindex="' + j + '"' + (j === len - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
@@ -1570,6 +1571,50 @@
     }
   }
 
+  var blockRenameTimer = 0;
+  function onDblClick(e) {
+    var lab = e.target.closest(".study__block-label");
+    if (!lab) return;
+    var head = lab.closest(".study__block-head");
+    if (!head || head.dataset.act !== "study-blocktoggle") return;
+    e.preventDefault();
+    clearTimeout(blockRenameTimer);
+    startBlockRename(lab, +head.dataset.index, +head.dataset.bindex);
+  }
+  function startBlockRename(lab, i, j) {
+    var b = data.work[i] && data.work[i].study && data.work[i].study.blocks[j];
+    if (!b || lab.querySelector("input")) return;
+    var input = document.createElement("input");
+    input.type = "text";
+    input.className = "study__block-rename";
+    input.maxLength = 60;
+    input.value = b.editorName ? String(b.editorName) : lab.textContent;
+    input.placeholder = "Section name";
+    input.setAttribute("aria-label", "Section name (overrides the auto-name)");
+    lab.textContent = "";
+    lab.classList.add("is-editing");
+    lab.appendChild(input);
+    input.focus(); input.select();
+    var done = false;
+    function commit(save) {
+      if (done) return; done = true;
+      if (save) {
+        var v = input.value.replace(/\s+/g, " ").trim();
+        if (v) b.editorName = v; else delete b.editorName;
+        saveDraft(true);
+      }
+      renderL2();
+    }
+    input.addEventListener("keydown", function (ev) {
+      ev.stopPropagation();
+      if (ev.key === "Enter") { ev.preventDefault(); commit(true); }
+      else if (ev.key === "Escape") { ev.preventDefault(); commit(false); }
+    });
+    input.addEventListener("blur", function () { commit(true); });
+    ["click", "dblclick", "pointerdown", "mousedown"].forEach(function (evt) {
+      input.addEventListener(evt, function (ev) { ev.stopPropagation(); });
+    });
+  }
   function onClick(e) {
     const rtb = e.target.closest("[data-rt]");
     if (rtb) { rtAction(rtb); return; }
@@ -1614,10 +1659,14 @@
     if (act === "study-decrypt") { decryptStudyForEdit(i); return; }
     if (act === "work-decrypt") { decryptWorkForEdit(i); return; }
     if (act === "study-blocktoggle") {
+      if (e.detail > 1) return; // 2nd click of a double-click - let dblclick handle rename
       const j = +b.dataset.bindex;
-      openBlock = (openBlock === j) ? -1 : j;
       const wrap = b.closest(".study__blocks");
-      if (wrap) wrap.querySelectorAll(".study__block").forEach(function (x, k) { x.classList.toggle("is-open", k === openBlock); });
+      clearTimeout(blockRenameTimer);
+      blockRenameTimer = setTimeout(function () {
+        openBlock = (openBlock === j) ? -1 : j;
+        if (wrap) wrap.querySelectorAll(".study__block").forEach(function (x, k) { x.classList.toggle("is-open", k === openBlock); });
+      }, 220);
       return;
     }
     if (act === "study-addblock") {
@@ -3393,6 +3442,7 @@
     root.addEventListener("input", onInput);
     root.addEventListener("change", onChange);
     root.addEventListener("click", onClick);
+    root.addEventListener("dblclick", onDblClick);
     // Drag-to-reorder any list with a grip handle (arrows still work).
     root.addEventListener("pointerdown", sortStart);
     // Keep the caret inside the rich-text area when a toolbar button is pressed.
