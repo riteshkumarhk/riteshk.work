@@ -322,9 +322,39 @@
         ? mediaEl(m, "pjb__media-el")
         : '<div class="pjb__shot-ph pjb__shot-ph--' + SHOT_THEMES[i % SHOT_THEMES.length] + '"><span class="pjb__shot-tag">Visual redacted</span></div>';
       var cap = '<figcaption class="pjb__slide-cap"><span class="pjb__slide-n">' + String(i + 1).padStart(2, "0") + " / " + String(n).padStart(2, "0") + "</span>" + (m.caption ? esc(m.caption) : "") + "</figcaption>";
-      return '<figure class="pjb__slide">' + body + cap + "</figure>";
+      return '<figure class="pjb__slide"><div class="pjb__slide-media">' + body + "</div>" + cap + "</figure>";
     }).join("");
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__gallery" tabindex="0"><div class="pjb__gallery-track">' + slides + "</div></div>";
+  }
+  // Equalise gallery slide heights: scale taller images DOWN (contain — no crop, no
+  // quality loss) so every slide matches the shortest image's height at the current width.
+  var galleryTimer = 0;
+  function normalizeGalleries(root) {
+    var scope = root || (overlay && overlay.querySelector("[data-content]"));
+    if (!scope) return;
+    [].forEach.call(scope.querySelectorAll(".pjb__gallery"), function (g) {
+      var boxes = [].slice.call(g.querySelectorAll(".pjb__slide-media"));
+      if (boxes.length < 2) return;
+      var imgs = boxes.map(function (bx) { return bx.querySelector("img.pjb__media-el"); });
+      if (imgs.some(function (im) { return !im; })) return; // only equalise pure-image galleries
+      function apply() {
+        var minH = Infinity;
+        for (var i = 0; i < boxes.length; i++) {
+          var im = imgs[i];
+          if (!im.naturalWidth || !im.naturalHeight) return; // wait until all images have loaded
+          var h = boxes[i].clientWidth * (im.naturalHeight / im.naturalWidth);
+          if (h < minH) minH = h;
+        }
+        if (!isFinite(minH) || minH <= 0) return;
+        boxes.forEach(function (bx) { bx.style.height = Math.round(minH) + "px"; bx.classList.add("is-normalized"); });
+      }
+      imgs.forEach(function (im) {
+        if (im.complete && im.naturalWidth) return;
+        im.addEventListener("load", apply, { once: true });
+        im.addEventListener("error", apply, { once: true });
+      });
+      apply();
+    });
   }
   function figureBlock(b) {
     var media = mediaSrc(b)
@@ -813,7 +843,7 @@
       contentEl.innerHTML = html;
     }
     contentEl.setAttribute("data-wid", String(w.id));
-    requestAnimationFrame(function () { updateSpy(); coverParallax(); });
+    requestAnimationFrame(function () { updateSpy(); coverParallax(); normalizeGalleries(contentEl); });
   }
 
   // Minimal DOM morph: update text/attributes in place and add/remove nodes, but
@@ -1040,7 +1070,7 @@
   /* ---------- bootstrap ---------- */
   function init() {
     if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = function () { return Object.keys(ICONS); }; window.RK.setStudyUnlocked = setUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; }
-    window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) updateSpy(); });
+    window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) { updateSpy(); clearTimeout(galleryTimer); galleryTimer = setTimeout(function () { normalizeGalleries(); }, 160); } });
     if (PREVIEW) return; // the admin editor drives the overlay; skip link/history/deep-link wiring
     document.addEventListener("click", onDocLinkClick);
     window.addEventListener("popstate", route);
