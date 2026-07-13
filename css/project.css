@@ -201,7 +201,7 @@ img[data-zoom] { cursor: zoom-in; }
 .pjb__img, .pjb__media-el { width: 100%; height: auto; display: block; }
 video.pjb__media-el { background: #000; }
 .pjb__shot-media { display: block; }
-.pjb__shot--fit .pjb__shot-media { display: grid; place-items: center; }
+.pjb__shot--fit .pjb__shot-media { display: grid; place-items: center; padding: clamp(14px, 4.5%, 46px); background: var(--bg-2); }
 .pjb__shot--fit .pjb__media-el { width: 100%; height: 100%; object-fit: contain; }
 .pjb__shot--custom .pjb__shot-media { display: grid; place-items: center; }
 .pjb__shot-scale { display: block; }

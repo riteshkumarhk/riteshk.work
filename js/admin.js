@@ -794,7 +794,7 @@
     var ratio = it.fitRatio || "16:9";
     var shrink = Math.max(0, Math.min(90, Math.round(+it.shrink || 0)));
     var bg = it.bg || "";
-    var sizeOpts = [["fill", "Fill \u2014 box fits the image"], ["fit", "Fit \u2014 image fits a fixed box"], ["custom", "Custom \u2014 shrink the image"]]
+    var sizeOpts = [["fill", "Fill \u2014 box fits the image"], ["fit", "Fit \u2014 image in a framed mat"], ["custom", "Custom \u2014 shrink the image"]]
       .map(function (o) { return '<option value="' + o[0] + '"' + (size === o[0] ? " selected" : "") + ">" + escHtml(o[1]) + "</option>"; }).join("");
     var ratioOpts = [["16:9", "16:9 \u2014 wide"], ["4:3", "4:3"], ["1:1", "1:1 \u2014 square"], ["3:2", "3:2"]]
       .map(function (o) { return '<option value="' + o[0] + '"' + (ratio === o[0] ? " selected" : "") + ">" + escHtml(o[1]) + "</option>"; }).join("");
@@ -810,7 +810,7 @@
         '<button type="button" class="imgsz__eye" data-act="media-eyedrop" ' + da + ' title="Pick a colour from the screen / an image">\uD83D\uDD0D</button>' +
         (bg ? '<button type="button" class="imgsz__clear" data-act="media-bgclear" ' + da + '>Clear</button>' : '<span class="imgsz__note">transparent</span>') +
       '</div>' +
-      '<div class="af__hint">Fill grows the box to the image. Fit places the image inside a fixed box \u2014 the leftover space shows the background. Custom shrinks the image and shows the background around it.</div></div>';
+      '<div class="af__hint">Fill grows the box to the image (edge to edge). Fit centres the image in a framed mat of the chosen ratio \u2014 the surrounding space always shows the background. Custom shrinks the image and shows the background around it.</div></div>';
   }
   var GRIP_SVG = '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="3" r="1.4"/><circle cx="10.5" cy="3" r="1.4"/><circle cx="5.5" cy="8" r="1.4"/><circle cx="10.5" cy="8" r="1.4"/><circle cx="5.5" cy="13" r="1.4"/><circle cx="10.5" cy="13" r="1.4"/></svg>';
   function itemLabel(it) {
