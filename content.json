@@ -195,10 +195,12 @@
             "nav": "Explorations",
             "kicker": "Explorations",
             "heading": "How do we communicate value beyond text?",
-            "body": "",
+            "body": "I tested whether product icons, account identity, and ecosystem cues could make the Microsoft account value proposition visible before users read the details.",
             "list": [],
             "src": "",
-            "caption": ""
+            "caption": "",
+            "editorName": "How do we communicate value beyond text?",
+            "hsize": "sm"
           },
           {
             "type": "media",
@@ -211,21 +213,24 @@
                 "caption": "",
                 "size": "custom",
                 "fitRatio": "3:2",
-                "shrink": 35,
+                "shrink": 40,
                 "bg": "#ffffff"
               }
             ],
-            "sep": false
+            "sep": false,
+            "editorName": "Image"
           },
           {
             "type": "text",
             "nav": "",
             "kicker": "",
             "heading": "How much content do we show?",
-            "body": "",
+            "body": "I explored the line between transparency and cognitive load, especially because this was a compliance-heavy surface where too much copy could reduce comprehension.",
             "list": [],
             "src": "",
-            "caption": ""
+            "caption": "",
+            "hsize": "sm",
+            "sep": true
           },
           {
             "type": "media",
@@ -238,21 +243,23 @@
                 "caption": "",
                 "size": "custom",
                 "fitRatio": "3:2",
-                "shrink": 35,
+                "shrink": 40,
                 "bg": "#ffffff"
               }
             ],
-            "sep": false
+            "sep": false,
+            "editorName": "Image"
           },
           {
             "type": "text",
             "nav": "",
             "kicker": "",
             "heading": "How do we present the content?",
-            "body": "",
+            "body": "<p>I explored whether Unified Consent should be framed as a product experience or a Microsoft account experience. This helped us evaluate how users interpret consent: as permission for a single app or as a relationship with their Microsoft account across products.</p>",
             "list": [],
             "src": "",
-            "caption": ""
+            "caption": "",
+            "hsize": "sm"
           },
           {
             "type": "media",
@@ -269,6 +276,333 @@
                 "bg": "#ffffff"
               }
             ],
+            "sep": false,
+            "editorName": "Image"
+          },
+          {
+            "type": "text",
+            "nav": "User research",
+            "kicker": "User research",
+            "heading": "Defining a unified Microsoft account messaging strategy",
+            "body": "<p>I led the design and synthesis of an evaluative research study that established how Microsoft account consent messaging should appear across Windows. The work aligned teams around a consistent interaction model, clarified the most effective delivery surfaces, and translated participant feedback into actionable cross-product design principles.</p>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Testing how much information to show upfront",
+            "body": "<p>We compared a fully expanded notice with progressive disclosure to understand how users scanned, explored, and understood the message.</p><p><br></p><figure class=\"rt__fig\"><img src=\"/assets/uploads/58d08bb5aa586c46ed749d7e4226b0c8e1fba9b5c697c19dece61455d262c59a.png\" alt=\"\"></figure><p>The chevron/accordion design serves two kinds of users (like to read or like to skim) and optimized for comprehension.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "sm",
+            "sep": true
+          },
+          {
+            "type": "voices",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "mode": "verbatim",
+            "vsize": "",
+            "items": [
+              {
+                "side": "left",
+                "heading": "",
+                "body": "“It makes me want to actually read it because it is less daunting”",
+                "cite": "Less overwhelming"
+              },
+              {
+                "side": "right",
+                "heading": "",
+                "body": "“I think Option B is the right amount of text that you can read and even stop on something that gets your attention”",
+                "cite": "At your own pace"
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "When we ask users: “do you think this message is about Word, Office, or Microsoft account? <div><ul><li>Option B: 100% </li><li>Option A: 83%</li></ul><div>When asked which was the least valuable item</div></div><div><ul><li>“Recommendations just for you” ranked as the least valuable item</li></ul></div><div><br></div>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Testing how visual treatment affects perceived ownership",
+            "body": "<p>We compared an account-styled dialog with a product-native presentation to understand which treatment communicated the scope and source of the message more clearly.</p><p><br></p><figure class=\"rt__fig\"><img src=\"/assets/uploads/a7369a2e817ec88875102e4cdd10dc3f7c0a9ee4bf1688ab682a28a46d06a009.png\" alt=\"\"></figure><p>The Microsoft account–styled dialog communicated account ownership more clearly.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "sm"
+          },
+          {
+            "type": "voices",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "mode": "verbatim",
+            "vsize": "",
+            "items": [
+              {
+                "side": "left",
+                "heading": "",
+                "body": "<p>“It really is what resembles for example, the Outlook log in which I know is also a box.”</p>",
+                "cite": "The scope of notice is clear"
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "Visual consistency with Microsoft account experiences helped users understand who was communicating and how broadly the message applied.<br><div><ul><li>Users recognised the dialog from previous account and sign-in experiences.</li><li>5 of 10 users expanded individual sections while reading through the message.</li></ul><div><br></div><div><br></div></div>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "Landing the design",
+            "kicker": "Landing the design",
+            "heading": "From Notice to Identity",
+            "body": "<p>As Microsoft Account evolved toward a more unified identity, we shifted Unified Consent from a text-forward notice to a branded Microsoft Account experience. Introducing illustration and MSA visual language helped create continuity across sign-in, onboarding, and account management surfaces, reinforcing that this was an account-level experience rather than a standalone consent dialog.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true,
+            "hsize": "lg"
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "beforeSrc": "/assets/uploads/5df32394fa6e5d5e8342f3be09d3c1eb87ad06c8e020af6652ef25749fab40ca.png",
+            "afterSrc": "/assets/uploads/9700ec72cf817acc1863f3baa074bee9c4c5d1a5417ff83952f2699ed70f6ff9.png",
+            "beforeLabel": "Before",
+            "afterLabel": "After",
+            "body": "Microsoft Account was undergoing a broader effort to create a more cohesive identity across sign-in, onboarding, account management, and privacy experiences.",
+            "editorName": "MSA evolving",
+            "sep": false
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "beforeSrc": "/assets/uploads/7487d987996026cd87e32ea39bbd896008fefe43bec3c13e53341daa58d60dcf.png",
+            "afterSrc": "/assets/uploads/08d4bcd129304699369ea53d59427dda1baeda92e7cc111af6dbd68c3b9b5b87.png",
+            "beforeLabel": "Before",
+            "afterLabel": "After",
+            "body": "To explore this, our partners introduced Microsoft Account visual language and illustrative assets that reinforced the idea of a connected account ecosystem. The goal was not simply to improve comprehension, but to create continuity across Microsoft Account touchpoints and help users recognize Unified Consent as part of the broader Microsoft Account journey.",
+            "editorName": "UC comparision",
+            "sep": false
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "Signed in users",
+            "items": [
+              {
+                "src": "/assets/uploads/8e612ed851f765bda770a627cbd28c03a147b852865933805092e92b722ac000.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/0282226c0dc42c565d6c22d10ab0482debbabd44981d60cc892ab4080dea0b00.png",
+                "caption": ""
+              }
+            ],
+            "hsize": "sm"
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "Signed out users",
+            "items": [
+              {
+                "src": "/assets/uploads/e48385c711079ef1a198eeeaad6630fbdb7a8a7b9d9bb9af58a8e8764ed176e9.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/fe2d2b8c7e9f1cf0b9fbfb18b7fe996510be3c898d8f39bfd3266d7a386f4220.png",
+                "caption": ""
+              }
+            ],
+            "hsize": "sm",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "Shipped Design",
+            "kicker": "Shipped Design",
+            "heading": "One framework. Many Microsoft experiences.",
+            "body": "Consent comes to life",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/9e89a84b15ed6256152697fda4a1a57dd7c986033a26f5c79d77c3f7811b437f.mp4",
+                "caption": "",
+                "controls": true
+              },
+              {
+                "src": "/assets/uploads/f4e7eb0d73989c62eb6df7cc4d3d2d6f3978dcf9e7922d7382e9d61423588521.mp4",
+                "caption": "",
+                "controls": true,
+                "size": "custom",
+                "shrink": 70,
+                "bg": "#000000"
+              }
+            ],
+            "sep": false,
+            "editorName": "Shipped design"
+          },
+          {
+            "type": "mediagrid",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "gridLayout": "uniform",
+            "items": [
+              {
+                "src": "/assets/uploads/dcc7be55e70a381d9b5afafe7ffb07c5aa0ee7d8ec998936b00e9547136746ee.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/8fc12a70193c8ae805cdb8b9edfe42a5ba124269fa34fef7bd909a9d9b0cbf20.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/cd0b193f8ce790bd4ab5cdeff5467d5e9edb2dcf2fd3faad87c32f4d77653f0e.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/2b49de95194d4296cd2faacf0b47ec27e9cd0bbe2511f1a129983c07c4bd3ae8.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/6fc83cbf4994c36a7585a4506525149f72ea3451cd5d5ee3f456f5ef660a0e75.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/fb5dfb82166ed8c884404c19d608c595c2c651e19665ec45bc6336ab8fa36d55.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/52170d59ce42914c5ccc57334eb9d6ff4c23fbc94f5f3976a14076c930690947.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/449fd8f4bd59d57e513e0e971aca5b24499ff7c5cd35e1e4b56320c7ffc76d39.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/36e8ae973e747f087f6b7101ffc16ecf8eb5f76c93db49691aaa226bcf046e5a.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/9a8307296f701d7a3d2c460548d9b57474e666ee5faabe5b33e6dddfdc705130.png",
+                "caption": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "Consent framework",
+            "kicker": "Consent framework",
+            "heading": "Designing the Consent Framework",
+            "body": "<p>What started as a solution to fragmented privacy notices evolved into a reusable consent framework. The platform enabled new regulatory and compliance scenarios to onboard without rebuilding consent experiences from scratch. The framework was easily bakeable to:</p><p></p><ul><li>Win32 apps</li><li>Web apps</li><li>Mobile</li><li>MacOS</li><li>Windows OOBE</li></ul><p></p>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/d2850be8be87e3c2f020f7734eefa6721d12ac4d523e346220ce3ceadf8adae3.png",
+                "caption": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "<p>Unified Consent was to simplify how users granted permissions across Microsoft experiences. But as the framework matured, its value extended far beyond a single consent experience. It became an enabled future consent scenarios, including evolving regulatory requirements and region-specific experiences such as DMA, without requiring products to recreate consent experiences independently.</p><p></p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false
+          },
+          {
+            "type": "cards",
+            "nav": "Impact",
+            "kicker": "Impact",
+            "heading": "",
+            "items": [
+              {
+                "title": "Product Impact",
+                "body": "Created the experience framework for Microsoft’s Unified Consent strategy, replacing fragmented product-level consent experiences with a scalable account-level model across Microsoft surfaces.",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Strategic Impact",
+                "body": "Helped establish a reusable consent foundation that enabled Microsoft teams to deliver personalized cross-product experiences while adapting to evolving privacy and regulatory requirements.",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Platform Impact",
+                "body": "Contributed to the evolution of Unified Consent from a single consent notice into a platform powering Unified Consent, DMA compliance, Xbox privacy scenarios, and future Microsoft privacy experiences at billion-account scale.",
+                "icon": "",
+                "src": ""
+              }
+            ],
+            "sep": true
+          },
+          {
+            "type": "metrics",
+            "nav": "",
+            "kicker": "",
+            "heading": "As of the Nov'24 MSA MAU Consented",
+            "items": [
+              {
+                "value": "~1.009",
+                "label": "Billion"
+              }
+            ],
+            "hsize": "sm",
             "sep": false
           }
         ]
