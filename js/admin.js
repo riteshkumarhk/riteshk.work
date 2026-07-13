@@ -514,6 +514,7 @@
       t("undo", RT_UNDO, "Undo (Ctrl+Z)") + t("redo", RT_REDO, "Redo (Ctrl+Y)") +
       '<span class="rt__sep"></span>' +
       t("bold", "<b>B</b>", "Bold") + t("italic", "<i>I</i>", "Italic") + t("strikeThrough", "<s>S</s>", "Strikethrough") +
+      t("dim", "\u25D0", "Tone \u2014 mute the selected text to grey (tap again to brighten)") +
       '<span class="rt__sep"></span>' +
       t("insertUnorderedList", "\u2022", "Bulleted list") + t("insertOrderedList", "1.", "Numbered list") +
       t("outdent", rtIndentIco("out"), "Decrease indent") + t("indent", rtIndentIco("in"), "Increase indent") +
@@ -625,8 +626,43 @@
       });
       return;
     }
+    if (cmd === "dim") { rtToggleDim(area); return; }
     try { document.execCommand(cmd, false, null); } catch (e) {}
     rtSerialize(area);
+  }
+  // Tone: mute the selected body text to grey by wrapping it in <span class="tdim">,
+  // or brighten it (back to the default) if the selection is already muted. Uses
+  // insertHTML so both directions are natively undoable (Ctrl+Z / Undo button).
+  function rtToggleDim(area) {
+    area.focus();
+    var sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    if (!area.contains(sel.anchorNode) || !area.contains(sel.focusNode)) return;
+    var anchorEl = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
+    var existing = anchorEl && anchorEl.closest ? anchorEl.closest(".tdim") : null;
+    if (existing && area.contains(existing)) {
+      var r = document.createRange();
+      r.selectNode(existing);
+      sel.removeAllRanges(); sel.addRange(r);
+      try { document.execCommand("insertHTML", false, existing.innerHTML || ""); }
+      catch (e) { var host = existing.parentNode; while (existing.firstChild) host.insertBefore(existing.firstChild, existing); host.removeChild(existing); host.normalize(); }
+      rtSerialize(area);
+      status("Text brightened.");
+      return;
+    }
+    var range = sel.getRangeAt(0);
+    if (range.collapsed) { status("Select some body text first, then tap the tone button."); return; }
+    var tmp = document.createElement("div");
+    tmp.appendChild(range.cloneContents());
+    tmp.querySelectorAll(".tdim").forEach(function (n) { var p = n.parentNode; while (n.firstChild) p.insertBefore(n.firstChild, n); p.removeChild(n); });
+    var inner = rtClean(tmp.innerHTML);
+    try { document.execCommand("insertHTML", false, '<span class="tdim">' + inner + "</span>"); }
+    catch (e) {
+      var span = document.createElement("span"); span.className = "tdim";
+      try { range.surroundContents(span); } catch (e2) { span.appendChild(range.extractContents()); range.insertNode(span); }
+    }
+    rtSerialize(area);
+    status("Text muted to grey.");
   }
   // Indentation is for text only — lift any image/media back out of an indent wrapper.
   function rtStripMediaIndent(area) {

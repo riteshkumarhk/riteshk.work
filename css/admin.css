@@ -460,6 +460,7 @@ body.adm-lock .cursor { display: none !important; }
 .rt__area li { margin: .15rem 0; }
 .rt__area strong { color: var(--text); font-weight: 600; }
 .rt__area em { font-style: italic; }
+.rt__area .tdim { color: var(--text-dim); }
 .rt__area img, .rt__fig img { max-width: 100%; height: auto; display: block; border-radius: 6px; border: 1px solid var(--line); margin: .5rem 0; }
 .rt__fig { margin: .5rem 0; }
 
