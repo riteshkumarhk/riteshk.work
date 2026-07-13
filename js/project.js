@@ -450,7 +450,7 @@
   function voicesBlock(b) {
     var mode = b.mode === "thought" ? "thought" : b.mode === "chat" ? "chat" : "verbatim";
     var items = (b.items || []).map(function (v) {
-      var side = mode === "chat" ? (String(v.side || "").trim().toLowerCase() === "right" ? "right" : "left") : "";
+      var side = String(v.side || "").trim().toLowerCase() === "right" ? "right" : "left";
       var head = (mode === "verbatim" && v.heading) ? '<div class="pjb__voice-h">' + md(v.heading) + "</div>" : "";
       var body = v.body ? '<div class="pjb__voice-b">' + richInline(v.body) + "</div>" : "";
       var cite = v.cite ? '<div class="pjb__voice-cite">' + esc(v.cite) + "</div>" : "";
