@@ -581,6 +581,9 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .secprev--gallery .sp__gdots { display: flex; gap: .25rem; justify-content: center; }
 .secprev--gallery .sp__gdots i { width: 4px; height: 4px; border-radius: 50%; background: var(--line); }
 .secprev--gallery .sp__gdots i.on { background: var(--accent); }
+.secprev--mediagrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .3rem; align-content: center; }
+.secprev--mediagrid .sp__gt { height: 15px; border-radius: 4px; border: 1px solid var(--line); background: linear-gradient(135deg, rgba(216, 166, 87, .14), transparent); }
+.secprev--mediagrid .sp__gt:nth-child(3n+2) { margin-top: 4px; }
 .secprev--figure { flex-direction: row; align-items: center; gap: .45rem; }
 .secprev--figure .sp__ffr { flex: 0 0 42%; align-self: stretch; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 5px; background: linear-gradient(135deg, rgba(216,166,87,.12), transparent); color: var(--accent); font-size: 1rem; }
 .secprev--figure .sp__ftx { flex: 1; display: flex; flex-direction: column; gap: .22rem; }
