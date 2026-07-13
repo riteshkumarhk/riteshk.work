@@ -839,7 +839,8 @@
         "</span></div>" + flds + "</div>";
     }).join("") || '<div class="rep__empty">No ' + escHtml(spec.title.toLowerCase()) + " yet.</div>";
     var bulk = /^(gallery|media|mediagrid)$/.test(b.type) ? '<button class="btn btn--add rep__add" data-act="item-upload-multi" data-index="' + i + '" data-bindex="' + j + '" title="Pick several images at once">+ Add images\u2026</button>' : "";
-    return '<div class="rep"><div class="rep__head"><label class="af__label">' + spec.title + '</label>' + bulk + '<button class="btn btn--add rep__add" data-act="item-add" data-index="' + i + '" data-bindex="' + j + '">+ ' + spec.add + "</button></div>" + rows + "</div>";
+    var single = (b.type === "mediagrid") ? "" : '<button class="btn btn--add rep__add" data-act="item-add" data-index="' + i + '" data-bindex="' + j + '">+ ' + spec.add + "</button>";
+    return '<div class="rep"><div class="rep__head"><label class="af__label">' + spec.title + '</label>' + bulk + single + "</div>" + rows + "</div>";
   }
   /* ---------- generic drag-to-reorder (grips; works alongside the up/down arrows) ----------
      A list is sortable when each row carries a [data-grip][data-sortkey] handle.
