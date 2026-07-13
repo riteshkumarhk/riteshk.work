@@ -733,7 +733,7 @@
     steps: { title: "Steps", one: "Step", add: "Add step", fields: [["title", "Title", "input"], ["body", "Body", "rich"]] },
     workflow: { title: "Steps", one: "Step", add: "Add step", fields: [["label", "Step \u2014 use // to fork into parallel branches (e.g. Design // Eng // Legal)", "input"], ["note", "Note (optional)", "input"]] },
     faq: { title: "Questions", one: "Q", add: "Add question", fields: [["q", "Question", "input"], ["a", "Answer", "rich"]] },
-    media: { title: "Media", one: "Item", add: "Add media", fields: [["src", "Image / video / Figma / PDF / deck URL", "media"], ["caption", "Caption", "input"]] },
+    media: { title: "Media", one: "Item", add: "Add media", fields: [["src", "Image / video / Figma / PDF / deck URL", "media"], ["caption", "Caption", "input"], ["_imgsize", "Image size", "imgsize"]] },
     gallery: { title: "Slides", one: "Slide", add: "Add slide", fields: [["src", "Image / video / embed URL", "media"], ["caption", "Caption", "input"]] },
     cards: { title: "Cards", one: "Card", add: "Add card", fields: [["title", "Title", "input"], ["body", "Body", "rich"], ["icon", "Icon", "icon"], ["src", "Image (optional \u2014 replaces the icon)", "media"]] },
     columns: { title: "Columns", one: "Column", add: "Add column", fields: [["label", "Label (optional)", "input"], ["cells", "Cells", "cells"]] },
@@ -785,9 +785,33 @@
         '<div class="imgblk__row"><button class="btn btn--ghost" data-act="item-upload" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">Upload\u2026</button>' +
         (v ? '<button class="btn btn--ghost" data-act="item-clear" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">Remove</button>' : "") + "</div></div>";
     }
+    if (kind === "imgsize") return mediaSizeCtl(i, j, k, it);
     return '<div class="af"><label class="af__label">' + label + '</label><input type="text" ' + da + ' value="' + escAttr(it[key] || "") + '" /></div>';
   }
-  var GRIP_SVG = '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="3" r="1.4"/><circle cx="10.5" cy="3" r="1.4"/><circle cx="5.5" cy="8" r="1.4"/><circle cx="10.5" cy="8" r="1.4"/><circle cx="5.5" cy="13" r="1.4"/><circle cx="10.5" cy="13" r="1.4"/></svg>';
+  function mediaSizeCtl(i, j, k, it) {
+    var da = 'data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '"';
+    var size = (it.size === "fit" || it.size === "custom") ? it.size : "fill";
+    var ratio = it.fitRatio || "16:9";
+    var shrink = Math.max(0, Math.min(90, Math.round(+it.shrink || 0)));
+    var bg = it.bg || "";
+    var sizeOpts = [["fill", "Fill \u2014 box fits the image"], ["fit", "Fit \u2014 image fits a fixed box"], ["custom", "Custom \u2014 shrink the image"]]
+      .map(function (o) { return '<option value="' + o[0] + '"' + (size === o[0] ? " selected" : "") + ">" + escHtml(o[1]) + "</option>"; }).join("");
+    var ratioOpts = [["16:9", "16:9 \u2014 wide"], ["4:3", "4:3"], ["1:1", "1:1 \u2014 square"], ["3:2", "3:2"]]
+      .map(function (o) { return '<option value="' + o[0] + '"' + (ratio === o[0] ? " selected" : "") + ">" + escHtml(o[1]) + "</option>"; }).join("");
+    return '<div class="af imgsz" data-size="' + size + '"><label class="af__label">Image size</label>' +
+      '<div class="imgsz__row">' +
+        '<select data-msz="size" ' + da + '>' + sizeOpts + '</select>' +
+        '<span class="imgsz__ratio"><select data-msz="fitRatio" ' + da + '>' + ratioOpts + '</select></span>' +
+        '<span class="imgsz__shrink"><input type="number" min="0" max="90" step="5" data-msz="shrink" ' + da + ' value="' + shrink + '" /><span class="imgsz__pctlbl">% smaller</span></span>' +
+      '</div>' +
+      '<div class="imgsz__bg"><span class="imgsz__bglbl">Background</span>' +
+        '<span class="imgsz__sw"' + (bg ? ' style="background:' + escAttr(bg) + '"' : "") + '></span>' +
+        '<input type="color" class="imgsz__color" data-msz="bg" ' + da + ' value="' + escAttr(bg || "#0e0e12") + '" />' +
+        '<button type="button" class="imgsz__eye" data-act="media-eyedrop" ' + da + ' title="Pick a colour from the screen / an image">\uD83D\uDD0D</button>' +
+        (bg ? '<button type="button" class="imgsz__clear" data-act="media-bgclear" ' + da + '>Clear</button>' : '<span class="imgsz__note">transparent</span>') +
+      '</div>' +
+      '<div class="af__hint">Fill grows the box to the image. Fit places the image inside a fixed box \u2014 the leftover space shows the background. Custom shrinks the image and shows the background around it.</div></div>';
+  }'<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="3" r="1.4"/><circle cx="10.5" cy="3" r="1.4"/><circle cx="5.5" cy="8" r="1.4"/><circle cx="10.5" cy="8" r="1.4"/><circle cx="5.5" cy="13" r="1.4"/><circle cx="10.5" cy="13" r="1.4"/></svg>';
   function itemLabel(it) {
     var v = (it && (it.caption || it.value || it.q || it.title || it.label || it.heading || it.name || it.icon || it.src)) || "";
     v = String(v).replace(/^data:[^,]*,.*$/, "\u2014").replace(/[\*\[\]#`]/g, "").replace(/\s+/g, " ").trim();
@@ -899,6 +923,17 @@
     var b = data.work[i] && data.work[i].study && data.work[i].study.blocks[j];
     if (!b || !b.items || !b.items[k]) return;
     b.items[k][f] = t.value;
+    saveDraft(); refreshL2Preview();
+  }
+  function onMediaSizeInput(t) {
+    var i = +t.dataset.index, j = +t.dataset.bindex, k = +t.dataset.iindex, f = t.dataset.msz;
+    var b = data.work[i] && data.work[i].study && data.work[i].study.blocks[j];
+    if (!b || !b.items || !b.items[k]) return;
+    var v = t.value;
+    if (f === "shrink") v = Math.max(0, Math.min(90, Math.round(+v || 0)));
+    b.items[k][f] = v;
+    var box = t.closest(".imgsz");
+    if (box) { if (f === "size") box.setAttribute("data-size", v); if (f === "bg") { var sw = box.querySelector(".imgsz__sw"); if (sw) sw.style.background = v; } }
     saveDraft(); refreshL2Preview();
   }
   function blankCell() { return { heading: "", body: "", src: "" }; }
@@ -1436,6 +1471,7 @@
   function onInput(e) {
     const t = e.target;
     if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined || t.dataset.rtcellfield !== undefined) { rtSerialize(t); return; }
+    if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.sitem !== undefined && t.dataset.ifield) { onItemInput(t); return; }
     if (t.dataset.cell !== undefined && t.dataset.cfield) { onCellInput(t); return; }
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
@@ -1471,6 +1507,7 @@
 
   function onChange(e) {
     const t = e.target;
+    if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
     if (t.dataset.sitem !== undefined && t.dataset.ifield) { onItemInput(t); return; }
     if (t.dataset.sblock !== undefined && t.type === "checkbox") {
@@ -1597,6 +1634,8 @@
     if (act === "item-remove") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items.splice(+b.dataset.iindex, 1); saveDraft(true); renderL2(); return; }
     if (act === "item-up") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (k > 0) { [bl.items[k - 1], bl.items[k]] = [bl.items[k], bl.items[k - 1]]; saveDraft(true); renderL2(); } return; }
     if (act === "item-down") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (k < bl.items.length - 1) { [bl.items[k + 1], bl.items[k]] = [bl.items[k], bl.items[k + 1]]; saveDraft(true); renderL2(); } return; }
+    if (act === "media-eyedrop") { const bj = +b.dataset.bindex, k = +b.dataset.iindex; const bl = data.work[i].study.blocks[bj]; const it = bl && bl.items && bl.items[k]; if (!it) return; if (!window.EyeDropper) { status("This browser has no eyedropper \u2014 use the colour box.", false); return; } new EyeDropper().open().then(function (res) { it.bg = res.sRGBHex; saveDraft(true); renderL2(); refreshL2Preview(); }).catch(function () {}); return; }
+    if (act === "media-bgclear") { const bj = +b.dataset.bindex, k = +b.dataset.iindex; const bl = data.work[i].study.blocks[bj]; const it = bl && bl.items && bl.items[k]; if (it) { it.bg = ""; saveDraft(true); renderL2(); refreshL2Preview(); } return; }
     if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; if (isVideoVal(uri)) bl.items[k].controls = true; saveDraft(true); renderL2(); } }); return; }
     if (act === "item-icon") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield, name = b.dataset.icon; const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = name; saveDraft(true); refreshL2Preview(); const grid = b.closest(".iconpick"); if (grid) grid.querySelectorAll(".iconpick__b").forEach(function (x) { x.classList.toggle("is-on", x === b); }); const dd = b.closest(".icondd"); if (dd) { const cur = dd.querySelector(".icondd__cur"); if (cur) cur.innerHTML = name ? admIcon(name) : "\u2205"; const nm = dd.querySelector(".icondd__name"); if (nm) nm.textContent = name || "No icon"; if (dd.tagName === "DETAILS") dd.open = false; } } return; }
     if (act === "item-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (bl && bl.items && bl.items[k]) { bl.items[k][b.dataset.ifield] = ""; saveDraft(true); renderL2(); } return; }

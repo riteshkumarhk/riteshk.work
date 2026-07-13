@@ -200,6 +200,11 @@ img[data-zoom] { cursor: zoom-in; }
 .pjb__shot { border-radius: 4px; overflow: hidden; border: 1px solid var(--line-soft); }
 .pjb__img, .pjb__media-el { width: 100%; height: auto; display: block; }
 video.pjb__media-el { background: #000; }
+.pjb__shot-media { display: block; }
+.pjb__shot--fit .pjb__shot-media { display: grid; place-items: center; }
+.pjb__shot--fit .pjb__media-el { width: 100%; height: 100%; object-fit: contain; }
+.pjb__shot--custom .pjb__shot-media { display: grid; place-items: center; }
+.pjb__shot-scale { display: block; }
 .pjb__shot-ph { position: relative; aspect-ratio: 16 / 9; display: grid; place-items: center; }
 .pjb__shot-ph--edge { background: radial-gradient(120% 120% at 20% 20%, #16324f 0%, #0b1522 45%, #08080a 100%); }
 .pjb__shot-ph--auth { background: radial-gradient(120% 120% at 80% 30%, #3a2a12 0%, #1a140a 50%, #08080a 100%); }

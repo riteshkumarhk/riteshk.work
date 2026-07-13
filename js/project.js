@@ -267,10 +267,17 @@
       var cap = m.caption
         ? '<figcaption class="pjb__cap"><span class="pjb__cap-n">' + String(i + 1).padStart(2, "0") + " / " + String(n).padStart(2, "0") + "</span>" + esc(m.caption) + "</figcaption>"
         : "";
-      return '<figure class="pjb__shot">' + body + cap + "</figure>";
+      var sz = (m.size === "fit" || m.size === "custom") ? m.size : "fill";
+      var mst = "";
+      if (m.bg) mst += "background:" + esc(m.bg) + ";";
+      if (sz === "fit") mst += "aspect-ratio:" + ratioCss(m.fitRatio) + ";";
+      var inner = body;
+      if (sz === "custom") { var w = Math.max(10, 100 - Math.max(0, Math.min(90, +m.shrink || 0))); inner = '<span class="pjb__shot-scale" style="width:' + w + '%">' + body + "</span>"; }
+      return '<figure class="pjb__shot pjb__shot--' + sz + '"><div class="pjb__shot-media"' + (mst ? ' style="' + mst + '"' : "") + ">" + inner + "</div>" + cap + "</figure>";
     }).join("");
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__media">' + shots + "</div>";
   }
+  function ratioCss(r) { var m = /^(\d+)\s*:\s*(\d+)$/.exec(r || ""); return m ? m[1] + " / " + m[2] : "16 / 9"; }
   function splitBlock(b) {
     var col = function (label, val, img, cls) {
       var media = (img && mediaSrc({ src: img })) ? '<div class="pjb__col-media">' + mediaEl({ src: img }, "pjb__media-el") + "</div>" : "";
