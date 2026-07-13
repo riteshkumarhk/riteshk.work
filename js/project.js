@@ -406,7 +406,8 @@
         (n.body ? '<div class="pjb__sticky-b">' + richInline(n.body) + "</div>" : "") +
         media + "</article>";
     }).join("");
-    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__stickies">' + items + "</div>";
+    var size = (b.stickySize === "uniform" || b.stickySize === "none") ? b.stickySize : "natural";
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__stickies pjb__stickies--' + size + '">' + items + "</div>";
   }
 
   function voicesBlock(b) {
