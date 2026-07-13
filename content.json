@@ -158,7 +158,7 @@
           },
           {
             "type": "text",
-            "nav": "Understanding modern onboarding",
+            "nav": "Understanding Modern Onboarding",
             "kicker": "",
             "heading": "Modern Onboarding",
             "body": "While studying onboarding patterns across Windows OOBE and modern browsers, I noticed a common trend: successful onboarding experiences focused less on setup and more on helping users experience value quickly.",
@@ -239,7 +239,7 @@
           },
           {
             "type": "columns",
-            "nav": "Business justification",
+            "nav": "Business Justification",
             "kicker": "Business justification",
             "heading": "Why two surfaces? ",
             "items": [
@@ -367,7 +367,7 @@
           },
           {
             "type": "text",
-            "nav": "Exploring the future",
+            "nav": "Exploring The Future",
             "kicker": "Exploring the future",
             "heading": "Most ambitious directional concepts",
             "body": "<p>The challenge was reimagining how onboarding should feel as a single cohesive journey.</p><p>Rather than jumping straight into a solution, I explored multiple future directions that challenged existing assumptions around surfaces, immersion, personalization, and activation.</p>",
@@ -418,7 +418,7 @@
           },
           {
             "type": "text",
-            "nav": "Landing the vision",
+            "nav": "Landing The Vision",
             "kicker": "the vision",
             "heading": "Future of Unified Onboarding",
             "body": "With alignment forming around unification, I shifted focus from exploring different surfaces to exploring the full potential of a unified onboarding experience.<div><br></div><div>The goal was no longer to redesign individual onboarding screens.</div><div><br></div><div>The goal was to rethink what onboarding could become if every critical setup, personalization, and activation moment lived within a single continuous journey.</div>",
