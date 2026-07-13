@@ -811,7 +811,8 @@
         (bg ? '<button type="button" class="imgsz__clear" data-act="media-bgclear" ' + da + '>Clear</button>' : '<span class="imgsz__note">transparent</span>') +
       '</div>' +
       '<div class="af__hint">Fill grows the box to the image. Fit places the image inside a fixed box \u2014 the leftover space shows the background. Custom shrinks the image and shows the background around it.</div></div>';
-  }'<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="3" r="1.4"/><circle cx="10.5" cy="3" r="1.4"/><circle cx="5.5" cy="8" r="1.4"/><circle cx="10.5" cy="8" r="1.4"/><circle cx="5.5" cy="13" r="1.4"/><circle cx="10.5" cy="13" r="1.4"/></svg>';
+  }
+  var GRIP_SVG = '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="3" r="1.4"/><circle cx="10.5" cy="3" r="1.4"/><circle cx="5.5" cy="8" r="1.4"/><circle cx="10.5" cy="8" r="1.4"/><circle cx="5.5" cy="13" r="1.4"/><circle cx="10.5" cy="13" r="1.4"/></svg>';
   function itemLabel(it) {
     var v = (it && (it.caption || it.value || it.q || it.title || it.label || it.heading || it.name || it.icon || it.src)) || "";
     v = String(v).replace(/^data:[^,]*,.*$/, "\u2014").replace(/[\*\[\]#`]/g, "").replace(/\s+/g, " ").trim();
