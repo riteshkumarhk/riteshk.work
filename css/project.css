@@ -339,6 +339,11 @@ video.pjb__media-el { background: #000; }
 .pjb__sticky-media .pjb__media-el { display: block; width: 100%; }
 @media (max-width: 860px) { .pjb__stickies { grid-template-columns: repeat(2, 1fr); } .pjb__stickies .pjb__sticky { margin-top: 0; } .pjb__stickies .pjb__sticky:nth-child(2n) { margin-top: 1.6rem; } }
 @media (max-width: 560px) { .pjb__stickies { grid-template-columns: 1fr; } .pjb__stickies .pjb__sticky { margin-top: 0 !important; } }
+/* sticky-note sizing modes (block field b.stickySize) */
+.pjb__stickies--natural .pjb__sticky { min-height: 16rem; }
+.pjb__stickies--none .pjb__sticky { min-height: 0; aspect-ratio: auto; }
+.pjb__stickies--uniform { align-items: stretch; grid-auto-rows: 1fr; }
+.pjb__stickies--uniform .pjb__sticky { min-height: 0; aspect-ratio: auto; margin-top: 0 !important; }
 
 /* voices — verbatims, thoughts & a chat thread from research */
 .pjb__voices { display: flex; flex-direction: column; gap: 1.5rem; margin-top: 1.4rem; }
