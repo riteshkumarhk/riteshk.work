@@ -95,12 +95,120 @@
       "plateTag": "Tag",
       "client": "Microsoft Account",
       "period": "2022 — 2023",
-      "title": "Project title",
-      "desc": "What you did and the impact.",
+      "title": "One Microsoft, One Consent",
+      "desc": "Microsoft’s consent strategy was moving from product-level permissions to an account-level model that could support connected, personalized experiences across the Microsoft ecosystem. My role was to translate that strategy into a scalable user experience framework, helping make consent clearer, more reusable, and consistent across product entry points like Windows OOBE, sign-in, apps, and contextual notices.",
       "tags": [
         "Tag"
       ],
-      "image": ""
+      "image": "",
+      "study": {
+        "tagline": "Creating a clearer, more consistent consent experience across Microsoft products, devices, and account journeys.",
+        "role": "Product Designer II ",
+        "team": "1 Designer, 1 Product Manager, 3 Developers, 1 Content Designer, Partner product teams, Privacy and Compliances",
+        "timeline": "FY22 - FY23",
+        "scope": "A horizontal capability spanning multiple Microsoft endpoints rather than a single product experience.",
+        "cover": "",
+        "unlockHash": "",
+        "blocks": [
+          {
+            "type": "text",
+            "nav": "Introduction",
+            "kicker": "Introduction",
+            "heading": "The Problem",
+            "body": "Microsoft products increasingly worked together through a shared Microsoft account, yet consent was still requested independently across products.<div><br></div><div>Users encountered separate privacy notices and permission requests across Windows, Edge, Outlook, Teams, Office, and sign-in experiences, often being asked for similar permissions multiple times. The result wasn't just added friction. It fragmented trust by forcing users to make account-level decisions through disconnected product-level experiences.</div>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Why It Mattered",
+            "body": "As Microsoft invested in more connected and personalized experiences, consent became a critical dependency.<div><br></div><div>Without a shared consent model, products had to request permissions independently, creating inconsistent experiences for users and making it harder for Microsoft teams to deliver seamless cross-product experiences at scale. The broader goal was to enable connected experiences across the Microsoft ecosystem while providing a scalable framework for evolving privacy and regulatory needs.</div>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "text",
+            "nav": "Design Challenge",
+            "kicker": "Design Challenge",
+            "heading": "Translating business strategy into an experience framework that could:",
+            "body": "<ul><li>Help users understand the value behind consent</li><li>Create a consistent experience across Microsoft surfaces</li><li>Build user trust and confidence</li><li>Scale across products, devices, and future consent scenarios</li></ul>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "stickies",
+            "nav": "",
+            "kicker": "",
+            "heading": "Experience Principles",
+            "items": [
+              {
+                "label": "1",
+                "heading": "Create a One Microsoft experience",
+                "body": "Show users that the value of consent extended across Microsoft products and devices, not just the product they were currently using.",
+                "src": ""
+              },
+              {
+                "label": "2",
+                "heading": "Turn consent into a value conversation",
+                "body": "Explain why account-based data use could make Microsoft experiences more seamless, personalized, and useful.",
+                "src": ""
+              },
+              {
+                "label": "3",
+                "heading": "Inspire trust",
+                "body": "Give users a sense of confidence and control so the experience felt transparent rather than transactional.",
+                "src": ""
+              }
+            ],
+            "sep": false,
+            "hsize": "sm",
+            "stickySize": "natural"
+          },
+          {
+            "type": "text",
+            "nav": "Section",
+            "kicker": "",
+            "heading": "",
+            "body": "",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": []
+          }
+        ]
+      }
     },
     {
       "id": "w1783840785203",
@@ -855,6 +963,625 @@
       }
     },
     {
+      "id": "w1783695671548",
+      "featured": true,
+      "theme": "grid",
+      "plateTag": "Tag",
+      "client": "Xbox Game Pass",
+      "period": "2022 — 2023",
+      "title": "Designing Growth Lifecycle for Xbox Customers",
+      "desc": "Designed a growth lifecycle vision for Xbox Game Pass spanning acquisition, engagement, retention, and reactivation across Windows and web experiences. The work uncovered new opportunities to reduce churn through personalization, strengthen long-term engagement, and guide future product investments beyond traditional subscription management.",
+      "tags": [
+        "Product Strategy",
+        "Vision Design",
+        "Growth Design",
+        "Customer Lifecycle",
+        "Subscription Experiences",
+        "Platform Strategy",
+        "Personalization",
+        "Service Design",
+        "Retention",
+        "Acquisition",
+        "Systems Thinking",
+        "Design Leadership",
+        "Design Mentorship"
+      ],
+      "image": "/assets/uploads/42d6e21daf6b701ae17ec68a85d784ee94504a9800ea6c52719040b568617152.png",
+      "study": {
+        "tagline": "A strategic vision for how Xbox could build stronger relationships with gamers across every stage of the subscription journey.",
+        "role": "Product Designer II | Leading the vision",
+        "team": "3 Designers, 1 Product Manager, 1 Content Designer, 4 Engineer, 1 Data Science",
+        "timeline": "4 months",
+        "scope": "Growth · Acquisition · Retention · Churn Reduction · Re-activation · Personalization · Platform Strategy",
+        "cover": "",
+        "unlockHash": "",
+        "blocks": [
+          {
+            "type": "columns",
+            "nav": "Overview",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "label": "Overview",
+                "cells": [
+                  {
+                    "heading": "",
+                    "body": "<p>Xbox Game Pass was growing rapidly, but customer experiences were optimized around individual subscription scenarios such as acquisition, management, upgrades, and cancellation. The broader customer journey was fragmented, making it difficult to identify opportunities that spanned the entire lifecycle.</p>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "What I did",
+                "cells": [
+                  {
+                    "heading": "",
+                    "body": "<p><ul><li>Mapped the end-to-end Game Pass customer lifecycle.</li><li>Developed the strategic vision for acquisition, retention, and reactivation.</li><li>Defined personalization principles for future subscription experiences.</li><li>Created north-star concepts that informed future execution and planning.</li></ul></p>",
+                    "src": ""
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "cards",
+            "nav": "",
+            "kicker": "Quick Context",
+            "heading": "",
+            "items": [
+              {
+                "title": "What is Xbox Game Pass",
+                "body": "<p>Xbox Game Pass is Microsoft's gaming subscription service that provides access to a catalogue of games and benefits across Xbox, PC, and cloud gaming experiences. The service includes several subscription tiers and membership benefits.</p>",
+                "icon": "layers",
+                "src": ""
+              },
+              {
+                "title": "Who are the users?",
+                "body": "<p>Xbox gamers at different stages of their subscription journey:</p><p><ul><li>New and prospective subscribers</li><li>Active Game Pass members</li><li>At-risk subscribers</li><li>Cancelled subscribers</li><li>Returning subscribers</li></ul></p>",
+                "icon": "users",
+                "src": ""
+              },
+              {
+                "title": "Windows objectives",
+                "body": "<p>Retain existing and win new customers with leading silicon, device, and platform capabilities.<br>And Inspire customers to complete more jobs on windows with Microsoft+ services and experiences.</p>",
+                "icon": "target",
+                "src": ""
+              }
+            ]
+          },
+          {
+            "type": "figure",
+            "nav": "Problem Statement",
+            "kicker": "Initial Problem",
+            "heading": "The team was primarily focused on subscription management scenarios, particularly reducing cancellations and improving save experiences when users attempted to leave the service.",
+            "body": "",
+            "src": "/assets/uploads/a445abc20ae1853f06ae5a33fdb62beb4966b96d87e318f0624652ca377fc06d.png",
+            "caption": "Benefits shown based on GamePass subscription | Static contents, lack of personalization",
+            "flip": true,
+            "hsize": "sm"
+          },
+          {
+            "type": "columns",
+            "nav": "",
+            "kicker": "What We Were Doing Wrong",
+            "heading": "",
+            "items": [
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "We treated cancellation as a single problem.",
+                    "body": "<p><span style=\"font-size: 0.9rem;\">After examining customer behaviour, it became clear that people left for fundamentally different reasons:</span></p><p><ul><li>Cost sensitivity</li><li>Lack of time</li><li>Lack of relevant content</li><li>Forgotten renewals</li><li>Temporary disengagement</li></ul></p><p>The real problem wasn't cancellation itself.</p><p>The real problem was that we weren't helping different users recognize and rediscover the value relevant to them.</p>",
+                    "src": ""
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "split",
+            "nav": "My Take",
+            "kicker": "My Take",
+            "heading": "How I Changed the Strategy",
+            "leftLabel": "Before",
+            "left": "<ul><li>How do we stop customers from cancelling?</li></ul>",
+            "leftImg": "",
+            "rightLabel": "After",
+            "right": "<ul><li><span style=\"font-size: 0.9rem;\">How do we create value throughout the customer lifecycle?</span></li></ul><span style=\"font-size: 0.9rem;\"></span>",
+            "rightImg": ""
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/b3fd950e99308c23fd2c6373ea2d1aec3b1c081dc08ba51a24de61768202f6cb.png",
+                "caption": "I’m a long time gamer by myself and the topic was something very close to my personality. I stepped back and mapped the entire Xbox customer lifecycle to identify where Microsoft could create value beyond subscription retention."
+              }
+            ]
+          },
+          {
+            "type": "gallery",
+            "nav": "Opportunities",
+            "kicker": "Sharpening defences",
+            "heading": "Understanding the churn",
+            "items": [
+              {
+                "src": "/assets/uploads/a773ac783481d42c6511a78c920e793e636ceb9cceee8ce8c60ede36a47c4336.png",
+                "caption": "The cancellation problem wasn't a single problem.  Different users cancelled for different reasons: Cost, Lack of content, No time to play, Forgotten renewals"
+              },
+              {
+                "src": "/assets/uploads/91bdaf50042a200e17c4708518dacf15f501bdf91a5299ba03b4228bd52fbec1.png",
+                "caption": "Not all churn is equal. Different churn types represent different recovery opportunities, and each opportunity requires a different business strategy."
+              }
+            ],
+            "locked": false
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/c2a77337ea427bf5cdd0af826dcab66cdf9687a1494cddcc6de89ac7a4edbd81.png",
+                "caption": "I reframed the work from \"prevent cancellation\" to \"help different gamer types recognize value in different ways.\"   This shift influenced the direction of future exploration and investment. "
+              }
+            ]
+          },
+          {
+            "type": "columns",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "This shift expanded the conversation beyond cancellation and surfaced new opportunities in:",
+                    "body": "<ul><li>Acquisition</li><li>Engagement</li><li>Retention</li><li>Family growth</li><li>Re-subscription</li><li>Customer reactivation</li></ul><div><br></div><div>\"How do we stop customers from cancelling?\"</div><div><br></div><div><i>to</i></div><div><br></div><div>\"How do we create value throughout the customer lifecycle?\"</div><div><br></div><div>Rather than designing a screen, I was helping define where the product should go next. </div>",
+                    "src": ""
+                  }
+                ]
+              }
+            ],
+            "hsize": "sm"
+          },
+          {
+            "type": "cards",
+            "nav": "Design Vision",
+            "kicker": "Design Vision",
+            "heading": "The vision was guided by five core principles:",
+            "items": [
+              {
+                "title": "Personalize the experience",
+                "body": "Different players have different motivations and should see experiences tailored to their interests, gaming history, and needs.",
+                "icon": "users",
+                "src": ""
+              },
+              {
+                "title": "Reinforce value",
+                "body": "Help users understand the benefits, savings, content, and experiences available through their membership.",
+                "icon": "bolt",
+                "src": ""
+              },
+              {
+                "title": "Celebrate progress",
+                "body": "Highlight achievements, milestones, and gaming history to strengthen emotional connection with the service.",
+                "icon": "heart",
+                "src": ""
+              },
+              {
+                "title": "Offer flexibility",
+                "body": "Provide alternatives beyond cancellation such as plan changes, pauses, or different subscription options.",
+                "icon": "layers",
+                "src": ""
+              },
+              {
+                "title": "Design for growth",
+                "body": "Create modular experiences that allow future experimentation and expansion across channels and touchpoints.",
+                "icon": "leaf",
+                "src": ""
+              }
+            ]
+          },
+          {
+            "type": "media",
+            "locked": true,
+            "encStub": true,
+            "iv": "T2Ux3XyoQZoRHvAM",
+            "ct": "yaybz6i14TwjE9re9RbcVyMAkKSjHlFe59lx5RoUTJXjE1BLCBwIOUBs/PJIB2WHJ9dEN41tYl2p72AqNK2h/8NXfGLYgpS7PffesTDd2WaK1apM8G7owkC6mDc+KI7UsPCR6NCF5atzgH4Q/womFOYussvSwuNyTGUQoluWUTY46wk4WSyaP9LNAS1GQZazD/ROkA8lioNXeG4B/x8PbnA4dFbD4WLTuR3/BHIF+xC/DStQZGOE20p+4Hbu7VCyZkHJV3e31ovj0/sIJZy0rqHVaOhkMxc15ym+JYwL+AlJOnyUwL10Qyi4ACsGhG4sPH9VusAxzJgra8CbGoMeMk0ycKLSRRyobpz4gWwpM3uww0H4+MJ2x6iGAwLuF+ZfG4JiS49deVtvponvG2b46gjmSrt90rWO8wRxyc3ZoyFd5u4gQYLEGNi1badYIrazd7OG4kmkQjRNAGt0sfsWtHHejWrgf1PaOXjXNOyG4GM/+HDGSy21KpxqVqjgDqNDOOvwA5xIF0yKDeWuWo/GADxz6cCXChT2x+XrjScwoNX3IgSCbNu5RqGfUK0pd12rOLSDgdpG1DxZc9uF93GJNpuc5HqN3B2sBEBJ/i6kMPXu3Cx1gnDFR8uwWoARJAg03EsGyap6OyGCwBnrufMxz3dBztxTFSuxg3btohqX0BQ7O9Jfxczmn6lLLDML5CB4A+ePkcQjQkf30ljCrZoD2GTTavUbthTOol7uv4PzOsxbk+8FUEKlhumZ7efbYDw6t0jnsGVLoOQNpYfFDptSKvXuAF6MzrvDtBEpWiCPNDgl8bGLe41x/kY9dzACGDiJHhxmjj274lxxiT5Bo3WlWBXs4SMG5cLIOolSgaur83sh48shGIreUBt+nQu8pyoYzyML4zDfSPC098+oaHj2W9QggH3Fsa/Gsr4shrBEpj1bpO4GHH/TFQitpXcBiHj/zjJUt0Bz3eejerCOs8Ch1qonrpkcOT/h/CEAzz6dDpmsz/AQn+t1ZUYLtBCj6H/7GsfikmBF8Rf2dP7u/x1YCtl9nzuLAaxsv3TtA8yHKQY85zbuAgq3A8vxPfuoFUix4j4pP1RopI/nyhd/WgA0WgVVt7aEDTcX/qDIYDye3J1UmOFe8wlOBLfcD4B7zt6SSj0Fwkwnrt59F4tyhOszGNngkPfCyFiXGP7uZ+7P/wkWJ/8p25CeMUj3"
+          },
+          {
+            "type": "columns",
+            "nav": "",
+            "kicker": "",
+            "heading": "How do we recover revenue differently for different types of churn?",
+            "items": [
+              {
+                "label": "TIER 3 ~40%",
+                "cells": [
+                  {
+                    "heading": "Value led Churn",
+                    "body": "<p>Users questioned economic value.</p><p></p><ul><li>Can't afford it</li><li>Already played available games</li></ul>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "TIER 2 ~30%",
+                "cells": [
+                  {
+                    "heading": "Engagement Churn",
+                    "body": "<p>Users no longer saw reasons to stay.</p><p></p><ul><li>Not enough interesting games</li><li>Prefer another gaming service</li></ul>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "TIER 1 ~20%",
+                "cells": [
+                  {
+                    "heading": "Operational Churn",
+                    "body": "<p>Users no longer saw reasons to stay.</p><p><ul><li>Not enough interesting games</li><li>Prefer another gaming service</li></ul></p>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "Business solution:",
+                    "body": "<div><ul><li>Pause plans</li><li>Flexible subscriptions</li><li>Future game notifications</li></ul></div><div>This is where retention becomes product strategy rather than UX optimization.</div>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "Business solution:",
+                    "body": "<div><ul><li>Personalized recommendations</li><li>Better discovery</li><li>Upcoming catalogue visibility</li></ul></div><div>This shifts the conversation from subscription management to content marketing.</div>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "Business solution:",
+                    "body": "<p><ul><li>Personalized recommendations</li><li>Better discovery</li><li>Upcoming catalogue visibility</li></ul>This shifts the conversation from subscription management to content marketing.</p>",
+                    "src": ""
+                  }
+                ]
+              }
+            ],
+            "hsize": ""
+          },
+          {
+            "type": "text",
+            "nav": "Acquisition Story",
+            "kicker": "Defined Opportunity",
+            "heading": "How do we turn existing Windows customers into Xbox Game Pass customers?",
+            "body": "Windows was already:<div><br></div><div><ul><li>High traffic</li><li>Trusted</li><li>Account-centric</li><li>Biggest canvass of Microsoft, and connected to Microsoft's ecosystem</li></ul></div><div><br></div><div>Making it a natural entry point for Xbox growth.</div>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "split",
+            "nav": "",
+            "kicker": "",
+            "heading": "Identified Directions",
+            "leftLabel": "Notifications",
+            "left": "<p><ul><li>Interruptive</li><li>Feels like a promotion or advertisement</li><li>Good for awareness</li><li>Limited space to explain value</li><li>One-time interaction</li><li>Generic experience</li><li>Risk of being perceived as noise</li></ul></p>",
+            "leftImg": "",
+            "rightLabel": "Settings",
+            "right": "<p><ul><li>Intent-driven</li><li>A natural extension of the OS</li><li>Good for discovery, education, comparison</li><li>Can showcase benefits, plans leading to conversions</li><li>Supports the entire lifecycle</li><li>Can leverage account context and subscription status for personalization</li></ul></p>",
+            "rightImg": ""
+          },
+          {
+            "type": "media",
+            "locked": true,
+            "encStub": true,
+            "iv": "Jh8Q978ixvDnffUF",
+            "ct": "WqUCFbZ3X7d2kEG7ucYbc6hzMXuhd1a057yZcsIfJ0Qrr3puJYtZCie6JeoJlN8uZnL0Bcy8qvmnh8Acg1+BYu0xkKmHSO0LGev0baG/cg8VpMFPVTCx5PhCpqap/s0TBf5EJ9lK1HJW6HUkp4FC2SnRazqKTKaSouTvD124wn3XODEKu64RKq1FF49ffujAE12cDYH5YZSwHvvlhUqskDXBlZ6FSIdqKKiryMe/d53Kz8DmYffwNsC/IOE95h/qnhCEnTUscBzhe63qaczzoWIPoQXNp3lkjkulTCZ12mAG9FMwGhxJfjIdXngQhd2oUZtOwNe/FNv/z0unK0BuyEjE4hAUyKiwzpu+1as869ZRcbzS4QxR0FH/HtCcpC81l1u4vayToIPK1RAUBHxBNG35+JHr+7dy0vWKdAJ3mLYZQA0hJ6Gng/izIjX4rD1dGP3cAI9hFazaBRfj0B0DHUc6824nQUswMkBBBUoneg9VvtRSjWXqGEghyj2t7ber8qSqIE51h7I8XBr4WWzCkpk4e2VHNFPtMZVvXscR/zWcguQ5GG8pEb8tBJOdDV8H7xSHVEWo0KuBFPAa6EaqmUPOK3paQf7F1pmTWZNlv6PL46WuNIwvV/XTgKYDIgJR+6tsDpKjWrw4YCA6ZSAj0K1/Li+TPn+OfRYcwK0XKydNFSCljxVToB4XVmtvVMX+KFGSRFgP0avjxRmrcAP7LfVljLvxAsc="
+          },
+          {
+            "type": "cards",
+            "nav": "Impact",
+            "kicker": "My Impact",
+            "heading": "",
+            "items": [
+              {
+                "title": "Cancellation & Retention",
+                "body": "<p>Transformed cancellation from a subscription-management challenge into a customer lifecycle strategy spanning retention, re-engagement, and long-term customer value growth.</p>",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Acquisition ",
+                "body": "<p>Positioned Windows as a strategic Xbox growth channel, defining a vision that connected acquisition, onboarding, retention, and reactivation through account-centric.</p>",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Mentoring & Shipping",
+                "body": "Scaled impact by mentoring two junior designers and translating strategic vision into executable MVPs that informed experimentation and shipped customer experiences.",
+                "icon": "",
+                "src": ""
+              }
+            ]
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "LIVE EXPERIENCES",
+            "heading": "The vision landed",
+            "beforeSrc": "/assets/uploads/eed380894cfad04550f8742d359b1b1ee04859474d69035e4318fd2d5fcb1a9b.png",
+            "afterSrc": "/assets/uploads/1a99d5d4210d6aa4f1a3e12594c0087bc152d8743dd7709e2803a9f74a9e39d9.png",
+            "beforeLabel": "Before",
+            "afterLabel": "After",
+            "body": "The final experience evolved from a downgrade-focused cancellation flow into a content-led retention experience. Rather than immediately presenting alternative plans, the experience highlights personalized game recommendations, recently added titles, upcoming releases, and key membership benefits to help subscribers rediscover the value of Game Pass before making a cancellation decision.",
+            "hsize": "sm"
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "All shipped experiences",
+            "items": [
+              {
+                "src": "/assets/uploads/1a99d5d4210d6aa4f1a3e12594c0087bc152d8743dd7709e2803a9f74a9e39d9.png",
+                "caption": "Cancellation flow more personalised and value oriented"
+              },
+              {
+                "src": "/assets/uploads/dda0e81214c5d6bf4a5ad2d23f3314fd044f40b3e50356f691339548f1c1ec33.png",
+                "caption": "Windows Settings - Subscription management in Accounts settings"
+              },
+              {
+                "src": "/assets/uploads/2a449860c952c97241b3b95e45a942e105017c6d586177140ddd17de64bf071d.png",
+                "caption": "Windows Settings - Subscription card in Settings home"
+              }
+            ],
+            "hsize": "sm"
+          },
+          {
+            "type": "metrics",
+            "nav": "",
+            "kicker": "BUSINESS IMPACT",
+            "heading": "Cancellation flows",
+            "items": [
+              {
+                "value": "136K",
+                "label": "incremental subscribers annually"
+              },
+              {
+                "value": "$15M",
+                "label": "annualized revenue impact"
+              },
+              {
+                "value": "66K/year",
+                "label": "Experiment 1"
+              },
+              {
+                "value": "70K/year",
+                "label": "Experiment 2"
+              }
+            ],
+            "hsize": "sm"
+          },
+          {
+            "type": "metrics",
+            "nav": "",
+            "kicker": "",
+            "heading": "Windows Acquisition",
+            "items": [
+              {
+                "value": "~1M to ~80M",
+                "label": "TAM Growth"
+              },
+              {
+                "value": "65K",
+                "label": "annual acquisitions from settings home"
+              },
+              {
+                "value": "112K–365K",
+                "label": "annualized acquisitions"
+              },
+              {
+                "value": "0.44M–1M",
+                "label": "annual incremental acquisitions opportunity"
+              },
+              {
+                "value": "380K-780K",
+                "label": "FY24 forecast"
+              }
+            ],
+            "hsize": "sm"
+          }
+        ],
+        "enc": {
+          "v": 1,
+          "it": 210000,
+          "wraps": {
+            "owner": {
+              "salt": "Ilf2a88ZDhalZ5V+jkQYDg==",
+              "iv": "Pa26vnL5Gb6Wq+to",
+              "ct": "uvSoFiuete6j82XIvRXjj3X28i+9G4KwUNsrgGS+G9tVEG9ZLLgmTeqGON9e/6VH"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "xbox",
+      "featured": false,
+      "theme": "xbox",
+      "plateTag": "Subscription Growth",
+      "client": "Xbox Game Pass",
+      "period": "2021 — 2022",
+      "title": "Growth and retention for Game Pass",
+      "desc": "Led growth and retention design for Xbox Game Pass — turning acquisition, cancellation and lifecycle moments into experiments that helped people see the value and stay.",
+      "tags": [
+        "Growth",
+        "Retention",
+        "Experimentation"
+      ],
+      "study": {
+        "tagline": "Turning cancellation moments into reasons to stay.",
+        "role": "Product Designer II — Growth & Retention",
+        "team": "Design · Product · Engineering · Data Science",
+        "timeline": "2021 — 2022",
+        "scope": "Subscription Growth · Retention · Experimentation",
+        "unlockHash": "56217d22aca7a9d6b581d4d5b3a92e1f44441d3584dcb629b2281d58545d1244",
+        "blocks": [
+          {
+            "type": "text",
+            "nav": "Overview",
+            "kicker": "Overview",
+            "heading": "The subscription is the product — so is leaving it.",
+            "body": "I led growth and retention experience work for Xbox Game Pass across acquisition, plan evaluation, cancellation and the lifecycle in between — designing the moments that decide whether a player subscribes, stays, or comes back.",
+            "list": [
+              "Led growth and retention experience work for Game Pass",
+              "Redesigned the cancellation and lifecycle journeys",
+              "Ran experimentation-led retention interventions",
+              "Partnered with Data Science on every bet"
+            ]
+          },
+          {
+            "type": "metrics",
+            "nav": "Impact",
+            "kicker": "Impact",
+            "heading": "Small lifecycle changes, real revenue.",
+            "items": [
+              {
+                "value": "$15M",
+                "label": "revenue influenced"
+              },
+              {
+                "value": "136K",
+                "label": "new subscriptions"
+              },
+              {
+                "value": "130K+",
+                "label": "users retained annually"
+              }
+            ]
+          },
+          {
+            "type": "statement",
+            "nav": "Problem",
+            "kicker": "The problem",
+            "body": "Most products treat cancellation as a door. It is actually the most honest conversation you will ever have with a customer.",
+            "sub": "The moment someone tries to leave is the moment they tell you exactly what value they are missing."
+          },
+          {
+            "type": "steps",
+            "nav": "Approach",
+            "kicker": "Approach",
+            "heading": "Designing the whole subscription lifecycle.",
+            "items": [
+              {
+                "title": "Meet doubt with value",
+                "body": "At cancellation, surface the value the customer has not used yet — not a guilt trip."
+              },
+              {
+                "title": "Experiment, do not assume",
+                "body": "Treat retention as a series of measured bets with Data Science, not opinions."
+              },
+              {
+                "title": "Fix the fundamentals",
+                "body": "Make plan evaluation and acquisition legible so people choose with confidence."
+              }
+            ]
+          },
+          {
+            "type": "faq",
+            "kicker": "Quick context",
+            "items": [
+              {
+                "q": "What is Game Pass?",
+                "a": "A subscription that gives players a rotating library of games for a monthly fee."
+              },
+              {
+                "q": "What is a lifecycle experience?",
+                "a": "Everything from signing up, to evaluating plans, to pausing or cancelling."
+              },
+              {
+                "q": "Why focus on cancellation?",
+                "a": "It is the highest-signal, highest-leverage moment to understand and retain a customer."
+              }
+            ]
+          },
+          {
+            "type": "media",
+            "nav": "Design",
+            "kicker": "The work",
+            "items": [
+              {
+                "caption": "Cancellation and lifecycle flows for Game Pass. Visuals abstracted; shipping UI is confidential."
+              },
+              {
+                "caption": "Plan-evaluation and retention-intervention explorations."
+              }
+            ]
+          },
+          {
+            "type": "split",
+            "nav": "Outcome",
+            "kicker": "Before / after",
+            "leftLabel": "Before",
+            "left": [
+              "Cancellation treated as a dead end",
+              "Retention driven by guesswork",
+              "Value hidden until after churn"
+            ],
+            "rightLabel": "After",
+            "right": [
+              "Cancellation reframed as a value conversation",
+              "Retention driven by experimentation",
+              "130K+ users retained annually"
+            ]
+          },
+          {
+            "type": "text",
+            "locked": true,
+            "encStub": true,
+            "iv": "MWrie22Hozx6eSnD",
+            "ct": "lt8aizeDy9o/xQTOBAfw6AtK5oCg89he/6Vl2NMH5Cmot3kAtRssmADh5FzCWLvpFDpa9HVQgiIqVTJmQXmRcTTY7jwmg3VCY6ZRa76oUWKn/0m7Snjfql8sgVVbdQ1BXWhapkPGbcsaJFQG497+nSbUPz097uhV6BBJfeLtT2kCDkQtPitwaVR/B5bS/BxhsWsVCji/j79NHFmsPPw/D5AycdFjOtRdq1XO+NnbTI/QbofX43gUr7qXgN+3tANMRN5R+hF0tJUxMIxxU0JpjD/CeJDfRCO5UwfXRm0VeftxoJxF09mgTXqt0KF/OmE37jC6djlxQX1oXvVRezfL2JSAb6vGAg0ZqUTOb8kS3c35IvoA8ET8xxKF4OMugGSuXDUFMz4gfNW/BWxAS6G4KeEgg9umyROSv384jCQ9KSEkI4tGnzVduT+VFW1RivCcdExkCPbPsTpo5Lf3qU4Ey+AkGMzbzjzyHbGd0y5lIJhoQ0xUtAZhJn1QUCYex4qbSfdejEi2qG9AvATvs8FTG0oeT+TEvh2iuwxUOJKo3r01iJCMO3oTi0kKzeteDps95p+/LkM2WjMqZEulTEHW1qw/DrmmY+W8U+y5UQk=",
+            "kicker": "Deeper cut",
+            "nav": "Deep dive"
+          },
+          {
+            "type": "statement",
+            "nav": "Reflection",
+            "kicker": "Reflection",
+            "body": "Retention is not a dark pattern. It is making the value you already deliver impossible to overlook.",
+            "sub": "If I had more time: feed the cancellation insights back into acquisition and onboarding."
+          }
+        ],
+        "enc": {
+          "v": 1,
+          "it": 210000,
+          "wraps": {
+            "owner": {
+              "salt": "7TVawgpaj1c7nWsWxBXxUw==",
+              "iv": "0iP6CR1XBhyzbM8m",
+              "ct": "152Ji+Ch8VmG0YV3eYZoh6rmvPt6L8kFLegPKjVzLlTHStoXZTVva2mPnfEt7iwV"
+            }
+          }
+        }
+      }
+    },
+    {
       "id": "edge",
       "featured": false,
       "theme": "edge",
@@ -1479,625 +2206,6 @@
               "salt": "XcIqC202x4rx9imSvPJpJQ==",
               "iv": "2pEB8vB8L2YO3ekq",
               "ct": "b0VAi+YBM6/dHFxXxHDYtfl2+4LeC9wJ7d5c2mw3rqkaVZsOCV7y+FsTFwO5o7BV"
-            }
-          }
-        }
-      }
-    },
-    {
-      "id": "xbox",
-      "featured": false,
-      "theme": "xbox",
-      "plateTag": "Subscription Growth",
-      "client": "Xbox Game Pass",
-      "period": "2021 — 2022",
-      "title": "Growth and retention for Game Pass",
-      "desc": "Led growth and retention design for Xbox Game Pass — turning acquisition, cancellation and lifecycle moments into experiments that helped people see the value and stay.",
-      "tags": [
-        "Growth",
-        "Retention",
-        "Experimentation"
-      ],
-      "study": {
-        "tagline": "Turning cancellation moments into reasons to stay.",
-        "role": "Product Designer II — Growth & Retention",
-        "team": "Design · Product · Engineering · Data Science",
-        "timeline": "2021 — 2022",
-        "scope": "Subscription Growth · Retention · Experimentation",
-        "unlockHash": "56217d22aca7a9d6b581d4d5b3a92e1f44441d3584dcb629b2281d58545d1244",
-        "blocks": [
-          {
-            "type": "text",
-            "nav": "Overview",
-            "kicker": "Overview",
-            "heading": "The subscription is the product — so is leaving it.",
-            "body": "I led growth and retention experience work for Xbox Game Pass across acquisition, plan evaluation, cancellation and the lifecycle in between — designing the moments that decide whether a player subscribes, stays, or comes back.",
-            "list": [
-              "Led growth and retention experience work for Game Pass",
-              "Redesigned the cancellation and lifecycle journeys",
-              "Ran experimentation-led retention interventions",
-              "Partnered with Data Science on every bet"
-            ]
-          },
-          {
-            "type": "metrics",
-            "nav": "Impact",
-            "kicker": "Impact",
-            "heading": "Small lifecycle changes, real revenue.",
-            "items": [
-              {
-                "value": "$15M",
-                "label": "revenue influenced"
-              },
-              {
-                "value": "136K",
-                "label": "new subscriptions"
-              },
-              {
-                "value": "130K+",
-                "label": "users retained annually"
-              }
-            ]
-          },
-          {
-            "type": "statement",
-            "nav": "Problem",
-            "kicker": "The problem",
-            "body": "Most products treat cancellation as a door. It is actually the most honest conversation you will ever have with a customer.",
-            "sub": "The moment someone tries to leave is the moment they tell you exactly what value they are missing."
-          },
-          {
-            "type": "steps",
-            "nav": "Approach",
-            "kicker": "Approach",
-            "heading": "Designing the whole subscription lifecycle.",
-            "items": [
-              {
-                "title": "Meet doubt with value",
-                "body": "At cancellation, surface the value the customer has not used yet — not a guilt trip."
-              },
-              {
-                "title": "Experiment, do not assume",
-                "body": "Treat retention as a series of measured bets with Data Science, not opinions."
-              },
-              {
-                "title": "Fix the fundamentals",
-                "body": "Make plan evaluation and acquisition legible so people choose with confidence."
-              }
-            ]
-          },
-          {
-            "type": "faq",
-            "kicker": "Quick context",
-            "items": [
-              {
-                "q": "What is Game Pass?",
-                "a": "A subscription that gives players a rotating library of games for a monthly fee."
-              },
-              {
-                "q": "What is a lifecycle experience?",
-                "a": "Everything from signing up, to evaluating plans, to pausing or cancelling."
-              },
-              {
-                "q": "Why focus on cancellation?",
-                "a": "It is the highest-signal, highest-leverage moment to understand and retain a customer."
-              }
-            ]
-          },
-          {
-            "type": "media",
-            "nav": "Design",
-            "kicker": "The work",
-            "items": [
-              {
-                "caption": "Cancellation and lifecycle flows for Game Pass. Visuals abstracted; shipping UI is confidential."
-              },
-              {
-                "caption": "Plan-evaluation and retention-intervention explorations."
-              }
-            ]
-          },
-          {
-            "type": "split",
-            "nav": "Outcome",
-            "kicker": "Before / after",
-            "leftLabel": "Before",
-            "left": [
-              "Cancellation treated as a dead end",
-              "Retention driven by guesswork",
-              "Value hidden until after churn"
-            ],
-            "rightLabel": "After",
-            "right": [
-              "Cancellation reframed as a value conversation",
-              "Retention driven by experimentation",
-              "130K+ users retained annually"
-            ]
-          },
-          {
-            "type": "text",
-            "locked": true,
-            "encStub": true,
-            "iv": "MWrie22Hozx6eSnD",
-            "ct": "lt8aizeDy9o/xQTOBAfw6AtK5oCg89he/6Vl2NMH5Cmot3kAtRssmADh5FzCWLvpFDpa9HVQgiIqVTJmQXmRcTTY7jwmg3VCY6ZRa76oUWKn/0m7Snjfql8sgVVbdQ1BXWhapkPGbcsaJFQG497+nSbUPz097uhV6BBJfeLtT2kCDkQtPitwaVR/B5bS/BxhsWsVCji/j79NHFmsPPw/D5AycdFjOtRdq1XO+NnbTI/QbofX43gUr7qXgN+3tANMRN5R+hF0tJUxMIxxU0JpjD/CeJDfRCO5UwfXRm0VeftxoJxF09mgTXqt0KF/OmE37jC6djlxQX1oXvVRezfL2JSAb6vGAg0ZqUTOb8kS3c35IvoA8ET8xxKF4OMugGSuXDUFMz4gfNW/BWxAS6G4KeEgg9umyROSv384jCQ9KSEkI4tGnzVduT+VFW1RivCcdExkCPbPsTpo5Lf3qU4Ey+AkGMzbzjzyHbGd0y5lIJhoQ0xUtAZhJn1QUCYex4qbSfdejEi2qG9AvATvs8FTG0oeT+TEvh2iuwxUOJKo3r01iJCMO3oTi0kKzeteDps95p+/LkM2WjMqZEulTEHW1qw/DrmmY+W8U+y5UQk=",
-            "kicker": "Deeper cut",
-            "nav": "Deep dive"
-          },
-          {
-            "type": "statement",
-            "nav": "Reflection",
-            "kicker": "Reflection",
-            "body": "Retention is not a dark pattern. It is making the value you already deliver impossible to overlook.",
-            "sub": "If I had more time: feed the cancellation insights back into acquisition and onboarding."
-          }
-        ],
-        "enc": {
-          "v": 1,
-          "it": 210000,
-          "wraps": {
-            "owner": {
-              "salt": "7TVawgpaj1c7nWsWxBXxUw==",
-              "iv": "0iP6CR1XBhyzbM8m",
-              "ct": "152Ji+Ch8VmG0YV3eYZoh6rmvPt6L8kFLegPKjVzLlTHStoXZTVva2mPnfEt7iwV"
-            }
-          }
-        }
-      }
-    },
-    {
-      "id": "w1783695671548",
-      "featured": true,
-      "theme": "grid",
-      "plateTag": "Tag",
-      "client": "Xbox Game Pass",
-      "period": "2022 — 2023",
-      "title": "Designing Growth Lifecycle for Xbox Customers",
-      "desc": "Designed a growth lifecycle vision for Xbox Game Pass spanning acquisition, engagement, retention, and reactivation across Windows and web experiences. The work uncovered new opportunities to reduce churn through personalization, strengthen long-term engagement, and guide future product investments beyond traditional subscription management.",
-      "tags": [
-        "Product Strategy",
-        "Vision Design",
-        "Growth Design",
-        "Customer Lifecycle",
-        "Subscription Experiences",
-        "Platform Strategy",
-        "Personalization",
-        "Service Design",
-        "Retention",
-        "Acquisition",
-        "Systems Thinking",
-        "Design Leadership",
-        "Design Mentorship"
-      ],
-      "image": "/assets/uploads/42d6e21daf6b701ae17ec68a85d784ee94504a9800ea6c52719040b568617152.png",
-      "study": {
-        "tagline": "A strategic vision for how Xbox could build stronger relationships with gamers across every stage of the subscription journey.",
-        "role": "Product Designer II | Leading the vision",
-        "team": "3 Designers, 1 Product Manager, 1 Content Designer, 4 Engineer, 1 Data Science",
-        "timeline": "4 months",
-        "scope": "Growth · Acquisition · Retention · Churn Reduction · Re-activation · Personalization · Platform Strategy",
-        "cover": "",
-        "unlockHash": "",
-        "blocks": [
-          {
-            "type": "columns",
-            "nav": "Overview",
-            "kicker": "",
-            "heading": "",
-            "items": [
-              {
-                "label": "Overview",
-                "cells": [
-                  {
-                    "heading": "",
-                    "body": "<p>Xbox Game Pass was growing rapidly, but customer experiences were optimized around individual subscription scenarios such as acquisition, management, upgrades, and cancellation. The broader customer journey was fragmented, making it difficult to identify opportunities that spanned the entire lifecycle.</p>",
-                    "src": ""
-                  }
-                ]
-              },
-              {
-                "label": "What I did",
-                "cells": [
-                  {
-                    "heading": "",
-                    "body": "<p><ul><li>Mapped the end-to-end Game Pass customer lifecycle.</li><li>Developed the strategic vision for acquisition, retention, and reactivation.</li><li>Defined personalization principles for future subscription experiences.</li><li>Created north-star concepts that informed future execution and planning.</li></ul></p>",
-                    "src": ""
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "type": "cards",
-            "nav": "",
-            "kicker": "Quick Context",
-            "heading": "",
-            "items": [
-              {
-                "title": "What is Xbox Game Pass",
-                "body": "<p>Xbox Game Pass is Microsoft's gaming subscription service that provides access to a catalogue of games and benefits across Xbox, PC, and cloud gaming experiences. The service includes several subscription tiers and membership benefits.</p>",
-                "icon": "layers",
-                "src": ""
-              },
-              {
-                "title": "Who are the users?",
-                "body": "<p>Xbox gamers at different stages of their subscription journey:</p><p><ul><li>New and prospective subscribers</li><li>Active Game Pass members</li><li>At-risk subscribers</li><li>Cancelled subscribers</li><li>Returning subscribers</li></ul></p>",
-                "icon": "users",
-                "src": ""
-              },
-              {
-                "title": "Windows objectives",
-                "body": "<p>Retain existing and win new customers with leading silicon, device, and platform capabilities.<br>And Inspire customers to complete more jobs on windows with Microsoft+ services and experiences.</p>",
-                "icon": "target",
-                "src": ""
-              }
-            ]
-          },
-          {
-            "type": "figure",
-            "nav": "Problem Statement",
-            "kicker": "Initial Problem",
-            "heading": "The team was primarily focused on subscription management scenarios, particularly reducing cancellations and improving save experiences when users attempted to leave the service.",
-            "body": "",
-            "src": "/assets/uploads/a445abc20ae1853f06ae5a33fdb62beb4966b96d87e318f0624652ca377fc06d.png",
-            "caption": "Benefits shown based on GamePass subscription | Static contents, lack of personalization",
-            "flip": true,
-            "hsize": "sm"
-          },
-          {
-            "type": "columns",
-            "nav": "",
-            "kicker": "What We Were Doing Wrong",
-            "heading": "",
-            "items": [
-              {
-                "label": "",
-                "cells": [
-                  {
-                    "heading": "We treated cancellation as a single problem.",
-                    "body": "<p><span style=\"font-size: 0.9rem;\">After examining customer behaviour, it became clear that people left for fundamentally different reasons:</span></p><p><ul><li>Cost sensitivity</li><li>Lack of time</li><li>Lack of relevant content</li><li>Forgotten renewals</li><li>Temporary disengagement</li></ul></p><p>The real problem wasn't cancellation itself.</p><p>The real problem was that we weren't helping different users recognize and rediscover the value relevant to them.</p>",
-                    "src": ""
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "type": "split",
-            "nav": "My Take",
-            "kicker": "My Take",
-            "heading": "How I Changed the Strategy",
-            "leftLabel": "Before",
-            "left": "<ul><li>How do we stop customers from cancelling?</li></ul>",
-            "leftImg": "",
-            "rightLabel": "After",
-            "right": "<ul><li><span style=\"font-size: 0.9rem;\">How do we create value throughout the customer lifecycle?</span></li></ul><span style=\"font-size: 0.9rem;\"></span>",
-            "rightImg": ""
-          },
-          {
-            "type": "media",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "items": [
-              {
-                "src": "/assets/uploads/b3fd950e99308c23fd2c6373ea2d1aec3b1c081dc08ba51a24de61768202f6cb.png",
-                "caption": "I’m a long time gamer by myself and the topic was something very close to my personality. I stepped back and mapped the entire Xbox customer lifecycle to identify where Microsoft could create value beyond subscription retention."
-              }
-            ]
-          },
-          {
-            "type": "gallery",
-            "nav": "Opportunities",
-            "kicker": "Sharpening defences",
-            "heading": "Understanding the churn",
-            "items": [
-              {
-                "src": "/assets/uploads/a773ac783481d42c6511a78c920e793e636ceb9cceee8ce8c60ede36a47c4336.png",
-                "caption": "The cancellation problem wasn't a single problem.  Different users cancelled for different reasons: Cost, Lack of content, No time to play, Forgotten renewals"
-              },
-              {
-                "src": "/assets/uploads/91bdaf50042a200e17c4708518dacf15f501bdf91a5299ba03b4228bd52fbec1.png",
-                "caption": "Not all churn is equal. Different churn types represent different recovery opportunities, and each opportunity requires a different business strategy."
-              }
-            ],
-            "locked": false
-          },
-          {
-            "type": "media",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "items": [
-              {
-                "src": "/assets/uploads/c2a77337ea427bf5cdd0af826dcab66cdf9687a1494cddcc6de89ac7a4edbd81.png",
-                "caption": "I reframed the work from \"prevent cancellation\" to \"help different gamer types recognize value in different ways.\"   This shift influenced the direction of future exploration and investment. "
-              }
-            ]
-          },
-          {
-            "type": "columns",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "items": [
-              {
-                "label": "",
-                "cells": [
-                  {
-                    "heading": "This shift expanded the conversation beyond cancellation and surfaced new opportunities in:",
-                    "body": "<ul><li>Acquisition</li><li>Engagement</li><li>Retention</li><li>Family growth</li><li>Re-subscription</li><li>Customer reactivation</li></ul><div><br></div><div>\"How do we stop customers from cancelling?\"</div><div><br></div><div><i>to</i></div><div><br></div><div>\"How do we create value throughout the customer lifecycle?\"</div><div><br></div><div>Rather than designing a screen, I was helping define where the product should go next. </div>",
-                    "src": ""
-                  }
-                ]
-              }
-            ],
-            "hsize": "sm"
-          },
-          {
-            "type": "cards",
-            "nav": "Design Vision",
-            "kicker": "Design Vision",
-            "heading": "The vision was guided by five core principles:",
-            "items": [
-              {
-                "title": "Personalize the experience",
-                "body": "Different players have different motivations and should see experiences tailored to their interests, gaming history, and needs.",
-                "icon": "users",
-                "src": ""
-              },
-              {
-                "title": "Reinforce value",
-                "body": "Help users understand the benefits, savings, content, and experiences available through their membership.",
-                "icon": "bolt",
-                "src": ""
-              },
-              {
-                "title": "Celebrate progress",
-                "body": "Highlight achievements, milestones, and gaming history to strengthen emotional connection with the service.",
-                "icon": "heart",
-                "src": ""
-              },
-              {
-                "title": "Offer flexibility",
-                "body": "Provide alternatives beyond cancellation such as plan changes, pauses, or different subscription options.",
-                "icon": "layers",
-                "src": ""
-              },
-              {
-                "title": "Design for growth",
-                "body": "Create modular experiences that allow future experimentation and expansion across channels and touchpoints.",
-                "icon": "leaf",
-                "src": ""
-              }
-            ]
-          },
-          {
-            "type": "media",
-            "locked": true,
-            "encStub": true,
-            "iv": "T2Ux3XyoQZoRHvAM",
-            "ct": "yaybz6i14TwjE9re9RbcVyMAkKSjHlFe59lx5RoUTJXjE1BLCBwIOUBs/PJIB2WHJ9dEN41tYl2p72AqNK2h/8NXfGLYgpS7PffesTDd2WaK1apM8G7owkC6mDc+KI7UsPCR6NCF5atzgH4Q/womFOYussvSwuNyTGUQoluWUTY46wk4WSyaP9LNAS1GQZazD/ROkA8lioNXeG4B/x8PbnA4dFbD4WLTuR3/BHIF+xC/DStQZGOE20p+4Hbu7VCyZkHJV3e31ovj0/sIJZy0rqHVaOhkMxc15ym+JYwL+AlJOnyUwL10Qyi4ACsGhG4sPH9VusAxzJgra8CbGoMeMk0ycKLSRRyobpz4gWwpM3uww0H4+MJ2x6iGAwLuF+ZfG4JiS49deVtvponvG2b46gjmSrt90rWO8wRxyc3ZoyFd5u4gQYLEGNi1badYIrazd7OG4kmkQjRNAGt0sfsWtHHejWrgf1PaOXjXNOyG4GM/+HDGSy21KpxqVqjgDqNDOOvwA5xIF0yKDeWuWo/GADxz6cCXChT2x+XrjScwoNX3IgSCbNu5RqGfUK0pd12rOLSDgdpG1DxZc9uF93GJNpuc5HqN3B2sBEBJ/i6kMPXu3Cx1gnDFR8uwWoARJAg03EsGyap6OyGCwBnrufMxz3dBztxTFSuxg3btohqX0BQ7O9Jfxczmn6lLLDML5CB4A+ePkcQjQkf30ljCrZoD2GTTavUbthTOol7uv4PzOsxbk+8FUEKlhumZ7efbYDw6t0jnsGVLoOQNpYfFDptSKvXuAF6MzrvDtBEpWiCPNDgl8bGLe41x/kY9dzACGDiJHhxmjj274lxxiT5Bo3WlWBXs4SMG5cLIOolSgaur83sh48shGIreUBt+nQu8pyoYzyML4zDfSPC098+oaHj2W9QggH3Fsa/Gsr4shrBEpj1bpO4GHH/TFQitpXcBiHj/zjJUt0Bz3eejerCOs8Ch1qonrpkcOT/h/CEAzz6dDpmsz/AQn+t1ZUYLtBCj6H/7GsfikmBF8Rf2dP7u/x1YCtl9nzuLAaxsv3TtA8yHKQY85zbuAgq3A8vxPfuoFUix4j4pP1RopI/nyhd/WgA0WgVVt7aEDTcX/qDIYDye3J1UmOFe8wlOBLfcD4B7zt6SSj0Fwkwnrt59F4tyhOszGNngkPfCyFiXGP7uZ+7P/wkWJ/8p25CeMUj3"
-          },
-          {
-            "type": "columns",
-            "nav": "",
-            "kicker": "",
-            "heading": "How do we recover revenue differently for different types of churn?",
-            "items": [
-              {
-                "label": "TIER 3 ~40%",
-                "cells": [
-                  {
-                    "heading": "Value led Churn",
-                    "body": "<p>Users questioned economic value.</p><p></p><ul><li>Can't afford it</li><li>Already played available games</li></ul>",
-                    "src": ""
-                  }
-                ]
-              },
-              {
-                "label": "TIER 2 ~30%",
-                "cells": [
-                  {
-                    "heading": "Engagement Churn",
-                    "body": "<p>Users no longer saw reasons to stay.</p><p></p><ul><li>Not enough interesting games</li><li>Prefer another gaming service</li></ul>",
-                    "src": ""
-                  }
-                ]
-              },
-              {
-                "label": "TIER 1 ~20%",
-                "cells": [
-                  {
-                    "heading": "Operational Churn",
-                    "body": "<p>Users no longer saw reasons to stay.</p><p><ul><li>Not enough interesting games</li><li>Prefer another gaming service</li></ul></p>",
-                    "src": ""
-                  }
-                ]
-              },
-              {
-                "label": "",
-                "cells": [
-                  {
-                    "heading": "Business solution:",
-                    "body": "<div><ul><li>Pause plans</li><li>Flexible subscriptions</li><li>Future game notifications</li></ul></div><div>This is where retention becomes product strategy rather than UX optimization.</div>",
-                    "src": ""
-                  }
-                ]
-              },
-              {
-                "label": "",
-                "cells": [
-                  {
-                    "heading": "Business solution:",
-                    "body": "<div><ul><li>Personalized recommendations</li><li>Better discovery</li><li>Upcoming catalogue visibility</li></ul></div><div>This shifts the conversation from subscription management to content marketing.</div>",
-                    "src": ""
-                  }
-                ]
-              },
-              {
-                "label": "",
-                "cells": [
-                  {
-                    "heading": "Business solution:",
-                    "body": "<p><ul><li>Personalized recommendations</li><li>Better discovery</li><li>Upcoming catalogue visibility</li></ul>This shifts the conversation from subscription management to content marketing.</p>",
-                    "src": ""
-                  }
-                ]
-              }
-            ],
-            "hsize": ""
-          },
-          {
-            "type": "text",
-            "nav": "Acquisition Story",
-            "kicker": "Defined Opportunity",
-            "heading": "How do we turn existing Windows customers into Xbox Game Pass customers?",
-            "body": "Windows was already:<div><br></div><div><ul><li>High traffic</li><li>Trusted</li><li>Account-centric</li><li>Biggest canvass of Microsoft, and connected to Microsoft's ecosystem</li></ul></div><div><br></div><div>Making it a natural entry point for Xbox growth.</div>",
-            "list": [],
-            "src": "",
-            "caption": ""
-          },
-          {
-            "type": "split",
-            "nav": "",
-            "kicker": "",
-            "heading": "Identified Directions",
-            "leftLabel": "Notifications",
-            "left": "<p><ul><li>Interruptive</li><li>Feels like a promotion or advertisement</li><li>Good for awareness</li><li>Limited space to explain value</li><li>One-time interaction</li><li>Generic experience</li><li>Risk of being perceived as noise</li></ul></p>",
-            "leftImg": "",
-            "rightLabel": "Settings",
-            "right": "<p><ul><li>Intent-driven</li><li>A natural extension of the OS</li><li>Good for discovery, education, comparison</li><li>Can showcase benefits, plans leading to conversions</li><li>Supports the entire lifecycle</li><li>Can leverage account context and subscription status for personalization</li></ul></p>",
-            "rightImg": ""
-          },
-          {
-            "type": "media",
-            "locked": true,
-            "encStub": true,
-            "iv": "Jh8Q978ixvDnffUF",
-            "ct": "WqUCFbZ3X7d2kEG7ucYbc6hzMXuhd1a057yZcsIfJ0Qrr3puJYtZCie6JeoJlN8uZnL0Bcy8qvmnh8Acg1+BYu0xkKmHSO0LGev0baG/cg8VpMFPVTCx5PhCpqap/s0TBf5EJ9lK1HJW6HUkp4FC2SnRazqKTKaSouTvD124wn3XODEKu64RKq1FF49ffujAE12cDYH5YZSwHvvlhUqskDXBlZ6FSIdqKKiryMe/d53Kz8DmYffwNsC/IOE95h/qnhCEnTUscBzhe63qaczzoWIPoQXNp3lkjkulTCZ12mAG9FMwGhxJfjIdXngQhd2oUZtOwNe/FNv/z0unK0BuyEjE4hAUyKiwzpu+1as869ZRcbzS4QxR0FH/HtCcpC81l1u4vayToIPK1RAUBHxBNG35+JHr+7dy0vWKdAJ3mLYZQA0hJ6Gng/izIjX4rD1dGP3cAI9hFazaBRfj0B0DHUc6824nQUswMkBBBUoneg9VvtRSjWXqGEghyj2t7ber8qSqIE51h7I8XBr4WWzCkpk4e2VHNFPtMZVvXscR/zWcguQ5GG8pEb8tBJOdDV8H7xSHVEWo0KuBFPAa6EaqmUPOK3paQf7F1pmTWZNlv6PL46WuNIwvV/XTgKYDIgJR+6tsDpKjWrw4YCA6ZSAj0K1/Li+TPn+OfRYcwK0XKydNFSCljxVToB4XVmtvVMX+KFGSRFgP0avjxRmrcAP7LfVljLvxAsc="
-          },
-          {
-            "type": "cards",
-            "nav": "Impact",
-            "kicker": "My Impact",
-            "heading": "",
-            "items": [
-              {
-                "title": "Cancellation & Retention",
-                "body": "<p>Transformed cancellation from a subscription-management challenge into a customer lifecycle strategy spanning retention, re-engagement, and long-term customer value growth.</p>",
-                "icon": "",
-                "src": ""
-              },
-              {
-                "title": "Acquisition ",
-                "body": "<p>Positioned Windows as a strategic Xbox growth channel, defining a vision that connected acquisition, onboarding, retention, and reactivation through account-centric.</p>",
-                "icon": "",
-                "src": ""
-              },
-              {
-                "title": "Mentoring & Shipping",
-                "body": "Scaled impact by mentoring two junior designers and translating strategic vision into executable MVPs that informed experimentation and shipped customer experiences.",
-                "icon": "",
-                "src": ""
-              }
-            ]
-          },
-          {
-            "type": "compare",
-            "nav": "",
-            "kicker": "LIVE EXPERIENCES",
-            "heading": "The vision landed",
-            "beforeSrc": "/assets/uploads/eed380894cfad04550f8742d359b1b1ee04859474d69035e4318fd2d5fcb1a9b.png",
-            "afterSrc": "/assets/uploads/1a99d5d4210d6aa4f1a3e12594c0087bc152d8743dd7709e2803a9f74a9e39d9.png",
-            "beforeLabel": "Before",
-            "afterLabel": "After",
-            "body": "The final experience evolved from a downgrade-focused cancellation flow into a content-led retention experience. Rather than immediately presenting alternative plans, the experience highlights personalized game recommendations, recently added titles, upcoming releases, and key membership benefits to help subscribers rediscover the value of Game Pass before making a cancellation decision.",
-            "hsize": "sm"
-          },
-          {
-            "type": "gallery",
-            "nav": "",
-            "kicker": "",
-            "heading": "All shipped experiences",
-            "items": [
-              {
-                "src": "/assets/uploads/1a99d5d4210d6aa4f1a3e12594c0087bc152d8743dd7709e2803a9f74a9e39d9.png",
-                "caption": "Cancellation flow more personalised and value oriented"
-              },
-              {
-                "src": "/assets/uploads/dda0e81214c5d6bf4a5ad2d23f3314fd044f40b3e50356f691339548f1c1ec33.png",
-                "caption": "Windows Settings - Subscription management in Accounts settings"
-              },
-              {
-                "src": "/assets/uploads/2a449860c952c97241b3b95e45a942e105017c6d586177140ddd17de64bf071d.png",
-                "caption": "Windows Settings - Subscription card in Settings home"
-              }
-            ],
-            "hsize": "sm"
-          },
-          {
-            "type": "metrics",
-            "nav": "",
-            "kicker": "BUSINESS IMPACT",
-            "heading": "Cancellation flows",
-            "items": [
-              {
-                "value": "136K",
-                "label": "incremental subscribers annually"
-              },
-              {
-                "value": "$15M",
-                "label": "annualized revenue impact"
-              },
-              {
-                "value": "66K/year",
-                "label": "Experiment 1"
-              },
-              {
-                "value": "70K/year",
-                "label": "Experiment 2"
-              }
-            ],
-            "hsize": "sm"
-          },
-          {
-            "type": "metrics",
-            "nav": "",
-            "kicker": "",
-            "heading": "Windows Acquisition",
-            "items": [
-              {
-                "value": "~1M to ~80M",
-                "label": "TAM Growth"
-              },
-              {
-                "value": "65K",
-                "label": "annual acquisitions from settings home"
-              },
-              {
-                "value": "112K–365K",
-                "label": "annualized acquisitions"
-              },
-              {
-                "value": "0.44M–1M",
-                "label": "annual incremental acquisitions opportunity"
-              },
-              {
-                "value": "380K-780K",
-                "label": "FY24 forecast"
-              }
-            ],
-            "hsize": "sm"
-          }
-        ],
-        "enc": {
-          "v": 1,
-          "it": 210000,
-          "wraps": {
-            "owner": {
-              "salt": "Ilf2a88ZDhalZ5V+jkQYDg==",
-              "iv": "Pa26vnL5Gb6Wq+to",
-              "ct": "uvSoFiuete6j82XIvRXjj3X28i+9G4KwUNsrgGS+G9tVEG9ZLLgmTeqGON9e/6VH"
             }
           }
         }
