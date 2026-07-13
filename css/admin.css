@@ -427,6 +427,9 @@ body.adm-lock .cursor { display: none !important; }
 .study__block-head:hover { background: rgba(255, 255, 255, .02); }
 .study__block-badge { font-family: var(--mono); font-size: .58rem; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--line); border-radius: 5px; padding: .16rem .4rem; flex: 0 0 auto; }
 .study__block-label { flex: 1 1 auto; min-width: 0; font-size: .85rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.study__block-label.is-custom::before { content: ""; display: inline-block; width: 5px; height: 5px; margin-right: .45rem; border-radius: 50%; background: var(--accent); vertical-align: middle; opacity: .85; }
+.study__block-label.is-editing { overflow: visible; }
+.study__block-rename { width: 100%; box-sizing: border-box; font: inherit; font-size: .85rem; color: var(--text); background: var(--bg-elev, #111116); border: 1px solid var(--accent); border-radius: 5px; padding: .16rem .4rem; outline: none; }
 .study__block-ops { display: flex; gap: .2rem; flex: 0 0 auto; opacity: 0; transition: opacity .2s; }
 .study__block-head:hover .study__block-ops, .study__block.is-open .study__block-ops { opacity: 1; }
 .study__block-chev { flex: 0 0 auto; color: var(--text-faint); font-size: 1.1rem; line-height: 1; transition: transform .25s var(--ease), color .25s; }
