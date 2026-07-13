@@ -89,6 +89,20 @@
   ],
   "work": [
     {
+      "id": "w1783924971648",
+      "featured": false,
+      "theme": "grid",
+      "plateTag": "Tag",
+      "client": "Microsoft Account",
+      "period": "2022 — 2023",
+      "title": "Project title",
+      "desc": "What you did and the impact.",
+      "tags": [
+        "Tag"
+      ],
+      "image": ""
+    },
+    {
       "id": "w1783840785203",
       "featured": false,
       "theme": "grid",
@@ -1636,7 +1650,7 @@
       "theme": "grid",
       "plateTag": "Tag",
       "client": "Xbox Game Pass",
-      "period": "2021-2022",
+      "period": "2022 — 2023",
       "title": "Designing Growth Lifecycle for Xbox Customers",
       "desc": "Designed a growth lifecycle vision for Xbox Game Pass spanning acquisition, engagement, retention, and reactivation across Windows and web experiences. The work uncovered new opportunities to reduce churn through personalization, strengthen long-term engagement, and guide future product investments beyond traditional subscription management.",
       "tags": [
