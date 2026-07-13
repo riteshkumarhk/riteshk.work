@@ -1212,12 +1212,12 @@
           return;
         }
         html += '<div class="card workcard">' + cardHead(w.client || w.title || ("Work " + (i + 1)), "work", i, list.length) +
-          '<div class="block-flags">' +
+          '<div class="block-flags workcard__flags">' +
             '<label class="chk workcard__feat"><input type="checkbox" data-act="feature" data-index="' + i + '"' + (w.featured ? " checked" : "") + " /> Feature on homepage</label>" +
             '<label class="chk"><input type="checkbox" data-act="work-hidden" data-index="' + i + '"' + (w.hidden ? " checked" : "") + " /> Hidden from the default site \u2014 only shown via a ticket</label>" +
           '</div>' +
           '<div class="af__row">' + itemField("work", i, "client", "Client") + itemField("work", i, "period", "Period") + "</div>" +
-          '<div class="workcard__name">' + escHtml(w.title || "Untitled project") + "</div>" +
+          '<div class="workcard__name' + (w.title && w.title !== "Project title" ? "" : " workcard__name--hint") + '">' + (w.title && w.title !== "Project title" ? escHtml(w.title) : "Edit the case study to add a project title") + "</div>" +
           studyToggle(w, i) +
           "</div>";
       });
@@ -1401,7 +1401,7 @@
     switch (list) {
       case "highlights": return { value: "0+", label: "New metric" };
       case "capabilities": return "New capability";
-      case "work": return { id: "w" + Date.now(), featured: false, theme: "grid", plateTag: "Tag", client: "Client", period: "Year", title: "Project title", desc: "What you did and the impact.", tags: ["Tag"], image: "" };
+      case "work": return { id: "w" + Date.now(), featured: false, theme: "grid", plateTag: "Tag", client: "Client", period: "Year", title: "", desc: "What you did and the impact.", tags: ["Tag"], image: "" };
       case "path": return { years: "Year", present: false, role: "Role", org: "Organisation", desc: "What you did." };
       case "recognition":
       case "education": return { title: "New entry", meta: "" };

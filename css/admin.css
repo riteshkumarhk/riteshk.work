@@ -514,6 +514,9 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 /* compact work card (L1) */
 .workcard__name { font-family: var(--serif); font-weight: 300; font-size: 1.05rem; color: var(--text); margin: .5rem 0 .2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workcard__feat { margin-bottom: .7rem; }
+.workcard__flags { flex-direction: row; flex-wrap: wrap; align-items: center; gap: .5rem 1.4rem; margin-bottom: 1rem; }
+.workcard__flags .workcard__feat { margin-bottom: 0; }
+.workcard__name--hint { font-family: inherit; font-weight: 400; font-style: italic; font-size: .8rem; color: var(--text-faint); white-space: normal; overflow: visible; }
 .study__add { margin-top: .9rem; }
 .study__pickbtn { width: 100%; }
 .study__foot { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .9rem; }
