@@ -92,13 +92,18 @@
       "id": "w1783924971648",
       "featured": true,
       "theme": "grid",
-      "plateTag": "Tag",
+      "plateTag": "Unified Consent",
       "client": "Microsoft Account",
       "period": "2022 — 2023",
       "title": "One Microsoft, One Consent",
       "desc": "Microsoft’s consent strategy was moving from product-level permissions to an account-level model that could support connected, personalized experiences across the Microsoft ecosystem. My role was to translate that strategy into a scalable user experience framework, helping make consent clearer, more reusable, and consistent across product entry points like Windows OOBE, sign-in, apps, and contextual notices.",
       "tags": [
-        "Tag"
+        "Platform Design",
+        "Systems Thinking",
+        "Trust Frameworks",
+        "Ecosystem Strategy",
+        "Cross-Functional Leadership",
+        "Scalable Design Systems"
       ],
       "image": "/assets/uploads/cd132b9755109dcf36ed4b8d48738d7f489a514bf872c64722a1a3aee50862d3.png",
       "study": {
@@ -106,7 +111,7 @@
         "role": "Product Designer II ",
         "team": "1 Designer, 1 Product Manager, 3 Developers, 1 Content Designer, Partner product teams, Privacy and Compliances",
         "timeline": "FY22 - FY23",
-        "scope": "A horizontal capability spanning multiple Microsoft endpoints rather than a single product experience.",
+        "scope": "Account-level Privacy & Consent Platform across Microsoft Ecosystem",
         "cover": "",
         "unlockHash": "",
         "blocks": [
