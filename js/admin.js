@@ -1107,7 +1107,7 @@
     return '<div class="study__panel">' +
       csgenPanel(w, i) +
       header + meta +
-      '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span>' + (blocks.length ? '<button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">\u2728 Review feedback</button>' : "") + "</div>" +
+      '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span>' + (blocks.length ? '<span class="l2grp__actions"><button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">\u2728 Review feedback</button><button class="btn btn--auto l2grp__ai" data-act="iprep-open" data-index="' + i + '" title="Generate likely interview questions from this case study">\uD83C\uDF99 Interview prep</button></span>' : "") + "</div>" +
       '<div class="study__blocks">' + list + "</div>" + add + "</section>" +
       unlockBlock +
       '<div class="study__foot"><a class="btn btn--ghost" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '">Preview case study \u2197</a><button class="btn btn--primary" data-act="study-close" data-index="' + i + '">Done</button></div>' +
@@ -1545,6 +1545,7 @@
     if (act === "csgen-variant") { csgenRun(i, true); return; }
     if (act === "csgen-pdf") { csgenAddPdf(i); return; }
     if (act === "fbrev-open") { fbReviewModal(i); return; }
+    if (act === "iprep-open") { iprepModal(i); return; }
     if (act === "csgen-ref-toggle") { const wrap = b.closest(".csgen__ref"); if (wrap) { const open = wrap.classList.toggle("is-open"); b.textContent = (open ? "\u2212" : "+") + " Paste a reference case study to echo (optional)"; const cw = data.work[i]; if (cw) csgenState(cw.id).refShow = open; } return; }
     if (act === "study-toggle") { openL2(i); return; }
     if (act === "study-close") { closeL2(); return; }
@@ -3061,6 +3062,206 @@
       refreshL2Preview();
       close();
       status(applied + " feedback edit" + (applied > 1 ? "s" : "") + " applied \u2014 review below, then Publish when ready.", true);
+    });
+  }
+
+  /* ---------- AI interview prep (per case study, level-aware) ---------- */
+  var IPREP_LEVELS = [
+    ["senior", "Senior", "Craft, execution &amp; the decisions behind the work"],
+    ["staff", "Principal / Staff", "Ambiguity, strategy &amp; cross-team leverage"],
+    ["leader", "Design Leader", "Vision, team, org &amp; business outcomes"]
+  ];
+  var iprepState = {};
+  function iprepSt(id) { return iprepState[id] || (iprepState[id] = { level: "staff", scope: "study", jd: "" }); }
+  function iprepStrip(s) { return String(s == null ? "" : s).replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim(); }
+  function iprepFlat(o) {
+    if (o == null) return "";
+    if (typeof o === "string") return iprepStrip(o);
+    if (Array.isArray(o)) return o.map(iprepFlat).filter(Boolean).join(" \u00b7 ");
+    if (typeof o === "object") return Object.keys(o).map(function (k) { return typeof o[k] === "string" ? iprepStrip(o[k]) : (Array.isArray(o[k]) ? iprepFlat(o[k]) : ""); }).filter(Boolean).join(" \u00b7 ");
+    return "";
+  }
+  function iprepContext(w, scope) {
+    var lines = [], st = w.study || {};
+    lines.push("# THIS CASE STUDY: " + (w.title || "Untitled"));
+    if (w.desc) lines.push("Summary: " + iprepStrip(w.desc));
+    [["tagline", "Tagline"], ["role", "My role"], ["team", "Team"], ["timeline", "Timeline"], ["scope", "Scope"]].forEach(function (p) { if (st[p[0]]) lines.push(p[1] + ": " + iprepStrip(st[p[0]])); });
+    (st.blocks || []).forEach(function (b) {
+      var parts = [];
+      ["kicker", "heading", "body", "sub", "caption", "leftLabel", "rightLabel", "beforeLabel", "afterLabel"].forEach(function (f) { if (typeof b[f] === "string" && b[f].trim()) parts.push(iprepStrip(b[f])); });
+      ["list", "left", "right"].forEach(function (f) { if (Array.isArray(b[f])) b[f].forEach(function (v) { if (v) parts.push("- " + iprepStrip(v)); }); else if (typeof b[f] === "string" && b[f].trim()) parts.push(iprepStrip(b[f])); });
+      (b.items || []).forEach(function (it) {
+        ["value", "label", "title", "heading", "body", "q", "a", "cite", "note"].forEach(function (f) { if (typeof it[f] === "string" && it[f].trim()) parts.push(iprepStrip(it[f])); });
+        (it.cells || []).forEach(function (cell) { ["heading", "body"].forEach(function (f) { if (cell[f]) parts.push(iprepStrip(cell[f])); }); });
+      });
+      if (parts.length) lines.push("[" + (b.type || "section") + "] " + parts.join(" "));
+    });
+    if (scope === "portfolio") {
+      var L = data.landing || {};
+      var about = [L.aboutLead, L.about, L.aboutSign].map(iprepStrip).filter(Boolean).join(" ");
+      if (about) lines.push("\n# ABOUT ME\n" + about);
+      if (Array.isArray(data.capabilities) && data.capabilities.length) lines.push("\n# CAPABILITIES\n" + data.capabilities.map(iprepFlat).filter(Boolean).join(", "));
+      if (Array.isArray(data.path) && data.path.length) { lines.push("\n# EXPERIENCE"); data.path.forEach(function (p) { var t = iprepFlat(p); if (t) lines.push("- " + t); }); }
+      if (Array.isArray(data.recognition) && data.recognition.length) lines.push("\n# RECOGNITION\n" + data.recognition.map(iprepFlat).filter(Boolean).join("; "));
+      var others = (data.work || []).filter(function (x) { return x && x.id !== w.id && !x.hidden && !x.encWork; });
+      if (others.length) { lines.push("\n# OTHER PROJECTS"); others.forEach(function (x) { lines.push("- " + iprepStrip(x.title) + (x.desc ? ": " + iprepStrip(x.desc) : "")); }); }
+    }
+    var txt = lines.filter(Boolean).join("\n");
+    return txt.length > 9000 ? txt.slice(0, 9000) + "\u2026" : txt;
+  }
+  function iprepSystem(level) {
+    var lv = {
+      senior: "a SENIOR product designer role \u2014 probe craft, execution detail, collaboration, and the reasoning behind concrete design decisions.",
+      staff: "a PRINCIPAL/STAFF product designer role \u2014 probe ambiguity, problem framing, strategy, systems thinking and cross-team influence far more than pixel-level execution.",
+      leader: "a DESIGN LEADERSHIP role (Head/Director of Design) \u2014 probe vision, team building, org design, hiring, stakeholder management and business outcomes."
+    }[level] || "";
+    return [
+      "You are an experienced design hiring manager and interview coach. Given a candidate's REAL portfolio material, generate the questions a sharp interviewer would actually ask.",
+      "Interviewing for: " + lv,
+      "Center questions on the provided case study, but broaden naturally to role-level, behavioral, strategy and leadership questions where relevant.",
+      "Rules:",
+      "- Ground every question in the candidate's ACTUAL material \u2014 reference the real project, decision, metric or tradeoff. No generic filler.",
+      "- Mix categories: Project deep-dive, Problem framing, Decisions & tradeoffs, Impact & metrics, Collaboration & stakeholders, and (for higher levels) Strategy / Vision / Leadership.",
+      "- Calibrate difficulty and focus to the target level.",
+      "- If a target role / job description is provided, tailor toward it.",
+      "- Never invent facts about the candidate; ask about gaps instead of assuming.",
+      "Return ONLY valid JSON (no markdown): {\"questions\":[{\"q\":string,\"category\":string,\"why\":string}]}. \"why\" = one short line on what a strong answer would show."
+    ].join("\n");
+  }
+  function iprepQUser(ctx, jd, n) {
+    return "TARGET ROLE / JOB DESCRIPTION (optional):\n" + (jd ? jd.trim() : "(none provided)") + "\n\nGenerate exactly " + n + " questions, ordered from opener to hardest.\n\nCANDIDATE MATERIAL:\n" + ctx;
+  }
+  function iprepAnsSystem(level) {
+    return [
+      "You are an interview coach helping a product designer rehearse. Given ONE interview question and the candidate's real portfolio material, draft a strong, honest answer IN FIRST PERSON that they could say aloud.",
+      "Interviewing at level: " + level + ".",
+      "Auto-pick the BEST format for THIS question:",
+      "- Behavioral / 'tell me about a time' \u2192 STAR (Situation, Task, Action, Result), lightly signposted.",
+      "- Project walkthrough \u2192 context \u2192 problem \u2192 my role \u2192 key decisions & tradeoffs \u2192 outcome \u2192 reflection.",
+      "- Quick / factual \u2192 a few crisp talking-point sentences.",
+      "Rules:",
+      "- Use ONLY facts in the material. NEVER invent metrics, names or outcomes. If a needed detail is missing, insert a bracketed placeholder like [add the metric] so they can fill it.",
+      "- Natural spoken voice, confident but not boastful. Usually 120\u2013220 words.",
+      "- Return clean minimal HTML: <p> paragraphs, <strong> for STAR labels or key phrases, <ul><li> for talking points. No markdown, no preamble."
+    ].join("\n");
+  }
+  function iprepAnsUser(q, ctx, jd) {
+    return "QUESTION:\n" + q + "\n\n" + (jd ? "TARGET ROLE:\n" + jd.trim() + "\n\n" : "") + "CANDIDATE MATERIAL:\n" + ctx;
+  }
+  async function iprepResolveJd(raw) {
+    var s = String(raw || "").trim();
+    if (!s || !/^https?:\/\/\S+$/i.test(s)) return s;
+    try {
+      var r = await fetch(s);
+      if (!r.ok) return s;
+      var t = await r.text();
+      t = t.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
+      return t.length > 300 ? t.slice(0, 4000) : s;
+    } catch (e) { return s; }
+  }
+  function iprepSafeHtml(s) {
+    return String(s || "").replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/ on\w+="[^"]*"/gi, "").replace(/ on\w+='[^']*'/gi, "").replace(/javascript:/gi, "");
+  }
+  function iprepModal(i) {
+    var w = data.work[i]; if (!w) return;
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { iprepModal(i); }); return; }
+    var g = iprepSt(w.id);
+    var questions = [];
+    var modal = document.createElement("div");
+    modal.className = "pass pass--wide iprep-modal";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">\uD83C\uDF99 Interview prep \u2014 ' + escHtml(w.title || "case study") + '</div>' +
+      '<div class="pass__sub">Generate the questions an interviewer is likely to ask about this work, framed for the level you\u2019re targeting. Ask for a suggested answer on any question.</div>' +
+      '<div class="iprep__setup">' +
+        '<div class="af"><label class="af__label">Interviewing for</label><div class="iprep__levels">' +
+          IPREP_LEVELS.map(function (l) { return '<button type="button" class="iprep__lvl' + (g.level === l[0] ? " is-on" : "") + '" data-iprep-lvl="' + l[0] + '"><span class="iprep__lvl-name">' + l[1] + '</span><span class="iprep__lvl-desc">' + l[2] + '</span></button>'; }).join("") +
+        '</div></div>' +
+        '<div class="af__row">' +
+          '<div class="af"><label class="af__label">Focus</label><select id="iprepScope"><option value="study"' + (g.scope === "study" ? " selected" : "") + '>This case study (deep dive)</option><option value="portfolio"' + (g.scope === "portfolio" ? " selected" : "") + '>Whole portfolio</option></select></div>' +
+          '<div class="af"><label class="af__label">How many</label><select id="iprepCount"><option>6</option><option selected>10</option><option>14</option></select></div>' +
+        '</div>' +
+        '<div class="af"><label class="af__label">Target role or job description <span class="af__opt">(optional)</span></label><textarea id="iprepJd" rows="3" placeholder="Paste a role title, the JD text, or a link\u2026">' + escHtml(g.jd || "") + '</textarea>' +
+        '<div class="af__hint">A link is sent as context (job sites often block reading \u2014 paste the text for best results). <button class="iprep__filebtn" data-iprep-file type="button">Add PDF / Word / text\u2026</button></div></div>' +
+      '</div>' +
+      '<div class="iprep__list" hidden></div>' +
+      '<div class="pass__err"></div>' +
+      '<div class="pass__actions iprep__foot">' +
+        '<button class="btn btn--ghost" data-cancel>Close</button>' +
+        '<button class="btn btn--ghost" data-iprep-new hidden>\u2190 New set</button>' +
+        '<button class="btn btn--auto" data-iprep-run>Generate questions</button>' +
+      '</div>' +
+      '<div class="pass__note">A prep tool only \u2014 nothing here is saved to or published on your site. Answers use only your own content.</div></div>';
+    document.body.appendChild(modal);
+    var err = modal.querySelector(".pass__err");
+    var setup = modal.querySelector(".iprep__setup");
+    var list = modal.querySelector(".iprep__list");
+    var runBtn = modal.querySelector("[data-iprep-run]");
+    var newBtn = modal.querySelector("[data-iprep-new]");
+    var jdEl = modal.querySelector("#iprepJd");
+    var close = function () { g.jd = jdEl.value; modal.remove(); };
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    modal.querySelectorAll("[data-iprep-lvl]").forEach(function (btn) {
+      btn.addEventListener("click", function () { g.level = btn.dataset.iprepLvl; modal.querySelectorAll("[data-iprep-lvl]").forEach(function (b2) { b2.classList.toggle("is-on", b2 === btn); }); });
+    });
+    modal.querySelector("[data-iprep-file]").addEventListener("click", function () {
+      var inp = document.createElement("input");
+      inp.type = "file"; inp.accept = ".pdf,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.txt,.md,.markdown,text/plain";
+      inp.onchange = async function () {
+        var f = inp.files && inp.files[0]; if (!f) return;
+        try { var t = ((await fbExtractFile(f)) || "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim(); if (t) { jdEl.value = (jdEl.value.trim() ? jdEl.value.trim() + "\n\n" : "") + t; err.textContent = ""; } } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t read that file."; }
+      };
+      inp.click();
+    });
+    newBtn.addEventListener("click", function () { list.hidden = true; setup.hidden = false; newBtn.hidden = true; runBtn.hidden = false; err.textContent = ""; });
+    function renderQuestions() {
+      list.innerHTML = questions.map(function (q, idx) {
+        return '<div class="iprep__card" data-qi="' + idx + '">' +
+          '<div class="iprep__q-top"><span class="iprep__cat">' + escHtml(q.category || "Question") + '</span><span class="iprep__n">' + (idx + 1) + "</span></div>" +
+          '<div class="iprep__q">' + escHtml(q.q || "") + "</div>" +
+          (q.why ? '<div class="iprep__why">' + escHtml(q.why) + "</div>" : "") +
+          '<div class="iprep__a" hidden></div>' +
+          '<div class="iprep__q-act"><button class="btn btn--ghost" data-iprep-ans="' + idx + '">\u2728 Suggest an answer</button></div>' +
+          "</div>";
+      }).join("");
+      list.hidden = false; setup.hidden = true; runBtn.hidden = true; newBtn.hidden = false;
+    }
+    runBtn.addEventListener("click", async function () {
+      err.textContent = "";
+      g.scope = modal.querySelector("#iprepScope").value; g.jd = jdEl.value;
+      var n = +modal.querySelector("#iprepCount").value || 10;
+      runBtn.disabled = true; runBtn.textContent = "Thinking\u2026";
+      try {
+        var jd = await iprepResolveJd(jdEl.value);
+        var ctx = iprepContext(w, g.scope);
+        var obj = csgenParse(await aiText(aiCfg("txt"), iprepSystem(g.level), iprepQUser(ctx, jd, n), { json: true, maxTokens: 2600, temperature: 0.75 }));
+        var raw = obj && Array.isArray(obj.questions) ? obj.questions : (Array.isArray(obj) ? obj : null);
+        if (!raw || !raw.length) throw new Error("The AI didn\u2019t return questions \u2014 try again.");
+        questions = raw.map(function (q) { return typeof q === "string" ? { q: q } : (q && typeof q.q === "string" ? { q: q.q, category: q.category, why: q.why } : null); }).filter(Boolean);
+        g.__ctx = ctx; g.__jd = jd;
+        renderQuestions();
+      } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t generate questions."; }
+      runBtn.disabled = false; runBtn.textContent = "Generate questions";
+    });
+    list.addEventListener("click", async function (e) {
+      var btn = e.target.closest("[data-iprep-ans]"); if (!btn) return;
+      var idx = +btn.dataset.iprepAns; var q = questions[idx]; if (!q) return;
+      var card = list.querySelector('.iprep__card[data-qi="' + idx + '"]'); if (!card) return;
+      var ansEl = card.querySelector(".iprep__a");
+      btn.disabled = true; var was = btn.textContent; btn.textContent = "Drafting\u2026"; err.textContent = "";
+      try {
+        var html = await aiText(aiCfg("txt"), iprepAnsSystem(g.level), iprepAnsUser(q.q, g.__ctx || iprepContext(w, g.scope), g.__jd || ""), { maxTokens: 900, temperature: 0.6 });
+        html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
+        ansEl.innerHTML = iprepSafeHtml(html); ansEl.hidden = false;
+        card.querySelector(".iprep__q-act").innerHTML = '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">\u21bb Regenerate</button><button class="btn btn--ghost" data-iprep-copy="' + idx + '">Copy</button>';
+      } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t draft an answer."; btn.disabled = false; btn.textContent = was; }
+    });
+    list.addEventListener("click", function (e) {
+      var cb = e.target.closest("[data-iprep-copy]"); if (!cb) return;
+      var idx = +cb.dataset.iprepCopy; var card = list.querySelector('.iprep__card[data-qi="' + idx + '"]'); if (!card) return;
+      var ansEl = card.querySelector(".iprep__a"); var txt = ansEl ? ansEl.innerText : ""; if (!txt) return;
+      if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function () { cb.textContent = "Copied"; setTimeout(function () { cb.textContent = "Copy"; }, 1400); }).catch(function () {});
     });
   }
 
