@@ -529,8 +529,23 @@
   function richInit(v) {
     v = v == null ? "" : String(v);
     if (!v) return "";
-    if (isRtHtml(v)) return v;
-    return v.split(/\n\n+/).map(function (p) { return "<p>" + rtInlineMd(escForRt(p)).replace(/\n/g, "<br>") + "</p>"; }).join("");
+    var html = isRtHtml(v) ? v : v.split(/\n\n+/).map(function (p) { return "<p>" + rtInlineMd(escForRt(p)).replace(/\n/g, "<br>") + "</p>"; }).join("");
+    return rtHostImgsForEdit(html);
+  }
+  // In the editor, hosted /assets/uploads images must display via a URL that works locally
+  // (in-memory bytes or the raw GitHub URL) — the bare path 404s on the dev server and collapses
+  // to a thin line. Keep the canonical path in data-src so serialize restores the lean path.
+  function rtHostImgsForEdit(html) {
+    if (!html || html.indexOf("assets/uploads/") === -1 || typeof document === "undefined") return html;
+    try {
+      var tmp = document.createElement("div");
+      tmp.innerHTML = html;
+      tmp.querySelectorAll("img").forEach(function (im) {
+        var s = im.getAttribute("src") || "";
+        if (isHostedPath(s) && !im.getAttribute("data-src")) { im.setAttribute("data-src", s); im.setAttribute("src", previewSrc(s)); }
+      });
+      return tmp.innerHTML;
+    } catch (e) { return html; }
   }
   function rtClean(html) {
     return String(html == null ? "" : html)
@@ -560,7 +575,11 @@
       richArea('data-sblock="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ccell="' + c + '" data-rtcellfield="' + field + '"', cell[field]) + "</div>";
   }
   function rtSerialize(area) {
-    var html = rtClean(area.innerHTML).trim();
+    var clone = area.cloneNode(true);
+    clone.querySelectorAll(".rt__rz").forEach(function (h) { h.remove(); });
+    clone.querySelectorAll(".rt__fig.is-imgsel").forEach(function (f) { f.classList.remove("is-imgsel"); });
+    clone.querySelectorAll("img[data-src]").forEach(function (im) { im.setAttribute("src", im.getAttribute("data-src")); im.removeAttribute("data-src"); });
+    var html = rtClean(clone.innerHTML).trim();
     if (/^(\s|<br\s*\/?>|<p>(\s|<br\s*\/?>)*<\/p>|<div>(\s|<br\s*\/?>)*<\/div>)*$/i.test(html)) html = "";
     var i = +area.dataset.sblock, j = +area.dataset.bindex;
     var b = data.work[i] && data.work[i].study && data.work[i].study.blocks[j];
@@ -586,13 +605,17 @@
       rtSerialize(area); return;
     }
     if (cmd === "image") {
-      // pickImage calls back TWICE (instant data-URI, then the hosted path) — insert once, then just swap the src so the image isn't added twice.
+      // pickImage calls back TWICE (instant data-URI, then the hosted path) — insert once, then swap.
+      // For the hosted path, display via previewSrc (works locally) and keep the canonical path in data-src.
       var imgFig = null;
       pickImage(function (uri) {
+        var hosted = isHostedPath(uri);
         if (imgFig && area.contains(imgFig)) {
-          var im = imgFig.querySelector("img"); if (im) im.setAttribute("src", uri);
+          var im = imgFig.querySelector("img");
+          if (im) { if (hosted) { im.setAttribute("data-src", uri); im.setAttribute("src", previewSrc(uri)); } else im.setAttribute("src", uri); }
         } else {
-          area.insertAdjacentHTML("beforeend", '<figure class="rt__fig"><img src="' + escAttr(uri) + '" alt="" /></figure><p><br></p>');
+          var srcAttr = hosted ? ('data-src="' + escAttr(uri) + '" src="' + escAttr(previewSrc(uri)) + '"') : ('src="' + escAttr(uri) + '"');
+          area.insertAdjacentHTML("beforeend", '<figure class="rt__fig"><img ' + srcAttr + ' alt="" /></figure><p><br></p>');
           var figs = area.querySelectorAll("figure.rt__fig");
           imgFig = figs[figs.length - 1] || null;
         }
