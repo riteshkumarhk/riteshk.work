@@ -147,13 +147,17 @@ img[data-zoom] { cursor: zoom-in; }
 .pjb--hsm .pjb__quote, .pjb--hsm .pjb__quote--rich p { font-size: clamp(1.25rem, 2.6vw, 1.8rem); }
 .pjb--hlg .pjb__quote, .pjb--hlg .pjb__quote--rich p { font-size: clamp(2rem, 5vw, 3.6rem); }
 
-.pjb__prose p { font-size: clamp(1rem, 1.25vw, 1.15rem); line-height: 1.7; color: var(--text-dim); max-width: 66ch; margin-bottom: 1.1rem; }
+.pjb__prose p { font-size: clamp(1rem, 1.25vw, 1.15rem); line-height: 1.7; color: var(--text); max-width: 66ch; margin-bottom: 1.1rem; }
 .pjb__prose p:last-child { margin-bottom: 0; }
-/* Emphasis colour is tied to bold/italic. The rich editor's B/I buttons emit
-   <b>/<i> while markdown (**x** / *x*) emits <strong>/<em> — style both so the
-   result is identical however the author created it. */
+/* Bold/italic emphasis is consistent whether authored via the editor (<b>/<i>)
+   or markdown (**x** / *x* -> <strong>/<em>). */
 .pjb__prose strong, .pjb__prose b { color: var(--text); font-weight: 500; }
 .pjb__prose strong.accent, .pjb__prose em, .pjb__prose i { color: var(--accent); }
+/* Tone control: body paragraphs are BRIGHT by default. Wrap a run in
+   <span class="tdim"> (the editor's Tone button) to MUTE it to grey. Bullets stay
+   grey via .pjb__prose li below. Placed last so muting wins over emphasis inside it. */
+.pjb__prose .tdim, .pjb__prose .tdim strong, .pjb__prose .tdim b,
+.pjb__prose .tdim em, .pjb__prose .tdim i { color: var(--text-dim); }
 /* rich-body extras: bullet/number lists, inserted media, alignment */
 .pjb__prose ul, .pjb__prose ol { margin: 1rem 0; padding-left: 1.3rem; display: grid; gap: .5rem; max-width: 66ch; }
 .pjb__prose ul { list-style: none; padding-left: 1.5rem; }
