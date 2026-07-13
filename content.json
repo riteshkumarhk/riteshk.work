@@ -192,9 +192,9 @@
           },
           {
             "type": "text",
-            "nav": "Section",
-            "kicker": "",
-            "heading": "",
+            "nav": "Explorations",
+            "kicker": "Explorations",
+            "heading": "How do we communicate value beyond text?",
             "body": "",
             "list": [],
             "src": "",
@@ -205,7 +205,71 @@
             "nav": "",
             "kicker": "",
             "heading": "",
-            "items": []
+            "items": [
+              {
+                "src": "/assets/uploads/fb0cba072a6b297fcc6c5981fad23ef44d6ba0437cfa9c2adc6ca7e25d72a6c2.gif",
+                "caption": "",
+                "size": "custom",
+                "fitRatio": "3:2",
+                "shrink": 35,
+                "bg": "#ffffff"
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "How much content do we show?",
+            "body": "",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/b0f85530d879036e614aaaaaa47b3f965839cd74074504437fb04b3b66e65dd6.gif",
+                "caption": "",
+                "size": "custom",
+                "fitRatio": "3:2",
+                "shrink": 35,
+                "bg": "#ffffff"
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "How do we present the content?",
+            "body": "",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/6b8455f3d9ddcca141f172c7ffa30958101944491abc165bbc202a0fe78b9f1d.gif",
+                "caption": "",
+                "size": "fill",
+                "fitRatio": "3:2",
+                "shrink": 35,
+                "bg": "#ffffff"
+              }
+            ],
+            "sep": false
           }
         ]
       }
