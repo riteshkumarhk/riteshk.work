@@ -485,12 +485,24 @@
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__flow pjb__flow--' + flow + '">' + nodes + "</div>" + ret;
   }
 
+  function mediagridBlock(b) {
+    var layout = b.gridLayout === "cluster" ? "cluster" : "uniform";
+    var cells = (b.items || []).map(function (m, i) {
+      var body = mediaSrc(m)
+        ? mediaEl(m, "pjb__media-el")
+        : '<div class="pjb__shot-ph pjb__shot-ph--' + SHOT_THEMES[i % SHOT_THEMES.length] + '"><span class="pjb__shot-tag">Visual redacted</span></div>';
+      var cap = m.caption ? '<figcaption class="pjb__grid-cap">' + esc(m.caption) + "</figcaption>" : "";
+      return '<figure class="pjb__grid-cell"><div class="pjb__grid-media">' + body + "</div>" + cap + "</figure>";
+    }).join("");
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__mediagrid pjb__mediagrid--' + layout + '">' + cells + "</div>";
+  }
+
   var RENDERERS = {
     text: textBlock, statement: stmtBlock, metrics: metricsBlock,
     steps: stepsBlock, media: mediaBlock, split: splitBlock, faq: faqBlock,
     cards: cardsBlock, gallery: galleryBlock, figure: figureBlock,
     columns: columnsBlock, rows: rowsBlock, compare: compareBlock, stickies: stickiesBlock, voices: voicesBlock,
-    workflow: workflowBlock,
+    workflow: workflowBlock, mediagrid: mediagridBlock,
   };
   function renderBlock(b, i) {
     var navLabel = b.nav || "";
