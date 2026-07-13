@@ -99,8 +99,8 @@ img[data-zoom] { cursor: zoom-in; }
 .pj__side-back:hover { color: var(--text); }
 
 /* ---------- main column ---------- */
-.pj__main { min-width: 0; padding: 0 clamp(1.5rem, 4vw, 3.5rem); opacity: 0; transition: opacity .55s var(--ease) .05s; }
-.pj.is-open .pj__main { opacity: 1; }
+.pj__main { min-width: 0; padding: 0 clamp(1.5rem, 4vw, 3.5rem); opacity: 0; transform: translateY(90px); transition: opacity .55s var(--ease) .06s, transform .66s var(--ease) .06s; will-change: transform; }
+.pj.is-open .pj__main { opacity: 1; transform: none; }
 
 /* ---------- cover (image / gif / video) ---------- */
 .pj__cover {
