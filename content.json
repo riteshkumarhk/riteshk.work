@@ -90,7 +90,7 @@
   "work": [
     {
       "id": "w1783924971648",
-      "featured": false,
+      "featured": true,
       "theme": "grid",
       "plateTag": "Tag",
       "client": "Microsoft Account",
@@ -127,16 +127,24 @@
             "heading": "",
             "items": [
               {
-                "src": "",
-                "caption": ""
+                "src": "/assets/uploads/fa51e4583597215f73142f2a76c0c1ca4b5c4c6e2a89431e065a7d9fe71f1f05.png",
+                "caption": "Windows 11 OOBE"
               },
               {
-                "src": "",
-                "caption": ""
+                "src": "/assets/uploads/344fb955873ad603f7dc812123e079dae98b29d31689015126fb08c02545513c.png",
+                "caption": "Microsoft Edge"
               },
               {
-                "src": "",
-                "caption": ""
+                "src": "/assets/uploads/646eb2e95dd0a2fdab61adaf309930f0c15f718e55bd4d1c07701ebe2f22ba80.png",
+                "caption": "OneDrive"
+              },
+              {
+                "src": "/assets/uploads/72de2b3c9baa4aaed62b55510421f9e907df3d38174ff25110780980a1e4008a.png",
+                "caption": "M365 Win32 apps"
+              },
+              {
+                "src": "/assets/uploads/5c010ade1fc86657c3d05782d3fa64683aa41d7906e1a46673c17dd572df753e.png",
+                "caption": "M365 Mobile apps"
               }
             ],
             "sep": false
