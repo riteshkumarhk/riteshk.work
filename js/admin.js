@@ -821,8 +821,10 @@
   function itemRepeater(i, j, b) {
     var spec = ITEM_SPEC[b.type]; if (!spec) return "";
     var items = b.items || (b.items = []);
+    var fields = spec.fields;
+    if (b.type === "voices" && b.mode !== "chat") fields = fields.filter(function (f) { return f[0] !== "side"; });
     var rows = items.map(function (it, k) {
-      var flds = spec.fields.map(function (f) { return itemFieldEl(i, j, k, it, f); }).join("");
+      var flds = fields.map(function (f) { return itemFieldEl(i, j, k, it, f); }).join("");
       return '<div class="rep__item"><div class="rep__bar">' +
         '<span class="rep__grip sortgrip" data-grip data-sortkey="item:' + i + ':' + j + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
         '<span class="rep__n">' + escHtml(spec.one) + " " + (k + 1) + '</span>' +
@@ -1209,6 +1211,7 @@
     else if (f === "items") b.items = parseItems(b.type, t.value);
     else b[f] = t.value;
     saveDraft();
+    if (b.type === "voices" && f === "mode") { renderL2(); return; }
     refreshL2Preview();
   }
 
