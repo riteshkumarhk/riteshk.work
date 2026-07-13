@@ -808,7 +808,34 @@
             "body": "Should onboarding ask users to invest in Edge first, or should Edge invest in the user first?",
             "sub": "We are yet to get the answers...",
             "src": "",
-            "caption": ""
+            "caption": "",
+            "hsize": "sm"
+          },
+          {
+            "type": "cards",
+            "nav": "Impact",
+            "kicker": "Impact",
+            "heading": "",
+            "items": [
+              {
+                "title": "Product Impact",
+                "body": "<p>Redefined onboarding for a surface experienced by 25M+ users every month, transforming Edge FRE into a unified platform for activation, personalization, and retention.</p>",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Strategic Impact",
+                "body": "<p>Shifted onboarding strategy from completing setup tasks to helping users discover value, build habits, and stay with Edge long term.</p>",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Leadership Impact",
+                "body": "Built alignment across Design, Product, Engineering, Privacy, and Content teams, turning an exploratory vision into a funded onboarding initiative and production-ready experience.",
+                "icon": "",
+                "src": ""
+              }
+            ]
           }
         ]
       }
