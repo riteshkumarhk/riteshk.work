@@ -392,11 +392,16 @@ video.pjb__media-el { background: #000; }
 .pjb__voices--thought .pjb__voice-bubble::before, .pjb__voices--thought .pjb__voice-bubble::after { content: ""; position: absolute; border-radius: 50%; background: var(--bg-elev); border: 1px solid var(--line); left: 26px; }
 .pjb__voices--thought .pjb__voice-bubble::after { width: 12px; height: 12px; bottom: -9px; }
 .pjb__voices--thought .pjb__voice-bubble::before { width: 6px; height: 6px; bottom: -19px; left: 21px; }
+/* right-aligned verbatim/thought — flip the tail to the right */
+.pjb__voices--verbatim .pjb__voice--right .pjb__voice-bubble::after { left: auto; right: 30px; }
+.pjb__voices--thought .pjb__voice--right .pjb__voice-bubble::before, .pjb__voices--thought .pjb__voice--right .pjb__voice-bubble::after { left: auto; }
+.pjb__voices--thought .pjb__voice--right .pjb__voice-bubble::after { right: 26px; }
+.pjb__voices--thought .pjb__voice--right .pjb__voice-bubble::before { right: 21px; }
 /* chat — a conversation, tails point both ways */
 .pjb__voices--chat { gap: .55rem; }
 .pjb__voices--chat .pjb__voice { max-width: 68%; }
-.pjb__voices--chat .pjb__voice--left { align-self: flex-start; }
-.pjb__voices--chat .pjb__voice--right { align-self: flex-end; text-align: right; }
+.pjb__voice--left { align-self: flex-start; }
+.pjb__voice--right { align-self: flex-end; text-align: right; }
 .pjb__voices--chat .pjb__voice-bubble { border-radius: 18px; }
 .pjb__voices--chat .pjb__voice--left .pjb__voice-bubble { background: rgba(216, 166, 87, .13); border-color: rgba(216, 166, 87, .3); border-bottom-left-radius: 5px; }
 .pjb__voices--chat .pjb__voice--right .pjb__voice-bubble { border-bottom-right-radius: 5px; }
