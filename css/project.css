@@ -488,19 +488,20 @@ video.pjb__media-el { background: #000; }
 .pjb__voices--thought .pjb__voice--right .pjb__voice-bubble::before, .pjb__voices--thought .pjb__voice--right .pjb__voice-bubble::after { left: auto; }
 .pjb__voices--thought .pjb__voice--right .pjb__voice-bubble::after { right: 26px; }
 .pjb__voices--thought .pjb__voice--right .pjb__voice-bubble::before { right: 21px; }
-/* chat — a conversation, tails point both ways */
-.pjb__voices--chat { gap: .55rem; }
-.pjb__voices--chat .pjb__voice { max-width: 68%; }
+/* chat — a two-way conversation; sides auto-alternate unless the author sets them */
+.pjb__voices--chat { gap: .45rem; }
+.pjb__voices--chat .pjb__voice { max-width: 74%; }
 .pjb__voice--left { align-self: flex-start; }
 .pjb__voice--right { align-self: flex-end; text-align: right; }
-.pjb__voices--chat .pjb__voice-bubble { border-radius: 18px; }
-.pjb__voices--chat .pjb__voice--left .pjb__voice-bubble { background: rgba(216, 166, 87, .13); border-color: rgba(216, 166, 87, .3); border-bottom-left-radius: 5px; }
-.pjb__voices--chat .pjb__voice--right .pjb__voice-bubble { border-bottom-right-radius: 5px; }
-.pjb__voices--chat .pjb__voice--left .pjb__voice-bubble::after { content: ""; position: absolute; left: 10px; bottom: -7px; width: 14px; height: 14px; background: rgba(216, 166, 87, .13); border-right: 1px solid rgba(216, 166, 87, .3); border-bottom: 1px solid rgba(216, 166, 87, .3); transform: rotate(45deg); }
-.pjb__voices--chat .pjb__voice--right .pjb__voice-bubble::after { content: ""; position: absolute; right: 10px; bottom: -7px; width: 14px; height: 14px; background: var(--bg-elev); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: rotate(45deg); }
-.pjb__voices--chat .pjb__voice-b { font-size: 1rem; }
-.pjb__voices--chat .pjb__voice-cite { color: var(--text-dim); margin-top: .35rem; }
-@media (max-width: 640px) { .pjb__voices--verbatim .pjb__voice, .pjb__voices--thought .pjb__voice { max-width: 100%; } .pjb__voices--chat .pjb__voice { max-width: 86%; } }
+.pjb__voices--chat .pjb__voice-bubble { border-radius: 20px; padding: .72rem 1.05rem; }
+.pjb__voices--chat .pjb__voice--left .pjb__voice-bubble { background: var(--bg-elev); border-color: var(--line); border-bottom-left-radius: 5px; }
+.pjb__voices--chat .pjb__voice--right .pjb__voice-bubble { background: rgba(216, 166, 87, .18); border-color: rgba(216, 166, 87, .42); border-bottom-right-radius: 5px; }
+.pjb__voices--chat .pjb__voice-bubble::after { content: ""; position: absolute; bottom: -6px; width: 15px; height: 15px; transform: rotate(45deg); }
+.pjb__voices--chat .pjb__voice--left .pjb__voice-bubble::after { left: 10px; background: var(--bg-elev); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.pjb__voices--chat .pjb__voice--right .pjb__voice-bubble::after { right: 10px; background: rgba(216, 166, 87, .18); border-right: 1px solid rgba(216, 166, 87, .42); border-bottom: 1px solid rgba(216, 166, 87, .42); }
+.pjb__voices--chat .pjb__voice-b { font-size: 1rem; line-height: 1.45; }
+.pjb__voices--chat .pjb__voice-cite { color: var(--text-dim); margin-top: .3rem; }
+@media (max-width: 640px) { .pjb__voices--verbatim .pjb__voice, .pjb__voices--thought .pjb__voice { max-width: 100%; } .pjb__voices--chat .pjb__voice { max-width: 88%; } }
 
 /* split images */
 .pjb__col-media { margin-bottom: 1rem; border-radius: 6px; overflow: hidden; border: 1px solid var(--line-soft); }

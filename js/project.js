@@ -449,8 +449,13 @@
 
   function voicesBlock(b) {
     var mode = b.mode === "thought" ? "thought" : b.mode === "chat" ? "chat" : "verbatim";
-    var items = (b.items || []).map(function (v) {
-      var side = String(v.side || "").trim().toLowerCase() === "right" ? "right" : "left";
+    var list = b.items || [];
+    // In chat mode, if sides were left untouched (all default "left"), auto-alternate so it
+    // reads as a back-and-forth conversation. If the author set any bubble to the right, respect
+    // their explicit arrangement instead.
+    var autoAlt = mode === "chat" && list.every(function (v) { return !v.side || String(v.side).toLowerCase() === "left"; });
+    var items = list.map(function (v, i) {
+      var side = autoAlt ? (i % 2 ? "right" : "left") : (String(v.side || "").trim().toLowerCase() === "right" ? "right" : "left");
       var head = (mode === "verbatim" && v.heading) ? '<div class="pjb__voice-h">' + md(v.heading) + "</div>" : "";
       var body = v.body ? '<div class="pjb__voice-b">' + richInline(v.body) + "</div>" : "";
       var cite = v.cite ? '<div class="pjb__voice-cite">' + esc(v.cite) + "</div>" : "";
