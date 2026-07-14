@@ -2121,13 +2121,31 @@
     if (/\.(png|jpe?g|webp|gif|avif|bmp|svg|mp4|webm|mov|m4v|ogv)$/i.test(v)) return hostedBytes[v] || rawUrlFor(v);
     return rawUrlFor(v);
   }
+  // A big embedded video (data:video/...) is unreliable as a live <video src> in the churny
+  // preview (huge string re-parsed on every refresh) and can't save to the draft. For the
+  // preview only, hand the iframe a stable blob URL built from the bytes — plays at any size.
+  var vcPreviewBlobs = new Map();
+  function vcVideoBlobUrl(uri) {
+    var hit = vcPreviewBlobs.get(uri); if (hit) return hit;
+    try {
+      var comma = uri.indexOf(","); if (comma < 0) return uri;
+      var meta = uri.slice(5, comma), mime = (meta.split(";")[0]) || "video/mp4";
+      var dataPart = uri.slice(comma + 1), bytes;
+      if (/;base64/i.test(meta)) { var bin = atob(dataPart); bytes = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); }
+      else bytes = new TextEncoder().encode(decodeURIComponent(dataPart));
+      var url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      if (vcPreviewBlobs.size > 12) { var oldK = vcPreviewBlobs.keys().next().value; try { URL.revokeObjectURL(vcPreviewBlobs.get(oldK)); } catch (e) {} vcPreviewBlobs.delete(oldK); }
+      vcPreviewBlobs.set(uri, url);
+      return url;
+    } catch (e) { return uri; }
+  }
   function resolvePreviewData(d) {
     const c = clone(d);
     (function walk(o) {
       if (!o || typeof o !== "object") return;
       for (const k in o) {
         const v = o[k];
-        if (typeof v === "string") { if (isHostedPath(v)) o[k] = previewSrc(v); }
+        if (typeof v === "string") { if (/^data:video\//i.test(v)) o[k] = vcVideoBlobUrl(v); else if (isHostedPath(v)) o[k] = previewSrc(v); }
         else if (v && typeof v === "object") walk(v);
       }
     })(c);
@@ -2646,47 +2664,65 @@
   function vcFmtBytes(n) { if (n < 1024) return n + " B"; if (n < 1048576) return (n / 1024).toFixed(0) + " KB"; return (n / 1048576).toFixed(1) + " MB"; }
   function vcSleep(ms) { return new Promise(function (r) { setTimeout(r, ms || 0); }); }
   // Demux an mp4/mov ArrayBuffer -> { track, samples[], description(avcC), durationSec, fps }
+  // Build a minimal AAC-LC AudioSpecificConfig from sample rate + channels (screen recordings
+  // are AAC-LC), so the copied audio track carries a valid decoder config in the output.
+  function vcAacASC(sr, ch) {
+    var rates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
+    var idx = rates.indexOf(sr); if (idx < 0) idx = 4;
+    return new Uint8Array([(2 << 3) | (idx >> 1), ((idx & 1) << 7) | ((ch || 2) << 3)]);
+  }
   function vcDemux(buf, libs) {
     return new Promise(function (resolve, reject) {
       var file = libs.MP4Box.createFile();
-      var samples = [], track = null, description = null, total = 0;
+      var vs = [], as = [], vt = null, at = null, description = null, vTotal = 0, aTotal = 0, gotV = false, gotA = false;
       file.onError = function (e) { reject(new Error("This video couldn\u2019t be read (" + e + ").")); };
       file.onReady = function (info) {
-        track = info.videoTracks && info.videoTracks[0];
-        if (!track) { reject(new Error("No video track found in this file.")); return; }
-        total = track.nb_samples;
+        vt = info.videoTracks && info.videoTracks[0];
+        if (!vt) { reject(new Error("No video track found in this file.")); return; }
+        vTotal = vt.nb_samples;
         try {
-          var entries = file.getTrackById(track.id).mdia.minf.stbl.stsd.entries;
+          var entries = file.getTrackById(vt.id).mdia.minf.stbl.stsd.entries;
           for (var e = 0; e < entries.length; e++) {
             if (entries[e].avcC) { var ds = new libs.DataStream(undefined, 0, libs.DataStream.BIG_ENDIAN); entries[e].avcC.write(ds); description = new Uint8Array(ds.buffer, 8); break; }
           }
         } catch (err) {}
         if (!description) { reject(new Error("Only H.264 .mp4/.mov videos can be compressed here. Export to H.264, or host this file and paste a link.")); return; }
-        file.setExtractionOptions(track.id, null, { nbSamples: Infinity });
+        at = info.audioTracks && info.audioTracks[0];
+        if (at && !/^mp4a/.test(at.codec || "")) at = null; // only AAC can be copied through as-is
+        aTotal = at ? at.nb_samples : 0;
+        file.setExtractionOptions(vt.id, null, { nbSamples: Infinity });
+        if (at) file.setExtractionOptions(at.id, null, { nbSamples: Infinity });
         file.start();
       };
       file.onSamples = function (id, user, s) {
-        for (var k = 0; k < s.length; k++) {
-          var x = s[k];
-          samples.push({ type: x.is_sync ? "key" : "delta", timestamp: x.cts * 1e6 / track.timescale, duration: x.duration * 1e6 / track.timescale, data: x.data.slice(0) });
+        if (vt && id === vt.id) {
+          for (var k = 0; k < s.length; k++) { var x = s[k]; vs.push({ type: x.is_sync ? "key" : "delta", timestamp: x.cts * 1e6 / vt.timescale, duration: x.duration * 1e6 / vt.timescale, data: x.data.slice(0) }); }
+          gotV = vs.length >= vTotal;
+        } else if (at && id === at.id) {
+          for (var m = 0; m < s.length; m++) { var y = s[m]; as.push({ timestamp: y.cts * 1e6 / at.timescale, duration: y.duration * 1e6 / at.timescale, data: y.data.slice(0) }); }
+          gotA = as.length >= aTotal;
         }
-        if (samples.length >= total) {
-          var durationSec = (track.duration / track.timescale) || (samples.length ? (samples[samples.length - 1].timestamp + samples[samples.length - 1].duration) / 1e6 : 0);
-          var fps = durationSec ? Math.min(60, Math.max(1, Math.round(samples.length / durationSec))) : 30;
-          resolve({ track: track, samples: samples, description: description, durationSec: durationSec, fps: fps });
+        if (gotV && (!at || gotA)) {
+          var durationSec = (vt.duration / vt.timescale) || (vs.length ? (vs[vs.length - 1].timestamp + vs[vs.length - 1].duration) / 1e6 : 0);
+          var fps = durationSec ? Math.min(60, Math.max(1, Math.round(vs.length / durationSec))) : 30;
+          var audio = at ? { samples: as, sampleRate: at.audio.sample_rate, channels: at.audio.channel_count || 2, description: vcAacASC(at.audio.sample_rate, at.audio.channel_count) } : null;
+          resolve({ track: vt, samples: vs, description: description, durationSec: durationSec, fps: fps, audio: audio });
         }
       };
       var ab = buf.slice(0); ab.fileStart = 0; file.appendBuffer(ab); file.flush();
     });
   }
   /* Transcode (pipelined w/ backpressure so a 100MB source stays within memory).
-     opts: { demuxed, libs, cap, bitrate, codec, startSec, durSec, onProgress } */
+     opts: { demuxed, libs, cap, bitrate, codec, startSec, durSec, keepAudio, onProgress } */
   function vcTranscode(opts) {
     var d = opts.demuxed, libs = opts.libs, src = d.track.video;
     var dims = vcScaleDims(src.width, src.height, opts.cap);
     var fps = d.fps, gop = Math.max(1, fps * 2);
     var Mux = libs.Mp4Muxer;
-    var muxer = new Mux.Muxer({ target: new Mux.ArrayBufferTarget(), video: { codec: "avc", width: dims.w, height: dims.h }, fastStart: "in-memory" });
+    var withAudio = !!(d.audio && opts.keepAudio);
+    var muxCfg = { target: new Mux.ArrayBufferTarget(), video: { codec: "avc", width: dims.w, height: dims.h }, fastStart: "in-memory" };
+    if (withAudio) muxCfg.audio = { codec: "aac", numberOfChannels: d.audio.channels || 2, sampleRate: d.audio.sampleRate || 48000 };
+    var muxer = new Mux.Muxer(muxCfg);
     var startUs = (opts.startSec || 0) * 1e6, endUs = opts.durSec ? startUs + opts.durSec * 1e6 : Infinity, offsetUs = startUs;
     var needScale = dims.w !== src.width || dims.h !== src.height;
     var cv = new OffscreenCanvas(dims.w, dims.h), ctx = cv.getContext("2d", { alpha: false });
@@ -2723,6 +2759,17 @@
       }
       if (!decErr) await decoder.flush();
       if (!encErr) await encoder.flush();
+      if (withAudio) {
+        try {
+          var aud = d.audio;
+          for (var ai = 0; ai < aud.samples.length; ai++) {
+            var asmp = aud.samples[ai];
+            if (asmp.timestamp < startUs) continue;
+            if (asmp.timestamp >= endUs) break;
+            muxer.addAudioChunk(new EncodedAudioChunk({ type: "key", timestamp: Math.max(0, asmp.timestamp - offsetUs), duration: asmp.duration, data: asmp.data }), { decoderConfig: { description: aud.description } });
+          }
+        } catch (e) { /* audio copy failed — ship video-only */ }
+      }
       muxer.finalize();
       try { decoder.close(); } catch (e) {}
       try { encoder.close(); } catch (e) {}
@@ -2745,8 +2792,8 @@
           '<div class="vc__stage">' +
             '<div class="vc__srcwrap"><video class="vc__src" controls muted playsinline></video><div class="vc__hint">Scrub to a moment that shows the detail you care about, then <b>Preview</b> \u2014 no auto-picked frames.</div></div>' +
             '<div class="vc__ab" hidden>' +
-              '<figure class="vc__cell"><figcaption>Original clip</figcaption><video class="vc__orig" muted loop playsinline></video></figure>' +
-              '<figure class="vc__cell"><figcaption>Compressed <span class="vc__cmpmeta"></span></figcaption><video class="vc__cmp" muted loop playsinline></video></figure>' +
+              '<figure class="vc__cell"><figcaption>Original clip</figcaption><video class="vc__orig" controls muted loop playsinline></video></figure>' +
+              '<figure class="vc__cell"><figcaption>Compressed <span class="vc__cmpmeta"></span> \u2014 use the \u26f6 for full screen</figcaption><video class="vc__cmp" controls muted loop playsinline></video></figure>' +
             '</div>' +
           '</div>' +
           '<div class="vc__side">' +
@@ -2756,7 +2803,8 @@
             '<div class="af"><label class="af__label">Resolution</label><select class="vc__res"><option value="0">Original</option><option value="1080">1080p max</option><option value="720">720p max</option></select></div>' +
             '<div class="vc__est">Full file (est.): <b class="vc__estsize">\u2014</b></div>' +
             '<button class="btn btn--ghost vc__preview" disabled>Preview from here</button>' +
-            '<div class="vc__note">Audio is removed. For narrated videos, host externally &amp; paste a link.</div>' +
+            '<label class="vc__chk" hidden><input type="checkbox" class="vc__audio" checked /> Keep audio (copied through)</label>' +
+            '<div class="vc__note"></div>' +
           '</div>' +
         '</div>' +
         '<div class="vc__prog" hidden><div class="vc__bar"><i></i></div><span class="vc__progtxt">Compressing\u2026</span></div>' +
@@ -2768,6 +2816,7 @@
     var previewBtn = el(".vc__preview"), goBtn = el(".vc__go"), cancelBtn = el(".vc__cancel");
     var abWrap = el(".vc__ab"), origV = el(".vc__orig"), cmpV = el(".vc__cmp"), cmpMeta = el(".vc__cmpmeta");
     var estSize = el(".vc__estsize"), prog = el(".vc__prog"), bar = el(".vc__bar i"), progTxt = el(".vc__progtxt");
+    var audioChk = el(".vc__audio"), audioLbl = el(".vc__chk"), noteEl = el(".vc__note");
     el(".vc__file").textContent = (file.name || "video") + " \u00b7 " + vcFmtBytes(file.size);
     srcV.src = srcURL;
     function cleanup() {
@@ -2780,15 +2829,18 @@
     function qVal() { return Math.max(0, Math.min(1, (+qEl.value || 0) / 100)); }
     function capVal() { return +resEl.value || 0; }
     function resetGo() { if (done) { done = false; outFile = null; goBtn.textContent = "Compress & use"; } }
-    qEl.oninput = resetGo; resEl.onchange = resetGo;
+    qEl.oninput = resetGo; resEl.onchange = resetGo; if (audioChk) audioChk.onchange = resetGo;
     function bitrateNow() { var dm = vcScaleDims(demuxed.track.video.width, demuxed.track.video.height, capVal()); return vcBitrate(dm.w, dm.h, demuxed.fps, qVal()); }
-    function run(startSec, durSec, onProg) { return vcTranscode({ demuxed: demuxed, libs: demuxed.__libs, cap: capVal(), bitrate: bitrateNow(), codec: codec, startSec: startSec, durSec: durSec, onProgress: onProg }); }
+    function keepAudio() { return !!(demuxed && demuxed.audio && audioChk && audioChk.checked); }
+    function run(startSec, durSec, onProg, withAud) { return vcTranscode({ demuxed: demuxed, libs: demuxed.__libs, cap: capVal(), bitrate: bitrateNow(), codec: codec, startSec: startSec, durSec: durSec, keepAudio: !!withAud, onProgress: onProg }); }
 
     status("Reading video\u2026");
     vcLoadLibs().then(function (libs) {
       return file.arrayBuffer().then(function (buf) { return vcDemux(buf, libs); }).then(function (dx) { demuxed = dx; demuxed.__libs = libs; });
     }).then(vcSupported).then(function (c) {
       codec = c || "avc1.4d0028"; ready = true;
+      if (demuxed && demuxed.audio) { if (audioLbl) audioLbl.hidden = false; if (noteEl) noteEl.textContent = "Audio is copied through untouched \u2014 no quality loss."; }
+      else if (noteEl) noteEl.textContent = "This clip has no audio track.";
       previewBtn.disabled = false; goBtn.disabled = false;
       status("Ready \u2014 scrub to a spot, then Preview or Compress.");
     }).catch(function (e) { status(""); close(false); setTimeout(function () { status((e && e.message) || "This video couldn\u2019t be prepared."); }, 20); });
@@ -2798,7 +2850,7 @@
       resetGo(); busy = true; previewBtn.disabled = true; goBtn.disabled = true; previewBtn.textContent = "Rendering\u2026";
       var start = Math.max(0, Math.min(srcV.currentTime || 0, Math.max(0, demuxed.durationSec - 0.2)));
       var dur = Math.min(5, Math.max(1, demuxed.durationSec - start));
-      run(start, dur, null).then(function (r) {
+      run(start, dur, null, false).then(function (r) {
         var blob = new Blob([r.buffer], { type: "video/mp4" });
         if (cmpV.src) URL.revokeObjectURL(cmpV.src);
         cmpV.src = URL.createObjectURL(blob); cmpV.play().catch(function () {});
@@ -2819,7 +2871,7 @@
       if (busy || !ready) return;
       busy = true; previewBtn.disabled = true; goBtn.disabled = true;
       prog.hidden = false; bar.style.width = "0%"; progTxt.textContent = "Compressing\u2026 0%";
-      run(0, 0, function (p) { var pc = Math.round(p * 100); bar.style.width = pc + "%"; progTxt.textContent = "Compressing\u2026 " + pc + "%"; }).then(function (r) {
+      run(0, 0, function (p) { var pc = Math.round(p * 100); bar.style.width = pc + "%"; progTxt.textContent = "Compressing\u2026 " + pc + "%"; }, keepAudio()).then(function (r) {
         var blob = new Blob([r.buffer], { type: "video/mp4" });
         outFile = new File([blob], (file.name || "video").replace(/\.[^.]+$/, "") + "-compressed.mp4", { type: "video/mp4" });
         if (cmpV.src) URL.revokeObjectURL(cmpV.src);

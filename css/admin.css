@@ -361,6 +361,8 @@ body.adm-lock .cursor { display: none !important; }
 .vc__qlbl { display: flex; justify-content: space-between; font-family: var(--mono); font-size: .58rem; color: var(--text-dim); }
 .vc__est { font-size: .74rem; color: var(--text-dim); padding: .5rem .6rem; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
 .vc__est b { color: var(--text); font-weight: 600; }
+.vc__chk { display: flex; align-items: center; gap: .5rem; font-size: .78rem; color: var(--text); cursor: pointer; margin-top: .1rem; }
+.vc .vc__chk input { width: auto; margin: 0; flex: none; accent-color: var(--accent); cursor: pointer; }
 .vc__note { font-size: .64rem; color: var(--text-dim); line-height: 1.45; }
 .vc__prog { display: flex; align-items: center; gap: .7rem; margin-top: 1rem; }
 .vc__bar { flex: 1; height: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 100px; overflow: hidden; }
