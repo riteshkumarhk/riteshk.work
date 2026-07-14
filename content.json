@@ -89,6 +89,201 @@
   ],
   "work": [
     {
+      "id": "w1784023223052",
+      "featured": false,
+      "theme": "grid",
+      "plateTag": "Tag",
+      "client": "Windows Identity",
+      "period": "2023 — 2025",
+      "title": "Reimagining Windows Hello for a passwordless era",
+      "desc": "Windows Hello had become one of Microsoft's most important identity systems, but the experience had evolved incrementally over many years.\n\nAs Windows expanded across new devices, passkeys, security models, and authentication scenarios, the experience needed to feel more modern, more trustworthy, and easier to understand while preserving user confidence in a highly sensitive identity surface.",
+      "tags": [
+        "Tag"
+      ],
+      "image": "",
+      "study": {
+        "tagline": "Designing a faster, more intuitive, and more trustworthy authentication experience for hundreds of millions of Windows users.",
+        "role": "",
+        "team": "",
+        "timeline": "",
+        "scope": "",
+        "cover": "",
+        "unlockHash": "",
+        "blocks": [
+          {
+            "type": "mediagrid",
+            "nav": "Context",
+            "kicker": "Context",
+            "heading": "Sep'23 - passkeys shipped on Windows 11",
+            "gridLayout": "uniform",
+            "items": [
+              {
+                "src": "/assets/uploads/20d4a5821e2e5e249525ee5a30833ffdaa0d7a909c603fa49041848c0f665253.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/bae5b8fc3792dfd4ae756d02c03d0ba769dc5533cfa77f77c91b75600fa66d4c.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/bacc2af6ab8c6f85a27a29fef578364b3cd4e2910cf9754d93a596025a48a16f.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/9ddd28043844124f789cddbabc73eace0bb3545da2e1002e1561ef74a9d5b6f5.png",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "type": "device",
+            "nav": "",
+            "kicker": "",
+            "heading": "Passkeys Experience",
+            "device": "laptop",
+            "preset": "wide",
+            "fill": "full",
+            "items": [
+              {
+                "src": "/assets/uploads/edb4f5fc32f0ea1ca8262049b2e762e0a3b17f0af902242245d370d72081e5a5.mp4",
+                "caption": "",
+                "controls": true
+              }
+            ],
+            "sep": false,
+            "hsize": "sm"
+          },
+          {
+            "type": "statement",
+            "nav": "",
+            "kicker": "",
+            "body": "Result",
+            "sub": "175K+ passkeys created in 10 days.",
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "columns",
+            "nav": "",
+            "kicker": "",
+            "heading": "Windows Hello generates billions of authentication interactions every month",
+            "items": [
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "Adoption",
+                    "body": "<ul><li>423M Windows aMAD use Windows Hello</li><li>~56% of Windows 11 devices sign in with Windows Hello</li><li>~98.5% of Windows devices with an MSA use Windows Hello</li></ul>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "Growth",
+                    "body": "<ul><li>PIN usage growing 11.5% YoY</li><li>Biometric usage growing 13% YoY</li><li>Projected to reach ~800M MAD users in coming years</li></ul>",
+                    "src": ""
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "media",
+            "nav": "User Experience",
+            "kicker": "User Experience",
+            "heading": "What users experienced",
+            "items": [
+              {
+                "src": "",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              }
+            ],
+            "sep": false,
+            "editorName": "Collection of credUI screens"
+          },
+          {
+            "type": "statement",
+            "nav": "",
+            "kicker": "",
+            "body": "<p>Windows Hello felt dated compared to other modern Windows experiences and competes trust experiences</p>",
+            "sub": "",
+            "src": "",
+            "caption": "",
+            "sep": false,
+            "hsize": "sm"
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "WINDOWS EXPERIENCES",
+            "heading": "",
+            "items": [
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "competes experience comparision",
+            "heading": "",
+            "beforeSrc": "",
+            "afterSrc": "",
+            "beforeLabel": "Apple",
+            "afterLabel": "Windows",
+            "body": "<div>As authentication became increasingly central to daily computing, the experience no longer reflected the quality users associated with modern trust and security systems.</div>",
+            "sep": false
+          },
+          {
+            "type": "split",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "leftLabel": "Windows Hello is perceived as ",
+            "left": "<ul><li>Old</li><li>Less intentional</li><li>Less polished</li><li>Less responsive</li></ul>",
+            "leftImg": "",
+            "rightLabel": "Face / Touch ID",
+            "right": "<ul><li>Progressive disclosure</li><li>Smarter modality selection</li><li>Motion and transitions</li><li>Contextual interactions</li></ul>",
+            "rightImg": "",
+            "sep": false
+          }
+        ]
+      }
+    },
+    {
       "id": "w1783924971648",
       "featured": true,
       "theme": "grid",
@@ -2116,17 +2311,9 @@
             "kicker": "Before / after",
             "heading": "From a checklist to a welcome.",
             "leftLabel": "Before",
-            "left": [
-              "Setup optimized for completion, not retention",
-              "Asks stacked into the first minute",
-              "Success measured at \"finished setup\""
-            ],
+            "left": "<ul><li>Setup optimized for completion, not retention</li><li>Asks stacked into the first minute</li><li>Success measured at \"finished setup\"</li></ul>",
             "rightLabel": "After",
-            "right": [
-              "Onboarding sequenced to earn the second session",
-              "Value shown before friction is introduced",
-              "Success measured on activation and return"
-            ]
+            "right": "<ul><li>Onboarding sequenced to earn the second session</li><li>Value shown before friction is introduced</li><li>Success measured on activation and return</li></ul>"
           },
           {
             "type": "text",
