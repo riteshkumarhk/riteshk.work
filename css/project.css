@@ -489,16 +489,18 @@ video.pjb__media-el { background: #000; }
 .pjb__voices--thought .pjb__voice--right .pjb__voice-bubble::after { right: 26px; }
 .pjb__voices--thought .pjb__voice--right .pjb__voice-bubble::before { right: 21px; }
 /* chat — a two-way conversation; sides auto-alternate unless the author sets them */
-.pjb__voices--chat { gap: .45rem; }
+.pjb__voices--chat { gap: .5rem; }
 .pjb__voices--chat .pjb__voice { max-width: 74%; }
 .pjb__voice--left { align-self: flex-start; }
 .pjb__voice--right { align-self: flex-end; text-align: right; }
-.pjb__voices--chat .pjb__voice-bubble { border-radius: 20px; padding: .72rem 1.05rem; }
+.pjb__voices--chat .pjb__voice-bubble { border-radius: 18px; padding: .72rem 1.05rem; }
+/* left = neutral, right = accent-tinted. Opaque fills so the tail merges cleanly over the border. */
 .pjb__voices--chat .pjb__voice--left .pjb__voice-bubble { background: var(--bg-elev); border-color: var(--line); border-bottom-left-radius: 5px; }
-.pjb__voices--chat .pjb__voice--right .pjb__voice-bubble { background: rgba(216, 166, 87, .18); border-color: rgba(216, 166, 87, .42); border-bottom-right-radius: 5px; }
-.pjb__voices--chat .pjb__voice-bubble::after { content: ""; position: absolute; bottom: -6px; width: 15px; height: 15px; transform: rotate(45deg); }
-.pjb__voices--chat .pjb__voice--left .pjb__voice-bubble::after { left: 10px; background: var(--bg-elev); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.pjb__voices--chat .pjb__voice--right .pjb__voice-bubble::after { right: 10px; background: rgba(216, 166, 87, .18); border-right: 1px solid rgba(216, 166, 87, .42); border-bottom: 1px solid rgba(216, 166, 87, .42); }
+.pjb__voices--chat .pjb__voice--right .pjb__voice-bubble { background: color-mix(in srgb, var(--accent) 15%, var(--bg-elev)); border-color: color-mix(in srgb, var(--accent) 46%, transparent); border-bottom-right-radius: 5px; }
+/* tail: rotated square straddling the bottom edge; its opaque fill covers the bubble border so it reads as one shape */
+.pjb__voices--chat .pjb__voice-bubble::after { content: ""; position: absolute; bottom: -5px; width: 13px; height: 13px; transform: rotate(45deg); }
+.pjb__voices--chat .pjb__voice--left .pjb__voice-bubble::after { left: 13px; background: var(--bg-elev); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.pjb__voices--chat .pjb__voice--right .pjb__voice-bubble::after { right: 13px; background: color-mix(in srgb, var(--accent) 15%, var(--bg-elev)); border-right: 1px solid color-mix(in srgb, var(--accent) 46%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 46%, transparent); }
 .pjb__voices--chat .pjb__voice-b { font-size: 1rem; line-height: 1.45; }
 .pjb__voices--chat .pjb__voice-cite { color: var(--text-dim); margin-top: .3rem; }
 @media (max-width: 640px) { .pjb__voices--verbatim .pjb__voice, .pjb__voices--thought .pjb__voice { max-width: 100%; } .pjb__voices--chat .pjb__voice { max-width: 88%; } }
