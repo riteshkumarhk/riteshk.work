@@ -2834,7 +2834,20 @@
         if (!v.videoWidth) { finish(false, "no video track"); return; }
         var p = v.play();
         (p && p.then ? p : Promise.resolve()).then(function () {
-          setTimeout(function () { finish(v.currentTime > 0.05, v.currentTime > 0.05 ? "" : "playback stalled"); }, 700);
+          setTimeout(function () {
+            if (!(v.currentTime > 0.05)) { finish(false, "playback stalled"); return; }
+            // Some real recordings transcode to an all-black stream that still "plays" (time
+            // advances, audio runs) — catch it by sampling the rendered pixels. A blob URL is
+            // same-origin, so the canvas isn't tainted and getImageData is allowed.
+            try {
+              var c = document.createElement("canvas"); c.width = 48; c.height = 27;
+              var g = c.getContext("2d"); g.drawImage(v, 0, 0, 48, 27);
+              var px = g.getImageData(0, 0, 48, 27).data, sum = 0, mx = 0;
+              for (var i = 0; i < px.length; i += 4) { var lum = (px[i] + px[i + 1] + px[i + 2]) / 3; sum += lum; if (lum > mx) mx = lum; }
+              if (sum / (px.length / 4) < 3 && mx < 12) { finish(false, "black frames"); return; }
+            } catch (e) { /* can't sample — don't block on it */ }
+            finish(true, "");
+          }, 700);
         }).catch(function () { finish(false, "couldn\u2019t start playback"); });
       };
       v.src = url;
@@ -2946,9 +2959,15 @@
         goBtn.textContent = "Use this file \u2713";
         vcVerifyPlayable(blob).then(function (chk) {
           if (!chk.ok && noteEl) {
-            noteEl.textContent = "\u26a0 This clip didn\u2019t encode cleanly (" + chk.reason + ") \u2014 it may not play. For a reliable result, compress externally (HandBrake / ffmpeg) and add the file directly.";
+            noteEl.textContent = chk.reason === "black frames"
+              ? "\u26a0 The compressed video came out black \u2014 this happens with some screen recordings in the browser encoder. Try Resolution = \u201cOriginal\u201d (it skips the rescale that\u2019s failing here), or compress it in HandBrake / ffmpeg and add the file directly."
+              : "\u26a0 This clip didn\u2019t encode cleanly (" + chk.reason + ") \u2014 it may not play. For a reliable result, compress externally (HandBrake / ffmpeg) and add the file directly.";
             noteEl.classList.add("vc__note--warn");
             goBtn.textContent = "Use anyway";
+          } else if (chk.ok && noteEl && noteEl.classList.contains("vc__note--warn")) {
+            // a previous attempt warned; this re-encode is clean — clear the stale amber note
+            noteEl.classList.remove("vc__note--warn");
+            noteEl.textContent = (demuxed && demuxed.audio) ? "Audio is copied through untouched \u2014 no quality loss." : "";
           }
         });
       }).catch(function (e) { prog.hidden = true; status((e && e.message) || "Compression failed."); }).then(function () {
