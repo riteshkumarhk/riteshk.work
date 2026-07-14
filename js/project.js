@@ -586,12 +586,51 @@
       '<div class="pjb__iso-stage">' + layers + "</div></div>";
   }
 
+  // Focus & annotate — one image with pinned "+" markers. Clicking a marker opens its note
+  // card; if that annotation defines a focus area, the rest of the image blurs and only that
+  // region stays sharp (a same-image "lens" sitting over a blurred veil). Clicking the image
+  // itself opens a full-screen view with a clickable list of the annotations. Every coordinate
+  // is a percentage of the image, so points + focus regions scale to any width (incl. mobile).
+  function faPct(v) { v = parseFloat(v); return isNaN(v) ? 0 : Math.max(0, Math.min(100, v)); }
+  function focusBlock(b) {
+    var url = mediaSrc(b);
+    if (!url) {
+      return kicker(b.kicker) + heading(b.heading) +
+        '<div class="pjb__shot-ph pjb__shot-ph--' + esc(b.theme || "edge") + '"><span class="pjb__shot-tag">Add an image to annotate</span></div>';
+    }
+    var anns = (b.annotations || []).filter(function (a) { return a && (a.title || a.body || a.focus); });
+    var marks = "", cards = "", hasFocus = false;
+    anns.forEach(function (a, i) {
+      var f = a.focus, fattr = "";
+      if (f) {
+        hasFocus = true;
+        var shape = /^(circle|square|rect)$/.test(f.shape) ? f.shape : "rect";
+        fattr = ' data-fshape="' + shape + '" data-fx="' + faPct(f.x) + '" data-fy="' + faPct(f.y) + '" data-fw="' + Math.max(1, faPct(f.w)) + '" data-fh="' + Math.max(1, faPct(f.h)) + '"';
+      }
+      marks += '<button type="button" class="pjb__focus-mark" data-focus-mark="' + i + '"' + fattr +
+        ' style="left:' + faPct(a.x) + '%;top:' + faPct(a.y) + '%" aria-label="Annotation ' + (i + 1) + '">' +
+        '<i aria-hidden="true">+</i><b aria-hidden="true">' + (i + 1) + "</b></button>";
+      var t = a.title ? '<h4 class="pjb__focus-card-t">' + md(a.title) + "</h4>" : "";
+      var bd = a.body ? '<div class="pjb__focus-card-b">' + richInline(a.body) + "</div>" : "";
+      cards += '<div class="pjb__focus-card" data-focus-card="' + i + '" role="dialog" aria-label="Annotation ' + (i + 1) + '" hidden>' +
+        '<button type="button" class="pjb__focus-cardx" data-focus-close aria-label="Close annotation">\u2715</button>' +
+        '<div class="pjb__focus-card-n">' + String(i + 1).padStart(2, "0") + "</div>" + t + bd + "</div>";
+    });
+    var veil = anns.length ? '<div class="pjb__focus-veil" aria-hidden="true"></div>' : "";
+    var lens = hasFocus ? '<div class="pjb__focus-lens" aria-hidden="true"><img src="' + attr(url) + '" alt="" draggable="false" /></div>' : "";
+    var stage = '<figure class="pjb__focus-stage" data-focus-stage>' +
+      '<img class="pjb__focus-img" src="' + attr(url) + '" alt="' + attr(b.caption || b.heading || "") + '" draggable="false" data-focus-open />' +
+      veil + lens + marks + cards + "</figure>";
+    var cap = b.caption ? '<figcaption class="pjb__cap">' + esc(b.caption) + "</figcaption>" : "";
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__focus" data-focus>' + stage + cap + "</div>";
+  }
+
   var RENDERERS = {
     text: textBlock, statement: stmtBlock, metrics: metricsBlock,
     steps: stepsBlock, media: mediaBlock, split: splitBlock, faq: faqBlock,
     cards: cardsBlock, gallery: galleryBlock, figure: figureBlock,
     columns: columnsBlock, rows: rowsBlock, compare: compareBlock, stickies: stickiesBlock, voices: voicesBlock,
-    workflow: workflowBlock, mediagrid: mediagridBlock, device: deviceBlock, isolayers: isolayersBlock,
+    workflow: workflowBlock, mediagrid: mediagridBlock, device: deviceBlock, isolayers: isolayersBlock, focus: focusBlock,
   };
   function renderBlock(b, i) {
     var navLabel = b.nav || "";
@@ -973,6 +1012,123 @@
     });
   }
 
+  /* ---------- focus & annotate ---------- */
+  var focusFs = null, focusResizeBound = false;
+  function focusActivate(stage, idx) {
+    var mark = stage.querySelector('[data-focus-mark="' + idx + '"]');
+    var card = stage.querySelector('[data-focus-card="' + idx + '"]');
+    if (!mark || !card) return;
+    stage.__faActive = idx;
+    [].forEach.call(stage.querySelectorAll(".pjb__focus-mark"), function (m) { m.classList.toggle("is-on", m === mark); });
+    [].forEach.call(stage.querySelectorAll(".pjb__focus-card"), function (c) { c.hidden = c !== card; });
+    var lens = stage.querySelector(".pjb__focus-lens");
+    if (mark.hasAttribute("data-fx") && lens) {
+      var shape = mark.getAttribute("data-fshape") || "rect";
+      var fx = +mark.getAttribute("data-fx"), fy = +mark.getAttribute("data-fy");
+      var fw = Math.max(1, +mark.getAttribute("data-fw")), fh = Math.max(1, +mark.getAttribute("data-fh"));
+      lens.style.left = fx + "%"; lens.style.top = fy + "%"; lens.style.width = fw + "%"; lens.style.height = fh + "%";
+      lens.style.borderRadius = shape === "circle" ? "50%" : (shape === "square" ? "10px" : "6px");
+      var im = lens.querySelector("img");
+      if (im) { im.style.width = (10000 / fw) + "%"; im.style.height = (10000 / fh) + "%"; im.style.left = (-fx * 100 / fw) + "%"; im.style.top = (-fy * 100 / fh) + "%"; }
+      stage.classList.add("is-focus");
+    } else { stage.classList.remove("is-focus"); }
+    stage.classList.add("is-active");
+    focusPlaceCard(stage, mark, card);
+    var fs = stage.closest && stage.closest(".pjfx");
+    if (fs) [].forEach.call(fs.querySelectorAll(".pjfx__listitem"), function (x) { x.classList.toggle("is-on", +x.getAttribute("data-fa-go") === idx); });
+  }
+  function focusPlaceCard(stage, mark, card) {
+    var sw = stage.clientWidth, sh = stage.clientHeight;
+    var mx = parseFloat(mark.style.left) / 100 * sw, my = parseFloat(mark.style.top) / 100 * sh;
+    var cw = card.offsetWidth, ch = card.offsetHeight, pad = 10, gap = 18;
+    var left = mx + gap;
+    if (left + cw > sw - pad) left = mx - gap - cw;
+    left = Math.max(pad, Math.min(Math.max(pad, sw - cw - pad), left));
+    var top = my - ch / 2;
+    top = Math.max(pad, Math.min(Math.max(pad, sh - ch - pad), top));
+    card.style.left = left + "px"; card.style.top = top + "px";
+  }
+  function focusDeactivate(stage) {
+    stage.__faActive = null;
+    stage.classList.remove("is-focus", "is-active");
+    [].forEach.call(stage.querySelectorAll(".pjb__focus-mark"), function (m) { m.classList.remove("is-on"); });
+    [].forEach.call(stage.querySelectorAll(".pjb__focus-card"), function (c) { c.hidden = true; });
+    var fs = stage.closest && stage.closest(".pjfx");
+    if (fs) [].forEach.call(fs.querySelectorAll(".pjfx__listitem"), function (x) { x.classList.remove("is-on"); });
+  }
+  function focusWire(stage, fullscreen) {
+    if (stage.__faWired) return; stage.__faWired = 1;
+    stage.addEventListener("click", function (e) {
+      var mark = e.target.closest("[data-focus-mark]");
+      if (mark) { e.preventDefault(); var i = +mark.getAttribute("data-focus-mark"); if (stage.__faActive === i) focusDeactivate(stage); else focusActivate(stage, i); return; }
+      if (e.target.closest("[data-focus-close]")) { focusDeactivate(stage); return; }
+      if (e.target.closest(".pjb__focus-card")) return;
+      if (stage.__faActive != null) { focusDeactivate(stage); return; }
+      if (!fullscreen && e.target.closest("[data-focus-open]")) openFocusFs(stage);
+    });
+  }
+  function focusEnhance(root) {
+    if (!focusResizeBound) {
+      focusResizeBound = true;
+      window.addEventListener("resize", function () {
+        [].forEach.call(document.querySelectorAll(".pjb__focus-stage.is-active"), function (st) {
+          if (st.__faActive == null) return;
+          var mk = st.querySelector('[data-focus-mark="' + st.__faActive + '"]');
+          var cd = st.querySelector('[data-focus-card="' + st.__faActive + '"]');
+          if (mk && cd && !cd.hidden) focusPlaceCard(st, mk, cd);
+        });
+      });
+    }
+    var scope = root || document;
+    [].slice.call(scope.querySelectorAll(".pjb__focus")).forEach(function (fx) {
+      if (fx.__faDone) return; fx.__faDone = 1;
+      var stage = fx.querySelector(".pjb__focus-stage");
+      if (stage) focusWire(stage, false);
+    });
+  }
+  function buildFocusFs() {
+    focusFs = document.createElement("div");
+    focusFs.className = "pjfx";
+    focusFs.setAttribute("role", "dialog"); focusFs.setAttribute("aria-modal", "true"); focusFs.setAttribute("aria-label", "Annotated image");
+    focusFs.innerHTML =
+      '<button class="pjfx__close" type="button" data-fa-close aria-label="Close">\u2715</button>' +
+      '<div class="pjfx__stagewrap"></div>' +
+      '<aside class="pjfx__panel"><div class="pjfx__panel-h">Annotations</div><div class="pjfx__list"></div></aside>';
+    document.body.appendChild(focusFs);
+    focusFs.addEventListener("click", function (e) {
+      if (e.target.closest("[data-fa-close]")) { closeFocusFs(); return; }
+      var it = e.target.closest("[data-fa-go]");
+      if (it && focusFs.__clone) { focusActivate(focusFs.__clone, +it.getAttribute("data-fa-go")); return; }
+      if (e.target === focusFs || e.target === focusFs.querySelector(".pjfx__stagewrap")) closeFocusFs();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (focusFs && focusFs.classList.contains("is-open") && e.key === "Escape") { e.stopPropagation(); closeFocusFs(); }
+    }, true);
+  }
+  function openFocusFs(inlineStage) {
+    if (!focusFs) buildFocusFs();
+    var wrap = focusFs.querySelector(".pjfx__stagewrap"), list = focusFs.querySelector(".pjfx__list");
+    wrap.innerHTML = ""; list.innerHTML = "";
+    var clone = inlineStage.cloneNode(true);
+    clone.classList.remove("is-focus", "is-active");
+    [].forEach.call(clone.querySelectorAll(".pjb__focus-card"), function (c) { c.hidden = true; c.style.left = ""; c.style.top = ""; });
+    [].forEach.call(clone.querySelectorAll(".pjb__focus-mark"), function (m) { m.classList.remove("is-on"); });
+    wrap.appendChild(clone);
+    [].forEach.call(clone.querySelectorAll(".pjb__focus-card"), function (c) {
+      var idx = +c.getAttribute("data-focus-card");
+      var t = c.querySelector(".pjb__focus-card-t");
+      var label = t ? t.textContent : "Annotation " + (idx + 1);
+      list.insertAdjacentHTML("beforeend", '<button type="button" class="pjfx__listitem" data-fa-go="' + idx + '"><span class="pjfx__listn">' + String(idx + 1).padStart(2, "0") + '</span><span class="pjfx__listt">' + esc(label) + "</span></button>");
+    });
+    focusFs.querySelector(".pjfx__panel").style.display = list.children.length ? "" : "none";
+    focusFs.__clone = clone;
+    focusWire(clone, true);
+    void focusFs.offsetWidth;
+    focusFs.classList.add("is-open");
+    var c = focusFs.querySelector(".pjfx__close"); if (c) { try { c.focus(); } catch (e) {} }
+  }
+  function closeFocusFs() { if (focusFs) { focusFs.classList.remove("is-open"); if (focusFs.__clone) focusDeactivate(focusFs.__clone); } }
+
   function fillContent(w) {
     var head = overlay.querySelector("[data-crumb]");
     head.innerHTML = '<b>' + esc(w.client || "") + "</b>" + (w.plateTag ? "<span>" + esc(w.plateTag) + "</span>" : "");
@@ -991,7 +1147,7 @@
       contentEl.innerHTML = html;
     }
     contentEl.setAttribute("data-wid", String(w.id));
-    requestAnimationFrame(function () { updateSpy(); coverParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); });
+    requestAnimationFrame(function () { updateSpy(); coverParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); });
   }
 
   // Minimal DOM morph: update text/attributes in place and add/remove nodes, but

@@ -82,6 +82,7 @@
     { type: "compare", name: "Before / after slider", tag: "Compare", desc: "Two images overlaid with a divider you drag to reveal before vs after.", best: "Redesigns \u00b7 visual transformations" },
     { type: "stickies", name: "Sticky notes", tag: "Research", desc: "Staggered note cards \u2014 each with a label, heading, body and image, with a gentle hover lift.", best: "Research methods \u00b7 findings \u00b7 inspiration" },
     { type: "voices", name: "Voices", tag: "Qual", desc: "Verbatims, thoughts or a chat thread \u2014 quote bubbles with a sharp, soft or two-way tail.", best: "User quotes \u00b7 assumption vs reality \u00b7 insights" },
+    { type: "focus", name: "Focus & annotate", tag: "Interactive", desc: "One image with pinned + markers \u2014 click a marker for a note, and add a focus area to blur everything but that region. Full-screen lists every annotation.", best: "UI teardown \u00b7 spec callouts \u00b7 walkthroughs" },
   ];
 
   let data = null;
@@ -449,6 +450,7 @@
       case "compare": return { type: "compare", nav: "", kicker: "", heading: "", beforeSrc: "", afterSrc: "", beforeLabel: "Before", afterLabel: "After", body: "" };
       case "stickies": return { type: "stickies", nav: "", kicker: "", heading: "", stickySize: "natural", items: [] };
       case "voices": return { type: "voices", nav: "", kicker: "", heading: "", mode: "verbatim", vsize: "", items: [] };
+      case "focus": return { type: "focus", nav: "", kicker: "", heading: "", src: "", caption: "", annotations: [] };
       default: return { type: "text", nav: "Section", kicker: "", heading: "", body: "", list: [], src: "", caption: "" };
     }
   }
@@ -1101,8 +1103,121 @@
     saveDraft(true); renderBody();
     status("Hidden project unlocked for editing \u2014 it re-encrypts on Publish.", true);
   }
+  /* ---------- focus & annotate editor ----------
+     One image, N annotations. Each annotation is a % point (marker) with an optional
+     % focus box. Click to place a marker; select one to edit its title/body; tick Focus
+     and drag on the image to draw/move/resize the spotlight region. All %-based → scales. */
+  var faSel = -1, faPlacing = false, faDrag = null;
+  function faPct(v) { v = parseFloat(v); return isNaN(v) ? 0 : Math.max(0, Math.min(100, v)); }
+  function faBlock(i, j) { var w = data.work[i]; var st = w && w.study; return st && st.blocks && st.blocks[j]; }
+  function focusAnnEditor(i, j, b) {
+    b.annotations = b.annotations || [];
+    if (faSel >= b.annotations.length) faSel = b.annotations.length - 1;
+    if (!b.src) return '<div class="af__hint">Add an image above first \u2014 then you can drop annotations onto it.</div>';
+    var src = (typeof previewSrc === "function" ? previewSrc(b.src) : b.src) || b.src;
+    var overlay = b.annotations.map(function (a, k) {
+      var sel = k === faSel, box = "";
+      if (sel && a.focus) {
+        var f = a.focus, shape = f.shape || "rect";
+        box = '<div class="faed__box" data-faed-box style="left:' + faPct(f.x) + "%;top:" + faPct(f.y) + "%;width:" + Math.max(1, faPct(f.w)) + "%;height:" + Math.max(1, faPct(f.h)) + "%;border-radius:" + (shape === "circle" ? "50%" : (shape === "square" ? "8px" : "4px")) + '"><span class="faed__handle" data-faed-handle></span></div>';
+      }
+      return box + '<button type="button" class="faed__mark' + (sel ? " is-sel" : "") + '" data-act="fa-select" data-index="' + i + '" data-bindex="' + j + '" data-aindex="' + k + '" style="left:' + faPct(a.x) + "%;top:" + faPct(a.y) + '%" title="Annotation ' + (k + 1) + '">' + (k + 1) + "</button>";
+    }).join("");
+    var canvas = '<div class="faed' + (faPlacing ? " is-placing" : "") + '" data-faed data-index="' + i + '" data-bindex="' + j + '"><img src="' + escAttr(src) + '" alt="" draggable="false" />' + overlay + "</div>";
+    var addbar = '<div class="adm__addbar"><button class="btn btn--add' + (faPlacing ? " is-on" : "") + '" data-act="fa-add" data-index="' + i + '" data-bindex="' + j + '">' + (faPlacing ? "\u2716 Click the image to place\u2026" : "+ Add annotation") + "</button></div>";
+    var rows = b.annotations.map(function (a, k) {
+      var sel = k === faSel, hasFocus = !!a.focus;
+      var da = 'data-index="' + i + '" data-bindex="' + j + '" data-aindex="' + k + '"';
+      var shapeSel = hasFocus ? '<div class="faed__shape"><label>Shape</label><select data-fann ' + da + ' data-afield="fshape">' +
+        [["rect", "Rectangle (free)"], ["square", "Square"], ["circle", "Circle"]].map(function (o) { return '<option value="' + o[0] + '"' + ((a.focus.shape || "rect") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select></div>" : "";
+      return '<div class="faed__row' + (sel ? " is-sel" : "") + '">' +
+        '<div class="faed__row-head"><button type="button" class="faed__row-n" data-act="fa-select" ' + da + ' title="Select">' + (k + 1) + "</button>" +
+          '<input type="text" placeholder="Title (optional)" data-fann ' + da + ' data-afield="title" value="' + escAttr(a.title || "") + '" />' +
+          '<button class="iconbtn iconbtn--danger" data-act="fa-remove" ' + da + ' title="Remove">\u2715</button></div>' +
+        '<textarea rows="2" placeholder="Body (optional \u2014 **bold** and *italic* welcome)" data-fann ' + da + ' data-afield="body">' + escHtml(a.body || "") + "</textarea>" +
+        '<label class="chk"><input type="checkbox" data-act="fa-focustoggle" ' + da + (hasFocus ? " checked" : "") + " /> Focus area \u2014 spotlight this region (blur the rest)</label>" +
+        shapeSel + "</div>";
+    }).join("");
+    return '<div class="faed-wrap">' + canvas + addbar + '<div class="faed__rows">' + (rows || '<div class="af__hint">No annotations yet \u2014 add one above.</div>') + "</div>" +
+      '<div class="af__hint">Hit <b>Add annotation</b>, then click the image to drop a numbered marker. Select one (click its number) to edit it. Tick <b>Focus area</b> and a box appears on the image \u2014 drag it to move, drag the corner to resize (square &amp; circle stay even), or drag on open image to redraw. Everything is a % of the image, so points and focus regions scale on mobile.</div></div>';
+  }
+  function onFocusAnn(t) {
+    var i = +t.dataset.index, j = +t.dataset.bindex, k = +t.dataset.aindex, f = t.dataset.afield;
+    var b = faBlock(i, j); if (!b || !b.annotations || !b.annotations[k]) return;
+    var a = b.annotations[k];
+    if (f === "fshape") {
+      if (!a.focus) a.focus = { shape: "rect", x: 30, y: 30, w: 30, h: 30 };
+      a.focus.shape = t.value;
+      saveDraft(); renderL2(); return;   // re-render so the editor box picks up the new shape
+    }
+    a[f] = t.value;
+    saveDraft(); refreshL2Preview();       // text edits: preview only, keep input focus
+  }
+  function faPointerDown(e) {
+    var canvas = e.target.closest(".faed"); if (!canvas) return;
+    if (e.target.closest(".faed__mark")) return;   // markers select via the click dispatcher
+    var i = +canvas.dataset.index, j = +canvas.dataset.bindex;
+    var b = faBlock(i, j); if (!b) return;
+    var img = canvas.querySelector("img"); if (!img) return;
+    var rect = img.getBoundingClientRect();
+    var aspect = rect.height ? rect.width / rect.height : 1.6;
+    var p = { x: Math.max(0, Math.min(100, (e.clientX - rect.left) / rect.width * 100)), y: Math.max(0, Math.min(100, (e.clientY - rect.top) / rect.height * 100)) };
+    if (faPlacing) {
+      b.annotations = b.annotations || [];
+      b.annotations.push({ x: +p.x.toFixed(1), y: +p.y.toFixed(1), title: "", body: "" });
+      faSel = b.annotations.length - 1; faPlacing = false;
+      saveDraft(true); renderL2(); e.preventDefault(); return;
+    }
+    var a = b.annotations && b.annotations[faSel]; if (!a || !a.focus) return;
+    var f = a.focus;
+    if (e.target.closest("[data-faed-handle]")) faDrag = { mode: "resize", i: i, j: j, k: faSel, rect: rect, aspect: aspect };
+    else if (e.target.closest("[data-faed-box]")) faDrag = { mode: "move", i: i, j: j, k: faSel, rect: rect, aspect: aspect, offX: p.x - faPct(f.x), offY: p.y - faPct(f.y) };
+    else { f.x = +p.x.toFixed(1); f.y = +p.y.toFixed(1); f.w = 2; f.h = 2; faDrag = { mode: "draw", i: i, j: j, k: faSel, rect: rect, aspect: aspect, startX: p.x, startY: p.y }; }
+    e.preventDefault();
+    document.addEventListener("pointermove", faPointerMove);
+    document.addEventListener("pointerup", faPointerEnd);
+  }
+  function faApplyBox(d, f) {
+    var canvas = root.querySelector('.faed[data-index="' + d.i + '"][data-bindex="' + d.j + '"]'); if (!canvas) return;
+    var box = canvas.querySelector("[data-faed-box]"); if (!box) return;
+    box.style.left = f.x + "%"; box.style.top = f.y + "%"; box.style.width = f.w + "%"; box.style.height = f.h + "%";
+  }
+  function faPointerMove(e) {
+    if (!faDrag) return;
+    var b = faBlock(faDrag.i, faDrag.j); if (!b) return;
+    var a = b.annotations[faDrag.k]; if (!a || !a.focus) return;
+    var f = a.focus, r = faDrag.rect;
+    var px = Math.max(0, Math.min(100, (e.clientX - r.left) / r.width * 100));
+    var py = Math.max(0, Math.min(100, (e.clientY - r.top) / r.height * 100));
+    var uniform = (f.shape === "square" || f.shape === "circle");
+    if (faDrag.mode === "move") {
+      f.x = +Math.max(0, Math.min(100 - f.w, px - faDrag.offX)).toFixed(1);
+      f.y = +Math.max(0, Math.min(100 - f.h, py - faDrag.offY)).toFixed(1);
+    } else if (faDrag.mode === "resize") {
+      f.w = +Math.max(2, Math.min(100 - f.x, px - f.x)).toFixed(1);
+      f.h = uniform ? +Math.max(2, Math.min(100 - f.y, f.w * faDrag.aspect)).toFixed(1) : +Math.max(2, Math.min(100 - f.y, py - f.y)).toFixed(1);
+    } else if (faDrag.mode === "draw") {
+      var x0 = Math.min(faDrag.startX, px), y0 = Math.min(faDrag.startY, py);
+      var w2 = Math.abs(px - faDrag.startX), h2 = Math.abs(py - faDrag.startY);
+      if (uniform) h2 = w2 * faDrag.aspect;
+      f.x = +x0.toFixed(1); f.y = +y0.toFixed(1);
+      f.w = +Math.max(2, Math.min(100 - f.x, w2)).toFixed(1);
+      f.h = +Math.max(2, Math.min(100 - f.y, h2)).toFixed(1);
+    }
+    faApplyBox(faDrag, f);
+    e.preventDefault();
+  }
+  function faPointerEnd() {
+    document.removeEventListener("pointermove", faPointerMove);
+    document.removeEventListener("pointerup", faPointerEnd);
+    if (!faDrag) return;
+    var wasDraw = faDrag.mode === "draw"; faDrag = null;
+    saveDraft(true);
+    if (wasDraw) renderL2(); else refreshL2Preview();
+  }
+
   function blockEditor(i, b, j, len, open) {
-    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Before / after slider", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices", isolayers: "Isometric layers" })[b.type] || b.type;
+    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Before / after slider", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices", isolayers: "Isometric layers", focus: "Focus & annotate" })[b.type] || b.type;
     if (b.encStub) {
       return '<div class="card study__block study__block--enc">' +
         '<div class="study__block-head study__block-head--enc">' +
@@ -1171,7 +1286,8 @@
     else if (b.type === "stickies") body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "stickySize", "Note size", [["natural", "Natural \u2014 physical sticky shape (squarish)"], ["uniform", "Uniform \u2014 all notes match the tallest"], ["none", "None \u2014 each note fits its content"]], "Uniform gives every note the tallest note\u2019s height; natural keeps a squarish physical-sticky shape; none lets each note size to its content.") + itemRepeater(i, j, b) + '<div class="af__hint">Cards stagger up and down automatically and lift on hover. Give each a short label (e.g. 01), a heading, a line or two, and an optional image.</div>';
     else if (b.type === "voices") body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "mode", "Style", [["verbatim", "Verbatim \u2014 sharp quote bubble"], ["thought", "Thought \u2014 soft bubble"], ["chat", "Chat \u2014 a two-way conversation"]], "Verbatim is a sharp quote bubble, thought a soft one, chat the tighter two-way style. Each voice can sit left or right below.") + sfSelect(i, j, "vsize", "Verbatim heading size", [["", "Standard"], ["lg", "Large"]]) + itemRepeater(i, j, b) + '<div class="af__hint">Side puts each bubble on the left or right \u2014 in Chat, the sides alternate automatically until you set them yourself. Heading only shows on Verbatim. Attribution is the small label under the bubble (e.g. \u201cWhat clients actually said\u201d).</div>';
     else if (b.type === "compare") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + mediaInputBlock(i, j, "beforeSrc", "Before image") + mediaInputBlock(i, j, "afterSrc", "After image") + "</div>" + '<div class="af__row">' + sfInput(i, j, "beforeLabel", "Before label") + sfInput(i, j, "afterLabel", "After label") + "</div>" + richBlock(i, j, "body", "Description below \u2014 what changed", "Both images should be the same size. Visitors drag the divider to compare.");
-    var hasHeading = /^(text|metrics|steps|media|split|cards|gallery|mediagrid|device|isolayers|figure|columns|rows|compare|stickies|voices|workflow)$/.test(b.type);
+    else if (b.type === "focus") body = sfInput(i, j, "heading", "Heading") + mediaInputBlock(i, j, "src", "Image to annotate") + focusAnnEditor(i, j, b) + sfInput(i, j, "caption", "Caption");
+    var hasHeading = /^(text|metrics|steps|media|split|cards|gallery|mediagrid|device|isolayers|figure|columns|rows|compare|stickies|voices|workflow|focus)$/.test(b.type);
     var sizeCtl = (hasHeading || b.type === "statement") ? sfSelect(i, j, "hsize", (b.type === "statement" ? "Statement size" : "Heading size"), [["", "Standard"], ["sm", "Compact \u2014 easier to read"], ["lg", "Large \u2014 display"]], "Shrink it if the standard size feels too big for the copy.") : "";
     var sepCtl = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="sep"' + (b.sep !== false ? " checked" : "") + " /> Separator line above \u2014 uncheck to flow into the previous section</label>";
     var locked = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="locked"' + (b.locked ? " checked" : "") + " /> Locked \u2014 only after the deeper-cut pass</label>";
@@ -1612,6 +1728,7 @@
     if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.sitem !== undefined && t.dataset.ifield) { onItemInput(t); return; }
     if (t.dataset.cell !== undefined && t.dataset.cfield) { onCellInput(t); return; }
+    if (t.dataset.fann !== undefined && t.dataset.afield) { onFocusAnn(t); return; }
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
     if (t.dataset.study !== undefined && t.dataset.sfield) { onStudyMeta(t); return; }
     if (t.dataset.sblock !== undefined && t.dataset.bfield && t.dataset.bfield !== "locked") { onStudyBlock(t); return; }
@@ -1648,6 +1765,7 @@
     if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
     if (t.dataset.sitem !== undefined && t.dataset.ifield) { onItemInput(t); return; }
+    if (t.dataset.fann !== undefined && t.dataset.afield) { onFocusAnn(t); return; }
     if (t.dataset.sblock !== undefined && t.type === "checkbox") {
       const wi = +t.dataset.sblock, bj = +t.dataset.bindex;
       if (data.work[wi] && data.work[wi].study && data.work[wi].study.blocks[bj]) {
@@ -1855,6 +1973,10 @@
     if (act === "cell-clear") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex], c = +b.dataset.cindex; if (it.cells && it.cells[c]) { it.cells[c].src = ""; saveDraft(true); renderL2(); } return; }
     if (act === "bfield-upload") { const bj = +b.dataset.bindex, f = b.dataset.bfield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl) { bl[f] = uri; if (isVideoVal(uri)) bl.controls = true; saveDraft(true); renderL2(); } }); return; }
     if (act === "bfield-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (bl) { bl[b.dataset.bfield] = ""; saveDraft(true); renderL2(); } return; }
+    if (act === "fa-add") { faPlacing = !faPlacing; renderL2(); return; }
+    if (act === "fa-select") { faSel = +b.dataset.aindex; faPlacing = false; renderL2(); return; }
+    if (act === "fa-remove") { const bl = faBlock(i, +b.dataset.bindex); if (bl && bl.annotations) { bl.annotations.splice(+b.dataset.aindex, 1); if (faSel >= bl.annotations.length) faSel = bl.annotations.length - 1; saveDraft(true); renderL2(); } return; }
+    if (act === "fa-focustoggle") { const bl = faBlock(i, +b.dataset.bindex); const a = bl && bl.annotations && bl.annotations[+b.dataset.aindex]; if (a) { if (a.focus) delete a.focus; else a.focus = { shape: "rect", x: 25, y: 25, w: 35, h: 35 }; faSel = +b.dataset.aindex; saveDraft(true); renderL2(); } return; }
     if (act === "study-preview") { saveDraft(true); status("Opening your current draft in a new tab\u2026"); return; }
     if (act === "work-dup") {
       const src = data.work[i];
@@ -3601,7 +3723,7 @@
   }
 
   /* ---------- AI feedback reviewer (map reviewer notes to the exact edits) ---------- */
-  var FB_TYPE_NAMES = { text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Compare", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices", isolayers: "Isometric layers" };
+  var FB_TYPE_NAMES = { text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Compare", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices", isolayers: "Isometric layers", focus: "Focus & annotate" };
   var FB_FIELD_LABELS = { kicker: "kicker", nav: "nav label", heading: "heading", body: "body", sub: "sub-line", caption: "caption", leftLabel: "before label", rightLabel: "after label", beforeLabel: "before label", afterLabel: "after label", value: "value", label: "label", title: "title", q: "question", a: "answer", cite: "attribution" };
   function fbPlain(s) { return String(s == null ? "" : s).replace(/<[^>]+>/g, " ").replace(/\*\*|\*|~~|\[\[|\]\]/g, "").replace(/\s+/g, " ").trim(); }
   function fbBlockLoc(b) { return fbPlain(b.nav || b.kicker || b.heading || b.body || FB_TYPE_NAMES[b.type] || "Section").slice(0, 42) || "Section"; }
@@ -4070,6 +4192,7 @@
 
     root.addEventListener("input", onInput);
     root.addEventListener("change", onChange);
+    root.addEventListener("pointerdown", faPointerDown);
     root.addEventListener("click", onClick);
     root.addEventListener("dblclick", onDblClick);
     // Drag-to-reorder any list with a grip handle (arrows still work).
