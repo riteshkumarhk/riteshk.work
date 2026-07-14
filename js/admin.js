@@ -1570,6 +1570,24 @@
       btn.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>' + (off ? '<line x1="3" y1="3" x2="21" y2="21"/>' : "") + "</svg>" + (off ? " Show preview" : " Hide preview");
     }
   }
+  // Clicking a non-interactive part of a section in the live preview (it postMessages the
+  // block index) jumps the editor straight to that block — expand it, scroll to it, flash it.
+  function selectPreviewBlock(idx) {
+    if (openStudy < 0 || !data.work[openStudy] || !data.work[openStudy].study) return;
+    var blocks = data.work[openStudy].study.blocks || [];
+    if (!(idx >= 0 && idx < blocks.length)) return;
+    openBlock = idx;
+    var wrap = l2body && l2body.querySelector(".study__blocks");
+    if (!wrap) return;
+    var items = wrap.querySelectorAll(".study__block");
+    items.forEach(function (x, k) { x.classList.toggle("is-open", k === idx); });
+    var target = items[idx];
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.classList.add("is-flash");
+      setTimeout(function () { target.classList.remove("is-flash"); }, 1100);
+    }
+  }
 
   /* ---------- blank templates ---------- */
   function blankSv() {
@@ -2116,10 +2134,28 @@
   // so show the in-memory bytes (instant) or the raw GitHub URL (works right after hosting).
   function previewSrc(v) {
     if (!isHostedPath(v)) return v;
-    // Images & videos can preview from the in-memory bytes; documents go through an external
-    // viewer (Office/Google) that must fetch a PUBLIC URL, so hand those the raw GitHub URL.
-    if (/\.(png|jpe?g|webp|gif|avif|bmp|svg|mp4|webm|mov|m4v|ogv)$/i.test(v)) return hostedBytes[v] || rawUrlFor(v);
+    if (/\.(mp4|webm|mov|m4v|ogv)$/i.test(v)) return hostedVideoSrc(v);
+    // Images preview from the in-memory data URI (instant) or the raw GitHub URL; documents go
+    // through an external viewer (Office/Google) that must fetch a PUBLIC URL.
+    if (/\.(png|jpe?g|webp|gif|avif|bmp|svg)$/i.test(v)) return hostedBytes[v] || rawUrlFor(v);
     return rawUrlFor(v);
+  }
+  // A hosted video is unreliable as a live <video src> from a data URI (huge) or from
+  // raw.githubusercontent.com (flaky range requests → black/stuck). Serve it from a stable
+  // blob instead: built from the in-memory bytes this session, or fetched once after a reload.
+  var vidBlobByPath = new Map(), vidFetching = {};
+  function hostedVideoSrc(path) {
+    var hit = vidBlobByPath.get(path);
+    if (hit) return hit;
+    var du = hostedBytes[path];
+    if (du && du.indexOf("data:") === 0) { var b = vcVideoBlobUrl(du); vidBlobByPath.set(path, b); return b; }
+    if (!vidFetching[path]) {
+      vidFetching[path] = 1;
+      fetch(rawUrlFor(path)).then(function (r) { return r.ok ? r.blob() : null; }).then(function (bl) {
+        if (bl) { vidBlobByPath.set(path, URL.createObjectURL(bl)); refreshL2Preview(); }
+      }).catch(function () {});
+    }
+    return rawUrlFor(path); // until the blob is ready; a refresh then swaps it in
   }
   // A big embedded video (data:video/...) is unreliable as a live <video src> in the churny
   // preview (huge string re-parsed on every refresh) and can't save to the draft. For the
@@ -2779,6 +2815,25 @@
       return { buffer: buffer, bytes: buffer.byteLength, width: dims.w, height: dims.h };
     })();
   }
+  // Sanity-check a freshly-encoded clip actually plays (some real recordings transcode to a
+  // stream that loads but stalls on playback). Resolves { ok, reason }.
+  function vcVerifyPlayable(blob) {
+    return new Promise(function (resolve) {
+      var v = document.createElement("video"); v.muted = true; v.preload = "auto"; v.playsInline = true;
+      var url = URL.createObjectURL(blob), settled = false;
+      function finish(ok, reason) { if (settled) return; settled = true; clearTimeout(to); try { v.pause(); } catch (e) {} try { URL.revokeObjectURL(url); } catch (e) {} resolve({ ok: ok, reason: reason || "" }); }
+      var to = setTimeout(function () { finish(false, "timed out"); }, 9000);
+      v.onerror = function () { finish(false, "decode error"); };
+      v.onloadeddata = function () {
+        if (!v.videoWidth) { finish(false, "no video track"); return; }
+        var p = v.play();
+        (p && p.then ? p : Promise.resolve()).then(function () {
+          setTimeout(function () { finish(v.currentTime > 0.05, v.currentTime > 0.05 ? "" : "playback stalled"); }, 700);
+        }).catch(function () { finish(false, "couldn\u2019t start playback"); });
+      };
+      v.src = url;
+    });
+  }
   // The compress panel: scrub to pick a clip, tune quality/resolution, preview A/B, then encode.
   function openCompressor(file, onApprove, onCancel) {
     var srcURL = URL.createObjectURL(file);
@@ -2883,6 +2938,13 @@
         estSize.textContent = vcFmtBytes(r.bytes) + " \u2014 was " + vcFmtBytes(file.size) + (pct > 0 ? " (" + pct + "% smaller)" : "");
         prog.hidden = true; done = true;
         goBtn.textContent = "Use this file \u2713";
+        vcVerifyPlayable(blob).then(function (chk) {
+          if (!chk.ok && noteEl) {
+            noteEl.textContent = "\u26a0 This clip didn\u2019t encode cleanly (" + chk.reason + ") \u2014 it may not play. For a reliable result, compress externally (HandBrake / ffmpeg) and add the file directly.";
+            noteEl.classList.add("vc__note--warn");
+            goBtn.textContent = "Use anyway";
+          }
+        });
       }).catch(function (e) { prog.hidden = true; status((e && e.message) || "Compression failed."); }).then(function () {
         busy = false; previewBtn.disabled = false; goBtn.disabled = false;
       });
@@ -4006,6 +4068,10 @@
     });
     frame.addEventListener("load", previewApply);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("message", function (e) {
+      var d = e.data;
+      if (d && d.__rk === "selectBlock" && typeof d.index === "number") selectPreviewBlock(d.index);
+    });
   }
 
   function onKey(e) { if (e.key === "Escape" && root && root.classList.contains("is-open")) exit(); }
