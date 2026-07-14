@@ -2526,10 +2526,12 @@
     inp.type = "file"; inp.accept = MEDIA_ACCEPT;
     inp.onchange = function () {
       const f = inp.files && inp.files[0]; if (!f) return;
-      if (f.size > 45 * 1024 * 1024) { status("\u201c" + (f.name || "That file") + "\u201d is " + Math.round(f.size / 1048576) + " MB \u2014 too large to embed. Host it (YouTube, Vimeo, OneDrive/Stream) and paste the link instead."); return; }
-      maybeTagVideo(f).then(function (file) {
-        if (file !== f) status("Tagged \u201c" + (f.name || "video") + "\u201d as BT.709 \u2014 true-to-life colour on OLED & wide-gamut screens.");
-        fileToDataUri(file).then(function (uri) { cb(uri); hostUploaded(uri, file, cb); });
+      prepareUpload(f).then(function (f0) {
+        if (!f0) return;
+        maybeTagVideo(f0).then(function (file) {
+          if (file !== f0) status("Tagged \u201c" + (f0.name || "video") + "\u201d as BT.709 \u2014 true-to-life colour on OLED & wide-gamut screens.");
+          fileToDataUri(file).then(function (uri) { cb(uri); hostUploaded(uri, file, cb); });
+        });
       });
     };
     inp.click();
@@ -2541,20 +2543,22 @@
     inp.type = "file"; inp.accept = MEDIA_ACCEPT; inp.multiple = true;
     inp.onchange = function () {
       const files = [].slice.call(inp.files || []);
-      const ok = files.filter(function (f) { return f.size <= 45 * 1024 * 1024; });
-      if (ok.length < files.length) status((files.length - ok.length) + " file(s) were over 45 MB and skipped \u2014 host those and paste links.");
-      if (!ok.length) return;
-      const slots = ok.map(function () { return makeItem(); });
-      if (done) done();
-      ok.forEach(function (f, idx) {
-        const it = slots[idx];
-        maybeTagVideo(f).then(function (file) {
-          fileToDataUri(file).then(function (uri) {
-            it.src = uri; if (isVideoVal(uri)) it.controls = true; if (done) done();
-            hostUploaded(uri, file, function (path) { it.src = path; if (isVideoVal(path)) it.controls = true; if (done) done(); });
-          });
+      (function next(idx) {
+        if (idx >= files.length) return;
+        prepareUpload(files[idx]).then(function (f0) {
+          if (f0) {
+            const it = makeItem();
+            if (done) done();
+            maybeTagVideo(f0).then(function (file) {
+              fileToDataUri(file).then(function (uri) {
+                it.src = uri; if (isVideoVal(uri)) it.controls = true; if (done) done();
+                hostUploaded(uri, file, function (path) { it.src = path; if (isVideoVal(path)) it.controls = true; if (done) done(); });
+              });
+            });
+          }
+          next(idx + 1);
         });
-      });
+      })(0);
     };
     inp.click();
   }
@@ -2582,6 +2586,275 @@
         finish(low, low ? " \u2014 heads up: " + dims + " is small for a full-width slot and may look soft when shown large." : (dims ? " (" + dims + ")" : ""));
       });
     } else { finish(false, ""); }
+  }
+
+  /* ===================== In-app video compressor (WebCodecs) =====================
+     Big UX-demo reels (100MB+) can't be embedded (localStorage/45MB cap) and don't
+     belong in the repo at full size. This transcodes them in the browser with the
+     native, hardware-accelerated H.264 encoder — no ffmpeg.wasm, no SharedArrayBuffer
+     and no COOP/COEP header hacks (which would break the site's iframe embeds).
+     Admin-only, so WebCodecs (Edge/Chrome) is a safe requirement; anything else falls
+     back to the "host it & paste a link" message. Video only for now (audio dropped). */
+  var VC = {
+    mp4box: "https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js",
+    muxer: "https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.min.js",
+    libs: null, caps: undefined
+  };
+  function vcLoadScript(src) {
+    return new Promise(function (res, rej) {
+      var s = document.createElement("script"); s.src = src;
+      s.onload = function () { res(1); };
+      s.onerror = function () { rej(new Error("Couldn\u2019t load a compression library (offline?).")); };
+      document.head.appendChild(s);
+    });
+  }
+  function vcLoadLibs() {
+    if (VC.libs) return Promise.resolve(VC.libs);
+    return vcLoadScript(VC.mp4box).then(function () { return vcLoadScript(VC.muxer); }).then(function () {
+      if (!window.MP4Box || !window.DataStream || !window.Mp4Muxer) throw new Error("Compression libraries didn\u2019t initialise.");
+      VC.libs = { MP4Box: window.MP4Box, DataStream: window.DataStream, Mp4Muxer: window.Mp4Muxer };
+      return VC.libs;
+    });
+  }
+  // Cached: the first supported H.264 profile string, or null if WebCodecs can't encode here.
+  function vcSupported() {
+    if (VC.caps !== undefined) return Promise.resolve(VC.caps);
+    if (typeof VideoEncoder === "undefined" || typeof VideoDecoder === "undefined" || typeof VideoFrame === "undefined" || typeof OffscreenCanvas === "undefined") { VC.caps = null; return Promise.resolve(null); }
+    var profiles = ["avc1.640028", "avc1.4d0028", "avc1.42001f"], i = 0;
+    function tryNext() {
+      if (i >= profiles.length) { VC.caps = null; return null; }
+      var codec = profiles[i++];
+      return VideoEncoder.isConfigSupported({ codec: codec, width: 1280, height: 720, bitrate: 3000000, framerate: 30 }).then(function (s) {
+        if (s && s.supported) { VC.caps = codec; return codec; }
+        return tryNext();
+      }).catch(function () { return tryNext(); });
+    }
+    return Promise.resolve(tryNext());
+  }
+  function vcIsCompressible(file) {
+    if (!file) return false;
+    var nm = (file.name || "").toLowerCase();
+    return file.type === "video/mp4" || file.type === "video/quicktime" || /\.(mp4|m4v|mov)$/.test(nm);
+  }
+  function vcEven(n) { n = Math.round(n); return n % 2 ? n - 1 : n; }
+  function vcScaleDims(w, h, cap) {
+    if (!cap || Math.max(w, h) <= cap) return { w: vcEven(w), h: vcEven(h) };
+    var scale = cap / Math.max(w, h);
+    return { w: vcEven(w * scale), h: vcEven(h * scale) };
+  }
+  function vcBitrate(w, h, fps, q) { var bpp = 0.04 + 0.14 * Math.max(0, Math.min(1, q)); return Math.max(120000, Math.round(w * h * fps * bpp)); }
+  function vcFmtBytes(n) { if (n < 1024) return n + " B"; if (n < 1048576) return (n / 1024).toFixed(0) + " KB"; return (n / 1048576).toFixed(1) + " MB"; }
+  function vcSleep(ms) { return new Promise(function (r) { setTimeout(r, ms || 0); }); }
+  // Demux an mp4/mov ArrayBuffer -> { track, samples[], description(avcC), durationSec, fps }
+  function vcDemux(buf, libs) {
+    return new Promise(function (resolve, reject) {
+      var file = libs.MP4Box.createFile();
+      var samples = [], track = null, description = null, total = 0;
+      file.onError = function (e) { reject(new Error("This video couldn\u2019t be read (" + e + ").")); };
+      file.onReady = function (info) {
+        track = info.videoTracks && info.videoTracks[0];
+        if (!track) { reject(new Error("No video track found in this file.")); return; }
+        total = track.nb_samples;
+        try {
+          var entries = file.getTrackById(track.id).mdia.minf.stbl.stsd.entries;
+          for (var e = 0; e < entries.length; e++) {
+            if (entries[e].avcC) { var ds = new libs.DataStream(undefined, 0, libs.DataStream.BIG_ENDIAN); entries[e].avcC.write(ds); description = new Uint8Array(ds.buffer, 8); break; }
+          }
+        } catch (err) {}
+        if (!description) { reject(new Error("Only H.264 .mp4/.mov videos can be compressed here. Export to H.264, or host this file and paste a link.")); return; }
+        file.setExtractionOptions(track.id, null, { nbSamples: Infinity });
+        file.start();
+      };
+      file.onSamples = function (id, user, s) {
+        for (var k = 0; k < s.length; k++) {
+          var x = s[k];
+          samples.push({ type: x.is_sync ? "key" : "delta", timestamp: x.cts * 1e6 / track.timescale, duration: x.duration * 1e6 / track.timescale, data: x.data.slice(0) });
+        }
+        if (samples.length >= total) {
+          var durationSec = (track.duration / track.timescale) || (samples.length ? (samples[samples.length - 1].timestamp + samples[samples.length - 1].duration) / 1e6 : 0);
+          var fps = durationSec ? Math.min(60, Math.max(1, Math.round(samples.length / durationSec))) : 30;
+          resolve({ track: track, samples: samples, description: description, durationSec: durationSec, fps: fps });
+        }
+      };
+      var ab = buf.slice(0); ab.fileStart = 0; file.appendBuffer(ab); file.flush();
+    });
+  }
+  /* Transcode (pipelined w/ backpressure so a 100MB source stays within memory).
+     opts: { demuxed, libs, cap, bitrate, codec, startSec, durSec, onProgress } */
+  function vcTranscode(opts) {
+    var d = opts.demuxed, libs = opts.libs, src = d.track.video;
+    var dims = vcScaleDims(src.width, src.height, opts.cap);
+    var fps = d.fps, gop = Math.max(1, fps * 2);
+    var Mux = libs.Mp4Muxer;
+    var muxer = new Mux.Muxer({ target: new Mux.ArrayBufferTarget(), video: { codec: "avc", width: dims.w, height: dims.h }, fastStart: "in-memory" });
+    var startUs = (opts.startSec || 0) * 1e6, endUs = opts.durSec ? startUs + opts.durSec * 1e6 : Infinity, offsetUs = startUs;
+    var needScale = dims.w !== src.width || dims.h !== src.height;
+    var cv = new OffscreenCanvas(dims.w, dims.h), ctx = cv.getContext("2d", { alpha: false });
+    var encErr = null, decErr = null, enkIn = 0, total = 0;
+    for (var t = 0; t < d.samples.length; t++) { var ts0 = d.samples[t].timestamp; if (ts0 >= startUs && ts0 < endUs) total++; }
+    total = total || d.samples.length;
+    var encoder = new VideoEncoder({ output: function (c, m) { muxer.addVideoChunk(c, m); }, error: function (e) { encErr = e; } });
+    encoder.configure({ codec: opts.codec, width: dims.w, height: dims.h, bitrate: opts.bitrate, framerate: fps, avc: { format: "avc" } });
+    var decoder = new VideoDecoder({
+      output: function (frame) {
+        var ts = frame.timestamp;
+        if (ts >= startUs && ts < endUs) {
+          var toEnc;
+          if (needScale) { ctx.drawImage(frame, 0, 0, dims.w, dims.h); toEnc = new VideoFrame(cv, { timestamp: ts - offsetUs }); frame.close(); }
+          else if (offsetUs) { toEnc = new VideoFrame(frame, { timestamp: ts - offsetUs }); frame.close(); }
+          else { toEnc = frame; }
+          var key = enkIn % gop === 0; enkIn++;
+          try { encoder.encode(toEnc, { keyFrame: key }); } catch (e) { encErr = e; }
+          toEnc.close();
+          if (opts.onProgress) opts.onProgress(Math.min(1, enkIn / total));
+        } else { frame.close(); }
+      },
+      error: function (e) { decErr = e; }
+    });
+    decoder.configure({ codec: d.track.codec, description: d.description, codedWidth: src.width, codedHeight: src.height });
+    var startIdx = 0;
+    if (startUs > 0) { for (var j = 0; j < d.samples.length; j++) { if (d.samples[j].timestamp > startUs) break; if (d.samples[j].type === "key") startIdx = j; } }
+    return (async function () {
+      for (var n = startIdx; n < d.samples.length; n++) {
+        if (decErr || encErr) break;
+        if (d.samples[n].timestamp >= endUs) break;
+        while (decoder.decodeQueueSize > 6 || encoder.encodeQueueSize > 6) { await vcSleep(0); if (decErr || encErr) break; }
+        decoder.decode(new EncodedVideoChunk(d.samples[n]));
+      }
+      if (!decErr) await decoder.flush();
+      if (!encErr) await encoder.flush();
+      muxer.finalize();
+      try { decoder.close(); } catch (e) {}
+      try { encoder.close(); } catch (e) {}
+      if (encErr) throw (encErr.message ? encErr : new Error("Encoding failed."));
+      if (decErr) throw (decErr.message ? decErr : new Error("Decoding failed."));
+      var buffer = muxer.target.buffer;
+      return { buffer: buffer, bytes: buffer.byteLength, width: dims.w, height: dims.h };
+    })();
+  }
+  // The compress panel: scrub to pick a clip, tune quality/resolution, preview A/B, then encode.
+  function openCompressor(file, onApprove, onCancel) {
+    var srcURL = URL.createObjectURL(file);
+    var demuxed = null, codec = null, busy = false, ready = false, done = false, outFile = null;
+    var box = document.createElement("div");
+    box.className = "pass pass--wide vc";
+    box.innerHTML =
+      '<div class="pass__box vc__box">' +
+        '<div class="vc__head"><strong>Compress video</strong><span class="vc__file"></span></div>' +
+        '<div class="vc__body">' +
+          '<div class="vc__stage">' +
+            '<div class="vc__srcwrap"><video class="vc__src" controls muted playsinline></video><div class="vc__hint">Scrub to a moment that shows the detail you care about, then <b>Preview</b> \u2014 no auto-picked frames.</div></div>' +
+            '<div class="vc__ab" hidden>' +
+              '<figure class="vc__cell"><figcaption>Original clip</figcaption><video class="vc__orig" muted loop playsinline></video></figure>' +
+              '<figure class="vc__cell"><figcaption>Compressed <span class="vc__cmpmeta"></span></figcaption><video class="vc__cmp" muted loop playsinline></video></figure>' +
+            '</div>' +
+          '</div>' +
+          '<div class="vc__side">' +
+            '<label class="af__label">Quality</label>' +
+            '<input type="range" class="vc__q" min="0" max="100" value="55" />' +
+            '<div class="vc__qlbl"><span>Smaller file</span><span>Higher quality</span></div>' +
+            '<div class="af"><label class="af__label">Resolution</label><select class="vc__res"><option value="0">Original</option><option value="1080">1080p max</option><option value="720">720p max</option></select></div>' +
+            '<div class="vc__est">Full file (est.): <b class="vc__estsize">\u2014</b></div>' +
+            '<button class="btn btn--ghost vc__preview" disabled>Preview from here</button>' +
+            '<div class="vc__note">Audio is removed. For narrated videos, host externally &amp; paste a link.</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="vc__prog" hidden><div class="vc__bar"><i></i></div><span class="vc__progtxt">Compressing\u2026</span></div>' +
+        '<div class="vc__foot"><button class="btn vc__cancel">Cancel</button><button class="btn btn--primary vc__go" disabled>Compress &amp; use</button></div>' +
+      '</div>';
+    document.body.appendChild(box);
+    var el = function (s) { return box.querySelector(s); };
+    var srcV = el(".vc__src"), qEl = el(".vc__q"), resEl = el(".vc__res");
+    var previewBtn = el(".vc__preview"), goBtn = el(".vc__go"), cancelBtn = el(".vc__cancel");
+    var abWrap = el(".vc__ab"), origV = el(".vc__orig"), cmpV = el(".vc__cmp"), cmpMeta = el(".vc__cmpmeta");
+    var estSize = el(".vc__estsize"), prog = el(".vc__prog"), bar = el(".vc__bar i"), progTxt = el(".vc__progtxt");
+    el(".vc__file").textContent = (file.name || "video") + " \u00b7 " + vcFmtBytes(file.size);
+    srcV.src = srcURL;
+    function cleanup() {
+      [srcURL, origV.src, cmpV.src].forEach(function (u) { if (u && u.slice(0, 5) === "blob:") try { URL.revokeObjectURL(u); } catch (e) {} });
+      box.remove();
+    }
+    function close(approved) { cleanup(); if (approved && outFile) onApprove(outFile); else if (onCancel) onCancel(); }
+    cancelBtn.onclick = function () { if (!busy) close(false); };
+    box.addEventListener("click", function (e) { if (e.target === box && !busy) close(false); });
+    function qVal() { return Math.max(0, Math.min(1, (+qEl.value || 0) / 100)); }
+    function capVal() { return +resEl.value || 0; }
+    function resetGo() { if (done) { done = false; outFile = null; goBtn.textContent = "Compress & use"; } }
+    qEl.oninput = resetGo; resEl.onchange = resetGo;
+    function bitrateNow() { var dm = vcScaleDims(demuxed.track.video.width, demuxed.track.video.height, capVal()); return vcBitrate(dm.w, dm.h, demuxed.fps, qVal()); }
+    function run(startSec, durSec, onProg) { return vcTranscode({ demuxed: demuxed, libs: demuxed.__libs, cap: capVal(), bitrate: bitrateNow(), codec: codec, startSec: startSec, durSec: durSec, onProgress: onProg }); }
+
+    status("Reading video\u2026");
+    vcLoadLibs().then(function (libs) {
+      return file.arrayBuffer().then(function (buf) { return vcDemux(buf, libs); }).then(function (dx) { demuxed = dx; demuxed.__libs = libs; });
+    }).then(vcSupported).then(function (c) {
+      codec = c || "avc1.4d0028"; ready = true;
+      previewBtn.disabled = false; goBtn.disabled = false;
+      status("Ready \u2014 scrub to a spot, then Preview or Compress.");
+    }).catch(function (e) { status(""); close(false); setTimeout(function () { status((e && e.message) || "This video couldn\u2019t be prepared."); }, 20); });
+
+    previewBtn.onclick = function () {
+      if (busy || !ready) return;
+      resetGo(); busy = true; previewBtn.disabled = true; goBtn.disabled = true; previewBtn.textContent = "Rendering\u2026";
+      var start = Math.max(0, Math.min(srcV.currentTime || 0, Math.max(0, demuxed.durationSec - 0.2)));
+      var dur = Math.min(5, Math.max(1, demuxed.durationSec - start));
+      run(start, dur, null).then(function (r) {
+        var blob = new Blob([r.buffer], { type: "video/mp4" });
+        if (cmpV.src) URL.revokeObjectURL(cmpV.src);
+        cmpV.src = URL.createObjectURL(blob); cmpV.play().catch(function () {});
+        origV.src = srcURL;
+        origV.onloadedmetadata = function () { try { origV.currentTime = start; } catch (e) {} origV.play().catch(function () {}); };
+        origV.ontimeupdate = function () { if (origV.currentTime > start + dur || origV.currentTime < start - 0.1) { try { origV.currentTime = start; } catch (e) {} } };
+        abWrap.hidden = false;
+        var full = demuxed.durationSec ? r.bytes / dur * demuxed.durationSec : r.bytes;
+        cmpMeta.textContent = "\u00b7 " + r.width + "\u00d7" + r.height + " \u00b7 " + vcFmtBytes(r.bytes) + " / " + dur.toFixed(1) + "s";
+        estSize.textContent = vcFmtBytes(full) + " \u2014 was " + vcFmtBytes(file.size);
+      }).catch(function (e) { status((e && e.message) || "Preview failed."); }).then(function () {
+        busy = false; previewBtn.disabled = false; goBtn.disabled = false; previewBtn.textContent = "Preview from here";
+      });
+    };
+
+    goBtn.onclick = function () {
+      if (done && outFile) { close(true); return; }
+      if (busy || !ready) return;
+      busy = true; previewBtn.disabled = true; goBtn.disabled = true;
+      prog.hidden = false; bar.style.width = "0%"; progTxt.textContent = "Compressing\u2026 0%";
+      run(0, 0, function (p) { var pc = Math.round(p * 100); bar.style.width = pc + "%"; progTxt.textContent = "Compressing\u2026 " + pc + "%"; }).then(function (r) {
+        var blob = new Blob([r.buffer], { type: "video/mp4" });
+        outFile = new File([blob], (file.name || "video").replace(/\.[^.]+$/, "") + "-compressed.mp4", { type: "video/mp4" });
+        if (cmpV.src) URL.revokeObjectURL(cmpV.src);
+        cmpV.src = URL.createObjectURL(blob); cmpV.play().catch(function () {});
+        origV.src = srcURL; origV.onloadedmetadata = function () { origV.play().catch(function () {}); }; origV.ontimeupdate = null;
+        abWrap.hidden = false;
+        cmpMeta.textContent = "\u00b7 " + r.width + "\u00d7" + r.height + " \u00b7 " + vcFmtBytes(r.bytes);
+        var pct = file.size ? Math.round((1 - r.bytes / file.size) * 100) : 0;
+        estSize.textContent = vcFmtBytes(r.bytes) + " \u2014 was " + vcFmtBytes(file.size) + (pct > 0 ? " (" + pct + "% smaller)" : "");
+        prog.hidden = true; done = true;
+        goBtn.textContent = "Use this file \u2713";
+      }).catch(function (e) { prog.hidden = true; status((e && e.message) || "Compression failed."); }).then(function () {
+        busy = false; previewBtn.disabled = false; goBtn.disabled = false;
+      });
+    };
+  }
+  // Gate a picked file before upload: big videos go through the compressor; oversize
+  // non-video (or unsupported browsers) get the existing "host it & paste a link" nudge.
+  function prepareUpload(file) {
+    return new Promise(function (resolve) {
+      if (!file) { resolve(null); return; }
+      if (vcIsCompressible(file) && file.size > 10 * 1024 * 1024) {
+        vcSupported().then(function (c) {
+          if (!c) {
+            if (file.size > 45 * 1024 * 1024) { status("\u201c" + (file.name || "That file") + "\u201d is " + Math.round(file.size / 1048576) + " MB \u2014 too large to embed. Host it (YouTube, Vimeo, OneDrive/Stream) and paste the link instead."); resolve(null); }
+            else resolve(file);
+            return;
+          }
+          openCompressor(file, function (out) { resolve(out); }, function () { resolve(null); });
+        });
+        return;
+      }
+      if (file.size > 45 * 1024 * 1024) { status("\u201c" + (file.name || "That file") + "\u201d is " + Math.round(file.size / 1048576) + " MB \u2014 too large to embed. Host it (YouTube, Vimeo, OneDrive/Stream) and paste the link instead."); resolve(null); return; }
+      resolve(file);
+    });
   }
   function pickResume(cb) {
     const inp = document.createElement("input");
