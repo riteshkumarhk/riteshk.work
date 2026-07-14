@@ -26,6 +26,10 @@
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
       touchMultiplier: 1.6,
+      // Let modals/lightboxes scroll natively — Lenis otherwise preventDefaults
+      // the wheel globally, so nested scroll areas (e.g. the "add a section"
+      // picker) show a scrollbar but never move.
+      prevent: (node) => !!(node && node.closest && node.closest(".pass, .pjx")),
     });
     const raf = (time) => { lenis.raf(time); requestAnimationFrame(raf); };
     requestAnimationFrame(raf);
