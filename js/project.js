@@ -536,12 +536,52 @@
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__devices pjb__devices--' + device + fill + '">' + frames + "</div>";
   }
 
+  // Isometric layered UI — ONE orthographic (NON-perspective) tilted stack per
+  // section. Layers are spaced by a uniform --distance; each carries a small --depth
+  // slab that extrudes DOWNWARD, built from masked slices in the height colour (--hc)
+  // so it follows the image's alpha — a rounded/transparent PNG gets rounded depth,
+  // no sharp edges. Height colour auto-derives from the image (data-iso-auto) unless
+  // the author sets one. Four view directions. Stack = opaque; interface = transparent
+  // (PNG alpha shows) with an optional transparency reduction. Capped at 12 layers.
+  function isolayersBlock(b) {
+    var mode = b.mode === "interface" ? "interface" : "stack";
+    var dir = /^(topR|topL|right|left)$/.test(b.dir) ? b.dir : "topR";
+    var distance = Math.max(6, Math.min(160, parseInt(b.distance, 10) || 40));
+    var depth = parseInt(b.depth, 10); depth = Math.max(0, Math.min(48, isNaN(depth) ? 12 : depth));
+    var items = (b.items || []).slice(0, 12);
+    var op = mode === "interface" ? ({ light: "0.92", medium: "0.75", strong: "0.55" }[b.transparency] || "") : "";
+    var nSlices = depth > 0 ? Math.max(3, Math.min(12, Math.round(depth / 1.4))) : 0;
+    var layers = items.map(function (m, i) {
+      var url = mediaSrc(m);
+      var face = url ? mediaEl(m, "pjb__iso-media")
+        : '<div class="pjb__shot-ph pjb__shot-ph--' + SHOT_THEMES[i % SHOT_THEMES.length] + '"><span class="pjb__shot-tag">Layer</span></div>';
+      var col = String(m.heightColor || "").replace(/[^#0-9a-z(),.%\s]/gi, "").slice(0, 32);
+      var depthEl = "";
+      if (nSlices && url) {
+        var murl = "url('" + attr(url) + "')";
+        var slices = "";
+        for (var k = 1; k <= nSlices; k++) {
+          var z = -(depth * (k / nSlices));
+          slices += '<span class="pjb__iso-ext" style="--z:' + z.toFixed(1) + "px;-webkit-mask-image:" + murl + ";mask-image:" + murl + '"></span>';
+        }
+        depthEl = '<span class="pjb__iso-depth">' + slices + "</span>";
+      }
+      var st = "--i:" + i + (col ? ";--hc:" + col : "") + (op ? ";opacity:" + op : "");
+      var auto = !col && url ? ' data-iso-auto="1"' : "";
+      return '<div class="pjb__iso-layer" style="' + st + '"' + auto + ">" + depthEl + face + "</div>";
+    }).join("");
+    var maxz = Math.max(0, items.length - 1) * distance + depth;
+    return kicker(b.kicker) + heading(b.heading) +
+      '<div class="pjb__iso pjb__iso--' + mode + " pjb__iso--" + dir + '" data-iso style="--distance:' + distance + "px;--depth:" + depth + "px;--maxz:" + maxz + 'px">' +
+      '<div class="pjb__iso-stage">' + layers + "</div></div>";
+  }
+
   var RENDERERS = {
     text: textBlock, statement: stmtBlock, metrics: metricsBlock,
     steps: stepsBlock, media: mediaBlock, split: splitBlock, faq: faqBlock,
     cards: cardsBlock, gallery: galleryBlock, figure: figureBlock,
     columns: columnsBlock, rows: rowsBlock, compare: compareBlock, stickies: stickiesBlock, voices: voicesBlock,
-    workflow: workflowBlock, mediagrid: mediagridBlock, device: deviceBlock,
+    workflow: workflowBlock, mediagrid: mediagridBlock, device: deviceBlock, isolayers: isolayersBlock,
   };
   function renderBlock(b, i) {
     var navLabel = b.nav || "";
@@ -876,6 +916,38 @@
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 
+  // Enhance isometric-layer blocks after render: (1) auto-derive each layer's height
+  // colour by sampling its image (darkened) when the author didn't set one — falls
+  // back silently if the canvas is cross-origin tainted; (2) double-click opens every
+  // layer full-screen in the shared lightbox (single click does nothing).
+  function isoEnhance(root) {
+    var scope = root || document;
+    [].slice.call(scope.querySelectorAll(".pjb__iso[data-iso]")).forEach(function (iso) {
+      if (iso.__isoDone) return;
+      iso.__isoDone = true;
+      [].slice.call(iso.querySelectorAll(".pjb__iso-layer[data-iso-auto]")).forEach(function (layer) {
+        var img = layer.querySelector("img.pjb__iso-media"); if (!img) return;
+        var apply = function () {
+          try {
+            var s = 22, cv = document.createElement("canvas"); cv.width = s; cv.height = s;
+            var cx = cv.getContext("2d"); cx.drawImage(img, 0, 0, s, s);
+            var d = cx.getImageData(0, 0, s, s).data, r = 0, g = 0, b = 0, n = 0;
+            for (var p = 0; p < d.length; p += 4) { if (d[p + 3] < 24) continue; r += d[p]; g += d[p + 1]; b += d[p + 2]; n++; }
+            if (n) layer.style.setProperty("--hc", "rgb(" + Math.round(r / n * .6) + "," + Math.round(g / n * .6) + "," + Math.round(b / n * .6) + ")");
+          } catch (e) {}
+        };
+        if (img.complete && img.naturalWidth) apply(); else img.addEventListener("load", apply, { once: true });
+      });
+      var faces = [].slice.call(iso.querySelectorAll("img.pjb__iso-media"));
+      faces.forEach(function (im) { im.removeAttribute("data-zoom"); });
+      iso.addEventListener("dblclick", function () {
+        var group = faces.map(function (im) { return { src: im.getAttribute("src") }; }).filter(function (x) { return x.src; });
+        if (group.length) openLbx(group, group.length - 1);
+      });
+      if (faces.length) { iso.style.cursor = "zoom-in"; iso.title = "Double-click to view every layer"; }
+    });
+  }
+
   function fillContent(w) {
     var head = overlay.querySelector("[data-crumb]");
     head.innerHTML = '<b>' + esc(w.client || "") + "</b>" + (w.plateTag ? "<span>" + esc(w.plateTag) + "</span>" : "");
@@ -894,7 +966,7 @@
       contentEl.innerHTML = html;
     }
     contentEl.setAttribute("data-wid", String(w.id));
-    requestAnimationFrame(function () { updateSpy(); coverParallax(); normalizeGalleries(contentEl); });
+    requestAnimationFrame(function () { updateSpy(); coverParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); });
   }
 
   // Minimal DOM morph: update text/attributes in place and add/remove nodes, but

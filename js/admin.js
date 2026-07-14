@@ -75,6 +75,7 @@
     { type: "gallery", name: "Gallery", tag: "Carousel", desc: "A swipeable strip of visuals with captions and a 1/N counter.", best: "Key features \u00b7 screen tours \u00b7 shots" },
     { type: "mediagrid", name: "Media grid", tag: "Grid", desc: "Several images in a compact grid \u2014 uniform tiles or a staggered cluster. Multi-select to add many at once.", best: "Moodboards \u00b7 screen sets \u00b7 explorations" },
     { type: "device", name: "Devices", tag: "Mockup", desc: "Wrap screens in an abstract phone, tablet, laptop or watch — pick a preset ratio or let the frame fit your media. Narrow devices pack side by side.", best: "App screens · responsive · device showcases" },
+    { type: "isolayers", name: "Isometric layers", tag: "3D", desc: "Stack screens or UI layers into a soft isometric explosion with depth — the showpiece. One stack per section, up to 12 layers.", best: "Design systems · UI teardown · flows" },
     { type: "figure", name: "Figure", tag: "Image + text", desc: "A visual beside a short write-up \u2014 image left or right.", best: "A decision explained next to its screen" },
     { type: "columns", name: "Columns", tag: "Text table", desc: "Multiple columns of titled text \u2014 add a heading or image to any column.", best: "Overview + What I did \u00b7 feature columns" },
     { type: "rows", name: "Rows", tag: "Text table", desc: "Stacked rows of titled cells \u2014 a labelled row header with cells side by side.", best: "Comparisons \u00b7 phased breakdowns \u00b7 matrices" },
@@ -441,6 +442,7 @@
       case "gallery": return { type: "gallery", nav: "", kicker: "", heading: "", items: [] };
       case "mediagrid": return { type: "mediagrid", nav: "", kicker: "", heading: "", gridLayout: "uniform", items: [] };
       case "device": return { type: "device", nav: "", kicker: "", heading: "", device: "phone", preset: "iphone", fill: "", items: [] };
+      case "isolayers": return { type: "isolayers", nav: "", kicker: "", heading: "", mode: "stack", dir: "topR", distance: "40", depth: "14", transparency: "", items: [] };
       case "figure": return { type: "figure", nav: "", kicker: "", heading: "", body: "", src: "", caption: "", flip: false };
       case "columns": return { type: "columns", nav: "", kicker: "", heading: "", items: [] };
       case "rows": return { type: "rows", nav: "", kicker: "", heading: "", items: [] };
@@ -778,6 +780,7 @@
     gallery: { title: "Slides", one: "Slide", add: "Add slide", fields: [["src", "Image / video / embed URL", "media"], ["caption", "Caption", "input"]] },
     mediagrid: { title: "Images", one: "Image", add: "Add image", fields: [["src", "Image / video URL", "media"], ["caption", "Caption (optional)", "input"]] },
     device: { title: "Screens", one: "Screen", add: "Add screen", fields: [["src", "Image / video / GIF URL", "media"], ["caption", "Caption (optional)", "input"]] },
+    isolayers: { title: "Layers", one: "Layer", add: "Add layer", fields: [["src", "Image / PNG URL", "media"], ["heightColor", "Height colour", "isohc"]] },
     cards: { title: "Cards", one: "Card", add: "Add card", fields: [["title", "Title", "input"], ["body", "Body", "rich"], ["icon", "Icon", "icon"], ["src", "Image (optional \u2014 replaces the icon)", "media"]] },
     columns: { title: "Columns", one: "Column", add: "Add column", fields: [["label", "Label (optional)", "input"], ["cells", "Cells", "cells"]] },
     rows: { title: "Rows", one: "Row", add: "Add row", fields: [["label", "Row label (optional)", "input"], ["cells", "Cells", "cells"]] },
@@ -793,6 +796,7 @@
       case "steps": return { title: "", body: "" };
       case "workflow": return { label: "", note: "" };
       case "faq": return { q: "", a: "" };
+      case "isolayers": return { src: "", heightColor: "" };
       case "media": case "gallery": case "mediagrid": case "device": return { src: "", caption: "" };
       case "cards": return { title: "", body: "", icon: "", src: "" };
       case "columns": return { label: "", cells: [{ heading: "", body: "", src: "" }] };
@@ -829,6 +833,16 @@
         (v ? '<button class="btn btn--ghost" data-act="item-clear" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">Remove</button>' : "") + "</div></div>";
     }
     if (kind === "imgsize") return mediaSizeCtl(i, j, k, it);
+    if (kind === "isohc") {
+      var hcv = it[key] || "";
+      return '<div class="af imgsz"><label class="af__label">' + label + '</label>' +
+        '<div class="imgsz__bg"><span class="imgsz__bglbl">Height side</span>' +
+        '<span class="imgsz__sw"' + (hcv ? ' style="background:' + escAttr(hcv) + '"' : "") + '></span>' +
+        '<input type="color" class="imgsz__color" ' + da + ' value="' + escAttr(hcv || "#333333") + '" />' +
+        '<button type="button" class="imgsz__eye" data-act="iso-eyedrop" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '" title="Pick a colour from the screen / an image">\uD83D\uDD0D</button>' +
+        (hcv ? '<button type="button" class="imgsz__clear" data-act="item-clear" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">Auto</button>' : '<span class="imgsz__note">auto from image</span>') +
+        '</div></div>';
+    }
     return '<div class="af"><label class="af__label">' + label + '</label><input type="text" ' + da + ' value="' + escAttr(it[key] || "") + '" /></div>';
   }
   function mediaSizeCtl(i, j, k, it) {
@@ -877,7 +891,7 @@
         '<button class="iconbtn iconbtn--danger" data-act="item-remove" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" title="Remove">\u2715</button>' +
         "</span></div>" + flds + "</div>";
     }).join("") || '<div class="rep__empty">No ' + escHtml(spec.title.toLowerCase()) + " yet.</div>";
-    var bulk = /^(gallery|media|mediagrid|device)$/.test(b.type) ? '<button class="btn btn--add rep__add" data-act="item-upload-multi" data-index="' + i + '" data-bindex="' + j + '" title="Pick several images at once">+ Add images\u2026</button>' : "";
+    var bulk = /^(gallery|media|mediagrid|device|isolayers)$/.test(b.type) ? '<button class="btn btn--add rep__add" data-act="item-upload-multi" data-index="' + i + '" data-bindex="' + j + '" title="Pick several images at once">+ Add images\u2026</button>' : "";
     var single = (b.type === "mediagrid") ? "" : '<button class="btn btn--add rep__add" data-act="item-add" data-index="' + i + '" data-bindex="' + j + '">+ ' + spec.add + "</button>";
     return '<div class="rep"><div class="rep__head"><label class="af__label">' + spec.title + '</label>' + bulk + single + "</div>" + rows + "</div>";
   }
@@ -1059,7 +1073,7 @@
     status("Hidden project unlocked for editing \u2014 it re-encrypts on Publish.", true);
   }
   function blockEditor(i, b, j, len, open) {
-    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Before / after slider", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices" })[b.type] || b.type;
+    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Before / after slider", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices", isolayers: "Isometric layers" })[b.type] || b.type;
     if (b.encStub) {
       return '<div class="card study__block study__block--enc">' +
         '<div class="study__block-head study__block-head--enc">' +
@@ -1113,13 +1127,22 @@
       var widthCtl = /^(laptop|tablet)$/.test(dvc) ? sfSelect(i, j, "fill", "Width", [["", "Natural"], ["34", "Three-quarters"], ["full", "Full — end to end"]], "How much of the column the device spans — handy for a laptop hero.") : "";
       body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + sfSelect(i, j, "device", "Device", [["phone", "Phone"], ["tablet", "Tablet"], ["laptop", "Laptop"], ["watch", "Watch"]], "") + sfSelect(i, j, "preset", "Screen", presetOpts, "") + "</div>" + widthCtl + itemRepeater(i, j, b) + '<div class="af__hint">Each screen sits in the chosen device. “Fit the media” wraps the frame around whatever you upload (no crop); presets fill the screen. Narrow devices (phone, watch) pack several per row — use “Add images” to add many at once. Tapping a screen on the live page opens it full-screen.</div>';
     }
+    else if (b.type === "isolayers") {
+      var isoIf = b.mode === "interface";
+      var transCtl = isoIf ? sfSelect(i, j, "transparency", "Layer transparency", [["", "Opaque \u2014 keep the PNG as-is"], ["light", "Light"], ["medium", "Medium"], ["strong", "Strong"]], "Interface layers already show their PNG transparency \u2014 reduce it further here.") : "";
+      body = sfInput(i, j, "heading", "Heading") +
+        '<div class="af__row">' + sfSelect(i, j, "mode", "Type", [["stack", "Screen stack \u2014 opaque layers"], ["interface", "Interface \u2014 transparent UI layers"]], "") + sfSelect(i, j, "dir", "Direction", [["topR", "Top-right"], ["topL", "Top-left"], ["right", "Right"], ["left", "Left"]], "") + "</div>" +
+        '<div class="af__row">' + sfSelect(i, j, "distance", "Distance between layers", [["24", "Tight"], ["40", "Medium"], ["60", "Roomy"], ["85", "Wide"]], "") + sfSelect(i, j, "depth", "Depth \u2014 slab thickness", [["0", "Flat"], ["8", "Slim"], ["14", "Medium"], ["22", "Thick"]], "") + "</div>" +
+        transCtl + itemRepeater(i, j, b) +
+        '<div class="af__hint">One stack per section (max 12 layers), added bottom \u2192 top \u2014 the last layer sits on top. Depth follows each image\u2019s shape, so rounded/transparent PNGs get soft rounded depth. The height colour auto-derives from each image (or set one \u2014 eyedropper included). Double-click the stack on the live page to open every layer full-screen.</div>';
+    }
     else if (b.type === "figure") body = sfInput(i, j, "heading", "Heading") + richBlock(i, j, "body", "Body") + mediaInputBlock(i, j, "src", "Image / video / embed URL") + sfInput(i, j, "caption", "Caption") + '<label class="chk" style="margin-top:.2rem"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="flip"' + (b.flip ? " checked" : "") + " /> Image on the left</label>";
     else if (b.type === "columns" || b.type === "rows") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
     else if (b.type === "workflow") body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "flow", "Layout", [["linear", "Linear \u2014 left to right"], ["loop", "Loop \u2014 a repeating cycle"]], "How the steps connect.") + itemRepeater(i, j, b) + '<div class="af__hint">Steps flow left to right with arrows. Split a step with <b>//</b> to fork into parallel branches that merge back \u2014 e.g. <em>Design // Eng // Legal</em>.</div>';
     else if (b.type === "stickies") body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "stickySize", "Note size", [["natural", "Natural \u2014 physical sticky shape (squarish)"], ["uniform", "Uniform \u2014 all notes match the tallest"], ["none", "None \u2014 each note fits its content"]], "Uniform gives every note the tallest note\u2019s height; natural keeps a squarish physical-sticky shape; none lets each note size to its content.") + itemRepeater(i, j, b) + '<div class="af__hint">Cards stagger up and down automatically and lift on hover. Give each a short label (e.g. 01), a heading, a line or two, and an optional image.</div>';
     else if (b.type === "voices") body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "mode", "Style", [["verbatim", "Verbatim \u2014 sharp quote bubble"], ["thought", "Thought \u2014 soft bubble"], ["chat", "Chat \u2014 a two-way conversation"]], "Verbatim is a sharp quote bubble, thought a soft one, chat the tighter two-way style. Each voice can sit left or right below.") + sfSelect(i, j, "vsize", "Verbatim heading size", [["", "Standard"], ["lg", "Large"]]) + itemRepeater(i, j, b) + '<div class="af__hint">Side puts each bubble on the left or right. Heading only shows on Verbatim. Attribution is the small label under the bubble (e.g. \u201cWhat clients actually said\u201d).</div>';
     else if (b.type === "compare") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + mediaInputBlock(i, j, "beforeSrc", "Before image") + mediaInputBlock(i, j, "afterSrc", "After image") + "</div>" + '<div class="af__row">' + sfInput(i, j, "beforeLabel", "Before label") + sfInput(i, j, "afterLabel", "After label") + "</div>" + richBlock(i, j, "body", "Description below \u2014 what changed", "Both images should be the same size. Visitors drag the divider to compare.");
-    var hasHeading = /^(text|metrics|steps|media|split|cards|gallery|mediagrid|device|figure|columns|rows|compare|stickies|voices|workflow)$/.test(b.type);
+    var hasHeading = /^(text|metrics|steps|media|split|cards|gallery|mediagrid|device|isolayers|figure|columns|rows|compare|stickies|voices|workflow)$/.test(b.type);
     var sizeCtl = (hasHeading || b.type === "statement") ? sfSelect(i, j, "hsize", (b.type === "statement" ? "Statement size" : "Heading size"), [["", "Standard"], ["sm", "Compact \u2014 easier to read"], ["lg", "Large \u2014 display"]], "Shrink it if the standard size feels too big for the copy.") : "";
     var sepCtl = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="sep"' + (b.sep !== false ? " checked" : "") + " /> Separator line above \u2014 uncheck to flow into the previous section</label>";
     var locked = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="locked"' + (b.locked ? " checked" : "") + " /> Locked \u2014 only after the deeper-cut pass</label>";
@@ -1152,6 +1175,8 @@
         return '<span class="secprev secprev--mediagrid"><span class="sp__gt"></span><span class="sp__gt"></span><span class="sp__gt"></span><span class="sp__gt"></span><span class="sp__gt"></span><span class="sp__gt"></span></span>';
       case "device":
         return '<span class="secprev secprev--device"><span class="sp__dev sp__dev--phone"></span><span class="sp__dev sp__dev--phone"></span><span class="sp__dev sp__dev--laptop"></span></span>';
+      case "isolayers":
+        return '<span class="secprev secprev--iso"><span class="sp__iso"></span><span class="sp__iso"></span><span class="sp__iso"></span></span>';
       case "figure":
         return '<span class="secprev secprev--figure"><span class="sp__ffr">\u25a4</span><span class="sp__ftx"><b>Heading</b><i></i><i></i><i></i></span></span>';
       case "columns":
@@ -1271,6 +1296,7 @@
     else if (f === "items") b.items = parseItems(b.type, t.value);
     else b[f] = t.value;
     if (b.type === "device" && f === "device") { b.preset = ({ phone: "iphone", tablet: "portrait", laptop: "wide", watch: "circle" })[b.device] || ""; if (b.device !== "laptop" && b.device !== "tablet") b.fill = ""; saveDraft(); renderL2(); return; }
+    if (b.type === "isolayers" && f === "mode") { if (b.mode !== "interface") b.transparency = ""; saveDraft(); renderL2(); return; }
     saveDraft();
     refreshL2Preview();
   }
@@ -1748,6 +1774,7 @@
     if (act === "item-up") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (k > 0) { [bl.items[k - 1], bl.items[k]] = [bl.items[k], bl.items[k - 1]]; saveDraft(true); renderL2(); } return; }
     if (act === "item-down") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (k < bl.items.length - 1) { [bl.items[k + 1], bl.items[k]] = [bl.items[k], bl.items[k + 1]]; saveDraft(true); renderL2(); } return; }
     if (act === "media-eyedrop") { const bj = +b.dataset.bindex, k = +b.dataset.iindex; const bl = data.work[i].study.blocks[bj]; const it = bl && bl.items && bl.items[k]; if (!it) return; if (!window.EyeDropper) { status("This browser has no eyedropper \u2014 use the colour box.", false); return; } new EyeDropper().open().then(function (res) { it.bg = res.sRGBHex; saveDraft(true); renderL2(); refreshL2Preview(); }).catch(function () {}); return; }
+    if (act === "iso-eyedrop") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; const bl = data.work[i].study.blocks[bj]; const it = bl && bl.items && bl.items[k]; if (!it) return; if (!window.EyeDropper) { status("This browser has no eyedropper \u2014 use the colour box.", false); return; } new EyeDropper().open().then(function (res) { it[f] = res.sRGBHex; saveDraft(true); renderL2(); refreshL2Preview(); }).catch(function () {}); return; }
     if (act === "media-bgclear") { const bj = +b.dataset.bindex, k = +b.dataset.iindex; const bl = data.work[i].study.blocks[bj]; const it = bl && bl.items && bl.items[k]; if (it) { it.bg = ""; saveDraft(true); renderL2(); refreshL2Preview(); } return; }
     if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; if (isVideoVal(uri)) bl.items[k].controls = true; saveDraft(true); renderL2(); } }); return; }
     if (act === "item-upload-multi") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (!bl) return; bl.items = bl.items || []; pickMediaMulti(function () { const it = blankItem(bl.type); bl.items.push(it); return it; }, function () { saveDraft(true); renderL2(); }); return; }
@@ -3104,7 +3131,7 @@
   }
 
   /* ---------- AI feedback reviewer (map reviewer notes to the exact edits) ---------- */
-  var FB_TYPE_NAMES = { text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Compare", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices" };
+  var FB_TYPE_NAMES = { text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Compare", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices", isolayers: "Isometric layers" };
   var FB_FIELD_LABELS = { kicker: "kicker", nav: "nav label", heading: "heading", body: "body", sub: "sub-line", caption: "caption", leftLabel: "before label", rightLabel: "after label", beforeLabel: "before label", afterLabel: "after label", value: "value", label: "label", title: "title", q: "question", a: "answer", cite: "attribution" };
   function fbPlain(s) { return String(s == null ? "" : s).replace(/<[^>]+>/g, " ").replace(/\*\*|\*|~~|\[\[|\]\]/g, "").replace(/\s+/g, " ").trim(); }
   function fbBlockLoc(b) { return fbPlain(b.nav || b.kicker || b.heading || b.body || FB_TYPE_NAMES[b.type] || "Section").slice(0, 42) || "Section"; }
