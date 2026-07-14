@@ -702,3 +702,25 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .imgsz__eye:hover { border-color: var(--accent); }
 .imgsz__clear { background: none; border: 0; color: var(--accent); cursor: pointer; font-size: .72rem; padding: 0; }
 .imgsz__note { font-size: .72rem; color: var(--text-faint); }
+
+/* focus & annotate editor */
+.faed-wrap { margin: .5rem 0 .2rem; }
+.faed { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--bg-2); line-height: 0; -webkit-user-select: none; user-select: none; touch-action: none; }
+.faed.is-placing { cursor: crosshair; outline: 2px dashed var(--accent); outline-offset: -2px; }
+.faed > img { display: block; width: 100%; height: auto; }
+.faed__mark { position: absolute; transform: translate(-50%, -50%); width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid #fff; background: rgba(216, 166, 87, .92); color: #1a1206; font: 600 .78rem/1 var(--mono, monospace); cursor: pointer; display: grid; place-items: center; box-shadow: 0 2px 8px rgba(0, 0, 0, .5); padding: 0; z-index: 2; }
+.faed__mark.is-sel { background: var(--accent); box-shadow: 0 0 0 3px rgba(216, 166, 87, .35); }
+.faed__box { position: absolute; z-index: 1; box-shadow: 0 0 0 2px var(--accent), 0 0 0 9999px rgba(6, 6, 8, .5); cursor: move; }
+.faed__handle { position: absolute; right: -7px; bottom: -7px; width: 15px; height: 15px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; cursor: nwse-resize; }
+.faed__rows { display: flex; flex-direction: column; gap: .5rem; margin-top: .5rem; }
+.faed__row { border: 1px solid var(--line-soft); border-radius: 8px; padding: .55rem .6rem; background: rgba(255, 255, 255, .015); }
+.faed__row.is-sel { border-color: var(--accent); background: rgba(216, 166, 87, .06); }
+.faed__row-head { display: flex; align-items: center; gap: .5rem; }
+.faed__row-n { flex: 0 0 auto; width: 25px; height: 25px; border-radius: 50%; border: 1px solid var(--line); background: none; color: var(--text-dim); cursor: pointer; font: 600 .74rem/1 var(--mono, monospace); }
+.faed__row.is-sel .faed__row-n { border-color: var(--accent); color: var(--accent); }
+.faed__row-head input { flex: 1 1 auto; min-width: 0; }
+.faed__row textarea { width: 100%; margin-top: .4rem; resize: vertical; }
+.faed__shape { display: flex; align-items: center; gap: .5rem; margin-top: .45rem; }
+.faed__shape label { font-size: .72rem; color: var(--text-dim); flex: 0 0 auto; }
+.faed__shape select { flex: 1 1 auto; }
+.btn--add.is-on { border-color: var(--accent); color: var(--accent); }
