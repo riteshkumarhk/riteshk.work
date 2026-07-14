@@ -362,18 +362,19 @@
     return '<div class="af"><label class="af__label">' + label + "</label>" + control + hint + "</div>";
   }
 
-  function ops(list, i, len) {
+  function ops(list, i, len, dupAct) {
     return (
       '<div class="card__ops">' +
       '<button class="iconbtn" data-act="up" data-list="' + list + '" data-index="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">↑</button>' +
       '<button class="iconbtn" data-act="down" data-list="' + list + '" data-index="' + i + '"' + (i === len - 1 ? " disabled" : "") + ' title="Move down">↓</button>' +
+      (dupAct ? '<button class="iconbtn" data-act="' + dupAct + '" data-list="' + list + '" data-index="' + i + '" title="Duplicate — creates a hidden copy"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' : "") +
       '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="' + list + '" data-index="' + i + '" title="Remove">✕</button>' +
       "</div>"
     );
   }
 
-  function cardHead(idxLabel, list, i, len) {
-    return '<div class="card__bar"><span class="sortgrip" data-grip data-sortkey="list:' + list + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span><span class="card__idx">' + idxLabel + "</span>" + ops(list, i, len) + "</div>";
+  function cardHead(idxLabel, list, i, len, dupAct) {
+    return '<div class="card__bar"><span class="sortgrip" data-grip data-sortkey="list:' + list + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span><span class="card__idx">' + idxLabel + "</span>" + ops(list, i, len, dupAct) + "</div>";
   }
 
   function addBtn(list, label) {
@@ -1316,7 +1317,7 @@
             '</div>';
           return;
         }
-        html += '<div class="card workcard">' + cardHead(w.client || w.title || ("Work " + (i + 1)), "work", i, list.length) +
+        html += '<div class="card workcard">' + cardHead(w.client || w.title || ("Work " + (i + 1)), "work", i, list.length, "work-dup") +
           '<div class="block-flags workcard__flags">' +
             '<label class="chk workcard__feat"><input type="checkbox" data-act="feature" data-index="' + i + '"' + (w.featured ? " checked" : "") + " /> Feature on homepage</label>" +
             '<label class="chk"><input type="checkbox" data-act="work-hidden" data-index="' + i + '"' + (w.hidden ? " checked" : "") + " /> Hidden from the default site \u2014 only shown via a ticket</label>" +
@@ -1744,6 +1745,19 @@
     if (act === "bfield-upload") { const bj = +b.dataset.bindex, f = b.dataset.bfield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl) { bl[f] = uri; if (isVideoVal(uri)) bl.controls = true; saveDraft(true); renderL2(); } }); return; }
     if (act === "bfield-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (bl) { bl[b.dataset.bfield] = ""; saveDraft(true); renderL2(); } return; }
     if (act === "study-preview") { saveDraft(true); status("Opening your current draft in a new tab\u2026"); return; }
+    if (act === "work-dup") {
+      const src = data.work[i];
+      if (!src || src.encWork) return;
+      const copy = JSON.parse(JSON.stringify(src));
+      copy.id = "w" + Date.now();   // new unique id so routing/keying doesn't clash with the original
+      copy.hidden = true;           // the copy stays off the live site until the owner is ready
+      copy.featured = false;        // a copy shouldn't take one of the 4 homepage feature slots
+      if (copy.title && copy.title !== "Project title") copy.title += " (copy)";
+      data.work.splice(i + 1, 0, copy);
+      apply(true); renderBody();
+      status("Case study duplicated \u2014 the copy is Hidden from the site until you\u2019re ready to publish it.", true);
+      return;
+    }
     if (act === "add") { data[list].unshift(blank(list)); apply(true); renderBody(); const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0; status("Added at the top \u2014 edit it right here.", true); }
     else if (act === "remove") { data[list].splice(i, 1); apply(true); renderBody(); }
     else if (act === "up" && i > 0) { const a = data[list]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; apply(true); renderBody(); }
