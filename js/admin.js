@@ -790,6 +790,35 @@
   var ICON_NAMES = ["users", "idea", "coins", "chart", "target", "lock", "spark", "clock", "shield", "check", "bolt", "layers"];
   function admIcon(n) { return (window.RK && window.RK.iconSvg) ? window.RK.iconSvg(n) : ""; }
   function admIconNames() { return (window.RK && window.RK.iconNames) ? window.RK.iconNames() : ICON_NAMES; }
+  // Split a Figma-exported SVG (a frame whose direct children are the layers) into
+  // one data-URI SVG per layer — each keeps the original viewBox + <defs> so it
+  // renders identically and aligns when stacked. Handles raster <image>, vector and
+  // hybrid layers; falls back to the whole SVG if it can't find distinct layers.
+  function isoSplitSvg(svgText) {
+    try {
+      var doc = new DOMParser().parseFromString(String(svgText || ""), "image/svg+xml");
+      if (doc.querySelector("parsererror")) return [];
+      var svg = doc.querySelector("svg"); if (!svg) return [];
+      var kids = function (el) { return [].slice.call(el.children).filter(function (n) { return n.nodeType === 1; }); };
+      var isG = function (n) { return n.tagName && n.tagName.toLowerCase() === "g"; };
+      var defs = svg.querySelector("defs");
+      var groups = kids(svg).filter(isG);
+      var guard = 0;
+      while (groups.length === 1 && guard++ < 4) {
+        var inner = kids(groups[0]).filter(isG);
+        if (inner.length >= 2) { groups = inner; break; }
+        if (inner.length === 1) groups = inner; else break;
+      }
+      var nodes = groups.length >= 2 ? groups : kids(svg).filter(function (n) { return n.tagName && n.tagName.toLowerCase() !== "defs"; });
+      if (!nodes.length) return [];
+      var vb = svg.getAttribute("viewBox") || ("0 0 " + (parseFloat(svg.getAttribute("width")) || 300) + " " + (parseFloat(svg.getAttribute("height")) || 600));
+      var defsHtml = defs ? defs.outerHTML : "";
+      return nodes.map(function (node) {
+        var s = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="' + vb + '">' + defsHtml + node.outerHTML + "</svg>";
+        return "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(s)));
+      });
+    } catch (e) { return []; }
+  }
   function blankItem(type) {
     switch (type) {
       case "metrics": return { value: "", label: "" };
@@ -1133,7 +1162,7 @@
       body = sfInput(i, j, "heading", "Heading") +
         '<div class="af__row">' + sfSelect(i, j, "mode", "Type", [["stack", "Screen stack \u2014 opaque layers"], ["interface", "Interface \u2014 transparent UI layers"]], "") + sfSelect(i, j, "dir", "Direction", [["topR", "Top-right"], ["topL", "Top-left"], ["right", "Right"], ["left", "Left"]], "") + "</div>" +
         '<div class="af__row">' + sfSelect(i, j, "distance", "Distance between layers", [["24", "Tight"], ["40", "Medium"], ["60", "Roomy"], ["85", "Wide"]], "") + sfSelect(i, j, "depth", "Depth \u2014 slab thickness", [["0", "Flat"], ["8", "Slim"], ["14", "Medium"], ["22", "Thick"]], "") + "</div>" +
-        transCtl + itemRepeater(i, j, b) +
+        transCtl + '<div class="adm__addbar"><button class="btn btn--add" data-act="iso-import-svg" data-index="' + i + '" data-bindex="' + j + '">+ Import layers from a Figma SVG\u2026</button></div>' + itemRepeater(i, j, b) +
         '<div class="af__hint">One stack per section (max 12 layers), added bottom \u2192 top \u2014 the last layer sits on top. Depth follows each image\u2019s shape, so rounded/transparent PNGs get soft rounded depth. The height colour auto-derives from each image (or set one \u2014 eyedropper included). Double-click the stack on the live page to open every layer full-screen.</div>';
     }
     else if (b.type === "figure") body = sfInput(i, j, "heading", "Heading") + richBlock(i, j, "body", "Body") + mediaInputBlock(i, j, "src", "Image / video / embed URL") + sfInput(i, j, "caption", "Caption") + '<label class="chk" style="margin-top:.2rem"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="flip"' + (b.flip ? " checked" : "") + " /> Image on the left</label>";
@@ -1775,6 +1804,26 @@
     if (act === "item-down") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (k < bl.items.length - 1) { [bl.items[k + 1], bl.items[k]] = [bl.items[k], bl.items[k + 1]]; saveDraft(true); renderL2(); } return; }
     if (act === "media-eyedrop") { const bj = +b.dataset.bindex, k = +b.dataset.iindex; const bl = data.work[i].study.blocks[bj]; const it = bl && bl.items && bl.items[k]; if (!it) return; if (!window.EyeDropper) { status("This browser has no eyedropper \u2014 use the colour box.", false); return; } new EyeDropper().open().then(function (res) { it.bg = res.sRGBHex; saveDraft(true); renderL2(); refreshL2Preview(); }).catch(function () {}); return; }
     if (act === "iso-eyedrop") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; const bl = data.work[i].study.blocks[bj]; const it = bl && bl.items && bl.items[k]; if (!it) return; if (!window.EyeDropper) { status("This browser has no eyedropper \u2014 use the colour box.", false); return; } new EyeDropper().open().then(function (res) { it[f] = res.sRGBHex; saveDraft(true); renderL2(); refreshL2Preview(); }).catch(function () {}); return; }
+    if (act === "iso-import-svg") {
+      const bj = +b.dataset.bindex; const bl = data.work[i].study.blocks[bj]; if (!bl) return;
+      const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".svg,image/svg+xml";
+      inp.onchange = function () {
+        const f = inp.files && inp.files[0]; if (!f) return;
+        const rd = new FileReader();
+        rd.onload = function () {
+          const layers = isoSplitSvg(rd.result);
+          if (!layers.length) { status("Couldn\u2019t find layers in that SVG \u2014 give each layer its own group/frame in Figma.", false); return; }
+          bl.items = bl.items || [];
+          let added = 0;
+          layers.forEach(function (src) { if (bl.items.length < 12) { bl.items.push({ src: src, heightColor: "" }); added++; } });
+          saveDraft(true); renderL2();
+          status(added + " layer" + (added > 1 ? "s" : "") + " imported" + (layers.length > added ? " (capped at 12)" : "") + ".", true);
+        };
+        rd.readAsText(f);
+      };
+      inp.click();
+      return;
+    }
     if (act === "media-bgclear") { const bj = +b.dataset.bindex, k = +b.dataset.iindex; const bl = data.work[i].study.blocks[bj]; const it = bl && bl.items && bl.items[k]; if (it) { it.bg = ""; saveDraft(true); renderL2(); refreshL2Preview(); } return; }
     if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; if (isVideoVal(uri)) bl.items[k].controls = true; saveDraft(true); renderL2(); } }); return; }
     if (act === "item-upload-multi") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (!bl) return; bl.items = bl.items || []; pickMediaMulti(function () { const it = blankItem(bl.type); bl.items.push(it); return it; }, function () { saveDraft(true); renderL2(); }); return; }
