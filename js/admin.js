@@ -1759,7 +1759,14 @@
       return;
     }
     if (act === "add") { data[list].unshift(blank(list)); apply(true); renderBody(); const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0; status("Added at the top \u2014 edit it right here.", true); }
-    else if (act === "remove") { data[list].splice(i, 1); apply(true); renderBody(); }
+    else if (act === "remove") {
+      if (list === "work") {
+        const w = data.work[i] || {};
+        const nm = (w.title && w.title !== "Project title") ? w.title : (w.client || "this case study");
+        confirmModal({ title: "Delete this case study?", sub: "\u201c" + nm + "\u201d and all of its sections will be permanently removed. This can\u2019t be undone.", cta: "Delete case study" })
+          .then(function (ok) { if (ok) { data.work.splice(i, 1); apply(true); renderBody(); status("Case study deleted.", true); } });
+      } else { data[list].splice(i, 1); apply(true); renderBody(); }
+    }
     else if (act === "up" && i > 0) { const a = data[list]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; apply(true); renderBody(); }
     else if (act === "down" && i < data[list].length - 1) { const a = data[list]; [a[i + 1], a[i]] = [a[i], a[i + 1]]; apply(true); renderBody(); }
   }
@@ -1884,6 +1891,30 @@
       return stub;
     });
   }
+  // Destructive-action confirm — resolves true ONLY on a deliberate click of the
+  // danger button. Escape / backdrop / Cancel all resolve false, and Cancel is
+  // focused so a stray Enter never deletes anything. Matches the .pass modal style.
+  function confirmModal(opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+      var modal = document.createElement("div");
+      modal.className = "pass pass--confirm";
+      modal.innerHTML =
+        '<div class="pass__box"><div class="pass__title">' + escHtml(opts.title || "Are you sure?") + "</div>" +
+        (opts.sub ? '<div class="pass__sub">' + escHtml(opts.sub) + "</div>" : "") +
+        '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>' + escHtml(opts.cancel || "Cancel") + "</button>" +
+        '<button class="btn btn--danger" data-ok>' + escHtml(opts.cta || "Delete") + "</button></div></div>";
+      document.body.appendChild(modal);
+      var done = function (v) { modal.remove(); document.removeEventListener("keydown", onKey); resolve(v); };
+      var onKey = function (e) { if (e.key === "Escape") { e.preventDefault(); done(false); } };
+      document.addEventListener("keydown", onKey);
+      modal.addEventListener("click", function (e) { if (e.target === modal) done(false); });
+      modal.querySelector("[data-cancel]").addEventListener("click", function () { done(false); });
+      modal.querySelector("[data-ok]").addEventListener("click", function () { done(true); });
+      var c = modal.querySelector("[data-cancel]"); if (c) c.focus();
+    });
+  }
+
   // Generic credential prompt — resolves to the plaintext value, or null if cancelled.
   function credModal(opts) {
     return new Promise(function (resolve) {

@@ -180,6 +180,8 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .btn--primary { background: var(--accent); border-color: var(--accent); color: #0a0a0a; font-weight: 600; }
 .btn--primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
 .btn--ghost { color: var(--text-dim); }
+.btn--danger { color: #ff9b9b; border-color: rgba(255, 122, 122, .38); }
+.btn--danger:hover { color: #fff; border-color: #ff7a7a; background: rgba(255, 90, 90, .15); }
 .btn--add { width: 100%; border-style: dashed; color: var(--text-dim); margin-top: .2rem; }
 .btn--add:hover { color: var(--text); }
 .adm__addbar { position: sticky; top: 0; z-index: 6; background: linear-gradient(var(--bg) 60%, transparent); padding: .5rem 0 .95rem; margin: -.2rem 0 .2rem; }
