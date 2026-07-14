@@ -878,7 +878,7 @@
       e.preventDefault();
       var clickedImg = zoomImg || richImg, groupRoot, imgs;
       if (zoomImg) {
-        groupRoot = zoomImg.closest(".pjb__gallery, .pjb__media");
+        groupRoot = zoomImg.closest(".pjb__gallery, .pjb__media, .pjb__mediagrid, .pjb__devices");
         imgs = groupRoot ? [].slice.call(groupRoot.querySelectorAll("img[data-zoom]")) : [];
       } else {
         groupRoot = richImg.closest(".pjb");

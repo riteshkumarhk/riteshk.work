@@ -2691,12 +2691,18 @@
     return file.type === "video/mp4" || file.type === "video/quicktime" || /\.(mp4|m4v|mov)$/.test(nm);
   }
   function vcEven(n) { n = Math.round(n); return n % 2 ? n - 1 : n; }
+  // Cap the SHORTER side, so "1080p" means 1080 lines tall for landscape (1920x1080 stays full)
+  // and 1080 wide for portrait — the conventional meaning. Capping the long side instead made
+  // "720p" a blurry 720x405 that destroyed fine screen-recording text.
   function vcScaleDims(w, h, cap) {
-    if (!cap || Math.max(w, h) <= cap) return { w: vcEven(w), h: vcEven(h) };
-    var scale = cap / Math.max(w, h);
+    var shorter = Math.min(w, h);
+    if (!cap || shorter <= cap) return { w: vcEven(w), h: vcEven(h) };
+    var scale = cap / shorter;
     return { w: vcEven(w * scale), h: vcEven(h * scale) };
   }
-  function vcBitrate(w, h, fps, q) { var bpp = 0.04 + 0.14 * Math.max(0, Math.min(1, q)); return Math.max(120000, Math.round(w * h * fps * bpp)); }
+  // Screen recordings (sharp text/edges) need a lot more bitrate than video; the old 0.18 bpp
+  // ceiling looked terrible even at max. Range ~0.06–0.30 bpp.
+  function vcBitrate(w, h, fps, q) { var bpp = 0.06 + 0.24 * Math.max(0, Math.min(1, q)); return Math.max(150000, Math.round(w * h * fps * bpp)); }
   function vcFmtBytes(n) { if (n < 1024) return n + " B"; if (n < 1048576) return (n / 1024).toFixed(0) + " KB"; return (n / 1048576).toFixed(1) + " MB"; }
   function vcSleep(ms) { return new Promise(function (r) { setTimeout(r, ms || 0); }); }
   // Demux an mp4/mov ArrayBuffer -> { track, samples[], description(avcC), durationSec, fps }
