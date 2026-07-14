@@ -582,7 +582,7 @@
     }).join("");
     var maxz = Math.max(0, items.length - 1) * distance + maxDepth;
     return kicker(b.kicker) + heading(b.heading) +
-      '<div class="pjb__iso pjb__iso--' + mode + " pjb__iso--" + dir + '" data-iso style="--distance:' + distance + "px;--depth:" + depth + "px;--maxz:" + maxz + 'px">' +
+      '<div class="pjb__iso pjb__iso--' + mode + " pjb__iso--" + dir + '" data-iso style="--distance:' + distance + "px;--depth:" + baseDepth + "px;--maxz:" + maxz + 'px">' +
       '<div class="pjb__iso-stage">' + layers + "</div></div>";
   }
 
