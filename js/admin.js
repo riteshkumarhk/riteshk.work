@@ -780,7 +780,7 @@
     gallery: { title: "Slides", one: "Slide", add: "Add slide", fields: [["src", "Image / video / embed URL", "media"], ["caption", "Caption", "input"]] },
     mediagrid: { title: "Images", one: "Image", add: "Add image", fields: [["src", "Image / video URL", "media"], ["caption", "Caption (optional)", "input"]] },
     device: { title: "Screens", one: "Screen", add: "Add screen", fields: [["src", "Image / video / GIF URL", "media"], ["caption", "Caption (optional)", "input"]] },
-    isolayers: { title: "Layers", one: "Layer", add: "Add layer", fields: [["src", "Image / PNG URL", "media"], ["heightColor", "Height colour", "isohc"]] },
+    isolayers: { title: "Layers", one: "Layer", add: "Add layer", fields: [["src", "Image / PNG URL", "media"], ["heightColor", "Height colour", "isohc"], ["depth", "Depth override", "select", [["", "Match block"], ["0", "Flat"], ["8", "Slim"], ["14", "Medium"], ["22", "Thick"], ["34", "Extra"]]]] },
     cards: { title: "Cards", one: "Card", add: "Add card", fields: [["title", "Title", "input"], ["body", "Body", "rich"], ["icon", "Icon", "icon"], ["src", "Image (optional \u2014 replaces the icon)", "media"]] },
     columns: { title: "Columns", one: "Column", add: "Add column", fields: [["label", "Label (optional)", "input"], ["cells", "Cells", "cells"]] },
     rows: { title: "Rows", one: "Row", add: "Add row", fields: [["label", "Row label (optional)", "input"], ["cells", "Cells", "cells"]] },
@@ -825,7 +825,7 @@
       case "steps": return { title: "", body: "" };
       case "workflow": return { label: "", note: "" };
       case "faq": return { q: "", a: "" };
-      case "isolayers": return { src: "", heightColor: "" };
+      case "isolayers": return { src: "", heightColor: "", depth: "" };
       case "media": case "gallery": case "mediagrid": case "device": return { src: "", caption: "" };
       case "cards": return { title: "", body: "", icon: "", src: "" };
       case "columns": return { label: "", cells: [{ heading: "", body: "", src: "" }] };
@@ -1163,7 +1163,7 @@
         '<div class="af__row">' + sfSelect(i, j, "mode", "Type", [["stack", "Screen stack \u2014 opaque layers"], ["interface", "Interface \u2014 transparent UI layers"]], "") + sfSelect(i, j, "dir", "Direction", [["topR", "Top-right"], ["topL", "Top-left"], ["right", "Right"], ["left", "Left"]], "") + "</div>" +
         '<div class="af__row">' + sfSelect(i, j, "distance", "Distance between layers", [["24", "Tight"], ["40", "Medium"], ["60", "Roomy"], ["85", "Wide"]], "") + sfSelect(i, j, "depth", "Depth \u2014 slab thickness", [["0", "Flat"], ["8", "Slim"], ["14", "Medium"], ["22", "Thick"]], "") + "</div>" +
         transCtl + '<div class="adm__addbar"><button class="btn btn--add" data-act="iso-import-svg" data-index="' + i + '" data-bindex="' + j + '">+ Import layers from a Figma SVG\u2026</button></div>' + itemRepeater(i, j, b) +
-        '<div class="af__hint">One stack per section (max 12 layers), added bottom \u2192 top \u2014 the last layer sits on top. Depth follows each image\u2019s shape, so rounded/transparent PNGs get soft rounded depth. The height colour auto-derives from each image (or set one \u2014 eyedropper included). Double-click the stack on the live page to open every layer full-screen.</div>';
+        '<div class="af__hint">One stack per section (max 12 layers), added bottom \u2192 top \u2014 the last layer sits on top. Depth follows each image\u2019s shape, so rounded/transparent PNGs get soft rounded depth. Each layer has an optional <em>Depth override</em> to make just that layer thicker or flatter than the block default. The height colour auto-derives from each image (or set one \u2014 eyedropper included). Double-click the stack on the live page to open every layer full-screen.</div>';
     }
     else if (b.type === "figure") body = sfInput(i, j, "heading", "Heading") + richBlock(i, j, "body", "Body") + mediaInputBlock(i, j, "src", "Image / video / embed URL") + sfInput(i, j, "caption", "Caption") + '<label class="chk" style="margin-top:.2rem"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="flip"' + (b.flip ? " checked" : "") + " /> Image on the left</label>";
     else if (b.type === "columns" || b.type === "rows") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
