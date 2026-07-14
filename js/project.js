@@ -592,7 +592,7 @@
     var hsize = b.hsize === "sm" ? " pjb--hsm" : b.hsize === "lg" ? " pjb--hlg" : "";
     var flush = b.sep === false ? " pjb--flush" : "";
     return '<section class="pjb pjb--' + esc(b.type) + (locked ? " pjb--locked" : "") + hsize + flush + '"' + idAttr + navAttr +
-      ' style="--i:' + i + '">' + inner + "</section>";
+      ' data-block="' + i + '" style="--i:' + i + '">' + inner + "</section>";
   }
 
   /* ---------- hero + shell content ---------- */
@@ -894,14 +894,24 @@
     var open = e.target.closest("[data-open]");
     if (open) { openProject(open.getAttribute("data-open"), { push: true }); return; }
     var act = e.target.closest("[data-pj]");
-    if (!act) return;
-    var kind = act.getAttribute("data-pj");
-    if (kind === "back" || kind === "close") { e.preventDefault(); closeProject({ push: true }); }
-    else if (kind === "prev") nav(-1);
-    else if (kind === "next") nav(1);
-    else if (kind === "unlock") unlockFlow();
-    else if (kind === "resume") { e.preventDefault(); var dz = data(); var rz = dz && dz.contact && dz.contact.resume; if (rz) { if (window.RK && window.RK.openResume) window.RK.openResume(rz); else window.open(rz, "_blank", "noopener"); } }
-    else if (kind === "contact") { e.preventDefault(); closeProject({ push: true }); setTimeout(function () { var c = document.getElementById("contact"); if (c) c.scrollIntoView({ behavior: "smooth" }); }, 320); }
+    if (act) {
+      var kind = act.getAttribute("data-pj");
+      if (kind === "back" || kind === "close") { e.preventDefault(); closeProject({ push: true }); }
+      else if (kind === "prev") nav(-1);
+      else if (kind === "next") nav(1);
+      else if (kind === "unlock") unlockFlow();
+      else if (kind === "resume") { e.preventDefault(); var dz = data(); var rz = dz && dz.contact && dz.contact.resume; if (rz) { if (window.RK && window.RK.openResume) window.RK.openResume(rz); else window.open(rz, "_blank", "noopener"); } }
+      else if (kind === "contact") { e.preventDefault(); closeProject({ push: true }); setTimeout(function () { var c = document.getElementById("contact"); if (c) c.scrollIntoView({ behavior: "smooth" }); }, 320); }
+      return;
+    }
+    // Admin preview only: clicking a non-interactive part of a section tells the editor to
+    // jump straight to that section (skips hunting through the nested list). Real controls
+    // (links, buttons, media, embeds, fullscreen/zoom) keep their own behaviour.
+    if (PREVIEW) {
+      if (e.target.closest('a[href], button, video, iframe, audio, input, select, textarea, label, summary, [data-fs], [data-zoom], [data-cmp-zoom], [data-goto], [data-open]')) return;
+      var sec = e.target.closest("[data-block]");
+      if (sec) { try { window.parent.postMessage({ __rk: "selectBlock", index: +sec.getAttribute("data-block") }, "*"); } catch (err) {} }
+    }
   }
   function onOverlayKey(e) {
     if (e.key === "Escape") { e.preventDefault(); closeProject({ push: true }); return; }
@@ -1194,7 +1204,7 @@
   function init() {
     if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = function () { return Object.keys(ICONS); }; window.RK.setStudyUnlocked = setUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; }
     window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) { updateSpy(); clearTimeout(galleryTimer); galleryTimer = setTimeout(function () { normalizeGalleries(); }, 160); } });
-    if (PREVIEW) return; // the admin editor drives the overlay; skip link/history/deep-link wiring
+    if (PREVIEW) { document.documentElement.classList.add("rk-preview"); return; } // the admin editor drives the overlay; skip link/history/deep-link wiring
     document.addEventListener("click", onDocLinkClick);
     window.addEventListener("popstate", route);
     initDeepLink();

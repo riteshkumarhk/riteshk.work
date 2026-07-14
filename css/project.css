@@ -132,6 +132,10 @@ img[data-zoom] { cursor: zoom-in; }
   animation: pjb-in .7s var(--ease) both; animation-delay: calc(var(--i, 0) * 55ms);
 }
 .pjb:first-child { border-top: 0; }
+/* Admin preview: clicking a non-interactive part of a section jumps the editor to it. */
+.rk-preview .pjb[data-block] { cursor: pointer; }
+.rk-preview .pjb[data-block]:hover { outline: 1px dashed var(--accent); outline-offset: -8px; }
+.rk-preview .pjb a, .rk-preview .pjb button, .rk-preview .pjb video, .rk-preview .pjb iframe, .rk-preview .pjb [data-zoom], .rk-preview .pjb [data-fs], .rk-preview .pjb [data-cmp-zoom], .rk-preview .pjb input, .rk-preview .pjb select, .rk-preview .pjb textarea, .rk-preview .pjb label, .rk-preview .pjb summary { cursor: auto; }
 /* Separator toggle — a "flush" block drops its divider + top gap so it flows from the previous section. */
 .pjb--flush { border-top: 0; padding-top: clamp(.4rem, 1.5vw, 1.1rem); }
 .pjb:has(+ .pjb--flush) { padding-bottom: clamp(.4rem, 1.5vw, 1.1rem); }
