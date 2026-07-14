@@ -552,12 +552,17 @@
     var mode = b.mode === "interface" ? "interface" : "stack";
     var dir = /^(topR|topL|right|left)$/.test(b.dir) ? b.dir : "topR";
     var distance = Math.max(6, Math.min(160, parseInt(b.distance, 10) || 40));
-    var depth = parseInt(b.depth, 10); depth = Math.max(0, Math.min(48, isNaN(depth) ? 12 : depth));
+    var baseDepth = parseInt(b.depth, 10); baseDepth = Math.max(0, Math.min(48, isNaN(baseDepth) ? 12 : baseDepth));
     var items = (b.items || []).slice(0, 12);
     var op = mode === "interface" ? ({ light: "0.92", medium: "0.75", strong: "0.55" }[b.transparency] || "") : "";
-    var nSlices = depth > 0 ? Math.max(3, Math.min(12, Math.round(depth / 1.4))) : 0;
+    var maxDepth = 0;
     var layers = items.map(function (m, i) {
       var url = mediaSrc(m);
+      // A layer can override the block's slab depth; a blank override just follows the block.
+      var rawD = parseInt(m.depth, 10);
+      var depth = isNaN(rawD) ? baseDepth : Math.max(0, Math.min(48, rawD));
+      if (depth > maxDepth) maxDepth = depth;
+      var nSlices = depth > 0 ? Math.max(3, Math.min(12, Math.round(depth / 1.4))) : 0;
       var face = url ? mediaEl(m, "pjb__iso-media")
         : '<div class="pjb__shot-ph pjb__shot-ph--' + SHOT_THEMES[i % SHOT_THEMES.length] + '"><span class="pjb__shot-tag">Layer</span></div>';
       var col = String(m.heightColor || "").replace(/[^#0-9a-z(),.%\s]/gi, "").slice(0, 32);
@@ -575,7 +580,7 @@
       var auto = !col && url ? ' data-iso-auto="1"' : "";
       return '<div class="pjb__iso-layer" style="' + st + '"' + auto + ">" + depthEl + face + "</div>";
     }).join("");
-    var maxz = Math.max(0, items.length - 1) * distance + depth;
+    var maxz = Math.max(0, items.length - 1) * distance + maxDepth;
     return kicker(b.kicker) + heading(b.heading) +
       '<div class="pjb__iso pjb__iso--' + mode + " pjb__iso--" + dir + '" data-iso style="--distance:' + distance + "px;--depth:" + depth + "px;--maxz:" + maxz + 'px">' +
       '<div class="pjb__iso-stage">' + layers + "</div></div>";
@@ -956,7 +961,12 @@
       var faces = [].slice.call(iso.querySelectorAll("img.pjb__iso-media"));
       faces.forEach(function (im) { im.removeAttribute("data-zoom"); });
       iso.addEventListener("dblclick", function () {
-        var group = faces.map(function (im) { return { src: im.getAttribute("src") }; }).filter(function (x) { return x.src; });
+        // Re-query the layer images at click time — a list cached at enhance time can go stale
+        // (late-loading images, or the churny admin preview), collapsing the group to one and
+        // hiding the prev/next nav. Number each so the viewer knows where they are in the stack.
+        var live = [].slice.call(iso.querySelectorAll("img.pjb__iso-media"));
+        var n = live.length;
+        var group = live.map(function (im, k) { return { src: im.getAttribute("src"), cap: "Layer " + (k + 1) + " of " + n }; }).filter(function (x) { return x.src; });
         if (group.length) openLbx(group, group.length - 1);
       });
       if (faces.length) { iso.style.cursor = "zoom-in"; iso.title = "Double-click to view every layer"; }
