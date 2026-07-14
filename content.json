@@ -145,7 +145,7 @@
             "fill": "full",
             "items": [
               {
-                "src": "/assets/uploads/edb4f5fc32f0ea1ca8262049b2e762e0a3b17f0af902242245d370d72081e5a5.mp4",
+                "src": "/assets/uploads/554e65cecd5129c40d20a6d728dfd207ceb041d39f28eb14dd91d3d3c83331a3.mp4",
                 "caption": "",
                 "controls": true
               }
@@ -279,6 +279,172 @@
             "right": "<ul><li>Progressive disclosure</li><li>Smarter modality selection</li><li>Motion and transitions</li><li>Contextual interactions</li></ul>",
             "rightImg": "",
             "sep": false
+          },
+          {
+            "type": "voices",
+            "nav": "User Problems",
+            "kicker": "User Problems",
+            "heading": "",
+            "mode": "verbatim",
+            "vsize": "",
+            "items": [
+              {
+                "side": "left",
+                "heading": "",
+                "body": "<p>\"I am not real comfortable with putting my PIN in there.\"</p>",
+                "cite": ""
+              }
+            ]
+          },
+          {
+            "type": "figure",
+            "nav": "",
+            "kicker": "",
+            "heading": "38% of total reported issues are related to usability and craft of Windows Hello.",
+            "body": "User misinterprets the title bar “Windows Security” and other security information impacting their confidence to move ahead in the flow.<div><br></div>",
+            "src": "",
+            "caption": "",
+            "flip": false,
+            "hsize": "sm",
+            "sep": false
+          },
+          {
+            "type": "voices",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "mode": "verbatim",
+            "vsize": "",
+            "items": [
+              {
+                "side": "right",
+                "heading": "",
+                "body": "<p>\"Windows Hello keeps using the wrong auth modality / How do I default Windows Hello to face every time?”</p>",
+                "cite": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "figure",
+            "nav": "",
+            "kicker": "",
+            "heading": "Often unexpected auth methods are provided to users due to lack of system context.",
+            "body": "Face verification when laptop lid is closed.<div><div><br></div></div>",
+            "src": "",
+            "caption": "",
+            "flip": true,
+            "hsize": "sm",
+            "sep": false
+          },
+          {
+            "type": "voices",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "mode": "verbatim",
+            "vsize": "",
+            "items": [
+              {
+                "side": "left",
+                "heading": "",
+                "body": "<p>“Windows Hello, does not recognize my face and fingerprint every time”</p>",
+                "cite": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "figure",
+            "nav": "",
+            "kicker": "",
+            "heading": "52% of total reported issues are related to the performance and reliability of Windows Hello.",
+            "body": "Face verification fails and exits to PIN even though camera is ON.<div><div><br></div></div>",
+            "src": "",
+            "caption": "",
+            "flip": false,
+            "hsize": "sm",
+            "sep": false
+          },
+          {
+            "type": "cards",
+            "nav": "",
+            "kicker": "Identified problems",
+            "heading": "",
+            "items": [
+              {
+                "title": "Authentication Didn't Feel Modern",
+                "body": "The Windows Hello animation and visual language had remained largely unchanged while authentication experiences across the industry continued to evolve. <div><br></div><div>A surface users interacted with repeatedly no longer conveyed the speed, trust, or polish expected from modern authentication experiences.</div>",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Designed for Systems. Not People.",
+                "body": "Over time, Credential UX accumulated accounts, authentication methods, credential providers, and security scenarios into a single experience. <div><span style=\"font-size: 0.9rem;\"><br></span></div><div><span style=\"font-size: 0.9rem;\">People were being asked to make trust decisions without enough clarity, context, or control.</span></div>",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Reliability Was the User Experience",
+                "body": "Authentication is one of the few moments where users expect the system to work instantly and predictably. <div><span style=\"font-size: 0.9rem;\"><br></span></div><div><span style=\"font-size: 0.9rem;\">Context mismatches, modality switching, and reliability issues created friction that undermined overall confidence.</span></div>",
+                "icon": "",
+                "src": ""
+              }
+            ]
+          },
+          {
+            "type": "steps",
+            "nav": "Design Opportunity",
+            "kicker": "Design Opportunity",
+            "heading": "The opportunity wasn't simply to refresh a dialog.  It was to reimagine how Windows communicates trust.",
+            "items": [
+              {
+                "title": "Modernise the animations",
+                "body": "Supported the brand and identity team"
+              },
+              {
+                "title": "Rejuvinate the auth platform- Credential UX",
+                "body": "This is what I worked on"
+              },
+              {
+                "title": "Designed for reliability",
+                "body": "Engineering area led by design influence"
+              }
+            ],
+            "hsize": ""
+          },
+          {
+            "type": "isolayers",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "mode": "stack",
+            "dir": "topR",
+            "distance": "85",
+            "depth": "8",
+            "transparency": "",
+            "items": [
+              {
+                "src": "/assets/uploads/20d4a5821e2e5e249525ee5a30833ffdaa0d7a909c603fa49041848c0f665253.png",
+                "heightColor": "",
+                "depth": "34"
+              },
+              {
+                "src": "/assets/uploads/bae5b8fc3792dfd4ae756d02c03d0ba769dc5533cfa77f77c91b75600fa66d4c.png",
+                "heightColor": "",
+                "depth": "34"
+              },
+              {
+                "src": "/assets/uploads/bacc2af6ab8c6f85a27a29fef578364b3cd4e2910cf9754d93a596025a48a16f.png",
+                "heightColor": "",
+                "depth": "22"
+              },
+              {
+                "src": "/assets/uploads/9ddd28043844124f789cddbabc73eace0bb3545da2e1002e1561ef74a9d5b6f5.png",
+                "heightColor": "",
+                "depth": "8"
+              }
+            ]
           }
         ]
       }
