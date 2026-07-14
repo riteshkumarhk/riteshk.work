@@ -305,6 +305,55 @@ video.pjb__media-el { background: #000; }
 @media (max-width: 560px) { .pjb__mediagrid--uniform { grid-template-columns: 1fr 1fr; } .pjb__mediagrid--cluster { columns: 1; } }
 @media (prefers-reduced-motion: reduce) { .pjb__mediagrid--cluster .pjb__grid-cell:hover { animation: none; } }
 
+/* Devices — abstract phone / tablet / laptop / watch frames around a media screen.
+   Each device carries its own natural width, so narrow ones (portrait phone, watch)
+   pack several per row and wide ones (laptop, landscape) wrap. Screen uses a preset
+   aspect ratio (media fills, cover) or "auto" (the frame wraps the media). */
+.pjb__devices { display: flex; flex-wrap: wrap; align-items: flex-end; gap: clamp(1.1rem, 3vw, 2.2rem); margin-top: clamp(1.4rem, 3vw, 2rem); }
+.pjb__devices--watch { align-items: center; }
+.pjb__dev { margin: 0; display: flex; flex-direction: column; gap: .75rem; }
+.pjb__dev-frame { position: relative; }
+.pjb__dev-screen { position: relative; overflow: hidden; background: var(--bg-2); }
+.pjb__dev-screen > .pjb__media-el { display: block; width: 100%; height: 100%; object-fit: cover; }
+.pjb__dev-screen--auto > .pjb__media-el { height: auto; object-fit: contain; }
+.pjb__dev-screen > .pjb__shot-ph { width: 100%; height: 100%; display: grid; place-items: center; min-height: 8rem; }
+.pjb__dev-cap { font-family: var(--mono); font-size: .66rem; letter-spacing: .04em; color: var(--text-dim); line-height: 1.4; text-align: center; max-width: 26ch; margin: 0 auto; }
+
+/* Phone — thin frame; speaker + home indicator sit in the top/bottom bezels */
+.pjb__dev--phone { width: clamp(148px, 44vw, 196px); }
+.pjb__dev--phone.pjb__dev--phone-land { width: clamp(300px, 76vw, 400px); }
+.pjb__dev--phone .pjb__dev-frame { padding: 15px 9px; border-radius: 2.1rem; background: linear-gradient(155deg, #303038, #131317); border: 1px solid var(--line); box-shadow: 0 20px 42px -24px rgba(0,0,0,.85), inset 0 0 0 1.5px rgba(255,255,255,.04); }
+.pjb__dev--phone .pjb__dev-screen { border-radius: 1.5rem; }
+.pjb__dev--phone .pjb__dev-frame::before { content: ""; position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 24%; height: 4px; border-radius: 100px; background: rgba(255, 255, 255, .12); }
+.pjb__dev--phone .pjb__dev-frame::after { content: ""; position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 30%; height: 4px; border-radius: 100px; background: rgba(255, 255, 255, .16); }
+
+/* Watch — rounded / round frame, bronze crown, faint straps behind */
+.pjb__dev--watch { width: clamp(116px, 32vw, 150px); }
+.pjb__dev--watch .pjb__dev-frame { padding: 9px; background: linear-gradient(155deg, #303038, #131317); border: 1px solid var(--line); box-shadow: 0 14px 30px -18px rgba(0, 0, 0, .85); }
+.pjb__dev--watch-circle .pjb__dev-frame, .pjb__dev--watch-circle .pjb__dev-screen { border-radius: 50%; }
+.pjb__dev--watch-square .pjb__dev-frame { border-radius: 32%; }
+.pjb__dev--watch-square .pjb__dev-screen { border-radius: 24%; }
+.pjb__dev--watch .pjb__dev-frame::after { content: ""; position: absolute; right: -3px; top: 40%; width: 5px; height: 18%; border-radius: 3px; background: var(--accent); opacity: .85; }
+
+/* Tablet — even bezel, small camera dot */
+.pjb__dev--tablet { width: clamp(210px, 58vw, 290px); }
+.pjb__dev--tablet.pjb__dev--tablet-land { width: clamp(300px, 74vw, 430px); }
+.pjb__dev--tablet .pjb__dev-frame { padding: 13px; border-radius: 1.1rem; background: linear-gradient(155deg, #303038, #131317); border: 1px solid var(--line); box-shadow: 0 20px 42px -24px rgba(0, 0, 0, .85); }
+.pjb__dev--tablet .pjb__dev-screen { border-radius: .5rem; }
+.pjb__dev--tablet .pjb__dev-frame::before { content: ""; position: absolute; top: 5px; left: 50%; transform: translateX(-50%); width: 5px; height: 5px; border-radius: 50%; background: rgba(255, 255, 255, .16); }
+
+/* Laptop — thin-bezel lid on a wider deck (open clamshell); won't force-stack */
+.pjb__dev--laptop { width: clamp(300px, 92vw, 560px); }
+.pjb__dev--laptop .pjb__dev-frame { padding: 10px 10px 0; border-radius: .8rem .8rem 0 0; background: linear-gradient(155deg, #303038, #131317); border: 1px solid var(--line); border-bottom: none; margin-bottom: 16px; }
+.pjb__dev--laptop .pjb__dev-screen { border-radius: .3rem .3rem 0 0; margin-bottom: 10px; }
+.pjb__dev--laptop .pjb__dev-frame::after { content: ""; position: absolute; left: -14px; right: -14px; bottom: -16px; height: 16px; background: linear-gradient(#292930, #17171b); border: 1px solid var(--line); border-radius: 0 0 .7rem .7rem; }
+.pjb__dev--laptop .pjb__dev-frame::before { content: ""; position: absolute; left: 50%; transform: translateX(-50%); bottom: -16px; width: 13%; height: 5px; background: var(--line); border-radius: 0 0 5px 5px; z-index: 2; }
+@media (max-width: 560px) { .pjb__dev--laptop { width: 100%; } .pjb__devices { gap: 1.1rem; } }
+/* Block width control (mainly for laptop): three-quarters or end-to-end */
+.pjb__devices--fill-34 .pjb__dev { width: 75%; max-width: none; }
+.pjb__devices--fill-full .pjb__dev { width: 100%; max-width: none; }
+@media (max-width: 700px) { .pjb__devices--fill-34 .pjb__dev { width: 100%; } }
+
 /* figure \u2014 media beside text */
 .pjb__figure { display: grid; grid-template-columns: 1.05fr .95fr; gap: clamp(1.2rem, 3vw, 2.6rem); align-items: center; margin-top: .5rem; }
 .pjb__figure-media { border-radius: 6px; overflow: hidden; border: 1px solid var(--line-soft); }
