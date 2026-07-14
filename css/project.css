@@ -354,6 +354,25 @@ video.pjb__media-el { background: #000; }
 .pjb__devices--fill-full .pjb__dev { width: 100%; max-width: none; }
 @media (max-width: 700px) { .pjb__devices--fill-34 .pjb__dev { width: 100%; } }
 
+/* Isometric layered UI — one ORTHOGRAPHIC (non-perspective) tilted stack per section.
+   Layers are spaced by a uniform --distance; each carries a small --depth slab built
+   from masked slices (background = height colour --hc) that extrude DOWNWARD and
+   follow the image alpha, so rounded/transparent PNGs get rounded, soft depth.
+   Four directions. Stack = opaque; interface = transparent (PNG alpha shows). */
+.pjb__iso { margin-top: clamp(1.4rem, 3vw, 2rem); border-radius: 16px; border: 1px solid var(--line-soft); background: radial-gradient(85% 55% at 50% 4%, rgba(216, 166, 87, .06), transparent 55%), radial-gradient(135% 110% at 50% 116%, var(--bg-elev), var(--bg-2) 46%, var(--bg) 100%); overflow: hidden; display: flex; justify-content: center; align-items: center; padding: calc(clamp(2rem, 6vw, 3.5rem) + var(--maxz, 0px) * .58) clamp(1rem, 6vw, 4rem) calc(clamp(2rem, 6vw, 3.5rem) + var(--maxz, 0px) * .18); }
+.pjb__iso-stage { position: relative; width: min(52%, 260px); transform-style: preserve-3d; }
+.pjb__iso--topR .pjb__iso-stage { transform: rotateX(58deg) rotateZ(-45deg); }
+.pjb__iso--topL .pjb__iso-stage { transform: rotateX(58deg) rotateZ(45deg); }
+.pjb__iso--right .pjb__iso-stage { transform: rotateX(24deg) rotateZ(-30deg); }
+.pjb__iso--left .pjb__iso-stage { transform: rotateX(24deg) rotateZ(30deg); }
+.pjb__iso-layer { --hc: rgba(14, 14, 18, .95); position: absolute; inset: 0; transform: translateZ(calc(var(--i) * var(--distance))); transform-style: preserve-3d; }
+.pjb__iso-layer:first-child { position: relative; }
+.pjb__iso-media { display: block; width: 100%; height: auto; border-radius: 13px; }
+.pjb__iso--stack .pjb__iso-media { background: var(--bg-elev); box-shadow: 0 30px 44px -18px rgba(0, 0, 0, .5); }
+.pjb__iso--interface .pjb__iso-media { filter: drop-shadow(0 16px 15px rgba(0, 0, 0, .4)); }
+.pjb__iso-depth { position: absolute; inset: 0; transform-style: preserve-3d; pointer-events: none; }
+.pjb__iso-ext { position: absolute; inset: 0; background: var(--hc); transform: translateZ(var(--z)); border-radius: 13px; -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
+
 /* figure \u2014 media beside text */
 .pjb__figure { display: grid; grid-template-columns: 1.05fr .95fr; gap: clamp(1.2rem, 3vw, 2.6rem); align-items: center; margin-top: .5rem; }
 .pjb__figure-media { border-radius: 6px; overflow: hidden; border: 1px solid var(--line-soft); }
