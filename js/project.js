@@ -499,12 +499,49 @@
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__mediagrid pjb__mediagrid--' + layout + '">' + cells + "</div>";
   }
 
+  // Device mockups — abstract CSS frames (phone / tablet / laptop / watch) wrapped
+  // around a screen. A screen either uses a preset aspect ratio (media fills, cover)
+  // or "auto" (the frame simply wraps the media's natural size). Each device has its
+  // own natural width, so narrow devices (portrait phone, watch) pack several per row
+  // while wide ones (laptop, landscape tablet/phone) take the room they need and wrap.
+  var DEVICE_RATIOS = {
+    phone: { iphone: "9 / 19.5", android: "9 / 20", landscape: "19.5 / 9", auto: "" },
+    tablet: { portrait: "3 / 4", landscape: "4 / 3", auto: "" },
+    laptop: { wide: "16 / 10", hd: "16 / 9", auto: "" },
+    watch: { circle: "1 / 1", square: "1 / 1" },
+  };
+  var DEVICE_DEFAULT = { phone: "iphone", tablet: "portrait", laptop: "wide", watch: "circle" };
+  function deviceMeta(device, preset) {
+    var map = DEVICE_RATIOS[device] || DEVICE_RATIOS.phone;
+    var key = preset && preset in map ? preset : DEVICE_DEFAULT[device];
+    var cls = "";
+    if (device === "watch") cls = "pjb__dev--watch-" + (key === "square" ? "square" : "circle");
+    else if (key === "landscape") cls = "pjb__dev--" + device + "-land";
+    return { ratio: map[key], cls: cls };
+  }
+  function deviceBlock(b) {
+    var device = /^(phone|tablet|laptop|watch)$/.test(b.device) ? b.device : "phone";
+    var meta = deviceMeta(device, b.preset);
+    var frames = (b.items || []).map(function (m, i) {
+      var media = mediaSrc(m)
+        ? mediaEl(m, "pjb__media-el")
+        : '<div class="pjb__shot-ph pjb__shot-ph--' + SHOT_THEMES[i % SHOT_THEMES.length] + '"><span class="pjb__shot-tag">Screen</span></div>';
+      var scls = "pjb__dev-screen" + (meta.ratio ? "" : " pjb__dev-screen--auto");
+      var sstyle = meta.ratio ? ' style="aspect-ratio:' + meta.ratio + '"' : "";
+      var cap = m.caption ? '<figcaption class="pjb__dev-cap">' + esc(m.caption) + "</figcaption>" : "";
+      return '<figure class="pjb__dev pjb__dev--' + device + (meta.cls ? " " + meta.cls : "") + '">' +
+        '<div class="pjb__dev-frame"><div class="' + scls + '"' + sstyle + ">" + media + "</div></div>" + cap + "</figure>";
+    }).join("");
+    var fill = /^(34|full)$/.test(b.fill) ? " pjb__devices--fill-" + b.fill : "";
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__devices pjb__devices--' + device + fill + '">' + frames + "</div>";
+  }
+
   var RENDERERS = {
     text: textBlock, statement: stmtBlock, metrics: metricsBlock,
     steps: stepsBlock, media: mediaBlock, split: splitBlock, faq: faqBlock,
     cards: cardsBlock, gallery: galleryBlock, figure: figureBlock,
     columns: columnsBlock, rows: rowsBlock, compare: compareBlock, stickies: stickiesBlock, voices: voicesBlock,
-    workflow: workflowBlock, mediagrid: mediagridBlock,
+    workflow: workflowBlock, mediagrid: mediagridBlock, device: deviceBlock,
   };
   function renderBlock(b, i) {
     var navLabel = b.nav || "";

@@ -587,6 +587,11 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .secprev--mediagrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .3rem; align-content: center; }
 .secprev--mediagrid .sp__gt { height: 15px; border-radius: 4px; border: 1px solid var(--line); background: linear-gradient(135deg, rgba(216, 166, 87, .14), transparent); }
 .secprev--mediagrid .sp__gt:nth-child(3n+2) { margin-top: 4px; }
+.secprev--device { display: flex; align-items: flex-end; justify-content: center; gap: .3rem; }
+.secprev--device .sp__dev { display: block; border: 1.5px solid var(--text-faint); background: var(--bg-2); }
+.secprev--device .sp__dev--phone { width: 13px; height: 28px; border-radius: 4px; }
+.secprev--device .sp__dev--laptop { position: relative; width: 40px; height: 25px; border-radius: 3px 3px 0 0; }
+.secprev--device .sp__dev--laptop::after { content: ""; position: absolute; left: -12%; right: -12%; bottom: -3px; height: 3px; background: var(--text-faint); border-radius: 0 0 3px 3px; }
 .secprev--figure { flex-direction: row; align-items: center; gap: .45rem; }
 .secprev--figure .sp__ffr { flex: 0 0 42%; align-self: stretch; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 5px; background: linear-gradient(135deg, rgba(216,166,87,.12), transparent); color: var(--accent); font-size: 1rem; }
 .secprev--figure .sp__ftx { flex: 1; display: flex; flex-direction: column; gap: .22rem; }
