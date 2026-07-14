@@ -2181,7 +2181,16 @@
       if (!o || typeof o !== "object") return;
       for (const k in o) {
         const v = o[k];
-        if (typeof v === "string") { if (/^data:video\//i.test(v)) o[k] = vcVideoBlobUrl(v); else if (isHostedPath(v)) o[k] = previewSrc(v); }
+        if (typeof v === "string") {
+          // A video is swapped for a blob: URL in preview, which drops the ".mp4" extension — so
+          // the renderer's extension-based detection falls back to <img> (broken-image icon, and a
+          // 0-height collapse in "Fit the media"). Pin kind:"video" on the media item's src/image
+          // field so it still renders as a <video>. Preview-only (this is a clone).
+          var isVid = /^data:video\//i.test(v) || (isHostedPath(v) && /\.(mp4|webm|mov|m4v|ogv)($|\?|#)/i.test(v));
+          if (/^data:video\//i.test(v)) o[k] = vcVideoBlobUrl(v);
+          else if (isHostedPath(v)) o[k] = previewSrc(v);
+          if (isVid && (k === "src" || k === "image")) o.kind = "video";
+        }
         else if (v && typeof v === "object") walk(v);
       }
     })(c);
