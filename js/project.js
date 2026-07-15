@@ -1047,14 +1047,13 @@
     [].forEach.call(stage.querySelectorAll(".pjb__focus-mark"), function (m) { m.classList.toggle("is-on", m === mark); });
     var fxWrap = stage.closest && stage.closest(".pjb__focus");
     var sticky = !!(fxWrap && fxWrap.classList.contains("pjb__focus--sticky"));
+    // fly the card out for the active marker — inline (pill mode) and full-screen both use it
+    [].forEach.call(stage.querySelectorAll(".pjb__focus-card"), function (c) { c.hidden = c !== card; });
     if (sticky) {
-      // sticky mode (inline only): no flyout — highlight the matching note below the image
-      [].forEach.call(stage.querySelectorAll(".pjb__focus-card"), function (c) { c.hidden = true; });
+      // pill mode: also highlight the matching pill below the image
       [].forEach.call(fxWrap.querySelectorAll(".pjb__focus-note"), function (n) { n.classList.toggle("is-on", +n.getAttribute("data-focus-note") === idx); });
       var nn = fxWrap.querySelector('.pjb__focus-note[data-focus-note="' + idx + '"]');
       if (nn) { try { nn.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) {} }
-    } else {
-      [].forEach.call(stage.querySelectorAll(".pjb__focus-card"), function (c) { c.hidden = c !== card; });
     }
     var lens = stage.querySelector(".pjb__focus-lens");
     if (mark.hasAttribute("data-fx") && lens) {
@@ -1068,7 +1067,7 @@
       stage.classList.add("is-focus");
     } else { stage.classList.remove("is-focus"); }
     stage.classList.add("is-active");
-    if (!sticky) focusPlaceCard(stage, mark, card);
+    focusPlaceCard(stage, mark, card);
     var fs = stage.closest && stage.closest(".pjfx");
     if (fs) [].forEach.call(fs.querySelectorAll(".pjfx__listitem"), function (x) { x.classList.toggle("is-on", +x.getAttribute("data-fa-go") === idx); });
   }

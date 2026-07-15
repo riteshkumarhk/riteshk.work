@@ -532,7 +532,6 @@ video.pjb__media-el { background: #000; }
 .pjb__focus-card-b p { margin: 0 0 .5rem; }
 .pjb__focus-card-b p:last-child { margin-bottom: 0; }
 /* pill list below the image (mirrors the full-screen nav) — markers ↔ pills cross-highlight */
-.pjb__focus--sticky .pjb__focus-stage > .pjb__focus-card { display: none; }
 .pjb__focus-notes { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
 .pjb__focus-note { display: inline-flex; align-items: center; gap: .5rem; max-width: 100%; padding: .5rem .9rem; border: 1px solid var(--line-soft); border-radius: 100px; background: rgba(255, 255, 255, .02); color: var(--text-dim); cursor: pointer; font: inherit; text-align: left; transition: border-color .25s var(--ease), color .25s var(--ease), background .25s var(--ease); }
 .pjb__focus-note:hover { border-color: var(--line); color: var(--text); }
