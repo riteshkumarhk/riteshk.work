@@ -1337,6 +1337,8 @@
         return '<span class="secprev secprev--voices"><span class="sp__vc sp__vc--l">“I wasn’t sure…”</span><span class="sp__vc sp__vc--r">“Where can I see it?”</span><span class="sp__vc sp__vc--l">“Is my balance usable?”</span></span>';
       case "workflow":
         return '<span class="secprev secprev--workflow"><span class="sp__wf">Review</span><span class="sp__wfa">\u2192</span><span class="sp__wf">Refine</span><span class="sp__wfa">\u2192</span><span class="sp__wf">Align</span><span class="sp__wfa">\u2192</span><span class="sp__wf">Ship</span></span>';
+      case "focus":
+        return '<span class="secprev secprev--focus"><span class="sp__fa"><span class="sp__fa-box"></span><span class="sp__fa-pin sp__fa-pin--a">+</span><span class="sp__fa-pin sp__fa-pin--b">+</span></span></span>';
       default:
         return '<span class="secprev secprev--text"><span class="sp__kick">Context</span><span class="sp__h">The problem</span><span class="sp__body">A short paragraph that sets up the situation and the stakes.</span><span class="sp__bul">Point one</span><span class="sp__bul">Point two</span></span>';
     }

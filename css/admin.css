@@ -660,6 +660,12 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .secprev--voices .sp__vc { font-size: .54rem; line-height: 1.3; color: var(--text-dim); border: 1px solid var(--line); border-radius: 8px; padding: .26rem .4rem; max-width: 78%; }
 .secprev--voices .sp__vc--l { align-self: flex-start; border-bottom-left-radius: 2px; background: rgba(216,166,87,.12); border-color: rgba(216,166,87,.26); }
 .secprev--voices .sp__vc--r { align-self: flex-end; border-bottom-right-radius: 2px; background: var(--bg-2); }
+.secprev--focus { justify-content: center; align-items: stretch; }
+.secprev--focus .sp__fa { position: relative; flex: 1; border-radius: 5px; overflow: hidden; border: 1px solid var(--line); background: linear-gradient(135deg, rgba(216, 166, 87, .18), transparent 46%), linear-gradient(315deg, rgba(58, 110, 165, .16), transparent 46%), var(--bg-2); }
+.secprev--focus .sp__fa-box { position: absolute; left: 11%; top: 20%; width: 35%; height: 50%; border-radius: 4px; box-shadow: 0 0 0 1.5px var(--accent), 0 0 0 60px rgba(8, 8, 10, .46); }
+.secprev--focus .sp__fa-pin { position: absolute; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); color: #1a1206; font: 600 .6rem var(--mono); display: grid; place-items: center; border: 1.5px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .55); }
+.secprev--focus .sp__fa-pin--a { left: 39%; top: 15%; }
+.secprev--focus .sp__fa-pin--b { right: 15%; bottom: 18%; opacity: .5; }
 
 /* interview prep */
 .l2grp__actions { margin-left: auto; display: flex; gap: .35rem; flex-wrap: wrap; }
