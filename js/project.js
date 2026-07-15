@@ -622,7 +622,15 @@
       '<img class="pjb__focus-img" src="' + attr(url) + '" alt="' + attr(b.caption || b.heading || "") + '" draggable="false" data-focus-open />' +
       veil + lens + marks + cards + "</figure>";
     var cap = b.caption ? '<figcaption class="pjb__cap">' + esc(b.caption) + "</figcaption>" : "";
-    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__focus" data-focus>' + stage + cap + "</div>";
+    var notes = "";
+    if (b.sticky && anns.length) {
+      notes = '<div class="pjb__focus-notes">' + anns.map(function (a, i) {
+        var nt = a.title ? '<div class="pjb__focus-note-t">' + md(a.title) + "</div>" : "";
+        var nb = a.body ? '<div class="pjb__focus-note-b">' + richInline(a.body) + "</div>" : "";
+        return '<div class="pjb__focus-note" data-focus-note="' + i + '" role="button" tabindex="0" aria-label="Annotation ' + (i + 1) + '"><span class="pjb__focus-note-n">' + String(i + 1).padStart(2, "0") + '</span><div class="pjb__focus-note-c">' + nt + nb + "</div></div>";
+      }).join("") + "</div>";
+    }
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__focus' + (b.sticky ? " pjb__focus--sticky" : "") + '" data-focus>' + stage + cap + notes + "</div>";
   }
 
   var RENDERERS = {
@@ -1037,7 +1045,17 @@
     if (!mark || !card) return;
     stage.__faActive = idx;
     [].forEach.call(stage.querySelectorAll(".pjb__focus-mark"), function (m) { m.classList.toggle("is-on", m === mark); });
-    [].forEach.call(stage.querySelectorAll(".pjb__focus-card"), function (c) { c.hidden = c !== card; });
+    var fxWrap = stage.closest && stage.closest(".pjb__focus");
+    var sticky = !!(fxWrap && fxWrap.classList.contains("pjb__focus--sticky"));
+    if (sticky) {
+      // sticky mode (inline only): no flyout — highlight the matching note below the image
+      [].forEach.call(stage.querySelectorAll(".pjb__focus-card"), function (c) { c.hidden = true; });
+      [].forEach.call(fxWrap.querySelectorAll(".pjb__focus-note"), function (n) { n.classList.toggle("is-on", +n.getAttribute("data-focus-note") === idx); });
+      var nn = fxWrap.querySelector('.pjb__focus-note[data-focus-note="' + idx + '"]');
+      if (nn) { try { nn.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) {} }
+    } else {
+      [].forEach.call(stage.querySelectorAll(".pjb__focus-card"), function (c) { c.hidden = c !== card; });
+    }
     var lens = stage.querySelector(".pjb__focus-lens");
     if (mark.hasAttribute("data-fx") && lens) {
       var shape = mark.getAttribute("data-fshape") || "rect";
@@ -1050,7 +1068,7 @@
       stage.classList.add("is-focus");
     } else { stage.classList.remove("is-focus"); }
     stage.classList.add("is-active");
-    focusPlaceCard(stage, mark, card);
+    if (!sticky) focusPlaceCard(stage, mark, card);
     var fs = stage.closest && stage.closest(".pjfx");
     if (fs) [].forEach.call(fs.querySelectorAll(".pjfx__listitem"), function (x) { x.classList.toggle("is-on", +x.getAttribute("data-fa-go") === idx); });
   }
@@ -1070,6 +1088,8 @@
     stage.classList.remove("is-focus", "is-active");
     [].forEach.call(stage.querySelectorAll(".pjb__focus-mark"), function (m) { m.classList.remove("is-on"); });
     [].forEach.call(stage.querySelectorAll(".pjb__focus-card"), function (c) { c.hidden = true; });
+    var fxW = stage.closest && stage.closest(".pjb__focus");
+    if (fxW) [].forEach.call(fxW.querySelectorAll(".pjb__focus-note"), function (n) { n.classList.remove("is-on"); });
     var fs = stage.closest && stage.closest(".pjfx");
     if (fs) [].forEach.call(fs.querySelectorAll(".pjfx__listitem"), function (x) { x.classList.remove("is-on"); });
   }
@@ -1101,6 +1121,12 @@
       if (fx.__faDone) return; fx.__faDone = 1;
       var stage = fx.querySelector(".pjb__focus-stage");
       if (stage) focusWire(stage, false);
+      var notes = fx.querySelector(".pjb__focus-notes");
+      if (notes && stage) {
+        var toggle = function (n) { var idx = +n.getAttribute("data-focus-note"); if (stage.__faActive === idx) focusDeactivate(stage); else focusActivate(stage, idx); };
+        notes.addEventListener("click", function (e) { var n = e.target.closest("[data-focus-note]"); if (n) toggle(n); });
+        notes.addEventListener("keydown", function (e) { if (e.key !== "Enter" && e.key !== " ") return; var n = e.target.closest("[data-focus-note]"); if (n) { e.preventDefault(); toggle(n); } });
+      }
     });
   }
   function buildFocusFs() {
