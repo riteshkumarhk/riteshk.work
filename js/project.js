@@ -582,7 +582,7 @@
     }).join("");
     var maxz = Math.max(0, items.length - 1) * distance + maxDepth;
     return kicker(b.kicker) + heading(b.heading) +
-      '<div class="pjb__iso pjb__iso--' + mode + " pjb__iso--" + dir + '" data-iso style="--distance:' + distance + "px;--depth:" + baseDepth + "px;--maxz:" + maxz + 'px">' +
+      '<div class="pjb__iso pjb__iso--' + mode + " pjb__iso--" + dir + '" data-iso' + (b.parallax ? " data-iso-parallax" : "") + ' style="--distance:' + distance + "px;--depth:" + baseDepth + "px;--maxz:" + maxz + 'px">' +
       '<div class="pjb__iso-stage">' + layers + "</div></div>";
   }
 
@@ -675,6 +675,23 @@
     var h = (cov && cov.clientHeight) || 300;
     var ty = Math.max(0, Math.min(h * 0.14, scroller.scrollTop * 0.2));
     el.style.transform = "translate3d(0," + ty.toFixed(1) + "px,0)";
+  }
+  // Isometric parallax: layers start stacked (progress 0) and fan out to their full
+  // --distance (progress 1) as the section travels from the bottom of the viewport up to
+  // its centre, then hold. Reduced-motion (lite) skips it, so --pp stays at its CSS
+  // default of 1 (fully expanded) — the stack never gets stuck collapsed.
+  function isoParallax() {
+    if (!overlay || document.documentElement.classList.contains("lite")) return;
+    var scope = overlay.querySelector("[data-content]"); if (!scope) return;
+    var vh = window.innerHeight || document.documentElement.clientHeight || 800;
+    [].forEach.call(scope.querySelectorAll(".pjb__iso[data-iso-parallax]"), function (iso) {
+      var r = iso.getBoundingClientRect();
+      if (!r.height) return;
+      var center = r.top + r.height / 2;
+      var p = (vh - center) / (vh * 0.5);
+      p = p < 0 ? 0 : p > 1 ? 1 : p;
+      iso.style.setProperty("--pp", p.toFixed(3));
+    });
   }
   var cmpDrag = null;
   function cmpMove(e) {
@@ -894,7 +911,7 @@
 
     scroller.addEventListener("scroll", function () {
       if (spyRaf) return;
-      spyRaf = requestAnimationFrame(function () { spyRaf = 0; updateSpy(); coverParallax(); });
+      spyRaf = requestAnimationFrame(function () { spyRaf = 0; updateSpy(); coverParallax(); isoParallax(); });
     }, { passive: true });
 
     overlay.addEventListener("pointerdown", function (e) {
@@ -1147,7 +1164,7 @@
       contentEl.innerHTML = html;
     }
     contentEl.setAttribute("data-wid", String(w.id));
-    requestAnimationFrame(function () { updateSpy(); coverParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); });
+    requestAnimationFrame(function () { updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); });
   }
 
   // Minimal DOM morph: update text/attributes in place and add/remove nodes, but
@@ -1374,7 +1391,7 @@
   /* ---------- bootstrap ---------- */
   function init() {
     if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = function () { return Object.keys(ICONS); }; window.RK.setStudyUnlocked = setUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; }
-    window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) { updateSpy(); clearTimeout(galleryTimer); galleryTimer = setTimeout(function () { normalizeGalleries(); }, 160); } });
+    window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) { updateSpy(); isoParallax(); clearTimeout(galleryTimer); galleryTimer = setTimeout(function () { normalizeGalleries(); }, 160); } });
     if (PREVIEW) { document.documentElement.classList.add("rk-preview"); return; } // the admin editor drives the overlay; skip link/history/deep-link wiring
     document.addEventListener("click", onDocLinkClick);
     window.addEventListener("popstate", route);
