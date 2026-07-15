@@ -5,6 +5,19 @@
 (function () {
   "use strict";
 
+  /* Discourage casual media saving on the public site: swallow the right-click
+     menu and drag-to-save on images / video / canvas — including project media
+     rendered later (galleries, lightbox, focus). Deterrent only: DevTools and the
+     network tab still expose the assets. Skipped inside the admin live-preview
+     iframe (?preview) so the editor's right-hand preview keeps its native
+     "Save image" / "Open image in new tab". */
+  if (!new URLSearchParams(location.search).has("preview")) {
+    document.documentElement.classList.add("no-mediasave");
+    var isMedia = function (t) { return !!(t && t.closest && t.closest("img, picture, source, video, canvas")); };
+    document.addEventListener("contextmenu", function (e) { if (isMedia(e.target)) e.preventDefault(); });
+    document.addEventListener("dragstart", function (e) { if (isMedia(e.target)) e.preventDefault(); });
+  }
+
   function initInteractions() {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const isTouch = window.matchMedia("(pointer: coarse)").matches;
