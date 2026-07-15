@@ -624,10 +624,10 @@
     var cap = b.caption ? '<figcaption class="pjb__cap">' + esc(b.caption) + "</figcaption>" : "";
     var notes = "";
     if (b.sticky && anns.length) {
-      notes = '<div class="pjb__focus-notes">' + anns.map(function (a, i) {
-        var nt = a.title ? '<div class="pjb__focus-note-t">' + md(a.title) + "</div>" : "";
-        var nb = a.body ? '<div class="pjb__focus-note-b">' + richInline(a.body) + "</div>" : "";
-        return '<div class="pjb__focus-note" data-focus-note="' + i + '" role="button" tabindex="0" aria-label="Annotation ' + (i + 1) + '"><span class="pjb__focus-note-n">' + String(i + 1).padStart(2, "0") + '</span><div class="pjb__focus-note-c">' + nt + nb + "</div></div>";
+      notes = '<div class="pjb__stickies pjb__stickies--natural pjb__focus-notes">' + anns.map(function (a, i) {
+        var nh = a.title ? '<h3 class="pjb__sticky-h">' + md(a.title) + "</h3>" : "";
+        var nb = a.body ? '<div class="pjb__sticky-b">' + richInline(a.body) + "</div>" : "";
+        return '<article class="pjb__sticky pjb__focus-note" data-focus-note="' + i + '" role="button" tabindex="0" aria-label="Annotation ' + (i + 1) + '"><div class="pjb__sticky-lbl">' + String(i + 1).padStart(2, "0") + "</div>" + nh + nb + "</article>";
       }).join("") + "</div>";
     }
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__focus' + (b.sticky ? " pjb__focus--sticky" : "") + '" data-focus>' + stage + cap + notes + "</div>";
