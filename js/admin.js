@@ -1107,7 +1107,7 @@
      One image, N annotations. Each annotation is a % point (marker) with an optional
      % focus box. Click to place a marker; select one to edit its title/body; tick Focus
      and drag on the image to draw/move/resize the spotlight region. All %-based → scales. */
-  var faSel = -1, faPlacing = false, faDrag = null;
+  var faSel = -1, faPlacing = false, faDrag = null, faJustMoved = false;
   function faPct(v) { v = parseFloat(v); return isNaN(v) ? 0 : Math.max(0, Math.min(100, v)); }
   function faBlock(i, j) { var w = data.work[i]; var st = w && w.study; return st && st.blocks && st.blocks[j]; }
   function focusAnnEditor(i, j, b) {
@@ -1139,7 +1139,7 @@
         shapeSel + "</div>";
     }).join("");
     return '<div class="faed-wrap">' + canvas + addbar + '<div class="faed__rows">' + (rows || '<div class="af__hint">No annotations yet \u2014 add one above.</div>') + "</div>" +
-      '<div class="af__hint">Hit <b>Add annotation</b>, then click the image to drop a numbered marker. Select one (click its number) to edit it. Tick <b>Focus area</b> and a box appears on the image \u2014 drag it to move, drag the corner to resize (square &amp; circle stay even), or drag on open image to redraw. Everything is a % of the image, so points and focus regions scale on mobile.</div></div>';
+      '<div class="af__hint">Hit <b>Add annotation</b>, then click the image to drop a numbered marker \u2014 drag a marker anytime to reposition it. Select one (click its number) to edit it. Tick <b>Focus area</b> and a box appears on the image \u2014 drag it to move, drag the corner to resize (square &amp; circle stay even), or drag on open image to redraw. Everything is a % of the image, so points and focus regions scale on mobile.</div></div>';
   }
   function onFocusAnn(t) {
     var i = +t.dataset.index, j = +t.dataset.bindex, k = +t.dataset.aindex, f = t.dataset.afield;
@@ -1155,7 +1155,6 @@
   }
   function faPointerDown(e) {
     var canvas = e.target.closest(".faed"); if (!canvas) return;
-    if (e.target.closest(".faed__mark")) return;   // markers select via the click dispatcher
     var i = +canvas.dataset.index, j = +canvas.dataset.bindex;
     var b = faBlock(i, j); if (!b) return;
     var img = canvas.querySelector("img"); if (!img) return;
@@ -1167,6 +1166,14 @@
       b.annotations.push({ x: +p.x.toFixed(1), y: +p.y.toFixed(1), title: "", body: "" });
       faSel = b.annotations.length - 1; faPlacing = false;
       saveDraft(true); renderL2(); e.preventDefault(); return;
+    }
+    // Drag an existing marker to reposition it; a plain click (no real movement) still selects it.
+    var mk = e.target.closest(".faed__mark");
+    if (mk) {
+      faDrag = { mode: "mark", i: i, j: j, k: +mk.getAttribute("data-aindex"), rect: rect, el: mk, sx: e.clientX, sy: e.clientY, moved: false };
+      document.addEventListener("pointermove", faPointerMove);
+      document.addEventListener("pointerup", faPointerEnd);
+      return;
     }
     var a = b.annotations && b.annotations[faSel]; if (!a || !a.focus) return;
     var f = a.focus;
@@ -1185,6 +1192,22 @@
   function faPointerMove(e) {
     if (!faDrag) return;
     var b = faBlock(faDrag.i, faDrag.j); if (!b) return;
+    if (faDrag.mode === "mark") {
+      var a0 = b.annotations[faDrag.k]; if (!a0) return;
+      if (!faDrag.moved) {
+        if (Math.hypot(e.clientX - faDrag.sx, e.clientY - faDrag.sy) < 4) return;   // ignore tiny jitters so a click still selects
+        faDrag.moved = true; faSel = faDrag.k;
+        var cv = faDrag.el.closest(".faed");
+        if (cv) [].forEach.call(cv.querySelectorAll(".faed__mark"), function (m) { m.classList.toggle("is-sel", m === faDrag.el); });
+        faDrag.el.classList.add("is-drag");
+      }
+      var mx = Math.max(0, Math.min(100, (e.clientX - faDrag.rect.left) / faDrag.rect.width * 100));
+      var my = Math.max(0, Math.min(100, (e.clientY - faDrag.rect.top) / faDrag.rect.height * 100));
+      a0.x = +mx.toFixed(1); a0.y = +my.toFixed(1);
+      faDrag.el.style.left = a0.x + "%"; faDrag.el.style.top = a0.y + "%";
+      e.preventDefault();
+      return;
+    }
     var a = b.annotations[faDrag.k]; if (!a || !a.focus) return;
     var f = a.focus, r = faDrag.rect;
     var px = Math.max(0, Math.min(100, (e.clientX - r.left) / r.width * 100));
@@ -1211,7 +1234,12 @@
     document.removeEventListener("pointermove", faPointerMove);
     document.removeEventListener("pointerup", faPointerEnd);
     if (!faDrag) return;
-    var wasDraw = faDrag.mode === "draw"; faDrag = null;
+    var d = faDrag; faDrag = null;
+    if (d.mode === "mark") {
+      if (d.moved) { faSel = d.k; saveDraft(true); renderL2(); faJustMoved = true; setTimeout(function () { faJustMoved = false; }, 350); }
+      return;   // no real move => it was a click; let fa-select handle it
+    }
+    var wasDraw = d.mode === "draw";
     saveDraft(true);
     if (wasDraw) renderL2(); else refreshL2Preview();
   }
@@ -1977,7 +2005,7 @@
     if (act === "bfield-upload") { const bj = +b.dataset.bindex, f = b.dataset.bfield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl) { bl[f] = uri; if (isVideoVal(uri)) bl.controls = true; saveDraft(true); renderL2(); } }); return; }
     if (act === "bfield-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (bl) { bl[b.dataset.bfield] = ""; saveDraft(true); renderL2(); } return; }
     if (act === "fa-add") { faPlacing = !faPlacing; renderL2(); return; }
-    if (act === "fa-select") { faSel = +b.dataset.aindex; faPlacing = false; renderL2(); return; }
+    if (act === "fa-select") { if (faJustMoved) { faJustMoved = false; return; } faSel = +b.dataset.aindex; faPlacing = false; renderL2(); return; }
     if (act === "fa-remove") { const bl = faBlock(i, +b.dataset.bindex); if (bl && bl.annotations) { bl.annotations.splice(+b.dataset.aindex, 1); if (faSel >= bl.annotations.length) faSel = bl.annotations.length - 1; saveDraft(true); renderL2(); } return; }
     if (act === "fa-focustoggle") { const bl = faBlock(i, +b.dataset.bindex); const a = bl && bl.annotations && bl.annotations[+b.dataset.aindex]; if (a) { if (a.focus) delete a.focus; else a.focus = { shape: "rect", x: 25, y: 25, w: 35, h: 35 }; faSel = +b.dataset.aindex; saveDraft(true); renderL2(); } return; }
     if (act === "study-preview") { saveDraft(true); status("Opening your current draft in a new tab\u2026"); return; }
