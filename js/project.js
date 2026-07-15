@@ -1418,6 +1418,17 @@
   function init() {
     if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = function () { return Object.keys(ICONS); }; window.RK.setStudyUnlocked = setUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; }
     window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) { updateSpy(); isoParallax(); clearTimeout(galleryTimer); galleryTimer = setTimeout(function () { normalizeGalleries(); }, 160); } });
+    // Editor → preview: the admin editor posts the block index of a clicked section; scroll the
+    // preview to it and flash it (the reverse of the preview → editor selectBlock message).
+    window.addEventListener("message", function (e) {
+      var d = e.data;
+      if (!d || d.__rk !== "gotoBlock" || typeof d.index !== "number" || !overlay) return;
+      var content = overlay.querySelector("[data-content]");
+      var sec = content && content.querySelector('[data-block="' + d.index + '"]');
+      if (!sec) return;
+      try { sec.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (er) { sec.scrollIntoView(); }
+      sec.classList.remove("pjb--flash"); void sec.offsetWidth; sec.classList.add("pjb--flash");
+    });
     if (PREVIEW) { document.documentElement.classList.add("rk-preview"); return; } // the admin editor drives the overlay; skip link/history/deep-link wiring
     document.addEventListener("click", onDocLinkClick);
     window.addEventListener("popstate", route);
