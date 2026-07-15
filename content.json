@@ -414,37 +414,529 @@
             "hsize": ""
           },
           {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Trust Was Hidden Behind Complexity",
+            "body": "At the centre of Windows authentication sat Credential UI, a framework responsible for everything from passkeys and purchases to admin approvals and remote access. Over time it had evolved to support dozens of scenarios, but the experience still reflected system architecture more than user intent.",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "focus",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "src": "/assets/uploads/6c3b31a0216e0f07d2547657a5a9fb9642b2907744b0bbd9016ccb19d512353e.png",
+            "caption": "Credential UX anatomy",
+            "annotations": [
+              {
+                "x": 44.9,
+                "y": 12.4,
+                "title": "Title bar",
+                "body": "Shows ‘”Windows security” branding which can be perceived as security threat\n",
+                "focus": {
+                  "shape": "rect",
+                  "x": 25.3,
+                  "y": 6.5,
+                  "w": 49,
+                  "h": 8.5
+                }
+              },
+              {
+                "x": 50.6,
+                "y": 18.2,
+                "title": "Title",
+                "body": "Static title without any connection with the context shown below",
+                "focus": {
+                  "shape": "rect",
+                  "x": 26.8,
+                  "y": 14.8,
+                  "w": 46.4,
+                  "h": 5.4
+                }
+              },
+              {
+                "x": 46.7,
+                "y": 24,
+                "title": "Summary",
+                "body": "Requires Immersive reading for crucial information",
+                "focus": {
+                  "shape": "rect",
+                  "x": 26.9,
+                  "y": 20,
+                  "w": 46.3,
+                  "h": 5.7
+                }
+              },
+              {
+                "x": 41.1,
+                "y": 30.3,
+                "title": "Security info",
+                "body": "Does not provide value",
+                "focus": {
+                  "shape": "rect",
+                  "x": 26.7,
+                  "y": 25.4,
+                  "w": 46.9,
+                  "h": 6.1
+                }
+              },
+              {
+                "x": 56.9,
+                "y": 42,
+                "title": "Active verification method",
+                "body": "Required to be refreshed with the latest branding, WinUI guidelines and animation direction."
+              },
+              {
+                "x": 58.5,
+                "y": 60.8,
+                "title": "More than more choices",
+                "body": "The menu consists of authentication methods, items unrelated to verification, user accounts, etc. See next"
+              }
+            ],
+            "editorName": "Existing credUI",
+            "sep": false,
+            "sticky": true
+          },
+          {
+            "type": "figure",
+            "nav": "",
+            "kicker": "",
+            "heading": "More than \"more choices\"",
+            "body": "The menu consists of<div><ul><li>Authentication methods</li><li>Items unrelated to verification</li><li>User accounts, etc.</li><li>No grouping or ranking logic</li></ul></div>",
+            "src": "/assets/uploads/aa9fa62dedcd095ecd5e3649c96ebd8030fbc8ca377f4015c6766ce54dc2af0a.png",
+            "caption": "",
+            "flip": false,
+            "hsize": "sm",
+            "sep": false,
+            "editorName": "More than \"more choices\""
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Opportunity for Credential UX",
+            "body": "When people authenticate, they're trying to answer a few simple questions:<div><br></div><div><ul><li>What am I doing?</li><li>Who is asking?</li><li>Is this safe?</li><li>What happens next?</li></ul><div><br></div></div><div>The existing experience contained those answers, but often buried them inside dense text, generic titles, and low-value security information. Users had to read and interpret the dialog before they could make a confident decision.</div>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true,
+            "editorName": "When people authenticate, they're trying to answ…"
+          },
+          {
+            "type": "cards",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "title": "Make context immediately understandable",
+                "body": "Help users quickly understand what they're approving without needing to read dense summaries.",
+                "icon": "target",
+                "src": ""
+              },
+              {
+                "title": "Make trust signals meaningful",
+                "body": "Replace generic security information with cues that help users evaluate authenticity and safety.",
+                "icon": "shield",
+                "src": ""
+              },
+              {
+                "title": "Make important decisions glanceable",
+                "body": "Surface the most relevant information first and reduce the effort required to build confidence.",
+                "icon": "eye",
+                "src": ""
+              }
+            ],
+            "hsize": "",
+            "sep": false,
+            "editorName": "Opportunity for Credential UX"
+          },
+          {
+            "type": "columns",
+            "nav": "Design for confidence",
+            "kicker": "Designing for confidence",
+            "heading": "Authentication is simply the final step",
+            "items": [
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "What users were doing",
+                    "body": "Users weren't trying to complete an authentication task. They wanted to:<br><div><ul><li>Connect to a remote desktop</li><li>Purchase an app</li><li>Save a passkey</li><li>Sign in to a website</li><li>Access a protected resource</li></ul></div>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "Role of Windows Hello",
+                    "body": "The role of Windows Hello wasn't just to verify identity. It was to help users understand what they were doing, trust the request, and complete their intended action with confidence.",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "Authentication is the final step",
+                    "body": "Before acting, users need answers to four questions:<div><ul><li>What am I trying to do?</li><li>Why am I being asked to verify?</li><li>Can I trust this request?</li><li>Do I have the right controls if something is wrong?</li></ul><div>Authentication isn't the user's goal. <span style=\"font-size: 0.9rem;\">Confidence is.</span></div></div>",
+                    "src": ""
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Exploring Trust & Authentication",
+            "body": "Before redesigning CredUI, I wanted to understand what makes authentication experiences feel trustworthy, effortless, and modern.<div><br></div><div>I studied authentication patterns across Windows, Passkeys, macOS, iOS, Android, and different CredUI scenarios to identify what users actually needed in moments of verification.</div>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "Modern authentication experiences:<div><ul><li>Prioritize the most relevant information first</li><li>Use smart defaults</li><li>Provide contextual guidance</li><li>Reveal complexity progressively</li><li>Minimize decisions until necessary</li></ul></div>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/e8afc0970439b716580665feb9c561c304b2295f06ec48e9c251863a48ec8d62.png",
+                "caption": ""
+              }
+            ],
+            "sep": false,
+            "editorName": "All credUI"
+          },
+          {
+            "type": "workflow",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "flow": "linear",
+            "items": [
+              {
+                "label": "Windows often exposed complexity before context.",
+                "note": ""
+              },
+              {
+                "label": "Users want reassurance, not options.",
+                "note": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Turning Complexity into Context",
+            "body": "Across every authentication flow, the information users needed already existed. The challenge was that context was hidden inside dense text.<div><br></div><div>Instead of adding more information, I explored how to make trust instantly understandable through a single glanceable context object.</div>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": ""
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "",
+            "heading": "Making Trust Glanceable",
+            "beforeSrc": "/assets/uploads/e9f8025d015565f4f0faf6a3d6b3371670ef9765bc501c1c8369985b71ea3720.png",
+            "afterSrc": "/assets/uploads/314bf3dc4a4ca7a39cd7024f382e325f12e30152cc8e6e6699b74490236290bd.png",
+            "beforeLabel": "Before",
+            "afterLabel": "After",
+            "body": "Authentication isn't the decision.<div><span style=\"font-size: 0.9rem;\">Trust is.</span></div>",
+            "hsize": "sm",
+            "sep": false
+          },
+          {
+            "type": "split",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "leftLabel": "Before",
+            "left": "<ul><li>Context hidden inside paragraphs</li><li>Users needed to read before understanding</li><li>Trust signals difficult to evaluate</li><li>Important information scattered across the dialog</li></ul>",
+            "leftImg": "",
+            "rightLabel": "After",
+            "right": "<ul><li>Context condensed into a single glanceable object</li><li>Identity, destination, and intent surfaced upfront</li><li>Trust signals become immediately visible</li><li>Users understand what they're approving before authenticating</li></ul>",
+            "rightImg": "",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "Explorations & Testing",
+            "kicker": "Explorations & Testing",
+            "heading": "Providing user choices",
+            "body": "Users could now understand what they were approving much faster. Once context became clear, another challenge surfaced:<div><br></div><div><b>How should users interact with authentication choices?</b></div>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Exploring a Reusable Interaction Model",
+            "body": "Across Passkeys, UAC, Remote Desktop and future authentication scenarios, users still needed ways to:<div><ul><li>Switch authentication methods</li><li>Change accounts</li><li>Recover from failures</li><li>Access advanced options</li></ul></div>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "sm",
+            "sep": false
+          },
+          {
+            "type": "mediagrid",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "gridLayout": "uniform",
+            "items": [
+              {
+                "src": "/assets/uploads/1c24462a3e0f0f7cf1adf0b2140121c0db034290346828536cb9b6d36ff17f8e.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/44c3e7914e1cfcd1f4275a047d86227ff586b970e79704d7ef74490e8f895391.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/0eea4bf705d252d1e26f5d0962f61f9595c4dc32194ed53757ff3090a5e8d686.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/7c8a4e4b8fc2c38dae1ec802efd9df4e77f0fa3db835bd720046add31808a70c.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/7d0210e63f271c4e22ed57f2308fe55c79e249e9ecfdc3ffe2b7a7312842421e.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/d5091cdc7174eca15a523f0b6c895298d1feb3006c95d271de75b686da7b91af.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/142998ae31518b65d09fe6b8d4779cf6b251e61cb287f2e0e3e76eb799f41952.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/fa4698de5a50bc96423ee87652bc254ba0d6a178659e269f824ee9d148d9906b.png",
+                "caption": ""
+              }
+            ],
+            "hsize": "sm",
+            "sep": false,
+            "editorName": "All explorations"
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Exploring How Users Access Alternatives",
+            "body": "<p>Across Passkeys and UAC, we tested two interaction models.</p>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "beforeSrc": "/assets/uploads/5b8b26a8dcf722cbb85bb2a4e92a427c3e5d3866fd74495cb5a5485e082f42c7.png",
+            "afterSrc": "/assets/uploads/f0bf895e098599c572549cc40d7a74f3bf1a88adfec07d7ae287f7327104b533.png",
+            "beforeLabel": "Exploration A",
+            "afterLabel": "Exploration B",
+            "body": "",
+            "hsize": "",
+            "sep": false,
+            "editorName": "Comparison A"
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "beforeSrc": "/assets/uploads/334717c9f4e7d710e1588d36e111069a3f53483e6b36ad68fb61366da31f70ec.png",
+            "afterSrc": "/assets/uploads/93d6b7de1bb27eef7c8062af15ccaf7b0560d43aadab0f060a8ac98767819a2e.png",
+            "beforeLabel": "Exploration A",
+            "afterLabel": "Exploration B",
+            "body": "",
+            "hsize": "",
+            "sep": false,
+            "editorName": "Comparison B"
+          },
+          {
+            "type": "columns",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "label": "Exploration A",
+                "cells": [
+                  {
+                    "heading": "Context-first with visible controls",
+                    "body": "Keep account switching, authentication methods, and alternate devices easily discoverable from the main experience.",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "Exploration B",
+                "cells": [
+                  {
+                    "heading": "Context-first with progressive disclosure",
+                    "body": "Keep the primary flow focused and reveal alternatives only when users actively seek them.",
+                    "src": ""
+                  }
+                ]
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "Landing the framework",
+            "kicker": "Landing the framework",
+            "heading": "Our learnings",
+            "body": "<p><b>User testing consistently favoured Exploration A.</b></p><p>Participants found the dropdown object easier to discover and more intuitive because it aligned with familiar interaction patterns. Many naturally assumed it was the primary place to click when looking for options. Users repeatedly described it as easier to find, easier to understand, and easier to use.</p>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "voices",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "mode": "verbatim",
+            "vsize": "",
+            "items": [
+              {
+                "side": "left",
+                "heading": "",
+                "body": "“I feel like it's more intuitive in Flow A. I automatically know to click this object.”",
+                "cite": ""
+              },
+              {
+                "side": "right",
+                "heading": "",
+                "body": "“I’m more used to Flow A with the drop down menu as an easy indicator to click for more options.”",
+                "cite": ""
+              },
+              {
+                "side": "left",
+                "heading": "",
+                "body": "<p>\"A is easier. B looks better. I like that it says 'connect' instead of ok.\"</p>",
+                "cite": ""
+              }
+            ],
+            "sep": false
+          },
+          {
             "type": "isolayers",
             "nav": "",
             "kicker": "",
             "heading": "",
             "mode": "interface",
-            "dir": "right",
-            "distance": "40",
+            "dir": "left",
+            "distance": "24",
             "depth": "0",
+            "parallax": true,
             "transparency": "",
             "items": [
               {
-                "src": "/assets/uploads/163352a449e6ff10a5111a921cbf9a68be4889fea410364de058d181bfbce2c3.svg",
+                "src": "/assets/uploads/4b6c1f1486d5958339d1eb663a9dbfe498cc8a86d969ee9532d23794886e220b.svg",
+                "heightColor": "",
+                "depth": ""
+              },
+              {
+                "src": "/assets/uploads/e6b1009dfffe5722bc2d148258a796370af1e6f2d0cbe813e4f29360807205f6.svg",
                 "heightColor": ""
               },
               {
-                "src": "/assets/uploads/5ced031caa17ea3b1e1c504d74fb471d7ba1d4ef6731115553f20f5757d2d30d.svg",
-                "heightColor": ""
-              },
-              {
-                "src": "/assets/uploads/9d8f806ed4ea90d347e2864999c571f3c700505b5ad02194102da34bd6c3271b.svg",
-                "heightColor": ""
-              },
-              {
-                "src": "/assets/uploads/45dab8dcca0366ac8374dd187039fcaac3e3c245670df445364365d1b7865555.svg",
-                "heightColor": ""
-              },
-              {
-                "src": "/assets/uploads/a1bc61890c2fcf942c25da3f44577cbba4118c8bfca952054a6f7e25c040f975.svg",
-                "heightColor": ""
+                "src": "/assets/uploads/ea8f2e0e46da63fc37a3bc70c81925ea560f82262a57ed258a25a5140228ab60.svg",
+                "heightColor": "#cac9c9",
+                "depth": "34"
               }
-            ]
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "The Context Object had become too successful.",
+            "body": "While users preferred Flow A, the study revealed something unexpected.<div><br></div><div><span class=\"tdim\">Users were deliberately clicking and exploring the object before engaging with authentication itself. The prominence of the card, avatar, dropdown affordances, and controls naturally pulled attention away from the primary task: verifying identity.</span></div><div><br></div><div>The Context Object was intended to provide understanding. Instead, it was becoming the focal point of the experience.</div>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false,
+            "hsize": ""
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Design Decision",
+            "body": "Rather than optimizing for discoverability alone, we optimized for intent.<div><span style=\"font-size: 0.9rem;\">Authentication was the primary job to be done. Context should support that journey, not compete with it.</span></div><div><span style=\"font-size: 0.9rem;\">This led us to a framework where:</span></div>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "steps",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "title": "Context establishes confidence.",
+                "body": ""
+              },
+              {
+                "title": "Authentication remains the hero.",
+                "body": ""
+              },
+              {
+                "title": "Controls stay nearby, but secondary.",
+                "body": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "figure",
+            "nav": "",
+            "kicker": "",
+            "heading": "That became the foundation for the final CredUI architecture.",
+            "body": "",
+            "src": "/assets/uploads/298b44835657322ad6599065c1852f8528e5d5b0016e6738d0de00d008eacb70.png",
+            "caption": "",
+            "flip": false,
+            "hsize": "",
+            "sep": false
           }
         ]
       }
