@@ -937,6 +937,234 @@
             "flip": false,
             "hsize": "",
             "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "Integrating the Architecture",
+            "kicker": "Integrating the Architecture",
+            "heading": "From Framework to Architecture",
+            "body": "The framework helped us move beyond redesigning screens and toward redesigning how authentication worked across Windows.",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "focus",
+            "nav": "",
+            "kicker": "",
+            "heading": "Comparison between old and new experience",
+            "src": "/assets/uploads/95669e1c20791944bbca3018b2b76999fbad73a047a4b97c79eed592af5af037.png",
+            "caption": "",
+            "sticky": true,
+            "annotations": [
+              {
+                "x": 59.3,
+                "y": 21.8,
+                "title": "A new refreshed branding",
+                "body": "Matches to the Windows security feature for building trust.",
+                "focus": {
+                  "shape": "rect",
+                  "x": 3.3,
+                  "y": 16.9,
+                  "w": 55.2,
+                  "h": 7.4
+                }
+              },
+              {
+                "x": 59.5,
+                "y": 30.8,
+                "title": "Context Before Authentication",
+                "body": "Make context the starting point of every authentication journey.\nBy transforming dense security information into a structured, glanceable object, users could immediately understand:\n\nWhat they're doing\nWho is requesting it\nWhich account is involved",
+                "focus": {
+                  "shape": "rect",
+                  "x": 3.8,
+                  "y": 23.8,
+                  "w": 55.1,
+                  "h": 13.2
+                }
+              },
+              {
+                "x": 59.3,
+                "y": 42.8,
+                "title": "Authentication Remains the Primary Task",
+                "body": "Since authentication was the primary job to be done, the design intentionally reduced visual emphasis on alternate paths while keeping them accessible when needed.",
+                "focus": {
+                  "shape": "rect",
+                  "x": 3.5,
+                  "y": 33.5,
+                  "w": 55.7,
+                  "h": 17.8
+                }
+              },
+              {
+                "x": 59.4,
+                "y": 56.2,
+                "title": "Control Without Complexity",
+                "body": "Research showed users wanted control close at hand, but not competing for attention.\nThe final architecture kept alternatives discoverable without overwhelming the primary authentication flow.",
+                "focus": {
+                  "shape": "rect",
+                  "x": 3.6,
+                  "y": 49.2,
+                  "w": 55.2,
+                  "h": 35.1
+                }
+              }
+            ],
+            "sep": false,
+            "editorName": "Old vs new",
+            "hsize": "sm"
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Control Without Complexity",
+            "body": "<p>Authentication methods, credential providers, devices, and account switching were no longer mixed inside a single menu.</p><p><span style=\"font-size: 0.9rem;\">We separated core authentication choices from secondary actions, making the experience easier to understand while keeping advanced options accessible when needed.</span></p><p><span style=\"font-size: 0.9rem;\">This reduced cognitive load and helped users focus on the primary task: authentication.</span></p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "sm"
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/8dbae28da081b5f27de110a4a3b3d7d40e6d95b80773f7553ff652302ad3f150.png",
+                "caption": ""
+              }
+            ],
+            "editorName": "Control without complexity",
+            "hsize": "sm",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Security At A Glance",
+            "body": "<p>Security information existed in the previous experience but required users to read and interpret it.</p><p><span style=\"font-size: 0.9rem;\">We shifted from text-heavy security messaging to status-driven communication.</span></p><p><span style=\"font-size: 0.9rem;\">When an action was safe, security information remained available but unobtrusive. When risk was present, severity became immediately visible through color, hierarchy, and contextual indicators.</span></p><p><span style=\"font-size: 0.9rem;\">Instead of asking users to read for danger, the experience made risk visible at a glance.</span></p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "sm"
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/400af62c775b02099bf2bda003660fa37e68c6e496021014cb571329fa64387c.png",
+                "caption": ""
+              }
+            ],
+            "editorName": "Control without complexity",
+            "hsize": "sm",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "One System Across Every Trust Moment",
+            "body": "<p>Although the scenarios were different, the underlying user needs were the same. The framework enabled a consistent architecture that could scale across Windows authentication experiences while adapting to each scenario's unique requirements.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "sm"
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              },
+              {
+                "src": "",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "nav": "Impact",
+            "kicker": "Impact",
+            "heading": "Building the Passwordless Future",
+            "body": "<p>The redesign created a scalable authentication architecture that could evolve with Windows' passwordless future.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "sm"
+          },
+          {
+            "type": "cards",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "title": "Product Impact",
+                "body": "Reimagined Windows' core authentication experience by transforming CredUI from a dense, system-centric security dialog into a clearer, more glanceable trust experience that scales across Passkeys, UAC, Remote Desktop, Store Purchases and future authentication scenarios.",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Experience Impact",
+                "body": "Introduced the Context Object, turning critical trust information from heavy text into a glanceable, reusable pattern that helped users quickly understand what they were approving and why. User validation showed strong preference for contextual, discoverable interactions over traditional authentication patterns.",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Framework Impact",
+                "body": "Defined a reusable authentication framework balancing three competing needs:<div><ul><li><span style=\"font-size: 0.9rem;\">Context before action</span></li><li>Authentication as the primary task</li><li>Control available when needed</li></ul></div><div><span style=\"font-size: 0.9rem;\">This framework informed how authentication, account switching, credential selection, and recovery experiences could work consistently across Windows scenarios.</span></div>",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Platform Impact",
+                "body": "Created a scalable interaction model for Windows Hello as it evolved beyond device sign-in into a broader authentication platform supporting Passkeys, Recall, Admin Protection, Remote Desktop, Store Purchases and future passwordless experiences.",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Scale Impact",
+                "body": "Designed for one of Windows' most frequently used trust surfaces, supporting authentication across 423M+ active Windows devices and laying the foundation for future growth toward hundreds of millions more users as Windows accelerates toward a passwordless future.",
+                "icon": "",
+                "src": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "statement",
+            "nav": "",
+            "kicker": "",
+            "body": "Transformed CredUI from a legacy authentication dialog into a scalable trust framework for Windows' passwordless future. By introducing a glanceable context model and validated interaction architecture, the work established a consistent foundation for authentication experiences across Passkeys, UAC, Remote Desktop, Store Purchases, and future Windows identity scenarios.",
+            "sub": "",
+            "src": "",
+            "caption": "",
+            "hsize": "sm",
+            "sep": false
           }
         ]
       }
