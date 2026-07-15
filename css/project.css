@@ -531,12 +531,15 @@ video.pjb__media-el { background: #000; }
 .pjb__focus-card-b { font-size: .86rem; line-height: 1.5; color: var(--text-dim); }
 .pjb__focus-card-b p { margin: 0 0 .5rem; }
 .pjb__focus-card-b p:last-child { margin-bottom: 0; }
-/* sticky-notes mode reuses the Sticky notes component (.pjb__stickies/.pjb__sticky) — add the click affordance + active state on top */
+/* pill list below the image (mirrors the full-screen nav) — markers ↔ pills cross-highlight */
 .pjb__focus--sticky .pjb__focus-stage > .pjb__focus-card { display: none; }
-.pjb__focus-note { cursor: pointer; }
-.pjb__focus-note:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.pjb__focus-note.is-on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent), 0 20px 44px -24px rgba(0, 0, 0, .9); }
-.pjb__focus-note.is-on .pjb__sticky-lbl { color: var(--accent); }
+.pjb__focus-notes { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+.pjb__focus-note { display: inline-flex; align-items: center; gap: .5rem; max-width: 100%; padding: .5rem .9rem; border: 1px solid var(--line-soft); border-radius: 100px; background: rgba(255, 255, 255, .02); color: var(--text-dim); cursor: pointer; font: inherit; text-align: left; transition: border-color .25s var(--ease), color .25s var(--ease), background .25s var(--ease); }
+.pjb__focus-note:hover { border-color: var(--line); color: var(--text); }
+.pjb__focus-note:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pjb__focus-note.is-on { border-color: var(--accent); color: var(--text); background: rgba(216, 166, 87, .1); }
+.pjb__focus-pill-n { flex: 0 0 auto; font-family: var(--mono); font-size: .66rem; letter-spacing: .04em; color: var(--accent); }
+.pjb__focus-pill-t { font-size: .84rem; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(40ch, 60vw); }
 /* editor → preview: flash a section when its editor card is clicked */
 @keyframes pjb-flash { from { box-shadow: 0 0 0 2px var(--accent), 0 0 26px -4px var(--accent); } to { box-shadow: 0 0 0 2px transparent, 0 0 26px -4px transparent; } }
 .pjb--flash { animation: pjb-flash 1.2s var(--ease); border-radius: 10px; }
