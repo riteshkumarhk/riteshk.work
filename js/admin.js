@@ -1951,6 +1951,7 @@
       blockRenameTimer = setTimeout(function () {
         openBlock = (openBlock === j) ? -1 : j;
         if (wrap) wrap.querySelectorAll(".study__block").forEach(function (x, k) { x.classList.toggle("is-open", k === openBlock); });
+        try { const fw = frameWin(); if (fw) fw.postMessage({ __rk: "gotoBlock", index: j }, "*"); } catch (err) {}
       }, 220);
       return;
     }
