@@ -49,6 +49,11 @@ body {
 @media (max-width: 900px) { body { cursor: auto; } }
 
 img { max-width: 100%; display: block; }
+/* Public-site media guard — toggled on <html> by main.js; absent inside the admin
+   ?preview iframe, so the editor's right-hand preview keeps native right-click + drag. */
+.no-mediasave img, .no-mediasave picture, .no-mediasave video, .no-mediasave canvas {
+  -webkit-user-drag: none; -webkit-touch-callout: none; user-select: none;
+}
 a { color: inherit; text-decoration: none; }
 ul, ol { list-style: none; }
 em { font-style: italic; }
