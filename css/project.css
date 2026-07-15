@@ -369,7 +369,7 @@ video.pjb__media-el { background: #000; }
 .pjb__iso--topL .pjb__iso-stage { transform: rotateX(58deg) rotateZ(45deg); }
 .pjb__iso--right .pjb__iso-stage { transform: rotateX(24deg) rotateZ(-30deg); }
 .pjb__iso--left .pjb__iso-stage { transform: rotateX(24deg) rotateZ(30deg); }
-.pjb__iso-layer { --hc: rgba(14, 14, 18, .95); position: absolute; inset: 0; transform: translateZ(calc(var(--i) * var(--distance))); transform-style: preserve-3d; }
+.pjb__iso-layer { --hc: rgba(14, 14, 18, .95); position: absolute; inset: 0; transform: translateZ(calc(var(--i) * var(--distance) * var(--pp, 1))); transform-style: preserve-3d; }
 .pjb__iso-layer:first-child { position: relative; }
 .pjb__iso-media { display: block; width: 100%; height: auto; border-radius: 13px; }
 .pjb__iso--stack .pjb__iso-media { background: var(--bg-elev); box-shadow: 0 30px 44px -18px rgba(0, 0, 0, .5); }
