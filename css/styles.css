@@ -60,6 +60,13 @@ em { font-style: italic; }
 
 ::selection { background: var(--accent); color: #0a0a0a; }
 
+/* ---------- Slim themed scrollbars (match the slideshow), everywhere it scrolls ---------- */
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 100px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); background-clip: padding-box; }
+
 /* ---------- Smooth scroll (Lenis) ---------- */
 html.lenis, html.lenis body { height: auto; }
 .lenis.lenis-smooth { scroll-behavior: auto !important; }
