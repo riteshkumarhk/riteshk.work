@@ -277,7 +277,20 @@ video.pjb__media-el { background: #000; }
 .pjb__card-b li::marker { color: var(--accent); }
 
 /* gallery / carousel */
-.pjb__gallery { margin-top: .6rem; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: thin; padding-bottom: .8rem; }
+.pjb__gallery-wrap { position: relative; }
+.pjb__gallery { margin-top: .6rem; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: var(--line) transparent; overscroll-behavior-x: contain; padding-bottom: .8rem; }
+/* macOS/Safari hides overlay scrollbars — force a slim visible one so the slideshow reads as scrollable */
+.pjb__gallery::-webkit-scrollbar { height: 8px; }
+.pjb__gallery::-webkit-scrollbar-track { background: transparent; }
+.pjb__gallery::-webkit-scrollbar-thumb { background: var(--line); border-radius: 100px; }
+.pjb__gallery:hover::-webkit-scrollbar-thumb { background: var(--text-faint); }
+.pjb__gallery-nav { position: absolute; top: var(--nav-cy, 45%); transform: translateY(-50%); z-index: 3; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; padding: 0; font-size: 1.35rem; line-height: 1; background: rgba(12, 12, 16, .62); color: var(--text); border: 1px solid var(--line); cursor: pointer; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); opacity: .9; transition: opacity .2s var(--ease), background .2s var(--ease), border-color .2s var(--ease), color .2s var(--ease); }
+.pjb__gallery-nav:hover { background: rgba(12, 12, 16, .92); border-color: var(--accent); color: #fff; }
+.pjb__gallery-nav:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pjb__gallery-nav:disabled { opacity: 0; pointer-events: none; }
+.pjb__gallery-nav--prev { left: .55rem; }
+.pjb__gallery-nav--next { right: .55rem; }
+@media (hover: none) { .pjb__gallery-nav { display: none; } }
 .pjb__gallery-track { display: flex; gap: 1.1rem; }
 .pjb__slide { flex: 0 0 84%; max-width: 84%; scroll-snap-align: center; }
 .pjb__slide-media { border-radius: 6px; overflow: hidden; border: 1px solid var(--line-soft); }

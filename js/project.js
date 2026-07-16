@@ -324,7 +324,11 @@
       var cap = '<figcaption class="pjb__slide-cap"><span class="pjb__slide-n">' + String(i + 1).padStart(2, "0") + " / " + String(n).padStart(2, "0") + "</span>" + (m.caption ? esc(m.caption) : "") + "</figcaption>";
       return '<figure class="pjb__slide"><div class="pjb__slide-media">' + body + "</div>" + cap + "</figure>";
     }).join("");
-    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__gallery" tabindex="0"><div class="pjb__gallery-track">' + slides + "</div></div>";
+    var flip = n > 1
+      ? '<button class="pjb__gallery-nav pjb__gallery-nav--prev" type="button" aria-label="Previous" tabindex="-1">\u2039</button>' +
+        '<button class="pjb__gallery-nav pjb__gallery-nav--next" type="button" aria-label="Next" tabindex="-1">\u203a</button>'
+      : "";
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__gallery-wrap"><div class="pjb__gallery" tabindex="0" data-gallery><div class="pjb__gallery-track">' + slides + "</div></div>" + flip + "</div>";
   }
   // Equalise gallery slide heights: scale taller images DOWN (contain — no crop, no
   // quality loss) so every slide matches the shortest image's height at the current width.
@@ -354,6 +358,41 @@
         im.addEventListener("error", apply, { once: true });
       });
       apply();
+    });
+  }
+  // Slideshow flippers + wheel→horizontal: macOS hides the scrollbar, so give each gallery
+  // visible prev/next buttons and let a vertical wheel / trackpad scroll it sideways.
+  function galleryNav(root) {
+    var scope = root || (overlay && overlay.querySelector("[data-content]"));
+    if (!scope) return;
+    [].forEach.call(scope.querySelectorAll(".pjb__gallery[data-gallery]"), function (g) {
+      var wrap = g.closest(".pjb__gallery-wrap"); if (!wrap) return;
+      var prev = wrap.querySelector(".pjb__gallery-nav--prev");
+      var next = wrap.querySelector(".pjb__gallery-nav--next");
+      function place() {
+        var media = g.querySelector(".pjb__slide-media"); if (!media) return;
+        var wr = wrap.getBoundingClientRect(), mr = media.getBoundingClientRect();
+        wrap.style.setProperty("--nav-cy", Math.round((mr.top - wr.top) + mr.height / 2) + "px");
+      }
+      function upd() {
+        var max = g.scrollWidth - g.clientWidth;
+        if (prev) prev.disabled = g.scrollLeft <= 2;
+        if (next) next.disabled = g.scrollLeft >= max - 2;
+      }
+      if (!g.__nav) {
+        g.__nav = true;
+        var step = function () {
+          var slide = g.querySelector(".pjb__slide");
+          var track = g.querySelector(".pjb__gallery-track");
+          var gap = track ? (parseFloat(getComputedStyle(track).columnGap) || 0) : 0;
+          return slide ? slide.getBoundingClientRect().width + gap : g.clientWidth * 0.8;
+        };
+        if (prev) prev.addEventListener("click", function () { g.scrollBy({ left: -step(), behavior: "smooth" }); });
+        if (next) next.addEventListener("click", function () { g.scrollBy({ left: step(), behavior: "smooth" }); });
+        g.addEventListener("scroll", upd, { passive: true });
+        [].forEach.call(g.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", function () { place(); upd(); }, { once: true }); });
+      }
+      place(); upd();
     });
   }
   function figureBlock(b) {
@@ -928,6 +967,14 @@
     overlay.addEventListener("wheel", function (e) {
       if (!window.__lenis) return;
       if (!scroller.contains(e.target)) return;
+      // A horizontal wheel / trackpad swipe over a slideshow scrolls it sideways — otherwise
+      // the block below eats every wheel event in the overlay and only moves the page vertically.
+      var gal = e.target.closest && e.target.closest(".pjb__gallery[data-gallery]");
+      if (gal && Math.abs(e.deltaX) > Math.abs(e.deltaY) && gal.scrollWidth - gal.clientWidth > 1) {
+        gal.scrollLeft += e.deltaX * (e.deltaMode === 1 ? 32 : 1);
+        e.preventDefault(); e.stopPropagation();
+        return;
+      }
       var factor = e.deltaMode === 1 ? 32 : (e.deltaMode === 2 ? Math.round(scroller.clientHeight * 0.9) : 1);
       scroller.scrollTop += e.deltaY * factor;
       e.preventDefault();
@@ -1257,7 +1304,7 @@
       contentEl.innerHTML = html;
     }
     contentEl.setAttribute("data-wid", String(w.id));
-    requestAnimationFrame(function () { updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); graphWire(contentEl); });
+    requestAnimationFrame(function () { updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); graphWire(contentEl); galleryNav(contentEl); });
   }
 
   // Minimal DOM morph: update text/attributes in place and add/remove nodes, but
@@ -1484,7 +1531,7 @@
   /* ---------- bootstrap ---------- */
   function init() {
     if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = function () { return Object.keys(ICONS); }; window.RK.setStudyUnlocked = setUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; }
-    window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) { updateSpy(); isoParallax(); clearTimeout(galleryTimer); galleryTimer = setTimeout(function () { normalizeGalleries(); graphWire(); }, 160); } });
+    window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) { updateSpy(); isoParallax(); clearTimeout(galleryTimer); galleryTimer = setTimeout(function () { normalizeGalleries(); graphWire(); galleryNav(); }, 160); } });
     // Editor → preview: the admin editor posts the block index of a clicked section; scroll the
     // preview to it and flash it (the reverse of the preview → editor selectBlock message).
     window.addEventListener("message", function (e) {
