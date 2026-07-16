@@ -4303,6 +4303,7 @@
     if (body) body.hidden = false;
     renderBody();
     musResumeOnExit = musPlaying; musStop(); musPlaying = false; musAttract(false); musToastHide(); musSync(); // silence the ambient music while editing
+    thDismiss(true); // belt-and-suspenders: the ticket nudge must never linger over the editor
     document.documentElement.classList.add("adm-lock");
     document.body.classList.add("adm-lock");
     requestAnimationFrame(() => root.classList.add("is-open"));
@@ -4322,6 +4323,7 @@
   /* ---------- passphrase gate (always asks) ---------- */
   function gate() {
     if (window.innerWidth < ADMIN_MIN) { flash("Admin mode needs a wider screen — open it on a laptop or desktop."); return; }
+    thDismiss(true);   // clear the landing “have a ticket?” nudge before the gate/editor (it sits above them)
     const stored = localStorage.getItem(HASH_KEY);
     const creating = !stored;
     const modal = document.createElement("div");
@@ -4746,12 +4748,13 @@
     var mr = mb.getBoundingClientRect(), fr = el.getBoundingClientRect();
     el.style.setProperty("--beak", Math.max(12, Math.round(fr.right - (mr.left + mr.width / 2))) + "px");   // point the tail at the ··· centre
   }
-  function thDismiss() {
+  function thDismiss(now) {
     var el = document.querySelector(".tickethint");
     window.removeEventListener("resize", thAlign);
     if (!el) return;
     el.classList.remove("is-on");
     clearTimeout(thTimer);
+    if (now) { el.remove(); return; }   // instant kill (e.g. entering admin) — no fade to linger over the editor
     setTimeout(function () { if (el.parentNode) el.remove(); }, 420);
   }
   function ticketHint() {
