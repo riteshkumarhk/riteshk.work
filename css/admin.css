@@ -286,9 +286,10 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
   font-family: var(--mono); font-size: .66rem; letter-spacing: .08em; text-transform: uppercase;
   padding: .5rem .85rem; border-radius: 100px; cursor: pointer;
   box-shadow: 0 12px 30px rgba(0, 0, 0, .4);
-  opacity: 0; pointer-events: none; transition: opacity .4s var(--ease), transform .4s var(--ease);
+  opacity: 0; pointer-events: none; transition: opacity .4s var(--ease), transform .4s var(--ease), top .4s var(--ease), right .4s var(--ease);
 }
 .soundtoast.is-on { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.soundtoast--low { top: 112px; }
 .soundtoast:hover { background: var(--bg-2); }
 .soundtoast__eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; }
 .soundtoast__eq i { width: 2.5px; height: 4px; background: var(--accent); border-radius: 2px; animation: steq 1s var(--ease-io) infinite; }
@@ -308,7 +309,6 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
   transition: opacity .4s var(--ease), transform .4s var(--ease), top .4s var(--ease);
 }
 .tickethint.is-on { opacity: 1; transform: translateY(0); }
-.tickethint--low { top: 112px; }
 .tickethint__t b { color: var(--accent); font-weight: 600; }
 .tickethint__x { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: var(--text-dim); font-size: 1.05rem; line-height: 1; flex: 0 0 auto; }
 .tickethint:hover .tickethint__x { color: var(--text); }
