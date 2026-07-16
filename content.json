@@ -576,39 +576,9 @@
             "editorName": "Opportunity for Credential UX"
           },
           {
-            "type": "focus",
+            "type": "text",
             "nav": "Designing for confidence",
             "kicker": "Designing for confidence",
-            "heading": "From action to confidence",
-            "src": "/assets/uploads/96b6437f4cac76aac187ee98e3fce3e0a7588b180edb7ff8fa961f6e917b65c4.png",
-            "caption": "Windows often exposed complexity before context. Users want reassurance, not options.",
-            "sticky": true,
-            "annotations": [
-              {
-                "x": 11.3,
-                "y": 48.6,
-                "title": "What users are doing",
-                "body": "Connect to a remote desktop,\nPurchase an app,\nSave a passkey,\nSign in to a website,\nAccess a protected resource"
-              },
-              {
-                "x": 49.7,
-                "y": 25,
-                "title": "Role of Windows Hello",
-                "body": "Windows Hello helps users understand what they were doing, trust the request, and complete their intended action with confidence."
-              },
-              {
-                "x": 64.2,
-                "y": 60.3,
-                "title": "Authentication isn't user goal, confidence is",
-                "body": "Before acting, users need answers to four questions:\n What am I trying to do?\n Why am I being asked to verify?\n Can I trust this request?\n Do I have the right controls if something is wrong?"
-              }
-            ],
-            "editorName": "Goal infographics"
-          },
-          {
-            "type": "text",
-            "nav": "",
-            "kicker": "",
             "heading": "Exploring Trust & Authentication",
             "body": "Before redesigning CredUI, I wanted to understand what makes authentication experiences feel trustworthy, effortless, and modern.<div><br></div><div>I studied authentication patterns across Windows, Passkeys, macOS, iOS, Android, and different CredUI scenarios to identify what users actually needed in moments of verification.</div>",
             "list": [],
@@ -891,6 +861,37 @@
             "hsize": ""
           },
           {
+            "type": "focus",
+            "nav": "",
+            "kicker": "",
+            "heading": "From action to confidence",
+            "src": "/assets/uploads/4b7d4aef6148ae8b36c7e7f8f81ec40ef95e252882d218b810b2159a954aa9fa.png",
+            "caption": "Users want reassurance, not options.",
+            "sticky": true,
+            "annotations": [
+              {
+                "x": 6.5,
+                "y": 57.7,
+                "title": "What users are doing",
+                "body": "Connect to a remote desktop,\nPurchase an app,\nSave a passkey,\nSign in to a website,\nAccess a protected resource"
+              },
+              {
+                "x": 49.7,
+                "y": 25,
+                "title": "Role of Windows Hello",
+                "body": "Windows Hello helps users understand what they were doing, trust the request, and complete their intended action with confidence."
+              },
+              {
+                "x": 50,
+                "y": 70.7,
+                "title": "Users want reassurance",
+                "body": "Before acting, users need answers to four questions:\n What am I trying to do?\n Why am I being asked to verify?\n Can I trust this request?\n Do I have the right controls if something is wrong?"
+              }
+            ],
+            "editorName": "Goal infographics",
+            "sep": true
+          },
+          {
             "type": "text",
             "nav": "",
             "kicker": "",
@@ -948,7 +949,7 @@
             "nav": "",
             "kicker": "",
             "heading": "Comparison between old and new experience",
-            "src": "/assets/uploads/95669e1c20791944bbca3018b2b76999fbad73a047a4b97c79eed592af5af037.png",
+            "src": "/assets/uploads/1d36b68766b3a2879140314e47772d751cd0bb95af996d63a43b4621c2f4147b.png",
             "caption": "",
             "sticky": true,
             "annotations": [
@@ -1021,18 +1022,15 @@
             "hsize": "sm"
           },
           {
-            "type": "media",
+            "type": "compare",
             "nav": "",
             "kicker": "",
             "heading": "",
-            "items": [
-              {
-                "src": "/assets/uploads/8dbae28da081b5f27de110a4a3b3d7d40e6d95b80773f7553ff652302ad3f150.png",
-                "caption": ""
-              }
-            ],
-            "editorName": "Control without complexity",
-            "hsize": "sm",
+            "beforeSrc": "/assets/uploads/b27a0c843b261718cec092f855ff396803451b2d5568acdb31aab0ccacd9015c.png",
+            "afterSrc": "/assets/uploads/e920f84bed0acc2a1e55a08f14fd99216af2e1b23e86b5b063ff975fee994db6.png",
+            "beforeLabel": "Before",
+            "afterLabel": "After",
+            "body": "",
             "sep": false
           },
           {
@@ -1047,18 +1045,15 @@
             "hsize": "sm"
           },
           {
-            "type": "media",
+            "type": "compare",
             "nav": "",
             "kicker": "",
             "heading": "",
-            "items": [
-              {
-                "src": "/assets/uploads/400af62c775b02099bf2bda003660fa37e68c6e496021014cb571329fa64387c.png",
-                "caption": ""
-              }
-            ],
-            "editorName": "Control without complexity",
-            "hsize": "sm",
+            "beforeSrc": "/assets/uploads/67f06a643337e4d6a056708265b9a2b7498a42ffc5b86d5b77a43fc4c1dad8ad.png",
+            "afterSrc": "/assets/uploads/c244be1c7c4990e6747320b610fb9e924f69f16c16bf76b81132ed9cface1b9e.png",
+            "beforeLabel": "Before",
+            "afterLabel": "After",
+            "body": "",
             "sep": false
           },
           {
@@ -1090,13 +1085,14 @@
                 "src": "/assets/uploads/10839e7c7a2671e8014eb18a32767f002bfa9fe0bebf3c9fbba42ad0581d4696.png",
                 "caption": ""
               }
-            ]
+            ],
+            "sep": false
           },
           {
             "type": "text",
             "nav": "Impact",
             "kicker": "Impact",
-            "heading": "Building the Passwordless Future",
+            "heading": "Ready for the passwordless future",
             "body": "<p>Transformed Credential UX from a legacy authentication dialog into a scalable trust framework for Windows' passwordless future. The redesign created a scalable authentication architecture that could evolve with Windows' passwordless future.</p>",
             "list": [],
             "src": "",
@@ -1141,38 +1137,6 @@
               }
             ],
             "sep": false
-          },
-          {
-            "type": "workflow",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "flow": "cycle",
-            "caption": "",
-            "items": [
-              {
-                "label": "Test 1",
-                "note": ""
-              },
-              {
-                "label": "Test 2",
-                "note": ""
-              },
-              {
-                "label": "Test 3",
-                "note": ""
-              },
-              {
-                "label": "Test 4",
-                "note": ""
-              },
-              {
-                "label": "Test 5",
-                "note": ""
-              }
-            ],
-            "loopFrom": "2",
-            "loopTo": "4"
           }
         ]
       }
