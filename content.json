@@ -90,23 +90,31 @@
   "work": [
     {
       "id": "w1784023223052",
-      "featured": false,
+      "featured": true,
       "theme": "grid",
-      "plateTag": "Tag",
-      "client": "Windows Identity",
-      "period": "2023 — 2025",
+      "plateTag": "Auth & IDentity",
+      "client": "Windows",
+      "period": "2023 — 2024",
       "title": "Reimagining Windows Hello for a passwordless era",
       "desc": "Windows Hello had become one of Microsoft's most important identity systems, but the experience had evolved incrementally over many years.\n\nAs Windows expanded across new devices, passkeys, security models, and authentication scenarios, the experience needed to feel more modern, more trustworthy, and easier to understand while preserving user confidence in a highly sensitive identity surface.",
       "tags": [
-        "Tag"
+        "Identity Design",
+        "Authentication",
+        "Trust & Security",
+        "Platform Design",
+        "Systems Thinking",
+        "UX Architecture",
+        "Passwordless Future",
+        "Design Strategy",
+        "Cross-Platform Experiences"
       ],
-      "image": "",
+      "image": "/assets/uploads/8d9844fdff6e7ea32003681054946c5ef3e6b0fa875abf1964bb61a54cd1b98d.png",
       "study": {
         "tagline": "Designing a faster, more intuitive, and more trustworthy authentication experience for hundreds of millions of Windows users.",
-        "role": "",
-        "team": "",
-        "timeline": "",
-        "scope": "",
+        "role": "Product Designer II | Consumer Identity Experiences",
+        "team": "1 Product Manager, 1 Design, 3 Engineers, 1 Researcher",
+        "timeline": "2023 — 2024",
+        "scope": "Modernizing Auth UX for Windows Hello and Credential UX",
         "cover": "",
         "unlockHash": "",
         "blocks": [
@@ -197,8 +205,11 @@
             "heading": "What users experienced",
             "items": [
               {
-                "src": "",
-                "caption": ""
+                "src": "/assets/uploads/745dc3756620ae05a2808cfa5d8c50ca912c2b60a86b44a004e6bbb81052b630.jpg",
+                "caption": "",
+                "size": "custom",
+                "shrink": 20,
+                "bg": "#ffffff"
               }
             ]
           },
@@ -209,15 +220,19 @@
             "heading": "",
             "items": [
               {
-                "src": "",
+                "src": "/assets/uploads/caf4ae51b308c556da7602d4d656ef5a30a688a010806e9fb1fb27ddf55a17e7.png",
                 "caption": ""
               },
               {
-                "src": "",
+                "src": "/assets/uploads/cfa674f885aa484dbf9fad2d0cfab2a7fbfa840c4f00179505fbd9a09d341fa6.png",
                 "caption": ""
               },
               {
-                "src": "",
+                "src": "/assets/uploads/3860571f7d56252448a3edba851195e9932d530c854bf5a1aa541feeacd2500c.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/6224862255e8da80b820d6e1c5c9b16689cbd3ff758566bd8cb79af6b4d87de1.png",
                 "caption": ""
               }
             ],
@@ -232,7 +247,7 @@
             "sub": "",
             "src": "",
             "caption": "",
-            "sep": false,
+            "sep": true,
             "hsize": "sm"
           },
           {
@@ -242,26 +257,27 @@
             "heading": "",
             "items": [
               {
-                "src": "",
+                "src": "/assets/uploads/6e1b69689658fa5df54a74574f360fba2bdf078d1c2714f6fe587072e3928b9d.jpg",
                 "caption": ""
               },
               {
-                "src": "",
+                "src": "/assets/uploads/28ffe4a32af09233e358de651285336ec6cdd0cb53de5354bddffa609b5f9548.png",
                 "caption": ""
               },
               {
-                "src": "",
+                "src": "/assets/uploads/9ec809adfbdb2825d92b987d132ca5640ae6e8ed1e4e79412af27f44f964ea9b.jpg",
                 "caption": ""
               }
-            ]
+            ],
+            "sep": false
           },
           {
             "type": "compare",
             "nav": "",
             "kicker": "competes experience comparision",
             "heading": "",
-            "beforeSrc": "",
-            "afterSrc": "",
+            "beforeSrc": "/assets/uploads/99abe306eac73c814215fb9cacf2dc87553baa88c4a15eac987bf44733b2af19.png",
+            "afterSrc": "/assets/uploads/c3ea22f368ee2142b7b9e1f79e6b5e36842978e892452ebf11dd4f6b93569529.png",
             "beforeLabel": "Apple",
             "afterLabel": "Windows",
             "body": "<div>As authentication became increasingly central to daily computing, the experience no longer reflected the quality users associated with modern trust and security systems.</div>",
@@ -278,7 +294,8 @@
             "rightLabel": "Face / Touch ID",
             "right": "<ul><li>Progressive disclosure</li><li>Smarter modality selection</li><li>Motion and transitions</li><li>Contextual interactions</li></ul>",
             "rightImg": "",
-            "sep": false
+            "sep": false,
+            "editorName": "Competes"
           },
           {
             "type": "voices",
@@ -294,7 +311,8 @@
                 "body": "<p>\"I am not real comfortable with putting my PIN in there.\"</p>",
                 "cite": ""
               }
-            ]
+            ],
+            "editorName": "User quotes"
           },
           {
             "type": "figure",
@@ -302,11 +320,12 @@
             "kicker": "",
             "heading": "38% of total reported issues are related to usability and craft of Windows Hello.",
             "body": "User misinterprets the title bar “Windows Security” and other security information impacting their confidence to move ahead in the flow.<div><br></div>",
-            "src": "",
+            "src": "/assets/uploads/d1a9e533cc17ce3213756b6b1487d99de8dfff3fb0dc0062d2b5628304707fe9.mp4",
             "caption": "",
             "flip": false,
             "hsize": "sm",
-            "sep": false
+            "sep": false,
+            "controls": true
           },
           {
             "type": "voices",
@@ -323,7 +342,8 @@
                 "cite": ""
               }
             ],
-            "sep": false
+            "sep": false,
+            "editorName": "User quotes"
           },
           {
             "type": "figure",
@@ -331,7 +351,7 @@
             "kicker": "",
             "heading": "Often unexpected auth methods are provided to users due to lack of system context.",
             "body": "Face verification when laptop lid is closed.<div><div><br></div></div>",
-            "src": "",
+            "src": "/assets/uploads/a2fe864d07e692b2c8513c375d33097c54d6168efe0b4d125a5b657bce5ef326.jpg",
             "caption": "",
             "flip": true,
             "hsize": "sm",
@@ -352,7 +372,8 @@
                 "cite": ""
               }
             ],
-            "sep": false
+            "sep": false,
+            "editorName": "User quotes"
           },
           {
             "type": "figure",
@@ -360,7 +381,7 @@
             "kicker": "",
             "heading": "52% of total reported issues are related to the performance and reliability of Windows Hello.",
             "body": "Face verification fails and exits to PIN even though camera is ON.<div><div><br></div></div>",
-            "src": "",
+            "src": "/assets/uploads/5c3b202d76b9ebce32bd532a96172aad010595c67d9ed7b4566b30e0312f5c7e.jpg",
             "caption": "",
             "flip": false,
             "hsize": "sm",
@@ -555,42 +576,34 @@
             "editorName": "Opportunity for Credential UX"
           },
           {
-            "type": "columns",
-            "nav": "Design for confidence",
+            "type": "focus",
+            "nav": "Designing for confidence",
             "kicker": "Designing for confidence",
             "heading": "Authentication is simply the final step",
-            "items": [
+            "src": "/assets/uploads/96b6437f4cac76aac187ee98e3fce3e0a7588b180edb7ff8fa961f6e917b65c4.png",
+            "caption": "Windows often exposed complexity before context. Users want reassurance, not options.",
+            "sticky": true,
+            "annotations": [
               {
-                "label": "",
-                "cells": [
-                  {
-                    "heading": "What users were doing",
-                    "body": "Users weren't trying to complete an authentication task. They wanted to:<br><div><ul><li>Connect to a remote desktop</li><li>Purchase an app</li><li>Save a passkey</li><li>Sign in to a website</li><li>Access a protected resource</li></ul></div>",
-                    "src": ""
-                  }
-                ]
+                "x": 11.3,
+                "y": 48.6,
+                "title": "What users are doing",
+                "body": "Connect to a remote desktop,\nPurchase an app,\nSave a passkey,\nSign in to a website,\nAccess a protected resource"
               },
               {
-                "label": "",
-                "cells": [
-                  {
-                    "heading": "Role of Windows Hello",
-                    "body": "The role of Windows Hello wasn't just to verify identity. It was to help users understand what they were doing, trust the request, and complete their intended action with confidence.",
-                    "src": ""
-                  }
-                ]
+                "x": 49.7,
+                "y": 25,
+                "title": "Role of Windows Hello",
+                "body": "Windows Hello helps users understand what they were doing, trust the request, and complete their intended action with confidence."
               },
               {
-                "label": "",
-                "cells": [
-                  {
-                    "heading": "Authentication is the final step",
-                    "body": "Before acting, users need answers to four questions:<div><ul><li>What am I trying to do?</li><li>Why am I being asked to verify?</li><li>Can I trust this request?</li><li>Do I have the right controls if something is wrong?</li></ul><div>Authentication isn't the user's goal. <span style=\"font-size: 0.9rem;\">Confidence is.</span></div></div>",
-                    "src": ""
-                  }
-                ]
+                "x": 64.2,
+                "y": 60.3,
+                "title": "Authentication isn't user goal, confidence is",
+                "body": "Before acting, users need answers to four questions:\n What am I trying to do?\n Why am I being asked to verify?\n Can I trust this request?\n Do I have the right controls if something is wrong?"
               }
-            ]
+            ],
+            "editorName": "Goal infographics"
           },
           {
             "type": "text",
@@ -626,24 +639,6 @@
             ],
             "sep": false,
             "editorName": "All credUI"
-          },
-          {
-            "type": "workflow",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "flow": "linear",
-            "items": [
-              {
-                "label": "Windows often exposed complexity before context.",
-                "note": ""
-              },
-              {
-                "label": "Users want reassurance, not options.",
-                "note": ""
-              }
-            ],
-            "sep": false
           },
           {
             "type": "text",
@@ -1084,23 +1079,15 @@
             "heading": "",
             "items": [
               {
-                "src": "",
+                "src": "/assets/uploads/0316cb3e5e42fe6b97d2598781cf427eb34ec726f33ff8d81cf1a6e15ac4adb7.png",
                 "caption": ""
               },
               {
-                "src": "",
+                "src": "/assets/uploads/74d5fdb8a805d06240e079af96ae8d760135a2c8d0dcb8b6027f0d41af4cad64.png",
                 "caption": ""
               },
               {
-                "src": "",
-                "caption": ""
-              },
-              {
-                "src": "",
-                "caption": ""
-              },
-              {
-                "src": "",
+                "src": "/assets/uploads/10839e7c7a2671e8014eb18a32767f002bfa9fe0bebf3c9fbba42ad0581d4696.png",
                 "caption": ""
               }
             ]
@@ -1110,7 +1097,7 @@
             "nav": "Impact",
             "kicker": "Impact",
             "heading": "Building the Passwordless Future",
-            "body": "<p>The redesign created a scalable authentication architecture that could evolve with Windows' passwordless future.</p>",
+            "body": "<p>Transformed Credential UX from a legacy authentication dialog into a scalable trust framework for Windows' passwordless future. The redesign created a scalable authentication architecture that could evolve with Windows' passwordless future.</p>",
             "list": [],
             "src": "",
             "caption": "",
@@ -1124,19 +1111,19 @@
             "items": [
               {
                 "title": "Product Impact",
-                "body": "Reimagined Windows' core authentication experience by transforming CredUI from a dense, system-centric security dialog into a clearer, more glanceable trust experience that scales across Passkeys, UAC, Remote Desktop, Store Purchases and future authentication scenarios.",
+                "body": "<p>Reimagined Windows' core authentication experience by transforming Credential UX from a dense, system-centric security dialog into a clearer, more glanceable trust experience that scales across scenarios.</p>",
                 "icon": "",
                 "src": ""
               },
               {
                 "title": "Experience Impact",
-                "body": "Introduced the Context Object, turning critical trust information from heavy text into a glanceable, reusable pattern that helped users quickly understand what they were approving and why. User validation showed strong preference for contextual, discoverable interactions over traditional authentication patterns.",
+                "body": "<p>Introduced the Context Object, turning critical trust information from heavy text into a glanceable, reusable pattern that helped users quickly understand what they were approving and why. </p>",
                 "icon": "",
                 "src": ""
               },
               {
                 "title": "Framework Impact",
-                "body": "Defined a reusable authentication framework balancing three competing needs:<div><ul><li><span style=\"font-size: 0.9rem;\">Context before action</span></li><li>Authentication as the primary task</li><li>Control available when needed</li></ul></div><div><span style=\"font-size: 0.9rem;\">This framework informed how authentication, account switching, credential selection, and recovery experiences could work consistently across Windows scenarios.</span></div>",
+                "body": "<div><span style=\"font-size: 0.9rem;\">The framework informed how authentication, account switching, credential selection, and recovery experiences could work consistently across Windows scenarios.</span></div>",
                 "icon": "",
                 "src": ""
               },
@@ -1153,17 +1140,6 @@
                 "src": ""
               }
             ],
-            "sep": false
-          },
-          {
-            "type": "statement",
-            "nav": "",
-            "kicker": "",
-            "body": "Transformed CredUI from a legacy authentication dialog into a scalable trust framework for Windows' passwordless future. By introducing a glanceable context model and validated interaction architecture, the work established a consistent foundation for authentication experiences across Passkeys, UAC, Remote Desktop, Store Purchases, and future Windows identity scenarios.",
-            "sub": "",
-            "src": "",
-            "caption": "",
-            "hsize": "sm",
             "sep": false
           }
         ]
