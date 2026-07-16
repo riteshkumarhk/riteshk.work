@@ -493,13 +493,10 @@
       var clamp = function (v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
       var from = clamp(parseInt(b.loopFrom, 10) || 1, 1, n);
       var to = clamp(parseInt(b.loopTo, 10) || n, from, n);
-      var out = "", mid = "", i;
-      for (i = 0; i < from - 1; i++) out += stepOf(i);
-      if (from > 1) out += '<div class="pjb__flow-step">' + arrowOf[from - 1] + "</div>";   // the arrow into the loop sits outside the arc
-      for (i = from - 1; i < to; i++) mid += stepOf(i, i === from - 1);                       // the first looped step drops its (now external) arrow
-      out += '<div class="pjb__flow-loop" data-loop>' + mid + "</div>";
-      for (i = to; i < n; i++) out += stepOf(i);
-      return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__flow pjb__flow--cycle">' + out + "</div>" + cap;
+      var gnodes = "";
+      for (var i = 0; i < n; i++) gnodes += '<div class="pjb__flow-step">' + nodeOf[i] + "</div>";   // no inline arrows — the SVG wire layer carries the flow
+      var graph = '<div class="pjb__flow pjb__flow--cycle" data-graph data-loop-from="' + from + '" data-loop-to="' + to + '"><svg class="pjb__wires" aria-hidden="true"></svg>' + gnodes + "</div>";
+      return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__graph-scroll">' + graph + "</div>" + cap;
     }
     if (flow === "cycle") flow = "linear";   // a loop needs at least two steps — degrade cleanly
     var ret = "";
@@ -1123,6 +1120,57 @@
       if (!fullscreen && e.target.closest("[data-focus-open]")) openFocusFs(stage);
     });
   }
+  // Cycle node-graph wires: forward links (right→left ports) + a circular loop over the
+  // chosen range (bottom arc out, top arc back), with ports at each edge-centre. Measured
+  // from the laid-out blocks so it scales; re-run on resize.
+  function graphWire(root) {
+    var scope = root || document;
+    [].slice.call(scope.querySelectorAll(".pjb__flow--cycle[data-graph]")).forEach(function (g) {
+      var svg = g.querySelector(".pjb__wires");
+      if (!svg) return;
+      var steps = [].slice.call(g.children).filter(function (c) { return c.classList && c.classList.contains("pjb__flow-step"); });
+      var gr = g.getBoundingClientRect();
+      if (steps.length < 2 || !gr.width) { svg.innerHTML = ""; return; }
+      var f = function (v) { return Math.round(v * 10) / 10; };
+      var P = steps.map(function (st) {
+        var r = st.getBoundingClientRect(), x = r.left - gr.left, y = r.top - gr.top;
+        return { l: [x, y + r.height / 2], r: [x + r.width, y + r.height / 2], t: [x + r.width / 2, y], b: [x + r.width / 2, y + r.height] };
+      });
+      var nn = steps.length;
+      var from = Math.max(1, Math.min(nn, parseInt(g.getAttribute("data-loop-from"), 10) || 1));
+      var to = Math.max(from, Math.min(nn, parseInt(g.getAttribute("data-loop-to"), 10) || nn));
+      var inLoop = function (k) { return (k + 1) >= from && (k + 1) <= to; };
+      var wires = "", dots = "", heads = "";
+      var wire = function (a, c1, c2, b) { wires += '<path class="pjb__wire" d="M' + f(a[0]) + " " + f(a[1]) + "C" + f(c1[0]) + " " + f(c1[1]) + " " + f(c2[0]) + " " + f(c2[1]) + " " + f(b[0]) + " " + f(b[1]) + '"/>'; };
+      var dot = function (p) { dots += '<circle class="pjb__port" cx="' + f(p[0]) + '" cy="' + f(p[1]) + '" r="2.6"/>'; };
+      var head = function (p, dir) {
+        var s = 5.5, d;
+        if (dir === "right") d = "M" + f(p[0]) + " " + f(p[1]) + "L" + f(p[0] - s) + " " + f(p[1] - s * 0.7) + "L" + f(p[0] - s) + " " + f(p[1] + s * 0.7) + "Z";
+        else if (dir === "down") d = "M" + f(p[0]) + " " + f(p[1]) + "L" + f(p[0] - s * 0.7) + " " + f(p[1] - s) + "L" + f(p[0] + s * 0.7) + " " + f(p[1] - s) + "Z";
+        else d = "M" + f(p[0]) + " " + f(p[1]) + "L" + f(p[0] - s * 0.7) + " " + f(p[1] + s) + "L" + f(p[0] + s * 0.7) + " " + f(p[1] + s) + "Z";
+        heads += '<path class="pjb__wire-head" d="' + d + '"/>';
+      };
+      for (var i = 0; i < nn - 1; i++) {
+        var a = P[i], b = P[i + 1];
+        if (inLoop(i) && inLoop(i + 1)) {
+          var bo = Math.min(46, Math.max(30, (b.b[0] - a.b[0]) * 0.42));
+          wire(a.b, [a.b[0], a.b[1] + bo], [b.b[0], b.b[1] + bo], b.b);
+          dot(a.b); dot(b.b); head(b.b, "up");
+        } else {
+          var dx = Math.max(24, (b.l[0] - a.r[0]) * 0.5);
+          wire(a.r, [a.r[0] + dx, a.r[1]], [b.l[0] - dx, b.l[1]], b.l);
+          dot(a.r); dot(b.l); head(b.l, "right");
+        }
+      }
+      if (to > from) {
+        var s0 = P[to - 1].t, e0 = P[from - 1].t, rb = Math.min(46, Math.max(34, (s0[0] - e0[0]) * 0.42));
+        wire(s0, [s0[0], s0[1] - rb], [e0[0], e0[1] - rb], e0);
+        dot(s0); dot(e0); head(e0, "down");
+      }
+      svg.setAttribute("viewBox", "0 0 " + f(gr.width) + " " + f(gr.height));
+      svg.innerHTML = wires + dots + heads;
+    });
+  }
   function focusEnhance(root) {
     if (!focusResizeBound) {
       focusResizeBound = true;
@@ -1209,7 +1257,7 @@
       contentEl.innerHTML = html;
     }
     contentEl.setAttribute("data-wid", String(w.id));
-    requestAnimationFrame(function () { updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); });
+    requestAnimationFrame(function () { updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); graphWire(contentEl); });
   }
 
   // Minimal DOM morph: update text/attributes in place and add/remove nodes, but
@@ -1436,7 +1484,7 @@
   /* ---------- bootstrap ---------- */
   function init() {
     if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = function () { return Object.keys(ICONS); }; window.RK.setStudyUnlocked = setUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; }
-    window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) { updateSpy(); isoParallax(); clearTimeout(galleryTimer); galleryTimer = setTimeout(function () { normalizeGalleries(); }, 160); } });
+    window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) { updateSpy(); isoParallax(); clearTimeout(galleryTimer); galleryTimer = setTimeout(function () { normalizeGalleries(); graphWire(); }, 160); } });
     // Editor → preview: the admin editor posts the block index of a clicked section; scroll the
     // preview to it and flash it (the reverse of the preview → editor selectBlock message).
     window.addEventListener("message", function (e) {

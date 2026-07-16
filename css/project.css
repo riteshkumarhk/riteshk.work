@@ -440,16 +440,19 @@ video.pjb__media-el { background: #000; }
   .pjb__flow-arrow { align-self: center; transform: rotate(90deg); }
 }
 
-/* Cycle — a linear flow with a smooth return-loop arc over a chosen range of steps */
-.pjb__flow--cycle { padding-top: 46px; }
-.pjb__flow-loop { position: relative; display: inline-flex; align-items: stretch; gap: .25rem; }
-.pjb__flow-loop::before { content: ""; position: absolute; left: 7%; right: 7%; top: -40px; height: 40px; border: 1.6px solid var(--accent); border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0; opacity: .5; pointer-events: none; }
-.pjb__flow-loop::after { content: ""; position: absolute; left: 7%; top: -5px; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 7px solid var(--accent); transform: translateX(-50%); opacity: .78; pointer-events: none; }
+/* Cycle — a node-graph: blocks with edge-centre ports joined by measured bezier wires (graphWire) */
+.pjb__graph-scroll { margin-top: clamp(1.4rem, 3vw, 2rem); overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; }
+.pjb__flow--cycle { position: relative; display: inline-flex; flex-wrap: nowrap; align-items: stretch; gap: 3rem; padding: 52px 10px; margin: 0; min-width: min-content; }
+.pjb__wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2; }
+.pjb__wire { fill: none; stroke: var(--accent); stroke-width: 1.5; opacity: .5; }
+.pjb__wire-head { fill: var(--accent); opacity: .85; }
+.pjb__port { fill: var(--accent); opacity: .9; }
+.pjb__flow--cycle .pjb__flow-step { position: relative; z-index: 1; }
 @media (max-width: 640px) {
-  .pjb__flow--cycle { padding-top: 0; }
-  .pjb__flow-loop { flex-direction: column; align-items: stretch; gap: .25rem; padding-left: .7rem; border-left: 2px solid var(--accent); }
-  .pjb__flow-loop::before { content: "\21ba\00a0loops back"; position: static; border: 0; height: auto; width: auto; margin: 0 0 .15rem; border-radius: 0; font-family: var(--mono); font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); opacity: .85; transform: none; }
-  .pjb__flow-loop::after { display: none; }
+  .pjb__graph-scroll { overflow: visible; }
+  .pjb__flow--cycle { flex-direction: column; align-items: stretch; gap: .3rem; padding: 0 0 0 .7rem; margin: 0; border-left: 2px solid var(--accent); min-width: 0; }
+  .pjb__flow--cycle .pjb__wires { display: none; }
+  .pjb__flow--cycle::before { content: "\21ba\0000a0cycle"; display: block; font-family: var(--mono); font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); opacity: .85; margin: 0 0 .2rem; }
 }
 
 /* sticky notes — staggered cards with a gentle hover lift */
