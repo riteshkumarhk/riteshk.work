@@ -146,7 +146,7 @@ img[data-zoom] { cursor: zoom-in; }
 .pjb__h em { color: var(--accent); font-style: italic; }
 .pjb__h--blur { filter: blur(6px); opacity: .5; user-select: none; margin-bottom: 0; }
 /* per-block heading-size control (Standard / Compact / Large) */
-.pjb--hsm .pjb__h { font-size: clamp(1.15rem, 2vw, 1.5rem); }
+.pjb--hsm .pjb__h { font-size: clamp(1.15rem, 2vw, 1.5rem); max-width: 42ch; }
 .pjb--hlg .pjb__h { font-size: clamp(1.9rem, 4.6vw, 3.2rem); }
 .pjb--hsm .pjb__quote, .pjb--hsm .pjb__quote--rich p { font-size: clamp(1.25rem, 2.6vw, 1.8rem); }
 .pjb--hlg .pjb__quote, .pjb--hlg .pjb__quote--rich p { font-size: clamp(2rem, 5vw, 3.6rem); }

@@ -1166,6 +1166,16 @@
       if (stage.__faActive != null) { focusDeactivate(stage); return; }
       if (!fullscreen && e.target.closest("[data-focus-open]")) openFocusFs(stage);
     });
+    // Inline (pill) mode: an open note also closes on a click anywhere OUTSIDE the block —
+    // the stage handler above only sees clicks on the image itself, not the rest of the page.
+    if (!fullscreen) {
+      var fxWrap = stage.closest(".pjb__focus");
+      document.addEventListener("click", function (e) {
+        if (stage.__faActive == null) return;                // nothing open
+        if (fxWrap && fxWrap.contains(e.target)) return;      // clicks inside are handled by the stage / pills
+        focusDeactivate(stage);
+      });
+    }
   }
   // Cycle node-graph wires: forward links (right→left ports) + a circular loop over the
   // chosen range (bottom arc out, top arc back), with ports at each edge-centre. Measured
