@@ -95,6 +95,7 @@
   let saveTimer = null;
   let sortState = null;
   let menuEl = null;
+  let menuUsed = false;   // set once the visitor opens the ··· menu — the ticket nudge stays hidden afterwards
   const ticketPlain = {}; // owner-only plaintext tickets, never published
   const studyUnlockPlain = {}; // owner-only plaintext deeper-cut passes, never published
   const hostedBytes = {}; // "/assets/uploads/<hash>.<ext>" -> data URI (this session) for instant local preview
@@ -4518,15 +4519,29 @@
       document.body.appendChild(el);
     }
     requestAnimationFrame(function () { el.classList.add("is-on"); });
-    var thA = document.querySelector(".tickethint"); if (thA) thA.classList.add("tickethint--low");   // drop the ticket nudge below this toast
+    placeSoundToast();   // tuck it below the ticket nudge / under the open ··· menu — never on top
     clearTimeout(soundToastTimer);
     soundToastTimer = setTimeout(musToastHide, 8000);
   }
   function musToastHide() {
     var el = document.querySelector(".soundtoast");
     if (el) el.classList.remove("is-on");
-    var thB = document.querySelector(".tickethint"); if (thB) thB.classList.remove("tickethint--low");
     clearTimeout(soundToastTimer);
+  }
+  function placeSoundToast() {
+    var el = document.querySelector(".soundtoast");
+    if (!el) return;
+    if (menuEl) {                                    // ··· menu open → sit below it, never over it
+      var mr = menuEl.getBoundingClientRect();
+      var cw = document.documentElement.clientWidth;  // excludes the scrollbar so the edge lines up with the menu
+      el.classList.remove("soundtoast--low");
+      el.style.right = Math.max(12, Math.round(cw - mr.right)) + "px";
+      el.style.top = Math.round(mr.bottom + 10) + "px";
+    } else {                                         // menu closed → default corner; drop below the ticket nudge when it's up
+      el.style.right = "";
+      el.style.top = "";
+      el.classList.toggle("soundtoast--low", !!document.querySelector(".tickethint"));
+    }
   }
   function musArmVisible() {
     if (musVisArmed) return; musVisArmed = true;
@@ -4643,6 +4658,7 @@
       '<button class="cmenu__item" data-open="admin"' + (narrow ? " disabled" : "") + '><span class="cmenu__ico">\u2726</span><span><b>Admin mode</b><i>' + (narrow ? "Needs a wider screen" : "Edit &amp; curate the site") + "</i></span></button>";
     document.body.appendChild(menuEl);
     positionMenu();
+    placeSoundToast();   // push any live “sound on” toast below the menu we just opened
     musSync();
     menuEl.addEventListener("click", onMenuClick);
     window.addEventListener("resize", positionMenu);
@@ -4654,15 +4670,17 @@
     const r = anchor.getBoundingClientRect();
     menuEl.style.top = (r.bottom + 12) + "px";
     menuEl.style.right = Math.max(12, Math.round(window.innerWidth - r.right)) + "px";
+    placeSoundToast();
   }
   function closeMenu() {
     if (!menuEl) return;
     menuEl.remove(); menuEl = null;
     document.removeEventListener("click", onDocClick);
     window.removeEventListener("resize", positionMenu);
+    placeSoundToast();   // menu gone → return the toast to the corner
   }
   function onDocClick(e) { if (menuEl && !menuEl.contains(e.target) && e.target.id !== "clock") closeMenu(); }
-  function toggleMenu(e) { if (e) e.stopPropagation(); thDismiss(); if (menuEl) closeMenu(); else buildMenu(); }
+  function toggleMenu(e) { if (e) e.stopPropagation(); menuUsed = true; thDismiss(true); if (menuEl) closeMenu(); else buildMenu(); }
   function onMenuClick(e) {
     const mus = e.target.closest("[data-mus]");
     if (mus) {
@@ -4754,10 +4772,11 @@
     if (!el) return;
     el.classList.remove("is-on");
     clearTimeout(thTimer);
-    if (now) { el.remove(); return; }   // instant kill (e.g. entering admin) — no fade to linger over the editor
-    setTimeout(function () { if (el.parentNode) el.remove(); }, 420);
+    if (now) { el.remove(); placeSoundToast(); return; }   // instant kill (entering admin / opening the menu)
+    setTimeout(function () { if (el.parentNode) el.remove(); placeSoundToast(); }, 420);
   }
   function ticketHint() {
+    if (menuUsed || menuEl) return;   // visitor already opened the ··· menu — don't nudge them to it
     if (document.querySelector(".tickethint")) return;
     if (!document.getElementById("moreBtn")) return;
     var el = document.createElement("button");
@@ -4766,7 +4785,7 @@
     el.setAttribute("aria-label", "Have a ticket? Open the menu to enter it");
     el.innerHTML = '<span class="tickethint__t">Have a ticket? <b>Click here</b></span><span class="tickethint__x" aria-hidden="true">\u00d7</span>';
     document.body.appendChild(el);
-    if (document.querySelector(".soundtoast.is-on")) el.classList.add("tickethint--low");   // never cover the sound toast
+    placeSoundToast();   // keep the ticket on top; push any “sound on” toast below it
     thAlign();
     window.addEventListener("resize", thAlign);
     requestAnimationFrame(function () { el.classList.add("is-on"); });
