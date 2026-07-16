@@ -4516,12 +4516,14 @@
       document.body.appendChild(el);
     }
     requestAnimationFrame(function () { el.classList.add("is-on"); });
+    var thA = document.querySelector(".tickethint"); if (thA) thA.classList.add("tickethint--low");   // drop the ticket nudge below this toast
     clearTimeout(soundToastTimer);
     soundToastTimer = setTimeout(musToastHide, 8000);
   }
   function musToastHide() {
     var el = document.querySelector(".soundtoast");
     if (el) el.classList.remove("is-on");
+    var thB = document.querySelector(".tickethint"); if (thB) thB.classList.remove("tickethint--low");
     clearTimeout(soundToastTimer);
   }
   function musArmVisible() {
@@ -4658,7 +4660,7 @@
     window.removeEventListener("resize", positionMenu);
   }
   function onDocClick(e) { if (menuEl && !menuEl.contains(e.target) && e.target.id !== "clock") closeMenu(); }
-  function toggleMenu(e) { if (e) e.stopPropagation(); if (menuEl) closeMenu(); else buildMenu(); }
+  function toggleMenu(e) { if (e) e.stopPropagation(); thDismiss(); if (menuEl) closeMenu(); else buildMenu(); }
   function onMenuClick(e) {
     const mus = e.target.closest("[data-mus]");
     if (mus) {
@@ -4735,6 +4737,35 @@
     flashTimer = setTimeout(function () { el.classList.remove("is-on"); }, 2600);
   }
 
+  /* ---------- “have a ticket?” nudge (points at the More menu on landing) ---------- */
+  var thTimer = 0;
+  function thDismiss() {
+    var el = document.querySelector(".tickethint");
+    if (!el) return;
+    el.classList.remove("is-on");
+    clearTimeout(thTimer);
+    setTimeout(function () { if (el.parentNode) el.remove(); }, 420);
+  }
+  function ticketHint() {
+    if (document.querySelector(".tickethint")) return;
+    if (!document.getElementById("moreBtn")) return;
+    var el = document.createElement("button");
+    el.type = "button";
+    el.className = "tickethint";
+    el.setAttribute("aria-label", "Have a ticket? Open the menu to enter it");
+    el.innerHTML = '<span class="tickethint__t">Have a ticket? <b>Click here</b></span><span class="tickethint__x" aria-hidden="true">\u00d7</span>';
+    document.body.appendChild(el);
+    if (document.querySelector(".soundtoast.is-on")) el.classList.add("tickethint--low");   // never cover the sound toast
+    requestAnimationFrame(function () { el.classList.add("is-on"); });
+    clearTimeout(thTimer);
+    thTimer = setTimeout(thDismiss, 11000);
+    el.addEventListener("click", function (e) {
+      var closing = !!e.target.closest(".tickethint__x");
+      thDismiss();
+      if (!closing && !menuEl) toggleMenu();   // open the “···” menu (Special view → enter ticket); leaves the sound toast untouched
+    });
+  }
+
   /* ---------- bootstrap ---------- */
   function init() {
     const clock = document.getElementById("clock");
@@ -4742,6 +4773,7 @@
     const more = document.getElementById("moreBtn");
     if (more) more.addEventListener("click", toggleMenu);
     musInit();
+    setTimeout(ticketHint, 1600);
   }
   if (window.__siteRendered) init();
   else document.addEventListener("site:rendered", init, { once: true });
