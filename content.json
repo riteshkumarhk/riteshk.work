@@ -1141,6 +1141,38 @@
               }
             ],
             "sep": false
+          },
+          {
+            "type": "workflow",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "flow": "cycle",
+            "caption": "",
+            "items": [
+              {
+                "label": "Test 1",
+                "note": ""
+              },
+              {
+                "label": "Test 2",
+                "note": ""
+              },
+              {
+                "label": "Test 3",
+                "note": ""
+              },
+              {
+                "label": "Test 4",
+                "note": ""
+              },
+              {
+                "label": "Test 5",
+                "note": ""
+              }
+            ],
+            "loopFrom": "2",
+            "loopTo": "4"
           }
         ]
       }
@@ -1470,6 +1502,16 @@
             "sep": false
           },
           {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Evolving Beyond Disclosure",
+            "body": "As part of the broader Microsoft Account (MSA) redesign, the content team was defining a new communication language grounded in three principles:<div><br></div><div><ul><li><b>Simplicity: </b>Reduce cognitive effort and make information easier to understand.</li><li><b>Transparency: </b>Clearly explain what is happening and why.</li><li><b>Value-Oriented Communication: </b>Focus on the benefits users receive, not just what Microsoft is asking for.</li></ul></div>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
             "type": "compare",
             "nav": "",
             "kicker": "",
@@ -1478,8 +1520,33 @@
             "afterSrc": "/assets/uploads/08d4bcd129304699369ea53d59427dda1baeda92e7cc111af6dbd68c3b9b5b87.png",
             "beforeLabel": "Before",
             "afterLabel": "After",
-            "body": "To explore this, our partners introduced Microsoft Account visual language and illustrative assets that reinforced the idea of a connected account ecosystem. The goal was not simply to improve comprehension, but to create continuity across Microsoft Account touchpoints and help users recognize Unified Consent as part of the broader Microsoft Account journey.",
+            "body": "",
             "editorName": "UC comparision",
+            "sep": false
+          },
+          {
+            "type": "split",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "leftLabel": "Before",
+            "left": "<p>The experience prioritized disclosure through expandable sections, requiring users to uncover information as they explored. Research showed experience was not easy comprehension and this conflicted with MSA principles of simplicity, transparency, and value-oriented communication.</p>",
+            "leftImg": "",
+            "rightLabel": "After",
+            "right": "<span class=\"tdim\">The content team evolved the experience to prioritize comprehension. Through iterative testing and refinement, key messages were surfaced directly through clearer content, stronger visuals, and a cohesive One Microsoft narrative. Users no longer had to discover the value. They understood it immediately.</span>",
+            "rightImg": "",
+            "sep": false,
+            "editorName": "Before after comparison"
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "The goal was not simply to improve comprehension, but to create continuity across Microsoft Account touchpoints and help users recognize Unified Consent as part of the broader Microsoft Account journey.",
+            "list": [],
+            "src": "",
+            "caption": "",
             "sep": false
           },
           {
