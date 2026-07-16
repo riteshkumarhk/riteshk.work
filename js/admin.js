@@ -946,7 +946,7 @@
     var rows = sortRowsFor(key); if (rows.length < 2) return;
     var from = rows.indexOf(row); if (from < 0) return;
     e.preventDefault();
-    sortState = { key: key, rows: rows, row: row, from: from, to: from, y: e.clientY, scrollEl: root.querySelector(".adm__editor"), raf: 0 };
+    sortState = { key: key, rows: rows, row: row, from: from, to: from, y: e.clientY, scrollEl: root.querySelector(".adm__editor"), raf: 0, isBlock: key.split(":")[0] === "block", pv: -1 };
     row.classList.add("is-sortdrag");
     document.body.classList.add("adm-sorting");
     sortMark(e.clientY);
@@ -963,6 +963,13 @@
     rows.forEach(function (r) { r.classList.remove("is-drop-above", "is-drop-below"); });
     if (insert >= rows.length) rows[rows.length - 1].classList.add("is-drop-below");
     else rows[insert].classList.add("is-drop-above");
+    if (s.isBlock) {                                   // mirror the drop point in the live preview on the right
+      var pidx = insert >= rows.length ? rows.length - 1 : insert;
+      if (pidx !== s.pv) { s.pv = pidx; sortPreview(pidx); }
+    }
+  }
+  function sortPreview(idx) {
+    try { var fw = frameWin(); if (fw) fw.postMessage({ __rk: "dragBlock", index: idx }, "*"); } catch (e) {}
   }
   function sortMove(e) { if (!sortState) return; sortState.y = e.clientY; sortMark(e.clientY); }
   function sortLoop() {
@@ -985,6 +992,7 @@
     if (s.raf) cancelAnimationFrame(s.raf);
     s.rows.forEach(function (r) { r.classList.remove("is-drop-above", "is-drop-below", "is-sortdrag"); });
     document.body.classList.remove("adm-sorting");
+    if (s.isBlock) { try { var fw = frameWin(); if (fw) fw.postMessage({ __rk: "dragBlockEnd" }, "*"); } catch (e) {} }
     if (s.to !== s.from) sortApply(s.key, s.from, s.to);
   }
   function sortApply(key, from, to) {
