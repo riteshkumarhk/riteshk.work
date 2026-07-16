@@ -440,6 +440,26 @@ video.pjb__media-el { background: #000; }
   .pjb__flow-arrow { align-self: center; transform: rotate(90deg); }
 }
 
+/* Cycle — advanced radial workflow: steps on a ring, curved directional arrows, optional centre image */
+.pjb__cycle { position: relative; width: min(88%, 500px); aspect-ratio: 1; margin: clamp(1.8rem, 3.6vw, 2.8rem) auto .4rem; }
+.pjb__cycle-ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.pjb__cycle-arc { fill: none; stroke: var(--accent); stroke-width: .5; opacity: .45; }
+.pjb__cycle-head { fill: var(--accent); opacity: .8; }
+.pjb__cycle-hub { position: absolute; left: 50%; top: 50%; width: 30%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 20px 44px -24px rgba(0, 0, 0, .85); }
+.pjb__cycle-hub img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pjb__cycle-node { position: absolute; left: calc(50% + var(--x)); top: calc(50% + var(--y)); transform: translate(-50%, -50%); width: max-content; max-width: 8.5rem; text-align: center; padding: .6rem .8rem; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-elev); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03), 0 10px 24px -18px rgba(0, 0, 0, .7); transition: transform .3s var(--ease), border-color .3s var(--ease), box-shadow .3s var(--ease); }
+.pjb__cycle-node:hover { transform: translate(-50%, -50%) translateY(-3px); border-color: var(--accent); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), 0 18px 32px -20px rgba(0, 0, 0, .75); z-index: 2; }
+.pjb__cycle-num { display: block; font-family: var(--mono); font-size: .56rem; font-weight: 500; letter-spacing: .16em; color: var(--accent); opacity: .92; }
+.pjb__cycle-lbl { display: block; margin-top: .14rem; font-size: .82rem; font-weight: 500; color: var(--text); line-height: 1.25; }
+.pjb__cycle-note { display: block; margin-top: .22rem; font-size: .68rem; color: var(--text-dim); line-height: 1.4; }
+@media (max-width: 640px) {
+  .pjb__cycle { width: 100%; aspect-ratio: auto; display: flex; flex-direction: column; align-items: stretch; gap: .4rem; }
+  .pjb__cycle-ring { display: none; }
+  .pjb__cycle-hub { position: static; transform: none; width: 84px; margin: 0 auto .55rem; }
+  .pjb__cycle-node { position: static; transform: none; left: auto; top: auto; width: auto; max-width: none; text-align: left; }
+  .pjb__cycle-node:hover { transform: translateY(-3px); }
+}
+
 /* sticky notes — staggered cards with a gentle hover lift */
 .pjb__stickies { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; margin-top: 1.4rem; align-items: start; }
 .pjb__sticky { border: 1px solid var(--line-soft); border-radius: 14px; padding: 1.4rem 1.4rem 1.5rem; background: var(--bg-2); min-height: 200px; box-shadow: 0 1px 0 rgba(255, 255, 255, .02), 0 12px 30px -20px rgba(0, 0, 0, .8); transition: box-shadow .32s var(--ease), border-color .32s; }

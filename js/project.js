@@ -466,10 +466,46 @@
 
   // Workflow — a process shown as a linear left-to-right flow or a repeating loop,
   // with optional fork/merge (a step split into parallel branches with "//").
+  // Cycle (advanced) — steps placed evenly around a ring, joined by curved directional
+  // arrows, with an optional centre image. Every coordinate is a % of a square box, so it
+  // scales to any width; the CSS reflows it to a plain vertical list on narrow screens.
+  function cycleHtml(b, items, branchesOf) {
+    var n = items.length, R = 36, TAU = Math.PI * 2, GAP = 0.18;
+    var nodes = items.map(function (it, i) {
+      var a = (i / n) * TAU;
+      var x = (R * Math.sin(a)).toFixed(2), y = (-R * Math.cos(a)).toFixed(2);
+      var label = branchesOf(it.label).join(" / ") || it.label || "";
+      var note = it.note ? '<span class="pjb__cycle-note">' + esc(it.note) + "</span>" : "";
+      return '<div class="pjb__cycle-node" style="--x:' + x + '%;--y:' + y + '%">' +
+        '<span class="pjb__cycle-num">' + String(i + 1).padStart(2, "0") + "</span>" +
+        '<span class="pjb__cycle-lbl">' + md(label) + "</span>" + note + "</div>";
+    }).join("");
+    var arcs = "";
+    for (var i = 0; i < n; i++) {
+      var a0 = ((i + GAP) / n) * TAU, a1 = ((i + 1 - GAP) / n) * TAU;
+      var sx = (50 + R * Math.sin(a0)).toFixed(2), sy = (50 - R * Math.cos(a0)).toFixed(2);
+      var ex = (50 + R * Math.sin(a1)).toFixed(2), ey = (50 - R * Math.cos(a1)).toFixed(2);
+      arcs += '<path class="pjb__cycle-arc" d="M' + sx + " " + sy + "A" + R + " " + R + " 0 0 1 " + ex + " " + ey + '"/>';
+      var dx = Math.cos(a1), dy = Math.sin(a1), px = -Math.sin(a1), py = Math.cos(a1), s = 2.3, w = 1.8;
+      var tx = (+ex + s * dx).toFixed(2), ty = (+ey + s * dy).toFixed(2);
+      var q1x = (+ex - s * dx + w * px).toFixed(2), q1y = (+ey - s * dy + w * py).toFixed(2);
+      var q2x = (+ex - s * dx - w * px).toFixed(2), q2y = (+ey - s * dy - w * py).toFixed(2);
+      arcs += '<path class="pjb__cycle-head" d="M' + tx + " " + ty + "L" + q1x + " " + q1y + "L" + q2x + " " + q2y + 'Z"/>';
+    }
+    var ring = '<svg class="pjb__cycle-ring" viewBox="0 0 100 100" aria-hidden="true">' + arcs + "</svg>";
+    var url = mediaSrc(b);
+    var hub = url ? '<div class="pjb__cycle-hub"><img src="' + attr(url) + '" alt="' + attr(b.heading || "") + '" loading="lazy" draggable="false" /></div>' : "";
+    return '<div class="pjb__cycle" style="--n:' + n + '">' + ring + hub + nodes + "</div>";
+  }
   function workflowBlock(b) {
-    var flow = b.flow === "loop" ? "loop" : "linear";
+    var flow = b.flow === "loop" ? "loop" : (b.flow === "cycle" ? "cycle" : "linear");
     var items = b.items || [];
     var branchesOf = function (label) { return String(label || "").split("//").map(function (s) { return s.trim(); }).filter(Boolean); };
+    var cap = b.caption ? '<figcaption class="pjb__cap">' + esc(b.caption) + "</figcaption>" : "";
+    if (flow === "cycle" && items.length >= 3) {
+      return kicker(b.kicker) + heading(b.heading) + cycleHtml(b, items, branchesOf) + cap;
+    }
+    if (flow === "cycle") flow = "linear";   // a ring needs at least three steps — degrade cleanly
     var arrowSvg = '<svg width="32" height="10" viewBox="0 0 32 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M0 5h27"/><path d="M24 1.5 28.5 5 24 8.5"/></svg>';
     var nodes = items.map(function (it, i) {
       var parts = branchesOf(it.label);
@@ -489,7 +525,7 @@
       var first = branchesOf(items[0].label)[0] || items[0].label || "";
       ret = '<div class="pjb__flow-return"><span class="pjb__flow-return-ico" aria-hidden="true">\u21ba</span><span>' + (first ? "Repeats from \u201c" + esc(first) + "\u201d" : "Repeats as a cycle") + "</span></div>";
     }
-    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__flow pjb__flow--' + flow + '">' + nodes + "</div>" + ret;
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__flow pjb__flow--' + flow + '">' + nodes + "</div>" + ret + cap;
   }
 
   function mediagridBlock(b) {
@@ -581,9 +617,10 @@
       return '<div class="pjb__iso-layer" style="' + st + '"' + auto + ">" + depthEl + face + "</div>";
     }).join("");
     var maxz = Math.max(0, items.length - 1) * distance + maxDepth;
+    var cap = b.caption ? '<figcaption class="pjb__cap">' + esc(b.caption) + "</figcaption>" : "";
     return kicker(b.kicker) + heading(b.heading) +
       '<div class="pjb__iso pjb__iso--' + mode + " pjb__iso--" + dir + '" data-iso' + (b.parallax ? " data-iso-parallax" : "") + ' style="--distance:' + distance + "px;--depth:" + baseDepth + "px;--maxz:" + maxz + 'px">' +
-      '<div class="pjb__iso-stage">' + layers + "</div></div>";
+      '<div class="pjb__iso-stage">' + layers + "</div></div>" + cap;
   }
 
   // Focus & annotate — one image with pinned "+" markers. Clicking a marker opens its note
