@@ -4739,8 +4739,16 @@
 
   /* ---------- “have a ticket?” nudge (points at the More menu on landing) ---------- */
   var thTimer = 0;
+  function thAlign() {
+    var el = document.querySelector(".tickethint");
+    var mb = document.getElementById("moreBtn");
+    if (!el || !mb) { window.removeEventListener("resize", thAlign); return; }
+    var mr = mb.getBoundingClientRect(), fr = el.getBoundingClientRect();
+    el.style.setProperty("--beak", Math.max(12, Math.round(fr.right - (mr.left + mr.width / 2))) + "px");   // point the tail at the ··· centre
+  }
   function thDismiss() {
     var el = document.querySelector(".tickethint");
+    window.removeEventListener("resize", thAlign);
     if (!el) return;
     el.classList.remove("is-on");
     clearTimeout(thTimer);
@@ -4756,6 +4764,8 @@
     el.innerHTML = '<span class="tickethint__t">Have a ticket? <b>Click here</b></span><span class="tickethint__x" aria-hidden="true">\u00d7</span>';
     document.body.appendChild(el);
     if (document.querySelector(".soundtoast.is-on")) el.classList.add("tickethint--low");   // never cover the sound toast
+    thAlign();
+    window.addEventListener("resize", thAlign);
     requestAnimationFrame(function () { el.classList.add("is-on"); });
     clearTimeout(thTimer);
     thTimer = setTimeout(thDismiss, 11000);
