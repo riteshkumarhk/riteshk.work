@@ -579,7 +579,7 @@
             "type": "focus",
             "nav": "Designing for confidence",
             "kicker": "Designing for confidence",
-            "heading": "Authentication is simply the final step",
+            "heading": "From action to confidence",
             "src": "/assets/uploads/96b6437f4cac76aac187ee98e3fce3e0a7588b180edb7ff8fa961f6e917b65c4.png",
             "caption": "Windows often exposed complexity before context. Users want reassurance, not options.",
             "sticky": true,
@@ -1101,7 +1101,7 @@
             "list": [],
             "src": "",
             "caption": "",
-            "hsize": "sm"
+            "hsize": ""
           },
           {
             "type": "cards",
