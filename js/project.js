@@ -466,48 +466,17 @@
 
   // Workflow — a process shown as a linear left-to-right flow or a repeating loop,
   // with optional fork/merge (a step split into parallel branches with "//").
-  // Cycle (advanced) — steps placed evenly around a ring, joined by curved directional
-  // arrows, with an optional centre image. Every coordinate is a % of a square box, so it
-  // scales to any width; the CSS reflows it to a plain vertical list on narrow screens.
-  function cycleHtml(b, items, branchesOf) {
-    var n = items.length, R = 36, TAU = Math.PI * 2, GAP = 0.18;
-    var nodes = items.map(function (it, i) {
-      var a = (i / n) * TAU;
-      var x = (R * Math.sin(a)).toFixed(2), y = (-R * Math.cos(a)).toFixed(2);
-      var label = branchesOf(it.label).join(" / ") || it.label || "";
-      var note = it.note ? '<span class="pjb__cycle-note">' + esc(it.note) + "</span>" : "";
-      return '<div class="pjb__cycle-node" style="--x:' + x + '%;--y:' + y + '%">' +
-        '<span class="pjb__cycle-num">' + String(i + 1).padStart(2, "0") + "</span>" +
-        '<span class="pjb__cycle-lbl">' + md(label) + "</span>" + note + "</div>";
-    }).join("");
-    var arcs = "";
-    for (var i = 0; i < n; i++) {
-      var a0 = ((i + GAP) / n) * TAU, a1 = ((i + 1 - GAP) / n) * TAU;
-      var sx = (50 + R * Math.sin(a0)).toFixed(2), sy = (50 - R * Math.cos(a0)).toFixed(2);
-      var ex = (50 + R * Math.sin(a1)).toFixed(2), ey = (50 - R * Math.cos(a1)).toFixed(2);
-      arcs += '<path class="pjb__cycle-arc" d="M' + sx + " " + sy + "A" + R + " " + R + " 0 0 1 " + ex + " " + ey + '"/>';
-      var dx = Math.cos(a1), dy = Math.sin(a1), px = -Math.sin(a1), py = Math.cos(a1), s = 2.3, w = 1.8;
-      var tx = (+ex + s * dx).toFixed(2), ty = (+ey + s * dy).toFixed(2);
-      var q1x = (+ex - s * dx + w * px).toFixed(2), q1y = (+ey - s * dy + w * py).toFixed(2);
-      var q2x = (+ex - s * dx - w * px).toFixed(2), q2y = (+ey - s * dy - w * py).toFixed(2);
-      arcs += '<path class="pjb__cycle-head" d="M' + tx + " " + ty + "L" + q1x + " " + q1y + "L" + q2x + " " + q2y + 'Z"/>';
-    }
-    var ring = '<svg class="pjb__cycle-ring" viewBox="0 0 100 100" aria-hidden="true">' + arcs + "</svg>";
-    var url = mediaSrc(b);
-    var hub = url ? '<div class="pjb__cycle-hub"><img src="' + attr(url) + '" alt="' + attr(b.heading || "") + '" loading="lazy" draggable="false" /></div>' : "";
-    return '<div class="pjb__cycle" style="--n:' + n + '">' + ring + hub + nodes + "</div>";
-  }
+  // Cycle (advanced) — the steps stay in a line, but a chosen range loops: a return
+  // bracket arcs over steps [loopFrom..loopTo] back to the first, marking an iteration
+  // loop (e.g. Task → Confirmation ⇄ Verification → Goal). Default range = every step
+  // (a classic "the whole thing repeats"). Reflows to a labelled group on mobile.
   function workflowBlock(b) {
     var flow = b.flow === "loop" ? "loop" : (b.flow === "cycle" ? "cycle" : "linear");
-    var items = b.items || [];
+    var items = b.items || [], n = items.length;
     var branchesOf = function (label) { return String(label || "").split("//").map(function (s) { return s.trim(); }).filter(Boolean); };
-    var cap = b.caption ? '<figcaption class="pjb__cap">' + esc(b.caption) + "</figcaption>" : "";
-    if (flow === "cycle" && items.length >= 3) {
-      return kicker(b.kicker) + heading(b.heading) + cycleHtml(b, items, branchesOf) + cap;
-    }
-    if (flow === "cycle") flow = "linear";   // a ring needs at least three steps — degrade cleanly
     var arrowSvg = '<svg width="32" height="10" viewBox="0 0 32 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M0 5h27"/><path d="M24 1.5 28.5 5 24 8.5"/></svg>';
-    var nodes = items.map(function (it, i) {
+    var cap = b.caption ? '<figcaption class="pjb__cap">' + esc(b.caption) + "</figcaption>" : "";
+    var steps = items.map(function (it, i) {
       var parts = branchesOf(it.label);
       var num = '<span class="pjb__flow-num">' + String(i + 1).padStart(2, "0") + "</span>";
       var note = it.note ? '<span class="pjb__flow-note">' + esc(it.note) + "</span>" : "";
@@ -519,13 +488,21 @@
       }
       var arrow = i > 0 ? '<span class="pjb__flow-arrow">' + arrowSvg + "</span>" : "";
       return '<div class="pjb__flow-step">' + arrow + node + "</div>";
-    }).join("");
+    });
+    if (flow === "cycle" && n >= 2) {
+      var clamp = function (v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
+      var from = clamp(parseInt(b.loopFrom, 10) || 1, 1, n);
+      var to = clamp(parseInt(b.loopTo, 10) || n, from, n);
+      var loop = '<div class="pjb__flow-loop" data-loop>' + steps.slice(from - 1, to).join("") + "</div>";
+      return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__flow pjb__flow--cycle">' + steps.slice(0, from - 1).join("") + loop + steps.slice(to).join("") + "</div>" + cap;
+    }
+    if (flow === "cycle") flow = "linear";   // a loop needs at least two steps — degrade cleanly
     var ret = "";
-    if (flow === "loop" && items.length) {
+    if (flow === "loop" && n) {
       var first = branchesOf(items[0].label)[0] || items[0].label || "";
       ret = '<div class="pjb__flow-return"><span class="pjb__flow-return-ico" aria-hidden="true">\u21ba</span><span>' + (first ? "Repeats from \u201c" + esc(first) + "\u201d" : "Repeats as a cycle") + "</span></div>";
     }
-    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__flow pjb__flow--' + flow + '">' + nodes + "</div>" + ret + cap;
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__flow pjb__flow--' + flow + '">' + steps.join("") + "</div>" + ret + cap;
   }
 
   function mediagridBlock(b) {
