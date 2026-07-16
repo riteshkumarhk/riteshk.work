@@ -1489,12 +1489,29 @@
     // preview to it and flash it (the reverse of the preview → editor selectBlock message).
     window.addEventListener("message", function (e) {
       var d = e.data;
-      if (!d || d.__rk !== "gotoBlock" || typeof d.index !== "number" || !overlay) return;
+      if (!d || !d.__rk || !overlay) return;
       var content = overlay.querySelector("[data-content]");
-      var sec = content && content.querySelector('[data-block="' + d.index + '"]');
-      if (!sec) return;
-      try { sec.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (er) { sec.scrollIntoView(); }
-      sec.classList.remove("pjb--flash"); void sec.offsetWidth; sec.classList.add("pjb--flash");
+      if (!content) return;
+      if (d.__rk === "gotoBlock" && typeof d.index === "number") {
+        var sec = content.querySelector('[data-block="' + d.index + '"]');
+        if (!sec) return;
+        try { sec.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (er) { sec.scrollIntoView(); }
+        sec.classList.remove("pjb--flash"); void sec.offsetWidth; sec.classList.add("pjb--flash");
+        return;
+      }
+      // Editor drag → preview: follow the drop point live and mark the section it will land beside.
+      if (d.__rk === "dragBlock" && typeof d.index === "number") {
+        content.querySelectorAll(".pjb--droptarget").forEach(function (x) { x.classList.remove("pjb--droptarget"); });
+        var t = content.querySelector('[data-block="' + d.index + '"]');
+        if (!t) return;
+        try { t.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (er2) { t.scrollIntoView(); }
+        t.classList.add("pjb--droptarget");
+        return;
+      }
+      if (d.__rk === "dragBlockEnd") {
+        content.querySelectorAll(".pjb--droptarget").forEach(function (x) { x.classList.remove("pjb--droptarget"); });
+        return;
+      }
     });
     if (PREVIEW) { document.documentElement.classList.add("rk-preview"); return; } // the admin editor drives the overlay; skip link/history/deep-link wiring
     document.addEventListener("click", onDocLinkClick);
