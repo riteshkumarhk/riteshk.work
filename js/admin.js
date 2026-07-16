@@ -1323,9 +1323,9 @@
     return '<div class="card study__block' + (open ? " is-open" : "") + '">' + head +
       '<div class="study__block-body">' + common + body + sizeCtl + '<div class="block-flags">' + sepCtl + locked + "</div></div></div>";
   }
-  function smeta(i, field, label, hint) {
+  function smeta(i, field, label, hint, ph) {
     var st = data.work[i].study;
-    return '<div class="af"><label class="af__label">' + label + '</label><input type="text" data-study="' + i + '" data-sfield="' + field + '" value="' + escAttr(st[field] || "") + '" />' + (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
+    return '<div class="af"><label class="af__label">' + label + '</label><input type="text" data-study="' + i + '" data-sfield="' + field + '" value="' + escAttr(st[field] || "") + '"' + (ph ? ' placeholder="' + escAttr(ph) + '"' : "") + ' />' + (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
   }
   function sectionPreview(type) {
     switch (type) {
@@ -1419,7 +1419,7 @@
       "</section>";
     var meta = '<section class="l2grp"><div class="l2grp__head">Story header</div>' +
       smeta(i, "tagline", "Tagline", "one line under the title") +
-      '<div class="af__row">' + smeta(i, "role", "Role") + smeta(i, "timeline", "Timeline") + "</div>" +
+      '<div class="af__row">' + smeta(i, "role", "Role") + smeta(i, "timeline", "Timeline", "Optional \u2014 leave blank to reuse the Period shown on the home card.", w.period || "") + "</div>" +
       '<div class="af__row">' + smeta(i, "team", "Team") + smeta(i, "scope", "Scope") + "</div>" +
       "</section>";
     var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
@@ -1776,6 +1776,12 @@
     if (t.dataset.list && t.dataset.field) {
       let v = t.value;
       if (t.dataset.field === "tags") v = t.value.split(",").map((x) => x.trim()).filter(Boolean);
+      else if (t.dataset.list === "work" && t.dataset.field === "period" && v.indexOf("-") !== -1) {
+        // Period is the date range that also feeds the case-study Timeline — same em-dash swap.
+        const caret = t.selectionStart;
+        v = v.replace(/-/g, "\u2014"); t.value = v;
+        try { t.setSelectionRange(caret, caret); } catch (e) {}
+      }
       data[t.dataset.list][+t.dataset.index][t.dataset.field] = v;
       apply();
     }

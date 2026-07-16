@@ -653,8 +653,8 @@
   }
 
   /* ---------- hero + shell content ---------- */
-  function metaGrid(st) {
-    var rows = [["Role", st.role], ["Team", st.team], ["Timeline", st.timeline], ["Scope", st.scope]]
+  function metaGrid(st, period) {
+    var rows = [["Role", st.role], ["Team", st.team], ["Timeline", st.timeline || period], ["Scope", st.scope]]
       .filter(function (r) { return r[1]; });
     if (!rows.length) return "";
     return '<dl class="pj__meta">' + rows.map(function (r) {
@@ -768,7 +768,7 @@
         '<div class="pj__eyebrow">' + esc(w.client) + (w.period ? " · " + esc(w.period) : "") + "</div>" +
         '<h1 class="pj__title">' + md(w.title) + "</h1>" +
         '<p class="pj__tagline">' + md(st.tagline || w.desc || "") + "</p>" +
-        metaGrid(st) +
+        metaGrid(st, w.period) +
       "</header>";
     var bodyBlocks = blocks.length ? blocks.map(renderBlock).join("") : emptyStudy(w);
     var hasCover = !!(w.image || (st && st.cover));
