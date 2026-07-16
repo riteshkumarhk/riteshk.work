@@ -1237,7 +1237,6 @@
       var nn = steps.length;
       var from = Math.max(1, Math.min(nn, parseInt(g.getAttribute("data-loop-from"), 10) || 1));
       var to = Math.max(from, Math.min(nn, parseInt(g.getAttribute("data-loop-to"), 10) || nn));
-      var inLoop = function (k) { return (k + 1) >= from && (k + 1) <= to; };
       var wires = "", dots = "", heads = "";
       var wire = function (a, c1, c2, b) { wires += '<path class="pjb__wire" d="M' + f(a[0]) + " " + f(a[1]) + "C" + f(c1[0]) + " " + f(c1[1]) + " " + f(c2[0]) + " " + f(c2[1]) + " " + f(b[0]) + " " + f(b[1]) + '"/>'; };
       var dot = function (p) { dots += '<circle class="pjb__port" cx="' + f(p[0]) + '" cy="' + f(p[1]) + '" r="2.6"/>'; };
@@ -1248,20 +1247,18 @@
         else d = "M" + f(p[0]) + " " + f(p[1]) + "L" + f(p[0] - s * 0.7) + " " + f(p[1] + s) + "L" + f(p[0] + s * 0.7) + " " + f(p[1] + s) + "Z";
         heads += '<path class="pjb__wire-head" d="' + d + '"/>';
       };
+      // Forward flow — every step links to the next with a straight left→right wire.
       for (var i = 0; i < nn - 1; i++) {
         var a = P[i], b = P[i + 1];
-        if (inLoop(i) && inLoop(i + 1)) {
-          var bo = Math.min(46, Math.max(30, (b.b[0] - a.b[0]) * 0.42));
-          wire(a.b, [a.b[0], a.b[1] + bo], [b.b[0], b.b[1] + bo], b.b);
-          dot(a.b); dot(b.b); head(b.b, "up");
-        } else {
-          var dx = Math.max(24, (b.l[0] - a.r[0]) * 0.5);
-          wire(a.r, [a.r[0] + dx, a.r[1]], [b.l[0] - dx, b.l[1]], b.l);
-          dot(a.r); dot(b.l); head(b.l, "right");
-        }
+        var dx = Math.max(24, (b.l[0] - a.r[0]) * 0.5);
+        wire(a.r, [a.r[0] + dx, a.r[1]], [b.l[0] - dx, b.l[1]], b.l);
+        dot(a.r); dot(b.l); head(b.l, "right");
       }
+      // The loop — one clean return arc over the top, from the last looped step
+      // back into the first. That single line is what makes it read as a cycle.
       if (to > from) {
-        var s0 = P[to - 1].t, e0 = P[from - 1].t, rb = Math.min(46, Math.max(34, (s0[0] - e0[0]) * 0.42));
+        var s0 = P[to - 1].t, e0 = P[from - 1].t;
+        var rb = Math.min(58, Math.max(44, (s0[0] - e0[0]) * 0.22));
         wire(s0, [s0[0], s0[1] - rb], [e0[0], e0[1] - rb], e0);
         dot(s0); dot(e0); head(e0, "down");
       }
