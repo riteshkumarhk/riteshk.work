@@ -1460,6 +1460,13 @@
     var i = +t.dataset.study; var w = data.work[i]; if (!w || !w.study) return;
     var f = t.dataset.sfield;
     if (f === "unlock") { studyUnlockPlain[w.id] = t.value; setStudyUnlock(w.study, t.value); return; }
+    // Timeline is a year range — auto-swap any typed hyphen for the site's em dash
+    // ("2023 - 2024" -> "2023 — 2024"). It's a 1:1 character swap, so the caret stays put.
+    if (f === "timeline" && t.value.indexOf("-") !== -1) {
+      var caret = t.selectionStart;
+      t.value = t.value.replace(/-/g, "\u2014");
+      try { t.setSelectionRange(caret, caret); } catch (e) {}
+    }
     w.study[f] = t.value;
     saveDraft();
     refreshL2Preview();
