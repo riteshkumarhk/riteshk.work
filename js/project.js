@@ -476,25 +476,30 @@
     var branchesOf = function (label) { return String(label || "").split("//").map(function (s) { return s.trim(); }).filter(Boolean); };
     var arrowSvg = '<svg width="32" height="10" viewBox="0 0 32 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M0 5h27"/><path d="M24 1.5 28.5 5 24 8.5"/></svg>';
     var cap = b.caption ? '<figcaption class="pjb__cap">' + esc(b.caption) + "</figcaption>" : "";
-    var steps = items.map(function (it, i) {
+    var arrowOf = [], nodeOf = [];
+    items.forEach(function (it, i) {
       var parts = branchesOf(it.label);
       var num = '<span class="pjb__flow-num">' + String(i + 1).padStart(2, "0") + "</span>";
       var note = it.note ? '<span class="pjb__flow-note">' + esc(it.note) + "</span>" : "";
-      var node;
       if (parts.length > 1) {
-        node = '<div class="pjb__flow-fork">' + num + '<div class="pjb__flow-branches">' + parts.map(function (p) { return '<span class="pjb__flow-branch">' + md(p) + "</span>"; }).join("") + "</div>" + note + "</div>";
+        nodeOf.push('<div class="pjb__flow-fork">' + num + '<div class="pjb__flow-branches">' + parts.map(function (p) { return '<span class="pjb__flow-branch">' + md(p) + "</span>"; }).join("") + "</div>" + note + "</div>");
       } else {
-        node = '<div class="pjb__flow-node">' + num + '<span class="pjb__flow-lbl">' + md(parts[0] || it.label || "") + "</span>" + note + "</div>";
+        nodeOf.push('<div class="pjb__flow-node">' + num + '<span class="pjb__flow-lbl">' + md(parts[0] || it.label || "") + "</span>" + note + "</div>");
       }
-      var arrow = i > 0 ? '<span class="pjb__flow-arrow">' + arrowSvg + "</span>" : "";
-      return '<div class="pjb__flow-step">' + arrow + node + "</div>";
+      arrowOf.push(i > 0 ? '<span class="pjb__flow-arrow">' + arrowSvg + "</span>" : "");
     });
+    var stepOf = function (i, noArrow) { return '<div class="pjb__flow-step">' + (noArrow ? "" : arrowOf[i]) + nodeOf[i] + "</div>"; };
     if (flow === "cycle" && n >= 2) {
       var clamp = function (v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
       var from = clamp(parseInt(b.loopFrom, 10) || 1, 1, n);
       var to = clamp(parseInt(b.loopTo, 10) || n, from, n);
-      var loop = '<div class="pjb__flow-loop" data-loop>' + steps.slice(from - 1, to).join("") + "</div>";
-      return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__flow pjb__flow--cycle">' + steps.slice(0, from - 1).join("") + loop + steps.slice(to).join("") + "</div>" + cap;
+      var out = "", mid = "", i;
+      for (i = 0; i < from - 1; i++) out += stepOf(i);
+      if (from > 1) out += '<div class="pjb__flow-step">' + arrowOf[from - 1] + "</div>";   // the arrow into the loop sits outside the arc
+      for (i = from - 1; i < to; i++) mid += stepOf(i, i === from - 1);                       // the first looped step drops its (now external) arrow
+      out += '<div class="pjb__flow-loop" data-loop>' + mid + "</div>";
+      for (i = to; i < n; i++) out += stepOf(i);
+      return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__flow pjb__flow--cycle">' + out + "</div>" + cap;
     }
     if (flow === "cycle") flow = "linear";   // a loop needs at least two steps — degrade cleanly
     var ret = "";
@@ -502,7 +507,8 @@
       var first = branchesOf(items[0].label)[0] || items[0].label || "";
       ret = '<div class="pjb__flow-return"><span class="pjb__flow-return-ico" aria-hidden="true">\u21ba</span><span>' + (first ? "Repeats from \u201c" + esc(first) + "\u201d" : "Repeats as a cycle") + "</span></div>";
     }
-    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__flow pjb__flow--' + flow + '">' + steps.join("") + "</div>" + ret + cap;
+    var nodes = ""; for (var m = 0; m < n; m++) nodes += stepOf(m);
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__flow pjb__flow--' + flow + '">' + nodes + "</div>" + ret + cap;
   }
 
   function mediagridBlock(b) {
