@@ -360,6 +360,44 @@
       apply();
     });
   }
+  // Adaptive flippers: sample the image brightness right under each flipper and flip its
+  // colours (light art keeps the dark button; dark art gets a light button) so ‹ › never blend in.
+  var toneCv = null;
+  function flipperLum(img, box, cx, cy) {
+    try {
+      var br = box.getBoundingClientRect();
+      var bx = cx - br.left, by = cy - br.top, nw = img.naturalWidth, nh = img.naturalHeight, sx, sy, sc;
+      if (box.classList.contains("is-normalized")) {          // object-fit: contain — respect the letterbox
+        sc = Math.min(br.width / nw, br.height / nh);
+        var dw = nw * sc, dh = nh * sc, ox = (br.width - dw) / 2, oy = (br.height - dh) / 2;
+        if (bx < ox || bx > ox + dw || by < oy || by > oy + dh) return null;
+        sx = (bx - ox) / sc; sy = (by - oy) / sc;
+      } else { sc = br.width / nw; sx = bx / sc; sy = by / sc; }   // image fills the box width
+      var reg = Math.max(6, Math.round(52 / sc));               // ~flipper-sized patch, in natural px
+      var rx = Math.max(0, Math.min(nw - 1, sx) - reg / 2), ry = Math.max(0, Math.min(nh - 1, sy) - reg / 2);
+      var rw = Math.min(nw - rx, reg), rh = Math.min(nh - ry, reg);
+      if (rw < 1 || rh < 1) return null;
+      if (!toneCv) { toneCv = document.createElement("canvas"); toneCv.width = toneCv.height = 1; }
+      var ctx = toneCv.getContext("2d", { willReadFrequently: true });
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.drawImage(img, rx, ry, rw, rh, 0, 0, 1, 1);           // 1x1 destination = average of the patch
+      var d = ctx.getImageData(0, 0, 1, 1).data;
+      return (0.2126 * d[0] + 0.7152 * d[1] + 0.0722 * d[2]) / 255;
+    } catch (e) { return null; }                                // cross-origin taint etc. — leave the default
+  }
+  function flipperTone(g, flip) {
+    if (!flip) return;
+    var fr = flip.getBoundingClientRect(), cx = fr.left + fr.width / 2, cy = fr.top + fr.height / 2;
+    var boxes = g.querySelectorAll(".pjb__slide-media"), box = null;
+    for (var i = 0; i < boxes.length; i++) {
+      var br = boxes[i].getBoundingClientRect();
+      if (cx >= br.left - 1 && cx <= br.right + 1 && cy >= br.top && cy <= br.bottom) { box = boxes[i]; break; }
+    }
+    var img = box && box.querySelector("img.pjb__media-el");
+    var lum = (img && img.naturalWidth && img.naturalHeight) ? flipperLum(img, box, cx, cy) : null;
+    if (lum == null) { flip.classList.remove("pjb__gallery-nav--ondark"); return; }
+    flip.classList.toggle("pjb__gallery-nav--ondark", lum < 0.5);   // dark art -> light button
+  }
   // Slideshow flippers + wheel→horizontal: macOS hides the scrollbar, so give each gallery
   // visible prev/next buttons and let a vertical wheel / trackpad scroll it sideways.
   function galleryNav(root) {
@@ -379,8 +417,11 @@
         if (prev) prev.disabled = g.scrollLeft <= 2;
         if (next) next.disabled = g.scrollLeft >= max - 2;
       }
+      function tone() { flipperTone(g, prev); flipperTone(g, next); }
       if (!g.__nav) {
         g.__nav = true;
+        var toneRaf = 0;
+        var scheduleTone = function () { if (toneRaf) return; toneRaf = requestAnimationFrame(function () { toneRaf = 0; tone(); }); };
         var step = function () {
           var slide = g.querySelector(".pjb__slide");
           var track = g.querySelector(".pjb__gallery-track");
@@ -389,10 +430,10 @@
         };
         if (prev) prev.addEventListener("click", function () { g.scrollBy({ left: -step(), behavior: "smooth" }); });
         if (next) next.addEventListener("click", function () { g.scrollBy({ left: step(), behavior: "smooth" }); });
-        g.addEventListener("scroll", upd, { passive: true });
-        [].forEach.call(g.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", function () { place(); upd(); }, { once: true }); });
+        g.addEventListener("scroll", function () { upd(); scheduleTone(); }, { passive: true });
+        [].forEach.call(g.querySelectorAll("img"), function (im) { if (!im.complete) im.addEventListener("load", function () { place(); upd(); tone(); }, { once: true }); });
       }
-      place(); upd();
+      place(); upd(); tone();
     });
   }
   function figureBlock(b) {
