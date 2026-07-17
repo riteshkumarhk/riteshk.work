@@ -1440,7 +1440,7 @@
     return '<div class="study__panel">' +
       csgenPanel(w, i) +
       header + meta +
-      '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span>' + (blocks.length ? '<span class="l2grp__actions"><button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">\u2728 Review feedback</button><button class="btn btn--auto l2grp__ai" data-act="iprep-open" data-index="' + i + '" title="Generate likely interview questions from this case study">\uD83C\uDF99 Interview prep</button></span>' : "") + "</div>" +
+      '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span>' + (blocks.length ? '<span class="l2grp__actions"><button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">\u2728 Review feedback</button><button class="btn btn--auto l2grp__ai" data-act="iprep-open" data-index="' + i + '" title="Generate likely interview questions from this case study">\uD83C\uDF99 Interview prep</button><button class="btn btn--auto l2grp__ai" data-act="story-open" data-index="' + i + '" title="Build a presentation narrative \u2014 pick a length &amp; audience, get story angles + a beat-by-beat script">\uD83D\uDCD6 Design storyteller</button></span>' : "") + "</div>" +
       '<div class="study__blocks">' + list + "</div>" + add + "</section>" +
       unlockBlock +
       '<div class="study__foot"><a class="btn btn--ghost" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '">Preview case study \u2197</a><button class="btn btn--primary" data-act="study-close" data-index="' + i + '">Done</button></div>' +
@@ -1961,6 +1961,7 @@
     if (act === "csgen-pdf") { csgenAddPdf(i); return; }
     if (act === "fbrev-open") { fbReviewModal(i); return; }
     if (act === "iprep-open") { iprepModal(i); return; }
+    if (act === "story-open") { storyModal(i); return; }
     if (act === "csgen-ref-toggle") { const wrap = b.closest(".csgen__ref"); if (wrap) { const open = wrap.classList.toggle("is-open"); b.textContent = (open ? "\u2212" : "+") + " Paste a reference case study to echo (optional)"; const cw = data.work[i]; if (cw) csgenState(cw.id).refShow = open; } return; }
     if (act === "study-toggle") { openL2(i); return; }
     if (act === "study-close") { closeL2(); return; }
@@ -4182,6 +4183,197 @@
       var ansEl = card.querySelector(".iprep__a"); var txt = ansEl ? ansEl.innerText : ""; if (!txt) return;
       if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function () { cb.textContent = "Copied"; setTimeout(function () { cb.textContent = "Copy"; }, 1400); }).catch(function () {});
     });
+  }
+
+  /* ---------- Design storyteller (prep only) ---------- */
+  // Turns a case study into a live-presentation narrative: pick a length + audience,
+  // get a few distinct story ANGLES, then a time-budgeted beat-by-beat script for one.
+  var STORY_DUR = [
+    ["2015", "20\u201315 min", "Deep dive \u2014 the full arc"],
+    ["1510", "15\u201310 min", "Standard interview slot"],
+    ["105", "10\u20135 min", "Tight \u2014 lead with impact"],
+    ["5", "5 min", "Lightning \u2014 one thread + the punchline"]
+  ];
+  var STORY_TONE = [
+    ["vp", "VP / Exec", "Outcomes, strategy, business altitude"],
+    ["staff", "Staff / Principal", "Ambiguity, systems, cross-team leverage"],
+    ["senior", "Senior", "Craft, decisions &amp; the how"]
+  ];
+  var STORY_BUDGET = { "2015": 17, "1510": 12, "105": 7, "5": 5 };
+  var storyState = {};
+  function storySt(id) { return storyState[id] || (storyState[id] = { dur: "1510", tone: "staff" }); }
+  function storyDurLabel(dur) { for (var i = 0; i < STORY_DUR.length; i++) if (STORY_DUR[i][0] === dur) return STORY_DUR[i][1]; return ""; }
+  function storyAudience(tone) {
+    return {
+      vp: "The room is a VP / executive panel \u2014 lead with business outcomes and strategic bets, stay at altitude over process, and be crisp and declarative.",
+      staff: "The room is staff / principal designers and engineers \u2014 dwell on ambiguity, problem framing, systems thinking and cross-team leverage; judgment over pixels.",
+      senior: "The room is senior designers \u2014 show craft, the concrete decisions and the reasoning behind them; the how, not just the what."
+    }[tone] || "";
+  }
+  var STORY_VIS = { media: "image(s)", gallery: "image carousel", mediagrid: "image grid", device: "device mockup", isolayers: "layered UI visual", compare: "before/after slider", figure: "figure + text", focus: "annotated image", voices: "user quotes", metrics: "metric band", workflow: "process diagram", stickies: "sticky-note board", columns: "comparison columns", rows: "comparison rows", cards: "card grid" };
+  function storyContext(w) {
+    var base = iprepContext(w, "study"), vis = [];
+    ((w.study && w.study.blocks) || []).forEach(function (b) {
+      var kind = STORY_VIS[b.type]; if (!kind) return;
+      var cap = iprepStrip(b.heading || b.caption || (b.items && b.items[0] && (b.items[0].caption || b.items[0].heading)) || "");
+      vis.push("- " + kind + (cap ? " \u2014 " + cap : ""));
+    });
+    if (vis.length) base += "\n\n# VISUALS I CAN SHOW (tell me WHEN to pull each up)\n" + vis.join("\n");
+    return base.length > 9200 ? base.slice(0, 9200) + "\u2026" : base;
+  }
+  function storyThemesSystem(tone, durLabel) {
+    return [
+      "You are an elite design-portfolio presentation coach. In an interview a designer gets roughly " + durLabel + " to present ONE case study live. From their REAL material, propose a few DISTINCT, high-impact STORY ANGLES to build the talk around \u2014 not a summary, but different SPINES for the narrative.",
+      storyAudience(tone),
+      "Each angle must be a genuinely different lens on the same project (e.g. a trust reframe, a metric that redirected the roadmap, a hard tradeoff, a systems bet, a user-insight turn). Make each vivid and specific to THIS work.",
+      "Rules: use ONLY facts from the material; never invent metrics, names or outcomes; no generic filler; make the titles presentation-worthy.",
+      "Return ONLY valid JSON (no markdown): {\"themes\":[{\"title\":string,\"hook\":string,\"why\":string,\"beats\":string}]}. hook = the one-line spine of the story. why = why this angle lands for THIS room. beats = a 4\u20136 word skeleton of the arc."
+    ].join("\n");
+  }
+  function storyThemesUser(ctx) { return "Propose 4 distinct angles.\n\nCASE STUDY MATERIAL:\n" + ctx; }
+  function storyTellSystem(tone, durLabel, budget) {
+    return [
+      "You are an elite presentation coach. Script EXACTLY how the designer should PRESENT this case study live, built around the chosen story angle, to fit " + durLabel + ".",
+      storyAudience(tone),
+      "Produce a time-budgeted, beat-by-beat SPOKEN narrative: an opening hook; ordered beats (each with what to SAY in a natural spoken voice, how many minutes, and the ONE point that must land); a strong close; what to consciously SKIP given the time; and one delivery tip.",
+      "Calibrate depth to the time budget \u2014 5 min = one thread and the punchline, skip the middle; 20 min = the full arc with detail. The beat minutes MUST sum to about " + budget + " minutes.",
+      "Where a visual exists (see \u2018VISUALS I CAN SHOW\u2019), say WHEN to pull it up inside the relevant beat.",
+      "Use ONLY facts from the material. NEVER invent metrics, names or outcomes; if a needed detail is missing, insert a bracketed placeholder like [add the metric].",
+      "Return ONLY valid JSON (no markdown): {\"spine\":string,\"opener\":string,\"beats\":[{\"label\":string,\"mins\":string,\"say\":string,\"must\":string}],\"close\":string,\"skip\":string,\"tip\":string}. say = 1\u20133 sentences of what to actually say aloud. must = the single point that must land. mins = a number like \"2\"."
+    ].join("\n");
+  }
+  function storyTellUser(t, ctx) {
+    return "CHOSEN STORY ANGLE:\nTitle: " + (t.title || "") + "\nSpine: " + (t.hook || "") + (t.beats ? "\nArc: " + t.beats : "") + "\n\nCASE STUDY MATERIAL:\n" + ctx;
+  }
+  function storyRenderThemes(box, themes) {
+    box.innerHTML = '<div class="story__themes-h">Pick an angle \u2014 I\u2019ll script the talk for it</div>' + themes.map(function (t, idx) {
+      return '<div class="story__theme" data-ti="' + idx + '">' +
+        '<div class="story__theme-h">' + escHtml(t.title || ("Angle " + (idx + 1))) + "</div>" +
+        (t.hook ? '<div class="story__theme-hook">' + escHtml(t.hook) + "</div>" : "") +
+        (t.beats ? '<div class="story__theme-arc">' + escHtml(t.beats) + "</div>" : "") +
+        (t.why ? '<div class="story__theme-why">' + escHtml(t.why) + "</div>" : "") +
+        '<div class="story__theme-act"><button class="btn btn--auto" data-story-tell="' + idx + '">Tell this story \u2192</button></div>' +
+        "</div>";
+    }).join("");
+  }
+  function storyRenderTale(box, s) {
+    var beats = Array.isArray(s.beats) ? s.beats : [];
+    var total = beats.reduce(function (a, b) { return a + (parseFloat(b.mins) || 0); }, 0);
+    box.innerHTML =
+      (s.spine ? '<div class="story__spine">' + escHtml(s.spine) + "</div>" : "") +
+      (s.opener ? '<div class="story__step story__open"><span class="story__tag">Open with</span><p>' + escHtml(s.opener) + "</p></div>" : "") +
+      '<div class="story__beats">' + beats.map(function (b, idx) {
+        return '<div class="story__beat">' +
+          '<div class="story__beat-time">' + escHtml(String(b.mins || "\u2022")) + (b.mins ? "<small>min</small>" : "") + "</div>" +
+          '<div class="story__beat-main">' +
+            '<div class="story__beat-label">' + escHtml(b.label || ("Beat " + (idx + 1))) + "</div>" +
+            (b.say ? '<div class="story__beat-say">' + escHtml(b.say) + "</div>" : "") +
+            (b.must ? '<div class="story__beat-must"><span>Must land</span> ' + escHtml(b.must) + "</div>" : "") +
+          "</div>" +
+        "</div>";
+      }).join("") + "</div>" +
+      (s.close ? '<div class="story__step story__land"><span class="story__tag">Land it</span><p>' + escHtml(s.close) + "</p></div>" : "") +
+      (s.skip ? '<div class="story__aside"><span>Skip / don\u2019t dwell</span> ' + escHtml(s.skip) + "</div>" : "") +
+      (s.tip ? '<div class="story__aside"><span>Delivery</span> ' + escHtml(s.tip) + "</div>" : "") +
+      '<div class="story__tale-foot"><span class="story__total">' + (total ? "\u2248 " + total + " min total" : "") + '</span><span class="story__tale-act"><button class="btn btn--ghost" data-story-regen>\u21bb Regenerate</button><button class="btn btn--ghost" data-story-copy>Copy script</button></span></div>';
+  }
+  function storyPlain(s, title) {
+    if (!s) return "";
+    var L = [];
+    if (title) L.push(String(title).toUpperCase());
+    if (s.spine) L.push(s.spine);
+    if (s.opener) L.push("", "OPEN WITH: " + s.opener);
+    L.push("");
+    (s.beats || []).forEach(function (b) {
+      L.push("\u2022 " + (b.label || "") + (b.mins ? "  (" + b.mins + " min)" : ""));
+      if (b.say) L.push("  " + b.say);
+      if (b.must) L.push("  Must land: " + b.must);
+      L.push("");
+    });
+    if (s.close) L.push("LAND IT: " + s.close);
+    if (s.skip) L.push("", "SKIP: " + s.skip);
+    if (s.tip) L.push("DELIVERY: " + s.tip);
+    return L.join("\n").trim();
+  }
+  function storyModal(i) {
+    var w = data.work[i]; if (!w) return;
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { storyModal(i); }); return; }
+    var g = storySt(w.id);
+    var themes = [];
+    var modal = document.createElement("div");
+    modal.className = "pass pass--wide story-modal";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">\uD83D\uDCD6 Design storyteller \u2014 ' + escHtml(w.title || "case study") + "</div>" +
+      '<div class="pass__sub">Turn this case study into a presentation. Pick how long you\u2019ll have and who\u2019s in the room \u2014 get a few story angles, then a beat-by-beat script for the one you choose.</div>' +
+      '<div class="story__setup">' +
+        '<div class="af"><label class="af__label">How long to present</label><div class="story__opts">' +
+          STORY_DUR.map(function (d) { return '<button type="button" class="story__opt' + (g.dur === d[0] ? " is-on" : "") + '" data-story-dur="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
+        "</div></div>" +
+        '<div class="af"><label class="af__label">Who\u2019s in the room</label><div class="story__opts">' +
+          STORY_TONE.map(function (t) { return '<button type="button" class="story__opt' + (g.tone === t[0] ? " is-on" : "") + '" data-story-tone="' + t[0] + '"><span class="story__opt-name">' + t[1] + '</span><span class="story__opt-desc">' + t[2] + "</span></button>"; }).join("") +
+        "</div></div>" +
+      "</div>" +
+      '<div class="story__themes" hidden></div>' +
+      '<div class="story__tale" hidden></div>' +
+      '<div class="pass__err"></div>' +
+      '<div class="pass__actions story__foot">' +
+        '<button class="btn btn--ghost" data-cancel>Close</button>' +
+        '<button class="btn btn--ghost" data-story-back hidden>\u2190 Back</button>' +
+        '<button class="btn btn--auto" data-story-run>Find story angles</button>' +
+      "</div>" +
+      '<div class="pass__note">A prep tool only \u2014 nothing here is saved to or published on your site. It uses only your own content.</div></div>';
+    document.body.appendChild(modal);
+    var err = modal.querySelector(".pass__err");
+    var setup = modal.querySelector(".story__setup");
+    var themesBox = modal.querySelector(".story__themes");
+    var taleBox = modal.querySelector(".story__tale");
+    var runBtn = modal.querySelector("[data-story-run]");
+    var backBtn = modal.querySelector("[data-story-back]");
+    var close = function () { modal.remove(); };
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    modal.querySelectorAll("[data-story-dur]").forEach(function (b) { b.addEventListener("click", function () { g.dur = b.dataset.storyDur; modal.querySelectorAll("[data-story-dur]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); }); });
+    modal.querySelectorAll("[data-story-tone]").forEach(function (b) { b.addEventListener("click", function () { g.tone = b.dataset.storyTone; modal.querySelectorAll("[data-story-tone]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); }); });
+    function showSetup() { setup.hidden = false; themesBox.hidden = true; taleBox.hidden = true; backBtn.hidden = true; runBtn.hidden = false; err.textContent = ""; }
+    function showThemes() { setup.hidden = true; themesBox.hidden = false; taleBox.hidden = true; backBtn.hidden = false; backBtn.textContent = "\u2190 Change setup"; runBtn.hidden = true; err.textContent = ""; }
+    function showTale() { setup.hidden = true; themesBox.hidden = true; taleBox.hidden = false; backBtn.hidden = false; backBtn.textContent = "\u2190 Other angles"; runBtn.hidden = true; err.textContent = ""; }
+    backBtn.addEventListener("click", function () { if (!taleBox.hidden) showThemes(); else showSetup(); });
+    runBtn.addEventListener("click", async function () {
+      err.textContent = "";
+      runBtn.disabled = true; runBtn.textContent = "Thinking\u2026";
+      try {
+        var ctx = storyContext(w); g.__ctx = ctx;
+        var obj = csgenParse(await aiText(aiCfg("txt"), storyThemesSystem(g.tone, storyDurLabel(g.dur)), storyThemesUser(ctx), { json: true, maxTokens: 1500, temperature: 0.8 }));
+        var raw = obj && Array.isArray(obj.themes) ? obj.themes : (Array.isArray(obj) ? obj : null);
+        if (!raw || !raw.length) throw new Error("No angles came back \u2014 try again.");
+        themes = raw.filter(function (t) { return t && (t.title || t.hook); });
+        storyRenderThemes(themesBox, themes);
+        showThemes();
+      } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t find story angles."; }
+      runBtn.disabled = false; runBtn.textContent = "Find story angles";
+    });
+    async function tell(idx, srcBtn) {
+      var t = themes[idx]; if (!t) return;
+      var was = srcBtn ? srcBtn.textContent : "";
+      if (srcBtn) { srcBtn.disabled = true; srcBtn.textContent = "Scripting\u2026"; }
+      err.textContent = "";
+      try {
+        var s = csgenParse(await aiText(aiCfg("txt"), storyTellSystem(g.tone, storyDurLabel(g.dur), STORY_BUDGET[g.dur] || 12), storyTellUser(t, g.__ctx || storyContext(w)), { json: true, maxTokens: 2200, temperature: 0.7 }));
+        if (!s || (!Array.isArray(s.beats) && !s.opener)) throw new Error("The script didn\u2019t come through \u2014 try again.");
+        taleBox.__ti = idx; taleBox.__script = s; taleBox.__title = t.title || "";
+        storyRenderTale(taleBox, s);
+        showTale(); taleBox.scrollTop = 0;
+      } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t script that story."; if (srcBtn) { srcBtn.disabled = false; srcBtn.textContent = was; } }
+    }
+    themesBox.addEventListener("click", function (e) { var b = e.target.closest("[data-story-tell]"); if (b) tell(+b.dataset.storyTell, b); });
+    taleBox.addEventListener("click", function (e) {
+      var rb = e.target.closest("[data-story-regen]");
+      if (rb) { tell(taleBox.__ti, rb); return; }
+      var cb = e.target.closest("[data-story-copy]");
+      if (cb) { var txt = storyPlain(taleBox.__script, taleBox.__title); if (navigator.clipboard && txt) navigator.clipboard.writeText(txt).then(function () { cb.textContent = "Copied"; setTimeout(function () { cb.textContent = "Copy script"; }, 1400); }).catch(function () {}); }
+    });
+    showSetup();
   }
 
   /* ---------- shell / open / exit ---------- */
