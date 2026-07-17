@@ -1334,7 +1334,27 @@
   }
   function closeFocusFs() { if (focusFs) { focusFs.classList.remove("is-open"); if (focusFs.__clone) focusDeactivate(focusFs.__clone); } }
 
-  function fillContent(w) {
+  // Anchor the preview scroll to a stable block so async reflow (galleries normalising,
+  // media loading, the enhancers below) above the fold can't make the view drift while you
+  // type. Capture the top-most in-view block + its viewport offset, then re-pin it after.
+  function captureAnchor() {
+    if (!scroller) return null;
+    var top = scroller.scrollTop;
+    var kids = scroller.querySelectorAll("[data-block]");
+    for (var i = 0; i < kids.length; i++) {
+      var el = kids[i];
+      if (el.offsetTop + el.offsetHeight > top + 8) return { block: el.getAttribute("data-block"), delta: el.offsetTop - top };
+    }
+    return { top: top };
+  }
+  function restoreAnchor(a) {
+    if (!scroller || !a) return;
+    if (a.block == null) { if (a.top != null) scroller.scrollTop = a.top; return; }
+    var el = scroller.querySelector('[data-block="' + a.block + '"]');
+    if (el) scroller.scrollTop = Math.max(0, Math.round(el.offsetTop - a.delta));
+    else if (a.top != null) scroller.scrollTop = a.top;
+  }
+  function fillContent(w, keepAnchor) {
     var head = overlay.querySelector("[data-crumb]");
     head.innerHTML = '<b>' + esc(w.client || "") + "</b>" + (w.plateTag ? "<span>" + esc(w.plateTag) + "</span>" : "");
     var st = w.study || {};
@@ -1352,7 +1372,10 @@
       contentEl.innerHTML = html;
     }
     contentEl.setAttribute("data-wid", String(w.id));
-    requestAnimationFrame(function () { updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); graphWire(contentEl); galleryNav(contentEl); });
+    requestAnimationFrame(function () {
+      updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); graphWire(contentEl); galleryNav(contentEl);
+      if (keepAnchor) { restoreAnchor(keepAnchor); requestAnimationFrame(function () { restoreAnchor(keepAnchor); }); }
+    });
   }
 
   // Minimal DOM morph: update text/attributes in place and add/remove nodes, but
@@ -1383,10 +1406,28 @@
     morphAttrs(o, n);
     morphChildren(o, n);
   }
+  // Classes/styles the live preview adds at RUNTIME (gallery-height normalisation, reveals,
+  // focus/iso state) aren't in the freshly-rendered template, so a naive morph would strip
+  // them every keystroke — galleries balloon back to natural height, everything below shifts,
+  // and the preview scroll drifts. Preserve those: merge runtime classes and keep inline style.
+  var RUNTIME_CLASS = /^(is-|pjb__gallery-nav--ondark$|pjb--flash$|pjb--droptarget$)/;
+  function mergeClass(oldC, newC) {
+    var out = (newC || "").split(/\s+/).filter(Boolean);
+    (oldC || "").split(/\s+/).forEach(function (c) { if (c && RUNTIME_CLASS.test(c) && out.indexOf(c) < 0) out.push(c); });
+    return out.join(" ");
+  }
   function morphAttrs(o, n) {
     var i, oa = o.attributes, na = n.attributes;
-    for (i = na.length - 1; i >= 0; i--) { if (o.getAttribute(na[i].name) !== na[i].value) o.setAttribute(na[i].name, na[i].value); }
-    for (i = oa.length - 1; i >= 0; i--) { if (!n.hasAttribute(oa[i].name)) o.removeAttribute(oa[i].name); }
+    for (i = na.length - 1; i >= 0; i--) {
+      var name = na[i].name, val = na[i].value;
+      if (name === "class") val = mergeClass(o.getAttribute("class"), val);
+      if (o.getAttribute(name) !== val) o.setAttribute(name, val);
+    }
+    for (i = oa.length - 1; i >= 0; i--) {
+      var an = oa[i].name;
+      if (an === "class" || an === "style") continue;   // class merged above; inline style is runtime-managed (gallery heights, transforms) — keep it
+      if (!n.hasAttribute(an)) o.removeAttribute(an);
+    }
   }
 
   function nav(dir) {
@@ -1464,11 +1505,11 @@
       setSiteInert(true);
     }
     activeId = id;
-    var prevScroll = scroller ? scroller.scrollTop : 0;
-    fillContent(w);
+    var keepAnchor = opts.keepScroll ? captureAnchor() : null;
+    fillContent(w, keepAnchor);
     document.title = w.title ? (plain(w.title) + " \u2014 Ritesh Kumar") : DEFAULT_TITLE;
     if (opts.push !== false) { try { history.pushState({ rkWork: id }, "", "/work/" + id); } catch (e) {} }
-    scroller.scrollTop = opts.keepScroll ? prevScroll : 0;
+    if (opts.keepScroll) restoreAnchor(keepAnchor); else scroller.scrollTop = 0;
     if (firstOpen) requestAnimationFrame(function () { overlay.classList.add("is-open"); requestAnimationFrame(updateSpy); });
     else updateSpy();
     if (!opts.silent) focusOverlay();
