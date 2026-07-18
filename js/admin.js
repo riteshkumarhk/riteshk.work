@@ -756,11 +756,24 @@
     }
     rtSerialize(area);
   }
+  // A CTA mid-AI-work: show a spinner (.is-busy) + optional label; btnIdle restores it.
+  function btnBusy(btn, label) {
+    if (!btn) return "";
+    var prev = btn.innerHTML;
+    btn.disabled = true; btn.classList.add("is-busy");
+    if (label != null) btn.textContent = label;
+    return prev;
+  }
+  function btnIdle(btn, label) {
+    if (!btn) return;
+    btn.disabled = false; btn.classList.remove("is-busy");
+    if (label != null) { if (String(label).indexOf("<") !== -1) btn.innerHTML = label; else btn.textContent = label; }
+  }
   async function rtImprove(area, btn) {
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { rtImprove(area, btn); }); return; }
     var text = (area.innerText || "").trim();
     if (!text) { status("Write something first, then Improve."); return; }
-    var lbl = btn && btn.innerHTML; if (btn) { btn.disabled = true; btn.innerHTML = "\u2728 \u2026"; }
+    var lbl = btnBusy(btn, "\u2728");
     status("Improving with AI\u2026");
     try {
       var out = await aiText(aiCfg("txt"),
@@ -770,7 +783,7 @@
       if (html) { rtSetHtml(area, html); rtSerialize(area); status("Improved \u2014 not right? Press Ctrl+Z or the Undo button to revert.", true); }
       else status("The AI didn\u2019t return usable copy \u2014 try again.");
     } catch (e) { status("Improve failed: " + ((e && e.message) || "error")); }
-    if (btn) { btn.disabled = false; btn.innerHTML = lbl || "\u2728 Improve"; }
+    btnIdle(btn, lbl || "\u2728 Improve");
   }
 
   /* ---------- structured item repeaters ---------- */
@@ -3319,11 +3332,12 @@
     if (!aiSupportsImages()) return status("This service can\u2019t generate images \u2014 pick OpenAI or Gemini.");
     const p = aiPromptFor(i);
     if (!p) return status("Type a prompt to generate an image.");
+    const gb = root.querySelector('[data-act="img-generate"][data-index="' + i + '"]'); btnBusy(gb, "Generating\u2026");
     status("Generating image\u2026 this can take a moment.");
     try {
       const uri = await compressDataUri(await aiImage(cfg, p, null));
       data.work[i].image = uri; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Image generated.", true);
-    } catch (e) { status("Generate failed: " + e.message); }
+    } catch (e) { btnIdle(gb, "Generate"); status("Generate failed: " + e.message); }
   }
   async function imgModify(i) {
     if (!aiHasKey("img")) { aiKeyModal("img", function () { imgModify(i); }); return; }
@@ -3333,11 +3347,12 @@
     if (!cur) return status("No current image to modify.");
     const p = aiPromptFor(i);
     if (!p) return status("Describe how to change the image.");
+    const mb = root.querySelector('[data-act="img-modify"][data-index="' + i + '"]'); btnBusy(mb, "Reimagining\u2026");
     status("Reimagining the image\u2026");
     try {
       const uri = await compressDataUri(await aiImage(cfg, p, cur));
       data.work[i].image = uri; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Image updated.", true);
-    } catch (e) { status("Modify failed: " + e.message); }
+    } catch (e) { btnIdle(mb, "Modify current"); status("Modify failed: " + e.message); }
   }
   async function aiImage(cfg, prompt, sourceImage) {
     if (cfg.provider === "anthropic") throw new Error("Claude can't generate images \u2014 pick OpenAI or Gemini.");
@@ -3649,7 +3664,7 @@
     var g = csgenState(w.id);
     if (!g.material.trim() && !g.links.trim() && !g.reference.trim()) { csgenStatus(i, "Add some notes or links first.", "err"); return; }
     var sel = '[data-act="csgen-run"][data-index="' + i + '"],[data-act="csgen-variant"][data-index="' + i + '"]';
-    root.querySelectorAll(sel).forEach(function (b) { b.disabled = true; });
+    root.querySelectorAll(sel).forEach(function (b) { b.disabled = true; b.classList.add("is-busy"); });
     csgenStatus(i, variant ? "Writing a fresh variant\u2026" : "Writing the case study\u2026 this can take a moment.", "run");
     try {
       var raw = await aiText(aiCfg("txt"), csgenSystem(g.tone), csgenUser(w, g, variant), { json: true, maxTokens: 4096, temperature: variant ? 0.95 : 0.65 });
@@ -3662,7 +3677,7 @@
       status("Case study generated \u2014 review and edit anything.", true);
     } catch (e) {
       csgenStatus(i, (e && e.message) || "Generation failed.", "err");
-      root.querySelectorAll(sel).forEach(function (b) { b.disabled = false; });
+      root.querySelectorAll(sel).forEach(function (b) { b.disabled = false; b.classList.remove("is-busy"); });
     }
   }
   function ensurePdfJs() {
@@ -3784,14 +3799,14 @@
       if (!picks.hero && !picks.highlights && !picks.capabilities && !picks.about) { err.textContent = "Pick at least one section."; return; }
       err.textContent = "";
       var brief = modal.querySelector("#laigBrief").value.trim(), tone = modal.querySelector("#laigTone").value;
-      var genBtn = modal.querySelector("[data-gen]"); genBtn.disabled = true; genBtn.textContent = "Writing\u2026";
+      var genBtn = modal.querySelector("[data-gen]"); btnBusy(genBtn, "Writing\u2026");
       try {
         var obj = csgenParse(await aiText(aiCfg("txt"), landingSystem(tone, picks), "BRIEF / CONTEXT:\n" + (brief || "(none \u2014 infer tastefully from a senior product designer profile)") + "\n\nWrite the requested sections as JSON.", { json: true, maxTokens: 2048, temperature: 0.7 }));
         if (!obj) throw new Error("The AI didn\u2019t return usable copy \u2014 try again.");
         renderReview(obj, picks);
         review.hidden = false; modal.querySelector(".laig").hidden = true; genBtn.hidden = true;
         modal.querySelector("[data-apply]").hidden = false;
-      } catch (e) { err.textContent = (e && e.message) || "Failed."; genBtn.disabled = false; genBtn.textContent = "Generate draft"; }
+      } catch (e) { err.textContent = (e && e.message) || "Failed."; btnIdle(genBtn, "Generate draft"); }
     });
     modal.querySelector("[data-apply]").addEventListener("click", function () {
       var g = function (id) { var el = modal.querySelector("#" + id); return el ? el.value : null; };
@@ -3973,7 +3988,7 @@
       if (!feedback) { err.textContent = "Paste or upload some feedback first."; return; }
       if (!fields.length) { err.textContent = "This case study has no editable text yet."; return; }
       err.textContent = "";
-      runBtn.disabled = true; runBtn.textContent = "Reviewing\u2026";
+      btnBusy(runBtn, "Reviewing\u2026");
       try {
         var obj = csgenParse(await aiText(aiCfg("txt"), fbSystem(), fbUser(fields, feedback), { json: true, maxTokens: 4096, temperature: 0.4 }));
         var raw = obj && Array.isArray(obj.changes) ? obj.changes : (Array.isArray(obj) ? obj : null);
@@ -3990,7 +4005,7 @@
         renderReview();
       } catch (e) {
         err.textContent = (e && e.message) || "Review failed.";
-        runBtn.disabled = false; runBtn.textContent = "Review against case study";
+        btnIdle(runBtn, "Review against case study");
       }
     });
     modal.querySelector("[data-fbrev-all]").addEventListener("click", function () { review.querySelectorAll("input[data-fbc]").forEach(function (c) { c.checked = true; }); updateApplyCount(); });
@@ -4178,7 +4193,7 @@
       err.textContent = "";
       g.scope = modal.querySelector("#iprepScope").value; g.jd = jdEl.value;
       var n = +modal.querySelector("#iprepCount").value || 10;
-      runBtn.disabled = true; runBtn.textContent = "Thinking\u2026";
+      btnBusy(runBtn, "Thinking\u2026");
       try {
         var jd = await iprepResolveJd(jdEl.value);
         var ctx = iprepContext(w, g.scope);
@@ -4189,20 +4204,20 @@
         g.__ctx = ctx; g.__jd = jd;
         renderQuestions();
       } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t generate questions."; }
-      runBtn.disabled = false; runBtn.textContent = "Generate questions";
+      btnIdle(runBtn, "Generate questions");
     });
     list.addEventListener("click", async function (e) {
       var btn = e.target.closest("[data-iprep-ans]"); if (!btn) return;
       var idx = +btn.dataset.iprepAns; var q = questions[idx]; if (!q) return;
       var card = list.querySelector('.iprep__card[data-qi="' + idx + '"]'); if (!card) return;
       var ansEl = card.querySelector(".iprep__a");
-      btn.disabled = true; var was = btn.textContent; btn.textContent = "Drafting\u2026"; err.textContent = "";
+      var was = btnBusy(btn, "Drafting\u2026"); err.textContent = "";
       try {
         var html = await aiText(aiCfg("txt"), iprepAnsSystem(g.level), iprepAnsUser(q.q, g.__ctx || iprepContext(w, g.scope), g.__jd || ""), { maxTokens: 900, temperature: 0.6 });
         html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
         ansEl.innerHTML = iprepSafeHtml(html); ansEl.hidden = false;
         card.querySelector(".iprep__q-act").innerHTML = '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">\u21bb Regenerate</button><button class="btn btn--ghost" data-iprep-copy="' + idx + '">Copy</button>';
-      } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t draft an answer."; btn.disabled = false; btn.textContent = was; }
+      } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t draft an answer."; btnIdle(btn, was); }
     });
     list.addEventListener("click", function (e) {
       var cb = e.target.closest("[data-iprep-copy]"); if (!cb) return;
@@ -4448,7 +4463,7 @@
     backBtn.addEventListener("click", function () { showSetup(); });
     runBtn.addEventListener("click", async function () {
       err.textContent = "";
-      runBtn.disabled = true; runBtn.textContent = "Thinking\u2026";
+      btnBusy(runBtn, "Thinking\u2026");
       try {
         var ctx = storyContext(w); g.__ctx = ctx;
         var obj = csgenParse(await aiText(aiCfg("txt"), storyThemesSystem(g.tone, storyDurLabel(g.dur)), storyThemesUser(ctx), { json: true, maxTokens: 1500, temperature: 0.8 }));
@@ -4458,13 +4473,13 @@
         storyRenderThemes(themesBox, themes);
         showThemes();
       } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t find story angles."; }
-      runBtn.disabled = false; runBtn.textContent = "Find story angles";
+      btnIdle(runBtn, "Find story angles");
     });
     async function tell(idx, srcBtn) {
       var t = themes[idx]; if (!t) return;
       var switching = idx !== curTi;
       var was = srcBtn ? srcBtn.textContent : "";
-      if (srcBtn) { srcBtn.disabled = true; srcBtn.textContent = "Scripting\u2026"; }
+      btnBusy(srcBtn, "Scripting\u2026");
       err.textContent = "";
       try {
         var s = csgenParse(await aiText(aiCfg("txt"), storyTellSystem(g.tone, storyDurLabel(g.dur), STORY_BUDGET[g.dur] || 12), storyTellUser(t, g.__ctx || storyContext(w)), { json: true, maxTokens: 2200, temperature: 0.7 }));
@@ -4474,7 +4489,8 @@
         if (switching) { questionsArr = []; qlist.innerHTML = ""; qgenBtn.textContent = "Generate questions"; }
         l2Title.textContent = t.title || "Your story";
         showL2(); if (l2Body) l2Body.scrollTop = 0;
-      } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t script that story."; if (srcBtn) { srcBtn.disabled = false; srcBtn.textContent = was; } }
+      } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t script that story."; }
+      finally { btnIdle(srcBtn, was); }
     }
     themesBox.addEventListener("click", function (e) { var b = e.target.closest("[data-story-tell]"); if (b) tell(+b.dataset.storyTell, b); });
     taleBox.addEventListener("click", function (e) {
@@ -4487,7 +4503,7 @@
       if (curTi < 0 || !themes[curTi]) return;
       g.qrole = qroleSel.value;
       var n = g.qrole === "any" ? 10 : 5;
-      qgenBtn.disabled = true; qgenBtn.textContent = "Thinking\u2026"; err.textContent = "";
+      btnBusy(qgenBtn, "Thinking\u2026"); err.textContent = "";
       try {
         var obj = csgenParse(await aiText(aiCfg("txt"), storyQSystem(g.tone, g.qrole, n), storyQUser(g.__ctx || storyContext(w), themes[curTi], n), { json: true, maxTokens: 1800, temperature: 0.8 }));
         var raw = obj && Array.isArray(obj.questions) ? obj.questions : (Array.isArray(obj) ? obj : null);
@@ -4495,7 +4511,7 @@
         questionsArr = raw.map(function (q) { return typeof q === "string" ? { q: q } : (q && q.q ? { q: q.q, role: q.role, why: q.why } : null); }).filter(Boolean);
         storyRenderQuestions(qlist, questionsArr);
       } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t generate questions."; }
-      qgenBtn.disabled = false; qgenBtn.textContent = questionsArr.length ? "Regenerate" : "Generate questions";
+      btnIdle(qgenBtn, questionsArr.length ? "Regenerate" : "Generate questions");
     });
     qlist.addEventListener("click", async function (e) {
       var ab = e.target.closest("[data-story-qans]");
@@ -4503,13 +4519,13 @@
         var idx = +ab.dataset.storyQans; var q = questionsArr[idx]; if (!q) return;
         var card = qlist.querySelector('.story__q[data-qi="' + idx + '"]'); if (!card) return;
         var aEl = card.querySelector(".story__q-a");
-        ab.disabled = true; var was = ab.textContent; ab.textContent = "Drafting\u2026"; err.textContent = "";
+        var was = btnBusy(ab, "Drafting\u2026"); err.textContent = "";
         try {
           var html = await aiText(aiCfg("txt"), storyQAnsSystem(g.tone, q.role || storyRoleName(g.qrole)), storyQAnsUser(q.q, g.__ctx || storyContext(w), themes[curTi]), { maxTokens: 700, temperature: 0.6 });
           html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
           aEl.innerHTML = iprepSafeHtml(html); aEl.hidden = false;
           card.querySelector(".story__q-act").innerHTML = '<button class="btn btn--ghost" data-story-qans="' + idx + '">\u21bb Redo</button><button class="btn btn--ghost" data-story-qcopy="' + idx + '">Copy</button>';
-        } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t draft an answer."; ab.disabled = false; ab.textContent = was; }
+        } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t draft an answer."; btnIdle(ab, was); }
         return;
       }
       var cb = e.target.closest("[data-story-qcopy]");
