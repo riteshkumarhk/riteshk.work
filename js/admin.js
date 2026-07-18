@@ -1274,6 +1274,7 @@
       '<span class="study__block-badge">' + escHtml(typeName) + "</span>" +
       '<span class="study__block-label' + (custom ? " is-custom" : "") + '" title="Double-click to rename">' + escHtml(label) + "</span>" +
       '<span class="study__block-ops">' +
+      '<button class="iconbtn" data-act="study-blockadd" data-index="' + i + '" data-bindex="' + j + '" title="Add a section above" aria-label="Add a section above"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>' +
       '<button class="iconbtn" data-act="study-blockup" data-index="' + i + '" data-bindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
       '<button class="iconbtn" data-act="study-blockdown" data-index="' + i + '" data-bindex="' + j + '"' + (j === len - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
       '<button class="iconbtn" data-act="study-blockdup" data-index="' + i + '" data-bindex="' + j + '" title="Duplicate section" aria-label="Duplicate section"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
@@ -1381,11 +1382,12 @@
         return '<span class="secprev secprev--text"><span class="sp__kick">Context</span><span class="sp__h">The problem</span><span class="sp__body">A short paragraph that sets up the situation and the stakes.</span><span class="sp__bul">Point one</span><span class="sp__bul">Point two</span></span>';
     }
   }
-  function sectionPicker(i) {
+  function sectionPicker(i, at) {
+    var above = typeof at === "number" && at >= 0;
     var modal = document.createElement("div");
     modal.className = "pass pass--wide secpick";
     modal.innerHTML =
-      '<div class="pass__box"><div class="pass__title">Add a section</div>' +
+      '<div class="pass__box"><div class="pass__title">' + (above ? "Add a section above" : "Add a section") + "</div>" +
       '<div class="pass__sub">Pick the layout that fits your content \u2014 this is how each one looks on your live page.</div>' +
       '<div class="secpick__grid">' +
       SECTION_GALLERY.map(function (s) {
@@ -1408,8 +1410,10 @@
         var type = btn.getAttribute("data-pick");
         var st = data.work[i].study || (data.work[i].study = blankStudy());
         st.blocks = st.blocks || [];
-        st.blocks.push(blankBlock(type));
-        openBlock = st.blocks.length - 1;
+        var pos;
+        if (above) { pos = Math.max(0, Math.min(at, st.blocks.length)); st.blocks.splice(pos, 0, blankBlock(type)); }
+        else { st.blocks.push(blankBlock(type)); pos = st.blocks.length - 1; }
+        openBlock = pos;
         close();
         saveDraft(true); renderL2();
         var meta = SECTION_GALLERY.filter(function (x) { return x.type === type; })[0] || { name: type };
@@ -1966,6 +1970,7 @@
     if (act === "study-toggle") { openL2(i); return; }
     if (act === "study-close") { closeL2(); return; }
     if (act === "study-pick") { sectionPicker(i); return; }
+    if (act === "study-blockadd") { sectionPicker(i, +b.dataset.bindex); return; }
     if (act === "study-decrypt") { decryptStudyForEdit(i); return; }
     if (act === "work-decrypt") { decryptWorkForEdit(i); return; }
     if (act === "study-blocktoggle") {
@@ -4201,7 +4206,7 @@
   ];
   var STORY_BUDGET = { "2015": 17, "1510": 12, "105": 7, "5": 5 };
   var storyState = {};
-  function storySt(id) { return storyState[id] || (storyState[id] = { dur: "1510", tone: "staff" }); }
+  function storySt(id) { return storyState[id] || (storyState[id] = { dur: "1510", tone: "staff", qrole: "any" }); }
   function storyDurLabel(dur) { for (var i = 0; i < STORY_DUR.length; i++) if (STORY_DUR[i][0] === dur) return STORY_DUR[i][1]; return ""; }
   function storyAudience(tone) {
     return {
@@ -4295,16 +4300,76 @@
     if (s.tip) L.push("DELIVERY: " + s.tip);
     return L.join("\n").trim();
   }
+  var STORY_ROLES = [
+    ["any", "Anyone (a mix)"],
+    ["pm", "Product Manager"],
+    ["design", "Design"],
+    ["research", "User Research"],
+    ["a11y", "Accessibility"],
+    ["marketing", "Marketing"],
+    ["eng", "Engineering"],
+    ["data", "Data Science"]
+  ];
+  var STORY_ROLE_LENS = {
+    pm: "a Product Manager \u2014 probing problem framing, prioritisation, scope, tradeoffs, metrics and business impact",
+    design: "a fellow designer / design manager \u2014 probing craft, critique, systems, the alternatives considered and the rationale",
+    research: "a User Researcher \u2014 probing the evidence, method, how insights shaped decisions, and validation",
+    a11y: "an Accessibility specialist \u2014 probing inclusive design, WCAG, edge cases, assistive tech and who might be excluded",
+    marketing: "a Marketing / GTM partner \u2014 probing positioning, the story to customers, differentiation and adoption",
+    eng: "an Engineer / tech lead \u2014 probing feasibility, constraints, handoff, edge cases and how the design met technical reality",
+    data: "a Data Scientist \u2014 probing how the design was measured, experiment design, what the numbers really showed, and causality"
+  };
+  function storyRoleName(id) { for (var i = 0; i < STORY_ROLES.length; i++) if (STORY_ROLES[i][0] === id) return STORY_ROLES[i][1]; return id; }
+  function storyQSystem(tone, role, n) {
+    var lens = STORY_ROLE_LENS[role];
+    return [
+      "You role-play the cross-functional partners in a design-portfolio interview. The candidate has just PRESENTED this case study using a specific narrative angle. Generate the questions they'd get AFTER that talk.",
+      storyAudience(tone),
+      role === "any"
+        ? "Spread " + n + " questions across the different partners a designer works with (Product, Design, Research, Accessibility, Marketing, Engineering, Data Science) \u2014 vary who is asking."
+        : "All " + n + " questions come from " + (lens || (storyRoleName(role) + ", staying in that partner's voice and concerns")) + ".",
+      "CRITICAL: these are questions the PARTNER asks the DESIGNER about the DESIGN work \u2014 NOT questions aimed at that partner's own craft. Keep DESIGN centrality in every question: probe the design thinking, decisions, tradeoffs, craft or impact, seen through that partner's lens.",
+      "Ground each question in the candidate's ACTUAL material and the chosen angle \u2014 reference a real decision, metric or tradeoff. Match the room's altitude. No generic filler \u2014 make them the sharp questions that actually get asked.",
+      "Return ONLY valid JSON (no markdown): {\"questions\":[{\"q\":string,\"role\":string,\"why\":string}]}. role = the partner asking (Product / Design / Research / Accessibility / Marketing / Engineering / Data Science). why = one short line on what a strong answer reveals."
+    ].join("\n");
+  }
+  function storyQUser(ctx, angle, n) {
+    return "CHOSEN NARRATIVE ANGLE:\nTitle: " + ((angle && angle.title) || "") + "\nSpine: " + ((angle && angle.hook) || "") + "\n\nGenerate exactly " + n + " questions.\n\nCASE STUDY MATERIAL:\n" + ctx;
+  }
+  function storyQAnsSystem(tone, roleStr) {
+    return [
+      "You coach a product designer to answer a question from a cross-functional partner right after they presented this case study. Draft a strong, honest answer IN FIRST PERSON they can say aloud.",
+      storyAudience(tone),
+      roleStr ? "The question comes from " + roleStr + " \u2014 speak to that partner's concern while keeping the design reasoning central." : "Speak to the asker's concern while keeping the design reasoning central.",
+      "Use ONLY facts in the material. NEVER invent metrics, names or outcomes; if a detail is missing insert a bracketed placeholder like [add the metric].",
+      "Natural spoken voice, confident but not boastful, about 90\u2013170 words. Return clean minimal HTML: <p> paragraphs, <strong> for key phrases, <ul><li> where it helps. No markdown, no preamble."
+    ].join("\n");
+  }
+  function storyQAnsUser(q, ctx, angle) {
+    return "QUESTION:\n" + q + "\n\n" + (angle ? "NARRATIVE ANGLE: " + (angle.title || "") + (angle.hook ? " \u2014 " + angle.hook : "") + "\n\n" : "") + "CASE STUDY MATERIAL:\n" + ctx;
+  }
+  function storyRenderQuestions(box, qs) {
+    box.innerHTML = qs.map(function (q, idx) {
+      return '<div class="story__q" data-qi="' + idx + '">' +
+        '<div class="story__q-top">' + (q.role ? '<span class="story__q-role">' + escHtml(q.role) + "</span>" : "<span></span>") + '<span class="story__q-n">' + (idx + 1) + "</span></div>" +
+        '<div class="story__q-text">' + escHtml(q.q || "") + "</div>" +
+        (q.why ? '<div class="story__q-why">' + escHtml(q.why) + "</div>" : "") +
+        '<div class="story__q-a" hidden></div>' +
+        '<div class="story__q-act"><button class="btn btn--ghost" data-story-qans="' + idx + '">\u2728 Answer</button></div>' +
+        "</div>";
+    }).join("");
+  }
   function storyModal(i) {
     var w = data.work[i]; if (!w) return;
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { storyModal(i); }); return; }
     var g = storySt(w.id);
-    var themes = [];
+    if (!g.qrole) g.qrole = "any";
+    var themes = [], curTi = -1, questionsArr = [];
     var modal = document.createElement("div");
     modal.className = "pass pass--wide story-modal";
     modal.innerHTML =
       '<div class="pass__box"><div class="pass__title">\uD83D\uDCD6 Design storyteller \u2014 ' + escHtml(w.title || "case study") + "</div>" +
-      '<div class="pass__sub">Turn this case study into a presentation. Pick how long you\u2019ll have and who\u2019s in the room \u2014 get a few story angles, then a beat-by-beat script for the one you choose.</div>' +
+      '<div class="pass__sub">Turn this case study into a presentation. Pick how long you\u2019ll have and who\u2019s in the room \u2014 get a few story angles, then open one for a beat-by-beat script and the questions it invites.</div>' +
       '<div class="story__setup">' +
         '<div class="af"><label class="af__label">How long to present</label><div class="story__opts">' +
           STORY_DUR.map(function (d) { return '<button type="button" class="story__opt' + (g.dur === d[0] ? " is-on" : "") + '" data-story-dur="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
@@ -4314,11 +4379,23 @@
         "</div></div>" +
       "</div>" +
       '<div class="story__themes" hidden></div>' +
-      '<div class="story__tale" hidden></div>' +
+      '<div class="story__l2" hidden>' +
+        '<div class="story__l2-bar"><button class="btn btn--ghost story__l2-back" data-story-l2back><span aria-hidden="true">\u2039</span> Other angles</button><span class="story__l2-title"></span></div>' +
+        '<div class="story__l2-body">' +
+          '<div class="story__tale"></div>' +
+          '<div class="story__qa">' +
+            '<div class="story__qa-head"><span>Questions they might ask</span><span class="story__qa-ctl"><select class="story__qrole" aria-label="Who is asking">' +
+              STORY_ROLES.map(function (r) { return '<option value="' + r[0] + '"' + ((g.qrole || "any") === r[0] ? " selected" : "") + '>' + r[1] + "</option>"; }).join("") +
+            '</select><button class="btn btn--auto" data-story-qgen>Generate questions</button></span></div>' +
+            '<div class="story__qlist"></div>' +
+            '<div class="story__qa-note">Framed as that partner would ask a designer, at the altitude you picked \u2014 hit Answer to rehearse a response. Anyone = 10 questions; a single role = 5.</div>' +
+          "</div>" +
+        "</div>" +
+      "</div>" +
       '<div class="pass__err"></div>' +
       '<div class="pass__actions story__foot">' +
         '<button class="btn btn--ghost" data-cancel>Close</button>' +
-        '<button class="btn btn--ghost" data-story-back hidden>\u2190 Back</button>' +
+        '<button class="btn btn--ghost" data-story-back hidden>\u2190 Change setup</button>' +
         '<button class="btn btn--auto" data-story-run>Find story angles</button>' +
       "</div>" +
       '<div class="pass__note">A prep tool only \u2014 nothing here is saved to or published on your site. It uses only your own content.</div></div>';
@@ -4326,19 +4403,27 @@
     var err = modal.querySelector(".pass__err");
     var setup = modal.querySelector(".story__setup");
     var themesBox = modal.querySelector(".story__themes");
+    var l2Box = modal.querySelector(".story__l2");
+    var l2Title = modal.querySelector(".story__l2-title");
+    var l2Body = modal.querySelector(".story__l2-body");
     var taleBox = modal.querySelector(".story__tale");
+    var qlist = modal.querySelector(".story__qlist");
+    var qroleSel = modal.querySelector(".story__qrole");
+    var qgenBtn = modal.querySelector("[data-story-qgen]");
     var runBtn = modal.querySelector("[data-story-run]");
     var backBtn = modal.querySelector("[data-story-back]");
     var close = function () { modal.remove(); };
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
     modal.querySelector("[data-cancel]").addEventListener("click", close);
+    modal.querySelector("[data-story-l2back]").addEventListener("click", function () { showThemes(); });
+    qroleSel.addEventListener("change", function () { g.qrole = qroleSel.value; });
     modal.querySelectorAll("[data-story-dur]").forEach(function (b) { b.addEventListener("click", function () { g.dur = b.dataset.storyDur; modal.querySelectorAll("[data-story-dur]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); }); });
     modal.querySelectorAll("[data-story-tone]").forEach(function (b) { b.addEventListener("click", function () { g.tone = b.dataset.storyTone; modal.querySelectorAll("[data-story-tone]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); }); });
-    function showSetup() { setup.hidden = false; themesBox.hidden = true; taleBox.hidden = true; backBtn.hidden = true; runBtn.hidden = false; err.textContent = ""; }
-    function showThemes() { setup.hidden = true; themesBox.hidden = false; taleBox.hidden = true; backBtn.hidden = false; backBtn.textContent = "\u2190 Change setup"; runBtn.hidden = true; err.textContent = ""; }
-    function showTale() { setup.hidden = true; themesBox.hidden = true; taleBox.hidden = false; backBtn.hidden = false; backBtn.textContent = "\u2190 Other angles"; runBtn.hidden = true; err.textContent = ""; }
-    backBtn.addEventListener("click", function () { if (!taleBox.hidden) showThemes(); else showSetup(); });
+    function showSetup() { setup.hidden = false; themesBox.hidden = true; l2Box.hidden = true; backBtn.hidden = true; runBtn.hidden = false; err.textContent = ""; }
+    function showThemes() { setup.hidden = true; themesBox.hidden = false; l2Box.hidden = true; backBtn.hidden = false; runBtn.hidden = true; err.textContent = ""; }
+    function showL2() { setup.hidden = true; themesBox.hidden = true; l2Box.hidden = false; backBtn.hidden = true; runBtn.hidden = true; err.textContent = ""; }
+    backBtn.addEventListener("click", function () { showSetup(); });
     runBtn.addEventListener("click", async function () {
       err.textContent = "";
       runBtn.disabled = true; runBtn.textContent = "Thinking\u2026";
@@ -4355,23 +4440,58 @@
     });
     async function tell(idx, srcBtn) {
       var t = themes[idx]; if (!t) return;
+      var switching = idx !== curTi;
       var was = srcBtn ? srcBtn.textContent : "";
       if (srcBtn) { srcBtn.disabled = true; srcBtn.textContent = "Scripting\u2026"; }
       err.textContent = "";
       try {
         var s = csgenParse(await aiText(aiCfg("txt"), storyTellSystem(g.tone, storyDurLabel(g.dur), STORY_BUDGET[g.dur] || 12), storyTellUser(t, g.__ctx || storyContext(w)), { json: true, maxTokens: 2200, temperature: 0.7 }));
         if (!s || (!Array.isArray(s.beats) && !s.opener)) throw new Error("The script didn\u2019t come through \u2014 try again.");
-        taleBox.__ti = idx; taleBox.__script = s; taleBox.__title = t.title || "";
+        curTi = idx; taleBox.__script = s; taleBox.__title = t.title || "";
         storyRenderTale(taleBox, s);
-        showTale(); taleBox.scrollTop = 0;
+        if (switching) { questionsArr = []; qlist.innerHTML = ""; qgenBtn.textContent = "Generate questions"; }
+        l2Title.textContent = t.title || "Your story";
+        showL2(); if (l2Body) l2Body.scrollTop = 0;
       } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t script that story."; if (srcBtn) { srcBtn.disabled = false; srcBtn.textContent = was; } }
     }
     themesBox.addEventListener("click", function (e) { var b = e.target.closest("[data-story-tell]"); if (b) tell(+b.dataset.storyTell, b); });
     taleBox.addEventListener("click", function (e) {
       var rb = e.target.closest("[data-story-regen]");
-      if (rb) { tell(taleBox.__ti, rb); return; }
+      if (rb) { tell(curTi, rb); return; }
       var cb = e.target.closest("[data-story-copy]");
       if (cb) { var txt = storyPlain(taleBox.__script, taleBox.__title); if (navigator.clipboard && txt) navigator.clipboard.writeText(txt).then(function () { cb.textContent = "Copied"; setTimeout(function () { cb.textContent = "Copy script"; }, 1400); }).catch(function () {}); }
+    });
+    qgenBtn.addEventListener("click", async function () {
+      if (curTi < 0 || !themes[curTi]) return;
+      g.qrole = qroleSel.value;
+      var n = g.qrole === "any" ? 10 : 5;
+      qgenBtn.disabled = true; qgenBtn.textContent = "Thinking\u2026"; err.textContent = "";
+      try {
+        var obj = csgenParse(await aiText(aiCfg("txt"), storyQSystem(g.tone, g.qrole, n), storyQUser(g.__ctx || storyContext(w), themes[curTi], n), { json: true, maxTokens: 1800, temperature: 0.8 }));
+        var raw = obj && Array.isArray(obj.questions) ? obj.questions : (Array.isArray(obj) ? obj : null);
+        if (!raw || !raw.length) throw new Error("No questions came back \u2014 try again.");
+        questionsArr = raw.map(function (q) { return typeof q === "string" ? { q: q } : (q && q.q ? { q: q.q, role: q.role, why: q.why } : null); }).filter(Boolean);
+        storyRenderQuestions(qlist, questionsArr);
+      } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t generate questions."; }
+      qgenBtn.disabled = false; qgenBtn.textContent = questionsArr.length ? "Regenerate" : "Generate questions";
+    });
+    qlist.addEventListener("click", async function (e) {
+      var ab = e.target.closest("[data-story-qans]");
+      if (ab) {
+        var idx = +ab.dataset.storyQans; var q = questionsArr[idx]; if (!q) return;
+        var card = qlist.querySelector('.story__q[data-qi="' + idx + '"]'); if (!card) return;
+        var aEl = card.querySelector(".story__q-a");
+        ab.disabled = true; var was = ab.textContent; ab.textContent = "Drafting\u2026"; err.textContent = "";
+        try {
+          var html = await aiText(aiCfg("txt"), storyQAnsSystem(g.tone, q.role || storyRoleName(g.qrole)), storyQAnsUser(q.q, g.__ctx || storyContext(w), themes[curTi]), { maxTokens: 700, temperature: 0.6 });
+          html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
+          aEl.innerHTML = iprepSafeHtml(html); aEl.hidden = false;
+          card.querySelector(".story__q-act").innerHTML = '<button class="btn btn--ghost" data-story-qans="' + idx + '">\u21bb Redo</button><button class="btn btn--ghost" data-story-qcopy="' + idx + '">Copy</button>';
+        } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t draft an answer."; ab.disabled = false; ab.textContent = was; }
+        return;
+      }
+      var cb = e.target.closest("[data-story-qcopy]");
+      if (cb) { var i2 = +cb.dataset.storyQcopy; var c2 = qlist.querySelector('.story__q[data-qi="' + i2 + '"]'); var a2 = c2 && c2.querySelector(".story__q-a"); var t2 = a2 ? a2.innerText : ""; if (navigator.clipboard && t2) navigator.clipboard.writeText(t2).then(function () { cb.textContent = "Copied"; setTimeout(function () { cb.textContent = "Copy"; }, 1400); }).catch(function () {}); }
     });
     showSetup();
   }
