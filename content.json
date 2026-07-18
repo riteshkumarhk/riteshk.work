@@ -1830,7 +1830,7 @@
                 "caption": ""
               },
               {
-                "src": "",
+                "src": "/assets/uploads/651dfd1b24c28216f4c388d912d591881e46ccb7716de41e8acfbc3124c98a3f.png",
                 "caption": ""
               }
             ]
@@ -1839,7 +1839,7 @@
             "type": "media",
             "nav": "Existing Experience",
             "kicker": "EDGE ONBOARDING",
-            "heading": "",
+            "heading": "What the current FRE showed",
             "items": [
               {
                 "src": "/assets/uploads/217a7a63cf0ca17e19a5767e375261158a265d40214895d7972b683941389aa4.mp4",
@@ -1849,6 +1849,43 @@
             ]
           },
           {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/411a426cb28662bd915888015aaa6a09400676fca02e20ff0e5d7f2aafa89648.png",
+                "caption": "Drives MSA sign-in, increases ecosystem retention, and makes switching costs higher once users are connected across devices."
+              },
+              {
+                "src": "/assets/uploads/796d68739f42a16dd5c4c3656a982ab19f2af989449e12e3808a9dcbe4057da9.png",
+                "caption": "Lowers adoption barriers by allowing users to keep using Chrome while gradually transitioning to Edge."
+              },
+              {
+                "src": "/assets/uploads/fca56220696086afd554b95c2a77fd721040288ef977cd88bd769a328efef604.png",
+                "caption": "Accelerates browser switching, improves activation, and increases likelihood of long-term Edge adoption."
+              },
+              {
+                "src": "/assets/uploads/090bc83bd0fcc2131a45b32803c061347742e003df277e41448fede7e2237da7.png",
+                "caption": "Expands data signals that power personalization, engagement, retention, and advertising opportunities."
+              },
+              {
+                "src": "/assets/uploads/ca0e7616a9855fb99ecb94000557a0c1b3e635f0c5c27172aa44c57587768025.png",
+                "caption": "Builds emotional attachment and strengthens product affinity through customization."
+              },
+              {
+                "src": "/assets/uploads/a5614ffdee69476a25d04e6a795f7155133e0c0c4dbdabb9351f6b7cb12a0784.png",
+                "caption": "Increases satisfaction and reduces the likelihood that users abandon the experience because it feels unfamiliar"
+              },
+              {
+                "src": "/assets/uploads/7c3af2cbeb295263b8a9337c67157ae0894f454b6da99ad8c359f1528e6b7e46.png",
+                "caption": "Creates habit loops, improves launch frequency, and increases daily engagement."
+              }
+            ],
+            "sep": false
+          },
+          {
             "type": "text",
             "nav": "",
             "kicker": "",
@@ -1856,7 +1893,8 @@
             "body": "The existing onboarding experience had evolved organically over time.<div><br></div><div>Sign-in, consent, import, personalization, pinning and activation were spread across disconnected surfaces.</div><div><br></div><div>Users experienced onboarding as separate experiences rather than a coherent journey. This contributed to drop-off between stages and made future growth initiatives increasingly difficult to scale.</div>",
             "list": [],
             "src": "",
-            "caption": ""
+            "caption": "",
+            "sep": false
           },
           {
             "type": "columns",
@@ -1930,7 +1968,7 @@
                 "label": "01",
                 "heading": "",
                 "body": "<p>Fragmented in multiple surfaces - Hard / Soft increasing the overall step counts</p>",
-                "src": ""
+                "src": "/assets/uploads/75ef57102aea029943e3f6d12899ba1bd60e51c99bc9904c1506ee46bcab202b.png"
               },
               {
                 "label": "02",
@@ -1951,7 +1989,8 @@
                 "src": ""
               }
             ],
-            "hsize": "sm"
+            "hsize": "sm",
+            "stickySize": "natural"
           },
           {
             "type": "compare",
@@ -2003,23 +2042,23 @@
             "heading": "",
             "items": [
               {
-                "src": "",
+                "src": "https://www.figma.com/proto/pVgnRhd4dDKQwCesKkV2iI/All-hosting?node-id=1-57737&viewport=493%2C155%2C0.08&t=LwwnfwZd1qGcUGIK-1&scaling=contain&content-scaling=fixed&starting-point-node-id=1%3A64587&page-id=0%3A1",
                 "caption": "Inspired by Windows OOBE, this direction explored a guided, distraction-free onboarding experience without the Edge Window in the background and onboarding becomes the primary focus."
               },
               {
-                "src": "",
+                "src": "https://www.figma.com/proto/pVgnRhd4dDKQwCesKkV2iI/All-hosting?node-id=1-57818&viewport=493%2C155%2C0.08&t=LwwnfwZd1qGcUGIK-1&scaling=contain&content-scaling=fixed&starting-point-node-id=1%3A64595&page-id=0%3A1",
                 "caption": "Instead of hiding the browser entirely, a compact onboarding exists with the browser window.  Users can immediately see the results of their setup decisions."
               },
               {
-                "src": "",
+                "src": "https://www.figma.com/proto/pVgnRhd4dDKQwCesKkV2iI/All-hosting?node-id=1-64599&viewport=493%2C155%2C0.08&t=LwwnfwZd1qGcUGIK-1&scaling=contain&content-scaling=fixed&starting-point-node-id=1%3A64599&page-id=0%3A1",
                 "caption": "This direction treated onboarding as an immersive product experience rather than a setup wizard.  Users could preview themes, layouts, pinning, and personalization in context."
               },
               {
-                "src": "",
+                "src": "https://www.figma.com/proto/pVgnRhd4dDKQwCesKkV2iI/All-hosting?node-id=1-65204&viewport=493%2C155%2C0.08&t=LwwnfwZd1qGcUGIK-1&scaling=contain&content-scaling=fixed&starting-point-node-id=1%3A65204&page-id=0%3A1",
                 "caption": "I began questioning whether every activation moment should happen inside FRE at all.  Personalization, pinning, and discovery could appear naturally in workflow moments such as the New Tab Page instead of being compressed into setup."
               },
               {
-                "src": "",
+                "src": "https://www.figma.com/proto/pVgnRhd4dDKQwCesKkV2iI/All-hosting?node-id=1-64591&viewport=493%2C155%2C0.08&t=LwwnfwZd1qGcUGIK-1&scaling=contain&content-scaling=fixed&starting-point-node-id=1%3A64591&page-id=0%3A1",
                 "caption": "As Microsoft AI experiences evolved, I explored onboarding concepts that unified Edge, Copilot, Bing, and personalization into a single setup experience."
               }
             ],
