@@ -1611,7 +1611,8 @@
       const list = data.specialViews || (data.specialViews = []);
       let html = secHead("Special Views",
         "Curated, ticketed versions of the site for one audience (say an automotive company). Choose the work, numbers and skills they see, set a ticket phrase and an optional expiry. Up to 6. <em>Tickets are a soft gate — the curated content still ships in your published file, so don't put anything confidential here.</em>") +
-        '<div class="adm__addbar"><button class="btn btn--add" data-act="sv-add"' + (list.length >= 6 ? " disabled" : "") + ">+ New special view</button></div>";
+        '<div class="adm__addbar rolekit__bar"><button class="btn btn--add" data-act="sv-add"' + (list.length >= 6 ? " disabled" : "") + '>+ New special view</button>' +
+        '<button class="btn btn--auto rolekit__cta" data-act="sv-tailor">\u2728 Tailor to a role</button></div>';
       if (!list.length) html += '<div class="adm__empty">No special views yet.</div>';
       list.forEach(function (sv, i) { html += svCard(sv, i); });
       if (list.length >= 6) html += '<div class="af__hint">Maximum of 6 special views reached.</div>';
@@ -1979,6 +1980,7 @@
       saveDraft(true); renderBody(); return;
     }
     if (act === "sv-remove") { (data.specialViews || []).splice(i, 1); saveDraft(true); renderBody(); return; }
+    if (act === "sv-tailor") { roleKitModal(); return; }
     if (act === "sv-preview") { svPreview(i); return; }
     if (act === "plate-sample") { data.work[i].theme = b.dataset.theme; data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Motion placeholder applied.", true); return; }
     if (act === "img-clear") { data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Image removed."); return; }
@@ -4171,6 +4173,234 @@
   function iprepSafeHtml(s) {
     return String(s || "").replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/ on\w+="[^"]*"/gi, "").replace(/ on\w+='[^']*'/gi, "").replace(/javascript:/gi, "");
   }
+  /* ---------- tailor to a role: tailored view + cover note + gap analysis ---------- */
+  var roleKitState = { level: "staff", jd: "" };
+  var roleKitResumeCache = null; // { src, text }
+  function rkLevelName(lv) { return ({ senior: "Senior", staff: "Principal / Staff", leader: "Design Leader" })[lv] || "Senior"; }
+  function rkCleanHtml(s) { return String(s || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").replace(/```/g, "").trim(); }
+
+  // Whole-portfolio context: projects carry their id, numbers + capabilities carry an index,
+  // so the AI can return exactly which to feature (workIds / highlightIdx / capabilityIdx).
+  function roleKitContext() {
+    var lines = [], L = data.landing || {};
+    var about = [L.statement, L.intro, L.aboutLead, L.about, L.aboutSign].map(iprepStrip).filter(Boolean).join(" ");
+    if (about) lines.push("# ABOUT ME\n" + about);
+    lines.push("\n# PROJECTS (reference by id)");
+    (data.work || []).filter(function (w) { return w && !w.encWork; }).forEach(function (w) {
+      var st = w.study || {}, bits = [iprepStrip(w.desc)];
+      ["tagline", "role", "scope", "timeline"].forEach(function (k) { if (st[k]) bits.push(k + ": " + iprepStrip(st[k])); });
+      lines.push("- id=" + w.id + " | " + iprepStrip(w.client) + " \u2014 " + iprepStrip(w.title) + (w.hidden ? " (hidden)" : "") +
+        (Array.isArray(w.tags) && w.tags.length ? " | tags: " + w.tags.join(", ") : "") +
+        (bits.filter(Boolean).length ? "\n    " + bits.filter(Boolean).join(" \u00b7 ") : ""));
+    });
+    if (Array.isArray(data.highlights) && data.highlights.length) {
+      lines.push("\n# NUMBERS (reference by index)");
+      data.highlights.forEach(function (h, i) { lines.push("  [" + i + "] " + iprepStrip(h.value) + " \u2014 " + iprepStrip(h.label)); });
+    }
+    if (Array.isArray(data.capabilities) && data.capabilities.length) {
+      lines.push("\n# CAPABILITIES (reference by index)");
+      data.capabilities.forEach(function (c, i) { lines.push("  [" + i + "] " + iprepFlat(c)); });
+    }
+    if (Array.isArray(data.path) && data.path.length) { lines.push("\n# EXPERIENCE"); data.path.forEach(function (p) { var t = iprepFlat(p); if (t) lines.push("- " + t); }); }
+    if (Array.isArray(data.recognition) && data.recognition.length) lines.push("\n# RECOGNITION\n" + data.recognition.map(iprepFlat).filter(Boolean).join("; "));
+    if (Array.isArray(data.education) && data.education.length) lines.push("\n# EDUCATION\n" + data.education.map(iprepFlat).filter(Boolean).join("; "));
+    var txt = lines.filter(Boolean).join("\n");
+    return txt.length > 11000 ? txt.slice(0, 11000) + "\u2026" : txt;
+  }
+  // Pull the r\u00e9sum\u00e9 text (from Contact) so the cover note & gap analysis can use it. Best-effort.
+  async function roleKitResume() {
+    var src = (data.contact && data.contact.resume) || "";
+    if (!src) return "";
+    if (roleKitResumeCache && roleKitResumeCache.src === src) return roleKitResumeCache.text;
+    var text = "";
+    try {
+      var url = (typeof previewSrc === "function") ? previewSrc(src) : src;
+      var res = await fetch(url);
+      var blob = await res.blob();
+      var name = (src.split("?")[0].split("/").pop()) || "resume.pdf";
+      if (!/\.(pdf|docx?|txt|md)$/i.test(name)) name += (blob.type === "application/pdf" ? ".pdf" : ".txt");
+      text = ((await fbExtractFile(new File([blob], name, { type: blob.type }))) || "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+      if (text.length > 6000) text = text.slice(0, 6000) + "\u2026";
+    } catch (e) { text = ""; }
+    roleKitResumeCache = { src: src, text: text };
+    return text;
+  }
+  function rkTailorSystem(level) {
+    return [
+      "You are a product-design portfolio strategist. Given a candidate's REAL portfolio (projects with ids, numbered metrics and capabilities) and a target job description, curate the version of their site that lands best for THIS role.",
+      "Targeting: " + rkLevelName(level) + ".",
+      "Choose and ORDER the most relevant projects (by their exact id), metrics (by index) and capabilities (by index). Prefer 3\u20135 projects, 4\u20136 metrics, 6\u201310 capabilities \u2014 lead with what the role cares about most.",
+      "Write a one-line hero eyebrow tailored to the role (e.g. \"Tailored for the Staff Product Designer role \u2014 Growth & AI\"). Classy, not gimmicky. Only name a company if the JD names one.",
+      "Use ONLY items that exist in the material. Never invent projects, metrics or capabilities.",
+      "Return ONLY valid JSON (no markdown): {\"name\":string,\"audience\":string,\"workIds\":[string],\"highlightIdx\":[number],\"capabilityIdx\":[number],\"why\":string}. \"name\" = short internal label; \"why\" = 1\u20132 sentences on the angle."
+    ].join("\n");
+  }
+  function rkCoverSystem(level) {
+    return [
+      "You are the candidate, writing a concise, specific cover note (usable as a recruiter message or the top of a cover letter). First person, in their real voice.",
+      "Targeting: " + rkLevelName(level) + ".",
+      "Ground every claim in their real portfolio + r\u00e9sum\u00e9 \u2014 cite specific work, decisions or metrics. Never invent facts, employers or numbers.",
+      "Open with a hook tied to the role, connect 2\u20133 concrete proof points to what the role needs, and close with a confident, warm line. 130\u2013200 words. Avoid bracketed placeholders unless truly needed.",
+      "Return clean minimal HTML only: <p> paragraphs, <strong> for key phrases. No markdown, no preamble, no subject line."
+    ].join("\n");
+  }
+  function rkGapSystem(level) {
+    return [
+      "You are a candid, experienced design hiring manager. Compare the candidate's portfolio + r\u00e9sum\u00e9 against the target role and give an honest read \u2014 helpful, not flattering.",
+      "Targeting: " + rkLevelName(level) + ".",
+      "Use ONLY their real material; never assume unstated experience. When something is missing or thin, say so and give a concrete fix.",
+      "Return ONLY valid JSON (no markdown): {\"fit\":\"strong\"|\"solid\"|\"stretch\",\"summary\":string,\"strengths\":[{\"point\":string,\"evidence\":string}],\"gaps\":[{\"point\":string,\"fix\":string}],\"talkingPoints\":[string]}.",
+      "\"evidence\" cites a real project/metric. \"fix\" is a concrete action (e.g. \"add the outcome metric to the Edge onboarding study\" or \"reframe the Xbox work around strategy, not screens\"). 3\u20135 strengths, 3\u20135 gaps, 3\u20134 talking points."
+    ].join("\n");
+  }
+  function rkUser(ctx, jd, resume) {
+    return "TARGET JOB DESCRIPTION:\n" + (jd || "(none provided)") +
+      "\n\nMY R\u00c9SUM\u00c9:\n" + (resume ? resume : "(no r\u00e9sum\u00e9 attached)") +
+      "\n\nMY PORTFOLIO:\n" + ctx;
+  }
+  function rkRenderTailor(t) {
+    var byId = {}; (data.work || []).forEach(function (w) { byId[w.id] = w; });
+    var works = (t.workIds || []).map(function (id) { return byId[id]; }).filter(Boolean);
+    var highs = (t.highlightIdx || []).map(function (i) { return (data.highlights || [])[i]; }).filter(Boolean);
+    var caps = (t.capabilityIdx || []).map(function (i) { return (data.capabilities || [])[i]; }).filter(Boolean);
+    var h = '<div class="rolekit__tailor">';
+    h += '<div class="rolekit__lead"><span class="rolekit__lead-k">Hero eyebrow</span><span class="rolekit__lead-v">' + escHtml(t.audience || "\u2014") + "</span></div>";
+    if (t.why) h += '<div class="rolekit__why">' + escHtml(t.why) + "</div>";
+    h += '<div class="rolekit__pick"><span class="rolekit__pick-h">Featured work \u00b7 ' + works.length + "</span><ol>" + works.map(function (w) { return "<li>" + escHtml((w.client ? w.client + " \u2014 " : "") + (w.title || w.id)) + "</li>"; }).join("") + "</ol></div>";
+    if (highs.length) h += '<div class="rolekit__pick"><span class="rolekit__pick-h">Numbers</span><div class="rolekit__chips">' + highs.map(function (x) { return '<span class="rolekit__chip">' + escHtml((x.value || "") + " \u00b7 " + (x.label || "")) + "</span>"; }).join("") + "</div></div>";
+    if (caps.length) h += '<div class="rolekit__pick"><span class="rolekit__pick-h">Capabilities</span><div class="rolekit__chips">' + caps.map(function (c) { return '<span class="rolekit__chip">' + escHtml(iprepFlat(c)) + "</span>"; }).join("") + "</div></div>";
+    h += '<div class="rolekit__act"><button class="btn btn--primary" data-rk-createview>Create this Special View \u2192</button><span class="af__hint">Adds it to Special Views \u2014 set a ticket &amp; publish to share.</span></div></div>';
+    return h;
+  }
+  function rkRenderCover(html) {
+    return '<div class="rolekit__cover"><div class="rolekit__cover-body">' + html + '</div><div class="rolekit__act"><button class="btn btn--ghost" data-rk-copy>Copy</button></div></div>';
+  }
+  function rkRenderGap(gp) {
+    var fit = String(gp.fit || "solid").toLowerCase();
+    var fitLabel = { strong: "Strong fit", solid: "Solid fit", stretch: "A stretch" }[fit] || "Read";
+    var h = '<div class="rolekit__gap"><div class="rolekit__fit rolekit__fit--' + fit + '">' + escHtml(fitLabel) + "</div>";
+    if (gp.summary) h += '<p class="rolekit__gap-sum">' + escHtml(gp.summary) + "</p>";
+    if (Array.isArray(gp.strengths) && gp.strengths.length) h += '<div class="rolekit__gap-grp"><span class="rolekit__gap-h rolekit__gap-h--good">Strengths</span>' + gp.strengths.map(function (s) { return '<div class="rolekit__gap-row"><div class="rolekit__gap-pt">' + escHtml(s.point || "") + "</div>" + (s.evidence ? '<div class="rolekit__gap-ev">' + escHtml(s.evidence) + "</div>" : "") + "</div>"; }).join("") + "</div>";
+    if (Array.isArray(gp.gaps) && gp.gaps.length) h += '<div class="rolekit__gap-grp"><span class="rolekit__gap-h rolekit__gap-h--warn">Gaps to close</span>' + gp.gaps.map(function (s) { return '<div class="rolekit__gap-row"><div class="rolekit__gap-pt">' + escHtml(s.point || "") + "</div>" + (s.fix ? '<div class="rolekit__gap-fix"><b>Fix:</b> ' + escHtml(s.fix) + "</div>" : "") + "</div>"; }).join("") + "</div>";
+    if (Array.isArray(gp.talkingPoints) && gp.talkingPoints.length) h += '<div class="rolekit__gap-grp"><span class="rolekit__gap-h">Talking points</span><ul class="rolekit__tp">' + gp.talkingPoints.map(function (t) { return "<li>" + escHtml(t) + "</li>"; }).join("") + "</ul></div>";
+    return h + "</div>";
+  }
+  function rkCreateView(t, closeFn) {
+    if (!t) return;
+    data.specialViews = data.specialViews || [];
+    if (data.specialViews.length >= 6) { status("You already have 6 special views \u2014 remove one first.", false); return; }
+    var wIds = (t.workIds || []).filter(function (id) { return (data.work || []).some(function (w) { return w.id === id; }); });
+    var hIdx = (t.highlightIdx || []).map(Number).filter(function (n) { return n >= 0 && n < (data.highlights || []).length; });
+    var cIdx = (t.capabilityIdx || []).map(Number).filter(function (n) { return n >= 0 && n < (data.capabilities || []).length; });
+    var sv = blankSv();
+    sv.name = String(t.name || "Tailored role").slice(0, 60);
+    sv.audience = String(t.audience || "").slice(0, 120);
+    if (wIds.length) sv.workIds = wIds;
+    if (hIdx.length) sv.highlightIdx = hIdx;
+    if (cIdx.length) sv.capabilityIdx = cIdx;
+    data.specialViews.push(sv);
+    saveDraft(true);
+    if (openStudy >= 0) closeL2({ render: false });
+    activeTab = "special";
+    renderBody();
+    if (typeof closeFn === "function") closeFn();
+    status("Tailored view created \u2014 set a ticket phrase &amp; publish to share it.", true);
+  }
+  function roleKitModal() {
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { roleKitModal(); }); return; }
+    var g = roleKitState;
+    var out = {}, ctxCache = null, jdCache = "", resumeCache = null;
+    var hasResume = !!(data.contact && data.contact.resume);
+    var modal = document.createElement("div");
+    modal.className = "pass pass--wide rolekit-modal";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">\uD83C\uDFAF Tailor to a role</div>' +
+      '<div class="pass__sub">Paste a job description \u2014 I\u2019ll read your r\u00e9sum\u00e9 and portfolio, then give you a tailored view of your work, a cover note, and an honest gap analysis.</div>' +
+      '<div class="rolekit__setup">' +
+        '<div class="af"><label class="af__label">Targeting</label><div class="iprep__levels">' +
+          IPREP_LEVELS.map(function (l) { return '<button type="button" class="iprep__lvl' + (g.level === l[0] ? " is-on" : "") + '" data-rk-lvl="' + l[0] + '"><span class="iprep__lvl-name">' + l[1] + '</span><span class="iprep__lvl-desc">' + l[2] + "</span></button>"; }).join("") +
+        "</div></div>" +
+        '<div class="af"><label class="af__label">Job description</label><textarea id="rkJd" rows="5" placeholder="Paste the JD text (or a link, or add a file)\u2026">' + escHtml(g.jd || "") + "</textarea>" +
+        '<div class="af__hint">A link is sent as context (job sites often block reading \u2014 paste the text for best results). <button class="iprep__filebtn" data-rk-file type="button">Add PDF / Word / text\u2026</button></div></div>' +
+        '<div class="rolekit__resume">' + (hasResume ? "\u2713 Using your r\u00e9sum\u00e9 from Contact." : "No r\u00e9sum\u00e9 attached \u2014 add one under Contact for a sharper cover note &amp; gap analysis.") + "</div>" +
+      "</div>" +
+      '<div class="rolekit__tabs" hidden>' +
+        '<button type="button" class="rolekit__tab" data-rk-tab="tailor">Tailored work</button>' +
+        '<button type="button" class="rolekit__tab" data-rk-tab="cover">Cover note</button>' +
+        '<button type="button" class="rolekit__tab" data-rk-tab="gap">Gap analysis</button>' +
+      "</div>" +
+      '<div class="rolekit__out" hidden></div>' +
+      '<div class="pass__err"></div>' +
+      '<div class="pass__actions rolekit__foot">' +
+        '<button class="btn btn--ghost" data-cancel>Close</button>' +
+        '<button class="btn btn--ghost" data-rk-back hidden><span aria-hidden="true">\u2190</span> Role setup</button>' +
+        '<button class="btn btn--auto" data-rk-run="tailor">Tailor my work</button>' +
+        '<button class="btn btn--auto" data-rk-run="cover">Cover note</button>' +
+        '<button class="btn btn--auto" data-rk-run="gap">Gap analysis</button>' +
+      "</div>" +
+      '<div class="pass__note">Uses only your own content + r\u00e9sum\u00e9. The cover note &amp; gap analysis are for you \u2014 not published. \u201cCreate view\u201d adds a Special View you can publish.</div></div>';
+    document.body.appendChild(modal);
+    var err = modal.querySelector(".pass__err");
+    var setup = modal.querySelector(".rolekit__setup");
+    var tabsBar = modal.querySelector(".rolekit__tabs");
+    var outBox = modal.querySelector(".rolekit__out");
+    var backBtn = modal.querySelector("[data-rk-back]");
+    var runBtns = [].slice.call(modal.querySelectorAll("[data-rk-run]"));
+    var jdEl = modal.querySelector("#rkJd");
+    var close = function () { g.jd = jdEl.value; modal.remove(); };
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    modal.querySelectorAll("[data-rk-lvl]").forEach(function (b) { b.addEventListener("click", function () { g.level = b.dataset.rkLvl; modal.querySelectorAll("[data-rk-lvl]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); }); });
+    modal.querySelector("[data-rk-file]").addEventListener("click", function () {
+      var inp = document.createElement("input");
+      inp.type = "file"; inp.accept = ".pdf,application/pdf,.docx,.txt,.md,.markdown,text/plain";
+      inp.onchange = async function () { var f = inp.files && inp.files[0]; if (!f) return; try { var t = ((await fbExtractFile(f)) || "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim(); if (t) { jdEl.value = (jdEl.value.trim() ? jdEl.value.trim() + "\n\n" : "") + t; err.textContent = ""; } } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t read that file."; } };
+      inp.click();
+    });
+    backBtn.addEventListener("click", function () { setup.hidden = false; tabsBar.hidden = true; outBox.hidden = true; backBtn.hidden = true; runBtns.forEach(function (b) { b.hidden = false; }); err.textContent = ""; });
+    function showTab(kind) { modal.querySelectorAll("[data-rk-tab]").forEach(function (t) { t.classList.toggle("is-on", t.dataset.rkTab === kind); }); }
+    async function ensureCtx() {
+      jdCache = await iprepResolveJd(jdEl.value);
+      if (ctxCache == null) ctxCache = roleKitContext();
+      if (resumeCache == null) resumeCache = await roleKitResume();
+      return { ctx: ctxCache, jd: jdCache, resume: resumeCache };
+    }
+    async function run(kind) {
+      g.jd = jdEl.value;
+      if (!jdEl.value.trim()) { err.textContent = "Paste a job description first."; return; }
+      err.textContent = "";
+      setup.hidden = true; tabsBar.hidden = false; backBtn.hidden = false; runBtns.forEach(function (b) { b.hidden = true; });
+      outBox.hidden = false; showTab(kind);
+      if (out[kind]) { outBox.innerHTML = out[kind]; outBox.__tailor = out.__tailorData || null; return; }
+      outBox.innerHTML = '<div class="rolekit__loading"><span class="rolekit__spin"></span> Reading the role and your work\u2026</div>';
+      var tabEl = modal.querySelector('[data-rk-tab="' + kind + '"]'); if (tabEl) tabEl.classList.add("is-busy");
+      try {
+        var c = await ensureCtx();
+        if (kind === "tailor") {
+          var t = csgenParse(await aiText(aiCfg("txt"), rkTailorSystem(g.level), rkUser(c.ctx, c.jd, c.resume), { json: true, maxTokens: 1400, temperature: 0.5 }));
+          if (!t || !Array.isArray(t.workIds)) throw new Error("Couldn\u2019t tailor that \u2014 try again.");
+          out.__tailorData = t; outBox.__tailor = t; out[kind] = rkRenderTailor(t); outBox.innerHTML = out[kind];
+        } else if (kind === "cover") {
+          var html = await aiText(aiCfg("txt"), rkCoverSystem(g.level), rkUser(c.ctx, c.jd, c.resume), { maxTokens: 800, temperature: 0.6 });
+          out[kind] = rkRenderCover(iprepSafeHtml(rkCleanHtml(html))); outBox.innerHTML = out[kind];
+        } else {
+          var gp = csgenParse(await aiText(aiCfg("txt"), rkGapSystem(g.level), rkUser(c.ctx, c.jd, c.resume), { json: true, maxTokens: 1900, temperature: 0.5 }));
+          if (!gp || (!Array.isArray(gp.strengths) && !Array.isArray(gp.gaps))) throw new Error("Couldn\u2019t analyse that \u2014 try again.");
+          out[kind] = rkRenderGap(gp); outBox.innerHTML = out[kind];
+        }
+      } catch (e2) { outBox.innerHTML = '<div class="rolekit__err-in">' + escHtml((e2 && e2.message) || "That didn\u2019t work \u2014 try again.") + "</div>"; }
+      if (tabEl) tabEl.classList.remove("is-busy");
+    }
+    runBtns.forEach(function (b) { b.addEventListener("click", function () { run(b.dataset.rkRun); }); });
+    modal.querySelectorAll("[data-rk-tab]").forEach(function (t) { t.addEventListener("click", function () { run(t.dataset.rkTab); }); });
+    outBox.addEventListener("click", function (e) {
+      if (e.target.closest("[data-rk-createview]")) { rkCreateView(outBox.__tailor, close); return; }
+      var cp = e.target.closest("[data-rk-copy]");
+      if (cp) { var body = outBox.querySelector(".rolekit__cover-body"); var txt = body ? body.innerText : ""; if (navigator.clipboard && txt) navigator.clipboard.writeText(txt).then(function () { cp.textContent = "Copied"; setTimeout(function () { cp.textContent = "Copy"; }, 1400); }).catch(function () {}); }
+    });
+  }
+
   function iprepModal(i) {
     var w = data.work[i]; if (!w) return;
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { iprepModal(i); }); return; }

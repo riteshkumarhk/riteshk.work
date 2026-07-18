@@ -122,6 +122,50 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__auto-opt:hover { background: rgba(236, 231, 225, .05); }
 .adm__auto-opt input { accent-color: var(--accent); margin: 0; }
 .adm__auto-pop-note { font-size: .64rem; color: var(--text-dim); line-height: 1.4; margin-top: .5rem; }
+/* tailor to a role: modal + tailored view / cover note / gap analysis */
+.rolekit__bar { display: flex; gap: .5rem; align-items: stretch; }
+.rolekit__bar .btn--add { width: auto; flex: 1 1 auto; margin-top: 0; }
+.rolekit__cta { flex: 0 0 auto; white-space: nowrap; }
+.rolekit__setup { display: flex; flex-direction: column; gap: .8rem; text-align: left; margin-top: .3rem; }
+.rolekit__resume { font-size: .72rem; color: var(--text-dim); background: var(--bg-2); border: 1px solid var(--line-soft); border-radius: 8px; padding: .5rem .65rem; }
+.rolekit__tabs { display: flex; gap: .3rem; margin: .6rem 0 .3rem; border-bottom: 1px solid var(--line-soft); }
+.rolekit__tab { font-family: var(--mono); font-size: .64rem; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); background: none; border: 0; border-bottom: 2px solid transparent; padding: .45rem .55rem; margin-bottom: -1px; cursor: pointer; display: inline-flex; align-items: center; gap: .4rem; transition: color .2s, border-color .2s; }
+.rolekit__tab:hover { color: var(--text); }
+.rolekit__tab.is-on { color: var(--accent); border-bottom-color: var(--accent); }
+.rolekit__tab.is-busy::before { content: ""; width: .72em; height: .72em; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: adm-btn-spin .6s linear infinite; }
+.rolekit__out { text-align: left; max-height: 56vh; overflow: auto; padding-right: .2rem; }
+.rolekit__loading { display: flex; align-items: center; gap: .5rem; color: var(--text-dim); font-size: .82rem; padding: 1.4rem .2rem; }
+.rolekit__spin { width: .95em; height: .95em; border: 2px solid var(--text-dim); border-top-color: transparent; border-radius: 50%; animation: adm-btn-spin .6s linear infinite; }
+.rolekit__err-in { color: #ff9b9b; font-size: .82rem; padding: 1rem .2rem; }
+.rolekit__lead { display: flex; flex-direction: column; gap: .15rem; padding: .55rem .7rem; border-radius: 10px; background: var(--bg-elev); box-shadow: inset 0 0 0 1px var(--accent); }
+.rolekit__lead-k { font-family: var(--mono); font-size: .56rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.rolekit__lead-v { font-family: var(--serif); font-size: 1.02rem; color: var(--text); }
+.rolekit__why { font-size: .82rem; color: var(--text-dim); line-height: 1.5; margin: .6rem 0; }
+.rolekit__pick { margin-top: .7rem; }
+.rolekit__pick-h { font-family: var(--mono); font-size: .58rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); display: block; margin-bottom: .35rem; }
+.rolekit__pick ol { margin: 0; padding-left: 1.2rem; }
+.rolekit__pick li { font-size: .88rem; color: var(--text); line-height: 1.6; }
+.rolekit__chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+.rolekit__chip { font-size: .74rem; color: var(--text); background: var(--bg-2); border: 1px solid var(--line); border-radius: 100px; padding: .22rem .6rem; }
+.rolekit__act { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--line-soft); }
+.rolekit__cover-body { font-size: .92rem; line-height: 1.65; color: var(--text); }
+.rolekit__cover-body p { margin: 0 0 .8rem; }
+.rolekit__cover-body strong { color: var(--text); font-weight: 600; }
+.rolekit__fit { display: inline-block; font-family: var(--mono); font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; padding: .28rem .6rem; border-radius: 100px; border: 1px solid var(--line); color: var(--text); }
+.rolekit__fit--strong { color: #86e0a3; border-color: rgba(134, 224, 163, .5); background: rgba(134, 224, 163, .1); }
+.rolekit__fit--solid { color: var(--accent); border-color: var(--accent); background: rgba(216, 166, 87, .1); }
+.rolekit__fit--stretch { color: #ffcf8a; border-color: rgba(255, 207, 138, .5); background: rgba(255, 207, 138, .1); }
+.rolekit__gap-sum { font-size: .9rem; color: var(--text); line-height: 1.6; margin: .7rem 0 0; }
+.rolekit__gap-grp { margin-top: 1rem; }
+.rolekit__gap-h { font-family: var(--mono); font-size: .58rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); display: block; margin-bottom: .5rem; }
+.rolekit__gap-h--good { color: #86e0a3; }
+.rolekit__gap-h--warn { color: #ffcf8a; }
+.rolekit__gap-row { padding: .5rem .65rem; border: 1px solid var(--line-soft); border-radius: 9px; background: var(--bg-2); margin-bottom: .45rem; }
+.rolekit__gap-pt { font-size: .86rem; color: var(--text); font-weight: 500; }
+.rolekit__gap-ev, .rolekit__gap-fix { font-size: .78rem; color: var(--text-dim); line-height: 1.45; margin-top: .25rem; }
+.rolekit__gap-fix b { color: var(--accent); font-weight: 600; }
+.rolekit__tp { margin: 0; padding-left: 1.2rem; }
+.rolekit__tp li { font-size: .85rem; color: var(--text); line-height: 1.6; }
 .adm__status.ok { color: #74d99f; }
 .adm__exit { color: var(--text-dim); }
 .adm__exit:hover { border-color: #ff7a7a; color: #ff7a7a; }
