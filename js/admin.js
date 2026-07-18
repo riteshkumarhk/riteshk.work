@@ -35,6 +35,8 @@
   const GH_BRANCH = "main";
   const GH_API = "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/content.json";
   const GH_TOKEN_KEY = "rk:gh:token";
+  const AUTOPUB_ON_KEY = "rk:autopub:on";       // auto-publish enabled ("1"/"0")
+  const AUTOPUB_EVERY_KEY = "rk:autopub:every"; // interval in minutes ("30"/"60")
   const GH_NEW_TOKEN_URL = "https://github.com/settings/tokens/new?description=riteshk.work%20publishing&scopes=public_repo";
   const GH_RAW = "https://raw.githubusercontent.com/" + GH_OWNER + "/" + GH_REPO + "/" + GH_BRANCH + "/";
   const GH_FILE_API = "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/";
@@ -92,6 +94,7 @@
   let musResumeOnExit = false; // was music playing when admin opened? → resume on exit
   let root = null, body = null, frame = null;
   let l2 = null, l2body = null, l2title = null, l2PreviewTimer = 0;
+  let autopubTimer = 0, publishing = false;
   let saveTimer = null;
   let sortState = null;
   let menuEl = null;
@@ -2109,6 +2112,48 @@
     else publishModal();
   }
 
+  /* ---------- auto-publish (publishes changes on a timer while the studio is open) ---------- */
+  function autopubOn() { return localStorage.getItem(AUTOPUB_ON_KEY) === "1"; }
+  function autopubEvery() { return localStorage.getItem(AUTOPUB_EVERY_KEY) === "60" ? 60 : 30; }
+  function autopubStop() { if (autopubTimer) { clearInterval(autopubTimer); autopubTimer = 0; } }
+  function autopubStart() { autopubStop(); if (autopubOn()) autopubTimer = setInterval(autopubTick, autopubEvery() * 60000); }
+  function autopubTick() {
+    if (!autopubOn()) { autopubStop(); return; }
+    if (publishing || !root || !root.classList.contains("is-open")) return;
+    const token = localStorage.getItem(GH_TOKEN_KEY);
+    if (!token) return;                        // not connected \u2014 can't publish silently
+    const ae = document.activeElement;          // don't yank focus mid-edit; catch it next tick
+    if (ae && (/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) || ae.isContentEditable)) return;
+    const cur = (window.RK && window.RK.sig) ? window.RK.sig(JSON.stringify(data)) : null;
+    const pub = (window.RK && window.RK.publishedSig) || "";
+    if (cur && pub && cur === pub) return;      // nothing changed since the last publish
+    status("Auto-publishing your changes\u2026", true);
+    ghPublish(token);
+  }
+  function autopubSync() {
+    if (!root) return;
+    const on = autopubOn(), every = autopubEvery();
+    const wrap = root.querySelector("[data-autopub]");
+    if (wrap) wrap.classList.toggle("is-on", on);
+    const sw = root.querySelector("[data-autopub-toggle]");
+    if (sw) sw.setAttribute("aria-checked", on ? "true" : "false");
+    const lbl = root.querySelector(".adm__auto-lbl");
+    if (lbl) lbl.textContent = on ? ("Auto-publish \u00b7 " + (every === 60 ? "1h" : "30m")) : "Auto-publish";
+    root.querySelectorAll("[data-autopub-every]").forEach(function (r) { r.checked = (+r.value === every); });
+  }
+  function autopubToggle() {
+    const turningOn = !autopubOn();
+    if (turningOn && !localStorage.getItem(GH_TOKEN_KEY)) publishModal();  // needs GitHub connected to run
+    try { localStorage.setItem(AUTOPUB_ON_KEY, turningOn ? "1" : "0"); } catch (e) {}
+    autopubSync(); autopubStart();
+    status(turningOn ? ("Auto-publish on \u2014 every " + (autopubEvery() === 60 ? "hour" : "30 minutes") + ".") : "Auto-publish off.", true);
+  }
+  function autopubSetEvery(mins) {
+    try { localStorage.setItem(AUTOPUB_EVERY_KEY, mins === 60 ? "60" : "30"); } catch (e) {}
+    autopubSync(); if (autopubOn()) autopubStart();
+    status("Auto-publish every " + (mins === 60 ? "hour" : "30 minutes") + ".", true);
+  }
+
   // Build the JSON to publish: auto-style, then clone and encrypt every plaintext
   // Locked block per project, wrapping its key for recovery + pass + curating tickets.
   async function buildPublishJson() {
@@ -2532,6 +2577,8 @@
   }
 
   async function ghPublish(token) {
+    if (publishing) return;
+    publishing = true;
     pubProgress(6, "Preparing your content\u2026");
     try {
       await hostEmbeddedImages(token, function (n, total) {
@@ -2572,7 +2619,7 @@
       if (e && e.auth) { authFailed(); pubProgress(100, "GitHub didn\u2019t accept that sign-in \u2014 hit Publish to reconnect.", { error: true }); return; }
       // Transient/network hiccup — keep the connection, just ask them to retry.
       pubProgress(100, "Couldn\u2019t reach GitHub just now. Hit Publish again to retry.", { error: true });
-    }
+    } finally { publishing = false; }
   }
 
   // GitHub rejected the saved token: drop it so the next Publish re-prompts sign-in.
@@ -4549,6 +4596,19 @@
           '<button class="btn btn--ghost" data-revert>Revert</button>' +
           '<button class="btn btn--ghost adm__keycfg" data-keycfg title="Change admin key" aria-label="Change admin key"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3z"/></svg></button>' +
           '<button class="btn btn--ghost adm__pubcfg" data-pubcfg title="Publishing settings" aria-label="Publishing settings">\u2699</button>' +
+          '<div class="adm__auto" data-autopub>' +
+            '<button class="adm__auto-sw" type="button" data-autopub-toggle role="switch" aria-checked="false" title="Auto-publish on a timer">' +
+              '<span class="adm__auto-track"><span class="adm__auto-knob"></span></span>' +
+              '<span class="adm__auto-lbl">Auto-publish</span>' +
+            "</button>" +
+            '<button class="adm__auto-cv" type="button" data-autopub-menu aria-label="Auto-publish interval" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>' +
+            '<div class="adm__auto-pop" hidden>' +
+              '<div class="adm__auto-pop-h">Auto-publish every</div>' +
+              '<label class="adm__auto-opt"><input type="radio" name="autopub-every" value="30" data-autopub-every /><span>30 minutes</span></label>' +
+              '<label class="adm__auto-opt"><input type="radio" name="autopub-every" value="60" data-autopub-every /><span>1 hour</span></label>' +
+              '<div class="adm__auto-pop-note">Publishes your unsaved changes on a timer while the studio is open. Needs GitHub connected.</div>' +
+            "</div>" +
+          "</div>" +
           '<button class="btn btn--primary" data-publish>Publish</button>' +
           '<button class="btn adm__exit" data-exit aria-label="Exit admin">Exit ✕</button>' +
         "</div>" +
@@ -4612,6 +4672,18 @@
     );
     root.querySelector("[data-publish]").addEventListener("click", publish);
     root.querySelector("[data-pubcfg]").addEventListener("click", () => publishModal());
+    root.querySelector("[data-autopub-toggle]").addEventListener("click", autopubToggle);
+    const autoWrap = root.querySelector("[data-autopub]");
+    root.querySelector("[data-autopub-menu]").addEventListener("click", (e) => {
+      e.stopPropagation();
+      const pop = autoWrap.querySelector(".adm__auto-pop"); const opening = pop.hidden;
+      pop.hidden = !opening; e.currentTarget.setAttribute("aria-expanded", opening ? "true" : "false");
+    });
+    autoWrap.querySelectorAll("[data-autopub-every]").forEach((r) => r.addEventListener("change", () => autopubSetEvery(+r.value)));
+    document.addEventListener("click", (e) => {
+      const pop = autoWrap.querySelector(".adm__auto-pop");
+      if (pop && !pop.hidden && !autoWrap.contains(e.target)) { pop.hidden = true; const cv = autoWrap.querySelector("[data-autopub-menu]"); if (cv) cv.setAttribute("aria-expanded", "false"); }
+    });
     root.querySelector("[data-keycfg]").addEventListener("click", () => changeKeyModal());
     const pubCloseBtn = root.querySelector("[data-pub-close]");
     if (pubCloseBtn) pubCloseBtn.addEventListener("click", pubHide);
@@ -4669,10 +4741,12 @@
     document.body.classList.add("adm-lock");
     requestAnimationFrame(() => root.classList.add("is-open"));
     if (frame && frame.contentWindow && frame.contentWindow.RK) previewApply();
+    autopubSync(); autopubStart();
     if (staleDiscarded) status("Loaded the latest published content (an old local draft was discarded).", true);
   }
 
   function exit() {
+    autopubStop();
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(data)); } catch (e) {}
     if (window.RK) { window.RK.data = clone(data); try { window.RK.render(data); } catch (e) {} forceReveal(); }
     if (root) root.classList.remove("is-open");
