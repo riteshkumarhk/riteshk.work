@@ -104,6 +104,24 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 
 .adm__actions { display: flex; align-items: center; gap: .5rem; }
 .adm__status { font-family: var(--mono); font-size: .62rem; color: var(--text-dim); max-width: 230px; line-height: 1.35; text-align: right; }
+/* auto-publish: a switch (on/off) + a chevron dropdown for the interval, beside Publish */
+.adm__auto { position: relative; display: inline-flex; align-items: stretch; }
+.adm__auto-sw { display: inline-flex; align-items: center; gap: .45rem; padding: .45rem .6rem; border: 1px solid var(--line); border-right: 0; border-radius: 100px 0 0 100px; background: none; color: var(--text-dim); cursor: pointer; font-family: var(--mono); font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; transition: color .2s, border-color .2s; }
+.adm__auto-sw:hover { color: var(--text); }
+.adm__auto-track { position: relative; width: 26px; height: 15px; border-radius: 100px; background: var(--line); flex: 0 0 auto; transition: background .2s; }
+.adm__auto-knob { position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--text-dim); transition: transform .2s, background .2s; }
+.adm__auto.is-on .adm__auto-sw { color: var(--accent); border-color: var(--accent); }
+.adm__auto.is-on .adm__auto-track { background: var(--accent); }
+.adm__auto.is-on .adm__auto-knob { transform: translateX(11px); background: #0a0a0a; }
+.adm__auto-cv { display: inline-flex; align-items: center; justify-content: center; padding: 0 .4rem; border: 1px solid var(--line); border-radius: 0 100px 100px 0; background: none; color: var(--text-dim); cursor: pointer; transition: color .2s, border-color .2s; }
+.adm__auto-cv:hover { color: var(--text); border-color: var(--accent); }
+.adm__auto.is-on .adm__auto-cv { color: var(--accent); border-color: var(--accent); }
+.adm__auto-pop { position: absolute; top: calc(100% + .45rem); right: 0; z-index: 60; min-width: 12.5rem; padding: .65rem; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 14px 34px -12px rgba(0, 0, 0, .75); }
+.adm__auto-pop-h { font-family: var(--mono); font-size: .58rem; letter-spacing: .09em; text-transform: uppercase; color: var(--text-faint); margin-bottom: .5rem; }
+.adm__auto-opt { display: flex; align-items: center; gap: .5rem; padding: .38rem .3rem; border-radius: 7px; cursor: pointer; font-size: .82rem; color: var(--text); text-transform: none; letter-spacing: 0; }
+.adm__auto-opt:hover { background: rgba(236, 231, 225, .05); }
+.adm__auto-opt input { accent-color: var(--accent); margin: 0; }
+.adm__auto-pop-note { font-size: .64rem; color: var(--text-dim); line-height: 1.4; margin-top: .5rem; }
 .adm__status.ok { color: #74d99f; }
 .adm__exit { color: var(--text-dim); }
 .adm__exit:hover { border-color: #ff7a7a; color: #ff7a7a; }
