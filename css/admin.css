@@ -187,6 +187,15 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .adm__addbar { position: sticky; top: 0; z-index: 6; background: linear-gradient(var(--bg) 60%, transparent); padding: .5rem 0 .95rem; margin: -.2rem 0 .2rem; }
 .adm__addbar .btn--add { margin-top: 0; }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
+/* AI-processing spinner — a CTA shows a spinner while its async AI action runs */
+@keyframes adm-btn-spin { to { transform: rotate(360deg); } }
+.btn.is-busy, .rt__b.is-busy { opacity: .8; cursor: progress; }
+.btn.is-busy::before, .rt__b.is-busy::before {
+  content: ""; display: inline-block; width: .8em; height: .8em; margin-right: .45em;
+  vertical-align: -.12em; border: 2px solid currentColor; border-top-color: transparent;
+  border-radius: 50%; animation: adm-btn-spin .6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) { .btn.is-busy::before, .rt__b.is-busy::before { animation-duration: 1.4s; } }
 
 @media (max-width: 899px) {
   .adm__main { grid-template-columns: 1fr; }
@@ -713,6 +722,9 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .iprep__a strong { color: var(--text); }
 .iprep__q-act { margin-top: .6rem; display: flex; gap: .4rem; flex-wrap: wrap; }
 /* design storyteller */
+/* These stages set an explicit display, which would override the [hidden] attribute —
+   restore hiding so switching between setup / angles / the L2 story swaps cleanly. */
+.story__setup[hidden], .story__themes[hidden] { display: none; }
 .story__setup { display: flex; flex-direction: column; gap: .9rem; text-align: left; margin-top: .3rem; }
 .story__opts { display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem; }
 .story__opt { display: flex; flex-direction: column; gap: .16rem; text-align: left; padding: .55rem .7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); cursor: pointer; transition: border-color .15s, background .15s; }
