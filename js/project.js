@@ -82,6 +82,7 @@
 
   var overlay = null, scroller = null, activeId = null;
   var returnScrollY = 0, lastFocus = null, spyRaf = 0;
+  var previewSelIdx = -1; // admin live-preview: index of the section whose floating action toolbar is shown
 
   /* ---------- small helpers (reuse RK where possible) ---------- */
   function esc(s) {
@@ -1045,7 +1046,46 @@
     overlay.addEventListener("keydown", onOverlayKey);
   }
 
+  // Admin live-preview only: a floating action toolbar pinned to the top-right of the
+  // selected section (add-above / move up / move down / duplicate / delete) — mirrors the
+  // editor's per-row ops so sections can be managed straight from the preview. Buttons post
+  // their intent to the parent editor, which mutates the draft and re-renders the preview.
+  function pvToolbarHtml(idx, total) {
+    var up = idx <= 0, down = idx >= total - 1;
+    return '<button type="button" class="pjtb__b" data-pjtb="add" title="Add a section above" aria-label="Add a section above"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>' +
+      '<button type="button" class="pjtb__b" data-pjtb="up"' + (up ? " disabled" : "") + ' title="Move up" aria-label="Move up">\u2191</button>' +
+      '<button type="button" class="pjtb__b" data-pjtb="down"' + (down ? " disabled" : "") + ' title="Move down" aria-label="Move down">\u2193</button>' +
+      '<button type="button" class="pjtb__b" data-pjtb="dup" title="Duplicate section" aria-label="Duplicate section"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
+      '<button type="button" class="pjtb__b pjtb__b--danger" data-pjtb="del" title="Remove section" aria-label="Remove section">\u2715</button>';
+  }
+  function applyPreviewToolbar() {
+    if (!PREVIEW || !overlay) return;
+    var content = overlay.querySelector("[data-content]");
+    if (!content) return;
+    content.querySelectorAll(".pjb.is-pvsel").forEach(function (x) { x.classList.remove("is-pvsel"); });
+    var old = content.querySelector(".pjtb"); if (old && old.parentNode) old.parentNode.removeChild(old);
+    if (previewSelIdx < 0) return;
+    var secs = content.querySelectorAll("[data-block]");
+    var sec = content.querySelector('[data-block="' + previewSelIdx + '"]');
+    if (!sec) return;
+    sec.classList.add("is-pvsel"); // an is-* class survives the preview morph; the toolbar node is re-added after each render
+    var tb = document.createElement("div");
+    tb.className = "pjtb";
+    tb.setAttribute("contenteditable", "false");
+    tb.innerHTML = pvToolbarHtml(previewSelIdx, secs.length);
+    sec.appendChild(tb);
+  }
+
   function onOverlayClick(e) {
+    var pvBtn = e.target.closest("[data-pjtb]");
+    if (pvBtn) {
+      e.preventDefault();
+      if (!pvBtn.hasAttribute("disabled")) {
+        var pvSec = pvBtn.closest("[data-block]");
+        if (pvSec) { try { window.parent.postMessage({ __rk: "blockAct", act: pvBtn.getAttribute("data-pjtb"), index: +pvSec.getAttribute("data-block") }, "*"); } catch (err) {} }
+      }
+      return;
+    }
     var fsB = e.target.closest("[data-fs]");
     if (fsB) { e.preventDefault(); toggleFrameFs(fsB); return; }
     var cmpZoom = e.target.closest("[data-cmp-zoom]");
@@ -1374,6 +1414,7 @@
     contentEl.setAttribute("data-wid", String(w.id));
     requestAnimationFrame(function () {
       updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); graphWire(contentEl); galleryNav(contentEl);
+      if (PREVIEW) applyPreviewToolbar(); // morph strips the injected toolbar node; re-add it in the same frame (no flicker)
       if (keepAnchor) { restoreAnchor(keepAnchor); requestAnimationFrame(function () { restoreAnchor(keepAnchor); }); }
     });
   }
@@ -1532,6 +1573,7 @@
       if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} }
     }
     activeId = null;
+    previewSelIdx = -1;
     if (opts.push !== false) { try { history.pushState({}, "", "/"); } catch (e) {} }
   }
 
@@ -1646,6 +1688,12 @@
       }
       if (d.__rk === "dragBlockEnd") {
         content.querySelectorAll(".pjb--droptarget").forEach(function (x) { x.classList.remove("pjb--droptarget"); });
+        return;
+      }
+      // Editor → preview: which section is selected. Show/refresh its floating action toolbar.
+      if (d.__rk === "selectInPreview") {
+        previewSelIdx = typeof d.index === "number" ? d.index : -1;
+        applyPreviewToolbar();
         return;
       }
     });
