@@ -1672,6 +1672,11 @@
 
   /* ---------- L2 case-study editor + auto live preview ---------- */
   function frameWin() { return frame && frame.contentWindow; }
+  // Tell the live-preview which section is selected so it can show/refresh its floating
+  // action toolbar (add-above / move / duplicate / delete) on that section.
+  function syncPreviewSelection() {
+    try { var w = frameWin(); if (w) w.postMessage({ __rk: "selectInPreview", index: (openStudy >= 0 ? openBlock : -1) }, "*"); } catch (e) {}
+  }
   function previewProject(id, keep) {
     const w = frameWin();
     if (!(w && w.RK)) return;
@@ -1679,6 +1684,7 @@
     try { w.RK.data = pd; } catch (e) {}
     if (!keep) { try { w.RK.render(pd); forceRevealDoc(w.document); } catch (e) {} }
     if (w.RK.openProject) { try { w.RK.openProject(id, { push: false, keepScroll: !!keep, silent: !!keep }); } catch (e) {} }
+    syncPreviewSelection();
   }
   function previewLanding() {
     const w = frameWin();
@@ -1756,6 +1762,21 @@
       target.classList.add("is-flash");
       setTimeout(function () { target.classList.remove("is-flash"); }, 1100);
     }
+    syncPreviewSelection();
+  }
+  // Preview → editor: the floating preview toolbar posts a section action. Apply the same
+  // mutation the editor row ops do, then re-render (renderL2 re-syncs the preview toolbar).
+  function previewBlockAct(act, j) {
+    if (openStudy < 0 || !data.work[openStudy] || !data.work[openStudy].study) return;
+    var i = openStudy, s = data.work[i].study.blocks;
+    if (!Array.isArray(s) || !(j >= 0 && j < s.length)) return;
+    if (act === "add") { openBlock = j; sectionPicker(i, j); return; }
+    if (act === "up") { if (j <= 0) return; var a = s[j - 1]; s[j - 1] = s[j]; s[j] = a; openBlock = j - 1; }
+    else if (act === "down") { if (j >= s.length - 1) return; var c = s[j + 1]; s[j + 1] = s[j]; s[j] = c; openBlock = j + 1; }
+    else if (act === "dup") { s.splice(j + 1, 0, JSON.parse(JSON.stringify(s[j]))); openBlock = j + 1; status("Section duplicated \u2014 editing the copy.", true); }
+    else if (act === "del") { s.splice(j, 1); openBlock = -1; }
+    else return;
+    saveDraft(true); renderL2();
   }
 
   /* ---------- blank templates ---------- */
@@ -1982,6 +2003,7 @@
         openBlock = (openBlock === j) ? -1 : j;
         if (wrap) wrap.querySelectorAll(".study__block").forEach(function (x, k) { x.classList.toggle("is-open", k === openBlock); });
         try { const fw = frameWin(); if (fw) fw.postMessage({ __rk: "gotoBlock", index: j }, "*"); } catch (err) {}
+        syncPreviewSelection();
       }, 220);
       return;
     }
@@ -4595,7 +4617,9 @@
     document.addEventListener("keydown", onKey);
     window.addEventListener("message", function (e) {
       var d = e.data;
-      if (d && d.__rk === "selectBlock" && typeof d.index === "number") selectPreviewBlock(d.index);
+      if (!d || !d.__rk) return;
+      if (d.__rk === "selectBlock" && typeof d.index === "number") selectPreviewBlock(d.index);
+      else if (d.__rk === "blockAct" && typeof d.index === "number") previewBlockAct(d.act, d.index);
     });
   }
 

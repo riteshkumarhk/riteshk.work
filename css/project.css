@@ -579,6 +579,15 @@ video.pjb__media-el { background: #000; }
 /* editor drag → preview: persistent marker on the section the dragged block will land beside */
 .pjb--droptarget { border-radius: 10px; box-shadow: 0 0 0 2px var(--accent), 0 0 30px -6px var(--accent); transition: box-shadow .25s var(--ease); }
 
+/* admin preview: the selected section + its floating action toolbar (mirrors the editor row ops) */
+.rk-preview .pjb.is-pvsel { position: relative; box-shadow: inset 0 0 0 1.5px var(--accent); border-radius: 10px; }
+.rk-preview .pjb.is-pvsel:hover { outline: 0; } /* selected ring wins over the dashed hover */
+.pjtb { position: absolute; top: .6rem; right: .6rem; z-index: 6; display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--bg-elev); border: 1px solid var(--line); box-shadow: 0 8px 22px -10px rgba(0, 0, 0, .7); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.pjtb__b { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-dim); font: inherit; font-size: .92rem; line-height: 1; cursor: pointer; transition: background .15s var(--ease), color .15s var(--ease); }
+.pjtb__b:hover { background: rgba(236, 231, 225, .08); color: var(--text); }
+.pjtb__b:disabled { opacity: .32; cursor: default; }
+.pjtb__b--danger:hover { background: rgba(255, 122, 122, .14); color: #ff7a7a; }
+
 /* focus full-screen — image left, clickable annotation list stacked top-right */
 .pjfx { position: fixed; inset: 0; z-index: 1400; display: flex; align-items: center; justify-content: center; gap: clamp(1rem, 3vw, 2.2rem); padding: clamp(1rem, 4vw, 3rem); background: rgba(6, 6, 8, .92); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: 0; visibility: hidden; transition: opacity .3s var(--ease), visibility .3s var(--ease); }
 .pjfx.is-open { opacity: 1; visibility: visible; }
