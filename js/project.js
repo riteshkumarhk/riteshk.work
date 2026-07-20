@@ -731,12 +731,19 @@
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__focus' + (b.sticky ? " pjb__focus--sticky" : "") + '" data-focus>' + stage + cap + notes + "</div>";
   }
 
+  // Generated section (isolated "gen" block): rendered by the RKGen interpreter from a
+  // safe declarative spec. Never executes generated code.
+  function genBlock(b) {
+    var body = (window.RKGen && b.spec) ? window.RKGen.renderHtml(b.spec) : "";
+    return kicker(b.kicker) + heading(b.heading) + body;
+  }
   var RENDERERS = {
     text: textBlock, statement: stmtBlock, metrics: metricsBlock,
     steps: stepsBlock, media: mediaBlock, split: splitBlock, faq: faqBlock,
     cards: cardsBlock, gallery: galleryBlock, figure: figureBlock,
     columns: columnsBlock, rows: rowsBlock, compare: compareBlock, stickies: stickiesBlock, voices: voicesBlock,
     workflow: workflowBlock, mediagrid: mediagridBlock, device: deviceBlock, isolayers: isolayersBlock, focus: focusBlock,
+    gen: genBlock,
   };
   function renderBlock(b, i) {
     var navLabel = b.nav || "";
