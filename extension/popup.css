@@ -1,0 +1,137 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  width: 320px;
+  margin: 0;
+  padding: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #0f172a;
+  background: #f8fafc;
+}
+.hd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+.hd h1 {
+  font-size: 14px;
+  margin: 0;
+}
+.status {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: #64748b;
+}
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.lbl {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  margin-bottom: 8px;
+}
+.seg {
+  display: flex;
+  gap: 6px;
+}
+.seg button {
+  flex: 1;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #334155;
+  padding: 8px 0;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.seg button.on {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+.hint {
+  font-size: 11.5px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 10px 0 0;
+}
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pill {
+  font-size: 11.5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-weight: 600;
+}
+.pill.warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 0;
+  font-size: 13px;
+}
+.row + .row {
+  border-top: 1px solid #f1f5f9;
+}
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.btn {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #334155;
+  padding: 9px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.btn:hover {
+  background: #f8fafc;
+}
+.btn.primary {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+.btn.primary:hover {
+  background: #4338ca;
+}
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #4f46e5;
+}

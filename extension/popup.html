@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Résumé Autofill</title>
+  </head>
+  <body>
+    <header class="hd">
+      <span class="logo">⚡</span>
+      <div>
+        <h1>Résumé Autofill</h1>
+        <p id="status" class="status">Loading…</p>
+      </div>
+    </header>
+
+    <section class="card">
+      <label class="lbl">Default insert mode</label>
+      <div class="seg" id="modeSeg">
+        <button data-mode="full" class="on">Full</button>
+        <button data-mode="snippet">Snippet</button>
+      </div>
+      <p class="hint">
+        Click into a form field on any site, then use the <b>⚡ button</b>, the
+        <b>⚡ Autofill chip</b>, or <b>right-click → Résumé Autofill</b>.
+      </p>
+    </section>
+
+    <section class="card">
+      <div class="summary" id="summary"></div>
+    </section>
+
+    <section class="card">
+      <label class="lbl">On-page helpers</label>
+      <label class="row"><span>Floating ⚡ button &amp; panel</span><input type="checkbox" id="tFab" /></label>
+      <label class="row"><span>Inline chip on text fields</span><input type="checkbox" id="tChip" /></label>
+      <label class="row"><span>Right-click menu</span><input type="checkbox" id="tMenu" /></label>
+    </section>
+
+    <div class="actions">
+      <button id="btnEdit" class="btn primary">Edit / add résumé data</button>
+      <button id="btnOcr" class="btn">OCR a resume</button>
+      <button id="btnSync" class="btn" hidden>Pull latest from my site</button>
+    </div>
+
+    <script src="src/model.js"></script>
+    <script src="src/store.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

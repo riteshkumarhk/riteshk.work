@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="options.css" />
+    <title>Résumé Autofill — Setup</title>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <div class="brand"><span class="logo">⚡</span><h1>Résumé Autofill</h1></div>
+        <div class="topact">
+          <span id="status" class="status"></span>
+          <button id="btnExport" class="btn">Export</button>
+          <label class="btn" for="fileImport">Import</label>
+          <input id="fileImport" type="file" accept="application/json" hidden />
+          <button id="btnSave" class="btn primary">Save</button>
+        </div>
+      </header>
+
+      <div id="banner" class="banner" hidden></div>
+
+      <!-- OCR / AI import -->
+      <section class="card" id="ocrCard">
+        <h2>Import from a resume (AI / OCR)</h2>
+        <p class="sub">
+          Paste your resume text or upload a resume image. The AI extracts your summary, experiences
+          (a <b>full</b> and a <b>snippet</b> version), skills and contact details. Nothing is saved until you review and click <b>Save</b>.
+        </p>
+        <div class="grid2">
+          <div class="fld">
+            <label>AI provider</label>
+            <select id="ai_provider"><option value="openai">OpenAI</option></select>
+          </div>
+          <div class="fld">
+            <label>Model (vision-capable for images)</label>
+            <input id="ai_model" type="text" placeholder="gpt-4o" />
+          </div>
+        </div>
+        <div class="fld">
+          <label>API key <span class="muted">(stored only on this device, never synced)</span></label>
+          <input id="ai_key" type="password" placeholder="sk-…" autocomplete="off" />
+        </div>
+        <div class="fld">
+          <label>Paste resume text</label>
+          <textarea id="ocr_text" rows="5" placeholder="Paste your resume here…"></textarea>
+        </div>
+        <div class="ocrRow">
+          <button id="btnExtractText" class="btn primary">Extract from text</button>
+          <span class="or">or</span>
+          <label class="btn" for="ocr_img">Upload resume image</label>
+          <input id="ocr_img" type="file" accept="image/*" hidden />
+          <span id="ocrMsg" class="muted"></span>
+        </div>
+      </section>
+
+      <!-- Profile -->
+      <section class="card">
+        <h2>Contact / profile</h2>
+        <div class="grid2">
+          <div class="fld"><label>Full name</label><input id="p_name" type="text" /></div>
+          <div class="fld"><label>Headline / title</label><input id="p_title" type="text" /></div>
+          <div class="fld"><label>Email</label><input id="p_email" type="email" /></div>
+          <div class="fld"><label>Phone</label><input id="p_phone" type="tel" /></div>
+          <div class="fld"><label>Location</label><input id="p_location" type="text" /></div>
+          <div class="fld"><label>LinkedIn</label><input id="p_linkedin" type="url" /></div>
+          <div class="fld"><label>Portfolio / website</label><input id="p_portfolio" type="url" /></div>
+          <div class="fld"><label>GitHub</label><input id="p_github" type="url" /></div>
+        </div>
+      </section>
+
+      <!-- Summary -->
+      <section class="card">
+        <h2>Professional summary</h2>
+        <div class="grid2">
+          <div class="fld"><label>Full (detailed)</label><textarea id="sum_full" rows="5"></textarea></div>
+          <div class="fld"><label>Snippet (1–2 lines)</label><textarea id="sum_snip" rows="5"></textarea></div>
+        </div>
+      </section>
+
+      <!-- Experiences -->
+      <section class="card">
+        <div class="chead"><h2>Work experience</h2><button id="addExp" class="btn small">+ Add experience</button></div>
+        <div id="expList"></div>
+      </section>
+
+      <!-- Skills -->
+      <section class="card">
+        <h2>Skills / capabilities</h2>
+        <div class="grid2">
+          <div class="fld"><label>Full (detailed paragraph)</label><textarea id="sk_full" rows="4"></textarea></div>
+          <div class="fld"><label>Snippet (short line)</label><textarea id="sk_snip" rows="4"></textarea></div>
+        </div>
+        <div class="fld"><label>Skills list <span class="muted">(comma-separated)</span></label><input id="sk_list" type="text" /></div>
+      </section>
+
+      <!-- Education -->
+      <section class="card">
+        <div class="chead"><h2>Education</h2><button id="addEdu" class="btn small">+ Add education</button></div>
+        <div id="eduList"></div>
+      </section>
+
+      <!-- Custom -->
+      <section class="card">
+        <div class="chead"><h2>Custom fields</h2><button id="addCustom" class="btn small">+ Add custom</button></div>
+        <p class="sub">For anything else you paste often — e.g. “Why this company”, availability, work authorization.</p>
+        <div id="customList"></div>
+      </section>
+
+      <!-- Sync -->
+      <section class="card">
+        <h2>Sync across devices</h2>
+        <p class="sub">
+          Your data automatically rides along with your signed-in Edge/Chrome profile on every PC.
+          Optionally, publish an <code>autofill.json</code> from your portfolio admin and paste its URL here to pull the latest on any device.
+        </p>
+        <div class="ocrRow">
+          <input id="sync_url" type="url" placeholder="https://your-site.com/autofill.json" style="flex:1" />
+          <button id="btnPull" class="btn">Pull now</button>
+        </div>
+      </section>
+
+      <!-- On-page -->
+      <section class="card">
+        <h2>On-page behaviour</h2>
+        <div class="fld">
+          <label>Default insert mode</label>
+          <select id="def_mode"><option value="full">Full</option><option value="snippet">Snippet</option></select>
+        </div>
+        <label class="check"><input type="checkbox" id="op_fab" /> Floating ⚡ button &amp; panel</label>
+        <label class="check"><input type="checkbox" id="op_chip" /> Inline chip on text fields</label>
+        <label class="check"><input type="checkbox" id="op_menu" /> Right-click menu</label>
+      </section>
+
+      <footer class="foot">
+        <button id="btnSave2" class="btn primary">Save all</button>
+        <span class="muted">Tip: after saving, open any job form and click into the experience box, then hit ⚡.</span>
+      </footer>
+    </div>
+
+    <template id="expTpl">
+      <div class="item" data-kind="exp">
+        <div class="grid2">
+          <div class="fld"><label>Role / title</label><input data-f="role" type="text" /></div>
+          <div class="fld"><label>Company</label><input data-f="company" type="text" /></div>
+          <div class="fld"><label>Start</label><input data-f="start" type="text" placeholder="Jan 2021" /></div>
+          <div class="fld"><label>End</label><input data-f="end" type="text" placeholder="Present" /></div>
+        </div>
+        <div class="fld"><label>Location</label><input data-f="location" type="text" /></div>
+        <div class="grid2">
+          <div class="fld"><label>Full (detailed)</label><textarea data-f="full" rows="4"></textarea></div>
+          <div class="fld"><label>Snippet (short)</label><textarea data-f="snippet" rows="4"></textarea></div>
+        </div>
+        <div class="itemact">
+          <button class="btn small ghost" data-act="ai-snip" title="Draft a snippet from the full text">✨ Snippet from full</button>
+          <button class="btn small danger" data-act="del">Remove</button>
+        </div>
+      </div>
+    </template>
+
+    <template id="eduTpl">
+      <div class="item" data-kind="edu">
+        <div class="grid2">
+          <div class="fld"><label>School</label><input data-f="school" type="text" /></div>
+          <div class="fld"><label>Degree</label><input data-f="degree" type="text" /></div>
+          <div class="fld"><label>Field</label><input data-f="field" type="text" /></div>
+          <div class="fld"><label>Year</label><input data-f="year" type="text" /></div>
+        </div>
+        <div class="grid2">
+          <div class="fld"><label>Full</label><textarea data-f="full" rows="3"></textarea></div>
+          <div class="fld"><label>Snippet</label><textarea data-f="snippet" rows="3"></textarea></div>
+        </div>
+        <div class="itemact"><button class="btn small danger" data-act="del">Remove</button></div>
+      </div>
+    </template>
+
+    <template id="customTpl">
+      <div class="item" data-kind="custom">
+        <div class="fld"><label>Label</label><input data-f="label" type="text" placeholder="e.g. Work authorization" /></div>
+        <div class="grid2">
+          <div class="fld"><label>Full</label><textarea data-f="full" rows="3"></textarea></div>
+          <div class="fld"><label>Snippet</label><textarea data-f="snippet" rows="3"></textarea></div>
+        </div>
+        <div class="itemact"><button class="btn small danger" data-act="del">Remove</button></div>
+      </div>
+    </template>
+
+    <script src="src/model.js"></script>
+    <script src="src/store.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>
