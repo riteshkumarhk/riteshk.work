@@ -1653,7 +1653,10 @@
     } else {
       body = '<div class="gsx__fields">' + genLeafFields(node, ps, i, j) + "</div>";
     }
-    return '<div class="gsx__node gsx__node--' + (isCont ? "cont" : "leaf") + '"><div class="gsx__nhead"><span class="gsx__badge">' + escHtml(node.type) + "</span>" + ops + "</div>" + body + "</div>";
+    return '<div class="gsx__node gsx__node--' + (isCont ? "cont" : "leaf") + '"><div class="gsx__nhead"><span class="gsx__badge">' + escHtml(node.type) + "</span>" + ops + "</div>" + body + genStyleField(node, ps, i, j) + "</div>";
+  }
+  function genStyleField(node, ps, i, j) {
+    return '<details class="gsx__style"' + (node.style ? " open" : "") + '><summary>Style - on-brand custom CSS (materials, 3D)</summary><textarea rows="2" data-gpath="' + ps + '" data-gfield="style" data-index="' + i + '" data-bindex="' + j + '" placeholder="border-radius: 28px; box-shadow: 18px 18px 40px rgba(0,0,0,.5), inset 0 1px 2px rgba(255,255,255,.12); background: linear-gradient(145deg, var(--bg-elev), var(--bg));">' + escHtml(node.style || "") + "</textarea></details>";
   }
   function genEditor(i, j, b) {
     var sp = gspec(b);
@@ -1702,11 +1705,11 @@
   }
   function genSystem() {
     return [
-      "You are a senior product designer composing ONE section for a dark, editorial, restrained portfolio case-study page.",
-      "Design language: near-black backgrounds, warm ivory text, ONE bronze accent used sparingly; serif display headings, sans body, mono micro-labels; generous whitespace; quiet, confident, high craft. Never garish.",
-      "You output ONLY a JSON layout spec that a fixed, safe interpreter renders. You NEVER output HTML, CSS, code, class names, styles or script.",
+      "You are a senior product designer composing ONE section for a dark, editorial, restrained portfolio case-study page. You can build ANY kind of UI - a device mockup, a sticky-note wall, a glass panel, a stat band, a testimonial row - but it MUST feel native to THIS site.",
+      "SITE LOOK & FEEL - obey it. Use these CSS variables in style values, do NOT hardcode brand colours: --bg (#08080a), --bg-2, --bg-elev (near-black surfaces); --text (warm ivory), --text-dim, --text-faint (muted); --accent (ONE bronze ~#D8A657, used sparingly); --line / --line-soft (hairline borders); --serif (Fraunces display serif, for headings), --mono (JetBrains Mono, for tiny labels). Body copy is a clean sans. Generous whitespace, soft radii, quiet high craft. Never garish, never bright/primary colours.",
+      "So: text colours = var(--text)/var(--text-dim)/var(--accent); surfaces = var(--bg-elev) or subtle gradients between the bg vars; borders = 1px solid var(--line); clay/soft shadows use rgba(0,0,0,...) plus faint white or accent highlights. A generated component should look like it always belonged on the site.",
       window.RKGen.describe(),
-      "Match the user's prompt and any reference images in STRUCTURE and INTENT (not exact pixels/brand). Write tight, believable placeholder copy the author will edit. Use grid/row for multiple items, stat for metrics, card + bg:elev to group, quote for testimonials. Leave media src EMPTY (the author adds visuals). Keep it to one focused section."
+      "Match the user's prompt and any reference image in STRUCTURE and INTENT. Write tight, believable placeholder copy the author edits. Leave media src EMPTY (the author adds visuals). One focused, on-brand section. Return the JSON object only."
     ].join("\n\n");
   }
   function genPickerCards() {
@@ -1795,7 +1798,8 @@
         var userText = "Section brief:\n" + (prompt || "(see reference image)") + (curSpec ? "\n\nRefine this existing layout (JSON):\n" + JSON.stringify(curSpec.root) : "");
         var user;
         if (imgs.length && /^(openai|custom)$/.test(cfg.provider)) user = [{ type: "text", text: userText }].concat(imgs.map(function (u) { return { type: "image_url", image_url: { url: u } }; }));
-        else user = userText + (imgs.length ? "\n\n(Reference image supplied, but this provider reads text only \u2014 using the brief.)" : "");
+        else if (imgs.length && cfg.provider === "anthropic") user = [{ type: "text", text: userText }].concat(imgs.map(function (u) { var c = u.indexOf(","); var mt = u.slice(5, c).split(";")[0]; return c > 0 ? { type: "image", source: { type: "base64", media_type: mt || "image/png", data: u.slice(c + 1) } } : null; }).filter(Boolean));
+        else user = userText + (imgs.length ? "\n\n(Reference image supplied; this provider reads text only, using the brief.)" : "");
         var parsed = csgenParse(await aiText(cfg, genSystem(), user, { json: true, maxTokens: 2200, temperature: 0.55 }));
         if (!parsed) throw new Error("The AI didn\u2019t return a valid layout \u2014 try rephrasing.");
         curSpec = window.RKGen.clean(parsed);
