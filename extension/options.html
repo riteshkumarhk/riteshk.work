@@ -25,8 +25,8 @@
       <section class="card" id="ocrCard">
         <h2>Import from a resume (AI / OCR)</h2>
         <p class="sub">
-          Paste your resume text or upload a resume image. The AI extracts your summary, experiences
-          (a <b>full</b> and a <b>snippet</b> version), skills and contact details. Nothing is saved until you review and click <b>Save</b>.
+          Paste your resume text, or upload a <b>PDF</b> or image of your résumé. The AI extracts your summary, experiences
+          (a <b>full</b> and a <b>snippet</b> version), skills and contact details — even from scanned PDFs (OCR). Nothing is saved until you review and click <b>Save</b>.
         </p>
         <div class="grid2">
           <div class="fld">
@@ -49,8 +49,8 @@
         <div class="ocrRow">
           <button id="btnExtractText" class="btn primary">Extract from text</button>
           <span class="or">or</span>
-          <label class="btn" for="ocr_img">Upload resume image</label>
-          <input id="ocr_img" type="file" accept="image/*" hidden />
+          <label class="btn" for="ocr_file">Upload PDF / image…</label>
+          <input id="ocr_file" type="file" accept=".pdf,.txt,.md,image/*" hidden />
           <span id="ocrMsg" class="muted"></span>
         </div>
       </section>

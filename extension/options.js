@@ -274,22 +274,39 @@
     }
   }
 
-  function extractFromImage(file) {
+  function extractFromFile(file) {
+    if (!file) return;
+    var name = file.name || "";
+    var isPdf = /\.pdf$/i.test(name) || file.type === "application/pdf";
+    var isImg = /^image\//.test(file.type) || /\.(png|jpe?g|webp|gif|bmp|tiff?)$/i.test(name);
+    var isTxt = /\.(txt|md|markdown|rtf)$/i.test(name) || /^text\//.test(file.type);
+    if (/\.docx?$/i.test(name) && !isPdf) {
+      banner("Word files aren’t read directly — export your résumé as a PDF (or paste the text above).", true);
+      return;
+    }
+    if (isTxt) {
+      file.text().then(function (t) {
+        setv("ocr_text", t);
+        extractFromText($("btnExtractText"));
+      }).catch(function () { banner("Couldn’t read that text file.", true); });
+      return;
+    }
+    if (!isPdf && !isImg) {
+      banner("Upload a PDF or an image of your résumé (or paste the text above).", true);
+      return;
+    }
     var reader = new FileReader();
     reader.onload = async function () {
-      $("ocrMsg").textContent = "Reading image…";
+      $("ocrMsg").textContent = isPdf ? "Reading your PDF…" : "Reading image…";
       try {
+        var part = isPdf
+          ? { type: "file", file: { filename: name || "resume.pdf", file_data: reader.result } }
+          : { type: "image_url", image_url: { url: reader.result } };
         var out = parseJson(
           await aiChat(
             [
               { role: "system", content: SCHEMA_PROMPT },
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: "Extract this resume image into the JSON schema." },
-                  { type: "image_url", image_url: { url: reader.result } }
-                ]
-              }
+              { role: "user", content: [{ type: "text", text: "Extract this résumé into the JSON schema." }, part] }
             ],
             { json: true }
           )
@@ -297,8 +314,8 @@
         applyExtract(out);
         $("ocrMsg").textContent = "";
       } catch (e) {
-        banner(e.message, true);
         $("ocrMsg").textContent = "";
+        banner(e.message, true);
       }
     };
     reader.readAsDataURL(file);
@@ -363,8 +380,8 @@
     $("btnExtractText").addEventListener("click", function (e) {
       extractFromText(e.currentTarget);
     });
-    $("ocr_img").addEventListener("change", function (e) {
-      if (e.target.files[0]) extractFromImage(e.target.files[0]);
+    $("ocr_file").addEventListener("change", function (e) {
+      if (e.target.files[0]) extractFromFile(e.target.files[0]);
       e.target.value = "";
     });
     $("btnPull").addEventListener("click", function (e) {
