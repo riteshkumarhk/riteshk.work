@@ -478,6 +478,7 @@
       case "stickies": return { type: "stickies", nav: "", kicker: "", heading: "", stickySize: "natural", items: [] };
       case "voices": return { type: "voices", nav: "", kicker: "", heading: "", mode: "verbatim", vsize: "", items: [] };
       case "focus": return { type: "focus", nav: "", kicker: "", heading: "", src: "", caption: "", sticky: false, annotations: [] };
+      case "gen": return { type: "gen", name: "", nav: "", kicker: "", heading: "", spec: (window.RKGen ? window.RKGen.blankSpec() : { version: 1, root: { type: "stack", props: {}, children: [] } }) };
       default: return { type: "text", nav: "Section", kicker: "", heading: "", body: "", list: [], src: "", caption: "" };
     }
   }
@@ -1445,7 +1446,7 @@
   }
 
   function blockEditor(i, b, j, len, open) {
-    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Before / after slider", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices", isolayers: "Isometric layers", focus: "Focus & annotate" })[b.type] || b.type;
+    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Before / after slider", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices", isolayers: "Isometric layers", focus: "Focus & annotate", gen: "Generated" })[b.type] || b.type;
     if (b.encStub) {
       return '<div class="card study__block study__block--enc">' +
         '<div class="study__block-head study__block-head--enc">' +
@@ -1457,7 +1458,7 @@
       '</div>';
     }
     var custom = (typeof b.editorName === "string" && b.editorName.trim()) ? b.editorName.trim() : "";
-    var raw = custom || b.nav || b.kicker || b.heading || b.body || (b.items && b.items[0] && (b.items[0].q || b.items[0].title || b.items[0].value || b.items[0].caption || b.items[0].heading || b.items[0].label)) || "Untitled";
+    var raw = custom || b.name || b.nav || b.kicker || b.heading || b.body || (b.items && b.items[0] && (b.items[0].q || b.items[0].title || b.items[0].value || b.items[0].caption || b.items[0].heading || b.items[0].label)) || "Untitled";
     var label = String(raw).replace(/[\*\[\]]/g, "").replace(/\s+/g, " ").trim();
     if (label.length > 48) label = label.slice(0, 48) + "\u2026";
     var head = '<div class="study__block-head" data-act="study-blocktoggle" data-index="' + i + '" data-bindex="' + j + '">' +
@@ -1518,6 +1519,7 @@
     else if (b.type === "voices") body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "mode", "Style", [["verbatim", "Verbatim \u2014 sharp quote bubble"], ["thought", "Thought \u2014 soft bubble"], ["chat", "Chat \u2014 a two-way conversation"]], "Verbatim is a sharp quote bubble, thought a soft one, chat the tighter two-way style. Each voice can sit left or right below.") + sfSelect(i, j, "vsize", "Verbatim heading size", [["", "Standard"], ["lg", "Large"]]) + itemRepeater(i, j, b) + '<div class="af__hint">Side puts each bubble on the left or right \u2014 in Chat, the sides alternate automatically until you set them yourself. Heading only shows on Verbatim. Attribution is the small label under the bubble (e.g. \u201cWhat clients actually said\u201d).</div>';
     else if (b.type === "compare") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + mediaInputBlock(i, j, "beforeSrc", "Before image") + mediaInputBlock(i, j, "afterSrc", "After image") + "</div>" + '<div class="af__row">' + sfInput(i, j, "beforeLabel", "Before label") + sfInput(i, j, "afterLabel", "After label") + "</div>" + richBlock(i, j, "body", "Description below \u2014 what changed", "Both images should be the same size. Visitors drag the divider to compare.");
     else if (b.type === "focus") body = sfInput(i, j, "heading", "Heading") + mediaInputBlock(i, j, "src", "Image to annotate") + focusAnnEditor(i, j, b) + '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="sticky"' + (b.sticky ? " checked" : "") + ' /> Show annotations as a pill list below the image (number + title, or the description if there\u2019s no title) \u2014 clicking a pill or marker opens its flyout and highlights the matching pill. Full-screen keeps its own list.</label>' + sfInput(i, j, "caption", "Caption");
+    else if (b.type === "gen") body = genEditor(i, j, b);
     var hasHeading = /^(text|metrics|steps|media|split|cards|gallery|mediagrid|device|isolayers|figure|columns|rows|compare|stickies|voices|workflow|focus)$/.test(b.type);
     var sizeCtl = (hasHeading || b.type === "statement") ? sfSelect(i, j, "hsize", (b.type === "statement" ? "Statement size" : "Heading size"), [["", "Standard"], ["sm", "Compact \u2014 easier to read"], ["lg", "Large \u2014 display"]], "Shrink it if the standard size feels too big for the copy.") : "";
     var sepCtl = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="sep"' + (b.sep !== false ? " checked" : "") + " /> Separator line above \u2014 uncheck to flow into the previous section</label>";
@@ -1573,6 +1575,238 @@
         return '<span class="secprev secprev--text"><span class="sp__kick">Context</span><span class="sp__h">The problem</span><span class="sp__body">A short paragraph that sets up the situation and the stakes.</span><span class="sp__bul">Point one</span><span class="sp__bul">Point two</span></span>';
     }
   }
+  /* ---------- Generated sections: isolated "gen" block — visual tree editor + AI generator ---------- */
+  function gspec(b) {
+    if (!b.spec || typeof b.spec !== "object") b.spec = (window.RKGen ? window.RKGen.blankSpec() : { version: 1, root: { type: "stack", props: {}, children: [] } });
+    if (!b.spec.root) b.spec.root = { type: "stack", props: {}, children: [] };
+    return b.spec;
+  }
+  function gParsePath(s) { return String(s == null ? "" : s).split(".").filter(function (x) { return x !== ""; }).map(Number); }
+  function gNodeAt(sp, path) { var n = sp.root; for (var k = 0; k < path.length; k++) { if (!n.children || !n.children[path[k]]) return null; n = n.children[path[k]]; } return n; }
+  function gParentAt(sp, path) { if (!path.length) return null; var parent = gNodeAt(sp, path.slice(0, -1)); return parent && parent.children ? { parent: parent, idx: path[path.length - 1] } : null; }
+  var GEN_CONTAINERS = ["stack", "row", "grid", "split", "card", "section"];
+  function gBlank(type) {
+    switch (type) {
+      case "heading": return { type: "heading", text: "Heading", size: "lg" };
+      case "text": return { type: "text", text: "Some copy the reader can edit.", size: "md", tone: "default", align: "left" };
+      case "quote": return { type: "quote", text: "A short, memorable quote.", cite: "" };
+      case "stat": return { type: "stat", value: "100%", label: "label" };
+      case "pill": return { type: "pill", text: "Label", tone: "accent" };
+      case "icon": return { type: "icon", name: "spark", size: "md" };
+      case "media": return { type: "media", src: "", kind: "image", ratio: "16x9", fit: "cover", caption: "" };
+      case "button": return { type: "button", label: "Learn more", href: "" };
+      case "divider": return { type: "divider" };
+      case "spacer": return { type: "spacer", size: "md" };
+      default: return { type: GEN_CONTAINERS.indexOf(type) !== -1 ? type : "stack", props: {}, children: [] };
+    }
+  }
+  function gField(i, j, ps, field, label, value, ph) {
+    return '<label class="gsx__f"><span>' + escHtml(label) + '</span><input type="text" data-gpath="' + ps + '" data-gfield="' + field + '" data-index="' + i + '" data-bindex="' + j + '" value="' + escAttr(value || "") + '"' + (ph ? ' placeholder="' + escAttr(ph) + '"' : "") + " /></label>";
+  }
+  function gArea(i, j, ps, field, label, value) {
+    return '<label class="gsx__f gsx__f--area"><span>' + escHtml(label) + '</span><textarea rows="2" data-gpath="' + ps + '" data-gfield="' + field + '" data-index="' + i + '" data-bindex="' + j + '">' + escHtml(value || "") + "</textarea></label>";
+  }
+  function gSel(i, j, ps, field, label, opts, value) {
+    return '<label class="gsx__f gsx__f--sel"><span>' + escHtml(label) + '</span><select data-gpath="' + ps + '" data-gfield="' + field + '" data-index="' + i + '" data-bindex="' + j + '">' + opts.map(function (o) { return '<option value="' + escAttr(o[0]) + '"' + (String(value) === String(o[0]) ? " selected" : "") + ">" + escHtml(o[1]) + "</option>"; }).join("") + "</select></label>";
+  }
+  var GEN_SIZ = [["sm", "S"], ["md", "M"], ["lg", "L"], ["xl", "XL"]];
+  var GEN_TON = [["default", "Default"], ["dim", "Dim"], ["faint", "Faint"], ["accent", "Accent"]];
+  var GEN_ALN = [["left", "Left"], ["center", "Center"], ["right", "Right"]];
+  function genLeafFields(n, ps, i, j) {
+    switch (n.type) {
+      case "heading": return gField(i, j, ps, "text", "Text", n.text) + gSel(i, j, ps, "size", "Size", GEN_SIZ, n.size || "lg");
+      case "text": return gArea(i, j, ps, "text", "Text \u2014 **bold** *italic* [link](url)", n.text) + '<div class="gsx__row3">' + gSel(i, j, ps, "size", "Size", GEN_SIZ, n.size || "md") + gSel(i, j, ps, "tone", "Tone", GEN_TON, n.tone || "default") + gSel(i, j, ps, "align", "Align", GEN_ALN, n.align || "left") + "</div>";
+      case "quote": return gArea(i, j, ps, "text", "Quote", n.text) + gField(i, j, ps, "cite", "Attribution", n.cite);
+      case "stat": return '<div class="gsx__row2">' + gField(i, j, ps, "value", "Value", n.value, "689M+") + gField(i, j, ps, "label", "Label", n.label, "accounts") + "</div>";
+      case "pill": return gField(i, j, ps, "text", "Text", n.text) + gSel(i, j, ps, "tone", "Tone", GEN_TON, n.tone || "accent");
+      case "icon": return gField(i, j, ps, "name", "Icon", n.name, "spark, chart, target, shield\u2026") + gSel(i, j, ps, "size", "Size", GEN_SIZ, n.size || "md");
+      case "media": return gField(i, j, ps, "src", "Media URL", n.src, "paste a URL, or upload \u2192") + '<div class="gsx__up"><button class="btn btn--ghost" data-act="gen-upload" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '">Upload\u2026</button></div>' + '<div class="gsx__row3">' + gSel(i, j, ps, "kind", "Kind", [["image", "Image"], ["video", "Video"], ["embed", "Embed"]], n.kind || "image") + gSel(i, j, ps, "ratio", "Ratio", [["16x9", "16:9"], ["4x3", "4:3"], ["1x1", "1:1"], ["3x2", "3:2"], ["3x4", "3:4"], ["9x16", "9:16"], ["auto", "Auto"]], n.ratio || "16x9") + gSel(i, j, ps, "fit", "Fit", [["cover", "Cover"], ["contain", "Contain"]], n.fit || "cover") + "</div>" + gField(i, j, ps, "caption", "Caption", n.caption);
+      case "button": return '<div class="gsx__row2">' + gField(i, j, ps, "label", "Label", n.label) + gField(i, j, ps, "href", "Link URL", n.href) + "</div>";
+      case "spacer": return gSel(i, j, ps, "size", "Size", GEN_SIZ, n.size || "md");
+      case "divider": return '<div class="gsx__mini">A thin divider line.</div>';
+    }
+    return "";
+  }
+  function genNode(node, path, i, j) {
+    var ps = path.join(".");
+    var isRoot = path.length === 0;
+    var isCont = GEN_CONTAINERS.indexOf(node.type) !== -1;
+    var ops = isRoot ? "" : '<span class="gsx__ops">' +
+      '<button class="iconbtn" data-act="gen-up" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '" title="Move up">\u2191</button>' +
+      '<button class="iconbtn" data-act="gen-down" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '" title="Move down">\u2193</button>' +
+      '<button class="iconbtn iconbtn--danger" data-act="gen-del" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '" title="Remove">\u2715</button></span>';
+    var body;
+    if (isCont) {
+      var p = node.props || {};
+      var props = '<div class="gsx__props">' +
+        gSel(i, j, ps, "type", "Layout", [["stack", "Stack"], ["row", "Row"], ["grid", "Grid"], ["split", "Split"], ["card", "Card"], ["section", "Section"]], node.type) +
+        gSel(i, j, ps, "props.gap", "Gap", [["none", "None"], ["sm", "S"], ["md", "M"], ["lg", "L"], ["xl", "XL"]], p.gap || "md") +
+        gSel(i, j, ps, "props.align", "Align", GEN_ALN, p.align || "left") +
+        (node.type === "grid" ? gSel(i, j, ps, "props.cols", "Cols", [["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"], ["6", "6"]], p.cols || 2) : "") +
+        gSel(i, j, ps, "props.pad", "Pad", [["none", "None"], ["sm", "S"], ["md", "M"], ["lg", "L"]], p.pad || "none") +
+        gSel(i, j, ps, "props.bg", "Panel", [["none", "None"], ["elev", "Elevated"], ["line", "Panel"], ["accent", "Accent"]], p.bg || "none") +
+        "</div>";
+      var kids = (node.children || []).map(function (c, ci) { return genNode(c, path.concat(ci), i, j); }).join("");
+      var addOpts = [["text", "Text"], ["heading", "Heading"], ["stat", "Stat"], ["media", "Media"], ["quote", "Quote"], ["pill", "Pill"], ["icon", "Icon"], ["button", "Button"], ["divider", "Divider"], ["spacer", "Spacer"], ["stack", "Stack"], ["row", "Row"], ["grid", "Grid"], ["split", "Split"], ["card", "Card"]];
+      var addbar = '<div class="gsx__add"><select class="gsx__addsel">' + addOpts.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + "</option>"; }).join("") + '</select><button class="btn btn--add" data-act="gen-add" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '">+ Add</button></div>';
+      body = props + '<div class="gsx__kids">' + (kids || '<div class="gsx__empty">Empty \u2014 add a block below.</div>') + "</div>" + addbar;
+    } else {
+      body = '<div class="gsx__fields">' + genLeafFields(node, ps, i, j) + "</div>";
+    }
+    return '<div class="gsx__node gsx__node--' + (isCont ? "cont" : "leaf") + '"><div class="gsx__nhead"><span class="gsx__badge">' + escHtml(node.type) + "</span>" + ops + "</div>" + body + "</div>";
+  }
+  function genEditor(i, j, b) {
+    var sp = gspec(b);
+    return '<div class="gsx">' +
+      '<div class="gsx__bar"><input class="gsx__name" type="text" data-gen-name data-index="' + i + '" data-bindex="' + j + '" value="' + escAttr(b.name || "") + '" placeholder="Section name (only you see this)" />' +
+      '<button class="btn btn--auto" data-act="gen-refine" data-index="' + i + '" data-bindex="' + j + '">\u2728 Refine with AI</button></div>' +
+      sfInput(i, j, "heading", "Heading (optional \u2014 shown above the section)") +
+      '<div class="gsx__tree">' + genNode(sp.root, [], i, j) + "</div>" +
+      '<div class="af__hint">Built from safe layout blocks \u2014 edit any field live, add / reorder / remove blocks, or hit \u2728 Refine to change it with AI. Nothing here runs code.</div>' +
+      "</div>";
+  }
+  function onGenEdit(t) {
+    var i = +t.dataset.index, j = +t.dataset.bindex;
+    var b = data.work[i] && data.work[i].study && data.work[i].study.blocks[j];
+    if (!b) return;
+    if (t.dataset.genName !== undefined) { b.name = t.value; saveDraft(); refreshL2Preview(); return; }
+    var sp = gspec(b), node = gNodeAt(sp, gParsePath(t.dataset.gpath));
+    if (!node) return;
+    var f = t.dataset.gfield;
+    if (f.indexOf("props.") === 0) { node.props = node.props || {}; node.props[f.slice(6)] = t.value; saveDraft(); refreshL2Preview(); return; }
+    if (f === "type") { node.type = t.value; saveDraft(); renderL2(); return; }
+    node[f] = t.value; saveDraft(); refreshL2Preview();
+  }
+  function genAction(act, el) {
+    var i = +el.dataset.index, j = +el.dataset.bindex;
+    var blk = data.work[i] && data.work[i].study && data.work[i].study.blocks[j];
+    if (!blk) return;
+    if (act === "gen-refine") { genModal(i, { editJ: j, seedSpec: blk.spec, seedName: blk.name }); return; }
+    var sp = gspec(blk), path = gParsePath(el.dataset.gpath);
+    if (act === "gen-add") {
+      var container = gNodeAt(sp, path) || sp.root;
+      var sel = el.closest(".gsx__add") && el.closest(".gsx__add").querySelector(".gsx__addsel");
+      container.children = container.children || [];
+      container.children.push(gBlank(sel ? sel.value : "text"));
+      saveDraft(true); renderL2(); return;
+    }
+    if (act === "gen-upload") {
+      var mnode = gNodeAt(sp, path); if (!mnode) return;
+      pickMedia(function (uri) { mnode.src = uri; if (/^data:video|\.(mp4|webm|mov|m4v|ogv)($|\?)/i.test(uri)) mnode.kind = "video"; saveDraft(true); renderL2(); });
+      return;
+    }
+    var pr = gParentAt(sp, path); if (!pr) return;
+    if (act === "gen-del") { pr.parent.children.splice(pr.idx, 1); saveDraft(true); renderL2(); return; }
+    if (act === "gen-up" && pr.idx > 0) { var a = pr.parent.children, x = a[pr.idx - 1]; a[pr.idx - 1] = a[pr.idx]; a[pr.idx] = x; saveDraft(true); renderL2(); return; }
+    if (act === "gen-down" && pr.idx < pr.parent.children.length - 1) { var a2 = pr.parent.children, y = a2[pr.idx + 1]; a2[pr.idx + 1] = a2[pr.idx]; a2[pr.idx] = y; saveDraft(true); renderL2(); return; }
+  }
+  function genSystem() {
+    return [
+      "You are a senior product designer composing ONE section for a dark, editorial, restrained portfolio case-study page.",
+      "Design language: near-black backgrounds, warm ivory text, ONE bronze accent used sparingly; serif display headings, sans body, mono micro-labels; generous whitespace; quiet, confident, high craft. Never garish.",
+      "You output ONLY a JSON layout spec that a fixed, safe interpreter renders. You NEVER output HTML, CSS, code, class names, styles or script.",
+      window.RKGen.describe(),
+      "Match the user's prompt and any reference images in STRUCTURE and INTENT (not exact pixels/brand). Write tight, believable placeholder copy the author will edit. Use grid/row for multiple items, stat for metrics, card + bg:elev to group, quote for testimonials. Leave media src EMPTY (the author adds visuals). Keep it to one focused section."
+    ].join("\n\n");
+  }
+  function genPickerCards() {
+    var presets = ((data && data.genSections) || []).map(function (p) {
+      return '<button type="button" class="secpick__preset" data-gen-preset="' + escAttr(p.id) + '">' +
+        '<span class="secpick__preset-prev">' + (window.RKGen ? window.RKGen.renderHtml(p.spec) : "") + "</span>" +
+        '<span class="secpick__preset-name">' + escHtml(p.name || "Section") + "</span>" +
+        '<button type="button" class="secpick__preset-del" data-gen-preset-del="' + escAttr(p.id) + '" title="Delete">\u2715</button></button>';
+    }).join("");
+    return '<div class="secpick__gen">' +
+      '<button type="button" class="secpick__gencard" data-gen-new><span class="secpick__genic">\u2728</span><span class="secpick__gentx"><b>Generate a section</b><span>Describe it or drop a reference image \u2014 AI builds it, you preview &amp; approve. Added as its own block; your other sections are untouched.</span></span></button>' +
+      (presets ? '<div class="secpick__presets"><div class="secpick__presets-h">Your generated sections</div><div class="secpick__presets-grid">' + presets + "</div></div>" : "") +
+      "</div>";
+  }
+  function genModal(i, opts) {
+    opts = opts || {};
+    var editJ = (opts.editJ != null) ? opts.editJ : null;
+    var imgs = [];
+    var curSpec = opts.seedSpec ? window.RKGen.clean(opts.seedSpec) : null;
+    var modal = document.createElement("div");
+    modal.className = "pass pass--wide gen-modal";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">' + (editJ != null ? "Refine this section" : "Generate a section") + "</div>" +
+      '<div class="pass__sub">Describe the section and optionally drop reference images. AI proposes a layout from safe building blocks \u2014 preview it, then ' + (editJ != null ? "apply" : "add") + " it. No code is generated or run.</div>" +
+      '<textarea class="gen__prompt" id="genPrompt" rows="3" placeholder="e.g. A testimonial wall \u2014 three quote cards in a row, each with a name and role, on a subtle panel."></textarea>' +
+      '<div class="gen__imgs"><label class="btn btn--ghost">Add reference image\u2026<input type="file" accept="image/*" multiple hidden class="gen__file" /></label><div class="gen__thumbs"></div></div>' +
+      '<div class="gen__err pass__err"></div>' +
+      '<div class="gen__stage"></div>' +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Close</button><button class="btn btn--primary" data-gen-run>\u2728 Generate</button></div></div>';
+    document.body.appendChild(modal);
+    var stage = modal.querySelector(".gen__stage"), errEl = modal.querySelector(".gen__err"), thumbs = modal.querySelector(".gen__thumbs");
+    var onKey = function (e) { if (e.key === "Escape") close(); };
+    var close = function () { modal.remove(); document.removeEventListener("keydown", onKey); };
+    document.addEventListener("keydown", onKey);
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    function renderThumbs() {
+      thumbs.innerHTML = "";
+      imgs.forEach(function (u, k) {
+        var s = document.createElement("span"); s.className = "gen__thumb";
+        var im = document.createElement("img"); im.src = u; s.appendChild(im);
+        var x = document.createElement("button"); x.textContent = "\u2715"; x.addEventListener("click", function () { imgs.splice(k, 1); renderThumbs(); });
+        s.appendChild(x); thumbs.appendChild(s);
+      });
+    }
+    modal.querySelector(".gen__file").addEventListener("change", function (e) {
+      [].forEach.call(e.target.files, function (f) { var r = new FileReader(); r.onload = function () { imgs.push(r.result); renderThumbs(); }; r.readAsDataURL(f); });
+      e.target.value = "";
+    });
+    function renderStage() {
+      if (!curSpec) { stage.innerHTML = ""; return; }
+      stage.innerHTML =
+        '<div class="gen__result"><div class="gen__prevhead">Preview</div>' +
+        '<div class="gen__preview">' + window.RKGen.renderHtml(curSpec) + "</div>" +
+        '<div class="gen__save"><input type="text" class="gen__name" id="genName" placeholder="Name this section" value="' + escAttr(opts.seedName || "") + '" />' +
+        (editJ != null
+          ? '<button class="btn btn--primary" data-gen-apply>Apply to this section</button>'
+          : '<button class="btn btn--primary" data-gen-insert>Add to this study</button><button class="btn btn--ghost" data-gen-savepreset>Save as reusable section</button>') +
+        "</div></div>";
+      var ap = stage.querySelector("[data-gen-apply]");
+      if (ap) ap.addEventListener("click", function () {
+        var b = data.work[i].study.blocks[editJ]; if (b) { b.spec = curSpec; var nm = (modal.querySelector("#genName").value || "").trim(); if (nm) b.name = nm; saveDraft(true); renderL2(); status("Section updated.", true); } close();
+      });
+      var ins = stage.querySelector("[data-gen-insert]");
+      if (ins) ins.addEventListener("click", function () {
+        var nm = ((modal.querySelector("#genName").value || "").trim()) || "Section";
+        var st = data.work[i].study || (data.work[i].study = blankStudy()); st.blocks = st.blocks || [];
+        var block = blankBlock("gen"); block.spec = curSpec; block.name = nm; block.nav = nm;
+        var pos; if (opts.above) { pos = Math.max(0, Math.min(opts.at, st.blocks.length)); st.blocks.splice(pos, 0, block); } else { st.blocks.push(block); pos = st.blocks.length - 1; }
+        openBlock = pos; close(); saveDraft(true); renderL2(); status("Added your generated section \u2014 edit it below.", true);
+      });
+      var sv = stage.querySelector("[data-gen-savepreset]");
+      if (sv) sv.addEventListener("click", function () {
+        var nm = ((modal.querySelector("#genName").value || "").trim()) || "Section";
+        data.genSections = data.genSections || []; data.genSections.push({ id: "g" + Date.now(), name: nm, spec: curSpec, createdAt: Date.now() });
+        saveDraft(true); sv.textContent = "Saved \u2713"; sv.disabled = true; status("Saved \u2014 it\u2019s now in your Add-section dialog.", true);
+      });
+    }
+    modal.querySelector("[data-gen-run]").addEventListener("click", async function (e) {
+      var prompt = (modal.querySelector("#genPrompt").value || "").trim();
+      if (!prompt && !imgs.length && !curSpec) { errEl.textContent = "Describe the section, or add a reference image."; return; }
+      if (!aiHasKey("txt")) { aiKeyModal("txt", function () {}); return; }
+      var btn = e.currentTarget, was = btnBusy(btn, "Generating\u2026"); errEl.textContent = "";
+      try {
+        var cfg = aiCfg("txt");
+        var userText = "Section brief:\n" + (prompt || "(see reference image)") + (curSpec ? "\n\nRefine this existing layout (JSON):\n" + JSON.stringify(curSpec.root) : "");
+        var user;
+        if (imgs.length && /^(openai|custom)$/.test(cfg.provider)) user = [{ type: "text", text: userText }].concat(imgs.map(function (u) { return { type: "image_url", image_url: { url: u } }; }));
+        else user = userText + (imgs.length ? "\n\n(Reference image supplied, but this provider reads text only \u2014 using the brief.)" : "");
+        var parsed = csgenParse(await aiText(cfg, genSystem(), user, { json: true, maxTokens: 2200, temperature: 0.55 }));
+        if (!parsed) throw new Error("The AI didn\u2019t return a valid layout \u2014 try rephrasing.");
+        curSpec = window.RKGen.clean(parsed);
+        if (window.RKGen.isEmpty(curSpec)) throw new Error("Came back empty \u2014 add detail and retry.");
+        renderStage();
+      } catch (err) { errEl.textContent = err.message || String(err); }
+      finally { btnIdle(btn, was); }
+    });
+    if (curSpec) renderStage();
+  }
+
   function sectionPicker(i, at) {
     var above = typeof at === "number" && at >= 0;
     var modal = document.createElement("div");
@@ -1580,6 +1814,7 @@
     modal.innerHTML =
       '<div class="pass__box"><div class="pass__title">' + (above ? "Add a section above" : "Add a section") + "</div>" +
       '<div class="pass__sub">Pick the layout that fits your content \u2014 this is how each one looks on your live page.</div>' +
+      genPickerCards() +
       '<div class="secpick__grid">' +
       SECTION_GALLERY.map(function (s) {
         return '<button type="button" class="secpick__card" data-pick="' + s.type + '">' +
@@ -1609,6 +1844,30 @@
         saveDraft(true); renderL2();
         var meta = SECTION_GALLERY.filter(function (x) { return x.type === type; })[0] || { name: type };
         status("Added a \u201c" + meta.name + "\u201d section \u2014 fill it in below.", true);
+      });
+    });
+    var gnew = modal.querySelector("[data-gen-new]");
+    if (gnew) gnew.addEventListener("click", function () { close(); genModal(i, { above: above, at: at }); });
+    modal.querySelectorAll("[data-gen-preset]").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        if (e.target.closest("[data-gen-preset-del]")) return;
+        var id = btn.getAttribute("data-gen-preset");
+        var pr = ((data.genSections) || []).filter(function (x) { return x.id === id; })[0];
+        if (!pr) return;
+        var st = data.work[i].study || (data.work[i].study = blankStudy()); st.blocks = st.blocks || [];
+        var block = blankBlock("gen"); block.spec = JSON.parse(JSON.stringify(pr.spec)); block.name = pr.name; block.nav = pr.name;
+        var pos; if (above) { pos = Math.max(0, Math.min(at, st.blocks.length)); st.blocks.splice(pos, 0, block); } else { st.blocks.push(block); pos = st.blocks.length - 1; }
+        openBlock = pos; close(); saveDraft(true); renderL2(); status("Added \u201c" + (pr.name || "section") + "\u201d.", true);
+      });
+    });
+    modal.querySelectorAll("[data-gen-preset-del]").forEach(function (x) {
+      x.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var id = x.getAttribute("data-gen-preset-del");
+        data.genSections = ((data.genSections) || []).filter(function (p) { return p.id !== id; });
+        saveDraft(true);
+        var card = x.closest(".secpick__preset"); if (card) card.remove();
+        status("Removed from your sections.");
       });
     });
   }
@@ -2007,6 +2266,7 @@
   /* ---------- events ---------- */
   function onInput(e) {
     const t = e.target;
+    if (t.dataset.gpath !== undefined || t.dataset.genName !== undefined) { onGenEdit(t); return; }
     if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined || t.dataset.rtcellfield !== undefined) { rtSerialize(t); return; }
     if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.sitem !== undefined && t.dataset.ifield) { onItemInput(t); return; }
@@ -2051,6 +2311,7 @@
 
   function onChange(e) {
     const t = e.target;
+    if (t.dataset.gpath !== undefined) { onGenEdit(t); return; }
     if (t.dataset.atsFile !== undefined) { if (t.files && t.files[0]) atsRun(t.closest(".ats"), t.files[0]); t.value = ""; return; }
     if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
@@ -2174,6 +2435,7 @@
     }
     if (act === "sv-remove") { (data.specialViews || []).splice(i, 1); saveDraft(true); renderBody(); return; }
     if (act === "sv-tailor") { roleKitModal(); return; }
+    if (/^gen-(add|del|up|down|upload|refine)$/.test(act)) { genAction(act, b); return; }
     if (act === "sv-preview") { svPreview(i); return; }
     if (act === "plate-sample") { data.work[i].theme = b.dataset.theme; data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Motion placeholder applied.", true); return; }
     if (act === "img-clear") { data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Image removed."); return; }
