@@ -59,6 +59,30 @@
     return out;
   }
 
+  /* ---------- safe inline style (rich visuals without executing code) ----------
+     CSS styling is NOT code execution. We allow a WHITELIST of visual properties with
+     scrubbed values (no url(), no expression/behavior, no javascript:, no attribute
+     breakout) so the AI can build claymorphism / glass / gradients / 3D looks safely. */
+  var STYLE_PROPS = {};
+  ("background background-color background-image background-blend-mode background-position background-size background-repeat color border border-color border-width border-style border-top border-right border-bottom border-left border-radius box-shadow text-shadow filter backdrop-filter -webkit-backdrop-filter transform transform-origin transform-style perspective perspective-origin opacity padding margin width height min-width min-height max-width max-height aspect-ratio gap overflow background-clip -webkit-background-clip -webkit-text-fill-color font-weight font-size font-style letter-spacing line-height text-align mix-blend-mode transition rotate scale translate outline outline-offset").split(" ").forEach(function (p) { STYLE_PROPS[p] = 1; });
+  function sanitizeStyle(s) {
+    s = String(s == null ? "" : s);
+    if (!s || s.length > 1400) return "";
+    // hard bans anywhere (never appear in the legit visual values we allow)
+    if (/url\s*\(|expression|javascript:|vbscript:|@import|@media|behaviou?r\s*:|-moz-binding|binding\s*:|[<>{}\\"'`]|\/\*|@/i.test(s)) return "";
+    var out = [];
+    s.split(";").forEach(function (decl) {
+      var idx = decl.indexOf(":");
+      if (idx < 1) return;
+      var prop = decl.slice(0, idx).trim().toLowerCase();
+      var val = decl.slice(idx + 1).trim();
+      if (!STYLE_PROPS[prop] || !val || val.length > 300) return;
+      if (!/^[a-z0-9#%.,()\-+/ _]+$/i.test(val)) return; // colors, %, funcs, calc, var, gradients only
+      out.push(prop + ": " + val);
+    });
+    return out.slice(0, 30).join("; ");
+  }
+
   /* ---------- clean (validate + normalize a spec, dropping anything unknown) ---------- */
   function cleanProps(p) {
     p = p || {};
@@ -97,9 +121,10 @@
         var c = cleanNode(kids[i], depth + 1);
         if (c) out.children.push(c);
       }
+      if (n.style) out.style = sanitizeStyle(n.style);
       return out;
     }
-    if (LEAVES[t]) return cleanLeaf(t, n);
+    if (LEAVES[t]) { var lf = cleanLeaf(t, n); if (lf && n.style) lf.style = sanitizeStyle(n.style); return lf; }
     return null;
   }
   function clean(spec) {
@@ -131,24 +156,25 @@
     if (n.kind === "embed") return '<iframe class="gs-media-el" src="' + esc(n.src) + '" loading="lazy" allowfullscreen referrerpolicy="no-referrer"></iframe>';
     return '<img class="gs-media-el" src="' + esc(n.src) + '" alt="' + esc(n.alt) + '" loading="lazy">';
   }
+  function styleAttr(n) { return n.style ? ' style="' + esc(n.style) + '"' : ""; }
   function renderNode(n) {
     if (!n) return "";
-    var t = n.type;
+    var t = n.type, sa = styleAttr(n);
     if (CONTAINERS[t]) {
       var cls = "gs-" + t + contProps(n.props) + (t === "grid" ? " gs-cols-" + n.props.cols : "");
-      return '<div class="' + cls + '">' + renderChildren(n.children) + "</div>";
+      return '<div class="' + cls + '"' + sa + ">" + renderChildren(n.children) + "</div>";
     }
     switch (t) {
-      case "heading": return '<h3 class="gs-h gs-h--' + n.size + '">' + rich(n.text) + "</h3>";
-      case "text": return '<div class="gs-text gs-tx--' + n.size + " gs-tone-" + n.tone + " gs-al-" + n.align + '">' + rich(n.text) + "</div>";
-      case "quote": return '<blockquote class="gs-quote">' + rich(n.text) + (n.cite ? '<cite class="gs-cite">' + esc(n.cite) + "</cite>" : "") + "</blockquote>";
-      case "stat": return '<div class="gs-stat"><span class="gs-stat-v">' + esc(n.value) + '</span><span class="gs-stat-l">' + esc(n.label) + "</span></div>";
-      case "pill": return '<span class="gs-pill gs-pill--' + n.tone + '">' + esc(n.text) + "</span>";
-      case "icon": return '<span class="gs-icon gs-icon--' + n.size + '">' + (iconSvg(n.name) || '<span class="gs-icon-dot"></span>') + "</span>";
-      case "media": return '<figure class="gs-media gs-media--' + n.ratio + " gs-fit-" + n.fit + '">' + mediaInner(n) + (n.caption ? '<figcaption class="gs-cap">' + esc(n.caption) + "</figcaption>" : "") + "</figure>";
-      case "button": return n.href ? '<a class="gs-btn" href="' + esc(n.href) + '" target="_blank" rel="noopener">' + esc(n.label) + "</a>" : '<span class="gs-btn gs-btn--dead">' + esc(n.label) + "</span>";
-      case "divider": return '<hr class="gs-divider">';
-      case "spacer": return '<div class="gs-spacer gs-sp--' + n.size + '"></div>';
+      case "heading": return '<h3 class="gs-h gs-h--' + n.size + '"' + sa + ">" + rich(n.text) + "</h3>";
+      case "text": return '<div class="gs-text gs-tx--' + n.size + " gs-tone-" + n.tone + " gs-al-" + n.align + '"' + sa + ">" + rich(n.text) + "</div>";
+      case "quote": return '<blockquote class="gs-quote"' + sa + ">" + rich(n.text) + (n.cite ? '<cite class="gs-cite">' + esc(n.cite) + "</cite>" : "") + "</blockquote>";
+      case "stat": return '<div class="gs-stat"' + sa + '><span class="gs-stat-v">' + esc(n.value) + '</span><span class="gs-stat-l">' + esc(n.label) + "</span></div>";
+      case "pill": return '<span class="gs-pill gs-pill--' + n.tone + '"' + sa + ">" + esc(n.text) + "</span>";
+      case "icon": return '<span class="gs-icon gs-icon--' + n.size + '"' + sa + ">" + (iconSvg(n.name) || '<span class="gs-icon-dot"></span>') + "</span>";
+      case "media": return '<figure class="gs-media gs-media--' + n.ratio + " gs-fit-" + n.fit + '"' + sa + ">" + mediaInner(n) + (n.caption ? '<figcaption class="gs-cap">' + esc(n.caption) + "</figcaption>" : "") + "</figure>";
+      case "button": return n.href ? '<a class="gs-btn" href="' + esc(n.href) + '" target="_blank" rel="noopener"' + sa + ">" + esc(n.label) + "</a>" : '<span class="gs-btn gs-btn--dead"' + sa + ">" + esc(n.label) + "</span>";
+      case "divider": return '<hr class="gs-divider"' + sa + ">";
+      case "spacer": return '<div class="gs-spacer gs-sp--' + n.size + '"' + sa + "></div>";
     }
     return "";
   }
@@ -176,22 +202,22 @@
   // Compact contract handed to the AI so it only ever emits valid, safe specs.
   function describe() {
     return [
-      "You output ONLY a JSON layout spec: { \"version\":1, \"root\": Node }.",
-      "A Node is a container or a leaf. NEVER output HTML, CSS, classes, styles, scripts or URLs to code.",
-      "Containers (have \"children\":[Node]) + \"props\": stack | row | grid | split | card | section.",
+      "You output ONLY a JSON layout spec: { \"version\":1, \"root\": Node }. Output JSON only — never HTML, <script>, event handlers or code.",
+      "A Node is a container or a leaf. Containers have \"children\":[Node] + \"props\".",
+      "Containers: stack | row | grid | split | card | section.",
       "  props: gap(none|sm|md|lg|xl) align(left|center|right) valign(top|center|bottom) cols(1-6, grid only) pad(none|sm|md|lg) radius(none|sm|md|lg) bg(none|elev|accent|line).",
       "Leaves:",
       "  heading {text, size(sm|md|lg|xl)}",
-      "  text {text, size, tone(default|dim|faint|accent), align} — text may use **bold** *italic* [label](url) and newlines ONLY.",
-      "  quote {text, cite}",
-      "  stat {value, label}   e.g. value \"689M+\", label \"accounts\"",
-      "  pill {text, tone}",
-      "  icon {name, size}     name from a line-icon set (users, chart, target, spark, bolt, shield, star, rocket, globe, check, heart, layers...).",
-      "  media {src, kind(image|video|embed), ratio(16x9|4x3|1x1|3x2|3x4|9x16|auto), fit(cover|contain), alt, caption} — leave src empty to show a placeholder.",
-      "  button {label, href}",
-      "  divider {}   spacer {size}",
-      "Design: restrained, editorial, dark; use accent sparingly; prefer grid/row for multi-item layouts; use stat for metrics; keep copy tight.",
-      "Return the JSON object only."
+      "  text {text, size, tone(default|dim|faint|accent), align} — text may use **bold** *italic* [label](url) and newlines only.",
+      "  quote {text, cite}   stat {value,label}   pill {text,tone}",
+      "  icon {name, size}   (users, chart, target, spark, bolt, shield, star, rocket, globe, check, heart, layers…)",
+      "  media {src, kind(image|video|embed), ratio(16x9|4x3|1x1|3x2|3x4|9x16|auto), fit(cover|contain), alt, caption} — leave src EMPTY for a placeholder the author fills with their own image.",
+      "  button {label, href}   divider {}   spacer {size}",
+      "RICH VISUALS — ANY node may ALSO carry a \"style\" string of SAFE CSS to build custom materials: claymorphism, neumorphism, glassmorphism, gradients, glows, rounded device frames, 3D tilt, etc.",
+      "  Allowed style properties ONLY: background, background-color, background-image (gradients only), background-blend-mode, color, border, border-radius, box-shadow, text-shadow, filter, backdrop-filter, transform, transform-origin, transform-style, perspective, perspective-origin, opacity, padding, margin, width, height, min/max-width, min/max-height, aspect-ratio, gap, overflow, background-clip, -webkit-background-clip, -webkit-text-fill-color, font-weight, font-size, font-style, letter-spacing, line-height, text-align, mix-blend-mode, transition, rotate, scale, translate, outline.",
+      "  In values use colors, rgba()/hsl(), linear-gradient()/radial-gradient(), box-shadow (incl. inset for clay/neumorphism), blur()/brightness()/saturate() filters, transform funcs (perspective/rotateX/rotateY/translateZ/scale), calc(), and var(--accent) to stay on-brand. NEVER use url(), @import, expression, position:fixed or any script.",
+      "  To build a device mockup (e.g. a phone), NEST styled containers: an outer 'card' styled as the body (large border-radius, a clay dual box-shadow like '18px 18px 40px rgba(0,0,0,.55), -10px -10px 30px rgba(255,255,255,.05), inset 0 1px 2px rgba(255,255,255,.15)', a subtle gradient background, and transform:perspective(900px) rotateY(-14deg) for 3D), containing a 'media' node (kind:image, src empty) styled as the inset screen (border-radius, overflow:hidden), plus small styled containers for the notch/buttons.",
+      "Design language: dark, editorial, restrained; ONE bronze accent (var(--accent)) used sparingly; generous whitespace; high craft. Match the user's prompt and any reference image. Return the JSON object only."
     ].join("\n");
   }
 
