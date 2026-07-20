@@ -142,3 +142,9 @@
 
 /* lite mode: kill autoplay motion on generated video */
 html.lite .gsec .gs-media-el[autoplay] { /* videos still show first frame */ }
+
+/* interactive fx nodes (orbit / tilt / spin) — pre-hydrate cursor hint;
+   the actual drag/zoom behavior is attached by RKGen.hydrate() in JS. */
+.gsec [data-rk-fx] { cursor: grab; touch-action: none; }
+.gsec [data-rk-fx="tilt"] { cursor: default; }
+.gsec [data-rk-fx]:active { cursor: grabbing; }

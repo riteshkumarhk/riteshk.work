@@ -27,6 +27,7 @@
   var RATIOS = { "16x9": 1, "4x3": 1, "1x1": 1, "3x2": 1, "3x4": 1, "9x16": 1, auto: 1 };
   var FITS = { cover: 1, contain: 1 };
   var MEDIA_KINDS = { image: 1, video: 1, embed: 1 };
+  var FX = { orbit: 1, tilt: 1, spin: 1 }; // safe, site-provided interactions (NOT AI code)
 
   function pick(v, table, dflt) { return (v != null && table[v]) ? v : dflt; }
   function pickNum(v, table, dflt) { return (v != null && table[String(v)]) ? Number(v) : dflt; }
@@ -122,9 +123,10 @@
         if (c) out.children.push(c);
       }
       if (n.style) out.style = sanitizeStyle(n.style);
+      if (n.fx && FX[n.fx]) out.fx = n.fx;
       return out;
     }
-    if (LEAVES[t]) { var lf = cleanLeaf(t, n); if (lf && n.style) lf.style = sanitizeStyle(n.style); return lf; }
+    if (LEAVES[t]) { var lf = cleanLeaf(t, n); if (lf) { if (n.style) lf.style = sanitizeStyle(n.style); if (n.fx && FX[n.fx]) lf.fx = n.fx; } return lf; }
     return null;
   }
   function clean(spec) {
@@ -157,9 +159,10 @@
     return '<img class="gs-media-el" src="' + esc(n.src) + '" alt="' + esc(n.alt) + '" loading="lazy">';
   }
   function styleAttr(n) { return n.style ? ' style="' + esc(n.style) + '"' : ""; }
+  function fxAttr(n) { return n.fx ? ' data-rk-fx="' + esc(n.fx) + '"' : ""; }
   function renderNode(n) {
     if (!n) return "";
-    var t = n.type, sa = styleAttr(n);
+    var t = n.type, sa = styleAttr(n) + fxAttr(n);
     if (CONTAINERS[t]) {
       var cls = "gs-" + t + contProps(n.props) + (t === "grid" ? " gs-cols-" + n.props.cols : "");
       return '<div class="' + cls + '"' + sa + ">" + renderChildren(n.children) + "</div>";
@@ -217,14 +220,89 @@
       "  Allowed style properties ONLY: background, background-color, background-image (gradients only), background-blend-mode, color, border, border-radius, box-shadow, text-shadow, filter, backdrop-filter, transform, transform-origin, transform-style, perspective, perspective-origin, opacity, padding, margin, width, height, min/max-width, min/max-height, aspect-ratio, gap, overflow, background-clip, -webkit-background-clip, -webkit-text-fill-color, font-weight, font-size, font-style, letter-spacing, line-height, text-align, mix-blend-mode, transition, rotate, scale, translate, outline.",
       "  In values use colors, rgba()/hsl(), linear-gradient()/radial-gradient(), box-shadow (incl. inset for clay/neumorphism), blur()/brightness()/saturate() filters, transform funcs (perspective/rotateX/rotateY/translateZ/scale), calc(), and var(--accent) to stay on-brand. NEVER use url(), @import, expression, position:fixed or any script.",
       "  To build a device mockup (e.g. a phone), NEST styled containers: an outer 'card' styled as the body (large border-radius, a clay dual box-shadow like '18px 18px 40px rgba(0,0,0,.55), -10px -10px 30px rgba(255,255,255,.05), inset 0 1px 2px rgba(255,255,255,.15)', a subtle gradient background, and transform:perspective(900px) rotateY(-14deg) for 3D), containing a 'media' node (kind:image, src empty) styled as the inset screen (border-radius, overflow:hidden), plus small styled containers for the notch/buttons.",
+      "INTERACTIVITY — any node may also carry \"fx\": \"orbit\" | \"tilt\" | \"spin\" to make it user-interactive. orbit = click-hold-drag to rotate the element in 3D + scroll wheel to zoom in/out + double-click to reset. tilt = subtle parallax that follows the cursor on hover. spin = slow idle auto-rotation that pauses on hover (also drag/zoom-able). Put fx on the OUTER device/frame node (e.g. the phone body) so grabbing anywhere moves the whole thing, and keep a transform:perspective(...) rotateY(...) as the resting pose. The interaction code is provided by the site — you ONLY set the flag; never write scripts.",
       "Design language: dark, editorial, restrained; ONE bronze accent (var(--accent)) used sparingly; generous whitespace; high craft. Match the user's prompt and any reference image. Return the JSON object only."
     ].join("\n");
+  }
+
+  /* ---------- interactivity (fixed, audited behaviors — NOT AI-authored code) ----------
+     The AI can only choose fx: orbit|tilt|spin (validated in clean()). The behavior below
+     is authored by US and shipped in the repo: it only reads pointer/wheel events and
+     mutates the element's own transform/cursor. No eval, no network, no storage, no
+     navigation, no innerHTML — so it never crosses the "run generated code" line. */
+  function fxNum(v, d) { v = parseFloat(v); return isFinite(v) ? v : d; }
+  function attachFx(el) {
+    if (!el || el.__rkfx) return; el.__rkfx = 1;
+    var mode = el.getAttribute("data-rk-fx");
+    if (!FX[mode]) return;
+    var reduce = false;
+    try { reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+    // Adopt any resting pose the AI set via transform, so interaction starts from there.
+    var st = el.style.transform || "";
+    var persp = (st.match(/perspective\(([^)]{1,20})\)/) || [0, "1000px"])[1];
+    var rx = fxNum((st.match(/rotateX\((-?[\d.]{1,8})deg\)/) || [])[1], 0);
+    var ry = fxNum((st.match(/rotateY\((-?[\d.]{1,8})deg\)/) || [])[1], 0);
+    var scale = fxNum((st.match(/scale\((-?[\d.]{1,8})\)/) || [])[1], 1);
+    var rx0 = rx, ry0 = ry, s0 = scale;
+    el.style.touchAction = "none"; el.style.willChange = "transform"; el.style.userSelect = "none";
+    if (!el.style.transformStyle) el.style.transformStyle = "preserve-3d";
+    function apply() { el.style.transform = "perspective(" + persp + ") rotateX(" + rx + "deg) rotateY(" + ry + "deg) scale(" + scale + ")"; }
+    apply();
+    if (mode === "tilt") { // gentle parallax that follows the cursor on hover
+      el.style.transition = "transform .12s ease-out";
+      el.addEventListener("pointermove", function (e) {
+        var r = el.getBoundingClientRect();
+        var nx = (e.clientX - r.left) / r.width - 0.5, ny = (e.clientY - r.top) / r.height - 0.5;
+        ry = ry0 + nx * 26; rx = rx0 - ny * 26; apply();
+      });
+      el.addEventListener("pointerleave", function () { rx = rx0; ry = ry0; apply(); });
+      return;
+    }
+    // orbit + spin: click-hold-drag to rotate in 3D, wheel to zoom, double-click to reset.
+    el.style.cursor = "grab";
+    var dragging = false, px = 0, py = 0;
+    el.addEventListener("pointerdown", function (e) {
+      if (e.target.closest && e.target.closest("a,button,input,textarea,select")) return;
+      dragging = true; px = e.clientX; py = e.clientY; el.style.cursor = "grabbing";
+      try { el.setPointerCapture(e.pointerId); } catch (x) {}
+      e.preventDefault();
+    });
+    el.addEventListener("pointermove", function (e) {
+      if (!dragging) return;
+      ry += (e.clientX - px) * 0.4; rx -= (e.clientY - py) * 0.4;
+      rx = Math.max(-85, Math.min(85, rx)); px = e.clientX; py = e.clientY; apply();
+    });
+    function endDrag() { if (dragging) { dragging = false; el.style.cursor = "grab"; } }
+    el.addEventListener("pointerup", endDrag);
+    el.addEventListener("pointercancel", endDrag);
+    el.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      scale = Math.max(0.4, Math.min(2.6, scale * (e.deltaY > 0 ? 0.92 : 1.08))); apply();
+    }, { passive: false });
+    el.addEventListener("dblclick", function (e) { e.preventDefault(); rx = rx0; ry = ry0; scale = s0; apply(); });
+    if (mode === "spin" && !reduce) { // slow idle rotation that pauses on hover / while dragging
+      var hover = false, last = 0;
+      el.addEventListener("pointerenter", function () { hover = true; });
+      el.addEventListener("pointerleave", function () { hover = false; });
+      requestAnimationFrame(function loop(ts) {
+        if (!el.isConnected) return; // self-clean if the block was removed
+        if (last && !dragging && !hover) { ry = (ry + (ts - last) * 0.02) % 360; apply(); }
+        last = ts; requestAnimationFrame(loop);
+      });
+    }
+  }
+  function hydrate(scope) {
+    if (typeof document === "undefined") return;
+    scope = (scope && scope.querySelectorAll) ? scope : document;
+    var els = scope.querySelectorAll("[data-rk-fx]");
+    for (var i = 0; i < els.length; i++) attachFx(els[i]);
   }
 
   root.RKGen = {
     VERSION: 1,
     clean: clean,
     renderHtml: renderHtml,
+    hydrate: hydrate,
     blankSpec: blankSpec,
     isEmpty: isEmpty,
     describe: describe,
@@ -236,5 +314,9 @@
       ratios: Object.keys(RATIOS), fits: Object.keys(FITS), mediaKinds: Object.keys(MEDIA_KINDS)
     }
   };
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { hydrate(document); });
+    else setTimeout(function () { hydrate(document); }, 0);
+  }
   if (typeof module !== "undefined" && module.exports) module.exports = root.RKGen;
 })(typeof self !== "undefined" ? self : this);
