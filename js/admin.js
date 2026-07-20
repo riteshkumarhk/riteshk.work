@@ -114,6 +114,15 @@
     ["contact", "Contact"],
     ["special", "Special Views"],
     ["ai", "AI"],
+    ["autofill", "Autofill"],
+  ];
+  // Files bundled into the downloadable Résumé Autofill extension (served from /extension/).
+  const EXT_FILES = [
+    "manifest.json", "background.js", "content.js",
+    "popup.html", "popup.js", "popup.css",
+    "options.html", "options.js", "options.css", "README.md",
+    "src/model.js", "src/store.js", "src/insert.js",
+    "icons/icon16.png", "icons/icon48.png", "icons/icon128.png"
   ];
   const THEMES = ["edge", "auth", "search", "auto", "xbox", "grid", "aurora", "orbit", "wave", "mesh", "ember"];
 
@@ -427,7 +436,21 @@
       '<input type="text" data-path="contact.resume" value="' + escAttr(url) + '" placeholder="Paste a r\u00e9sum\u00e9 URL\u2026 e.g. /resume.pdf" />' +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="resume-upload">Upload PDF\u2026</button>' +
       (has ? '<button class="btn btn--ghost" data-act="resume-open">Open</button><button class="btn btn--ghost" data-act="resume-clear">Remove</button>' : "") + "</div>" +
-      '<div class="imgblk__hint">' + (has ? ("In use: " + escHtml(isData ? "embedded PDF" : url) + " \u00b7 the dock button is now visible") : "Not set \u2014 the r\u00e9sum\u00e9 button stays hidden until you add one.") + "</div></div>";
+      '<div class="imgblk__hint">' + (has ? ("In use: " + escHtml(isData ? "embedded PDF" : url) + " \u00b7 the dock button is now visible") : "Not set \u2014 the r\u00e9sum\u00e9 button stays hidden until you add one.") + "</div></div>" +
+      atsPanelHtml(has);
+  }
+  function atsPanelHtml(has) {
+    var lvls = IPREP_LEVELS.map(function (l) {
+      return '<button type="button" class="ats__lvl' + (atsLevel === l[0] ? " is-on" : "") + '" data-act="ats-level" data-lvl="' + l[0] + '"><b>' + l[1] + "</b><span>" + l[2] + "</span></button>";
+    }).join("");
+    return '<div class="ats">' +
+      '<div class="ats__head"><span class="ats__badge">ATS</span><div><b>ATS r\u00e9sum\u00e9 check</b><span>Is your r\u00e9sum\u00e9 parseable and tuned for the level you\u2019re targeting?</span></div></div>' +
+      '<div class="ats__levels">' + lvls + "</div>" +
+      '<div class="imgblk__row"><button class="btn btn--primary" data-act="ats-check"' + (has ? "" : " disabled") + ">Check ATS rating</button>" +
+      '<label class="btn btn--ghost ats__file">Check a different file\u2026<input type="file" accept=".pdf,.docx,.txt,.md" data-ats-file hidden></label></div>' +
+      (has ? "" : '<div class="af__hint">Add your r\u00e9sum\u00e9 above (or pick a file) to run the check.</div>') +
+      '<div class="ats__out" data-ats-out></div>' +
+      "</div>";
   }
 
   /* ---------- case study (L2) authoring ---------- */
@@ -772,6 +795,158 @@
     btn.disabled = false; btn.classList.remove("is-busy");
     if (label != null) { if (String(label).indexOf("<") !== -1) btn.innerHTML = label; else btn.textContent = label; }
   }
+
+  /* ---------- Résumé Autofill extension: build a .zip in the browser (STORED entries, no deps) ---------- */
+  const CRC_TABLE = (function () {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; }
+    return t;
+  })();
+  function crc32(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  async function buildExtensionZip() {
+    const base = location.origin + "/extension/";
+    const local = [], central = [];
+    const w16 = (a, n) => a.push(n & 255, (n >>> 8) & 255);
+    const w32 = (a, n) => a.push(n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255);
+    const wStr = (a, s) => { for (let i = 0; i < s.length; i++) a.push(s.charCodeAt(i) & 255); };
+    const wBytes = (a, u8) => { for (let i = 0; i < u8.length; i++) a.push(u8[i]); };
+    for (let f = 0; f < EXT_FILES.length; f++) {
+      const res = await fetch(base + EXT_FILES[f], { cache: "no-store" });
+      if (!res.ok) throw new Error("Couldn\u2019t read " + EXT_FILES[f] + " (" + res.status + ")");
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const name = "resume-autofill/" + EXT_FILES[f];
+      const crc = crc32(bytes), off = local.length;
+      w32(local, 0x04034b50); w16(local, 20); w16(local, 0x0800); w16(local, 0); w16(local, 0); w16(local, 0);
+      w32(local, crc); w32(local, bytes.length); w32(local, bytes.length);
+      w16(local, name.length); w16(local, 0); wStr(local, name); wBytes(local, bytes);
+      central.push({ name: name, crc: crc, size: bytes.length, off: off });
+    }
+    const cd = [], cdStart = local.length;
+    central.forEach((c) => {
+      w32(cd, 0x02014b50); w16(cd, 20); w16(cd, 20); w16(cd, 0x0800); w16(cd, 0); w16(cd, 0); w16(cd, 0);
+      w32(cd, c.crc); w32(cd, c.size); w32(cd, c.size);
+      w16(cd, c.name.length); w16(cd, 0); w16(cd, 0); w16(cd, 0); w16(cd, 0); w32(cd, 0); w32(cd, c.off);
+      wStr(cd, c.name);
+    });
+    const eo = [];
+    w32(eo, 0x06054b50); w16(eo, 0); w16(eo, 0); w16(eo, central.length); w16(eo, central.length);
+    w32(eo, cd.length); w32(eo, cdStart); w16(eo, 0);
+    return new Blob([new Uint8Array(local.concat(cd).concat(eo))], { type: "application/zip" });
+  }
+  async function extDownload(btn) {
+    const was = btnBusy(btn, "Packaging\u2026");
+    try {
+      const blob = await buildExtensionZip();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "resume-autofill.zip";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      status("Extension downloaded \u2014 unzip it, then load the folder in edge://extensions.", true);
+    } catch (e) {
+      status("Download failed: " + (e && e.message || e));
+    } finally {
+      btnIdle(btn, was);
+    }
+  }
+
+  /* ---------- ATS résumé check (Contact tab, beside the résumé upload) ---------- */
+  var atsLevel = "staff";
+  function atsLevelName(l) { return ({ senior: "Senior", staff: "Principal / Staff", leader: "Design leadership" })[l] || l; }
+  async function resumeToFile(url) {
+    var p = parseDataUri(url);
+    if (p) {
+      var bytes = p.base64 ? b64ToBytes(p.data) : new TextEncoder().encode(decodeURIComponent(p.data));
+      return new File([bytes], "resume." + extForMime(p.mime), { type: p.mime });
+    }
+    var src = isHostedPath(url) ? (hostedBytes[url] || rawUrlFor(url)) : url;
+    var pd = parseDataUri(src);
+    if (pd) { var b = pd.base64 ? b64ToBytes(pd.data) : new TextEncoder().encode(decodeURIComponent(pd.data)); return new File([b], "resume." + extForMime(pd.mime), { type: pd.mime }); }
+    var res = await fetch(src, { cache: "no-store" });
+    if (!res.ok) throw new Error("Couldn\u2019t fetch the r\u00e9sum\u00e9 (" + res.status + ").");
+    var blob = await res.blob();
+    return new File([blob], "resume." + (extForMime(blob.type) || "pdf"), { type: blob.type || "application/pdf" });
+  }
+  async function atsResumeText(file) {
+    if (file) return await fbExtractFile(file);
+    var url = (data.contact && data.contact.resume) || "";
+    if (!url) throw new Error("Add your r\u00e9sum\u00e9 above first \u2014 upload a PDF or paste its URL.");
+    return await fbExtractFile(await resumeToFile(url));
+  }
+  function atsSystem(level) {
+    var lvl = {
+      senior: "TARGET LEVEL: Senior Product Designer. Weight craft, execution quality, shipped outcomes and clear ownership; expect concrete UX/interaction work with impact metrics.",
+      staff: "TARGET LEVEL: Staff / Principal Product Designer. Weight scope, ambiguity, systems thinking, cross-team influence, strategy and leverage over hands-on pixels; expect evidence of driving direction across teams.",
+      leader: "TARGET LEVEL: VP / Head of Design. Weight org building, team growth, design strategy, business outcomes, executive communication and vision \u2014 leadership scope over IC craft."
+    }[level] || "";
+    return [
+      "You are an expert technical recruiter and resume ATS (Applicant Tracking System) analyst for product-design roles.",
+      "You are given the EXTRACTED TEXT of a candidate's resume (already parsed from their file). Judge (a) how ATS-FRIENDLY / parseable it is and (b) how well it is optimised for the target level below.",
+      lvl,
+      "ATS signals to weigh: single-column reading order; standard section headings (Experience, Skills, Education); machine-readable text (garbled or near-empty text = image-based = fails); a clear contact block; reverse-chronological dated roles; quantified impact; relevant role & skill KEYWORDS for the level; standard fonts; sensible length; no reliance on tables/graphics/text-in-images/headers-footers; consistent date formats.",
+      "Be honest, specific and actionable. Base everything ONLY on the provided text; never invent facts. If the text is sparse or garbled, say the file may not be ATS-parseable.",
+      "Return ONLY valid JSON (no markdown) matching EXACTLY this shape:",
+      '{"score":0,"band":"Strong|Good|Needs work|At risk","summary":"one honest sentence","checks":[{"label":"short label","status":"pass|warn|fail","note":"one line"}],"fixes":[{"priority":"high|med|low","point":"what to change","how":"a concrete rewrite or action"}],"keywords":{"present":["..."],"missing":["..."]}}',
+      "score is 0-100 reflecting BOTH ATS parseability AND fit for the target level. Give 5-8 checks, 4-8 fixes ordered by priority, and level-appropriate missing keywords."
+    ].join("\n");
+  }
+  function atsUser(text, level) {
+    return "TARGET LEVEL: " + atsLevelName(level) + "\n\nRESUME TEXT (extracted from the candidate's file):\n\n" + String(text).slice(0, 12000);
+  }
+  function atsRenderHtml(res, level, thin) {
+    var score = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
+    var band = res.band || (score >= 80 ? "Strong" : score >= 65 ? "Good" : score >= 45 ? "Needs work" : "At risk");
+    var tone = score >= 80 ? "good" : score >= 65 ? "ok" : score >= 45 ? "warn" : "bad";
+    var checks = Array.isArray(res.checks) ? res.checks : [];
+    var fixes = Array.isArray(res.fixes) ? res.fixes : [];
+    var kw = res.keywords || {}, pres = (kw.present || []).filter(Boolean), miss = (kw.missing || []).filter(Boolean);
+    var html = '<div class="ats__result">';
+    if (thin) html += '<div class="ats__thin">\u26A0 Only a little text was extracted \u2014 if this PDF is image-based or heavily column/table-based, real ATS parsers may also struggle. A clean, text-based PDF scores best.</div>';
+    html += '<div class="ats__score ats__score--' + tone + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div>' +
+      '<div class="ats__score-x"><b>' + escHtml(band) + '</b><span>ATS + ' + escHtml(atsLevelName(level)) + ' fit</span>' + (res.summary ? '<p>' + escHtml(res.summary) + '</p>' : '') + '</div></div>';
+    if (checks.length) html += '<div class="ats__checks">' + checks.map(function (c) {
+      var s = c.status === "pass" ? "pass" : c.status === "fail" ? "fail" : "warn", ic = s === "pass" ? "\u2713" : s === "fail" ? "\u2715" : "!";
+      return '<div class="ats__chk ats__chk--' + s + '"><span class="ats__chk-i">' + ic + '</span><div><b>' + escHtml(c.label || "") + '</b>' + (c.note ? '<span>' + escHtml(c.note) + '</span>' : '') + '</div></div>';
+    }).join("") + '</div>';
+    if (fixes.length) html += '<div class="ats__fixes"><div class="ats__sub">How to optimise for ' + escHtml(atsLevelName(level)) + '</div>' + fixes.map(function (f) {
+      var pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med";
+      return '<div class="ats__fix ats__fix--' + pr + '"><span class="ats__pri">' + pr + '</span><div><b>' + escHtml(f.point || "") + '</b>' + (f.how ? '<span>' + escHtml(f.how) + '</span>' : '') + '</div></div>';
+    }).join("") + '</div>';
+    if (pres.length || miss.length) {
+      html += '<div class="ats__kw">';
+      if (miss.length) html += '<div class="ats__kw-grp"><span class="ats__kw-lbl">Consider adding</span>' + miss.map(function (k) { return '<span class="ats__chip ats__chip--miss">' + escHtml(k) + '</span>'; }).join("") + '</div>';
+      if (pres.length) html += '<div class="ats__kw-grp"><span class="ats__kw-lbl">Already covered</span>' + pres.map(function (k) { return '<span class="ats__chip">' + escHtml(k) + '</span>'; }).join("") + '</div>';
+      html += '</div>';
+    }
+    html += '<div class="af__hint" style="margin-top:.7rem">An AI review of the extracted text \u2014 helpful guidance, not a guaranteed ATS pass. Re-run after edits.</div></div>';
+    return html;
+  }
+  async function atsRun(panel, file) {
+    if (!panel) return;
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { atsRun(panel, file); }); return; }
+    var out = panel.querySelector("[data-ats-out]");
+    var btn = panel.querySelector('[data-act="ats-check"]');
+    var was = btnBusy(btn, "Checking\u2026");
+    if (out) out.innerHTML = '<div class="ats__load"><span class="ats__spin"></span> Reading your r\u00e9sum\u00e9 and scoring it\u2026</div>';
+    try {
+      var text = (await atsResumeText(file) || "").replace(/\s+/g, " ").trim();
+      if (text.length < 40) throw new Error("I couldn\u2019t read text from that r\u00e9sum\u00e9. If it\u2019s an image-only or scanned PDF, that\u2019s itself a major ATS red flag \u2014 export a text-based PDF from your design tool or Word.");
+      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel), { json: true, maxTokens: 1800, temperature: 0.3 }));
+      if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
+      if (out) out.innerHTML = atsRenderHtml(res, atsLevel, text.length < 500);
+      status("ATS check done.", true);
+    } catch (e) {
+      if (out) out.innerHTML = '<div class="ats__err">' + escHtml(e && e.message || String(e)) + '</div>';
+      status("ATS check failed.");
+    } finally {
+      btnIdle(btn, was);
+    }
+  }
+
   async function rtImprove(area, btn) {
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { rtImprove(area, btn); }); return; }
     var text = (area.innerText || "").trim();
@@ -1635,6 +1810,23 @@
       html += '<div class="adm__empty" style="text-align:left;margin-top:1.1rem;line-height:1.6">Security: keys live only in this browser, are sent only to the service you pick, and are never committed to your site. Calling these APIs from the browser exposes the key to that provider \u2014 use a limited key. Some providers block browser calls (CORS); OpenAI and Gemini generally work directly.</div>';
       return html;
     },
+    autofill() {
+      return (
+        secHead("Form Autofill", "A little browser widget that fills job-application forms from your r\u00e9sum\u00e9 \u2014 summary, work experiences (a <em>full</em> and a <em>snippet</em> version of each), skills and contact details. Works in Microsoft Edge and Chrome.") +
+        '<div class="adm__ext">' +
+          '<div class="adm__ext-head"><span class="adm__ext-logo">\u26A1</span><div><b>R\u00e9sum\u00e9 Autofill</b><span>Edge / Chrome extension</span></div></div>' +
+          '<p class="adm__ext-lead">On any job site: open the floating \u26A1 button, right-click a field, or use the inline chip \u2014 pick <b>Full</b> or <b>Snippet</b> and it drops your experience straight into the form.</p>' +
+          '<div class="imgblk__row"><button class="btn btn--primary" data-act="ext-download">\u2b07 Download the extension (.zip)</button></div>' +
+          '<ol class="adm__ext-steps">' +
+            "<li>Unzip the downloaded file somewhere you\u2019ll keep it.</li>" +
+            "<li>Open <code>edge://extensions</code> (or <code>chrome://extensions</code>) and turn on <b>Developer mode</b>.</li>" +
+            "<li>Click <b>Load unpacked</b> and pick the unzipped <b>resume-autofill</b> folder.</li>" +
+            "<li>Pin it, then open its options to add your r\u00e9sum\u00e9 (or OCR one).</li>" +
+          "</ol>" +
+          '<div class="af__hint">Your data stays in the browser and syncs across your PCs when you\u2019re signed into the same Edge/Chrome profile. Reinstall the same way on any device \u2014 for security, browsers don\u2019t let a website install an extension automatically.</div>' +
+        "</div>"
+      );
+    },
   };
 
   function svCard(sv, i) {
@@ -1859,6 +2051,7 @@
 
   function onChange(e) {
     const t = e.target;
+    if (t.dataset.atsFile !== undefined) { if (t.files && t.files[0]) atsRun(t.closest(".ats"), t.files[0]); t.value = ""; return; }
     if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
     if (t.dataset.sitem !== undefined && t.dataset.ifield) { onItemInput(t); return; }
@@ -1992,6 +2185,9 @@
     if (act === "resume-open") { const u = data.contact && data.contact.resume; if (u && window.RK && window.RK.openResume) window.RK.openResume(u); else if (u) window.open(u, "_blank", "noopener"); return; }
     if (act === "ai-save") { aiSave(); return; }
     if (act === "ai-clear") { Object.keys(localStorage).forEach(function (k) { if (/^rk:ai:[a-z]+:key$/.test(k)) localStorage.removeItem(k); }); renderBody(); status("Keys removed."); return; }
+    if (act === "ext-download") { extDownload(b); return; }
+    if (act === "ats-check") { atsRun(b.closest(".ats"), null); return; }
+    if (act === "ats-level") { atsLevel = b.dataset.lvl; var ap = b.closest(".ats"); if (ap) ap.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
     if (act === "autostyle") {
       const n = autoStyleLanding(true);
       apply(true); renderBody();
