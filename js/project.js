@@ -1421,6 +1421,7 @@
     contentEl.setAttribute("data-wid", String(w.id));
     requestAnimationFrame(function () {
       updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); graphWire(contentEl); galleryNav(contentEl);
+      if (window.RKGen && RKGen.hydrate) RKGen.hydrate(contentEl); // wire drag/zoom on generated fx nodes
       if (PREVIEW) applyPreviewToolbar(); // morph strips the injected toolbar node; re-add it in the same frame (no flicker)
       if (keepAnchor) { restoreAnchor(keepAnchor); requestAnimationFrame(function () { restoreAnchor(keepAnchor); }); }
     });

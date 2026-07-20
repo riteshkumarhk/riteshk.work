@@ -1769,6 +1769,7 @@
           ? '<button class="btn btn--primary" data-gen-apply>Apply to this section</button>'
           : '<button class="btn btn--primary" data-gen-insert>Add to this study</button><button class="btn btn--ghost" data-gen-savepreset>Save as reusable section</button>') +
         "</div></div>";
+      if (window.RKGen && RKGen.hydrate) RKGen.hydrate(stage); // let the author test drag/zoom right in the preview
       var ap = stage.querySelector("[data-gen-apply]");
       if (ap) ap.addEventListener("click", function () {
         var b = data.work[i].study.blocks[editJ]; if (b) { b.spec = curSpec; var nm = (modal.querySelector("#genName").value || "").trim(); if (nm) b.name = nm; saveDraft(true); renderL2(); status("Section updated.", true); } close();
