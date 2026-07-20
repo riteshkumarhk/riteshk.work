@@ -32,9 +32,9 @@ site and pull it on any device.
 
 Open the extension's **options** (icon → *Edit / add résumé data*):
 
-- **Import from a resume (AI/OCR):** paste resume text or upload a resume image,
-  add your OpenAI API key (stored only on this device), and click **Extract**.
-  Review the fields, then **Save**.
+- **Import from a resume (AI/OCR):** paste resume text or upload a **PDF** or
+  image of your résumé (scanned PDFs are OCR'd by the model), add your OpenAI API
+  key (stored only on this device), and click **Extract**. Review, then **Save**.
 - Or type everything manually. Each experience has a **Full** (detailed) and a
   **Snippet** (1–2 line) field. Use **✨ Snippet from full** to draft the short one.
 
