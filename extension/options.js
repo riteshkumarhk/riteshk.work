@@ -38,26 +38,86 @@
     "skills.list = an array of individual skills. " +
     "Do NOT invent facts; leave any unknown field as an empty string. Return JSON only.";
 
-  /* ---------- AI ---------- */
+  /* ---------- AI (multi-provider: OpenAI · Anthropic/Claude · Google Gemini · OpenAI-compatible) ---------- */
+  var KNOWN_DEFAULT_MODELS = ["gpt-4o", "claude-3-5-sonnet-latest", "gemini-1.5-flash"];
+  function providerDefaults(p) {
+    return ({
+      openai: { model: "gpt-4o", key: "sk-…", base: false },
+      anthropic: { model: "claude-3-5-sonnet-latest", key: "sk-ant-…", base: false },
+      gemini: { model: "gemini-1.5-flash", key: "AIza…", base: false },
+      custom: { model: "gpt-4o", key: "sk-…", base: true }
+    })[p] || { model: "gpt-4o", key: "sk-…", base: false };
+  }
+  function splitDataUri(u) {
+    u = String(u || "");
+    var comma = u.indexOf(",");
+    if (comma < 0) return { mime: "application/octet-stream", data: "" };
+    var mime = (u.slice(0, 5).toLowerCase() === "data:") ? (u.slice(5, comma).split(";")[0] || "application/octet-stream") : "application/octet-stream";
+    return { mime: mime, data: u.slice(comma + 1) };
+  }
+  function toAnthropicContent(user) {
+    if (typeof user === "string") return user;
+    return (user || []).map(function (p) {
+      if (p.type === "text") return { type: "text", text: p.text };
+      if (p.type === "image_url") { var d = splitDataUri(p.image_url.url); return { type: "image", source: { type: "base64", media_type: d.mime, data: d.data } }; }
+      if (p.type === "file") { var f = splitDataUri(p.file.file_data); return { type: "document", source: { type: "base64", media_type: f.mime || "application/pdf", data: f.data } }; }
+      return null;
+    }).filter(Boolean);
+  }
+  function toGeminiParts(user) {
+    if (typeof user === "string") return [{ text: user }];
+    return (user || []).map(function (p) {
+      if (p.type === "text") return { text: p.text };
+      if (p.type === "image_url") { var d = splitDataUri(p.image_url.url); return { inline_data: { mime_type: d.mime, data: d.data } }; }
+      if (p.type === "file") { var f = splitDataUri(p.file.file_data); return { inline_data: { mime_type: f.mime || "application/pdf", data: f.data } }; }
+      return null;
+    }).filter(Boolean);
+  }
+  async function aiHttp(url, headers, body) {
+    var res = await fetch(url, { method: "POST", headers: headers, body: JSON.stringify(body) });
+    if (!res.ok) { var t = ""; try { t = await res.text(); } catch (e) {} throw new Error("AI error " + res.status + ": " + String(t).slice(0, 200)); }
+    return await res.json();
+  }
   async function aiChat(messages, opts) {
     opts = opts || {};
+    var provider = (val("ai_provider") || "openai").trim();
     var key = (val("ai_key") || "").trim();
     if (!key) key = await Store.getAiKey();
     if (!key) throw new Error("Add your API key first.");
-    var model = (val("ai_model") || "gpt-4o").trim();
+    var model = (val("ai_model") || "").trim() || providerDefaults(provider).model;
+    var system = "", user = null;
+    (messages || []).forEach(function (m) {
+      if (m.role === "system") system += (system ? String.fromCharCode(10) : "") + (typeof m.content === "string" ? m.content : "");
+      else if (m.role === "user") user = m.content;
+    });
+    if (provider === "anthropic") {
+      var ja = await aiHttp("https://api.anthropic.com/v1/messages",
+        { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        { model: model, max_tokens: 2400, temperature: 0.2, system: system, messages: [{ role: "user", content: toAnthropicContent(user) }] });
+      return ((ja.content || []).map(function (b) { return b.text || ""; }).join("")) || "";
+    }
+    if (provider === "gemini") {
+      var gen = { temperature: 0.2 };
+      if (opts.json) gen.responseMimeType = "application/json";
+      var jg = await aiHttp("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key),
+        { "content-type": "application/json" },
+        { systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts: toGeminiParts(user) }], generationConfig: gen });
+      var gc = (jg.candidates && jg.candidates[0]) || {};
+      return (((gc.content && gc.content.parts) || []).map(function (p) { return p.text || ""; }).join("")) || "";
+    }
+    var base = "https://api.openai.com/v1";
+    if (provider === "custom") { var bb = (val("ai_base") || "").trim(); while (bb.length && bb.charAt(bb.length - 1) === "/") bb = bb.slice(0, -1); if (bb) base = bb; }
     var body = { model: model, messages: messages, temperature: 0.2 };
     if (opts.json) body.response_format = { type: "json_object" };
-    var res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) {
-      var t = await res.text();
-      throw new Error("AI error " + res.status + ": " + t.slice(0, 160));
-    }
-    var j = await res.json();
-    return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "";
+    var jo = await aiHttp(base + "/chat/completions", { "Content-Type": "application/json", Authorization: "Bearer " + key }, body);
+    return (jo.choices && jo.choices[0] && jo.choices[0].message && jo.choices[0].message.content) || "";
+  }
+  function syncProviderUI(swapModel) {
+    var p = val("ai_provider") || "openai", pd = providerDefaults(p);
+    var m = $("ai_model");
+    if (m) { m.placeholder = pd.model; var cur = (m.value || "").trim(); if (swapModel && (!cur || KNOWN_DEFAULT_MODELS.indexOf(cur) >= 0)) m.value = pd.model; }
+    var k = $("ai_key"); if (k) k.placeholder = pd.key;
+    var bf = $("ai_base_fld"); if (bf) bf.hidden = !pd.base;
   }
 
   function parseJson(txt) {
@@ -129,7 +189,9 @@
     setv("sync_url", d.settings.syncUrl);
     setv("def_mode", d.settings.defaultMode);
     setv("ai_provider", d.settings.ai.provider || "openai");
-    setv("ai_model", d.settings.ai.model || "gpt-4o");
+    setv("ai_model", d.settings.ai.model || providerDefaults(d.settings.ai.provider || "openai").model);
+    setv("ai_base", (d.settings.ai && d.settings.ai.base) || "");
+    syncProviderUI(false);
     setchk("op_fab", d.settings.onPage.fab !== false);
     setchk("op_chip", d.settings.onPage.chip !== false);
     setchk("op_menu", d.settings.onPage.menu !== false);
@@ -165,7 +227,8 @@
     d.settings.syncUrl = val("sync_url").trim();
     d.settings.defaultMode = val("def_mode");
     d.settings.ai.provider = val("ai_provider");
-    d.settings.ai.model = val("ai_model").trim() || "gpt-4o";
+    d.settings.ai.model = val("ai_model").trim() || providerDefaults(val("ai_provider")).model;
+    d.settings.ai.base = val("ai_base").trim();
     d.settings.onPage.fab = chk("op_fab");
     d.settings.onPage.chip = chk("op_chip");
     d.settings.onPage.menu = chk("op_menu");
@@ -373,6 +436,7 @@
     $("btnSave").addEventListener("click", save);
     $("btnSave2").addEventListener("click", save);
     $("btnExport").addEventListener("click", exportJson);
+    $("ai_provider").addEventListener("change", function () { syncProviderUI(true); markDirty(); });
     $("fileImport").addEventListener("change", function (e) {
       if (e.target.files[0]) importFile(e.target.files[0]);
       e.target.value = "";
