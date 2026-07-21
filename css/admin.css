@@ -1086,3 +1086,22 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
   .atsv__body { flex-direction: column; }
   .atsv__rail { width: auto; border-left: 0; border-top: 1px solid var(--line); max-height: 46%; }
 }
+
+/* ---------- Cover letter builder (next to ATS) ---------- */
+.cl { margin-top: 1rem; border: 1px solid var(--line); border-radius: 12px; padding: 1rem; background: var(--bg-2); }
+.cl__row { display: flex; gap: .5rem; margin-bottom: .5rem; }
+.cl__url { flex: 1; min-width: 0; }
+.cl__jd { width: 100%; resize: vertical; box-sizing: border-box; }
+.cl__row2 { display: flex; gap: .5rem; align-items: center; margin: .5rem 0; }
+.cl__company { flex: 1; min-width: 0; }
+.cl__len { display: inline-flex; flex-shrink: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.cl__lenbtn { border: 0; background: transparent; color: var(--text-dim); padding: .4rem .75rem; cursor: pointer; font-size: .78rem; }
+.cl__lenbtn.is-on { background: var(--accent); color: #16110a; font-weight: 600; }
+.cl__note { font-size: .72rem; color: var(--text-faint); margin: .45rem 0 0; line-height: 1.45; }
+.cl__out { margin-top: .7rem; }
+.cl__load, .cl__ok { display: flex; align-items: center; gap: .5rem; font-size: .85rem; color: var(--text-dim); padding: .5rem 0; }
+.cl__ok { color: var(--accent); }
+.cl__letter { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 1.1rem 1.2rem; font-family: var(--serif, Georgia, serif); font-size: .92rem; line-height: 1.65; color: var(--text); }
+.cl__letter p { margin: 0 0 .8rem; }
+.cl__letter p:last-child { margin-bottom: 0; }
+.cl__acts { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .7rem; }
