@@ -437,7 +437,7 @@
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="resume-upload">Upload PDF\u2026</button>' +
       (has ? '<button class="btn btn--ghost" data-act="resume-open">Open</button><button class="btn btn--ghost" data-act="resume-clear">Remove</button>' : "") + "</div>" +
       '<div class="imgblk__hint">' + (has ? ("In use: " + escHtml(isData ? "embedded PDF" : url) + " \u00b7 the dock button is now visible") : "Not set \u2014 the r\u00e9sum\u00e9 button stays hidden until you add one.") + "</div></div>" +
-      atsPanelHtml(has);
+      atsPanelHtml(has) + clPanelHtml();
   }
   function atsPanelHtml(has) {
     var lvls = IPREP_LEVELS.map(function (l) {
@@ -2707,6 +2707,13 @@
     if (act === "ats-check") { atsRun(b.closest(".ats"), null); return; }
     if (act === "ats-view") { atsOpenViewer(); return; }
     if (act === "ats-level") { atsLevel = b.dataset.lvl; var ap = b.closest(".ats"); if (ap) ap.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
+    if (act === "cl-level") { clLevel = b.dataset.lvl; var clp = b.closest(".cl"); if (clp) clp.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
+    if (act === "cl-length") { clState.length = b.dataset.len; var clp2 = b.closest(".cl"); if (clp2) clp2.querySelectorAll(".cl__lenbtn").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
+    if (act === "cl-fetch") { clFetchToPanel(b.closest(".cl")); return; }
+    if (act === "cl-generate") { clRun(b.closest(".cl"), false); return; }
+    if (act === "cl-regen") { clRun(b.closest(".cl"), true); return; }
+    if (act === "cl-copy") { if (clLast && navigator.clipboard) { navigator.clipboard.writeText(clLast).then(function () { status("Copied to clipboard.", true); }).catch(function () {}); } return; }
+    if (act === "cl-download") { clDownload(); return; }
     if (act === "autostyle") {
       const n = autoStyleLanding(true);
       apply(true); renderBody();
@@ -5158,6 +5165,133 @@
       var cp = e.target.closest("[data-rk-copy]");
       if (cp) { var body = outBox.querySelector(".rolekit__cover-body"); var txt = body ? body.innerText : ""; if (navigator.clipboard && txt) navigator.clipboard.writeText(txt).then(function () { cp.textContent = "Copied"; setTimeout(function () { cp.textContent = "Copy"; }, 1400); }).catch(function () {}); }
     });
+  }
+
+  /* ---------- Cover letter builder (paste a job link → personalised letter) ----------
+     Sits next to the ATS panel. Reuses the role-kit engine: roleKitContext() (portfolio)
+     + roleKitResume() to GROUND the letter in REAL material, IPREP_LEVELS for altitude.
+     A job URL is read via a reader service (r.jina.ai) with a paste fallback. All inputs
+     and the letter are EPHEMERAL — never written to content.json or published. */
+  var clLevel = "staff";
+  var clState = { jd: "", url: "", company: "", length: "full" };
+  var clLast = "";
+  var CL_NL = String.fromCharCode(10);
+  function clPanelHtml() {
+    var lvls = IPREP_LEVELS.map(function (l) {
+      return '<button type="button" class="ats__lvl' + (clLevel === l[0] ? " is-on" : "") + '" data-act="cl-level" data-lvl="' + l[0] + '"><b>' + l[1] + "</b><span>" + l[2] + "</span></button>";
+    }).join("");
+    return '<div class="cl">' +
+      '<div class="ats__head"><span class="ats__badge">CL</span><div><b>Cover letter builder</b><span>Paste a job link (or the description) \u2014 I\u2019ll write a letter grounded in your real work.</span></div></div>' +
+      '<div class="ats__levels">' + lvls + "</div>" +
+      '<div class="cl__row"><input type="url" class="cl__url" placeholder="Paste the job posting URL\u2026" value="' + escAttr(clState.url) + '" /><button class="btn btn--ghost" type="button" data-act="cl-fetch">Fetch</button></div>' +
+      '<textarea class="cl__jd" rows="5" placeholder="\u2026or paste the job description here (best results \u2014 LinkedIn links often need pasting).">' + escHtml(clState.jd) + "</textarea>" +
+      '<div class="cl__row2"><input type="text" class="cl__company" placeholder="Company / role (optional, sharpens it)" value="' + escAttr(clState.company) + '" />' +
+        '<div class="cl__len"><button type="button" class="cl__lenbtn' + (clState.length === "short" ? " is-on" : "") + '" data-act="cl-length" data-len="short">Short</button><button type="button" class="cl__lenbtn' + (clState.length === "full" ? " is-on" : "") + '" data-act="cl-length" data-len="full">Full</button></div></div>' +
+      '<div class="imgblk__row"><button class="btn btn--primary" type="button" data-act="cl-generate">Write my cover letter</button></div>' +
+      '<div class="cl__note">A link is read via a reader service (r.jina.ai) to pull the page text \u2014 it\u2019s only your public job post. Nothing here is saved or published; the letter is grounded only in your own content + r\u00e9sum\u00e9.</div>' +
+      '<div class="cl__out" data-cl-out></div>' +
+      "</div>";
+  }
+  async function clFetchJd(url) {
+    url = String(url || "").trim();
+    if (!/^https?:/i.test(url)) throw new Error("Enter a full job URL (starting with http).");
+    var ctrl = new AbortController(), timer = setTimeout(function () { ctrl.abort(); }, 20000);
+    try {
+      var r = await fetch("https://r.jina.ai/" + url, { signal: ctrl.signal, headers: { "Accept": "text/plain" } });
+      if (!r.ok) throw new Error("reader " + r.status);
+      var t = ((await r.text()) || "").trim();
+      if (t.length < 200) throw new Error("short");
+      return t.length > 16000 ? t.slice(0, 16000) : t;
+    } catch (e) {
+      throw new Error("Couldn\u2019t read that link automatically (job sites often block it) \u2014 paste the description text instead.");
+    } finally { clearTimeout(timer); }
+  }
+  function clSystem(level, length) {
+    var words = length === "short" ? "about 180\u2013220 words" : "about 300\u2013360 words";
+    return [
+      "You are the candidate, writing a COMPLETE, personalised cover letter for a specific role \u2014 first person, in their real voice.",
+      "Targeting: " + rkLevelName(level) + ".",
+      "Ground EVERY claim in the candidate\u2019s real portfolio + r\u00e9sum\u00e9 below \u2014 cite specific projects, decisions or metrics that match what THIS role needs. Never invent employers, projects, numbers or outcomes. If a specific detail is genuinely missing, use a light bracket like [add metric] sparingly.",
+      "Read the job description and mirror its priorities and language (without keyword-stuffing). Name the company and role when they appear in the posting.",
+      "Structure: a greeting (use the company name if known, else \u2018Dear Hiring Team\u2019); an opening hook tied to THIS company/role; 2\u20133 short body paragraphs, each connecting one concrete proof point to a need in the JD; a short paragraph on why this company specifically; a warm, confident close; and a sign-off with the candidate\u2019s name from their material (else \u2018[Your name]\u2019).",
+      "Voice: senior, warm, specific, human. No clich\u00e9s, no \u2018I am writing to apply\u2019, no buzzword soup, no AI throat-clearing. Calibrate altitude to the target level.",
+      "Length: " + words + ".",
+      "Return the letter as PLAIN TEXT only \u2014 real line breaks between paragraphs, no markdown, no bold, no commentary before or after."
+    ].join(CL_NL);
+  }
+  function clUser(ctx, jd, resume, company) {
+    return "TARGET JOB DESCRIPTION:" + CL_NL + (jd ? jd.trim() : "(none provided \u2014 write from the company/role hint)") +
+      (company ? CL_NL + CL_NL + "COMPANY / ROLE HINT: " + company.trim() : "") +
+      CL_NL + CL_NL + "MY R\u00c9SUM\u00c9:" + CL_NL + (resume || "(no r\u00e9sum\u00e9 attached)") +
+      CL_NL + CL_NL + "MY PORTFOLIO:" + CL_NL + ctx +
+      CL_NL + CL_NL + "Write the full cover letter now.";
+  }
+  function clRenderHtml(text) {
+    var esc = escHtml(String(text || "").trim());
+    var lines = esc.split(CL_NL), paras = [], cur = [];
+    lines.forEach(function (ln) { if (ln.trim() === "") { if (cur.length) { paras.push(cur.join("<br>")); cur = []; } } else cur.push(ln); });
+    if (cur.length) paras.push(cur.join("<br>"));
+    var body = paras.map(function (p) { return "<p>" + p + "</p>"; }).join("") || "<p></p>";
+    return '<div class="cl__result"><div class="cl__letter">' + body + "</div>" +
+      '<div class="cl__acts"><button class="btn btn--ghost" type="button" data-act="cl-copy">Copy</button>' +
+      '<button class="btn btn--ghost" type="button" data-act="cl-download">Download .txt</button>' +
+      '<button class="btn btn--ghost" type="button" data-act="cl-regen">Regenerate</button></div>' +
+      '<div class="af__hint" style="margin-top:.6rem">Review before sending \u2014 grounded in your material; fill any [bracketed] gaps.</div></div>';
+  }
+  async function clFetchToPanel(panel) {
+    if (!panel) return;
+    var urlEl = panel.querySelector(".cl__url"), jdEl = panel.querySelector(".cl__jd"), out = panel.querySelector("[data-cl-out]");
+    var url = urlEl ? urlEl.value.trim() : "";
+    if (!url) { status("Paste a job URL first."); return; }
+    if (out) out.innerHTML = '<div class="cl__load"><span class="ats__spin"></span> Reading the job post\u2026</div>';
+    try {
+      var jd = await clFetchJd(url);
+      if (jdEl) jdEl.value = jd; clState.jd = jd; clState.url = url;
+      if (out) out.innerHTML = '<div class="cl__ok">\u2713 Pulled the job text \u2014 review it below, then write the letter.</div>';
+      status("Job post read.", true);
+    } catch (e) {
+      if (out) out.innerHTML = '<div class="ats__err">' + escHtml((e && e.message) || "Couldn\u2019t read that link.") + "</div>";
+      status("Couldn\u2019t read that link.");
+    }
+  }
+  async function clRun(panel, variant) {
+    if (!panel) return;
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { clRun(panel, variant); }); return; }
+    var urlEl = panel.querySelector(".cl__url"), jdEl = panel.querySelector(".cl__jd"), coEl = panel.querySelector(".cl__company");
+    var out = panel.querySelector("[data-cl-out]");
+    clState.url = urlEl ? urlEl.value.trim() : "";
+    clState.jd = jdEl ? jdEl.value.trim() : "";
+    clState.company = coEl ? coEl.value.trim() : "";
+    var btn = panel.querySelector('[data-act="cl-generate"]');
+    var was = btn ? btnBusy(btn, "Writing\u2026") : null;
+    try {
+      var jd = clState.jd;
+      if (!jd && clState.url) {
+        if (out) out.innerHTML = '<div class="cl__load"><span class="ats__spin"></span> Reading the job post\u2026</div>';
+        jd = await clFetchJd(clState.url);
+        if (jdEl) jdEl.value = jd; clState.jd = jd;
+      }
+      if (!jd && !clState.company) throw new Error("Paste the job description (or a link, or at least the company/role).");
+      if (out) out.innerHTML = '<div class="cl__load"><span class="ats__spin"></span> Writing a letter grounded in your work\u2026</div>';
+      var ctx = roleKitContext();
+      var resume = await roleKitResume();
+      var text = await aiText(aiCfg("txt"), clSystem(clLevel, clState.length), clUser(ctx, jd, resume, clState.company), { maxTokens: 1200, temperature: variant ? 0.85 : 0.6 });
+      text = String(text || "").replace(/^```[a-z]*/i, "").replace(/```$/, "").trim();
+      if (!text) throw new Error("The letter came back empty \u2014 try again.");
+      clLast = text;
+      if (out) out.innerHTML = clRenderHtml(text);
+      status("Cover letter ready.", true);
+    } catch (e) {
+      if (out) out.innerHTML = '<div class="ats__err">' + escHtml((e && e.message) || String(e)) + "</div>";
+      status("Cover letter failed.");
+    } finally { if (btn) btnIdle(btn, was); }
+  }
+  function clDownload() {
+    if (!clLast) { status("Write a letter first."); return; }
+    var blob = new Blob([clLast], { type: "text/plain;charset=utf-8" });
+    var a = document.createElement("a"), url = URL.createObjectURL(blob);
+    a.href = url; a.download = "cover-letter.txt"; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 500);
   }
 
   function iprepModal(i) {
