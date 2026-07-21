@@ -891,8 +891,9 @@
       "ATS signals to weigh: single-column reading order; standard section headings (Experience, Skills, Education); machine-readable text (garbled or near-empty text = image-based = fails); a clear contact block; reverse-chronological dated roles; quantified impact; relevant role & skill KEYWORDS for the level; standard fonts; sensible length; no reliance on tables/graphics/text-in-images/headers-footers; consistent date formats.",
       "Be honest, specific and actionable. Base everything ONLY on the provided text; never invent facts. If the text is sparse or garbled, say the file may not be ATS-parseable.",
       "Return ONLY valid JSON (no markdown) matching EXACTLY this shape:",
-      '{"score":0,"band":"Strong|Good|Needs work|At risk","summary":"one honest sentence","checks":[{"label":"short label","status":"pass|warn|fail","note":"one line"}],"fixes":[{"priority":"high|med|low","point":"what to change","how":"a concrete rewrite or action"}],"keywords":{"present":["..."],"missing":["..."]}}',
+      '{"score":0,"band":"Strong|Good|Needs work|At risk","summary":"one honest sentence","checks":[{"label":"short label","status":"pass|warn|fail","note":"one line"}],"fixes":[{"priority":"high|med|low","point":"what to change","how":"a concrete rewrite or action","anchor":{"type":"quote|section|global","quote":"the EXACT text from the resume this refers to, copied verbatim (only when type=quote)","section":"the section heading it concerns, e.g. Experience (only when type=section)","replacement":"a ready-to-paste rewrite of the quoted text (optional)"}}],"keywords":{"present":["..."],"missing":["..."]}}',
       "score is 0-100 reflecting BOTH ATS parseability AND fit for the target level. Give 5-8 checks, 4-8 fixes ordered by priority, and level-appropriate missing keywords.",
+      "For EACH fix, set anchor.type to one of: 'quote' when the fix is about a specific phrase or line — copy that phrase into anchor.quote EXACTLY as written above (verbatim, no paraphrase; a few words up to about one line) so it can be pinned on the page; 'section' when it concerns a whole section — put the section heading in anchor.section; 'global' for document-wide issues such as length, column/table layout, a missing section, overall tone, or keywords. Include anchor.replacement whenever you can give a concrete rewrite of the quoted text.",
       "Output ONE compact JSON object and nothing else. Do not wrap it in markdown fences, and do not put literal newlines inside any string value; keep every note and how on a single line."
     ].join("\n");
   }
@@ -910,6 +911,7 @@
     if (thin) html += '<div class="ats__thin">\u26A0 Only a little text was extracted \u2014 if this PDF is image-based or heavily column/table-based, real ATS parsers may also struggle. A clean, text-based PDF scores best.</div>';
     html += '<div class="ats__score ats__score--' + tone + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div>' +
       '<div class="ats__score-x"><b>' + escHtml(band) + '</b><span>ATS + ' + escHtml(atsLevelName(level)) + ' fit</span>' + (res.summary ? '<p>' + escHtml(res.summary) + '</p>' : '') + '</div></div>';
+    if (fixes.length) html += '<div class="ats__viewrow"><button class="btn btn--primary" type="button" data-act="ats-view">Show fixes on your résumé →</button></div>';
     if (checks.length) html += '<div class="ats__checks">' + checks.map(function (c) {
       var s = c.status === "pass" ? "pass" : c.status === "fail" ? "fail" : "warn", ic = s === "pass" ? "\u2713" : s === "fail" ? "\u2715" : "!";
       return '<div class="ats__chk ats__chk--' + s + '"><span class="ats__chk-i">' + ic + '</span><div><b>' + escHtml(c.label || "") + '</b>' + (c.note ? '<span>' + escHtml(c.note) + '</span>' : '') + '</div></div>';
@@ -935,10 +937,14 @@
     var was = btnBusy(btn, "Checking\u2026");
     if (out) out.innerHTML = '<div class="ats__load"><span class="ats__spin"></span> Reading your r\u00e9sum\u00e9 and scoring it\u2026</div>';
     try {
-      var text = (await atsResumeText(file) || "").replace(/\s+/g, " ").trim();
+      var url = (data.contact && data.contact.resume) || "";
+      if (!file && !url) throw new Error("Add your résumé above first — upload a PDF or paste its URL.");
+      var f = file || await resumeToFile(url);
+      var text = ((await fbExtractFile(f)) || "").replace(/\s+/g, " ").trim();
       if (text.length < 40) throw new Error("I couldn\u2019t read text from that r\u00e9sum\u00e9. If it\u2019s an image-only or scanned PDF, that\u2019s itself a major ATS red flag \u2014 export a text-based PDF from your design tool or Word.");
-      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel), { json: true, maxTokens: 4096, temperature: 0.3 }));
+      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel), { json: true, maxTokens: 5000, temperature: 0.3 }));
       if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
+      atsLast = { file: f, res: res, level: atsLevel };
       if (out) out.innerHTML = atsRenderHtml(res, atsLevel, text.length < 500);
       status("ATS check done.", true);
     } catch (e) {
@@ -947,6 +953,250 @@
     } finally {
       btnIdle(btn, was);
     }
+  }
+
+  /* ---------- ATS résumé viewer: pins the AI's fixes onto the rendered PDF ----------
+     Feedback is mixed: some fixes point at an exact phrase (anchor.type "quote"),
+     some at a section ("section"), some are document-wide ("global"). We render the
+     PDF with pdf.js, locate quote/section anchors in the text layer and pin them; the
+     qualitative rest lives in an "Overall" rail. Everything degrades gracefully. */
+  var atsLast = null; // { file, res, level } — set after a successful check
+  function atsIsPdf(f) { return !!f && (f.type === "application/pdf" || /\.pdf$/i.test(f.name || "")); }
+  function atsAnchor(fx) {
+    var a = (fx && fx.anchor) || {};
+    var type = a.type;
+    if (type !== "quote" && type !== "section" && type !== "global") type = a.quote ? "quote" : (a.section ? "section" : "global");
+    return { type: type, quote: String(a.quote || ""), section: String(a.section || ""), replacement: String((a.replacement != null ? a.replacement : (fx && fx.replacement)) || "") };
+  }
+  // Build a punctuation/whitespace-tolerant matcher from a snippet (alphanumeric tokens only).
+  function atsRegex(text) {
+    var toks = String(text || "").toLowerCase().match(/[a-z0-9]+/g);
+    if (!toks || !toks.length) return null;
+    if (toks.length > 16) toks = toks.slice(0, 16);
+    try { return new RegExp(toks.join("[^a-z0-9]+")); } catch (e) { return null; }
+  }
+  function atsUnionByLine(itemSet, rects) {
+    var idxs = Object.keys(itemSet).map(Number).sort(function (a, b) { return a - b; });
+    var lines = [];
+    idxs.forEach(function (i) {
+      var r = rects[i]; if (!r) return;
+      var line = null;
+      for (var L = 0; L < lines.length; L++) { if (Math.abs(lines[L].top - r.top) <= Math.max(6, r.h * 0.6)) { line = lines[L]; break; } }
+      if (!line) lines.push({ left: r.left, top: r.top, right: r.left + r.w, bottom: r.top + r.h });
+      else { line.left = Math.min(line.left, r.left); line.top = Math.min(line.top, r.top); line.right = Math.max(line.right, r.left + r.w); line.bottom = Math.max(line.bottom, r.top + r.h); }
+    });
+    return lines.map(function (l) { return { left: l.left, top: l.top, w: l.right - l.left, h: l.bottom - l.top }; });
+  }
+  // Find a snippet across a set of page indexes; returns { pageNum, rects[] } or null.
+  function atsLocate(text, pages) {
+    var re = atsRegex(text); if (!re) return null;
+    for (var p = 0; p < pages.length; p++) {
+      var pg = pages[p], m = re.exec(pg.H);
+      if (m) {
+        var start = m.index, end = m.index + m[0].length, set = {};
+        for (var k = start; k < end; k++) { var ii = pg.map[k]; if (ii != null) set[ii] = 1; }
+        var rects = atsUnionByLine(set, pg.rects);
+        if (rects.length) return { pageNum: pg.pageNum, rects: rects };
+      }
+    }
+    return null;
+  }
+  // Concatenate a page's text layer into a lowercase string + a char→item map + item rects (CSS px).
+  async function atsPageIndex(page, viewport) {
+    var content = await page.getTextContent();
+    var H = "", map = [], rects = [];
+    content.items.forEach(function (it) {
+      var tr = window.pdfjsLib.Util.transform(viewport.transform, it.transform);
+      var h = Math.hypot(tr[2], tr[3]) || Math.abs(tr[3]) || ((it.height || 0) * viewport.scale) || 12;
+      var w = (it.width || 0) * viewport.scale, left = tr[4], top = tr[5] - h, idx = rects.length;
+      rects.push({ left: left, top: top, w: w, h: h });
+      var s = (it.str || "").toLowerCase();
+      for (var c = 0; c < s.length; c++) { H += s[c]; map.push(idx); }
+      H += " "; map.push(idx);
+    });
+    return { H: H, map: map, rects: rects };
+  }
+  function atsvEl(t, c) { var e = document.createElement(t); if (c) e.className = c; return e; }
+
+  async function atsOpenViewer() {
+    if (!atsLast || !atsLast.res) { status("Run an ATS check first."); return; }
+    var res = atsLast.res, file = atsLast.file, level = atsLast.level || atsLevel;
+    var modal = atsvEl("div", "atsv");
+    modal.innerHTML =
+      '<div class="atsv__bar">' +
+        '<div class="atsv__ttl"><span class="ats__badge">ATS</span> Résumé review <span class="atsv__lvl">' + escHtml(atsLevelName(level)) + '</span></div>' +
+        '<div class="atsv__tools">' +
+          '<span class="atsv__pageno" data-atsv-pageno></span>' +
+          '<button class="atsv__tbtn" data-atsv-zoom="out" title="Zoom out">−</button>' +
+          '<button class="atsv__tbtn" data-atsv-zoom="fit" title="Fit width">Fit</button>' +
+          '<button class="atsv__tbtn" data-atsv-zoom="in" title="Zoom in">+</button>' +
+          '<button class="atsv__tbtn atsv__x" data-atsv-close title="Close (Esc)">×</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="atsv__body">' +
+        '<div class="atsv__stage" data-atsv-stage><div class="atsv__loading">Rendering your résumé…</div></div>' +
+        '<div class="atsv__rail" data-atsv-rail></div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    function onKey(e) { if (e.key === "Escape") close(); }
+    function close() { document.removeEventListener("keydown", onKey); modal.remove(); }
+    document.addEventListener("keydown", onKey);
+    modal.addEventListener("click", function (e) { if (e.target === modal || e.target.closest("[data-atsv-close]")) close(); });
+
+    var ctx = { modal: modal, res: res, file: file, level: level, scale: 1, pdf: null, pages: [], located: {}, onPage: [], overall: [] };
+    if (atsIsPdf(file)) {
+      try { var pdfjs = await ensurePdfJs(); ctx.pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise; }
+      catch (e) { ctx.pdf = null; }
+    }
+    await atsvBuild(ctx, true);
+    atsvWire(ctx);
+  }
+
+  async function atsvBuild(ctx, first) {
+    var stage = ctx.modal.querySelector("[data-atsv-stage]");
+    if (!ctx.pdf) {
+      stage.innerHTML = '<div class="atsv__nopdf"><b>Pins need a text-based PDF résumé.</b><span>Your full review is on the right. Add a text PDF résumé (not a scan or DOCX) to see fixes pinned on the page.</span></div>';
+      if (first) { ctx.onPage = []; ctx.overall = (ctx.res.fixes || []).map(function (f, i) { return i; }); atsvPaintRail(ctx); }
+      return;
+    }
+    if (first || ctx._needFit) {
+      var page1 = await ctx.pdf.getPage(1), vp1 = page1.getViewport({ scale: 1 });
+      var avail = Math.max(360, (stage.clientWidth || 760) - 52);
+      ctx.scale = Math.min(2.2, Math.max(0.5, avail / vp1.width));
+      ctx._needFit = false;
+    }
+    stage.innerHTML = "";
+    ctx.pages = [];
+    var pageIdx = [];
+    for (var p = 1; p <= ctx.pdf.numPages; p++) {
+      var page = await ctx.pdf.getPage(p);
+      var viewport = page.getViewport({ scale: ctx.scale });
+      var wrap = atsvEl("div", "atsv__page"); wrap.style.width = viewport.width + "px"; wrap.style.height = viewport.height + "px"; wrap.dataset.page = p;
+      var canvas = document.createElement("canvas");
+      var dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(viewport.width * dpr); canvas.height = Math.floor(viewport.height * dpr);
+      canvas.style.width = viewport.width + "px"; canvas.style.height = viewport.height + "px";
+      var cctx = canvas.getContext("2d"); cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      var layer = atsvEl("div", "atsv__layer");
+      wrap.appendChild(canvas); wrap.appendChild(layer); stage.appendChild(wrap);
+      await page.render({ canvasContext: cctx, viewport: viewport }).promise;
+      var index = await atsPageIndex(page, viewport);
+      ctx.pages.push({ pageNum: p, layer: layer, wrap: wrap });
+      pageIdx.push({ pageNum: p, H: index.H, map: index.map, rects: index.rects });
+    }
+    ctx.located = {};
+    (ctx.res.fixes || []).forEach(function (fx, fi) {
+      var a = atsAnchor(fx);
+      if (a.type === "quote" || a.type === "section") {
+        var loc = atsLocate(a.type === "quote" ? a.quote : a.section, pageIdx);
+        if (loc) ctx.located[fi] = loc;
+      }
+    });
+    if (first) {
+      ctx.onPage = []; ctx.overall = [];
+      (ctx.res.fixes || []).forEach(function (fx, fi) { if (ctx.located[fi]) ctx.onPage.push(fi); else ctx.overall.push(fi); });
+      atsvPaintRail(ctx);
+    }
+    atsvPaintPins(ctx);
+    atsvUpdatePageNo(ctx);
+  }
+
+  function atsvPaintPins(ctx) {
+    ctx.pages.forEach(function (pg) { pg.layer.innerHTML = ""; });
+    Object.keys(ctx.located).forEach(function (fiKey) {
+      var fi = +fiKey, loc = ctx.located[fi], fx = ctx.res.fixes[fi];
+      var pg = null; for (var i = 0; i < ctx.pages.length; i++) { if (ctx.pages[i].pageNum === loc.pageNum) { pg = ctx.pages[i]; break; } }
+      if (!pg) return;
+      var pr = fx.priority === "high" ? "high" : fx.priority === "low" ? "low" : "med";
+      loc.rects.forEach(function (r) {
+        var hl = atsvEl("div", "atsv__hl atsv__hl--" + pr); hl.dataset.fi = fi;
+        hl.style.left = r.left + "px"; hl.style.top = r.top + "px"; hl.style.width = r.w + "px"; hl.style.height = r.h + "px";
+        pg.layer.appendChild(hl);
+      });
+      var r0 = loc.rects[0], num = ctx.onPage.indexOf(fi) + 1;
+      var pin = atsvEl("button", "atsv__pin atsv__pin--" + pr); pin.dataset.fi = fi; pin.textContent = num; pin.title = fx.point || "";
+      pin.style.left = Math.max(2, r0.left - 26) + "px"; pin.style.top = (r0.top - 3) + "px";
+      pg.layer.appendChild(pin);
+    });
+  }
+
+  function atsvItemHtml(ctx, fi, num, anchored) {
+    var fx = ctx.res.fixes[fi], a = atsAnchor(fx);
+    var pr = fx.priority === "high" ? "high" : fx.priority === "low" ? "low" : "med";
+    var badge = anchored ? '<span class="atsv__num atsv__num--' + pr + '">' + num + '</span>' : '<span class="atsv__dot atsv__dot--' + pr + '"></span>';
+    var loc = anchored ? "" : (a.type === "section" && a.section ? '<span class="atsv__loc">' + escHtml(a.section) + '</span>' : (a.type === "quote" && a.quote ? '<span class="atsv__loc atsv__loc--miss">couldn’t pinpoint</span>' : ''));
+    var rep = a.replacement ? '<div class="atsv__rep"><code>' + escHtml(a.replacement) + '</code><button class="atsv__copy" type="button" data-atsv-copy>Copy</button></div>' : "";
+    return '<div class="atsv__item atsv__item--' + pr + '" data-fi="' + fi + '">' +
+      '<div class="atsv__ihead">' + badge + '<span class="atsv__pri atsv__pri--' + pr + '">' + pr + '</span>' + loc + '</div>' +
+      '<div class="atsv__point">' + escHtml(fx.point || "") + '</div>' +
+      (fx.how ? '<div class="atsv__how">' + escHtml(fx.how) + '</div>' : "") + rep + '</div>';
+  }
+
+  function atsvPaintRail(ctx) {
+    var res = ctx.res, level = ctx.level;
+    var score = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
+    var band = res.band || (score >= 80 ? "Strong" : score >= 65 ? "Good" : score >= 45 ? "Needs work" : "At risk");
+    var tone = score >= 80 ? "good" : score >= 65 ? "ok" : score >= 45 ? "warn" : "bad";
+    var html = '<div class="atsv__score atsv__score--' + tone + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div><div class="atsv__score-x"><b>' + escHtml(band) + '</b><span>ATS + ' + escHtml(atsLevelName(level)) + ' fit</span>' + (res.summary ? '<p>' + escHtml(res.summary) + '</p>' : '') + '</div></div>';
+    html += '<div class="atsv__grp"><div class="atsv__grptitle">On the page <span>' + ctx.onPage.length + '</span></div>';
+    html += ctx.onPage.length ? ctx.onPage.map(function (fi, n) { return atsvItemHtml(ctx, fi, n + 1, true); }).join("") : '<div class="atsv__empty">No fixes mapped to an exact spot on the page.</div>';
+    html += '</div>';
+    var checks = (Array.isArray(res.checks) ? res.checks : []).filter(function (c) { return c.status === "warn" || c.status === "fail"; });
+    var kw = res.keywords || {}, miss = (kw.missing || []).filter(Boolean), pres = (kw.present || []).filter(Boolean);
+    var count = ctx.overall.length + checks.length + (miss.length || pres.length ? 1 : 0);
+    html += '<div class="atsv__grp"><div class="atsv__grptitle">Overall <span>' + count + '</span></div>';
+    ctx.overall.forEach(function (fi) { html += atsvItemHtml(ctx, fi, null, false); });
+    if (checks.length) html += '<div class="atsv__checks">' + checks.map(function (c) {
+      var s = c.status === "fail" ? "fail" : "warn";
+      return '<div class="atsv__chk atsv__chk--' + s + '"><span class="atsv__chki">' + (s === "fail" ? "✕" : "!") + '</span><div><b>' + escHtml(c.label || "") + '</b>' + (c.note ? '<span>' + escHtml(c.note) + '</span>' : '') + '</div></div>';
+    }).join("") + '</div>';
+    if (miss.length || pres.length) {
+      html += '<div class="atsv__kw">';
+      if (miss.length) html += '<div class="atsv__kwrow"><span class="atsv__kwlbl">Add for ' + escHtml(atsLevelName(level)) + '</span>' + miss.map(function (k) { return '<span class="atsv__chip atsv__chip--miss">' + escHtml(k) + '</span>'; }).join("") + '</div>';
+      if (pres.length) html += '<div class="atsv__kwrow"><span class="atsv__kwlbl">Covered</span>' + pres.map(function (k) { return '<span class="atsv__chip">' + escHtml(k) + '</span>'; }).join("") + '</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+    ctx.modal.querySelector("[data-atsv-rail]").innerHTML = html;
+  }
+
+  function atsvActivate(ctx, fi) {
+    ctx.modal.querySelectorAll(".is-active[data-fi]").forEach(function (x) { x.classList.remove("is-active"); });
+    if (fi == null) return;
+    ctx.modal.querySelectorAll('[data-fi="' + fi + '"]').forEach(function (x) { x.classList.add("is-active"); });
+  }
+  function atsvFocusPin(ctx, fi) {
+    var pin = ctx.modal.querySelector('.atsv__pin[data-fi="' + fi + '"]');
+    if (pin) pin.scrollIntoView({ behavior: "smooth", block: "center" });
+    atsvActivate(ctx, fi);
+    var item = ctx.modal.querySelector('.atsv__item[data-fi="' + fi + '"]');
+    if (item) item.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  function atsvWire(ctx) {
+    var modal = ctx.modal, stage = modal.querySelector("[data-atsv-stage]"), rail = modal.querySelector("[data-atsv-rail]");
+    rail.addEventListener("click", function (e) {
+      var cp = e.target.closest("[data-atsv-copy]");
+      if (cp) { var it = cp.closest(".atsv__item"), code = it && it.querySelector("code"); if (code) { try { navigator.clipboard.writeText(code.textContent); } catch (x) {} cp.textContent = "Copied"; setTimeout(function () { cp.textContent = "Copy"; }, 1200); } return; }
+      var item = e.target.closest(".atsv__item"); if (item && item.dataset.fi) atsvFocusPin(ctx, item.dataset.fi);
+    });
+    stage.addEventListener("click", function (e) { var pin = e.target.closest(".atsv__pin"); if (pin) atsvFocusPin(ctx, pin.dataset.fi); });
+    stage.addEventListener("mouseover", function (e) { var t = e.target.closest(".atsv__pin,.atsv__hl"); if (t) atsvActivate(ctx, t.dataset.fi); });
+    stage.addEventListener("scroll", function () { atsvUpdatePageNo(ctx); });
+    modal.querySelectorAll("[data-atsv-zoom]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var z = b.dataset.zoom;
+        if (z === "fit") ctx._needFit = true;
+        else ctx.scale = Math.min(3, Math.max(0.4, ctx.scale * (z === "in" ? 1.2 : 1 / 1.2)));
+        atsvBuild(ctx, false);
+      });
+    });
+  }
+  function atsvUpdatePageNo(ctx) {
+    var pn = ctx.modal.querySelector("[data-atsv-pageno]"); if (!pn) return;
+    if (!ctx.pdf) { pn.textContent = ""; return; }
+    var stage = ctx.modal.querySelector("[data-atsv-stage]"), mid = stage.scrollTop + stage.clientHeight / 2, cur = 1;
+    ctx.pages.forEach(function (pg) { if (pg.wrap.offsetTop <= mid) cur = pg.pageNum; });
+    pn.textContent = "Page " + cur + " / " + ctx.pdf.numPages;
   }
 
   async function rtImprove(area, btn) {
@@ -2455,6 +2705,7 @@
     if (act === "ai-clear") { Object.keys(localStorage).forEach(function (k) { if (/^rk:ai:[a-z]+:key$/.test(k)) localStorage.removeItem(k); }); renderBody(); status("Keys removed."); return; }
     if (act === "ext-download") { extDownload(b); return; }
     if (act === "ats-check") { atsRun(b.closest(".ats"), null); return; }
+    if (act === "ats-view") { atsOpenViewer(); return; }
     if (act === "ats-level") { atsLevel = b.dataset.lvl; var ap = b.closest(".ats"); if (ap) ap.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
     if (act === "autostyle") {
       const n = autoStyleLanding(true);

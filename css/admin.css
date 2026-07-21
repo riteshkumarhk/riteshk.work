@@ -1013,3 +1013,76 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .secpick__preset-prev { display: block; height: 96px; overflow: hidden; padding: .5rem; background: var(--bg); transform: scale(.9); transform-origin: top left; pointer-events: none; }
 .secpick__preset-name { display: block; padding: .5rem .6rem; font-size: .8rem; font-weight: 600; border-top: 1px solid var(--line-soft); }
 .secpick__preset-del { position: absolute; top: .3rem; right: .3rem; width: 20px; height: 20px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .55); color: #fff; font-size: 11px; line-height: 1; cursor: pointer; }
+
+/* ---------- ATS résumé viewer (PDF canvas + pinned fixes) ---------- */
+.ats__viewrow { margin: .3rem 0 .2rem; }
+.atsv { position: fixed; inset: 0; z-index: 12000; background: var(--bg); display: flex; flex-direction: column; --p-high: #e2674c; --p-med: var(--accent); --p-low: #8a8f98; }
+.atsv__bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .6rem .9rem; border-bottom: 1px solid var(--line); background: var(--bg-elev); }
+.atsv__ttl { display: flex; align-items: center; gap: .5rem; font-family: var(--serif, serif); font-size: 1.02rem; }
+.atsv__lvl { font-family: var(--mono, monospace); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); border: 1px solid var(--line); border-radius: 999px; padding: .1rem .5rem; }
+.atsv__tools { display: flex; align-items: center; gap: .35rem; }
+.atsv__pageno { font-family: var(--mono, monospace); font-size: .72rem; color: var(--text-dim); margin-right: .4rem; min-width: 78px; text-align: right; }
+.atsv__tbtn { min-width: 30px; height: 30px; padding: 0 .5rem; border: 1px solid var(--line); background: var(--bg-2); color: var(--text); border-radius: 8px; cursor: pointer; font-size: .82rem; }
+.atsv__tbtn:hover { border-color: var(--accent); }
+.atsv__x { font-size: 1.1rem; line-height: 1; }
+.atsv__body { flex: 1; min-height: 0; display: flex; }
+.atsv__stage { flex: 1; min-width: 0; overflow: auto; padding: 1.4rem; background: var(--bg-2); display: flex; flex-direction: column; align-items: center; gap: 1.2rem; scroll-behavior: smooth; }
+.atsv__page { position: relative; background: #fff; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); border-radius: 2px; }
+.atsv__page canvas { display: block; border-radius: 2px; }
+.atsv__layer { position: absolute; inset: 0; pointer-events: none; }
+.atsv__hl { position: absolute; background: rgba(216, 166, 87, .18); border-bottom: 2px solid var(--accent); border-radius: 2px; transition: background .15s, box-shadow .15s; }
+.atsv__hl--high { background: rgba(226, 103, 76, .16); border-bottom-color: var(--p-high); }
+.atsv__hl.is-active { background: rgba(216, 166, 87, .34); box-shadow: 0 0 0 2px var(--accent); }
+.atsv__hl--high.is-active { background: rgba(226, 103, 76, .32); box-shadow: 0 0 0 2px var(--p-high); }
+.atsv__pin { position: absolute; width: 21px; height: 21px; border-radius: 50%; display: grid; place-items: center; font-family: var(--mono, monospace); font-size: 11px; font-weight: 700; color: #16110a; background: var(--p-med); border: 2px solid var(--bg); cursor: pointer; pointer-events: auto; z-index: 2; box-shadow: 0 2px 6px rgba(0, 0, 0, .4); transition: transform .12s; }
+.atsv__pin--high { background: var(--p-high); color: #fff; }
+.atsv__pin--low { background: var(--p-low); color: #fff; }
+.atsv__pin:hover, .atsv__pin.is-active { transform: scale(1.25); }
+.atsv__rail { width: 384px; flex-shrink: 0; overflow: auto; border-left: 1px solid var(--line); padding: 1rem; background: var(--bg); }
+.atsv__score { display: flex; align-items: center; gap: .8rem; padding-bottom: .9rem; margin-bottom: .4rem; border-bottom: 1px solid var(--line); }
+.atsv__score-x b { font-family: var(--serif, serif); font-size: 1.1rem; }
+.atsv__score-x span { display: block; font-size: .72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; }
+.atsv__score-x p { margin: .35rem 0 0; font-size: .84rem; color: var(--text-dim); line-height: 1.4; }
+.atsv__grp { margin-top: 1rem; }
+.atsv__grptitle { font-family: var(--mono, monospace); font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text-faint); margin-bottom: .55rem; display: flex; align-items: center; gap: .4rem; }
+.atsv__grptitle span { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 .3rem; border-radius: 999px; background: var(--bg-elev); color: var(--text-dim); font-size: .66rem; }
+.atsv__item { border: 1px solid var(--line); border-radius: 10px; padding: .6rem .65rem; margin-bottom: .5rem; cursor: pointer; transition: border-color .15s, box-shadow .15s, background .15s; }
+.atsv__item:hover { border-color: var(--accent); }
+.atsv__item.is-active { border-color: var(--accent); background: rgba(216, 166, 87, .07); box-shadow: 0 0 0 1px var(--accent); }
+.atsv__ihead { display: flex; align-items: center; gap: .4rem; margin-bottom: .3rem; }
+.atsv__num { display: inline-grid; place-items: center; width: 19px; height: 19px; border-radius: 50%; font-family: var(--mono, monospace); font-size: 11px; font-weight: 700; color: #16110a; background: var(--p-med); }
+.atsv__num--high { background: var(--p-high); color: #fff; }
+.atsv__num--low { background: var(--p-low); color: #fff; }
+.atsv__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--p-med); }
+.atsv__dot--high { background: var(--p-high); }
+.atsv__dot--low { background: var(--p-low); }
+.atsv__pri { font-family: var(--mono, monospace); font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; padding: .08rem .35rem; border-radius: 4px; border: 1px solid var(--line); color: var(--text-dim); }
+.atsv__pri--high { color: var(--p-high); border-color: var(--p-high); }
+.atsv__loc { font-size: .66rem; color: var(--text-dim); margin-left: auto; border: 1px dashed var(--line); border-radius: 999px; padding: .05rem .4rem; }
+.atsv__loc--miss { border-style: dotted; color: var(--text-faint); }
+.atsv__point { font-size: .87rem; font-weight: 600; line-height: 1.35; }
+.atsv__how { font-size: .8rem; color: var(--text-dim); line-height: 1.4; margin-top: .2rem; }
+.atsv__rep { display: flex; align-items: flex-start; gap: .4rem; margin-top: .45rem; }
+.atsv__rep code { flex: 1; font-family: var(--mono, monospace); font-size: .74rem; line-height: 1.4; background: var(--bg-elev); border: 1px solid var(--line-soft); border-radius: 6px; padding: .35rem .45rem; white-space: pre-wrap; color: var(--text); }
+.atsv__copy { flex-shrink: 0; border: 1px solid var(--line); background: var(--bg-2); color: var(--text-dim); border-radius: 6px; padding: .25rem .5rem; font-size: .68rem; cursor: pointer; }
+.atsv__copy:hover { border-color: var(--accent); color: var(--text); }
+.atsv__checks { margin-top: .3rem; }
+.atsv__chk { display: flex; gap: .5rem; align-items: flex-start; padding: .35rem 0; border-top: 1px solid var(--line-soft); }
+.atsv__chki { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; background: var(--bg-elev); }
+.atsv__chk--fail .atsv__chki { color: var(--p-high); }
+.atsv__chk--warn .atsv__chki { color: var(--accent); }
+.atsv__chk b { font-size: .82rem; font-weight: 600; }
+.atsv__chk span span, .atsv__chk > div > span { display: block; font-size: .76rem; color: var(--text-dim); }
+.atsv__kw { margin-top: .6rem; display: flex; flex-direction: column; gap: .4rem; }
+.atsv__kwrow { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+.atsv__kwlbl { font-size: .68rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; width: 100%; }
+.atsv__chip { font-size: .72rem; border: 1px solid var(--line); border-radius: 999px; padding: .12rem .5rem; color: var(--text-dim); }
+.atsv__chip--miss { border-color: var(--accent); color: var(--accent); }
+.atsv__empty, .atsv__nopdf, .atsv__loading { color: var(--text-dim); font-size: .84rem; }
+.atsv__nopdf { max-width: 320px; text-align: center; margin: auto; display: flex; flex-direction: column; gap: .4rem; }
+.atsv__nopdf b { color: var(--text); font-size: .95rem; }
+.atsv__loading { margin: auto; }
+@media (max-width: 900px) {
+  .atsv__body { flex-direction: column; }
+  .atsv__rail { width: auto; border-left: 0; border-top: 1px solid var(--line); max-height: 46%; }
+}
