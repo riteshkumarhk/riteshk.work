@@ -870,7 +870,11 @@
     var res = await fetch(src, { cache: "no-store" });
     if (!res.ok) throw new Error("Couldn\u2019t fetch the r\u00e9sum\u00e9 (" + res.status + ").");
     var blob = await res.blob();
-    return new File([blob], "resume." + (extForMime(blob.type) || "pdf"), { type: blob.type || "application/pdf" });
+    var clean = String(url).split("?")[0].split("#")[0];
+    var dot = clean.lastIndexOf("."), ext = dot >= 0 ? clean.slice(dot + 1).toLowerCase() : "";
+    if (!ext || ext.length > 5) ext = extForMime(blob.type) || "pdf";
+    var mime = ext === "pdf" ? "application/pdf" : (blob.type || "application/octet-stream");
+    return new File([blob], "resume." + ext, { type: mime });
   }
   async function atsResumeText(file) {
     if (file) return await fbExtractFile(file);
@@ -4685,6 +4689,16 @@
     return ensureMammoth._p;
   }
   async function fbExtractFile(f) {
+    // Detect the REAL format by magic bytes FIRST: hosted PDFs are often served as
+    // application/octet-stream (e.g. raw.githubusercontent), which would name the file
+    // "resume.bin" and fall through to f.text() below, dumping raw PDF bytes to the AI.
+    try {
+      var _h = new Uint8Array(await f.slice(0, 8).arrayBuffer()), _sig = "";
+      for (var _i = 0; _i < _h.length; _i++) _sig += String.fromCharCode(_h[_i]);
+      var _nm = String(f.name || "").toLowerCase();
+      if (_sig.indexOf("%PDF") === 0 && _nm.slice(-4) !== ".pdf" && f.type !== "application/pdf") f = new File([f], "resume.pdf", { type: "application/pdf" });
+      else if (_sig.indexOf("PK") === 0 && _nm.slice(-5) === ".docx" && !f.type) f = new File([f], _nm, { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+    } catch (_e) {}
     if (/\.pdf$/i.test(f.name) || f.type === "application/pdf") {
       var pdfjs = await ensurePdfJs();
       var pdf = await pdfjs.getDocument({ data: await f.arrayBuffer() }).promise;
