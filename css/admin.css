@@ -204,7 +204,7 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .af__row { display: flex; gap: .6rem; }
 .af__row .af { flex: 1; }
 
-.adm input[type="text"], .adm input[type="email"], .adm input[type="password"], .adm textarea, .adm select {
+.adm input[type="text"], .adm input[type="email"], .adm input[type="password"], .adm input[type="url"], .adm input[type="tel"], .adm input[type="search"], .adm textarea, .adm select {
   width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line);
   border-radius: 6px; padding: .55rem .65rem; font-family: var(--sans); font-size: .85rem;
 }
