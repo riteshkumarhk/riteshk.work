@@ -892,7 +892,8 @@
       "Be honest, specific and actionable. Base everything ONLY on the provided text; never invent facts. If the text is sparse or garbled, say the file may not be ATS-parseable.",
       "Return ONLY valid JSON (no markdown) matching EXACTLY this shape:",
       '{"score":0,"band":"Strong|Good|Needs work|At risk","summary":"one honest sentence","checks":[{"label":"short label","status":"pass|warn|fail","note":"one line"}],"fixes":[{"priority":"high|med|low","point":"what to change","how":"a concrete rewrite or action"}],"keywords":{"present":["..."],"missing":["..."]}}',
-      "score is 0-100 reflecting BOTH ATS parseability AND fit for the target level. Give 5-8 checks, 4-8 fixes ordered by priority, and level-appropriate missing keywords."
+      "score is 0-100 reflecting BOTH ATS parseability AND fit for the target level. Give 5-8 checks, 4-8 fixes ordered by priority, and level-appropriate missing keywords.",
+      "Output ONE compact JSON object and nothing else. Do not wrap it in markdown fences, and do not put literal newlines inside any string value; keep every note and how on a single line."
     ].join("\n");
   }
   function atsUser(text, level) {
@@ -936,7 +937,7 @@
     try {
       var text = (await atsResumeText(file) || "").replace(/\s+/g, " ").trim();
       if (text.length < 40) throw new Error("I couldn\u2019t read text from that r\u00e9sum\u00e9. If it\u2019s an image-only or scanned PDF, that\u2019s itself a major ATS red flag \u2014 export a text-based PDF from your design tool or Word.");
-      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel), { json: true, maxTokens: 1800, temperature: 0.3 }));
+      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel), { json: true, maxTokens: 4096, temperature: 0.3 }));
       if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
       if (out) out.innerHTML = atsRenderHtml(res, atsLevel, text.length < 500);
       status("ATS check done.", true);
@@ -4101,7 +4102,51 @@
     try { return JSON.parse(s); } catch (e) {}
     var a = s.indexOf("{"), b = s.lastIndexOf("}");
     if (a !== -1 && b > a) { try { return JSON.parse(s.slice(a, b + 1)); } catch (e2) {} }
+    // Last resort: repair loose/truncated JSON (unescaped control chars in strings,
+    // trailing commas, or output cut off by the model's token limit) so a slightly
+    // malformed reply still yields a usable object. Only runs AFTER strict parsing fails.
+    var fixed = csgenRepair(a !== -1 ? s.slice(a) : s);
+    if (fixed) { try { return JSON.parse(fixed); } catch (e3) {} }
     return null;
+  }
+  function csgenRepair(raw) {
+    if (!raw) return null;
+    var s = String(raw);
+    var oi = s.indexOf("{"), ai = s.indexOf("[");
+    var start = oi === -1 ? ai : (ai === -1 ? oi : Math.min(oi, ai));
+    if (start === -1) return null;
+    s = s.slice(start);
+    var BS = String.fromCharCode(92); // backslash, without writing one literally
+    var ctrl = { 10: BS + "n", 13: BS + "r", 9: BS + "t" };
+    var stack = [], inStr = false, escd = false, out = "";
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charAt(i), code = s.charCodeAt(i);
+      if (inStr) {
+        if (escd) { out += c; escd = false; continue; }
+        if (c === BS) { out += c; escd = true; continue; }
+        if (c === '"') { out += c; inStr = false; continue; }
+        out += ctrl[code] || c; // escape raw newline/tab that would break JSON.parse
+        continue;
+      }
+      if (c === '"') { inStr = true; out += c; continue; }
+      if (c === "{" || c === "[") stack.push(c === "{" ? "}" : "]");
+      else if (c === "}" || c === "]") {
+        if (stack.length) stack.pop();
+        var e = out.length; // drop a trailing comma right before this closer:  ...,]  ->  ...]
+        while (e > 0) { var w = out.charCodeAt(e - 1); if (w === 32 || w === 9 || w === 10 || w === 13) e--; else break; }
+        if (e > 0 && out.charAt(e - 1) === ",") out = out.slice(0, e - 1);
+      }
+      out += c;
+    }
+    if (inStr) out += '"';
+    var end = out.length;
+    while (end > 0) { var cc = out.charCodeAt(end - 1); if (cc === 32 || cc === 9 || cc === 10 || cc === 13) end--; else break; }
+    out = out.slice(0, end);
+    var last = out.charAt(out.length - 1);
+    if (last === ",") out = out.slice(0, -1);
+    else if (last === ":") out += "null";
+    for (var k = stack.length - 1; k >= 0; k--) out += stack[k];
+    return out;
   }
   function csgenSystem(tone) {
     var toneGuide = {
