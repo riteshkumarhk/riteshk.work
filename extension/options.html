@@ -31,12 +31,21 @@
         <div class="grid2">
           <div class="fld">
             <label>AI provider</label>
-            <select id="ai_provider"><option value="openai">OpenAI</option></select>
+            <select id="ai_provider">
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="gemini">Google (Gemini)</option>
+              <option value="custom">OpenAI-compatible…</option>
+            </select>
           </div>
           <div class="fld">
             <label>Model (vision-capable for images)</label>
             <input id="ai_model" type="text" placeholder="gpt-4o" />
           </div>
+        </div>
+        <div class="fld" id="ai_base_fld" hidden>
+          <label>API base URL <span class="muted">(OpenAI-compatible endpoint, ending in /v1)</span></label>
+          <input id="ai_base" type="text" placeholder="https://api.example.com/v1" autocomplete="off" />
         </div>
         <div class="fld">
           <label>API key <span class="muted">(stored only on this device, never synced)</span></label>
