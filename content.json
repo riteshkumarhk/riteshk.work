@@ -2291,21 +2291,13 @@
             "caption": ""
           },
           {
-            "type": "gallery",
+            "type": "media",
             "nav": "",
             "kicker": "",
             "heading": "",
             "items": [
               {
-                "src": "",
-                "caption": ""
-              },
-              {
-                "src": "",
-                "caption": ""
-              },
-              {
-                "src": "",
+                "src": "/assets/uploads/ea0e4c72a8635b53fc830f2fd4d1fa7735082dcafe08e016faadb477485d6772.png",
                 "caption": ""
               }
             ],
@@ -2516,7 +2508,8 @@
             }
           }
         }
-      }
+      },
+      "hidden": false
     },
     {
       "id": "w1783695671548",
