@@ -3492,6 +3492,27 @@
     return done;
   }
 
+  // Commit content.json via the Git Data API (blob -> tree -> commit -> ref).
+  // Robust for any size: the Contents API PUT can return HTTP 500 on some content; this path does not.
+  async function ghCommitViaGitData(token, json, message) {
+    const repo = "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO;
+    const api = async (url, opts) => {
+      const res = await fetch(url, Object.assign({ headers: ghHeaders(token), cache: "no-store" }, opts || {}));
+      let body = null; try { body = await res.json(); } catch (e) { body = null; }
+      if (res.status === 401 || res.status === 403) { const er = new Error("auth"); er.auth = true; throw er; }
+      if (!res.ok) { const er = new Error((body && body.message) || ("HTTP " + res.status)); er.http = res.status; throw er; }
+      return body;
+    };
+    const ref = await api(repo + "/git/ref/heads/" + GH_BRANCH);
+    const headSha = ref.object.sha;
+    const headCommit = await api(repo + "/git/commits/" + headSha);
+    const blob = await api(repo + "/git/blobs", { method: "POST", body: JSON.stringify({ content: b64(json), encoding: "base64" }) });
+    const tree = await api(repo + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: headCommit.tree.sha, tree: [{ path: "content.json", mode: "100644", type: "blob", sha: blob.sha }] }) });
+    const commit = await api(repo + "/git/commits", { method: "POST", body: JSON.stringify({ message: message, tree: tree.sha, parents: [headSha] }) });
+    await api(repo + "/git/refs/heads/" + GH_BRANCH, { method: "PATCH", body: JSON.stringify({ sha: commit.sha }) });
+    return commit.sha;
+  }
+
   async function ghPublish(token) {
     if (publishing) return;
     publishing = true;
@@ -3503,24 +3524,12 @@
       pubProgress(50, "Saving your content to GitHub\u2026");
       const json = await buildPublishJson();
       const mySig = (window.RK && window.RK.sig) ? window.RK.sig(JSON.stringify(JSON.parse(json))) : null;
-      const getSha = async () => {
-        const g = await fetch(GH_API + "?ref=" + GH_BRANCH + "&t=" + Date.now(), { headers: ghHeaders(token), cache: "no-store" });
-        if (g.status === 401 || g.status === 403) { const er = new Error("auth"); er.auth = true; throw er; }
-        if (g.ok) { const j = await g.json(); return j.sha; }
-        if (g.status === 404) return undefined;
-        const er = new Error("couldn\u2019t read the current file (HTTP " + g.status + ")"); er.http = g.status; throw er;
-      };
-      const doPut = async (sha) => {
-        const body = { message: "Update content.json via admin", content: b64(json), branch: GH_BRANCH };
-        if (sha) body.sha = sha;
-        const p = await fetch(GH_API, { method: "PUT", headers: ghHeaders(token), body: JSON.stringify(body) });
-        const pj = await p.json().catch(() => ({}));
-        return { status: p.status, ok: p.ok, pj: pj };
-      };
-      let r = await doPut(await getSha());
-      if (r.status === 409 || r.status === 422) r = await doPut(await getSha()); // stale-sha conflict: refresh + retry once
-      if (r.status === 401 || r.status === 403) { authFailed(); pubProgress(100, "GitHub didn\u2019t accept that sign-in \u2014 hit Publish to reconnect.", { error: true }); return; }
-      if (!r.ok) { const er = new Error((r.pj && r.pj.message) || ("HTTP " + r.status)); er.http = r.status; throw er; }
+      try {
+        await ghCommitViaGitData(token, json, "Update content.json via admin");
+      } catch (e1) {
+        if (e1 && (e1.http === 409 || e1.http === 422)) await ghCommitViaGitData(token, json, "Update content.json via admin"); // ref/tree conflict: refresh + retry once
+        else throw e1;
+      }
       // Committed. This data is now the published content — clear the draft so it can't go stale.
       localStorage.removeItem(DRAFT_KEY);
       localStorage.removeItem(DRAFT_SIG_KEY);
