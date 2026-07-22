@@ -114,7 +114,7 @@
     ["contact", "Contact"],
     ["special", "Special Views"],
     ["ai", "AI"],
-    ["autofill", "Autofill"],
+    ["autofill", "More"],
   ];
   // Files bundled into the downloadable Résumé Autofill extension (served from /extension/).
   const EXT_FILES = [
@@ -850,6 +850,187 @@
       status("Extension downloaded \u2014 unzip it, then load the folder in edge://extensions.", true);
     } catch (e) {
       status("Download failed: " + (e && e.message || e));
+    } finally {
+      btnIdle(btn, was);
+    }
+  }
+
+  /* ---------- One-page résumé PDF (vector, clickable case-study links + QR) ---------- */
+  var RPDF_NL = String.fromCharCode(10);
+  function rpdfPlain(s) {
+    s = String(s == null ? "" : s);
+    s = s.split("[[").join("").split("]]").join("");
+    s = s.split("**").join("").split("*").join("");
+    s = s.split(RPDF_NL).join(" ");
+    s = s.split(String.fromCharCode(0x2014)).join("-").split(String.fromCharCode(0x2013)).join("-");
+    s = s.split(String.fromCharCode(0x2192)).join(">");
+    while (s.indexOf("  ") !== -1) s = s.split("  ").join(" ");
+    return s.trim();
+  }
+  function rpdfNoProto(u) { return String(u || "").split("https://").join("").split("http://").join(""); }
+  function ensureJsPdf() {
+    if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+    if (ensureJsPdf._p) return ensureJsPdf._p;
+    ensureJsPdf._p = new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+      s.onload = function () { (window.jspdf && window.jspdf.jsPDF) ? resolve(window.jspdf.jsPDF) : reject(new Error("The PDF engine didn\u2019t initialise.")); };
+      s.onerror = function () { ensureJsPdf._p = null; reject(new Error("Couldn\u2019t load the PDF engine.")); };
+      document.head.appendChild(s);
+    });
+    return ensureJsPdf._p;
+  }
+  function ensureQrLib() {
+    if (window.qrcode) return Promise.resolve(window.qrcode);
+    if (ensureQrLib._p) return ensureQrLib._p;
+    ensureQrLib._p = new Promise(function (resolve) {
+      var s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js";
+      s.onload = function () { resolve(window.qrcode || null); };
+      s.onerror = function () { ensureQrLib._p = null; resolve(null); };
+      document.head.appendChild(s);
+    });
+    return ensureQrLib._p;
+  }
+  function rpdfDrawQr(doc, qrcode, url, x, y, size) {
+    if (!qrcode) return false;
+    try {
+      var qr = qrcode(0, "M"); qr.addData(url); qr.make();
+      var n = qr.getModuleCount(), cell = size / n;
+      doc.setFillColor(28, 26, 23);
+      for (var r = 0; r < n; r++) for (var c = 0; c < n; c++) if (qr.isDark(r, c)) doc.rect(x + c * cell, y + r * cell, cell + 0.05, cell + 0.05, "F");
+      return true;
+    } catch (e) { return false; }
+  }
+  async function resumePdfBuild() {
+    var jsPDF = await ensureJsPdf();
+    var qrcode = await ensureQrLib();
+    var d = data, c = d.contact || {}, L = d.landing || {};
+    var SITE = LIVE_ORIGIN;
+    var work = (d.work || []).filter(function (w) { return w && !w.hidden && !w.encWork; }).slice(0, 4);
+    var highs = (d.highlights || []).slice(0, 6);
+    var caps = d.capabilities || [], path = d.path || [], rec = d.recognition || [], edu = d.education || [];
+
+    var doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
+    var PW = 210, PH = 297, M = 14, CW = PW - M * 2;
+    var INK = [28, 26, 23], MUT = [101, 92, 83], FAINT = [154, 147, 138], ACC = [154, 106, 36], LINE = [225, 216, 205];
+    var y = M;
+    function ink() { doc.setTextColor(INK[0], INK[1], INK[2]); }
+    function mut() { doc.setTextColor(MUT[0], MUT[1], MUT[2]); }
+    function faint() { doc.setTextColor(FAINT[0], FAINT[1], FAINT[2]); }
+    function acc() { doc.setTextColor(ACC[0], ACC[1], ACC[2]); }
+    function rule(yy, x1, x2) { doc.setDrawColor(LINE[0], LINE[1], LINE[2]); doc.setLineWidth(0.2); doc.line(x1 == null ? M : x1, yy, x2 == null ? PW - M : x2, yy); }
+    function need(h) { if (y + h > PH - M - 4) { doc.addPage(); y = M; } }
+    function pdfSec(t) { need(12); acc(); doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setCharSpace(0.5); doc.text(t.toUpperCase(), M, y); doc.setCharSpace(0); y += 2; rule(y); y += 4.2; }
+
+    ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(22); doc.text("Ritesh Kumar", M, y + 6);
+    var eyebrow = rpdfPlain(L.eyebrow || "Product Design"); if (L.domains) eyebrow += " \u00b7 " + rpdfPlain(L.domains);
+    acc(); doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setCharSpace(0.4); doc.text(eyebrow.toUpperCase(), M, y + 11); doc.setCharSpace(0);
+    if (L.presence) { mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.text(rpdfPlain(L.presence), M, y + 15.5); }
+    var cy = y + 1.5, rx = PW - M; doc.setFontSize(9);
+    function rlink(txt, url) { ink(); doc.setFont("helvetica", "normal"); var w = doc.getTextWidth(txt); doc.textWithLink(txt, rx - w, cy, { url: url }); cy += 4.4; }
+    if (c.email) rlink(c.email, "mailto:" + c.email);
+    if (c.phone) rlink(rpdfPlain(c.phone), "tel:" + (c.phoneRaw || c.phone));
+    if (c.linkedin) rlink("in/riteshkumarhk", c.linkedin);
+    rlink(rpdfNoProto(SITE), SITE);
+    y += 18; doc.setDrawColor(INK[0], INK[1], INK[2]); doc.setLineWidth(0.4); doc.line(M, y, PW - M, y); y += 6.5;
+
+    ink(); doc.setFont("times", "italic"); doc.setFontSize(15);
+    var stmtLines = doc.splitTextToSize(rpdfPlain(L.statement || ""), CW); doc.text(stmtLines, M, y); y += stmtLines.length * 6.2;
+    if (L.intro) { y += 1; mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(9); var il = doc.splitTextToSize(rpdfPlain(L.intro), CW); doc.text(il, M, y); y += il.length * 4.4; }
+    y += 3.5;
+
+    if (highs.length) {
+      rule(y); y += 5; var mx = M;
+      highs.forEach(function (h) {
+        var v = rpdfPlain(h.value || ""), lb = rpdfPlain(h.label || "");
+        doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); var vw = doc.getTextWidth(v);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); var lw = doc.getTextWidth(lb);
+        var itemW = vw + 1.5 + lw + 7;
+        if (mx + itemW > PW - M + 2) { mx = M; y += 6; }
+        ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.text(v, mx, y);
+        mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.text(lb, mx + vw + 1.5, y);
+        mx += itemW;
+      });
+      y += 3.5; rule(y); y += 6.5;
+    }
+
+    if (work.length) {
+      pdfSec("Selected work");
+      work.forEach(function (w, wi) {
+        var url = SITE + "/work/" + w.id;
+        var one = rpdfPlain((w.study && w.study.tagline) || w.desc || "");
+        var qrSize = 21, textW = CW - qrSize - 6;
+        doc.setFont("helvetica", "normal"); doc.setFontSize(9); var tagLines = doc.splitTextToSize(one, textW);
+        var textH = 4 + (w.client ? 3.8 : 0) + 4.5 + tagLines.length * 4 + 5;
+        var blockH = Math.max(qrSize, textH) + 4; need(blockH);
+        var top = y, qx = PW - M - qrSize;
+        rpdfDrawQr(doc, qrcode, url, qx, top, qrSize);
+        ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text(rpdfPlain(w.title || ""), M, top + 3.5);
+        var ty = top + 3.5;
+        if (w.client) { ty += 4; faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setCharSpace(0.3); doc.text(rpdfPlain(w.client).toUpperCase(), M, ty); doc.setCharSpace(0); }
+        ty += 4.5; mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.text(tagLines, M, ty); ty += tagLines.length * 4 + 1;
+        acc(); doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.textWithLink("View the live case study", M, ty + 1.5, { url: url });
+        y = Math.max(top + qrSize, ty + 1.5) + 5;
+        if (wi < work.length - 1) rule(y - 2.5);
+      });
+      y += 2.5;
+    }
+
+    if (path.length) {
+      pdfSec("Experience");
+      path.forEach(function (p) {
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); var dLines = p.desc ? doc.splitTextToSize(rpdfPlain(p.desc), CW) : [];
+        need(4 + 4 + (p.org ? 3.8 : 0) + dLines.length * 4 + 4);
+        faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setCharSpace(0.3); doc.text(rpdfPlain(p.years || "").toUpperCase(), M, y); doc.setCharSpace(0);
+        y += 4; ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.text(rpdfPlain(p.role || ""), M, y);
+        if (p.org) { y += 3.8; acc(); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(rpdfPlain(p.org), M, y); }
+        if (dLines.length) { y += 4; mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.text(dLines, M, y); y += dLines.length * 4; }
+        y += 4;
+      });
+      y += 1;
+    }
+
+    if (caps.length) {
+      pdfSec("Capabilities");
+      mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
+      var capStr = caps.map(function (x) { return rpdfPlain(x); }).join("   \u00b7   ");
+      var cl = doc.splitTextToSize(capStr, CW); need(cl.length * 4.4 + 4); doc.text(cl, M, y); y += cl.length * 4.4 + 5;
+    }
+
+    function liList(title, arr) {
+      if (!arr.length) return;
+      pdfSec(title);
+      arr.forEach(function (r) {
+        need(5.2);
+        ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.text(rpdfPlain(r.title || ""), M, y);
+        var meta = rpdfPlain(r.meta || "");
+        if (meta) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); var mw = doc.getTextWidth(meta); doc.text(meta, PW - M - mw, y); }
+        y += 4.6;
+      });
+      y += 2.5;
+    }
+    liList("Recognition", rec);
+    liList("Education", edu);
+
+    var pages = doc.getNumberOfPages();
+    for (var pi = 1; pi <= pages; pi++) {
+      doc.setPage(pi);
+      doc.setDrawColor(LINE[0], LINE[1], LINE[2]); doc.setLineWidth(0.2); doc.line(M, PH - 10, PW - M, PH - 10);
+      faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+      doc.text("Scan a code or tap a link to open the live, interactive case study.", M, PH - 6.2);
+      var sw = doc.getTextWidth(rpdfNoProto(SITE)); doc.text(rpdfNoProto(SITE), PW - M - sw, PH - 6.2);
+    }
+    return doc;
+  }
+  async function resumePdfDownload(btn) {
+    var was = btnBusy(btn, "Building PDF\u2026");
+    try {
+      var doc = await resumePdfBuild();
+      doc.save("Ritesh-Kumar-Portfolio.pdf");
+      status("PDF downloaded \u2014 with clickable, live case-study links.", true);
+    } catch (e) {
+      status("PDF failed: " + (e && e.message || e));
     } finally {
       btnIdle(btn, was);
     }
@@ -2331,7 +2512,13 @@
     },
     autofill() {
       return (
-        secHead("Form Autofill", "A little browser widget that fills job-application forms from your r\u00e9sum\u00e9 \u2014 summary, work experiences (a <em>full</em> and a <em>snippet</em> version of each), skills and contact details. Works in Microsoft Edge and Chrome.") +
+        secHead("More", "Extras that live outside the page itself \u2014 a downloadable one-page PDF r\u00e9sum\u00e9 and the browser autofill extension.") +
+        '<div class="adm__ext">' +
+          '<div class="adm__ext-head"><span class="adm__ext-logo">\uD83D\uDCC4</span><div><b>One-page r\u00e9sum\u00e9 \u2014 PDF</b><span>Clickable case-study links + QR codes</span></div></div>' +
+          '<p class="adm__ext-lead">A print-ready A4 one-pager built live from your content: positioning, key metrics, your top four case studies (each a live link), experience, capabilities, recognition and education. A real PDF with clickable links \u2014 no browser print dialog.</p>' +
+          '<div class="imgblk__row"><button class="btn btn--primary" data-act="resume-pdf">\u2b07 Download PDF r\u00e9sum\u00e9</button></div>' +
+          '<div class="af__hint">Built from what you have in admin right now \u2014 publish first so the case-study links resolve on your live site (they point to riteshk.work/work/\u2026).</div>' +
+        "</div>" +
         '<div class="adm__ext">' +
           '<div class="adm__ext-head"><span class="adm__ext-logo">\u26A1</span><div><b>R\u00e9sum\u00e9 Autofill</b><span>Edge / Chrome extension</span></div></div>' +
           '<p class="adm__ext-lead">On any job site: open the floating \u26A1 button, right-click a field, or use the inline chip \u2014 pick <b>Full</b> or <b>Snippet</b> and it drops your experience straight into the form.</p>' +
@@ -2708,6 +2895,7 @@
     if (act === "ai-save") { aiSave(); return; }
     if (act === "ai-clear") { Object.keys(localStorage).forEach(function (k) { if (/^rk:ai:[a-z]+:key$/.test(k)) localStorage.removeItem(k); }); renderBody(); status("Keys removed."); return; }
     if (act === "ext-download") { extDownload(b); return; }
+    if (act === "resume-pdf") { resumePdfDownload(b); return; }
     if (act === "ats-check") { atsRun(b.closest(".ats"), null); return; }
     if (act === "ats-view") { atsOpenViewer(); return; }
     if (act === "ats-level") { atsLevel = b.dataset.lvl; var ap = b.closest(".ats"); if (ap) ap.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
