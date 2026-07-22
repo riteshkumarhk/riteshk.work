@@ -43,6 +43,7 @@
   const UPLOAD_DIR = "assets/uploads/";
   // Where a visitor actually sees the site — used to confirm a publish is live.
   const LIVE_ORIGIN = (/(^|\.)riteshk\.work$/i.test(location.hostname) || /\.github\.io$/i.test(location.hostname)) ? location.origin : "https://riteshk.work";
+  const PUBLISH_HARD_CAP = 40 * 1024 * 1024; // skip an obviously-doomed content.json commit (GitHub rejects very large blobs)
   const DRAFT_SIG_KEY = "rk:content:draft:sig";
   const PREVIEW_SRC = "index.html?preview=1&lite=1";
   const ADMIN_MIN = 900; // below this the split editor can't fit — admin is disabled
@@ -3397,10 +3398,18 @@
     const repoPath = UPLOAD_DIR + name;
     const webPath = "/" + repoPath;
     hostedBytes[webPath] = uri;
-    const put = await fetch(GH_FILE_API + repoPath, { method: "PUT", headers: ghHeaders(token), body: JSON.stringify({ message: "Add " + name + " via admin", content: rawB64, branch: GH_BRANCH }) });
+    let put;
+    try { put = await fetch(GH_FILE_API + repoPath, { method: "PUT", headers: ghHeaders(token), body: JSON.stringify({ message: "Add " + name + " via admin", content: rawB64, branch: GH_BRANCH }) }); }
+    catch (netErr) { const e = new Error("network"); e.network = 1; throw e; }
     if (put.status === 422) return webPath; // identical file already hosted → reuse
     if (put.status === 401 || put.status === 403) { const e = new Error("auth"); e.auth = 1; throw e; }
-    if (!put.ok) { const j = await put.json().catch(function () { return {}; }); throw new Error((j && j.message) || ("HTTP " + put.status)); }
+    if (!put.ok) {
+      const j = await put.json().catch(function () { return {}; });
+      const msg = (j && j.message) || ("HTTP " + put.status);
+      const e = new Error(msg); e.http = put.status;
+      if (put.status === 413 || /too large|too big|exceed/i.test(msg)) e.tooLarge = 1;
+      throw e;
+    }
     return webPath;
   }
   /* ---------- publish progress bar + live-site confirmation ---------- */
@@ -3466,30 +3475,43 @@
     return false;
   }
 
-  // Replace every still-embedded data:image in `data` with a hosted path (used at publish).
+  // Replace every still-embedded data: asset in `data` with a hosted path (used at publish).
+  // Non-auth failures are COLLECTED (never silently swallowed): an asset that can't be hosted
+  // would otherwise stay inline and bloat content.json past GitHub's blob limit ("input too
+  // large to process"). ghPublish inspects the returned failures and stops with a precise,
+  // fixable message instead of committing a doomed request.
   async function hostEmbeddedImages(token, onProg) {
     const targets = [];
     // Skip media inside Locked blocks / Hidden projects: it must stay inline so it
     // encrypts with that block/work instead of becoming a public /assets file.
-    (function walk(o, prot) {
+    (function walk(o, prot, ctx) {
       if (!o || typeof o !== "object") return;
       const p = prot || o.hidden === true || o.locked === true;
+      const here = (o && (o.title || o.name)) ? String(o.title || o.name) : ctx;
       for (const k in o) {
         const v = o[k];
-        if (typeof v === "string") { if (!p && /^data:(image|video|application)\//i.test(v)) targets.push([o, k]); }
-        else if (v && typeof v === "object") walk(v, p);
+        if (typeof v === "string") { if (!p && /^data:(image|video|application)\//i.test(v)) targets.push({ o: o, k: k, ctx: here }); }
+        else if (v && typeof v === "object") walk(v, p, here);
       }
-    })(data, false);
+    })(data, false, "");
     const total = targets.length;
-    let done = 0;
+    let done = 0; const failed = [];
     if (onProg && total) onProg(0, total);
     for (const t of targets) {
-      try { t[0][t[1]] = await hostDataUri(t[0][t[1]], token); }
-      catch (e) { if (e && e.auth) throw e; /* otherwise leave embedded, it still publishes */ }
+      const uri = t.o[t.k];
+      try { t.o[t.k] = await hostDataUri(uri, token); }
+      catch (e) {
+        if (e && e.auth) throw e;
+        const mm = /^data:([^;,]+)/i.exec(uri); const mime = (mm && mm[1]) || "";
+        const kind = /^video\//i.test(mime) ? "video" : /^image\//i.test(mime) ? "image" : "file";
+        const bytes = Math.round((String(uri).length * 3) / 4);
+        failed.push({ kind: kind, mb: Math.max(1, Math.round(bytes / 1048576)), where: t.ctx || "", tooLarge: !!(e && e.tooLarge), network: !!(e && e.network), msg: (e && e.message) || "" });
+        /* leave embedded for now; ghPublish decides whether it's safe or must stop */
+      }
       done++;
       if (onProg && total) onProg(done, total);
     }
-    return done;
+    return { hosted: done - failed.length, failed: failed };
   }
 
   // Commit content.json via the Git Data API (blob -> tree -> commit -> ref).
@@ -3500,7 +3522,7 @@
       const res = await fetch(url, Object.assign({ headers: ghHeaders(token), cache: "no-store" }, opts || {}));
       let body = null; try { body = await res.json(); } catch (e) { body = null; }
       if (res.status === 401 || res.status === 403) { const er = new Error("auth"); er.auth = true; throw er; }
-      if (!res.ok) { const er = new Error((body && body.message) || ("HTTP " + res.status)); er.http = res.status; throw er; }
+      if (!res.ok) { const er = new Error((body && body.message) || ("HTTP " + res.status)); er.http = res.status; if (res.status === 413 || /too large|too big|exceed/i.test(String(er.message))) er.tooLarge = true; throw er; }
       return body;
     };
     const ref = await api(repo + "/git/ref/heads/" + GH_BRANCH);
@@ -3513,21 +3535,52 @@
     return commit.sha;
   }
 
+  function jsonByteLen(s) { try { return new TextEncoder().encode(s).length; } catch (e) { return (s || "").length; } }
+  // Turn GitHub's cryptic "input too large to process" into an actionable message that names
+  // the offending media so the owner can compress it or host it externally.
+  function mediaTooLargeMsg(fails, jsonBytes) {
+    var items = (fails || []).filter(Boolean).slice().sort(function (a, b) { return (b.mb || 0) - (a.mb || 0); }).slice(0, 3).map(function (f) {
+      return "a " + (f.mb || 1) + " MB " + (f.kind || "file") + (f.where ? " in \u201c" + f.where + "\u201d" : "");
+    });
+    if (items.length) {
+      var many = items.length > 1;
+      return "Can\u2019t publish \u2014 " + items.join(", ") + (many ? " are" : " is") + " too large for GitHub to store from the browser. Replace " + (many ? "them" : "it") + " with a smaller / compressed version (the built-in video compressor helps) or host it on Vimeo/YouTube/Stream and paste the link, then Publish.";
+    }
+    var mb = Math.max(1, Math.round((jsonBytes || 0) / 1048576));
+    return "Can\u2019t publish \u2014 your content is " + mb + " MB, too large for GitHub to store from the browser. It\u2019s usually one very large image or a locked section with big media \u2014 compress the largest media or host it externally, then Publish.";
+  }
+
   async function ghPublish(token) {
     if (publishing) return;
     publishing = true;
     pubProgress(6, "Preparing your content\u2026");
     try {
-      await hostEmbeddedImages(token, function (n, total) {
+      const hostRes = await hostEmbeddedImages(token, function (n, total) {
         pubProgress(6 + Math.round((n / Math.max(1, total)) * 40), "Uploading images at full quality \u2014 " + n + " of " + total + "\u2026");
       });
       pubProgress(50, "Saving your content to GitHub\u2026");
       const json = await buildPublishJson();
+      const jsonBytes = jsonByteLen(json);
+      const fails = (hostRes && hostRes.failed) || [];
+      const tooLargeFails = fails.filter(function (f) { return f.tooLarge; });
+      // An embedded asset that couldn't be hosted stays inline and bloats content.json past
+      // GitHub's blob limit. Stop here with a precise, fixable message rather than committing a
+      // doomed request (and wasting a long upload). Let GitHub be the authority otherwise.
+      if (tooLargeFails.length || jsonBytes > PUBLISH_HARD_CAP) {
+        pubStopCreep();
+        if (!tooLargeFails.length && fails.length && fails.every(function (f) { return f.network; })) {
+          pubProgress(100, "Couldn\u2019t reach GitHub to upload your media \u2014 likely a network block (a VPN, ad-blocker or firewall stopping api.github.com). Check your connection, then hit Publish again.", { error: true });
+        } else {
+          pubProgress(100, mediaTooLargeMsg(tooLargeFails.length ? tooLargeFails : fails, jsonBytes), { error: true });
+        }
+        return;
+      }
       const mySig = (window.RK && window.RK.sig) ? window.RK.sig(JSON.stringify(JSON.parse(json))) : null;
       try {
         await ghCommitViaGitData(token, json, "Update content.json via admin");
       } catch (e1) {
-        if (e1 && (e1.http === 409 || e1.http === 422)) await ghCommitViaGitData(token, json, "Update content.json via admin"); // ref/tree conflict: refresh + retry once
+        if (e1 && e1.tooLarge) { pubStopCreep(); pubProgress(100, mediaTooLargeMsg(fails, jsonBytes), { error: true }); return; }
+        else if (e1 && (e1.http === 409 || e1.http === 422)) await ghCommitViaGitData(token, json, "Update content.json via admin"); // ref/tree conflict: refresh + retry once
         else throw e1;
       }
       // Committed. This data is now the published content — clear the draft so it can't go stale.
