@@ -1716,7 +1716,7 @@
     },
     {
       "id": "w1783840785203",
-      "featured": false,
+      "featured": true,
       "theme": "grid",
       "plateTag": "First Run Experience",
       "client": "Microsoft AI: Edge browser",
