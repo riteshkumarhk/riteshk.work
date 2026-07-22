@@ -3503,17 +3503,24 @@
       pubProgress(50, "Saving your content to GitHub\u2026");
       const json = await buildPublishJson();
       const mySig = (window.RK && window.RK.sig) ? window.RK.sig(JSON.stringify(JSON.parse(json))) : null;
-      let sha;
-      const getRes = await fetch(GH_API + "?ref=" + GH_BRANCH + "&t=" + Date.now(), { headers: ghHeaders(token) });
-      if (getRes.status === 401 || getRes.status === 403) { authFailed(); pubProgress(100, "GitHub didn\u2019t accept that sign-in \u2014 hit Publish to reconnect.", { error: true }); return; }
-      if (getRes.ok) { const j = await getRes.json(); sha = j.sha; }
-      else if (getRes.status !== 404) throw new Error("read HTTP " + getRes.status);
-      const body = { message: "Update content.json via admin", content: b64(json), branch: GH_BRANCH };
-      if (sha) body.sha = sha;
-      const putRes = await fetch(GH_API, { method: "PUT", headers: ghHeaders(token), body: JSON.stringify(body) });
-      const pj = await putRes.json().catch(() => ({}));
-      if (putRes.status === 401 || putRes.status === 403) { authFailed(); pubProgress(100, "GitHub didn\u2019t accept that sign-in \u2014 hit Publish to reconnect.", { error: true }); return; }
-      if (!putRes.ok) throw new Error((pj && pj.message) || ("HTTP " + putRes.status));
+      const getSha = async () => {
+        const g = await fetch(GH_API + "?ref=" + GH_BRANCH + "&t=" + Date.now(), { headers: ghHeaders(token), cache: "no-store" });
+        if (g.status === 401 || g.status === 403) { const er = new Error("auth"); er.auth = true; throw er; }
+        if (g.ok) { const j = await g.json(); return j.sha; }
+        if (g.status === 404) return undefined;
+        const er = new Error("couldn\u2019t read the current file (HTTP " + g.status + ")"); er.http = g.status; throw er;
+      };
+      const doPut = async (sha) => {
+        const body = { message: "Update content.json via admin", content: b64(json), branch: GH_BRANCH };
+        if (sha) body.sha = sha;
+        const p = await fetch(GH_API, { method: "PUT", headers: ghHeaders(token), body: JSON.stringify(body) });
+        const pj = await p.json().catch(() => ({}));
+        return { status: p.status, ok: p.ok, pj: pj };
+      };
+      let r = await doPut(await getSha());
+      if (r.status === 409 || r.status === 422) r = await doPut(await getSha()); // stale-sha conflict: refresh + retry once
+      if (r.status === 401 || r.status === 403) { authFailed(); pubProgress(100, "GitHub didn\u2019t accept that sign-in \u2014 hit Publish to reconnect.", { error: true }); return; }
+      if (!r.ok) { const er = new Error((r.pj && r.pj.message) || ("HTTP " + r.status)); er.http = r.status; throw er; }
       // Committed. This data is now the published content — clear the draft so it can't go stale.
       localStorage.removeItem(DRAFT_KEY);
       localStorage.removeItem(DRAFT_SIG_KEY);
@@ -3533,8 +3540,14 @@
         return;
       }
       if (e && e.auth) { authFailed(); pubProgress(100, "GitHub didn\u2019t accept that sign-in \u2014 hit Publish to reconnect.", { error: true }); return; }
-      // Transient/network hiccup — keep the connection, just ask them to retry.
-      pubProgress(100, "Couldn\u2019t reach GitHub just now. Hit Publish again to retry.", { error: true });
+      var emsg = (e && e.message) ? String(e.message).slice(0, 160) : "";
+      if (e && e.http) {
+        pubProgress(100, "GitHub couldn\u2019t save it \u2014 " + emsg + ". Hit Publish to retry.", { error: true });
+      } else if (!emsg || /Failed to fetch|NetworkError|load failed|ERR_|network/i.test(emsg)) {
+        pubProgress(100, "Couldn\u2019t reach GitHub \u2014 likely a network block (a VPN, ad-blocker or firewall stopping api.github.com). Check your connection, then hit Publish again.", { error: true });
+      } else {
+        pubProgress(100, "Publish hit a snag: " + emsg + " \u2014 hit Publish to retry.", { error: true });
+      }
     } finally { publishing = false; }
   }
 
