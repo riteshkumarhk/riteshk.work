@@ -3460,7 +3460,14 @@
     pubCreepTo(94, 75);
     while (Date.now() < deadline) {
       await new Promise(function (r) { setTimeout(r, 4000); });
-      const urls = [LIVE_ORIGIN + "/content.json?t=" + Date.now(), GH_RAW + "content.json?t=" + Date.now()];
+      // Confirm the ACTUAL Pages deploy (riteshk.work), not just raw.githubusercontent: raw updates
+      // within seconds of the commit, but Pages takes ~1 min to rebuild — matching raw would call it
+      // "live" too early and a hard-refresh right after would still show the old page. On the Pages
+      // origin, poll only it (same-origin, no CORS); cross-origin, keep raw as a fallback.
+      const sameOrigin = (location.origin === LIVE_ORIGIN);
+      const urls = sameOrigin
+        ? [LIVE_ORIGIN + "/content.json?t=" + Date.now()]
+        : [LIVE_ORIGIN + "/content.json?t=" + Date.now(), GH_RAW + "content.json?t=" + Date.now()];
       for (const u of urls) {
         try {
           const res = await fetch(u, { cache: "no-store" });
@@ -3550,6 +3557,23 @@
     return "Can\u2019t publish \u2014 your content is " + mb + " MB, too large for GitHub to store from the browser. It\u2019s usually one very large image or a locked section with big media \u2014 compress the largest media or host it externally, then Publish.";
   }
 
+  // Count hosted (already-public) images that sit inside a Hidden project or Locked block.
+  // At publish these get pulled inline + encrypted (inlineProtectedImages); a lot of them
+  // is what blows content.json past GitHub's size limit.
+  function protectedHostedCount(d) {
+    var n = 0;
+    (function walk(o, prot) {
+      if (!o || typeof o !== "object") return;
+      var p = prot || o.hidden === true || o.locked === true;
+      for (var k in o) {
+        var v = o[k];
+        if (typeof v === "string") { if (p && v.indexOf("assets/uploads/") !== -1 && v.slice(0, 5).toLowerCase() !== "data:") n++; }
+        else if (v && typeof v === "object") walk(v, p);
+      }
+    })({ work: (d && d.work) || [] }, false);
+    return n;
+  }
+
   async function ghPublish(token) {
     if (publishing) return;
     publishing = true;
@@ -3568,8 +3592,11 @@
       // doomed request (and wasting a long upload). Let GitHub be the authority otherwise.
       if (tooLargeFails.length || jsonBytes > PUBLISH_HARD_CAP) {
         pubStopCreep();
+        const protN = protectedHostedCount(data);
         if (!tooLargeFails.length && fails.length && fails.every(function (f) { return f.network; })) {
           pubProgress(100, "Couldn\u2019t reach GitHub to upload your media \u2014 likely a network block (a VPN, ad-blocker or firewall stopping api.github.com). Check your connection, then hit Publish again.", { error: true });
+        } else if (!tooLargeFails.length && protN >= 5 && jsonBytes > PUBLISH_HARD_CAP) {
+          pubProgress(100, "Can\u2019t publish \u2014 hiding or locking a project bundles all of its images into the file so they can be encrypted (here that\u2019s ~" + protN + " images \u2192 " + Math.round(jsonBytes / 1048576) + " MB), which is too large for GitHub. Keep the project visible (it can still be Featured on the homepage), or use far fewer / smaller images inside the hidden or locked section.", { error: true });
         } else {
           pubProgress(100, mediaTooLargeMsg(tooLargeFails.length ? tooLargeFails : fails, jsonBytes), { error: true });
         }
