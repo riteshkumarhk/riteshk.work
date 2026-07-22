@@ -52,6 +52,11 @@ img[data-zoom] { cursor: zoom-in; }
 .pjx__img { max-width: 94vw; max-height: 78vh; object-fit: contain; transform-origin: center center; transition: transform .18s var(--ease-io); -webkit-user-select: none; user-select: none; -webkit-user-drag: none; border-radius: 3px; }
 .pjx.is-zoomed .pjx__img { cursor: grab; transition: none; }
 .pjx.is-grab .pjx__img { cursor: grabbing; }
+/* When zoomed, free the image from the box it opened in so it can grow into the whole
+   screen instead of being cropped to that footprint. Click-outside-to-dismiss and pan
+   are unchanged (the base, unzoomed view still opens at its normal contained size). */
+.pjx.is-zoomed .pjx__stage { overflow: visible; }
+.pjx.is-zoomed .pjx__cap { opacity: 0; pointer-events: none; }
 .pjx__cap { max-width: min(760px, 90vw); margin-top: 1.1rem; text-align: center; font-size: .85rem; color: rgba(236,231,225,.72); line-height: 1.55; }
 .pjx__cap-t { display: block; color: #fff; font-weight: 500; margin-bottom: .18rem; }
 .pjx__ctrl { position: fixed; top: .8rem; right: clamp(.8rem, 3vw, 1.6rem); z-index: 3; display: flex; gap: .5rem; }
