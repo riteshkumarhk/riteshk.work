@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ritesh Kumar — Portfolio one-pager</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1c1a17; --muted:#655c53; --faint:#9a938a; --line:#e7ded3; --line2:#f0eae1; --accent:#9a6a24; --paper:#fff;
+    --serif:'Fraunces',Georgia,'Times New Roman',serif;
+    --sans:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:#e9e4dc; color:var(--ink); font-family:var(--sans); -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  a{ color:var(--accent); text-decoration:none; }
+
+  .bar{ position:sticky; top:0; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.7rem 1.1rem; background:#1c1a17; color:#fff; }
+  .bar b{ font-weight:600; letter-spacing:.02em; }
+  .bar__r{ display:flex; align-items:center; gap:1rem; }
+  .hint{ font-size:.76rem; color:#c7bdae; }
+  #dl{ background:var(--accent); color:#fff; border:0; border-radius:8px; padding:.5rem 1rem; font-weight:600; font-size:.85rem; cursor:pointer; }
+  #dl:hover{ filter:brightness(1.08); }
+
+  .sheet{ width:210mm; min-height:296mm; margin:1.2rem auto; padding:15mm 16mm; background:var(--paper); box-shadow:0 10px 44px rgba(0,0,0,.16); }
+  .loading{ color:var(--muted); padding:3rem 0; text-align:center; }
+
+  .hd{ display:flex; justify-content:space-between; align-items:flex-start; gap:1.5rem; padding-bottom:.9rem; border-bottom:1.5px solid var(--ink); }
+  .hd__name{ font-family:var(--serif); font-weight:600; font-size:30px; line-height:1; letter-spacing:-.01em; }
+  .hd__eyebrow{ margin-top:.35rem; font-size:.72rem; text-transform:uppercase; letter-spacing:.16em; color:var(--accent); font-weight:600; }
+  .hd__loc{ margin-top:.3rem; font-size:.82rem; color:var(--muted); }
+  .hd__r{ text-align:right; font-size:.8rem; line-height:1.7; }
+  .hd__r a{ color:var(--ink); display:block; }
+  .hd__r a span{ color:var(--faint); }
+
+  .lede{ margin:.9rem 0 0; }
+  .lede__head{ font-family:var(--serif); font-size:19px; line-height:1.25; font-weight:500; }
+  .lede__head em{ font-style:italic; color:var(--accent); }
+  .lede__sub{ margin-top:.45rem; font-size:.88rem; line-height:1.5; color:var(--muted); max-width:60ch; }
+
+  .metrics{ display:flex; flex-wrap:wrap; gap:.5rem 1.4rem; margin:.9rem 0 0; padding:.7rem 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .metric b{ font-family:var(--serif); font-size:16px; font-weight:600; }
+  .metric span{ font-size:.72rem; color:var(--muted); margin-left:.35rem; }
+
+  .cols{ display:grid; grid-template-columns:1.7fr 1fr; gap:12mm; margin-top:1rem; }
+  h2.sec{ font-size:.72rem; text-transform:uppercase; letter-spacing:.14em; color:var(--accent); font-weight:600; margin:0 0 .6rem; padding-bottom:.25rem; border-bottom:1px solid var(--line); }
+  section+section, .side-grp+.side-grp{ margin-top:1.1rem; }
+
+  .wk{ display:flex; gap:.7rem; padding:.6rem 0; border-bottom:1px solid var(--line2); break-inside:avoid; }
+  .wk:last-child{ border-bottom:0; }
+  .wk__qr{ width:74px; height:74px; flex-shrink:0; border:1px solid var(--line); border-radius:6px; }
+  .wk__t{ font-family:var(--serif); font-size:14.5px; font-weight:600; line-height:1.2; }
+  .wk__c{ font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:var(--faint); margin:.12rem 0 .25rem; }
+  .wk__tag{ font-size:.82rem; line-height:1.4; color:var(--muted); }
+  .wk__link{ display:inline-block; margin-top:.28rem; font-size:.76rem; font-weight:600; }
+
+  .exp{ break-inside:avoid; padding:.45rem 0; border-bottom:1px solid var(--line2); }
+  .exp:last-child{ border-bottom:0; }
+  .exp__yr{ font-size:.7rem; color:var(--faint); text-transform:uppercase; letter-spacing:.05em; }
+  .exp__role{ font-family:var(--serif); font-size:13.5px; font-weight:600; margin:.05rem 0; }
+  .exp__org{ font-size:.75rem; color:var(--accent); }
+  .exp__desc{ font-size:.78rem; color:var(--muted); line-height:1.4; margin-top:.15rem; }
+
+  .caps{ display:flex; flex-wrap:wrap; gap:.3rem; }
+  .cap{ font-size:.72rem; border:1px solid var(--line); border-radius:999px; padding:.14rem .5rem; color:var(--muted); }
+
+  .li{ display:flex; justify-content:space-between; gap:.6rem; padding:.24rem 0; font-size:.78rem; border-bottom:1px dashed var(--line); }
+  .li:last-child{ border-bottom:0; }
+  .li b{ font-weight:600; color:var(--ink); }
+  .li span{ color:var(--faint); white-space:nowrap; font-size:.72rem; }
+
+  .foot{ margin-top:1.2rem; padding-top:.6rem; border-top:1px solid var(--line); font-size:.72rem; color:var(--faint); display:flex; justify-content:space-between; }
+
+  @page{ size:A4; margin:12mm; }
+  @media print{
+    html,body{ background:#fff; }
+    .no-print{ display:none !important; }
+    .sheet{ width:auto; min-height:0; margin:0; padding:0; box-shadow:none; }
+    a{ color:var(--accent); }
+  }
+</style>
+</head>
+<body>
+  <div class="bar no-print">
+    <b>Ritesh Kumar — Portfolio one-pager</b>
+    <div class="bar__r">
+      <span class="hint">Designed for A4 · click Download, then choose “Save as PDF”.</span>
+      <button id="dl" type="button">Download PDF ↓</button>
+    </div>
+  </div>
+  <main id="sheet" class="sheet"><div class="loading">Building your one-pager from your live content…</div></main>
+
+  <script>
+  (function () {
+    "use strict";
+    var NL = String.fromCharCode(10);
+    var SITE = "https://riteshk.work";
+    var NAME = "Ritesh Kumar";
+
+    function esc(s) {
+      return String(s == null ? "" : s).split("&").join("&amp;").split("<").join("&lt;").split(">").join("&gt;").split('"').join("&quot;");
+    }
+    // strip the site's authoring markup: [[Name]], **bold**, *italic*
+    function md(s) {
+      s = String(s == null ? "" : s);
+      s = s.split("[[").join("").split("]]").join("");
+      s = s.split("**").join("").split("*").join("");
+      return s;
+    }
+    function plain(s) { return md(s).split(NL).join(" "); }
+    function nobr(url) { return String(url || "").split("https://").join("").split("http://").join(""); }
+    function qr(url, px) { return "https://api.qrserver.com/v1/create-qr-code/?margin=0&size=" + px + "x" + px + "&data=" + encodeURIComponent(url); }
+
+    function render(d) {
+      var c = d.contact || {}, L = d.landing || {};
+      var work = (d.work || []).filter(function (w) { return w && !w.hidden && !w.encWork; }).slice(0, 4);
+      var highs = (d.highlights || []).slice(0, 6);
+      var caps = d.capabilities || [];
+      var path = d.path || [];
+      var rec = d.recognition || [];
+      var edu = d.education || [];
+
+      // header contact links
+      var links = "";
+      if (c.email) links += '<a href="mailto:' + esc(c.email) + '">' + esc(c.email) + "</a>";
+      if (c.phone) links += '<a href="tel:' + esc(c.phoneRaw || c.phone) + '">' + esc(c.phone) + "</a>";
+      if (c.linkedin) links += '<a href="' + esc(c.linkedin) + '"><span>in/</span>riteshkumarhk</a>';
+      links += '<a href="' + SITE + '">' + esc(nobr(SITE)) + "</a>";
+
+      var head =
+        '<header class="hd"><div class="hd__l">' +
+          '<div class="hd__name">' + esc(NAME) + "</div>" +
+          '<div class="hd__eyebrow">' + esc(plain(L.eyebrow || "Product Design")) + (L.domains ? " · " + esc(plain(L.domains)) : "") + "</div>" +
+          '<div class="hd__loc">' + esc(plain(L.presence || "")) + "</div>" +
+        "</div><div class=\"hd__r\">" + links + "</div></header>";
+
+      var lede =
+        '<div class="lede">' +
+          '<div class="lede__head">' + esc(md(L.statement || "")).split(NL).join(" ") + "</div>" +
+          (L.intro ? '<div class="lede__sub">' + esc(plain(L.intro)) + "</div>" : "") +
+        "</div>";
+
+      var metrics = highs.length ? '<div class="metrics">' + highs.map(function (h) {
+        return '<span class="metric"><b>' + esc(h.value || "") + "</b><span>" + esc(h.label || "") + "</span></span>";
+      }).join("") + "</div>" : "";
+
+      var wk = work.map(function (w) {
+        var url = SITE + "/work/" + w.id;
+        var one = plain((w.study && w.study.tagline) || w.desc || "");
+        return '<div class="wk"><img class="wk__qr" src="' + qr(url, 150) + '" alt="Scan to open case study" loading="lazy">' +
+          '<div class="wk__b"><div class="wk__t">' + esc(w.title || "") + "</div>" +
+          (w.client ? '<div class="wk__c">' + esc(w.client) + "</div>" : "") +
+          '<div class="wk__tag">' + esc(one) + "</div>" +
+          '<a class="wk__link" href="' + url + '">View the live case study →</a></div></div>';
+      }).join("");
+
+      var exp = path.map(function (p) {
+        return '<div class="exp"><div class="exp__yr">' + esc(plain(p.years || "")) + "</div>" +
+          '<div class="exp__role">' + esc(plain(p.role || "")) + "</div>" +
+          '<div class="exp__org">' + esc(plain(p.org || "")) + "</div>" +
+          (p.desc ? '<div class="exp__desc">' + esc(plain(p.desc)) + "</div>" : "") + "</div>";
+      }).join("");
+
+      var capsHtml = caps.length ? '<div class="caps">' + caps.map(function (x) { return '<span class="cap">' + esc(plain(x)) + "</span>"; }).join("") + "</div>" : "";
+      var recHtml = rec.map(function (r) { return '<div class="li"><b>' + esc(plain(r.title || "")) + "</b><span>" + esc(plain(r.meta || "")) + "</span></div>"; }).join("");
+      var eduHtml = edu.map(function (r) { return '<div class="li"><b>' + esc(plain(r.title || "")) + "</b><span>" + esc(plain(r.meta || "")) + "</span></div>"; }).join("");
+
+      var body =
+        '<div class="cols"><section class="col-main">' +
+          '<h2 class="sec">Selected work</h2>' + wk +
+          '<section><h2 class="sec">Experience</h2>' + exp + "</section>" +
+        "</section><aside class=\"col-side\">" +
+          '<div class="side-grp"><h2 class="sec">Capabilities</h2>' + capsHtml + "</div>" +
+          (recHtml ? '<div class="side-grp"><h2 class="sec">Recognition</h2>' + recHtml + "</div>" : "") +
+          (eduHtml ? '<div class="side-grp"><h2 class="sec">Education</h2>' + eduHtml + "</div>" : "") +
+        "</aside></div>";
+
+      var foot = '<div class="foot"><span>Scan any code — or tap a link — to view the live, interactive case study.</span><span>' + esc(nobr(SITE)) + "</span></div>";
+
+      document.getElementById("sheet").innerHTML = head + lede + metrics + body + foot;
+    }
+
+    fetch("content.json").then(function (r) { return r.json(); }).then(render).catch(function () {
+      document.getElementById("sheet").innerHTML = '<div class="loading">Couldn\u2019t load content.json. Open this page from your site (riteshk.work/onepager.html) or the local dev server.</div>';
+    });
+    var dl = document.getElementById("dl");
+    if (dl) dl.addEventListener("click", function () { window.print(); });
+  })();
+  </script>
+</body>
+</html>
