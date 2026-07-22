@@ -2321,15 +2321,15 @@
             "heading": "",
             "items": [
               {
-                "src": "",
+                "src": "/assets/uploads/9bf88ef87e44fcc5b8e4fd6a24fcba205c2189ed8892991c6775925b346b938c.png",
                 "caption": ""
               },
               {
-                "src": "",
+                "src": "/assets/uploads/941f6d08f3ffd02c2134f22b79b36eef5c0d932029388d0ec27dfaaa06705285.png",
                 "caption": ""
               },
               {
-                "src": "",
+                "src": "/assets/uploads/89852fe5afd71ae5fcf4e1f82b6c0d22a46bf75663a5fd059a1dae7898debc1b.png",
                 "caption": ""
               }
             ],
@@ -2352,8 +2352,9 @@
             "heading": "",
             "items": [
               {
-                "src": "",
-                "caption": ""
+                "src": "/assets/uploads/bc482364bc00fb7be7b327d53e938357d7ad723f9762d96ddcbfd753e64047dd.mp4",
+                "caption": "",
+                "controls": true
               }
             ],
             "sep": false
