@@ -395,6 +395,18 @@
     var base = baseData();
     if (!base || !Array.isArray(base.work)) return { ok: false, reason: "no-data" };
     var data = JSON.parse(JSON.stringify(base));
+    // The Design Journey is an owner-only presentation aid kept in the PRIVATE local draft
+    // (it's intentionally not part of the public content.json). Present mode is entered from a
+    // normal page load, which renders the published data — so pull the latest journey straight
+    // from the draft here, letting the owner present it without publishing it publicly.
+    try {
+      var draftRaw = localStorage.getItem(DRAFT_KEY);
+      if (draftRaw) {
+        var dj = (JSON.parse(draftRaw) || {}).journey;
+        var djHas = dj && Array.isArray(dj.chapters) && dj.chapters.some(function (c) { return c && c.entries && c.entries.some(function (e) { return e && (e.title || e.body || (e.images && e.images.length) || e.period); }); });
+        if (djHas) data.journey = dj;
+      }
+    } catch (e) { /* ignore bad draft */ }
     var ids = [], hadProtected = 0, unlocked = 0;
     for (var idx = 0; idx < data.work.length; idx++) {
       var w = data.work[idx];
