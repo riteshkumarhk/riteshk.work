@@ -250,7 +250,8 @@
 .jrn__img[data-jzoom] { cursor: zoom-in; }
 
 /* ---------- Path-section CTA (lives on the main page) ---------- */
-.path__cta { margin-top: clamp(1.6rem, 4vw, 2.6rem); display: flex; }
+.path__cta { margin-top: clamp(1.4rem, 3vw, 2.2rem); display: flex; }
+.path__cta:empty { display: none; }
 .path__journey {
   display: inline-flex;
   align-items: center;
