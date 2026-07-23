@@ -160,7 +160,7 @@
 
     set("stats", (data.highlights || []).slice(0, 8).map(highlightEl).join(""));
 
-    set("cases", (data.work || []).filter((w) => w.featured && !w.encWork && !w.hidden).slice(0, 6).map(caseEl).join(""));
+    set("cases", (data.work || []).filter((w) => presentActive ? !w.encWork : (w.featured && !w.encWork && !w.hidden)).slice(0, presentActive ? 999 : 6).map(caseEl).join(""));
 
     set("capsList", caps.map((c) => '<li data-reveal>' + esc(c) + "</li>").join(""));
 
@@ -220,6 +220,7 @@
   /* ---------- special (curated) views ---------- */
   const SV_KEY = "rk:sv:active";
   let DATA = null;
+  let presentActive = false;
   function baseData() { return (window.RK && window.RK.data) || DATA; }
 
   function svById(id) {
@@ -367,6 +368,72 @@
     document.body.classList.remove("has-sv");
   }
 
+  /* ---------- present mode (owner) ----------
+     One-click: decrypt every locked section + hidden project with the owner
+     recovery passphrase, show ALL case studies as cards fully unlocked, in the
+     normal viewer (never the editor). Ephemeral: a reload clears it. */
+  var RK_PRESENT_ACTIVE = "rk:present:active";
+  var RK_PRESENT_IDS = "rk:present:ids";
+  function rkHasProtected() {
+    var b = baseData();
+    if (!b || !Array.isArray(b.work)) return false;
+    return b.work.some(function (w) {
+      if (w.encWork && w.enc && w.enc.wraps && w.enc.wraps.owner) return true;
+      var st = w.study;
+      return !!(st && st.enc && st.enc.wraps && st.enc.wraps.owner);
+    });
+  }
+  async function presentAll(recovery) {
+    var base = baseData();
+    if (!base || !Array.isArray(base.work)) return { ok: false, reason: "no-data" };
+    var data = JSON.parse(JSON.stringify(base));
+    var ids = [], hadProtected = 0, unlocked = 0;
+    for (var idx = 0; idx < data.work.length; idx++) {
+      var w = data.work[idx];
+      var wwrap = w.encWork && w.enc && w.enc.wraps && w.enc.wraps.owner;
+      if (wwrap) {
+        hadProtected++;
+        try { var sek = await rkUnwrapSek(recovery, wwrap); var full = await rkDecWithSek(sek, w); await rkResolveEncImages(full, sek); data.work[idx] = full; rkMarkUnlocked(full.id); ids.push(full.id); unlocked++; } catch (e) {}
+        continue;
+      }
+      var st = w.study;
+      var swrap = st && st.enc && st.enc.wraps && st.enc.wraps.owner;
+      if (swrap) {
+        hadProtected++;
+        try { var sek2 = await rkUnwrapSek(recovery, swrap); if (await rkDecryptStudyBlocks(st, sek2)) { rkMarkUnlocked(w.id); ids.push(w.id); unlocked++; } } catch (e) {}
+      }
+    }
+    if (hadProtected && !unlocked) return { ok: false, reason: "pass" };
+    try { sessionStorage.setItem(RK_PRESENT_IDS, JSON.stringify(ids)); sessionStorage.setItem(RK_PRESENT_ACTIVE, "1"); } catch (e) {}
+    if (window.RK) window.RK.data = data;
+    DATA = data;
+    presentActive = true;
+    render(data);
+    revealAll();
+    showPresentBanner();
+    return { ok: true, unlocked: unlocked, total: data.work.length };
+  }
+  function rkClearPresent() {
+    try {
+      var ids = JSON.parse(sessionStorage.getItem(RK_PRESENT_IDS) || "[]");
+      (ids || []).forEach(function (id) { sessionStorage.removeItem(RK_UNLOCK_PREFIX + id); });
+    } catch (e) {}
+    try { sessionStorage.removeItem(RK_PRESENT_IDS); sessionStorage.removeItem(RK_PRESENT_ACTIVE); } catch (e) {}
+  }
+  function exitPresent() { rkClearPresent(); location.reload(); }
+  function showPresentBanner() {
+    removeSvBanner();
+    var b = document.createElement("div");
+    b.className = "sv-banner present-banner";
+    b.innerHTML =
+      '<span class="sv-banner__dot"></span>' +
+      '<span class="sv-banner__txt">Presenting all work \u2014 fully unlocked</span>' +
+      '<button class="sv-banner__exit" type="button">Exit \u2715</button>';
+    b.querySelector(".sv-banner__exit").addEventListener("click", exitPresent);
+    document.body.appendChild(b);
+    document.body.classList.add("has-sv");
+  }
+
   /* ---------- data loading ---------- */
   // Fast, stable signature of the published content so the admin can tell when a
   // saved draft is stale (i.e. content.json changed under it) and discard it.
@@ -420,7 +487,13 @@
       svById: svById,
       svExpired: svExpired,
       svDaysLeft: svDaysLeft,
+      presentAll: presentAll,
+      exitPresent: exitPresent,
+      rkHasProtected: rkHasProtected,
     });
+
+    // Present mode never survives a reload (the passphrase isn't kept), so clear any stale flags.
+    try { if (sessionStorage.getItem(RK_PRESENT_ACTIVE)) rkClearPresent(); } catch (e) {}
 
     // If a curated view is active (e.g. after a refresh), render it as the initial view.
     let initial = data, activeSv = null;
