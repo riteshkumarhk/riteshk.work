@@ -258,11 +258,31 @@
     var pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: rkUnb64(e.iv) }, key, rkUnb64(e.ct));
     return JSON.parse(new TextDecoder().decode(pt));
   }
+  async function rkDecBytes(sekBytes, ivB64, ctBytes) {
+    var key = await rkImportSek(sekBytes);
+    var pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: rkUnb64(ivB64) }, key, ctBytes);
+    return new Uint8Array(pt);
+  }
+  // Fetch each "rkenc:" protected image, decrypt it with the section key, and swap in a
+  // blob: URL so it renders. Runs right after a ticket unlock, in place on the data.
+  async function rkResolveEncImages(node, sekBytes) {
+    var targets = [];
+    (function walk(o) { if (!o || typeof o !== "object") return; for (var k in o) { var v = o[k]; if (typeof v === "string") { if (/^rkenc:/.test(v)) targets.push({ o: o, k: k }); } else if (v && typeof v === "object") walk(v); } })(node);
+    for (var i = 0; i < targets.length; i++) {
+      var o = targets[i].o, k = targets[i].k;
+      try {
+        var meta = JSON.parse(atob(o[k].slice(6)));
+        var res = await fetch(meta.p); if (!res.ok) continue;
+        var bytes = await rkDecBytes(sekBytes, meta.iv, new Uint8Array(await res.arrayBuffer()));
+        o[k] = URL.createObjectURL(new Blob([bytes], { type: meta.m || "application/octet-stream" }));
+      } catch (e) { /* leave as rkenc: */ }
+    }
+  }
   function rkMarkUnlocked(id) { try { sessionStorage.setItem(RK_UNLOCK_PREFIX + id, "1"); } catch (e) {} }
   async function rkDecryptStudyBlocks(st, sek) {
     if (!st || !Array.isArray(st.blocks)) return false;
     var out = st.blocks.slice(), any = false;
-    for (var i = 0; i < out.length; i++) { var b = out[i]; if (b && b.encStub && b.iv && b.ct) { try { out[i] = await rkDecWithSek(sek, b); any = true; } catch (e) { return false; } } }
+    for (var i = 0; i < out.length; i++) { var b = out[i]; if (b && b.encStub && b.iv && b.ct) { try { out[i] = await rkDecWithSek(sek, b); await rkResolveEncImages(out[i], sek); any = true; } catch (e) { return false; } } }
     if (any) st.blocks = out;
     return any;
   }
@@ -277,7 +297,7 @@
       var w = data.work[idx];
       var wtkt = w.encWork && w.enc && w.enc.wraps && w.enc.wraps.tickets && w.enc.wraps.tickets[sv.id];
       if (wtkt) {
-        try { var sek = await rkUnwrapSek(code, wtkt); var full = await rkDecWithSek(sek, w); data.work[idx] = full; rkMarkUnlocked(full.id); } catch (e) {}
+        try { var sek = await rkUnwrapSek(code, wtkt); var full = await rkDecWithSek(sek, w); await rkResolveEncImages(full, sek); data.work[idx] = full; rkMarkUnlocked(full.id); } catch (e) {}
         continue;
       }
       var st = w.study;

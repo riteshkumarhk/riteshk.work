@@ -192,6 +192,17 @@
     var raw = await crypto.subtle.decrypt({ name: "AES-GCM", iv: rkUnb64(wrap.iv) }, key, rkUnb64(wrap.ct));
     return new Uint8Array(raw);
   }
+  // Encrypt/decrypt raw bytes with a SEK (protected media hosted as its own .enc file).
+  async function rkEncBytes(sekBytes, bytes) {
+    var key = await rkImportSek(sekBytes), iv = crypto.getRandomValues(new Uint8Array(12));
+    var ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, bytes);
+    return { iv: rkB64(iv), ct: new Uint8Array(ct) };
+  }
+  async function rkDecBytes(sekBytes, ivB64, ctBytes) {
+    var key = await rkImportSek(sekBytes);
+    var pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: rkUnb64(ivB64) }, key, ctBytes);
+    return new Uint8Array(pt);
+  }
 
   function getPath(obj, path) {
     return path.split(".").reduce((o, k) => (o == null ? o : o[k]), obj);
@@ -1720,7 +1731,7 @@
     catch (e) { recoveryPassCache = null; status("That recovery passphrase didn\u2019t unlock this project."); return; }
     try {
       const out = st.blocks.slice();
-      for (let k = 0; k < out.length; k++) { const bk = out[k]; if (bk && bk.encStub && bk.iv && bk.ct) out[k] = await rkDecWithSek(sek, bk); }
+      for (let k = 0; k < out.length; k++) { const bk = out[k]; if (bk && bk.encStub && bk.iv && bk.ct) { out[k] = await rkDecWithSek(sek, bk); await rkResolveEncToDataUri(out[k], sek); } }
       st.blocks = out;
     } catch (e) { status("Couldn\u2019t decrypt the protected sections."); return; }
     saveDraft(true); renderL2();
@@ -1735,7 +1746,7 @@
     const recovery = await ensureRecoveryPass();
     if (recovery === null) return;
     let full;
-    try { const sek = await rkUnwrapSek(recovery, wrap); full = await rkDecWithSek(sek, stub); }
+    try { const sek = await rkUnwrapSek(recovery, wrap); full = await rkDecWithSek(sek, stub); await rkResolveEncToDataUri(full, sek); }
     catch (e) { recoveryPassCache = null; status("That recovery passphrase didn\u2019t unlock this project."); return; }
     data.work[i] = full;
     saveDraft(true); renderBody();
@@ -3076,13 +3087,91 @@
 
   // Build the JSON to publish: auto-style, then clone and encrypt every plaintext
   // Locked block per project, wrapping its key for recovery + pass + curating tickets.
-  async function buildPublishJson() {
+  async function buildPublishJson(token) {
     const styled = autoStyleLanding(false);
     if (styled) { if (activeTab === "landing") renderBody(); apply(true); }
     const pubData = JSON.parse(JSON.stringify(data));
-    await inlineProtectedImages(pubData);     // pull any hosted NDA/hidden image inline so it encrypts, not a public file
-    await encryptLockedForPublish(pubData);
+    // With a token, protected images are encrypted into their own /assets/protected/<hash>.enc
+    // files (content.json stays tiny). Without one (manual publish), fall back to inlining them.
+    if (!token) await inlineProtectedImages(pubData);
+    await encryptLockedForPublish(pubData, token || null);
     return JSON.stringify(pubData, null, 2);
+  }
+  // ---------- per-image protected media: encrypt each image and host it as its own
+  //   /assets/protected/<hash>.enc file, so content.json never bloats with big media. ----------
+  function isBareUploadPath(v) {
+    return typeof v === "string" && v.indexOf(" ") === -1 &&
+      (v.indexOf("/assets/uploads/") === 0 || v.indexOf("assets/uploads/") === 0);
+  }
+  async function getImageBytes(ref) {
+    if (/^data:/i.test(ref)) {
+      var parts = parseDataUri(ref); if (!parts) return null;
+      var rb = parts.base64 ? parts.data : b64(decodeURIComponent(parts.data));
+      return { bytes: b64ToBytes(rb), mime: parts.mime || "application/octet-stream" };
+    }
+    var url = ref.charAt(0) === "/" ? ref : "/" + ref;
+    var res = await fetch(url); if (!res.ok) return null;
+    var blob = await res.blob();
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), mime: blob.type || "application/octet-stream" };
+  }
+  async function hostEncFile(ctBytes, token) {
+    var hash = await sha256Hex(ctBytes);
+    var repoPath = "assets/protected/" + hash + ".enc";
+    var put;
+    try { put = await fetch(GH_FILE_API + repoPath, { method: "PUT", headers: ghHeaders(token), body: JSON.stringify({ message: "Add " + hash + ".enc via admin", content: rkB64(ctBytes), branch: GH_BRANCH }) }); }
+    catch (e) { var ne = new Error("network"); ne.network = 1; throw ne; }
+    if (put.status === 422) return "/" + repoPath;
+    if (put.status === 401 || put.status === 403) { var ae = new Error("auth"); ae.auth = 1; throw ae; }
+    if (!put.ok) { var j = await put.json().catch(function () { return {}; }); var er = new Error((j && j.message) || ("HTTP " + put.status)); er.http = put.status; if (put.status === 413 || /too large|too big|exceed/i.test(er.message)) er.tooLarge = 1; throw er; }
+    return "/" + repoPath;
+  }
+  // Encrypt every image/video inside `node` with `sek`, host each as an .enc file, and replace
+  // the reference with a compact "rkenc:" token that holds {path, iv, mime}. Best-effort per item.
+  async function encImagesInSubtree(node, sekBytes, token) {
+    var targets = [];
+    (function walk(o) {
+      if (!o || typeof o !== "object") return;
+      for (var k in o) {
+        var v = o[k];
+        if (typeof v === "string") {
+          if (!/^rkenc:/.test(v) && (isBareUploadPath(v) || /^data:(image|video|application)\//i.test(v))) targets.push({ o: o, k: k });
+        } else if (v && typeof v === "object") walk(v);
+      }
+    })(node);
+    var cache = {};
+    for (var i = 0; i < targets.length; i++) {
+      var o = targets[i].o, k = targets[i].k, v = o[k];
+      try {
+        if (!(v in cache)) {
+          var got = await getImageBytes(v);
+          if (!got) { cache[v] = null; }
+          else {
+            var enc = await rkEncBytes(sekBytes, got.bytes);
+            var webPath = await hostEncFile(enc.ct, token);
+            cache[v] = "rkenc:" + btoa(JSON.stringify({ p: webPath, iv: enc.iv, m: got.mime }));
+          }
+        }
+        if (cache[v]) o[k] = cache[v];
+      } catch (e) { if (e && e.auth) throw e; /* else leave the ref as-is (stays inside the encrypted blob) */ }
+    }
+  }
+  // Owner side: turn "rkenc:" refs back into viewable data: URIs (decrypt the .enc files) so
+  // protected media shows in the editor; they re-encrypt to fresh .enc files on Publish.
+  async function rkResolveEncToDataUri(node, sekBytes) {
+    var targets = [];
+    (function walk(o) {
+      if (!o || typeof o !== "object") return;
+      for (var k in o) { var v = o[k]; if (typeof v === "string") { if (/^rkenc:/.test(v)) targets.push({ o: o, k: k }); } else if (v && typeof v === "object") walk(v); }
+    })(node);
+    for (var i = 0; i < targets.length; i++) {
+      var o = targets[i].o, k = targets[i].k;
+      try {
+        var meta = JSON.parse(atob(o[k].slice(6)));
+        var res = await fetch(meta.p); if (!res.ok) continue;
+        var bytes = await rkDecBytes(sekBytes, meta.iv, new Uint8Array(await res.arrayBuffer()));
+        o[k] = "data:" + (meta.m || "application/octet-stream") + ";base64," + rkB64(bytes);
+      } catch (e) { /* leave as rkenc: */ }
+    }
   }
   // Inline (as data URIs) any hosted image referenced inside a Locked block or a
   // Hidden project, so its bytes get encrypted with that block/work rather than
@@ -3123,7 +3212,7 @@
       }
     }
   }
-  async function encryptLockedForPublish(pubData) {
+  async function encryptLockedForPublish(pubData, token) {
     var works = (pubData && pubData.work) || [];
     var svAll = (pubData.specialViews || []);
     for (var wi = 0; wi < works.length; wi++) {
@@ -3134,6 +3223,7 @@
         var wrecovery = await ensureRecoveryPass();
         if (wrecovery === null) throw { rkEnc: true, cancelled: true };
         var wsek = rkNewSek();
+        if (token) await encImagesInSubtree(w, wsek, token);
         var wenc = await rkEncWithSek(wsek, w);
         var wwraps = { owner: await rkWrapSek(wrecovery, wsek) };
         var wtks = {};
@@ -3161,7 +3251,7 @@
       var recovery = await ensureRecoveryPass();
       if (recovery === null) throw { rkEnc: true, cancelled: true };
       var sek = rkNewSek();
-      for (var pi = 0; pi < plain.length; pi++) { var idx = plain[pi]; st.blocks[idx] = await makeStub(sek, st.blocks[idx]); }
+      for (var pi = 0; pi < plain.length; pi++) { var idx = plain[pi]; if (token) await encImagesInSubtree(st.blocks[idx], sek, token); st.blocks[idx] = await makeStub(sek, st.blocks[idx]); }
       var wraps = { owner: await rkWrapSek(recovery, sek) };
       var deeper = await ensureStudyPass(w, st);
       if (rkNormPass(deeper)) wraps.pass = await rkWrapSek(deeper, sek);
@@ -3630,7 +3720,7 @@
         pubProgress(6 + Math.round((n / Math.max(1, total)) * 40), "Uploading images at full quality \u2014 " + n + " of " + total + "\u2026");
       });
       pubProgress(50, "Saving your content to GitHub\u2026");
-      const json = await buildPublishJson();
+      const json = await buildPublishJson(token);
       const jsonBytes = jsonByteLen(json);
       const fails = (hostRes && hostRes.failed) || [];
       const tooLargeFails = fails.filter(function (f) { return f.tooLarge; });
