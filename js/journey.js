@@ -74,7 +74,10 @@
       (entry.title ? '<h3 class="jrn__title">' + md(entry.title) + "</h3>" : "") +
       (entry.body ? prose(entry.body) : "") +
       cs + "</div>";
-    return '<article class="jrn__entry" data-reveal>' + meta + gallery(entry) + "</article>";
+    // NOTE: no data-reveal here — the global [data-reveal]{opacity:0} rule only clears to
+    // opacity:1 when the page's scroll observer adds .is-in, which never runs inside this
+    // fixed overlay (nor in the lite preview iframe). The overlay fades itself in instead.
+    return '<article class="jrn__entry">' + meta + gallery(entry) + "</article>";
   }
   function chapterHtml(chap, ci) {
     var entries = (chap.entries || []).filter(function (e) { return e && (e.title || e.body || (e.images && e.images.length) || e.period); });
