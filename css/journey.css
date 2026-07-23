@@ -174,6 +174,10 @@
 .jrn__prose strong, .jrn__prose b { color: var(--text); font-weight: 500; }
 .jrn__prose em, .jrn__prose i { color: var(--accent); font-style: italic; }
 .jrn__prose ul, .jrn__prose ol { margin: 0 0 .7rem; padding-left: 1.2rem; }
+/* Restore markers: the global reset (styles.css) sets `ul,ol{list-style:none}`,
+   which would otherwise leave li::marker with nothing to paint. */
+.jrn__prose ul { list-style: disc; }
+.jrn__prose ol { list-style: decimal; }
 .jrn__prose li { margin: .2rem 0; }
 .jrn__prose li::marker { color: var(--accent); }
 .jrn__prose .tdim, .jrn__prose .tdim strong, .jrn__prose .tdim b, .jrn__prose .tdim em, .jrn__prose .tdim i { color: var(--text-dim); }
