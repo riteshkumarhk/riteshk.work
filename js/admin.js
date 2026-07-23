@@ -6634,6 +6634,7 @@
   function buildMenu() {
     const theme = (window.__theme ? window.__theme.mode() : (localStorage.getItem(THEME_KEY) || "system"));
     const narrow = window.innerWidth < ADMIN_MIN;
+    const owner = !!localStorage.getItem(HASH_KEY);   // only the owner's own browser gets Present mode
     menuEl = document.createElement("div");
     menuEl.className = "cmenu";
     menuEl.innerHTML =
@@ -6653,6 +6654,7 @@
         "</div></div>" +
       '<div class="cmenu__sep"></div>' +
       '<button class="cmenu__item" data-open="special"><span class="cmenu__ico">\u25c7</span><span><b>Special view</b><i>Enter a ticket for a curated view</i></span></button>' +
+      (owner ? '<button class="cmenu__item" data-open="present"><span class="cmenu__ico">\u25b6</span><span><b>Present mode</b><i>Unlock all work for presenting, not editing</i></span></button>' : "") +
       '<button class="cmenu__item" data-open="admin"' + (narrow ? " disabled" : "") + '><span class="cmenu__ico">\u2726</span><span><b>Admin mode</b><i>' + (narrow ? "Needs a wider screen" : "Edit &amp; curate the site") + "</i></span></button>";
     document.body.appendChild(menuEl);
     positionMenu();
@@ -6700,6 +6702,7 @@
     const which = it.dataset.open;
     closeMenu();
     if (which === "special") ticketDialog();
+    else if (which === "present") presentDialog();
     else if (which === "admin") gate();
   }
 
@@ -6740,6 +6743,52 @@
   }
   function ticketArrived(sv) {
     flash("Ticket accepted \u2014 your curated projects are in the Work section below.");
+    const el = document.getElementById("work");
+    if (el && el.scrollIntoView) requestAnimationFrame(function () { try { el.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) {} });
+  }
+
+  /* ---------- present mode (owner: unlock everything to present) ---------- */
+  function presentDialog() {
+    if (!(window.RK && window.RK.presentAll)) { flash("Present mode isn't ready yet - reload and try again."); return; }
+    // Nothing protected? Just show everything unlocked, no passphrase needed.
+    if (window.RK.rkHasProtected && !window.RK.rkHasProtected()) {
+      Promise.resolve(window.RK.presentAll("")).then(function (r) { if (r && r.ok) presentArrived(r); });
+      return;
+    }
+    const modal = document.createElement("div");
+    modal.className = "pass";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">Present mode</div>' +
+      '<div class="pass__sub">Enter your recovery passphrase to open every case study fully unlocked - for presenting, not editing.</div>' +
+      '<input type="password" placeholder="Recovery passphrase" autocomplete="off" autofocus />' +
+      '<div class="pass__err"></div>' +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
+      '<button class="btn btn--primary" data-go>Present</button></div></div>';
+    document.body.appendChild(modal);
+    const inp = modal.querySelector("input");
+    const err = modal.querySelector(".pass__err");
+    const goBtn = modal.querySelector("[data-go]");
+    inp.focus();
+    const done = function () { modal.remove(); };
+    modal.querySelector("[data-cancel]").addEventListener("click", done);
+    modal.addEventListener("click", function (e) { if (e.target === modal) done(); });
+    async function submit() {
+      const val = inp.value.trim();
+      if (!val) { err.textContent = "Enter your recovery passphrase"; return; }
+      err.textContent = ""; goBtn.disabled = true;
+      const was = goBtn.textContent; goBtn.textContent = "Unlocking...";
+      let res;
+      try { res = await window.RK.presentAll(val); } catch (e) { res = { ok: false, reason: "err" }; }
+      goBtn.disabled = false; goBtn.textContent = was;
+      if (!res || !res.ok) { err.textContent = (res && res.reason === "pass") ? "That passphrase didn't unlock your protected work." : "Couldn't start present mode."; return; }
+      done();
+      presentArrived(res);
+    }
+    goBtn.addEventListener("click", submit);
+    modal.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });
+  }
+  function presentArrived(res) {
+    flash("Present mode on - every case study is unlocked. Click any project to present.");
     const el = document.getElementById("work");
     if (el && el.scrollIntoView) requestAnimationFrame(function () { try { el.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) {} });
   }
