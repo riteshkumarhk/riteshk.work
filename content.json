@@ -3706,5 +3706,301 @@
       "meta": "MNPS · 1998–2010"
     }
   ],
-  "specialViews": []
+  "specialViews": [],
+  "journey": {
+    "enabled": true,
+    "chapters": [
+      {
+        "id": "jcmrxvxx62",
+        "name": "Before the journey begins",
+        "entries": [
+          {
+            "id": "jemrxvyd1j579",
+            "period": "2008 - 2010",
+            "title": "Video Game Mod community - Mapraider",
+            "body": "<p><ul><li>Explored 2D/3D graphics software</li><li>Game engine- Unreal Development Kit</li><li>3D character design</li><li>3D level design</li></ul></p>",
+            "workId": "",
+            "layout": "showcase",
+            "images": [
+              {
+                "src": "/assets/uploads/ad288e7a320f689a8dc44b698b8ad1f4ff09bf8689bf0bb791acd911e9c05598.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/a8e28ac04d06ab3bed76dc81d5483a26da6fcbf4c83b653730a712cb2dbe05aa.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/f40d0713c9009ac31bbe511493c58aed83b0ec6d37c393110bbc9e9162394bd1.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/f32b5505791caf024a5fe740046bc0e0aff3e708ce80aac9df5c565abfe3cd1e.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/87e0675642e72da18924a5d33248997ad012495e87e6bcd673f55c6965dca7a8.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/e9becd49ad2406ecafcbd08550a06c01dfe0a07a4b13e3f642a9d01f645dfa92.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/3e6d198eb522191a6cd3377deba777e90827247671f7ffef6b5181498b0287a7.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/de88e3fdc221b40c7bd7ff10313165ceba7a33d23c865770c151d6573692cd23.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/b322af74aa4139117bf4381b74078bf5207aca72d773c9f140a2f102a8ebacd7.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/d9a68ec4d7c1839f35f5dccb7694b5145ff2324c38847e5d2c0c7f8ad3b92fdb.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/b37b9794140a95dc177c7a4939154e95cf3901115576d5cb9662d864441c72f3.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/b5c54ad6be486495779346fbc0fb4c9cd8972bbb36a3d6017ae118ef99b98c7e.png",
+                "caption": ""
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "jcmrxw1u58",
+        "name": "Tata Elxsi",
+        "entries": [
+          {
+            "id": "jemrxw2l3q358",
+            "period": "2014 - 2016",
+            "title": "iOS and Android mobile apps",
+            "body": "<ul><li>Cannon Connect (Proof of concept) </li><li>Tata Motors- Service Assistant </li></ul>",
+            "workId": "",
+            "layout": "auto",
+            "images": [
+              {
+                "src": "/assets/uploads/1ec3e8957bb37e654b334293883046d07ea1fb4700705f129b85b5c9d776667f.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/852d8cd3c190f1fe26618a52ac88b8d0c4a5e8834d98456d6e77d5bdfd903782.png",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "id": "jemrxw3s3o166",
+            "period": "2014 - 2016",
+            "title": "Cross device infotainment app",
+            "body": "Infotainment BYOD (Proof of concept)",
+            "workId": "",
+            "layout": "auto",
+            "images": [
+              {
+                "src": "/assets/uploads/4fbdb79faa91929f5c8da9862bddc0ad01914698ee85032bd4707c9e0f2dcfd5.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/3efbcadda9110665f8aab54492f6123922201d1c889715e445745fd65f6d34c9.png",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "id": "jemrxxp9ir172",
+            "period": "2014 - 2016",
+            "title": "Evoque-E concept EV",
+            "body": "<ul><li>HMI infotainment</li><li>Companion app</li><li>EV instrument cluster</li><li>Charge pad alignment</li></ul>",
+            "workId": "",
+            "layout": "auto",
+            "images": [
+              {
+                "src": "/assets/uploads/c1c6a448dd3a06af2c9613e683664f834e3ab9d278975efd66e6b43e2ae8981a.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/4411e4ca4e9ae7f3a2040b651eca23a620c8df066d6540ef50716fb8c7a55031.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/e83159db13b6a4294dd19d5f8baddd2c31feccc27ea54ef3b84f2f061fdaab11.png",
+                "caption": ""
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "jcmry0tykh",
+        "name": "Jaguar Land Rover",
+        "entries": [
+          {
+            "id": "jemry0uibh56",
+            "period": "2015 - 2018",
+            "title": "Land Rover InControl Touch Pro Duo",
+            "body": "Lower screen multi modal HMI for Land Rover vehicles 18MY and beyond staring from Velar.<div><ul><li>Terrain Response</li><li>Climate</li><li>Seats</li></ul></div>",
+            "workId": "",
+            "layout": "auto",
+            "images": [
+              {
+                "src": "/assets/uploads/545178148f36cbc53ca891fb295bbd6f3c1560cde357c442076bdc6269366c82.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/c7b791f227a2da5c5a0b964ae9eb778a1b0663d0b11cbc3eb2bc437cfa016e36.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/25f55c804f5be33004f12bb3910fbb1acef54ed8e33396893f4008ede166edfe.png",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "id": "jemry0x47k928",
+            "period": "2015 - 2018",
+            "title": "Jaguar InControl Touch Pro Duo",
+            "body": "EV HMI features for Jaguar iPace.<br><ul><li>My EV </li><li>Vehicle Preconditioning </li><li>EV Settings</li></ul>",
+            "workId": "",
+            "layout": "auto",
+            "images": [
+              {
+                "src": "/assets/uploads/1d4c074508d596f84b557113e6a5b7d0ad2bef86f81b80d6d465f4575d340796.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/d0ee79070a40987abc04531abcf84858d7a9903b60bac4e08a51db1aee4801ee.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/88e60286aae2355008ab99efbda49e34285e39aa86fca13003456a5e59daec55.png",
+                "caption": ""
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "jcmry0yy5y",
+        "name": "Microsoft Corporation ",
+        "entries": [
+          {
+            "id": "jemry0zbas282",
+            "period": "2019 - 2022",
+            "title": "Microsoft Search, Assistance and Intelligence - Answer Framework",
+            "body": "<p></p><span style=\"font-size: 0.9rem;\">Enterprise search answers across Bing and M365 products</span><p></p>",
+            "workId": "",
+            "layout": "auto",
+            "images": [
+              {
+                "src": "/assets/uploads/580886178f06af455af75447e3e8be761efd3fbd13735c2b67e8d06f0b983726.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/d8463b5baf03d222d0bbbd524368fcf15eed76c3505ba704f919e831c92a3fc8.png",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "id": "jemry1steu990",
+            "period": "2019 - 2022",
+            "title": "Microsoft Search, Assistance and Intelligence - Proactive discovery",
+            "body": "Query suggestions and implicit recommendations based on user graph",
+            "workId": "",
+            "layout": "auto",
+            "images": [
+              {
+                "src": "/assets/uploads/9b5e916792f904d7e5b470674e7be7796fe9964d39bb1da6645453a0acb586eb.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/ac4c5da32a9ff59ef27c44d4172b72ce467ebb00a5183f9f06ea3dd94b16d0c1.png",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "id": "jemry15lr5536",
+            "period": "2022 - 2023",
+            "title": "Windows 11 - Xbox Subscription Growth",
+            "body": "<p>Xbox GamePass Growth &amp;amp; Retention in WindowsXbox GamePass Growth &amp;amp; Retention in Windows</p>",
+            "workId": "w1783695671548",
+            "layout": "showcase",
+            "images": [
+              {
+                "src": "/assets/uploads/0b541d91f459eb053b851decc8f04fa7f2850772be0934c5ff7a8030bb0142fb.png",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "id": "jemry1a2lj731",
+            "period": "2022 - 2023",
+            "title": "Windows 11 - Microsoft Account",
+            "body": "Microsoft account consent framework",
+            "workId": "w1783924971648",
+            "layout": "showcase",
+            "images": [
+              {
+                "src": "/assets/uploads/4b78cd5d70666a0fbb2ff349703539f797cc3fcb586ce05c8d0d1f7838da84b4.png",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "id": "jemry1f1ep635",
+            "period": "2023 - Early 2025",
+            "title": "Windows 11 - Auth & Identity",
+            "body": "Windows Hello auth experiences",
+            "workId": "w1784023223052",
+            "layout": "showcase",
+            "images": [
+              {
+                "src": "/assets/uploads/7eb61ece84a9d9608c0c955d9447e6860303bab5a7bdd55cca63d91b291415b6.png",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "id": "jemry1gpya419",
+            "period": "2023 - Early 2025",
+            "title": "Windows 11 - Auth & Identity",
+            "body": "Passkeys platform consumer and enterprise experiences",
+            "workId": "",
+            "layout": "showcase",
+            "images": [
+              {
+                "src": "/assets/uploads/eab55d747fa892de3d0489b9e123d9d461b34f83eaaad62350b88ce44d315fa0.png",
+                "caption": ""
+              }
+            ]
+          },
+          {
+            "id": "jemry1izo3573",
+            "period": "2025 - Present",
+            "title": "Microsoft AI - Edge Growth",
+            "body": "Edge Growth:<div>Onboarding and retention</div>",
+            "workId": "w1783840785203",
+            "layout": "showcase",
+            "images": [
+              {
+                "src": "/assets/uploads/648c23858b565f53dad7cbc9560898eb878dc0249ceadceb309ffd962d573553.png",
+                "caption": ""
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "eyebrow": ""
+  }
 }
