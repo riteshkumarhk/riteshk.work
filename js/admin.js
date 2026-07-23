@@ -418,7 +418,7 @@
       '<div class="imgblk__preview' + (has ? " has" : "") + '">' + (has ? '<img src="' + escAttr(previewSrc(w.image)) + '" alt="" />' : "<span>No image \u2014 the animated placeholder is shown</span>") + "</div>" +
       '<input type="text" data-list="work" data-index="' + i + '" data-field="image" value="' + escAttr(w.image || "") + '" placeholder="Paste an image URL\u2026" />' +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="img-upload" data-index="' + i + '">Upload\u2026</button>' +
-      (has ? '<button class="btn btn--ghost" data-act="img-clear" data-index="' + i + '">Remove</button>' : "") + "</div>" +
+      (has ? '<button class="btn btn--ghost" data-act="img-clear" data-index="' + i + '">Remove</button>' : "") + mediaSizeTag(w.image) + "</div>" +
       '<div class="af__label" style="margin:.7rem 0 .2rem">Or use an animated placeholder \u2014 no upload, always on-brand</div>' +
       '<div class="imgblk__plates">' + plates + "</div>" +
       itemField("work", i, "plateTag", "Tag on the cover / plate", { hint: "the small label shown on the card & cover, e.g. \u201cFirst Run Experience\u201d" }) +
@@ -1491,7 +1491,7 @@
       var v = it[key] || "";
       return '<div class="af"><label class="af__label">' + label + '</label><input type="text" ' + da + ' value="' + escAttr(v) + '" placeholder="Paste a URL\u2026" />' +
         '<div class="imgblk__row"><button class="btn btn--ghost" data-act="item-upload" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">Upload\u2026</button>' +
-        (v ? '<button class="btn btn--ghost" data-act="item-clear" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">Remove</button>' : "") + "</div></div>";
+        (v ? '<button class="btn btn--ghost" data-act="item-clear" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">Remove</button>' : "") + mediaSizeTag(v) + "</div></div>";
     }
     if (kind === "imgsize") return mediaSizeCtl(i, j, k, it);
     if (kind === "isohc") {
@@ -1690,7 +1690,7 @@
         richCell(i, j, k, c, "body", "Body") +
         '<div class="af"><label class="af__label">Image (optional)</label><input type="text" data-cell="' + i + '" data-cbindex="' + j + '" data-citem="' + k + '" data-ccell="' + c + '" data-cfield="src" value="' + escAttr(img) + '" placeholder="Paste a URL\u2026" />' +
         '<div class="imgblk__row"><button class="btn btn--ghost" data-act="cell-upload" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '">Upload\u2026</button>' +
-        (img ? '<button class="btn btn--ghost" data-act="cell-clear" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '">Remove</button>' : "") +
+        (img ? '<button class="btn btn--ghost" data-act="cell-clear" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '">Remove</button>' : "") + mediaSizeTag(img) +
         "</div></div></div>";
     }).join("");
     var foot = it.cells.length < 5
@@ -1702,7 +1702,7 @@
     var b = data.work[i].study.blocks[j]; var v = b[field] || "";
     return '<div class="af"><label class="af__label">' + label + '</label><input type="text" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '" value="' + escAttr(v) + '" placeholder="Paste a URL\u2026" />' +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="bfield-upload" data-index="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '">Upload\u2026</button>' +
-      (v ? '<button class="btn btn--ghost" data-act="bfield-clear" data-index="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '">Remove</button>' : "") + "</div>" +
+      (v ? '<button class="btn btn--ghost" data-act="bfield-clear" data-index="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '">Remove</button>' : "") + mediaSizeTag(v) + "</div>" +
       (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
   }
 
@@ -2584,6 +2584,7 @@
   function renderBody() {
     body.innerHTML = sections[activeTab]();
     root.querySelectorAll(".adm__tab").forEach((t) => t.classList.toggle("is-active", t.dataset.tab === activeTab));
+    resolveMediaSizes(body);
   }
 
   /* ---------- L2 case-study editor + auto live preview ---------- */
@@ -2624,6 +2625,7 @@
     const w = data.work[i];
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
     l2body.innerHTML = studyEditor(w, i);
+    resolveMediaSizes(l2body);
     body.hidden = true;
     l2.hidden = false;
     if (root) root.classList.add("is-l2");
@@ -2638,6 +2640,7 @@
     const w = data.work[openStudy];
     l2body.innerHTML = studyEditor(w, openStudy);
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
+    resolveMediaSizes(l2body);
     previewProject(w.id, true);
   }
   function closeL2(opts) {
@@ -3313,6 +3316,50 @@
   function rawUrlFor(path) { return GH_RAW + String(path).replace(/^\//, ""); }
   // In the admin preview a hosted path can't load from localhost until it's pulled —
   // so show the in-memory bytes (instant) or the raw GitHub URL (works right after hosting).
+  var mediaSizeCache = {};
+  function fmtBytes(n) {
+    if (n == null || n < 0) return "";
+    if (n < 1024) return n + " B";
+    if (n < 1048576) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB";
+    return (n / 1048576).toFixed(1) + " MB";
+  }
+  function b64ByteLen(uri) {
+    var comma = (uri || "").indexOf(","); if (comma < 0) return 0;
+    var meta = uri.slice(0, comma), s = uri.slice(comma + 1);
+    if (/;base64/i.test(meta)) { var pad = (s.match(/=+$/) || [""])[0].length; return Math.max(0, Math.floor(s.length * 3 / 4) - pad); }
+    return s.length;
+  }
+  function mediaSizeSync(v) {
+    if (!v || typeof v !== "string") return null;
+    if (/^data:/i.test(v)) return b64ByteLen(v);
+    if (hostedBytes[v]) return b64ByteLen(hostedBytes[v]);
+    if (v in mediaSizeCache) return mediaSizeCache[v];
+    return null;
+  }
+  // A small file-size badge for a media value. Hosted files resolve their byte size lazily
+  // (a HEAD request) after render via resolveMediaSizes, so the owner can see what's heavy.
+  function mediaSizeTag(v) {
+    if (!v || typeof v !== "string") return "";
+    var isData = /^data:/i.test(v);
+    if (!isData && v.indexOf(UPLOAD_DIR) === -1) return "";
+    var s = mediaSizeSync(v);
+    var big = s != null && s >= 4 * 1048576;
+    var attr = (s == null && !isData) ? ' data-msize="' + escAttr(v) + '" data-msize-pending="1"' : "";
+    return '<span class="af__msize' + (big ? " af__msize--big" : "") + '"' + attr + ' title="File size on your published site">' + (s == null ? "\u2026" : fmtBytes(s)) + "</span>";
+  }
+  function resolveMediaSizes(scope) {
+    var els = [].slice.call((scope || document).querySelectorAll(".af__msize[data-msize-pending]"));
+    els.forEach(function (el) {
+      var v = el.getAttribute("data-msize"); el.removeAttribute("data-msize-pending");
+      if (!v || !isHostedPath(v)) { el.textContent = ""; return; }
+      fetch(v, { method: "HEAD", cache: "force-cache" }).then(function (r) {
+        var len = (r && r.ok) ? +(r.headers.get("content-length") || 0) : 0;
+        if (len > 0) { mediaSizeCache[v] = len; el.textContent = fmtBytes(len); if (len >= 4 * 1048576) el.classList.add("af__msize--big"); }
+        else { el.textContent = ""; }
+      }).catch(function () { el.textContent = ""; });
+    });
+  }
+
   function previewSrc(v) {
     if (!isHostedPath(v)) return v;
     if (/\.(mp4|webm|mov|m4v|ogv)$/i.test(v)) return hostedVideoSrc(v);
