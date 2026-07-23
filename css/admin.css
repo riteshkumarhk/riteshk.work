@@ -1083,6 +1083,8 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .jimg__preview span { font-size: .72rem; color: var(--text-faint); }
 .jimg__preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .jimg__preview:not(.has) { aspect-ratio: auto; min-height: 42px; }
+.jlogo__preview { aspect-ratio: auto; min-height: 46px; padding: .5rem .7rem; }
+.jlogo__preview img { width: auto; max-width: 100%; height: auto; max-height: 58px; object-fit: contain; }
 
 .atsv__pri { font-family: var(--mono, monospace); font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; padding: .08rem .35rem; border-radius: 4px; border: 1px solid var(--line); color: var(--text-dim); }
 .atsv__pri--high { color: var(--p-high); border-color: var(--p-high); }
