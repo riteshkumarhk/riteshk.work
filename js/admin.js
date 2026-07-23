@@ -2737,7 +2737,12 @@
       '<span class="jchap__count" title="entries">' + entries.length + '</span>' +
       '<span class="card__ops"><button class="iconbtn iconbtn--danger" data-act="jchap-del" data-jc="' + c + '" title="Remove chapter">\u2715</button></span>' +
       '<span class="study__block-chev">\u203a</span></div>' +
-      '<div class="jchap__body">' + (entriesHtml || '<div class="rep__empty">No entries yet.</div>') +
+      '<div class="jchap__body">' +
+      '<div class="af"><label class="af__label">Company logo (optional)</label>' +
+      '<div class="jimg__preview jlogo__preview' + (chap.logo ? " has" : "") + '">' + (chap.logo ? '<img src="' + escAttr(previewSrc(chap.logo)) + '" alt="" />' : "<span>No logo</span>") + "</div>" +
+      '<div class="imgblk__row"><button class="btn btn--ghost" data-act="jlogo-upload" data-jc="' + c + '">' + (chap.logo ? "Replace\u2026" : "Upload\u2026") + "</button>" +
+      (chap.logo ? '<button class="btn btn--ghost" data-act="jlogo-clear" data-jc="' + c + '">Clear</button>' : "") + mediaSizeTag(chap.logo) + "</div></div>" +
+      (entriesHtml || '<div class="rep__empty">No entries yet.</div>') +
       '<button class="btn btn--add" data-act="jentry-add" data-jc="' + c + '">+ Add entry</button></div></div>';
   }
   function journeyEditor() {
@@ -3148,6 +3153,13 @@
       return;
     }
     if (act === "jimg-del") { var jdd = journeyData().chapters[+b.dataset.jc], jde = jdd && jdd.entries[+b.dataset.je]; if (jde && jde.images) { jde.images.splice(+b.dataset.jk, 1); saveDraft(true); renderJourneyEditor(); } return; }
+    if (act === "jlogo-upload") {
+      var jlc = journeyData().chapters[+b.dataset.jc];
+      if (!jlc) return;
+      pickMedia(function (uri) { jlc.logo = uri; saveDraft(true); renderJourneyEditor(); });
+      return;
+    }
+    if (act === "jlogo-clear") { var jlcc = journeyData().chapters[+b.dataset.jc]; if (jlcc) { jlcc.logo = ""; saveDraft(true); renderJourneyEditor(); } return; }
     if (act === "study-pick") { sectionPicker(i); return; }
     if (act === "study-blockadd") { sectionPicker(i, +b.dataset.bindex); return; }
     if (act === "study-decrypt") { decryptStudyForEdit(i); return; }

@@ -145,6 +145,7 @@
 .jrn__chap-head { display: flex; align-items: center; gap: 1rem; margin-bottom: clamp(1.4rem, 3vw, 2.2rem); }
 .jrn__chap-rule { flex: 0 0 auto; width: 30px; height: 2px; background: var(--accent); }
 .jrn__chap-name { font-family: var(--serif); font-size: clamp(1.4rem, 3vw, 2rem); line-height: 1.1; color: var(--text); margin: 0; }
+.jrn__chap-logo { margin-left: auto; flex: 0 0 auto; width: auto; max-width: min(240px, 40%); max-height: clamp(34px, 5vw, 56px); object-fit: contain; }
 
 /* ---------- entry: meta (left) + gallery (right), stacks on narrow ---------- */
 .jrn__entry {

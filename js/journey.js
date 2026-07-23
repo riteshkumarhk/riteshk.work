@@ -83,7 +83,9 @@
     var entries = (chap.entries || []).filter(function (e) { return e && (e.title || e.body || (e.images && e.images.length) || e.period); });
     if (!entries.length) return "";
     return '<section class="jrn__chap" id="jrnc-' + ci + '" data-jchap="' + ci + '">' +
-      '<header class="jrn__chap-head"><span class="jrn__chap-rule"></span><h2 class="jrn__chap-name">' + esc(chap.name || "Chapter " + (ci + 1)) + "</h2></header>" +
+      '<header class="jrn__chap-head"><span class="jrn__chap-rule"></span><h2 class="jrn__chap-name">' + esc(chap.name || "Chapter " + (ci + 1)) + "</h2>" +
+      (chap.logo ? '<img class="jrn__chap-logo" src="' + esc(chap.logo) + '" alt="' + esc((chap.name || "Chapter") + " logo") + '" loading="lazy" draggable="false" />' : "") +
+      "</header>" +
       entries.map(function (e, ei) { return entryHtml(e, ci, ei); }).join("") + "</section>";
   }
   function chapterRange(chap) {
