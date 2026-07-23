@@ -3712,13 +3712,13 @@
     "chapters": [
       {
         "id": "jcmrxvxx62",
-        "name": "Before the journey begins",
+        "name": "Before the journey begin",
         "entries": [
           {
             "id": "jemrxvyd1j579",
             "period": "2008 - 2010",
             "title": "Video Game Mod community - Mapraider",
-            "body": "<p><ul><li>Explored 2D/3D graphics software</li><li>Game engine- Unreal Development Kit</li><li>3D character design</li><li>3D level design</li></ul></p>",
+            "body": "<p></p><ul><li>Explored 2D/3D graphics software</li><li>Game engine- Unreal Development Kit</li><li>3D character design</li><li>3D level design</li></ul><p><br></p>",
             "workId": "",
             "layout": "showcase",
             "images": [
