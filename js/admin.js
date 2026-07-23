@@ -2624,8 +2624,8 @@
     var entries = (j.chapters || []).reduce(function (n, c) { return n + ((c && c.entries) ? c.entries.length : 0); }, 0);
     return '<div class="card jrncard">' +
       '<div class="adm__sec-title" style="margin-top:.2rem">Design Journey</div>' +
-      '<div class="adm__sec-note">An immersive, scrollable timeline of your whole journey \u2014 chapters (Microsoft / Jaguar Land Rover / \u2026) each with dated entries, rich descriptions and images. Adds a \u201cView full journey\u201d button to this Path section.</div>' +
-      '<label class="chk jrncard__chk"><input type="checkbox" data-act="journey-toggle"' + (on ? " checked" : "") + " /> Show the journey on my site</label>" +
+      '<div class="adm__sec-note">An immersive, scrollable timeline of your whole journey \u2014 chapters (Microsoft / Jaguar Land Rover / \u2026) each with dated entries, rich descriptions and images. It\u2019s an owner-only presentation aid: the \u201cView full journey\u201d button appears only in Present mode (\u22ef menu \u2192 Present mode), not on the public site.</div>' +
+      '<label class="chk jrncard__chk"><input type="checkbox" data-act="journey-toggle"' + (on ? " checked" : "") + " /> Enable the journey (shown in Present mode)</label>" +
       '<div class="jrncard__row"><button class="btn btn--primary" data-act="journey-edit">Edit journey \u2192</button>' +
       '<span class="jrncard__meta">' + (chaps ? (chaps + " chapter" + (chaps > 1 ? "s" : "") + " \u00b7 " + entries + " entr" + (entries === 1 ? "y" : "ies")) : "No chapters yet") + "</span></div></div>";
   }

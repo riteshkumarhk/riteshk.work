@@ -160,14 +160,19 @@
 
     set("stats", (data.highlights || []).slice(0, 8).map(highlightEl).join(""));
 
-    set("cases", (data.work || []).filter((w) => presentActive ? !w.encWork : (w.featured && !w.encWork && !w.hidden)).slice(0, presentActive ? 999 : 6).map(caseEl).join(""));
+    // Present mode shows the SAME curated set as the home page (featured), PLUS any
+    // project that's hidden-from-default (ticket-only) — now decrypted — so the owner can
+    // present the confidential work too. Non-featured, non-hidden work stays hidden.
+    set("cases", (data.work || []).filter((w) => presentActive ? (!w.encWork && (w.featured || w.hidden)) : (w.featured && !w.encWork && !w.hidden)).slice(0, presentActive ? 999 : 6).map(caseEl).join(""));
 
     set("capsList", caps.map((c) => '<li data-reveal>' + esc(c) + "</li>").join(""));
 
     set("timeline", (data.path || []).map(tlEl).join(""));
     var jrn = data.journey;
     var jrnHas = !!(jrn && jrn.enabled && Array.isArray(jrn.chapters) && jrn.chapters.some(function (c) { return c && c.entries && c.entries.some(function (e) { return e && (e.title || e.body || (e.images && e.images.length) || e.period); }); }));
-    set("journeyCta", jrnHas ? '<button type="button" class="path__journey" data-journey-open data-cursor="hover">View full journey <span aria-hidden="true">\u2192</span></button>' : "");
+    // The Design Journey is an owner-only presentation aid — the "View full journey" CTA
+    // only appears in Present mode (⋯ menu → Present mode), not on the public site.
+    set("journeyCta", (jrnHas && presentActive) ? '<button type="button" class="path__journey" data-journey-open data-cursor="hover">View full journey <span aria-hidden="true">\u2192</span></button>' : "");
     set("recognitionList", (data.recognition || []).map(awardEl).join(""));
     set("educationList", (data.education || []).map(awardEl).join(""));
 
