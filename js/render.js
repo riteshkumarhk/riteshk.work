@@ -165,6 +165,9 @@
     set("capsList", caps.map((c) => '<li data-reveal>' + esc(c) + "</li>").join(""));
 
     set("timeline", (data.path || []).map(tlEl).join(""));
+    var jrn = data.journey;
+    var jrnHas = !!(jrn && jrn.enabled && Array.isArray(jrn.chapters) && jrn.chapters.some(function (c) { return c && c.entries && c.entries.some(function (e) { return e && (e.title || e.body || (e.images && e.images.length) || e.period); }); }));
+    set("journeyCta", jrnHas ? '<button type="button" class="path__journey" data-journey-open data-cursor="hover">View full journey <span aria-hidden="true">\u2192</span></button>' : "");
     set("recognitionList", (data.recognition || []).map(awardEl).join(""));
     set("educationList", (data.education || []).map(awardEl).join(""));
 

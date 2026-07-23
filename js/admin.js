@@ -92,6 +92,9 @@
   let activeTab = "landing";
   let openStudy = -1; // index of the work item whose case-study editor is expanded
   let openBlock = -1; // which section (block) is expanded in the L2 sections accordion
+  let journeyOpen = false; // is the Design Journey editor open in the L2 panel?
+  let openJC = -1; // which journey chapter is expanded in the accordion
+  let jrnPreviewTimer = 0;
   let musResumeOnExit = false; // was music playing when admin opened? → resume on exit
   let root = null, body = null, frame = null;
   let l2 = null, l2body = null, l2title = null, l2PreviewTimer = 0;
@@ -631,6 +634,13 @@
     clone.querySelectorAll("img[data-src]").forEach(function (im) { im.setAttribute("src", im.getAttribute("data-src")); im.removeAttribute("data-src"); });
     var html = rtClean(clone.innerHTML).trim();
     if (/^(\s|<br\s*\/?>|<p>(\s|<br\s*\/?>)*<\/p>|<div>(\s|<br\s*\/?>)*<\/div>)*$/i.test(html)) html = "";
+    if (area.dataset.rtjrn !== undefined) {
+      var jc = +area.dataset.jc, je = +area.dataset.je;
+      var jd = data.journey && data.journey.chapters && data.journey.chapters[jc];
+      var jent = jd && jd.entries && jd.entries[je];
+      if (jent) { jent[area.dataset.rtjrn] = html; saveDraft(); refreshJourneyPreview(); }
+      return;
+    }
     var i = +area.dataset.sblock, j = +area.dataset.bindex;
     var b = data.work[i] && data.work[i].study && data.work[i].study.blocks[j];
     if (!b) return;
@@ -1651,6 +1661,12 @@
     } else if (p[0] === "cell") {
       var cwi = +p[1], cbj = +p[2], cci = +p[3], cit = data.work[cwi] && data.work[cwi].study && data.work[cwi].study.blocks[cbj] && data.work[cwi].study.blocks[cbj].items[cci];
       if (!cit || !cit.cells) return; arr = cit.cells; after = function () { saveDraft(true); renderL2(); };
+    } else if (p[0] === "jchap") {
+      arr = journeyData().chapters; after = function () { openJC = -1; saveDraft(true); renderJourneyEditor(); };
+    } else if (p[0] === "jentry") {
+      var jch = journeyData().chapters[+p[1]]; if (!jch || !jch.entries) return; arr = jch.entries; after = function () { saveDraft(true); renderJourneyEditor(); };
+    } else if (p[0] === "jimg") {
+      var jen = journeyData().chapters[+p[1]] && journeyData().chapters[+p[1]].entries[+p[2]]; if (!jen || !jen.images) return; arr = jen.images; after = function () { saveDraft(true); renderJourneyEditor(); };
     }
     if (!arr || from < 0 || from >= arr.length) return;
     to = Math.max(0, Math.min(arr.length - 1, to));
@@ -2486,6 +2502,7 @@
           itemField("path", i, "desc", "Description", { type: "textarea", rows: 3 }) +
           "</div>";
       });
+      html += journeyCard();
       return html;
     },
     recognition() {
@@ -2592,6 +2609,162 @@
     return '<div class="adm__sec-title">' + title + '</div><div class="adm__sec-note">' + note + "</div>";
   }
 
+  /* ---------- Design Journey editor (L2 panel) ---------- */
+  function journeyData() {
+    if (!data.journey || typeof data.journey !== "object") data.journey = { enabled: false, chapters: [] };
+    if (!Array.isArray(data.journey.chapters)) data.journey.chapters = [];
+    return data.journey;
+  }
+  function blankChapter() { return { id: "jc" + Date.now().toString(36), name: "New chapter", entries: [] }; }
+  function blankEntry() { return { id: "je" + Date.now().toString(36) + Math.floor(Math.random() * 999), period: "", title: "", body: "", workId: "", layout: "auto", images: [] }; }
+  function journeyCard() {
+    var j = data.journey || {};
+    var on = !!j.enabled;
+    var chaps = (j.chapters || []).length;
+    var entries = (j.chapters || []).reduce(function (n, c) { return n + ((c && c.entries) ? c.entries.length : 0); }, 0);
+    return '<div class="card jrncard">' +
+      '<div class="adm__sec-title" style="margin-top:.2rem">Design Journey</div>' +
+      '<div class="adm__sec-note">An immersive, scrollable timeline of your whole journey \u2014 chapters (Microsoft / Jaguar Land Rover / \u2026) each with dated entries, rich descriptions and images. Adds a \u201cView full journey\u201d button to this Path section.</div>' +
+      '<label class="chk jrncard__chk"><input type="checkbox" data-act="journey-toggle"' + (on ? " checked" : "") + " /> Show the journey on my site</label>" +
+      '<div class="jrncard__row"><button class="btn btn--primary" data-act="journey-edit">Edit journey \u2192</button>' +
+      '<span class="jrncard__meta">' + (chaps ? (chaps + " chapter" + (chaps > 1 ? "s" : "") + " \u00b7 " + entries + " entr" + (entries === 1 ? "y" : "ies")) : "No chapters yet") + "</span></div></div>";
+  }
+  function previewJourney() {
+    var w = frameWin();
+    if (!(w && w.RK && w.RK.openJourney)) return;
+    try { w.RK.data = resolvePreviewData(data); } catch (e) {}
+    try { w.RK.openJourney({ preview: true, silent: true }); } catch (e) {}
+  }
+  function refreshJourneyPreview() {
+    if (!journeyOpen) return;
+    clearTimeout(jrnPreviewTimer);
+    jrnPreviewTimer = setTimeout(function () { if (journeyOpen) previewJourney(); }, 180);
+  }
+  function setL2BackLabel(txt) {
+    var bk = root && root.querySelector(".adm__l2-back");
+    if (bk) bk.innerHTML = '<span aria-hidden="true">\u2039</span> ' + txt;
+  }
+  function openJourneyEditor() {
+    journeyData();
+    journeyOpen = true;
+    openStudy = -1;
+    if (l2title) l2title.textContent = "Design Journey";
+    setL2BackLabel("Back to Path");
+    l2body.innerHTML = journeyEditor();
+    resolveMediaSizes(l2body);
+    body.hidden = true;
+    l2.hidden = false;
+    if (root) root.classList.add("is-l2");
+    requestAnimationFrame(function () { l2.classList.add("is-open"); });
+    var ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0;
+    saveDraft();
+    previewJourney();
+    l2PreviewApply();
+  }
+  function renderJourneyEditor() {
+    if (!journeyOpen) return;
+    l2body.innerHTML = journeyEditor();
+    resolveMediaSizes(l2body);
+    refreshJourneyPreview();
+  }
+  function closeJourneyEditor(opts) {
+    opts = opts || {};
+    journeyOpen = false;
+    if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
+    if (root) { root.classList.remove("is-l2"); root.classList.remove("is-preview"); root.classList.remove("is-noprev"); }
+    if (body) body.hidden = false;
+    setL2BackLabel("Back to projects");
+    var ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0;
+    var vt = root && root.querySelector("[data-view]"); if (vt) vt.textContent = "Preview";
+    try { var w = frameWin(); if (w && w.RK && w.RK.closeJourney) w.RK.closeJourney(); } catch (e) {}
+    previewLanding();
+    if (opts.render !== false) renderBody();
+  }
+  function richJourney(c, e, val) {
+    return '<div class="af rt"><label class="af__label">Description (optional)</label>' + richTools() +
+      richArea('data-rtjrn="body" data-jc="' + c + '" data-je="' + e + '"', val) + "</div>";
+  }
+  function journeyWorkOptions(sel) {
+    var opts = '<option value="">\u2014 no case study \u2014</option>';
+    (data.work || []).forEach(function (w) {
+      if (!w || w.encWork) return;
+      var label = (w.title && w.title !== "Project title") ? w.title : (w.client || w.id);
+      opts += '<option value="' + escAttr(w.id) + '"' + (sel === w.id ? " selected" : "") + ">" + escHtml(label) + "</option>";
+    });
+    return opts;
+  }
+  function journeyLayoutOptions(sel) {
+    var L = [["auto", "Auto \u2014 flowing columns"], ["grid", "Grid \u2014 even 4:3 tiles"], ["showcase", "Showcase \u2014 hero + thumbnails"], ["stack", "Stack \u2014 one per row"]];
+    return L.map(function (o) { return '<option value="' + o[0] + '"' + ((sel || "auto") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
+  }
+  function journeyImageRow(c, e, k, im) {
+    var src = (im && im.src) || "";
+    return '<div class="rep__item jimg">' +
+      '<div class="rep__bar"><span class="sortgrip" data-grip data-sortkey="jimg:' + c + ':' + e + '" title="Drag to reorder">' + GRIP_SVG + '</span>' +
+      '<span class="rep__n">Image ' + (k + 1) + '</span><span class="rep__ops">' +
+      '<button class="iconbtn iconbtn--danger" data-act="jimg-del" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" title="Remove">\u2715</button></span></div>' +
+      '<div class="jimg__preview' + (src ? " has" : "") + '">' + (src ? '<img src="' + escAttr(previewSrc(src)) + '" alt="" />' : "<span>No image</span>") + "</div>" +
+      '<input type="text" data-jimg="src" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" value="' + escAttr(src) + '" placeholder="Paste an image URL\u2026" />' +
+      '<div class="imgblk__row"><button class="btn btn--ghost" data-act="jimg-upload" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '">Replace\u2026</button>' + mediaSizeTag(src) + "</div>" +
+      '<input type="text" data-jimg="caption" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" value="' + escAttr((im && im.caption) || "") + '" placeholder="Caption (optional)" /></div>';
+  }
+  function journeyEntryHtml(c, entry, e) {
+    var imgRows = (entry.images || []).map(function (im, k) { return journeyImageRow(c, e, k, im); }).join("");
+    return '<div class="card jentry">' +
+      '<div class="card__bar"><span class="sortgrip" data-grip data-sortkey="jentry:' + c + '" title="Drag to reorder">' + GRIP_SVG + '</span>' +
+      '<span class="card__idx">' + escHtml(entry.title || entry.period || "Entry " + (e + 1)) + '</span>' +
+      '<div class="card__ops"><button class="iconbtn iconbtn--danger" data-act="jentry-del" data-jc="' + c + '" data-je="' + e + '" title="Remove entry">\u2715</button></div></div>' +
+      '<div class="af__row">' +
+      '<div class="af"><label class="af__label">Period</label><input type="text" data-jfield="period" data-jc="' + c + '" data-je="' + e + '" value="' + escAttr(entry.period || "") + '" placeholder="e.g. 2022 \u2014 2023" /></div>' +
+      '<div class="af"><label class="af__label">Title</label><input type="text" data-jfield="title" data-jc="' + c + '" data-je="' + e + '" value="' + escAttr(entry.title || "") + '" placeholder="What you worked on" /></div>' +
+      "</div>" +
+      richJourney(c, e, entry.body) +
+      '<div class="af__row">' +
+      '<div class="af"><label class="af__label">Image layout</label><select data-jsel="layout" data-jc="' + c + '" data-je="' + e + '">' + journeyLayoutOptions(entry.layout) + "</select></div>" +
+      '<div class="af"><label class="af__label">Link to a case study</label><select data-jsel="workId" data-jc="' + c + '" data-je="' + e + '">' + journeyWorkOptions(entry.workId) + "</select></div>" +
+      "</div>" +
+      '<div class="rep"><div class="rep__head"><span>Images</span><button class="btn btn--add rep__add" data-act="jimg-add" data-jc="' + c + '" data-je="' + e + '">+ Add images\u2026</button></div>' +
+      (imgRows || '<div class="rep__empty">No images yet.</div>') + "</div></div>";
+  }
+  function journeyChapterHtml(chap, c) {
+    var open = openJC === c;
+    var entries = (chap.entries || []);
+    var entriesHtml = entries.map(function (en, e) { return journeyEntryHtml(c, en, e); }).join("");
+    return '<div class="card jchap' + (open ? " is-open" : "") + '">' +
+      '<div class="jchap__head" data-act="journey-chaptoggle" data-jc="' + c + '">' +
+      '<span class="sortgrip" data-grip data-sortkey="jchap" title="Drag to reorder">' + GRIP_SVG + '</span>' +
+      '<input type="text" class="jchap__name" data-jname data-jc="' + c + '" value="' + escAttr(chap.name || "") + '" placeholder="Chapter name (e.g. Microsoft)" />' +
+      '<span class="jchap__count" title="entries">' + entries.length + '</span>' +
+      '<span class="card__ops"><button class="iconbtn iconbtn--danger" data-act="jchap-del" data-jc="' + c + '" title="Remove chapter">\u2715</button></span>' +
+      '<span class="study__block-chev">\u203a</span></div>' +
+      '<div class="jchap__body">' + (entriesHtml || '<div class="rep__empty">No entries yet.</div>') +
+      '<button class="btn btn--add" data-act="jentry-add" data-jc="' + c + '">+ Add entry</button></div></div>';
+  }
+  function journeyEditor() {
+    var j = journeyData();
+    var chaps = (j.chapters || []).map(function (chap, c) { return journeyChapterHtml(chap, c); }).join("");
+    return '<div class="l2grp"><div class="l2grp__head">Journey header <span>The intro shown at the top of the immersive view.</span></div>' +
+      '<div class="af"><label class="af__label">Eyebrow</label><input type="text" data-jmeta="eyebrow" value="' + escAttr(j.eyebrow || "") + '" placeholder="Design Journey" /></div>' +
+      '<div class="af"><label class="af__label">Title</label><input type="text" data-jmeta="title" value="' + escAttr(j.title || "") + '" placeholder="Eleven years, from \u2026 to \u2026" /></div>' +
+      '<div class="af"><label class="af__label">Intro</label><textarea data-jmeta="intro" rows="2" placeholder="One or two lines that set the scene.">' + escHtml(j.intro || "") + "</textarea></div></div>" +
+      '<div class="l2grp"><div class="l2grp__head">Chapters <span>Group entries by company or era. Each chapter is a stop on the left timeline.</span></div>' +
+      (chaps || '<div class="adm__empty">No chapters yet \u2014 add your first below.</div>') +
+      '<button class="btn btn--add" data-act="jchap-add" style="margin-top:.6rem">+ Add chapter</button></div>' +
+      '<div class="l2grp__foot"><button class="btn btn--primary" data-act="journey-close">Done</button></div>';
+  }
+  function onJourneyEdit(t) {
+    var j = journeyData();
+    if (t.dataset.jmeta !== undefined) { j[t.dataset.jmeta] = t.value; saveDraft(); refreshJourneyPreview(); return; }
+    var chap = j.chapters[+t.dataset.jc];
+    if (!chap) return;
+    if (t.dataset.jname !== undefined) { chap.name = t.value; saveDraft(); refreshJourneyPreview(); return; }
+    var ent = chap.entries && chap.entries[+t.dataset.je];
+    if (!ent) return;
+    if (t.dataset.jfield !== undefined) { ent[t.dataset.jfield] = t.value; saveDraft(); refreshJourneyPreview(); return; }
+    if (t.dataset.jsel !== undefined) { ent[t.dataset.jsel] = t.value; saveDraft(); refreshJourneyPreview(); return; }
+    if (t.dataset.jimg !== undefined) { var im = ent.images && ent.images[+t.dataset.jk]; if (im) { im[t.dataset.jimg] = t.value; saveDraft(); refreshJourneyPreview(); } }
+  }
+
   function renderBody() {
     body.innerHTML = sections[activeTab]();
     root.querySelectorAll(".adm__tab").forEach((t) => t.classList.toggle("is-active", t.dataset.tab === activeTab));
@@ -2668,7 +2841,7 @@
   }
   function l2PreviewApply() {
     var off = localStorage.getItem(L2PREV_KEY) === "0";
-    if (root) root.classList.toggle("is-noprev", off && openStudy >= 0);
+    if (root) root.classList.toggle("is-noprev", off && (openStudy >= 0 || journeyOpen));
     var btn = root && root.querySelector("[data-l2-prev]");
     if (btn) {
       btn.classList.toggle("is-off", off);
@@ -2729,7 +2902,8 @@
   function onInput(e) {
     const t = e.target;
     if (t.dataset.gpath !== undefined || t.dataset.genName !== undefined) { onGenEdit(t); return; }
-    if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined || t.dataset.rtcellfield !== undefined) { rtSerialize(t); return; }
+    if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined || t.dataset.rtcellfield !== undefined || t.dataset.rtjrn !== undefined) { rtSerialize(t); return; }
+    if (t.dataset.jmeta !== undefined || t.dataset.jname !== undefined || t.dataset.jfield !== undefined || t.dataset.jimg !== undefined) { onJourneyEdit(t); return; }
     if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.sitem !== undefined && t.dataset.ifield) { onItemInput(t); return; }
     if (t.dataset.cell !== undefined && t.dataset.cfield) { onCellInput(t); return; }
@@ -2774,6 +2948,8 @@
   function onChange(e) {
     const t = e.target;
     if (t.dataset.gpath !== undefined) { onGenEdit(t); return; }
+    if (t.dataset.jsel !== undefined) { onJourneyEdit(t); return; }
+    if (t.dataset.act === "journey-toggle") { journeyData().enabled = t.checked; saveDraft(true); apply(true); renderBody(); return; }
     if (t.dataset.atsFile !== undefined) { if (t.files && t.files[0]) atsRun(t.closest(".ats"), t.files[0]); t.value = ""; return; }
     if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
@@ -2937,6 +3113,41 @@
     if (act === "csgen-ref-toggle") { const wrap = b.closest(".csgen__ref"); if (wrap) { const open = wrap.classList.toggle("is-open"); b.textContent = (open ? "\u2212" : "+") + " Paste a reference case study to echo (optional)"; const cw = data.work[i]; if (cw) csgenState(cw.id).refShow = open; } return; }
     if (act === "study-toggle") { openL2(i); return; }
     if (act === "study-close") { closeL2(); return; }
+    if (act === "journey-edit") { openJourneyEditor(); return; }
+    if (act === "journey-close") { closeJourneyEditor(); return; }
+    if (act === "journey-chaptoggle") {
+      if (e.target.closest("input, button, [data-grip], .card__ops")) return;
+      var jtc = +b.dataset.jc;
+      openJC = (openJC === jtc) ? -1 : jtc;
+      if (l2body) l2body.querySelectorAll(".jchap").forEach(function (x, k) { x.classList.toggle("is-open", k === openJC); });
+      return;
+    }
+    if (act === "jchap-add") { journeyData().chapters.push(blankChapter()); openJC = data.journey.chapters.length - 1; saveDraft(true); renderJourneyEditor(); return; }
+    if (act === "jchap-del") {
+      var jdc = +b.dataset.jc;
+      confirmModal({ title: "Remove this chapter?", sub: "All of its entries will be removed from the journey. This can\u2019t be undone.", cta: "Remove chapter" }).then(function (ok) {
+        if (!ok) return;
+        data.journey.chapters.splice(jdc, 1);
+        if (openJC >= data.journey.chapters.length) openJC = -1;
+        saveDraft(true); renderJourneyEditor();
+      });
+      return;
+    }
+    if (act === "jentry-add") { var jac = journeyData().chapters[+b.dataset.jc]; if (jac) { jac.entries = jac.entries || []; jac.entries.push(blankEntry()); openJC = +b.dataset.jc; saveDraft(true); renderJourneyEditor(); } return; }
+    if (act === "jentry-del") { var jec = journeyData().chapters[+b.dataset.jc]; if (jec && jec.entries) { jec.entries.splice(+b.dataset.je, 1); saveDraft(true); renderJourneyEditor(); } return; }
+    if (act === "jimg-add") {
+      var jic = journeyData().chapters[+b.dataset.jc], jie = jic && jic.entries[+b.dataset.je];
+      if (!jie) return; jie.images = jie.images || [];
+      pickMediaMulti(function () { var im = { src: "", caption: "" }; jie.images.push(im); return im; }, function () { saveDraft(true); renderJourneyEditor(); });
+      return;
+    }
+    if (act === "jimg-upload") {
+      var juc = journeyData().chapters[+b.dataset.jc], jue = juc && juc.entries[+b.dataset.je], juk = +b.dataset.jk;
+      if (!jue || !jue.images || !jue.images[juk]) return;
+      pickMedia(function (uri) { jue.images[juk].src = uri; saveDraft(true); renderJourneyEditor(); });
+      return;
+    }
+    if (act === "jimg-del") { var jdd = journeyData().chapters[+b.dataset.jc], jde = jdd && jdd.entries[+b.dataset.je]; if (jde && jde.images) { jde.images.splice(+b.dataset.jk, 1); saveDraft(true); renderJourneyEditor(); } return; }
     if (act === "study-pick") { sectionPicker(i); return; }
     if (act === "study-blockadd") { sectionPicker(i, +b.dataset.bindex); return; }
     if (act === "study-decrypt") { decryptStudyForEdit(i); return; }
@@ -6232,7 +6443,7 @@
     // Paste into a rich-text body as plain text (no foreign colours/fonts).
     root.addEventListener("paste", onRtPaste);
     root.querySelectorAll(".adm__tab").forEach((t) =>
-      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); activeTab = t.dataset.tab; renderBody(); })
+      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); })
     );
     root.querySelector("[data-publish]").addEventListener("click", publish);
     root.querySelector("[data-pubcfg]").addEventListener("click", () => publishModal());
@@ -6253,17 +6464,18 @@
     if (pubCloseBtn) pubCloseBtn.addEventListener("click", pubHide);
     root.querySelector("[data-revert]").addEventListener("click", revert);
     root.querySelector("[data-exit]").addEventListener("click", exit);
-    root.querySelector("[data-l2-back]").addEventListener("click", () => closeL2());
+    root.querySelector("[data-l2-back]").addEventListener("click", () => { if (journeyOpen) closeJourneyEditor(); else closeL2(); });
     root.querySelector("[data-l2-prev]").addEventListener("click", () => {
       const wasOff = localStorage.getItem(L2PREV_KEY) === "0";
       try { localStorage.setItem(L2PREV_KEY, wasOff ? "1" : "0"); } catch (e) {}
       l2PreviewApply();
-      if (wasOff && openStudy >= 0 && data.work[openStudy]) previewProject(data.work[openStudy].id, false);
+      if (wasOff && journeyOpen) previewJourney();
+      else if (wasOff && openStudy >= 0 && data.work[openStudy]) previewProject(data.work[openStudy].id, false);
     });
     root.querySelector("[data-view]").addEventListener("click", (e) => {
       const on = root.classList.toggle("is-preview");
       e.currentTarget.textContent = on ? "Edit" : "Preview";
-      if (on) { if (openStudy >= 0 && data.work[openStudy]) previewProject(data.work[openStudy].id, false); else previewLanding(); }
+      if (on) { if (journeyOpen) previewJourney(); else if (openStudy >= 0 && data.work[openStudy]) previewProject(data.work[openStudy].id, false); else previewLanding(); }
     });
     frame.addEventListener("load", previewApply);
     document.addEventListener("keydown", onKey);
@@ -6296,6 +6508,7 @@
     if (!root) buildShell();
     activeTab = "landing";
     openStudy = -1;
+    journeyOpen = false;
     if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
     if (body) body.hidden = false;
     renderBody();
