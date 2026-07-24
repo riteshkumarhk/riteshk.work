@@ -284,6 +284,10 @@
         var res = await fetch(meta.p); if (!res.ok) continue;
         var bytes = await rkDecBytes(sekBytes, meta.iv, new Uint8Array(await res.arrayBuffer()));
         o[k] = URL.createObjectURL(new Blob([bytes], { type: meta.m || "application/octet-stream" }));
+        // The blob: URL drops the ".mp4" extension, so the renderer's extension-based detection
+        // would fall back to <img> and the video silently vanishes. Pin kind:"video" (mirrors the
+        // admin's resolvePreviewData) so a decrypted video still renders as a <video>.
+        if (/^video\//i.test(meta.m || "") && (k === "src" || k === "image")) o.kind = "video";
       } catch (e) { /* leave as rkenc: */ }
     }
   }
