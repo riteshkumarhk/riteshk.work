@@ -796,6 +796,9 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .story__opt.is-on { border-color: var(--accent); background: var(--bg-elev); box-shadow: inset 0 0 0 1px var(--accent); }
 .story__opt-name { font-weight: 600; font-size: .86rem; }
 .story__opt-desc { font-size: .68rem; color: var(--text-dim); line-height: 1.25; }
+.story__role { display: flex; flex-direction: column; gap: .55rem; align-items: flex-start; border-top: 1px solid var(--line-soft); padding-top: .85rem; }
+.story__role-fields { width: 100%; }
+.story__role-fields[hidden] { display: none; }
 .story__themes { display: flex; flex-direction: column; gap: .6rem; max-height: 58vh; overflow: auto; margin-top: .4rem; text-align: left; }
 .story__themes-h { font-family: var(--mono); font-size: .6rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); }
 .story__theme { border: 1px solid var(--line); border-radius: 11px; padding: .8rem .9rem; background: var(--bg-2); }
