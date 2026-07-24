@@ -6124,9 +6124,18 @@
   var wbState = (function () { try { var o = JSON.parse(localStorage.getItem(WB_KEY)); return (o && typeof o === "object") ? o : {}; } catch (e) { return {}; } })();
   if (!wbState.mins) wbState.mins = "60";
   if (!wbState.mode) wbState.mode = "coach";
-  function wbSave() { try { localStorage.setItem(WB_KEY, JSON.stringify({ mins: wbState.mins, mode: wbState.mode, brief: wbState.brief || "" })); } catch (e) {} }
+  function wbSave() { try { localStorage.setItem(WB_KEY, JSON.stringify({ mins: wbState.mins, mode: wbState.mode, brief: wbState.brief || "", company: wbState.company || "", jd: wbState.jd || "" })); } catch (e) {} }
   function wbMinsLabel(m) { for (var i = 0; i < WB_MINS.length; i++) if (WB_MINS[i][0] === m) return WB_MINS[i][1]; return m + " min"; }
-  function wbRoleLine() { var t = storyJdText(); return t ? "\n\nTARGET ROLE \u2014 tailor the exercise to what THIS role/team would actually probe (mirror its domain and altitude):\n" + t : ""; }
+  function wbCompany() { return String(wbState.company || "").trim(); }
+  function wbJdText() { var t = String(wbState.jd || "").trim(); return t || storyJdText(); }
+  function wbRoleLine() {
+    var jd = wbJdText(), co = wbCompany();
+    if (!jd && !co) return "";
+    var s = "\n\n# TARGET";
+    if (co) s += "\nCompany: " + co + " \u2014 tailor the exercise to how " + co + " actually runs design interviews at this level: the kind of whiteboard prompt they favour, the structure and answer depth they expect, and the collaboration/interaction they look for in the room.";
+    if (jd) s += "\nJob description (what the role demands \u2014 bias the prompt, the probes and the scoring toward these):\n" + jd;
+    return s;
+  }
   function wbPortfolioHint() {
     var titles = (data.work || []).filter(function (w) { return w && !w.encWork; }).map(function (w) { return w.client || w.title; }).filter(Boolean).slice(0, 6);
     return titles.length ? "\n\nThe candidate's background spans: " + titles.join("; ") + ". A prompt adjacent to (not identical to) these lands best." : "";
@@ -6256,10 +6265,14 @@
         '<div class="af"><label class="af__label">Mode</label><div class="story__opts">' +
           WB_MODES.map(function (d) { return '<button type="button" class="story__opt' + (st.mode === d[0] ? " is-on" : "") + '" data-wb-mode="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
         "</div></div>" +
+        '<div class="af"><label class="af__label">Company &amp; job description <span class="af__opt">(optional)</span></label>' +
+          '<input type="text" class="wb__company" placeholder="Company you\u2019re interviewing at \u2014 e.g. Stripe, Google\u2026" value="' + escAttr(st.company || "") + '" />' +
+          '<textarea class="cl__jd wb__jd" rows="4" placeholder="Paste the job description \u2014 I\u2019ll bias the prompt, the probes and the scoring toward what the role demands.">' + escHtml(st.jd || "") + '</textarea>' +
+          '<div class="af__hint">Company \u2192 I match how they interview at this level (prompt type, answer depth, collaboration). ' + (storyJdText() ? 'Leave the description blank to reuse your \u201cAlign to a role\u201d target from the storyteller.' : 'Both optional.') + '</div>' +
+        "</div>" +
         '<div class="af"><label class="af__label">Flavour / your own prompt (optional)</label>' +
           '<input type="text" class="wb__brief" placeholder="Domain or product to riff on \u2014 e.g. fintech onboarding, transit app\u2026" value="' + escAttr(st.brief || "") + '" />' +
           '<textarea class="cl__jd wb__own" rows="3" placeholder="\u2026or paste a specific prompt to use verbatim (leave blank and I\u2019ll invent one)."></textarea>' +
-          (storyJdText() ? '<div class="af__hint">Will tailor to your target role (from \u201cAlign to a role\u201d in the storyteller).</div>' : "") +
         "</div>" +
       "</div>" +
       '<div class="wb__stage" hidden></div>' +
@@ -6278,6 +6291,8 @@
     var backBtn = modal.querySelector("[data-wb-back]");
     var briefEl = modal.querySelector(".wb__brief");
     var ownEl = modal.querySelector(".wb__own");
+    var companyEl = modal.querySelector(".wb__company");
+    var jdEl = modal.querySelector(".wb__jd");
     var close = function () { modal.remove(); };
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
@@ -6285,6 +6300,8 @@
     modal.querySelectorAll("[data-wb-mins]").forEach(function (b) { b.addEventListener("click", function () { st.mins = b.dataset.wbMins; modal.querySelectorAll("[data-wb-mins]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     modal.querySelectorAll("[data-wb-mode]").forEach(function (b) { b.addEventListener("click", function () { st.mode = b.dataset.wbMode; modal.querySelectorAll("[data-wb-mode]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     if (briefEl) briefEl.addEventListener("input", function () { st.brief = briefEl.value; wbSave(); });
+    if (companyEl) companyEl.addEventListener("input", function () { st.company = companyEl.value; wbSave(); });
+    if (jdEl) jdEl.addEventListener("input", function () { st.jd = jdEl.value; wbSave(); });
     function showSetup() { setup.hidden = false; stage.hidden = true; backBtn.hidden = true; startBtn.hidden = false; err.textContent = ""; }
     function showStage() { setup.hidden = true; stage.hidden = false; backBtn.hidden = false; startBtn.hidden = true; err.textContent = ""; }
     backBtn.addEventListener("click", showSetup);
