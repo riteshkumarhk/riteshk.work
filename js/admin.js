@@ -6078,6 +6078,13 @@
   var STORY_BUDGET = { "2015": 17, "1510": 12, "105": 7, "5": 5 };
   var storyState = {};
   function storySt(id) { return storyState[id] || (storyState[id] = { dur: "1510", tone: "staff", qrole: "any" }); }
+  // Optional “align to a role” target — one job at a time, shared across every case study's
+  // storyteller and persisted locally (prep only, never published).
+  var STORY_JD_KEY = "rk:story:jd";
+  var storyJd = (function () { try { var o = JSON.parse(localStorage.getItem(STORY_JD_KEY)); return (o && typeof o === "object") ? o : {}; } catch (e) { return {}; } })();
+  function saveStoryJd() { try { localStorage.setItem(STORY_JD_KEY, JSON.stringify({ on: !!storyJd.on, url: storyJd.url || "", text: storyJd.text || "" })); } catch (e) {} }
+  function storyJdText() { return (storyJd.on && storyJd.text && String(storyJd.text).trim()) ? String(storyJd.text).trim() : ""; }
+  function storyJdUserBlock() { var t = storyJdText(); return t ? "\n\nTARGET ROLE — JOB DESCRIPTION (bias the story toward what THIS role values — mirror its priorities and language — using ONLY real facts from the material above; never invent anything to fit the role):\n" + t : ""; }
   function storyDurLabel(dur) { for (var i = 0; i < STORY_DUR.length; i++) if (STORY_DUR[i][0] === dur) return STORY_DUR[i][1]; return ""; }
   function storyAudience(tone) {
     return {
@@ -6106,7 +6113,7 @@
       "Return ONLY valid JSON (no markdown): {\"themes\":[{\"title\":string,\"hook\":string,\"why\":string,\"beats\":string}]}. hook = the one-line spine of the story. why = why this angle lands for THIS room. beats = a 4\u20136 word skeleton of the arc."
     ].join("\n");
   }
-  function storyThemesUser(ctx) { return "Propose 4 distinct angles.\n\nCASE STUDY MATERIAL:\n" + ctx; }
+  function storyThemesUser(ctx) { return "Propose 4 distinct angles.\n\nCASE STUDY MATERIAL:\n" + ctx + storyJdUserBlock(); }
   function storyTellSystem(tone, durLabel, budget) {
     return [
       "You are an elite presentation coach. Script EXACTLY how the designer should PRESENT this case study live, built around the chosen story angle, to fit " + durLabel + ".",
@@ -6119,7 +6126,7 @@
     ].join("\n");
   }
   function storyTellUser(t, ctx) {
-    return "CHOSEN STORY ANGLE:\nTitle: " + (t.title || "") + "\nSpine: " + (t.hook || "") + (t.beats ? "\nArc: " + t.beats : "") + "\n\nCASE STUDY MATERIAL:\n" + ctx;
+    return "CHOSEN STORY ANGLE:\nTitle: " + (t.title || "") + "\nSpine: " + (t.hook || "") + (t.beats ? "\nArc: " + t.beats : "") + "\n\nCASE STUDY MATERIAL:\n" + ctx + storyJdUserBlock();
   }
   function storyRenderThemes(box, themes) {
     box.innerHTML = '<div class="story__themes-h">Pick an angle \u2014 I\u2019ll script the talk for it</div>' + themes.map(function (t, idx) {
@@ -6205,7 +6212,7 @@
     ].join("\n");
   }
   function storyQUser(ctx, angle, n) {
-    return "CHOSEN NARRATIVE ANGLE:\nTitle: " + ((angle && angle.title) || "") + "\nSpine: " + ((angle && angle.hook) || "") + "\n\nGenerate exactly " + n + " questions.\n\nCASE STUDY MATERIAL:\n" + ctx;
+    return "CHOSEN NARRATIVE ANGLE:\nTitle: " + ((angle && angle.title) || "") + "\nSpine: " + ((angle && angle.hook) || "") + "\n\nGenerate exactly " + n + " questions.\n\nCASE STUDY MATERIAL:\n" + ctx + storyJdUserBlock();
   }
   function storyQAnsSystem(tone, roleStr) {
     return [
@@ -6248,6 +6255,13 @@
         '<div class="af"><label class="af__label">Who\u2019s in the room</label><div class="story__opts">' +
           STORY_TONE.map(function (t) { return '<button type="button" class="story__opt' + (g.tone === t[0] ? " is-on" : "") + '" data-story-tone="' + t[0] + '"><span class="story__opt-name">' + t[1] + '</span><span class="story__opt-desc">' + t[2] + "</span></button>"; }).join("") +
         "</div></div>" +
+        '<div class="af story__role"><label class="chk"><input type="checkbox" data-story-align' + (storyJd.on ? " checked" : "") + " /> Align to a role</label>" +
+          '<div class="story__role-fields"' + (storyJd.on ? "" : " hidden") + '>' +
+            '<div class="cl__row"><input type="url" class="cl__url" data-story-jd-url placeholder="Paste the job posting URL\u2026" value="' + escAttr(storyJd.url || "") + '" /><button class="btn btn--ghost" type="button" data-story-jd-fetch>Fetch</button></div>' +
+            '<textarea class="cl__jd" data-story-jd-text rows="5" placeholder="\u2026or paste the full job description here (best results \u2014 LinkedIn links often need pasting).">' + escHtml(storyJd.text || "") + "</textarea>" +
+            '<div class="cl__note">Angles and the script will lean toward what this role values, using only your real material. A link is read via a reader service (r.jina.ai) \u2014 only your public job post; nothing here is saved to or published on your site.</div>' +
+          "</div>" +
+        "</div>" +
       "</div>" +
       '<div class="story__themes" hidden></div>' +
       '<div class="story__l2" hidden>' +
@@ -6291,6 +6305,24 @@
     qroleSel.addEventListener("change", function () { g.qrole = qroleSel.value; });
     modal.querySelectorAll("[data-story-dur]").forEach(function (b) { b.addEventListener("click", function () { g.dur = b.dataset.storyDur; modal.querySelectorAll("[data-story-dur]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); }); });
     modal.querySelectorAll("[data-story-tone]").forEach(function (b) { b.addEventListener("click", function () { g.tone = b.dataset.storyTone; modal.querySelectorAll("[data-story-tone]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); }); });
+    var alignCb = modal.querySelector("[data-story-align]");
+    var roleFields = modal.querySelector(".story__role-fields");
+    var jdUrlEl = modal.querySelector("[data-story-jd-url]");
+    var jdTextEl = modal.querySelector("[data-story-jd-text]");
+    var jdFetchBtn = modal.querySelector("[data-story-jd-fetch]");
+    if (alignCb) alignCb.addEventListener("change", function () { storyJd.on = alignCb.checked; if (roleFields) roleFields.hidden = !alignCb.checked; saveStoryJd(); });
+    if (jdUrlEl) jdUrlEl.addEventListener("input", function () { storyJd.url = jdUrlEl.value; saveStoryJd(); });
+    if (jdTextEl) jdTextEl.addEventListener("input", function () { storyJd.text = jdTextEl.value; saveStoryJd(); });
+    if (jdFetchBtn) jdFetchBtn.addEventListener("click", async function () {
+      err.textContent = "";
+      btnBusy(jdFetchBtn, "Fetching\u2026");
+      try {
+        var jt = await clFetchJd(jdUrlEl ? jdUrlEl.value : "");
+        if (jdTextEl) jdTextEl.value = jt;
+        storyJd.text = jt; storyJd.on = true; if (alignCb) alignCb.checked = true; if (roleFields) roleFields.hidden = false; saveStoryJd();
+      } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t read that link \u2014 paste the description instead."; }
+      btnIdle(jdFetchBtn, "Fetch");
+    });
     function showSetup() { setup.hidden = false; themesBox.hidden = true; l2Box.hidden = true; backBtn.hidden = true; runBtn.hidden = false; err.textContent = ""; }
     function showThemes() { setup.hidden = true; themesBox.hidden = false; l2Box.hidden = true; backBtn.hidden = false; runBtn.hidden = true; err.textContent = ""; }
     function showL2() { setup.hidden = true; themesBox.hidden = true; l2Box.hidden = false; backBtn.hidden = true; runBtn.hidden = true; err.textContent = ""; }
