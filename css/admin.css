@@ -799,6 +799,9 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .story__role { display: flex; flex-direction: column; gap: .55rem; align-items: flex-start; border-top: 1px solid var(--line-soft); padding-top: .85rem; }
 .story__role-fields { width: 100%; }
 .story__role-fields[hidden] { display: none; }
+.story__pick { width: 100%; box-sizing: border-box; }
+.iprep__projs { display: grid; gap: .35rem; max-height: 190px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: .6rem .7rem; background: var(--bg); }
+.iprep__projs .chk { align-items: flex-start; }
 .story__themes { display: flex; flex-direction: column; gap: .6rem; max-height: 58vh; overflow: auto; margin-top: .4rem; text-align: left; }
 .story__themes-h { font-family: var(--mono); font-size: .6rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); }
 .story__theme { border: 1px solid var(--line); border-radius: 11px; padding: .8rem .9rem; background: var(--bg-2); }

@@ -451,8 +451,7 @@
       '<input type="text" data-path="contact.resume" value="' + escAttr(url) + '" placeholder="Paste a r\u00e9sum\u00e9 URL\u2026 e.g. /resume.pdf" />' +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="resume-upload">Upload PDF\u2026</button>' +
       (has ? '<button class="btn btn--ghost" data-act="resume-open">Open</button><button class="btn btn--ghost" data-act="resume-clear">Remove</button>' : "") + "</div>" +
-      '<div class="imgblk__hint">' + (has ? ("In use: " + escHtml(isData ? "embedded PDF" : url) + " \u00b7 the dock button is now visible") : "Not set \u2014 the r\u00e9sum\u00e9 button stays hidden until you add one.") + "</div></div>" +
-      atsPanelHtml(has) + clPanelHtml();
+      '<div class="imgblk__hint">' + (has ? ("In use: " + escHtml(isData ? "embedded PDF" : url) + " \u00b7 the dock button is now visible") : "Not set \u2014 the r\u00e9sum\u00e9 button stays hidden until you add one.") + "</div></div>";
   }
   function atsPanelHtml(has) {
     var lvls = IPREP_LEVELS.map(function (l) {
@@ -2536,8 +2535,9 @@
       }
       html += '<div class="af__hint" style="margin:.1rem 0 1rem">' + (imgOK ? "Image service supports generation." : "Your image service (Claude) can't generate images \u2014 pick OpenAI or Gemini for imagery.") + "</div>";
       html += '<div class="imgblk__row"><button class="btn btn--primary" data-act="ai-save">Save</button><button class="btn btn--ghost" data-act="ai-clear">Remove keys</button></div>';
-      html += wbPanelHtml();
       html += '<div class="adm__empty" style="text-align:left;margin-top:1.1rem;line-height:1.6">Security: keys live only in this browser, are sent only to the service you pick, and are never committed to your site. Calling these APIs from the browser exposes the key to that provider \u2014 use a limited key. Some providers block browser calls (CORS); OpenAI and Gemini generally work directly.</div>';
+      const resumeSet = !!(data.contact && data.contact.resume);
+      html += atsPanelHtml(resumeSet) + clPanelHtml() + iprepPanelHtml() + storyPanelHtml() + wbPanelHtml();
       return html;
     },
     autofill() {
@@ -3117,6 +3117,8 @@
     if (act === "iprep-open") { iprepModal(i); return; }
     if (act === "story-open") { storyModal(i); return; }
     if (act === "wb-open") { wbModal(); return; }
+    if (act === "iprep-open-ai") { iprepModal(); return; }
+    if (act === "story-open-ai") { storyModal(); return; }
     if (act === "csgen-ref-toggle") { const wrap = b.closest(".csgen__ref"); if (wrap) { const open = wrap.classList.toggle("is-open"); b.textContent = (open ? "\u2212" : "+") + " Paste a reference case study to echo (optional)"; const cw = data.work[i]; if (cw) csgenState(cw.id).refShow = open; } return; }
     if (act === "study-toggle") { openL2(i); return; }
     if (act === "study-close") { closeL2(); return; }
@@ -5552,6 +5554,35 @@
     var txt = lines.filter(Boolean).join("\n");
     return txt.length > 9000 ? txt.slice(0, 9000) + "\u2026" : txt;
   }
+  // AI-tab entry: build context from one or more picked projects (and, when “whole portfolio”,
+  // the about / capabilities / experience too). Mirrors iprepContext's per-work extraction.
+  function iprepAiContext(works, whole) {
+    var lines = [];
+    (works || []).forEach(function (w) {
+      var st = w.study || {};
+      lines.push("# PROJECT: " + (w.title || "Untitled"));
+      if (w.desc) lines.push("Summary: " + iprepStrip(w.desc));
+      [["tagline", "Tagline"], ["role", "My role"], ["team", "Team"], ["timeline", "Timeline"], ["scope", "Scope"]].forEach(function (p) { if (st[p[0]]) lines.push(p[1] + ": " + iprepStrip(st[p[0]])); });
+      (st.blocks || []).forEach(function (b) {
+        var parts = [];
+        ["kicker", "heading", "body", "sub", "caption", "leftLabel", "rightLabel", "beforeLabel", "afterLabel"].forEach(function (f) { if (typeof b[f] === "string" && b[f].trim()) parts.push(iprepStrip(b[f])); });
+        ["list", "left", "right"].forEach(function (f) { if (Array.isArray(b[f])) b[f].forEach(function (v) { if (v) parts.push("- " + iprepStrip(v)); }); else if (typeof b[f] === "string" && b[f].trim()) parts.push(iprepStrip(b[f])); });
+        (b.items || []).forEach(function (it) { ["value", "label", "title", "heading", "body", "q", "a", "cite", "note"].forEach(function (f) { if (typeof it[f] === "string" && it[f].trim()) parts.push(iprepStrip(it[f])); }); });
+        if (parts.length) lines.push("[" + (b.type || "section") + "] " + parts.join(" "));
+      });
+      lines.push("");
+    });
+    if (whole) {
+      var L = data.landing || {};
+      var about = [L.aboutLead, L.about, L.aboutSign].map(iprepStrip).filter(Boolean).join(" ");
+      if (about) lines.push("# ABOUT ME\n" + about);
+      if (Array.isArray(data.capabilities) && data.capabilities.length) lines.push("# CAPABILITIES\n" + data.capabilities.map(iprepFlat).filter(Boolean).join(", "));
+      if (Array.isArray(data.path) && data.path.length) { lines.push("# EXPERIENCE"); data.path.forEach(function (p) { var t = iprepFlat(p); if (t) lines.push("- " + t); }); }
+      if (Array.isArray(data.recognition) && data.recognition.length) lines.push("# RECOGNITION\n" + data.recognition.map(iprepFlat).filter(Boolean).join("; "));
+    }
+    var txt2 = lines.filter(Boolean).join("\n");
+    return txt2.length > 9000 ? txt2.slice(0, 9000) + "\u2026" : txt2;
+  }
   function iprepSystem(level) {
     var lv = {
       senior: "a SENIOR product designer role \u2014 probe craft, execution detail, collaboration, and the reasoning behind concrete design decisions.",
@@ -5961,23 +5992,29 @@
   }
 
   function iprepModal(i) {
-    var w = data.work[i]; if (!w) return;
+    var fromAi = (i == null);
+    var w = fromAi ? null : data.work[i]; if (!fromAi && !w) return;
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { iprepModal(i); }); return; }
-    var g = iprepSt(w.id);
+    var aiWorks = (data.work || []).filter(function (x) { return x && !x.encWork; });
+    if (fromAi && !aiWorks.length) return;
+    var g = iprepSt(fromAi ? "__ai__" : w.id);
     var questions = [];
     var modal = document.createElement("div");
     modal.className = "pass pass--wide iprep-modal";
     modal.innerHTML =
-      '<div class="pass__box"><div class="pass__title">\uD83C\uDF99 Interview prep \u2014 ' + escHtml(w.title || "case study") + '</div>' +
-      '<div class="pass__sub">Generate the questions an interviewer is likely to ask about this work, framed for the level you\u2019re targeting. Ask for a suggested answer on any question.</div>' +
+      '<div class="pass__box"><div class="pass__title">\uD83C\uDF99 Interview prep' + (fromAi ? "" : " \u2014 " + escHtml(w.title || "case study")) + '</div>' +
+      '<div class="pass__sub">Generate the questions an interviewer is likely to ask' + (fromAi ? " \u2014 on a project, a few, or your whole portfolio" : " about this work") + ', framed for the level you\u2019re targeting. Ask for a suggested answer on any question.</div>' +
       '<div class="iprep__setup">' +
         '<div class="af"><label class="af__label">Interviewing for</label><div class="iprep__levels">' +
           IPREP_LEVELS.map(function (l) { return '<button type="button" class="iprep__lvl' + (g.level === l[0] ? " is-on" : "") + '" data-iprep-lvl="' + l[0] + '"><span class="iprep__lvl-name">' + l[1] + '</span><span class="iprep__lvl-desc">' + l[2] + '</span></button>'; }).join("") +
         '</div></div>' +
-        '<div class="af__row">' +
-          '<div class="af"><label class="af__label">Focus</label><select id="iprepScope"><option value="study"' + (g.scope === "study" ? " selected" : "") + '>This case study (deep dive)</option><option value="portfolio"' + (g.scope === "portfolio" ? " selected" : "") + '>Whole portfolio</option></select></div>' +
-          '<div class="af"><label class="af__label">How many</label><select id="iprepCount"><option>6</option><option selected>10</option><option>14</option></select></div>' +
-        '</div>' +
+        (fromAi
+          ? '<div class="af"><label class="af__label">Focus <span class="af__opt">(tick projects \u2014 leave all unticked for your whole portfolio)</span></label><div class="iprep__projs">' + aiWorks.map(function (x, idx) { return '<label class="chk"><input type="checkbox" data-iprep-proj value="' + idx + '" /> ' + escHtml(x.title || ("Project " + (idx + 1))) + "</label>"; }).join("") + "</div></div>" +
+            '<div class="af__row"><div class="af"><label class="af__label">How many</label><select id="iprepCount"><option>6</option><option selected>10</option><option>14</option></select></div><div class="af"></div></div>'
+          : '<div class="af__row">' +
+              '<div class="af"><label class="af__label">Focus</label><select id="iprepScope"><option value="study"' + (g.scope === "study" ? " selected" : "") + '>This case study (deep dive)</option><option value="portfolio"' + (g.scope === "portfolio" ? " selected" : "") + '>Whole portfolio</option></select></div>' +
+              '<div class="af"><label class="af__label">How many</label><select id="iprepCount"><option>6</option><option selected>10</option><option>14</option></select></div>' +
+            "</div>") +
         '<div class="af"><label class="af__label">Target role or job description <span class="af__opt">(optional)</span></label><textarea id="iprepJd" rows="3" placeholder="Paste a role title, the JD text, or a link\u2026">' + escHtml(g.jd || "") + '</textarea>' +
         '<div class="af__hint">A link is sent as context (job sites often block reading \u2014 paste the text for best results). <button class="iprep__filebtn" data-iprep-file type="button">Add PDF / Word / text\u2026</button></div></div>' +
       '</div>' +
@@ -6027,12 +6064,19 @@
     }
     runBtn.addEventListener("click", async function () {
       err.textContent = "";
-      g.scope = modal.querySelector("#iprepScope").value; g.jd = jdEl.value;
+      g.jd = jdEl.value;
       var n = +modal.querySelector("#iprepCount").value || 10;
       btnBusy(runBtn, "Thinking\u2026");
       try {
+        var ctx;
+        if (fromAi) {
+          var picked = [].slice.call(modal.querySelectorAll("[data-iprep-proj]:checked")).map(function (cb) { return aiWorks[+cb.value]; }).filter(Boolean);
+          ctx = iprepAiContext(picked.length ? picked : aiWorks, picked.length === 0);
+        } else {
+          g.scope = modal.querySelector("#iprepScope").value;
+          ctx = iprepContext(w, g.scope);
+        }
         var jd = await iprepResolveJd(jdEl.value);
-        var ctx = iprepContext(w, g.scope);
         var obj = csgenParse(await aiText(aiCfg("txt"), iprepSystem(g.level), iprepQUser(ctx, jd, n), { json: true, maxTokens: 2600, temperature: 0.75 }));
         var raw = obj && Array.isArray(obj.questions) ? obj.questions : (Array.isArray(obj) ? obj : null);
         if (!raw || !raw.length) throw new Error("The AI didn\u2019t return questions \u2014 try again.");
@@ -6049,7 +6093,7 @@
       var ansEl = card.querySelector(".iprep__a");
       var was = btnBusy(btn, "Drafting\u2026"); err.textContent = "";
       try {
-        var html = await aiText(aiCfg("txt"), iprepAnsSystem(g.level), iprepAnsUser(q.q, g.__ctx || iprepContext(w, g.scope), g.__jd || ""), { maxTokens: 900, temperature: 0.6 });
+        var html = await aiText(aiCfg("txt"), iprepAnsSystem(g.level), iprepAnsUser(q.q, g.__ctx || (fromAi ? "" : iprepContext(w, g.scope)), g.__jd || ""), { maxTokens: 900, temperature: 0.6 });
         html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
         ansEl.innerHTML = iprepSafeHtml(html); ansEl.hidden = false;
         card.querySelector(".iprep__q-act").innerHTML = '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">\u21bb Regenerate</button><button class="btn btn--ghost" data-iprep-copy="' + idx + '">Copy</button>';
@@ -6134,6 +6178,12 @@
     ].join("\n");
   }
   function wbScoreUser(p, transcript) { return "PROMPT:\n" + (p.prompt || "") + "\n\nFULL TRANSCRIPT:\n" + (transcript || "(empty)") + wbRoleLine(); }
+  function iprepPanelHtml() {
+    return '<div class="ats"><div class="ats__head"><span class="ats__badge">IQ</span><div><b>Interview prep</b><span>Likely interview questions \u2014 on one project, a few, or your whole portfolio \u2014 with suggested answers.</span></div></div><div class="imgblk__row"><button class="btn btn--primary" type="button" data-act="iprep-open-ai">Open interview prep</button></div></div>';
+  }
+  function storyPanelHtml() {
+    return '<div class="ats"><div class="ats__head"><span class="ats__badge">DS</span><div><b>Design storyteller</b><span>Turn a case study into a presentation \u2014 pick the project, then get story angles, a script and the questions it invites.</span></div></div><div class="imgblk__row"><button class="btn btn--primary" type="button" data-act="story-open-ai">Open design storyteller</button></div></div>';
+  }
   function wbPanelHtml() {
     return '<div class="ats wb-card">' +
       '<div class="ats__head"><span class="ats__badge">WB</span><div><b>Whiteboard coach</b><span>Rehearse the live design exercise \u2014 a role-tailored prompt, a timed game-plan, then coaching or a mock interview.</span></div></div>' +
@@ -6493,17 +6543,20 @@
     }).join("");
   }
   function storyModal(i) {
-    var w = data.work[i]; if (!w) return;
+    var fromAi = (i == null);
+    var stWorks = (data.work || []).filter(function (x) { return x && !x.encWork; });
+    var w = fromAi ? (stWorks[0] || null) : data.work[i]; if (!w) return;
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { storyModal(i); }); return; }
-    var g = storySt(w.id);
+    var g = storySt(fromAi ? "__ai__" : w.id);
     if (!g.qrole) g.qrole = "any";
     var themes = [], curTi = -1, questionsArr = [];
     var modal = document.createElement("div");
     modal.className = "pass pass--wide story-modal";
     modal.innerHTML =
-      '<div class="pass__box"><div class="pass__title">\uD83D\uDCD6 Design storyteller \u2014 ' + escHtml(w.title || "case study") + "</div>" +
-      '<div class="pass__sub">Turn this case study into a presentation. Pick how long you\u2019ll have and who\u2019s in the room \u2014 get a few story angles, then open one for a beat-by-beat script and the questions it invites.</div>' +
+      '<div class="pass__box"><div class="pass__title">\uD83D\uDCD6 Design storyteller' + (fromAi ? "" : " \u2014 " + escHtml(w.title || "case study")) + "</div>" +
+      '<div class="pass__sub">Turn ' + (fromAi ? "a" : "this") + ' case study into a presentation. Pick how long you\u2019ll have and who\u2019s in the room \u2014 get a few story angles, then open one for a beat-by-beat script and the questions it invites.</div>' +
       '<div class="story__setup">' +
+        (fromAi ? '<div class="af"><label class="af__label">Case study</label><select class="story__pick">' + stWorks.map(function (pw, idx) { return '<option value="' + idx + '">' + escHtml(pw.title || ("Project " + (idx + 1))) + "</option>"; }).join("") + "</select></div>" : "") +
         '<div class="af"><label class="af__label">How long to present</label><div class="story__opts">' +
           STORY_DUR.map(function (d) { return '<button type="button" class="story__opt' + (g.dur === d[0] ? " is-on" : "") + '" data-story-dur="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
         "</div></div>" +
@@ -6560,6 +6613,8 @@
     qroleSel.addEventListener("change", function () { g.qrole = qroleSel.value; });
     modal.querySelectorAll("[data-story-dur]").forEach(function (b) { b.addEventListener("click", function () { g.dur = b.dataset.storyDur; modal.querySelectorAll("[data-story-dur]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); }); });
     modal.querySelectorAll("[data-story-tone]").forEach(function (b) { b.addEventListener("click", function () { g.tone = b.dataset.storyTone; modal.querySelectorAll("[data-story-tone]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); }); });
+    var storyPick = modal.querySelector(".story__pick");
+    if (storyPick) storyPick.addEventListener("change", function () { var nw = stWorks[+storyPick.value]; if (nw) { w = nw; g.__ctx = null; } });
     var alignCb = modal.querySelector("[data-story-align]");
     var roleFields = modal.querySelector(".story__role-fields");
     var jdUrlEl = modal.querySelector("[data-story-jd-url]");
