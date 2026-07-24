@@ -452,7 +452,7 @@
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="resume-upload">Upload PDF\u2026</button>' +
       (has ? '<button class="btn btn--ghost" data-act="resume-open">Open</button><button class="btn btn--ghost" data-act="resume-clear">Remove</button>' : "") + "</div>" +
       '<div class="imgblk__hint">' + (has ? ("In use: " + escHtml(isData ? "embedded PDF" : url) + " \u00b7 the dock button is now visible") : "Not set \u2014 the r\u00e9sum\u00e9 button stays hidden until you add one.") + "</div></div>" +
-      atsPanelHtml(has) + clPanelHtml();
+      atsPanelHtml(has) + clPanelHtml() + wbPanelHtml();
   }
   function atsPanelHtml(has) {
     var lvls = IPREP_LEVELS.map(function (l) {
@@ -3115,6 +3115,7 @@
     if (act === "fbrev-open") { fbReviewModal(i); return; }
     if (act === "iprep-open") { iprepModal(i); return; }
     if (act === "story-open") { storyModal(i); return; }
+    if (act === "wb-open") { wbModal(); return; }
     if (act === "csgen-ref-toggle") { const wrap = b.closest(".csgen__ref"); if (wrap) { const open = wrap.classList.toggle("is-open"); b.textContent = (open ? "\u2212" : "+") + " Paste a reference case study to echo (optional)"; const cw = data.work[i]; if (cw) csgenState(cw.id).refShow = open; } return; }
     if (act === "study-toggle") { openL2(i); return; }
     if (act === "study-close") { closeL2(); return; }
@@ -6059,6 +6060,259 @@
       var ansEl = card.querySelector(".iprep__a"); var txt = ansEl ? ansEl.innerText : ""; if (!txt) return;
       if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function () { cb.textContent = "Copied"; setTimeout(function () { cb.textContent = "Copy"; }, 1400); }).catch(function () {});
     });
+  }
+
+  /* ---------- Whiteboard coach (design-exercise trainer) ---------- */
+  // Rehearse a live whiteboard/app-design exercise: pick a slot (60/45/30) + a mode
+  // (Coach = prompt + timed game-plan + feedback on your written approach; Mock = the AI
+  // role-plays the interviewer turn-by-turn, then scores you). Prep only, never published.
+  var WB_MINS = [
+    ["60", "60 min", "Full onsite exercise"],
+    ["45", "45 min", "Standard slot"],
+    ["30", "30 min", "Tight \u2014 lead with structure"]
+  ];
+  var WB_MODES = [
+    ["coach", "Coach", "Prompt + timed plan, then feedback on your approach"],
+    ["mock", "Mock interview", "I play the interviewer \u2014 back-and-forth, then a scorecard"]
+  ];
+  var WB_KEY = "rk:wb";
+  var wbState = (function () { try { var o = JSON.parse(localStorage.getItem(WB_KEY)); return (o && typeof o === "object") ? o : {}; } catch (e) { return {}; } })();
+  if (!wbState.mins) wbState.mins = "60";
+  if (!wbState.mode) wbState.mode = "coach";
+  function wbSave() { try { localStorage.setItem(WB_KEY, JSON.stringify({ mins: wbState.mins, mode: wbState.mode, brief: wbState.brief || "" })); } catch (e) {} }
+  function wbMinsLabel(m) { for (var i = 0; i < WB_MINS.length; i++) if (WB_MINS[i][0] === m) return WB_MINS[i][1]; return m + " min"; }
+  function wbRoleLine() { var t = storyJdText(); return t ? "\n\nTARGET ROLE \u2014 tailor the exercise to what THIS role/team would actually probe (mirror its domain and altitude):\n" + t : ""; }
+  function wbPortfolioHint() {
+    var titles = (data.work || []).filter(function (w) { return w && !w.encWork; }).map(function (w) { return w.client || w.title; }).filter(Boolean).slice(0, 6);
+    return titles.length ? "\n\nThe candidate's background spans: " + titles.join("; ") + ". A prompt adjacent to (not identical to) these lands best." : "";
+  }
+  function wbPromptSystem() {
+    return [
+      "You are a design-interview lead who sets whiteboard / app-design exercises for senior product designers.",
+      "Invent ONE crisp, realistic prompt \u2014 an open design challenge (e.g. 'Design a X for Y who need to Z'), the kind given live in an onsite. It must be solvable in the time given, ambiguous enough to explore, and not a trick.",
+      "Return ONLY valid JSON (no markdown): {\"prompt\":string,\"context\":string,\"watchfor\":[string]}. context = 1\u20132 lines of setup/constraints the interviewer would say. watchfor = 3\u20134 things the panel is secretly grading."
+    ].join("\n");
+  }
+  function wbPromptUser(mins, brief) {
+    return "Time: " + wbMinsLabel(mins) + ".\nDesired flavour / domain (optional): " + (brief || "(you choose \u2014 pick something juicy and current)") + "." + wbRoleLine() + wbPortfolioHint();
+  }
+  function wbPlanSystem(mins) {
+    return [
+      "You are an elite design-interview coach. Give a battle-tested GAME PLAN for whiteboarding the given prompt live in " + wbMinsLabel(mins) + ".",
+      "Be specific to THIS prompt \u2014 no generic advice. Budget the minutes so they sum to about " + mins + ".",
+      "Return ONLY valid JSON (no markdown): {\"clarifiers\":[string],\"assumptions\":[string],\"phases\":[{\"label\":string,\"mins\":string,\"move\":string,\"tip\":string}],\"curveballs\":[{\"q\":string,\"handle\":string}],\"closer\":string}. clarifiers = 3\u20135 sharp questions to ask BEFORE diving in. assumptions = 2\u20133 you'd state and move on. phases = the ordered arc (Clarify \u2192 Users \u2192 Goal/metric \u2192 Framing/HMW \u2192 Ideate \u2192 Prioritise \u2192 Flow \u2192 Edge cases \u2192 Trade-offs \u2192 Recap). curveballs = 3 likely mid-exercise challenges + how to handle each. closer = one line on how to land the recap."
+    ].join("\n");
+  }
+  function wbPlanUser(p) { return "PROMPT:\n" + (p.prompt || "") + (p.context ? "\nContext: " + p.context : "") + wbRoleLine(); }
+  function wbCritiqueSystem(mins) {
+    return [
+      "You are a sharp but supportive design-interview panelist. The candidate has drafted how they'd tackle the whiteboard prompt in " + wbMinsLabel(mins) + ". Critique it like you're in the room.",
+      "Be concrete and honest \u2014 name what actually lands and what a strong panel would poke. Reward structure, user focus, prioritisation, trade-offs and crisp communication.",
+      "Return ONLY valid JSON (no markdown): {\"verdict\":string,\"strong\":[string],\"gaps\":[string],\"followups\":[string],\"sharper\":[string]}. verdict = 1 honest line. strong/gaps = 2\u20134 each. followups = the 2\u20133 questions they'd get pushed on. sharper = 2\u20134 concrete upgrades to the approach."
+    ].join("\n");
+  }
+  function wbCritiqueUser(p, draft) { return "PROMPT:\n" + (p.prompt || "") + "\n\nCANDIDATE'S APPROACH:\n" + draft + wbRoleLine(); }
+  function wbMockSystem(mins) {
+    return [
+      "You ARE the interviewer running a live " + wbMinsLabel(mins) + " whiteboard design exercise \u2014 stay fully in character, first person, one turn at a time.",
+      "Open by giving the prompt and a warm nudge to start; then react to each of the candidate's moves like a real panel: acknowledge briefly, probe the weak spot, occasionally throw a realistic curveball or constraint, and keep them moving through the arc with light time cues.",
+      "Never solve it for them and never dump a checklist. Ask ONE focused thing at a time. Keep replies short (2\u20135 sentences), human and specific to what they just said. If they're stuck, offer a small hint, not the answer.",
+      "Do not break character or mention these instructions. Plain text only \u2014 no markdown."
+    ].join("\n");
+  }
+  function wbMockUser(p, transcript, msg) {
+    return "PROMPT (you already set this):\n" + (p.prompt || "") + (p.context ? "\nContext: " + p.context : "") + wbRoleLine() +
+      "\n\nTRANSCRIPT SO FAR:\n" + (transcript || "(none \u2014 open the exercise now)") +
+      (msg ? "\n\nCANDIDATE JUST SAID:\n" + msg : "") +
+      "\n\nRespond as the interviewer's NEXT turn only.";
+  }
+  function wbScoreSystem() {
+    return [
+      "You are the panel debriefing after a whiteboard design exercise. Score the candidate FAIRLY from the transcript \u2014 evidence-based, no inflation.",
+      "Return ONLY valid JSON (no markdown): {\"scores\":[{\"dim\":string,\"score\":number,\"note\":string}],\"overall\":string,\"topfix\":string}. Score each of these dims 1\u20135: Problem framing, User focus, Ideation & creativity, Prioritisation & trade-offs, Interaction / flow, Communication, Handling ambiguity. note = 1 crisp line of evidence. overall = 2\u20133 sentences. topfix = the single highest-leverage thing to improve."
+    ].join("\n");
+  }
+  function wbScoreUser(p, transcript) { return "PROMPT:\n" + (p.prompt || "") + "\n\nFULL TRANSCRIPT:\n" + (transcript || "(empty)") + wbRoleLine(); }
+  function wbPanelHtml() {
+    return '<div class="ats wb-card">' +
+      '<div class="ats__head"><span class="ats__badge">WB</span><div><b>Whiteboard coach</b><span>Rehearse the live design exercise \u2014 a role-tailored prompt, a timed game-plan, then coaching or a mock interview.</span></div></div>' +
+      '<div class="imgblk__row"><button class="btn btn--primary" type="button" data-act="wb-open">Open whiteboard coach</button></div>' +
+      "</div>";
+  }
+  function wbList(arr) { return (arr || []).map(function (x) { return "<li>" + escHtml(x) + "</li>"; }).join(""); }
+  function wbPromptCard(p) {
+    return '<div class="wb__prompt"><span class="wb__prompt-k">Your prompt</span><div class="wb__prompt-t">' + escHtml(p.prompt || "") + "</div>" +
+      (p.context ? '<div class="wb__prompt-c">' + escHtml(p.context) + "</div>" : "") +
+      ((p.watchfor && p.watchfor.length) ? '<div class="wb__watch"><span>Panel is grading</span> ' + p.watchfor.map(function (x) { return escHtml(x); }).join(" \u00b7 ") + "</div>" : "") +
+      '<button class="btn btn--ghost btn--auto wb__newp" type="button" data-wb-newprompt>\u21bb New prompt</button></div>';
+  }
+  function wbPlanCard(pl, mins) {
+    pl = pl || {};
+    var phases = (pl.phases || []).map(function (ph) {
+      return '<div class="wb__phase"><div class="wb__phase-t"><span class="wb__phase-m">' + escHtml(String(ph.mins || "\u2022")) + "<small>min</small></span><b>" + escHtml(ph.label || "") + "</b></div>" +
+        (ph.move ? '<div class="wb__phase-move">' + escHtml(ph.move) + "</div>" : "") +
+        (ph.tip ? '<div class="wb__phase-tip">' + escHtml(ph.tip) + "</div>" : "") + "</div>";
+    }).join("");
+    var curve = (pl.curveballs || []).map(function (c) { return '<div class="wb__curve"><b>' + escHtml(c.q || "") + "</b>" + (c.handle ? "<span>" + escHtml(c.handle) + "</span>" : "") + "</div>"; }).join("");
+    return '<div class="wb__plan">' +
+      ((pl.clarifiers && pl.clarifiers.length) ? '<div class="wb__block"><h4>Clarify first \u2014 ask</h4><ul>' + wbList(pl.clarifiers) + "</ul></div>" : "") +
+      ((pl.assumptions && pl.assumptions.length) ? '<div class="wb__block"><h4>State &amp; move on \u2014 assume</h4><ul>' + wbList(pl.assumptions) + "</ul></div>" : "") +
+      (phases ? '<div class="wb__block"><h4>The arc \u00b7 ' + escHtml(wbMinsLabel(mins)) + '</h4><div class="wb__phases">' + phases + "</div></div>" : "") +
+      (curve ? '<div class="wb__block"><h4>Curveballs to expect</h4>' + curve + "</div>" : "") +
+      (pl.closer ? '<div class="wb__closer"><span>Land it</span> ' + escHtml(pl.closer) + "</div>" : "") +
+      "</div>";
+  }
+  function wbDraftCard() {
+    return '<div class="wb__draftwrap"><h4>Rehearse \u2014 draft your approach</h4>' +
+      '<textarea class="cl__jd wb__draft" rows="6" placeholder="Talk through how you\u2019d attack it \u2014 clarifiers, users, goal, a couple of ideas, what you\u2019d prioritise and why, the core flow, edge cases, trade-offs\u2026"></textarea>' +
+      '<div class="imgblk__row"><button class="btn btn--primary" type="button" data-wb-critique>Get coaching</button></div>' +
+      '<div class="wb__crit"></div></div>';
+  }
+  function wbCritiqueHtml(c) {
+    c = c || {};
+    return '<div class="wb__feedback">' +
+      (c.verdict ? '<div class="wb__verdict">' + escHtml(c.verdict) + "</div>" : "") +
+      ((c.strong && c.strong.length) ? '<div class="wb__fb wb__fb--good"><h5>What lands</h5><ul>' + wbList(c.strong) + "</ul></div>" : "") +
+      ((c.gaps && c.gaps.length) ? '<div class="wb__fb wb__fb--gap"><h5>What a panel would poke</h5><ul>' + wbList(c.gaps) + "</ul></div>" : "") +
+      ((c.followups && c.followups.length) ? '<div class="wb__fb"><h5>Be ready for</h5><ul>' + wbList(c.followups) + "</ul></div>" : "") +
+      ((c.sharper && c.sharper.length) ? '<div class="wb__fb wb__fb--up"><h5>Sharper</h5><ul>' + wbList(c.sharper) + "</ul></div>" : "") +
+      "</div>";
+  }
+  function wbScoreHtml(s) {
+    s = s || {};
+    var rows = (s.scores || []).map(function (r) {
+      var n = Math.max(0, Math.min(5, Math.round(+r.score || 0)));
+      return '<div class="wb__score"><div class="wb__score-h"><b>' + escHtml(r.dim || "") + '</b><span class="wb__dots">' + wbRepeat("\u25CF", n) + wbRepeat("\u25CB", 5 - n) + "</span></div>" + (r.note ? '<div class="wb__score-n">' + escHtml(r.note) + "</div>" : "") + "</div>";
+    }).join("");
+    return '<div class="wb__scorecard"><h4>Scorecard</h4>' + rows +
+      (s.overall ? '<div class="wb__overall">' + escHtml(s.overall) + "</div>" : "") +
+      (s.topfix ? '<div class="wb__topfix"><span>Fix this first</span> ' + escHtml(s.topfix) + "</div>" : "") + "</div>";
+  }
+  function wbRepeat(ch, n) { var s = ""; for (var i = 0; i < n; i++) s += ch; return s; }
+  function wbModal() {
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { wbModal(); }); return; }
+    var st = wbState; if (!st.mins) st.mins = "60"; if (!st.mode) st.mode = "coach";
+    var prompt = null, transcript = "";
+    var modal = document.createElement("div");
+    modal.className = "pass pass--wide wb-modal";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">\uD83E\uDDE9 Whiteboard coach</div>' +
+      '<div class="pass__sub">Rehearse a live design exercise. Pick the length and a mode \u2014 I\u2019ll set a realistic prompt' + (storyJdText() ? " tailored to your target role" : "") + ", give you a timed game-plan, then coach you or run a mock.</div>" +
+      '<div class="wb__setup">' +
+        '<div class="af"><label class="af__label">How long is the exercise</label><div class="story__opts wb__opts3">' +
+          WB_MINS.map(function (d) { return '<button type="button" class="story__opt' + (st.mins === d[0] ? " is-on" : "") + '" data-wb-mins="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
+        "</div></div>" +
+        '<div class="af"><label class="af__label">Mode</label><div class="story__opts">' +
+          WB_MODES.map(function (d) { return '<button type="button" class="story__opt' + (st.mode === d[0] ? " is-on" : "") + '" data-wb-mode="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
+        "</div></div>" +
+        '<div class="af"><label class="af__label">Flavour / your own prompt (optional)</label>' +
+          '<input type="text" class="wb__brief" placeholder="Domain or product to riff on \u2014 e.g. fintech onboarding, transit app\u2026" value="' + escAttr(st.brief || "") + '" />' +
+          '<textarea class="cl__jd wb__own" rows="3" placeholder="\u2026or paste a specific prompt to use verbatim (leave blank and I\u2019ll invent one)."></textarea>' +
+          (storyJdText() ? '<div class="af__hint">Will tailor to your target role (from \u201cAlign to a role\u201d in the storyteller).</div>' : "") +
+        "</div>" +
+      "</div>" +
+      '<div class="wb__stage" hidden></div>' +
+      '<div class="pass__err"></div>' +
+      '<div class="pass__actions wb__foot">' +
+        '<button class="btn btn--ghost" data-cancel>Close</button>' +
+        '<button class="btn btn--ghost" data-wb-back hidden>\u2190 Change setup</button>' +
+        '<button class="btn btn--auto" data-wb-start>Start</button>' +
+      "</div>" +
+      '<div class="pass__note">A prep tool only \u2014 nothing here is saved to or published on your site.</div></div>';
+    document.body.appendChild(modal);
+    var err = modal.querySelector(".pass__err");
+    var setup = modal.querySelector(".wb__setup");
+    var stage = modal.querySelector(".wb__stage");
+    var startBtn = modal.querySelector("[data-wb-start]");
+    var backBtn = modal.querySelector("[data-wb-back]");
+    var briefEl = modal.querySelector(".wb__brief");
+    var ownEl = modal.querySelector(".wb__own");
+    var close = function () { modal.remove(); };
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    modal.querySelectorAll("[data-wb-mins]").forEach(function (b) { b.addEventListener("click", function () { st.mins = b.dataset.wbMins; modal.querySelectorAll("[data-wb-mins]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
+    modal.querySelectorAll("[data-wb-mode]").forEach(function (b) { b.addEventListener("click", function () { st.mode = b.dataset.wbMode; modal.querySelectorAll("[data-wb-mode]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
+    if (briefEl) briefEl.addEventListener("input", function () { st.brief = briefEl.value; wbSave(); });
+    function showSetup() { setup.hidden = false; stage.hidden = true; backBtn.hidden = true; startBtn.hidden = false; err.textContent = ""; }
+    function showStage() { setup.hidden = true; stage.hidden = false; backBtn.hidden = false; startBtn.hidden = true; err.textContent = ""; }
+    backBtn.addEventListener("click", showSetup);
+    startBtn.addEventListener("click", async function () {
+      err.textContent = ""; btnBusy(startBtn, "Setting the prompt\u2026");
+      try {
+        var own = (ownEl && ownEl.value.trim()) || "";
+        if (own) prompt = { prompt: own, context: "", watchfor: [] };
+        else prompt = csgenParse(await aiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { json: true, maxTokens: 700, temperature: 0.9 }));
+        if (!prompt || !prompt.prompt) throw new Error("Couldn\u2019t set a prompt \u2014 try again.");
+        transcript = "";
+        showStage();
+        if (st.mode === "coach") await wbRunCoach();
+        else await wbRunMock(true);
+      } catch (e) { err.textContent = (e && e.message) || "Something went wrong \u2014 try again."; showSetup(); }
+      btnIdle(startBtn, "Start");
+    });
+    async function wbRunCoach() {
+      stage.innerHTML = wbPromptCard(prompt) + '<div class="wb__loading">Building your game-plan\u2026</div>';
+      try {
+        var plan = csgenParse(await aiText(aiCfg("txt"), wbPlanSystem(st.mins), wbPlanUser(prompt), { json: true, maxTokens: 2000, temperature: 0.6 }));
+        stage.innerHTML = wbPromptCard(prompt) + wbPlanCard(plan, st.mins) + wbDraftCard();
+      } catch (e) { stage.innerHTML = wbPromptCard(prompt) + wbDraftCard(); err.textContent = (e && e.message) || "Couldn\u2019t build the plan \u2014 you can still rehearse below."; }
+      wireStage();
+    }
+    async function wbRunMock(opening) {
+      stage.innerHTML = wbPromptCard(prompt) + '<div class="wb__chat" data-wb-log></div>' +
+        '<div class="wb__composer"><textarea class="wb__msg" rows="2" placeholder="Type your next move \u2014 think out loud like you would at the board (\u2318/Ctrl+Enter to send)\u2026"></textarea>' +
+        '<div class="wb__composer-act"><button class="btn btn--auto" data-wb-send>Send</button><button class="btn btn--ghost" data-wb-score>Wrap up &amp; score me</button></div></div>';
+      wireStage();
+      var log = stage.querySelector("[data-wb-log]");
+      var msgEl = stage.querySelector(".wb__msg");
+      var sendBtn = stage.querySelector("[data-wb-send]");
+      var scoreBtn = stage.querySelector("[data-wb-score]");
+      function addTurn(who, text) { var d = document.createElement("div"); d.className = "wb__turn wb__turn--" + who; var wl = document.createElement("span"); wl.className = "wb__who"; wl.textContent = who === "int" ? "Interviewer" : "You"; var bu = document.createElement("div"); bu.className = "wb__bubble"; bu.textContent = text; d.appendChild(wl); d.appendChild(bu); log.appendChild(d); log.scrollTop = log.scrollHeight; }
+      async function interviewerTurn(userMsg) {
+        btnBusy(sendBtn, "\u2026");
+        try {
+          var reply = (await aiText(aiCfg("txt"), wbMockSystem(st.mins), wbMockUser(prompt, transcript, userMsg || ""), { maxTokens: 500, temperature: 0.75 }) || "").trim();
+          if (reply) { addTurn("int", reply); transcript += (transcript ? "\n" : "") + "INTERVIEWER: " + reply; }
+        } catch (e) { err.textContent = (e && e.message) || "The interviewer went quiet \u2014 try again."; }
+        btnIdle(sendBtn, "Send");
+      }
+      if (sendBtn) sendBtn.addEventListener("click", async function () { var m = (msgEl && msgEl.value.trim()) || ""; if (!m) return; addTurn("you", m); transcript += (transcript ? "\n" : "") + "CANDIDATE: " + m; msgEl.value = ""; await interviewerTurn(m); });
+      if (msgEl) msgEl.addEventListener("keydown", function (e) { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); if (sendBtn) sendBtn.click(); } });
+      if (scoreBtn) scoreBtn.addEventListener("click", async function () {
+        if (!transcript) { err.textContent = "Have a bit of the exercise first \u2014 then I\u2019ll score it."; return; }
+        err.textContent = ""; btnBusy(scoreBtn, "Scoring\u2026");
+        try {
+          var s = csgenParse(await aiText(aiCfg("txt"), wbScoreSystem(), wbScoreUser(prompt, transcript), { json: true, maxTokens: 1400, temperature: 0.4 }));
+          var card = document.createElement("div"); card.className = "wb__scorewrap"; card.innerHTML = wbScoreHtml(s); stage.appendChild(card); card.scrollIntoView({ block: "nearest" });
+        } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t score that \u2014 try again."; }
+        btnIdle(scoreBtn, "Wrap up & score me");
+      });
+      if (opening) interviewerTurn("");
+    }
+    function wireStage() {
+      var np = stage.querySelector("[data-wb-newprompt]");
+      if (np) np.addEventListener("click", async function () {
+        btnBusy(np, "New prompt\u2026");
+        try {
+          prompt = csgenParse(await aiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { json: true, maxTokens: 700, temperature: 0.95 }));
+          transcript = "";
+          if (st.mode === "coach") await wbRunCoach(); else await wbRunMock(true);
+        } catch (e) { err.textContent = (e && e.message) || "Try again."; btnIdle(np, "\u21bb New prompt"); }
+      });
+      var crit = stage.querySelector("[data-wb-critique]");
+      if (crit) crit.addEventListener("click", async function () {
+        var draftEl = stage.querySelector(".wb__draft");
+        var d = (draftEl && draftEl.value.trim()) || "";
+        if (d.length < 20) { err.textContent = "Jot a few lines of your approach first."; return; }
+        err.textContent = ""; btnBusy(crit, "Reading the room\u2026");
+        try {
+          var c = csgenParse(await aiText(aiCfg("txt"), wbCritiqueSystem(st.mins), wbCritiqueUser(prompt, d), { json: true, maxTokens: 1500, temperature: 0.55 }));
+          var out = stage.querySelector(".wb__crit"); if (out) out.innerHTML = wbCritiqueHtml(c);
+        } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t get feedback \u2014 try again."; }
+        btnIdle(crit, "Get coaching");
+      });
+    }
   }
 
   /* ---------- Design storyteller (prep only) ---------- */
