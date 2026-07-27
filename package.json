@@ -1,0 +1,14 @@
+{
+  "name": "riteshk-portfolio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ritesh Kumar portfolio — static site (riteshk.work) with an esbuild module build.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
+  }
+}

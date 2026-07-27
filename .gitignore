@@ -1,0 +1,12 @@
+# Dependencies (never committed — installed via `npm ci`)
+node_modules/
+
+# Logs & OS cruft
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
