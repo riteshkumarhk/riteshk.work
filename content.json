@@ -3706,7 +3706,57 @@
       "meta": "MNPS · 1998–2010"
     }
   ],
-  "specialViews": [],
+  "specialViews": [
+    {
+      "id": "svms2t5b5t",
+      "name": "Adobe Unlocked",
+      "audience": "Adobe",
+      "ticketHash": "ee9021c84f33366bde80b75efa132836e47afa18b9ce58e8077f4c25d039666c",
+      "createdAt": 1785131404481,
+      "days": 3,
+      "workIds": [
+        "w1784023223052",
+        "w1783924971648",
+        "w1783840785203",
+        "w1783695671548"
+      ],
+      "highlightIdx": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "capabilityIdx": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ]
+    }
+  ],
   "journey": {
     "enabled": true,
     "chapters": [
