@@ -1,10 +1,13 @@
 /* =================================================================
    ADMIN MODE — private, client-side content editor.
-   Trigger: click the nav clock. Gated by a passphrase (hashed in
-   this browser). Edits live-preview + save to a localStorage draft.
+   Trigger: click the nav clock. Gated by an admin key — verified
+   against a salted hash published in content.json, so a fresh browser
+   must know the real key (no self-serve "create"). Edits live-preview
+   + save to a localStorage draft.
    Publishing = download content.json + clipboard + open GitHub editor.
-   NOTE: the passphrase is a deterrent only — the real lock is that
-   the live site changes only when content.json is committed.
+   NOTE: the gate is still a client-side deterrent — content.json is
+   public, and the real lock is that the live site changes only when
+   content.json is committed (which needs your GitHub token).
    ================================================================= */
 (function () {
   "use strict";
@@ -13,6 +16,7 @@
   if (new URLSearchParams(location.search).has("preview")) return;
 
   const HASH_KEY = "rk:admin:hash";
+  const GATE_KEY = "rk:admin:gate"; // salted PBKDF2 record embedded in content.json at publish
   const DRAFT_KEY = "rk:content:draft";
   const THEME_KEY = "rk:theme";
   const MUSIC_ON_KEY = "rk:music:on";
@@ -205,6 +209,26 @@
     var key = await rkImportSek(sekBytes);
     var pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: rkUnb64(ivB64) }, key, ctBytes);
     return new Uint8Array(pt);
+  }
+
+  /* ---------- admin-key gate hash (salted PBKDF2, published in content.json) ----------
+     The admin key is verified against a salted hash that ships in content.json, so a
+     fresh browser must know the real key instead of minting a new one. It is a slow
+     PBKDF2 hash (not the plain SHA-256 kept in localStorage for quick re-entry) to make
+     the public hash costly to brute-force. Case-sensitive, matching the existing key. */
+  async function rkPbkHex(pass, saltBytes, iters) {
+    var base = await crypto.subtle.importKey("raw", new TextEncoder().encode(String(pass == null ? "" : pass)), "PBKDF2", false, ["deriveBits"]);
+    var bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: saltBytes, iterations: iters, hash: "SHA-256" }, base, 256);
+    return [...new Uint8Array(bits)].map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+  }
+  async function rkGateRecord(pass) {
+    var salt = crypto.getRandomValues(new Uint8Array(16));
+    return { v: 1, it: RK_KDF_IT, salt: rkB64(salt), hash: await rkPbkHex(pass, salt, RK_KDF_IT) };
+  }
+  async function rkGateVerify(pass, rec) {
+    if (!rec || !rec.salt || !rec.hash) return false;
+    try { return (await rkPbkHex(pass, rkUnb64(rec.salt), rec.it || RK_KDF_IT)) === rec.hash; }
+    catch (e) { return false; }
   }
 
   function getPath(obj, path) {
@@ -3319,6 +3343,8 @@
     const styled = autoStyleLanding(false);
     if (styled) { if (activeTab === "landing") renderBody(); apply(true); }
     const pubData = JSON.parse(JSON.stringify(data));
+    // Publish a salted hash of the admin key so any browser must know the real key to open the editor.
+    try { var _gr = localStorage.getItem(GATE_KEY); if (_gr) pubData.adminGate = JSON.parse(_gr); else delete pubData.adminGate; } catch (e) {}
     // With a token, protected images are encrypted into their own /assets/protected/<hash>.enc
     // files (content.json stays tiny). Without one (manual publish), fall back to inlining them.
     if (!token) await inlineProtectedImages(pubData);
@@ -6935,8 +6961,9 @@
   function gate() {
     if (window.innerWidth < ADMIN_MIN) { flash("Admin mode needs a wider screen — open it on a laptop or desktop."); return; }
     thDismiss(true);   // clear the landing “have a ticket?” nudge before the gate/editor (it sits above them)
+    const publishedGate = (window.RK && window.RK.published && window.RK.published.adminGate) || null;
     const stored = localStorage.getItem(HASH_KEY);
-    const creating = !stored;
+    const creating = !publishedGate && !stored;
     const modal = document.createElement("div");
     modal.className = "pass";
     modal.innerHTML =
@@ -6966,10 +6993,16 @@
         if (val.length < 4) { err.textContent = "Use at least 4 characters"; return; }
         if (confirm2 && confirm2.value !== val) { err.textContent = "Keys don't match"; return; }
         localStorage.setItem(HASH_KEY, await sha256(val));
+        try { localStorage.setItem(GATE_KEY, JSON.stringify(await rkGateRecord(val))); } catch (e) {}
         done(); open();
       } else {
-        if ((await sha256(val)) === stored) { done(); open(); }
-        else { err.textContent = "Incorrect key"; }
+        var ok = false;
+        if (publishedGate && await rkGateVerify(val, publishedGate)) ok = true;
+        else if (stored && (await sha256(val)) === stored) ok = true;
+        if (ok) {
+          try { localStorage.setItem(HASH_KEY, await sha256(val)); localStorage.setItem(GATE_KEY, JSON.stringify(await rkGateRecord(val))); } catch (e) {}
+          done(); open();
+        } else { err.textContent = "Incorrect key"; }
       }
     }
     modal.querySelector("[data-go]").addEventListener("click", submit);
@@ -7003,8 +7036,9 @@
       if (cf.value !== val) { err.textContent = "New keys don\u2019t match"; return; }
       if (stored && (await sha256(val)) === stored) { err.textContent = "That\u2019s already your current key"; return; }
       localStorage.setItem(HASH_KEY, await sha256(val));
+      try { localStorage.setItem(GATE_KEY, JSON.stringify(await rkGateRecord(val))); } catch (e) {}
       done();
-      status("Admin key updated \u2014 you\u2019ll use the new key next time you open admin.", true);
+      status("Admin key updated \u2014 you\u2019ll use the new key next time you open admin. Publish to require it on your other devices too.", true);
     }
     modal.querySelector("[data-go]").addEventListener("click", submit);
     modal.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });
