@@ -16,7 +16,7 @@ import { build, context } from "esbuild";
 const watch = process.argv.includes("--watch");
 
 // Public entries already migrated to ES modules (built → js/<name>.js).
-const ENTRIES = ["render", "main", "gensection", "project", "journey"];
+const ENTRIES = ["render", "main", "gensection", "project", "journey", "admin"];
 
 /** @type {import("esbuild").BuildOptions} */
 const options = {
