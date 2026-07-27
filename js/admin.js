@@ -3015,6 +3015,7 @@
     const sv = (data.specialViews || [])[i];
     const w = frame && frame.contentWindow;
     if (w && w.RK && sv) {
+      try { (sv.workIds || []).forEach(function (id) { if (w.RK.setStudyUnlocked) w.RK.setStudyUnlocked(id); }); } catch (e) {}
       try { w.RK.render(resolvePreviewData(w.RK.deriveSpecialData(data, sv))); forceRevealDoc(w.document); } catch (e) {}
       status("Previewing \u201c" + (sv.name || "view") + "\u201d \u2014 edit anything to return to the full site.");
     }

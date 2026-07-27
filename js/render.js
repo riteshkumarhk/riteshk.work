@@ -317,6 +317,16 @@
       var wrap = st && st.enc && st.enc.wraps && st.enc.wraps.tickets && st.enc.wraps.tickets[sv.id];
       if (wrap) { try { var sek2 = await rkUnwrapSek(code, wrap); if (await rkDecryptStudyBlocks(st, sek2)) rkMarkUnlocked(w.id); } catch (e) {} }
     }
+    // A valid ticket authorises this view's works: reveal their deeper-cut sections whenever the
+    // locked content is actually available (decrypted just now, or already plaintext in an owner
+    // draft/preview). Blocks still ciphertext (encStub) stay gated so we never render empty content.
+    for (var mi = 0; mi < ids.length; mi++) {
+      var mw = null;
+      for (var mk = 0; mk < data.work.length; mk++) { if (data.work[mk] && data.work[mk].id === ids[mi]) { mw = data.work[mk]; break; } }
+      if (!mw || mw.encWork || !mw.study || !Array.isArray(mw.study.blocks)) continue;
+      var lk = mw.study.blocks.filter(function (b) { return b && b.locked; });
+      if (lk.length && !lk.some(function (b) { return b.encStub; })) rkMarkUnlocked(mw.id);
+    }
   }
 
   function deriveSpecialData(base, sv) {
