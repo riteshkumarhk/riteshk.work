@@ -3439,12 +3439,39 @@
       }
     }
   }
+  // Already-encrypted content (encWork stubs / stub-only studies) is preserved verbatim across
+  // publishes — so a special view created AFTER a section was first encrypted would never carry a
+  // key to open it. This tops up the missing per-view ticket wraps (unwrapping the section key with
+  // the recovery pass) and prunes wraps for views that no longer include the work. Publish-payload
+  // only (pubData is a clone); the recovery pass is cached per session.
+  async function syncStubTickets(enc, workId, svAll) {
+    if (!enc || !enc.wraps || !enc.wraps.owner) return;
+    var qualify = {};
+    (svAll || []).forEach(function (sv) { if (sv && sv.ticketHash && (sv.workIds || []).indexOf(workId) !== -1) qualify[sv.id] = sv; });
+    var have = enc.wraps.tickets || {};
+    var missing = Object.keys(qualify).filter(function (id) { return !have[id]; });
+    var stale = Object.keys(have).filter(function (id) { return !qualify[id]; });
+    if (!missing.length && !stale.length) return;
+    stale.forEach(function (id) { delete have[id]; });
+    if (missing.length) {
+      var recovery = await ensureRecoveryPass();
+      if (recovery === null) throw { rkEnc: true, cancelled: true };
+      var sek;
+      try { sek = await rkUnwrapSek(recovery, enc.wraps.owner); } catch (e) { throw { rkEnc: true, cancelled: true }; }
+      for (var i = 0; i < missing.length; i++) {
+        var code = await ensureTicketCode(qualify[missing[i]]);
+        if (code === null) throw { rkEnc: true, cancelled: true };
+        have[missing[i]] = await rkWrapSek(code, sek);
+      }
+    }
+    if (Object.keys(have).length) enc.wraps.tickets = have; else if (enc.wraps.tickets) delete enc.wraps.tickets;
+  }
   async function encryptLockedForPublish(pubData, token) {
     var works = (pubData && pubData.work) || [];
     var svAll = (pubData.specialViews || []);
     for (var wi = 0; wi < works.length; wi++) {
       var w = works[wi], st = w && w.study;
-      if (w && w.encWork) continue;                             // already an encrypted stub — preserve verbatim
+      if (w && w.encWork) { await syncStubTickets(w.enc, w.id, svAll); continue; }   // already-encrypted stub - keep verbatim, but sync its ticket wraps
       // --- hidden whole-project encryption (ticket-only + owner recovery) ---
       if (w && w.hidden) {
         var wrecovery = await ensureRecoveryPass();
@@ -3473,7 +3500,7 @@
         if (!b || !b.locked) continue;
         if (b.encStub) stubs++; else plain.push(bi);
       }
-      if (!plain.length) continue;                              // stub-only preserved verbatim, or nothing locked
+      if (!plain.length) { await syncStubTickets(st.enc, w.id, svAll); continue; }   // stub-only (or nothing locked) - sync ticket wraps, keep verbatim
       if (stubs) throw { rkEnc: true, mixed: true, work: w };    // never mix plaintext + already-encrypted
       var recovery = await ensureRecoveryPass();
       if (recovery === null) throw { rkEnc: true, cancelled: true };
