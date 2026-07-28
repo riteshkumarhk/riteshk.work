@@ -212,6 +212,42 @@
     if (okDec) { try { if (window.RK && window.RK.vaultRedeem) await window.RK.vaultRedeem(credential); } catch (e) {} }
     return okDec;
   }
+  // ---------- vault-hosted locked sections ----------
+  // A locked block can live entirely in the private R2 vault as plain JSON, so content.json ships
+  // only a {vaultBlock:"<key>"} pointer + a locked placeholder — zero content (not even ciphertext)
+  // in the public repo. Authorised viewers (owner session or a redeemed pass grant) fetch the block
+  // over a short-lived signed URL and render it in place; everyone else keeps seeing the gate.
+  async function resolveVaultBlocks(w) {
+    var st = w && w.study;
+    if (!st || !Array.isArray(st.blocks)) return 0;
+    var sign = window.RK && window.RK.vaultSignedUrl;
+    if (typeof sign !== "function") return 0;
+    var resolved = 0;
+    for (var i = 0; i < st.blocks.length; i++) {
+      var b = st.blocks[i];
+      if (!b || !b.locked || typeof b.vaultBlock !== "string" || !b.vaultBlock) continue;
+      try {
+        var url = await sign(b.vaultBlock);
+        if (!url) continue;                       // not authorised — leave the pointer, stay gated
+        var res = await fetch(url);
+        if (!res.ok) continue;
+        var full = await res.json();
+        if (full && typeof full === "object" && !Array.isArray(full)) { full.locked = true; st.blocks[i] = full; resolved++; }
+      } catch (e) {}
+    }
+    return resolved;
+  }
+  // Best-effort, post-render: if this project has vault-hosted locked sections and the viewer is
+  // already authorised (owner, or a pass redeemed earlier this session), fetch them and re-render
+  // unlocked — no gate needed. Guarded by isUnlocked so it runs at most once per project.
+  function autoResolveVaultBlocks(w) {
+    var st = w && w.study;
+    if (!st || !w || isUnlocked(w.id)) return;
+    if (!(st.blocks || []).some(function (b) { return b && b.locked && b.vaultBlock; })) return;
+    resolveVaultBlocks(w).then(function (n) {
+      if (n > 0) { setUnlocked(w.id); if (activeId === w.id) fillContent(w); }
+    });
+  }
 
   /* ---------- block renderers ---------- */
   function kicker(k) { return k ? '<div class="pjb__kicker">' + esc(k) + "</div>" : ""; }
@@ -1462,6 +1498,7 @@
     requestAnimationFrame(function () {
       updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); graphWire(contentEl); galleryNav(contentEl);
       resolveVaultMedia(contentEl); // swap vault placeholders for signed URLs (authorised viewers only)
+      autoResolveVaultBlocks(w);    // fetch vault-hosted locked sections if the viewer is already authorised
       if (window.RKGen && RKGen.hydrate) RKGen.hydrate(contentEl); // wire drag/zoom on generated fx nodes
       if (PREVIEW) applyPreviewToolbar(); // morph strips the injected toolbar node; re-add it in the same frame (no flicker)
       if (keepAnchor) { restoreAnchor(keepAnchor); requestAnimationFrame(function () { restoreAnchor(keepAnchor); }); }
@@ -1638,9 +1675,16 @@
       sub: "Enter the pass you were given to reveal the deeper cut.",
       placeholder: "Your pass", cta: "Unlock", password: false,
       onSubmit: async function (v, err) {
+        var hasVault = (st.blocks || []).some(function (b) { return b && b.locked && b.vaultBlock; });
         if (passWrap) {
-          var ok = await unlockStudyWithCred(st, v, passWrap);
+          var ok = await unlockStudyWithCred(st, v, passWrap);   // also redeems the vault grant on success
           if (!ok) { err.textContent = "That pass doesn't match."; return false; }
+          if (hasVault) await resolveVaultBlocks(w);
+        } else if (hasVault) {
+          var redeemed = false;
+          try { redeemed = (window.RK && window.RK.vaultRedeem) ? await window.RK.vaultRedeem(v) : false; } catch (e) {}
+          if (!redeemed) { err.textContent = "That pass doesn't match."; return false; }
+          if (!(await resolveVaultBlocks(w))) { err.textContent = "That pass doesn't open this section."; return false; }
         } else {
           if (!hash) { err.textContent = "No deeper cut is set for this project."; return false; }
           var h = await sha256(v.toLowerCase());
