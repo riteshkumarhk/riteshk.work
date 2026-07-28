@@ -3492,18 +3492,28 @@ import {
   // already has) and scoped to the union of vault keys across every project the pass unlocks. Each
   // /vault/grant call REPLACES the pass's key set, so we always send the full union. Best-effort:
   // any failure here never blocks the publish — the .enc protection already applies regardless.
-  var VAULT_GRANT_MIN_DAYS = 30;
+  var VAULT_GRANT_MAX_DAYS = 365;
+  // The absolute time a pass's vault grant should expire — kept identical to the special view's own
+  // auto-hide (createdAt + days; days === 0 means "never", so a rolling max-length window refreshed on
+  // each publish). Recomputed every publish from that FIXED expiry, so a dated ticket is never rolled
+  // forward — the grant lapses exactly when the curated view does (svExpired uses the same formula).
+  function grantExpForSv(sv) {
+    var d = parseInt(sv && sv.days, 10) || 0;
+    if (d <= 0) return Date.now() + VAULT_GRANT_MAX_DAYS * 86400000;
+    return (sv.createdAt || 0) + d * 86400000;
+  }
   async function registerVaultGrants(pubData) {
     try {
       if (!adminSession()) return;                 // /vault/grant is owner-session gated
       if (recoveryPassCache === null) return;      // no master key on hand this session -> leave existing grants untouched
       var works = (pubData && pubData.work) || [];
       var svAll = (pubData.specialViews || []);
-      var scope = {};                              // normalised pass -> { keys:{key:1}, days:n }
-      function want(code, days) {
+      var now = Date.now();
+      var scope = {};                              // normalised pass -> { keys:{key:1}, exp:ms }
+      function want(code, exp) {
         var c = rkNormPass(code); if (!c) return null;
-        if (!scope[c]) scope[c] = { keys: {}, days: 0 };
-        if (days > scope[c].days) scope[c].days = days;
+        if (!scope[c]) scope[c] = { keys: {}, exp: 0 };
+        if (exp > scope[c].exp) scope[c].exp = exp;   // a shared code stays valid as long as its longest-lived pass
         return scope[c];
       }
       function scanKeys(node, into) {
@@ -3516,15 +3526,17 @@ import {
       }
       for (var wi = 0; wi < works.length; wi++) {
         var w = works[wi]; if (!w) continue;
-        // Which passes open this project? (codes were already recovered during encryption — never prompt here.)
+        // Which passes open this project, and until when? (codes were recovered during encryption — never prompt here.)
         var codes = [];
         for (var si = 0; si < svAll.length; si++) {
           var sv = svAll[si];
           if (!sv || !sv.ticketHash || (sv.workIds || []).indexOf(w.id) === -1) continue;
-          if (rkNormPass(ticketPlain[sv.id])) codes.push({ code: ticketPlain[sv.id], days: Math.max(parseInt(sv.days, 10) || 0, VAULT_GRANT_MIN_DAYS) });
+          if (!rkNormPass(ticketPlain[sv.id])) continue;
+          var exp = grantExpForSv(sv);
+          if (exp > now + 60000) codes.push({ code: ticketPlain[sv.id], exp: exp });   // skip a ticket that has already auto-hidden
         }
-        if (rkNormPass(studyUnlockPlain[w.id])) codes.push({ code: studyUnlockPlain[w.id], days: VAULT_GRANT_MIN_DAYS });
-        if (!codes.length) continue;               // no pass opens this project -> nothing to grant
+        if (rkNormPass(studyUnlockPlain[w.id])) codes.push({ code: studyUnlockPlain[w.id], exp: now + VAULT_GRANT_MAX_DAYS * 86400000 });  // deeper-cut pass carries no expiry
+        if (!codes.length) continue;               // no live pass opens this project -> nothing to grant
         // Collect this project's vault keys, decrypting protected sections with the master key.
         var keys = {};
         try {
@@ -3542,12 +3554,12 @@ import {
           }
         } catch (e) { continue; }                  // couldn't read this project -> leave its passes' prior grants intact
         var kl = Object.keys(keys); if (!kl.length) continue;
-        for (var ci = 0; ci < codes.length; ci++) { var sc = want(codes[ci].code, codes[ci].days); if (sc) for (var ki = 0; ki < kl.length; ki++) sc.keys[kl[ki]] = 1; }
+        for (var ci = 0; ci < codes.length; ci++) { var sc = want(codes[ci].code, codes[ci].exp); if (sc) for (var ki = 0; ki < kl.length; ki++) sc.keys[kl[ki]] = 1; }
       }
       var passes = Object.keys(scope), okN = 0;
       for (var pi = 0; pi < passes.length; pi++) {
         var entry = scope[passes[pi]], ks = Object.keys(entry.keys); if (!ks.length) continue;
-        try { await vaultRegisterGrant(passes[pi], ks, entry.days); okN++; } catch (er) {}
+        try { await vaultRegisterGrant(passes[pi], ks, { exp: entry.exp }); okN++; } catch (er) {}
       }
       if (okN) status(okN + " pass" + (okN === 1 ? "" : "es") + " can now open its private-vault media.", true);
     } catch (e) { /* grants are best-effort; never block a publish */ }
