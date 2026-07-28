@@ -242,8 +242,8 @@
   // unlocked — no gate needed. Guarded by isUnlocked so it runs at most once per project.
   function autoResolveVaultBlocks(w) {
     var st = w && w.study;
-    if (!st || !w || isUnlocked(w.id)) return;
-    if (!(st.blocks || []).some(function (b) { return b && b.locked && b.vaultBlock; })) return;
+    if (!st || !w) return;
+    if (!(st.blocks || []).some(function (b) { return b && b.locked && b.vaultBlock; })) return;   // only acts on unresolved pointers; runs once (resolution removes them)
     resolveVaultBlocks(w).then(function (n) {
       if (n > 0) { setUnlocked(w.id); if (activeId === w.id) fillContent(w); }
     });
@@ -825,7 +825,7 @@
     var navLabel = b.nav || "";
     var idAttr = navLabel ? ' id="pjs-' + slug(navLabel, i) + '"' : "";
     var navAttr = navLabel ? ' data-nav="' + attr(navLabel) + '"' : "";
-    var locked = b.locked && !isUnlocked(activeId);
+    var locked = b.locked && (!isUnlocked(activeId) || !!b.vaultBlock);   // an unresolved vault pointer stays gated even in present mode
     var inner = locked ? lockedBlock(b) : ((RENDERERS[b.type] || function () { return ""; })(b));
     var hsize = b.hsize === "sm" ? " pjb--hsm" : b.hsize === "lg" ? " pjb--hlg" : "";
     var flush = b.sep === false ? " pjb--flush" : "";
