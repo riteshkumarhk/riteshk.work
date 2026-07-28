@@ -14,7 +14,7 @@ import {
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
   rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath, adminLogin, ADMIN_WORKER,
-  vaultSignedUrl, vaultRedeem
+  vaultSignedUrl, vaultRedeem, webauthnSupported, webauthnList, webauthnAuth
 } from "./admin-core.js";
 
 (function () {
@@ -177,6 +177,7 @@ import {
       '<div class="pass__sub">' + (creating
         ? "Create a key for this browser. (It guards this editor only — publishing still requires your repo.)"
         : "Enter your key to open the studio. Required every time.") + "</div>" +
+      (creating ? "" : '<button class="btn btn--primary" data-passkey hidden style="width:100%;justify-content:center;margin-bottom:14px">\uD83D\uDD11 Sign in with a passkey</button><div class="pass__or" data-or hidden style="text-align:center;font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.4;margin:0 0 12px">or use your admin key</div>') +
       '<input type="password" placeholder="Key" autofocus />' +
       (creating ? '<input type="password" placeholder="Confirm key" data-confirm />' : "") +
       '<div class="pass__err"></div>' +
@@ -190,6 +191,24 @@ import {
     const confirm2 = modal.querySelector("[data-confirm]");
     const err = modal.querySelector(".pass__err");
     pass.focus();
+
+    // Offer passkey sign-in when any are enrolled (and the browser supports it). The password stays
+    // as a fallback so a new/unenrolled device is never locked out.
+    async function doPasskey() {
+      const pkBtn = modal.querySelector("[data-passkey]");
+      if (pkBtn) pkBtn.disabled = true; err.textContent = "";
+      try { await webauthnAuth("login"); done(); openStudio(); }
+      catch (e) { if (pkBtn) pkBtn.disabled = false; err.textContent = (e && e.message) || "Passkey sign-in didn’t work."; }
+    }
+    if (!creating && webauthnSupported()) {
+      webauthnList().then((list) => {
+        if (list && list.length) {
+          const pkBtn = modal.querySelector("[data-passkey]"), orEl = modal.querySelector("[data-or]");
+          if (pkBtn) { pkBtn.hidden = false; pkBtn.addEventListener("click", doPasskey); }
+          if (orEl) orEl.hidden = false;
+        }
+      }).catch(() => {});
+    }
 
     const done = () => modal.remove();
     modal.querySelector("[data-cancel]").addEventListener("click", done);

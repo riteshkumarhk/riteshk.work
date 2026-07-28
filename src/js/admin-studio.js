@@ -14,7 +14,8 @@ import {
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
   rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath,
-  ADMIN_WORKER, adminSession, clearAdminSession, vaultUpload, vaultRegisterGrant, vaultSignedUrl
+  ADMIN_WORKER, adminSession, clearAdminSession, vaultUpload, vaultRegisterGrant, vaultSignedUrl,
+  webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof
 } from "./admin-core.js";
 
 (function () {
@@ -7023,6 +7024,7 @@ import {
           '<button class="btn btn--ghost adm__viewtoggle" data-view>Preview</button>' +
           '<button class="btn btn--ghost" data-revert>Revert</button>' +
           '<button class="btn btn--ghost adm__keycfg" data-keycfg title="Change admin key" aria-label="Change admin key"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3z"/></svg></button>' +
+          '<button class="btn btn--ghost adm__pkcfg" data-passkeys title="Passkeys" aria-label="Passkeys">\uD83D\uDD11</button>' +
           '<button class="btn btn--ghost adm__pubcfg" data-pubcfg title="Publishing settings" aria-label="Publishing settings">\u2699</button>' +
           '<div class="adm__auto" data-autopub>' +
             '<button class="adm__auto-sw" type="button" data-autopub-toggle role="switch" aria-checked="false" title="Auto-publish on a timer">' +
@@ -7113,6 +7115,7 @@ import {
       if (pop && !pop.hidden && !autoWrap.contains(e.target)) { pop.hidden = true; const cv = autoWrap.querySelector("[data-autopub-menu]"); if (cv) cv.setAttribute("aria-expanded", "false"); }
     });
     root.querySelector("[data-keycfg]").addEventListener("click", () => changeKeyModal());
+    var _pk = root.querySelector("[data-passkeys]"); if (_pk) _pk.addEventListener("click", () => passkeyModal());
     const pubCloseBtn = root.querySelector("[data-pub-close]");
     if (pubCloseBtn) pubCloseBtn.addEventListener("click", pubHide);
     root.querySelector("[data-revert]").addEventListener("click", revert);
@@ -7188,6 +7191,44 @@ import {
   }
 
   /* ---------- change the admin key (requires the current key) ---------- */
+  // Manage passkeys (enrol / list / remove). Enrolment is owner-gated by the current session, so the
+  // first passkey is added right after a normal (password) sign-in; after that, passkeys sign you in.
+  async function passkeyModal() {
+    if (!webauthnSupported()) { status("This browser doesn\u2019t support passkeys.", false); return; }
+    const modal = document.createElement("div");
+    modal.className = "pass";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">Passkeys</div>' +
+      '<div class="pass__sub">Sign in to admin with Windows Hello, Face ID or a security key. Enrol a few (laptop, phone, a backup) so you\u2019re never locked out \u2014 your admin key still works as a fallback.</div>' +
+      '<div class="pass__err"></div>' +
+      '<div data-pklist style="margin:4px 0 14px;font-size:13px">Loading\u2026</div>' +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Done</button>' +
+      '<button class="btn btn--primary" data-add>\uFF0B Add a passkey</button></div></div>';
+    document.body.appendChild(modal);
+    const err = modal.querySelector(".pass__err"), listEl = modal.querySelector("[data-pklist]");
+    const done = () => modal.remove();
+    modal.querySelector("[data-cancel]").addEventListener("click", done);
+    modal.addEventListener("click", (e) => { if (e.target === modal) done(); });
+    modal.addEventListener("keydown", (e) => { if (e.key === "Escape") done(); });
+    async function refresh() {
+      const list = await webauthnList().catch(() => []);
+      if (!list.length) { listEl.innerHTML = '<span style="opacity:.55">No passkeys yet \u2014 add one below.</span>'; return; }
+      listEl.innerHTML = list.map((p) => '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.07)"><span>\uD83D\uDD11 ' + escHtml(p.label || "passkey") + '</span><button class="btn btn--ghost" data-rm="' + escAttr(p.id) + '" style="padding:3px 10px;font-size:12px">Remove</button></div>').join("");
+      listEl.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", async () => {
+        b.disabled = true; err.textContent = "";
+        try { await webauthnRemove(b.getAttribute("data-rm")); await refresh(); } catch (e) { b.disabled = false; err.textContent = (e && e.message) || "Couldn\u2019t remove that passkey."; }
+      }));
+    }
+    modal.querySelector("[data-add]").addEventListener("click", async () => {
+      const btn = modal.querySelector("[data-add]"); btn.disabled = true; err.textContent = "";
+      const label = (prompt("Name this passkey (e.g. \u201cLaptop\u201d, \u201ciPhone\u201d, \u201cYubiKey\u201d):", "") || "").trim() || "passkey";
+      try { await webauthnRegister(label); await refresh(); status("Passkey added.", true); }
+      catch (e) { err.textContent = (e && e.message) || "Enrolment failed."; }
+      finally { btn.disabled = false; }
+    });
+    refresh();
+  }
+
   function changeKeyModal() {
     const stored = localStorage.getItem(HASH_KEY);
     const modal = document.createElement("div");

@@ -46,6 +46,80 @@ export async function adminLogin(password) {
   } catch (e) { return { ok: false, network: true }; }
 }
 
+/* ---------- passkeys (WebAuthn) — passwordless admin sign-in + publish step-up ----------
+   The Worker holds the credential public keys and verifies assertions; here we just run the
+   browser ceremony and shuttle base64url<->ArrayBuffer. A "login" assertion returns a session
+   (same as the password path); a "publish" assertion returns a short-lived step-up token. */
+function b64urlToBuf(s) {
+  s = String(s).replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "=";
+  const bin = atob(s), b = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+  return b.buffer;
+}
+function bufToB64url(buf) {
+  const b = new Uint8Array(buf); let s = "";
+  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+export function webauthnSupported() { return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create); }
+export async function webauthnList() {
+  try { const r = await fetch(ADMIN_WORKER + "/admin/webauthn/list"); if (!r.ok) return []; const j = await r.json(); return (j && j.passkeys) || []; } catch (e) { return []; }
+}
+// Enrol a new passkey (owner-gated — needs a live session, e.g. from the password login the first time).
+export async function webauthnRegister(label) {
+  const sess = adminSession(); if (!sess) { const e = new Error("Sign in first to add a passkey."); e.auth = true; throw e; }
+  const br = await fetch(ADMIN_WORKER + "/admin/webauthn/register/begin", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: "{}" });
+  if (br.status === 401) { const e = new Error("Your session expired — sign in again."); e.auth = true; throw e; }
+  if (!br.ok) throw new Error("Couldn’t start passkey enrolment.");
+  const o = await br.json();
+  const cred = await navigator.credentials.create({ publicKey: {
+    rp: o.rp, user: { id: b64urlToBuf(o.user.id), name: o.user.name, displayName: o.user.displayName },
+    challenge: b64urlToBuf(o.challenge), pubKeyCredParams: o.pubKeyCredParams, timeout: o.timeout,
+    attestation: o.attestation, authenticatorSelection: o.authenticatorSelection,
+    excludeCredentials: (o.excludeCredentials || []).map((c) => ({ type: c.type, id: b64urlToBuf(c.id) })),
+  } });
+  if (!cred) throw new Error("Passkey creation was cancelled.");
+  const body = { id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type, label: label || "passkey", response: { clientDataJSON: bufToB64url(cred.response.clientDataJSON), attestationObject: bufToB64url(cred.response.attestationObject) } };
+  const fr = await fetch(ADMIN_WORKER + "/admin/webauthn/register/finish", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!fr.ok) { const j = await fr.json().catch(() => null); throw new Error((j && j.error) || "Passkey enrolment failed."); }
+  return await fr.json();
+}
+// Sign in (purpose "login" → stores a session) or step up for publish (purpose "publish" → returns {publishToken,exp}).
+export async function webauthnAuth(purpose) {
+  const br = await fetch(ADMIN_WORKER + "/admin/webauthn/auth/begin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ purpose: purpose || "login" }) });
+  if (!br.ok) throw new Error("Couldn’t start passkey sign-in.");
+  const o = await br.json();
+  const assertion = await navigator.credentials.get({ publicKey: {
+    challenge: b64urlToBuf(o.challenge), rpId: o.rpId, timeout: o.timeout || 120000, userVerification: o.userVerification || "preferred",
+    allowCredentials: (o.allowCredentials || []).map((c) => ({ type: c.type, id: b64urlToBuf(c.id) })),
+  } });
+  if (!assertion) throw new Error("Passkey sign-in was cancelled.");
+  const r = assertion.response;
+  const body = { id: assertion.id, rawId: bufToB64url(assertion.rawId), type: assertion.type, response: { clientDataJSON: bufToB64url(r.clientDataJSON), authenticatorData: bufToB64url(r.authenticatorData), signature: bufToB64url(r.signature), userHandle: r.userHandle ? bufToB64url(r.userHandle) : null } };
+  const fr = await fetch(ADMIN_WORKER + "/admin/webauthn/auth/finish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!fr.ok) { const j = await fr.json().catch(() => null); throw new Error((j && j.error) || "Passkey sign-in failed."); }
+  const j = await fr.json();
+  if (purpose === "publish") return j; // {publishToken, exp}
+  if (j && j.token && j.exp) { saveAdminSession(j.token, j.exp); return { ok: true }; }
+  throw new Error("Passkey sign-in didn’t return a session.");
+}
+// Remove an enrolled passkey (owner-gated).
+export async function webauthnRemove(credId) {
+  const sess = adminSession(); if (!sess) { const e = new Error("Sign in first."); e.auth = true; throw e; }
+  const r = await fetch(ADMIN_WORKER + "/admin/webauthn/remove", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ credId: credId }) });
+  if (!r.ok) throw new Error("Couldn’t remove that passkey.");
+  return await r.json();
+}
+// Domain-separated proof of the recovery passphrase for the publish step-up (factor 2). A DIFFERENT
+// label from any content-key derivation, so the Worker (which only stores its hash) can verify the
+// owner typed the passphrase without ever being able to derive the content keys — zero-knowledge kept.
+export async function publishProof(recovery) {
+  const salt = new TextEncoder().encode("rk-publish-auth-v1");
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(rkNormPass(recovery)), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: salt, iterations: 210000, hash: "SHA-256" }, base, 256);
+  return bufToB64url(bits);
+}
+
 /* ---------- NDA vault (private R2, via the Worker) ----------
    Gated media (deeper-cut reels, NDA screen recordings) live in a private R2 bucket, never
    on a public URL. Uploads need the owner session; playback is a short-lived signed URL the

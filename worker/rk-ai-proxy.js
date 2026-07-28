@@ -158,6 +158,16 @@ export default {
         return json({ passkeys: out }, 200, cors);
       } catch (e) { return json({ passkeys: [] }, 200, cors); }
     }
+    if (url.pathname === "/admin/webauthn/remove") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      try {
+        const b = await request.json();
+        if (b && b.credId) await env.VAULT_GRANTS.delete("wa:cred:" + b.credId);
+        const l = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" });
+        return json({ ok: true, count: l.keys.length }, 200, cors);
+      } catch (e) { return json({ error: "Remove failed" }, 400, cors); }
+    }
 
     // ---------- admin: authenticated GitHub proxy (holds the GH token server-side) ----------
     if (url.pathname.startsWith("/admin/gh/")) {
