@@ -3492,7 +3492,7 @@ import {
   // already has) and scoped to the union of vault keys across every project the pass unlocks. Each
   // /vault/grant call REPLACES the pass's key set, so we always send the full union. Best-effort:
   // any failure here never blocks the publish — the .enc protection already applies regardless.
-  var VAULT_GRANT_MAX_DAYS = 365;
+  var VAULT_GRANT_MAX_DAYS = 3650;   // 10y — the horizon for a "never"-expiring ticket / deeper-cut pass (refreshed each publish); dated tickets use their own exact expiry
   // The absolute time a pass's vault grant should expire — kept identical to the special view's own
   // auto-hide (createdAt + days; days === 0 means "never", so a rolling max-length window refreshed on
   // each publish). Recomputed every publish from that FIXED expiry, so a dated ticket is never rolled

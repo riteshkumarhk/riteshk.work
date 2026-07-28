@@ -138,7 +138,7 @@ export default {
       const code = body && typeof body.code === "string" ? body.code.trim().toLowerCase() : "";
       const keys = body && Array.isArray(body.keys) ? body.keys.filter((k) => typeof k === "string" && k && k.indexOf("/") === -1).slice(0, 2000) : [];
       const now = Date.now();
-      const maxExp = now + 365 * 86400000;
+      const maxExp = now + 3650 * 86400000;   // 10y sanity bound — honours any realistic ticket length; 'never' tickets refresh on publish
       // Prefer an absolute expiry so a grant tracks its ticket's exact auto-hide time; fall back to a day count.
       let exp;
       if (body && typeof body.exp === "number" && isFinite(body.exp)) exp = Math.max(now + 60000, Math.min(maxExp, Math.floor(body.exp)));
