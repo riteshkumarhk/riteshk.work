@@ -694,6 +694,14 @@ import {
     if (more) more.addEventListener("click", toggleMenu);
     musInit();
     setTimeout(ticketHint, 1600);
+    // Direct studio entry: /studio (and /admin) arrive here as ?studio=1 via the 404 SPA
+    // fallback. Tidy the address bar to /studio and open the same gate the clock menu uses.
+    try {
+      if (new URLSearchParams(location.search || "").get("studio") === "1") {
+        try { history.replaceState({}, "", "/studio"); } catch (e) {}
+        setTimeout(gate, 350);
+      }
+    } catch (e) {}
   }
   if (window.__siteRendered) init();
   else document.addEventListener("site:rendered", init, { once: true });
