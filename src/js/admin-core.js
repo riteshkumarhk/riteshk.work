@@ -46,6 +46,41 @@ export async function adminLogin(password) {
   } catch (e) { return { ok: false, network: true }; }
 }
 
+/* ---------- NDA vault (private R2, via the Worker) ----------
+   Gated media (deeper-cut reels, NDA screen recordings) live in a private R2 bucket, never
+   on a public URL. Uploads need the owner session; playback is a short-lived signed URL the
+   viewer swaps in at render time. Keys are "<sha256>.<ext>" so the viewer can still tell a
+   video from an image (and pick <video> vs <img>) without fetching the bytes first. */
+export async function vaultUpload(file, extHint) {
+  const sess = adminSession();
+  if (!sess) { const e = new Error("Sign in to store media in the private vault."); e.auth = true; throw e; }
+  const ext = String(extHint || "").replace(/[^a-z0-9]/gi, "").slice(0, 8).toLowerCase();
+  const res = await fetch(ADMIN_WORKER + "/vault/upload" + (ext ? "?ext=" + ext : ""), {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + sess, "Content-Type": (file && file.type) || "application/octet-stream" },
+    body: file,
+  });
+  if (res.status === 401) { const e = new Error("Your session expired — sign in again."); e.auth = true; throw e; }
+  if (!res.ok) throw new Error("The vault didn’t accept that upload (" + res.status + ").");
+  const j = await res.json().catch(() => null);
+  if (!j || !j.key) throw new Error("The vault didn’t return a key.");
+  return j.key; // "<sha256>.<ext>"
+}
+// Resolve a vault key to a short-lived, absolute streaming URL. Returns "" when there is no
+// owner session (a public visitor) or the Worker declines — the caller then shows it locked.
+export async function vaultSignedUrl(key) {
+  const sess = adminSession();
+  if (!sess || !key) return "";
+  try {
+    const res = await fetch(ADMIN_WORKER + "/vault/sign?key=" + encodeURIComponent(key), {
+      headers: { "Authorization": "Bearer " + sess },
+    });
+    if (!res.ok) return "";
+    const j = await res.json().catch(() => null);
+    return j && j.url ? ADMIN_WORKER + j.url : "";
+  } catch (e) { return ""; }
+}
+
 export async function sha256(str) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");

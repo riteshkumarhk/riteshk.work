@@ -71,13 +71,49 @@
     if (kind === "office") return frameEl(officeEmbed(url), cls, "slideshow");
     if (kind === "pdf") return frameEl(url + (/[#?]/.test(url) ? "" : "#view=FitH"), cls, "PDF");
     if (kind === "embed") return frameEl(ytEmbed(url), cls, /(1drv|onedrive|sharepoint)/i.test(url) ? "slideshow" : "video");
+    // Private-vault media (src "vault:<key>") ships no public URL — render the element with a
+    // data-vault placeholder instead of src; resolveVaultMedia() swaps in a short-lived signed
+    // URL after render (only for a viewer the Worker authorises; others stay locked/blank).
+    var vk = /^vault:(.+)$/i.exec(url); vk = vk ? vk[1] : "";
     if (kind === "video") {
       var poster = m.poster ? ' poster="' + attr(m.poster) + '"' : "";
-      if (m.controls) return '<video class="' + cls + '" src="' + attr(url) + '"' + poster + ' controls controlsList="nodownload noplaybackrate" disablepictureinpicture playsinline preload="metadata"></video>';
-      return '<video class="' + cls + '" src="' + attr(url) + '"' + poster + ' autoplay muted loop playsinline preload="metadata"></video>';
+      var vsrc = vk ? ' data-vault="' + attr(vk) + '"' : ' src="' + attr(url) + '"';
+      if (m.controls) return '<video class="' + cls + '"' + vsrc + poster + ' controls controlsList="nodownload noplaybackrate" disablepictureinpicture playsinline preload="metadata"></video>';
+      return '<video class="' + cls + '"' + vsrc + poster + ' autoplay muted loop playsinline preload="metadata"></video>';
     }
     var cap = attr(m.caption || "");
-    return '<img class="' + cls + '" src="' + attr(url) + '" alt="' + cap + '" data-cap="' + cap + '"' + (m.title ? ' data-title="' + attr(m.title) + '"' : "") + ' data-zoom loading="lazy" />';
+    var isrc = vk ? ' data-vault="' + attr(vk) + '"' : ' src="' + attr(url) + '"';
+    return '<img class="' + cls + '"' + isrc + ' alt="' + cap + '" data-cap="' + cap + '"' + (m.title ? ' data-title="' + attr(m.title) + '"' : "") + ' data-zoom loading="lazy" />';
+  }
+  // Resolve any vault placeholders inside a freshly-rendered subtree to short-lived signed URLs.
+  // window.RK.vaultSignedUrl (from the admin bundle) returns "" for a viewer without an owner
+  // session, so unauthorised visitors simply see the slot stay locked. Signed URLs are cached
+  // briefly so preview re-renders (morph) don't refetch on every keystroke.
+  var vaultUrlCache = {}; // key -> { url, until }
+  function resolveVaultMedia(root) {
+    if (!root || !root.querySelectorAll) return;
+    var nodes = root.querySelectorAll("[data-vault]");
+    if (!nodes.length) return;
+    var sign = window.RK && window.RK.vaultSignedUrl;
+    Array.prototype.forEach.call(nodes, function (el) {
+      var key = el.getAttribute("data-vault");
+      if (!key) return;
+      var c = vaultUrlCache[key];
+      if (c && c.until > Date.now()) { applyVaultUrl(el, c.url); return; }
+      if (typeof sign !== "function") { el.setAttribute("data-vault-locked", "1"); return; }
+      sign(key).then(function (u) {
+        if (!u) { el.setAttribute("data-vault-locked", "1"); return; }
+        vaultUrlCache[key] = { url: u, until: Date.now() + 5 * 60 * 1000 }; // refresh well inside the 6h URL TTL
+        applyVaultUrl(el, u);
+      }).catch(function () { el.setAttribute("data-vault-locked", "1"); });
+    });
+  }
+  function applyVaultUrl(el, url) {
+    if (!el || !url) return;
+    el.removeAttribute("data-vault-locked");
+    if (el.getAttribute("src") === url) return;
+    el.setAttribute("src", url);
+    if (el.tagName === "VIDEO") { try { el.load(); } catch (e) {} }
   }
 
   var overlay = null, scroller = null, activeId = null;
@@ -1421,6 +1457,7 @@
     contentEl.setAttribute("data-wid", String(w.id));
     requestAnimationFrame(function () {
       updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); graphWire(contentEl); galleryNav(contentEl);
+      resolveVaultMedia(contentEl); // swap vault placeholders for signed URLs (authorised viewers only)
       if (window.RKGen && RKGen.hydrate) RKGen.hydrate(contentEl); // wire drag/zoom on generated fx nodes
       if (PREVIEW) applyPreviewToolbar(); // morph strips the injected toolbar node; re-add it in the same frame (no flicker)
       if (keepAnchor) { restoreAnchor(keepAnchor); requestAnimationFrame(function () { restoreAnchor(keepAnchor); }); }
