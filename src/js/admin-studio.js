@@ -15,7 +15,7 @@ import {
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
   rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath,
   ADMIN_WORKER, adminSession, clearAdminSession, vaultUpload, vaultRegisterGrant, vaultSignedUrl,
-  webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig, authStatus, authConfig
+  webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig, authStatus, authConfig, keyringGet, keyringPut
 } from "./admin-core.js";
 
 (function () {
@@ -3322,8 +3322,10 @@ import {
     // With a token, protected images are encrypted into their own /assets/protected/<hash>.enc
     // files (content.json stays tiny). Without one (manual publish), fall back to inlining them.
     if (!token) await inlineProtectedImages(pubData);
+    await loadTicketKeyring();
     await encryptLockedForPublish(pubData, token || null);
     await registerVaultGrants(pubData);
+    await saveTicketKeyring();
     return JSON.stringify(pubData, null, 2);
   }
   // ---------- per-image protected media: encrypt each image and host it as its own
@@ -3734,6 +3736,39 @@ import {
     if (code === null) return null;
     ticketPlain[sv.id] = code;
     return code;
+  }
+  // Ticket keyring: your recovery passphrase unlocks EVERY special-view ticket code at publish, so you
+  // type each code once (ever) and never re-enter them per view. A recovery-encrypted {svId:code} blob
+  // lives server-side (cross-device); the backend only ever sees ciphertext.
+  async function encryptKeyring(recovery, map) {
+    var sek = rkNewSek();
+    return { v: 1, wrap: await rkWrapSek(recovery, sek), data: await rkEncWithSek(sek, map) };
+  }
+  async function decryptKeyring(recovery, blob) {
+    var sek = await rkUnwrapSek(recovery, blob.wrap);
+    return await rkDecWithSek(sek, blob.data);
+  }
+  async function loadTicketKeyring() {
+    try {
+      if (!(data.specialViews || []).some(function (sv) { return sv && sv.ticketHash; })) return;
+      var needs = (data.work || []).some(function (w) { return w && (w.hidden || w.encWork || (w.study && Array.isArray(w.study.blocks) && w.study.blocks.some(function (b) { return b && b.locked; }))); });
+      if (!needs) return;
+      var rec = await ensureRecoveryPass();
+      if (rec === null) return;
+      var blob = await keyringGet();
+      if (!blob || !blob.wrap || !blob.data) return;
+      var map = await decryptKeyring(rec, blob);
+      Object.keys(map || {}).forEach(function (id) { if (!rkNormPass(ticketPlain[id])) ticketPlain[id] = map[id]; });
+    } catch (e) { /* best-effort — falls back to per-ticket prompts */ }
+  }
+  async function saveTicketKeyring() {
+    try {
+      if (recoveryPassCache === null) return;
+      var map = {};
+      (data.specialViews || []).forEach(function (sv) { if (sv && sv.id && rkNormPass(ticketPlain[sv.id])) map[sv.id] = ticketPlain[sv.id]; });
+      if (!Object.keys(map).length) return;
+      await keyringPut(await encryptKeyring(recoveryPassCache, map));
+    } catch (e) { /* best-effort */ }
   }
   // Include a deeper-cut-pass unlock ONLY if the owner already has that pass on
   // hand this session (typed into the study editor's Deeper-cut pass field). Never
@@ -7258,8 +7293,7 @@ import {
     }
     modal.querySelector("[data-add]").addEventListener("click", async () => {
       const btn = modal.querySelector("[data-add]"); btn.disabled = true; err.textContent = "";
-      const label = (prompt("Name this passkey (e.g. \u201cLaptop\u201d, \u201ciPhone\u201d, \u201cYubiKey\u201d):", "") || "").trim() || "passkey";
-      try { await webauthnRegister(label); await refresh(); status("Passkey added.", true); }
+      try { await webauthnRegister(); await refresh(); status("Passkey added.", true); }
       catch (e) { err.textContent = (e && e.message) || "Enrolment failed."; }
       finally { btn.disabled = false; }
     });

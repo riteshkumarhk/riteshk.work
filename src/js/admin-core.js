@@ -65,6 +65,31 @@ export function webauthnSupported() { return !!(window.PublicKeyCredential && na
 export async function webauthnList() {
   try { const r = await fetch(ADMIN_WORKER + "/admin/webauthn/list"); if (!r.ok) return []; const j = await r.json(); return (j && j.passkeys) || []; } catch (e) { return []; }
 }
+// The owner's private ticket keyring (a recovery-encrypted {svId:code} blob) — stored server-side, cross-device.
+export async function keyringGet() {
+  const sess = adminSession(); if (!sess) return null;
+  try { const r = await fetch(ADMIN_WORKER + "/admin/keyring", { headers: { Authorization: "Bearer " + sess } }); if (!r.ok) return null; return await r.json(); } catch (e) { return null; }
+}
+export async function keyringPut(blob) {
+  const sess = adminSession(); if (!sess) return { ok: false };
+  try { const r = await fetch(ADMIN_WORKER + "/admin/keyring", { method: "PUT", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify(blob || {}) }); return { ok: r.ok }; } catch (e) { return { ok: false }; }
+}
+// Auto-name a new passkey from what we can detect (platform + attachment). attestation "none" zeroes the
+// AAGUID so the exact provider isn't readable; this is the reliable signal, and the owner can rename later.
+function guessPasskeyLabel(cred) {
+  const att = (cred && cred.authenticatorAttachment) || "";
+  const uaP = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || "";
+  const plat = /win/i.test(uaP) ? "Windows" : /mac/i.test(uaP) ? "Mac" : /iphone|ipad|ios/i.test(uaP) ? "iPhone" : /android/i.test(uaP) ? "Android" : /linux/i.test(uaP) ? "Linux" : "";
+  if (att === "cross-platform") return "Phone or security key";
+  if (att === "platform") {
+    if (plat === "Windows") return "Windows Hello";
+    if (plat === "Mac") return "Touch ID (Mac)";
+    if (plat === "iPhone") return "iPhone (Face ID)";
+    if (plat === "Android") return "Android";
+    return plat ? plat + " passkey" : "This device";
+  }
+  return plat ? plat + " passkey" : "Passkey";
+}
 // Enrol a new passkey (owner-gated — needs a live session, e.g. from the password login the first time).
 export async function webauthnRegister(label) {
   const sess = adminSession(); if (!sess) { const e = new Error("Sign in first to add a passkey."); e.auth = true; throw e; }
@@ -79,7 +104,7 @@ export async function webauthnRegister(label) {
     excludeCredentials: (o.excludeCredentials || []).map((c) => ({ type: c.type, id: b64urlToBuf(c.id) })),
   } });
   if (!cred) throw new Error("Passkey creation was cancelled.");
-  const body = { id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type, label: label || "passkey", response: { clientDataJSON: bufToB64url(cred.response.clientDataJSON), attestationObject: bufToB64url(cred.response.attestationObject) } };
+  const body = { id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type, label: label || guessPasskeyLabel(cred), response: { clientDataJSON: bufToB64url(cred.response.clientDataJSON), attestationObject: bufToB64url(cred.response.attestationObject) } };
   const fr = await fetch(ADMIN_WORKER + "/admin/webauthn/register/finish", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!fr.ok) { const j = await fr.json().catch(() => null); throw new Error((j && j.error) || "Passkey enrolment failed."); }
   return await fr.json();

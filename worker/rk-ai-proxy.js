@@ -234,6 +234,15 @@ export default {
         return json(await issueSession(env), 200, cors);
       } catch (e) { return json({ error: "Recovery failed" }, 400, cors); }
     }
+    // Owner's private ticket keyring: an opaque recovery-encrypted blob {svId:code}, stored server-side
+    // (cross-device). The Worker never sees the codes — only the ciphertext.
+    if (url.pathname === "/admin/keyring") {
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Store not configured" }, 500, cors);
+      if (request.method === "GET") return json((await env.VAULT_GRANTS.get("cfg:keyring", "json")) || {}, 200, cors);
+      if (request.method === "PUT") { try { const b = await request.json(); await env.VAULT_GRANTS.put("cfg:keyring", JSON.stringify(b || {})); return json({ ok: true }, 200, cors); } catch (e) { return json({ error: "Save failed" }, 400, cors); } }
+      return json({ error: "Method not allowed" }, 405, cors);
+    }
 
     // ---------- admin: authenticated GitHub proxy (holds the GH token server-side) ----------
     if (url.pathname.startsWith("/admin/gh/")) {
