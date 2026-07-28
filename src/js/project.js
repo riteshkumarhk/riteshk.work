@@ -825,7 +825,12 @@
     var navLabel = b.nav || "";
     var idAttr = navLabel ? ' id="pjs-' + slug(navLabel, i) + '"' : "";
     var navAttr = navLabel ? ' data-nav="' + attr(navLabel) + '"' : "";
-    var locked = b.locked && (!isUnlocked(activeId) || !!b.vaultBlock);   // an unresolved vault pointer stays gated even in present mode
+    // A still-sealed block (ciphertext stub or unresolved vault pointer) has NO readable content, so it
+    // must always show the lock mask — never render as "unlocked", which would draw an empty, invisible
+    // section. `isUnlocked` persists in sessionStorage from an earlier unlock, but the freshly-loaded
+    // blocks are re-fetched as stubs; without this guard they'd vanish instead of showing the mask.
+    var sealed = !!b.encStub || !!b.vaultBlock;
+    var locked = b.locked && (sealed || !isUnlocked(activeId));
     var inner = locked ? lockedBlock(b) : ((RENDERERS[b.type] || function () { return ""; })(b));
     var hsize = b.hsize === "sm" ? " pjb--hsm" : b.hsize === "lg" ? " pjb--hlg" : "";
     var flush = b.sep === false ? " pjb--flush" : "";
