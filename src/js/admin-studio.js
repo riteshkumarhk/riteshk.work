@@ -2476,6 +2476,7 @@ import {
       const imgOK = aiSupportsImages();
       let html = secHead("AI",
         "Connect providers for AI features. <em>Keys are stored only in this browser and are never written to your published file.</em>") +
+        aiProxyBlock(aiProxy()) +
         '<label class="chk aiblk__same"><input type="checkbox" id="aiSame"' + (same ? " checked" : "") + " /> Use the same service &amp; key for content and image</label>";
       if (same) {
         html += aiBlock("all", "AI service", "content + image");
@@ -2920,6 +2921,7 @@ import {
       return;
     }
     if (t.id === "aiSame") { aiPersistVisible(); localStorage.setItem("rk:ai:same", t.checked ? "1" : "0"); renderBody(); return; }
+    if (t.id === "aiProxyOn") { aiPersistProxy(); renderBody(); return; }
     if (t.dataset.aiscope) { aiPickProvider(t.dataset.aiscope, t.value); return; }
     if (t.dataset.sv !== undefined && t.dataset.sel) { onSvToggle(t); return; }
     if (t.dataset.act === "feature") {
@@ -4680,14 +4682,24 @@ import {
     localStorage.removeItem("rk:ai:" + scope + ":base");
     localStorage.removeItem("rk:ai:" + scope + ":key");
   }
+  var AI_PROXY_PROVIDERS = ["openai", "gemini", "anthropic"];
+  function aiProxy() {
+    return {
+      on: localStorage.getItem("rk:ai:proxy:on") === "1",
+      url: (localStorage.getItem("rk:ai:proxy:url") || "").trim().replace(/\/+$/, ""),
+      token: localStorage.getItem("rk:ai:proxy:token") || "",
+    };
+  }
   function aiCfg(purpose) {
     const scope = aiScope(purpose);
     const p = aiGet(scope, "provider") || "openai";
+    const px = aiProxy();
+    const viaProxy = px.on && !!px.url && AI_PROXY_PROVIDERS.indexOf(p) !== -1;
     return {
-      purpose: purpose || "img", scope: scope, provider: p,
-      key: aiGet(scope, "key") || "",
+      purpose: purpose || "img", scope: scope, provider: p, proxied: viaProxy,
+      key: viaProxy ? px.token : (aiGet(scope, "key") || ""),
       model: (aiGet(scope, "model") || bestModel(p, purpose) || AI_DEFAULT_MODEL[p] || "").trim(),
-      base: (aiGet(scope, "base") || AI_DEFAULT_BASE[p] || "").trim().replace(/\/+$/, ""),
+      base: viaProxy ? (px.url + "/" + p) : (aiGet(scope, "base") || AI_DEFAULT_BASE[p] || "").trim().replace(/\/+$/, ""),
     };
   }
   function aiBlock(scope, label, note) {
@@ -4709,6 +4721,14 @@ import {
       '<div class="af"><label class="af__label">API key</label><input type="password" id="aiKey_' + scope + '" placeholder="' + (key ? "Saved \u2014 paste to replace" : "Paste your key") + '" autocomplete="off" /><div class="af__hint">' + (key ? ("In use: " + escHtml(masked)) : "Not set") + "</div></div>" +
       advanced + "</div>";
   }
+  function aiProxyBlock(px) {
+    const maskedTok = px.token ? (px.token.slice(0, 3) + "\u2022\u2022\u2022\u2022\u2022\u2022" + px.token.slice(-4)) : "";
+    return '<div class="aiblk"><div class="aiblk__head">Private proxy <span>keeps keys off this site</span></div>' +
+      '<label class="chk"><input type="checkbox" id="aiProxyOn"' + (px.on ? " checked" : "") + ' /> Route AI through my Cloudflare Worker</label>' +
+      '<div class="af"><label class="af__label">Worker URL</label><input type="text" id="aiProxyUrl" value="' + escAttr(px.url) + '" placeholder="https://rk-ai-proxy.you.workers.dev" autocomplete="off" /></div>' +
+      '<div class="af"><label class="af__label">Access token</label><input type="password" id="aiProxyToken" placeholder="' + (px.token ? "Saved \u2014 paste to replace" : "Paste your ACCESS_TOKEN") + '" autocomplete="off" /><div class="af__hint">' + (px.token ? ("In use: " + escHtml(maskedTok)) : "Not set") + "</div></div>" +
+      '<div class="af__hint">When on, pick the provider below that matches a key you configured on the Worker \u2014 your own API key isn\u2019t needed here. Custom providers still call direct.</div></div>';
+  }
   function aiPickProvider(scope, p) {
     aiSetProvider(scope, p);
     if (activeTab === "ai") renderBody();
@@ -4729,6 +4749,15 @@ import {
         localStorage.removeItem("rk:ai:" + scope + ":base");
       }
     });
+    aiPersistProxy();
+  }
+  function aiPersistProxy() {
+    const on = root.querySelector("#aiProxyOn");
+    const url = root.querySelector("#aiProxyUrl");
+    const tok = root.querySelector("#aiProxyToken");
+    if (on) localStorage.setItem("rk:ai:proxy:on", on.checked ? "1" : "0");
+    if (url) localStorage.setItem("rk:ai:proxy:url", url.value.trim());
+    if (tok && tok.value.trim()) localStorage.setItem("rk:ai:proxy:token", tok.value.trim());
   }
   function aiSave() { aiPersistVisible(); renderBody(); status("AI settings saved \u2014 local only.", true); }
   function aiPromptFor(i) {
