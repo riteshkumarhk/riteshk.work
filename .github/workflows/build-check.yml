@@ -1,0 +1,45 @@
+name: build-check
+
+# Verifies the committed js/ bundles are exactly what `npm run build` produces,
+# so a stale or hand-edited build can never reach main unnoticed. This is a CHECK
+# only — GitHub Pages deploys from the branch independently, so a red result here
+# never takes the live site down.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  verify-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild bundles
+        run: npm run build
+
+      - name: Fail if committed js/ is out of date
+        run: |
+          if [ -n "$(git status --porcelain js/)" ]; then
+            echo "::error::Committed js/ output is stale. Run 'npm run build' locally and commit the result."
+            git --no-pager diff --stat -- js/
+            exit 1
+          fi
+          echo "OK — committed js/ matches a fresh build."
+
+      - name: Syntax-check every bundle
+        run: |
+          for f in js/*.js; do
+            node --check "$f" || { echo "::error::Syntax check failed for $f"; exit 1; }
+          done
+          echo "OK — all bundles pass node --check."

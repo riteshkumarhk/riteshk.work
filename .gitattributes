@@ -1,0 +1,8 @@
+# Keep build inputs & outputs LF so the CI build-check is byte-deterministic
+# across Windows (local) and Linux (CI). Prevents spurious CRLF/LF diffs.
+*.js   text eol=lf
+*.mjs  text eol=lf
+*.json text eol=lf
+*.css  text eol=lf
+*.html text eol=lf
+*.md   text eol=lf
