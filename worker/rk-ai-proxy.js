@@ -456,7 +456,7 @@ function corsHeaders(origin, env) {
   return {
     "Access-Control-Allow-Origin": ok ? (origin || allow[0] || "*") : (allow[0] || "null"),
     "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization,Content-Type,x-api-key,anthropic-version,anthropic-dangerous-direct-browser-access,Accept,X-GitHub-Api-Version,X-Vault-Grant",
+    "Access-Control-Allow-Headers": "Authorization,Content-Type,x-api-key,anthropic-version,anthropic-dangerous-direct-browser-access,Accept,X-GitHub-Api-Version,X-Vault-Grant,X-Publish-Token,X-Publish-Proof",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
