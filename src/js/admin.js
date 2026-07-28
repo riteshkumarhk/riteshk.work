@@ -237,9 +237,13 @@ import {
     });
     return __studioLoading;
   }
+  function studioUrlExit() { try { if (location.pathname === "/studio") history.replaceState({}, "", "/"); } catch (e) {} }
   function openStudio() {
     loadStudio().then(function () {
-      if (window.__RKStudio) window.__RKStudio.open({ musSilence: musSilence, musRestore: musRestore, thDismiss: thDismiss });
+      if (window.__RKStudio) {
+        window.__RKStudio.open({ musSilence: musSilence, musRestore: musRestore, thDismiss: thDismiss, onExit: studioUrlExit });
+        try { history.replaceState({}, "", "/studio"); } catch (e) {}   // reflect admin mode in the URL, however you entered
+      }
     }).catch(function () { flash("Couldn\u2019t load the editor \u2014 check your connection and try again."); });
   }
   /* ---------- control menu (clock flyout) ---------- */

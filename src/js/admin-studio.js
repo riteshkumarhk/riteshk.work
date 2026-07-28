@@ -161,6 +161,7 @@ import {
   function musSilence() { if (__host.musSilence) __host.musSilence(); }
   function musRestore() { if (__host.musRestore) __host.musRestore(); }
   function thDismiss(n) { if (__host.thDismiss) __host.thDismiss(n); }
+  function hostExit() { if (__host.onExit) __host.onExit(); }
   function platePreview(th) {
     return (window.RK && window.RK.plateInner) ? window.RK.plateInner(th) : "";
   }
@@ -6924,6 +6925,7 @@ import {
     document.documentElement.classList.remove("adm-lock");
     document.body.classList.remove("adm-lock");
     musRestore(); // bring the music back if it was on before
+    hostExit();   // let the shell restore the URL (/studio -> /)
   }
 
   /* ---------- change the admin key (requires the current key) ---------- */
