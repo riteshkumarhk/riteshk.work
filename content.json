@@ -678,10 +678,9 @@
           {
             "type": "mediagrid",
             "locked": true,
-            "encStub": true,
-            "iv": "vx4SUE13fCdANt88",
-            "ct": "IodT3o2+IBHuW1ihjXtBcoOEIq6b1Gs+i+5Oqq9ivacUo7ehG6YjCqFkK5FZ7ZfvraDLGXbLyJx3uaVhUNX0AGn596MLtj3mW3eEp9bbimsI3IcLHOYnHqnyz8X5VePlETJDnPxe5MXb+dsN1Wvonr1NHB87KIVFFCCouc00j8bCMYoP242sVwORzeSkgeUP9R4Y2i8YxYWWF2aWnOtzHQ==",
-            "sep": false
+            "vaultBlock": "18cc65efeb2046c9c8a782b6de8398b482b0904863d79352e882ae94a2e835da.json",
+            "sep": false,
+            "hsize": "sm"
           },
           {
             "type": "text",
