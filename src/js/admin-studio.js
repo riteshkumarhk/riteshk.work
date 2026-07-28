@@ -406,6 +406,17 @@ import {
       (has ? '<button class="btn btn--ghost" data-act="resume-open">Open</button><button class="btn btn--ghost" data-act="resume-clear">Remove</button>' : "") + "</div>" +
       '<div class="imgblk__hint">' + (has ? ("In use: " + escHtml(isData ? "embedded PDF" : url) + " \u00b7 the dock button is now visible") : "Not set \u2014 the r\u00e9sum\u00e9 button stays hidden until you add one.") + "</div></div>";
   }
+  var AVATAR_PLACEHOLDER_SVG = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" style="opacity:.4"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-6.5 8-6.5s8 2.1 8 6.5"/></svg>';
+  function avatarBlock() {
+    const url = (data.contact && data.contact.avatar) || "";
+    const has = !!url;
+    return '<div class="imgblk"><div class="af__label">Display picture</div>' +
+      '<div class="af__hint" style="margin-bottom:.6rem">Your photo \u2014 shown on the admin sign-in card. A square image works best.</div>' +
+      '<div style="display:flex;align-items:center;gap:14px">' +
+        '<div style="width:64px;height:64px;border-radius:50%;overflow:hidden;flex:0 0 64px;background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;justify-content:center">' + (has ? '<img src="' + escAttr(url) + '" alt="" style="width:100%;height:100%;object-fit:cover" />' : AVATAR_PLACEHOLDER_SVG) + '</div>' +
+        '<div class="imgblk__row" style="margin:0"><button class="btn btn--ghost" data-act="avatar-upload">' + (has ? "Replace\u2026" : "Upload photo\u2026") + '</button>' + (has ? '<button class="btn btn--ghost" data-act="avatar-clear">Remove</button>' : "") + "</div>" +
+      "</div></div>";
+  }
   function atsPanelHtml(has) {
     var lvls = IPREP_LEVELS.map(function (l) {
       return '<button type="button" class="ats__lvl' + (atsLevel === l[0] ? " is-on" : "") + '" data-act="ats-level" data-lvl="' + l[0] + '"><b>' + l[1] + "</b><span>" + l[2] + "</span></button>";
@@ -2415,6 +2426,7 @@ import {
     contact() {
       return (
         secHead("Contact", "Used across the contact section, menu, footer and the floating dock.") +
+        avatarBlock() +
         input("Email", "contact.email") +
         '<div class="af__row">' +
         input("Phone (display)", "contact.phone") +
@@ -3070,6 +3082,8 @@ import {
     if (act === "img-modify") { imgModify(i); return; }
     if (act === "resume-upload") { pickResume(function (uri) { setPath(data, "contact.resume", uri); apply(true); renderBody(); status("R\u00e9sum\u00e9 embedded \u2014 the dock button is now visible.", true); }); return; }
     if (act === "resume-clear") { setPath(data, "contact.resume", ""); apply(true); renderBody(); status("R\u00e9sum\u00e9 removed."); return; }
+    if (act === "avatar-upload") { pickImage(function (uri) { setPath(data, "contact.avatar", uri); apply(true); renderBody(); status("Display picture updated.", true); }); return; }
+    if (act === "avatar-clear") { setPath(data, "contact.avatar", ""); apply(true); renderBody(); status("Display picture removed."); return; }
     if (act === "resume-open") { const u = data.contact && data.contact.resume; if (u && window.RK && window.RK.openResume) window.RK.openResume(u); else if (u) window.open(u, "_blank", "noopener"); return; }
     if (act === "ai-save") { aiSave(); return; }
     if (act === "ai-clear") { Object.keys(localStorage).forEach(function (k) { if (/^rk:ai:[a-z]+:key$/.test(k)) localStorage.removeItem(k); }); renderBody(); status("Keys removed."); return; }

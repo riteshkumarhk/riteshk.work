@@ -165,6 +165,7 @@ import {
     if (window.innerWidth < ADMIN_MIN) { flash("Admin mode needs a wider screen — open it on a laptop or desktop."); return; }
     thDismiss(true);   // clear the landing “have a ticket?” nudge before the gate/editor (it sits above them)
     const publishedGate = (window.RK && window.RK.published && window.RK.published.adminGate) || null;
+    const avatarUrl = (window.RK && window.RK.published && window.RK.published.contact && window.RK.published.contact.avatar) || "";
     const stored = localStorage.getItem(HASH_KEY);
     // A server admin (the Cloudflare Worker) is the source of truth for the key, so any browser —
     // fresh device included — must ENTER the real key (verified server-side), never self-serve a
@@ -183,8 +184,11 @@ import {
       '<div class="pass__err"></div>' +
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
       '<button class="btn btn--primary" data-go>' + (creating ? "Create" : "Enter") + "</button></div>" +
-      '<div class="pass__note" style="margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.09);font-size:12px;line-height:1.55;opacity:.62">' +
-        'A little easter egg, since you found the admin door: I was a core designer on the team that brought <b style="font-weight:600;opacity:.85">passkeys to Windows</b> \u2014 the kind of security behind sign-ins like this one. Endlessly grateful to my teammates across the Windows security landscape for the opportunity and the collaboration. \u2014 Ritesh' +
+      '<div class="pass__cred" style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(255,255,255,.09);display:flex;flex-direction:column;align-items:center;gap:11px">' +
+        '<div style="width:58px;height:58px;border-radius:50%;overflow:hidden;flex:0 0 58px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center">' +
+          (avatarUrl ? '<img src="' + avatarUrl + '" alt="Ritesh" style="width:100%;height:100%;object-fit:cover" />' : '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.4" style="opacity:.4"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-6.5 8-6.5s8 2.1 8 6.5"/></svg>') +
+        "</div>" +
+        '<div style="font-size:12px;line-height:1.55;opacity:.62;text-align:center">A little easter egg, since you found the admin door: I was a core designer on the team that brought <b style="font-weight:600;opacity:.85">passkeys to Windows</b> \u2014 the kind of security behind sign-ins like this one. Endlessly grateful to my teammates across the Windows security landscape for the opportunity and the collaboration. \u2014 Ritesh</div>' +
       "</div></div>";
     document.body.appendChild(modal);
     const pass = modal.querySelector('input[type="password"]');
