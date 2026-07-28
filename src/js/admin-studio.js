@@ -2308,9 +2308,12 @@ import {
       "</section>";
     var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
     var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
+    var _vm = lockedVideoTargets(w);
     var unlockBlock = '<section class="l2grp"><div class="l2grp__head">Deeper-cut pass <span>\u2014 optional gate for \u201cLocked\u201d sections</span></div>' +
       '<div class="af"><input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
-      '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks \u00b7 case-insensitive \u00b7 locked content still ships in your file (soft gate)</div></div></section>";
+      '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks \u00b7 case-insensitive \u00b7 locked content still ships in your file (soft gate)</div></div>" +
+      '<div class="af" style="margin-top:12px"><button class="btn btn--auto" data-act="vault-migrate" data-index="' + i + '"' + (_vm.targets.length ? "" : " disabled") + '>\uD83D\uDD10 Move Locked videos to the private vault' + (_vm.targets.length ? " (" + _vm.targets.length + ")" : "") + '</button>' +
+      '<div class="af__hint">' + (_vm.targets.length ? ("Uploads " + _vm.targets.length + " Locked video" + (_vm.targets.length > 1 ? "s" : "") + " to your private R2 vault (streamed via a signed URL), replacing the public copy. Publish afterwards.") : (_vm.encryptedLeft ? "Unlock the \uD83D\uDD12 Protected sections above first \u2014 then their videos can be moved here." : "No Locked videos in this project.")) + "</div></div></section>";
     return '<div class="study__panel">' +
       csgenPanel(w, i) +
       header + meta +
@@ -3122,6 +3125,7 @@ import {
     if (act === "study-pick") { sectionPicker(i); return; }
     if (act === "study-blockadd") { sectionPicker(i, +b.dataset.bindex); return; }
     if (act === "study-decrypt") { decryptStudyForEdit(i); return; }
+    if (act === "vault-migrate") { vaultMigrateProject(i); return; }
     if (act === "work-decrypt") { decryptWorkForEdit(i); return; }
     if (act === "study-blocktoggle") {
       if (e.detail > 1) return; // 2nd click of a double-click - let dblclick handle rename
@@ -4314,6 +4318,60 @@ import {
       if (e && e.auth) status("Your session ended \u2014 \u201c" + nm + "\u201d stays embedded; sign in and re-add to store it privately.");
       else status("Couldn\u2019t reach the vault \u2014 \u201c" + nm + "\u201d stays embedded and will be protected on Publish.");
     });
+  }
+
+  // ---- migrate a project's Locked-section videos into the private vault ----
+  // Scans Locked blocks for videos still hosted as public /assets/uploads files or inline
+  // data: URIs (i.e. sections that are unlocked for editing) and returns them as move targets;
+  // still-encrypted (🔒 Protected) blocks are counted so we can tell the owner to unlock first.
+  function lockedVideoTargets(w) {
+    var out = [], encryptedLeft = 0;
+    var blocks = (w && w.study && w.study.blocks) || [];
+    blocks.forEach(function (b) {
+      if (!b) return;
+      if (b.encStub) { encryptedLeft++; return; }
+      if (!b.locked) return;
+      (function scan(o) {
+        if (!o || typeof o !== "object") return;
+        for (var k in o) {
+          var v = o[k];
+          if (typeof v === "string") {
+            if (isVideoVal(v) && !/^vault:/i.test(v) && (isBareUploadPath(v) || /^data:video\//i.test(v))) out.push({ o: o, k: k, src: v });
+          } else if (v && typeof v === "object") scan(v);
+        }
+      })(b);
+    });
+    return { targets: out, encryptedLeft: encryptedLeft };
+  }
+  function vaultMigrateProject(i) {
+    var w = data.work[i]; if (!w) return;
+    if (!adminSession()) { status("Sign in first \u2014 moving videos to the vault needs your session."); return; }
+    var info = lockedVideoTargets(w), targets = info.targets;
+    if (!targets.length) {
+      status(info.encryptedLeft ? "Nothing to move yet \u2014 click \u201cUnlock to edit\u201d on the \uD83D\uDD12 Protected sections first, then run this again." : "No Locked videos to move in this project.");
+      return;
+    }
+    status("Moving " + targets.length + " Locked video" + (targets.length > 1 ? "s" : "") + " to your private vault\u2026");
+    var done = 0;
+    (function next(idx) {
+      if (idx >= targets.length) {
+        saveDraft(true); renderBody();
+        status(done + " Locked video" + (done === 1 ? "" : "s") + " moved to your private vault. Publish, then the public copies can be removed.", true);
+        return;
+      }
+      var t = targets[idx];
+      var url = /^data:/i.test(t.src) ? t.src : (t.src.charAt(0) === "/" ? t.src : "/" + t.src);
+      fetch(url).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.blob(); })
+        .then(function (blob) {
+          var ext = extFromName(t.src) || (blob.type && blob.type.indexOf("/") >= 0 ? blob.type.split("/")[1] : "") || "mp4";
+          return vaultUpload(blob, ext).then(function (key) { t.o[t.k] = "vault:" + key; done++; });
+        })
+        .then(function () { next(idx + 1); })
+        .catch(function (e) {
+          if (e && e.auth) { clearAdminSession(); saveDraft(true); renderBody(); status("Your session ended \u2014 " + done + " moved. Sign in again and retry."); return; }
+          next(idx + 1);
+        });
+    })(0);
   }
 
   /* ===================== In-app video compressor (WebCodecs) =====================
