@@ -2308,12 +2308,12 @@ import {
       "</section>";
     var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
     var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
-    var _vm = lockedVideoTargets(w);
+    var _vm = lockedMediaTargets(w);
     var unlockBlock = '<section class="l2grp"><div class="l2grp__head">Deeper-cut pass <span>\u2014 optional gate for \u201cLocked\u201d sections</span></div>' +
       '<div class="af"><input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
       '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks \u00b7 case-insensitive \u00b7 locked content still ships in your file (soft gate)</div></div>" +
-      '<div class="af" style="margin-top:12px"><button class="btn btn--auto" data-act="vault-migrate" data-index="' + i + '"' + (_vm.targets.length ? "" : " disabled") + '>\uD83D\uDD10 Move Locked videos to the private vault' + (_vm.targets.length ? " (" + _vm.targets.length + ")" : "") + '</button>' +
-      '<div class="af__hint">' + (_vm.targets.length ? ("Uploads " + _vm.targets.length + " Locked video" + (_vm.targets.length > 1 ? "s" : "") + " to your private R2 vault (streamed via a signed URL), replacing the public copy. Publish afterwards.") : (_vm.encryptedLeft ? "Unlock the \uD83D\uDD12 Protected sections above first \u2014 then their videos can be moved here." : "No Locked videos in this project.")) + "</div></div></section>";
+      '<div class="af" style="margin-top:12px"><button class="btn btn--auto" data-act="vault-migrate" data-index="' + i + '"' + (_vm.targets.length ? "" : " disabled") + '>\uD83D\uDD10 Move Locked media to the private vault' + (_vm.targets.length ? " (" + _vm.targets.length + ")" : "") + '</button>' +
+      '<div class="af__hint">' + (_vm.targets.length ? ("Uploads " + _vm.targets.length + " Locked item" + (_vm.targets.length > 1 ? "s" : "") + " (images &amp; videos) to your private R2 vault (streamed via a signed URL), replacing the public copy. Publish afterwards.") : (_vm.encryptedLeft ? "Unlock the \uD83D\uDD12 Protected sections above first \u2014 then their images &amp; videos can be moved here." : "No Locked images or videos in this project.")) + "</div></div></section>";
     return '<div class="study__panel">' +
       csgenPanel(w, i) +
       header + meta +
@@ -4401,11 +4401,26 @@ import {
     });
   }
 
-  // ---- migrate a project's Locked-section videos into the private vault ----
-  // Scans Locked blocks for videos still hosted as public /assets/uploads files or inline
+  // ---- migrate a project's Locked-section media into the private vault ----
+  // Scans Locked blocks for images/videos still hosted as public /assets/uploads files or inline
   // data: URIs (i.e. sections that are unlocked for editing) and returns them as move targets;
   // still-encrypted (🔒 Protected) blocks are counted so we can tell the owner to unlock first.
-  function lockedVideoTargets(w) {
+  var VAULT_MEDIA_EXT_RE = /\.(png|jpe?g|gif|webp|avif|bmp|svg|mp4|webm|mov|m4v|ogv)($|\?|#)/i;
+  // A public/embedded image or video that isn't already a vault ref — eligible to move into the vault.
+  function isVaultMigratable(v) {
+    return typeof v === "string" && !/^vault:/i.test(v) &&
+      (/^data:(image|video)\//i.test(v) || (isBareUploadPath(v) && VAULT_MEDIA_EXT_RE.test(v)));
+  }
+  // Pick a file extension for the vault key so the viewer renders <img> vs <video> correctly.
+  function vaultMediaExt(src, blob) {
+    var e = extFromName(src); if (e) return e;
+    var mt = String((blob && blob.type) || "").toLowerCase();
+    var map = { "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp", "image/avif": "avif", "image/bmp": "bmp", "image/svg+xml": "svg", "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov", "video/x-m4v": "m4v", "video/ogg": "ogv" };
+    if (map[mt]) return map[mt];
+    if (mt.indexOf("/") >= 0) return mt.split("/")[1].replace(/[^a-z0-9]/gi, "").slice(0, 8) || "bin";
+    return /^data:image\//i.test(src) ? "png" : "mp4";
+  }
+  function lockedMediaTargets(w) {
     var out = [], encryptedLeft = 0;
     var blocks = (w && w.study && w.study.blocks) || [];
     blocks.forEach(function (b) {
@@ -4417,7 +4432,7 @@ import {
         for (var k in o) {
           var v = o[k];
           if (typeof v === "string") {
-            if (isVideoVal(v) && !/^vault:/i.test(v) && (isBareUploadPath(v) || /^data:video\//i.test(v))) out.push({ o: o, k: k, src: v });
+            if (isVaultMigratable(v)) out.push({ o: o, k: k, src: v });
           } else if (v && typeof v === "object") scan(v);
         }
       })(b);
@@ -4426,26 +4441,25 @@ import {
   }
   function vaultMigrateProject(i) {
     var w = data.work[i]; if (!w) return;
-    if (!adminSession()) { status("Sign in first \u2014 moving videos to the vault needs your session."); return; }
-    var info = lockedVideoTargets(w), targets = info.targets;
+    if (!adminSession()) { status("Sign in first \u2014 moving media to the vault needs your session."); return; }
+    var info = lockedMediaTargets(w), targets = info.targets;
     if (!targets.length) {
-      status(info.encryptedLeft ? "Nothing to move yet \u2014 click \u201cUnlock to edit\u201d on the \uD83D\uDD12 Protected sections first, then run this again." : "No Locked videos to move in this project.");
+      status(info.encryptedLeft ? "Nothing to move yet \u2014 click \u201cUnlock to edit\u201d on the \uD83D\uDD12 Protected sections first, then run this again." : "No Locked images or videos to move in this project.");
       return;
     }
-    status("Moving " + targets.length + " Locked video" + (targets.length > 1 ? "s" : "") + " to your private vault\u2026");
+    status("Moving " + targets.length + " Locked item" + (targets.length > 1 ? "s" : "") + " to your private vault\u2026");
     var done = 0;
     (function next(idx) {
       if (idx >= targets.length) {
         saveDraft(true); renderBody();
-        status(done + " Locked video" + (done === 1 ? "" : "s") + " moved to your private vault. Publish, then the public copies can be removed.", true);
+        status(done + " Locked item" + (done === 1 ? "" : "s") + " moved to your private vault. Publish, then the public copies can be removed.", true);
         return;
       }
       var t = targets[idx];
       var url = /^data:/i.test(t.src) ? t.src : (t.src.charAt(0) === "/" ? t.src : "/" + t.src);
       fetch(url).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.blob(); })
         .then(function (blob) {
-          var ext = extFromName(t.src) || (blob.type && blob.type.indexOf("/") >= 0 ? blob.type.split("/")[1] : "") || "mp4";
-          return vaultUpload(blob, ext).then(function (key) { t.o[t.k] = "vault:" + key; done++; });
+          return vaultUpload(blob, vaultMediaExt(t.src, blob)).then(function (key) { t.o[t.k] = "vault:" + key; done++; });
         })
         .then(function () { next(idx + 1); })
         .catch(function (e) {
