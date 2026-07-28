@@ -168,6 +168,27 @@ export default {
         return json({ ok: true, count: l.keys.length }, 200, cors);
       } catch (e) { return json({ error: "Remove failed" }, 400, cors); }
     }
+    // Owner sets/clears the publish step-up: stores SHA-256 of the recovery proof and the require flag.
+    if (url.pathname === "/admin/publish/config") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Store not configured" }, 500, cors);
+      try {
+        const b = await request.json();
+        if (b && typeof b.proof === "string" && b.proof) await env.VAULT_GRANTS.put("cfg:publishproof", bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(b.proof))));
+        if (b && typeof b.require === "boolean") {
+          const hasProof = !!(await env.VAULT_GRANTS.get("cfg:publishproof"));
+          const creds = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" });
+          if (b.require && (!hasProof || !creds.keys.length)) return json({ error: "Add a passkey and set the passphrase first." }, 400, cors);
+          await env.VAULT_GRANTS.put("cfg:publish2fa", b.require ? "1" : "");
+        }
+        return json({ ok: true, enabled: (await env.VAULT_GRANTS.get("cfg:publish2fa")) === "1", hasProof: !!(await env.VAULT_GRANTS.get("cfg:publishproof")) }, 200, cors);
+      } catch (e) { return json({ error: "Config failed" }, 400, cors); }
+    }
+    if (url.pathname === "/admin/publish/status") {
+      if (!env.VAULT_GRANTS) return json({ enabled: false, hasProof: false }, 200, cors);
+      return json({ enabled: (await env.VAULT_GRANTS.get("cfg:publish2fa")) === "1", hasProof: !!(await env.VAULT_GRANTS.get("cfg:publishproof")) }, 200, cors);
+    }
 
     // ---------- admin: authenticated GitHub proxy (holds the GH token server-side) ----------
     if (url.pathname.startsWith("/admin/gh/")) {
@@ -194,6 +215,16 @@ export default {
       // session cannot delete files, delete or rewrite branches, or wipe history through this proxy.
       // (Branch protection on main also blocks force-pushes as a second layer.)
       if (["GET", "HEAD", "POST", "PUT", "PATCH"].indexOf(ghMethod) === -1) return json({ error: "Method not allowed via proxy" }, 405, cors);
+      // Publish step-up: when enabled, every repo WRITE requires BOTH a fresh passkey assertion
+      // (X-Publish-Token — factor 1, possession) AND the recovery-passphrase proof (X-Publish-Proof
+      // — factor 2, knowledge). So a stolen session alone can read but cannot publish/deface.
+      if (env.VAULT_GRANTS && ghMethod !== "GET" && ghMethod !== "HEAD" && (await env.VAULT_GRANTS.get("cfg:publish2fa")) === "1") {
+        if (!(await verifyPublishToken(request.headers.get("X-Publish-Token"), env))) return json({ error: "Publish needs a passkey step-up." }, 401, cors);
+        const stored = await env.VAULT_GRANTS.get("cfg:publishproof");
+        const proof = request.headers.get("X-Publish-Proof") || "";
+        const proofHash = proof ? bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(proof))) : "";
+        if (!stored || !timingSafeEqual(proofHash, stored)) return json({ error: "Publish needs your recovery passphrase." }, 401, cors);
+      }
       const ghBody = (ghMethod === "GET" || ghMethod === "HEAD") ? undefined : await request.arrayBuffer();
 
       let ghUp;
@@ -464,6 +495,14 @@ async function verifyGrant(token, env) {
     if (obj && obj.g && obj.exp && obj.exp > Date.now()) return obj;
   } catch (e) {}
   return null;
+}
+// Verify a publish step-up token (the passkey "publish" assertion result): payload {pub:1, exp} + HMAC.
+async function verifyPublishToken(token, env) {
+  if (!token || !env.SESSION_SECRET) return false;
+  const dot = token.indexOf("."); if (dot < 1) return false;
+  const payload = token.slice(0, dot), sig = token.slice(dot + 1);
+  if (!timingSafeEqual(sig, await hmac(env.SESSION_SECRET, payload))) return false;
+  try { const o = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload))); return !!(o && o.pub && o.exp && o.exp > Date.now()); } catch (e) { return false; }
 }
 
 /* ---------- WebAuthn (passkey) helpers — dependency-free ---------- */

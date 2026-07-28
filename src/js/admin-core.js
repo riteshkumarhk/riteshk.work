@@ -119,6 +119,18 @@ export async function publishProof(recovery) {
   const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: salt, iterations: 210000, hash: "SHA-256" }, base, 256);
   return bufToB64url(bits);
 }
+// Whether publishing currently requires the two-step (passkey + passphrase), and whether a proof is set.
+export async function publishStatus() {
+  try { const r = await fetch(ADMIN_WORKER + "/admin/publish/status"); if (!r.ok) return { enabled: false, hasProof: false }; return await r.json(); } catch (e) { return { enabled: false, hasProof: false }; }
+}
+// Owner-only: set the recovery proof hash and/or the require flag for the publish step-up.
+export async function publishConfig(proof, require) {
+  const sess = adminSession(); if (!sess) { const e = new Error("Sign in first."); e.auth = true; throw e; }
+  const body = { require: !!require }; if (proof) body.proof = proof;
+  const r = await fetch(ADMIN_WORKER + "/admin/publish/config", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) { const j = await r.json().catch(() => null); throw new Error((j && j.error) || "Couldn’t update publish security."); }
+  return await r.json();
+}
 
 /* ---------- NDA vault (private R2, via the Worker) ----------
    Gated media (deeper-cut reels, NDA screen recordings) live in a private R2 bucket, never

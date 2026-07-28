@@ -15,7 +15,7 @@ import {
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
   rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath,
   ADMIN_WORKER, adminSession, clearAdminSession, vaultUpload, vaultRegisterGrant, vaultSignedUrl,
-  webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof
+  webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig
 } from "./admin-core.js";
 
 (function () {
@@ -3302,8 +3302,9 @@ import {
     const styled = autoStyleLanding(false);
     if (styled) { if (activeTab === "landing") renderBody(); apply(true); }
     const pubData = JSON.parse(JSON.stringify(data));
-    // Publish a salted hash of the admin key so any browser must know the real key to open the editor.
-    try { var _gr = localStorage.getItem(GATE_KEY); if (_gr) pubData.adminGate = JSON.parse(_gr); else delete pubData.adminGate; } catch (e) {}
+    // Never publish the admin-key hash — in a public repo it was an offline brute-force target. The
+    // Cloudflare Worker is the source of truth for admin auth now (password login + passkeys).
+    try { delete pubData.adminGate; } catch (e) {}
     // With a token, protected images are encrypted into their own /assets/protected/<hash>.enc
     // files (content.json stays tiny). Without one (manual publish), fall back to inlining them.
     if (!token) await inlineProtectedImages(pubData);
@@ -3728,14 +3729,20 @@ import {
     return rkNormPass(studyUnlockPlain[w.id]) ? studyUnlockPlain[w.id] : "";
   }
 
+  // Publish step-up factors (a fresh passkey token + the recovery proof), gathered at the start of a
+  // publish and attached to every repo write via ghHeaders; null when the step-up is off.
+  var publishStepup = null;
   function ghHeaders(token) {
     const sess = adminSession();
-    return {
+    const h = {
       Authorization: sess ? ("Bearer " + sess) : ("Bearer " + token),
       Accept: "application/vnd.github+json",
       "Content-Type": "application/json",
       "X-GitHub-Api-Version": "2022-11-28",
     };
+    if (publishStepup && publishStepup.token) h["X-Publish-Token"] = publishStepup.token;
+    if (publishStepup && publishStepup.proof) h["X-Publish-Proof"] = publishStepup.proof;
+    return h;
   }
   // With an admin session, GitHub calls go through the Worker (which holds the real token,
   // scoped to this one repo); otherwise they hit the GitHub API directly with the saved token.
@@ -4090,6 +4097,20 @@ import {
     var viaSession = (token === "session");
     pubProgress(6, "Preparing your content\u2026");
     try {
+      // Publish step-up: when enabled, gather BOTH factors up front (fresh passkey assertion + recovery
+      // proof) so every repo write — image uploads included — carries them. A stolen session alone fails.
+      publishStepup = null;
+      if (viaSession) {
+        var _pst = await publishStatus().catch(function () { return { enabled: false }; });
+        if (_pst && _pst.enabled) {
+          var _rec = await ensureRecoveryPass();
+          if (_rec === null) { pubStopCreep(); pubProgress(100, "Publish needs your recovery passphrase.", { error: true }); return; }
+          var _proof = await publishProof(_rec), _tok;
+          try { pubProgress(7, "Confirm it\u2019s you \u2014 tap your passkey\u2026"); _tok = (await webauthnAuth("publish")).publishToken; }
+          catch (e) { pubStopCreep(); pubProgress(100, (e && e.message) || "Passkey step-up was cancelled.", { error: true }); return; }
+          publishStepup = { token: _tok, proof: _proof };
+        }
+      }
       const hostRes = await hostEmbeddedImages(token, function (n, total) {
         pubProgress(6 + Math.round((n / Math.max(1, total)) * 40), "Uploading images at full quality \u2014 " + n + " of " + total + "\u2026");
       });
@@ -4153,7 +4174,7 @@ import {
       } else {
         pubProgress(100, "Publish hit a snag: " + emsg + " \u2014 hit Publish to retry.", { error: true });
       }
-    } finally { publishing = false; }
+    } finally { publishing = false; publishStepup = null; }
   }
 
   // GitHub rejected the saved token: drop it so the next Publish re-prompts sign-in.
@@ -7202,6 +7223,7 @@ import {
       '<div class="pass__sub">Sign in to admin with Windows Hello, Face ID or a security key. Enrol a few (laptop, phone, a backup) so you\u2019re never locked out \u2014 your admin key still works as a fallback.</div>' +
       '<div class="pass__err"></div>' +
       '<div data-pklist style="margin:4px 0 14px;font-size:13px">Loading\u2026</div>' +
+      '<div data-2fa style="margin:2px 0 14px;font-size:13px"></div>' +
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Done</button>' +
       '<button class="btn btn--primary" data-add>\uFF0B Add a passkey</button></div></div>';
     document.body.appendChild(modal);
@@ -7226,7 +7248,21 @@ import {
       catch (e) { err.textContent = (e && e.message) || "Enrolment failed."; }
       finally { btn.disabled = false; }
     });
-    refresh();
+    async function render2fa() {
+      const el = modal.querySelector("[data-2fa]"); if (!el) return;
+      const st = await publishStatus().catch(() => ({ enabled: false }));
+      el.innerHTML = '<label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;line-height:1.4"><input type="checkbox" data-2fatoggle style="margin-top:2px"' + (st.enabled ? " checked" : "") + ' /><span>Require a passkey <b>and</b> your recovery passphrase on every publish <span style="opacity:.55">\u2014 a stolen session alone then can\u2019t publish.</span></span></label>';
+      const cb = el.querySelector("[data-2fatoggle]");
+      cb.addEventListener("change", async () => {
+        cb.disabled = true; err.textContent = "";
+        try {
+          if (cb.checked) { const rec = await ensureRecoveryPass(); if (rec === null) { cb.checked = false; return; } await publishConfig(await publishProof(rec), true); status("Publish now requires your passkey + passphrase.", true); }
+          else { await publishConfig(null, false); status("Publish step-up turned off.", true); }
+        } catch (e) { cb.checked = !cb.checked; err.textContent = (e && e.message) || "Couldn\u2019t update publish security."; }
+        finally { cb.disabled = false; }
+      });
+    }
+    refresh(); render2fa();
   }
 
   function changeKeyModal() {
