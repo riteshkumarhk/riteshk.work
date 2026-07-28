@@ -14,16 +14,16 @@ import {
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
   rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath, adminLogin, ADMIN_WORKER,
-  vaultSignedUrl
+  vaultSignedUrl, vaultRedeem
 } from "./admin-core.js";
 
 (function () {
   "use strict";
 
-  // Bridge the vault resolver onto window.RK for the viewer (project.js is a separate bundle
-  // that shares via window.RK). Done BEFORE the preview early-return so the studio's preview
-  // iframe — which loads this file with ?preview and bails out below — still gets it.
-  try { (window.RK = window.RK || {}).vaultSignedUrl = vaultSignedUrl; } catch (e) {}
+  // Bridge the vault resolver + pass-redeem onto window.RK for the viewer (project.js/render.js are
+  // separate bundles that share via window.RK). Done BEFORE the preview early-return so the studio's
+  // preview iframe — which loads this file with ?preview and bails out below — still gets it.
+  try { window.RK = window.RK || {}; window.RK.vaultSignedUrl = vaultSignedUrl; window.RK.vaultRedeem = vaultRedeem; } catch (e) {}
 
   // The live-preview iframe loads this very file — it must stay inert there.
   if (new URLSearchParams(location.search).has("preview")) return;

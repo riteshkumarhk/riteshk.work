@@ -327,6 +327,9 @@
       var lk = mw.study.blocks.filter(function (b) { return b && b.locked; });
       if (lk.length && !lk.some(function (b) { return b.encStub; })) rkMarkUnlocked(mw.id);
     }
+    // Also redeem this pass for a scoped vault grant, so any vault-hosted media in these works
+    // streams for the pass-holder (best-effort; a no-op if no grant is registered for this code).
+    try { if (window.RK && window.RK.vaultRedeem) await window.RK.vaultRedeem(code); } catch (e) {}
   }
 
   function deriveSpecialData(base, sv) {

@@ -66,15 +66,42 @@ export async function vaultUpload(file, extHint) {
   if (!j || !j.key) throw new Error("The vault didn’t return a key.");
   return j.key; // "<sha256>.<ext>"
 }
-// Resolve a vault key to a short-lived, absolute streaming URL. Returns "" when there is no
-// owner session (a public visitor) or the Worker declines — the caller then shows it locked.
-export async function vaultSignedUrl(key) {
-  const sess = adminSession();
-  if (!sess || !key) return "";
+// Resolve a vault key to a short-lived, absolute streaming URL. Authorised by EITHER the owner
+// session OR a redeemed curated-view grant (for pass-holders). Returns "" when neither is present
+// or the Worker declines — the caller then shows the item locked.
+export const VAULT_GRANT_KEY = "rk:vault:grant";
+export function vaultGrantToken() {
   try {
-    const res = await fetch(ADMIN_WORKER + "/vault/sign?key=" + encodeURIComponent(key), {
-      headers: { "Authorization": "Bearer " + sess },
+    const g = JSON.parse(localStorage.getItem(VAULT_GRANT_KEY) || "null");
+    if (g && g.token && g.exp && g.exp > Date.now()) return g.token;
+  } catch (e) {}
+  return "";
+}
+// Redeem a curated-view / deeper-cut pass for a scoped vault grant token (best-effort — a pass
+// with no registered grant simply leaves the viewer without vault access, which is fine).
+export async function vaultRedeem(code) {
+  const c = String(code == null ? "" : code).trim();
+  if (!c) return false;
+  try {
+    const res = await fetch(ADMIN_WORKER + "/vault/redeem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: c }),
     });
+    if (!res.ok) return false;
+    const j = await res.json().catch(() => null);
+    if (j && j.token && j.exp) { try { localStorage.setItem(VAULT_GRANT_KEY, JSON.stringify({ token: j.token, exp: j.exp })); } catch (e) {} return true; }
+  } catch (e) {}
+  return false;
+}
+export async function vaultSignedUrl(key) {
+  if (!key) return "";
+  const sess = adminSession();
+  const headers = {};
+  if (sess) headers.Authorization = "Bearer " + sess;
+  else { const g = vaultGrantToken(); if (g) headers["X-Vault-Grant"] = g; else return ""; }
+  try {
+    const res = await fetch(ADMIN_WORKER + "/vault/sign?key=" + encodeURIComponent(key), { headers });
     if (!res.ok) return "";
     const j = await res.json().catch(() => null);
     return j && j.url ? ADMIN_WORKER + j.url : "";

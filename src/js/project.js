@@ -206,7 +206,11 @@
     if (!st || !st.enc || !wrap) return false;
     var sek;
     try { sek = await rkUnwrapSek(credential, wrap); } catch (e) { return false; }
-    return decryptStudyBlocks(st, sek);
+    var okDec = await decryptStudyBlocks(st, sek);
+    // A working deeper-cut pass also redeems a scoped vault grant, so vault-hosted media in this
+    // project streams for the pass-holder (best-effort; no-op if no grant is registered).
+    if (okDec) { try { if (window.RK && window.RK.vaultRedeem) await window.RK.vaultRedeem(credential); } catch (e) {} }
+    return okDec;
   }
 
   /* ---------- block renderers ---------- */
