@@ -34,6 +34,8 @@ const PROVIDERS = {
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // admin session lifetime — 12 hours
 const VAULT_URL_TTL_MS = 6 * 60 * 60 * 1000;  // signed vault-asset URL lifetime — 6 hours
 const GRANT_REDEEM_TTL_MS = 12 * 60 * 60 * 1000; // ticket-holder vault access token lifetime — 12 hours
+const WEBAUTHN_CHALLENGE_TTL_MS = 5 * 60 * 1000; // passkey register/auth challenge lifetime — 5 min
+const PUBLISH_TOKEN_TTL_MS = 5 * 60 * 1000;       // publish step-up (passkey factor) token lifetime — 5 min
 
 export default {
   async fetch(request, env) {
@@ -56,6 +58,105 @@ export default {
       } catch (e) {
         return json({ error: "Login failed on the server", detail: String((e && e.message) || e) }, 500, cors);
       }
+    }
+
+    // ---------- admin: passkey (WebAuthn) enrolment + sign-in ----------
+    // Register is owner-gated (needs an existing session — i.e. the password login) so only the owner
+    // can enrol a passkey. Auth is public: the assertion signature IS the proof. A "login" assertion
+    // issues the same HMAC session as the password path; a "publish" assertion issues a short-lived
+    // publish token (factor 1 of the publish step-up — the recovery proof is factor 2, checked later).
+    if (url.pathname === "/admin/webauthn/register/begin") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Passkey store not configured" }, 500, cors);
+      const challenge = b64urlFromBytes(crypto.getRandomValues(new Uint8Array(32)));
+      await env.VAULT_GRANTS.put("wa:chal:" + challenge, JSON.stringify({ type: "reg", exp: Date.now() + WEBAUTHN_CHALLENGE_TTL_MS }), { expirationTtl: 300 });
+      const exclude = [];
+      try { const l = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" }); for (const k of l.keys) exclude.push({ type: "public-key", id: k.name.slice(8) }); } catch (e) {}
+      return json({
+        rp: { id: waRpId(env), name: "riteshk.work" },
+        user: { id: await waOwnerId(env), name: env.RP_USER_NAME || "owner@riteshk.work", displayName: env.RP_USER_DISPLAY || "Ritesh \u2014 riteshk.work admin" },
+        challenge: challenge,
+        pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+        timeout: 120000, attestation: "none",
+        authenticatorSelection: { residentKey: "required", requireResidentKey: true, userVerification: "preferred" },
+        excludeCredentials: exclude,
+      }, 200, cors);
+    }
+    if (url.pathname === "/admin/webauthn/register/finish") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      try {
+        const body = await request.json();
+        const cd = JSON.parse(new TextDecoder().decode(b64urlToBytes(body.response.clientDataJSON)));
+        if (cd.type !== "webauthn.create") return json({ error: "Bad clientData type" }, 400, cors);
+        const ck = "wa:chal:" + cd.challenge;
+        const chal = await env.VAULT_GRANTS.get(ck, "json");
+        if (!chal || chal.type !== "reg" || chal.exp < Date.now()) return json({ error: "Challenge expired" }, 400, cors);
+        await env.VAULT_GRANTS.delete(ck);
+        if (!waOriginOk(cd.origin, env)) return json({ error: "Bad origin" }, 400, cors);
+        const att = cborDecode(b64urlToBytes(body.response.attestationObject)).value;
+        const p = parseAuthData(att.get("authData"));
+        const rpHash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(waRpId(env))));
+        if (!bytesEq(p.rpIdHash, rpHash)) return json({ error: "RP mismatch" }, 400, cors);
+        if (!(p.flags & 0x01)) return json({ error: "User not present" }, 400, cors);
+        if (!p.credId || !p.credPubKey) return json({ error: "No credential" }, 400, cors);
+        const parsedKey = coseToJwk(p.credPubKey);
+        const credId = b64urlFromBytes(p.credId);
+        await env.VAULT_GRANTS.put("wa:cred:" + credId, JSON.stringify({ jwk: parsedKey.jwk, alg: parsedKey.alg, counter: p.signCount, label: String(body.label || "passkey").slice(0, 40), createdAt: Date.now() }));
+        const l = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" });
+        return json({ ok: true, credId: credId, count: l.keys.length }, 200, cors);
+      } catch (e) { return json({ error: "Registration failed", detail: String((e && e.message) || e) }, 400, cors); }
+    }
+    if (url.pathname === "/admin/webauthn/auth/begin") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Passkey store not configured" }, 500, cors);
+      let purpose = "login"; try { const b = await request.json(); if (b && b.purpose === "publish") purpose = "publish"; } catch (e) {}
+      const challenge = b64urlFromBytes(crypto.getRandomValues(new Uint8Array(32)));
+      await env.VAULT_GRANTS.put("wa:chal:" + challenge, JSON.stringify({ type: "auth", purpose: purpose, exp: Date.now() + WEBAUTHN_CHALLENGE_TTL_MS }), { expirationTtl: 300 });
+      return json({ challenge: challenge, rpId: waRpId(env), timeout: 120000, userVerification: "preferred", allowCredentials: [] }, 200, cors);
+    }
+    if (url.pathname === "/admin/webauthn/auth/finish") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      try {
+        const body = await request.json();
+        const cd = JSON.parse(new TextDecoder().decode(b64urlToBytes(body.response.clientDataJSON)));
+        if (cd.type !== "webauthn.get") return json({ error: "Bad clientData type" }, 400, cors);
+        const ck = "wa:chal:" + cd.challenge;
+        const chal = await env.VAULT_GRANTS.get(ck, "json");
+        if (!chal || chal.type !== "auth" || chal.exp < Date.now()) return json({ error: "Challenge expired" }, 400, cors);
+        await env.VAULT_GRANTS.delete(ck);
+        if (!waOriginOk(cd.origin, env)) return json({ error: "Bad origin" }, 400, cors);
+        const cred = await env.VAULT_GRANTS.get("wa:cred:" + body.id, "json");
+        if (!cred) return json({ error: "Unknown credential" }, 401, cors);
+        const authData = b64urlToBytes(body.response.authenticatorData);
+        const p = parseAuthData(authData);
+        const rpHash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(waRpId(env))));
+        if (!bytesEq(p.rpIdHash, rpHash)) return json({ error: "RP mismatch" }, 400, cors);
+        if (!(p.flags & 0x01)) return json({ error: "User not present" }, 400, cors);
+        const cdHash = new Uint8Array(await crypto.subtle.digest("SHA-256", b64urlToBytes(body.response.clientDataJSON)));
+        const ok = await waVerifySig(cred.jwk, cred.alg, concatBytes(authData, cdHash), b64urlToBytes(body.response.signature));
+        if (!ok) return json({ error: "Bad signature" }, 401, cors);
+        if (cred.counter > 0 && p.signCount > 0 && p.signCount <= cred.counter) return json({ error: "Counter regression" }, 401, cors);
+        cred.counter = p.signCount; await env.VAULT_GRANTS.put("wa:cred:" + body.id, JSON.stringify(cred));
+        if (chal.purpose === "publish") {
+          const exp = Date.now() + PUBLISH_TOKEN_TTL_MS;
+          const payload = b64urlFromStr(JSON.stringify({ pub: 1, exp: exp }));
+          return json({ ok: true, publishToken: payload + "." + (await hmac(env.SESSION_SECRET || "", payload)), exp: exp }, 200, cors);
+        }
+        return json(await issueSession(env), 200, cors);
+      } catch (e) { return json({ error: "Auth failed", detail: String((e && e.message) || e) }, 401, cors); }
+    }
+    if (url.pathname === "/admin/webauthn/list") {
+      if (request.method !== "GET") return json({ error: "Method not allowed" }, 405, cors);
+      // Low-sensitivity: whether passkeys exist + their labels, so the client can decide to offer
+      // passkey sign-in. Credential IDs are not secrets (they travel in every assertion anyway).
+      if (!env.VAULT_GRANTS) return json({ passkeys: [] }, 200, cors);
+      try {
+        const l = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" }); const out = [];
+        for (const k of l.keys) { const c = await env.VAULT_GRANTS.get(k.name, "json"); out.push({ id: k.name.slice(8), label: (c && c.label) || "passkey", createdAt: (c && c.createdAt) || 0 }); }
+        return json({ passkeys: out }, 200, cors);
+      } catch (e) { return json({ passkeys: [] }, 200, cors); }
     }
 
     // ---------- admin: authenticated GitHub proxy (holds the GH token server-side) ----------
@@ -353,4 +454,87 @@ async function verifyGrant(token, env) {
     if (obj && obj.g && obj.exp && obj.exp > Date.now()) return obj;
   } catch (e) {}
   return null;
+}
+
+/* ---------- WebAuthn (passkey) helpers — dependency-free ---------- */
+function waRpId(env) { return env.RP_ID || "riteshk.work"; }
+function waOriginOk(origin, env) {
+  const allow = String(env.ALLOW_ORIGIN || "https://riteshk.work").split(",").map((s) => s.trim()).filter(Boolean);
+  return allow.indexOf(origin) !== -1;
+}
+async function waOwnerId(env) {
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("owner:" + waRpId(env)));
+  return b64urlFromBytes(new Uint8Array(h).slice(0, 16));
+}
+function bytesEq(a, b) { if (!a || !b || a.length !== b.length) return false; let r = 0; for (let i = 0; i < a.length; i++) r |= a[i] ^ b[i]; return r === 0; }
+function concatBytes(a, b) { const c = new Uint8Array(a.length + b.length); c.set(a, 0); c.set(b, a.length); return c; }
+// Minimal CBOR decoder — only the subset used in a WebAuthn attestationObject + COSE key.
+function cborDecode(buf) {
+  let o = 0;
+  function read() {
+    const first = buf[o++], major = first >> 5, info = first & 0x1f;
+    let len = info;
+    if (info === 24) len = buf[o++];
+    else if (info === 25) { len = (buf[o] << 8) | buf[o + 1]; o += 2; }
+    else if (info === 26) { len = (buf[o] * 0x1000000) + (buf[o + 1] << 16) + (buf[o + 2] << 8) + buf[o + 3]; o += 4; }
+    else if (info === 27) { const hi = (buf[o] * 0x1000000) + (buf[o + 1] << 16) + (buf[o + 2] << 8) + buf[o + 3]; const lo = (buf[o + 4] * 0x1000000) + (buf[o + 5] << 16) + (buf[o + 6] << 8) + buf[o + 7]; o += 8; len = hi * 0x100000000 + lo; }
+    switch (major) {
+      case 0: return len;
+      case 1: return -1 - len;
+      case 2: { const b = buf.slice(o, o + len); o += len; return b; }
+      case 3: { const s = new TextDecoder().decode(buf.slice(o, o + len)); o += len; return s; }
+      case 4: { const a = []; for (let i = 0; i < len; i++) a.push(read()); return a; }
+      case 5: { const m = new Map(); for (let i = 0; i < len; i++) { const k = read(); m.set(k, read()); } return m; }
+      case 7: { if (info === 20) return false; if (info === 21) return true; if (info === 22) return null; return len; }
+      default: throw new Error("CBOR major " + major);
+    }
+  }
+  const value = read();
+  return { value: value, offset: o };
+}
+function parseAuthData(ad) {
+  const rpIdHash = ad.slice(0, 32);
+  const flags = ad[32];
+  const signCount = (ad[33] * 0x1000000) + (ad[34] << 16) + (ad[35] << 8) + ad[36];
+  let credId = null, credPubKey = null, o = 37;
+  if (flags & 0x40) {
+    o += 16; // aaguid
+    const credIdLen = (ad[o] << 8) | ad[o + 1]; o += 2;
+    credId = ad.slice(o, o + credIdLen); o += credIdLen;
+    credPubKey = cborDecode(ad.slice(o)).value;
+  }
+  return { rpIdHash: rpIdHash, flags: flags, signCount: signCount, credId: credId, credPubKey: credPubKey };
+}
+function coseToJwk(cose) {
+  const g = (k) => cose.get(k);
+  const kty = g(1), alg = g(3);
+  if (kty === 2) {
+    const crv = g(-1);
+    const crvName = crv === 2 ? "P-384" : crv === 3 ? "P-521" : "P-256";
+    return { alg: alg, jwk: { kty: "EC", crv: crvName, x: b64urlFromBytes(g(-2)), y: b64urlFromBytes(g(-3)), ext: true } };
+  }
+  if (kty === 3) return { alg: alg, jwk: { kty: "RSA", n: b64urlFromBytes(g(-1)), e: b64urlFromBytes(g(-2)), ext: true } };
+  throw new Error("Unsupported COSE key type " + kty);
+}
+function derToRawEcdsa(der) {
+  let o = 0;
+  if (der[o++] !== 0x30) throw new Error("DER seq");
+  let sl = der[o++]; if (sl & 0x80) { let n = sl & 0x7f; sl = 0; while (n--) sl = (sl << 8) | der[o++]; }
+  if (der[o++] !== 0x02) throw new Error("DER int r");
+  const rl = der[o++]; let r = der.slice(o, o + rl); o += rl;
+  if (der[o++] !== 0x02) throw new Error("DER int s");
+  const sl2 = der[o++]; let s = der.slice(o, o + sl2); o += sl2;
+  const norm = (x) => { let i = 0; while (i < x.length - 1 && x[i] === 0) i++; x = x.slice(i); if (x.length > 32) x = x.slice(x.length - 32); const out = new Uint8Array(32); out.set(x, 32 - x.length); return out; };
+  const raw = new Uint8Array(64); raw.set(norm(r), 0); raw.set(norm(s), 32); return raw;
+}
+async function waVerifySig(jwk, alg, signed, sig) {
+  if (alg === -7) {
+    const key = await crypto.subtle.importKey("jwk", jwk, { name: "ECDSA", namedCurve: jwk.crv || "P-256" }, false, ["verify"]);
+    return crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, key, derToRawEcdsa(sig), signed);
+  }
+  if (alg === -257) {
+    const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+    return crypto.subtle.verify({ name: "RSASSA-PKCS1-v1_5" }, key, sig, signed);
+  }
+  return false;
 }
