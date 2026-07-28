@@ -14,7 +14,7 @@ import {
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
   rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath,
-  ADMIN_WORKER, adminSession, clearAdminSession, vaultUpload, vaultRegisterGrant
+  ADMIN_WORKER, adminSession, clearAdminSession, vaultUpload, vaultRegisterGrant, vaultSignedUrl
 } from "./admin-core.js";
 
 (function () {
@@ -1690,19 +1690,41 @@ import {
     const w = data.work[i]; if (!w || !w.study) return;
     const st = w.study;
     const wrap = st.enc && st.enc.wraps && st.enc.wraps.owner;
-    if (!wrap) { status("This project has no protected sections to unlock."); return; }
-    const recovery = await ensureRecoveryPass();
-    if (recovery === null) return;
-    let sek;
-    try { sek = await rkUnwrapSek(recovery, wrap); }
-    catch (e) { recoveryPassCache = null; status("That recovery passphrase didn\u2019t unlock this project."); return; }
-    try {
-      const out = st.blocks.slice();
-      for (let k = 0; k < out.length; k++) { const bk = out[k]; if (bk && bk.encStub && bk.iv && bk.ct) { out[k] = await rkDecWithSek(sek, bk); await rkResolveEncToDataUri(out[k], sek); } }
-      st.blocks = out;
-    } catch (e) { status("Couldn\u2019t decrypt the protected sections."); return; }
+    const hasVault = (st.blocks || []).some(function (b) { return b && b.locked && b.vaultBlock; });
+    if (!wrap && !hasVault) { status("This project has no protected sections to unlock."); return; }
+    // 1) Restore vault-hosted sections: fetch their plain JSON with your session and re-flag them vault
+    //    so they re-vault on Publish (content.json keeps shipping only a pointer).
+    if (hasVault) {
+      if (!adminSession()) { status("Sign in to edit this project\u2019s vault-hosted sections."); return; }
+      try {
+        const out = st.blocks.slice();
+        for (let k = 0; k < out.length; k++) {
+          const bk = out[k];
+          if (bk && bk.locked && bk.vaultBlock) {
+            const url = await vaultSignedUrl(bk.vaultBlock);
+            if (!url) { status("The vault declined \u2014 sign in again to edit these sections."); return; }
+            const full = await (await fetch(url)).json();
+            if (full && typeof full === "object") { full.locked = true; full.vault = true; out[k] = full; }
+          }
+        }
+        st.blocks = out;
+      } catch (e) { status("Couldn\u2019t fetch the vault-hosted sections."); return; }
+    }
+    // 2) Decrypt any legacy .enc sections with the recovery passphrase.
+    if (wrap) {
+      const recovery = await ensureRecoveryPass();
+      if (recovery === null) return;
+      let sek;
+      try { sek = await rkUnwrapSek(recovery, wrap); }
+      catch (e) { recoveryPassCache = null; status("That recovery passphrase didn\u2019t unlock this project."); return; }
+      try {
+        const out = st.blocks.slice();
+        for (let k = 0; k < out.length; k++) { const bk = out[k]; if (bk && bk.encStub && bk.iv && bk.ct) { out[k] = await rkDecWithSek(sek, bk); await rkResolveEncToDataUri(out[k], sek); } }
+        st.blocks = out;
+      } catch (e) { status("Couldn\u2019t decrypt the protected sections."); return; }
+    }
     saveDraft(true); renderL2();
-    status("Protected sections unlocked for editing \u2014 they\u2019ll be re-encrypted on Publish.", true);
+    status("Protected sections unlocked for editing \u2014 they\u2019ll be re-protected on Publish.", true);
   }
   // Owner-only: turn a hidden encrypted project back into an editable one.
   async function decryptWorkForEdit(i) {
@@ -2309,11 +2331,12 @@ import {
     var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
     var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
     var _vm = lockedMediaTargets(w);
+    var _vmN = _vm.sections || 0, _vmCan = _vmN > 0 || _vm.targets.length > 0;
     var unlockBlock = '<section class="l2grp"><div class="l2grp__head">Deeper-cut pass <span>\u2014 optional gate for \u201cLocked\u201d sections</span></div>' +
       '<div class="af"><input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
       '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks \u00b7 case-insensitive \u00b7 locked content still ships in your file (soft gate)</div></div>" +
-      '<div class="af" style="margin-top:12px"><button class="btn btn--auto" data-act="vault-migrate" data-index="' + i + '"' + (_vm.targets.length ? "" : " disabled") + '>\uD83D\uDD10 Move Locked media to the private vault' + (_vm.targets.length ? " (" + _vm.targets.length + ")" : "") + '</button>' +
-      '<div class="af__hint">' + (_vm.targets.length ? ("Uploads " + _vm.targets.length + " Locked item" + (_vm.targets.length > 1 ? "s" : "") + " (images &amp; videos) to your private R2 vault (streamed via a signed URL), replacing the public copy. Publish afterwards.") : (_vm.encryptedLeft ? "Unlock the \uD83D\uDD12 Protected sections above first \u2014 then their images &amp; videos can be moved here." : "No Locked images or videos in this project.")) + "</div></div></section>";
+      '<div class="af" style="margin-top:12px"><button class="btn btn--auto" data-act="vault-migrate" data-index="' + i + '"' + (_vmCan ? "" : " disabled") + '>\uD83D\uDD10 Move Locked content to the private vault' + (_vmN ? " (" + _vmN + ")" : "") + '</button>' +
+      '<div class="af__hint">' + (_vmCan ? ("Moves " + _vmN + " Locked section" + (_vmN === 1 ? "" : "s") + (_vm.targets.length ? " (and " + _vm.targets.length + " media file" + (_vm.targets.length === 1 ? "" : "s") + ")" : "") + " into your private R2 vault \u2014 content.json then ships only a pointer, zero content. Publish afterwards.") : (_vm.encryptedLeft ? "Unlock the \uD83D\uDD12 Protected sections above first \u2014 then their content can be moved here." : "No Locked sections in this project.")) + "</div></div></section>";
     return '<div class="study__panel">' +
       csgenPanel(w, i) +
       header + meta +
@@ -3429,9 +3452,32 @@ import {
     }
     if (Object.keys(have).length) enc.wraps.tickets = have; else if (enc.wraps.tickets) delete enc.wraps.tickets;
   }
+  // Vault-section keys collected during a publish (workId -> [vaultBlock key, ...inner vault: media keys]),
+  // so registerVaultGrants can scope each pass's grant to the sections it opens. Reset every publish.
+  var vaultBlockKeys = {};
+  // Upload a whole locked section to the private vault as plain JSON and return a lean {vaultBlock:key}
+  // pointer for the published payload (content.json ships zero content). Records the section's vault keys
+  // (itself + any inner vault: media) for grant scoping. Returns null on failure so the caller can fall
+  // back to .enc protection rather than ever ship the section as plaintext.
+  async function vaultBlockPointer(workId, block) {
+    try {
+      var json = JSON.stringify(block, function (k, v) { return k === "vault" ? undefined : v; });
+      var key = await vaultUpload(new Blob([json], { type: "application/json" }), "json");
+      var keys = [key];
+      (function scan(o) { if (!o || typeof o !== "object") return; for (var kk in o) { var v = o[kk]; if (typeof v === "string") { var m = /^vault:(.+)$/i.exec(v); if (m && m[1].indexOf("/") === -1) keys.push(m[1]); } else if (v && typeof v === "object") scan(v); } })(block);
+      vaultBlockKeys[workId] = (vaultBlockKeys[workId] || []).concat(keys);
+      var ptr = { type: block.type, locked: true, vaultBlock: key };
+      if (block.nav) ptr.nav = block.nav;
+      if (block.kicker) ptr.kicker = block.kicker;
+      if (block.sep === false) ptr.sep = false;
+      if (block.hsize) ptr.hsize = block.hsize;
+      return ptr;
+    } catch (e) { return null; }
+  }
   async function encryptLockedForPublish(pubData, token) {
     var works = (pubData && pubData.work) || [];
     var svAll = (pubData.specialViews || []);
+    vaultBlockKeys = {};
     for (var wi = 0; wi < works.length; wi++) {
       var w = works[wi], st = w && w.study;
       if (w && w.encWork) { await syncStubTickets(w.enc, w.id, svAll); continue; }   // already-encrypted stub - keep verbatim, but sync its ticket wraps
@@ -3455,15 +3501,33 @@ import {
         works[wi] = { id: w.id, hidden: true, encWork: true, enc: { v: 1, it: RK_KDF_IT, wraps: wwraps }, iv: wenc.iv, ct: wenc.ct };
         continue;
       }
-      // --- per-block locked-section encryption ---
+      // --- per-block locked-section: vault whole sections, encrypt the rest ---
       if (!st || !Array.isArray(st.blocks)) continue;
-      var plain = [], stubs = 0;
+      var plain = [], stubs = 0, vaultBlks = [];
       for (var bi = 0; bi < st.blocks.length; bi++) {
         var b = st.blocks[bi];
         if (!b || !b.locked) continue;
-        if (b.encStub) stubs++; else plain.push(bi);
+        if (b.vault && !b.encStub) vaultBlks.push(bi);   // owner marked "store this whole section privately in the vault"
+        else if (b.encStub) stubs++;
+        else plain.push(bi);
       }
-      if (!plain.length) { await syncStubTickets(st.enc, w.id, svAll); continue; }   // stub-only (or nothing locked) - sync ticket wraps, keep verbatim
+      // Upload each vault-flagged section as plain JSON -> replace with a lean pointer. On failure
+      // (e.g. no session) fall back to encrypting it in place so it is never shipped as plaintext.
+      for (var vbi = 0; vbi < vaultBlks.length; vbi++) {
+        var vidx = vaultBlks[vbi], vptr = await vaultBlockPointer(w.id, st.blocks[vidx]);
+        if (vptr) st.blocks[vidx] = vptr; else plain.push(vidx);
+      }
+      // Recover the ticket codes that open this project's vault sections. Vault sections aren't
+      // per-pass-wrapped like .enc, but registerVaultGrants still needs the plaintext code to scope
+      // each pass's grant — so recover it here (ensureTicketCode caches; mirrors the .enc loop below).
+      if (vaultBlks.length) {
+        for (var vsi = 0; vsi < svAll.length; vsi++) {
+          var vsv = svAll[vsi];
+          if (!vsv || !vsv.ticketHash || (vsv.workIds || []).indexOf(w.id) === -1) continue;
+          if (await ensureTicketCode(vsv) === null) throw { rkEnc: true, cancelled: true };
+        }
+      }
+      if (!plain.length) { await syncStubTickets(st.enc, w.id, svAll); continue; }   // stub-only (or vault-only) - sync ticket wraps, keep verbatim
       if (stubs) throw { rkEnc: true, mixed: true, work: w };    // never mix plaintext + already-encrypted
       var recovery = await ensureRecoveryPass();
       if (recovery === null) throw { rkEnc: true, cancelled: true };
@@ -3505,14 +3569,14 @@ import {
   async function registerVaultGrants(pubData) {
     try {
       if (!adminSession()) return;                 // /vault/grant is owner-session gated
-      if (recoveryPassCache === null) return;      // no master key on hand this session -> leave existing grants untouched
+      if (recoveryPassCache === null && !Object.keys(vaultBlockKeys).length) return;   // no master key AND no vault sections -> leave existing grants untouched
       var works = (pubData && pubData.work) || [];
       var svAll = (pubData.specialViews || []);
       var now = Date.now();
       var scope = {};                              // normalised pass -> { keys:{key:1}, exp:ms }
       function want(code, exp) {
         var c = rkNormPass(code); if (!c) return null;
-        if (!scope[c]) scope[c] = { keys: {}, exp: 0 };
+        if (!scope[c]) scope[c] = { keys: {}, exp: 0, complete: true };
         if (exp > scope[c].exp) scope[c].exp = exp;   // a shared code stays valid as long as its longest-lived pass
         return scope[c];
       }
@@ -3537,31 +3601,37 @@ import {
         }
         if (rkNormPass(studyUnlockPlain[w.id])) codes.push({ code: studyUnlockPlain[w.id], exp: now + VAULT_GRANT_MAX_DAYS * 86400000 });  // deeper-cut pass carries no expiry
         if (!codes.length) continue;               // no live pass opens this project -> nothing to grant
-        // Collect this project's vault keys, decrypting protected sections with the master key.
-        var keys = {};
+        // Collect this project's vault keys. encStub media needs the master key to read; vault-section keys
+        // come from the publish stash. If we can't fully read the project, mark it incomplete so we never
+        // POST a shrunk key set (which would revoke access a pass already had).
+        var keys = {}, readable = true;
         try {
           if (w.encWork && w.enc && w.enc.wraps && w.enc.wraps.owner) {
-            scanKeys(await rkDecWithSek(await rkUnwrapSek(recoveryPassCache, w.enc.wraps.owner), w), keys);
+            if (recoveryPassCache) scanKeys(await rkDecWithSek(await rkUnwrapSek(recoveryPassCache, w.enc.wraps.owner), w), keys);
+            else readable = false;
           } else if (w.study && Array.isArray(w.study.blocks)) {
             var st = w.study, sek = null;
             for (var bi = 0; bi < st.blocks.length; bi++) {
               var b = st.blocks[bi]; if (!b) continue;
               if (b.encStub && b.iv && b.ct) {
+                if (!recoveryPassCache) { readable = false; break; }
                 if (!sek && st.enc && st.enc.wraps && st.enc.wraps.owner) sek = await rkUnwrapSek(recoveryPassCache, st.enc.wraps.owner);
-                if (sek) scanKeys(await rkDecWithSek(sek, b), keys);
-              } else if (b.locked) { scanKeys(b, keys); }   // plaintext locked (token-less publish) — safe to scan
+                if (sek) scanKeys(await rkDecWithSek(sek, b), keys); else readable = false;
+              } else if (b.locked && !b.vaultBlock) { scanKeys(b, keys); }   // plaintext locked (token-less publish) — safe to scan
             }
           }
-        } catch (e) { continue; }                  // couldn't read this project -> leave its passes' prior grants intact
-        var kl = Object.keys(keys); if (!kl.length) continue;
-        for (var ci = 0; ci < codes.length; ci++) { var sc = want(codes[ci].code, codes[ci].exp); if (sc) for (var ki = 0; ki < kl.length; ki++) sc.keys[kl[ki]] = 1; }
+        } catch (e) { readable = false; }
+        (vaultBlockKeys[w.id] || []).forEach(function (k) { if (k) keys[k] = 1; });   // vault-section keys: the pointer + any inner media
+        var kl = Object.keys(keys);
+        for (var ci = 0; ci < codes.length; ci++) { var sc = want(codes[ci].code, codes[ci].exp); if (!sc) continue; if (!readable) sc.complete = false; for (var ki = 0; ki < kl.length; ki++) sc.keys[kl[ki]] = 1; }
       }
       var passes = Object.keys(scope), okN = 0;
       for (var pi = 0; pi < passes.length; pi++) {
-        var entry = scope[passes[pi]], ks = Object.keys(entry.keys); if (!ks.length) continue;
+        var entry = scope[passes[pi]], ks = Object.keys(entry.keys);
+        if (!entry.complete || !ks.length) continue;   // incomplete read -> leave the prior grant intact (never shrink)
         try { await vaultRegisterGrant(passes[pi], ks, { exp: entry.exp }); okN++; } catch (er) {}
       }
-      if (okN) status(okN + " pass" + (okN === 1 ? "" : "es") + " can now open its private-vault media.", true);
+      if (okN) status(okN + " pass" + (okN === 1 ? "" : "es") + " can now open its private-vault content.", true);
     } catch (e) { /* grants are best-effort; never block a publish */ }
   }
   function makeStub(sek, block) {
@@ -4421,12 +4491,13 @@ import {
     return /^data:image\//i.test(src) ? "png" : "mp4";
   }
   function lockedMediaTargets(w) {
-    var out = [], encryptedLeft = 0;
+    var out = [], encryptedLeft = 0, sections = 0;
     var blocks = (w && w.study && w.study.blocks) || [];
     blocks.forEach(function (b) {
       if (!b) return;
       if (b.encStub) { encryptedLeft++; return; }
       if (!b.locked) return;
+      sections++;   // a plaintext locked section that can be moved wholesale into the vault
       (function scan(o) {
         if (!o || typeof o !== "object") return;
         for (var k in o) {
@@ -4437,22 +4508,36 @@ import {
         }
       })(b);
     });
-    return { targets: out, encryptedLeft: encryptedLeft };
+    return { targets: out, encryptedLeft: encryptedLeft, sections: sections };
   }
   function vaultMigrateProject(i) {
     var w = data.work[i]; if (!w) return;
-    if (!adminSession()) { status("Sign in first \u2014 moving media to the vault needs your session."); return; }
+    if (!adminSession()) { status("Sign in first \u2014 moving content to the vault needs your session."); return; }
     var info = lockedMediaTargets(w), targets = info.targets;
-    if (!targets.length) {
-      status(info.encryptedLeft ? "Nothing to move yet \u2014 click \u201cUnlock to edit\u201d on the \uD83D\uDD12 Protected sections first, then run this again." : "No Locked images or videos to move in this project.");
+    if (!targets.length && !info.sections) {
+      status(info.encryptedLeft ? "Nothing to move yet \u2014 click \u201cUnlock to edit\u201d on the \uD83D\uDD12 Protected sections first, then run this again." : "No Locked sections to move in this project.");
       return;
     }
-    status("Moving " + targets.length + " Locked item" + (targets.length > 1 ? "s" : "") + " to your private vault\u2026");
+    // Flag every plaintext locked section to be stored wholesale in the vault at Publish (content.json
+    // then ships only a pointer). Media inside is uploaded first so the stored section holds vault: refs.
+    function markSections() {
+      var n = 0, blocks = (w.study && w.study.blocks) || [];
+      blocks.forEach(function (b) { if (b && b.locked && !b.encStub && !b.vault) { b.vault = true; n++; } });
+      return n;
+    }
+    if (!targets.length) {
+      var n0 = markSections();
+      saveDraft(true); renderBody();
+      status(n0 + " Locked section" + (n0 === 1 ? "" : "s") + " will move to your private vault on Publish.", true);
+      return;
+    }
+    status("Moving " + targets.length + " media file" + (targets.length > 1 ? "s" : "") + " to your private vault\u2026");
     var done = 0;
     (function next(idx) {
       if (idx >= targets.length) {
+        var n1 = markSections();
         saveDraft(true); renderBody();
-        status(done + " Locked item" + (done === 1 ? "" : "s") + " moved to your private vault. Publish, then the public copies can be removed.", true);
+        status(done + " media file" + (done === 1 ? "" : "s") + " + " + n1 + " section" + (n1 === 1 ? "" : "s") + " set to move to your private vault. Publish, then the public copies can be removed.", true);
         return;
       }
       var t = targets[idx];
