@@ -262,7 +262,9 @@ import {
     if (__studioLoading) return __studioLoading;
     __studioLoading = new Promise(function (resolve, reject) {
       var s = document.createElement("script");
-      s.src = "/js/admin-studio.js"; s.async = true;
+      // Cache-bust: the studio is owner-only and opened infrequently, so always load the freshest
+      // build — otherwise the browser serves a stale admin-studio.js after a deploy.
+      s.src = "/js/admin-studio.js?v=" + Date.now(); s.async = true;
       s.onload = function () { resolve(); };
       s.onerror = function () { __studioLoading = null; reject(new Error("studio load failed")); };
       document.head.appendChild(s);
