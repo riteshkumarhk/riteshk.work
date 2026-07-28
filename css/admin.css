@@ -124,6 +124,38 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__auto-opt:hover { background: rgba(236, 231, 225, .05); }
 .adm__auto-opt input { accent-color: var(--accent); margin: 0; }
 .adm__auto-pop-note { font-size: .64rem; color: var(--text-dim); line-height: 1.4; margin-top: .5rem; }
+
+/* contextual Publish — only shown when the draft differs from the published site */
+.adm__publish[hidden] { display: none; }
+
+/* "\22EF" more-menu + "\2715" exit flyout: a clean top-right, everything else tucked away */
+.adm__more, .adm__exitwrap { position: relative; display: inline-flex; }
+.adm__more-btn { padding: .3rem .6rem; font-size: 1.2rem; line-height: 1; letter-spacing: .04em; }
+.adm__more-btn[aria-expanded="true"] { border-color: var(--accent); color: var(--text); }
+.adm__more-pop, .adm__exit-pop { position: absolute; top: calc(100% + .5rem); right: 0; z-index: 62; min-width: 16.5rem; padding: .35rem; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 16px 40px -14px rgba(0, 0, 0, .8); }
+.adm__more-pop[hidden], .adm__exit-pop[hidden] { display: none; }
+.adm__more-item { display: flex; align-items: flex-start; gap: .6rem; width: 100%; text-align: left; padding: .5rem .55rem; border: 0; border-radius: 8px; background: none; color: var(--text); cursor: pointer; font-family: var(--sans); }
+.adm__more-item:hover { background: rgba(236, 231, 225, .06); }
+.adm__more-ic { flex: 0 0 auto; width: 1.25rem; text-align: center; font-size: 1rem; line-height: 1.2; }
+.adm__more-tx { display: flex; flex-direction: column; gap: .12rem; min-width: 0; }
+.adm__more-tx b { font-size: .82rem; font-weight: 500; color: var(--text); text-transform: none; letter-spacing: 0; }
+.adm__more-tx small { font-size: .66rem; color: var(--text-dim); line-height: 1.35; text-transform: none; letter-spacing: 0; }
+.adm__more-sep { height: 1px; background: var(--line); margin: .35rem; }
+/* auto-publish flattened inside the "\22EF" menu */
+.adm__more .adm__auto { flex-direction: column; align-items: stretch; width: 100%; padding: .1rem .1rem .15rem; }
+.adm__more .adm__auto-sw { width: 100%; justify-content: space-between; border: 0; border-radius: 8px; padding: .5rem .55rem; text-transform: none; letter-spacing: 0; font-family: var(--sans); font-size: .82rem; }
+.adm__more .adm__auto-sw:hover { background: rgba(236, 231, 225, .06); color: var(--text); }
+.adm__more .adm__auto.is-on .adm__auto-sw { color: var(--accent); border: 0; }
+.adm__more .adm__auto-opt { padding: .34rem .55rem; }
+/* "\2715" exit button is neutral now (destructive choice lives inside its flyout) */
+.adm__actions .adm__exit { padding: .3rem .58rem; font-size: 1rem; line-height: 1; color: var(--text-dim); }
+.adm__actions .adm__exit:hover { color: var(--text); border-color: var(--accent); }
+.adm__exit-pop-h { font-family: var(--mono); font-size: .58rem; letter-spacing: .09em; text-transform: uppercase; color: var(--text-faint); padding: .4rem .55rem .3rem; }
+.adm__exit-opt { display: flex; width: 100%; text-align: left; padding: .5rem .55rem; border: 0; border-radius: 8px; background: none; cursor: pointer; }
+.adm__exit-opt--save:hover { background: rgba(116, 217, 159, .12); }
+.adm__exit-opt--save:hover .adm__more-tx b { color: #8fe0ab; }
+.adm__exit-opt--discard:hover { background: rgba(255, 90, 90, .12); }
+.adm__exit-opt--discard:hover .adm__more-tx b { color: #ff9b9b; }
 /* tailor to a role: modal + tailored view / cover note / gap analysis */
 .rolekit__bar { display: flex; gap: .5rem; align-items: stretch; }
 .rolekit__bar .btn--add { width: auto; flex: 1 1 auto; margin-top: 0; }

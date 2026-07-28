@@ -178,6 +178,7 @@ import {
   }
 
   function saveDraft(immediate) {
+    updateDirtyUI();
     clearTimeout(saveTimer);
     const save = () => {
       try {
@@ -218,6 +219,35 @@ import {
     const s = root && root.querySelector(".adm__status");
     if (s) { s.textContent = msg; s.classList.toggle("ok", !!ok); }
   }
+
+  // The Publish button + the "\u2715" leave-options flyout are contextual: they only
+  // appear once the working draft differs from the published site. When we can't be
+  // sure (no signature yet), default to "dirty" so publishing is never hidden away.
+  function isDirty() {
+    try {
+      if (!window.RK || !window.RK.sig) return true;
+      var pub = window.RK.publishedSig || "";
+      if (!pub) return true;
+      return window.RK.sig(JSON.stringify(data)) !== pub;
+    } catch (e) { return true; }
+  }
+  function updateDirtyUI() {
+    if (!root) return;
+    var dirty = isDirty();
+    var pb = root.querySelector("[data-publish]"); if (pb) pb.hidden = !dirty;
+    root.classList.toggle("is-dirty", dirty);
+    if (!dirty) closeExitPop();
+  }
+  function closeMorePop() {
+    if (!root) return;
+    var p = root.querySelector(".adm__more-pop"); if (p) p.hidden = true;
+    var b = root.querySelector("[data-more]"); if (b) b.setAttribute("aria-expanded", "false");
+  }
+  function closeExitPop() {
+    if (!root) return;
+    var p = root.querySelector(".adm__exit-pop"); if (p) p.hidden = true;
+  }
+  function closeBarPops() { closeMorePop(); closeExitPop(); }
 
   /* =================================================================
      SMART AUTO-STYLE — turns plain landing copy into the editorial
@@ -4196,6 +4226,7 @@ import {
       localStorage.removeItem(DRAFT_SIG_KEY);
       if (viaSession) localStorage.removeItem(GH_TOKEN_KEY); // published via the Worker session — the repo token no longer needs to live in this browser
       if (window.RK) { window.RK.published = clone(data); if (window.RK.sig) window.RK.publishedSig = window.RK.sig(JSON.stringify(data)); }
+      updateDirtyUI();
       pubProgress(64, "Saved to GitHub. Building your live site\u2026");
       const live = await waitForLive(mySig);
       pubStopCreep();
@@ -4291,10 +4322,11 @@ import {
   }
 
   function revert() {
-    if (!confirm("Discard local changes and reload the published content?")) return;
+    // Called only from the "\u2715" leave flyout's explicit red "Discard changes" option,
+    // which is itself the confirmation. Drop the draft and go to the published site.
     localStorage.removeItem(DRAFT_KEY);
     localStorage.removeItem(DRAFT_SIG_KEY);
-    location.reload();
+    location.href = "/";
   }
 
   /* ---------- imagery + AI ---------- */
@@ -7092,25 +7124,31 @@ import {
         '<div class="adm__actions">' +
           '<span class="adm__status">Editing local draft</span>' +
           '<button class="btn btn--ghost adm__viewtoggle" data-view>Preview</button>' +
-          '<button class="btn btn--ghost" data-revert>Revert</button>' +
-          '<button class="btn btn--ghost adm__keycfg" data-keycfg title="Change admin key" aria-label="Change admin key"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3z"/></svg></button>' +
-          '<button class="btn btn--ghost adm__pkcfg" data-passkeys title="Passkeys" aria-label="Passkeys">\uD83D\uDD11</button>' +
-          '<button class="btn btn--ghost adm__pubcfg" data-pubcfg title="Publishing settings" aria-label="Publishing settings">\u2699</button>' +
-          '<div class="adm__auto" data-autopub>' +
-            '<button class="adm__auto-sw" type="button" data-autopub-toggle role="switch" aria-checked="false" title="Auto-publish on a timer">' +
-              '<span class="adm__auto-track"><span class="adm__auto-knob"></span></span>' +
-              '<span class="adm__auto-lbl">Auto-publish</span>' +
-            "</button>" +
-            '<button class="adm__auto-cv" type="button" data-autopub-menu aria-label="Auto-publish interval" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>' +
-            '<div class="adm__auto-pop" hidden>' +
-              '<div class="adm__auto-pop-h">Auto-publish every</div>' +
-              '<label class="adm__auto-opt"><input type="radio" name="autopub-every" value="30" data-autopub-every /><span>30 minutes</span></label>' +
-              '<label class="adm__auto-opt"><input type="radio" name="autopub-every" value="60" data-autopub-every /><span>1 hour</span></label>' +
-              '<div class="adm__auto-pop-note">Publishes your unsaved changes on a timer while the studio is open. Needs GitHub connected.</div>' +
+          '<button class="btn btn--primary adm__publish" data-publish hidden>Publish</button>' +
+          '<div class="adm__more" data-more-wrap>' +
+            '<button class="btn btn--ghost adm__more-btn" data-more type="button" aria-haspopup="true" aria-expanded="false" aria-label="More options" title="More">\u22EF</button>' +
+            '<div class="adm__more-pop" hidden>' +
+              '<button class="adm__more-item" data-passkeys type="button"><span class="adm__more-ic">\uD83D\uDD11</span><span class="adm__more-tx"><b>Passkeys</b><small>Sign in with Windows Hello, Face ID or a security key</small></span></button>' +
+              '<button class="adm__more-item" data-pubcfg type="button"><span class="adm__more-ic">\u2699</span><span class="adm__more-tx"><b>Publishing settings</b><small>Connect GitHub, replace the token, or publish manually</small></span></button>' +
+              '<div class="adm__more-sep"></div>' +
+              '<div class="adm__auto" data-autopub>' +
+                '<button class="adm__auto-sw" type="button" data-autopub-toggle role="switch" aria-checked="false" title="Auto-publish on a timer">' +
+                  '<span class="adm__auto-lbl">Auto-publish</span>' +
+                  '<span class="adm__auto-track"><span class="adm__auto-knob"></span></span>' +
+                "</button>" +
+                '<label class="adm__auto-opt"><input type="radio" name="autopub-every" value="30" data-autopub-every /><span>Every 30 minutes</span></label>' +
+                '<label class="adm__auto-opt"><input type="radio" name="autopub-every" value="60" data-autopub-every /><span>Every hour</span></label>' +
+              "</div>" +
             "</div>" +
           "</div>" +
-          '<button class="btn btn--primary" data-publish>Publish</button>' +
-          '<button class="btn adm__exit" data-exit aria-label="Exit admin">Exit ✕</button>' +
+          '<div class="adm__exitwrap" data-exit-wrap>' +
+            '<button class="btn adm__exit" data-exit type="button" aria-label="Exit studio" title="Exit">\u2715</button>' +
+            '<div class="adm__exit-pop" hidden>' +
+              '<div class="adm__exit-pop-h">You have unsaved changes</div>' +
+              '<button class="adm__exit-opt adm__exit-opt--save" data-exit-save type="button"><span class="adm__more-tx"><b>Save &amp; leave</b><small>Keep your changes as a local draft \u2014 publish them anytime</small></span></button>' +
+              '<button class="adm__exit-opt adm__exit-opt--discard" data-exit-discard type="button"><span class="adm__more-tx"><b>Discard changes</b><small>Throw away everything changed since your last publish</small></span></button>' +
+            "</div>" +
+          "</div>" +
         "</div>" +
       "</header>" +
       '<div class="adm__pub" hidden aria-live="polite">' +
@@ -7171,25 +7209,43 @@ import {
       t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); })
     );
     root.querySelector("[data-publish]").addEventListener("click", publish);
-    root.querySelector("[data-pubcfg]").addEventListener("click", () => publishModal());
+    var _pubcfg = root.querySelector("[data-pubcfg]"); if (_pubcfg) _pubcfg.addEventListener("click", () => { closeBarPops(); publishModal(); });
     root.querySelector("[data-autopub-toggle]").addEventListener("click", autopubToggle);
     const autoWrap = root.querySelector("[data-autopub]");
-    root.querySelector("[data-autopub-menu]").addEventListener("click", (e) => {
+    var _apMenu = root.querySelector("[data-autopub-menu]");
+    if (_apMenu) _apMenu.addEventListener("click", (e) => {
       e.stopPropagation();
       const pop = autoWrap.querySelector(".adm__auto-pop"); const opening = pop.hidden;
       pop.hidden = !opening; e.currentTarget.setAttribute("aria-expanded", opening ? "true" : "false");
     });
     autoWrap.querySelectorAll("[data-autopub-every]").forEach((r) => r.addEventListener("change", () => autopubSetEvery(+r.value)));
+    var _pk = root.querySelector("[data-passkeys]"); if (_pk) _pk.addEventListener("click", () => { closeBarPops(); passkeyModal(); });
+    const pubCloseBtn = root.querySelector("[data-pub-close]");
+    if (pubCloseBtn) pubCloseBtn.addEventListener("click", pubHide);
+    // "\u22EF" more-menu: Passkeys / Publishing settings / Auto-publish
+    var _more = root.querySelector("[data-more]");
+    if (_more) _more.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const pop = root.querySelector(".adm__more-pop"); if (!pop) return;
+      const opening = pop.hidden; closeExitPop(); pop.hidden = !opening;
+      _more.setAttribute("aria-expanded", opening ? "true" : "false");
+    });
+    // "\u2715" close: when there are unsaved changes, offer Save / Discard; a clean studio just exits.
+    root.querySelector("[data-exit]").addEventListener("click", (e) => {
+      e.stopPropagation(); closeMorePop();
+      if (!isDirty()) { exit(); return; }
+      const pop = root.querySelector(".adm__exit-pop"); if (pop) pop.hidden = !pop.hidden;
+    });
+    var _exSave = root.querySelector("[data-exit-save]"); if (_exSave) _exSave.addEventListener("click", () => { closeExitPop(); exit(); });
+    var _exDiscard = root.querySelector("[data-exit-discard]"); if (_exDiscard) _exDiscard.addEventListener("click", () => { closeExitPop(); revert(); });
     document.addEventListener("click", (e) => {
       const pop = autoWrap.querySelector(".adm__auto-pop");
       if (pop && !pop.hidden && !autoWrap.contains(e.target)) { pop.hidden = true; const cv = autoWrap.querySelector("[data-autopub-menu]"); if (cv) cv.setAttribute("aria-expanded", "false"); }
+      const mw = root.querySelector("[data-more-wrap]");
+      if (mw && !mw.contains(e.target)) closeMorePop();
+      const ew = root.querySelector("[data-exit-wrap]");
+      if (ew && !ew.contains(e.target)) closeExitPop();
     });
-    root.querySelector("[data-keycfg]").addEventListener("click", () => changeKeyModal());
-    var _pk = root.querySelector("[data-passkeys]"); if (_pk) _pk.addEventListener("click", () => passkeyModal());
-    const pubCloseBtn = root.querySelector("[data-pub-close]");
-    if (pubCloseBtn) pubCloseBtn.addEventListener("click", pubHide);
-    root.querySelector("[data-revert]").addEventListener("click", revert);
-    root.querySelector("[data-exit]").addEventListener("click", exit);
     root.querySelector("[data-l2-back]").addEventListener("click", () => { if (journeyOpen) closeJourneyEditor(); else closeL2(); });
     root.querySelector("[data-l2-prev]").addEventListener("click", () => {
       const wasOff = localStorage.getItem(L2PREV_KEY) === "0";
@@ -7213,7 +7269,12 @@ import {
     });
   }
 
-  function onKey(e) { if (e.key === "Escape" && root && root.classList.contains("is-open")) exit(); }
+  function onKey(e) {
+    if (e.key !== "Escape" || !root || !root.classList.contains("is-open")) return;
+    var mp = root.querySelector(".adm__more-pop"), xp = root.querySelector(".adm__exit-pop");
+    if ((mp && !mp.hidden) || (xp && !xp.hidden)) { closeMorePop(); closeExitPop(); return; }
+    exit();
+  }
 
   function open(hostApi) {
     if (hostApi) __host = hostApi;
@@ -7246,6 +7307,7 @@ import {
     requestAnimationFrame(() => root.classList.add("is-open"));
     if (frame && frame.contentWindow && frame.contentWindow.RK) previewApply();
     autopubSync(); autopubStart();
+    updateDirtyUI();
     if (staleDiscarded) status("Loaded the latest published content (an old local draft was discarded).", true);
   }
 
