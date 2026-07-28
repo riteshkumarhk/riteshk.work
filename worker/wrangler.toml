@@ -9,6 +9,11 @@ preview_urls = false
 binding = "VAULT"
 bucket_name = "rk-vault"
 
+# KV store for curated-view (ticket) grants: pass-hash -> {allowed vault keys, expiry}.
+[[kv_namespaces]]
+binding = "VAULT_GRANTS"
+id = "ec6ed36fa1fd4dbfb9483a147d003aef"
+
 # Plain-text var (kept in sync with the dashboard). Secrets (ACCESS_TOKEN,
 # ANTHROPIC_KEY, ADMIN_HASH, ADMIN_SALT, SESSION_SECRET, GH_TOKEN, ...) are set
 # via the dashboard / `wrangler secret put` and are NOT stored in this file.

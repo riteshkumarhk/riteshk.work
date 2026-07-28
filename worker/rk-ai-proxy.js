@@ -33,6 +33,7 @@ const PROVIDERS = {
 
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // admin session lifetime — 12 hours
 const VAULT_URL_TTL_MS = 6 * 60 * 60 * 1000;  // signed vault-asset URL lifetime — 6 hours
+const GRANT_REDEEM_TTL_MS = 12 * 60 * 60 * 1000; // ticket-holder vault access token lifetime — 12 hours
 
 export default {
   async fetch(request, env) {
@@ -107,15 +108,57 @@ export default {
       }
     }
 
-    // Mint a short-lived signed per-asset URL (owner session). The <video>/<img> src can then load
-    // it with no auth header — the signature IS the auth, scoped to one key and expiring.
+    // Mint a short-lived signed per-asset URL. Authorised by EITHER the owner session (any key)
+    // OR a redeemed curated-view grant token (only keys the grant allows). The <video>/<img> src
+    // then loads with no auth header — the signature IS the auth, scoped to one key and expiring.
     if (url.pathname === "/vault/sign") {
-      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
       const key = url.searchParams.get("key") || "";
       if (!key || key.indexOf("..") !== -1 || key.indexOf("/") !== -1) return json({ error: "Bad key" }, 400, cors);
+      let ok = await verifySession(bearer(request.headers.get("Authorization")), env);
+      if (!ok) {
+        const g = await verifyGrant(request.headers.get("X-Vault-Grant") || url.searchParams.get("grant"), env);
+        if (!g) return json({ error: "Unauthorized" }, 401, cors);
+        const rec = env.VAULT_GRANTS ? await env.VAULT_GRANTS.get("g:" + g.g, "json") : null;
+        if (!rec || !rec.exp || rec.exp < Date.now() || !Array.isArray(rec.keys) || rec.keys.indexOf(key) === -1) return json({ error: "Not authorized for this item" }, 403, cors);
+        ok = true;
+      }
       const exp = Date.now() + VAULT_URL_TTL_MS;
       const sig = await hmac(env.SESSION_SECRET || "", "vault:" + key + ":" + exp);
       return json({ url: "/vault/asset/" + encodeURIComponent(key) + "?exp=" + exp + "&sig=" + sig, exp: exp }, 200, cors);
+    }
+
+    // Owner registers a curated-view grant: a pass that lets a recruiter mint signed URLs for a
+    // fixed set of vault keys until it expires. Stored in KV keyed by an HMAC of the pass — the
+    // raw pass is never stored, and the allowed-keys list scopes access to just that view.
+    if (url.pathname === "/vault/grant") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Grants store not configured" }, 500, cors);
+      let body; try { body = await request.json(); } catch (e) { body = null; }
+      const code = body && typeof body.code === "string" ? body.code.trim().toLowerCase() : "";
+      const keys = body && Array.isArray(body.keys) ? body.keys.filter((k) => typeof k === "string" && k && k.indexOf("/") === -1).slice(0, 2000) : [];
+      const days = Math.max(1, Math.min(365, parseInt((body && body.days) || 30, 10) || 30));
+      if (!code) return json({ error: "Missing pass" }, 400, cors);
+      const gid = await hmac(env.SESSION_SECRET || "", "grant:" + code);
+      const exp = Date.now() + days * 86400000;
+      await env.VAULT_GRANTS.put("g:" + gid, JSON.stringify({ keys: keys, exp: exp }), { expiration: Math.floor(exp / 1000) });
+      return json({ ok: true, exp: exp, count: keys.length }, 200, cors);
+    }
+
+    // Recruiter redeems their curated-view pass for a short-lived, scoped vault access token.
+    if (url.pathname === "/vault/redeem") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Grants store not configured" }, 500, cors);
+      let body; try { body = await request.json(); } catch (e) { body = null; }
+      const code = body && typeof body.code === "string" ? body.code.trim().toLowerCase() : "";
+      if (!code) return json({ error: "Missing pass" }, 400, cors);
+      const gid = await hmac(env.SESSION_SECRET || "", "grant:" + code);
+      const rec = await env.VAULT_GRANTS.get("g:" + gid, "json");
+      if (!rec || !rec.exp || rec.exp < Date.now()) return json({ error: "That pass isn’t valid or has expired." }, 403, cors);
+      const exp = Math.min(Date.now() + GRANT_REDEEM_TTL_MS, rec.exp);
+      const payload = b64urlFromStr(JSON.stringify({ g: gid, exp: exp }));
+      const sig = await hmac(env.SESSION_SECRET || "", payload);
+      return json({ token: payload + "." + sig, exp: exp }, 200, cors);
     }
 
     // Serve a vault object (signature-gated, HTTP range support for smooth video streaming).
@@ -208,7 +251,7 @@ function corsHeaders(origin, env) {
   return {
     "Access-Control-Allow-Origin": ok ? (origin || allow[0] || "*") : (allow[0] || "null"),
     "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization,Content-Type,x-api-key,anthropic-version,anthropic-dangerous-direct-browser-access,Accept,X-GitHub-Api-Version",
+    "Access-Control-Allow-Headers": "Authorization,Content-Type,x-api-key,anthropic-version,anthropic-dangerous-direct-browser-access,Accept,X-GitHub-Api-Version,X-Vault-Grant",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
@@ -285,4 +328,20 @@ async function verifySession(token, env) {
     const obj = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload)));
     return !!(obj && obj.exp && obj.exp > Date.now());
   } catch (e) { return false; }
+}
+// Verify a redeemed curated-view grant token (payload {g, exp} + HMAC). Returns the payload
+// ({g: the KV grant id}) when the signature + expiry check out, else null. The caller then
+// looks the grant up in KV to confirm the requested key is in its allowed set.
+async function verifyGrant(token, env) {
+  if (!token || !env.SESSION_SECRET) return null;
+  const dot = token.indexOf(".");
+  if (dot < 1) return null;
+  const payload = token.slice(0, dot), sig = token.slice(dot + 1);
+  const expect = await hmac(env.SESSION_SECRET, payload);
+  if (!timingSafeEqual(sig, expect)) return null;
+  try {
+    const obj = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload)));
+    if (obj && obj.g && obj.exp && obj.exp > Date.now()) return obj;
+  } catch (e) {}
+  return null;
 }
