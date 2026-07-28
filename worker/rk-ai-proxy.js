@@ -78,6 +78,11 @@ export default {
       const ghAv = request.headers.get("X-GitHub-Api-Version"); if (ghAv) ghHeaders.set("X-GitHub-Api-Version", ghAv);
 
       const ghMethod = request.method;
+      // Hardening: a publish only ever reads, creates blobs/trees/commits, updates the ref (PATCH),
+      // and uploads files (PUT). It NEVER needs DELETE. Allowlisting these verbs means a stolen admin
+      // session cannot delete files, delete or rewrite branches, or wipe history through this proxy.
+      // (Branch protection on main also blocks force-pushes as a second layer.)
+      if (["GET", "HEAD", "POST", "PUT", "PATCH"].indexOf(ghMethod) === -1) return json({ error: "Method not allowed via proxy" }, 405, cors);
       const ghBody = (ghMethod === "GET" || ghMethod === "HEAD") ? undefined : await request.arrayBuffer();
 
       let ghUp;
