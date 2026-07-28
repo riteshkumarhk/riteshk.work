@@ -14,7 +14,7 @@ import {
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
   rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath,
-  ADMIN_WORKER, adminSession, clearAdminSession
+  ADMIN_WORKER, adminSession, clearAdminSession, vaultUpload
 } from "./admin-core.js";
 
 (function () {
@@ -3174,17 +3174,17 @@ import {
       return;
     }
     if (act === "media-bgclear") { const bj = +b.dataset.bindex, k = +b.dataset.iindex; const bl = data.work[i].study.blocks[bj]; const it = bl && bl.items && bl.items[k]; if (it) { it.bg = ""; saveDraft(true); renderL2(); refreshL2Preview(); } return; }
-    if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; if (isVideoVal(uri)) bl.items[k].controls = true; saveDraft(true); renderL2(); } }); return; }
-    if (act === "item-upload-multi") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (!bl) return; bl.items = bl.items || []; pickMediaMulti(function () { const it = blankItem(bl.type); bl.items.push(it); return it; }, function () { saveDraft(true); renderL2(); }); return; }
+    if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; if (isVideoVal(uri)) bl.items[k].controls = true; saveDraft(true); renderL2(); } }, { vault: !!(data.work[i].study.blocks[bj] && data.work[i].study.blocks[bj].locked) }); return; }
+    if (act === "item-upload-multi") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (!bl) return; bl.items = bl.items || []; pickMediaMulti(function () { const it = blankItem(bl.type); bl.items.push(it); return it; }, function () { saveDraft(true); renderL2(); }, { vault: !!bl.locked }); return; }
     if (act === "item-icon") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield, name = b.dataset.icon; const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = name; saveDraft(true); refreshL2Preview(); const grid = b.closest(".iconpick"); if (grid) grid.querySelectorAll(".iconpick__b").forEach(function (x) { x.classList.toggle("is-on", x === b); }); const dd = b.closest(".icondd"); if (dd) { const cur = dd.querySelector(".icondd__cur"); if (cur) cur.innerHTML = name ? admIcon(name) : "\u2205"; const nm = dd.querySelector(".icondd__name"); if (nm) nm.textContent = name || "No icon"; if (dd.tagName === "DETAILS") dd.open = false; } } return; }
     if (act === "item-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (bl && bl.items && bl.items[k]) { bl.items[k][b.dataset.ifield] = ""; saveDraft(true); renderL2(); } return; }
     if (act === "cell-add") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex]; it.cells = it.cells || []; if (it.cells.length < 5) { it.cells.push(blankCell()); saveDraft(true); renderL2(); } return; }
     if (act === "cell-remove") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex]; if (it.cells) { it.cells.splice(+b.dataset.cindex, 1); if (!it.cells.length) it.cells.push(blankCell()); saveDraft(true); renderL2(); } return; }
     if (act === "cell-up") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex], c = +b.dataset.cindex; if (it.cells && c > 0) { const tmp = it.cells[c - 1]; it.cells[c - 1] = it.cells[c]; it.cells[c] = tmp; saveDraft(true); renderL2(); } return; }
     if (act === "cell-down") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex], c = +b.dataset.cindex; if (it.cells && c < it.cells.length - 1) { const tmp = it.cells[c + 1]; it.cells[c + 1] = it.cells[c]; it.cells[c] = tmp; saveDraft(true); renderL2(); } return; }
-    if (act === "cell-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, c = +b.dataset.cindex; pickMedia(function (uri) { const it = data.work[i].study.blocks[bj].items[k]; if (it && it.cells && it.cells[c]) { it.cells[c].src = uri; saveDraft(true); renderL2(); } }); return; }
+    if (act === "cell-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, c = +b.dataset.cindex; pickMedia(function (uri) { const it = data.work[i].study.blocks[bj].items[k]; if (it && it.cells && it.cells[c]) { it.cells[c].src = uri; saveDraft(true); renderL2(); } }, { vault: !!(data.work[i].study.blocks[bj] && data.work[i].study.blocks[bj].locked) }); return; }
     if (act === "cell-clear") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex], c = +b.dataset.cindex; if (it.cells && it.cells[c]) { it.cells[c].src = ""; saveDraft(true); renderL2(); } return; }
-    if (act === "bfield-upload") { const bj = +b.dataset.bindex, f = b.dataset.bfield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl) { bl[f] = uri; if (isVideoVal(uri)) bl.controls = true; saveDraft(true); renderL2(); } }); return; }
+    if (act === "bfield-upload") { const bj = +b.dataset.bindex, f = b.dataset.bfield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl) { bl[f] = uri; if (isVideoVal(uri)) bl.controls = true; saveDraft(true); renderL2(); } }, { vault: !!(data.work[i].study.blocks[bj] && data.work[i].study.blocks[bj].locked) }); return; }
     if (act === "bfield-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (bl) { bl[b.dataset.bfield] = ""; saveDraft(true); renderL2(); } return; }
     if (act === "fa-add") { faPlacing = !faPlacing; renderL2(); return; }
     if (act === "fa-select") { if (faJustMoved) { faJustMoved = false; return; } faSel = +b.dataset.aindex; faPlacing = false; renderL2(); return; }
@@ -4228,7 +4228,8 @@ import {
   }
 
   // Media slots accept images, video, PowerPoint & PDF — hosted in the repo just like images.
-  function pickMedia(cb) {
+  function pickMedia(cb, opts) {
+    opts = opts || {};
     const inp = document.createElement("input");
     inp.type = "file"; inp.accept = MEDIA_ACCEPT;
     inp.onchange = function () {
@@ -4237,7 +4238,7 @@ import {
         if (!f0) return;
         maybeTagVideo(f0).then(function (file) {
           if (file !== f0) status("Tagged \u201c" + (f0.name || "video") + "\u201d as BT.709 \u2014 true-to-life colour on OLED & wide-gamut screens.");
-          fileToDataUri(file).then(function (uri) { cb(uri); hostUploaded(uri, file, cb); });
+          fileToDataUri(file).then(function (uri) { cb(uri); if (opts.vault) vaultHost(uri, file, cb); else hostUploaded(uri, file, cb); });
         });
       });
     };
@@ -4245,7 +4246,8 @@ import {
   }
   // Pick several images/videos at once — create the items in order up front, then fill each in
   // as its bytes are read, and host them (swapping the embedded data URI for a lean path).
-  function pickMediaMulti(makeItem, done) {
+  function pickMediaMulti(makeItem, done, opts) {
+    opts = opts || {};
     const inp = document.createElement("input");
     inp.type = "file"; inp.accept = MEDIA_ACCEPT; inp.multiple = true;
     inp.onchange = function () {
@@ -4259,7 +4261,8 @@ import {
             maybeTagVideo(f0).then(function (file) {
               fileToDataUri(file).then(function (uri) {
                 it.src = uri; if (isVideoVal(uri)) it.controls = true; if (done) done();
-                hostUploaded(uri, file, function (path) { it.src = path; if (isVideoVal(path)) it.controls = true; if (done) done(); });
+                var swap = function (path) { it.src = path; if (isVideoVal(path)) it.controls = true; if (done) done(); };
+                if (opts.vault) vaultHost(uri, file, swap); else hostUploaded(uri, file, swap);
               });
             });
           }
@@ -4293,6 +4296,24 @@ import {
         finish(low, low ? " \u2014 heads up: " + dims + " is small for a full-width slot and may look soft when shown large." : (dims ? " (" + dims + ")" : ""));
       });
     } else { finish(false, ""); }
+  }
+
+  // Store gated (Locked-block) media straight in the private R2 vault instead of the public
+  // repo, swapping the reference for a compact "vault:<key>" token. Needs an owner session;
+  // on any failure the item keeps its embedded data URI, which Publish then protects as an
+  // .enc file (safety net), so gated media is never left plaintext-public.
+  function vaultHost(uri, file, cb) {
+    const nm = (file && file.name) || "File";
+    const ext = extFromName(nm) || (/^data:video\//i.test(uri) ? "mp4" : /^data:image\//i.test(uri) ? "png" : "");
+    if (!adminSession()) { status("\u201c" + nm + "\u201d added \u2014 embedded for now; sign in to store it privately in the vault."); return; }
+    status("Storing \u201c" + nm + "\u201d privately in your vault\u2026");
+    vaultUpload(file, ext).then(function (key) {
+      cb("vault:" + key);
+      status("\u201c" + nm + "\u201d stored privately \u2014 only you (and people you grant a pass) can view it.", true);
+    }).catch(function (e) {
+      if (e && e.auth) status("Your session ended \u2014 \u201c" + nm + "\u201d stays embedded; sign in and re-add to store it privately.");
+      else status("Couldn\u2019t reach the vault \u2014 \u201c" + nm + "\u201d stays embedded and will be protected on Publish.");
+    });
   }
 
   /* ===================== In-app video compressor (WebCodecs) =====================
