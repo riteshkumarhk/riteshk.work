@@ -1,0 +1,19 @@
+name = "rk-ai-proxy"
+main = "rk-ai-proxy.js"
+compatibility_date = "2026-07-28"
+workers_dev = true
+preview_urls = false
+
+# Plain-text var (kept in sync with the dashboard). Secrets (ACCESS_TOKEN,
+# ANTHROPIC_KEY, ADMIN_HASH, ADMIN_SALT, SESSION_SECRET, GH_TOKEN, ...) are set
+# via the dashboard / `wrangler secret put` and are NOT stored in this file.
+[vars]
+ALLOW_ORIGIN = "https://riteshk.work"
+OWNER = "riteshkumarhk"
+REPO = "riteshk.work"
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
