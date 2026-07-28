@@ -16,7 +16,8 @@ import { build, context } from "esbuild";
 const watch = process.argv.includes("--watch");
 
 // Public entries already migrated to ES modules (built → js/<name>.js).
-const ENTRIES = ["render", "main", "gensection", "project", "journey", "admin"];
+// admin-studio is the lazy chunk the shell injects after the gate — never referenced in index.html.
+const ENTRIES = ["render", "main", "gensection", "project", "journey", "admin", "admin-studio"];
 
 /** @type {import("esbuild").BuildOptions} */
 const options = {
