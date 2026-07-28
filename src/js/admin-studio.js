@@ -7251,7 +7251,7 @@ import {
     async function render2fa() {
       const el = modal.querySelector("[data-2fa]"); if (!el) return;
       const st = await publishStatus().catch(() => ({ enabled: false }));
-      el.innerHTML = '<label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;line-height:1.4"><input type="checkbox" data-2fatoggle style="margin-top:2px"' + (st.enabled ? " checked" : "") + ' /><span>Require a passkey <b>and</b> your recovery passphrase on every publish <span style="opacity:.55">\u2014 a stolen session alone then can\u2019t publish.</span></span></label>';
+      el.innerHTML = '<label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;line-height:1.45"><input type="checkbox" data-2fatoggle' + (st.enabled ? " checked" : "") + ' /><span>Require a passkey <b>and</b> your recovery passphrase on every publish <span style="opacity:.55">\u2014 a stolen session alone then can\u2019t publish.</span></span></label>';
       const cb = el.querySelector("[data-2fatoggle]");
       cb.addEventListener("change", async () => {
         cb.disabled = true; err.textContent = "";

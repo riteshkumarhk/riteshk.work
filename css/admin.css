@@ -24,6 +24,8 @@
   font-family: var(--sans); margin-bottom: .7rem;
 }
 .pass input:focus { outline: none; border-color: var(--accent); }
+/* Checkboxes must not inherit the full-width password-field styling above. */
+.pass input[type="checkbox"] { width: auto; flex: 0 0 auto; margin: 2px 0 0; padding: 0; text-align: left; accent-color: var(--accent); cursor: pointer; }
 .pass__err { color: #ff7a7a; font-size: .74rem; min-height: 1.1em; margin-bottom: .6rem; }
 .pass__actions { display: flex; gap: .6rem; }
 .pass__actions .btn { flex: 1; }
