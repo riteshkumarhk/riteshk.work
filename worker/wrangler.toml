@@ -4,6 +4,11 @@ compatibility_date = "2026-07-28"
 workers_dev = true
 preview_urls = false
 
+# Private R2 bucket for NDA media (the "vault") — objects are served only through the Worker.
+[[r2_buckets]]
+binding = "VAULT"
+bucket_name = "rk-vault"
+
 # Plain-text var (kept in sync with the dashboard). Secrets (ACCESS_TOKEN,
 # ANTHROPIC_KEY, ADMIN_HASH, ADMIN_SALT, SESSION_SECRET, GH_TOKEN, ...) are set
 # via the dashboard / `wrangler secret put` and are NOT stored in this file.

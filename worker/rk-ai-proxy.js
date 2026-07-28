@@ -32,6 +32,7 @@ const PROVIDERS = {
 };
 
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // admin session lifetime — 12 hours
+const VAULT_URL_TTL_MS = 6 * 60 * 60 * 1000;  // signed vault-asset URL lifetime — 6 hours
 
 export default {
   async fetch(request, env) {
@@ -85,6 +86,73 @@ export default {
       const ghOut = new Headers(ghUp.headers);
       for (const [k, v] of Object.entries(cors)) ghOut.set(k, v);
       return new Response(ghUp.body, { status: ghUp.status, headers: ghOut });
+    }
+
+    // ---------- admin vault: private media in R2, gated + signed by the Worker ----------
+    if (url.pathname === "/vault/upload") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT) return json({ error: "Vault storage is not configured" }, 500, cors);
+      try {
+        const ct = request.headers.get("Content-Type") || "application/octet-stream";
+        const buf = await request.arrayBuffer();
+        if (!buf || buf.byteLength === 0) return json({ error: "Empty upload" }, 400, cors);
+        const hash = bytesToHex(await crypto.subtle.digest("SHA-256", buf));
+        const ext = (url.searchParams.get("ext") || "").replace(/[^a-z0-9]/gi, "").slice(0, 8).toLowerCase();
+        const key = ext ? (hash + "." + ext) : hash;
+        await env.VAULT.put(key, buf, { httpMetadata: { contentType: ct } });
+        return json({ key: key, size: buf.byteLength }, 200, cors);
+      } catch (e) {
+        return json({ error: "Upload failed", detail: String((e && e.message) || e) }, 500, cors);
+      }
+    }
+
+    // Mint a short-lived signed per-asset URL (owner session). The <video>/<img> src can then load
+    // it with no auth header — the signature IS the auth, scoped to one key and expiring.
+    if (url.pathname === "/vault/sign") {
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      const key = url.searchParams.get("key") || "";
+      if (!key || key.indexOf("..") !== -1 || key.indexOf("/") !== -1) return json({ error: "Bad key" }, 400, cors);
+      const exp = Date.now() + VAULT_URL_TTL_MS;
+      const sig = await hmac(env.SESSION_SECRET || "", "vault:" + key + ":" + exp);
+      return json({ url: "/vault/asset/" + encodeURIComponent(key) + "?exp=" + exp + "&sig=" + sig, exp: exp }, 200, cors);
+    }
+
+    // Serve a vault object (signature-gated, HTTP range support for smooth video streaming).
+    if (url.pathname.startsWith("/vault/asset/")) {
+      if (!env.VAULT) return json({ error: "Vault storage is not configured" }, 500, cors);
+      const key = decodeURIComponent(url.pathname.slice("/vault/asset/".length));
+      const exp = parseInt(url.searchParams.get("exp") || "0", 10);
+      const sig = url.searchParams.get("sig") || "";
+      if (!key || key.indexOf("..") !== -1) return json({ error: "Bad key" }, 400, cors);
+      const expect = await hmac(env.SESSION_SECRET || "", "vault:" + key + ":" + exp);
+      if (!exp || exp < Date.now() || !timingSafeEqual(sig, expect)) return json({ error: "Link expired or invalid" }, 403, cors);
+
+      const rangeHeader = request.headers.get("Range");
+      const getOpts = {};
+      if (rangeHeader) {
+        const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+        if (m && (m[1] || m[2])) {
+          if (m[1] && m[2]) getOpts.range = { offset: +m[1], length: (+m[2] - +m[1] + 1) };
+          else if (m[1]) getOpts.range = { offset: +m[1] };
+          else getOpts.range = { suffix: +m[2] };
+        }
+      }
+      const obj = await env.VAULT.get(key, getOpts);
+      if (!obj) return json({ error: "Not found" }, 404, cors);
+      const headers = new Headers(cors);
+      obj.writeHttpMetadata(headers);
+      headers.set("Accept-Ranges", "bytes");
+      headers.set("Cache-Control", "private, max-age=3600");
+      if (obj.range && rangeHeader) {
+        const off = obj.range.offset || 0;
+        const len = (obj.range.length != null) ? obj.range.length : (obj.size - off);
+        headers.set("Content-Range", "bytes " + off + "-" + (off + len - 1) + "/" + obj.size);
+        headers.set("Content-Length", String(len));
+        return new Response(obj.body, { status: 206, headers });
+      }
+      headers.set("Content-Length", String(obj.size));
+      return new Response(obj.body, { status: 200, headers });
     }
 
     const segments = url.pathname.replace(/^\/+/, "").split("/");
