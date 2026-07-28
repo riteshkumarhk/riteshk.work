@@ -13,7 +13,8 @@ import {
   clone, escHtml, escAttr, RK_KDF_IT, sha256,
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
-  rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath
+  rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath,
+  ADMIN_WORKER, adminSession, clearAdminSession
 } from "./admin-core.js";
 
 (function () {
@@ -3218,6 +3219,7 @@ import {
   /* ---------- publish / revert ---------- */
   /* ---------- publish ---------- */
   function publish() {
+    if (adminSession()) { ghPublish("session"); return; }   // session authorises publishing via the Worker
     const token = localStorage.getItem(GH_TOKEN_KEY);
     if (token) ghPublish(token);
     else publishModal();
@@ -3231,7 +3233,7 @@ import {
   function autopubTick() {
     if (!autopubOn()) { autopubStop(); return; }
     if (publishing || !root || !root.classList.contains("is-open")) return;
-    const token = localStorage.getItem(GH_TOKEN_KEY);
+    const token = adminSession() ? "session" : localStorage.getItem(GH_TOKEN_KEY);
     if (!token) return;                        // not connected \u2014 can't publish silently
     const ae = document.activeElement;          // don't yank focus mid-edit; catch it next tick
     if (ae && (/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) || ae.isContentEditable)) return;
@@ -3254,7 +3256,7 @@ import {
   }
   function autopubToggle() {
     const turningOn = !autopubOn();
-    if (turningOn && !localStorage.getItem(GH_TOKEN_KEY)) publishModal();  // needs GitHub connected to run
+    if (turningOn && !adminSession() && !localStorage.getItem(GH_TOKEN_KEY)) publishModal();  // needs a session or saved token to run
     try { localStorage.setItem(AUTOPUB_ON_KEY, turningOn ? "1" : "0"); } catch (e) {}
     autopubSync(); autopubStart();
     status(turningOn ? ("Auto-publish on \u2014 every " + (autopubEvery() === 60 ? "hour" : "30 minutes") + ".") : "Auto-publish off.", true);
@@ -3300,7 +3302,7 @@ import {
     var hash = await sha256Hex(ctBytes);
     var repoPath = "assets/protected/" + hash + ".enc";
     var put;
-    try { put = await fetch(GH_FILE_API + repoPath, { method: "PUT", headers: ghHeaders(token), body: JSON.stringify({ message: "Add " + hash + ".enc via admin", content: rkB64(ctBytes), branch: GH_BRANCH }) }); }
+    try { put = await fetch(ghContentsUrl(repoPath), { method: "PUT", headers: ghHeaders(token), body: JSON.stringify({ message: "Add " + hash + ".enc via admin", content: rkB64(ctBytes), branch: GH_BRANCH }) }); }
     catch (e) { var ne = new Error("network"); ne.network = 1; throw ne; }
     if (put.status === 422) return "/" + repoPath;
     if (put.status === 401 || put.status === 403) { var ae = new Error("auth"); ae.auth = 1; throw ae; }
@@ -3570,13 +3572,18 @@ import {
   }
 
   function ghHeaders(token) {
+    const sess = adminSession();
     return {
-      Authorization: "Bearer " + token,
+      Authorization: sess ? ("Bearer " + sess) : ("Bearer " + token),
       Accept: "application/vnd.github+json",
       "Content-Type": "application/json",
       "X-GitHub-Api-Version": "2022-11-28",
     };
   }
+  // With an admin session, GitHub calls go through the Worker (which holds the real token,
+  // scoped to this one repo); otherwise they hit the GitHub API directly with the saved token.
+  function ghApiRoot() { return adminSession() ? (ADMIN_WORKER + "/admin/gh") : "https://api.github.com"; }
+  function ghContentsUrl(repoPath) { return ghApiRoot() + "/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/" + repoPath; }
   function b64(str) { return btoa(unescape(encodeURIComponent(str))); }
 
   /* ---------- image hosting: upload files to the repo, store lean paths ----------
@@ -3745,7 +3752,7 @@ import {
     const webPath = "/" + repoPath;
     hostedBytes[webPath] = uri;
     let put;
-    try { put = await fetch(GH_FILE_API + repoPath, { method: "PUT", headers: ghHeaders(token), body: JSON.stringify({ message: "Add " + name + " via admin", content: rawB64, branch: GH_BRANCH }) }); }
+    try { put = await fetch(ghContentsUrl(repoPath), { method: "PUT", headers: ghHeaders(token), body: JSON.stringify({ message: "Add " + name + " via admin", content: rawB64, branch: GH_BRANCH }) }); }
     catch (netErr) { const e = new Error("network"); e.network = 1; throw e; }
     if (put.status === 422) return webPath; // identical file already hosted → reuse
     if (put.status === 401 || put.status === 403) { const e = new Error("auth"); e.auth = 1; throw e; }
@@ -3870,7 +3877,7 @@ import {
   // Commit content.json via the Git Data API (blob -> tree -> commit -> ref).
   // Robust for any size: the Contents API PUT can return HTTP 500 on some content; this path does not.
   async function ghCommitViaGitData(token, json, message) {
-    const repo = "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO;
+    const repo = ghApiRoot() + "/repos/" + GH_OWNER + "/" + GH_REPO;
     const api = async (url, opts) => {
       const res = await fetch(url, Object.assign({ headers: ghHeaders(token), cache: "no-store" }, opts || {}));
       let body = null; try { body = await res.json(); } catch (e) { body = null; }
@@ -3923,6 +3930,7 @@ import {
   async function ghPublish(token) {
     if (publishing) return;
     publishing = true;
+    var viaSession = (token === "session");
     pubProgress(6, "Preparing your content\u2026");
     try {
       const hostRes = await hostEmbeddedImages(token, function (n, total) {
@@ -3959,6 +3967,7 @@ import {
       // Committed. This data is now the published content — clear the draft so it can't go stale.
       localStorage.removeItem(DRAFT_KEY);
       localStorage.removeItem(DRAFT_SIG_KEY);
+      if (viaSession) localStorage.removeItem(GH_TOKEN_KEY); // published via the Worker session — the repo token no longer needs to live in this browser
       if (window.RK) { window.RK.published = clone(data); if (window.RK.sig) window.RK.publishedSig = window.RK.sig(JSON.stringify(data)); }
       pubProgress(64, "Saved to GitHub. Building your live site\u2026");
       const live = await waitForLive(mySig);
@@ -3974,7 +3983,11 @@ import {
           : "Publish paused \u2014 a passphrase for a protected project wasn\u2019t provided.", { error: true });
         return;
       }
-      if (e && e.auth) { authFailed(); pubProgress(100, "GitHub didn\u2019t accept that sign-in \u2014 hit Publish to reconnect.", { error: true }); return; }
+      if (e && e.auth) {
+        if (viaSession) { clearAdminSession(); pubProgress(100, "Your admin session ended \u2014 exit the studio and sign in again to publish.", { error: true }); }
+        else { authFailed(); pubProgress(100, "GitHub didn\u2019t accept that sign-in \u2014 hit Publish to reconnect.", { error: true }); }
+        return;
+      }
       var emsg = (e && e.message) ? String(e.message).slice(0, 160) : "";
       if (e && e.http) {
         pubProgress(100, "GitHub couldn\u2019t save it \u2014 " + emsg + ". Hit Publish to retry.", { error: true });
@@ -4261,7 +4274,7 @@ import {
     const ext = extFromName(nm);
     const isImg = /^data:image\//i.test(uri);
     const finish = function (low, note) {
-      const token = localStorage.getItem(GH_TOKEN_KEY);
+      const token = adminSession() ? "session" : localStorage.getItem(GH_TOKEN_KEY);
       if (!token) { status("\u201c" + nm + "\u201d added" + note + " \u2014 embedded for now; connect GitHub on Publish and it becomes a hosted file automatically."); return; }
       status("Hosting \u201c" + nm + "\u201d\u2026");
       hostDataUri(uri, token, ext).then(function (path) {

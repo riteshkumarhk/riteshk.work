@@ -13,7 +13,7 @@ import {
   clone, escHtml, escAttr, RK_KDF_IT, sha256,
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
-  rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath
+  rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath, adminLogin
 } from "./admin-core.js";
 
 (function () {
@@ -192,15 +192,26 @@ import {
         localStorage.setItem(HASH_KEY, await sha256(val));
         try { localStorage.setItem(GATE_KEY, JSON.stringify(await rkGateRecord(val))); } catch (e) {}
         done(); openStudio();
-      } else {
-        var ok = false;
-        if (publishedGate && await rkGateVerify(val, publishedGate)) ok = true;
-        else if (stored && (await sha256(val)) === stored) ok = true;
-        if (ok) {
-          try { localStorage.setItem(HASH_KEY, await sha256(val)); localStorage.setItem(GATE_KEY, JSON.stringify(await rkGateRecord(val))); } catch (e) {}
-          done(); openStudio();
-        } else { err.textContent = "Incorrect key"; }
+        return;
       }
+      // Prefer a server login (Cloudflare Worker): a short session — not a repo token in your
+      // browser — authorises publishing. If the Worker rejects or is unreachable, fall back to
+      // the existing local / published-gate check so you're never locked out.
+      const go = modal.querySelector("[data-go]");
+      if (go) go.disabled = true;
+      const login = await adminLogin(val);
+      if (login.ok) {
+        try { localStorage.setItem(HASH_KEY, await sha256(val)); localStorage.setItem(GATE_KEY, JSON.stringify(await rkGateRecord(val))); } catch (e) {}
+        done(); openStudio();
+        return;
+      }
+      var ok = false;
+      if (publishedGate && await rkGateVerify(val, publishedGate)) ok = true;
+      else if (stored && (await sha256(val)) === stored) ok = true;
+      if (ok) {
+        try { localStorage.setItem(HASH_KEY, await sha256(val)); localStorage.setItem(GATE_KEY, JSON.stringify(await rkGateRecord(val))); } catch (e) {}
+        done(); openStudio();
+      } else { if (go) go.disabled = false; err.textContent = "Incorrect key"; }
     }
     modal.querySelector("[data-go]").addEventListener("click", submit);
     modal.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });

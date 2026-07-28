@@ -10,6 +10,42 @@ export const clone = (o) => JSON.parse(JSON.stringify(o));
 export const escHtml = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 export const escAttr = (s) => escHtml(s).replace(/"/g, "&quot;");
 
+/* ---------- admin backend (Cloudflare Worker): session login + GitHub proxy ----------
+   The studio logs in with the admin key to get a short signed session, then publishes
+   through the Worker so the GitHub token never has to live in the browser. If the Worker
+   isn't reachable, callers fall back to the existing local gate + repo token. */
+export const ADMIN_WORKER = "https://rk-ai-proxy.riteshkumarhk.workers.dev"; // your Cloudflare Worker URL
+export const ADMIN_SESSION_KEY = "rk:admin:sess";
+export function adminSession() {
+  try {
+    const s = JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY) || "null");
+    if (s && s.token && s.exp && s.exp > Date.now()) return s.token;
+  } catch (e) {}
+  return "";
+}
+export function saveAdminSession(token, exp) {
+  try { localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token, exp })); } catch (e) {}
+}
+export function clearAdminSession() { try { localStorage.removeItem(ADMIN_SESSION_KEY); } catch (e) {} }
+// Log in against the Worker. Returns {ok:true} (session stored), {ok:false,status} (rejected),
+// or {ok:false,network:true} (Worker unreachable / not deployed → caller falls back to the local gate).
+export async function adminLogin(password) {
+  try {
+    const res = await fetch(ADMIN_WORKER + "/admin/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    if (res.status === 200) {
+      const j = await res.json().catch(() => null);
+      if (j && j.token && j.exp) { saveAdminSession(j.token, j.exp); return { ok: true }; }
+      return { ok: false, status: 500 };
+    }
+    if (res.status === 404) return { ok: false, network: true }; // endpoint not deployed yet → fall back
+    return { ok: false, status: res.status };
+  } catch (e) { return { ok: false, network: true }; }
+}
+
 export async function sha256(str) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
