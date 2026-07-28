@@ -4085,8 +4085,9 @@ import {
   function pubProgress(pct, label, opts) {
     opts = opts || {};
     const el = pubEl();
-    status(label, !!opts.done);
-    if (!el) return;
+    // The publish bar (row 3) is the single home for progress/status while publishing — don't
+    // also mirror the message into the top .adm__status (that was the duplicated text on screen).
+    if (!el) { status(label, !!opts.done); return; }
     el.hidden = false;
     el.classList.toggle("is-done", !!opts.done);
     el.classList.toggle("is-error", !!opts.error);
@@ -4276,7 +4277,7 @@ import {
         pubStopCreep();
         const protN = protectedHostedCount(data);
         if (!tooLargeFails.length && fails.length && fails.every(function (f) { return f.network; })) {
-          pubProgress(100, "Couldn\u2019t reach GitHub to upload your media \u2014 likely a network block (a VPN, ad-blocker or firewall stopping api.github.com). Check your connection, then hit Publish again.", { error: true });
+          pubProgress(100, "Couldn\u2019t reach " + (viaSession ? "the publishing service" : "GitHub (api.github.com)") + " to upload your media \u2014 a VPN, ad-blocker or firewall may be blocking it. Check your connection, then hit Publish again.", { error: true });
         } else if (!tooLargeFails.length && protN >= 5 && jsonBytes > PUBLISH_HARD_CAP) {
           pubProgress(100, "Can\u2019t publish \u2014 hiding or locking a project bundles all of its images into the file so they can be encrypted (here that\u2019s ~" + protN + " images \u2192 " + Math.round(jsonBytes / 1048576) + " MB), which is too large for GitHub. Keep the project visible (it can still be Featured on the homepage), or use far fewer / smaller images inside the hidden or locked section.", { error: true });
         } else {
@@ -4307,6 +4308,9 @@ import {
       else pubProgress(100, "Published. It can take another minute to appear \u2014 open your site to check.", { done: true, viewUrl: viewUrl });
     } catch (e) {
       pubStopCreep();
+      // A ticket code typed this session must survive a failed publish so the next attempt doesn't
+      // re-ask for it — persist the recovery keyring best-effort before surfacing the error.
+      try { await saveTicketKeyring(); } catch (_) {}
       if (e && e.rkEnc) {
         pubProgress(100, e.mixed
           ? "Unlock this project\u2019s protected sections (enter its pass) before publishing."
@@ -4322,7 +4326,10 @@ import {
       if (e && e.http) {
         pubProgress(100, "GitHub couldn\u2019t save it \u2014 " + emsg + ". Hit Publish to retry.", { error: true });
       } else if (!emsg || /Failed to fetch|NetworkError|load failed|ERR_|network/i.test(emsg)) {
-        pubProgress(100, "Couldn\u2019t reach GitHub \u2014 likely a network block (a VPN, ad-blocker or firewall stopping api.github.com). Check your connection, then hit Publish again.", { error: true });
+        var _svc = viaSession ? "the publishing service" : "GitHub (api.github.com)";
+        var _msg = "Couldn\u2019t reach " + _svc + " \u2014 a VPN, ad-blocker or firewall may be blocking it. Check your connection, then hit Publish again.";
+        if (protectedHostedCount(data)) _msg += " If it keeps failing, a large image or video in a locked / vaulted section may be timing out \u2014 compress it or host it externally.";
+        pubProgress(100, _msg, { error: true });
       } else {
         pubProgress(100, "Publish hit a snag: " + emsg + " \u2014 hit Publish to retry.", { error: true });
       }

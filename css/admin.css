@@ -122,8 +122,10 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__hist-btn:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .adm__hist-btn:disabled { opacity: .3; cursor: not-allowed; }
 @media (max-width: 1023px) {
-  .adm__actions { flex: 1 1 100%; margin-top: .5rem; justify-content: space-between; }
-  .adm__actions-l { margin-right: auto; }
+  /* row 1 = brand + all actions (top-right); row 2 = tabs; row 3 = the publish bar (its own block below) */
+  .adm__brand { order: 1; margin-right: auto; }
+  .adm__actions { order: 2; }
+  .adm__tabswrap { order: 3; flex: 1 1 100%; margin-top: .55rem; }
   .adm__actions .adm__status { display: none; }
 }
 /* auto-publish: a switch (on/off) + a chevron dropdown for the interval, beside Publish */
