@@ -13,7 +13,7 @@ import {
   clone, escHtml, escAttr, RK_KDF_IT, sha256,
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
-  rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath, adminLogin
+  rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath, adminLogin, ADMIN_WORKER
 } from "./admin-core.js";
 
 (function () {
@@ -160,7 +160,10 @@ import {
     thDismiss(true);   // clear the landing “have a ticket?” nudge before the gate/editor (it sits above them)
     const publishedGate = (window.RK && window.RK.published && window.RK.published.adminGate) || null;
     const stored = localStorage.getItem(HASH_KEY);
-    const creating = !publishedGate && !stored;
+    // A server admin (the Cloudflare Worker) is the source of truth for the key, so any browser —
+    // fresh device included — must ENTER the real key (verified server-side), never self-serve a
+    // local "create". Create mode only survives as a true first-run fallback with no Worker set.
+    const creating = !ADMIN_WORKER && !publishedGate && !stored;
     const modal = document.createElement("div");
     modal.className = "pass";
     modal.innerHTML =
