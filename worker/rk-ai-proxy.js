@@ -45,11 +45,15 @@ export default {
     // ---------- admin: verify the admin key, issue a short signed session ----------
     if (url.pathname === "/admin/login") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
-      let creds = {};
-      try { creds = await request.json(); } catch (e) {}
-      const ok = await verifyAdminPassword(String(creds.password || ""), env);
-      if (!ok) return json({ error: "Incorrect key" }, 401, cors);
-      return json(await issueSession(env), 200, cors);
+      try {
+        let creds = {};
+        try { creds = await request.json(); } catch (e) {}
+        const ok = await verifyAdminPassword(String(creds.password || ""), env);
+        if (!ok) return json({ error: "Incorrect key" }, 401, cors);
+        return json(await issueSession(env), 200, cors);
+      } catch (e) {
+        return json({ error: "Login failed on the server", detail: String((e && e.message) || e) }, 500, cors);
+      }
     }
 
     // ---------- admin: authenticated GitHub proxy (holds the GH token server-side) ----------
@@ -184,7 +188,10 @@ async function pbkdf2Hex(password, saltBytes, iters) {
 }
 async function verifyAdminPassword(pw, env) {
   if (!pw || !env.ADMIN_HASH || !env.ADMIN_SALT) return false;
-  const iters = parseInt(env.ADMIN_ITERS || "210000", 10) || 210000;
+  // Cloudflare Workers' WebCrypto caps PBKDF2 at 100000 iterations (higher throws
+  // NotSupportedError), so clamp here — the stored ADMIN_HASH must be generated with the same count.
+  let iters = parseInt(env.ADMIN_ITERS || "100000", 10) || 100000;
+  if (iters > 100000) iters = 100000;
   const hex = await pbkdf2Hex(pw, hexToBytes(env.ADMIN_SALT), iters);
   return timingSafeEqual(hex, String(env.ADMIN_HASH).trim().toLowerCase());
 }
