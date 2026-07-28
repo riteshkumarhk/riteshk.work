@@ -49,6 +49,7 @@ export default {
     // ---------- admin: verify the admin key, issue a short signed session ----------
     if (url.pathname === "/admin/login") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (env.VAULT_GRANTS && (await env.VAULT_GRANTS.get("cfg:passwordless")) === "1") return json({ error: "Password sign-in is disabled \u2014 use a passkey." }, 403, cors);
       try {
         let creds = {};
         try { creds = await request.json(); } catch (e) {}
@@ -188,6 +189,50 @@ export default {
     if (url.pathname === "/admin/publish/status") {
       if (!env.VAULT_GRANTS) return json({ enabled: false, hasProof: false }, 200, cors);
       return json({ enabled: (await env.VAULT_GRANTS.get("cfg:publish2fa")) === "1", hasProof: !!(await env.VAULT_GRANTS.get("cfg:publishproof")) }, 200, cors);
+    }
+    // Auth mode the sign-in card reads: are we passwordless, is a recovery passphrase set, how many passkeys.
+    if (url.pathname === "/admin/auth/status") {
+      if (!env.VAULT_GRANTS) return json({ passwordless: false, hasRecovery: false, passkeys: 0 }, 200, cors);
+      const l = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" });
+      return json({ passwordless: (await env.VAULT_GRANTS.get("cfg:passwordless")) === "1", hasRecovery: !!(await env.VAULT_GRANTS.get("cfg:publishproof")), passkeys: l.keys.length }, 200, cors);
+    }
+    // Owner turns passwordless on/off. Enabling requires ≥1 passkey AND a recovery passphrase (so no lockout).
+    if (url.pathname === "/admin/auth/config") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Store not configured" }, 500, cors);
+      try {
+        const b = await request.json();
+        if (b && typeof b.passwordless === "boolean") {
+          if (b.passwordless) {
+            const l = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" });
+            if (!l.keys.length || !(await env.VAULT_GRANTS.get("cfg:publishproof"))) return json({ error: "Add a passkey and set your recovery passphrase first." }, 400, cors);
+          }
+          await env.VAULT_GRANTS.put("cfg:passwordless", b.passwordless ? "1" : "");
+        }
+        return json({ ok: true, passwordless: (await env.VAULT_GRANTS.get("cfg:passwordless")) === "1" }, 200, cors);
+      } catch (e) { return json({ error: "Config failed" }, 400, cors); }
+    }
+    // Break-glass: recover admin access with the recovery-passphrase proof when all passkeys are lost.
+    // Verified against the stored hash (never reveals the backend); rate-limited by IP.
+    if (url.pathname === "/admin/recover") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Recovery unavailable" }, 500, cors);
+      const rlKey = "rl:recover:" + (request.headers.get("CF-Connecting-IP") || "0");
+      const tries = parseInt((await env.VAULT_GRANTS.get(rlKey)) || "0", 10) || 0;
+      if (tries >= 6) return json({ error: "Too many attempts \u2014 try again later." }, 429, cors);
+      try {
+        const b = await request.json();
+        const stored = await env.VAULT_GRANTS.get("cfg:publishproof");
+        const proof = (b && b.proof) || "";
+        const proofHash = proof ? bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(proof))) : "";
+        if (!stored || !timingSafeEqual(proofHash, stored)) {
+          await env.VAULT_GRANTS.put(rlKey, String(tries + 1), { expirationTtl: 900 });
+          return json({ error: "That recovery passphrase didn\u2019t match." }, 401, cors);
+        }
+        await env.VAULT_GRANTS.delete(rlKey);
+        return json(await issueSession(env), 200, cors);
+      } catch (e) { return json({ error: "Recovery failed" }, 400, cors); }
     }
 
     // ---------- admin: authenticated GitHub proxy (holds the GH token server-side) ----------

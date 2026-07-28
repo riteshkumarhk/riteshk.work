@@ -14,7 +14,7 @@ import {
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
   rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath, adminLogin, ADMIN_WORKER,
-  vaultSignedUrl, vaultRedeem, webauthnSupported, webauthnList, webauthnAuth
+  vaultSignedUrl, vaultRedeem, webauthnSupported, webauthnList, webauthnAuth, authStatus, recoverWithPassphrase
 } from "./admin-core.js";
 
 (function () {
@@ -204,12 +204,36 @@ import {
       try { await webauthnAuth("login"); done(); openStudio(); }
       catch (e) { if (pkBtn) pkBtn.disabled = false; err.textContent = (e && e.message) || "Passkey sign-in didn’t work."; }
     }
+    let recovering = false;
+    function showRecover() {
+      recovering = true;
+      const pkBtn = modal.querySelector("[data-passkey]"); if (pkBtn) pkBtn.style.display = "none";
+      const link = modal.querySelector("[data-reclink]"); if (link) link.style.display = "none";
+      const subEl = modal.querySelector(".pass__sub"); if (subEl) subEl.textContent = "Enter your recovery passphrase to regain access, then add a new passkey.";
+      pass.placeholder = "Recovery passphrase"; pass.style.display = ""; pass.value = ""; try { pass.focus(); } catch (e) {}
+      const go = modal.querySelector("[data-go]"); if (go) { go.style.display = ""; go.disabled = false; go.textContent = "Recover"; }
+    }
     if (!creating && webauthnSupported()) {
-      webauthnList().then((list) => {
-        if (list && list.length) {
-          const pkBtn = modal.querySelector("[data-passkey]"), orEl = modal.querySelector("[data-or]");
-          if (pkBtn) { pkBtn.hidden = false; pkBtn.addEventListener("click", doPasskey); }
-          if (orEl) orEl.hidden = false;
+      authStatus().then((st) => {
+        const pkBtn = modal.querySelector("[data-passkey]"), orEl = modal.querySelector("[data-or]");
+        if (st.passkeys > 0 && pkBtn) { pkBtn.hidden = false; pkBtn.addEventListener("click", doPasskey); }
+        if (st.passkeys > 0 && orEl) orEl.hidden = false;
+        if (st.passwordless) {
+          // Passwordless: passkey only, with a discreet recovery-passphrase break-glass. No admin key field.
+          if (pass) pass.style.display = "none";
+          const go = modal.querySelector("[data-go]"); if (go) go.style.display = "none";
+          if (orEl) orEl.style.display = "none";
+          const subEl = modal.querySelector(".pass__sub"); if (subEl) subEl.textContent = "Sign in with your passkey.";
+          if (pkBtn) pkBtn.hidden = false;
+          if (st.hasRecovery) {
+            const rec = document.createElement("button");
+            rec.type = "button"; rec.setAttribute("data-reclink", "1");
+            rec.textContent = "Lost your passkey? Recover access";
+            rec.style.cssText = "display:block;margin:10px auto 0;background:none;border:none;color:inherit;opacity:.5;font-size:12px;text-decoration:underline;cursor:pointer";
+            rec.addEventListener("click", showRecover);
+            const actions = modal.querySelector(".pass__actions");
+            if (actions && actions.parentNode) actions.parentNode.insertBefore(rec, actions.nextSibling);
+          }
         }
       }).catch(() => {});
     }
@@ -220,6 +244,13 @@ import {
 
     async function submit() {
       const val = pass.value;
+      if (recovering) {
+        if (!val) { err.textContent = "Enter your recovery passphrase"; return; }
+        const go = modal.querySelector("[data-go]"); if (go) go.disabled = true; err.textContent = "";
+        try { await recoverWithPassphrase(val); done(); openStudio(); }
+        catch (e) { if (go) go.disabled = false; err.textContent = (e && e.message) || "Recovery didn’t work."; }
+        return;
+      }
       if (!val) { err.textContent = "Enter your key"; return; }
       if (creating) {
         if (val.length < 4) { err.textContent = "Use at least 4 characters"; return; }

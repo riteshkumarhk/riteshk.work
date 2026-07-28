@@ -131,6 +131,26 @@ export async function publishConfig(proof, require) {
   if (!r.ok) { const j = await r.json().catch(() => null); throw new Error((j && j.error) || "Couldn’t update publish security."); }
   return await r.json();
 }
+// Sign-in mode the gate reads: passwordless?, is a recovery passphrase set?, how many passkeys.
+export async function authStatus() {
+  try { const r = await fetch(ADMIN_WORKER + "/admin/auth/status"); if (!r.ok) return { passwordless: false, hasRecovery: false, passkeys: 0 }; return await r.json(); } catch (e) { return { passwordless: false, hasRecovery: false, passkeys: 0 }; }
+}
+// Owner-only: turn the passwordless (passkey-only) admin login on/off.
+export async function authConfig(passwordless) {
+  const sess = adminSession(); if (!sess) { const e = new Error("Sign in first."); e.auth = true; throw e; }
+  const r = await fetch(ADMIN_WORKER + "/admin/auth/config", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ passwordless: !!passwordless }) });
+  if (!r.ok) { const j = await r.json().catch(() => null); throw new Error((j && j.error) || "Couldn’t update sign-in mode."); }
+  return await r.json();
+}
+// Break-glass sign-in with the recovery passphrase (all passkeys lost). Stores a session on success.
+export async function recoverWithPassphrase(recovery) {
+  const proof = await publishProof(recovery);
+  const r = await fetch(ADMIN_WORKER + "/admin/recover", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ proof: proof }) });
+  if (!r.ok) { const j = await r.json().catch(() => null); const e = new Error((j && j.error) || "Recovery didn’t work."); e.status = r.status; throw e; }
+  const j = await r.json();
+  if (j && j.token && j.exp) { saveAdminSession(j.token, j.exp); return { ok: true }; }
+  throw new Error("Recovery didn’t return a session.");
+}
 
 /* ---------- NDA vault (private R2, via the Worker) ----------
    Gated media (deeper-cut reels, NDA screen recordings) live in a private R2 bucket, never
