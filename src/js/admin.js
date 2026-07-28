@@ -181,7 +181,10 @@ import {
       (creating ? '<input type="password" placeholder="Confirm key" data-confirm />' : "") +
       '<div class="pass__err"></div>' +
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
-      '<button class="btn btn--primary" data-go>' + (creating ? "Create" : "Enter") + "</button></div></div>";
+      '<button class="btn btn--primary" data-go>' + (creating ? "Create" : "Enter") + "</button></div>" +
+      '<div class="pass__note" style="margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.09);font-size:12px;line-height:1.55;opacity:.62">' +
+        'A little easter egg, since you found the admin door: I was a core designer on the team that brought <b style="font-weight:600;opacity:.85">passkeys to Windows</b> \u2014 the kind of security behind sign-ins like this one. Endlessly grateful to my teammates across the Windows security landscape for the opportunity and the collaboration. \u2014 Ritesh' +
+      "</div></div>";
     document.body.appendChild(modal);
     const pass = modal.querySelector('input[type="password"]');
     const confirm2 = modal.querySelector("[data-confirm]");
