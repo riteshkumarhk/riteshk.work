@@ -413,7 +413,7 @@ import {
     return '<div class="imgblk"><div class="af__label">Display picture</div>' +
       '<div class="af__hint" style="margin-bottom:.6rem">Your photo \u2014 shown on the admin sign-in card. A square image works best.</div>' +
       '<div style="display:flex;align-items:center;gap:14px">' +
-        '<div style="width:64px;height:64px;border-radius:50%;overflow:hidden;flex:0 0 64px;background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;justify-content:center">' + (has ? '<img src="' + escAttr(url) + '" alt="" style="width:100%;height:100%;object-fit:cover" />' : AVATAR_PLACEHOLDER_SVG) + '</div>' +
+        '<div style="width:64px;height:64px;border-radius:50%;overflow:hidden;flex:0 0 64px;background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;justify-content:center">' + (has ? '<img src="' + escAttr(previewSrc(url)) + '" alt="" style="width:100%;height:100%;object-fit:cover" />' : AVATAR_PLACEHOLDER_SVG) + '</div>' +
         '<div class="imgblk__row" style="margin:0"><button class="btn btn--ghost" data-act="avatar-upload">' + (has ? "Replace\u2026" : "Upload photo\u2026") + '</button>' + (has ? '<button class="btn btn--ghost" data-act="avatar-clear">Remove</button>' : "") + "</div>" +
       "</div></div>";
   }

@@ -184,11 +184,14 @@ import {
       '<div class="pass__err"></div>' +
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
       '<button class="btn btn--primary" data-go>' + (creating ? "Create" : "Enter") + "</button></div>" +
-      '<div class="pass__cred" style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(255,255,255,.09);display:flex;flex-direction:column;align-items:center;gap:11px">' +
-        '<div style="width:58px;height:58px;border-radius:50%;overflow:hidden;flex:0 0 58px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center">' +
+      '<div class="pass__cred" style="margin-top:18px;padding-top:18px;border-top:1px solid rgba(255,255,255,.09);display:flex;flex-direction:column;align-items:center;gap:13px">' +
+        '<div style="width:60px;height:60px;border-radius:50%;overflow:hidden;flex:0 0 60px;background:rgba(255,255,255,.05);border:1px solid color-mix(in srgb, var(--accent) 45%, rgba(255,255,255,.14));display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 9%, transparent)">' +
           (avatarUrl ? '<img src="' + avatarUrl + '" alt="Ritesh" style="width:100%;height:100%;object-fit:cover" />' : '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.4" style="opacity:.4"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-6.5 8-6.5s8 2.1 8 6.5"/></svg>') +
         "</div>" +
-        '<div style="font-size:12px;line-height:1.55;opacity:.62;text-align:center">A little easter egg, since you found the admin door: I was a core designer on the team that brought <b style="font-weight:600;opacity:.85">passkeys to Windows</b> \u2014 the kind of security behind sign-ins like this one. Endlessly grateful to my teammates across the Windows security landscape for the opportunity and the collaboration. \u2014 Ritesh</div>' +
+        '<div style="background:color-mix(in srgb, var(--accent) 8%, transparent);border:1px solid color-mix(in srgb, var(--accent) 24%, transparent);border-radius:13px;padding:13px 15px;text-align:center">' +
+          '<div style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px">\u2726 A little pride</div>' +
+          '<div style="font-size:12.5px;line-height:1.62;opacity:.82">I was a core designer on the team that brought <b style="color:var(--accent);font-weight:600">passkeys to Windows</b> \u2014 yes, the very security behind sign-ins like this one. Endless gratitude to my teammates across the Windows security landscape for the opportunity and the collaboration. <span style="opacity:.7">\u2014 Ritesh</span></div>' +
+        "</div>" +
       "</div></div>";
     document.body.appendChild(modal);
     const pass = modal.querySelector('input[type="password"]');
