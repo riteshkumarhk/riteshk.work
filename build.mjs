@@ -24,6 +24,10 @@ const options = {
   entryPoints: ENTRIES.map((name) => ({ in: `src/js/${name}.js`, out: name })),
   outdir: "js",
   bundle: true,
+  // Safe minification: esbuild renames LOCALS + strips whitespace/dead code only.
+  // Property mangling stays OFF, so window.RK.* , localStorage keys and Web-Crypto
+  // string params ("AES-GCM"/"PBKDF2") are all preserved.
+  minify: true,
   format: "iife",
   target: ["es2020"],
   charset: "utf8",
