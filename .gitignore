@@ -10,3 +10,17 @@ Thumbs.db
 # Editor
 .vscode/*
 !.vscode/extensions.json
+
+# Secrets — NEVER commit (Worker secrets live in Cloudflare, set via `wrangler secret put`).
+# The repo is public, so a committed secret = instant compromise. Keep these out.
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+credentials.json
+.wrangler/
