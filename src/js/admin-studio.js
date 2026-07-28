@@ -188,6 +188,7 @@ import {
       } catch (e) {
         status("\u26a0 Draft too big to auto-save locally \u2014 your images are safe at full quality here. Hit Publish to store them (large ones are hosted as files automatically).");
       }
+      histPush();
     };
     if (immediate) save();
     else saveTimer = setTimeout(save, 400);
@@ -237,6 +238,7 @@ import {
     var pb = root.querySelector("[data-publish]"); if (pb) pb.hidden = !dirty;
     root.classList.toggle("is-dirty", dirty);
     if (!dirty) closeExitPop();
+    updateHistUI();
   }
   function closeMorePop() {
     if (!root) return;
@@ -248,6 +250,75 @@ import {
     var p = root.querySelector(".adm__exit-pop"); if (p) p.hidden = true;
   }
   function closeBarPops() { closeMorePop(); closeExitPop(); }
+
+  // ---- undo / redo (session snapshots of `data`) + tab-strip overflow flippers ----
+  var histStack = [], histIndex = -1, histRestoring = false, tabsRaf = 0;
+  function histSnap() { try { return JSON.stringify(data); } catch (e) { return null; } }
+  function histReset() {
+    var cur = histSnap() || "{}", pub = null;
+    if (window.RK && window.RK.published) { try { pub = JSON.stringify(window.RK.published); } catch (e) {} }
+    if (pub && pub !== cur) { histStack = [pub, cur]; histIndex = 1; }   // resumed a dirty draft: undo can reach the published baseline
+    else { histStack = [cur]; histIndex = 0; }
+    updateHistUI();
+  }
+  function histPush() {
+    if (histRestoring) return;
+    var snap = histSnap(); if (snap == null) return;
+    if (histIndex >= 0 && histStack[histIndex] === snap) return;   // nothing changed
+    histStack = histStack.slice(0, histIndex + 1);
+    histStack.push(snap);
+    while (histStack.length > 80) histStack.shift();
+    histIndex = histStack.length - 1;
+    updateHistUI();
+  }
+  function histRerender() {
+    if (journeyOpen) { renderJourneyEditor(); return; }
+    if (openStudy >= 0) {
+      if (data.work && data.work[openStudy]) { renderL2(); return; }
+      openStudy = -1; if (l2) { l2.hidden = true; l2.classList.remove("is-open"); } if (body) body.hidden = false;
+    }
+    renderBody();
+  }
+  function histRestore(idx) {
+    if (idx < 0 || idx >= histStack.length) return;
+    histIndex = idx; histRestoring = true;
+    try { data = JSON.parse(histStack[idx]); } catch (e) {}
+    histRerender();
+    previewApply();
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(data)); localStorage.setItem(DRAFT_SIG_KEY, (window.RK && window.RK.publishedSig) || ""); } catch (e) {}
+    histRestoring = false;
+    updateDirtyUI();
+  }
+  function histUndo() { if (histIndex > 0) histRestore(histIndex - 1); }
+  function histRedo() { if (histIndex < histStack.length - 1) histRestore(histIndex + 1); }
+  function updateHistUI() {
+    if (!root) return;
+    var dirty = isDirty();
+    var wrap = root.querySelector("[data-hist]"); if (wrap) wrap.hidden = !dirty;   // whole undo/redo cluster hides once you're back at the published baseline
+    var u = root.querySelector("[data-undo]"); if (u) u.disabled = histIndex <= 0;
+    var r = root.querySelector("[data-redo]"); if (r) r.disabled = histIndex >= histStack.length - 1;
+  }
+  function tabScroll(dir) {
+    var t = root && root.querySelector(".adm__tabs"); if (!t) return;
+    t.scrollBy({ left: dir * Math.max(160, Math.round(t.clientWidth * 0.7)), behavior: "smooth" });
+    // refresh the \u2039 \u203A once the smooth scroll settles (scrollend where supported, timeout fallback otherwise)
+    var done = false, fin = function () { if (done) return; done = true; tabsSync(); };
+    try { t.addEventListener("scrollend", fin, { once: true }); } catch (e) {}
+    setTimeout(fin, 700);
+  }
+  function tabsSync() {
+    if (!root) return;
+    var t = root.querySelector(".adm__tabs");
+    var prev = root.querySelector("[data-tabflip='-1']"), next = root.querySelector("[data-tabflip='1']");
+    if (!t || !prev || !next) return;
+    var overflow = t.scrollWidth - t.clientWidth > 2;
+    // No overflow -> remove both flippers (no wasted space). Overflow -> keep BOTH
+    // in the layout (constant tab-strip width, no scroll feedback loop) and just
+    // disable the one that can't scroll further.
+    prev.hidden = next.hidden = !overflow;
+    prev.disabled = !overflow || t.scrollLeft <= 1;
+    next.disabled = !overflow || (t.scrollLeft + t.clientWidth >= t.scrollWidth - 1);
+  }
 
   /* =================================================================
      SMART AUTO-STYLE — turns plain landing copy into the editorial
@@ -4227,6 +4298,7 @@ import {
       if (viaSession) localStorage.removeItem(GH_TOKEN_KEY); // published via the Worker session — the repo token no longer needs to live in this browser
       if (window.RK) { window.RK.published = clone(data); if (window.RK.sig) window.RK.publishedSig = window.RK.sig(JSON.stringify(data)); }
       updateDirtyUI();
+      histReset();
       pubProgress(64, "Saved to GitHub. Building your live site\u2026");
       const live = await waitForLive(mySig);
       pubStopCreep();
@@ -7120,11 +7192,22 @@ import {
     root.innerHTML =
       '<header class="adm__bar">' +
         '<div class="adm__brand"><span class="adm__pulse"></span>Admin Mode <small>content studio</small></div>' +
-        '<nav class="adm__tabs">' + TABS.map((t) => '<button class="adm__tab" data-tab="' + t[0] + '">' + t[1] + "</button>").join("") + "</nav>" +
+        '<div class="adm__tabswrap">' +
+          '<button class="adm__tabflip adm__tabflip--prev" data-tabflip="-1" type="button" aria-label="Scroll tabs left" hidden>\u2039</button>' +
+          '<nav class="adm__tabs">' + TABS.map((t) => '<button class="adm__tab" data-tab="' + t[0] + '">' + t[1] + "</button>").join("") + "</nav>" +
+          '<button class="adm__tabflip adm__tabflip--next" data-tabflip="1" type="button" aria-label="Scroll tabs right" hidden>\u203A</button>' +
+        "</div>" +
         '<div class="adm__actions">' +
-          '<span class="adm__status">Editing local draft</span>' +
-          '<button class="btn btn--ghost adm__viewtoggle" data-view>Preview</button>' +
-          '<button class="btn btn--primary adm__publish" data-publish hidden>Publish</button>' +
+          '<div class="adm__actions-l">' +
+            '<span class="adm__status">Editing local draft</span>' +
+            '<div class="adm__hist" data-hist hidden>' +
+              '<button class="adm__hist-btn" data-undo type="button" aria-label="Undo" title="Undo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg></button>' +
+              '<button class="adm__hist-btn" data-redo type="button" aria-label="Redo" title="Redo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg></button>' +
+            "</div>" +
+          "</div>" +
+          '<div class="adm__actions-r">' +
+            '<button class="btn btn--ghost adm__viewtoggle" data-view>Preview</button>' +
+            '<button class="btn btn--primary adm__publish" data-publish hidden>Publish</button>' +
           '<div class="adm__more" data-more-wrap>' +
             '<button class="btn btn--ghost adm__more-btn" data-more type="button" aria-haspopup="true" aria-expanded="false" aria-label="More options" title="More">\u22EF</button>' +
             '<div class="adm__more-pop" hidden>' +
@@ -7148,6 +7231,7 @@ import {
               '<button class="adm__exit-opt adm__exit-opt--save" data-exit-save type="button"><span class="adm__more-tx"><b>Save &amp; leave</b><small>Keep your changes as a local draft \u2014 publish them anytime</small></span></button>' +
               '<button class="adm__exit-opt adm__exit-opt--discard" data-exit-discard type="button"><span class="adm__more-tx"><b>Discard changes</b><small>Throw away everything changed since your last publish</small></span></button>' +
             "</div>" +
+          "</div>" +
           "</div>" +
         "</div>" +
       "</header>" +
@@ -7206,8 +7290,15 @@ import {
     // Paste into a rich-text body as plain text (no foreign colours/fonts).
     root.addEventListener("paste", onRtPaste);
     root.querySelectorAll(".adm__tab").forEach((t) =>
-      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); })
+      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); try { t.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {} tabsSync(); })
     );
+    // tab-strip overflow flippers (\u2039 \u203A)
+    root.querySelectorAll("[data-tabflip]").forEach((b) => b.addEventListener("click", () => tabScroll(+b.dataset.tabflip)));
+    var _tabsEl = root.querySelector(".adm__tabs");
+    if (_tabsEl) _tabsEl.addEventListener("scroll", function () { if (tabsRaf) return; tabsRaf = requestAnimationFrame(function () { tabsRaf = 0; tabsSync(); }); }, { passive: true });
+    window.addEventListener("resize", tabsSync);
+    var _undo = root.querySelector("[data-undo]"); if (_undo) _undo.addEventListener("click", histUndo);
+    var _redo = root.querySelector("[data-redo]"); if (_redo) _redo.addEventListener("click", histRedo);
     root.querySelector("[data-publish]").addEventListener("click", publish);
     var _pubcfg = root.querySelector("[data-pubcfg]"); if (_pubcfg) _pubcfg.addEventListener("click", () => { closeBarPops(); publishModal(); });
     root.querySelector("[data-autopub-toggle]").addEventListener("click", autopubToggle);
@@ -7307,7 +7398,9 @@ import {
     requestAnimationFrame(() => root.classList.add("is-open"));
     if (frame && frame.contentWindow && frame.contentWindow.RK) previewApply();
     autopubSync(); autopubStart();
+    histReset();
     updateDirtyUI();
+    requestAnimationFrame(tabsSync);
     if (staleDiscarded) status("Loaded the latest published content (an old local draft was discarded).", true);
   }
 
