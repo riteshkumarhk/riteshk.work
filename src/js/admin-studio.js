@@ -14,7 +14,7 @@ import {
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
   rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath,
-  ADMIN_WORKER, adminSession, clearAdminSession, vaultUpload
+  ADMIN_WORKER, adminSession, clearAdminSession, vaultUpload, vaultRegisterGrant
 } from "./admin-core.js";
 
 (function () {
@@ -3284,6 +3284,7 @@ import {
     // files (content.json stays tiny). Without one (manual publish), fall back to inlining them.
     if (!token) await inlineProtectedImages(pubData);
     await encryptLockedForPublish(pubData, token || null);
+    await registerVaultGrants(pubData);
     return JSON.stringify(pubData, null, 2);
   }
   // ---------- per-image protected media: encrypt each image and host it as its own
@@ -3482,6 +3483,74 @@ import {
       if (Object.keys(tks).length) wraps.tickets = tks;
       st.enc = { v: 1, it: RK_KDF_IT, wraps: wraps };
     }
+  }
+  // ---- curated-view vault grants ----
+  // After a publish has encrypted everything, register/refresh a server-side grant for each pass
+  // (a special-view ticket or a deeper-cut pass) so its holder can mint signed URLs for exactly the
+  // vault media inside the sections that pass opens — nothing more. The grant is keyed server-side by
+  // an HMAC of the pass (the raw pass never leaves the browser except as the code the recruiter
+  // already has) and scoped to the union of vault keys across every project the pass unlocks. Each
+  // /vault/grant call REPLACES the pass's key set, so we always send the full union. Best-effort:
+  // any failure here never blocks the publish — the .enc protection already applies regardless.
+  var VAULT_GRANT_MIN_DAYS = 30;
+  async function registerVaultGrants(pubData) {
+    try {
+      if (!adminSession()) return;                 // /vault/grant is owner-session gated
+      if (recoveryPassCache === null) return;      // no master key on hand this session -> leave existing grants untouched
+      var works = (pubData && pubData.work) || [];
+      var svAll = (pubData.specialViews || []);
+      var scope = {};                              // normalised pass -> { keys:{key:1}, days:n }
+      function want(code, days) {
+        var c = rkNormPass(code); if (!c) return null;
+        if (!scope[c]) scope[c] = { keys: {}, days: 0 };
+        if (days > scope[c].days) scope[c].days = days;
+        return scope[c];
+      }
+      function scanKeys(node, into) {
+        if (!node || typeof node !== "object") return;
+        for (var k in node) {
+          var v = node[k];
+          if (typeof v === "string") { var m = /^vault:(.+)$/i.exec(v); if (m && m[1].indexOf("/") === -1) into[m[1]] = 1; }
+          else if (v && typeof v === "object") scanKeys(v, into);
+        }
+      }
+      for (var wi = 0; wi < works.length; wi++) {
+        var w = works[wi]; if (!w) continue;
+        // Which passes open this project? (codes were already recovered during encryption — never prompt here.)
+        var codes = [];
+        for (var si = 0; si < svAll.length; si++) {
+          var sv = svAll[si];
+          if (!sv || !sv.ticketHash || (sv.workIds || []).indexOf(w.id) === -1) continue;
+          if (rkNormPass(ticketPlain[sv.id])) codes.push({ code: ticketPlain[sv.id], days: Math.max(parseInt(sv.days, 10) || 0, VAULT_GRANT_MIN_DAYS) });
+        }
+        if (rkNormPass(studyUnlockPlain[w.id])) codes.push({ code: studyUnlockPlain[w.id], days: VAULT_GRANT_MIN_DAYS });
+        if (!codes.length) continue;               // no pass opens this project -> nothing to grant
+        // Collect this project's vault keys, decrypting protected sections with the master key.
+        var keys = {};
+        try {
+          if (w.encWork && w.enc && w.enc.wraps && w.enc.wraps.owner) {
+            scanKeys(await rkDecWithSek(await rkUnwrapSek(recoveryPassCache, w.enc.wraps.owner), w), keys);
+          } else if (w.study && Array.isArray(w.study.blocks)) {
+            var st = w.study, sek = null;
+            for (var bi = 0; bi < st.blocks.length; bi++) {
+              var b = st.blocks[bi]; if (!b) continue;
+              if (b.encStub && b.iv && b.ct) {
+                if (!sek && st.enc && st.enc.wraps && st.enc.wraps.owner) sek = await rkUnwrapSek(recoveryPassCache, st.enc.wraps.owner);
+                if (sek) scanKeys(await rkDecWithSek(sek, b), keys);
+              } else if (b.locked) { scanKeys(b, keys); }   // plaintext locked (token-less publish) — safe to scan
+            }
+          }
+        } catch (e) { continue; }                  // couldn't read this project -> leave its passes' prior grants intact
+        var kl = Object.keys(keys); if (!kl.length) continue;
+        for (var ci = 0; ci < codes.length; ci++) { var sc = want(codes[ci].code, codes[ci].days); if (sc) for (var ki = 0; ki < kl.length; ki++) sc.keys[kl[ki]] = 1; }
+      }
+      var passes = Object.keys(scope), okN = 0;
+      for (var pi = 0; pi < passes.length; pi++) {
+        var entry = scope[passes[pi]], ks = Object.keys(entry.keys); if (!ks.length) continue;
+        try { await vaultRegisterGrant(passes[pi], ks, entry.days); okN++; } catch (er) {}
+      }
+      if (okN) status(okN + " pass" + (okN === 1 ? "" : "es") + " can now open its private-vault media.", true);
+    } catch (e) { /* grants are best-effort; never block a publish */ }
   }
   function makeStub(sek, block) {
     return rkEncWithSek(sek, block).then(function (e) {

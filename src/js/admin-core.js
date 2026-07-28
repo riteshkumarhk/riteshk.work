@@ -66,6 +66,21 @@ export async function vaultUpload(file, extHint) {
   if (!j || !j.key) throw new Error("The vault didn’t return a key.");
   return j.key; // "<sha256>.<ext>"
 }
+// Owner-only: register/refresh a curated-view grant so a pass (a special-view ticket or a
+// deeper-cut pass) can mint signed URLs for exactly `keys` until it expires. Each call REPLACES
+// any prior grant for that pass, so callers must pass the full key set the pass should open.
+export async function vaultRegisterGrant(code, keys, days) {
+  const sess = adminSession();
+  if (!sess) { const e = new Error("Sign in to grant vault access."); e.auth = true; throw e; }
+  const res = await fetch(ADMIN_WORKER + "/vault/grant", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + sess, "Content-Type": "application/json" },
+    body: JSON.stringify({ code: String(code == null ? "" : code), keys: Array.isArray(keys) ? keys : [], days: days || 30 }),
+  });
+  if (res.status === 401) { const e = new Error("Your session expired — sign in again."); e.auth = true; throw e; }
+  if (!res.ok) throw new Error("The vault didn’t accept that grant (" + res.status + ").");
+  return (await res.json().catch(() => null)) || { ok: true };
+}
 // Resolve a vault key to a short-lived, absolute streaming URL. Authorised by EITHER the owner
 // session OR a redeemed curated-view grant (for pass-holders). Returns "" when neither is present
 // or the Worker declines — the caller then shows the item locked.
