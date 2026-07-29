@@ -2467,13 +2467,10 @@ import {
       "</section>";
     var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
     var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
-    var _vm = lockedMediaTargets(w);
-    var _vmN = _vm.sections || 0, _vmCan = _vmN > 0 || _vm.targets.length > 0;
     var unlockBlock = '<section class="l2grp"><div class="l2grp__head">Deeper-cut pass <span>\u2014 optional gate for \u201cLocked\u201d sections</span></div>' +
       '<div class="af"><input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
-      '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks \u00b7 case-insensitive \u00b7 locked content still ships in your file (soft gate)</div></div>" +
-      '<div class="af" style="margin-top:12px"><button class="btn btn--auto" data-act="vault-migrate" data-index="' + i + '"' + (_vmCan ? "" : " disabled") + '>\uD83D\uDD10 Move Locked content to the private vault' + (_vmN ? " (" + _vmN + ")" : "") + '</button>' +
-      '<div class="af__hint">' + (_vmCan ? ("Moves " + _vmN + " Locked section" + (_vmN === 1 ? "" : "s") + (_vm.targets.length ? " (and " + _vm.targets.length + " media file" + (_vm.targets.length === 1 ? "" : "s") + ")" : "") + " into your private R2 vault \u2014 content.json then ships only a pointer, zero content. Publish afterwards.") : (_vm.encryptedLeft ? "Unlock the \uD83D\uDD12 Protected sections above first \u2014 then their content can be moved here." : "No Locked sections in this project.")) + "</div></div></section>";
+      '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks for pass-holders \u00b7 case-insensitive \u00b7 Locked sections are moved to your private vault on Publish (zero content in your file)</div></div>" +
+      "</section>";
     return '<div class="study__panel">' +
       csgenPanel(w, i) +
       header + meta +
@@ -3290,7 +3287,6 @@ import {
     if (act === "study-pick") { sectionPicker(i); return; }
     if (act === "study-blockadd") { sectionPicker(i, +b.dataset.bindex); return; }
     if (act === "study-decrypt") { decryptStudyForEdit(i); return; }
-    if (act === "vault-migrate") { vaultMigrateProject(i); return; }
     if (act === "work-decrypt") { decryptWorkForEdit(i); return; }
     if (act === "study-blocktoggle") {
       if (e.detail > 1) return; // 2nd click of a double-click - let dblclick handle rename
@@ -3442,6 +3438,46 @@ import {
 
   // Build the JSON to publish: auto-style, then clone and encrypt every plaintext
   // Locked block per project, wrapping its key for recovery + pass + curating tickets.
+  // AUTO-VAULT ON PUBLISH: every plaintext Locked section is moved into the private vault at publish time
+  // so content.json ships only a pointer (zero content). Runs on the publish CLONE (pubData) — the live
+  // draft is never mutated, so your editor keeps the section fully editable. Per section it's ATOMIC: all
+  // of the section's media must upload to R2 before the section is flagged `vault`; if you're not signed in,
+  // or any upload fails, that section is left untouched and encryptLockedForPublish protects it with the
+  // in-file .enc gate instead (a Locked section is therefore never left unprotected, and publish never breaks).
+  async function autoVaultLockedForPublish(pubData) {
+    if (!adminSession()) return;                       // no session -> nothing to upload with -> all Locked -> .enc
+    var works = (pubData && pubData.work) || [];
+    for (var wi = 0; wi < works.length; wi++) {
+      var w = works[wi];
+      if (!w || w.hidden || w.encWork || !w.study || !Array.isArray(w.study.blocks)) continue;
+      var blocks = w.study.blocks;
+      for (var bi = 0; bi < blocks.length; bi++) {
+        var b = blocks[bi];
+        if (!b || !b.locked || b.encStub || b.vault) continue;   // only plaintext Locked, not already vaulted/enc
+        var targets = [];
+        (function scan(o) {
+          if (!o || typeof o !== "object") return;
+          for (var k in o) { var v = o[k]; if (typeof v === "string") { if (isVaultMigratable(v)) targets.push({ o: o, k: k, src: v }); } else if (v && typeof v === "object") scan(v); }
+        })(b);
+        // Upload all of this section's media FIRST; only commit the ref swaps + vault flag if every one succeeds.
+        var uploaded = [], ok = true;
+        for (var ti = 0; ti < targets.length; ti++) {
+          var t = targets[ti];
+          try {
+            var url = /^data:/i.test(t.src) ? t.src : (t.src.charAt(0) === "/" ? t.src : "/" + t.src);
+            var r = await fetch(url); if (!r.ok) { ok = false; break; }
+            var blob = await r.blob();
+            var key = await vaultUpload(blob, vaultMediaExt(t.src, blob));
+            uploaded.push({ o: t.o, k: t.k, key: key });
+          } catch (e) { ok = false; if (e && e.auth) { clearAdminSession(); return; } break; }
+        }
+        if (!ok) continue;                              // leave this section untouched -> .enc fallback
+        uploaded.forEach(function (u) { u.o[u.k] = "vault:" + u.key; });
+        b.vault = true;
+      }
+    }
+  }
+
   async function buildPublishJson(token) {
     const styled = autoStyleLanding(false);
     if (styled) { if (activeTab === "landing") renderBody(); apply(true); }
@@ -3449,6 +3485,9 @@ import {
     // Never publish the admin-key hash — in a public repo it was an offline brute-force target. The
     // Cloudflare Worker is the source of truth for admin auth now (password login + passkeys).
     try { delete pubData.adminGate; } catch (e) {}
+    // Auto-vault: move every plaintext Locked section into the private vault (on the CLONE, so the live
+    // draft stays editable). Needs your session; any section it can't fully move stays for the .enc gate below.
+    await autoVaultLockedForPublish(pubData);
     // With a token, protected images are encrypted into their own /assets/protected/<hash>.enc
     // files (content.json stays tiny). Without one (manual publish), fall back to inlining them.
     if (!token) await inlineProtectedImages(pubData);
