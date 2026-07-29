@@ -2614,9 +2614,7 @@
           {
             "type": "media",
             "locked": true,
-            "encStub": true,
-            "iv": "KHSXr+L9w3sZWisX",
-            "ct": "1zWbtyaVLsEF2FuBebZioI/KK8PVijK1DZDfnKLLkW9H/CBwq09XX7Fnz2/QY4a/sELzjTHnzd4UFlW240S/NIUUjwguS/X9HiS7te3F4Q62lVYTCkg2ZJY0FPO0/tbnxLhJOGPQubuRc2kCnqdGPUM8SjcGucvEVh/hCc8c0rmr7H0="
+            "vaultBlock": "0a0f62cde72f13c6122b56f645585294e84c32147c7c68f2a04fbe49cec820da.json"
           },
           {
             "type": "columns",
@@ -2712,9 +2710,7 @@
           {
             "type": "media",
             "locked": true,
-            "encStub": true,
-            "iv": "g4NICIZaXzYmger2",
-            "ct": "+3unI9Cf62Mm0Wplhb96F2V2Zi6qBJaEkKjOMNoAFGk1mIX1gYz77y/gzlTUvFbQRsSoYugeGqsJ/iW73YWl5fPIuUSJ6xMpGNJ/Vvlosa9aFzkXs+mNI7aAkcA6YRPuCCGfs63nYkPWfC5z25FjJ1cyzypmP8OczSwyBHvYRCpWpsQ="
+            "vaultBlock": "d2feaad8729b5a9cd839ba1f2ad130bb5abe7ac29783fea85d1e7e0a243c8021.json"
           },
           {
             "type": "cards",
