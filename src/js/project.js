@@ -90,21 +90,31 @@
   // session, so unauthorised visitors simply see the slot stay locked. Signed URLs are cached
   // briefly so preview re-renders (morph) don't refetch on every keystroke.
   var vaultUrlCache = {}; // key -> { url, until }
+  // A src="..." attribute, or a data-vault placeholder for private-vault media (src "vault:<key>")
+  // that resolveVaultMedia() swaps in post-render. For components that build their own <img> tag
+  // instead of going through mediaEl() (compare slider, focus & annotate).
+  function vaultSrcAttr(url) {
+    var vk = /^vault:(.+)$/i.exec(url || ""); vk = vk ? vk[1] : "";
+    if (vk) return ' data-vault="' + attr(vk) + '"';
+    return url ? ' src="' + attr(url) + '"' : "";
+  }
   function resolveVaultMedia(root) {
     if (!root || !root.querySelectorAll) return;
-    var nodes = root.querySelectorAll("[data-vault]");
+    var nodes = root.querySelectorAll("[data-vault], [data-vault-mask]");
     if (!nodes.length) return;
     var sign = window.RK && window.RK.vaultSignedUrl;
     Array.prototype.forEach.call(nodes, function (el) {
-      var key = el.getAttribute("data-vault");
+      var isMask = el.hasAttribute("data-vault-mask");
+      var key = el.getAttribute(isMask ? "data-vault-mask" : "data-vault");
       if (!key) return;
+      var apply = isMask ? function (u) { applyVaultMask(el, u); } : function (u) { applyVaultUrl(el, u); };
       var c = vaultUrlCache[key];
-      if (c && c.until > Date.now()) { applyVaultUrl(el, c.url); return; }
+      if (c && c.until > Date.now()) { apply(c.url); return; }
       if (typeof sign !== "function") { el.setAttribute("data-vault-locked", "1"); return; }
       sign(key).then(function (u) {
         if (!u) { el.setAttribute("data-vault-locked", "1"); return; }
         vaultUrlCache[key] = { url: u, until: Date.now() + 5 * 60 * 1000 }; // refresh well inside the 6h URL TTL
-        applyVaultUrl(el, u);
+        apply(u);
       }).catch(function () { el.setAttribute("data-vault-locked", "1"); });
     });
   }
@@ -114,6 +124,13 @@
     if (el.getAttribute("src") === url) return;
     el.setAttribute("src", url);
     if (el.tagName === "VIDEO") { try { el.load(); } catch (e) {} }
+  }
+  function applyVaultMask(el, url) {
+    if (!el || !url) return;
+    el.removeAttribute("data-vault-locked");
+    var v = "url('" + url + "')";
+    el.style.webkitMaskImage = v;
+    el.style.maskImage = v;
   }
 
   var overlay = null, scroller = null, activeId = null;
@@ -564,8 +581,8 @@
       return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__shot-ph pjb__shot-ph--edge"><span class="pjb__shot-tag">Add a before &amp; after image</span></div>' + note;
     }
     var cmp = '<div class="pjb__cmp" style="--pos:50%">' +
-      '<img class="pjb__cmp-base" src="' + attr(b.afterSrc) + '" alt="" draggable="false" />' +
-      '<div class="pjb__cmp-top"><img src="' + attr(b.beforeSrc) + '" alt="" draggable="false" /></div>' +
+      '<img class="pjb__cmp-base"' + vaultSrcAttr(b.afterSrc) + ' alt="" draggable="false" />' +
+      '<div class="pjb__cmp-top"><img' + vaultSrcAttr(b.beforeSrc) + ' alt="" draggable="false" /></div>' +
       '<span class="pjb__cmp-line" aria-hidden="true"></span>' +
       '<button type="button" class="pjb__cmp-grip" data-cmp aria-label="Drag to compare before and after"><span>\u2039\u203a</span></button>' +
       '<button type="button" class="pjb__cmp-zoom" data-cmp-zoom aria-label="View full screen" title="View full screen">' + FS_SVG + "</button>" +
@@ -748,11 +765,14 @@
       var col = String(m.heightColor || "").replace(/[^#0-9a-z(),.%\s]/gi, "").slice(0, 32);
       var depthEl = "";
       if (nSlices && url) {
-        var murl = "url('" + attr(url) + "')";
+        var ivk = /^vault:(.+)$/i.exec(url); ivk = ivk ? ivk[1] : "";
+        var murl = ivk ? "" : "url('" + attr(url) + "')";
+        var maskAttr = ivk ? ' data-vault-mask="' + attr(ivk) + '"' : "";
+        var maskStyle = murl ? ";-webkit-mask-image:" + murl + ";mask-image:" + murl : "";
         var slices = "";
         for (var k = 1; k <= nSlices; k++) {
           var z = -(depth * (k / nSlices));
-          slices += '<span class="pjb__iso-ext" style="--z:' + z.toFixed(1) + "px;-webkit-mask-image:" + murl + ";mask-image:" + murl + '"></span>';
+          slices += '<span class="pjb__iso-ext"' + maskAttr + ' style="--z:' + z.toFixed(1) + "px" + maskStyle + '"></span>';
         }
         depthEl = '<span class="pjb__iso-depth">' + slices + "</span>";
       }
@@ -798,9 +818,9 @@
         '<div class="pjb__focus-card-n">' + String(i + 1).padStart(2, "0") + "</div>" + t + bd + "</div>";
     });
     var veil = anns.length ? '<div class="pjb__focus-veil" aria-hidden="true"></div>' : "";
-    var lens = hasFocus ? '<div class="pjb__focus-lens" aria-hidden="true"><img src="' + attr(url) + '" alt="" draggable="false" /></div>' : "";
+    var lens = hasFocus ? '<div class="pjb__focus-lens" aria-hidden="true"><img' + vaultSrcAttr(url) + ' alt="" draggable="false" /></div>' : "";
     var stage = '<figure class="pjb__focus-stage" data-focus-stage>' +
-      '<img class="pjb__focus-img" src="' + attr(url) + '" alt="' + attr(b.caption || b.heading || "") + '" draggable="false" data-focus-open />' +
+      '<img class="pjb__focus-img"' + vaultSrcAttr(url) + ' alt="' + attr(b.caption || b.heading || "") + '" draggable="false" data-focus-open />' +
       veil + lens + marks + cards + "</figure>";
     var cap = b.caption ? '<figcaption class="pjb__cap">' + esc(b.caption) + "</figcaption>" : "";
     var notes = "";
