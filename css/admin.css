@@ -631,7 +631,26 @@ body.adm-lock .cursor { display: none !important; }
 .study__block-lock.is-locked { color: var(--accent); border-color: var(--accent); background: rgba(216, 166, 71, .12); }
 .study__block.is-locked { border-color: rgba(216, 166, 71, .42); }
 /* separator toggle moved to the TOP of the section (matches the live-preview hierarchy) */
-.block-sep { width: 100%; margin: 0 0 .55rem; padding-bottom: .55rem; border-bottom: 1px solid var(--line); }
+.block-sep { width: 100%; margin: .1rem 0 1.05rem; padding-bottom: .85rem; border-bottom: 1px solid var(--line); }
+/* Heading field + inline heading-size picker on one row */
+.af__headrow { display: flex; align-items: stretch; gap: .5rem; }
+.af__headrow > input { flex: 1 1 auto; width: auto; min-width: 0; }
+.hsize { position: relative; flex: 0 0 auto; display: flex; }
+.hsize__cur { display: inline-flex; align-items: center; gap: .35rem; padding: 0 .55rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-elev); color: var(--text); cursor: pointer; }
+.hsize__cur:hover { border-color: var(--accent); }
+.hsize__chev { color: var(--text-dim); flex: 0 0 auto; }
+.hsize__h { font-weight: 700; line-height: 1; color: var(--text); font-family: var(--sans); }
+.hsize__h--sm { font-size: .8rem; }
+.hsize__h--std { font-size: 1rem; }
+.hsize__h--lg { font-size: 1.28rem; }
+.hsize__pop { position: absolute; top: calc(100% + 5px); right: 0; z-index: 40; display: none; flex-direction: column; min-width: 152px; padding: 4px; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 14px 32px -14px rgba(0, 0, 0, .8); }
+.hsize.is-open .hsize__pop { display: flex; }
+.hsize__opt { display: flex; align-items: center; gap: .6rem; width: 100%; padding: .4rem .55rem; border: 0; border-radius: 6px; background: none; color: var(--text-dim); cursor: pointer; text-align: left; }
+.hsize__opt:hover { background: rgba(255, 255, 255, .05); color: var(--text); }
+.hsize__opt.is-sel { color: var(--text); }
+.hsize__opt.is-sel .hsize__lbl { color: var(--accent); }
+.hsize__opt .hsize__h { width: 22px; text-align: center; }
+.hsize__lbl { font-size: .82rem; font-family: var(--sans); }
 
 /* ---------- rich-text editor (contenteditable + toolbar) ---------- */
 .rt .af__label { margin-bottom: .35rem; }

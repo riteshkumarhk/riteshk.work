@@ -595,9 +595,23 @@ import {
   function listToText(arr) { return (arr || []).join("\n"); }
   function arrToListHtml(arr) { return (arr && arr.length) ? "<ul>" + arr.map(function (x) { return "<li>" + rtInlineMd(escForRt(x)) + "</li>"; }).join("") + "</ul>" : ""; }
 
+  function hsizeGlyph(v) { return '<span class="hsize__h hsize__h--' + (v === "sm" ? "sm" : v === "lg" ? "lg" : "std") + '">H</span>'; }
+  function hsizeSel(i, j, b) {
+    var cur = b.hsize === "sm" ? "sm" : b.hsize === "lg" ? "lg" : "";
+    var curName = ({ "": "Standard", "sm": "Compact", "lg": "Large" })[cur];
+    var opts = [["sm", "Compact"], ["", "Standard"], ["lg", "Large"]].map(function (o) {
+      return '<button type="button" class="hsize__opt' + (cur === o[0] ? " is-sel" : "") + '" data-act="hsize-set" data-index="' + i + '" data-bindex="' + j + '" data-hsize="' + o[0] + '">' + hsizeGlyph(o[0]) + '<span class="hsize__lbl">' + o[1] + "</span></button>";
+    }).join("");
+    return '<div class="hsize" title="Heading size">' +
+      '<button type="button" class="hsize__cur" data-act="hsize-toggle" data-index="' + i + '" data-bindex="' + j + '" aria-label="Heading size: ' + curName + '">' + hsizeGlyph(cur) + '<svg class="hsize__chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>' +
+      '<div class="hsize__pop">' + opts + "</div>" +
+    "</div>";
+  }
   function sfInput(i, j, field, label, hint) {
     var b = data.work[i].study.blocks[j];
-    return '<div class="af"><label class="af__label">' + label + '</label><input type="text" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '" value="' + escAttr(b[field] || "") + '" />' + (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
+    var input = '<input type="text" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '" value="' + escAttr(b[field] || "") + '" />';
+    var control = (field === "heading") ? '<div class="af__headrow">' + input + hsizeSel(i, j, b) + "</div>" : input;
+    return '<div class="af"><label class="af__label">' + label + '</label>' + control + (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
   }
   function sfArea(i, j, field, label, value, rows, hint) {
     return '<div class="af"><label class="af__label">' + label + '</label><textarea data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '" rows="' + (rows || 3) + '">' + escHtml(value) + "</textarea>" + (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
@@ -2072,7 +2086,7 @@ import {
     else if (b.type === "focus") body = sfInput(i, j, "heading", "Heading") + mediaInputBlock(i, j, "src", "Image to annotate") + focusAnnEditor(i, j, b) + '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="sticky"' + (b.sticky ? " checked" : "") + ' /> Show annotations as a pill list below the image (number + title, or the description if there\u2019s no title) \u2014 clicking a pill or marker opens its flyout and highlights the matching pill. Full-screen keeps its own list.</label>' + sfInput(i, j, "caption", "Caption");
     else if (b.type === "gen") body = genEditor(i, j, b);
     var hasHeading = /^(text|metrics|steps|media|split|cards|gallery|mediagrid|device|isolayers|figure|columns|rows|compare|stickies|voices|workflow|focus)$/.test(b.type);
-    var sizeCtl = (hasHeading || b.type === "statement") ? sfSelect(i, j, "hsize", (b.type === "statement" ? "Statement size" : "Heading size"), [["", "Standard"], ["sm", "Compact \u2014 easier to read"], ["lg", "Large \u2014 display"]], "Shrink it if the standard size feels too big for the copy.") : "";
+    var sizeCtl = (b.type === "statement") ? sfSelect(i, j, "hsize", "Statement size", [["", "Standard"], ["sm", "Compact \u2014 easier to read"], ["lg", "Large \u2014 display"]], "Shrink it if the standard size feels too big for the copy.") : "";
     var sepCtl = '<label class="chk block-sep"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="sep"' + (b.sep !== false ? " checked" : "") + " /> Separator line above \u2014 uncheck to flow into the previous section</label>";
     return '<div class="card study__block' + (open ? " is-open" : "") + (b.locked ? " is-locked" : "") + '">' + head +
       '<div class="study__block-body">' + sepCtl + common + body + sizeCtl + "</div></div>";
@@ -3161,6 +3175,7 @@ import {
     });
   }
   function onClick(e) {
+    if (root && !e.target.closest(".hsize")) { var _oh = root.querySelectorAll(".hsize.is-open"); if (_oh.length) _oh.forEach(function (x) { x.classList.remove("is-open"); }); }
     const rtb = e.target.closest("[data-rt]");
     if (rtb) { rtAction(rtb); return; }
     if (e.target.closest("[data-grip]")) return; // grip is a drag handle, not a click target
@@ -3292,6 +3307,8 @@ import {
     if (act === "study-blockremove") { const j = +b.dataset.bindex; data.work[i].study.blocks.splice(j, 1); if (openBlock === j) openBlock = -1; else if (openBlock > j) openBlock--; saveDraft(true); renderL2(); return; }
     if (act === "study-blockdup") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s.splice(j + 1, 0, JSON.parse(JSON.stringify(s[j]))); openBlock = j + 1; saveDraft(true); renderL2(); status("Section duplicated \u2014 editing the copy.", true); } return; }
     if (act === "study-blocklock") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].locked = !s[j].locked; saveDraft(true); renderL2(); status(s[j].locked ? "Section locked \u2014 hidden behind the deeper-cut pass." : "Section unlocked.", true); } return; }
+    if (act === "hsize-toggle") { var hsSel = b.closest(".hsize"); if (hsSel) { var wasHsOpen = hsSel.classList.contains("is-open"); if (root) root.querySelectorAll(".hsize.is-open").forEach(function (x) { x.classList.remove("is-open"); }); if (!wasHsOpen) hsSel.classList.add("is-open"); } return; }
+    if (act === "hsize-set") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].hsize = b.dataset.hsize || ""; saveDraft(true); renderL2(); } return; }
     if (act === "item-add") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items = bl.items || []; bl.items.push(blankItem(bl.type)); saveDraft(true); renderL2(); return; }
     if (act === "item-remove") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items.splice(+b.dataset.iindex, 1); saveDraft(true); renderL2(); return; }
     if (act === "item-up") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (k > 0) { [bl.items[k - 1], bl.items[k]] = [bl.items[k], bl.items[k - 1]]; saveDraft(true); renderL2(); } return; }
