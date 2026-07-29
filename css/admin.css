@@ -372,6 +372,8 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
   max-width: calc(100vw - 24px);
 }
 .sv-banner__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 rgba(216, 166, 71, .5); animation: pulse 2.4s infinite; flex: none; }
+.sv-banner__spin { width: 13px; height: 13px; flex: none; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: rk-svspin .7s linear infinite; }
+@keyframes rk-svspin { to { transform: rotate(360deg); } }
 .sv-banner__txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sv-banner__exp { color: var(--text-dim); border-left: 1px solid var(--line); padding-left: .7rem; white-space: nowrap; }
 .sv-banner__exit { font-family: var(--mono); font-size: .66rem; color: #0a0a0a; background: var(--accent); border: 0; border-radius: 100px; padding: .35rem .75rem; cursor: pointer; flex: none; }

@@ -392,6 +392,19 @@
     if (b) b.remove();
     document.body.classList.remove("has-sv");
   }
+  // Transient “working” banner (spinner + label) shown while a present/curated view is being
+  // decrypted. It occupies the same spot as the final banner; showSvBanner/showPresentBanner
+  // replace it (they removeSvBanner first) once everything is unlocked.
+  function showUnlockingBanner(txt) {
+    removeSvBanner();
+    const b = document.createElement("div");
+    b.className = "sv-banner sv-banner--loading";
+    b.innerHTML =
+      '<span class="sv-banner__spin" aria-hidden="true"></span>' +
+      '<span class="sv-banner__txt">' + esc(txt || "Unlocking\u2026") + "</span>";
+    document.body.appendChild(b);
+    document.body.classList.add("has-sv");
+  }
 
   /* ---------- present mode (owner) ----------
      One-click: decrypt every locked section + hidden project with the owner
@@ -424,6 +437,8 @@
         if (djHas) data.journey = dj;
       }
     } catch (e) { /* ignore bad draft */ }
+    // Show the working state right away — the decrypt loop below can take a moment.
+    showUnlockingBanner("Unlocking\u2026");
     var ids = [], hadProtected = 0, unlocked = 0;
     for (var idx = 0; idx < data.work.length; idx++) {
       var w = data.work[idx];
@@ -440,7 +455,7 @@
         try { var sek2 = await rkUnwrapSek(recovery, swrap); if (await rkDecryptStudyBlocks(st, sek2)) { rkMarkUnlocked(w.id); ids.push(w.id); unlocked++; } } catch (e) {}
       }
     }
-    if (hadProtected && !unlocked) return { ok: false, reason: "pass" };
+    if (hadProtected && !unlocked) { removeSvBanner(); return { ok: false, reason: "pass" }; }
     try { sessionStorage.setItem(RK_PRESENT_IDS, JSON.stringify(ids)); sessionStorage.setItem(RK_PRESENT_ACTIVE, "1"); } catch (e) {}
     if (window.RK) window.RK.data = data;
     DATA = data;
@@ -521,6 +536,8 @@
       clearSpecialView: clearSpecialView,
       deriveSpecialData: deriveSpecialData,
       decryptActiveTicket: decryptActiveTicket,
+      showUnlockingBanner: showUnlockingBanner,
+      removeSvBanner: removeSvBanner,
       svById: svById,
       svExpired: svExpired,
       svDaysLeft: svDaysLeft,

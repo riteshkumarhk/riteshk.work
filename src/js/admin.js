@@ -650,6 +650,7 @@ import {
       if (window.RK.svExpired(match)) { err.textContent = "This curated view has expired."; return; }
       done();
       try { sessionStorage.setItem("rk:sv:code", val); } catch (e) {}   // survive a reload
+      if (window.RK.showUnlockingBanner) window.RK.showUnlockingBanner("Unlocking\u2026");
       if (window.RK.decryptActiveTicket) { try { await window.RK.decryptActiveTicket(window.RK.data, match, val); } catch (e) {} }
       window.RK.applySpecialView(match.id);
       ticketArrived(match);
@@ -693,10 +694,15 @@ import {
       if (!val) { err.textContent = "Enter your recovery passphrase"; return; }
       err.textContent = ""; goBtn.disabled = true;
       const was = goBtn.textContent; goBtn.textContent = "Unlocking...";
+      // Step aside so presentAll's “Unlocking…” toast is visible; the dialog returns only on error.
+      modal.style.display = "none";
       let res;
       try { res = await window.RK.presentAll(val); } catch (e) { res = { ok: false, reason: "err" }; }
-      goBtn.disabled = false; goBtn.textContent = was;
-      if (!res || !res.ok) { err.textContent = (res && res.reason === "pass") ? "That passphrase didn't unlock your protected work." : "Couldn't start present mode."; return; }
+      if (!res || !res.ok) {
+        modal.style.display = ""; goBtn.disabled = false; goBtn.textContent = was;
+        err.textContent = (res && res.reason === "pass") ? "That passphrase didn't unlock your protected work." : "Couldn't start present mode.";
+        return;
+      }
       done();
       presentArrived(res);
     }
