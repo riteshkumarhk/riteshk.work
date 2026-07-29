@@ -2007,9 +2007,7 @@
           {
             "type": "gallery",
             "locked": true,
-            "encStub": true,
-            "iv": "jNKW5f/y4b0RdYMA",
-            "ct": "XEiiUSWbzZkXtbScC2GFsFswIv8e0uyBbnuV4vLZP4j2Fal4OYvTb+z8CEbmrrOmBKqeN3alZthqR7gunClMsrfH19H6iyHsvhZuqgwxL1J/Qt4MpHmVTNLf4WBFOf7JPPx+ohKoUURX4LnUkcSsNJZVKxr1qiRwJXBUsNatzWSftMf0Ju7KM1/qSTSbYOTgRw==",
+            "vaultBlock": "43f5c5e0ce3c9f2112b0c21b4d0712f7b4c32a6753ebc867cb0f83fa51103f7c.json",
             "sep": false
           },
           {
@@ -2038,9 +2036,7 @@
           {
             "type": "media",
             "locked": true,
-            "encStub": true,
-            "iv": "fm1zq8nSx5wDL+tF",
-            "ct": "Z1BrJjWdf/FYEz9qRyjZZl335Z+PaaGBKT7bTkrNi9GSQtPte8G2rRrpUPOUUGs3KjebTBdeT00gru/YezYCm6A4ezeIrK9Jeo7arkJg/7x6m66tnT4Wzy6kG4z7MhOfWy/pgYq1AYnQr5aDMCLBWdoezsDzpMjWyyi4/izleoDi5iVVt2E4yEDCfQS7b4Y=",
+            "vaultBlock": "29c7cacf970cb3acbf6e90a53e8229e64465a083af285aa83323de3e7d6973e3.json",
             "sep": false
           },
           {
@@ -2160,38 +2156,28 @@
           {
             "type": "compare",
             "locked": true,
-            "encStub": true,
-            "iv": "5C6QaQhs8twKGQe6",
-            "ct": "4IDk4D2gTnpFtoNH5VH2aUMDERKI391oMY+efcRCpUVPu5srpwrqJfDYHyF1itC4oI1d3qKeblDccY8Iw+gwacHuQBVLMxcW65Y1tyQjyKq+VjRJLP5tcbaq3lt4hC254ovA9BhnpAaNVplMMFjFSlkTvURMZZR1pg5ciDpajary1zVIEz1lPfnkvce6UcK3nw==",
+            "vaultBlock": "f978b24d84df47a9c9475bbab1e5bf86b56aa2a88aab2053add6d845615dbb6f.json",
             "sep": false
           },
           {
             "type": "compare",
             "locked": true,
-            "encStub": true,
-            "iv": "M4IQEp4SODrIwoYP",
-            "ct": "o8zL9i+nVvHNafKy7NF5cmcBzcfcgX9Lvzt7PLOsJFvpbxYIELIVXlCJNgds7dKKH0NyAAW9rIDIJ5QtXn4hnqAnrBmQH4oNFH16LGPfH+esWsCS8W/oy2yfYBnGEyeMj+CtaAaWjxIHrAXG+FpzBnU2a+3gttYzp7uitTpee7VbqN1yeA=="
+            "vaultBlock": "34753cfe624b3e4b5f83047f1df23040d3d7e5992181102b56a39169d484cee7.json"
           },
           {
             "type": "compare",
             "locked": true,
-            "encStub": true,
-            "iv": "eszizRlejLYBS3Lg",
-            "ct": "KuEBuaNaIudebEUTPn8iMRFJeDFDJiGN3YZMzMj3C+fWX50sMk0rxoYFmQFCfuPgKOrtbN6yf6u38Z+EAAJWZ+FhZn/2DFAGa5gKqi1/uV9B4kfVE9zL15Mt+zizAiCUcppxmOaNYEh3QNIoW/BP54fkd7MMU1NL+JVXXdqA/OwnRO46Qw=="
+            "vaultBlock": "ed5e363f78fc376cd216c9b48199ae90c3cd56aec8d6a3495f998d912896a9d5.json"
           },
           {
             "type": "compare",
             "locked": true,
-            "encStub": true,
-            "iv": "ek6sL+RlfGrfxolD",
-            "ct": "hiay/YSBMXpYajksYLvuLuprqOaAaA/rozAzn151mg0G3V9sRRipqcjX+pRADyO9LcByzJlxJ3ahZyKWsHYZnhPXv+WgTsIuKtAbgFKgGkvZtsnaXnfItEQOVsoxf58+xwltQ+7nucm9ZRfMvk4Hu+EkC28WeVI5lMbFpYQhkwvos6c0vw=="
+            "vaultBlock": "042aa11892a31507ef5f5208c4f53e727dd6676aaa2d587ca74b26c56774c056.json"
           },
           {
             "type": "compare",
             "locked": true,
-            "encStub": true,
-            "iv": "Po4AlDxInWxt244g",
-            "ct": "4Z1rxpc6GCjIOdcCvg9ldXJmpSDx4I2zB80T7YQ8nRhbgOKciuGJIhPY/1iTJ+RTd8tHGHyAikuxDfVuDjwN9l6gn5GKqz3XkRFvnvqpbHU0XEn+EAwM4AecMO2Ao8LQbTMqBn8kg5IWRalLhwMlnKG457baDTXstChrordacEzX1vmmuA=="
+            "vaultBlock": "417f87bb6b1dcf81faf6d90136628ceb070d1d5bdf140298b56a3eaba8ef7ac8.json"
           },
           {
             "type": "text",
@@ -2231,9 +2217,7 @@
           {
             "type": "gallery",
             "locked": true,
-            "encStub": true,
-            "iv": "TNP1kW6buCjprRBl",
-            "ct": "nt5ZYxzmneYUpnF1O4khA+0VmxBSrQeoYPJ5Fo3Na1jlkUiO62C/jUpO5F72Boe+yDtPuP/Y3CpsR4UJv1C9sc71dBDSO5rXHgk73mZDfYpT+eoL1pAOOvdOt4j6RYfZtsnv0kRuJx2HdInP5zQUTRFVbI4B89agnQJ+jJJSpOQSJoeBrQDCa0ubkyUUR6s8+A==",
+            "vaultBlock": "988663b4c215e1d2bd2f290acb528ae6809c4be825898536e3ad37a720bed251.json",
             "sep": false
           },
           {
@@ -2249,9 +2233,7 @@
           {
             "type": "media",
             "locked": true,
-            "encStub": true,
-            "iv": "kheuyl/XbWeHUhou",
-            "ct": "IwmJqu64g4h0Uu2xuTNTSFr5W6B7H1m6F8vfEvSp8PzZoBVg5Mb2spcON+0GCw3haDGoJAqnCE4TDh1wGfqOMjr82RHt//OCmTf9SBgrkBoTyLH9v+MK2AVKq43ebIsCL0czqQ6MhejZs5iiRWYBvg58O9j99yubB/jvcOm1rb8lz+JYaRN8X+3MhR+I0Oc=",
+            "vaultBlock": "41cf1e61a0fece639fbd39fdcd2fd7676ec61d02a91a3c06eeb93497e79d2201.json",
             "sep": false
           },
           {
@@ -2267,9 +2249,7 @@
           {
             "type": "media",
             "locked": true,
-            "encStub": true,
-            "iv": "8POkg5eAnNvVr1X7",
-            "ct": "GHEa88XwN7jELWMECJ7s9GBr2mweFX/DMalvavdI+EUXQjRwH0xQ47rqsEfJg9PiyZxJxqyofNA/SmdvzK58k+uJc6d0nUb4iWGdlgplmd/cx8dEx7afnhICs/flvkPdRZrzPqYNjEtE2N20vqlf+VFWyuoQKFr84BH2qf7bZX+HRPVmtfBmu0cCoHBXQlcR0UbWGqRs8DejgG4=",
+            "vaultBlock": "44e22d3db035f133ea5ef96ed5df6d9ef02591527a49130c6bb13db1e464fe50.json",
             "kicker": "Experiment A"
           },
           {
@@ -2309,9 +2289,7 @@
           {
             "type": "media",
             "locked": true,
-            "encStub": true,
-            "iv": "fYiqv2SzuL1Amg5h",
-            "ct": "aucANQPNjzAmJZWu+0s2ys7JPnlywyiImo6EN7y/oJ8FCqOhItCrtm9T7HHrGQEtrSZU5bcOVi9che77nQKRK8NLoBUaRqbovczihej+rlfErLdWjNkpYBVZWIR7qv9M1PZB4q8GOUkO9qosZzU34oTCCRJDyjkjEs+m+TXP0vfh064ZZ9Hg3V2q0EyghAERWqW4pTJq/5iKdpY=",
+            "vaultBlock": "d95cc568cb50b9e858ff78e8276475a0b80304837feac461dd76dc8a20cf465d.json",
             "kicker": "Experiment B"
           },
           {
