@@ -15,7 +15,7 @@ import {
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
   rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath,
   ADMIN_WORKER, adminSession, clearAdminSession, vaultUpload, vaultRegisterGrant, vaultSignedUrl,
-  webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig, authStatus, authConfig, keyringGet, keyringPut
+  webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig, authStatus, authConfig, recoveryConfig, keyringGet, keyringPut
 } from "./admin-core.js";
 
 (function () {
@@ -7541,6 +7541,7 @@ import {
       '<div data-pklist style="margin:4px 0 14px;font-size:13px">Loading\u2026</div>' +
       '<div data-2fa style="margin:2px 0 14px;font-size:13px"></div>' +
       '<div data-pwless style="margin:2px 0 14px;font-size:13px"></div>' +
+      '<div data-rec2fa style="margin:2px 0 14px;font-size:13px"></div>' +
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Done</button>' +
       '<button class="btn btn--primary" data-add>\uFF0B Add a passkey</button></div></div>';
     document.body.appendChild(modal);
@@ -7596,7 +7597,24 @@ import {
         finally { cb.disabled = false; }
       });
     }
-    refresh(); render2fa(); renderPwless();
+    async function renderRec2fa() {
+      const el = modal.querySelector("[data-rec2fa]"); if (!el) return;
+      const st = await authStatus().catch(() => ({ recovery2fa: false, hasAdminPass: false }));
+      const usable = !!st.hasAdminPass || !!st.recovery2fa;
+      el.innerHTML = '<label style="display:flex;align-items:flex-start;gap:9px;line-height:1.45;cursor:' + (usable ? "pointer" : "not-allowed") + (usable ? "" : ";opacity:.5") + '"><input type="checkbox" data-rec2fatoggle' + (st.recovery2fa ? " checked" : "") + (usable ? "" : " disabled") + ' /><span>2-factor recovery <span style="opacity:.55">\u2014 the \u201cLost your passkey\u201d recovery then needs your recovery passphrase <b>and</b> your admin password.' + (usable ? "" : " Set an admin password first.") + '</span></span></label>';
+      const cb = el.querySelector("[data-rec2fatoggle]");
+      if (cb) cb.addEventListener("change", async () => {
+        cb.disabled = true; err.textContent = "";
+        try {
+          if (cb.checked) {
+            if (!confirm("Require your admin password too when recovering access?\n\nAfter losing every passkey you\u2019ll then need BOTH your recovery passphrase AND your admin password to get back in.")) { cb.checked = false; cb.disabled = false; return; }
+            await recoveryConfig(true); status("2-factor recovery is on \u2014 recovery needs your passphrase + admin password.", true);
+          } else { await recoveryConfig(false); status("2-factor recovery turned off."); }
+        } catch (e) { cb.checked = !cb.checked; err.textContent = (e && e.message) || "Couldn\u2019t update recovery security."; }
+        finally { cb.disabled = false; }
+      });
+    }
+    refresh(); render2fa(); renderPwless(); renderRec2fa();
   }
 
   function changeKeyModal() {

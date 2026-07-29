@@ -207,17 +207,27 @@ import {
       try { await webauthnAuth("login"); done(); openStudio(); }
       catch (e) { if (pkBtn) pkBtn.disabled = false; err.textContent = (e && e.message) || "Passkey sign-in didn’t work."; }
     }
-    let recovering = false;
+    let recovering = false, recovery2fa = false;
     function showRecover() {
       recovering = true;
       const pkBtn = modal.querySelector("[data-passkey]"); if (pkBtn) pkBtn.style.display = "none";
       const link = modal.querySelector("[data-reclink]"); if (link) link.style.display = "none";
-      const subEl = modal.querySelector(".pass__sub"); if (subEl) subEl.textContent = "Enter your recovery passphrase to regain access, then add a new passkey.";
+      const subEl = modal.querySelector(".pass__sub"); if (subEl) subEl.textContent = recovery2fa
+        ? "Enter your recovery passphrase and your admin password to regain access, then add a new passkey."
+        : "Enter your recovery passphrase to regain access, then add a new passkey.";
       pass.placeholder = "Recovery passphrase"; pass.style.display = ""; pass.value = ""; try { pass.focus(); } catch (e) {}
+      // Second factor (when 2-factor recovery is on): the admin password.
+      if (recovery2fa && !modal.querySelector("[data-recpw]")) {
+        const pw2 = document.createElement("input");
+        pw2.type = "password"; pw2.setAttribute("data-recpw", "1");
+        pw2.placeholder = "Admin password"; pw2.autocomplete = "off";
+        if (pass.parentNode) pass.parentNode.insertBefore(pw2, pass.nextSibling);
+      }
       const go = modal.querySelector("[data-go]"); if (go) { go.style.display = ""; go.disabled = false; go.textContent = "Recover"; }
     }
     if (!creating && webauthnSupported()) {
       authStatus().then((st) => {
+        recovery2fa = !!st.recovery2fa;
         const pkBtn = modal.querySelector("[data-passkey]"), orEl = modal.querySelector("[data-or]");
         if (st.passkeys > 0 && pkBtn) { pkBtn.hidden = false; pkBtn.addEventListener("click", doPasskey); }
         if (st.passkeys > 0 && orEl) orEl.hidden = false;
@@ -249,8 +259,11 @@ import {
       const val = pass.value;
       if (recovering) {
         if (!val) { err.textContent = "Enter your recovery passphrase"; return; }
+        const pw2El = modal.querySelector("[data-recpw]");
+        const adminPw = pw2El ? pw2El.value : "";
+        if (recovery2fa && !adminPw) { err.textContent = "Enter your admin password"; return; }
         const go = modal.querySelector("[data-go]"); if (go) go.disabled = true; err.textContent = "";
-        try { await recoverWithPassphrase(val); done(); openStudio(); }
+        try { await recoverWithPassphrase(val, adminPw); done(); openStudio(); }
         catch (e) { if (go) go.disabled = false; err.textContent = (e && e.message) || "Recovery didn’t work."; }
         return;
       }

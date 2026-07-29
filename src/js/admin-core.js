@@ -167,10 +167,20 @@ export async function authConfig(passwordless) {
   if (!r.ok) { const j = await r.json().catch(() => null); throw new Error((j && j.error) || "Couldn’t update sign-in mode."); }
   return await r.json();
 }
+// Owner-only: require the admin password as a SECOND factor in the break-glass recovery flow
+// (the “Lost your passkey → Recover access” path then needs recovery passphrase AND admin password).
+export async function recoveryConfig(recovery2fa) {
+  const sess = adminSession(); if (!sess) { const e = new Error("Sign in first."); e.auth = true; throw e; }
+  const r = await fetch(ADMIN_WORKER + "/admin/auth/config", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ recovery2fa: !!recovery2fa }) });
+  if (!r.ok) { const j = await r.json().catch(() => null); throw new Error((j && j.error) || "Couldn’t update recovery security."); }
+  return await r.json();
+}
 // Break-glass sign-in with the recovery passphrase (all passkeys lost). Stores a session on success.
-export async function recoverWithPassphrase(recovery) {
+export async function recoverWithPassphrase(recovery, password) {
   const proof = await publishProof(recovery);
-  const r = await fetch(ADMIN_WORKER + "/admin/recover", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ proof: proof }) });
+  const body = { proof: proof };
+  if (password) body.password = password;
+  const r = await fetch(ADMIN_WORKER + "/admin/recover", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!r.ok) { const j = await r.json().catch(() => null); const e = new Error((j && j.error) || "Recovery didn’t work."); e.status = r.status; throw e; }
   const j = await r.json();
   if (j && j.token && j.exp) { saveAdminSession(j.token, j.exp); return { ok: true }; }
