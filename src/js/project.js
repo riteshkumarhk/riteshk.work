@@ -244,6 +244,13 @@
     var st = w && w.study;
     if (!st || !w) return;
     if (!(st.blocks || []).some(function (b) { return b && b.locked && b.vaultBlock; })) return;   // only acts on unresolved pointers; runs once (resolution removes them)
+    // Auto-reveal vault-hosted sections ONLY for an explicit owner Present-mode session, or for a
+    // pass-holder who has redeemed a grant. A bare admin session during NORMAL browsing must never
+    // silently unlock protected content — it stays masked, exactly like a visitor sees it. (The
+    // owner can still reveal it by entering Present mode from the ⋯ menu, or by entering the pass.)
+    var presenting = false; try { presenting = sessionStorage.getItem("rk:present:active") === "1"; } catch (e) {}
+    var hasGrant = false; try { var g = JSON.parse(localStorage.getItem("rk:vault:grant") || "null"); hasGrant = !!(g && g.token && g.exp && g.exp > Date.now()); } catch (e) {}
+    if (!presenting && !hasGrant) return;
     resolveVaultBlocks(w).then(function (n) {
       if (n > 0) { setUnlocked(w.id); if (activeId === w.id) fillContent(w); }
     });
