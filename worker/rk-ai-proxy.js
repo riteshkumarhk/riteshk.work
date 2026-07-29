@@ -194,7 +194,7 @@ export default {
     if (url.pathname === "/admin/auth/status") {
       if (!env.VAULT_GRANTS) return json({ passwordless: false, hasRecovery: false, passkeys: 0 }, 200, cors);
       const l = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" });
-      return json({ passwordless: (await env.VAULT_GRANTS.get("cfg:passwordless")) === "1", hasRecovery: !!(await env.VAULT_GRANTS.get("cfg:publishproof")), passkeys: l.keys.length, recovery2fa: (await env.VAULT_GRANTS.get("cfg:recovery2fa")) === "1", hasAdminPass: !!env.ADMIN_HASH }, 200, cors);
+      return json({ passwordless: (await env.VAULT_GRANTS.get("cfg:passwordless")) === "1", hasRecovery: !!(await env.VAULT_GRANTS.get("cfg:publishproof")), passkeys: l.keys.length, hasAdminPass: !!env.ADMIN_HASH }, 200, cors);
     }
     // Owner turns passwordless on/off. Enabling requires ≥1 passkey AND a recovery passphrase (so no lockout).
     if (url.pathname === "/admin/auth/config") {
@@ -210,13 +210,7 @@ export default {
           }
           await env.VAULT_GRANTS.put("cfg:passwordless", b.passwordless ? "1" : "");
         }
-        if (b && typeof b.recovery2fa === "boolean") {
-          // 2-factor break-glass: the “Lost your passkey” recovery then needs the recovery passphrase
-          // AND the admin password. Requires a password to exist, or there’d be no second factor.
-          if (b.recovery2fa && !env.ADMIN_HASH) return json({ error: "Set an admin password first — there’s no second factor to require." }, 400, cors);
-          await env.VAULT_GRANTS.put("cfg:recovery2fa", b.recovery2fa ? "1" : "");
-        }
-        return json({ ok: true, passwordless: (await env.VAULT_GRANTS.get("cfg:passwordless")) === "1", recovery2fa: (await env.VAULT_GRANTS.get("cfg:recovery2fa")) === "1" }, 200, cors);
+        return json({ ok: true, passwordless: (await env.VAULT_GRANTS.get("cfg:passwordless")) === "1" }, 200, cors);
       } catch (e) { return json({ error: "Config failed" }, 400, cors); }
     }
     // Break-glass: recover admin access with the recovery-passphrase proof when all passkeys are lost.
@@ -232,8 +226,8 @@ export default {
         const stored = await env.VAULT_GRANTS.get("cfg:publishproof");
         const proof = (b && b.proof) || "";
         const proofHash = proof ? bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(proof))) : "";
-        // Optional 2nd factor: when cfg:recovery2fa is on, the admin password is also required.
-        const need2fa = (await env.VAULT_GRANTS.get("cfg:recovery2fa")) === "1";
+        // Baked in: the break-glass is 2-factor whenever an admin password exists (no toggle to forget).
+        const need2fa = !!env.ADMIN_HASH;
         const passOk = !need2fa || (await verifyAdminPassword(String((b && b.password) || ""), env));
         if (!stored || !timingSafeEqual(proofHash, stored) || !passOk) {
           await env.VAULT_GRANTS.put(rlKey, String(tries + 1), { expirationTtl: 900 });

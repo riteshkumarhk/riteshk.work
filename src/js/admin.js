@@ -227,7 +227,7 @@ import {
     }
     if (!creating && webauthnSupported()) {
       authStatus().then((st) => {
-        recovery2fa = !!st.recovery2fa;
+        recovery2fa = !!st.hasAdminPass; // baked in: recovery needs the admin password whenever one exists
         const pkBtn = modal.querySelector("[data-passkey]"), orEl = modal.querySelector("[data-or]");
         if (st.passkeys > 0 && pkBtn) { pkBtn.hidden = false; pkBtn.addEventListener("click", doPasskey); }
         if (st.passkeys > 0 && orEl) orEl.hidden = false;
