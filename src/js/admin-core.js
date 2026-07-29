@@ -27,6 +27,27 @@ export function saveAdminSession(token, exp) {
   try { localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token, exp })); } catch (e) {}
 }
 export function clearAdminSession() { try { localStorage.removeItem(ADMIN_SESSION_KEY); } catch (e) {} }
+// ---------- device-trust: this browser/device passed a 2-factor step-up (recovery passphrase + admin
+// password), so it may enrol a passkey or publish. The token is HMAC-signed by the Worker (unspoofable);
+// a fresh device (e.g. signed in via your phone) has none until it steps up. ----------
+export const TRUST_KEY = "rk:trust";
+export function deviceTrust() {
+  try { const s = JSON.parse(localStorage.getItem(TRUST_KEY) || "null"); if (s && s.token && s.exp && s.exp > Date.now()) return s.token; } catch (e) {}
+  return "";
+}
+export function deviceTrusted() { return !!deviceTrust(); }
+export function saveDeviceTrust(token, exp) { try { localStorage.setItem(TRUST_KEY, JSON.stringify({ token: token, exp: exp })); } catch (e) {} }
+export function clearDeviceTrust() { try { localStorage.removeItem(TRUST_KEY); } catch (e) {} }
+// Verify the recovery passphrase (+ admin password when one is set) to trust THIS device; stores the token.
+export async function stepUp(recovery, password) {
+  const sess = adminSession(); if (!sess) { const e = new Error("Sign in first."); e.auth = true; throw e; }
+  const proof = await publishProof(recovery);
+  const r = await fetch(ADMIN_WORKER + "/admin/stepup", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ proof: proof, password: password || "" }) });
+  if (!r.ok) { const j = await r.json().catch(() => null); const e = new Error((j && j.error) || "That didn’t verify."); e.status = r.status; throw e; }
+  const j = await r.json();
+  if (j && j.trust && j.exp) { saveDeviceTrust(j.trust, j.exp); return { ok: true }; }
+  throw new Error("Step-up didn’t return a token.");
+}
 // Log in against the Worker. Returns {ok:true} (session stored), {ok:false,status} (rejected),
 // or {ok:false,network:true} (Worker unreachable / not deployed → caller falls back to the local gate).
 export async function adminLogin(password) {
@@ -93,8 +114,9 @@ function guessPasskeyLabel(cred) {
 // Enrol a new passkey (owner-gated — needs a live session, e.g. from the password login the first time).
 export async function webauthnRegister(label) {
   const sess = adminSession(); if (!sess) { const e = new Error("Sign in first to add a passkey."); e.auth = true; throw e; }
-  const br = await fetch(ADMIN_WORKER + "/admin/webauthn/register/begin", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: "{}" });
+  const br = await fetch(ADMIN_WORKER + "/admin/webauthn/register/begin", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json", "X-Device-Trust": deviceTrust() }, body: "{}" });
   if (br.status === 401) { const e = new Error("Your session expired — sign in again."); e.auth = true; throw e; }
+  if (br.status === 403) { const j = await br.json().catch(() => null); const e = new Error((j && j.error) || "Verify it’s you first."); if (j && j.needStepup) e.needStepup = true; throw e; }
   if (!br.ok) throw new Error("Couldn’t start passkey enrolment.");
   const o = await br.json();
   const cred = await navigator.credentials.create({ publicKey: {

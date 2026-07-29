@@ -36,6 +36,7 @@ const VAULT_URL_TTL_MS = 6 * 60 * 60 * 1000;  // signed vault-asset URL lifetime
 const GRANT_REDEEM_TTL_MS = 12 * 60 * 60 * 1000; // ticket-holder vault access token lifetime — 12 hours
 const WEBAUTHN_CHALLENGE_TTL_MS = 5 * 60 * 1000; // passkey register/auth challenge lifetime — 5 min
 const PUBLISH_TOKEN_TTL_MS = 5 * 60 * 1000;       // publish step-up (passkey factor) token lifetime — 5 min
+const TRUST_TTL_MS = 180 * 24 * 60 * 60 * 1000;    // device-trust token lifetime — 180 days
 
 export default {
   async fetch(request, env) {
@@ -70,6 +71,11 @@ export default {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
       if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
       if (!env.VAULT_GRANTS) return json({ error: "Passkey store not configured" }, 500, cors);
+      // Enrolling a passkey needs this device to be TRUSTED (a prior step-up) — except the very first
+      // passkey ever (bootstrap from the initial session). Stops a phone-only sign-in on a strange
+      // device from silently minting a resident passkey without the recovery passphrase + admin password.
+      const _rc = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" });
+      if (_rc.keys.length > 0 && !(await verifyTrust(request.headers.get("X-Device-Trust"), env))) return json({ error: "Verify it\u2019s you to add a passkey on this device.", needStepup: true }, 403, cors);
       const challenge = b64urlFromBytes(crypto.getRandomValues(new Uint8Array(32)));
       await env.VAULT_GRANTS.put("wa:chal:" + challenge, JSON.stringify({ type: "reg", exp: Date.now() + WEBAUTHN_CHALLENGE_TTL_MS }), { expirationTtl: 300 });
       const exclude = [];
@@ -237,6 +243,31 @@ export default {
         return json(await issueSession(env), 200, cors);
       } catch (e) { return json({ error: "Recovery failed" }, 400, cors); }
     }
+    // Device-trust step-up: verify the recovery passphrase (+ admin password when one exists) to mark
+    // THIS device trusted so it may enrol a passkey or publish. Session-gated; rate-limited by IP.
+    if (url.pathname === "/admin/stepup") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Unavailable" }, 500, cors);
+      const rlKey = "rl:stepup:" + (request.headers.get("CF-Connecting-IP") || "0");
+      const tries = parseInt((await env.VAULT_GRANTS.get(rlKey)) || "0", 10) || 0;
+      if (tries >= 6) return json({ error: "Too many attempts \u2014 try again later." }, 429, cors);
+      try {
+        const b = await request.json();
+        const stored = await env.VAULT_GRANTS.get("cfg:publishproof");
+        const proof = (b && b.proof) || "";
+        const proofHash = proof ? bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(proof))) : "";
+        const proofOk = stored && timingSafeEqual(proofHash, stored);
+        const needPass = !!env.ADMIN_HASH;
+        const passOk = !needPass || (await verifyAdminPassword(String((b && b.password) || ""), env));
+        if (!proofOk || !passOk) {
+          await env.VAULT_GRANTS.put(rlKey, String(tries + 1), { expirationTtl: 900 });
+          return json({ error: needPass ? "That recovery passphrase or admin password didn\u2019t match." : "That recovery passphrase didn\u2019t match." }, 401, cors);
+        }
+        await env.VAULT_GRANTS.delete(rlKey);
+        return json(await issueTrust(env), 200, cors);
+      } catch (e) { return json({ error: "Step-up failed" }, 400, cors); }
+    }
     // Owner's private ticket keyring: an opaque recovery-encrypted blob {svId:code}, stored server-side
     // (cross-device). The Worker never sees the codes — only the ciphertext.
     if (url.pathname === "/admin/keyring") {
@@ -272,6 +303,11 @@ export default {
       // session cannot delete files, delete or rewrite branches, or wipe history through this proxy.
       // (Branch protection on main also blocks force-pushes as a second layer.)
       if (["GET", "HEAD", "POST", "PUT", "PATCH"].indexOf(ghMethod) === -1) return json({ error: "Method not allowed via proxy" }, 405, cors);
+      // Device-trust: a repo WRITE requires this device to have passed a step-up (recovery passphrase +
+      // admin password) at least once — so a phone-only sign-in on a strange device can't publish.
+      if (env.VAULT_GRANTS && ghMethod !== "GET" && ghMethod !== "HEAD" && !(await verifyTrust(request.headers.get("X-Device-Trust"), env))) {
+        return json({ error: "This device isn\u2019t verified to publish yet.", needStepup: true }, 403, cors);
+      }
       // Publish step-up: when enabled, every repo WRITE requires BOTH a fresh passkey assertion
       // (X-Publish-Token — factor 1, possession) AND the recovery-passphrase proof (X-Publish-Proof
       // — factor 2, knowledge). So a stolen session alone can read but cannot publish/deface.
@@ -459,7 +495,7 @@ function corsHeaders(origin, env) {
   return {
     "Access-Control-Allow-Origin": ok ? (origin || allow[0] || "*") : (allow[0] || "null"),
     "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization,Content-Type,x-api-key,anthropic-version,anthropic-dangerous-direct-browser-access,Accept,X-GitHub-Api-Version,X-Vault-Grant,X-Publish-Token,X-Publish-Proof",
+    "Access-Control-Allow-Headers": "Authorization,Content-Type,x-api-key,anthropic-version,anthropic-dangerous-direct-browser-access,Accept,X-GitHub-Api-Version,X-Vault-Grant,X-Publish-Token,X-Publish-Proof,X-Device-Trust",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
@@ -524,6 +560,26 @@ async function issueSession(env) {
   const payload = b64urlFromStr(JSON.stringify({ exp }));
   const sig = await hmac(env.SESSION_SECRET || "", payload);
   return { token: payload + "." + sig, exp };
+}
+// Device-trust token: a long-lived, HMAC-signed marker that THIS device passed a 2-factor step-up.
+// Domain-separated from sessions ("trust." prefix in the MAC) so one can never be used as the other.
+async function issueTrust(env) {
+  const exp = Date.now() + TRUST_TTL_MS;
+  const payload = b64urlFromStr(JSON.stringify({ t: "trust", exp }));
+  const sig = await hmac(env.SESSION_SECRET || "", "trust." + payload);
+  return { trust: payload + "." + sig, exp };
+}
+async function verifyTrust(token, env) {
+  if (!token || !env.SESSION_SECRET) return false;
+  const dot = token.indexOf(".");
+  if (dot < 1) return false;
+  const payload = token.slice(0, dot), sig = token.slice(dot + 1);
+  const expect = await hmac(env.SESSION_SECRET, "trust." + payload);
+  if (!timingSafeEqual(sig, expect)) return false;
+  try {
+    const obj = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload)));
+    return !!(obj && obj.t === "trust" && obj.exp && obj.exp > Date.now());
+  } catch (e) { return false; }
 }
 async function verifySession(token, env) {
   if (!token || !env.SESSION_SECRET) return false;

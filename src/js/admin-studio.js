@@ -15,7 +15,7 @@ import {
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
   rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath,
   ADMIN_WORKER, adminSession, clearAdminSession, vaultUpload, vaultRegisterGrant, vaultSignedUrl,
-  webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig, authStatus, authConfig, keyringGet, keyringPut
+  webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig, authStatus, authConfig, deviceTrust, deviceTrusted, stepUp, keyringGet, keyringPut
 } from "./admin-core.js";
 
 (function () {
@@ -3976,6 +3976,7 @@ import {
     };
     if (publishStepup && publishStepup.token) h["X-Publish-Token"] = publishStepup.token;
     if (publishStepup && publishStepup.proof) h["X-Publish-Proof"] = publishStepup.proof;
+    var _dt = deviceTrust(); if (_dt) h["X-Device-Trust"] = _dt;
     return h;
   }
   // With an admin session, GitHub calls go through the Worker (which holds the real token,
@@ -4330,6 +4331,16 @@ import {
     if (publishing) return;
     publishing = true;
     var viaSession = (token === "session");
+    // Device-trust: an unverified device (e.g. you just signed in with your phone) must verify + set up
+    // a passkey before it can publish. Trusted devices publish straight through.
+    if (viaSession && !deviceTrusted()) {
+      const _ok = await deviceStepUpModal({ sub: "To publish from this device, first verify it\u2019s you \u2014 recovery passphrase + admin password." });
+      if (!_ok) { publishing = false; status("Publish cancelled \u2014 verify to publish from this device."); return; }
+      if (confirm("Add a passkey to this device before publishing?\n\nRecommended \u2014 then this device is set up and won\u2019t ask again here.")) {
+        try { await webauthnRegister(); status("Passkey added to this device.", true); }
+        catch (e) { status((e && e.message) || "Couldn\u2019t add a passkey \u2014 continuing.", false); }
+      }
+    }
     pubProgress(6, "Preparing your content\u2026");
     try {
       // Publish step-up: when enabled, gather BOTH factors up front (fresh passkey assertion + recovery
@@ -7530,6 +7541,36 @@ import {
   /* ---------- change the admin key (requires the current key) ---------- */
   // Manage passkeys (enrol / list / remove). Enrolment is owner-gated by the current session, so the
   // first passkey is added right after a normal (password) sign-in; after that, passkeys sign you in.
+  // Verify it’s you on an untrusted device (recovery passphrase + admin password) → device-trust token.
+  function deviceStepUpModal(opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+      const modal = document.createElement("div");
+      modal.className = "pass";
+      modal.innerHTML =
+        '<div class="pass__box"><div class="pass__title">Verify it\u2019s you</div>' +
+        '<div class="pass__sub">' + escHtml(opts.sub || "This device isn\u2019t verified yet. Enter your recovery passphrase and admin password to continue.") + "</div>" +
+        '<input type="password" placeholder="Recovery passphrase" data-rec autocomplete="off" autofocus />' +
+        '<input type="password" placeholder="Admin password" data-pw autocomplete="off" />' +
+        '<div class="pass__err"></div>' +
+        '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
+        '<button class="btn btn--primary" data-go>Verify</button></div></div>';
+      document.body.appendChild(modal);
+      const rec = modal.querySelector("[data-rec]"), pw = modal.querySelector("[data-pw]"), err = modal.querySelector(".pass__err"), go = modal.querySelector("[data-go]");
+      try { rec.focus(); } catch (e) {}
+      const done = function (v) { modal.remove(); resolve(v); };
+      modal.querySelector("[data-cancel]").addEventListener("click", function () { done(false); });
+      modal.addEventListener("click", function (e) { if (e.target === modal) done(false); });
+      async function submit() {
+        const r = rec.value.trim(); if (!r) { err.textContent = "Enter your recovery passphrase"; return; }
+        go.disabled = true; err.textContent = ""; const was = go.textContent; go.textContent = "Verifying\u2026";
+        try { await stepUp(r, pw.value); done(true); }
+        catch (e) { go.disabled = false; go.textContent = was; err.textContent = (e && e.message) || "That didn\u2019t verify."; }
+      }
+      go.addEventListener("click", submit);
+      modal.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); if (e.key === "Escape") done(false); });
+    });
+  }
   async function passkeyModal() {
     if (!webauthnSupported()) { status("This browser doesn\u2019t support passkeys.", false); return; }
     const modal = document.createElement("div");
@@ -7558,7 +7599,17 @@ import {
     }
     modal.querySelector("[data-add]").addEventListener("click", async () => {
       const btn = modal.querySelector("[data-add]"); btn.disabled = true; err.textContent = "";
-      try { await webauthnRegister(); await refresh(); status("Passkey added.", true); }
+      try {
+        try { await webauthnRegister(); }
+        catch (e) {
+          if (e && e.needStepup) {
+            const ok = await deviceStepUpModal({ sub: "To add a passkey on this device, first verify it\u2019s you \u2014 recovery passphrase + admin password." });
+            if (!ok) { btn.disabled = false; return; }
+            await webauthnRegister();
+          } else throw e;
+        }
+        await refresh(); status("Passkey added.", true);
+      }
       catch (e) { err.textContent = (e && e.message) || "Enrolment failed."; }
       finally { btn.disabled = false; }
     });
