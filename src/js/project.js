@@ -837,7 +837,10 @@
     // section. `isUnlocked` persists in sessionStorage from an earlier unlock, but the freshly-loaded
     // blocks are re-fetched as stubs; without this guard they'd vanish instead of showing the mask.
     var sealed = !!b.encStub || !!b.vaultBlock;
-    var locked = b.locked && (sealed || !isUnlocked(activeId));
+    // In the admin live preview, mirror the editor: a section flagged locked ALWAYS shows the
+    // deeper-cut mask, so the owner sees exactly what a visitor sees. On the real site it stays
+    // content-until-unlocked (sealed stub or the isUnlocked gate) as before.
+    var locked = b.locked && (PREVIEW || sealed || !isUnlocked(activeId));
     var inner = locked ? lockedBlock(b) : ((RENDERERS[b.type] || function () { return ""; })(b));
     var hsize = b.hsize === "sm" ? " pjb--hsm" : b.hsize === "lg" ? " pjb--hlg" : "";
     var flush = b.sep === false ? " pjb--flush" : "";
@@ -1145,12 +1148,13 @@
   // selected section (add-above / move up / move down / duplicate / delete) — mirrors the
   // editor's per-row ops so sections can be managed straight from the preview. Buttons post
   // their intent to the parent editor, which mutates the draft and re-renders the preview.
-  function pvToolbarHtml(idx, total) {
+  function pvToolbarHtml(idx, total, locked) {
     var up = idx <= 0, down = idx >= total - 1;
     return '<button type="button" class="pjtb__b" data-pjtb="add" title="Add a section above" aria-label="Add a section above"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>' +
       '<button type="button" class="pjtb__b" data-pjtb="up"' + (up ? " disabled" : "") + ' title="Move up" aria-label="Move up">\u2191</button>' +
       '<button type="button" class="pjtb__b" data-pjtb="down"' + (down ? " disabled" : "") + ' title="Move down" aria-label="Move down">\u2193</button>' +
       '<button type="button" class="pjtb__b" data-pjtb="dup" title="Duplicate section" aria-label="Duplicate section"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
+      '<button type="button" class="pjtb__b pjtb__b--lock' + (locked ? " is-locked" : "") + '" data-pjtb="lock" title="' + (locked ? "Locked \u2014 click to unlock" : "Lock \u2014 deeper-cut only") + '" aria-label="Toggle lock"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' + (locked ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<path d="M8 10.5V6.8a4 4 0 0 1 7.5-1.6"/>') + '</svg></button>' +
       '<button type="button" class="pjtb__b pjtb__b--danger" data-pjtb="del" title="Remove section" aria-label="Remove section">\u2715</button>';
   }
   function applyPreviewToolbar() {
@@ -1167,7 +1171,7 @@
     var tb = document.createElement("div");
     tb.className = "pjtb";
     tb.setAttribute("contenteditable", "false");
-    tb.innerHTML = pvToolbarHtml(previewSelIdx, secs.length);
+    tb.innerHTML = pvToolbarHtml(previewSelIdx, secs.length, sec.classList.contains("pjb--locked"));
     sec.appendChild(tb);
   }
 

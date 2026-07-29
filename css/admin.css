@@ -621,6 +621,16 @@ body.adm-lock .cursor { display: none !important; }
 .study__block-body { display: none; padding: .35rem .85rem 1rem; border-top: 1px solid var(--line); }
 .study__block.is-open .study__block-body { display: block; }
 .study__block-body .af:last-child { margin-bottom: 0; }
+/* per-section lock CTA (replaces the old Locked checkbox): shows on hover / when open, and stays
+   visible whenever the section is locked — so a folded card still shows it's locked at a glance. */
+.study__block-lock { flex: 0 0 auto; display: grid; place-items: center; width: 27px; height: 27px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text-faint); cursor: pointer; opacity: 0; transition: opacity .2s, color .2s, border-color .2s, background .2s; }
+.study__block-lock svg { display: block; }
+.study__block-head:hover .study__block-lock, .study__block.is-open .study__block-lock, .study__block-lock.is-locked { opacity: 1; }
+.study__block-lock:hover { color: var(--text); border-color: var(--accent); }
+.study__block-lock.is-locked { color: var(--accent); border-color: var(--accent); background: rgba(216, 166, 71, .12); }
+.study__block.is-locked { border-color: rgba(216, 166, 71, .42); }
+/* separator toggle moved to the TOP of the section (matches the live-preview hierarchy) */
+.block-sep { width: 100%; margin: 0 0 .55rem; padding-bottom: .55rem; border-bottom: 1px solid var(--line); }
 
 /* ---------- rich-text editor (contenteditable + toolbar) ---------- */
 .rt .af__label { margin-bottom: .35rem; }

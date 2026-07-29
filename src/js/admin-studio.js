@@ -2022,6 +2022,7 @@ import {
       '<button class="iconbtn" data-act="study-blockdup" data-index="' + i + '" data-bindex="' + j + '" title="Duplicate section" aria-label="Duplicate section"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
       '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">\u2715</button>' +
       "</span>" +
+      '<button class="iconbtn study__block-lock' + (b.locked ? " is-locked" : "") + '" data-act="study-blocklock" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.locked ? "Locked \u2014 click to unlock" : "Lock this section \u2014 deeper-cut only") + '" aria-label="' + (b.locked ? "Unlock section" : "Lock section") + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' + (b.locked ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<path d="M8 10.5V6.8a4 4 0 0 1 7.5-1.6"/>') + "</svg></button>" +
       '<span class="study__block-chev" aria-hidden="true">\u203a</span>' +
       "</div>";
     var common = sfInput(i, j, "nav", "Section label", "Shows in the left nav \u2014 leave blank to hide it there") + sfInput(i, j, "kicker", "Kicker", "small label above the block");
@@ -2072,10 +2073,9 @@ import {
     else if (b.type === "gen") body = genEditor(i, j, b);
     var hasHeading = /^(text|metrics|steps|media|split|cards|gallery|mediagrid|device|isolayers|figure|columns|rows|compare|stickies|voices|workflow|focus)$/.test(b.type);
     var sizeCtl = (hasHeading || b.type === "statement") ? sfSelect(i, j, "hsize", (b.type === "statement" ? "Statement size" : "Heading size"), [["", "Standard"], ["sm", "Compact \u2014 easier to read"], ["lg", "Large \u2014 display"]], "Shrink it if the standard size feels too big for the copy.") : "";
-    var sepCtl = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="sep"' + (b.sep !== false ? " checked" : "") + " /> Separator line above \u2014 uncheck to flow into the previous section</label>";
-    var locked = '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="locked"' + (b.locked ? " checked" : "") + " /> Locked \u2014 only after the deeper-cut pass</label>";
-    return '<div class="card study__block' + (open ? " is-open" : "") + '">' + head +
-      '<div class="study__block-body">' + common + body + sizeCtl + '<div class="block-flags">' + sepCtl + locked + "</div></div></div>";
+    var sepCtl = '<label class="chk block-sep"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="sep"' + (b.sep !== false ? " checked" : "") + " /> Separator line above \u2014 uncheck to flow into the previous section</label>";
+    return '<div class="card study__block' + (open ? " is-open" : "") + (b.locked ? " is-locked" : "") + '">' + head +
+      '<div class="study__block-body">' + sepCtl + common + body + sizeCtl + "</div></div>";
   }
   function smeta(i, field, label, hint, ph) {
     var st = data.work[i].study;
@@ -2976,6 +2976,7 @@ import {
     if (act === "up") { if (j <= 0) return; var a = s[j - 1]; s[j - 1] = s[j]; s[j] = a; openBlock = j - 1; }
     else if (act === "down") { if (j >= s.length - 1) return; var c = s[j + 1]; s[j + 1] = s[j]; s[j] = c; openBlock = j + 1; }
     else if (act === "dup") { s.splice(j + 1, 0, JSON.parse(JSON.stringify(s[j]))); openBlock = j + 1; status("Section duplicated \u2014 editing the copy.", true); }
+    else if (act === "lock") { s[j].locked = !s[j].locked; openBlock = j; status(s[j].locked ? "Section locked \u2014 hidden behind the deeper-cut pass." : "Section unlocked.", true); }
     else if (act === "del") { s.splice(j, 1); openBlock = -1; }
     else return;
     saveDraft(true); renderL2();
@@ -3290,6 +3291,7 @@ import {
     if (act === "study-blockdown") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j < s.length - 1) { [s[j + 1], s[j]] = [s[j], s[j + 1]]; if (openBlock === j) openBlock = j + 1; else if (openBlock === j + 1) openBlock = j; saveDraft(true); renderL2(); } return; }
     if (act === "study-blockremove") { const j = +b.dataset.bindex; data.work[i].study.blocks.splice(j, 1); if (openBlock === j) openBlock = -1; else if (openBlock > j) openBlock--; saveDraft(true); renderL2(); return; }
     if (act === "study-blockdup") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s.splice(j + 1, 0, JSON.parse(JSON.stringify(s[j]))); openBlock = j + 1; saveDraft(true); renderL2(); status("Section duplicated \u2014 editing the copy.", true); } return; }
+    if (act === "study-blocklock") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].locked = !s[j].locked; saveDraft(true); renderL2(); status(s[j].locked ? "Section locked \u2014 hidden behind the deeper-cut pass." : "Section unlocked.", true); } return; }
     if (act === "item-add") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items = bl.items || []; bl.items.push(blankItem(bl.type)); saveDraft(true); renderL2(); return; }
     if (act === "item-remove") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items.splice(+b.dataset.iindex, 1); saveDraft(true); renderL2(); return; }
     if (act === "item-up") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (k > 0) { [bl.items[k - 1], bl.items[k]] = [bl.items[k], bl.items[k - 1]]; saveDraft(true); renderL2(); } return; }
