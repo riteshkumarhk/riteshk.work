@@ -4387,6 +4387,25 @@ import {
     status("GitHub didn\u2019t accept that sign-in. Hit Publish again to reconnect.");
   }
 
+  // Owner-only, LOCAL-ONLY safety net: save the full current content (including any sections
+  // you've unlocked for editing) to a file on THIS device. Purely a client-side Blob download —
+  // no network, no upload, no clipboard — and it never touches the encryption/publish/grant code.
+  // The file holds plaintext locked-section content, so it's sensitive; it does NOT contain your
+  // admin key, recovery passphrase or session token (those are never part of the content model).
+  function downloadContentBackup() {
+    try {
+      var json = JSON.stringify(data, null, 2);
+      var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      var blob = new Blob([json], { type: "application/json" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "riteshk-content-backup-" + stamp + ".json";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { try { URL.revokeObjectURL(a.href); } catch (e) {} }, 4000);
+      status("Backup saved to this device \u2014 it holds your unlocked content in plain text, so keep it private (don\u2019t commit or share it).", true);
+    } catch (e) { status("Couldn\u2019t create the backup."); }
+  }
+
   async function publishManual() {
     let json;
     try { json = await buildPublishJson(); }
@@ -7265,6 +7284,7 @@ import {
             '<div class="adm__more-pop" hidden>' +
               '<button class="adm__more-item" data-passkeys type="button"><span class="adm__more-ic">\uD83D\uDD11</span><span class="adm__more-tx"><b>Passkeys</b><small>Sign in with Windows Hello, Face ID or a security key</small></span></button>' +
               '<button class="adm__more-item" data-pubcfg type="button"><span class="adm__more-ic">\u2699</span><span class="adm__more-tx"><b>Publishing settings</b><small>Connect GitHub, replace the token, or publish manually</small></span></button>' +
+              '<button class="adm__more-item" data-backup type="button"><span class="adm__more-ic">\uD83D\uDCBE</span><span class="adm__more-tx"><b>Download content backup</b><small>Save an unencrypted copy to this device \u2014 keep it private</small></span></button>' +
               '<div class="adm__more-sep"></div>' +
               '<div class="adm__auto" data-autopub>' +
                 '<button class="adm__auto-sw" type="button" data-autopub-toggle role="switch" aria-checked="false" title="Auto-publish on a timer">' +
@@ -7353,6 +7373,7 @@ import {
     var _redo = root.querySelector("[data-redo]"); if (_redo) _redo.addEventListener("click", histRedo);
     root.querySelector("[data-publish]").addEventListener("click", publish);
     var _pubcfg = root.querySelector("[data-pubcfg]"); if (_pubcfg) _pubcfg.addEventListener("click", () => { closeBarPops(); publishModal(); });
+    var _bkp = root.querySelector("[data-backup]"); if (_bkp) _bkp.addEventListener("click", () => { closeBarPops(); downloadContentBackup(); });
     root.querySelector("[data-autopub-toggle]").addEventListener("click", autopubToggle);
     const autoWrap = root.querySelector("[data-autopub]");
     var _apMenu = root.querySelector("[data-autopub-menu]");
