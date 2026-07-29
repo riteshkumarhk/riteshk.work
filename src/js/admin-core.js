@@ -179,8 +179,17 @@ export async function publishConfig(proof, require) {
   return await r.json();
 }
 // Sign-in mode the gate reads: passwordless?, is a recovery passphrase set?, how many passkeys.
+// Cached to localStorage so the gate can render the right mode INSTANTLY (no admin-key flash) on reopen.
+export const AUTHMODE_KEY = "rk:authmode";
+export function cachedAuthMode() { try { return JSON.parse(localStorage.getItem(AUTHMODE_KEY) || "null"); } catch (e) { return null; } }
 export async function authStatus() {
-  try { const r = await fetch(ADMIN_WORKER + "/admin/auth/status"); if (!r.ok) return { passwordless: false, hasRecovery: false, passkeys: 0 }; return await r.json(); } catch (e) { return { passwordless: false, hasRecovery: false, passkeys: 0 }; }
+  try {
+    const r = await fetch(ADMIN_WORKER + "/admin/auth/status");
+    if (!r.ok) return { passwordless: false, hasRecovery: false, passkeys: 0 };
+    const j = await r.json();
+    try { localStorage.setItem(AUTHMODE_KEY, JSON.stringify({ passwordless: !!j.passwordless, hasRecovery: !!j.hasRecovery, passkeys: j.passkeys | 0, hasAdminPass: !!j.hasAdminPass })); } catch (e) {}
+    return j;
+  } catch (e) { return { passwordless: false, hasRecovery: false, passkeys: 0 }; }
 }
 // Owner-only: turn the passwordless (passkey-only) admin login on/off.
 export async function authConfig(passwordless) {

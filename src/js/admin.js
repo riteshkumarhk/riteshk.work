@@ -14,7 +14,7 @@ import {
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
   rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath, adminLogin, ADMIN_WORKER,
-  vaultSignedUrl, vaultRedeem, webauthnSupported, webauthnList, webauthnAuth, authStatus, recoverWithPassphrase
+  vaultSignedUrl, vaultRedeem, webauthnSupported, webauthnList, webauthnAuth, authStatus, cachedAuthMode, recoverWithPassphrase
 } from "./admin-core.js";
 
 (function () {
@@ -225,30 +225,48 @@ import {
       }
       const go = modal.querySelector("[data-go]"); if (go) { go.style.display = ""; go.disabled = false; go.textContent = "Recover"; }
     }
+    // Render the sign-in mode SYNCHRONOUSLY (before first paint) so a passkey-only account never flashes
+    // the admin-key field. Cached from the last authStatus; optimistically passkey-first when unknown.
+    function applyPasskeyOnly(hasRecovery) {
+      const pkBtn = modal.querySelector("[data-passkey]"), orEl = modal.querySelector("[data-or]"), go = modal.querySelector("[data-go]"), subEl = modal.querySelector(".pass__sub");
+      if (pass) pass.style.display = "none";
+      if (go) go.style.display = "none";
+      if (orEl) { orEl.hidden = true; orEl.style.display = "none"; }
+      if (subEl && !recovering) subEl.textContent = "Sign in with your passkey.";
+      if (pkBtn) { pkBtn.hidden = false; if (!pkBtn.dataset.wired) { pkBtn.dataset.wired = "1"; pkBtn.addEventListener("click", doPasskey); } }
+      if (hasRecovery && !modal.querySelector("[data-reclink]")) {
+        const rec = document.createElement("button");
+        rec.type = "button"; rec.setAttribute("data-reclink", "1");
+        rec.textContent = "Lost your passkey? Recover access";
+        rec.style.cssText = "display:block;margin:10px auto 0;background:none;border:none;color:inherit;opacity:.5;font-size:12px;text-decoration:underline;cursor:pointer";
+        rec.addEventListener("click", showRecover);
+        const actions = modal.querySelector(".pass__actions");
+        if (actions && actions.parentNode) actions.parentNode.insertBefore(rec, actions.nextSibling);
+      }
+    }
+    function applyKeyMode(passkeys) {
+      if (recovering) return;
+      const pkBtn = modal.querySelector("[data-passkey]"), orEl = modal.querySelector("[data-or]"), go = modal.querySelector("[data-go]"), subEl = modal.querySelector(".pass__sub");
+      if (pass) pass.style.display = "";
+      if (go) go.style.display = "";
+      if (subEl) subEl.textContent = "Enter your key to open the studio. Required every time.";
+      if (passkeys > 0) {
+        if (pkBtn) { pkBtn.hidden = false; if (!pkBtn.dataset.wired) { pkBtn.dataset.wired = "1"; pkBtn.addEventListener("click", doPasskey); } }
+        if (orEl) { orEl.hidden = false; orEl.style.display = ""; }
+      }
+      try { if (pass) pass.focus(); } catch (e) {}
+    }
     if (!creating && webauthnSupported()) {
+      const cachedAuth = cachedAuthMode();
+      recovery2fa = !!(cachedAuth && cachedAuth.hasAdminPass);
+      // Instant render from the cached mode (passkey-first when unknown) → no admin-key flash.
+      if (!cachedAuth || cachedAuth.passwordless) applyPasskeyOnly(cachedAuth && cachedAuth.hasRecovery);
+      else applyKeyMode(cachedAuth.passkeys || 0);
       authStatus().then((st) => {
-        recovery2fa = !!st.hasAdminPass; // baked in: recovery needs the admin password whenever one exists
-        const pkBtn = modal.querySelector("[data-passkey]"), orEl = modal.querySelector("[data-or]");
-        if (st.passkeys > 0 && pkBtn) { pkBtn.hidden = false; pkBtn.addEventListener("click", doPasskey); }
-        if (st.passkeys > 0 && orEl) orEl.hidden = false;
-        if (st.passwordless) {
-          // Passwordless: passkey only, with a discreet recovery-passphrase break-glass. No admin key field.
-          if (pass) pass.style.display = "none";
-          const go = modal.querySelector("[data-go]"); if (go) go.style.display = "none";
-          if (orEl) orEl.style.display = "none";
-          const subEl = modal.querySelector(".pass__sub"); if (subEl) subEl.textContent = "Sign in with your passkey.";
-          if (pkBtn) pkBtn.hidden = false;
-          if (st.hasRecovery) {
-            const rec = document.createElement("button");
-            rec.type = "button"; rec.setAttribute("data-reclink", "1");
-            rec.textContent = "Lost your passkey? Recover access";
-            rec.style.cssText = "display:block;margin:10px auto 0;background:none;border:none;color:inherit;opacity:.5;font-size:12px;text-decoration:underline;cursor:pointer";
-            rec.addEventListener("click", showRecover);
-            const actions = modal.querySelector(".pass__actions");
-            if (actions && actions.parentNode) actions.parentNode.insertBefore(rec, actions.nextSibling);
-          }
-        }
-      }).catch(() => {});
+        recovery2fa = !!st.hasAdminPass;
+        if (st.passwordless) applyPasskeyOnly(st.hasRecovery);
+        else applyKeyMode(st.passkeys);
+      }).catch(() => { if (!cachedAuth) applyKeyMode(0); });
     }
 
     const done = () => modal.remove();
