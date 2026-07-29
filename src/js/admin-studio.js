@@ -2021,6 +2021,16 @@ import {
         '<div class="study__enc-note">Its content isn\u2019t in your published file. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
       '</div>';
     }
+    if (b.vaultBlock) {
+      return '<div class="card study__block study__block--enc">' +
+        '<div class="study__block-head study__block-head--enc">' +
+          '<span class="study__block-badge">\uD83D\uDD12 Vaulted</span>' +
+          '<span class="study__block-label">' + escHtml(typeName) + ' \u2014 stored in your private vault</span>' +
+          '<span class="study__block-ops"><button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">\u2715</button></span>' +
+        '</div>' +
+        '<div class="study__enc-note">Your content is safe in your private vault \u2014 it just isn\u2019t in the published file, so it looks empty here. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
+      '</div>';
+    }
     var custom = (typeof b.editorName === "string" && b.editorName.trim()) ? b.editorName.trim() : "";
     var raw = custom || b.name || b.nav || b.kicker || b.heading || b.body || (b.items && b.items[0] && (b.items[0].q || b.items[0].title || b.items[0].value || b.items[0].caption || b.items[0].heading || b.items[0].label)) || "Untitled";
     var label = String(raw).replace(/[\*\[\]]/g, "").replace(/\s+/g, " ").trim();
@@ -3641,11 +3651,12 @@ import {
       }
       // --- per-block locked-section: vault whole sections, encrypt the rest ---
       if (!st || !Array.isArray(st.blocks)) continue;
-      var plain = [], stubs = 0, vaultBlks = [];
+      var plain = [], stubs = 0, vaultBlks = [], alreadyVaulted = [];
       for (var bi = 0; bi < st.blocks.length; bi++) {
         var b = st.blocks[bi];
         if (!b || !b.locked) continue;
-        if (b.vault && !b.encStub) vaultBlks.push(bi);   // owner marked "store this whole section privately in the vault"
+        if (b.vaultBlock && !b.vault) alreadyVaulted.push(bi);   // a lean vault pointer reopened without unlocking — keep it verbatim, never re-encrypt it
+        else if (b.vault && !b.encStub) vaultBlks.push(bi);   // owner marked "store this whole section privately in the vault"
         else if (b.encStub) stubs++;
         else plain.push(bi);
       }
@@ -3655,10 +3666,25 @@ import {
         var vidx = vaultBlks[vbi], vptr = await vaultBlockPointer(w.id, st.blocks[vidx]);
         if (vptr) st.blocks[vidx] = vptr; else plain.push(vidx);
       }
+      // Already-vaulted pointers ship verbatim (content.json keeps the lean pointer, R2 stays untouched, the
+      // R2 key is unchanged). Re-scan each one's stored JSON so this publish's grants still cover its inner
+      // media keys — otherwise the grant would shrink and revoke a pass-holder's access to those images.
+      for (var avi = 0; avi < alreadyVaulted.length; avi++) {
+        var apb = st.blocks[alreadyVaulted[avi]], akeys = [apb.vaultBlock];
+        try {
+          var aurl = adminSession() ? await vaultSignedUrl(apb.vaultBlock) : null;
+          if (aurl) {
+            var afull = await (await fetch(aurl)).json();
+            (function scan(o) { if (!o || typeof o !== "object") return; for (var kk in o) { var v = o[kk]; if (typeof v === "string") { var m = /^vault:(.+)$/i.exec(v); if (m && m[1].indexOf("/") === -1) akeys.push(m[1]); } else if (v && typeof v === "object") scan(v); } })(afull);
+          }
+        } catch (e) {}
+        vaultBlockKeys[w.id] = (vaultBlockKeys[w.id] || []).concat(akeys);
+      }
       // Recover the ticket codes that open this project's vault sections. Vault sections aren't
       // per-pass-wrapped like .enc, but registerVaultGrants still needs the plaintext code to scope
       // each pass's grant — so recover it here (ensureTicketCode caches; mirrors the .enc loop below).
-      if (vaultBlks.length) {
+      // Reopened-but-not-unlocked pointers (alreadyVaulted) count too, so their grants still refresh.
+      if (vaultBlks.length || alreadyVaulted.length) {
         for (var vsi = 0; vsi < svAll.length; vsi++) {
           var vsv = svAll[vsi];
           if (!vsv || !vsv.ticketHash || (vsv.workIds || []).indexOf(w.id) === -1) continue;
