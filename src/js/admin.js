@@ -684,7 +684,7 @@ import {
       const val = inp.value.trim();
       if (!val) { err.textContent = "Enter your ticket"; return; }
       const r = await applyTicketCode(val);
-      if (!r.ok) { err.textContent = ticketErr(r.reason); return; }
+      if (!r.ok) { if (r.reason === "expired") { done(); expiredNotice({}); return; } err.textContent = ticketErr(r.reason); return; }
       done();
     }
     modal.querySelector("[data-go]").addEventListener("click", submit);
@@ -772,6 +772,26 @@ import {
     modal.addEventListener("keydown", function (e) { if (e.key === "Escape") done(); else if (e.key === "Enter") submit(); });
     setTimeout(function () { try { modal.querySelector('[data-f="name"]').focus(); } catch (e) {} }, 40);
   }
+  // An old or revoked ticket link that still matches a KNOWN-but-expired view: say so plainly and
+  // offer a one-click path to request a fresh code (reuses the request-access panel).
+  function expiredNotice(opts) {
+    opts = opts || {};
+    if (document.querySelector(".rkexp") || document.querySelector(".rkreq")) return;
+    var modal = document.createElement("div");
+    modal.className = "pass rkexp";
+    modal.innerHTML =
+      '<div class="pass__box">' +
+        '<div class="pass__title">This access link has expired</div>' +
+        '<div class="pass__sub">The curated view you were given is no longer active. Request a fresh code and I\u2019ll email you a new link.</div>' +
+        '<div class="pass__actions"><button class="btn btn--ghost" data-cancel type="button">Not now</button><button class="btn btn--primary" data-new type="button">Request a new code</button></div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    function done() { if (modal.parentNode) modal.remove(); }
+    modal.querySelector("[data-cancel]").addEventListener("click", done);
+    modal.querySelector("[data-new]").addEventListener("click", function () { done(); requestAccessModal({ context: opts.context || "A new access code (my previous link expired)" }); });
+    modal.addEventListener("click", function (e) { if (e.target === modal) done(); });
+    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") done(); });
+  }
   // Soft, non-blocking landing prompt (anchored under the ··· menu) to enter a ticket (code or link).
   // Shown to every visitor once per session when the owner has turned Recruiter mode on.
   function recruiterFlyout(errNote) {
@@ -805,7 +825,7 @@ import {
       var v = inp.value.trim(); if (!v) { errEl.textContent = "Enter your ticket or link"; return; }
       go.disabled = true; errEl.textContent = "";
       var r = await applyTicketCode(v);
-      if (!r.ok) { go.disabled = false; errEl.textContent = ticketErr(r.reason); return; }
+      if (!r.ok) { go.disabled = false; if (r.reason === "expired") { dismiss(true); expiredNotice({}); return; } errEl.textContent = ticketErr(r.reason); return; }
       try { sessionStorage.setItem("rk:fly:dismissed", "1"); } catch (e) {}
       if (el.parentNode) el.remove(); placeSoundToast();
     }
@@ -819,7 +839,7 @@ import {
     if (deep) {
       applyTicketCode(deep).then(function (r) {
         try { var u = new URL(location.href); u.searchParams.delete("ticket"); history.replaceState({}, "", u.pathname + (u.search || "") + u.hash); } catch (e) {}
-        if (!r || !r.ok) maybeRecruiterFlyout(ticketErr(r && r.reason));
+        if (!r || !r.ok) { if (r && r.reason === "expired") expiredNotice({}); else maybeRecruiterFlyout(ticketErr(r && r.reason)); }
       });
       return;
     }

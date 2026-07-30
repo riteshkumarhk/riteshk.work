@@ -2628,6 +2628,7 @@ import {
       let html = secHead("Special Views",
         "Curated, ticketed versions of the site for one audience (say an automotive company). Choose the work, numbers and skills they see, set a ticket phrase and an optional expiry. Up to 6. <em>Tickets are a soft gate — the curated content still ships in your published file, so don't put anything confidential here.</em>") +
         reqInboxSection() +
+        quickGrantPanel() +
         '<div class="adm__addbar rolekit__bar"><button class="btn btn--add" data-act="sv-add"' + (list.length >= 6 ? " disabled" : "") + '>+ New special view</button>' +
         '<button class="btn btn--auto rolekit__cta" data-act="sv-tailor">\u2728 Tailor to a role</button></div>';
       if (!list.length) html += '<div class="adm__empty">No special views yet.</div>';
@@ -2727,6 +2728,42 @@ import {
     } catch (e) {}
   }
 
+  // ---------- one-tap Full-access quick-grant (the link the request notification's Allow button emails) ----------
+  var qgCache = null; // {code?, expiresAt?, updatedAt?} from the Worker, or null until loaded
+  function qgStatusText() {
+    if (!qgCache || !qgCache.code) return "Not set \u2014 pick a view and Save to enable one-tap Allow.";
+    if (qgCache.expiresAt && Date.now() > qgCache.expiresAt) return "Expired \u2014 re-save to refresh the link.";
+    if (!qgCache.expiresAt) return "Active \u00b7 no expiry.";
+    var d = Math.ceil((qgCache.expiresAt - Date.now()) / 86400000);
+    return "Active \u00b7 " + (d <= 0 ? "expires today" : d + " day" + (d > 1 ? "s" : "") + " left") + ".";
+  }
+  function quickGrantPanel() {
+    var views = data.specialViews || [];
+    var set = !!(qgCache && qgCache.code);
+    var opts = views.map(function (sv, i) { return '<option value="' + escAttr(sv.id) + '">' + escHtml(sv.name || ("View " + (i + 1))) + "</option>"; }).join("");
+    return '<div class="rkqg">' +
+      '<div class="rkqg__head">One-tap Full access <span class="rkqg__sub">the link the request notification\u2019s <b>Allow</b> button emails</span></div>' +
+      (views.length
+        ? '<div class="rkqg__row"><select data-qg-view>' + opts + "</select>" +
+          '<input data-qg-days type="number" min="0" step="1" value="0" placeholder="days" title="Auto-expire after (days) \u2014 0 = never" />' +
+          '<button class="btn btn--primary" data-act="qg-set">' + (set ? "Update" : "Set") + "</button></div>"
+        : '<div class="af__hint">Create a \u201cFull access\u201d special view below (all work selected + a ticket phrase), then set it here.</div>') +
+      '<div class="rkqg__status' + (set ? " is-on" : "") + '"><span>' + escHtml(qgStatusText()) + "</span>" +
+        (set ? '<span class="rkqg__acts"><button class="btn btn--ghost" data-act="qg-copylink">Copy link</button><button class="btn btn--ghost" data-act="qg-copycode">Copy code</button><button class="btn btn--danger" data-act="qg-revoke">Revoke</button></span>' : "") +
+      "</div>" +
+      '<div class="af__hint">Set your \u201cFull access\u201d view here so tapping <b>Allow</b> on a request notification instantly emails that link. Publish the view first so the link opens. Change the days or Revoke anytime.</div>' +
+    "</div>";
+  }
+  async function loadQuickGrant() {
+    try {
+      var sess = adminSession(); if (!sess) return;
+      var r = await fetch(ADMIN_WORKER + "/admin/quickgrant", { headers: { Authorization: "Bearer " + sess } });
+      if (!r.ok) return;
+      qgCache = await r.json();
+      if (activeTab === "special") renderBody();
+    } catch (e) {}
+  }
+
   function svCard(sv, i) {
     const works = data.work || [], highs = data.highlights || [], caps = data.capabilities || [];
     const expired = window.RK.svExpired(sv), left = window.RK.svDaysLeft(sv);
@@ -2747,7 +2784,7 @@ import {
       svChecklist(i, "work", "Work shown", wItems) +
       svChecklist(i, "highlights", "Numbers shown", hItems) +
       svChecklist(i, "capabilities", "Capabilities shown", cItems) +
-      '<div class="sv-card__foot"><button class="btn btn--ghost" data-act="sv-preview" data-index="' + i + '">Preview in panel \u2192</button><button class="btn btn--ghost" data-act="sv-copylink" data-index="' + i + '">Copy recruiter link</button><span class="af__hint">Publish to make it live.</span></div>' +
+      '<div class="sv-card__foot"><button class="btn btn--ghost" data-act="sv-preview" data-index="' + i + '">Preview in panel \u2192</button><button class="btn btn--ghost" data-act="sv-copylink" data-index="' + i + '">Copy recruiter link</button><button class="btn btn--ghost" data-act="sv-copycode" data-index="' + i + '">Copy code</button><span class="af__hint">Publish to make it live.</span></div>' +
       "</div>";
   }
 
@@ -3267,6 +3304,59 @@ import {
       if (_code) _finish(_code);
       else if (_sv.ticketHash) ensureTicketCode(_sv).then(_finish, function () {});
       else _finish("");
+      return;
+    }
+    if (act === "qg-set") {
+      var _panel = b.closest(".rkqg"); if (!_panel) return;
+      var _sel = _panel.querySelector("[data-qg-view]"), _daysEl = _panel.querySelector("[data-qg-days]");
+      var _svId = _sel && _sel.value;
+      var _qsv = (data.specialViews || []).filter(function (v) { return v.id === _svId; })[0];
+      if (!_qsv) { status("Pick a special view first.", false); return; }
+      var _days = Math.max(0, parseInt((_daysEl && _daysEl.value) || "0", 10) || 0);
+      var _finishQg = function (code) {
+        if (!code) { status("Set a ticket phrase on that view first.", false); return; }
+        var _sess = adminSession(); if (!_sess) { status("Sign in first.", false); return; }
+        var _exp = _days > 0 ? Date.now() + _days * 86400000 : 0;
+        fetch(ADMIN_WORKER + "/admin/quickgrant", { method: "POST", headers: { Authorization: "Bearer " + _sess, "Content-Type": "application/json" }, body: JSON.stringify({ code: code, expiresAt: _exp }) })
+          .then(function (r) { if (!r.ok) throw 0; qgCache = { code: code, expiresAt: _exp, updatedAt: Date.now() }; renderBody(); status("One-tap Full access set \u2014 tapping Allow now emails this view.", true); })
+          .catch(function () { status("Couldn\u2019t save the quick-grant \u2014 try again.", false); });
+      };
+      var _pc = rkNormPass(ticketPlain[_qsv.id]) ? ticketPlain[_qsv.id] : "";
+      if (_pc) _finishQg(_pc);
+      else ensureTicketCode(_qsv).then(_finishQg, function () {});
+      return;
+    }
+    if (act === "qg-revoke") {
+      var _sess2 = adminSession(); if (!_sess2) return;
+      fetch(ADMIN_WORKER + "/admin/quickgrant", { method: "POST", headers: { Authorization: "Bearer " + _sess2, "Content-Type": "application/json" }, body: JSON.stringify({ revoke: true }) })
+        .then(function () { qgCache = {}; renderBody(); status("One-tap Full access revoked.", true); })
+        .catch(function () { status("Couldn\u2019t revoke \u2014 try again.", false); });
+      return;
+    }
+    if (act === "qg-copylink") {
+      var _l = location.origin + "/?ticket=" + encodeURIComponent((qgCache && qgCache.code) || "");
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(_l).then(function () { status("Full-access link copied.", true); }, function () { status(_l); });
+      else status(_l);
+      return;
+    }
+    if (act === "qg-copycode") {
+      var _c2 = (qgCache && qgCache.code) || "";
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(_c2).then(function () { status("Full-access code copied.", true); }, function () { status(_c2); });
+      else status(_c2);
+      return;
+    }
+    if (act === "sv-copycode") {
+      var _sv3 = (data.specialViews || [])[i]; if (!_sv3) return;
+      var _tin3 = document.querySelector('input[data-sv="' + i + '"][data-field="ticket"]');
+      var _code3 = (_tin3 && _tin3.value.trim()) || ticketPlain[_sv3.id] || "";
+      var _fin3 = function (c) {
+        if (!c) { status("Set a ticket phrase for this view first.", false); return; }
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(c).then(function () { status("Ticket code copied.", true); }, function () { status(c); });
+        else status(c);
+      };
+      if (_code3) _fin3(_code3);
+      else if (_sv3.ticketHash) ensureTicketCode(_sv3).then(_fin3, function () {});
+      else _fin3("");
       return;
     }
     if (act === "plate-sample") { data.work[i].theme = b.dataset.theme; data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Motion placeholder applied.", true); return; }
@@ -7483,7 +7573,7 @@ import {
     // Paste into a rich-text body as plain text (no foreign colours/fonts).
     root.addEventListener("paste", onRtPaste);
     root.querySelectorAll(".adm__tab").forEach((t) =>
-      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); if (activeTab === "special") loadRequests(); try { t.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {} tabsSync(); })
+      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); if (activeTab === "special") { loadRequests(); loadQuickGrant(); } try { t.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {} tabsSync(); })
     );
     // tab-strip overflow flippers (\u2039 \u203A)
     root.querySelectorAll("[data-tabflip]").forEach((b) => b.addEventListener("click", () => tabScroll(+b.dataset.tabflip)));
@@ -7587,6 +7677,7 @@ import {
     if (body) body.hidden = false;
     renderBody();
     loadRequests();   // prefetch access requests for the Special Views tab
+    loadQuickGrant(); // prefetch the one-tap Full-access quick-grant status
     musSilence(); // silence the ambient music while editing
     thDismiss(true); // belt-and-suspenders: the ticket nudge must never linger over the editor
     document.documentElement.classList.add("adm-lock");

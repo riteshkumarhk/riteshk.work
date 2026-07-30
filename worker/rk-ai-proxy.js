@@ -70,9 +70,10 @@ export default {
           const msg = [name + (company ? " \u2014 " + company : ""), email, "Wants: " + (context || "general access"), note ? ("\u201c" + note + "\u201d") : ""].filter(Boolean).join("\n");
           var hook = String(env.REQUEST_WEBHOOK).trim();
           if (!/^https?:\/\//i.test(hook)) hook = "https://ntfy.sh/" + hook.replace(/^\/+/, "");   // a bare topic name -> full ntfy.sh URL
-          const _dtok = await hmac(env.SESSION_SECRET || "", "reqdismiss." + reqId);   // signs the one-tap Ignore link
-          const _mailto = "mailto:" + email + "?subject=" + encodeURIComponent("Your access to my work \u2014 Ritesh Kumar") + "&body=" + encodeURIComponent("Hi " + name + ",\n\nThanks for the interest \u2014 here's your code: [PASTE CODE]\nOr open it directly: https://riteshk.work/?ticket=[CODE]\n\n\u2014 Ritesh");
-          const _actions = "view, Email reply, " + _mailto + "; view, Open in studio, https://riteshk.work/studio; http, Ignore, " + url.origin + "/req/dismiss?id=" + encodeURIComponent(reqId) + "&t=" + _dtok + ", method=POST, clear=true";
+          const _allowTok = await hmac(env.SESSION_SECRET || "", "reqallow." + reqId);     // one-tap Allow: auto-send the full-access link
+          const _cancelTok = await hmac(env.SESSION_SECRET || "", "reqcancel." + reqId);    // one-tap Cancel: auto-send a decline note
+          const _rq = "id=" + encodeURIComponent(reqId);
+          const _actions = "http, Allow, " + url.origin + "/req/allow?" + _rq + "&t=" + _allowTok + ", method=POST, clear=true; view, Open in studio, https://riteshk.work/studio; http, Cancel, " + url.origin + "/req/cancel?" + _rq + "&t=" + _cancelTok + ", method=POST, clear=true";
           try { await fetch(hook, { method: "POST", headers: { Title: "New access request", Tags: "envelope", Priority: "high", Actions: _actions }, body: msg }); } catch (e) {}
         }
         return json({ ok: true }, 200, cors);
@@ -87,6 +88,46 @@ export default {
       if (!timingSafeEqual(_t, _exp)) return new Response("Invalid or expired link", { status: 403, headers: cors });
       try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
       return new Response("Request dismissed \u2014 you can close this.", { status: 200, headers: Object.assign({ "Content-Type": "text/plain; charset=utf-8" }, cors) });
+    }
+
+    // ---------- one-tap "Allow" from the notification: auto-send the Full-access link (signed capability link) ----------
+    if (url.pathname === "/req/allow") {
+      const _id = url.searchParams.get("id") || "", _t = url.searchParams.get("t") || "";
+      const _reply = (s) => new Response(s, { status: 200, headers: Object.assign({ "Content-Type": "text/plain; charset=utf-8" }, cors) });
+      if (!_id || !_t || !env.VAULT_GRANTS) return new Response("Bad request", { status: 400, headers: cors });
+      if (!timingSafeEqual(_t, await hmac(env.SESSION_SECRET || "", "reqallow." + _id))) return new Response("Invalid or expired link", { status: 403, headers: cors });
+      const rec = await env.VAULT_GRANTS.get(_id, "json");
+      if (!rec || !rec.email) return _reply("Already handled \u2014 nothing to send.");
+      const qg = await env.VAULT_GRANTS.get("quickgrant:full", "json");
+      if (!qg || !qg.code) return _reply("No Full-access quick-grant is set up yet. Open the studio, mark a special view as Full access, then tap Allow again.");
+      if (qg.expiresAt && Date.now() > qg.expiresAt) return _reply("Your Full-access link has expired. Refresh it in the studio, then tap Allow again.");
+      const link = "https://riteshk.work/?ticket=" + encodeURIComponent(qg.code);
+      const who = String(rec.name || "there"), me = env.OWNER_EMAIL || "riteshkumarhk@gmail.com";
+      const html = "<p>Hi " + emailEsc(who) + ",</p><p>Thanks for your interest \u2014 here\u2019s access to my work:</p>"
+        + "<p><a href=\"" + link + "\" style=\"display:inline-block;padding:10px 18px;background:#0a0a0a;color:#fff;border-radius:8px;text-decoration:none\">Open my work</a></p>"
+        + "<p style=\"color:#555;font-size:13px\">Or paste this link: " + link + "</p><p>\u2014 Ritesh Kumar</p>";
+      const text = "Hi " + who + ",\n\nThanks for your interest \u2014 here's access to my work:\n" + link + "\n\n\u2014 Ritesh Kumar";
+      const sent = await sendEmail(env, { to: rec.email, subject: "Your access to my work \u2014 Ritesh Kumar", html, text, replyTo: me });
+      if (!sent.ok) return _reply("Couldn\u2019t send the email (" + (sent.status || "no email service") + "). Check the Resend setup, then tap Allow again.");
+      try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
+      return _reply("Sent full access to " + rec.email + ". \u2713");
+    }
+
+    // ---------- one-tap "Cancel" from the notification: email a polite decline (Reply-To you) + dismiss ----------
+    if (url.pathname === "/req/cancel") {
+      const _id = url.searchParams.get("id") || "", _t = url.searchParams.get("t") || "";
+      const _reply = (s) => new Response(s, { status: 200, headers: Object.assign({ "Content-Type": "text/plain; charset=utf-8" }, cors) });
+      if (!_id || !_t || !env.VAULT_GRANTS) return new Response("Bad request", { status: 400, headers: cors });
+      if (!timingSafeEqual(_t, await hmac(env.SESSION_SECRET || "", "reqcancel." + _id))) return new Response("Invalid or expired link", { status: 403, headers: cors });
+      const rec = await env.VAULT_GRANTS.get(_id, "json");
+      if (!rec || !rec.email) return _reply("Already handled.");
+      const who = String(rec.name || "there"), me = env.OWNER_EMAIL || "riteshkumarhk@gmail.com";
+      const html = "<p>Hi " + emailEsc(who) + ",</p><p>Thanks for reaching out about my work. I\u2019m not able to share access right now \u2014 feel free to reply here and we can talk.</p><p>\u2014 Ritesh Kumar</p>";
+      const text = "Hi " + who + ",\n\nThanks for reaching out about my work. I'm not able to share access right now \u2014 feel free to reply here and we can talk.\n\n\u2014 Ritesh Kumar";
+      const sent = await sendEmail(env, { to: rec.email, subject: "About your access request \u2014 Ritesh Kumar", html, text, replyTo: me });
+      if (!sent.ok) return _reply("Couldn\u2019t send the note (" + (sent.status || "no email service") + "). Dismiss it in the studio instead, or check the Resend setup.");
+      try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
+      return _reply("Sent a cancellation note to " + rec.email + " (replies come to you). \u2713");
     }
 
     // ---------- admin: verify the admin key, issue a short signed session ----------
@@ -343,6 +384,27 @@ export default {
       if (request.method === "PUT") { try { const b = await request.json(); await env.VAULT_GRANTS.put("cfg:keyring", JSON.stringify(b || {})); return json({ ok: true }, 200, cors); } catch (e) { return json({ error: "Save failed" }, 400, cors); } }
       return json({ error: "Method not allowed" }, 405, cors);
     }
+    // ---------- admin: the "Full access" quick-grant the notification's Allow button emails (session-gated) ----------
+    // The ONE deliberate exception to zero-knowledge: the owner uploads a full-access code here so the
+    // Worker can email it on one tap. Rotatable, timeboxable, revocable (POST {revoke:true}). Curated
+    // special-view codes never live here — they stay in the recovery-encrypted keyring.
+    if (url.pathname === "/admin/quickgrant") {
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Store not configured" }, 500, cors);
+      if (request.method === "GET") return json((await env.VAULT_GRANTS.get("quickgrant:full", "json")) || {}, 200, cors);
+      if (request.method === "POST") {
+        try {
+          const b = await request.json();
+          if (b && b.revoke) { await env.VAULT_GRANTS.delete("quickgrant:full"); return json({ ok: true, revoked: true }, 200, cors); }
+          const code = String((b && b.code) || "").trim();
+          if (!code) return json({ error: "Add the Full-access code first." }, 400, cors);
+          const rec = { code, expiresAt: Number((b && b.expiresAt) || 0) || 0, updatedAt: Date.now() };
+          await env.VAULT_GRANTS.put("quickgrant:full", JSON.stringify(rec));
+          return json({ ok: true, expiresAt: rec.expiresAt, updatedAt: rec.updatedAt }, 200, cors);
+        } catch (e) { return json({ error: "Save failed" }, 400, cors); }
+      }
+      return json({ error: "Method not allowed" }, 405, cors);
+    }
 
     // ---------- admin: authenticated GitHub proxy (holds the GH token server-side) ----------
     if (url.pathname.startsWith("/admin/gh/")) {
@@ -574,6 +636,28 @@ function timingSafeEqual(a, b) {
   if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
   let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return r === 0;
+}
+function emailEsc(s) {
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+// Best-effort transactional email via Resend. Returns {ok,status,detail} and NEVER throws — it
+// degrades to ok:false when RESEND_API_KEY / a verified sender domain isn't configured yet, so the
+// one-tap Allow/Cancel report a clear "not set up" message instead of failing hard.
+async function sendEmail(env, msg) {
+  if (!env.RESEND_API_KEY) return { ok: false, status: 0, detail: "no-api-key" };
+  const from = env.EMAIL_FROM || "Ritesh Kumar <access@riteshk.work>";
+  const body = { from, to: [msg.to], subject: msg.subject, html: msg.html };
+  if (msg.text) body.text = msg.text;
+  if (msg.replyTo) body.reply_to = msg.replyTo;
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    let detail = ""; try { detail = await r.text(); } catch (e) {}
+    return { ok: r.ok, status: r.status, detail: String(detail).slice(0, 300) };
+  } catch (e) { return { ok: false, status: 0, detail: String((e && e.message) || e) }; }
 }
 
 /* ---------- admin auth crypto (PBKDF2 verify + HMAC session) ---------- */

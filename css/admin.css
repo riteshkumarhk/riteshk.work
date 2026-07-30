@@ -422,6 +422,16 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .rkinbox__note { font-size: .78rem; color: var(--text-dim); margin-top: .3rem; font-style: italic; }
 .rkinbox__acts { display: flex; flex-direction: column; gap: .4rem; flex: 0 0 auto; }
 .rkinbox__acts .btn { font-size: .72rem; padding: .3rem .6rem; }
+.rkqg { margin: .2rem 0 1.4rem; border: 1px solid var(--line); border-radius: 12px; padding: .85rem .9rem; background: var(--bg-2); }
+.rkqg__head { font-family: var(--mono); font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); margin-bottom: .6rem; }
+.rkqg__sub { text-transform: none; letter-spacing: 0; font-family: var(--sans); font-size: .74rem; color: var(--text-faint); margin-left: .4rem; }
+.rkqg__row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.rkqg__row select { flex: 1 1 180px; width: auto; }
+.rkqg__row input[data-qg-days] { width: 76px; flex: 0 0 auto; }
+.rkqg__status { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin-top: .6rem; font-size: .82rem; color: var(--text-dim); }
+.rkqg__status.is-on { color: var(--text); }
+.rkqg__acts { display: flex; gap: .4rem; margin-left: auto; flex-wrap: wrap; }
+.rkqg__acts .btn { font-size: .72rem; padding: .3rem .6rem; }
 .adm__empty { color: var(--text-dim); font-size: .82rem; padding: 1rem; border: 1px dashed var(--line); border-radius: 10px; margin-bottom: 1rem; text-align: center; }
 .sv-card--exp { opacity: .72; }
 .sv-badge { font-family: var(--mono); font-size: .52rem; text-transform: uppercase; letter-spacing: .06em; color: #ff9a7a; border: 1px solid rgba(255, 154, 122, .35); border-radius: 100px; padding: .05rem .4rem; font-weight: 400; }
