@@ -719,8 +719,8 @@ import {
       : reason === "notready" ? "One moment \u2014 the page is still loading. Try again."
       : "That ticket doesn\u2019t match anything.";
   }
-  // Soft, non-blocking landing prompt for recruiters to enter a ticket (code or link). Owner-gated
-  // OFF; shown only when the owner turned on Recruiter mode, to non-owners, once per session.
+  // Soft, non-blocking landing prompt (anchored under the ··· menu) to enter a ticket (code or link).
+  // Shown to every visitor once per session when the owner has turned Recruiter mode on.
   function recruiterFlyout(errNote) {
     if (document.querySelector(".rkfly")) return;
     var el = document.createElement("div");
@@ -764,8 +764,7 @@ import {
   }
   function maybeRecruiterFlyout(errNote) {
     var d = (window.RK && (window.RK.data || window.RK.published)) || null;   // data === published on the live site
-    if (!(d && d.recruiterMode)) return;                     // owner opted out
-    if (localStorage.getItem(HASH_KEY)) return;              // owner's own browser — no nag
+    if (!(d && d.recruiterMode)) return;                     // owner hasn't turned Recruiter mode on
     try { if (sessionStorage.getItem("rk:fly:dismissed")) return; } catch (e) {}
     if (document.querySelector(".sv-banner")) return;        // already in a curated / present view
     recruiterFlyout(errNote);
