@@ -1676,6 +1676,7 @@
     if (firstOpen) requestAnimationFrame(function () { overlay.classList.add("is-open"); requestAnimationFrame(updateSpy); });
     else updateSpy();
     if (!opts.silent) focusOverlay();
+    try { document.dispatchEvent(new Event("rk:route")); } catch (e) {}
   }
   function focusOverlay() { var f = overlay && overlay.querySelector(".pj__icon--close"); if (f) { try { f.focus(); } catch (e) {} } }
 
@@ -1697,6 +1698,7 @@
     activeId = null;
     previewSelIdx = -1;
     if (opts.push !== false) { try { history.pushState({}, "", "/"); } catch (e) {} }
+    try { document.dispatchEvent(new Event("rk:route")); } catch (e) {}
   }
 
   /* ---------- unlock (gated deeper tier) ---------- */

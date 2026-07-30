@@ -752,6 +752,7 @@ import {
       if (instant) kill(); else setTimeout(kill, 300);
     }
     el.__dismiss = dismiss;   // let the ··· menu fold this away when it opens
+    el.__hide = function () { if (el.parentNode) el.remove(); placeSoundToast(); };   // route change — remove WITHOUT marking it dismissed
     el.querySelector(".rkfly__cancel").addEventListener("click", function () { dismiss(); });
     el.querySelector(".rkfly__x").addEventListener("click", function () { dismiss(); });
     async function submit() {
@@ -767,6 +768,7 @@ import {
     setTimeout(function () { try { inp.focus(); } catch (e) {} }, 350);
   }
   function recruiterInit() {
+    document.addEventListener("rk:route", syncRecruiterFlyout);   // a case study opens/closes over the landing without a reload
     var deep = new URLSearchParams(location.search || "").get("ticket");
     if (deep) {
       applyTicketCode(deep).then(function (r) {
@@ -777,12 +779,24 @@ import {
     }
     maybeRecruiterFlyout();
   }
+  function onLandingPath() {                                  // the main page only — not /work/… case studies, not /studio
+    var p = location.pathname || "/";
+    return p === "/" || /\/index\.html?$/i.test(p);
+  }
   function maybeRecruiterFlyout(errNote) {
+    if (!onLandingPath()) return;                            // only offer it on the landing page
     var d = (window.RK && (window.RK.data || window.RK.published)) || null;   // data === published on the live site
     if (!(d && d.recruiterMode)) return;                     // owner hasn't turned Recruiter mode on
     try { if (sessionStorage.getItem("rk:fly:dismissed")) return; } catch (e) {}
     if (document.querySelector(".sv-banner")) return;        // already in a curated / present view
     recruiterFlyout(errNote);
+  }
+  // A case study opens/closes over the landing without a reload; hide the flyout while one is open and
+  // bring it back on return — but only if the visitor hasn't intentionally dismissed it.
+  function syncRecruiterFlyout() {
+    var el = document.querySelector(".rkfly");
+    if (onLandingPath()) { if (!el) maybeRecruiterFlyout(); }
+    else if (el && el.__hide) el.__hide();
   }
   function afterRender(fn) {
     if (window.__siteRendered) fn();
