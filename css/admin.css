@@ -400,6 +400,9 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .rkfly__err { color: #ff9a7a; font-size: .72rem; min-height: 1.1em; margin: 6px 2px 0; }
 .rkfly__row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
 .rkfly__row .btn { font-size: .78rem; }
+.rkfly__req { margin: 10px 2px 0; font-size: .72rem; color: var(--text-faint); }
+.rkfly__reqbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.rkfly__reqbtn:hover { color: var(--text); }
 @media (max-width: 480px) { .rkfly { top: 56px; width: min(340px, calc(100vw - 20px)); } }
 
 /* ---------- special-view admin cards ---------- */

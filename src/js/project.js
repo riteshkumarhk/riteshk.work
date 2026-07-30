@@ -1712,6 +1712,7 @@
       title: "Unlock the full case study",
       sub: "Enter the pass you were given to reveal the deeper cut.",
       placeholder: "Your pass", cta: "Unlock", password: false,
+      requestCtx: "Deeper cut \u2014 " + plain(w.title),
       onSubmit: async function (v, err) {
         var hasVault = (st.blocks || []).some(function (b) { return b && b.locked && b.vaultBlock; });
         if (passWrap) {
@@ -1745,7 +1746,9 @@
       '<input type="' + (opts.password ? "password" : "text") + '" placeholder="' + attr(opts.placeholder || "") + '" autocomplete="off" />' +
       '<div class="pass__err"></div>' +
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
-      '<button class="btn btn--primary" data-go>' + esc(opts.cta || "Enter") + "</button></div></div>";
+      '<button class="btn btn--primary" data-go>' + esc(opts.cta || "Enter") + "</button></div>" +
+      (opts.requestCtx && window.RK && window.RK.requestAccess ? '<button type="button" class="pass__link" data-request>No pass? Request access</button>' : "") +
+      "</div>";
     document.body.appendChild(modal);
     var inp = modal.querySelector("input"), err = modal.querySelector(".pass__err");
     setTimeout(function () { try { inp.focus(); } catch (e) {} }, 30);
@@ -1758,6 +1761,8 @@
       Promise.resolve(opts.onSubmit(v, err)).then(function (ok) { if (ok) done(); });
     }
     modal.querySelector("[data-go]").addEventListener("click", submit);
+    var reqLink = modal.querySelector("[data-request]");
+    if (reqLink) reqLink.addEventListener("click", function () { done(); if (window.RK && window.RK.requestAccess) window.RK.requestAccess({ context: opts.requestCtx }); });
     modal.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });
   }
 

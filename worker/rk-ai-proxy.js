@@ -23,6 +23,7 @@
      GH_TOKEN        (secret)  a GitHub token (Contents: read+write on your repo)
      OWNER           (text)    riteshkumarhk
      REPO            (text)    riteshk.work
+     REQUEST_WEBHOOK (secret)  optional - an ntfy.sh URL (or any webhook) pinged on a new access request
    ========================================================================== */
 
 const PROVIDERS = {
@@ -46,6 +47,31 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
 
     const url = new URL(request.url);
+
+    // ---------- public: a visitor without a code asks for one (rate-limited + honeypot) ----------
+    if (url.pathname === "/request-access") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Requests aren\u2019t available right now." }, 503, cors);
+      const reqIp = request.headers.get("CF-Connecting-IP") || "0";
+      const reqRl = "rl:req:" + reqIp;
+      const reqTries = parseInt((await env.VAULT_GRANTS.get(reqRl)) || "0", 10) || 0;
+      if (reqTries >= 5) return json({ error: "You\u2019ve sent a few already \u2014 I\u2019ll be in touch. Try later." }, 429, cors);
+      try {
+        const b = await request.json();
+        if (b && String(b.hp || "").trim()) return json({ ok: true }, 200, cors);   // honeypot: silently drop bots
+        const clip = (s, n) => String(s == null ? "" : s).replace(/\s+/g, " ").trim().slice(0, n);
+        const name = clip(b && b.name, 80), email = clip(b && b.email, 140), company = clip(b && b.company, 140), note = clip(b && b.note, 400), context = clip(b && b.context, 160);
+        if (!name || !company || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "Add your name, company/role and a valid work email." }, 400, cors);
+        await env.VAULT_GRANTS.put(reqRl, String(reqTries + 1), { expirationTtl: 3600 });
+        const rec = { name, email, company, note, context, at: new Date().toISOString(), ip: reqIp, ua: clip(request.headers.get("User-Agent"), 200) };
+        try { await env.VAULT_GRANTS.put("req:" + Date.now() + ":" + Math.random().toString(36).slice(2, 8), JSON.stringify(rec), { expirationTtl: 90 * 24 * 3600 }); } catch (e) {}
+        if (env.REQUEST_WEBHOOK) {
+          const msg = [name + (company ? " \u2014 " + company : ""), email, "Wants: " + (context || "general access"), note ? ("\u201c" + note + "\u201d") : ""].filter(Boolean).join("\n");
+          try { await fetch(env.REQUEST_WEBHOOK, { method: "POST", headers: { Title: "New access request", Tags: "envelope", Priority: "high" }, body: msg }); } catch (e) {}
+        }
+        return json({ ok: true }, 200, cors);
+      } catch (e) { return json({ error: "Couldn\u2019t send that \u2014 try again." }, 400, cors); }
+    }
 
     // ---------- admin: verify the admin key, issue a short signed session ----------
     if (url.pathname === "/admin/login") {
@@ -270,6 +296,19 @@ export default {
         await env.VAULT_GRANTS.delete(rlKey);
         return json(await issueTrust(env), 200, cors);
       } catch (e) { return json({ error: "Step-up failed" }, 400, cors); }
+    }
+    // Owner's request inbox: the access requests visitors have sent (session-gated). Newest first.
+    if (url.pathname === "/admin/requests") {
+      if (request.method !== "GET") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ requests: [] }, 200, cors);
+      try {
+        const l = await env.VAULT_GRANTS.list({ prefix: "req:" });
+        const out = [];
+        for (const k of l.keys) { const v = await env.VAULT_GRANTS.get(k.name, "json"); if (v) out.push(Object.assign({ id: k.name }, v)); }
+        out.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+        return json({ requests: out.slice(0, 50) }, 200, cors);
+      } catch (e) { return json({ requests: [] }, 200, cors); }
     }
     // Owner's private ticket keyring: an opaque recovery-encrypted blob {svId:code}, stored server-side
     // (cross-device). The Worker never sees the codes — only the ciphertext.

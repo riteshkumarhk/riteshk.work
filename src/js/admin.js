@@ -728,6 +728,50 @@ import {
       : reason === "notready" ? "One moment \u2014 the page is still loading. Try again."
       : "That ticket doesn\u2019t match anything.";
   }
+  // Shared “request a code” panel — reachable from the recruiter flyout and the case-study deeper cut.
+  // Posts to the Worker (which logs it + pings the owner); the owner then approves and issues a code.
+  function requestAccessModal(opts) {
+    opts = opts || {};
+    if (document.querySelector(".rkreq")) return;
+    var modal = document.createElement("div");
+    modal.className = "pass rkreq";
+    modal.innerHTML =
+      '<div class="pass__box">' +
+        '<div class="pass__title">Request access</div>' +
+        '<div class="pass__sub">Most of my work is open. A few pieces are under NDA \u2014 tell me who you are and I\u2019ll email a code for the curated view.</div>' +
+        '<div class="pass__note rkreq__ctx" hidden></div>' +
+        '<input data-f="name" type="text" placeholder="Your name" autocomplete="name" />' +
+        '<input data-f="email" type="email" placeholder="Work email" autocomplete="email" />' +
+        '<input data-f="company" type="text" placeholder="Company / role" autocomplete="organization" />' +
+        '<input data-f="note" type="text" placeholder="Anything specific? (optional)" />' +
+        '<input data-f="hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" />' +
+        '<div class="pass__err"></div>' +
+        '<div class="pass__actions"><button class="btn btn--ghost" data-cancel type="button">Cancel</button><button class="btn btn--primary" data-go type="button">Send request</button></div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    var box = modal.querySelector(".pass__box"), errEl = modal.querySelector(".pass__err"), go = modal.querySelector("[data-go]");
+    if (opts.context) { var cx = modal.querySelector(".rkreq__ctx"); cx.textContent = "Requesting: " + opts.context; cx.hidden = false; }
+    function done() { if (modal.parentNode) modal.remove(); }
+    function val(f) { var e2 = modal.querySelector('[data-f="' + f + '"]'); return e2 ? e2.value.trim() : ""; }
+    async function submit() {
+      var name = val("name"), email = val("email"), company = val("company"), note = val("note"), hp = val("hp");
+      if (!name || !company || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { errEl.textContent = "Add your name, company/role and a valid work email."; return; }
+      go.disabled = true; errEl.textContent = "Sending\u2026";
+      try {
+        var res = await fetch(ADMIN_WORKER + "/request-access", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name, email: email, company: company, note: note, context: opts.context || "", hp: hp }) });
+        var j = await res.json().catch(function () { return {}; });
+        if (!res.ok || !j || !j.ok) { go.disabled = false; errEl.textContent = (j && j.error) || "Couldn\u2019t send that \u2014 try again."; return; }
+        box.innerHTML = '<div class="pass__title">Request sent</div><div class="pass__sub"></div><div class="pass__actions"><button class="btn btn--primary" data-done type="button">Done</button></div>';
+        box.querySelector(".pass__sub").textContent = "Thanks \u2014 I\u2019ll email a code to " + email + " soon. Everything else on the site is already open.";
+        box.querySelector("[data-done]").addEventListener("click", done);
+      } catch (e2) { go.disabled = false; errEl.textContent = "Network hiccup \u2014 try again."; }
+    }
+    modal.querySelector("[data-cancel]").addEventListener("click", done);
+    go.addEventListener("click", submit);
+    modal.addEventListener("click", function (e) { if (e.target === modal) done(); });
+    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") done(); else if (e.key === "Enter") submit(); });
+    setTimeout(function () { try { modal.querySelector('[data-f="name"]').focus(); } catch (e) {} }, 40);
+  }
   // Soft, non-blocking landing prompt (anchored under the ··· menu) to enter a ticket (code or link).
   // Shown to every visitor once per session when the owner has turned Recruiter mode on.
   function recruiterFlyout(errNote) {
@@ -740,7 +784,8 @@ import {
       '<div class="rkfly__sub">Recruiting? Enter the ticket you were given to unlock the NDA case studies shared with you \u2014 everything else here is already open.</div>' +
       '<input class="rkfly__inp" type="text" placeholder="Ticket code or link" autocomplete="off" />' +
       '<div class="rkfly__err"></div>' +
-      '<div class="rkfly__row"><button class="btn btn--ghost rkfly__cancel" type="button">Not now</button><button class="btn btn--primary rkfly__go" type="button">Unlock</button></div>';
+      '<div class="rkfly__row"><button class="btn btn--ghost rkfly__cancel" type="button">Not now</button><button class="btn btn--primary rkfly__go" type="button">Unlock</button></div>' +
+      '<div class="rkfly__req">No code? <button type="button" class="rkfly__reqbtn">Request access</button></div>';
     document.body.appendChild(el);
     var inp = el.querySelector(".rkfly__inp"), errEl = el.querySelector(".rkfly__err"), go = el.querySelector(".rkfly__go");
     if (errNote) errEl.textContent = errNote;
@@ -755,6 +800,7 @@ import {
     el.__hide = function () { if (el.parentNode) el.remove(); placeSoundToast(); };   // route change — remove WITHOUT marking it dismissed
     el.querySelector(".rkfly__cancel").addEventListener("click", function () { dismiss(); });
     el.querySelector(".rkfly__x").addEventListener("click", function () { dismiss(); });
+    var _req = el.querySelector(".rkfly__reqbtn"); if (_req) _req.addEventListener("click", function () { requestAccessModal({}); });
     async function submit() {
       var v = inp.value.trim(); if (!v) { errEl.textContent = "Enter your ticket or link"; return; }
       go.disabled = true; errEl.textContent = "";
@@ -913,6 +959,7 @@ import {
     const more = document.getElementById("moreBtn");
     if (more) more.addEventListener("click", toggleMenu);
     musInit();
+    if (window.RK) window.RK.requestAccess = requestAccessModal;
     afterRender(recruiterInit);
     // Direct studio entry: /studio (and /admin) arrive here as ?studio=1 via the 404 SPA
     // fallback. Tidy the address bar to /studio and open the same gate the clock menu uses.
