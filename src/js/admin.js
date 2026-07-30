@@ -659,8 +659,8 @@ import {
     modal.className = "pass";
     modal.innerHTML =
       '<div class="pass__box"><div class="pass__title">Special view</div>' +
-      '<div class="pass__sub">Enter the ticket you were given to unlock a curated view of the work.</div>' +
-      '<input type="text" placeholder="Your ticket" autocomplete="off" autofocus />' +
+      '<div class="pass__sub">Enter the ticket you were given — a code or a link — to unlock a curated view of the work.</div>' +
+      '<input type="text" placeholder="Ticket code or link" autocomplete="off" autofocus />' +
       '<div class="pass__err"></div>' +
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
       '<button class="btn btn--primary" data-go>Enter</button></div></div>';
@@ -674,17 +674,9 @@ import {
     async function submit() {
       const val = inp.value.trim();
       if (!val) { err.textContent = "Enter your ticket"; return; }
-      const h = await sha256(val.toLowerCase());
-      const views = (window.RK && window.RK.data && window.RK.data.specialViews) || [];
-      const match = views.filter(function (v) { return v.ticketHash === h; })[0];
-      if (!match) { err.textContent = "That ticket doesn't match anything."; return; }
-      if (window.RK.svExpired(match)) { err.textContent = "This curated view has expired."; return; }
+      const r = await applyTicketCode(val);
+      if (!r.ok) { err.textContent = ticketErr(r.reason); return; }
       done();
-      try { sessionStorage.setItem("rk:sv:code", val); } catch (e) {}   // survive a reload
-      if (window.RK.showUnlockingBanner) window.RK.showUnlockingBanner("Unlocking\u2026");
-      if (window.RK.decryptActiveTicket) { try { await window.RK.decryptActiveTicket(window.RK.data, match, val); } catch (e) {} }
-      window.RK.applySpecialView(match.id);
-      ticketArrived(match);
     }
     modal.querySelector("[data-go]").addEventListener("click", submit);
     modal.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });
@@ -693,6 +685,94 @@ import {
     flash("Ticket accepted \u2014 your curated projects are in the Work section below.");
     const el = document.getElementById("work");
     if (el && el.scrollIntoView) requestAnimationFrame(function () { try { el.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) {} });
+  }
+  // Turn a raw ticket string OR a full link into a code, then unlock its curated view. Shared by the
+  // ⋯ dialog, the recruiter flyout, and the ?ticket= deep link.
+  function extractTicketCode(raw) {
+    raw = (raw || "").trim();
+    if (!raw) return "";
+    if (/[?&]ticket=/i.test(raw) || /^https?:\/\//i.test(raw)) {
+      try { var u = new URL(raw, location.origin); var t = u.searchParams.get("ticket"); if (t) return t.trim(); } catch (e) {}
+      var m = /[?&]ticket=([^&#\s]+)/i.exec(raw); if (m) { try { return decodeURIComponent(m[1]).trim(); } catch (e) { return m[1].trim(); } }
+    }
+    return raw;
+  }
+  async function applyTicketCode(raw) {
+    var code = extractTicketCode(raw);
+    if (!code) return { ok: false, reason: "empty" };
+    if (!(window.RK && window.RK.applySpecialView)) return { ok: false, reason: "notready" };
+    var h = await sha256(code.toLowerCase());
+    var views = (window.RK.data && window.RK.data.specialViews) || [];
+    var match = views.filter(function (v) { return v.ticketHash === h; })[0];
+    if (!match) return { ok: false, reason: "nomatch" };
+    if (window.RK.svExpired && window.RK.svExpired(match)) return { ok: false, reason: "expired" };
+    try { sessionStorage.setItem("rk:sv:code", code); } catch (e) {}
+    if (window.RK.showUnlockingBanner) window.RK.showUnlockingBanner("Unlocking\u2026");
+    if (window.RK.decryptActiveTicket) { try { await window.RK.decryptActiveTicket(window.RK.data, match, code); } catch (e) {} }
+    window.RK.applySpecialView(match.id);
+    ticketArrived(match);
+    return { ok: true, view: match };
+  }
+  function ticketErr(reason) {
+    return reason === "expired" ? "That ticket has expired."
+      : reason === "empty" ? "Enter your ticket or link."
+      : reason === "notready" ? "One moment \u2014 the page is still loading. Try again."
+      : "That ticket doesn\u2019t match anything.";
+  }
+  // Soft, non-blocking landing prompt for recruiters to enter a ticket (code or link). Owner-gated
+  // OFF; shown only when the owner turned on Recruiter mode, to non-owners, once per session.
+  function recruiterFlyout(errNote) {
+    if (document.querySelector(".rkfly")) return;
+    var el = document.createElement("div");
+    el.className = "rkfly";
+    el.innerHTML =
+      '<button class="rkfly__x" type="button" aria-label="Dismiss">\u00d7</button>' +
+      '<div class="rkfly__title">Special view</div>' +
+      '<div class="rkfly__sub">Recruiting? Enter the ticket you were given to unlock the NDA case studies shared with you \u2014 everything else here is already open.</div>' +
+      '<input class="rkfly__inp" type="text" placeholder="Ticket code or link" autocomplete="off" />' +
+      '<div class="rkfly__err"></div>' +
+      '<div class="rkfly__row"><button class="btn btn--ghost rkfly__cancel" type="button">Not now</button><button class="btn btn--primary rkfly__go" type="button">Unlock</button></div>';
+    document.body.appendChild(el);
+    var inp = el.querySelector(".rkfly__inp"), errEl = el.querySelector(".rkfly__err"), go = el.querySelector(".rkfly__go");
+    if (errNote) errEl.textContent = errNote;
+    requestAnimationFrame(function () { el.classList.add("is-on"); });
+    function dismiss() { try { sessionStorage.setItem("rk:fly:dismissed", "1"); } catch (e) {} el.classList.remove("is-on"); setTimeout(function () { if (el.parentNode) el.remove(); }, 300); }
+    el.querySelector(".rkfly__cancel").addEventListener("click", dismiss);
+    el.querySelector(".rkfly__x").addEventListener("click", dismiss);
+    async function submit() {
+      var v = inp.value.trim(); if (!v) { errEl.textContent = "Enter your ticket or link"; return; }
+      go.disabled = true; errEl.textContent = "";
+      var r = await applyTicketCode(v);
+      if (!r.ok) { go.disabled = false; errEl.textContent = ticketErr(r.reason); return; }
+      try { sessionStorage.setItem("rk:fly:dismissed", "1"); } catch (e) {}
+      if (el.parentNode) el.remove();
+    }
+    go.addEventListener("click", submit);
+    el.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); if (e.key === "Escape") dismiss(); });
+    setTimeout(function () { try { inp.focus(); } catch (e) {} }, 350);
+  }
+  function recruiterInit() {
+    var deep = new URLSearchParams(location.search || "").get("ticket");
+    if (deep) {
+      applyTicketCode(deep).then(function (r) {
+        try { var u = new URL(location.href); u.searchParams.delete("ticket"); history.replaceState({}, "", u.pathname + (u.search || "") + u.hash); } catch (e) {}
+        if (!r || !r.ok) maybeRecruiterFlyout(ticketErr(r && r.reason));
+      });
+      return;
+    }
+    maybeRecruiterFlyout();
+  }
+  function maybeRecruiterFlyout(errNote) {
+    var d = (window.RK && (window.RK.data || window.RK.published)) || null;   // data === published on the live site
+    if (!(d && d.recruiterMode)) return;                     // owner opted out
+    if (localStorage.getItem(HASH_KEY)) return;              // owner's own browser — no nag
+    try { if (sessionStorage.getItem("rk:fly:dismissed")) return; } catch (e) {}
+    if (document.querySelector(".sv-banner")) return;        // already in a curated / present view
+    recruiterFlyout(errNote);
+  }
+  function afterRender(fn) {
+    if (window.__siteRendered) fn();
+    else document.addEventListener("site:rendered", fn, { once: true });
   }
 
   /* ---------- present mode (owner: unlock everything to present) ---------- */
@@ -805,7 +885,7 @@ import {
     const more = document.getElementById("moreBtn");
     if (more) more.addEventListener("click", toggleMenu);
     musInit();
-    setTimeout(ticketHint, 1600);
+    afterRender(recruiterInit);
     // Direct studio entry: /studio (and /admin) arrive here as ?studio=1 via the 404 SPA
     // fallback. Tidy the address bar to /studio and open the same gate the clock menu uses.
     try {

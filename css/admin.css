@@ -379,6 +379,27 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .sv-banner__exit { font-family: var(--mono); font-size: .66rem; color: #0a0a0a; background: var(--accent); border: 0; border-radius: 100px; padding: .35rem .75rem; cursor: pointer; flex: none; }
 .sv-banner__exit:hover { background: var(--accent-2); }
 
+/* ---------- recruiter ticket flyout (soft, non-blocking) ---------- */
+.rkfly {
+  position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 20px);
+  z-index: 8000; width: min(400px, calc(100vw - 26px)); box-sizing: border-box;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .55); padding: 17px 18px 15px;
+  opacity: 0; pointer-events: none; transition: opacity .32s ease, transform .32s cubic-bezier(.2, .7, .2, 1);
+}
+.rkfly.is-on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.rkfly__x { position: absolute; top: 9px; right: 11px; background: none; border: 0; color: var(--text-faint); font-size: 17px; line-height: 1; cursor: pointer; padding: 4px; }
+.rkfly__x:hover { color: var(--text); }
+.rkfly__title { font-family: var(--serif); font-size: 1.2rem; color: var(--text); margin-bottom: 5px; padding-right: 16px; }
+.rkfly__sub { font-size: .78rem; line-height: 1.5; color: var(--text-dim); margin-bottom: 13px; }
+.rkfly__inp { width: 100%; box-sizing: border-box; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 9px; padding: .62rem .72rem; font-family: var(--mono); font-size: .8rem; }
+.rkfly__inp::placeholder { color: var(--text-faint); }
+.rkfly__inp:focus { outline: none; border-color: var(--accent); }
+.rkfly__err { color: #ff9a7a; font-size: .72rem; min-height: 1.1em; margin: 6px 2px 0; }
+.rkfly__row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
+.rkfly__row .btn { font-size: .78rem; }
+@media (max-width: 480px) { .rkfly { bottom: 14px; } }
+
 /* ---------- special-view admin cards ---------- */
 .adm__empty { color: var(--text-dim); font-size: .82rem; padding: 1rem; border: 1px dashed var(--line); border-radius: 10px; margin-bottom: 1rem; text-align: center; }
 .sv-card--exp { opacity: .72; }

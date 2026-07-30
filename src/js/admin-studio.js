@@ -2699,7 +2699,7 @@ import {
       svChecklist(i, "work", "Work shown", wItems) +
       svChecklist(i, "highlights", "Numbers shown", hItems) +
       svChecklist(i, "capabilities", "Capabilities shown", cItems) +
-      '<div class="sv-card__foot"><button class="btn btn--ghost" data-act="sv-preview" data-index="' + i + '">Preview in panel \u2192</button><span class="af__hint">Publish to make it live.</span></div>' +
+      '<div class="sv-card__foot"><button class="btn btn--ghost" data-act="sv-preview" data-index="' + i + '">Preview in panel \u2192</button><button class="btn btn--ghost" data-act="sv-copylink" data-index="' + i + '">Copy recruiter link</button><span class="af__hint">Publish to make it live.</span></div>' +
       "</div>";
   }
 
@@ -3199,6 +3199,21 @@ import {
     if (act === "sv-tailor") { roleKitModal(); return; }
     if (/^gen-(add|del|up|down|upload|refine)$/.test(act)) { genAction(act, b); return; }
     if (act === "sv-preview") { svPreview(i); return; }
+    if (act === "sv-copylink") {
+      var _sv = (data.specialViews || [])[i]; if (!_sv) return;
+      var _tin = document.querySelector('input[data-sv="' + i + '"][data-field="ticket"]');
+      var _code = (_tin && _tin.value.trim()) || ticketPlain[_sv.id] || "";
+      var _finish = function (c) {
+        if (!c) { status("Set a ticket phrase for this view first.", false); return; }
+        var link = location.origin + "/?ticket=" + encodeURIComponent(c);
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(function () { status("Recruiter link copied \u2014 paste it to a recruiter.", true); }, function () { status(link); });
+        else status(link);
+      };
+      if (_code) _finish(_code);
+      else if (_sv.ticketHash) ensureTicketCode(_sv).then(_finish, function () {});
+      else _finish("");
+      return;
+    }
     if (act === "plate-sample") { data.work[i].theme = b.dataset.theme; data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Motion placeholder applied.", true); return; }
     if (act === "img-clear") { data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Image removed."); return; }
     if (act === "img-upload") { pickImage(function (uri) { data.work[i].image = uri; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); }); return; }
@@ -7335,6 +7350,7 @@ import {
               '<button class="adm__more-item" data-passkeys type="button"><span class="adm__more-ic">\uD83D\uDD11</span><span class="adm__more-tx"><b>Passkeys</b><small>Sign in with Windows Hello, Face ID or a security key</small></span></button>' +
               '<button class="adm__more-item" data-pubcfg type="button"><span class="adm__more-ic">\u2699</span><span class="adm__more-tx"><b>Publishing settings</b><small>Connect GitHub, replace the token, or publish manually</small></span></button>' +
               '<button class="adm__more-item" data-backup type="button"><span class="adm__more-ic">\uD83D\uDCBE</span><span class="adm__more-tx"><b>Download content backup</b><small>Save an unencrypted copy to this device \u2014 keep it private</small></span></button>' +
+              '<button class="adm__more-item" data-recruiter type="button"><span class="adm__more-ic">\uD83C\uDFAB</span><span class="adm__more-tx"><b>Recruiter mode <span data-recstate style="opacity:.55;font-weight:400"></span></b><small>Show the ticket prompt to every visitor on landing</small></span></button>' +
               '<div class="adm__more-sep"></div>' +
               '<div class="adm__auto" data-autopub>' +
                 '<button class="adm__auto-sw" type="button" data-autopub-toggle role="switch" aria-checked="false" title="Auto-publish on a timer">' +
@@ -7424,6 +7440,7 @@ import {
     root.querySelector("[data-publish]").addEventListener("click", publish);
     var _pubcfg = root.querySelector("[data-pubcfg]"); if (_pubcfg) _pubcfg.addEventListener("click", () => { closeBarPops(); publishModal(); });
     var _bkp = root.querySelector("[data-backup]"); if (_bkp) _bkp.addEventListener("click", () => { closeBarPops(); downloadContentBackup(); });
+    var _rec = root.querySelector("[data-recruiter]"); if (_rec) { _rec.addEventListener("click", recruiterToggle); recruiterStateSync(); }
     root.querySelector("[data-autopub-toggle]").addEventListener("click", autopubToggle);
     const autoWrap = root.querySelector("[data-autopub]");
     var _apMenu = root.querySelector("[data-autopub-menu]");
@@ -7541,6 +7558,17 @@ import {
   /* ---------- change the admin key (requires the current key) ---------- */
   // Manage passkeys (enrol / list / remove). Enrolment is owner-gated by the current session, so the
   // first passkey is added right after a normal (password) sign-in; after that, passkeys sign you in.
+  // Recruiter mode (published): show the landing ticket flyout to every visitor. Toggled from the ⋯ menu.
+  function recruiterStateSync() {
+    var el = document.querySelector("[data-recstate]");
+    if (el) el.textContent = data.recruiterMode ? "\u00b7 On" : "\u00b7 Off";
+  }
+  function recruiterToggle() {
+    data.recruiterMode = !data.recruiterMode;
+    saveDraft(true);
+    recruiterStateSync();
+    status(data.recruiterMode ? "Recruiter mode on \u2014 Publish to show the ticket prompt on your live site." : "Recruiter mode off \u2014 Publish to apply.", true);
+  }
   // Verify it’s you on an untrusted device (recovery passphrase + admin password) → device-trust token.
   function deviceStepUpModal(opts) {
     opts = opts || {};
