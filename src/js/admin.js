@@ -482,10 +482,18 @@ import {
       el.classList.remove("soundtoast--low");
       el.style.right = Math.max(12, Math.round(cw - mr.right)) + "px";
       el.style.top = Math.round(mr.bottom + 10) + "px";
-    } else {                                         // menu closed → default corner; drop below the ticket nudge when it's up
-      el.style.right = "";
-      el.style.top = "";
-      el.classList.toggle("soundtoast--low", !!document.querySelector(".tickethint"));
+    } else {                                         // menu closed → sit just below the recruiter flyout if it's up, else the default corner
+      var fly = document.querySelector(".rkfly");
+      el.classList.remove("soundtoast--low");
+      if (fly) {
+        var cw2 = document.documentElement.clientWidth;
+        var frr = fly.getBoundingClientRect();
+        el.style.right = Math.max(12, Math.round(cw2 - frr.right)) + "px";
+        el.style.top = Math.round(frr.bottom + 10) + "px";
+      } else {
+        el.style.right = "";
+        el.style.top = "";
+      }
     }
   }
   function musArmVisible() {
@@ -579,6 +587,7 @@ import {
   }
 
   function buildMenu() {
+    var _fly = document.querySelector(".rkfly"); if (_fly && _fly.__dismiss) _fly.__dismiss(true);   // fold the recruiter flyout away — the menu itself offers “Special view”
     const theme = (window.__theme ? window.__theme.mode() : (localStorage.getItem(THEME_KEY) || "system"));
     const narrow = window.innerWidth < ADMIN_MIN;
     const owner = !!localStorage.getItem(HASH_KEY);   // only the owner's own browser gets Present mode
@@ -735,17 +744,23 @@ import {
     document.body.appendChild(el);
     var inp = el.querySelector(".rkfly__inp"), errEl = el.querySelector(".rkfly__err"), go = el.querySelector(".rkfly__go");
     if (errNote) errEl.textContent = errNote;
-    requestAnimationFrame(function () { el.classList.add("is-on"); });
-    function dismiss() { try { sessionStorage.setItem("rk:fly:dismissed", "1"); } catch (e) {} el.classList.remove("is-on"); setTimeout(function () { if (el.parentNode) el.remove(); }, 300); }
-    el.querySelector(".rkfly__cancel").addEventListener("click", dismiss);
-    el.querySelector(".rkfly__x").addEventListener("click", dismiss);
+    requestAnimationFrame(function () { el.classList.add("is-on"); placeSoundToast(); });   // push any live “sound on” toast below the flyout
+    function dismiss(instant) {
+      try { sessionStorage.setItem("rk:fly:dismissed", "1"); } catch (e) {}
+      el.classList.remove("is-on");
+      var kill = function () { if (el.parentNode) el.remove(); placeSoundToast(); };   // return the toast to the corner once we're gone
+      if (instant) kill(); else setTimeout(kill, 300);
+    }
+    el.__dismiss = dismiss;   // let the ··· menu fold this away when it opens
+    el.querySelector(".rkfly__cancel").addEventListener("click", function () { dismiss(); });
+    el.querySelector(".rkfly__x").addEventListener("click", function () { dismiss(); });
     async function submit() {
       var v = inp.value.trim(); if (!v) { errEl.textContent = "Enter your ticket or link"; return; }
       go.disabled = true; errEl.textContent = "";
       var r = await applyTicketCode(v);
       if (!r.ok) { go.disabled = false; errEl.textContent = ticketErr(r.reason); return; }
       try { sessionStorage.setItem("rk:fly:dismissed", "1"); } catch (e) {}
-      if (el.parentNode) el.remove();
+      if (el.parentNode) el.remove(); placeSoundToast();
     }
     go.addEventListener("click", submit);
     el.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); if (e.key === "Escape") dismiss(); });
