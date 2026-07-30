@@ -64,15 +64,29 @@ export default {
         if (!name || !company || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "Add your name, company/role and a valid work email." }, 400, cors);
         await env.VAULT_GRANTS.put(reqRl, String(reqTries + 1), { expirationTtl: 3600 });
         const rec = { name, email, company, note, context, at: new Date().toISOString(), ip: reqIp, ua: clip(request.headers.get("User-Agent"), 200) };
-        try { await env.VAULT_GRANTS.put("req:" + Date.now() + ":" + Math.random().toString(36).slice(2, 8), JSON.stringify(rec), { expirationTtl: 90 * 24 * 3600 }); } catch (e) {}
+        const reqId = "req:" + Date.now() + ":" + Math.random().toString(36).slice(2, 8);
+        try { await env.VAULT_GRANTS.put(reqId, JSON.stringify(rec), { expirationTtl: 90 * 24 * 3600 }); } catch (e) {}
         if (env.REQUEST_WEBHOOK) {
           const msg = [name + (company ? " \u2014 " + company : ""), email, "Wants: " + (context || "general access"), note ? ("\u201c" + note + "\u201d") : ""].filter(Boolean).join("\n");
           var hook = String(env.REQUEST_WEBHOOK).trim();
           if (!/^https?:\/\//i.test(hook)) hook = "https://ntfy.sh/" + hook.replace(/^\/+/, "");   // a bare topic name -> full ntfy.sh URL
-          try { await fetch(hook, { method: "POST", headers: { Title: "New access request", Tags: "envelope", Priority: "high" }, body: msg }); } catch (e) {}
+          const _dtok = await hmac(env.SESSION_SECRET || "", "reqdismiss." + reqId);   // signs the one-tap Ignore link
+          const _mailto = "mailto:" + email + "?subject=" + encodeURIComponent("Your access to my work \u2014 Ritesh Kumar") + "&body=" + encodeURIComponent("Hi " + name + ",\n\nThanks for the interest \u2014 here's your code: [PASTE CODE]\nOr open it directly: https://riteshk.work/?ticket=[CODE]\n\n\u2014 Ritesh");
+          const _actions = "view, Email reply, " + _mailto + "; view, Open in studio, https://riteshk.work/studio; http, Ignore, " + url.origin + "/req/dismiss?id=" + encodeURIComponent(reqId) + "&t=" + _dtok + ", method=POST, clear=true";
+          try { await fetch(hook, { method: "POST", headers: { Title: "New access request", Tags: "envelope", Priority: "high", Actions: _actions }, body: msg }); } catch (e) {}
         }
         return json({ ok: true }, 200, cors);
       } catch (e) { return json({ error: "Couldn\u2019t send that \u2014 try again." }, 400, cors); }
+    }
+
+    // ---------- one-tap dismiss from the notification's "Ignore" button (signed capability link, no session) ----------
+    if (url.pathname === "/req/dismiss") {
+      const _id = url.searchParams.get("id") || "", _t = url.searchParams.get("t") || "";
+      if (!_id || !_t || !env.VAULT_GRANTS) return new Response("Bad request", { status: 400, headers: cors });
+      const _exp = await hmac(env.SESSION_SECRET || "", "reqdismiss." + _id);
+      if (!timingSafeEqual(_t, _exp)) return new Response("Invalid or expired link", { status: 403, headers: cors });
+      try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
+      return new Response("Request dismissed \u2014 you can close this.", { status: 200, headers: Object.assign({ "Content-Type": "text/plain; charset=utf-8" }, cors) });
     }
 
     // ---------- admin: verify the admin key, issue a short signed session ----------
@@ -311,6 +325,14 @@ export default {
         out.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
         return json({ requests: out.slice(0, 50) }, 200, cors);
       } catch (e) { return json({ requests: [] }, 200, cors); }
+    }
+    // Owner dismisses a request from the studio inbox (session-gated).
+    if (url.pathname === "/admin/requests/delete") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ ok: true }, 200, cors);
+      try { const b = await request.json(); if (b && b.id) await env.VAULT_GRANTS.delete(String(b.id)); } catch (e) {}
+      return json({ ok: true }, 200, cors);
     }
     // Owner's private ticket keyring: an opaque recovery-encrypted blob {svId:code}, stored server-side
     // (cross-device). The Worker never sees the codes — only the ciphertext.

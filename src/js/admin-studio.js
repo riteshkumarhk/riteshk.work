@@ -2627,6 +2627,7 @@ import {
       const list = data.specialViews || (data.specialViews = []);
       let html = secHead("Special Views",
         "Curated, ticketed versions of the site for one audience (say an automotive company). Choose the work, numbers and skills they see, set a ticket phrase and an optional expiry. Up to 6. <em>Tickets are a soft gate — the curated content still ships in your published file, so don't put anything confidential here.</em>") +
+        reqInboxSection() +
         '<div class="adm__addbar rolekit__bar"><button class="btn btn--add" data-act="sv-add"' + (list.length >= 6 ? " disabled" : "") + '>+ New special view</button>' +
         '<button class="btn btn--auto rolekit__cta" data-act="sv-tailor">\u2728 Tailor to a role</button></div>';
       if (!list.length) html += '<div class="adm__empty">No special views yet.</div>';
@@ -2678,6 +2679,53 @@ import {
       );
     },
   };
+
+  // ---------- access-requests inbox (top of the Special Views tab) ----------
+  var reqCache = [];
+  function reqAgo(iso) {
+    var t = Date.parse(iso || ""); if (!t) return "";
+    var s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 60) return "just now";
+    if (s < 3600) return Math.floor(s / 60) + "m ago";
+    if (s < 86400) return Math.floor(s / 3600) + "h ago";
+    return Math.floor(s / 86400) + "d ago";
+  }
+  function reqMailto(q) {
+    var sub = encodeURIComponent("Your access to my work \u2014 Ritesh Kumar");
+    var body = encodeURIComponent("Hi " + (q.name || "") + ",\n\nThanks for the interest \u2014 here's your code: [PASTE CODE]\nOr open it directly: " + location.origin + "/?ticket=[CODE]\n\n\u2014 Ritesh");
+    return "mailto:" + (q.email || "") + "?subject=" + sub + "&body=" + body;
+  }
+  function reqInboxHtml() {
+    if (!reqCache.length) return '<div class="rkinbox__empty">No requests yet. When a visitor taps \u201cRequest access\u201d, it lands here.</div>';
+    return reqCache.map(function (q) {
+      var mt = reqMailto(q);
+      return '<div class="rkinbox__row">' +
+        '<div class="rkinbox__main">' +
+          '<div class="rkinbox__who"><b>' + escHtml(q.name || "\u2014") + "</b>" + (q.company ? ' <span class="rkinbox__co">\u00b7 ' + escHtml(q.company) + "</span>" : "") + ' <span class="rkinbox__ago">' + escHtml(reqAgo(q.at)) + "</span></div>" +
+          '<a class="rkinbox__mail" href="' + escAttr(mt) + '">' + escHtml(q.email || "") + "</a>" +
+          (q.context ? '<div class="rkinbox__ctx">' + escHtml(q.context) + "</div>" : "") +
+          (q.note ? '<div class="rkinbox__note">\u201c' + escHtml(q.note) + "\u201d</div>" : "") +
+        "</div>" +
+        '<div class="rkinbox__acts">' +
+          '<a class="btn btn--ghost" href="' + escAttr(mt) + '">Email</a>' +
+          '<button class="btn btn--ghost" data-act="req-dismiss" data-id="' + escAttr(q.id) + '">Dismiss</button>' +
+        "</div>" +
+      "</div>";
+    }).join("");
+  }
+  function reqInboxSection() {
+    return '<div class="rkinbox"><div class="rkinbox__head">Access requests' + (reqCache.length ? ' <span class="rkinbox__badge">' + reqCache.length + "</span>" : "") + '</div><div data-reqbox>' + reqInboxHtml() + "</div></div>";
+  }
+  async function loadRequests() {
+    try {
+      var sess = adminSession(); if (!sess) return;
+      var r = await fetch(ADMIN_WORKER + "/admin/requests", { headers: { Authorization: "Bearer " + sess } });
+      if (!r.ok) return;
+      var j = await r.json();
+      reqCache = (j && j.requests) || [];
+      if (activeTab === "special") renderBody();
+    } catch (e) {}
+  }
 
   function svCard(sv, i) {
     const works = data.work || [], highs = data.highlights || [], caps = data.capabilities || [];
@@ -3196,6 +3244,13 @@ import {
       saveDraft(true); renderBody(); return;
     }
     if (act === "sv-remove") { (data.specialViews || []).splice(i, 1); saveDraft(true); renderBody(); return; }
+    if (act === "req-dismiss") {
+      var _rid = b.dataset.id; b.disabled = true;
+      fetch(ADMIN_WORKER + "/admin/requests/delete", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ id: _rid }) })
+        .then(function () { reqCache = reqCache.filter(function (x) { return x.id !== _rid; }); renderBody(); status("Request dismissed.", true); })
+        .catch(function () { b.disabled = false; status("Couldn\u2019t dismiss \u2014 try again.", false); });
+      return;
+    }
     if (act === "sv-tailor") { roleKitModal(); return; }
     if (/^gen-(add|del|up|down|upload|refine)$/.test(act)) { genAction(act, b); return; }
     if (act === "sv-preview") { svPreview(i); return; }
@@ -7428,7 +7483,7 @@ import {
     // Paste into a rich-text body as plain text (no foreign colours/fonts).
     root.addEventListener("paste", onRtPaste);
     root.querySelectorAll(".adm__tab").forEach((t) =>
-      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); try { t.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {} tabsSync(); })
+      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); if (activeTab === "special") loadRequests(); try { t.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {} tabsSync(); })
     );
     // tab-strip overflow flippers (\u2039 \u203A)
     root.querySelectorAll("[data-tabflip]").forEach((b) => b.addEventListener("click", () => tabScroll(+b.dataset.tabflip)));
@@ -7531,6 +7586,7 @@ import {
     if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
     if (body) body.hidden = false;
     renderBody();
+    loadRequests();   // prefetch access requests for the Special Views tab
     musSilence(); // silence the ambient music while editing
     thDismiss(true); // belt-and-suspenders: the ticket nudge must never linger over the editor
     document.documentElement.classList.add("adm-lock");
