@@ -57,6 +57,14 @@
     .req__done{margin-top:14px;color:var(--accent);font-weight:600;font-size:14px}
     .empty{text-align:center;padding:48px 0}
     .note{margin-top:10px;font-size:13px;color:var(--dim)}.note.err{color:var(--err)}
+    .topbar__acts{display:flex;gap:8px}
+    .help{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+    .help summary{cursor:pointer;color:var(--accent);font-size:13px;font-weight:600;list-style:none;outline:none}
+    .help summary::-webkit-details-marker{display:none}
+    .help summary::after{content:" ›";color:var(--faint)}
+    .help[open] summary::after{content:" ⌄"}
+    .help > div{margin-top:10px;line-height:1.55}
+    .help b{color:var(--text);font-weight:600}
   </style>
 </head>
 <body>

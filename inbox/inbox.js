@@ -51,32 +51,21 @@
   function sess() { return localStorage.getItem(SS) || ""; }
   function authHdr() { return { "Authorization": "Bearer " + sess() }; }
 
-  /* ---------- WebAuthn ---------- */
-  async function enrollWithPair(pairToken) {
-    var beg = await api("/admin/webauthn/register/begin", { method: "POST", headers: { "X-Pair-Token": pairToken, "Content-Type": "application/json" }, body: "{}" });
-    if (!beg.ok) throw new Error((beg.json && beg.json.error) || "Couldn’t start setup (the QR link may have expired — re-open it from the studio).");
-    var o = beg.json;
-    var cred = await navigator.credentials.create({ publicKey: {
-      rp: o.rp,
-      user: { id: b64urlToBuf(o.user.id), name: o.user.name, displayName: o.user.displayName },
-      challenge: b64urlToBuf(o.challenge),
-      pubKeyCredParams: o.pubKeyCredParams, timeout: o.timeout, attestation: o.attestation,
-      authenticatorSelection: o.authenticatorSelection,
-      excludeCredentials: (o.excludeCredentials || []).map(function (c) { return { type: c.type, id: b64urlToBuf(c.id) }; })
-    } });
-    var fin = await api("/admin/webauthn/register/finish", { method: "POST", headers: { "X-Pair-Token": pairToken, "Content-Type": "application/json" }, body: JSON.stringify({ label: "phone", response: { clientDataJSON: bufToB64url(cred.response.clientDataJSON), attestationObject: bufToB64url(cred.response.attestationObject) } }) });
-    if (!fin.ok) throw new Error((fin.json && fin.json.error) || "Setup failed.");
-    return true;
-  }
+  /* ---------- WebAuthn (verify only — enrolment happens in the desktop studio) ---------- */
   async function authPasskey() {
     var beg = await api("/admin/webauthn/auth/begin", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     if (!beg.ok) throw new Error((beg.json && beg.json.error) || "Couldn’t start sign-in.");
     var o = beg.json;
-    var as = await navigator.credentials.get({ publicKey: {
-      challenge: b64urlToBuf(o.challenge), rpId: o.rpId, timeout: o.timeout,
-      userVerification: o.userVerification || "preferred",
-      allowCredentials: (o.allowCredentials || []).map(function (c) { return { type: c.type, id: b64urlToBuf(c.id) }; })
-    } });
+    var as;
+    try {
+      as = await navigator.credentials.get({ publicKey: {
+        challenge: b64urlToBuf(o.challenge), rpId: o.rpId, timeout: o.timeout,
+        userVerification: o.userVerification || "preferred",
+        allowCredentials: (o.allowCredentials || []).map(function (c) { return { type: c.type, id: b64urlToBuf(c.id) }; })
+      } });
+    } catch (e) {
+      throw new Error("No passkey was approved on this device. If you haven’t added this phone yet, see the steps below.");
+    }
     var fin = await api("/admin/webauthn/auth/finish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: as.id, response: { clientDataJSON: bufToB64url(as.response.clientDataJSON), authenticatorData: bufToB64url(as.response.authenticatorData), signature: bufToB64url(as.response.signature) } }) });
     if (!fin.ok || !fin.json || !fin.json.token) throw new Error((fin.json && fin.json.error) || "Sign-in failed.");
     localStorage.setItem(SS, fin.json.token);
@@ -95,27 +84,29 @@
     try { await fn(); } catch (e) { b.disabled = false; b.textContent = label; onErr((e && e.message) || "Something went wrong."); }
   }
 
-  function showSetup(pairToken) {
-    var b = btn("Set up with Face ID / fingerprint", "primary");
-    b.addEventListener("click", function () {
-      runBtn(b, async function () { await enrollWithPair(pairToken); await authPasskey(); showOnboarding(); },
-        function (m) { showError(m, "Back", function () { showSetup(pairToken); }); });
-    });
-    screen([brand(), h("div", { class: "card" }, [
-      h("h1", { text: "Set up this phone" }),
-      h("p", { class: "muted", text: "Create a passkey on this device so you can approve recruiter requests. It’s bound to your face / fingerprint and never leaves the phone." }),
-      b
-    ])]);
-  }
-
-  function showVerify() {
+  function showVerify(errMsg) {
     var b = btn("Verify with passkey", "primary");
-    b.addEventListener("click", function () { runBtn(b, async function () { await authPasskey(); openInbox(); }, function (m) { showError(m, "Try again", showVerify); }); });
-    screen([brand(), h("div", { class: "card" }, [
+    b.addEventListener("click", function () { runBtn(b, async function () { await authPasskey(); afterVerify(); }, function (m) { showVerify(m); }); });
+    var kids = [
       h("h1", { text: "Verify it’s you" }),
-      h("p", { class: "muted", text: "Approve with your passkey to open your requests." }),
+      h("p", { class: "muted", text: "Approve with the passkey you added from your computer to open your requests." }),
       b
-    ])]);
+    ];
+    if (errMsg) kids.push(h("div", { class: "note err", text: errMsg }));
+    kids.push(addPasskeyHelp());
+    screen([brand(), h("div", { class: "card" }, kids)]);
+  }
+  function addPasskeyHelp() {
+    return h("details", { class: "help" }, [
+      h("summary", { text: "No passkey on this phone?" }),
+      h("div", { class: "muted small", html: "Passkeys are added from your computer — not here — so nobody can grant themselves access from a link.<br><br>On your computer, open <b>riteshk.work/studio</b> → sign in → open the <b>⋯</b> menu → <b>Passkeys</b> → <b>Add a passkey</b>, and pick <b>“Use a phone or tablet.”</b> Scan the code with this phone to save the passkey here, then come back and tap <b>Verify</b>." })
+    ]);
+  }
+  async function afterVerify() {
+    var subscribed = false;
+    try { if (("serviceWorker" in navigator) && ("PushManager" in window)) { var reg = await navigator.serviceWorker.ready; subscribed = !!(await reg.pushManager.getSubscription()); } } catch (e) {}
+    if (isStandalone() && subscribed) return openInbox();
+    return showOnboarding();
   }
 
   function isStandalone() { return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true; }
@@ -198,7 +189,10 @@
       ? h("div", { class: "list" }, reqs.map(reqCard))
       : h("div", { class: "empty" }, [h("p", { class: "muted", text: "No pending requests. You’re all caught up." })]);
     screen([
-      h("div", { class: "topbar" }, [brand(), h("button", { class: "iconbtn", title: "Refresh", onclick: openInbox, html: "&#8635;" })]),
+      h("div", { class: "topbar" }, [brand(), h("div", { class: "topbar__acts" }, [
+        h("button", { class: "iconbtn", title: "Notifications", onclick: showOnboarding, html: "&#128276;" }),
+        h("button", { class: "iconbtn", title: "Refresh", onclick: openInbox, html: "&#8635;" })
+      ])]),
       body
     ]);
   }
@@ -245,11 +239,11 @@
   window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferredInstall = e; });
 
   (function init() {
-    if (!window.PublicKeyCredential || !(navigator.credentials && navigator.credentials.create)) {
+    if (!window.PublicKeyCredential || !(navigator.credentials && navigator.credentials.get)) {
       return showError("This browser doesn’t support passkeys. Open riteshk.work/inbox in Chrome (Android) or Safari (iOS 16.4+).");
     }
-    var pair = new URLSearchParams(location.search).get("pair");
-    if (pair) { try { history.replaceState({}, "", "/inbox/"); } catch (e) {} return showSetup(pair); }
+    // Strip any legacy ?pair token from an old QR — enrolment happens only in the desktop studio now.
+    if (new URLSearchParams(location.search).get("pair")) { try { history.replaceState({}, "", "/inbox/"); } catch (e) {} }
     if (sess()) return openInbox();
     return showVerify();
   })();

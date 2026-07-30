@@ -992,30 +992,26 @@ import {
     });
     return ensureQrLib._p;
   }
-  // Phone/PWA setup: mint a one-time pairing token (owner session) and render a QR the phone scans to
-  // enrol its own passkey at /inbox. Token is single-use + ~10 min (Worker /admin/pair).
+  // Render a QR to riteshk.work/inbox so the owner can open the requests inbox on their phone. No token
+  // is minted: enrolment is studio-only (Passkeys menu + the browser's cross-device flow) \u2014 the phone
+  // only VERIFIES an existing passkey, so an inbox link alone can never grant anyone access.
   async function phoneQr(btn) {
     var box = document.querySelector("[data-phoneqr]");
     if (!box) return;
-    var sess = adminSession();
-    if (!sess) { box.innerHTML = '<div class="af__hint">Sign in to the studio first.</div>'; return; }
     var label = btn ? btn.textContent : "";
     if (btn) { btn.disabled = true; btn.textContent = "\u2026"; }
-    box.innerHTML = '<div class="af__hint">Generating a one-time code\u2026</div>';
+    box.innerHTML = '<div class="af__hint">Preparing the QR\u2026</div>';
     try {
-      var r = await fetch(ADMIN_WORKER + "/admin/pair", { method: "GET", headers: { Authorization: "Bearer " + sess } });
-      var j = {}; try { j = await r.json(); } catch (e) {}
-      if (!r.ok || !j.token) { box.innerHTML = '<div class="af__hint">Couldn\u2019t generate a code (' + escHtml(String(j.error || r.status)) + '). Try again.</div>'; return; }
-      var url = LIVE_ORIGIN.replace(/\/+$/, "") + "/inbox/?pair=" + encodeURIComponent(j.token);
+      var url = LIVE_ORIGIN.replace(/\/+$/, "") + "/inbox/";
       var qrcode = await ensureQrLib();
       var img = "";
       if (qrcode) { try { var qr = qrcode(0, "M"); qr.addData(url); qr.make(); img = qr.createDataURL(6, 4); } catch (e) {} }
       box.innerHTML =
-        (img ? '<div style="background:#fff;border-radius:14px;padding:14px;display:inline-block"><img src="' + img + '" alt="Pairing QR" style="display:block;width:230px;height:230px;image-rendering:pixelated"></div>' : "") +
-        '<div class="af__hint" style="margin-top:12px">Scan with your phone camera. Valid ~10\u00a0min, one-time. Opens <b>/inbox</b>, creates a passkey on the phone (Face\u00a0ID / fingerprint), then Add\u00a0to\u00a0Home\u00a0Screen + notifications.</div>' +
+        (img ? '<div style="background:#fff;border-radius:14px;padding:14px;display:inline-block"><img src="' + img + '" alt="Inbox QR" style="display:block;width:220px;height:220px;image-rendering:pixelated"></div>' : "") +
+        '<div class="af__hint" style="margin-top:12px">Scan to open the requests inbox on your phone, then verify with your passkey. Add this phone as a passkey first via <b>\u22EF \u2192 Passkeys</b> above.</div>' +
         '<div class="af__hint" style="opacity:.65;word-break:break-all">Or open on the phone: ' + escHtml(url) + "</div>";
     } catch (e) {
-      box.innerHTML = '<div class="af__hint">Couldn\u2019t reach the server. Try again.</div>';
+      box.innerHTML = '<div class="af__hint">Couldn\u2019t build the QR. Try again.</div>';
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = label; }
     }
@@ -2688,9 +2684,9 @@ import {
       return (
         secHead("More", "Your phone notifications app, a one-page PDF r\u00e9sum\u00e9, and the browser autofill extension.") +
         '<div class="adm__ext">' +
-          '<div class="adm__ext-head"><span class="adm__ext-logo">\uD83D\uDCF1</span><div><b>Phone \u2014 requests app</b><span>Install the PWA + a passkey on your phone</span></div></div>' +
-          '<p class="adm__ext-lead">Turn your phone into your private requests inbox. Generate a one-time QR, scan it, create a passkey on the phone (Face\u00a0ID / fingerprint), then Add\u00a0to\u00a0Home\u00a0Screen. You approve recruiter requests right from your phone \u2014 no third-party app, no rate limits.</p>' +
-          '<div class="imgblk__row"><button class="btn btn--primary" data-act="phone-qr">\uD83D\uDCF2 Show setup QR</button></div>' +
+          '<div class="adm__ext-head"><span class="adm__ext-logo">\uD83D\uDCF1</span><div><b>Phone \u2014 requests app</b><span>Approve requests from your phone</span></div></div>' +
+          '<p class="adm__ext-lead">First add your phone as a passkey: <b>\u22EF \u2192 Passkeys \u2192 Add a passkey</b>, then pick <b>\u201cUse a phone or tablet\u201d</b> and scan with your phone. Then open <b>riteshk.work/inbox</b> on the phone, verify with that passkey, and Add\u00a0to\u00a0Home\u00a0Screen. Enrolment happens only here in the studio \u2014 the phone can only <i>verify</i>, never create a passkey, so a link alone can never grant access.</p>' +
+          '<div class="imgblk__row"><button class="btn btn--primary" data-act="phone-qr">\uD83D\uDCF2 Show inbox QR</button></div>' +
           '<div data-phoneqr style="margin-top:14px"></div>' +
         "</div>" +
         '<div class="adm__ext">' +

@@ -157,23 +157,16 @@ export default {
     // can enrol a passkey. Auth is public: the assertion signature IS the proof. A "login" assertion
     // issues the same HMAC session as the password path; a "publish" assertion issues a short-lived
     // publish token (factor 1 of the publish step-up — the recovery proof is factor 2, checked later).
-    if (url.pathname === "/admin/pair") {
-      // Owner-only: mint a one-time pairing token for the phone-setup QR (studio is already authenticated).
-      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
-      const _p = await issuePairing(env);
-      return json({ token: _p.token, exp: _p.exp }, 200, cors);
-    }
     if (url.pathname === "/admin/webauthn/register/begin") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
-      const _pair = await verifyPairing(request.headers.get("X-Pair-Token"), env);
-      if (!_pair && !(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
       if (!env.VAULT_GRANTS) return json({ error: "Passkey store not configured" }, 500, cors);
-      // Enrolling a passkey needs this device TRUSTED (a prior step-up) OR a valid one-time pairing token
-      // (issued from the already-authenticated studio, e.g. the phone-setup QR) — except the very first
-      // passkey ever (bootstrap from the initial session). Stops a phone-only sign-in on a strange
-      // device from silently minting a resident passkey without the recovery passphrase + admin password.
+      // Enrolling a passkey needs this device TRUSTED (a prior step-up) — except the very first passkey
+      // ever (bootstrap from the initial session). Enrolment is owner-session-only (there is NO phone
+      // pairing path): add new devices from the authenticated desktop studio, incl. a phone via the
+      // browser's cross-device passkey flow. Stops anyone minting a credential (= authority) off a link.
       const _rc = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" });
-      if (_rc.keys.length > 0 && !_pair && !(await verifyTrust(request.headers.get("X-Device-Trust"), env))) return json({ error: "Verify it\u2019s you to add a passkey on this device.", needStepup: true }, 403, cors);
+      if (_rc.keys.length > 0 && !(await verifyTrust(request.headers.get("X-Device-Trust"), env))) return json({ error: "Verify it\u2019s you to add a passkey on this device.", needStepup: true }, 403, cors);
       const challenge = b64urlFromBytes(crypto.getRandomValues(new Uint8Array(32)));
       await env.VAULT_GRANTS.put("wa:chal:" + challenge, JSON.stringify({ type: "reg", exp: Date.now() + WEBAUTHN_CHALLENGE_TTL_MS }), { expirationTtl: 300 });
       const exclude = [];
@@ -190,8 +183,7 @@ export default {
     }
     if (url.pathname === "/admin/webauthn/register/finish") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
-      const _pairF = await verifyPairing(request.headers.get("X-Pair-Token"), env);
-      if (!_pairF && !(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
       try {
         const body = await request.json();
         const cd = JSON.parse(new TextDecoder().decode(b64urlToBytes(body.response.clientDataJSON)));
@@ -210,7 +202,6 @@ export default {
         const parsedKey = coseToJwk(p.credPubKey);
         const credId = b64urlFromBytes(p.credId);
         await env.VAULT_GRANTS.put("wa:cred:" + credId, JSON.stringify({ jwk: parsedKey.jwk, alg: parsedKey.alg, counter: p.signCount, label: String(body.label || "passkey").slice(0, 40), createdAt: Date.now() }));
-        if (_pairF) await consumePairing(_pairF.n, env);   // one-time pairing token spent on successful enrolment
         const l = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" });
         return json({ ok: true, credId: credId, count: l.keys.length }, 200, cors);
       } catch (e) { return json({ error: "Registration failed", detail: String((e && e.message) || e) }, 400, cors); }
@@ -718,7 +709,7 @@ function corsHeaders(origin, env) {
   return {
     "Access-Control-Allow-Origin": ok ? (origin || allow[0] || "*") : (allow[0] || "null"),
     "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization,Content-Type,x-api-key,anthropic-version,anthropic-dangerous-direct-browser-access,Accept,X-GitHub-Api-Version,X-Vault-Grant,X-Publish-Token,X-Publish-Proof,X-Device-Trust,X-Pair-Token",
+    "Access-Control-Allow-Headers": "Authorization,Content-Type,x-api-key,anthropic-version,anthropic-dangerous-direct-browser-access,Accept,X-GitHub-Api-Version,X-Vault-Grant,X-Publish-Token,X-Publish-Proof,X-Device-Trust",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
@@ -862,30 +853,6 @@ async function verifyPublishToken(token, env) {
   if (!timingSafeEqual(sig, await hmac(env.SESSION_SECRET, payload))) return false;
   try { const o = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload))); return !!(o && o.pub && o.exp && o.exp > Date.now()); } catch (e) { return false; }
 }
-// One-time PAIRING token: issued from the authenticated studio (the phone-setup QR) so a phone can
-// enrol its OWN passkey without a session/step-up. Signed (domain-separated "pair." MAC) + short-lived
-// + single-use (a KV nonce consumed on successful enrolment).
-async function issuePairing(env) {
-  const nonce = b64urlFromBytes(crypto.getRandomValues(new Uint8Array(16)));
-  const exp = Date.now() + 10 * 60 * 1000; // 10 minutes
-  if (env.VAULT_GRANTS) { try { await env.VAULT_GRANTS.put("pair:" + nonce, JSON.stringify({ exp: exp }), { expirationTtl: 600 }); } catch (e) {} }
-  const payload = b64urlFromStr(JSON.stringify({ t: "pair", n: nonce, exp: exp }));
-  const sig = await hmac(env.SESSION_SECRET || "", "pair." + payload);
-  return { token: payload + "." + sig, exp: exp };
-}
-async function verifyPairing(token, env) {
-  if (!token || !env.SESSION_SECRET) return null;
-  const dot = token.indexOf("."); if (dot < 1) return null;
-  const payload = token.slice(0, dot), sig = token.slice(dot + 1);
-  if (!timingSafeEqual(sig, await hmac(env.SESSION_SECRET, "pair." + payload))) return null;
-  try {
-    const o = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload)));
-    if (!(o && o.t === "pair" && o.n && o.exp && o.exp > Date.now())) return null;
-    if (env.VAULT_GRANTS && !(await env.VAULT_GRANTS.get("pair:" + o.n))) return null; // single-use: nonce already consumed
-    return o;
-  } catch (e) { return null; }
-}
-async function consumePairing(nonce, env) { if (env.VAULT_GRANTS && nonce) { try { await env.VAULT_GRANTS.delete("pair:" + nonce); } catch (e) {} } }
 
 /* ---------- Web Push (RFC 8291 aes128gcm payload + RFC 8292 VAPID) ---------- */
 function pushConcat() { let n = 0; for (let i = 0; i < arguments.length; i++) n += arguments[i].length; const out = new Uint8Array(n); let o = 0; for (let i = 0; i < arguments.length; i++) { out.set(arguments[i], o); o += arguments[i].length; } return out; }
