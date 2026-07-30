@@ -1,7 +1,7 @@
 /* Riteshk Requests — service worker.
-   Phase 1: cache the app shell for a fast, offline-tolerant launch. API calls to the Worker
-   always pass straight through (never cached). Phase 2 will add "push" + "notificationclick". */
-const CACHE = "rk-inbox-v1";
+   Caches the app shell for a fast, offline-tolerant launch (API calls to the Worker always pass
+   straight through, never cached) + handles Web Push ("push" + "notificationclick"). */
+const CACHE = "rk-inbox-v2";
 const SHELL = [
   "/inbox/",
   "/inbox/index.html",
@@ -19,6 +19,34 @@ self.addEventListener("activate", (e) => {
     caches.keys()
       .then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
+  );
+});
+
+// Show the notification when a push arrives (payload = the JSON the Worker encrypted).
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (x) { try { d = { body: e.data.text() }; } catch (y) { d = {}; } }
+  const title = d.title || "New access request";
+  e.waitUntil(self.registration.showNotification(title, {
+    body: d.body || "Open the app to review.",
+    icon: "/inbox/icon.svg",
+    badge: "/inbox/icon.svg",
+    tag: d.tag || "rk-req",
+    renotify: true,
+    vibrate: [80, 40, 80],
+    data: { url: d.url || "/inbox/" }
+  }));
+});
+
+// Tapping the notification focuses an open inbox tab, or opens the app.
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const target = (e.notification.data && e.notification.data.url) || "/inbox/";
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((cls) => {
+      for (const c of cls) { if (c.url.indexOf("/inbox") !== -1 && "focus" in c) return c.focus(); }
+      return self.clients.openWindow(target);
+    })
   );
 });
 

@@ -6,6 +6,8 @@
   "use strict";
   var WORKER = "https://rk-ai-proxy.riteshkumarhk.workers.dev";
   var SS = "rk:inbox:sess";
+  // VAPID public key (paired with the Worker's VAPID_PRIVATE secret) — used as applicationServerKey.
+  var VAPID_PUBLIC = "BNvPqxaZXo1uLqMAXeW-l6WCPMceklB7Z5RzgpAL3p8N8MtkATL5j0w6YMwdFmNPD0nkcN4NWY_msYNewlZKCHQ";
   var app = document.getElementById("app");
   var deferredInstall = null;
 
@@ -141,12 +143,47 @@
     return wrap;
   }
   function notifBlock() {
-    if (!("Notification" in window)) return h("div", { class: "muted small", text: "This browser can’t show notifications." });
-    if (Notification.permission === "granted") return h("div", { class: "muted small", text: "On ✓ — live push delivery arrives in the next update." });
-    if (Notification.permission === "denied") return h("div", { class: "muted small", text: "Blocked in settings — enable notifications for this app to get pinged." });
+    var box = h("div", {});
+    function set(kids) { box.innerHTML = ""; kids.forEach(function (c) { if (c) box.appendChild(c); }); }
+    var hasPush = ("Notification" in window) && ("serviceWorker" in navigator) && ("PushManager" in window);
+    if (!hasPush) { set([h("div", { class: "muted small", text: "This browser can’t receive push. On iPhone, add this app to your Home Screen first (Share → Add to Home Screen), then reopen it here." })]); return box; }
+    if (Notification.permission === "denied") { set([h("div", { class: "muted small", text: "Notifications are blocked in settings — turn them on for this app to get pinged." })]); return box; }
+    set([h("div", { class: "muted small", text: "Checking…" })]);
+    navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (existing) {
+      if (existing && Notification.permission === "granted") set([h("div", { class: "muted small", text: "On ✓ — you’ll get pinged on new requests." }), testBtn(box)]);
+      else set([h("div", { class: "muted small", text: "Get a ping the moment a recruiter asks for access." }), enableBtn(box)]);
+    }).catch(function () { set([h("div", { class: "muted small", text: "Get a ping the moment a recruiter asks for access." }), enableBtn(box)]); });
+    return box;
+  }
+  function enableBtn(box) {
     var b = btn("Enable notifications", "ghost");
-    b.addEventListener("click", async function () { try { await Notification.requestPermission(); } catch (e) {} showOnboarding(); });
-    return h("div", {}, [h("div", { class: "muted small", text: "Get a ping the moment a recruiter asks for access." }), b]);
+    b.addEventListener("click", function () { runBtn(b, subscribePush, function (m) { b.disabled = false; b.textContent = "Enable notifications"; noteErr(box, m); }); });
+    return b;
+  }
+  function testBtn(box) {
+    var b = btn("Send a test", "ghost");
+    b.addEventListener("click", function () {
+      runBtn(b, async function () {
+        var r = await api("/inbox/test", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHdr()), body: "{}" });
+        if (r.status === 401) { localStorage.removeItem(SS); return showVerify(); }
+        if (!r.ok) throw new Error((r.json && r.json.error) || "Couldn’t send the test.");
+        b.textContent = "Sent — check your phone ✓";
+      }, function (m) { b.disabled = false; b.textContent = "Send a test"; noteErr(box, m); });
+    });
+    return b;
+  }
+  function noteErr(box, m) { var ex = box.querySelector(".note"); if (ex) ex.remove(); box.appendChild(h("div", { class: "note err", text: m })); }
+  async function subscribePush() {
+    var perm = Notification.permission;
+    if (perm !== "granted") { try { perm = await Notification.requestPermission(); } catch (e) {} }
+    if (perm !== "granted") throw new Error("Allow notifications to get pinged on new requests.");
+    var reg = await navigator.serviceWorker.ready;
+    var sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: new Uint8Array(b64urlToBuf(VAPID_PUBLIC)) });
+    var r = await api("/inbox/subscribe", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHdr()), body: JSON.stringify({ subscription: sub.toJSON() }) });
+    if (r.status === 401) { localStorage.removeItem(SS); showVerify(); return; }
+    if (!r.ok) throw new Error((r.json && r.json.error) || "Couldn’t save the subscription.");
+    showOnboarding();
   }
 
   async function openInbox() {

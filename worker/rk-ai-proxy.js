@@ -38,6 +38,9 @@ const GRANT_REDEEM_TTL_MS = 12 * 60 * 60 * 1000; // ticket-holder vault access t
 const WEBAUTHN_CHALLENGE_TTL_MS = 5 * 60 * 1000; // passkey register/auth challenge lifetime — 5 min
 const PUBLISH_TOKEN_TTL_MS = 5 * 60 * 1000;       // publish step-up (passkey factor) token lifetime — 5 min
 const TRUST_TTL_MS = 180 * 24 * 60 * 60 * 1000;    // device-trust token lifetime — 180 days
+// VAPID public key (raw uncompressed P-256 point, base64url) — PUBLIC by design, paired with the
+// VAPID_PRIVATE secret (a JWK). The same value is hardcoded in inbox/inbox.js (applicationServerKey).
+const VAPID_PUBLIC = "BNvPqxaZXo1uLqMAXeW-l6WCPMceklB7Z5RzgpAL3p8N8MtkATL5j0w6YMwdFmNPD0nkcN4NWY_msYNewlZKCHQ";
 
 export default {
   async fetch(request, env) {
@@ -78,6 +81,8 @@ export default {
           if (env.NTFY_TOKEN) _nh.Authorization = "Bearer " + String(env.NTFY_TOKEN).trim();   // authenticated publish -> per-account rate limit (avoids the shared Cloudflare-IP quota)
           try { await fetch(hook, { method: "POST", headers: _nh, body: msg }); } catch (e) {}
         }
+        // Web Push fan-out to the owner's installed inbox PWA(s) — no IP quota (unlike ntfy).
+        try { await pushToAll(env, { title: "New access request", body: name + (company ? " \u00b7 " + company : "") + (context ? " \u2014 " + context : ""), tag: reqId, url: "/inbox/", reqId: reqId }); } catch (e) {}
         return json({ ok: true }, 200, cors);
       } catch (e) { return json({ error: "Couldn\u2019t send that \u2014 try again." }, 400, cors); }
     }
@@ -431,6 +436,39 @@ export default {
         try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
         return json({ ok: true, sentTo: rec.email }, 200, cors);
       } catch (e) { return json({ error: "Decline failed" }, 400, cors); }
+    }
+    // ---------- inbox PWA: register/replace THIS device's Web Push subscription (session-gated) ----------
+    if (url.pathname === "/inbox/subscribe") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Store not configured" }, 500, cors);
+      try {
+        const b = await request.json();
+        const s = (b && b.subscription) || b || {};
+        const endpoint = String(s.endpoint || ""), keys = s.keys || {};
+        if (!/^https:\/\//i.test(endpoint) || !keys.p256dh || !keys.auth) return json({ error: "Bad subscription" }, 400, cors);
+        const id = "push:" + bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(endpoint))).slice(0, 32);
+        await env.VAULT_GRANTS.put(id, JSON.stringify({ endpoint, p256dh: String(keys.p256dh), auth: String(keys.auth), at: Date.now() }));
+        return json({ ok: true }, 200, cors);
+      } catch (e) { return json({ error: "Subscribe failed" }, 400, cors); }
+    }
+    // ---------- inbox PWA: remove THIS device's subscription (session-gated) ----------
+    if (url.pathname === "/inbox/unsubscribe") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ ok: true }, 200, cors);
+      try { const b = await request.json(); const ep = String((b && b.endpoint) || ""); if (ep) await env.VAULT_GRANTS.delete("push:" + bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ep))).slice(0, 32)); } catch (e) {}
+      return json({ ok: true }, 200, cors);
+    }
+    // ---------- inbox PWA: fire a test push to all this owner's devices (session-gated) ----------
+    if (url.pathname === "/inbox/test") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAPID_PRIVATE) return json({ error: "Push isn\u2019t configured on the server yet." }, 503, cors);
+      let n = 0; try { const l = await env.VAULT_GRANTS.list({ prefix: "push:" }); n = l.keys.length; } catch (e) {}
+      if (!n) return json({ error: "No devices are subscribed yet \u2014 enable notifications first." }, 400, cors);
+      await pushToAll(env, { title: "Test notification", body: "Push is working \u2014 you\u2019ll be pinged on new requests.", tag: "rk-test", url: "/inbox/" });
+      return json({ ok: true, devices: n }, 200, cors);
     }
     // Owner's private ticket keyring: an opaque recovery-encrypted blob {svId:code}, stored server-side
     // (cross-device). The Worker never sees the codes — only the ciphertext.
@@ -848,6 +886,75 @@ async function verifyPairing(token, env) {
   } catch (e) { return null; }
 }
 async function consumePairing(nonce, env) { if (env.VAULT_GRANTS && nonce) { try { await env.VAULT_GRANTS.delete("pair:" + nonce); } catch (e) {} } }
+
+/* ---------- Web Push (RFC 8291 aes128gcm payload + RFC 8292 VAPID) ---------- */
+function pushConcat() { let n = 0; for (let i = 0; i < arguments.length; i++) n += arguments[i].length; const out = new Uint8Array(n); let o = 0; for (let i = 0; i < arguments.length; i++) { out.set(arguments[i], o); o += arguments[i].length; } return out; }
+async function hmacRaw(keyBytes, dataBytes) {
+  const k = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, dataBytes));
+}
+// HKDF-Expand with a single output block (len <= 32) using the given salt as the HMAC key.
+async function hkdf1(salt, ikm, info, len) {
+  const prk = await hmacRaw(salt, ikm);
+  const out = await hmacRaw(prk, pushConcat(info, new Uint8Array([1])));
+  return out.slice(0, len);
+}
+// Encrypt a payload for one Web Push subscription (aes128gcm content-coding, RFC 8188 + RFC 8291).
+async function encryptPush(payloadBytes, p256dhB64, authB64) {
+  const uaPub = b64urlToBytes(p256dhB64);       // subscriber public key, 65-byte uncompressed
+  const authSecret = b64urlToBytes(authB64);    // 16-byte auth secret
+  const asKeys = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
+  const asPub = new Uint8Array(await crypto.subtle.exportKey("raw", asKeys.publicKey)); // 65 bytes
+  const uaKey = await crypto.subtle.importKey("raw", uaPub, { name: "ECDH", namedCurve: "P-256" }, false, []);
+  const ecdh = new Uint8Array(await crypto.subtle.deriveBits({ name: "ECDH", public: uaKey }, asKeys.privateKey, 256));
+  const enc = new TextEncoder();
+  const prkKey = await hmacRaw(authSecret, ecdh);
+  const keyInfo = pushConcat(enc.encode("WebPush: info\0"), uaPub, asPub);
+  const ikm = (await hmacRaw(prkKey, pushConcat(keyInfo, new Uint8Array([1])))).slice(0, 32);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const cek = await hkdf1(salt, ikm, enc.encode("Content-Encoding: aes128gcm\0"), 16);
+  const nonce = await hkdf1(salt, ikm, enc.encode("Content-Encoding: nonce\0"), 12);
+  const plaintext = pushConcat(payloadBytes, new Uint8Array([2])); // 0x02 = last-record padding delimiter
+  const aesKey = await crypto.subtle.importKey("raw", cek, { name: "AES-GCM" }, false, ["encrypt"]);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, aesKey, plaintext));
+  const header = new Uint8Array(16 + 4 + 1 + asPub.length);       // salt | rs(4) | idlen(1) | keyid
+  header.set(salt, 0);
+  new DataView(header.buffer).setUint32(16, 4096, false);         // record size
+  header[20] = asPub.length;                                       // 65
+  header.set(asPub, 21);
+  return pushConcat(header, ct);
+}
+// Build a VAPID JWT (ES256) for a given audience (the push endpoint's origin).
+async function vapidJwt(env, audience) {
+  const header = b64urlFromStr(JSON.stringify({ typ: "JWT", alg: "ES256" }));
+  const payload = b64urlFromStr(JSON.stringify({ aud: audience, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: "mailto:" + (env.OWNER_EMAIL || "riteshkumarhk@gmail.com") }));
+  const signingInput = header + "." + payload;
+  const key = await crypto.subtle.importKey("jwk", JSON.parse(env.VAPID_PRIVATE), { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, new TextEncoder().encode(signingInput)));
+  return signingInput + "." + b64urlFromBytes(sig); // WebCrypto ECDSA already returns raw r||s (JWS format)
+}
+// Send one encrypted push. Returns the push service's HTTP status (or 0 on a thrown error).
+async function sendOnePush(env, sub, payloadObj) {
+  const audience = new URL(sub.endpoint).origin;
+  const jwt = await vapidJwt(env, audience);
+  const body = await encryptPush(new TextEncoder().encode(JSON.stringify(payloadObj)), sub.p256dh, sub.auth);
+  const r = await fetch(sub.endpoint, {
+    method: "POST",
+    headers: { "Content-Encoding": "aes128gcm", "Content-Type": "application/octet-stream", "TTL": "86400", "Urgency": "high", "Authorization": "vapid t=" + jwt + ", k=" + VAPID_PUBLIC },
+    body,
+  });
+  return r.status;
+}
+// Fan out a push to every stored inbox subscription; prune subscriptions the push service reports gone.
+async function pushToAll(env, payloadObj) {
+  if (!env.VAULT_GRANTS || !env.VAPID_PRIVATE) return;
+  let list; try { list = await env.VAULT_GRANTS.list({ prefix: "push:" }); } catch (e) { return; }
+  for (const k of list.keys) {
+    const sub = await env.VAULT_GRANTS.get(k.name, "json");
+    if (!sub || !sub.endpoint) continue;
+    try { const st = await sendOnePush(env, sub, payloadObj); if (st === 404 || st === 410) { try { await env.VAULT_GRANTS.delete(k.name); } catch (e) {} } } catch (e) {}
+  }
+}
 
 /* ---------- WebAuthn (passkey) helpers — dependency-free ---------- */
 function waRpId(env) { return env.RP_ID || "riteshk.work"; }
