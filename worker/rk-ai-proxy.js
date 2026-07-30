@@ -151,7 +151,10 @@ export default {
           const payload = b64urlFromStr(JSON.stringify({ pub: 1, exp: exp }));
           return json({ ok: true, publishToken: payload + "." + (await hmac(env.SESSION_SECRET || "", payload)), exp: exp }, 200, cors);
         }
-        return json(await issueSession(env), 200, cors);
+        // A passkey assertion is strong proof of possession — trust this device (same as passing the
+        // recovery+password step-up), so publishing needs no further verification here.
+        const _sess = await issueSession(env), _trust = await issueTrust(env);
+        return json({ token: _sess.token, exp: _sess.exp, trust: _trust.trust, trustExp: _trust.exp }, 200, cors);
       } catch (e) { return json({ error: "Auth failed", detail: String((e && e.message) || e) }, 401, cors); }
     }
     if (url.pathname === "/admin/webauthn/list") {

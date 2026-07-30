@@ -147,7 +147,7 @@ export async function webauthnAuth(purpose) {
   if (!fr.ok) { const j = await fr.json().catch(() => null); throw new Error((j && j.error) || "Passkey sign-in failed."); }
   const j = await fr.json();
   if (purpose === "publish") return j; // {publishToken, exp}
-  if (j && j.token && j.exp) { saveAdminSession(j.token, j.exp); return { ok: true }; }
+  if (j && j.token && j.exp) { saveAdminSession(j.token, j.exp); if (j.trust && j.trustExp) saveDeviceTrust(j.trust, j.trustExp); return { ok: true }; }
   throw new Error("Passkey sign-in didn’t return a session.");
 }
 // Remove an enrolled passkey (owner-gated).
