@@ -74,7 +74,9 @@ export default {
           const _cancelTok = await hmac(env.SESSION_SECRET || "", "reqcancel." + reqId);    // one-tap Cancel: auto-send a decline note
           const _rq = "id=" + encodeURIComponent(reqId);
           const _actions = "http, Allow, " + url.origin + "/req/allow?" + _rq + "&t=" + _allowTok + ", method=POST, clear=true; view, Open in studio, https://riteshk.work/studio; http, Cancel, " + url.origin + "/req/cancel?" + _rq + "&t=" + _cancelTok + ", method=POST, clear=true";
-          try { await fetch(hook, { method: "POST", headers: { Title: "New access request", Tags: "envelope", Priority: "high", Actions: _actions }, body: msg }); } catch (e) {}
+          const _nh = { Title: "New access request", Tags: "envelope", Priority: "high", Actions: _actions };
+          if (env.NTFY_TOKEN) _nh.Authorization = "Bearer " + String(env.NTFY_TOKEN).trim();   // authenticated publish -> per-account rate limit (avoids the shared Cloudflare-IP quota)
+          try { await fetch(hook, { method: "POST", headers: _nh, body: msg }); } catch (e) {}
         }
         return json({ ok: true }, 200, cors);
       } catch (e) { return json({ error: "Couldn\u2019t send that \u2014 try again." }, 400, cors); }
@@ -150,15 +152,23 @@ export default {
     // can enrol a passkey. Auth is public: the assertion signature IS the proof. A "login" assertion
     // issues the same HMAC session as the password path; a "publish" assertion issues a short-lived
     // publish token (factor 1 of the publish step-up — the recovery proof is factor 2, checked later).
+    if (url.pathname === "/admin/pair") {
+      // Owner-only: mint a one-time pairing token for the phone-setup QR (studio is already authenticated).
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      const _p = await issuePairing(env);
+      return json({ token: _p.token, exp: _p.exp }, 200, cors);
+    }
     if (url.pathname === "/admin/webauthn/register/begin") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
-      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      const _pair = await verifyPairing(request.headers.get("X-Pair-Token"), env);
+      if (!_pair && !(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
       if (!env.VAULT_GRANTS) return json({ error: "Passkey store not configured" }, 500, cors);
-      // Enrolling a passkey needs this device to be TRUSTED (a prior step-up) — except the very first
+      // Enrolling a passkey needs this device TRUSTED (a prior step-up) OR a valid one-time pairing token
+      // (issued from the already-authenticated studio, e.g. the phone-setup QR) — except the very first
       // passkey ever (bootstrap from the initial session). Stops a phone-only sign-in on a strange
       // device from silently minting a resident passkey without the recovery passphrase + admin password.
       const _rc = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" });
-      if (_rc.keys.length > 0 && !(await verifyTrust(request.headers.get("X-Device-Trust"), env))) return json({ error: "Verify it\u2019s you to add a passkey on this device.", needStepup: true }, 403, cors);
+      if (_rc.keys.length > 0 && !_pair && !(await verifyTrust(request.headers.get("X-Device-Trust"), env))) return json({ error: "Verify it\u2019s you to add a passkey on this device.", needStepup: true }, 403, cors);
       const challenge = b64urlFromBytes(crypto.getRandomValues(new Uint8Array(32)));
       await env.VAULT_GRANTS.put("wa:chal:" + challenge, JSON.stringify({ type: "reg", exp: Date.now() + WEBAUTHN_CHALLENGE_TTL_MS }), { expirationTtl: 300 });
       const exclude = [];
@@ -175,7 +185,8 @@ export default {
     }
     if (url.pathname === "/admin/webauthn/register/finish") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
-      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      const _pairF = await verifyPairing(request.headers.get("X-Pair-Token"), env);
+      if (!_pairF && !(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
       try {
         const body = await request.json();
         const cd = JSON.parse(new TextDecoder().decode(b64urlToBytes(body.response.clientDataJSON)));
@@ -194,6 +205,7 @@ export default {
         const parsedKey = coseToJwk(p.credPubKey);
         const credId = b64urlFromBytes(p.credId);
         await env.VAULT_GRANTS.put("wa:cred:" + credId, JSON.stringify({ jwk: parsedKey.jwk, alg: parsedKey.alg, counter: p.signCount, label: String(body.label || "passkey").slice(0, 40), createdAt: Date.now() }));
+        if (_pairF) await consumePairing(_pairF.n, env);   // one-time pairing token spent on successful enrolment
         const l = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" });
         return json({ ok: true, credId: credId, count: l.keys.length }, 200, cors);
       } catch (e) { return json({ error: "Registration failed", detail: String((e && e.message) || e) }, 400, cors); }
@@ -374,6 +386,51 @@ export default {
       if (!env.VAULT_GRANTS) return json({ ok: true }, 200, cors);
       try { const b = await request.json(); if (b && b.id) await env.VAULT_GRANTS.delete(String(b.id)); } catch (e) {}
       return json({ ok: true }, 200, cors);
+    }
+    // Owner ALLOWS a request from the passkey-gated inbox PWA (session-gated) — mirrors /req/allow but
+    // authorized by the owner session instead of a signed URL token. Emails the Full-access link.
+    if (url.pathname === "/admin/requests/allow") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Store not configured" }, 500, cors);
+      try {
+        const b = await request.json(); const _id = String((b && b.id) || "");
+        if (!_id) return json({ error: "Missing id" }, 400, cors);
+        const rec = await env.VAULT_GRANTS.get(_id, "json");
+        if (!rec || !rec.email) return json({ ok: true, note: "already handled" }, 200, cors);
+        const qg = await env.VAULT_GRANTS.get("quickgrant:full", "json");
+        if (!qg || !qg.code) return json({ error: "No Full-access quick-grant is set up yet \u2014 mark a special view as Full access in the studio first." }, 400, cors);
+        if (qg.expiresAt && Date.now() > qg.expiresAt) return json({ error: "Your Full-access link has expired \u2014 refresh it in the studio." }, 400, cors);
+        const link = "https://riteshk.work/?ticket=" + encodeURIComponent(qg.code);
+        const who = String(rec.name || "there"), me = env.OWNER_EMAIL || "riteshkumarhk@gmail.com";
+        const html = "<p>Hi " + emailEsc(who) + ",</p><p>Thanks for your interest \u2014 here\u2019s access to my work:</p>"
+          + "<p><a href=\"" + link + "\" style=\"display:inline-block;padding:10px 18px;background:#0a0a0a;color:#fff;border-radius:8px;text-decoration:none\">Open my work</a></p>"
+          + "<p style=\"color:#555;font-size:13px\">Or paste this link: " + link + "</p><p>\u2014 Ritesh Kumar</p>";
+        const text = "Hi " + who + ",\n\nThanks for your interest \u2014 here's access to my work:\n" + link + "\n\n\u2014 Ritesh Kumar";
+        const sent = await sendEmail(env, { to: rec.email, subject: "Your access to my work \u2014 Ritesh Kumar", html, text, replyTo: me });
+        if (!sent.ok) return json({ error: "Couldn\u2019t send the email (" + (sent.status || "no email service") + ")." }, 502, cors);
+        try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
+        return json({ ok: true, sentTo: rec.email }, 200, cors);
+      } catch (e) { return json({ error: "Allow failed" }, 400, cors); }
+    }
+    // Owner DECLINES a request from the inbox PWA (session-gated) — mirrors /req/cancel. Polite email (Reply-To=you).
+    if (url.pathname === "/admin/requests/decline") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Store not configured" }, 500, cors);
+      try {
+        const b = await request.json(); const _id = String((b && b.id) || "");
+        if (!_id) return json({ error: "Missing id" }, 400, cors);
+        const rec = await env.VAULT_GRANTS.get(_id, "json");
+        if (!rec || !rec.email) return json({ ok: true, note: "already handled" }, 200, cors);
+        const who = String(rec.name || "there"), me = env.OWNER_EMAIL || "riteshkumarhk@gmail.com";
+        const html = "<p>Hi " + emailEsc(who) + ",</p><p>Thanks for reaching out about my work. I\u2019m not able to share access right now \u2014 feel free to reply here and we can talk.</p><p>\u2014 Ritesh Kumar</p>";
+        const text = "Hi " + who + ",\n\nThanks for reaching out about my work. I'm not able to share access right now \u2014 feel free to reply here and we can talk.\n\n\u2014 Ritesh Kumar";
+        const sent = await sendEmail(env, { to: rec.email, subject: "About your access request \u2014 Ritesh Kumar", html, text, replyTo: me });
+        if (!sent.ok) return json({ error: "Couldn\u2019t send the note (" + (sent.status || "no email service") + ")." }, 502, cors);
+        try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
+        return json({ ok: true, sentTo: rec.email }, 200, cors);
+      } catch (e) { return json({ error: "Decline failed" }, 400, cors); }
     }
     // Owner's private ticket keyring: an opaque recovery-encrypted blob {svId:code}, stored server-side
     // (cross-device). The Worker never sees the codes — only the ciphertext.
@@ -623,7 +680,7 @@ function corsHeaders(origin, env) {
   return {
     "Access-Control-Allow-Origin": ok ? (origin || allow[0] || "*") : (allow[0] || "null"),
     "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization,Content-Type,x-api-key,anthropic-version,anthropic-dangerous-direct-browser-access,Accept,X-GitHub-Api-Version,X-Vault-Grant,X-Publish-Token,X-Publish-Proof,X-Device-Trust",
+    "Access-Control-Allow-Headers": "Authorization,Content-Type,x-api-key,anthropic-version,anthropic-dangerous-direct-browser-access,Accept,X-GitHub-Api-Version,X-Vault-Grant,X-Publish-Token,X-Publish-Proof,X-Device-Trust,X-Pair-Token",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
@@ -767,6 +824,30 @@ async function verifyPublishToken(token, env) {
   if (!timingSafeEqual(sig, await hmac(env.SESSION_SECRET, payload))) return false;
   try { const o = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload))); return !!(o && o.pub && o.exp && o.exp > Date.now()); } catch (e) { return false; }
 }
+// One-time PAIRING token: issued from the authenticated studio (the phone-setup QR) so a phone can
+// enrol its OWN passkey without a session/step-up. Signed (domain-separated "pair." MAC) + short-lived
+// + single-use (a KV nonce consumed on successful enrolment).
+async function issuePairing(env) {
+  const nonce = b64urlFromBytes(crypto.getRandomValues(new Uint8Array(16)));
+  const exp = Date.now() + 10 * 60 * 1000; // 10 minutes
+  if (env.VAULT_GRANTS) { try { await env.VAULT_GRANTS.put("pair:" + nonce, JSON.stringify({ exp: exp }), { expirationTtl: 600 }); } catch (e) {} }
+  const payload = b64urlFromStr(JSON.stringify({ t: "pair", n: nonce, exp: exp }));
+  const sig = await hmac(env.SESSION_SECRET || "", "pair." + payload);
+  return { token: payload + "." + sig, exp: exp };
+}
+async function verifyPairing(token, env) {
+  if (!token || !env.SESSION_SECRET) return null;
+  const dot = token.indexOf("."); if (dot < 1) return null;
+  const payload = token.slice(0, dot), sig = token.slice(dot + 1);
+  if (!timingSafeEqual(sig, await hmac(env.SESSION_SECRET, "pair." + payload))) return null;
+  try {
+    const o = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload)));
+    if (!(o && o.t === "pair" && o.n && o.exp && o.exp > Date.now())) return null;
+    if (env.VAULT_GRANTS && !(await env.VAULT_GRANTS.get("pair:" + o.n))) return null; // single-use: nonce already consumed
+    return o;
+  } catch (e) { return null; }
+}
+async function consumePairing(nonce, env) { if (env.VAULT_GRANTS && nonce) { try { await env.VAULT_GRANTS.delete("pair:" + nonce); } catch (e) {} } }
 
 /* ---------- WebAuthn (passkey) helpers — dependency-free ---------- */
 function waRpId(env) { return env.RP_ID || "riteshk.work"; }

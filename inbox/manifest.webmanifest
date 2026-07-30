@@ -1,0 +1,15 @@
+{
+  "name": "Riteshk — Requests",
+  "short_name": "Requests",
+  "description": "Recruiter access requests for riteshk.work",
+  "start_url": "/inbox/",
+  "scope": "/inbox/",
+  "id": "/inbox/",
+  "display": "standalone",
+  "background_color": "#08080a",
+  "theme_color": "#08080a",
+  "icons": [
+    { "src": "/inbox/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/inbox/icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

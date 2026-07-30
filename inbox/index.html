@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Requests — riteshk</title>
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#08080a">
+  <link rel="manifest" href="/inbox/manifest.webmanifest">
+  <link rel="icon" href="/inbox/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/inbox/icon.svg">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Requests">
+  <style>
+    :root{
+      --bg:#08080a; --bg2:#0d0d10; --card:#111116; --line:#23232a;
+      --text:#ECE7E1; --dim:#8f8a84; --faint:#5a5650; --accent:#D8A657; --warn:#c9704f; --err:#d9534f;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+    body{min-height:100dvh}
+    #app{min-height:100dvh;display:flex;flex-direction:column;
+      padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+    .wrap{max-width:560px;margin:0 auto;width:100%;padding:24px 18px 44px;flex:1}
+    .brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:.02em}
+    .brand .logo{width:34px;height:34px;border-radius:9px;background:var(--bg2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
+    .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+    .iconbtn{background:var(--bg2);border:1px solid var(--line);color:var(--text);width:38px;height:38px;border-radius:10px;font-size:17px;cursor:pointer}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;margin-top:20px}
+    h1{font-size:22px;margin:0 0 8px;font-weight:650;letter-spacing:-.01em}
+    p{line-height:1.5;margin:0 0 16px}
+    .muted{color:var(--dim)} .small{font-size:13px}
+    .btn{display:block;width:100%;padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:var(--bg2);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;margin-top:10px;text-align:center}
+    .btn.primary{background:var(--accent);border-color:var(--accent);color:#0a0a0a}
+    .btn.warn{color:var(--warn);border-color:#3a2a24;background:transparent}
+    .btn.ghost{background:transparent}
+    .btn:disabled{opacity:.55}
+    .step{display:flex;gap:12px;padding:16px 0;border-top:1px solid var(--line)}
+    .step__n{width:26px;height:26px;border-radius:50%;background:var(--bg2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:13px;font-weight:700;flex:none}
+    .step__b{flex:1}.step__t{font-weight:600;margin-bottom:3px}
+    .spinner{width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:10px auto}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .list{display:flex;flex-direction:column;gap:12px;margin-top:18px}
+    .req{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;transition:opacity .3s}
+    .req.done{opacity:.5}
+    .req__top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+    .req__name{font-weight:650}.req__co{color:var(--dim)}
+    .req__time{color:var(--faint);font-size:12px;flex:none;white-space:nowrap}
+    .req__email{display:block;color:var(--accent);text-decoration:none;font-size:14px;margin-top:2px;word-break:break-all}
+    .req__meta{color:var(--dim);font-size:13px;margin-top:6px}
+    .req__note{color:var(--text);font-size:14px;margin-top:6px;font-style:italic;opacity:.9}
+    .req__acts{display:flex;gap:8px;margin-top:14px}
+    .req__acts .btn{flex:1;width:auto;margin-top:0;padding:11px 6px;font-size:13px}
+    .req__done{margin-top:14px;color:var(--accent);font-weight:600;font-size:14px}
+    .empty{text-align:center;padding:48px 0}
+    .note{margin-top:10px;font-size:13px;color:var(--dim)}.note.err{color:var(--err)}
+  </style>
+</head>
+<body>
+  <div id="app"><div class="wrap"><div class="spinner"></div><p class="muted" style="text-align:center">Loading…</p></div></div>
+  <script src="/inbox/inbox.js"></script>
+</body>
+</html>
