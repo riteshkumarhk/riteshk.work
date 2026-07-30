@@ -67,7 +67,9 @@ export default {
         try { await env.VAULT_GRANTS.put("req:" + Date.now() + ":" + Math.random().toString(36).slice(2, 8), JSON.stringify(rec), { expirationTtl: 90 * 24 * 3600 }); } catch (e) {}
         if (env.REQUEST_WEBHOOK) {
           const msg = [name + (company ? " \u2014 " + company : ""), email, "Wants: " + (context || "general access"), note ? ("\u201c" + note + "\u201d") : ""].filter(Boolean).join("\n");
-          try { await fetch(env.REQUEST_WEBHOOK, { method: "POST", headers: { Title: "New access request", Tags: "envelope", Priority: "high" }, body: msg }); } catch (e) {}
+          var hook = String(env.REQUEST_WEBHOOK).trim();
+          if (!/^https?:\/\//i.test(hook)) hook = "https://ntfy.sh/" + hook.replace(/^\/+/, "");   // a bare topic name -> full ntfy.sh URL
+          try { await fetch(hook, { method: "POST", headers: { Title: "New access request", Tags: "envelope", Priority: "high" }, body: msg }); } catch (e) {}
         }
         return json({ ok: true }, 200, cors);
       } catch (e) { return json({ error: "Couldn\u2019t send that \u2014 try again." }, 400, cors); }
