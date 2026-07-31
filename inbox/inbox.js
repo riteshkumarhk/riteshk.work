@@ -105,18 +105,18 @@
   async function afterVerify() {
     var subscribed = false;
     try { if (("serviceWorker" in navigator) && ("PushManager" in window)) { var reg = await navigator.serviceWorker.ready; subscribed = !!(await reg.pushManager.getSubscription()); } } catch (e) {}
-    if (isStandalone() && subscribed) return openInbox();
-    return showOnboarding();
+    if (subscribed) return openInbox();   // already set up for push → straight to the inbox
+    return showOnboarding();               // otherwise guide notifications + install first
   }
 
   function isStandalone() { return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true; }
   function showOnboarding() {
     var installed = isStandalone();
-    screen([brand(), h("div", { class: "card" }, [
-      h("h1", { text: "You’re set 🎉" }),
-      h("p", { class: "muted", text: "A passkey now lives on this phone. Two quick things so you never miss a recruiter:" }),
-      step("1", "Add to Home Screen", installed ? h("div", { class: "muted small", text: "Installed ✓" }) : installBlock()),
-      step("2", "Enable notifications", notifBlock()),
+    screen([brand(), h("div", { class: "card", "data-ob": "1" }, [
+      h("h1", { text: "Two quick steps" }),
+      h("p", { class: "muted", text: "So a recruiter request pings this phone even when the app is closed." }),
+      step("1", "Turn on notifications", notifBlock()),
+      step("2", installed ? "Added to Home Screen ✓" : "Add to Home Screen", installed ? h("div", { class: "muted small", text: "Done — you’ll get an app icon too." }) : installBlock()),
       btn("Open my requests →", "primary", openInbox)
     ])]);
   }
@@ -125,7 +125,7 @@
   }
   function installBlock() {
     var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    var wrap = h("div", {}, [h("div", { class: "muted small", text: ios ? "Tap the Share icon, then “Add to Home Screen.”" : "Open the browser menu → “Install app” / “Add to Home screen.”" })]);
+      var wrap = h("div", {}, [h("div", { class: "muted small", text: ios ? "Tap the Share icon, then “Add to Home Screen.”" : "Tap Chrome’s ⋮ menu, then “Add to Home screen” / “Install app.”" })]);
     if (deferredInstall) {
       var ib = btn("Install", "ghost");
       ib.addEventListener("click", async function () { try { deferredInstall.prompt(); await deferredInstall.userChoice; } catch (e) {} deferredInstall = null; ib.remove(); });
@@ -236,7 +236,7 @@
 
   /* ---------- init ---------- */
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/inbox/sw.js").catch(function () {});
-  window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferredInstall = e; });
+  window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferredInstall = e; if (document.querySelector("[data-ob]")) showOnboarding(); });
 
   (function init() {
     if (!window.PublicKeyCredential || !(navigator.credentials && navigator.credentials.get)) {
