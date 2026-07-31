@@ -255,7 +255,9 @@
   function actBtn(label, cls, rq, path, card, doneMsg) {
     var b = btn(label, cls);
     b.addEventListener("click", async function () {
-      var acts = card.querySelector(".req__acts");
+      var card = b.closest(".req");                        // resolve at click time — the card ref isn't ready when actBtn is built
+      var acts = card && card.querySelector(".req__acts");
+      if (!acts) return;
       Array.prototype.forEach.call(acts.querySelectorAll("button"), function (x) { x.disabled = true; });
       b.textContent = "…";
       var r = await api(path, { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHdr()), body: JSON.stringify({ id: rq.id }) });
