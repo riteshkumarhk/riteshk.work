@@ -833,8 +833,32 @@ import {
     el.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); if (e.key === "Escape") dismiss(); });
     setTimeout(function () { try { inp.focus(); } catch (e) {} }, 350);
   }
+  // Exchange a per-recruiter ?k= link for the current access code (the Worker checks it's live, not
+  // expired or revoked). Returns the code, or null after surfacing a friendly message.
+  async function redeemAccessLink(token) {
+    try {
+      var res = await fetch(ADMIN_WORKER + "/access/redeem", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ k: token }) });
+      var j = null; try { j = await res.json(); } catch (e) {}
+      if (res.ok && j && j.code) return j.code;
+      var reason = (j && j.reason) || "invalid";
+      if (reason === "expired") { expiredNotice({}); return null; }
+      maybeRecruiterFlyout(reason === "revoked" ? "This access link was turned off \u2014 reply to the email and I\u2019ll sort it out." : "This access link isn\u2019t valid \u2014 reply to the email and I\u2019ll send a fresh one.");
+      return null;
+    } catch (e) { maybeRecruiterFlyout("Couldn\u2019t reach the server \u2014 try again in a moment."); return null; }
+  }
   function recruiterInit() {
     document.addEventListener("rk:route", syncRecruiterFlyout);   // a case study opens/closes over the landing without a reload
+    var kTok = new URLSearchParams(location.search || "").get("k");
+    if (kTok) {
+      redeemAccessLink(kTok).then(function (code) {
+        try { var u = new URL(location.href); u.searchParams.delete("k"); history.replaceState({}, "", u.pathname + (u.search || "") + u.hash); } catch (e) {}
+        if (!code) return;
+        applyTicketCode(code).then(function (r) {
+          if (!r || !r.ok) { if (r && r.reason === "expired") expiredNotice({}); else maybeRecruiterFlyout(ticketErr(r && r.reason)); }
+        });
+      });
+      return;
+    }
     var deep = new URLSearchParams(location.search || "").get("ticket");
     if (deep) {
       applyTicketCode(deep).then(function (r) {
