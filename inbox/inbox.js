@@ -7,6 +7,7 @@
   var WORKER = "https://rk-ai-proxy.riteshkumarhk.workers.dev";
   var SS = "rk:inbox:sess";
   var INST = "rk:inbox:installed";
+  var pushEnsured = false;   // re-register this device's push subscription once per launch (self-heals rotation)
   // VAPID public key (paired with the Worker's VAPID_PRIVATE secret) — used as applicationServerKey.
   var VAPID_PUBLIC = "BNvPqxaZXo1uLqMAXeW-l6WCPMceklB7Z5RzgpAL3p8N8MtkATL5j0w6YMwdFmNPD0nkcN4NWY_msYNewlZKCHQ";
   var app = document.getElementById("app");
@@ -199,8 +200,23 @@
     if (!r.ok) throw new Error((r.json && r.json.error) || "Couldn’t save the subscription.");
     await maybePromptInstall();  // notifications on - now offer Add to Home Screen (fires the install dialog)
   }
+  // Push subscriptions rotate (e.g. after installing to the Home Screen, or when the browser refreshes them),
+  // which silently leaves the server holding a dead endpoint (410). On every launch, quietly re-register the
+  // current subscription so the server always has a live endpoint. Idempotent — the Worker dedupes by endpoint.
+  async function ensurePush() {
+    try {
+      if (!(("Notification" in window) && ("serviceWorker" in navigator) && ("PushManager" in window))) return;
+      if (Notification.permission !== "granted" || !sess()) return;
+      var reg = await navigator.serviceWorker.ready;
+      var sub = await reg.pushManager.getSubscription();
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: new Uint8Array(b64urlToBuf(VAPID_PUBLIC)) });
+      if (!sub) return;
+      await api("/inbox/subscribe", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHdr()), body: JSON.stringify({ subscription: sub.toJSON() }) });
+    } catch (e) {}
+  }
 
   async function openInbox() {
+    if (!pushEnsured) { pushEnsured = true; ensurePush(); }
     screen([brand(), h("div", { class: "card" }, [h("div", { class: "spinner" }), h("p", { class: "muted", text: "Loading requests…" })])]);
     var r = await api("/admin/requests", { headers: authHdr() });
     if (r.status === 401) { localStorage.removeItem(SS); return showVerify(); }

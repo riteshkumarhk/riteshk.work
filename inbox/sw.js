@@ -1,7 +1,7 @@
 /* Riteshk Requests — service worker.
    Caches the app shell for a fast, offline-tolerant launch (API calls to the Worker always pass
    straight through, never cached) + handles Web Push ("push" + "notificationclick"). */
-const CACHE = "rk-inbox-v6";
+const CACHE = "rk-inbox-v7";
 const SHELL = [
   "/inbox/",
   "/inbox/index.html",
@@ -11,6 +11,16 @@ const SHELL = [
   "/inbox/icon-192.png",
   "/inbox/icon-512.png"
 ];
+
+// VAPID public key (same as the app + the Worker's VAPID_PRIVATE) — needed to re-subscribe on rotation.
+const VAPID_PUBLIC = "BNvPqxaZXo1uLqMAXeW-l6WCPMceklB7Z5RzgpAL3p8N8MtkATL5j0w6YMwdFmNPD0nkcN4NWY_msYNewlZKCHQ";
+function vapidKey() {
+  const s = VAPID_PUBLIC.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = s.length % 4 ? "=".repeat(4 - (s.length % 4)) : "";
+  const bin = atob(s + pad); const b = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+  return b;
+}
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -38,6 +48,12 @@ self.addEventListener("push", (e) => {
     vibrate: [80, 40, 80],
     data: { url: d.url || "/inbox/" }
   }));
+});
+
+// If the browser rotates our push subscription, re-subscribe immediately so getSubscription() stays valid;
+// the app re-registers the fresh endpoint with the server on its next launch (ensurePush).
+self.addEventListener("pushsubscriptionchange", (e) => {
+  e.waitUntil(self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKey() }).catch(() => {}));
 });
 
 // Tapping the notification focuses an open inbox tab, or opens the app.
