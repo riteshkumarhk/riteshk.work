@@ -130,6 +130,7 @@ import {
     ["education", "Education"],
     ["contact", "Contact"],
     ["special", "Special Views"],
+    ["access", "Access"],
     ["ai", "AI"],
     ["autofill", "More"],
   ];
@@ -2794,6 +2795,130 @@ import {
     } catch (e) {}
   }
 
+  // ---------- dedicated Access tab: Requests / Approved / Curated ----------
+  // NOTE: fully independent of the legacy Special-Views inbox (its own caches) so the
+  // recruiter's live `all`-mode flow is never perturbed. Curated is a separate branch.
+  var accReqCache = [];
+  var accGrantCache = [];
+  var accSubTab = "requests";       // requests | approved | curated
+  var accShowDeclined = false;
+  var accLoading = false;
+
+  function accSubBtn(id, label) {
+    return '<button class="rkacc__tab' + (accSubTab === id ? " is-on" : "") + '" data-act="acc-tab" data-tab="' + id + '">' + escHtml(label) + "</button>";
+  }
+  function accGrantLeft(g) {
+    if (g.revoked) return "revoked";
+    if (!g.expiresAt) return "no expiry";
+    var d = Math.ceil((g.expiresAt - Date.now()) / 86400000);
+    return d <= 0 ? "expired" : d + "d left";
+  }
+  function accReqRow(q) {
+    var declined = q.status === "declined";
+    var acts = declined
+      ? '<button class="btn btn--ghost" data-act="acc-req-delete" data-id="' + escAttr(q.id) + '">Delete</button>'
+      : '<button class="btn btn--primary" data-act="acc-req-approve" data-id="' + escAttr(q.id) + '">Approve</button>' +
+        '<button class="btn btn--ghost" data-act="acc-req-curate" data-id="' + escAttr(q.id) + '">Curate\u2026</button>' +
+        '<button class="btn btn--ghost" data-act="acc-req-decline" data-id="' + escAttr(q.id) + '">Decline</button>';
+    return '<div class="rkinbox__row">' +
+      '<div class="rkinbox__main">' +
+        '<div class="rkinbox__who"><b>' + escHtml(q.name || "\u2014") + "</b>" + (q.company ? ' <span class="rkinbox__co">\u00b7 ' + escHtml(q.company) + "</span>" : "") + ' <span class="rkinbox__ago">' + escHtml(reqAgo(declined ? (q.declinedAt || q.at) : q.at)) + "</span></div>" +
+        (q.email ? '<a class="rkinbox__mail" href="mailto:' + escAttr(q.email) + '">' + escHtml(q.email) + "</a>" : "") +
+        (q.context ? '<div class="rkinbox__ctx">' + escHtml(q.context) + "</div>" : "") +
+        (q.note ? '<div class="rkinbox__note">\u201c' + escHtml(q.note) + "\u201d</div>" : "") +
+      "</div>" +
+      '<div class="rkinbox__acts">' + acts + "</div>" +
+    "</div>";
+  }
+  function accGrantRow(g) {
+    var meta = "Opened " + (g.uses || 0) + "\u00d7" + (g.days ? " \u00b7 " + g.days + "d link" : "");
+    return '<div class="rkinbox__row' + (g.revoked ? " is-off" : "") + '">' +
+      '<div class="rkinbox__main">' +
+        '<div class="rkinbox__who"><b>' + escHtml(g.name || g.email || "Recruiter") + "</b>" + (g.company ? ' <span class="rkinbox__co">\u00b7 ' + escHtml(g.company) + "</span>" : "") + ' <span class="rkinbox__ago">' + escHtml(accGrantLeft(g)) + "</span></div>" +
+        (g.email ? '<a class="rkinbox__mail" href="mailto:' + escAttr(g.email) + '">' + escHtml(g.email) + "</a>" : "") +
+        '<div class="rkinbox__ctx">' + escHtml(meta) + "</div>" +
+      "</div>" +
+      '<div class="rkinbox__acts">' +
+        '<button class="btn btn--ghost" data-act="acc-grant-copy" data-token="' + escAttr(g.token) + '">Copy link</button>' +
+        '<button class="btn btn--ghost" data-act="acc-grant-days" data-token="' + escAttr(g.token) + '" data-days="' + escAttr(String(g.days || 15)) + '">Duration</button>' +
+        '<button class="btn ' + (g.revoked ? "btn--primary" : "btn--ghost") + '" data-act="acc-grant-revoke" data-token="' + escAttr(g.token) + '" data-on="' + (g.revoked ? "1" : "0") + '">' + (g.revoked ? "Restore" : "Revoke") + "</button>" +
+        '<button class="btn btn--danger" data-act="acc-grant-delete" data-token="' + escAttr(g.token) + '">Delete</button>' +
+      "</div>" +
+    "</div>";
+  }
+  function accessSection() {
+    var head = '<div class="rkacc__tabs">' + accSubBtn("requests", "Requests") + accSubBtn("approved", "Approved") + accSubBtn("curated", "Curated") + "</div>";
+    var inner;
+    if (accLoading) {
+      inner = '<div class="rkinbox__empty">Loading\u2026</div>';
+    } else if (accSubTab === "requests") {
+      inner = '<label class="rkacc__switch"><input type="checkbox" data-act="acc-declined"' + (accShowDeclined ? " checked" : "") + " /> Show declined</label>" +
+        (accReqCache.length ? accReqCache.map(accReqRow).join("") : '<div class="rkinbox__empty">' + (accShowDeclined ? "No declined requests." : "No pending requests \u2014 you\u2019re all caught up.") + "</div>");
+    } else {
+      var curated = accSubTab === "curated";
+      var gs = accGrantCache.filter(function (g) { return ((g.mode || "all") === "curated") === curated; });
+      inner = gs.length ? gs.map(accGrantRow).join("") : '<div class="rkinbox__empty">' + (curated ? "No curated grants yet \u2014 use Curate\u2026 on a request." : "No approved grants yet.") + "</div>";
+    }
+    return '<p class="af__hint" style="margin:.1rem 0 1rem">Approve, decline and manage every recruiter\u2019s access here. Approving mints a private <code>/?k=</code> link and emails it. <b>Curate\u2026</b> scopes exactly what they see.</p>' +
+      '<div class="rkinbox">' + head + '<div data-accbody>' + inner + "</div></div>";
+  }
+  async function loadAccessData() {
+    var sess = adminSession(); if (!sess) return;
+    accLoading = true; if (activeTab === "access") renderBody();
+    try {
+      var rq = await fetch(ADMIN_WORKER + "/admin/requests?status=" + (accShowDeclined ? "declined" : "pending"), { headers: { Authorization: "Bearer " + sess } });
+      if (rq.ok) accReqCache = (await rq.json()).requests || [];
+      var rg = await fetch(ADMIN_WORKER + "/admin/access", { headers: { Authorization: "Bearer " + sess } });
+      if (rg.ok) accGrantCache = (await rg.json()).grants || [];
+    } catch (e) {}
+    accLoading = false; if (activeTab === "access") renderBody();
+  }
+  sections.access = accessSection;
+
+  // Foldable curation dialog — pick exactly what a recruiter sees, then mint a scoped link.
+  function curateModal(reqId) {
+    var q = accReqCache.filter(function (x) { return x.id === reqId; })[0] || {};
+    var works = data.work || [], highs = data.highlights || [], caps = data.capabilities || [];
+    var wOpts = works.map(function (w, wi) { return '<label class="svchk"><input type="checkbox" data-cur="work" value="' + escAttr(w.id) + '" /><span>' + escHtml(w.client || w.title || ("Work " + (wi + 1))) + "</span></label>"; }).join("");
+    var hOpts = highs.map(function (hh, hi) { return '<label class="svchk"><input type="checkbox" data-cur="high" value="' + hi + '" checked /><span>' + escHtml((hh.value || "") + " \u00b7 " + (hh.label || "")) + "</span></label>"; }).join("");
+    var cOpts = caps.map(function (c, ci) { return '<label class="svchk"><input type="checkbox" data-cur="cap" value="' + ci + '" checked /><span>' + escHtml(c) + "</span></label>"; }).join("");
+    var modal = document.createElement("div");
+    modal.className = "pass";
+    modal.innerHTML =
+      '<div class="pass__box pass__box--wide"><div class="pass__title">Curate access \u2014 ' + escHtml(q.name || "recruiter") + "</div>" +
+      '<div class="pass__sub">Approving emails a private link scoped to exactly this selection.</div>' +
+      '<details open class="rkcur__grp"><summary>Work shown <span>(none ticked = all work)</span></summary><div class="svchk__grid">' + wOpts + "</div></details>" +
+      '<details class="rkcur__grp"><summary>Numbers shown <span>(all by default)</span></summary><div class="svchk__grid">' + hOpts + "</div></details>" +
+      '<details class="rkcur__grp"><summary>Capabilities shown <span>(all by default)</span></summary><div class="svchk__grid">' + cOpts + "</div></details>" +
+      '<div class="rkcur__days"><label>Link lasts <input type="number" min="0" step="1" value="15" data-cur-days /> days <span>(0 = no expiry)</span></label></div>' +
+      '<div class="pass__err"></div>' +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
+      '<button class="btn btn--primary" data-go>Approve &amp; email link</button></div></div>';
+    document.body.appendChild(modal);
+    var err = modal.querySelector(".pass__err"), go = modal.querySelector("[data-go]");
+    var done = function () { modal.remove(); };
+    modal.querySelector("[data-cancel]").addEventListener("click", done);
+    modal.addEventListener("click", function (e) { if (e.target === modal) done(); });
+    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") done(); });
+    go.addEventListener("click", async function () {
+      var pick = function (sel) { return Array.prototype.map.call(modal.querySelectorAll('[data-cur="' + sel + '"]:checked'), function (x) { return x.value; }); };
+      var workIds = pick("work");
+      var highlightIdx = pick("high").map(Number);
+      var capabilityIdx = pick("cap").map(Number);
+      var days = Math.max(0, parseInt((modal.querySelector("[data-cur-days]") || {}).value || "15", 10) || 0);
+      go.disabled = true; err.textContent = ""; var was = go.textContent; go.textContent = "Sending\u2026";
+      try {
+        var r = await fetch(ADMIN_WORKER + "/admin/requests/curate", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ id: reqId, workIds: workIds, highlightIdx: highlightIdx, capabilityIdx: capabilityIdx, days: days }) });
+        if (!r.ok) throw 0;
+        done();
+        accReqCache = accReqCache.filter(function (x) { return x.id !== reqId; });
+        renderBody();
+        status("Curated access emailed.", true);
+        loadAccessData();
+      } catch (e) { go.disabled = false; go.textContent = was; err.textContent = "Couldn\u2019t send \u2014 try again."; }
+    });
+  }
+
   function svCard(sv, i) {
     const works = data.work || [], highs = data.highlights || [], caps = data.capabilities || [];
     const expired = window.RK.svExpired(sv), left = window.RK.svDaysLeft(sv);
@@ -3316,6 +3441,59 @@ import {
       fetch(ADMIN_WORKER + "/admin/requests/delete", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ id: _rid }) })
         .then(function () { reqCache = reqCache.filter(function (x) { return x.id !== _rid; }); renderBody(); status("Request dismissed.", true); })
         .catch(function () { b.disabled = false; status("Couldn\u2019t dismiss \u2014 try again.", false); });
+      return;
+    }
+    if (act === "acc-tab") { accSubTab = b.dataset.tab; renderBody(); return; }
+    if (act === "acc-declined") { accShowDeclined = !accShowDeclined; loadAccessData(); return; }
+    if (act === "acc-req-approve") {
+      var _aid = b.dataset.id; b.disabled = true; status("Approving\u2026", true);
+      fetch(ADMIN_WORKER + "/admin/requests/allow", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ id: _aid }) })
+        .then(function (r) { if (!r.ok) throw 0; accReqCache = accReqCache.filter(function (x) { return x.id !== _aid; }); renderBody(); status("Approved \u2014 access link emailed.", true); loadAccessData(); })
+        .catch(function () { b.disabled = false; status("Couldn\u2019t approve \u2014 try again.", false); });
+      return;
+    }
+    if (act === "acc-req-curate") { curateModal(b.dataset.id); return; }
+    if (act === "acc-req-decline") {
+      var _did = b.dataset.id; b.disabled = true;
+      fetch(ADMIN_WORKER + "/admin/requests/decline", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ id: _did }) })
+        .then(function (r) { if (!r.ok) throw 0; accReqCache = accReqCache.filter(function (x) { return x.id !== _did; }); renderBody(); status("Declined \u2014 a polite note was sent.", true); })
+        .catch(function () { b.disabled = false; status("Couldn\u2019t decline \u2014 try again.", false); });
+      return;
+    }
+    if (act === "acc-req-delete") {
+      var _xid = b.dataset.id; b.disabled = true;
+      fetch(ADMIN_WORKER + "/admin/requests/delete", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ id: _xid }) })
+        .then(function () { accReqCache = accReqCache.filter(function (x) { return x.id !== _xid; }); renderBody(); status("Deleted.", true); })
+        .catch(function () { b.disabled = false; status("Couldn\u2019t delete \u2014 try again.", false); });
+      return;
+    }
+    if (act === "acc-grant-copy") {
+      var _gl = location.origin + "/?k=" + (b.dataset.token || "");
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(_gl).then(function () { status("Access link copied.", true); }, function () { status(_gl); });
+      else status(_gl);
+      return;
+    }
+    if (act === "acc-grant-days") {
+      var _gt = b.dataset.token, _nd = prompt("Days this link stays live (1\u2013365):", b.dataset.days || "15");
+      if (!_nd) return; var _ndn = parseInt(_nd, 10); if (!(_ndn > 0)) return;
+      fetch(ADMIN_WORKER + "/admin/access", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ token: _gt, days: Math.min(_ndn, 365) }) })
+        .then(function (r) { if (!r.ok) throw 0; status("Duration updated.", true); loadAccessData(); })
+        .catch(function () { status("Couldn\u2019t update \u2014 try again.", false); });
+      return;
+    }
+    if (act === "acc-grant-revoke") {
+      var _rt = b.dataset.token, _on = b.dataset.on === "1";
+      fetch(ADMIN_WORKER + "/admin/access", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ token: _rt, revoke: !_on }) })
+        .then(function (r) { if (!r.ok) throw 0; status(_on ? "Access restored." : "Access revoked.", true); loadAccessData(); })
+        .catch(function () { status("Couldn\u2019t update \u2014 try again.", false); });
+      return;
+    }
+    if (act === "acc-grant-delete") {
+      var _dt = b.dataset.token;
+      if (!confirm("Delete this grant permanently? Their link stops working.")) return;
+      fetch(ADMIN_WORKER + "/admin/access", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ token: _dt, delete: true }) })
+        .then(function (r) { if (!r.ok) throw 0; status("Grant deleted.", true); loadAccessData(); })
+        .catch(function () { status("Couldn\u2019t delete \u2014 try again.", false); });
       return;
     }
     if (act === "sv-tailor") { roleKitModal(); return; }
@@ -7604,7 +7782,7 @@ import {
     // Paste into a rich-text body as plain text (no foreign colours/fonts).
     root.addEventListener("paste", onRtPaste);
     root.querySelectorAll(".adm__tab").forEach((t) =>
-      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); if (activeTab === "special") { loadRequests(); loadQuickGrant(); } try { t.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {} tabsSync(); })
+      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); if (activeTab === "special") { loadRequests(); loadQuickGrant(); } if (activeTab === "access") loadAccessData(); try { t.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {} tabsSync(); })
     );
     // tab-strip overflow flippers (\u2039 \u203A)
     root.querySelectorAll("[data-tabflip]").forEach((b) => b.addEventListener("click", () => tabScroll(+b.dataset.tabflip)));
@@ -7709,6 +7887,7 @@ import {
     renderBody();
     loadRequests();   // prefetch access requests for the Special Views tab
     loadQuickGrant(); // prefetch the one-tap Full-access quick-grant status
+    loadAccessData(); // prefetch the dedicated Access tab (requests + grants)
     musSilence(); // silence the ambient music while editing
     thDismiss(true); // belt-and-suspenders: the ticket nudge must never linger over the editor
     document.documentElement.classList.add("adm-lock");

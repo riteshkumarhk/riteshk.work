@@ -432,6 +432,24 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .rkqg__status.is-on { color: var(--text); }
 .rkqg__acts { display: flex; gap: .4rem; margin-left: auto; flex-wrap: wrap; }
 .rkqg__acts .btn { font-size: .72rem; padding: .3rem .6rem; }
+.rkacc__tabs { display: flex; gap: .3rem; padding: .5rem .55rem; border-bottom: 1px solid var(--line); background: var(--bg-2); }
+.rkacc__tab { font-family: var(--mono); font-size: .64rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); background: transparent; border: 1px solid transparent; border-radius: 100px; padding: .32rem .7rem; cursor: pointer; }
+.rkacc__tab:hover { color: var(--text); }
+.rkacc__tab.is-on { color: #1a1206; background: var(--accent); border-color: var(--accent); }
+.rkacc__switch { display: flex; align-items: center; gap: .5rem; font-size: .76rem; color: var(--text-dim); cursor: pointer; padding: .7rem .9rem; border-top: 1px solid var(--line); }
+.rkacc__switch input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+.rkinbox__row.is-off { opacity: .5; }
+.pass__box--wide { max-width: 560px; width: min(560px, calc(100vw - 2rem)); }
+.rkcur__grp { border: 1px solid var(--line); border-radius: 10px; margin: .5rem 0; background: var(--bg); overflow: hidden; }
+.rkcur__grp > summary { font-family: var(--mono); font-size: .64rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); padding: .6rem .8rem; cursor: pointer; list-style: none; }
+.rkcur__grp > summary::-webkit-details-marker { display: none; }
+.rkcur__grp > summary::before { content: "\25B8  "; color: var(--text-faint); }
+.rkcur__grp[open] > summary::before { content: "\25BE  "; }
+.rkcur__grp > summary span { text-transform: none; letter-spacing: 0; color: var(--text-faint); font-family: var(--sans); }
+.rkcur__grp .svchk__grid { padding: .3rem .8rem .7rem; max-height: 190px; overflow: auto; }
+.rkcur__days { margin: .8rem 0 .2rem; font-size: .82rem; color: var(--text-dim); }
+.rkcur__days input { width: 66px; margin: 0 .3rem; }
+.rkcur__days span { color: var(--text-faint); }
 .adm__empty { color: var(--text-dim); font-size: .82rem; padding: 1rem; border: 1px dashed var(--line); border-radius: 10px; margin-bottom: 1rem; text-align: center; }
 .sv-card--exp { opacity: .72; }
 .sv-badge { font-family: var(--mono); font-size: .52rem; text-transform: uppercase; letter-spacing: .06em; color: #ff9a7a; border: 1px solid rgba(255, 154, 122, .35); border-radius: 100px; padding: .05rem .4rem; font-weight: 400; }
