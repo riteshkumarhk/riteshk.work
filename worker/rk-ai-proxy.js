@@ -108,13 +108,10 @@ export default {
       const qg = await env.VAULT_GRANTS.get("quickgrant:full", "json");
       if (!qg || !qg.code) return _reply("No Full-access quick-grant is set up yet. Open the studio, mark a special view as Full access, then tap Allow again.");
       if (qg.expiresAt && Date.now() > qg.expiresAt) return _reply("Your Full-access link has expired. Refresh it in the studio, then tap Allow again.");
-      const link = "https://riteshk.work/?ticket=" + encodeURIComponent(qg.code);
       const who = String(rec.name || "there"), me = env.OWNER_EMAIL || "riteshkumarhk@gmail.com";
-      const html = "<p>Hi " + emailEsc(who) + ",</p><p>Thanks for your interest \u2014 here\u2019s access to my work:</p>"
-        + "<p><a href=\"" + link + "\" style=\"display:inline-block;padding:10px 18px;background:#0a0a0a;color:#fff;border-radius:8px;text-decoration:none\">Open my work</a></p>"
-        + "<p style=\"color:#555;font-size:13px\">Or paste this link: " + link + "</p><p>\u2014 Ritesh Kumar</p>";
-      const text = "Hi " + who + ",\n\nThanks for your interest \u2014 here's access to my work:\n" + link + "\n\n\u2014 Ritesh Kumar";
-      const sent = await sendEmail(env, { to: rec.email, subject: "Your access to my work \u2014 Ritesh Kumar", html, text, replyTo: me });
+      const minted = await mintAccessLink(env, { email: rec.email, name: rec.name, company: rec.company, reqId: _id });
+      const mail = fullAccessEmail(env, minted.link, who, 15);
+      const sent = await sendEmail(env, { to: rec.email, subject: mail.subject, html: mail.html, text: mail.text, replyTo: me, bcc: me });
       if (!sent.ok) return _reply("Couldn\u2019t send the email (" + (sent.status || "no email service") + "). Check the Resend setup, then tap Allow again.");
       try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
       return _reply("Sent full access to " + rec.email + ". \u2713");
@@ -135,6 +132,22 @@ export default {
       if (!sent.ok) return _reply("Couldn\u2019t send the note (" + (sent.status || "no email service") + "). Dismiss it in the studio instead, or check the Resend setup.");
       try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
       return _reply("Sent a cancellation note to " + rec.email + " (replies come to you). \u2713");
+    }
+
+    // ---------- public: a recruiter's unique ?k= link resolves to the current Full-access code ----------
+    if (url.pathname === "/access/redeem") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Unavailable" }, 503, cors);
+      let token = ""; try { const b = await request.json(); token = String((b && b.k) || "").trim(); } catch (e) {}
+      if (!token) return json({ error: "Missing link", reason: "empty" }, 400, cors);
+      const acc = await env.VAULT_GRANTS.get("access:" + token, "json");
+      if (!acc) return json({ error: "This link isn\u2019t valid.", reason: "invalid" }, 403, cors);
+      if (acc.revoked) return json({ error: "This link was turned off.", reason: "revoked" }, 403, cors);
+      if (acc.expiresAt && Date.now() > acc.expiresAt) return json({ error: "This link has expired.", reason: "expired" }, 403, cors);
+      const qg = await env.VAULT_GRANTS.get("quickgrant:full", "json");
+      if (!qg || !qg.code) return json({ error: "Access isn\u2019t set up right now.", reason: "noquickgrant" }, 503, cors);
+      try { acc.uses = (acc.uses || 0) + 1; acc.lastUsedAt = Date.now(); await env.VAULT_GRANTS.put("access:" + token, JSON.stringify(acc), acc.expiresAt ? { expiration: Math.floor(acc.expiresAt / 1000) } : undefined); } catch (e) {}
+      return json({ ok: true, code: qg.code }, 200, cors);
     }
 
     // ---------- admin: verify the admin key, issue a short signed session ----------
@@ -397,13 +410,10 @@ export default {
         const qg = await env.VAULT_GRANTS.get("quickgrant:full", "json");
         if (!qg || !qg.code) return json({ error: "No Full-access quick-grant is set up yet \u2014 mark a special view as Full access in the studio first." }, 400, cors);
         if (qg.expiresAt && Date.now() > qg.expiresAt) return json({ error: "Your Full-access link has expired \u2014 refresh it in the studio." }, 400, cors);
-        const link = "https://riteshk.work/?ticket=" + encodeURIComponent(qg.code);
         const who = String(rec.name || "there"), me = env.OWNER_EMAIL || "riteshkumarhk@gmail.com";
-        const html = "<p>Hi " + emailEsc(who) + ",</p><p>Thanks for your interest \u2014 here\u2019s access to my work:</p>"
-          + "<p><a href=\"" + link + "\" style=\"display:inline-block;padding:10px 18px;background:#0a0a0a;color:#fff;border-radius:8px;text-decoration:none\">Open my work</a></p>"
-          + "<p style=\"color:#555;font-size:13px\">Or paste this link: " + link + "</p><p>\u2014 Ritesh Kumar</p>";
-        const text = "Hi " + who + ",\n\nThanks for your interest \u2014 here's access to my work:\n" + link + "\n\n\u2014 Ritesh Kumar";
-        const sent = await sendEmail(env, { to: rec.email, subject: "Your access to my work \u2014 Ritesh Kumar", html, text, replyTo: me });
+        const minted = await mintAccessLink(env, { email: rec.email, name: rec.name, company: rec.company, reqId: _id });
+        const mail = fullAccessEmail(env, minted.link, who, 15);
+        const sent = await sendEmail(env, { to: rec.email, subject: mail.subject, html: mail.html, text: mail.text, replyTo: me, bcc: me });
         if (!sent.ok) return json({ error: "Couldn\u2019t send the email (" + (sent.status || "no email service") + ")." }, 502, cors);
         try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
         return json({ ok: true, sentTo: rec.email }, 200, cors);
@@ -427,6 +437,30 @@ export default {
         try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
         return json({ ok: true, sentTo: rec.email }, 200, cors);
       } catch (e) { return json({ error: "Decline failed" }, 400, cors); }
+    }
+    // ---------- admin: list / revoke / delete the per-recruiter access links (session-gated) ----------
+    if (url.pathname === "/admin/access") {
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ grants: [] }, 200, cors);
+      if (request.method === "GET") {
+        const out = [];
+        try { const l = await env.VAULT_GRANTS.list({ prefix: "access:" }); for (const k of l.keys) { const v = await env.VAULT_GRANTS.get(k.name, "json"); if (v) out.push(Object.assign({ token: k.name.slice(7) }, v)); } } catch (e) {}
+        out.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        return json({ grants: out }, 200, cors);
+      }
+      if (request.method === "POST") {
+        try {
+          const b = await request.json(); const t = String((b && b.token) || "");
+          if (!t) return json({ error: "Missing token" }, 400, cors);
+          if (b.delete) { await env.VAULT_GRANTS.delete("access:" + t); return json({ ok: true, deleted: true }, 200, cors); }
+          const acc = await env.VAULT_GRANTS.get("access:" + t, "json");
+          if (!acc) return json({ ok: true, note: "gone" }, 200, cors);
+          acc.revoked = !!b.revoke;
+          await env.VAULT_GRANTS.put("access:" + t, JSON.stringify(acc), acc.expiresAt ? { expiration: Math.floor(acc.expiresAt / 1000) } : undefined);
+          return json({ ok: true, revoked: acc.revoked }, 200, cors);
+        } catch (e) { return json({ error: "Failed" }, 400, cors); }
+      }
+      return json({ error: "Method not allowed" }, 405, cors);
     }
     // ---------- inbox PWA: register/replace THIS device's Web Push subscription (session-gated) ----------
     if (url.pathname === "/inbox/subscribe") {
@@ -735,6 +769,7 @@ async function sendEmail(env, msg) {
   const body = { from, to: [msg.to], subject: msg.subject, html: msg.html };
   if (msg.text) body.text = msg.text;
   if (msg.replyTo) body.reply_to = msg.replyTo;
+  if (msg.bcc) body.bcc = Array.isArray(msg.bcc) ? msg.bcc : [msg.bcc];
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -744,6 +779,35 @@ async function sendEmail(env, msg) {
     let detail = ""; try { detail = await r.text(); } catch (e) {}
     return { ok: r.ok, status: r.status, detail: String(detail).slice(0, 300) };
   } catch (e) { return { ok: false, status: 0, detail: String((e && e.message) || e) }; }
+}
+
+// Recruiter access links: a unique, revocable, trackable token per approval. The shared decryption
+// code never travels in the email — the link resolves to it server-side via /access/redeem, so a
+// forwarded email can be revoked and each recruiter's use is tracked. Expires after ACCESS_TTL_MS.
+const ACCESS_TTL_MS = 15 * 24 * 60 * 60 * 1000; // per-recruiter access link lifetime — 15 days
+async function mintAccessLink(env, rec) {
+  const token = b64urlFromBytes(crypto.getRandomValues(new Uint8Array(18))); // 144-bit opaque token
+  const now = Date.now(), exp = now + ACCESS_TTL_MS;
+  const entry = { email: rec.email, name: rec.name || "", company: rec.company || "", reqId: rec.reqId || "", createdAt: now, expiresAt: exp, revoked: false, uses: 0, lastUsedAt: 0 };
+  await env.VAULT_GRANTS.put("access:" + token, JSON.stringify(entry), { expiration: Math.floor(exp / 1000) });
+  return { token, link: "https://riteshk.work/?k=" + token, expiresAt: exp };
+}
+// The personal, Primary-leaning access email: a plain visible link (no promo-looking button), the
+// N-day validity, and a warm "need more time?" line (reply / call / LinkedIn).
+function fullAccessEmail(env, link, who, days) {
+  const phone = env.OWNER_PHONE || "+91 81978 09767";
+  const li = env.OWNER_LINKEDIN || "https://www.linkedin.com/in/riteshkumarhk";
+  const name = emailEsc(who || "there");
+  const html = "<p>Hi " + name + ",</p>"
+    + "<p>Thanks for your interest \u2014 here\u2019s your access to my work:</p>"
+    + "<p>\u2192 <a href=\"" + link + "\">" + link + "</a></p>"
+    + "<p>The link works for <b>" + days + " days</b>. If you need more time, just reply to this email, call me at " + emailEsc(phone) + ", or reach me on <a href=\"" + li + "\">LinkedIn</a>.</p>"
+    + "<p>\u2014 Ritesh Kumar</p>";
+  const text = "Hi " + (who || "there") + ",\n\n"
+    + "Thanks for your interest \u2014 here's your access to my work:\n" + link + "\n\n"
+    + "The link works for " + days + " days. If you need more time, just reply to this email, call me at " + phone + ", or reach me on LinkedIn: " + li + "\n\n"
+    + "\u2014 Ritesh Kumar";
+  return { subject: "Your access to my work \u2014 Ritesh Kumar", html, text };
 }
 
 /* ---------- admin auth crypto (PBKDF2 verify + HMAC session) ---------- */
