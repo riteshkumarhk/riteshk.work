@@ -1,7 +1,7 @@
 /* Riteshk Requests — service worker.
    Caches the app shell for a fast, offline-tolerant launch (API calls to the Worker always pass
    straight through, never cached) + handles Web Push ("push" + "notificationclick"). */
-const CACHE = "rk-inbox-v7";
+const CACHE = "rk-inbox-v8";
 const SHELL = [
   "/inbox/",
   "/inbox/index.html",
@@ -37,15 +37,16 @@ self.addEventListener("activate", (e) => {
 // Show the notification when a push arrives (payload = the JSON the Worker encrypted).
 self.addEventListener("push", (e) => {
   let d = {};
-  try { d = e.data ? e.data.json() : {}; } catch (x) { try { d = { body: e.data.text() }; } catch (y) { d = {}; } }
+  try { d = e.data ? e.data.json() : {}; } catch (x) { d = {}; }
   const title = d.title || "New access request";
   e.waitUntil(self.registration.showNotification(title, {
     body: d.body || "Open the app to review.",
-    icon: "/inbox/icon.svg",
-    badge: "/inbox/icon.svg",
+    icon: "/inbox/icon-192.png",
+    badge: "/inbox/icon-192.png",
     tag: d.tag || "rk-req",
     renotify: true,
-    vibrate: [80, 40, 80],
+    requireInteraction: true,   // stay on screen until tapped — a recruiter ping must not be missed
+    vibrate: [90, 40, 90, 40, 90],
     data: { url: d.url || "/inbox/" }
   }));
 });
