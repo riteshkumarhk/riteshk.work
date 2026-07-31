@@ -706,7 +706,7 @@ import {
     }
     return raw;
   }
-  async function applyTicketCode(raw) {
+  async function applyTicketCode(raw, opts) {
     var code = extractTicketCode(raw);
     if (!code) return { ok: false, reason: "empty" };
     if (!(window.RK && window.RK.applySpecialView)) return { ok: false, reason: "notready" };
@@ -714,7 +714,9 @@ import {
     var views = (window.RK.data && window.RK.data.specialViews) || [];
     var match = views.filter(function (v) { return v.ticketHash === h; })[0];
     if (!match) return { ok: false, reason: "nomatch" };
-    if (window.RK.svExpired && window.RK.svExpired(match)) return { ok: false, reason: "expired" };
+    var skipExpiry = !!(opts && opts.skipExpiry);   // a server-validated per-recruiter token governs its own 15-day expiry
+    try { if (skipExpiry) sessionStorage.setItem("rk:sv:tok", "1"); else sessionStorage.removeItem("rk:sv:tok"); } catch (e) {}
+    if (!skipExpiry && window.RK.svExpired && window.RK.svExpired(match)) return { ok: false, reason: "expired" };
     try { sessionStorage.setItem("rk:sv:code", code); } catch (e) {}
     if (window.RK.showUnlockingBanner) window.RK.showUnlockingBanner("Unlocking\u2026");
     if (window.RK.decryptActiveTicket) { try { await window.RK.decryptActiveTicket(window.RK.data, match, code); } catch (e) {} }
@@ -853,7 +855,7 @@ import {
       redeemAccessLink(kTok).then(function (code) {
         try { var u = new URL(location.href); u.searchParams.delete("k"); history.replaceState({}, "", u.pathname + (u.search || "") + u.hash); } catch (e) {}
         if (!code) return;
-        applyTicketCode(code).then(function (r) {
+        applyTicketCode(code, { skipExpiry: true }).then(function (r) {
           if (!r || !r.ok) { if (r && r.reason === "expired") expiredNotice({}); else maybeRecruiterFlyout(ticketErr(r && r.reason)); }
         });
       });

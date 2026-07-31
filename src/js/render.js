@@ -250,6 +250,8 @@
      locked-section stubs are decrypted and the study marked unlocked. */
   var RK_UNLOCK_PREFIX = "rk:study:unlocked:";
   var RK_SV_CODE = "rk:sv:code";
+  var RK_SV_TOK = "rk:sv:tok";   // set when a server-validated per-recruiter token unlocked the view — its own 15-day expiry governs, so the view's `days` is ignored
+  function svTok() { try { return sessionStorage.getItem(RK_SV_TOK) === "1"; } catch (e) { return false; } }
   function rkNormPass(p) { return String(p == null ? "" : p).trim().toLowerCase(); }
   function rkUnb64(str) { var s = atob(str), u = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
   function rkImportSek(bytes) { return crypto.subtle.importKey("raw", bytes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]); }
@@ -358,7 +360,7 @@
   function applySpecialView(id) {
     const sv = svById(id);
     if (!sv) return { ok: false, reason: "not-found" };
-    if (svExpired(sv)) return { ok: false, reason: "expired" };
+    if (svExpired(sv) && !svTok()) return { ok: false, reason: "expired" };
     try { sessionStorage.setItem(SV_KEY, id); } catch (e) {}
     render(deriveSpecialData(baseData(), sv));
     showSvBanner(sv);
@@ -368,6 +370,7 @@
   function clearSpecialView() {
     try { sessionStorage.removeItem(SV_KEY); } catch (e) {}
     try { sessionStorage.removeItem(RK_SV_CODE); } catch (e) {}
+    try { sessionStorage.removeItem(RK_SV_TOK); } catch (e) {}
     removeSvBanner();
     render(baseData());
     revealAll();
@@ -555,13 +558,13 @@
       const activeId = sessionStorage.getItem(SV_KEY);
       if (activeId) {
         const sv = svById(activeId);
-        if (sv && !svExpired(sv)) {
+        if (sv && (!svExpired(sv) || svTok())) {
           activeSv = sv;
           const code = sessionStorage.getItem(RK_SV_CODE);
           if (code) { try { await decryptActiveTicket(data, sv, code); } catch (e) {} }
           initial = deriveSpecialData(data, sv);
         }
-        else { sessionStorage.removeItem(SV_KEY); sessionStorage.removeItem(RK_SV_CODE); }
+        else { sessionStorage.removeItem(SV_KEY); sessionStorage.removeItem(RK_SV_CODE); sessionStorage.removeItem(RK_SV_TOK); }
       }
     } catch (e) {}
 
