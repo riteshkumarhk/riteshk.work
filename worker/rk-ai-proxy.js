@@ -66,7 +66,7 @@ export default {
         const name = clip(b && b.name, 80), email = clip(b && b.email, 140), company = clip(b && b.company, 140), note = clip(b && b.note, 400), context = clip(b && b.context, 160);
         if (!name || !company || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "Add your name, company/role and a valid work email." }, 400, cors);
         await env.VAULT_GRANTS.put(reqRl, String(reqTries + 1), { expirationTtl: 3600 });
-        const rec = { name, email, company, note, context, at: new Date().toISOString(), ip: reqIp, ua: clip(request.headers.get("User-Agent"), 200) };
+        const rec = { name, email, company, note, context, status: "pending", at: new Date().toISOString(), ip: reqIp, ua: clip(request.headers.get("User-Agent"), 200) };
         const reqId = "req:" + Date.now() + ":" + Math.random().toString(36).slice(2, 8);
         try { await env.VAULT_GRANTS.put(reqId, JSON.stringify(rec), { expirationTtl: 90 * 24 * 3600 }); } catch (e) {}
         if (env.REQUEST_WEBHOOK) {
@@ -147,7 +147,7 @@ export default {
       const qg = await env.VAULT_GRANTS.get("quickgrant:full", "json");
       if (!qg || !qg.code) return json({ error: "Access isn\u2019t set up right now.", reason: "noquickgrant" }, 503, cors);
       try { acc.uses = (acc.uses || 0) + 1; acc.lastUsedAt = Date.now(); await env.VAULT_GRANTS.put("access:" + token, JSON.stringify(acc), acc.expiresAt ? { expiration: Math.floor(acc.expiresAt / 1000) } : undefined); } catch (e) {}
-      return json({ ok: true, code: qg.code }, 200, cors);
+      return json({ ok: true, code: qg.code, mode: acc.mode || "all", workIds: acc.workIds || null, highlightIdx: acc.highlightIdx || null, capabilityIdx: acc.capabilityIdx || null, name: acc.name || "", audience: acc.company || "" }, 200, cors);
     }
 
     // ---------- admin: verify the admin key, issue a short signed session ----------
@@ -381,11 +381,18 @@ export default {
       if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
       if (!env.VAULT_GRANTS) return json({ requests: [] }, 200, cors);
       try {
+        const want = url.searchParams.get("status") || "pending";   // pending (default) | declined | all
         const l = await env.VAULT_GRANTS.list({ prefix: "req:" });
         const out = [];
-        for (const k of l.keys) { const v = await env.VAULT_GRANTS.get(k.name, "json"); if (v) out.push(Object.assign({ id: k.name }, v)); }
+        for (const k of l.keys) {
+          const v = await env.VAULT_GRANTS.get(k.name, "json"); if (!v) continue;
+          const st = v.status || "pending";
+          if (want === "declined") { if (st !== "declined") continue; }
+          else if (want !== "all") { if (st === "declined") continue; }   // default: hide the declined archive
+          out.push(Object.assign({ id: k.name }, v));
+        }
         out.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
-        return json({ requests: out.slice(0, 50) }, 200, cors);
+        return json({ requests: out.slice(0, 80) }, 200, cors);
       } catch (e) { return json({ requests: [] }, 200, cors); }
     }
     // Owner dismisses a request from the studio inbox (session-gated).
@@ -434,9 +441,34 @@ export default {
         const text = "Hi " + who + ",\n\nThanks for reaching out about my work. I'm not able to share access right now \u2014 feel free to reply here and we can talk.\n\n\u2014 Ritesh Kumar";
         const sent = await sendEmail(env, { to: rec.email, subject: "About your access request \u2014 Ritesh Kumar", html, text, replyTo: me });
         if (!sent.ok) return json({ error: "Couldn\u2019t send the note (" + (sent.status || "no email service") + ")." }, 502, cors);
-        try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
-        return json({ ok: true, sentTo: rec.email }, 200, cors);
+        rec.status = "declined"; rec.declinedAt = new Date().toISOString();   // keep as an archive (Requests tab "Show declined"), not delete
+        try { await env.VAULT_GRANTS.put(_id, JSON.stringify(rec), { expirationTtl: 365 * 24 * 3600 }); } catch (e) {}
+        return json({ ok: true, sentTo: rec.email, declined: true }, 200, cors);
       } catch (e) { return json({ error: "Decline failed" }, 400, cors); }
+    }
+    // Owner CURATES a request (session-gated): mint a curated grant (subset of works + optional custom phrase + duration) + email + move to Curated.
+    if (url.pathname === "/admin/requests/curate") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Store not configured" }, 500, cors);
+      try {
+        const b = await request.json(); const _id = String((b && b.id) || "");
+        if (!_id) return json({ error: "Missing id" }, 400, cors);
+        const rec = await env.VAULT_GRANTS.get(_id, "json");
+        if (!rec || !rec.email) return json({ ok: true, note: "already handled" }, 200, cors);
+        const workIds = Array.isArray(b.workIds) ? b.workIds.map(String).filter(Boolean) : null;
+        const highlightIdx = Array.isArray(b.highlightIdx) ? b.highlightIdx : null;
+        const capabilityIdx = Array.isArray(b.capabilityIdx) ? b.capabilityIdx : null;
+        const days = parseInt(b.days, 10) > 0 ? Math.min(parseInt(b.days, 10), 365) : 15;
+        const phrase = String((b && b.phrase) || "").trim() || null;
+        const who = String(rec.name || "there"), me = env.OWNER_EMAIL || "riteshkumarhk@gmail.com";
+        const minted = await mintAccessLink(env, { email: rec.email, name: rec.name, company: rec.company, reqId: _id, mode: "curated", workIds: workIds, highlightIdx: highlightIdx, capabilityIdx: capabilityIdx, phrase: phrase, status: "curated", days: days });
+        const mail = fullAccessEmail(env, minted.link, who, days);
+        const sent = await sendEmail(env, { to: rec.email, subject: mail.subject, html: mail.html, text: mail.text, replyTo: me, bcc: me });
+        if (!sent.ok) return json({ error: "Couldn\u2019t send the email (" + (sent.status || "no email service") + ")." }, 502, cors);
+        try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
+        return json({ ok: true, sentTo: rec.email, token: minted.token, link: minted.link }, 200, cors);
+      } catch (e) { return json({ error: "Curate failed" }, 400, cors); }
     }
     // ---------- admin: list / revoke / delete the per-recruiter access links (session-gated) ----------
     if (url.pathname === "/admin/access") {
@@ -455,9 +487,10 @@ export default {
           if (b.delete) { await env.VAULT_GRANTS.delete("access:" + t); return json({ ok: true, deleted: true }, 200, cors); }
           const acc = await env.VAULT_GRANTS.get("access:" + t, "json");
           if (!acc) return json({ ok: true, note: "gone" }, 200, cors);
-          acc.revoked = !!b.revoke;
+          if (typeof b.revoke === "boolean") acc.revoked = b.revoke;
+          if (b.days && parseInt(b.days, 10) > 0) { const d = Math.min(parseInt(b.days, 10), 365); acc.days = d; acc.expiresAt = (acc.createdAt || Date.now()) + d * 86400000; }
           await env.VAULT_GRANTS.put("access:" + t, JSON.stringify(acc), acc.expiresAt ? { expiration: Math.floor(acc.expiresAt / 1000) } : undefined);
-          return json({ ok: true, revoked: acc.revoked }, 200, cors);
+          return json({ ok: true, revoked: acc.revoked, expiresAt: acc.expiresAt, days: acc.days }, 200, cors);
         } catch (e) { return json({ error: "Failed" }, 400, cors); }
       }
       return json({ error: "Method not allowed" }, 405, cors);
@@ -787,8 +820,10 @@ async function sendEmail(env, msg) {
 const ACCESS_TTL_MS = 15 * 24 * 60 * 60 * 1000; // per-recruiter access link lifetime — 15 days
 async function mintAccessLink(env, rec) {
   const token = b64urlFromBytes(crypto.getRandomValues(new Uint8Array(18))); // 144-bit opaque token
-  const now = Date.now(), exp = now + ACCESS_TTL_MS;
-  const entry = { email: rec.email, name: rec.name || "", company: rec.company || "", reqId: rec.reqId || "", createdAt: now, expiresAt: exp, revoked: false, uses: 0, lastUsedAt: 0 };
+  const now = Date.now();
+  const days = (rec.days && rec.days > 0) ? Math.min(rec.days, 365) : Math.round(ACCESS_TTL_MS / 86400000);
+  const exp = now + days * 86400000;
+  const entry = { email: rec.email, name: rec.name || "", company: rec.company || "", reqId: rec.reqId || "", mode: rec.mode || "all", workIds: rec.workIds || null, highlightIdx: rec.highlightIdx || null, capabilityIdx: rec.capabilityIdx || null, phrase: rec.phrase || null, status: rec.status || "approved", days: days, createdAt: now, expiresAt: exp, revoked: false, uses: 0, lastUsedAt: 0 };
   await env.VAULT_GRANTS.put("access:" + token, JSON.stringify(entry), { expiration: Math.floor(exp / 1000) });
   return { token, link: "https://riteshk.work/?k=" + token, expiresAt: exp };
 }
