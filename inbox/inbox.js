@@ -215,64 +215,128 @@
     } catch (e) {}
   }
 
+  var accessTab = "requests";     // requests | approved | curated
+  var showDeclined = false;
   async function openInbox() {
     if (!pushEnsured) { pushEnsured = true; ensurePush(); }
-    screen([brand(), h("div", { class: "card" }, [h("div", { class: "spinner" }), h("p", { class: "muted", text: "Loading requests…" })])]);
-    var r = await api("/admin/requests", { headers: authHdr() });
-    if (r.status === 401) { localStorage.removeItem(SS); return showVerify(); }
-    if (!r.ok) return showError((r.json && r.json.error) || "Couldn’t load requests.", "Try again", openInbox);
-    renderInbox((r.json && r.json.requests) || []);
+    renderShell();
+    loadTab();
   }
-  function renderInbox(reqs) {
-    var body = reqs.length
-      ? h("div", { class: "list" }, reqs.map(reqCard))
-      : h("div", { class: "empty" }, [h("p", { class: "muted", text: "No pending requests. You’re all caught up." })]);
+  function tabBtn(id, label) {
+    var b = h("button", { class: "tab" + (accessTab === id ? " tab--on" : "") }, [label]);
+    b.addEventListener("click", function () { if (accessTab !== id) { accessTab = id; showDeclined = false; } openInbox(); });
+    return b;
+  }
+  function renderShell() {
     screen([
       h("div", { class: "topbar" }, [brand(), h("div", { class: "topbar__acts" }, [
         h("button", { class: "iconbtn", title: "Notifications", onclick: showOnboarding, html: "&#128276;" }),
-        h("button", { class: "iconbtn", title: "Refresh", onclick: openInbox, html: "&#8635;" })
+        h("button", { class: "iconbtn", title: "Refresh", onclick: loadTab, html: "&#8635;" })
       ])]),
-      body
+      h("div", { class: "tabs" }, [tabBtn("requests", "Requests"), tabBtn("approved", "Approved"), tabBtn("curated", "Curated")]),
+      h("div", { class: "tabbody", id: "tabbody" }, [h("div", { class: "spinner" })])
     ]);
   }
+  function setBody(kids) { var el = document.getElementById("tabbody"); if (!el) return; el.innerHTML = ""; kids.forEach(function (k) { if (k) el.appendChild(k); }); }
+  async function loadTab() {
+    setBody([h("div", { class: "spinner" })]);
+    if (accessTab === "requests") return loadRequests();
+    return loadGrants();
+  }
+  async function loadRequests() {
+    var r = await api("/admin/requests?status=" + (showDeclined ? "declined" : "pending"), { headers: authHdr() });
+    if (r.status === 401) { localStorage.removeItem(SS); return showVerify(); }
+    if (!r.ok) return setBody([h("div", { class: "note err", text: (r.json && r.json.error) || "Couldn\u2019t load." })]);
+    var reqs = (r.json && r.json.requests) || [];
+    var sw = h("label", { class: "switch" }, [h("input", { type: "checkbox" }), h("span", { text: "Show declined" })]);
+    var cb = sw.querySelector("input"); if (showDeclined) cb.checked = true;
+    cb.addEventListener("change", function () { showDeclined = cb.checked; loadTab(); });
+    var kids = [sw];
+    if (reqs.length) reqs.forEach(function (rq) { kids.push(reqCard(rq)); });
+    else kids.push(h("div", { class: "empty" }, [h("p", { class: "muted", text: showDeclined ? "No declined requests." : "No pending requests. You\u2019re all caught up." })]));
+    setBody(kids);
+  }
+  async function loadGrants() {
+    var r = await api("/admin/access", { headers: authHdr() });
+    if (r.status === 401) { localStorage.removeItem(SS); return showVerify(); }
+    if (!r.ok) return setBody([h("div", { class: "note err", text: (r.json && r.json.error) || "Couldn\u2019t load." })]);
+    var grants = (r.json && r.json.grants) || [];
+    var curated = accessTab === "curated";
+    var list = grants.filter(function (g) { return ((g.mode || "all") === "curated") === curated; });
+    var kids = [];
+    if (list.length) list.forEach(function (g) { kids.push(grantCard(g)); });
+    else kids.push(h("div", { class: "empty" }, [h("p", { class: "muted", text: curated ? "No curated grants yet." : "No approved grants yet." })]));
+    setBody(kids);
+  }
   function reqCard(rq) {
-    var card = h("div", { class: "req" }, [
+    var declined = (rq.status === "declined");
+    var acts = declined
+      ? [actBtn("Delete", "warn", rq, "/admin/requests/delete", "Deleted")]
+      : [actBtn("Approve", "primary", rq, "/admin/requests/allow", "Access sent \u2713"), actBtn("Decline", "ghost", rq, "/admin/requests/decline", "Declined \u2713")];
+    return h("div", { class: "req" }, [
       h("div", { class: "req__top" }, [
-        h("div", {}, [h("span", { class: "req__name", text: rq.name || "Someone" }), rq.company ? h("span", { class: "req__co", text: " · " + rq.company }) : false]),
-        h("span", { class: "req__time", text: timeAgo(rq.at) })
+        h("div", {}, [h("span", { class: "req__name", text: rq.name || "Someone" }), rq.company ? h("span", { class: "req__co", text: " \u00b7 " + rq.company }) : false]),
+        h("span", { class: "req__time", text: timeAgo(declined ? (rq.declinedAt || rq.at) : rq.at) })
       ]),
       rq.email ? h("a", { class: "req__email", href: "mailto:" + rq.email, text: rq.email }) : false,
       rq.context ? h("div", { class: "req__meta", text: "Wants: " + rq.context }) : false,
-      rq.note ? h("div", { class: "req__note", text: "“" + rq.note + "”" }) : false,
-      h("div", { class: "req__acts" }, [
-        actBtn("Allow", "primary", rq, "/admin/requests/allow", card, "Access sent ✓"),
-        actBtn("Decline", "warn", rq, "/admin/requests/decline", card, "Declined ✓"),
-        actBtn("Dismiss", "ghost", rq, "/admin/requests/delete", card, "Dismissed")
-      ])
+      rq.note ? h("div", { class: "req__note", text: "\u201c" + rq.note + "\u201d" }) : false,
+      h("div", { class: "req__acts" }, acts)
     ]);
-    return card;
   }
-  function actBtn(label, cls, rq, path, card, doneMsg) {
+  function actBtn(label, cls, rq, path, doneMsg) {
     var b = btn(label, cls);
     b.addEventListener("click", async function () {
       var card = b.closest(".req");                        // resolve at click time — the card ref isn't ready when actBtn is built
       var acts = card && card.querySelector(".req__acts");
       if (!acts) return;
       Array.prototype.forEach.call(acts.querySelectorAll("button"), function (x) { x.disabled = true; });
-      b.textContent = "…";
+      b.textContent = "\u2026";
       var r = await api(path, { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHdr()), body: JSON.stringify({ id: rq.id }) });
       if (r.status === 401) { localStorage.removeItem(SS); return showVerify(); }
       if (!r.ok) {
         Array.prototype.forEach.call(acts.querySelectorAll("button"), function (x) { x.disabled = false; });
         b.textContent = label;
         var ex = card.querySelector(".note"); if (ex) ex.remove();
-        card.appendChild(h("div", { class: "note err", text: (r.json && r.json.error) || "Failed — try again." }));
+        card.appendChild(h("div", { class: "note err", text: (r.json && r.json.error) || "Failed \u2014 try again." }));
         return;
       }
       card.classList.add("done");
       acts.replaceWith(h("div", { class: "req__done", text: doneMsg }));
     });
     return b;
+  }
+  function toast(msg) {
+    var t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t);
+    setTimeout(function () { t.classList.add("toast--in"); }, 10);
+    setTimeout(function () { t.classList.remove("toast--in"); setTimeout(function () { t.remove(); }, 300); }, 1600);
+  }
+  function copyText(t) { try { navigator.clipboard.writeText(t).then(function () { toast("Copied"); }, function () { toast("Copy failed"); }); } catch (e) { toast("Copy failed"); } }
+  function gbtn(label, cls, on) { var b = btn(label, cls); b.addEventListener("click", on); return b; }
+  function grantCard(g) {
+    var daysLeft = g.expiresAt ? Math.max(0, Math.ceil((g.expiresAt - Date.now()) / 86400000)) : null;
+    var link = "https://riteshk.work/?k=" + g.token;
+    var meta = "Opened " + (g.uses || 0) + "\u00d7" + (g.mode === "curated" ? " \u00b7 curated" : "") + (g.days ? " \u00b7 " + g.days + "d" : "");
+    return h("div", { class: "req" + (g.revoked ? " req--off" : "") }, [
+      h("div", { class: "req__top" }, [
+        h("div", {}, [h("span", { class: "req__name", text: g.name || g.email || "Recruiter" }), g.company ? h("span", { class: "req__co", text: " \u00b7 " + g.company }) : false]),
+        h("span", { class: "req__time", text: g.revoked ? "Revoked" : (daysLeft != null ? daysLeft + "d left" : "") })
+      ]),
+      g.email ? h("a", { class: "req__email", href: "mailto:" + g.email, text: g.email }) : false,
+      h("div", { class: "req__meta", text: meta }),
+      h("div", { class: "req__acts" }, [
+        gbtn("Copy link", "ghost", function () { copyText(link); }),
+        gbtn("Duration", "ghost", function () { var d = prompt("Days this link stays live (1\u2013365):", g.days || 15); if (d && parseInt(d, 10) > 0) setGrant(g.token, { days: parseInt(d, 10) }); }),
+        gbtn(g.revoked ? "Restore" : "Revoke", g.revoked ? "primary" : "warn", function () { setGrant(g.token, { revoke: !g.revoked }); }),
+        gbtn("Delete", "ghost", function () { if (confirm("Delete this grant permanently?")) setGrant(g.token, { delete: true }); })
+      ])
+    ]);
+  }
+  async function setGrant(token, body) {
+    var r = await api("/admin/access", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHdr()), body: JSON.stringify(Object.assign({ token: token }, body)) });
+    if (r.status === 401) { localStorage.removeItem(SS); return showVerify(); }
+    if (!r.ok) { toast((r.json && r.json.error) || "Failed"); return; }
+    toast("Updated"); loadTab();
   }
 
   /* ---------- init ---------- */
