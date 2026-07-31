@@ -678,7 +678,7 @@
           {
             "type": "mediagrid",
             "locked": true,
-            "vaultBlock": "31a7167eeedea2988f993451d87ed377674c0b0583394a8dd8a3b31f74c8d29a.json",
+            "vaultBlock": "df0bf195ab6c7d0cddd91f20a17e4fe20a8798341a91daa679e0ff4d0d76ef46.json",
             "sep": false,
             "hsize": "sm"
           },
@@ -1258,7 +1258,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "ef1d03743eeb73225ec7353a20f21ba6293a479d1bf475699c64d877311d4694.json",
+            "vaultBlock": "1a2dd1588bbb7f1123fff684473c2b834443c61a8c226392ade979f0cdd8cb94.json",
             "sep": false
           },
           {
@@ -1276,7 +1276,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "b263be479b57f8a2d619b798731f0bb8913e4d7dd2a7d8053f33dc298644f2a4.json",
+            "vaultBlock": "d446a7908f2c051f521a1a7a47b860a17a2d6b5c4b25a727cc63c9d3b626f78b.json",
             "sep": false
           },
           {
@@ -1293,7 +1293,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "6863ef075baaee329f347484cd02c9995df8cd2948d511e21292a47b2cdd100f.json",
+            "vaultBlock": "58343c412663cce0e99ea485383b6c321f7e9afa1f7b471c68fd6756dd314951.json",
             "sep": false
           },
           {
@@ -2007,7 +2007,7 @@
           {
             "type": "gallery",
             "locked": true,
-            "vaultBlock": "3261ec670b8af2bfd8d14869210a55da8506e5875d1623bb6635f556649550fc.json",
+            "vaultBlock": "dc2a1b7778fc8bf6c739f9ba884b77215900dc12cd18229d4e16be2c6da58ee1.json",
             "sep": false
           },
           {
@@ -2036,7 +2036,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "3425752462c378cab1ecd85f998b0235d861adf6e4806579f782367e53f65ce9.json",
+            "vaultBlock": "91cc0814b65a94c077e016a1e59f93796fd3c4e552653c631cf05347c6ca597f.json",
             "sep": false
           },
           {
@@ -2156,28 +2156,28 @@
           {
             "type": "compare",
             "locked": true,
-            "vaultBlock": "24999ab54615be63a2e37c73d617c641ee47a4496d77c3cc5619b80bd42bc8f3.json",
+            "vaultBlock": "96ddd19f0454bfcdd48de5e06178f05fc3ad89cb0a1a6833b3d7a75d53d48257.json",
             "sep": false
           },
           {
             "type": "compare",
             "locked": true,
-            "vaultBlock": "7768f5338ead9b8e477ba2af5ba21c1228779f393e2f661cb5aec2e5a5f88519.json"
+            "vaultBlock": "d2d9e17ce2e6eaad11092117b0acea6c8fb061017d0fb3c680a91e459c492be4.json"
           },
           {
             "type": "compare",
             "locked": true,
-            "vaultBlock": "176b2f3f44188da8eb9d739956e11904fc0df95fb8e95a3d00e220fb621b3a55.json"
+            "vaultBlock": "a556e2191a2bff1e0f48dcf9be9a8bf69283544b787995c77229a6770850ee96.json"
           },
           {
             "type": "compare",
             "locked": true,
-            "vaultBlock": "28fbf197c1b1696cfd05bebe8144e079590955dc929d7053e07fb67af46c04f1.json"
+            "vaultBlock": "bf947ec1708c8ae877f73707a8cba47266dcb2f439599c7f240dab5605b6d0ab.json"
           },
           {
             "type": "compare",
             "locked": true,
-            "vaultBlock": "38fb152190af7e7b8565d579fac3204a3fd3f189620d7e1d9ac2f5fc9eb9fa8c.json"
+            "vaultBlock": "4c18c501fedf3253a82ad18c36111c9a4ae7be93e019059e84fc7adbb616af6d.json"
           },
           {
             "type": "text",
@@ -2217,7 +2217,7 @@
           {
             "type": "gallery",
             "locked": true,
-            "vaultBlock": "930af6bbae6ae3c78cd2ed68dc9426a4b007379d923c3a04021377cc322a62fa.json",
+            "vaultBlock": "bb18800737f70c711c793b374384dc3dad7340b88ea4d6db8a95da7cc8896d9c.json",
             "sep": false
           },
           {
@@ -2233,7 +2233,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "b0c5c657782720ca1490e1bb7a9ace7d893780fe83d3767d0dde1efa19aa3dac.json",
+            "vaultBlock": "f3fc27432fcd3e1f993fb9e2d87561e5f4e007cfe5850654257f349bb880b52d.json",
             "sep": false
           },
           {
@@ -2249,7 +2249,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "4caf5b78ee431668dd3d3c3786b069aba60f42b4da22588e0bc7f387a0e2c82a.json",
+            "vaultBlock": "c3d1ae9cefb81239b9ac3387fbcf92cce5097596f1172136e93ba8afac7ec66e.json",
             "kicker": "Experiment A"
           },
           {
@@ -2289,7 +2289,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "66224b4e739047c426892d6d749f1433aa884bd96f71845b1720e11009c2a916.json",
+            "vaultBlock": "17574f908da1207dc1fc8d7e730dc78545a45b8a588292bc41d8d6c4eef01ce7.json",
             "kicker": "Experiment B"
           },
           {
@@ -2614,7 +2614,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "3d1ccb2a7a537b65ee13bc74fcf22f93afb976ec233a36989f8838c2d34179b4.json"
+            "vaultBlock": "ab887d207941dadfc7847aa4a8afd20b14ce1ab836b8cd5b8cf06ffb20a80a60.json"
           },
           {
             "type": "columns",
@@ -2710,7 +2710,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "345583cc452bf1a0d3fe1ba13670a27c962f7491f6b4a51006eddbdf8ec4c6e9.json"
+            "vaultBlock": "4ad371a1e19a7c187bb405628ef03aa245292c65723cedefad2e0bed37c226b2.json"
           },
           {
             "type": "cards",
@@ -3709,7 +3709,7 @@
       "audience": "Adobe",
       "ticketHash": "ee9021c84f33366bde80b75efa132836e47afa18b9ce58e8077f4c25d039666c",
       "createdAt": 1785131404481,
-      "days": 3,
+      "days": 0,
       "workIds": [
         "w1784023223052",
         "w1783924971648",
