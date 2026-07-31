@@ -112,7 +112,23 @@
 
   function isStandalone() { return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true; }
   function isInstalled() { if (isStandalone()) return true; try { return localStorage.getItem(INST) === "1"; } catch (e) { return false; } }
+  function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1); }
+  function shareSvg() {
+    return '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M12 3v11"/><path d="M8.5 6.5 12 3l3.5 3.5"/><path d="M7 11H5.5A1.5 1.5 0 0 0 4 12.5v6A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5v-6A1.5 1.5 0 0 0 18.5 11H17"/></svg>';
+  }
+  function iosInstallCard() {
+    return h("div", { class: "card", "data-ob": "1" }, [
+      h("h1", { text: "Add me to your Home Screen" }),
+      h("p", { class: "muted", text: "On iPhone, notifications only switch on once this app sits on your Home Screen \u2014 that\u2019s Apple\u2019s rule, not ours. Takes about 10 seconds:" }),
+      step("1", "Tap Share in Safari", h("div", { class: "muted small", html: "the " + shareSvg() + " icon in Safari\u2019s toolbar." })),
+      step("2", "Tap \u201cAdd to Home Screen\u201d", h("div", { class: "muted small", text: "scroll the share sheet down a little if you don\u2019t see it, then tap Add." })),
+      step("3", "Open the \u201cRequests\u201d icon", h("div", { class: "muted small", text: "launch it from your Home Screen, verify once, then \u201cTurn on notifications.\u201d" })),
+      h("p", { class: "muted small", text: "After that it behaves exactly like Android \u2014 a ping the moment a recruiter asks." }),
+      btn("Look at requests first \u2192", "ghost", openInbox)
+    ]);
+  }
   function showOnboarding() {
+    if (isIOS() && !isStandalone()) return screen([brand(), iosInstallCard()]);
     var inst = isInstalled();
     screen([brand(), h("div", { class: "card", "data-ob": "1" }, [
       h("h1", { text: inst ? "You’re all set 🎉" : "Two quick steps" }),
