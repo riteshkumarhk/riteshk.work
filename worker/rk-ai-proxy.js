@@ -765,7 +765,7 @@ function emailEsc(s) {
 // one-tap Allow/Cancel report a clear "not set up" message instead of failing hard.
 async function sendEmail(env, msg) {
   if (!env.RESEND_API_KEY) return { ok: false, status: 0, detail: "no-api-key" };
-  const from = env.EMAIL_FROM || "Ritesh Kumar <access@riteshk.work>";
+  const from = env.EMAIL_FROM || "Ritesh Kumar <ritesh@riteshk.work>";
   const body = { from, to: [msg.to], subject: msg.subject, html: msg.html };
   if (msg.text) body.text = msg.text;
   if (msg.replyTo) body.reply_to = msg.replyTo;
@@ -797,17 +797,18 @@ async function mintAccessLink(env, rec) {
 function fullAccessEmail(env, link, who, days) {
   const phone = env.OWNER_PHONE || "+91 81978 09767";
   const li = env.OWNER_LINKEDIN || "https://www.linkedin.com/in/riteshkumarhk";
+  const named = !!(who && who !== "there");
   const name = emailEsc(who || "there");
   const html = "<p>Hi " + name + ",</p>"
-    + "<p>Thanks for your interest \u2014 here\u2019s your access to my work:</p>"
-    + "<p>\u2192 <a href=\"" + link + "\">" + link + "</a></p>"
-    + "<p>The link works for <b>" + days + " days</b>. If you need more time, just reply to this email, call me at " + emailEsc(phone) + ", or reach me on <a href=\"" + li + "\">LinkedIn</a>.</p>"
-    + "<p>\u2014 Ritesh Kumar</p>";
+    + "<p>Thanks for reaching out \u2014 happy to share my work. Here\u2019s your private link:</p>"
+    + "<p><a href=\"" + link + "\">" + link + "</a></p>"
+    + "<p>It\u2019ll stay live for about <b>" + days + " days</b>. If you need a bit longer, just reply to this note \u2014 or reach me on " + emailEsc(phone) + " or <a href=\"" + li + "\">LinkedIn</a>.</p>"
+    + "<p>Best,<br>Ritesh</p>";
   const text = "Hi " + (who || "there") + ",\n\n"
-    + "Thanks for your interest \u2014 here's your access to my work:\n" + link + "\n\n"
-    + "The link works for " + days + " days. If you need more time, just reply to this email, call me at " + phone + ", or reach me on LinkedIn: " + li + "\n\n"
-    + "\u2014 Ritesh Kumar";
-  return { subject: "Your access to my work \u2014 Ritesh Kumar", html, text };
+    + "Thanks for reaching out \u2014 happy to share my work. Here's your private link:\n" + link + "\n\n"
+    + "It'll stay live for about " + days + " days. If you need a bit longer, just reply to this note \u2014 or reach me on " + phone + " or LinkedIn: " + li + "\n\n"
+    + "Best,\nRitesh";
+  return { subject: "Here\u2019s my work" + (named ? ", " + who : ""), html, text };
 }
 
 /* ---------- admin auth crypto (PBKDF2 verify + HMAC session) ---------- */
