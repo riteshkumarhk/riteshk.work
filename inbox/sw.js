@@ -1,7 +1,7 @@
 /* Riteshk Requests — service worker.
    Caches the app shell for a fast, offline-tolerant launch (API calls to the Worker always pass
    straight through, never cached) + handles Web Push ("push" + "notificationclick"). */
-const CACHE = "rk-inbox-v9";
+const CACHE = "rk-inbox-v10";
 const SHELL = [
   "/inbox/",
   "/inbox/index.html",
@@ -73,9 +73,10 @@ self.addEventListener("fetch", (e) => {
   const u = new URL(e.request.url);
   // Local /inbox/ shell only; Worker API + everything else goes straight to network.
   if (e.request.method !== "GET" || u.origin !== self.location.origin || !u.pathname.startsWith("/inbox/")) return;
-  // Network-first so the freshest app code always loads online; the cache is just the offline fallback.
+  // Network-first AND revalidating (cache:"no-cache") so the freshest app code always loads online
+  // — a plain fetch would still read the browser's 10-min HTTP cache and serve stale JS. Cache = offline fallback.
   e.respondWith(
-    fetch(e.request).then((resp) => {
+    fetch(e.request, { cache: "no-cache" }).then((resp) => {
       const copy = resp.clone();
       caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
       return resp;
