@@ -6,6 +6,7 @@
   "use strict";
   var WORKER = "https://rk-ai-proxy.riteshkumarhk.workers.dev";
   var SS = "rk:inbox:sess";
+  var INST = "rk:inbox:installed";
   // VAPID public key (paired with the Worker's VAPID_PRIVATE secret) — used as applicationServerKey.
   var VAPID_PUBLIC = "BNvPqxaZXo1uLqMAXeW-l6WCPMceklB7Z5RzgpAL3p8N8MtkATL5j0w6YMwdFmNPD0nkcN4NWY_msYNewlZKCHQ";
   var app = document.getElementById("app");
@@ -105,33 +106,39 @@
   async function afterVerify() {
     var subscribed = false;
     try { if (("serviceWorker" in navigator) && ("PushManager" in window)) { var reg = await navigator.serviceWorker.ready; subscribed = !!(await reg.pushManager.getSubscription()); } } catch (e) {}
-    if (subscribed) return openInbox();   // already set up for push → straight to the inbox
-    return showOnboarding();               // otherwise guide notifications + install first
+    if (subscribed && isInstalled()) return openInbox();   // fully set up (push + Home Screen) → inbox
+    return showOnboarding();                                 // else nudge notifications + Add to Home Screen
   }
 
   function isStandalone() { return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true; }
+  function isInstalled() { if (isStandalone()) return true; try { return localStorage.getItem(INST) === "1"; } catch (e) { return false; } }
   function showOnboarding() {
-    var installed = isStandalone();
+    var inst = isInstalled();
     screen([brand(), h("div", { class: "card", "data-ob": "1" }, [
-      h("h1", { text: "Two quick steps" }),
-      h("p", { class: "muted", text: "So a recruiter request pings this phone even when the app is closed." }),
+      h("h1", { text: inst ? "You’re all set 🎉" : "Two quick steps" }),
+      h("p", { class: "muted", text: inst ? "Notifications on, and the app lives on your Home Screen — you’re good." : "So a recruiter request pings this phone even when the app is closed." }),
       step("1", "Turn on notifications", notifBlock()),
-      step("2", installed ? "Added to Home Screen ✓" : "Add to Home Screen", installed ? h("div", { class: "muted small", text: "Done — you’ll get an app icon too." }) : installBlock()),
-      btn("Open my requests →", "primary", openInbox)
+      step("2", inst ? "On your Home Screen ✓" : "Add to Home Screen", inst ? h("div", { class: "muted small", text: "Launch it from the Home Screen icon — it won’t get lost in browser tabs." }) : installBlock()),
+      btn("Open my requests →", inst ? "primary" : "ghost", openInbox)
     ])]);
   }
   function step(n, title, body) {
     return h("div", { class: "step" }, [h("div", { class: "step__n", text: n }), h("div", { class: "step__b" }, [h("div", { class: "step__t", text: title }), body])]);
   }
   function installBlock() {
-    var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-      var wrap = h("div", {}, [h("div", { class: "muted small", text: ios ? "Tap the Share icon, then “Add to Home Screen.”" : "Tap Chrome’s ⋮ menu, then “Add to Home screen” / “Install app.”" })]);
+    if (/iphone|ipad|ipod/i.test(navigator.userAgent)) return h("div", { class: "muted small", text: "Tap the Share icon, then “Add to Home Screen.”" });
     if (deferredInstall) {
-      var ib = btn("Install", "ghost");
-      ib.addEventListener("click", async function () { try { deferredInstall.prompt(); await deferredInstall.userChoice; } catch (e) {} deferredInstall = null; ib.remove(); });
-      wrap.appendChild(ib);
+      var ab = btn("Add to Home Screen", "primary");
+      ab.addEventListener("click", function () { maybePromptInstall(); });
+      return h("div", {}, [ab, h("div", { class: "muted small", text: "One tap — keeps the app on your Home Screen so it never gets lost in tabs." })]);
     }
-    return wrap;
+    return h("div", { class: "muted small", text: "Tap Chrome’s ⋮ menu, then “Add to Home screen” / “Install app.”" });
+  }
+  async function maybePromptInstall() {
+    if (!isInstalled() && deferredInstall) {
+      try { deferredInstall.prompt(); await deferredInstall.userChoice; deferredInstall = null; } catch (e) { /* needs a fresh gesture — keep the button so a tap can retry */ }
+    }
+    if (document.querySelector("[data-ob]")) showOnboarding();
   }
   function notifBlock() {
     var box = h("div", {});
@@ -174,7 +181,7 @@
     var r = await api("/inbox/subscribe", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHdr()), body: JSON.stringify({ subscription: sub.toJSON() }) });
     if (r.status === 401) { localStorage.removeItem(SS); showVerify(); return; }
     if (!r.ok) throw new Error((r.json && r.json.error) || "Couldn’t save the subscription.");
-    showOnboarding();
+    await maybePromptInstall();  // notifications on - now offer Add to Home Screen (fires the install dialog)
   }
 
   async function openInbox() {
@@ -237,6 +244,7 @@
   /* ---------- init ---------- */
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/inbox/sw.js").catch(function () {});
   window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferredInstall = e; if (document.querySelector("[data-ob]")) showOnboarding(); });
+  window.addEventListener("appinstalled", function () { try { localStorage.setItem(INST, "1"); } catch (e) {} deferredInstall = null; if (document.querySelector("[data-ob]")) showOnboarding(); });
 
   (function init() {
     if (!window.PublicKeyCredential || !(navigator.credentials && navigator.credentials.get)) {
