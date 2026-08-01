@@ -678,7 +678,7 @@
           {
             "type": "mediagrid",
             "locked": true,
-            "vaultBlock": "70863cc8aaa1dadb9f1528fd371cd65cee9e8d11dbd84bcfa6e55ecf0d22e35d.json",
+            "vaultBlock": "aba306ab0db57f297822a3af84817da64612d96f3351715ee8b741421b1a2a98.json",
             "sep": false,
             "hsize": "sm"
           },
@@ -1258,7 +1258,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "769106a36bc0418e52662126b98551188c31b06e086ce847eef9c1c0bea3fef2.json",
+            "vaultBlock": "57cf08424bc3ab202f2cbbc9e53da80be2488e8d6de168135dd4e2c4152317fc.json",
             "sep": false
           },
           {
@@ -1276,7 +1276,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "db70c12afffa2d74f8d9411b14e99195579d2300a62e8912fd18e6148c7eeb9b.json",
+            "vaultBlock": "a8bf52611eecb0a5fb7d4dfb2c0cbb7396b35e6acc88f1afec6d5eac25cef139.json",
             "sep": false
           },
           {
@@ -1293,7 +1293,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "22b8cf234f20087917bee1316bc8b38cd92dfe6a760d4bda4466c9ac0b006250.json",
+            "vaultBlock": "3e340a271f4ebf30266506e7f5c6aabe250fbbb010d52e10a7b35c6b2fdc71c2.json",
             "sep": false
           },
           {
@@ -2007,7 +2007,7 @@
           {
             "type": "gallery",
             "locked": true,
-            "vaultBlock": "dc2a1b7778fc8bf6c739f9ba884b77215900dc12cd18229d4e16be2c6da58ee1.json",
+            "vaultBlock": "6c69e154ed8946505226ac9c2f5b09c94fdd141f462b65e6c7b0b08165d4a9d3.json",
             "sep": false
           },
           {
@@ -2036,7 +2036,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "91cc0814b65a94c077e016a1e59f93796fd3c4e552653c631cf05347c6ca597f.json",
+            "vaultBlock": "e7c5b07f30f5dafa58448154d255c0aa7ee3fa37307af744b9eaf36b5e452de4.json",
             "sep": false
           },
           {
@@ -2156,28 +2156,28 @@
           {
             "type": "compare",
             "locked": true,
-            "vaultBlock": "96ddd19f0454bfcdd48de5e06178f05fc3ad89cb0a1a6833b3d7a75d53d48257.json",
+            "vaultBlock": "06816abf9e919753938f81a3dc6f31d366a76b6492fe0f45e1950fa6dd4e0ff6.json",
             "sep": false
           },
           {
             "type": "compare",
             "locked": true,
-            "vaultBlock": "d2d9e17ce2e6eaad11092117b0acea6c8fb061017d0fb3c680a91e459c492be4.json"
+            "vaultBlock": "ba7a94914633126350b72545a5352fae13f63bd185983433cb389f2992517d6e.json"
           },
           {
             "type": "compare",
             "locked": true,
-            "vaultBlock": "a556e2191a2bff1e0f48dcf9be9a8bf69283544b787995c77229a6770850ee96.json"
+            "vaultBlock": "3a80dc5f8f000b9b3724992a9324c62d878b1c3a3a22576cc13a67bfe8cc1f1e.json"
           },
           {
             "type": "compare",
             "locked": true,
-            "vaultBlock": "bf947ec1708c8ae877f73707a8cba47266dcb2f439599c7f240dab5605b6d0ab.json"
+            "vaultBlock": "225ba10416c7caed556ac96aa99e67955ae5d3fa3aada5b886b5dee29f700878.json"
           },
           {
             "type": "compare",
             "locked": true,
-            "vaultBlock": "4c18c501fedf3253a82ad18c36111c9a4ae7be93e019059e84fc7adbb616af6d.json"
+            "vaultBlock": "e05a4cd97432d51634f0ee9b93e1b562f73c0f2012f1928cb3993acb3e197a06.json"
           },
           {
             "type": "text",
@@ -2217,7 +2217,7 @@
           {
             "type": "gallery",
             "locked": true,
-            "vaultBlock": "bb18800737f70c711c793b374384dc3dad7340b88ea4d6db8a95da7cc8896d9c.json",
+            "vaultBlock": "6d4fa41bf51a2a6f59dfc53f92879410c0ccce13e49e320ec5256fab7d41e9f7.json",
             "sep": false
           },
           {
@@ -2233,7 +2233,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "f3fc27432fcd3e1f993fb9e2d87561e5f4e007cfe5850654257f349bb880b52d.json",
+            "vaultBlock": "8a6e19d5e855c25d6dbdd3862d5e8348fc890c9056fb3c8db3d0ae5772d153db.json",
             "sep": false
           },
           {
@@ -2249,7 +2249,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "c3d1ae9cefb81239b9ac3387fbcf92cce5097596f1172136e93ba8afac7ec66e.json",
+            "vaultBlock": "309933d3b2496277090df3ce5c3af0a838f42aac80b6160fbe0156fd4cfa25f5.json",
             "kicker": "Experiment A"
           },
           {
@@ -2289,7 +2289,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "17574f908da1207dc1fc8d7e730dc78545a45b8a588292bc41d8d6c4eef01ce7.json",
+            "vaultBlock": "5352ddbbd029042d2172dd651ea5b14df296bdea80222f0cc923aa7eb1b9a7cb.json",
             "kicker": "Experiment B"
           },
           {
@@ -2614,7 +2614,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "e8b6cef4ebbc95f5252394b507ab8690cc938b76c221e3551b4b7be4405b537b.json"
+            "vaultBlock": "6c7ae40d0e92eb97f9f26fdacb075359c63755b5346fefb5b444d0c6d06bbb85.json"
           },
           {
             "type": "columns",
@@ -2710,7 +2710,7 @@
           {
             "type": "media",
             "locked": true,
-            "vaultBlock": "714867674c600102e6003e43457b9aaf6792e7fb363b96c419ce5f4c8e10cd11.json"
+            "vaultBlock": "fa4c5c93ec29bb163eaab2714a8a1c1e56c3cf47e2b3510e1d1467b8893f3434.json"
           },
           {
             "type": "cards",
@@ -3325,7 +3325,8 @@
           }
         }
       },
-      "image": ""
+      "image": "",
+      "hidden": false
     },
     {
       "id": "search",
