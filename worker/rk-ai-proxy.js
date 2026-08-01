@@ -709,7 +709,8 @@ export default {
     }
 
     // Publish seeds this: the current vault key-set per work, so /access/redeem can mint a per-link
-    // grant with up-to-date keys (owner-session gated). Replaces prior sets so a re-publish refreshes them.
+    // grant with up-to-date keys (owner-session gated). Unions with prior sets (never replaces) so a
+    // recruiter link keeps working across re-publishes and GitHub Pages CDN lag.
     if (url.pathname === "/admin/vault/keycache") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
       if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
@@ -720,8 +721,17 @@ export default {
       let kn = 0;
       for (const wid of Object.keys(kmap)) {
         if (!/^[a-z0-9_]+$/i.test(wid)) continue;
-        const ks = Array.isArray(kmap[wid]) ? kmap[wid].filter((k) => typeof k === "string" && k && k.indexOf("/") === -1).slice(0, 500) : [];
-        try { await env.VAULT_GRANTS.put("vaultkeys:" + wid, JSON.stringify(ks)); kn++; } catch (e) {}
+        const incoming = Array.isArray(kmap[wid]) ? kmap[wid].filter((k) => typeof k === "string" && k && k.indexOf("/") === -1) : [];
+        // Accumulate keys across publishes (union, newest last) instead of replacing. R2 objects are
+        // content-addressed and never deleted, so a grant covering every historical key lets ANY
+        // content.json version resolve — a stale copy on a laggy CDN edge OR the freshly-published one.
+        // This removes the publish/propagation key-skew that intermittently locked recruiter links.
+        let prior = [];
+        try { const p = await env.VAULT_GRANTS.get("vaultkeys:" + wid, "json"); if (Array.isArray(p)) prior = p; } catch (e) {}
+        const seen = {}, merged = [];
+        for (const k of prior.concat(incoming)) { if (typeof k === "string" && k && !seen[k]) { seen[k] = 1; merged.push(k); } }
+        const capped = merged.slice(-500);
+        try { await env.VAULT_GRANTS.put("vaultkeys:" + wid, JSON.stringify(capped)); kn++; } catch (e) {}
       }
       return json({ ok: true, count: kn }, 200, cors);
     }
