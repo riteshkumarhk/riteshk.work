@@ -736,6 +736,18 @@ export default {
       const gid = await hmac(env.SESSION_SECRET || "", "grant:" + code);
       const rec = await env.VAULT_GRANTS.get("g:" + gid, "json");
       if (!rec || !rec.exp || rec.exp < Date.now()) return json({ error: "That pass isn’t valid or has expired." }, 403, cors);
+      // Self-heal the pass's key-set from the current per-work caches on every redeem, so a pass minted
+      // before a re-vault/flatten still covers today's content + inner media — the same robustness the
+      // ?k= link already has via /access/redeem. (Union of all vault works; per-view scoping is a future
+      // hardening — currently only recruiter works have vault content.)
+      try {
+        const _ks = {};
+        (Array.isArray(rec.keys) ? rec.keys : []).forEach((k) => { _ks[k] = 1; });
+        const _l = await env.VAULT_GRANTS.list({ prefix: "vaultkeys:" });
+        for (const _kk of _l.keys) { const _arr = await env.VAULT_GRANTS.get(_kk.name, "json"); if (Array.isArray(_arr)) _arr.forEach((x) => { _ks[x] = 1; }); }
+        const _keys = Object.keys(_ks);
+        if (_keys.length && _keys.length !== (rec.keys || []).length) { rec.keys = _keys; await env.VAULT_GRANTS.put("g:" + gid, JSON.stringify(rec), { expiration: Math.floor(rec.exp / 1000) }); }
+      } catch (e) {}
       const exp = Math.min(Date.now() + GRANT_REDEEM_TTL_MS, rec.exp);
       const payload = b64urlFromStr(JSON.stringify({ g: gid, exp: exp }));
       const sig = await hmac(env.SESSION_SECRET || "", payload);
