@@ -131,7 +131,7 @@ import {
     ["contact", "Contact"],
     ["special", "Special Views"],
     ["access", "Access"],
-    ["ai", "AI"],
+    ["ai", "Prepare"],
     ["autofill", "More"],
   ];
   // Files bundled into the downloadable Résumé Autofill extension (served from /extension/).
@@ -2662,21 +2662,8 @@ import {
       return html;
     },
     ai() {
-      const same = aiSameKey();
-      const imgOK = aiSupportsImages();
-      let html = secHead("AI",
-        "Connect providers for AI features. <em>Keys are stored only in this browser and are never written to your published file.</em>") +
-        aiProxyBlock(aiProxy()) +
-        '<label class="chk aiblk__same"><input type="checkbox" id="aiSame"' + (same ? " checked" : "") + " /> Use the same service &amp; key for content and image</label>";
-      if (same) {
-        html += aiBlock("all", "AI service", "content + image");
-      } else {
-        html += aiBlock("txt", "Content generation", "text");
-        html += aiBlock("img", "Image generation", "imagery");
-      }
-      html += '<div class="af__hint" style="margin:.1rem 0 1rem">' + (imgOK ? "Image service supports generation." : "Your image service (Claude) can't generate images \u2014 pick OpenAI or Gemini for imagery.") + "</div>";
-      html += '<div class="imgblk__row"><button class="btn btn--primary" data-act="ai-save">Save</button><button class="btn btn--ghost" data-act="ai-clear">Remove keys</button></div>';
-      html += '<div class="adm__empty" style="text-align:left;margin-top:1.1rem;line-height:1.6">Security: keys live only in this browser, are sent only to the service you pick, and are never committed to your site. Calling these APIs from the browser exposes the key to that provider \u2014 use a limited key. Some providers block browser calls (CORS); OpenAI and Gemini generally work directly.</div>';
+      let html = secHead("Prepare",
+        "AI-assisted job-hunt tools \u2014 ATS r\u00e9sum\u00e9 check, cover letters, interview prep and more. Connect your AI provider once in <b>\u22EF \u2192 AI settings</b>; keys stay in this browser and never touch your published site.");
       const resumeSet = !!(data.contact && data.contact.resume);
       html += atsPanelHtml(resumeSet) + clPanelHtml() + iprepPanelHtml() + storyPanelHtml() + wbPanelHtml();
       return html;
@@ -5706,13 +5693,14 @@ import {
     aiSetProvider(scope, p);
     if (activeTab === "ai") renderBody();
   }
-  function aiPersistVisible() {
+  function aiPersistVisible(scopeEl) {
+    scopeEl = scopeEl || root;
     ["all", "txt", "img"].forEach(function (scope) {
-      const sel = root.querySelector("#aiProvider_" + scope);
+      const sel = scopeEl.querySelector("#aiProvider_" + scope);
       if (!sel) return;
       const p = sel.value;
       localStorage.setItem("rk:ai:" + scope + ":provider", p);
-      const k = root.querySelector("#aiKey_" + scope), m = root.querySelector("#aiModel_" + scope), bs = root.querySelector("#aiBase_" + scope);
+      const k = scopeEl.querySelector("#aiKey_" + scope), m = scopeEl.querySelector("#aiModel_" + scope), bs = scopeEl.querySelector("#aiBase_" + scope);
       if (k && k.value.trim()) localStorage.setItem("rk:ai:" + scope + ":key", k.value.trim());
       if (p === "custom") {
         if (m) localStorage.setItem("rk:ai:" + scope + ":model", m.value.trim());
@@ -5722,17 +5710,65 @@ import {
         localStorage.removeItem("rk:ai:" + scope + ":base");
       }
     });
-    aiPersistProxy();
+    aiPersistProxy(scopeEl);
   }
-  function aiPersistProxy() {
-    const on = root.querySelector("#aiProxyOn");
-    const url = root.querySelector("#aiProxyUrl");
-    const tok = root.querySelector("#aiProxyToken");
+  function aiPersistProxy(scopeEl) {
+    scopeEl = scopeEl || root;
+    const on = scopeEl.querySelector("#aiProxyOn");
+    const url = scopeEl.querySelector("#aiProxyUrl");
+    const tok = scopeEl.querySelector("#aiProxyToken");
     if (on) localStorage.setItem("rk:ai:proxy:on", on.checked ? "1" : "0");
     if (url) localStorage.setItem("rk:ai:proxy:url", url.value.trim());
     if (tok && tok.value.trim()) localStorage.setItem("rk:ai:proxy:token", tok.value.trim());
   }
   function aiSave() { aiPersistVisible(); renderBody(); status("AI settings saved \u2014 local only.", true); }
+  // Full AI settings dialog, opened from the More (...) menu. Mirrors the old AI-tab config: private proxy +
+  // one/two provider blocks + save/remove. Self-contained (its own handlers) since it lives outside the tab
+  // body, and persists via aiPersistVisible(modal) scoped to its own inputs.
+  function aiSettingsModal() {
+    var modal = document.createElement("div");
+    modal.className = "pass";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">AI settings</div>' +
+      '<div class="pass__sub">Connect a provider for the Prepare tools \u2014 ATS check, cover letters, interview prep and imagery. Keys are stored only in this browser and never written to your published site.</div>' +
+      '<div class="aiset__body" style="max-height:58vh;overflow:auto;margin:.2rem 0 .4rem"></div>' +
+      '<div class="pass__err"></div>' +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-clear>Remove keys</button><button class="btn btn--ghost" data-cancel>Close</button><button class="btn btn--primary" data-go>Save</button></div>' +
+      '<div class="pass__note">Keys never touch your published site; they\u2019re sent only to the provider you pick. Some providers block browser calls (CORS) \u2014 OpenAI &amp; Gemini work directly, or route through your private proxy.</div></div>';
+    document.body.appendChild(modal);
+    var bodyEl = modal.querySelector(".aiset__body");
+    function paint() {
+      var same = aiSameKey();
+      var imgOK = aiSupportsImages();
+      var html = aiProxyBlock(aiProxy()) +
+        '<label class="chk aiblk__same"><input type="checkbox" data-aiset-same' + (same ? " checked" : "") + " /> Use the same service &amp; key for content and image</label>";
+      html += same ? aiBlock("all", "AI service", "content + image")
+                   : (aiBlock("txt", "Content generation", "text") + aiBlock("img", "Image generation", "imagery"));
+      html += '<div class="af__hint" style="margin:.1rem 0 .2rem">' + (imgOK ? "Image service supports generation." : "Your image service (Claude) can\u2019t generate images \u2014 pick OpenAI or Gemini for imagery.") + "</div>";
+      bodyEl.innerHTML = html;
+      bodyEl.querySelectorAll("[data-aiscope]").forEach(function (sel) {
+        sel.addEventListener("change", function () { aiPersistVisible(modal); aiSetProvider(sel.getAttribute("data-aiscope"), sel.value); paint(); });
+      });
+      var sameCb = bodyEl.querySelector("[data-aiset-same]");
+      if (sameCb) sameCb.addEventListener("change", function () { aiPersistVisible(modal); localStorage.setItem("rk:ai:same", sameCb.checked ? "1" : "0"); paint(); });
+    }
+    paint();
+    var close = function () { modal.remove(); };
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    modal.querySelector("[data-clear]").addEventListener("click", function () {
+      Object.keys(localStorage).forEach(function (k) { if (/^rk:ai:[a-z]+:key$/.test(k)) localStorage.removeItem(k); });
+      if (activeTab === "ai") renderBody();
+      paint(); status("Keys removed.");
+    });
+    modal.querySelector("[data-go]").addEventListener("click", function () {
+      aiPersistVisible(modal);
+      if (activeTab === "ai") renderBody();
+      status("AI settings saved \u2014 local only.", true);
+      close();
+    });
+    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+  }
   function aiPromptFor(i) {
     const el = root.querySelector('[data-aiprompt="' + i + '"]');
     return el ? el.value.trim() : "";
@@ -7738,6 +7774,7 @@ import {
             '<div class="adm__more-pop" hidden>' +
               '<button class="adm__more-item" data-passkeys type="button"><span class="adm__more-ic">\uD83D\uDD11</span><span class="adm__more-tx"><b>Passkeys</b><small>Sign in with Windows Hello, Face ID or a security key</small></span></button>' +
               '<button class="adm__more-item" data-pubcfg type="button"><span class="adm__more-ic">\u2699</span><span class="adm__more-tx"><b>Publishing settings</b><small>Connect GitHub, replace the token, or publish manually</small></span></button>' +
+              '<button class="adm__more-item" data-aicfg type="button"><span class="adm__more-ic">\u2728</span><span class="adm__more-tx"><b>AI settings</b><small>Connect OpenAI, Gemini or Claude for the Prepare tools</small></span></button>' +
               '<button class="adm__more-item" data-backup type="button"><span class="adm__more-ic">\uD83D\uDCBE</span><span class="adm__more-tx"><b>Download content backup</b><small>Save an unencrypted copy to this device \u2014 keep it private</small></span></button>' +
               '<button class="adm__more-item" data-recruiter type="button"><span class="adm__more-ic">\uD83C\uDFAB</span><span class="adm__more-tx"><b>Recruiter mode <span data-recstate style="opacity:.55;font-weight:400"></span></b><small>Show the ticket prompt to every visitor on landing</small></span></button>' +
               '<div class="adm__more-sep"></div>' +
@@ -7840,6 +7877,7 @@ import {
     });
     autoWrap.querySelectorAll("[data-autopub-every]").forEach((r) => r.addEventListener("change", () => autopubSetEvery(+r.value)));
     var _pk = root.querySelector("[data-passkeys]"); if (_pk) _pk.addEventListener("click", () => { closeBarPops(); passkeyModal(); });
+    var _aicfg = root.querySelector("[data-aicfg]"); if (_aicfg) _aicfg.addEventListener("click", () => { closeBarPops(); aiSettingsModal(); });
     const pubCloseBtn = root.querySelector("[data-pub-close]");
     if (pubCloseBtn) pubCloseBtn.addEventListener("click", pubHide);
     // "\u22EF" more-menu: Passkeys / Publishing settings / Auto-publish
@@ -7893,7 +7931,7 @@ import {
     if (e.key !== "Escape" || !root || !root.classList.contains("is-open")) return;
     var mp = root.querySelector(".adm__more-pop"), xp = root.querySelector(".adm__exit-pop");
     if ((mp && !mp.hidden) || (xp && !xp.hidden)) { closeMorePop(); closeExitPop(); return; }
-    exit();
+    // Escape no longer dismisses the studio - leave the editor open; exit only via the More menu.
   }
 
   function open(hostApi) {
