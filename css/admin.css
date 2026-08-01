@@ -444,6 +444,18 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .adm__tabbadge.is-pulse, .rkacc__badge.is-pulse { animation: rkbadgepulse .55s cubic-bezier(.34, 1.56, .64, 1) 2; }
 @keyframes rkbadgepulse { 0%, 100% { transform: scale(1); } 45% { transform: scale(1.4); } }
 @media (prefers-reduced-motion: reduce) { .adm__tabbadge.is-pulse, .rkacc__badge.is-pulse { animation: none; } }
+.svrow { display: flex; align-items: center; gap: 12px; padding: 12px 15px; border: 1px solid var(--line); border-radius: 12px; margin-top: 10px; background: var(--bg-2); }
+.svrow--off { opacity: .58; }
+.svrow--exp .svrow__name { color: var(--text-dim); }
+.svrow__main { flex: 1 1 auto; min-width: 0; }
+.svrow__name { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 7px; }
+.svrow__meta { color: var(--text-dim); font-size: 11.5px; margin-top: 3px; font-family: var(--mono); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svrow__acts { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+.svshare { position: relative; }
+.svshare__menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 5px; min-width: 132px; box-shadow: 0 12px 34px rgba(0,0,0,.55); display: flex; flex-direction: column; gap: 2px; }
+.svshare__menu[hidden] { display: none; }
+.svshare__item { text-align: left; background: transparent; border: 0; color: var(--text); font-size: 13px; padding: 8px 10px; border-radius: 7px; cursor: pointer; font-family: inherit; }
+.svshare__item:hover { background: rgba(255,255,255,.06); }
 .rkacc__switch { display: flex; align-items: center; gap: .5rem; font-size: .76rem; color: var(--text-dim); cursor: pointer; padding: .7rem .9rem; border-top: 1px solid var(--line); }
 .rkacc__switch input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
 .rkinbox__row.is-off { opacity: .5; }

@@ -2849,16 +2849,22 @@ import {
     "</div>";
   }
   // The "Custom" sub-tab body: reusable ticketed special views you build yourself (New / Tailor to a role)
-  // plus the one-tap Full-access grant. The soft-gate note lives here (these ship in the published file).
+  // plus the one-tap Full-access grant. Same revoke-first model as Approved/Curated: Revoke -> Show revoked
+  // -> Restore/Delete. Each view is a slim card; Edit opens the low-density picker dialog (svEditModal).
   function customViewsPane() {
     const list = data.specialViews || (data.specialViews = []);
-    let html = '<p class="af__hint" style="margin:.1rem 0 1rem">Curated, ticketed versions of the site for one audience (say an automotive company). Choose the work, numbers and skills they see, set a ticket phrase and an optional expiry. Up to 6. <em>Tickets are a soft gate \u2014 the curated content still ships in your published file, so don\u2019t put anything confidential here.</em></p>' +
-      quickGrantPanel() +
-      '<div class="adm__addbar rolekit__bar"><button class="btn btn--add" data-act="sv-add"' + (list.length >= 6 ? " disabled" : "") + '>+ New special view</button>' +
-      '<button class="btn btn--auto rolekit__cta" data-act="sv-tailor">\u2728 Tailor to a role</button></div>';
-    if (!list.length) html += '<div class="adm__empty">No special views yet.</div>';
-    list.forEach(function (sv, i) { html += svCard(sv, i); });
-    if (list.length >= 6) html += '<div class="af__hint">Maximum of 6 special views reached.</div>';
+    const showRevoked = accShowRevoked;
+    const shown = list.map(function (sv, i) { return { sv: sv, i: i }; }).filter(function (x) { return !!x.sv.revoked === showRevoked; });
+    let html = '<label class="rkacc__switch"><input type="checkbox" data-act="acc-revoked"' + (showRevoked ? " checked" : "") + " /> Show revoked</label>";
+    if (!showRevoked) html += '<p class="af__hint" style="margin:.1rem 0 1rem">Curated, ticketed versions of the site for one audience (say an automotive company). Choose the work, numbers and skills they see, set a ticket phrase and an optional expiry. Up to 6. <em>Tickets are a soft gate \u2014 the curated content still ships in your published file, so don\u2019t put anything confidential here.</em></p>';
+    if (!shown.length) html += '<div class="adm__empty">' + (showRevoked ? "No revoked views." : "No special views yet.") + "</div>";
+    shown.forEach(function (x) { html += svCard(x.sv, x.i); });
+    if (!showRevoked) {
+      html += '<div class="adm__addbar rolekit__bar"><button class="btn btn--add" data-act="sv-add"' + (list.length >= 6 ? " disabled" : "") + '>+ New special view</button>' +
+        '<button class="btn btn--auto rolekit__cta" data-act="sv-tailor">\u2728 Tailor to a role</button></div>';
+      if (list.length >= 6) html += '<div class="af__hint">Maximum of 6 special views reached.</div>';
+      html += quickGrantPanel();
+    }
     return html;
   }
   function accessSection() {
@@ -2939,27 +2945,74 @@ import {
   }
 
   function svCard(sv, i) {
-    const works = data.work || [], highs = data.highlights || [], caps = data.capabilities || [];
+    const revoked = !!sv.revoked;
     const expired = window.RK.svExpired(sv), left = window.RK.svDaysLeft(sv);
-    const status = !sv.days ? "No expiry" : expired ? "Expired" : (left <= 0 ? "Expires today" : left + " day" + (left > 1 ? "s" : "") + " left");
+    const exp = !sv.days ? "no expiry" : expired ? "expired" : (left <= 0 ? "expires today" : left + "d left");
+    const nWork = (sv.workIds || []).length;
+    const meta = (sv.audience ? escHtml(sv.audience) + " \u00b7 " : "") + (sv.ticketHash ? "ticket set" : "no ticket") + " \u00b7 " + (nWork ? nWork + (nWork > 1 ? " works" : " work") : "all work") + " \u00b7 " + exp;
+    const acts = revoked
+      ? '<button class="btn btn--ghost" data-act="sv-restore" data-index="' + i + '">Restore</button>' +
+        '<button class="btn btn--danger" data-act="sv-delete" data-index="' + i + '">Delete</button>'
+      : '<div class="svshare"><button class="btn btn--ghost svshare__btn" data-act="sv-share" data-index="' + i + '">Share \u25be</button>' +
+          '<div class="svshare__menu" hidden><button class="svshare__item" data-act="sv-copylink" data-index="' + i + '">Copy link</button><button class="svshare__item" data-act="sv-copycode" data-index="' + i + '">Copy code</button></div></div>' +
+        '<button class="btn btn--ghost" data-act="sv-edit" data-index="' + i + '">Edit</button>' +
+        '<button class="btn btn--warn" data-act="sv-revoke" data-index="' + i + '">Revoke</button>';
+    return '<div class="svrow' + (revoked ? " svrow--off" : (expired ? " svrow--exp" : "")) + '">' +
+      '<div class="svrow__main"><div class="svrow__name">' + escHtml(sv.name || ("View " + (i + 1))) + (revoked ? ' <span class="sv-badge">revoked</span>' : (expired ? ' <span class="sv-badge">expired</span>' : "")) + "</div>" +
+        '<div class="svrow__meta">' + meta + "</div></div>" +
+        '<div class="svrow__acts">' + acts + "</div>" +
+    "</div>";
+  }
+  // Low-density Edit dialog for a special view: name / audience / ticket / expiry + foldable Work / Numbers /
+  // Capabilities pickers (reuses the curate dialog's .rkcur__grp + .svchk styles). Gathers on Save/Preview.
+  function svEditModal(i) {
+    const sv = (data.specialViews || [])[i];
+    if (!sv) return;
+    const works = data.work || [], highs = data.highlights || [], caps = data.capabilities || [];
+    const wOpts = works.map(function (w, wi) { return '<label class="svchk"><input type="checkbox" data-cur="work" value="' + escAttr(w.id) + '"' + ((sv.workIds || []).indexOf(w.id) !== -1 ? " checked" : "") + ' /><span>' + escHtml(w.client || w.title || ("Work " + (wi + 1))) + "</span></label>"; }).join("");
+    const hOpts = highs.map(function (hh, hi) { return '<label class="svchk"><input type="checkbox" data-cur="high" value="' + hi + '"' + ((sv.highlightIdx || []).indexOf(hi) !== -1 ? " checked" : "") + ' /><span>' + escHtml((hh.value || "") + " \u00b7 " + (hh.label || "")) + "</span></label>"; }).join("");
+    const cOpts = caps.map(function (c, ci) { return '<label class="svchk"><input type="checkbox" data-cur="cap" value="' + ci + '"' + ((sv.capabilityIdx || []).indexOf(ci) !== -1 ? " checked" : "") + ' /><span>' + escHtml(c) + "</span></label>"; }).join("");
     const tv = ticketPlain[sv.id] || "";
-    const wItems = works.map(function (w, wi) { return { on: (sv.workIds || []).indexOf(w.id) !== -1, val: w.id, label: (w.client || w.title || ("Work " + (wi + 1))) }; });
-    const hItems = highs.map(function (h, hi) { return { on: (sv.highlightIdx || []).indexOf(hi) !== -1, val: hi, label: ((h.value || "") + " \u00b7 " + (h.label || "")) }; });
-    const cItems = caps.map(function (c, ci) { return { on: (sv.capabilityIdx || []).indexOf(ci) !== -1, val: ci, label: c }; });
-    return '<div class="card sv-card' + (expired ? " sv-card--exp" : "") + '">' +
-      '<div class="card__bar"><span class="card__idx">' + escHtml(sv.name || ("View " + (i + 1))) + (expired ? ' <b class="sv-badge">expired</b>' : "") + "</span>" +
-        '<div class="card__ops"><button class="iconbtn iconbtn--danger" data-act="sv-remove" data-index="' + i + '" title="Remove">\u2715</button></div></div>' +
-      '<div class="af"><label class="af__label">Name (only you see this)</label><input type="text" data-sv="' + i + '" data-field="name" value="' + escAttr(sv.name) + '" /></div>' +
-      '<div class="af"><label class="af__label">Audience line (replaces the hero eyebrow)</label><input type="text" data-sv="' + i + '" data-field="audience" value="' + escAttr(sv.audience) + '" placeholder="e.g. Prepared for Jaguar Land Rover" /></div>' +
-      '<div class="af__row">' +
-        '<div class="af"><label class="af__label">Ticket phrase</label><input type="text" data-sv="' + i + '" data-field="ticket" value="' + escAttr(tv) + '" placeholder="' + (sv.ticketHash && !tv ? "Set \u2014 type to change" : "e.g. jaguar-2026") + '" /><div class="af__hint">' + (sv.ticketHash ? "Ticket set \u2713" : "Not set") + " \u00b7 case-insensitive</div></div>" +
-        '<div class="af"><label class="af__label">Auto-hide after (days)</label><input type="number" min="0" step="1" data-sv="' + i + '" data-field="days" value="' + (sv.days || 0) + '" /><div class="af__hint">' + escHtml(status) + " \u00b7 0 = never</div></div>" +
-      "</div>" +
-      svChecklist(i, "work", "Work shown", wItems) +
-      svChecklist(i, "highlights", "Numbers shown", hItems) +
-      svChecklist(i, "capabilities", "Capabilities shown", cItems) +
-      '<div class="sv-card__foot"><button class="btn btn--ghost" data-act="sv-preview" data-index="' + i + '">Preview in panel \u2192</button><button class="btn btn--ghost" data-act="sv-copylink" data-index="' + i + '">Copy recruiter link</button><button class="btn btn--ghost" data-act="sv-copycode" data-index="' + i + '">Copy code</button><span class="af__hint">Publish to make it live.</span></div>' +
-      "</div>";
+    const modal = document.createElement("div");
+    modal.className = "pass";
+    modal.innerHTML =
+      '<div class="pass__box pass__box--wide"><div class="pass__title">Edit view</div>' +
+      '<div class="pass__sub">A curated, ticketed version of your site for one audience. Pick what shows, set a ticket, publish to share.</div>' +
+      '<div class="af"><label class="af__label">Name (only you see this)</label><input type="text" data-e="name" value="' + escAttr(sv.name) + '" /></div>' +
+      '<div class="af"><label class="af__label">Audience line (replaces the hero eyebrow)</label><input type="text" data-e="audience" value="' + escAttr(sv.audience) + '" placeholder="e.g. Prepared for Jaguar Land Rover" /></div>' +
+      '<div class="af__row"><div class="af"><label class="af__label">Ticket phrase</label><input type="text" data-e="ticket" value="' + escAttr(tv) + '" placeholder="' + (sv.ticketHash && !tv ? "Set \u2014 type to change" : "e.g. jaguar-2026") + '" /><div class="af__hint">' + (sv.ticketHash ? "Ticket set \u2713" : "Not set") + " \u00b7 case-insensitive</div></div>" +
+        '<div class="af"><label class="af__label">Auto-hide after (days)</label><input type="number" min="0" step="1" data-e="days" value="' + (sv.days || 0) + '" /><div class="af__hint">0 = never</div></div></div>' +
+      '<details open class="rkcur__grp"><summary>Work shown <span>(none ticked = all work)</span></summary><div class="svchk__grid">' + wOpts + "</div></details>" +
+      '<details class="rkcur__grp"><summary>Numbers shown <span>(all by default)</span></summary><div class="svchk__grid">' + hOpts + "</div></details>" +
+      '<details class="rkcur__grp"><summary>Capabilities shown <span>(all by default)</span></summary><div class="svchk__grid">' + cOpts + "</div></details>" +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button><button class="btn btn--ghost" data-preview>Preview \u2192</button><button class="btn btn--primary" data-go>Save</button></div></div>';
+    document.body.appendChild(modal);
+    const done = function () { modal.remove(); };
+    function pick(sel) { return Array.prototype.map.call(modal.querySelectorAll('[data-cur="' + sel + '"]:checked'), function (x) { return x.value; }); }
+    function applyFields() {
+      sv.name = (modal.querySelector('[data-e="name"]').value || "").trim() || sv.name;
+      sv.audience = modal.querySelector('[data-e="audience"]').value;
+      sv.days = Math.max(0, parseInt(modal.querySelector('[data-e="days"]').value, 10) || 0);
+      if (!sv.createdAt) sv.createdAt = Date.now();
+      sv.workIds = pick("work");
+      sv.highlightIdx = pick("high").map(Number);
+      sv.capabilityIdx = pick("cap").map(Number);
+      const order = (data.work || []).map(function (w) { return w.id; });
+      sv.workIds.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
+      sv.highlightIdx.sort(function (a, b) { return a - b; });
+      sv.capabilityIdx.sort(function (a, b) { return a - b; });
+    }
+    modal.querySelector("[data-cancel]").addEventListener("click", done);
+    modal.addEventListener("click", function (e) { if (e.target === modal) done(); });
+    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") done(); });
+    modal.querySelector("[data-preview]").addEventListener("click", function () { applyFields(); saveDraft(); svPreview(i); });
+    modal.querySelector("[data-go]").addEventListener("click", async function () {
+      applyFields();
+      const ticket = (modal.querySelector('[data-e="ticket"]').value || "").trim();
+      if (ticket !== (tv || "").trim()) { ticketPlain[sv.id] = ticket; await setSvTicket(sv, ticket); }
+      else saveDraft(true);
+      done(); renderBody(); status("View updated.", true);
+    });
   }
 
   function svChecklist(i, kind, label, items) {
@@ -3455,6 +3508,11 @@ import {
       saveDraft(true); renderBody(); return;
     }
     if (act === "sv-remove") { (data.specialViews || []).splice(i, 1); saveDraft(true); renderBody(); return; }
+    if (act === "sv-edit") { svEditModal(i); return; }
+    if (act === "sv-share") { var _shm = b.parentNode.querySelector(".svshare__menu"); var _wh = _shm && _shm.hidden; if (root) root.querySelectorAll(".svshare__menu").forEach(function (m) { m.hidden = true; }); if (_shm) _shm.hidden = !_wh; return; }
+    if (act === "sv-revoke") { var _rv = (data.specialViews || [])[i]; if (_rv) { _rv.revoked = true; saveDraft(true); renderBody(); status("View revoked \u2014 tick Show revoked to restore or delete it.", true); } return; }
+    if (act === "sv-restore") { var _rs = (data.specialViews || [])[i]; if (_rs) { _rs.revoked = false; saveDraft(true); renderBody(); status("View restored.", true); } return; }
+    if (act === "sv-delete") { if (!confirm("Delete this special view permanently?")) return; (data.specialViews || []).splice(i, 1); saveDraft(true); renderBody(); status("View deleted."); return; }
     if (act === "req-dismiss") {
       var _rid = b.dataset.id; b.disabled = true;
       fetch(ADMIN_WORKER + "/admin/requests/delete", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ id: _rid }) })
