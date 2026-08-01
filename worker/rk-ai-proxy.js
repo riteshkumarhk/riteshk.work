@@ -145,7 +145,31 @@ export default {
       const qg = await env.VAULT_GRANTS.get("quickgrant:full", "json");
       if (!qg || !qg.code) return json({ error: "Access isn\u2019t set up right now.", reason: "noquickgrant" }, 503, cors);
       try { acc.uses = (acc.uses || 0) + 1; acc.lastUsedAt = Date.now(); await env.VAULT_GRANTS.put("access:" + token, JSON.stringify(acc), acc.expiresAt ? { expiration: Math.floor(acc.expiresAt / 1000) } : undefined); } catch (e) {}
-      return json({ ok: true, code: qg.code, mode: acc.mode || "all", workIds: acc.workIds || null, highlightIdx: acc.highlightIdx || null, capabilityIdx: acc.capabilityIdx || null, name: acc.name || "", audience: acc.company || "" }, 200, cors);
+      // Per-request vault grant: mint THIS link its own grant, scoped to its works with the CURRENT
+      // keys (cached at publish). Each recruiter is isolated + always fresh — no shared "Adobe" grant.
+      // Refreshed on every redeem, so it self-heals after any re-publish. (Client falls back to the
+      // shared quick-grant code when this is absent — e.g. before the first publish that seeds the cache.)
+      let vaultGrant = null;
+      try {
+        const keyset = {};
+        const wantIds = (acc.mode === "curated" && Array.isArray(acc.workIds) && acc.workIds.length) ? acc.workIds : null;
+        if (wantIds) {
+          for (const wid of wantIds) { const ks = await env.VAULT_GRANTS.get("vaultkeys:" + wid, "json"); if (Array.isArray(ks)) ks.forEach((k) => { keyset[k] = 1; }); }
+        } else {
+          const l = await env.VAULT_GRANTS.list({ prefix: "vaultkeys:" });
+          for (const kk of l.keys) { const ks = await env.VAULT_GRANTS.get(kk.name, "json"); if (Array.isArray(ks)) ks.forEach((x) => { keyset[x] = 1; }); }
+        }
+        const keys = Object.keys(keyset);
+        if (keys.length) {
+          const gexp = (acc.expiresAt && acc.expiresAt > Date.now()) ? acc.expiresAt : (Date.now() + GRANT_REDEEM_TTL_MS);
+          const gid = await hmac(env.SESSION_SECRET || "", "agrant:" + token);
+          await env.VAULT_GRANTS.put("g:" + gid, JSON.stringify({ keys: keys, exp: gexp }), { expiration: Math.floor(gexp / 1000) });
+          const gpayload = b64urlFromStr(JSON.stringify({ g: gid, exp: gexp }));
+          const gsig = await hmac(env.SESSION_SECRET || "", gpayload);
+          vaultGrant = { token: gpayload + "." + gsig, exp: gexp };
+        }
+      } catch (e) {}
+      return json({ ok: true, code: qg.code, vaultGrant: vaultGrant, mode: acc.mode || "all", workIds: acc.workIds || null, highlightIdx: acc.highlightIdx || null, capabilityIdx: acc.capabilityIdx || null, name: acc.name || "", audience: acc.company || "" }, 200, cors);
     }
 
     // ---------- admin: verify the admin key, issue a short signed session ----------
@@ -682,6 +706,24 @@ export default {
       const payload = b64urlFromStr(JSON.stringify({ g: gid, exp: exp }));
       const sig = await hmac(env.SESSION_SECRET || "", payload);
       return json({ token: payload + "." + sig, exp: exp }, 200, cors);
+    }
+
+    // Publish seeds this: the current vault key-set per work, so /access/redeem can mint a per-link
+    // grant with up-to-date keys (owner-session gated). Replaces prior sets so a re-publish refreshes them.
+    if (url.pathname === "/admin/vault/keycache") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Store not configured" }, 500, cors);
+      let kbody; try { kbody = await request.json(); } catch (e) { kbody = null; }
+      const kmap = kbody && kbody.map && typeof kbody.map === "object" ? kbody.map : null;
+      if (!kmap) return json({ error: "Bad map" }, 400, cors);
+      let kn = 0;
+      for (const wid of Object.keys(kmap)) {
+        if (!/^[a-z0-9_]+$/i.test(wid)) continue;
+        const ks = Array.isArray(kmap[wid]) ? kmap[wid].filter((k) => typeof k === "string" && k && k.indexOf("/") === -1).slice(0, 500) : [];
+        try { await env.VAULT_GRANTS.put("vaultkeys:" + wid, JSON.stringify(ks)); kn++; } catch (e) {}
+      }
+      return json({ ok: true, count: kn }, 200, cors);
     }
 
     // Serve a vault object (signature-gated, HTTP range support for smooth video streaming).

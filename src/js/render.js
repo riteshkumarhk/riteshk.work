@@ -302,6 +302,11 @@
     if (any) st.blocks = out;
     return any;
   }
+  // A server-minted per-recruiter vault grant (from /access/redeem) — store it directly so every
+  // vault-hosted section signs against THIS link's own grant, scoped to its works with current keys,
+  // instead of the shared quick-grant one.
+  function applyVaultGrant(g) { try { if (g && g.token) localStorage.setItem("rk:vault:grant", JSON.stringify({ token: g.token, exp: g.exp || 0 })); } catch (e) {} }
+  function rkHasVaultGrant() { try { var g = JSON.parse(localStorage.getItem("rk:vault:grant") || "null"); return !!(g && g.token && g.exp && g.exp > Date.now()); } catch (e) { return false; } }
   // Decrypt everything a ticket authorises, in place on `data`.
   async function decryptActiveTicket(data, sv, code) {
     if (!data || !Array.isArray(data.work) || !sv) return;
@@ -332,7 +337,9 @@
     }
     // Also redeem this pass for a scoped vault grant, so any vault-hosted media in these works
     // streams for the pass-holder (best-effort; a no-op if no grant is registered for this code).
-    try { if (window.RK && window.RK.vaultRedeem) await window.RK.vaultRedeem(code); } catch (e) {}
+    // Skip when a per-LINK grant was already applied (recruiterInit stores the server-minted one
+    // first) — don't clobber the fresh, tightly-scoped grant with the shared-code redeem.
+    try { if (!rkHasVaultGrant() && window.RK && window.RK.vaultRedeem) await window.RK.vaultRedeem(code); } catch (e) {}
   }
 
   function deriveSpecialData(base, sv) {
@@ -561,6 +568,7 @@
       DRAFT_KEY: DRAFT_KEY,
       applySpecialView: applySpecialView,
       applyCuratedView: applyCuratedView,
+      applyVaultGrant: applyVaultGrant,
       clearSpecialView: clearSpecialView,
       deriveSpecialData: deriveSpecialData,
       decryptActiveTicket: decryptActiveTicket,

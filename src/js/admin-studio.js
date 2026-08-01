@@ -4203,6 +4203,13 @@ import {
         if (!entry.complete || !ks.length) continue;   // incomplete read -> leave the prior grant intact (never shrink)
         try { await vaultRegisterGrant(passes[pi], ks, { exp: entry.exp }); okN++; } catch (er) {}
       }
+      // Seed the per-work vault key cache so /access/redeem can mint a fresh per-LINK grant scoped to
+      // each recruiter's works (decoupled from the shared quick-grant view grant, always current keys).
+      try {
+        var kmap = {};
+        Object.keys(vaultBlockKeys).forEach(function (wid) { var arr = (vaultBlockKeys[wid] || []).filter(Boolean); if (arr.length) kmap[wid] = arr; });
+        if (Object.keys(kmap).length) await fetch(ADMIN_WORKER + "/admin/vault/keycache", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ map: kmap }) });
+      } catch (e) {}
       if (okN) status(okN + " pass" + (okN === 1 ? "" : "es") + " can now open its private-vault content.", true);
     } catch (e) { /* grants are best-effort; never block a publish */ }
   }

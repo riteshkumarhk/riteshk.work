@@ -877,6 +877,7 @@ import {
       redeemAccessLink(kTok).then(function (res) {
         try { var u = new URL(location.href); u.searchParams.delete("k"); history.replaceState({}, "", u.pathname + (u.search || "") + u.hash); } catch (e) {}
         if (!res || !res.code) { if (window.RK && window.RK.removeSvBanner) window.RK.removeSvBanner(); return; }
+        if (res.vaultGrant && window.RK && window.RK.applyVaultGrant) window.RK.applyVaultGrant(res.vaultGrant);   // per-link vault grant (scoped to this link's works, current keys) — beats the shared-code fallback
         if (res.mode === "curated") { applyCuratedGrant(res); return; }   // scoped view; the all-mode path below is unchanged
         applyTicketCode(res.code, { skipExpiry: true }).then(function (r) {
           if (!r || !r.ok) { if (window.RK && window.RK.removeSvBanner) window.RK.removeSvBanner(); if (r && r.reason === "expired") expiredNotice({}); else maybeRecruiterFlyout(ticketErr(r && r.reason)); }
