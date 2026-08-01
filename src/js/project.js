@@ -616,10 +616,11 @@
     '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.4">' +
     '<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
   function lockedBlock(b) {
-    // A pass-holder (or owner presenting) whose vault-hosted section is being fetched right now sees a
-    // decrypting state rather than the "request access" prompt — so they know the content is on its
+    // A pass-holder (or owner presenting) whose vault-hosted section will be auto-fetched sees a
+    // decrypting state instead of the "request access" prompt — from the FIRST render (viewer is
+    // authorised, not yet finished) and through the fetch — so they always know the content is on its
     // way (signing + fetch + decrypt can take a few seconds).
-    if (b.vaultBlock && vaultResolving[activeId]) {
+    if (b.vaultBlock && (vaultResolving[activeId] || (viewerAuthorized() && !vaultTried[activeId]))) {
       return kicker(b.kicker || "Deeper cut") +
         (b.heading ? '<h2 class="pjb__h pjb__h--blur">' + md(b.heading) + "</h2>" : "") +
         '<div class="pjb__lock pjb__lock--loading"><span class="pjb__lock-spin" aria-hidden="true"></span>' +
@@ -1713,6 +1714,7 @@
       });
       if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} }
     }
+    if (activeId) { delete vaultResolving[activeId]; delete vaultTried[activeId]; }   // let a reopened project re-attempt + re-show the "Unlocking…" state (recovers from a transient fetch fail)
     activeId = null;
     previewSelIdx = -1;
     if (opts.push !== false) { try { history.pushState({}, "", "/"); } catch (e) {} }
