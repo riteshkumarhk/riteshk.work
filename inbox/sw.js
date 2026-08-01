@@ -1,7 +1,7 @@
 /* Riteshk Requests — service worker.
    Caches the app shell for a fast, offline-tolerant launch (API calls to the Worker always pass
    straight through, never cached) + handles Web Push ("push" + "notificationclick"). */
-const CACHE = "rk-inbox-v14";
+const CACHE = "rk-inbox-v15";
 const SHELL = [
   "/inbox/",
   "/inbox/index.html",
@@ -39,7 +39,14 @@ self.addEventListener("push", (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (x) { d = {}; }
   const title = d.title || "New access request";
-  const actions = (d.allow || d.cancel) ? [{ action: "allow", title: "Allow" }, { action: "decline", title: "Decline" }] : [];
+  // Notification action buttons are attached everywhere EXCEPT Android. On iOS the platform reveals
+  // them only on long-press/expand (a normal tap just opens the PWA) and on desktop they're deliberate
+  // mouse clicks - both safe. Android renders them INLINE with no long-press gate, where a pocket
+  // mis-tap could email a recruiter an irreversible decline, so we omit them there: a tap opens the app
+  // and you Approve / Curate / Decline deliberately in the UI.
+  const ua = (self.navigator && self.navigator.userAgent) || "";
+  const isAndroid = /Android/i.test(ua);
+  const actions = (!isAndroid && (d.allow || d.cancel)) ? [{ action: "allow", title: "Allow" }, { action: "decline", title: "Decline" }] : [];
   e.waitUntil(self.registration.showNotification(title, {
     body: d.body || "Open the app to review.",
     icon: "/inbox/icon-192.png",
@@ -65,13 +72,19 @@ self.addEventListener("pushsubscriptionchange", (e) => {
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
   const data = e.notification.data || {};
-  if (e.action === "allow" || e.action === "decline") {
-    const url = e.action === "allow" ? data.allow : data.cancel;
-    if (url) {
+  const act = e.action;
+  if (act === "allow" || act === "decline") {
+    // Verify the target matches this action's OWN endpoint, so a stale or mismatched payload can never
+    // fire the opposite action - tapping Allow can only ever POST /req/allow (grant), never the decline
+    // note. Anything missing or mismatched falls through to simply opening the app.
+    const url = act === "allow" ? data.allow : data.cancel;
+    const endpoint = act === "allow" ? "/req/allow" : "/req/cancel";
+    if (url && url.indexOf(endpoint) !== -1) {
+      const okTitle = act === "allow" ? "Access sent \u2713" : "Declined \u2713";
       e.waitUntil(
         fetch(url, { method: "POST" })
           .then((r) => r.text().catch(() => ""))
-          .then((msg) => self.registration.showNotification(e.action === "allow" ? "Access sent \u2713" : "Declined \u2713", { body: String(msg || "Done.").slice(0, 140), icon: "/inbox/icon-192.png", badge: "/inbox/icon-192.png", tag: "rk-req-done" }))
+          .then((msg) => self.registration.showNotification(okTitle, { body: String(msg || "Done.").slice(0, 140), icon: "/inbox/icon-192.png", badge: "/inbox/icon-192.png", tag: "rk-req-done" }))
           .catch(() => self.registration.showNotification("Couldn\u2019t reach the server", { body: "Open the app and try again.", icon: "/inbox/icon-192.png", badge: "/inbox/icon-192.png", tag: "rk-req-done" }))
       );
       return;
