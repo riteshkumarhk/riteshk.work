@@ -172,6 +172,40 @@ export default {
       return json({ ok: true, code: qg.code, vaultGrant: vaultGrant, mode: acc.mode || "all", workIds: acc.workIds || null, highlightIdx: acc.highlightIdx || null, capabilityIdx: acc.capabilityIdx || null, name: acc.name || "", audience: acc.company || "" }, 200, cors);
     }
 
+    // ---------- owner Present mode: the recovery passphrase is the true master key ----------
+    // Prove the recovery passphrase (its domain-separated hash, same proof used for recovery/step-up)
+    // and receive a READ-ONLY grant over EVERY vault key, so the owner can open all deeper cuts to
+    // present. No admin session, no editing -- vault reads only. Rate-limited by IP.
+    if (url.pathname === "/vault/owner-grant") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Unavailable" }, 503, cors);
+      const rlKey = "rl:ownergrant:" + (request.headers.get("CF-Connecting-IP") || "0");
+      const tries = parseInt((await env.VAULT_GRANTS.get(rlKey)) || "0", 10) || 0;
+      if (tries >= 12) return json({ error: "Too many attempts -- try again later." }, 429, cors);
+      try {
+        const b = await request.json();
+        const stored = await env.VAULT_GRANTS.get("cfg:publishproof");
+        const proof = (b && b.proof) || "";
+        const proofHash = proof ? bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(proof))) : "";
+        if (!stored || !timingSafeEqual(proofHash, stored)) {
+          await env.VAULT_GRANTS.put(rlKey, String(tries + 1), { expirationTtl: 900 });
+          return json({ error: "That recovery passphrase did not match.", reason: "pass" }, 401, cors);
+        }
+        await env.VAULT_GRANTS.delete(rlKey);
+        // Union of every work's vault keys -- Present mode unlocks all of them.
+        const keyset = {};
+        const l = await env.VAULT_GRANTS.list({ prefix: "vaultkeys:" });
+        for (const kk of l.keys) { const ks = await env.VAULT_GRANTS.get(kk.name, "json"); if (Array.isArray(ks)) ks.forEach((x) => { keyset[x] = 1; }); }
+        const keys = Object.keys(keyset);
+        const gexp = Date.now() + GRANT_REDEEM_TTL_MS;
+        const gid = await hmac(env.SESSION_SECRET || "", "ownergrant:" + gexp + ":" + keys.length);
+        await env.VAULT_GRANTS.put("g:" + gid, JSON.stringify({ keys: keys, exp: gexp }), { expiration: Math.floor(gexp / 1000) });
+        const gpayload = b64urlFromStr(JSON.stringify({ g: gid, exp: gexp }));
+        const gsig = await hmac(env.SESSION_SECRET || "", gpayload);
+        return json({ ok: true, vaultGrant: { token: gpayload + "." + gsig, exp: gexp } }, 200, cors);
+      } catch (e) { return json({ error: "Owner grant failed" }, 400, cors); }
+    }
+
     // ---------- admin: verify the admin key, issue a short signed session ----------
     if (url.pathname === "/admin/login") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);

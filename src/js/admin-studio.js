@@ -3822,7 +3822,7 @@ import {
       var blocks = w.study.blocks;
       for (var bi = 0; bi < blocks.length; bi++) {
         var b = blocks[bi];
-        if (!b || !b.locked || b.encStub || b.vault) continue;   // only plaintext Locked, not already vaulted/enc
+        if (!b || !b.locked || b.encStub || b.vault || b.vaultBlock) continue;   // only plaintext Locked, not already vaulted (pointer or in-file .enc) -- STABLE KEYS: never re-vault an unchanged pointer
         var targets = [];
         (function scan(o) {
           if (!o || typeof o !== "object") return;

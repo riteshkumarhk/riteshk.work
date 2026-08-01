@@ -473,23 +473,31 @@
     } catch (e) { /* ignore bad draft */ }
     // Show the working state right away — the decrypt loop below can take a moment.
     showUnlockingBanner("Unlocking\u2026");
-    var ids = [], hadProtected = 0, unlocked = 0;
+    var ids = [], hadProtected = 0, unlocked = 0, passOk = false, hadVault = false;
     for (var idx = 0; idx < data.work.length; idx++) {
       var w = data.work[idx];
       var wwrap = w.encWork && w.enc && w.enc.wraps && w.enc.wraps.owner;
       if (wwrap) {
         hadProtected++;
-        try { var sek = await rkUnwrapSek(recovery, wwrap); var full = await rkDecWithSek(sek, w); await rkResolveEncImages(full, sek); data.work[idx] = full; rkMarkUnlocked(full.id); ids.push(full.id); unlocked++; } catch (e) {}
+        try { var sek = await rkUnwrapSek(recovery, wwrap); var full = await rkDecWithSek(sek, w); await rkResolveEncImages(full, sek); data.work[idx] = full; rkMarkUnlocked(full.id); ids.push(full.id); unlocked++; passOk = true; } catch (e) {}
         continue;
       }
       var st = w.study;
+      // Vault-hosted deeper cuts don't decrypt client-side -- they resolve via the owner grant below.
+      if (st && Array.isArray(st.blocks) && st.blocks.some(function (b) { return b && b.locked && b.vaultBlock; })) hadVault = true;
       var swrap = st && st.enc && st.enc.wraps && st.enc.wraps.owner;
       if (swrap) {
         hadProtected++;
-        try { var sek2 = await rkUnwrapSek(recovery, swrap); if (await rkDecryptStudyBlocks(st, sek2)) { rkMarkUnlocked(w.id); ids.push(w.id); unlocked++; } } catch (e) {}
+        // A successful unwrap proves the passphrase even when the study is vault-only (0 encStubs to decrypt).
+        try { var sek2 = await rkUnwrapSek(recovery, swrap); passOk = true; if (await rkDecryptStudyBlocks(st, sek2)) unlocked++; rkMarkUnlocked(w.id); ids.push(w.id); } catch (e) {}
       }
     }
-    if (hadProtected && !unlocked) { removeSvBanner(); return { ok: false, reason: "pass" }; }
+    if (hadProtected && !passOk) { removeSvBanner(); return { ok: false, reason: "pass" }; }
+    // The recovery passphrase is the TRUE master key: it also mints a read-only owner grant over every
+    // vault key, so vault-hosted deeper cuts resolve in Present mode exactly like the decrypted ones.
+    if (hadVault) {
+      try { var og = (window.RK && window.RK.ownerVaultGrant) ? await window.RK.ownerVaultGrant(recovery) : null; if (og) applyVaultGrant(og); } catch (e) {}
+    }
     try { sessionStorage.setItem(RK_PRESENT_IDS, JSON.stringify(ids)); sessionStorage.setItem(RK_PRESENT_ACTIVE, "1"); } catch (e) {}
     if (window.RK) window.RK.data = data;
     DATA = data;

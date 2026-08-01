@@ -210,6 +210,19 @@ export async function recoverWithPassphrase(recovery, password) {
   throw new Error("Recovery didn’t return a session.");
 }
 
+// Present mode / true master key: prove the recovery passphrase to the Worker and receive a read-only
+// vault grant covering EVERY vault key, so the owner can open all deeper cuts to present. The
+// passphrase never leaves the browser -- only its domain-separated proof does (same as recovery).
+export async function ownerVaultGrant(recovery) {
+  try {
+    const proof = await publishProof(recovery);
+    const r = await fetch(ADMIN_WORKER + "/vault/owner-grant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ proof: proof }) });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => null);
+    return (j && j.vaultGrant && j.vaultGrant.token) ? j.vaultGrant : null;
+  } catch (e) { return null; }
+}
+
 /* ---------- NDA vault (private R2, via the Worker) ----------
    Gated media (deeper-cut reels, NDA screen recordings) live in a private R2 bucket, never
    on a public URL. Uploads need the owner session; playback is a short-lived signed URL the
