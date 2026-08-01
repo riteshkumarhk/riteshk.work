@@ -1,7 +1,7 @@
 /* Riteshk Requests — service worker.
    Caches the app shell for a fast, offline-tolerant launch (API calls to the Worker always pass
    straight through, never cached) + handles Web Push ("push" + "notificationclick"). */
-const CACHE = "rk-inbox-v15";
+const CACHE = "rk-inbox-v16";
 const SHELL = [
   "/inbox/",
   "/inbox/index.html",
@@ -39,24 +39,26 @@ self.addEventListener("push", (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (x) { d = {}; }
   const title = d.title || "New access request";
-  // Notification action buttons are attached everywhere EXCEPT Android. On iOS the platform reveals
-  // them only on long-press/expand (a normal tap just opens the PWA) and on desktop they're deliberate
-  // mouse clicks - both safe. Android renders them INLINE with no long-press gate, where a pocket
-  // mis-tap could email a recruiter an irreversible decline, so we omit them there: a tap opens the app
-  // and you Approve / Curate / Decline deliberately in the UI.
+  const body = d.body || "Open the app to review.";
+  const tag = d.tag || "rk-req";
+  // iOS reveals notification actions only on long-press (a normal tap opens the PWA) and desktop clicks
+  // are deliberate, so we attach the Allow/Decline buttons up front there. Android renders action buttons
+  // INLINE with no long-press gate, so we start WITHOUT them and reveal on the first tap instead (see
+  // notificationclick): first tap shows the buttons, a second tap opens the PWA - a stray tap sends nothing.
   const ua = (self.navigator && self.navigator.userAgent) || "";
   const isAndroid = /Android/i.test(ua);
-  const actions = (!isAndroid && (d.allow || d.cancel)) ? [{ action: "allow", title: "Allow" }, { action: "decline", title: "Decline" }] : [];
+  const hasActions = !!(d.allow || d.cancel);
+  const actions = (!isAndroid && hasActions) ? [{ action: "allow", title: "Allow" }, { action: "decline", title: "Decline" }] : [];
   e.waitUntil(self.registration.showNotification(title, {
-    body: d.body || "Open the app to review.",
+    body: body,
     icon: "/inbox/icon-192.png",
     badge: "/inbox/icon-192.png",
-    tag: d.tag || "rk-req",
+    tag: tag,
     renotify: true,
-    requireInteraction: true,   // stay on screen until tapped — a recruiter ping must not be missed
+    requireInteraction: true,   // stay on screen until tapped - a recruiter ping must not be missed
     vibrate: [90, 40, 90, 40, 90],
     actions: actions,
-    data: { url: d.url || "/inbox/", allow: d.allow || "", cancel: d.cancel || "" }
+    data: { url: d.url || "/inbox/", allow: d.allow || "", cancel: d.cancel || "", title: title, body: body, tag: tag, reveal: isAndroid && hasActions, stage: "initial" }
   }));
 });
 
@@ -70,13 +72,13 @@ self.addEventListener("pushsubscriptionchange", (e) => {
 // capability link straight from the SW and flash the result — no app open needed; a plain tap
 // focuses an open inbox tab or opens the app.
 self.addEventListener("notificationclick", (e) => {
-  e.notification.close();
   const data = e.notification.data || {};
   const act = e.action;
   if (act === "allow" || act === "decline") {
     // Verify the target matches this action's OWN endpoint, so a stale or mismatched payload can never
     // fire the opposite action - tapping Allow can only ever POST /req/allow (grant), never the decline
     // note. Anything missing or mismatched falls through to simply opening the app.
+    e.notification.close();
     const url = act === "allow" ? data.allow : data.cancel;
     const endpoint = act === "allow" ? "/req/allow" : "/req/cancel";
     if (url && url.indexOf(endpoint) !== -1) {
@@ -89,7 +91,24 @@ self.addEventListener("notificationclick", (e) => {
       );
       return;
     }
+  } else if (data.reveal && data.stage !== "shown") {
+    // Android two-stage: the FIRST tap on the notification body reveals the Allow/Decline buttons in place
+    // (no app launch, nothing sent); a SECOND tap opens the PWA. Keeps a stray single tap from ever firing
+    // an action, while still giving the quick buttons on a deliberate first tap.
+    e.waitUntil(self.registration.showNotification(data.title || "New access request", {
+      body: (data.body || "Open the app to review.") + " \u2014 tap again to open",
+      icon: "/inbox/icon-192.png",
+      badge: "/inbox/icon-192.png",
+      tag: data.tag || "rk-req",
+      renotify: false,
+      silent: true,
+      requireInteraction: true,
+      actions: [{ action: "allow", title: "Allow" }, { action: "decline", title: "Decline" }],
+      data: Object.assign({}, data, { stage: "shown" })
+    }));
+    return;
   }
+  e.notification.close();
   const target = data.url || "/inbox/";
   e.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((cls) => {
