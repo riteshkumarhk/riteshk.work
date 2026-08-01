@@ -92,6 +92,19 @@
     .rel__d{margin-top:1px}
     .rel__p{font-size:11px;color:var(--faint);margin-top:3px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
     .rel__row--done .rel__t{color:var(--dim);text-decoration:line-through;text-decoration-color:var(--faint)}
+    .curgrp{border:1px solid var(--line);border-radius:12px;margin-top:12px;background:var(--bg2);overflow:hidden}
+    .curgrp summary{list-style:none;cursor:pointer;padding:13px 15px;display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;outline:none}
+    .curgrp summary::-webkit-details-marker{display:none}
+    .curgrp summary::after{content:"\203a";color:var(--faint);font-size:18px;transform:rotate(90deg);transition:transform .2s;margin-left:4px}
+    .curgrp[open] summary::after{transform:rotate(-90deg)}
+    .curgrp__hint{color:var(--faint);font-size:12px;font-weight:400;margin-left:auto}
+    .curgrp__grid{display:flex;flex-direction:column;gap:1px;padding:2px 8px 10px;max-height:44vh;overflow-y:auto}
+    .curchk{display:flex;gap:11px;align-items:flex-start;padding:9px 7px;border-radius:9px;cursor:pointer;font-size:14px;line-height:1.35}
+    .curchk:active{background:var(--card)}
+    .curchk input{width:20px;height:20px;margin-top:1px;accent-color:var(--accent);flex:none}
+    .curdays{margin:16px 0 2px;color:var(--dim);font-size:14px}
+    .curdays label{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .curdays__in{width:66px;background:var(--bg2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;font-size:15px;font-family:inherit}
   </style>
 </head>
 <body>

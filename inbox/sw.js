@@ -1,7 +1,7 @@
 /* Riteshk Requests — service worker.
    Caches the app shell for a fast, offline-tolerant launch (API calls to the Worker always pass
    straight through, never cached) + handles Web Push ("push" + "notificationclick"). */
-const CACHE = "rk-inbox-v13";
+const CACHE = "rk-inbox-v14";
 const SHELL = [
   "/inbox/",
   "/inbox/index.html",

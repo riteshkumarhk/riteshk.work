@@ -326,7 +326,7 @@
     var declined = (rq.status === "declined");
     var acts = declined
       ? [actBtn("Delete", "warn", rq, "/admin/requests/delete", "Deleted")]
-      : [actBtn("Approve", "primary", rq, "/admin/requests/allow", "Access sent \u2713"), actBtn("Decline", "ghost", rq, "/admin/requests/decline", "Declined \u2713")];
+      : [actBtn("Approve", "primary", rq, "/admin/requests/allow", "Access sent \u2713"), curateBtn(rq), actBtn("Decline", "ghost", rq, "/admin/requests/decline", "Declined \u2713")];
     return h("div", { class: "req" }, [
       h("div", { class: "req__top" }, [
         h("div", {}, [h("span", { class: "req__name", text: rq.name || "Someone" }), rq.company ? h("span", { class: "req__co", text: " \u00b7 " + rq.company }) : false]),
@@ -359,6 +359,56 @@
       acts.replaceWith(h("div", { class: "req__done", text: doneMsg }));
     });
     return b;
+  }
+  function curateBtn(rq) {
+    var b = btn("Curate\u2026", "ghost");
+    b.addEventListener("click", function () { curateScreen(rq); });
+    return b;
+  }
+  // Phone-friendly curation: scope exactly what a recruiter sees, then POST /admin/requests/curate
+  // (mints a scoped /?k= link + emails it). Mirrors the studio's simplified foldable dialog.
+  async function curateScreen(rq) {
+    screen([brand(), h("div", { class: "card" }, [h("div", { class: "spinner" }), h("p", { class: "muted", style: "text-align:center;margin:2px 0 0", text: "Loading your content\u2026" })])]);
+    var content;
+    try { content = await (await fetch("/content.json?cb=" + Date.now(), { cache: "no-cache" })).json(); }
+    catch (e) { return screen([brand(), h("div", { class: "card" }, [h("h1", { text: "Hmm." }), h("p", { class: "muted", text: "Couldn\u2019t load your content \u2014 check your connection and try again." }), btn("Back to requests", "primary", openInbox)])]); }
+    var works = content.work || [], highs = content.highlights || [], caps = content.capabilities || [];
+    var wItems = works.map(function (w, i) { return { val: w.id, label: (w.client || w.title || ("Work " + (i + 1))) }; });
+    var hItems = highs.map(function (hh, i) { return { val: i, label: ((hh.value || "") + " \u00b7 " + (hh.label || "")) }; });
+    var cItems = caps.map(function (c, i) { return { val: i, label: String(c) }; });
+    function grp(title, hint, open, items, defOn) {
+      var grid = h("div", { class: "curgrp__grid" }, items.map(function (it) {
+        var cb = h("input", { type: "checkbox" }); cb.checked = defOn; it.cb = cb;
+        return h("label", { class: "curchk" }, [cb, h("span", { text: it.label })]);
+      }));
+      var sum = h("summary", {}, [h("span", { text: title }), h("span", { class: "curgrp__hint", text: hint })]);
+      return h("details", open ? { open: "", class: "curgrp" } : { class: "curgrp" }, [sum, grid]);
+    }
+    function pick(items) { return items.filter(function (it) { return it.cb && it.cb.checked; }).map(function (it) { return it.val; }); }
+    var daysIn = h("input", { type: "number", min: "0", step: "1", value: "15", class: "curdays__in" });
+    var errBox = h("div", {});
+    var go = btn("Send curated access \u2192", "primary");
+    go.addEventListener("click", function () {
+      errBox.innerHTML = "";
+      runBtn(go, async function () {
+        var days = parseInt(daysIn.value, 10); if (!(days >= 0)) days = 15;
+        var r = await api("/admin/requests/curate", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHdr()), body: JSON.stringify({ id: rq.id, workIds: pick(wItems), highlightIdx: pick(hItems), capabilityIdx: pick(cItems), days: days }) });
+        if (r.status === 401) { localStorage.removeItem(SS); return showVerify(); }
+        if (!r.ok) throw new Error((r.json && r.json.error) || "Couldn\u2019t curate \u2014 try again.");
+        toast("Curated access emailed \u2713");
+        accessTab = "curated"; openInbox();
+      }, function (m) { errBox.appendChild(h("div", { class: "note err", text: m })); });
+    });
+    screen([brand(), h("div", { class: "card" }, [
+      h("h1", { text: rq.name ? ("Curate for " + rq.name) : "Curate access" }),
+      h("p", { class: "muted small", text: "Pick exactly what they see \u2014 the rest of your site stays out of their view. They get a private, expiring link." }),
+      grp("Work shown", "none = all work", true, wItems, false),
+      grp("Numbers shown", "all by default", false, hItems, true),
+      grp("Capabilities shown", "all by default", false, cItems, true),
+      h("div", { class: "curdays" }, [h("label", {}, [h("span", { text: "Link lasts" }), daysIn, h("span", { text: "days (0 = no expiry)" })])]),
+      go, errBox,
+      btn("Cancel", "ghost", openInbox)
+    ])]);
   }
   function toast(msg) {
     var t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t);
