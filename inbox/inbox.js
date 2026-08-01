@@ -248,6 +248,7 @@
 
   var accessTab = "requests";     // requests | approved | curated
   var showDeclined = false;
+  var showRevoked = false;        // Approved/Curated: when on, show ONLY revoked grants (where Delete lives)
   async function openInbox() {
     if (!pushEnsured) { pushEnsured = true; ensurePush(); }
     renderShell();
@@ -255,7 +256,7 @@
   }
   function tabBtn(id, label) {
     var b = h("button", { class: "tab" + (accessTab === id ? " tab--on" : "") }, [label]);
-    b.addEventListener("click", function () { if (accessTab !== id) { accessTab = id; showDeclined = false; } openInbox(); });
+    b.addEventListener("click", function () { if (accessTab !== id) { accessTab = id; showDeclined = false; showRevoked = false; } openInbox(); });
     return b;
   }
   // Persistent in-app nudge: the ONLY reason a request won't ping this phone is no live push
@@ -319,10 +320,14 @@
     if (!r.ok) return setBody([h("div", { class: "note err", text: (r.json && r.json.error) || "Couldn\u2019t load." })]);
     var grants = (r.json && r.json.grants) || [];
     var curated = accessTab === "curated";
-    var list = grants.filter(function (g) { return ((g.mode || "all") === "curated") === curated; });
-    var kids = [];
+    var list = grants.filter(function (g) { return ((g.mode || "all") === "curated") === curated; })
+      .filter(function (g) { return !!g.revoked === showRevoked; });
+    var sw = h("label", { class: "switch" }, [h("input", { type: "checkbox" }), h("span", { text: "Show revoked" })]);
+    var cb = sw.querySelector("input"); if (showRevoked) cb.checked = true;
+    cb.addEventListener("change", function () { showRevoked = cb.checked; loadTab(); });
+    var kids = [sw];
     if (list.length) list.forEach(function (g) { kids.push(grantCard(g)); });
-    else kids.push(h("div", { class: "empty" }, [h("p", { class: "muted", text: curated ? "No curated grants yet." : "No approved grants yet." })]));
+    else kids.push(h("div", { class: "empty" }, [h("p", { class: "muted", text: showRevoked ? "No revoked grants here." : (curated ? "No curated grants yet." : "No approved grants yet.") })]));
     setBody(kids);
   }
   function reqCard(rq) {
@@ -435,6 +440,18 @@
     var daysLeft = g.expiresAt ? Math.max(0, Math.ceil((g.expiresAt - Date.now()) / 86400000)) : null;
     var link = "https://riteshk.work/?k=" + g.token;
     var meta = "Opened " + (g.uses || 0) + "\u00d7" + (g.mode === "curated" ? " \u00b7 curated" : "") + (g.days ? " \u00b7 " + g.days + "d" : "");
+    // Active grants: copy / duration / revoke (no hard delete). Revoked grants: restore, or permanently
+    // delete (surfaced via the "Show revoked" toggle) - so access is never silently deleted without a revoke first.
+    var acts = g.revoked
+      ? [
+          gbtn("Restore", "primary", function () { setGrant(g.token, { revoke: false }); }),
+          gbtn("Delete", "warn", function () { if (confirm("Delete this revoked grant permanently?")) setGrant(g.token, { delete: true }); })
+        ]
+      : [
+          gbtn("Copy link", "ghost", function () { copyText(link); }),
+          gbtn("Duration", "ghost", function () { var d = prompt("Days this link stays live (1\u2013365):", g.days || 15); if (d && parseInt(d, 10) > 0) setGrant(g.token, { days: parseInt(d, 10) }); }),
+          gbtn("Revoke", "warn", function () { setGrant(g.token, { revoke: true }); })
+        ];
     return h("div", { class: "req" + (g.revoked ? " req--off" : "") }, [
       h("div", { class: "req__top" }, [
         h("div", {}, [h("span", { class: "req__name", text: g.name || g.email || "Recruiter" }), g.company ? h("span", { class: "req__co", text: " \u00b7 " + g.company }) : false]),
@@ -442,12 +459,7 @@
       ]),
       g.email ? h("a", { class: "req__email", href: "mailto:" + g.email, text: g.email }) : false,
       h("div", { class: "req__meta", text: meta }),
-      h("div", { class: "req__acts" }, [
-        gbtn("Copy link", "ghost", function () { copyText(link); }),
-        gbtn("Duration", "ghost", function () { var d = prompt("Days this link stays live (1\u2013365):", g.days || 15); if (d && parseInt(d, 10) > 0) setGrant(g.token, { days: parseInt(d, 10) }); }),
-        gbtn(g.revoked ? "Restore" : "Revoke", g.revoked ? "primary" : "warn", function () { setGrant(g.token, { revoke: !g.revoked }); }),
-        gbtn("Delete", "ghost", function () { if (confirm("Delete this grant permanently?")) setGrant(g.token, { delete: true }); })
-      ])
+      h("div", { class: "req__acts" }, acts)
     ]);
   }
   async function setGrant(token, body) {
