@@ -130,7 +130,6 @@ import {
     ["education", "Education"],
     ["contact", "Contact"],
     ["special", "Special Views"],
-    ["access", "Access"],
     ["ai", "Prepare"],
     ["autofill", "More"],
   ];
@@ -2649,17 +2648,9 @@ import {
       return titleMetaList("education", "Education", "Degrees and schooling.");
     },
     special() {
-      const list = data.specialViews || (data.specialViews = []);
-      let html = secHead("Special Views",
-        "Curated, ticketed versions of the site for one audience (say an automotive company). Choose the work, numbers and skills they see, set a ticket phrase and an optional expiry. Up to 6. <em>Tickets are a soft gate — the curated content still ships in your published file, so don't put anything confidential here.</em>") +
-        reqInboxSection() +
-        quickGrantPanel() +
-        '<div class="adm__addbar rolekit__bar"><button class="btn btn--add" data-act="sv-add"' + (list.length >= 6 ? " disabled" : "") + '>+ New special view</button>' +
-        '<button class="btn btn--auto rolekit__cta" data-act="sv-tailor">\u2728 Tailor to a role</button></div>';
-      if (!list.length) html += '<div class="adm__empty">No special views yet.</div>';
-      list.forEach(function (sv, i) { html += svCard(sv, i); });
-      if (list.length >= 6) html += '<div class="af__hint">Maximum of 6 special views reached.</div>';
-      return html;
+      // Special Views is now the single access hub: Requests / Approved / Curated (incoming) + Custom (the
+      // ticketed views you build). accessSection() renders the sub-tabs; the Custom pane = customViewsPane().
+      return accessSection();
     },
     ai() {
       let html = secHead("Prepare",
@@ -2857,10 +2848,25 @@ import {
       '<div class="rkinbox__acts">' + acts + "</div>" +
     "</div>";
   }
+  // The "Custom" sub-tab body: reusable ticketed special views you build yourself (New / Tailor to a role)
+  // plus the one-tap Full-access grant. The soft-gate note lives here (these ship in the published file).
+  function customViewsPane() {
+    const list = data.specialViews || (data.specialViews = []);
+    let html = '<p class="af__hint" style="margin:.1rem 0 1rem">Curated, ticketed versions of the site for one audience (say an automotive company). Choose the work, numbers and skills they see, set a ticket phrase and an optional expiry. Up to 6. <em>Tickets are a soft gate \u2014 the curated content still ships in your published file, so don\u2019t put anything confidential here.</em></p>' +
+      quickGrantPanel() +
+      '<div class="adm__addbar rolekit__bar"><button class="btn btn--add" data-act="sv-add"' + (list.length >= 6 ? " disabled" : "") + '>+ New special view</button>' +
+      '<button class="btn btn--auto rolekit__cta" data-act="sv-tailor">\u2728 Tailor to a role</button></div>';
+    if (!list.length) html += '<div class="adm__empty">No special views yet.</div>';
+    list.forEach(function (sv, i) { html += svCard(sv, i); });
+    if (list.length >= 6) html += '<div class="af__hint">Maximum of 6 special views reached.</div>';
+    return html;
+  }
   function accessSection() {
-    var head = '<div class="rkacc__tabs">' + accSubBtn("requests", "Requests") + accSubBtn("approved", "Approved") + accSubBtn("curated", "Curated") + "</div>";
+    var head = '<div class="rkacc__tabs">' + accSubBtn("requests", "Requests") + accSubBtn("approved", "Approved") + accSubBtn("curated", "Curated") + accSubBtn("custom", "Custom") + "</div>";
     var inner;
-    if (accLoading) {
+    if (accSubTab === "custom") {
+      inner = customViewsPane();
+    } else if (accLoading) {
       inner = '<div class="rkinbox__empty">Loading\u2026</div>';
     } else if (accSubTab === "requests") {
       inner = '<label class="rkacc__switch"><input type="checkbox" data-act="acc-declined"' + (accShowDeclined ? " checked" : "") + " /> Show declined</label>" +
@@ -2873,21 +2879,20 @@ import {
       inner = '<label class="rkacc__switch"><input type="checkbox" data-act="acc-revoked"' + (accShowRevoked ? " checked" : "") + " /> Show revoked</label>" +
         (gs.length ? gs.map(accGrantRow).join("") : '<div class="rkinbox__empty">' + gempty + "</div>");
     }
-    return '<p class="af__hint" style="margin:.1rem 0 1rem">Approve, decline and manage every recruiter\u2019s access here. Approving mints a private <code>/?k=</code> link and emails it. <b>Curate\u2026</b> scopes exactly what they see.</p>' +
+    return secHead("Special Views", "One place for who sees your work \u2014 approve incoming requests, mint scoped <code>/?k=</code> links, and build reusable ticketed views for specific audiences.") +
       '<div class="rkinbox">' + head + '<div data-accbody>' + inner + "</div></div>";
   }
   async function loadAccessData() {
     var sess = adminSession(); if (!sess) return;
-    accLoading = true; if (activeTab === "access") renderBody();
+    accLoading = true; if (activeTab === "special") renderBody();
     try {
       var rq = await fetch(ADMIN_WORKER + "/admin/requests?status=" + (accShowDeclined ? "declined" : "pending"), { headers: { Authorization: "Bearer " + sess } });
       if (rq.ok) accReqCache = (await rq.json()).requests || [];
       var rg = await fetch(ADMIN_WORKER + "/admin/access", { headers: { Authorization: "Bearer " + sess } });
       if (rg.ok) accGrantCache = (await rg.json()).grants || [];
     } catch (e) {}
-    accLoading = false; accSyncBadges(); if (activeTab === "access") renderBody();
+    accLoading = false; accSyncBadges(); if (activeTab === "special") renderBody();
   }
-  sections.access = accessSection;
 
   // Foldable curation dialog — pick exactly what a recruiter sees, then mint a scoped link.
   function curateModal(reqId) {
@@ -7755,7 +7760,7 @@ import {
         '<div class="adm__brand"><span class="adm__pulse"></span>Admin Mode <small>content studio</small></div>' +
         '<div class="adm__tabswrap">' +
           '<button class="adm__tabflip adm__tabflip--prev" data-tabflip="-1" type="button" aria-label="Scroll tabs left" hidden>\u2039</button>' +
-          '<nav class="adm__tabs">' + TABS.map((t) => '<button class="adm__tab" data-tab="' + t[0] + '">' + t[1] + (t[0] === "access" ? '<span class="adm__tabbadge" data-accbadge></span>' : "") + "</button>").join("") + "</nav>" +
+          '<nav class="adm__tabs">' + TABS.map((t) => '<button class="adm__tab" data-tab="' + t[0] + '">' + t[1] + (t[0] === "special" ? '<span class="adm__tabbadge" data-accbadge></span>' : "") + "</button>").join("") + "</nav>" +
           '<button class="adm__tabflip adm__tabflip--next" data-tabflip="1" type="button" aria-label="Scroll tabs right" hidden>\u203A</button>' +
         "</div>" +
         '<div class="adm__actions">' +
@@ -7854,7 +7859,7 @@ import {
     // Paste into a rich-text body as plain text (no foreign colours/fonts).
     root.addEventListener("paste", onRtPaste);
     root.querySelectorAll(".adm__tab").forEach((t) =>
-      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); if (activeTab === "special") { loadRequests(); loadQuickGrant(); } if (activeTab === "access") loadAccessData(); try { t.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {} tabsSync(); })
+      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); if (activeTab === "special") { loadAccessData(); loadQuickGrant(); } try { t.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {} tabsSync(); })
     );
     // tab-strip overflow flippers (\u2039 \u203A)
     root.querySelectorAll("[data-tabflip]").forEach((b) => b.addEventListener("click", () => tabScroll(+b.dataset.tabflip)));
@@ -7958,9 +7963,8 @@ import {
     if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
     if (body) body.hidden = false;
     renderBody();
-    loadRequests();   // prefetch access requests for the Special Views tab
     loadQuickGrant(); // prefetch the one-tap Full-access quick-grant status
-    loadAccessData(); // prefetch the dedicated Access tab (requests + grants)
+    loadAccessData(); // prefetch requests + grants for the merged Special Views tab
     // Live-ish: when the owner returns to this tab while the studio is open, re-check pending so a request
     // that arrived meanwhile shows up (and the badge pulses). Gated on adm-lock so it never runs when closed.
     if (!accVisBound) { accVisBound = true; document.addEventListener("visibilitychange", function () { if (!document.hidden && document.documentElement.classList.contains("adm-lock") && adminSession()) loadAccessData(); }); }
