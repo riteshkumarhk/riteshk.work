@@ -262,7 +262,7 @@
   // content stays masked, exactly as a visitor sees it. The owner reveals it via Present mode or the pass.)
   function viewerAuthorized() {
     try { if (sessionStorage.getItem("rk:present:active") === "1") return true; } catch (e) {}
-    try { var g = JSON.parse(localStorage.getItem("rk:vault:grant") || "null"); return !!(g && g.token && g.exp && g.exp > Date.now()); } catch (e) {}
+    try { var g = JSON.parse(sessionStorage.getItem("rk:vault:grant") || "null"); return !!(g && g.token && g.exp && g.exp > Date.now()); } catch (e) {}
     return false;
   }
   var vaultResolving = Object.create(null), vaultTried = Object.create(null);

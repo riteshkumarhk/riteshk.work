@@ -267,7 +267,7 @@ export async function vaultRegisterGrant(code, keys, opts) {
 export const VAULT_GRANT_KEY = "rk:vault:grant";
 export function vaultGrantToken() {
   try {
-    const g = JSON.parse(localStorage.getItem(VAULT_GRANT_KEY) || "null");
+    const g = JSON.parse(sessionStorage.getItem(VAULT_GRANT_KEY) || "null");
     if (g && g.token && g.exp && g.exp > Date.now()) return g.token;
   } catch (e) {}
   return "";
@@ -285,7 +285,7 @@ export async function vaultRedeem(code) {
     });
     if (!res.ok) return false;
     const j = await res.json().catch(() => null);
-    if (j && j.token && j.exp) { try { localStorage.setItem(VAULT_GRANT_KEY, JSON.stringify({ token: j.token, exp: j.exp })); } catch (e) {} return true; }
+    if (j && j.token && j.exp) { try { sessionStorage.setItem(VAULT_GRANT_KEY, JSON.stringify({ token: j.token, exp: j.exp })); } catch (e) {} return true; }
   } catch (e) {}
   return false;
 }
