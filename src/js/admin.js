@@ -841,21 +841,43 @@ import {
     try {
       var res = await fetch(ADMIN_WORKER + "/access/redeem", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ k: token }) });
       var j = null; try { j = await res.json(); } catch (e) {}
-      if (res.ok && j && j.code) return j.code;
+      if (res.ok && j && j.code) return j;   // full response so recruiterInit can branch on mode (all vs curated)
       var reason = (j && j.reason) || "invalid";
       if (reason === "expired") { expiredNotice({}); return null; }
       maybeRecruiterFlyout(reason === "revoked" ? "This access link was turned off \u2014 reply to the email and I\u2019ll sort it out." : "This access link isn\u2019t valid \u2014 reply to the email and I\u2019ll send a fresh one.");
       return null;
     } catch (e) { maybeRecruiterFlyout("Couldn\u2019t reach the server \u2014 try again in a moment."); return null; }
   }
+  // A server-minted per-recruiter CURATED grant: same full-access code, but the recruiter is shown
+  // only the curated slice. Find the master view (whose ticket hash matches the code — it holds the
+  // vault/study wraps) so render.js can decrypt-against-master, then display just the subset.
+  async function applyCuratedGrant(res) {
+    var code = res && res.code;
+    if (!code || !(window.RK && window.RK.applyCuratedView)) return;
+    var master = null;
+    try {
+      var h = await sha256(String(code).toLowerCase());
+      var views = (window.RK.data && window.RK.data.specialViews) || [];
+      master = views.filter(function (v) { return v.ticketHash === h; })[0] || null;
+    } catch (e) {}
+    var spec = {
+      id: "__curated__", masterId: master ? master.id : "",
+      name: res.name || "Curated view",
+      audience: res.audience || (res.company ? "Prepared for " + res.company : ""),
+      workIds: res.workIds || [], highlightIdx: res.highlightIdx || [], capabilityIdx: res.capabilityIdx || [],
+      days: 0
+    };
+    try { await window.RK.applyCuratedView(spec, code); } catch (e) {}
+  }
   function recruiterInit() {
     document.addEventListener("rk:route", syncRecruiterFlyout);   // a case study opens/closes over the landing without a reload
     var kTok = new URLSearchParams(location.search || "").get("k");
     if (kTok) {
-      redeemAccessLink(kTok).then(function (code) {
+      redeemAccessLink(kTok).then(function (res) {
         try { var u = new URL(location.href); u.searchParams.delete("k"); history.replaceState({}, "", u.pathname + (u.search || "") + u.hash); } catch (e) {}
-        if (!code) return;
-        applyTicketCode(code, { skipExpiry: true }).then(function (r) {
+        if (!res || !res.code) return;
+        if (res.mode === "curated") { applyCuratedGrant(res); return; }   // scoped view; the all-mode path below is unchanged
+        applyTicketCode(res.code, { skipExpiry: true }).then(function (r) {
           if (!r || !r.ok) { if (r && r.reason === "expired") expiredNotice({}); else maybeRecruiterFlyout(ticketErr(r && r.reason)); }
         });
       });

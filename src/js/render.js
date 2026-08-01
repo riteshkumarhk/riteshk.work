@@ -250,6 +250,7 @@
      locked-section stubs are decrypted and the study marked unlocked. */
   var RK_UNLOCK_PREFIX = "rk:study:unlocked:";
   var RK_SV_CODE = "rk:sv:code";
+  var RK_SV_CURATED = "rk:sv:curated";   // a server-minted curated grant's synthetic-view spec (JSON), restored on reload
   var RK_SV_TOK = "rk:sv:tok";   // set when a server-validated per-recruiter token unlocked the view — its own 15-day expiry governs, so the view's `days` is ignored
   function svTok() { try { return sessionStorage.getItem(RK_SV_TOK) === "1"; } catch (e) { return false; } }
   function rkNormPass(p) { return String(p == null ? "" : p).trim().toLowerCase(); }
@@ -367,8 +368,31 @@
     revealAll();
     return { ok: true, view: sv };
   }
+  // A server-minted per-recruiter CURATED grant. The recruiter's code is the full-access code, so
+  // we decrypt against the MASTER view (svById(spec.masterId) — it carries the vault/study wraps),
+  // then render only the curated subset. Display-scoping today; per-ticket vault keys would make it
+  // a true content boundary. `spec` is a synthetic view: {id:"__curated__", masterId, name, audience,
+  // workIds, highlightIdx, capabilityIdx, days:0}.
+  async function applyCuratedView(spec, code) {
+    const base = baseData();
+    if (!base || !spec) return { ok: false, reason: "notready" };
+    try {
+      sessionStorage.setItem(RK_SV_CURATED, JSON.stringify(spec));
+      if (code) sessionStorage.setItem(RK_SV_CODE, code);
+      sessionStorage.setItem(RK_SV_TOK, "1");   // the server token governs expiry, not a view `days`
+      sessionStorage.removeItem(SV_KEY);          // curated isn't a by-id view
+    } catch (e) {}
+    showUnlockingBanner("Unlocking\u2026");
+    const master = svById(spec.masterId);
+    if (master && code) { try { await decryptActiveTicket(base, master, code); } catch (e) {} }
+    render(deriveSpecialData(base, spec));
+    showSvBanner(spec);
+    revealAll();
+    return { ok: true, view: spec };
+  }
   function clearSpecialView() {
     try { sessionStorage.removeItem(SV_KEY); } catch (e) {}
+    try { sessionStorage.removeItem(RK_SV_CURATED); } catch (e) {}
     try { sessionStorage.removeItem(RK_SV_CODE); } catch (e) {}
     try { sessionStorage.removeItem(RK_SV_TOK); } catch (e) {}
     removeSvBanner();
@@ -536,6 +560,7 @@
       plateInner: plateInner,
       DRAFT_KEY: DRAFT_KEY,
       applySpecialView: applySpecialView,
+      applyCuratedView: applyCuratedView,
       clearSpecialView: clearSpecialView,
       deriveSpecialData: deriveSpecialData,
       decryptActiveTicket: decryptActiveTicket,
@@ -555,16 +580,26 @@
     // If a curated view is active (e.g. after a refresh), render it as the initial view.
     let initial = data, activeSv = null;
     try {
-      const activeId = sessionStorage.getItem(SV_KEY);
-      if (activeId) {
-        const sv = svById(activeId);
-        if (sv && (!svExpired(sv) || svTok())) {
-          activeSv = sv;
-          const code = sessionStorage.getItem(RK_SV_CODE);
-          if (code) { try { await decryptActiveTicket(data, sv, code); } catch (e) {} }
-          initial = deriveSpecialData(data, sv);
+      const curatedRaw = sessionStorage.getItem(RK_SV_CURATED);
+      if (curatedRaw) {
+        const spec = JSON.parse(curatedRaw);
+        activeSv = spec;
+        const master = svById(spec.masterId);
+        const ccode = sessionStorage.getItem(RK_SV_CODE);
+        if (master && ccode) { try { await decryptActiveTicket(data, master, ccode); } catch (e) {} }
+        initial = deriveSpecialData(data, spec);
+      } else {
+        const activeId = sessionStorage.getItem(SV_KEY);
+        if (activeId) {
+          const sv = svById(activeId);
+          if (sv && (!svExpired(sv) || svTok())) {
+            activeSv = sv;
+            const code = sessionStorage.getItem(RK_SV_CODE);
+            if (code) { try { await decryptActiveTicket(data, sv, code); } catch (e) {} }
+            initial = deriveSpecialData(data, sv);
+          }
+          else { sessionStorage.removeItem(SV_KEY); sessionStorage.removeItem(RK_SV_CODE); sessionStorage.removeItem(RK_SV_TOK); }
         }
-        else { sessionStorage.removeItem(SV_KEY); sessionStorage.removeItem(RK_SV_CODE); sessionStorage.removeItem(RK_SV_TOK); }
       }
     } catch (e) {}
 
