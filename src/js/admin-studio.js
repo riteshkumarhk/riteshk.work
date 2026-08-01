@@ -2803,9 +2803,21 @@ import {
   var accSubTab = "requests";       // requests | approved | curated
   var accShowDeclined = false;
   var accLoading = false;
+  var accPendingCount = 0;          // pending requests awaiting action -> drives the Access tab + Requests sub-tab count badges
 
   function accSubBtn(id, label) {
-    return '<button class="rkacc__tab' + (accSubTab === id ? " is-on" : "") + '" data-act="acc-tab" data-tab="' + id + '">' + escHtml(label) + "</button>";
+    var badge = (id === "requests" && accPendingCount > 0) ? ' <span class="rkacc__badge">' + (accPendingCount > 99 ? "99+" : accPendingCount) + "</span>" : "";
+    return '<button class="rkacc__tab' + (accSubTab === id ? " is-on" : "") + '" data-act="acc-tab" data-tab="' + id + '">' + escHtml(label) + badge + "</button>";
+  }
+  // Top "Access" tab + Requests sub-tab show a live count of pending requests. The tab bar is built once,
+  // so the top badge is updated in place; accSyncBadges() recomputes the count whenever the pending list changes.
+  function updateAccessBadges() {
+    var el = document.querySelector("[data-accbadge]");
+    if (el) el.textContent = accPendingCount > 0 ? (accPendingCount > 99 ? "99+" : String(accPendingCount)) : "";
+  }
+  function accSyncBadges() {
+    if (!accShowDeclined) accPendingCount = accReqCache.length;
+    updateAccessBadges();
   }
   function accGrantLeft(g) {
     if (g.revoked) return "revoked";
@@ -2871,7 +2883,7 @@ import {
       var rg = await fetch(ADMIN_WORKER + "/admin/access", { headers: { Authorization: "Bearer " + sess } });
       if (rg.ok) accGrantCache = (await rg.json()).grants || [];
     } catch (e) {}
-    accLoading = false; if (activeTab === "access") renderBody();
+    accLoading = false; accSyncBadges(); if (activeTab === "access") renderBody();
   }
   sections.access = accessSection;
 
@@ -3448,7 +3460,7 @@ import {
     if (act === "acc-req-approve") {
       var _aid = b.dataset.id; b.disabled = true; status("Approving\u2026", true);
       fetch(ADMIN_WORKER + "/admin/requests/allow", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ id: _aid }) })
-        .then(function (r) { if (!r.ok) throw 0; accReqCache = accReqCache.filter(function (x) { return x.id !== _aid; }); renderBody(); status("Approved \u2014 access link emailed.", true); loadAccessData(); })
+        .then(function (r) { if (!r.ok) throw 0; accReqCache = accReqCache.filter(function (x) { return x.id !== _aid; }); accSyncBadges(); renderBody(); status("Approved \u2014 access link emailed.", true); loadAccessData(); })
         .catch(function () { b.disabled = false; status("Couldn\u2019t approve \u2014 try again.", false); });
       return;
     }
@@ -3456,7 +3468,7 @@ import {
     if (act === "acc-req-decline") {
       var _did = b.dataset.id; b.disabled = true;
       fetch(ADMIN_WORKER + "/admin/requests/decline", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ id: _did }) })
-        .then(function (r) { if (!r.ok) throw 0; accReqCache = accReqCache.filter(function (x) { return x.id !== _did; }); renderBody(); status("Declined \u2014 a polite note was sent.", true); })
+        .then(function (r) { if (!r.ok) throw 0; accReqCache = accReqCache.filter(function (x) { return x.id !== _did; }); accSyncBadges(); renderBody(); status("Declined \u2014 a polite note was sent.", true); })
         .catch(function () { b.disabled = false; status("Couldn\u2019t decline \u2014 try again.", false); });
       return;
     }
@@ -7691,7 +7703,7 @@ import {
         '<div class="adm__brand"><span class="adm__pulse"></span>Admin Mode <small>content studio</small></div>' +
         '<div class="adm__tabswrap">' +
           '<button class="adm__tabflip adm__tabflip--prev" data-tabflip="-1" type="button" aria-label="Scroll tabs left" hidden>\u2039</button>' +
-          '<nav class="adm__tabs">' + TABS.map((t) => '<button class="adm__tab" data-tab="' + t[0] + '">' + t[1] + "</button>").join("") + "</nav>" +
+          '<nav class="adm__tabs">' + TABS.map((t) => '<button class="adm__tab" data-tab="' + t[0] + '">' + t[1] + (t[0] === "access" ? '<span class="adm__tabbadge" data-accbadge></span>' : "") + "</button>").join("") + "</nav>" +
           '<button class="adm__tabflip adm__tabflip--next" data-tabflip="1" type="button" aria-label="Scroll tabs right" hidden>\u203A</button>' +
         "</div>" +
         '<div class="adm__actions">' +
