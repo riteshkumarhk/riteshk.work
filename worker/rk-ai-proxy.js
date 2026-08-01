@@ -81,6 +81,13 @@ export default {
             cancel: url.origin + "/req/cancel?id=" + encodeURIComponent(reqId) + "&t=" + cancelTok,
           });
         } catch (e) {}
+        // Reliable fallback: also email the owner, so a new request reaches your Gmail even when Android
+        // Doze defers the PWA push. No action links in the email (email scanners prefetch links and could
+        // auto-approve) -- you approve/decline securely in the passkey-gated inbox. Reply-To = recruiter.
+        try {
+          const om = reqOwnerEmail({ name: name, email: email, company: company, context: context, note: note, inbox: url.origin + "/inbox/" });
+          await sendEmail(env, { to: (env.OWNER_EMAIL || "riteshkumarhk@gmail.com"), subject: "New access request \u2014 " + name + (company ? " \u00b7 " + company : ""), html: om.html, text: om.text, replyTo: email });
+        } catch (e) {}
         return json({ ok: true }, 200, cors);
       } catch (e) { return json({ error: "Couldn\u2019t send that \u2014 try again." }, 400, cors); }
     }
@@ -892,6 +899,26 @@ function emailEsc(s) {
 // Best-effort transactional email via Resend. Returns {ok,status,detail} and NEVER throws — it
 // degrades to ok:false when RESEND_API_KEY / a verified sender domain isn't configured yet, so the
 // one-tap Allow/Cancel report a clear "not set up" message instead of failing hard.
+// Owner-facing "new request" email -- the reliable fallback for the PWA push (Gmail is never Doze-
+// throttled). Notification only: request details + a button into the passkey-gated inbox to act.
+function reqOwnerEmail(o) {
+  const e = emailEsc;
+  const line = o.company ? (e(o.company) + (o.context ? " \u00b7 " + e(o.context) : "")) : (o.context ? e(o.context) : "");
+  const html =
+    '<div style="background:#08080a;padding:24px 12px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">' +
+    '<div style="max-width:520px;margin:0 auto;background:#111116;border:1px solid #23232a;border-radius:16px;padding:26px">' +
+    '<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#8f8a84;margin-bottom:10px">New access request</div>' +
+    '<div style="font-size:21px;font-weight:700;color:#ECE7E1">' + e(o.name) + '</div>' +
+    (line ? '<div style="color:#8f8a84;font-size:14px;margin-top:2px">' + line + '</div>' : '') +
+    '<div style="margin-top:6px"><a href="mailto:' + e(o.email) + '" style="color:#D8A657;font-size:14px;text-decoration:none">' + e(o.email) + '</a></div>' +
+    (o.note ? '<div style="margin-top:14px;color:#ECE7E1;font-size:14px;font-style:italic;opacity:.9;border-left:2px solid #23232a;padding-left:12px">' + e(o.note) + '</div>' : '') +
+    '<div style="margin-top:22px"><a href="' + o.inbox + '" style="display:inline-block;background:#D8A657;color:#0a0a0a;font-weight:700;font-size:15px;padding:13px 22px;border-radius:10px;text-decoration:none">Open inbox to review</a></div>' +
+    '<div style="margin-top:14px;font-size:12px;color:#5a5650;line-height:1.5">Approve or decline securely in your passkey-protected inbox. Reply to this email to reach ' + e(o.name) + ' directly.</div>' +
+    '</div></div>';
+  const text = "New access request\n" + o.name + (o.company ? " \u00b7 " + o.company : "") + "\n" + o.email + (o.note ? "\n\n\"" + o.note + "\"" : "") + "\n\nReview: " + o.inbox;
+  return { html: html, text: text };
+}
+
 async function sendEmail(env, msg) {
   if (!env.RESEND_API_KEY) return { ok: false, status: 0, detail: "no-api-key" };
   const from = env.EMAIL_FROM || "Ritesh Kumar <ritesh@riteshk.work>";
