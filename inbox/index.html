@@ -74,6 +74,10 @@
     .req--off{opacity:.5}
     .toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);background:var(--card);border:1px solid var(--line);color:var(--text);padding:10px 18px;border-radius:10px;font-size:14px;font-weight:600;opacity:0;transition:opacity .25s,transform .25s;z-index:50;pointer-events:none}
     .toast--in{opacity:1;transform:translate(-50%,0)}
+    .nudge{display:flex;align-items:center;gap:12px;margin:12px 0 2px;padding:12px 14px;border:1px solid var(--accent);border-radius:12px;background:rgba(216,166,87,.08)}
+    .nudge__txt{flex:1;font-size:13px;line-height:1.4;color:var(--text)}
+    .nudge__btn{flex:none;padding:9px 16px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:#0a0a0a;font-size:14px;font-weight:600;cursor:pointer}
+    .nudge__btn:disabled{opacity:.6}
   </style>
 </head>
 <body>

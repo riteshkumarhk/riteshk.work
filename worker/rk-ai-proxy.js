@@ -23,7 +23,6 @@
      GH_TOKEN        (secret)  a GitHub token (Contents: read+write on your repo)
      OWNER           (text)    riteshkumarhk
      REPO            (text)    riteshk.work
-     REQUEST_WEBHOOK (secret)  optional - an ntfy.sh URL (or any webhook) pinged on a new access request
    ========================================================================== */
 
 const PROVIDERS = {
@@ -69,20 +68,19 @@ export default {
         const rec = { name, email, company, note, context, status: "pending", at: new Date().toISOString(), ip: reqIp, ua: clip(request.headers.get("User-Agent"), 200) };
         const reqId = "req:" + Date.now() + ":" + Math.random().toString(36).slice(2, 8);
         try { await env.VAULT_GRANTS.put(reqId, JSON.stringify(rec), { expirationTtl: 90 * 24 * 3600 }); } catch (e) {}
-        if (env.REQUEST_WEBHOOK) {
-          const msg = [name + (company ? " \u2014 " + company : ""), email, "Wants: " + (context || "general access"), note ? ("\u201c" + note + "\u201d") : ""].filter(Boolean).join("\n");
-          var hook = String(env.REQUEST_WEBHOOK).trim();
-          if (!/^https?:\/\//i.test(hook)) hook = "https://ntfy.sh/" + hook.replace(/^\/+/, "");   // a bare topic name -> full ntfy.sh URL
-          const _allowTok = await hmac(env.SESSION_SECRET || "", "reqallow." + reqId);     // one-tap Allow: auto-send the full-access link
-          const _cancelTok = await hmac(env.SESSION_SECRET || "", "reqcancel." + reqId);    // one-tap Cancel: auto-send a decline note
-          const _rq = "id=" + encodeURIComponent(reqId);
-          const _actions = "http, Allow, " + url.origin + "/req/allow?" + _rq + "&t=" + _allowTok + ", method=POST, clear=true; view, Open in studio, https://riteshk.work/studio; http, Cancel, " + url.origin + "/req/cancel?" + _rq + "&t=" + _cancelTok + ", method=POST, clear=true";
-          const _nh = { Title: "New access request", Tags: "envelope", Priority: "high", Actions: _actions };
-          if (env.NTFY_TOKEN) _nh.Authorization = "Bearer " + String(env.NTFY_TOKEN).trim();   // authenticated publish -> per-account rate limit (avoids the shared Cloudflare-IP quota)
-          try { await fetch(hook, { method: "POST", headers: _nh, body: msg }); } catch (e) {}
-        }
-        // Web Push fan-out to the owner's installed inbox PWA(s) — no IP quota (unlike ntfy).
-        try { await pushToAll(env, { title: "New access request", body: name + (company ? " \u00b7 " + company : "") + (context ? " \u2014 " + context : ""), tag: reqId, url: "/inbox/", reqId: reqId }); } catch (e) {}
+        // Web Push fan-out to the owner's installed inbox PWA(s). The payload carries signed one-tap
+        // capability links so the notification's Allow / Decline buttons act without opening the app.
+        try {
+          const allowTok = await hmac(env.SESSION_SECRET || "", "reqallow." + reqId);
+          const cancelTok = await hmac(env.SESSION_SECRET || "", "reqcancel." + reqId);
+          await pushToAll(env, {
+            title: "New access request",
+            body: name + (company ? " \u00b7 " + company : "") + (context ? " \u2014 " + context : ""),
+            tag: reqId, url: "/inbox/", reqId: reqId,
+            allow: url.origin + "/req/allow?id=" + encodeURIComponent(reqId) + "&t=" + allowTok,
+            cancel: url.origin + "/req/cancel?id=" + encodeURIComponent(reqId) + "&t=" + cancelTok,
+          });
+        } catch (e) {}
         return json({ ok: true }, 200, cors);
       } catch (e) { return json({ error: "Couldn\u2019t send that \u2014 try again." }, 400, cors); }
     }

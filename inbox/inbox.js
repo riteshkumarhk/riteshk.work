@@ -227,15 +227,38 @@
     b.addEventListener("click", function () { if (accessTab !== id) { accessTab = id; showDeclined = false; } openInbox(); });
     return b;
   }
+  // Persistent in-app nudge: the ONLY reason a request won't ping this phone is no live push
+  // subscription. Show it right in the inbox (not just onboarding) until notifications are on.
+  function notifNudge() {
+    if (!(("Notification" in window) && ("serviceWorker" in navigator) && ("PushManager" in window))) return null;
+    if (Notification.permission === "granted") return null;
+    var denied = Notification.permission === "denied";
+    var bar = h("div", { class: "nudge" }, [
+      h("span", { class: "nudge__txt", text: denied
+        ? "Notifications are blocked — turn them on for this app in your phone’s Settings to get pinged."
+        : "Turn on notifications so new requests reach this phone even when the app is closed." })
+    ]);
+    if (!denied) {
+      var b = h("button", { class: "nudge__btn" }, ["Enable"]);
+      b.addEventListener("click", function () {
+        b.disabled = true; b.textContent = "…";
+        subscribePush().then(function () { toast("Notifications on ✓"); openInbox(); },
+          function (m) { b.disabled = false; b.textContent = "Enable"; toast((m && m.message) || "Couldn’t enable — try again"); });
+      });
+      bar.appendChild(b);
+    }
+    return bar;
+  }
   function renderShell() {
     screen([
       h("div", { class: "topbar" }, [brand(), h("div", { class: "topbar__acts" }, [
         h("button", { class: "iconbtn", title: "Notifications", onclick: showOnboarding, html: "&#128276;" }),
         h("button", { class: "iconbtn", title: "Refresh", onclick: loadTab, html: "&#8635;" })
       ])]),
+      notifNudge(),
       h("div", { class: "tabs" }, [tabBtn("requests", "Requests"), tabBtn("approved", "Approved"), tabBtn("curated", "Curated")]),
       h("div", { class: "tabbody", id: "tabbody" }, [h("div", { class: "spinner" })])
-    ]);
+    ].filter(Boolean));
   }
   function setBody(kids) { var el = document.getElementById("tabbody"); if (!el) return; el.innerHTML = ""; kids.forEach(function (k) { if (k) el.appendChild(k); }); }
   async function loadTab() {

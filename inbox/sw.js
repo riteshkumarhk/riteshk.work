@@ -1,7 +1,7 @@
 /* Riteshk Requests — service worker.
    Caches the app shell for a fast, offline-tolerant launch (API calls to the Worker always pass
    straight through, never cached) + handles Web Push ("push" + "notificationclick"). */
-const CACHE = "rk-inbox-v11";
+const CACHE = "rk-inbox-v12";
 const SHELL = [
   "/inbox/",
   "/inbox/index.html",
@@ -39,6 +39,7 @@ self.addEventListener("push", (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (x) { d = {}; }
   const title = d.title || "New access request";
+  const actions = (d.allow || d.cancel) ? [{ action: "allow", title: "Allow" }, { action: "decline", title: "Decline" }] : [];
   e.waitUntil(self.registration.showNotification(title, {
     body: d.body || "Open the app to review.",
     icon: "/inbox/icon-192.png",
@@ -47,7 +48,8 @@ self.addEventListener("push", (e) => {
     renotify: true,
     requireInteraction: true,   // stay on screen until tapped — a recruiter ping must not be missed
     vibrate: [90, 40, 90, 40, 90],
-    data: { url: d.url || "/inbox/" }
+    actions: actions,
+    data: { url: d.url || "/inbox/", allow: d.allow || "", cancel: d.cancel || "" }
   }));
 });
 
@@ -57,10 +59,25 @@ self.addEventListener("pushsubscriptionchange", (e) => {
   e.waitUntil(self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKey() }).catch(() => {}));
 });
 
-// Tapping the notification focuses an open inbox tab, or opens the app.
+// Tapping the notification (or its Allow / Decline action). The one-tap actions POST the signed
+// capability link straight from the SW and flash the result — no app open needed; a plain tap
+// focuses an open inbox tab or opens the app.
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
-  const target = (e.notification.data && e.notification.data.url) || "/inbox/";
+  const data = e.notification.data || {};
+  if (e.action === "allow" || e.action === "decline") {
+    const url = e.action === "allow" ? data.allow : data.cancel;
+    if (url) {
+      e.waitUntil(
+        fetch(url, { method: "POST" })
+          .then((r) => r.text().catch(() => ""))
+          .then((msg) => self.registration.showNotification(e.action === "allow" ? "Access sent \u2713" : "Declined \u2713", { body: String(msg || "Done.").slice(0, 140), icon: "/inbox/icon-192.png", badge: "/inbox/icon-192.png", tag: "rk-req-done" }))
+          .catch(() => self.registration.showNotification("Couldn\u2019t reach the server", { body: "Open the app and try again.", icon: "/inbox/icon-192.png", badge: "/inbox/icon-192.png", tag: "rk-req-done" }))
+      );
+      return;
+    }
+  }
+  const target = data.url || "/inbox/";
   e.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((cls) => {
       for (const c of cls) { if (c.url.indexOf("/inbox") !== -1 && "focus" in c) return c.focus(); }
