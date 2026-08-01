@@ -305,7 +305,7 @@
   // A server-minted per-recruiter vault grant (from /access/redeem) — store it directly so every
   // vault-hosted section signs against THIS link's own grant, scoped to its works with current keys,
   // instead of the shared quick-grant one.
-  function applyVaultGrant(g) { try { if (g && g.token) localStorage.setItem("rk:vault:grant", JSON.stringify({ token: g.token, exp: g.exp || 0 })); } catch (e) {} }
+  function applyVaultGrant(g) { try { if (g && g.token) localStorage.setItem("rk:vault:grant", JSON.stringify({ token: g.token, exp: g.exp || 0 })); } catch (e) {} try { document.dispatchEvent(new CustomEvent("rk:vaultgrant")); } catch (e) {} }
   function rkHasVaultGrant() { try { var g = JSON.parse(localStorage.getItem("rk:vault:grant") || "null"); return !!(g && g.token && g.exp && g.exp > Date.now()); } catch (e) { return false; } }
   // Decrypt everything a ticket authorises, in place on `data`.
   async function decryptActiveTicket(data, sv, code) {

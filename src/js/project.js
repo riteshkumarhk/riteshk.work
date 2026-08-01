@@ -1818,6 +1818,16 @@
   /* ---------- bootstrap ---------- */
   function init() {
     if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = function () { return Object.keys(ICONS); }; window.RK.setStudyUnlocked = setUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; }
+    // A fresh vault grant just arrived (Present mode's owner grant, or a recruiter link). If a case
+    // study is open, drop its "already tried" latch and re-resolve its vault-hosted deeper cuts so
+    // they swap in immediately — no reopen needed.
+    document.addEventListener("rk:vaultgrant", function () {
+      if (!activeId) return;
+      delete vaultResolving[activeId];
+      delete vaultTried[activeId];
+      var d = data(); var w = (d && d.work || []).filter(function (x) { return x && x.id === activeId; })[0];
+      if (w) autoResolveVaultBlocks(w);
+    });
     window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) { updateSpy(); isoParallax(); clearTimeout(galleryTimer); galleryTimer = setTimeout(function () { normalizeGalleries(); graphWire(); galleryNav(); }, 160); } });
     // Editor → preview: the admin editor posts the block index of a clicked section; scroll the
     // preview to it and flash it (the reverse of the preview → editor selectBlock message).
