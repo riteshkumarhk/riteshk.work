@@ -3163,7 +3163,8 @@
           }
         }
       },
-      "image": ""
+      "image": "",
+      "hidden": false
     },
     {
       "id": "auth",
