@@ -131,13 +131,16 @@
   function showOnboarding() {
     if (isIOS() && !isStandalone()) return screen([brand(), iosInstallCard()]);
     var inst = isInstalled();
-    screen([brand(), h("div", { class: "card", "data-ob": "1" }, [
-      h("h1", { text: inst ? "You’re all set 🎉" : "Two quick steps" }),
+    var relBlk = reliabilityBlock();
+    var card = [
+      h("h1", { text: inst ? "You’re all set 🎉" : (relBlk ? "Three quick steps" : "Two quick steps") }),
       h("p", { class: "muted", text: inst ? "Notifications on, and the app lives on your Home Screen — you’re good." : "So a recruiter request pings this phone even when the app is closed." }),
       step("1", "Turn on notifications", notifBlock()),
       step("2", inst ? "On your Home Screen ✓" : "Add to Home Screen", inst ? h("div", { class: "muted small", text: "Launch it from the Home Screen icon — it won’t get lost in browser tabs." }) : installBlock()),
+      relBlk ? step("3", "Keep pings reliable", relBlk) : null,
       btn("Open my requests →", inst ? "primary" : "ghost", openInbox)
-    ])]);
+    ].filter(Boolean);
+    screen([brand(), h("div", { class: "card", "data-ob": "1" }, card)]);
   }
   function step(n, title, body) {
     return h("div", { class: "step" }, [h("div", { class: "step__n", text: n }), h("div", { class: "step__b" }, [h("div", { class: "step__t", text: title }), body])]);
@@ -150,6 +153,34 @@
       return h("div", {}, [ab, h("div", { class: "muted small", text: "One tap — keeps the app on your Home Screen so it never gets lost in tabs." })]);
     }
     return h("div", { class: "muted small", text: "Tap Chrome’s ⋮ menu, then “Add to Home screen” / “Install app.”" });
+  }
+  function relItem(key, title, why, path) {
+    var done = false; try { done = localStorage.getItem("rk:rel:" + key) === "1"; } catch (e) {}
+    var cb = h("input", { type: "checkbox" }); cb.checked = done;
+    var row = h("label", { class: "rel__row" + (done ? " rel__row--done" : "") }, [
+      cb,
+      h("div", { class: "rel__b" }, [
+        h("div", { class: "rel__t", html: title }),
+        h("div", { class: "rel__d muted small", text: why }),
+        h("div", { class: "rel__p", text: path })
+      ])
+    ]);
+    cb.addEventListener("change", function () {
+      try { localStorage.setItem("rk:rel:" + key, cb.checked ? "1" : "0"); } catch (e) {}
+      row.className = "rel__row" + (cb.checked ? " rel__row--done" : "");
+    });
+    return row;
+  }
+  // Android-only: the OEM battery/data/notification toggles that keep a push instant even when locked.
+  // Mirrors the exact Settings paths; a tickable checklist (persisted) so setup feels finished.
+  function reliabilityBlock() {
+    if (isIOS()) return null;
+    return h("div", { class: "rel" }, [
+      h("div", { class: "muted small", html: "Android sleeps background apps \u2014 three toggles keep a ping instant even when locked. Long-press the app icon \u203a <b>App info</b>." }),
+      relItem("batt", "Battery \u203a <b>Always allow</b>", "Lets the app wake while your phone sleeps.", "App battery usage"),
+      relItem("data", "Mobile data \u203a <b>Background</b> + <b>Unrestricted</b>", "Pings arrive on data and in Data Saver.", "Mobile data & Wi-Fi"),
+      relItem("alert", "Notifications \u203a <b>Default</b> + <b>Override Do Not Disturb</b>", "It rings and shows on the lock screen.", "Notifications")
+    ]);
   }
   async function maybePromptInstall() {
     if (!isInstalled() && deferredInstall) {
