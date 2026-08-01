@@ -643,6 +643,8 @@ video.pjb__media-el { background: #000; }
 .pjb__lock-ico { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--accent); }
 .pjb__lock-txt { color: var(--text-dim); font-size: 1rem; }
 .pjb__lock-hint { font-family: var(--mono); font-size: .7rem; letter-spacing: .04em; text-transform: uppercase; color: var(--text-faint); }
+.pjb__lock-spin { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: pjb-lock-spin .8s linear infinite; }
+@keyframes pjb-lock-spin { to { transform: rotate(360deg); } }
 
 /* buttons + tags */
 .pj__btn { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; font-family: var(--mono); font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; padding: .8rem 1.4rem; border-radius: 100px; border: 1px solid var(--line); background: none; color: var(--text); transition: color .3s, border-color .3s, background .3s; }

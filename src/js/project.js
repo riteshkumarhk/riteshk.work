@@ -257,19 +257,28 @@
   // Best-effort, post-render: if this project has vault-hosted locked sections and the viewer is
   // already authorised (owner, or a pass redeemed earlier this session), fetch them and re-render
   // unlocked — no gate needed. Guarded by isUnlocked so it runs at most once per project.
+  // Authorised to see vault-hosted deeper cuts? Owner in Present mode, or a pass-holder who redeemed
+  // a grant this session. (A bare admin session during normal browsing does NOT count — protected
+  // content stays masked, exactly as a visitor sees it. The owner reveals it via Present mode or the pass.)
+  function viewerAuthorized() {
+    try { if (sessionStorage.getItem("rk:present:active") === "1") return true; } catch (e) {}
+    try { var g = JSON.parse(localStorage.getItem("rk:vault:grant") || "null"); return !!(g && g.token && g.exp && g.exp > Date.now()); } catch (e) {}
+    return false;
+  }
+  var vaultResolving = Object.create(null), vaultTried = Object.create(null);
   function autoResolveVaultBlocks(w) {
     var st = w && w.study;
     if (!st || !w) return;
-    if (!(st.blocks || []).some(function (b) { return b && b.locked && b.vaultBlock; })) return;   // only acts on unresolved pointers; runs once (resolution removes them)
-    // Auto-reveal vault-hosted sections ONLY for an explicit owner Present-mode session, or for a
-    // pass-holder who has redeemed a grant. A bare admin session during NORMAL browsing must never
-    // silently unlock protected content — it stays masked, exactly like a visitor sees it. (The
-    // owner can still reveal it by entering Present mode from the ⋯ menu, or by entering the pass.)
-    var presenting = false; try { presenting = sessionStorage.getItem("rk:present:active") === "1"; } catch (e) {}
-    var hasGrant = false; try { var g = JSON.parse(localStorage.getItem("rk:vault:grant") || "null"); hasGrant = !!(g && g.token && g.exp && g.exp > Date.now()); } catch (e) {}
-    if (!presenting && !hasGrant) return;
+    if (!(st.blocks || []).some(function (b) { return b && b.locked && b.vaultBlock; })) return;   // only unresolved pointers (resolution removes them)
+    if (!viewerAuthorized()) return;
+    if (vaultResolving[w.id] || vaultTried[w.id]) return;   // a resolve is already in flight, or already attempted this session
+    vaultResolving[w.id] = true;
+    if (activeId === w.id) fillContent(w);                  // re-render so the vault sections show an "Unlocking…" state instead of the request prompt
     resolveVaultBlocks(w).then(function (n) {
-      if (n > 0) { setUnlocked(w.id); if (activeId === w.id) fillContent(w); }
+      delete vaultResolving[w.id];
+      vaultTried[w.id] = true;
+      if (n > 0) setUnlocked(w.id);
+      if (activeId === w.id) fillContent(w);                // swap in the unlocked content (or clear the "Unlocking…" state if nothing resolved)
     });
   }
 
@@ -607,6 +616,15 @@
     '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.4">' +
     '<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
   function lockedBlock(b) {
+    // A pass-holder (or owner presenting) whose vault-hosted section is being fetched right now sees a
+    // decrypting state rather than the "request access" prompt — so they know the content is on its
+    // way (signing + fetch + decrypt can take a few seconds).
+    if (b.vaultBlock && vaultResolving[activeId]) {
+      return kicker(b.kicker || "Deeper cut") +
+        (b.heading ? '<h2 class="pjb__h pjb__h--blur">' + md(b.heading) + "</h2>" : "") +
+        '<div class="pjb__lock pjb__lock--loading"><span class="pjb__lock-spin" aria-hidden="true"></span>' +
+        '<p class="pjb__lock-txt">Unlocking your access \u2014 decrypting this section\u2026</p></div>';
+    }
     return kicker(b.kicker || "Deeper cut") +
       (b.heading ? '<h2 class="pjb__h pjb__h--blur">' + md(b.heading) + "</h2>" : "") +
       '<div class="pjb__lock"><div class="pjb__lock-ico" aria-hidden="true">' + LOCK_SVG + "</div>" +

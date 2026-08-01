@@ -873,12 +873,13 @@ import {
     document.addEventListener("rk:route", syncRecruiterFlyout);   // a case study opens/closes over the landing without a reload
     var kTok = new URLSearchParams(location.search || "").get("k");
     if (kTok) {
+      if (window.RK && window.RK.showUnlockingBanner) window.RK.showUnlockingBanner("Unlocking your access\u2026");   // instant feedback while we redeem + decrypt (the link open takes a moment)
       redeemAccessLink(kTok).then(function (res) {
         try { var u = new URL(location.href); u.searchParams.delete("k"); history.replaceState({}, "", u.pathname + (u.search || "") + u.hash); } catch (e) {}
-        if (!res || !res.code) return;
+        if (!res || !res.code) { if (window.RK && window.RK.removeSvBanner) window.RK.removeSvBanner(); return; }
         if (res.mode === "curated") { applyCuratedGrant(res); return; }   // scoped view; the all-mode path below is unchanged
         applyTicketCode(res.code, { skipExpiry: true }).then(function (r) {
-          if (!r || !r.ok) { if (r && r.reason === "expired") expiredNotice({}); else maybeRecruiterFlyout(ticketErr(r && r.reason)); }
+          if (!r || !r.ok) { if (window.RK && window.RK.removeSvBanner) window.RK.removeSvBanner(); if (r && r.reason === "expired") expiredNotice({}); else maybeRecruiterFlyout(ticketErr(r && r.reason)); }
         });
       });
       return;
