@@ -441,6 +441,9 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .adm__tab.is-active .adm__tabbadge { background: #1a1206; color: var(--accent); }
 .rkacc__badge { display: inline-grid; place-items: center; min-width: 1.05rem; height: 1.05rem; padding: 0 .28rem; margin-left: .35rem; border-radius: 100px; background: var(--accent); color: #1a1206; font-size: .58rem; font-weight: 700; line-height: 1; vertical-align: middle; }
 .rkacc__tab.is-on .rkacc__badge { background: #1a1206; color: var(--accent); }
+.adm__tabbadge.is-pulse, .rkacc__badge.is-pulse { animation: rkbadgepulse .55s cubic-bezier(.34, 1.56, .64, 1) 2; }
+@keyframes rkbadgepulse { 0%, 100% { transform: scale(1); } 45% { transform: scale(1.4); } }
+@media (prefers-reduced-motion: reduce) { .adm__tabbadge.is-pulse, .rkacc__badge.is-pulse { animation: none; } }
 .rkacc__switch { display: flex; align-items: center; gap: .5rem; font-size: .76rem; color: var(--text-dim); cursor: pointer; padding: .7rem .9rem; border-top: 1px solid var(--line); }
 .rkacc__switch input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
 .rkinbox__row.is-off { opacity: .5; }

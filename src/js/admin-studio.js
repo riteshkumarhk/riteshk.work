@@ -2802,8 +2802,10 @@ import {
   var accGrantCache = [];
   var accSubTab = "requests";       // requests | approved | curated
   var accShowDeclined = false;
+  var accShowRevoked = false;       // Approved/Curated: when on, show ONLY revoked grants (where Delete lives)
   var accLoading = false;
   var accPendingCount = 0;          // pending requests awaiting action -> drives the Access tab + Requests sub-tab count badges
+  var accVisBound = false;          // one-time guard for the tab-focus auto-refresh
 
   function accSubBtn(id, label) {
     var badge = (id === "requests" && accPendingCount > 0) ? ' <span class="rkacc__badge">' + (accPendingCount > 99 ? "99+" : accPendingCount) + "</span>" : "";
@@ -2811,9 +2813,16 @@ import {
   }
   // Top "Access" tab + Requests sub-tab show a live count of pending requests. The tab bar is built once,
   // so the top badge is updated in place; accSyncBadges() recomputes the count whenever the pending list changes.
+  var accLastPending = -1;          // last count we reflected; a rise means new request(s) arrived -> pulse
   function updateAccessBadges() {
     var el = document.querySelector("[data-accbadge]");
     if (el) el.textContent = accPendingCount > 0 ? (accPendingCount > 99 ? "99+" : String(accPendingCount)) : "";
+    if (accLastPending >= 0 && accPendingCount > accLastPending) pulseBadges();
+    accLastPending = accPendingCount;
+  }
+  function pulseBadges() {
+    var els = document.querySelectorAll(".adm__tabbadge, .rkacc__badge");
+    for (var i = 0; i < els.length; i++) { var b = els[i]; b.classList.remove("is-pulse"); void b.offsetWidth; b.classList.add("is-pulse"); }
   }
   function accSyncBadges() {
     if (!accShowDeclined) accPendingCount = accReqCache.length;
@@ -2844,18 +2853,21 @@ import {
   }
   function accGrantRow(g) {
     var meta = "Opened " + (g.uses || 0) + "\u00d7" + (g.days ? " \u00b7 " + g.days + "d link" : "");
+    // Active grants: copy / duration / revoke (NO hard delete — revoke first; it's reversible and tells the
+    // recruiter). Revoked grants: restore, or permanently delete (surfaced via the "Show revoked" filter).
+    var acts = g.revoked
+      ? '<button class="btn btn--primary" data-act="acc-grant-revoke" data-token="' + escAttr(g.token) + '" data-on="1">Restore</button>' +
+        '<button class="btn btn--danger" data-act="acc-grant-delete" data-token="' + escAttr(g.token) + '">Delete</button>'
+      : '<button class="btn btn--ghost" data-act="acc-grant-copy" data-token="' + escAttr(g.token) + '">Copy link</button>' +
+        '<button class="btn btn--ghost" data-act="acc-grant-days" data-token="' + escAttr(g.token) + '" data-days="' + escAttr(String(g.days || 15)) + '">Duration</button>' +
+        '<button class="btn btn--ghost" data-act="acc-grant-revoke" data-token="' + escAttr(g.token) + '" data-on="0">Revoke</button>';
     return '<div class="rkinbox__row' + (g.revoked ? " is-off" : "") + '">' +
       '<div class="rkinbox__main">' +
         '<div class="rkinbox__who"><b>' + escHtml(g.name || g.email || "Recruiter") + "</b>" + (g.company ? ' <span class="rkinbox__co">\u00b7 ' + escHtml(g.company) + "</span>" : "") + ' <span class="rkinbox__ago">' + escHtml(accGrantLeft(g)) + "</span></div>" +
         (g.email ? '<a class="rkinbox__mail" href="mailto:' + escAttr(g.email) + '">' + escHtml(g.email) + "</a>" : "") +
         '<div class="rkinbox__ctx">' + escHtml(meta) + "</div>" +
       "</div>" +
-      '<div class="rkinbox__acts">' +
-        '<button class="btn btn--ghost" data-act="acc-grant-copy" data-token="' + escAttr(g.token) + '">Copy link</button>' +
-        '<button class="btn btn--ghost" data-act="acc-grant-days" data-token="' + escAttr(g.token) + '" data-days="' + escAttr(String(g.days || 15)) + '">Duration</button>' +
-        '<button class="btn ' + (g.revoked ? "btn--primary" : "btn--ghost") + '" data-act="acc-grant-revoke" data-token="' + escAttr(g.token) + '" data-on="' + (g.revoked ? "1" : "0") + '">' + (g.revoked ? "Restore" : "Revoke") + "</button>" +
-        '<button class="btn btn--danger" data-act="acc-grant-delete" data-token="' + escAttr(g.token) + '">Delete</button>' +
-      "</div>" +
+      '<div class="rkinbox__acts">' + acts + "</div>" +
     "</div>";
   }
   function accessSection() {
@@ -2868,8 +2880,11 @@ import {
         (accReqCache.length ? accReqCache.map(accReqRow).join("") : '<div class="rkinbox__empty">' + (accShowDeclined ? "No declined requests." : "No pending requests \u2014 you\u2019re all caught up.") + "</div>");
     } else {
       var curated = accSubTab === "curated";
-      var gs = accGrantCache.filter(function (g) { return ((g.mode || "all") === "curated") === curated; });
-      inner = gs.length ? gs.map(accGrantRow).join("") : '<div class="rkinbox__empty">' + (curated ? "No curated grants yet \u2014 use Curate\u2026 on a request." : "No approved grants yet.") + "</div>";
+      var gs = accGrantCache.filter(function (g) { return ((g.mode || "all") === "curated") === curated; })
+        .filter(function (g) { return !!g.revoked === accShowRevoked; });
+      var gempty = accShowRevoked ? "No revoked grants here." : (curated ? "No curated grants yet \u2014 use Curate\u2026 on a request." : "No approved grants yet.");
+      inner = '<label class="rkacc__switch"><input type="checkbox" data-act="acc-revoked"' + (accShowRevoked ? " checked" : "") + " /> Show revoked</label>" +
+        (gs.length ? gs.map(accGrantRow).join("") : '<div class="rkinbox__empty">' + gempty + "</div>");
     }
     return '<p class="af__hint" style="margin:.1rem 0 1rem">Approve, decline and manage every recruiter\u2019s access here. Approving mints a private <code>/?k=</code> link and emails it. <b>Curate\u2026</b> scopes exactly what they see.</p>' +
       '<div class="rkinbox">' + head + '<div data-accbody>' + inner + "</div></div>";
@@ -3457,6 +3472,7 @@ import {
     }
     if (act === "acc-tab") { accSubTab = b.dataset.tab; renderBody(); return; }
     if (act === "acc-declined") { accShowDeclined = !accShowDeclined; loadAccessData(); return; }
+    if (act === "acc-revoked") { accShowRevoked = !accShowRevoked; renderBody(); return; }
     if (act === "acc-req-approve") {
       var _aid = b.dataset.id; b.disabled = true; status("Approving\u2026", true);
       fetch(ADMIN_WORKER + "/admin/requests/allow", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ id: _aid }) })
@@ -7907,6 +7923,9 @@ import {
     loadRequests();   // prefetch access requests for the Special Views tab
     loadQuickGrant(); // prefetch the one-tap Full-access quick-grant status
     loadAccessData(); // prefetch the dedicated Access tab (requests + grants)
+    // Live-ish: when the owner returns to this tab while the studio is open, re-check pending so a request
+    // that arrived meanwhile shows up (and the badge pulses). Gated on adm-lock so it never runs when closed.
+    if (!accVisBound) { accVisBound = true; document.addEventListener("visibilitychange", function () { if (!document.hidden && document.documentElement.classList.contains("adm-lock") && adminSession()) loadAccessData(); }); }
     musSilence(); // silence the ambient music while editing
     thDismiss(true); // belt-and-suspenders: the ticket nudge must never linger over the editor
     document.documentElement.classList.add("adm-lock");
