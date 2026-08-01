@@ -504,6 +504,17 @@
     presentActive = true;
     render(data);
     revealAll();
+    // Pre-fetch every presented work's vault-hosted deeper cuts while the "Unlocking…" toast is up, so
+    // the banner only flips to "fully unlocked" once the deeper cuts are actually in hand — and each
+    // case study then opens instantly. (An already-open case study was refreshed by the grant event.)
+    if (hadVault && window.RK && typeof window.RK.resolveWorkVault === "function") {
+      showUnlockingBanner("Unlocking deeper cuts\u2026");
+      try {
+        await Promise.all((data.work || []).filter(function (pw) {
+          return pw && pw.study && Array.isArray(pw.study.blocks) && pw.study.blocks.some(function (b) { return b && b.locked && b.vaultBlock; });
+        }).map(function (pw) { return window.RK.resolveWorkVault(pw).catch(function () { return 0; }); }));
+      } catch (e) {}
+    }
     showPresentBanner();
     return { ok: true, unlocked: unlocked, total: data.work.length };
   }
