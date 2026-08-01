@@ -1,7 +1,7 @@
 /* Riteshk Requests — service worker.
    Caches the app shell for a fast, offline-tolerant launch (API calls to the Worker always pass
    straight through, never cached) + handles Web Push ("push" + "notificationclick"). */
-const CACHE = "rk-inbox-v16";
+const CACHE = "rk-inbox-v17";
 const SHELL = [
   "/inbox/",
   "/inbox/index.html",
@@ -34,6 +34,21 @@ self.addEventListener("activate", (e) => {
   );
 });
 
+// App-icon badge = count of un-actioned request notifications still on screen (Badging API; progressive,
+// no-ops where unsupported). Called after showing a push and after a notification is closed.
+function refreshBadge() {
+  try {
+    if (!self.registration.getNotifications) return;
+    self.registration.getNotifications().then((ns) => {
+      const n = ns.filter((x) => x.data && (x.data.allow || x.data.cancel || x.data.reveal)).length;
+      if (self.navigator && self.navigator.setAppBadge) {
+        if (n > 0) self.navigator.setAppBadge(n).catch(() => {});
+        else if (self.navigator.clearAppBadge) self.navigator.clearAppBadge().catch(() => {});
+      }
+    }).catch(() => {});
+  } catch (e) {}
+}
+
 // Show the notification when a push arrives (payload = the JSON the Worker encrypted).
 self.addEventListener("push", (e) => {
   let d = {};
@@ -54,12 +69,13 @@ self.addEventListener("push", (e) => {
     icon: "/inbox/icon-192.png",
     badge: "/inbox/icon-192.png",
     tag: tag,
+    timestamp: d.timestamp || Date.now(),
     renotify: true,
     requireInteraction: true,   // stay on screen until tapped - a recruiter ping must not be missed
     vibrate: [90, 40, 90, 40, 90],
     actions: actions,
     data: { url: d.url || "/inbox/", allow: d.allow || "", cancel: d.cancel || "", title: title, body: body, tag: tag, reveal: isAndroid && hasActions, stage: "initial" }
-  }));
+  }).then(refreshBadge));
 });
 
 // If the browser rotates our push subscription, re-subscribe immediately so getSubscription() stays valid;
@@ -79,6 +95,7 @@ self.addEventListener("notificationclick", (e) => {
     // fire the opposite action - tapping Allow can only ever POST /req/allow (grant), never the decline
     // note. Anything missing or mismatched falls through to simply opening the app.
     e.notification.close();
+    refreshBadge();
     const url = act === "allow" ? data.allow : data.cancel;
     const endpoint = act === "allow" ? "/req/allow" : "/req/cancel";
     if (url && url.indexOf(endpoint) !== -1) {
@@ -109,6 +126,7 @@ self.addEventListener("notificationclick", (e) => {
     return;
   }
   e.notification.close();
+  refreshBadge();
   const target = data.url || "/inbox/";
   e.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((cls) => {
@@ -122,13 +140,19 @@ self.addEventListener("fetch", (e) => {
   const u = new URL(e.request.url);
   // Local /inbox/ shell only; Worker API + everything else goes straight to network.
   if (e.request.method !== "GET" || u.origin !== self.location.origin || !u.pathname.startsWith("/inbox/")) return;
-  // Network-first AND revalidating (cache:"no-cache") so the freshest app code always loads online
-  // — a plain fetch would still read the browser's 10-min HTTP cache and serve stale JS. Cache = offline fallback.
+  // Stale-while-revalidate: serve the cached shell INSTANTLY for a fast launch, then refresh the cache in
+  // the background so the next open has the latest. Offline -> the cached shell. Shell changes ship with a
+  // CACHE bump, which re-precaches fresh copies on activate, so "instant" never means "stuck on old".
   e.respondWith(
-    fetch(e.request, { cache: "no-cache" }).then((resp) => {
-      const copy = resp.clone();
-      caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
-      return resp;
-    }).catch(() => caches.match(e.request).then((hit) => hit || caches.match("/inbox/")))
+    caches.open(CACHE).then((cache) =>
+      cache.match(e.request).then((cached) => {
+        const fetching = fetch(e.request, { cache: "no-cache" }).then((resp) => {
+          if (resp && resp.ok) cache.put(e.request, resp.clone());
+          return resp;
+        }).catch(() => null);
+        e.waitUntil(fetching);
+        return cached || fetching.then((r) => r || caches.match("/inbox/"));
+      })
+    )
   );
 });

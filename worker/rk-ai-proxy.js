@@ -73,10 +73,11 @@ export default {
         try {
           const allowTok = await hmac(env.SESSION_SECRET || "", "reqallow." + reqId);
           const cancelTok = await hmac(env.SESSION_SECRET || "", "reqcancel." + reqId);
+          const notePrev = note ? (note.length > 140 ? note.slice(0, 139) + "\u2026" : note) : "";
           await pushToAll(env, {
             title: "New access request",
-            body: name + (company ? " \u00b7 " + company : "") + (context ? " \u2014 " + context : ""),
-            tag: reqId, url: "/inbox/", reqId: reqId,
+            body: name + (company ? " \u00b7 " + company : "") + (context ? "\nWants: " + context : "") + (notePrev ? "\n\u201c" + notePrev + "\u201d" : ""),
+            tag: reqId, url: "/inbox/", reqId: reqId, timestamp: Date.now(),
             allow: url.origin + "/req/allow?id=" + encodeURIComponent(reqId) + "&t=" + allowTok,
             cancel: url.origin + "/req/cancel?id=" + encodeURIComponent(reqId) + "&t=" + cancelTok,
           });

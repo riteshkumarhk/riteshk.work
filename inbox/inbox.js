@@ -300,8 +300,10 @@
   async function loadRequests() {
     var r = await api("/admin/requests?status=" + (showDeclined ? "declined" : "pending"), { headers: authHdr() });
     if (r.status === 401) { localStorage.removeItem(SS); return showVerify(); }
+    if (r.status === 0) return setBody([offlineState()]);
     if (!r.ok) return setBody([h("div", { class: "note err", text: (r.json && r.json.error) || "Couldn\u2019t load." })]);
     var reqs = (r.json && r.json.requests) || [];
+    if (!showDeclined) setBadge(reqs.length);
     var sw = h("label", { class: "switch" }, [h("input", { type: "checkbox" }), h("span", { text: "Show declined" })]);
     var cb = sw.querySelector("input"); if (showDeclined) cb.checked = true;
     cb.addEventListener("change", function () { showDeclined = cb.checked; loadTab(); });
@@ -313,6 +315,7 @@
   async function loadGrants() {
     var r = await api("/admin/access", { headers: authHdr() });
     if (r.status === 401) { localStorage.removeItem(SS); return showVerify(); }
+    if (r.status === 0) return setBody([offlineState()]);
     if (!r.ok) return setBody([h("div", { class: "note err", text: (r.json && r.json.error) || "Couldn\u2019t load." })]);
     var grants = (r.json && r.json.grants) || [];
     var curated = accessTab === "curated";
@@ -410,6 +413,17 @@
       btn("Cancel", "ghost", openInbox)
     ])]);
   }
+  function setBadge(n) {
+    try {
+      if (navigator.setAppBadge) { if (n > 0) navigator.setAppBadge(n).catch(function () {}); else if (navigator.clearAppBadge) navigator.clearAppBadge().catch(function () {}); }
+    } catch (e) {}
+  }
+  function offlineState() {
+    return h("div", { class: "empty" }, [
+      h("p", { class: "muted", text: "You\u2019re offline. Your requests will load the moment you\u2019re back." }),
+      btn("Try again", "ghost", loadTab)
+    ]);
+  }
   function toast(msg) {
     var t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t);
     setTimeout(function () { t.classList.add("toast--in"); }, 10);
@@ -447,6 +461,8 @@
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/inbox/sw.js").catch(function () {});
   window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferredInstall = e; if (document.querySelector("[data-ob]")) showOnboarding(); });
   window.addEventListener("appinstalled", function () { try { localStorage.setItem(INST, "1"); } catch (e) {} deferredInstall = null; if (document.querySelector("[data-ob]")) showOnboarding(); });
+  // Reconnect: when the network returns, quietly reload whatever tab is open so the offline state clears itself.
+  window.addEventListener("online", function () { if (document.getElementById("tabbody")) loadTab(); });
 
   (function init() {
     if (!window.PublicKeyCredential || !(navigator.credentials && navigator.credentials.get)) {
