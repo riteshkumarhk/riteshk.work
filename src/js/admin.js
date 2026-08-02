@@ -336,7 +336,7 @@ import {
     });
     return __studioLoading;
   }
-  function studioUrlExit() { try { if (location.pathname === "/studio") history.replaceState({}, "", "/"); } catch (e) {} }
+  function studioUrlExit() { try { document.documentElement.classList.remove("studio-boot"); } catch (e) {} try { if (location.pathname === "/studio") history.replaceState({}, "", "/"); } catch (e) {} }
   function openStudio() {
     loadStudio().then(function () {
       if (window.__RKStudio) {
