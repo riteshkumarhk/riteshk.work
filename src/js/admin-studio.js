@@ -2777,21 +2777,22 @@ import {
       '<div class="af__hint">A unique 15-day link is minted per recruiter (duration is per link, not set here). This controls <b>whether</b> Allow works and <b>what</b> they see \u2014 all your work by default. <b>Publish</b> after turning it on or editing scope so the links resolve. Turning it off stops new approvals but won\u2019t cut off recruiters you already approved.</div>' +
     "</div>";
   }
-  async function toggleAllowDefault() {
+  async function toggleAllowDefault(onDone) {
     var sess = adminSession(); if (!sess) return;
     var on = allowIsOn();
+    var refresh = onDone || function () { if (activeTab === "special") renderBody(); };
     try {
       if (on) {
         var r = await fetch(ADMIN_WORKER + "/admin/quickgrant", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ enabled: false }) });
         if (!r.ok) throw 0;
         qgCache = qgCache || {}; qgCache.enabled = false;
-        if (activeTab === "special") renderBody();
+        refresh();
         status("One-tap Allow turned off \u2014 links you already sent still work.", true);
       } else if (qgCache && qgCache.code) {
         var r2 = await fetch(ADMIN_WORKER + "/admin/quickgrant", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ enabled: true }) });
         if (!r2.ok) throw 0;
         qgCache.enabled = true;
-        if (activeTab === "special") renderBody();
+        refresh();
         status("One-tap Allow is on.", true);
       } else {
         var v = await ensureFullAccessView();
@@ -2800,12 +2801,12 @@ import {
         var r3 = await fetch(ADMIN_WORKER + "/admin/quickgrant", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ code: phrase, enabled: true, expiresAt: 0 }) });
         if (!r3.ok) throw 0;
         qgCache = { code: phrase, enabled: true, expiresAt: 0, updatedAt: Date.now() };
-        if (activeTab === "special") renderBody();
+        refresh();
         status("One-tap Allow set up \u2014 hit Publish to make it live.", true);
       }
     } catch (e) { status("Couldn\u2019t reach the server \u2014 try again.", false); }
   }
-  function allowEditModal() {
+  function allowEditModal(onDone) {
     ensureFullAccessView().then(function (sv) {
       var works = data.work || [], highs = data.highlights || [], caps = data.capabilities || [];
       var wOpts = works.map(function (w, wi) { return '<label class="svchk"><input type="checkbox" data-cur="work" value="' + escAttr(w.id) + '"' + ((sv.workIds || []).indexOf(w.id) !== -1 ? " checked" : "") + ' /><span>' + escHtml(w.client || w.title || ("Work " + (wi + 1))) + "</span></label>"; }).join("");
@@ -2834,10 +2835,29 @@ import {
         sv.highlightIdx.sort(function (a, b) { return a - b; });
         sv.capabilityIdx.sort(function (a, b) { return a - b; });
         saveDraft(true); done();
-        if (activeTab === "special") renderBody();
+        (onDone || function () { if (activeTab === "special") renderBody(); })();
         status("Scope saved \u2014 publish to apply.", true);
       });
     });
+  }
+  function allowSettingsModal() {
+    var modal = document.createElement("div"); modal.className = "pass";
+    modal.innerHTML = '<div class="pass__box pass__box--wide"><div data-allow-body></div><div class="pass__actions"><button class="btn btn--primary" data-close>Done</button></div></div>';
+    document.body.appendChild(modal);
+    var body = modal.querySelector("[data-allow-body]");
+    var done = function () { modal.remove(); };
+    var paint = function () { body.innerHTML = quickGrantPanel(); };
+    paint();
+    // refresh from the server so the toggle reflects the true current state, then repaint the sheet
+    (async function () { try { var sess = adminSession(); if (!sess) return; var r = await fetch(ADMIN_WORKER + "/admin/quickgrant", { headers: { Authorization: "Bearer " + sess } }); if (r.ok) { qgCache = await r.json(); paint(); } } catch (e) {} })();
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal || e.target.closest("[data-close]")) { done(); return; }
+      var b = e.target.closest("[data-act]"); if (!b) return;
+      var act = b.dataset.act;
+      if (act === "allow-toggle") { toggleAllowDefault(paint); return; }
+      if (act === "allow-edit") { allowEditModal(paint); return; }
+    });
+    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") done(); });
   }
   async function loadQuickGrant() {
     try {
@@ -2930,19 +2950,18 @@ import {
   function customViewsPane() {
     const list = data.specialViews || (data.specialViews = []);
     const showRevoked = accShowRevoked;
-    // The hidden "Full access" view (the Allow default) never shows as a shareable card.
+    // The hidden "Full access" view (the Allow default, managed in the ⋯ menu) never shows here.
     const shown = list.map(function (sv, i) { return { sv: sv, i: i }; }).filter(function (x) { return !x.sv.fullAccess && !!x.sv.revoked === showRevoked; });
     const userCount = list.filter(function (sv) { return !sv.fullAccess; }).length;
     let html = '<label class="rkacc__switch"><input type="checkbox" data-act="acc-revoked"' + (showRevoked ? " checked" : "") + " /> Show revoked</label>";
-    if (!showRevoked) html += quickGrantPanel();
-    if (!showRevoked) html += '<p class="af__hint" style="margin:.1rem 0 1rem">Curated, ticketed versions of the site for one audience (say an automotive company). Choose the work, numbers and skills they see, set a ticket phrase and an optional expiry. Up to 6. <em>Tickets are a soft gate \u2014 the curated content still ships in your published file, so don\u2019t put anything confidential here.</em></p>';
-    if (!shown.length) html += '<div class="adm__empty">' + (showRevoked ? "No revoked views." : "No special views yet.") + "</div>";
-    shown.forEach(function (x) { html += svCard(x.sv, x.i); });
     if (!showRevoked) {
       html += '<div class="adm__addbar rolekit__bar"><button class="btn btn--add" data-act="sv-add"' + (userCount >= 6 ? " disabled" : "") + '>+ New special view</button>' +
         '<button class="btn btn--auto rolekit__cta" data-act="sv-tailor">\u2728 Tailor to a role</button></div>';
+      html += '<p class="af__hint" style="margin:.1rem 0 1rem">Curated, ticketed versions of the site for one audience (say an automotive company). Choose the work, numbers and skills they see, set a ticket phrase and an optional expiry. Up to 6. <em>Tickets are a soft gate \u2014 the curated content still ships in your published file, so don\u2019t put anything confidential here.</em></p>';
       if (userCount >= 6) html += '<div class="af__hint">Maximum of 6 special views reached.</div>';
     }
+    if (!shown.length) html += '<div class="adm__empty">' + (showRevoked ? "No revoked views." : "No special views yet.") + "</div>";
+    shown.forEach(function (x) { html += svCard(x.sv, x.i); });
     return html;
   }
   function accessSection() {
@@ -3590,8 +3609,6 @@ import {
     }
     if (act === "sv-remove") { (data.specialViews || []).splice(i, 1); saveDraft(true); renderBody(); return; }
     if (act === "sv-edit") { svEditModal(i); return; }
-    if (act === "allow-toggle") { toggleAllowDefault(); return; }
-    if (act === "allow-edit") { allowEditModal(); return; }
     if (act === "sv-share") { var _shm = b.parentNode.querySelector(".svshare__menu"); var _wh = _shm && _shm.hidden; if (root) root.querySelectorAll(".svshare__menu").forEach(function (m) { m.hidden = true; }); if (_shm) _shm.hidden = !_wh; return; }
     if (act === "sv-revoke") { var _rv = (data.specialViews || [])[i]; if (_rv) { _rv.revoked = true; saveDraft(true); renderBody(); status("View revoked \u2014 tick Show revoked to restore or delete it.", true); } return; }
     if (act === "sv-restore") { var _rs = (data.specialViews || [])[i]; if (_rs) { _rs.revoked = false; saveDraft(true); renderBody(); status("View restored.", true); } return; }
@@ -7923,6 +7940,7 @@ import {
               '<button class="adm__more-item" data-aicfg type="button"><span class="adm__more-ic">\u2728</span><span class="adm__more-tx"><b>AI settings</b><small>Connect OpenAI, Gemini or Claude for the Prepare tools</small></span></button>' +
               '<button class="adm__more-item" data-backup type="button"><span class="adm__more-ic">\uD83D\uDCBE</span><span class="adm__more-tx"><b>Download content backup</b><small>Save an unencrypted copy to this device \u2014 keep it private</small></span></button>' +
               '<button class="adm__more-item" data-recruiter type="button"><span class="adm__more-ic">\uD83C\uDFAB</span><span class="adm__more-tx"><b>Recruiter mode <span data-recstate style="opacity:.55;font-weight:400"></span></b><small>Show the ticket prompt to every visitor on landing</small></span></button>' +
+              '<button class="adm__more-item" data-allowcfg type="button"><span class="adm__more-ic">\u26A1</span><span class="adm__more-tx"><b>One-tap Allow</b><small>What the request notification\u2019s Allow button hands out</small></span></button>' +
               '<div class="adm__more-sep"></div>' +
               '<div class="adm__auto" data-autopub>' +
                 '<button class="adm__auto-sw" type="button" data-autopub-toggle role="switch" aria-checked="false" title="Auto-publish on a timer">' +
@@ -8024,6 +8042,7 @@ import {
     autoWrap.querySelectorAll("[data-autopub-every]").forEach((r) => r.addEventListener("change", () => autopubSetEvery(+r.value)));
     var _pk = root.querySelector("[data-passkeys]"); if (_pk) _pk.addEventListener("click", () => { closeBarPops(); passkeyModal(); });
     var _aicfg = root.querySelector("[data-aicfg]"); if (_aicfg) _aicfg.addEventListener("click", () => { closeBarPops(); aiSettingsModal(); });
+    var _allowcfg = root.querySelector("[data-allowcfg]"); if (_allowcfg) _allowcfg.addEventListener("click", () => { closeBarPops(); allowSettingsModal(); });
     const pubCloseBtn = root.querySelector("[data-pub-close]");
     if (pubCloseBtn) pubCloseBtn.addEventListener("click", pubHide);
     // "\u22EF" more-menu: Passkeys / Publishing settings / Auto-publish
