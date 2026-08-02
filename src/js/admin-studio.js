@@ -58,7 +58,7 @@ import {
   const LIVE_ORIGIN = (/(^|\.)riteshk\.work$/i.test(location.hostname) || /\.github\.io$/i.test(location.hostname)) ? location.origin : "https://riteshk.work";
   const PUBLISH_HARD_CAP = 40 * 1024 * 1024; // skip an obviously-doomed content.json commit (GitHub rejects very large blobs)
   const DRAFT_SIG_KEY = "rk:content:draft:sig";
-  const PREVIEW_SRC = "index.html?preview=1&lite=1";
+  const PREVIEW_SRC = "/index.html?preview=1&lite=1";
   const ADMIN_MIN = 900; // below this the split editor can't fit — admin is disabled
   const AI_PROVIDERS = [
     ["openai", "OpenAI"],

@@ -7,7 +7,6 @@ This is only a local preview helper — it is not needed to deploy the site.
 """
 import http.server
 import os
-import socketserver
 
 PORT = 5510
 
@@ -31,7 +30,8 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     # Always serve this file's folder, regardless of where it was launched from.
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("", PORT), NoCacheHandler) as httpd:
+    # Threaded so one slow/stuck client (e.g. a keep-alive connection) never blocks other requests.
+    http.server.ThreadingHTTPServer.allow_reuse_address = True
+    with http.server.ThreadingHTTPServer(("", PORT), NoCacheHandler) as httpd:
         print(f"Serving http://localhost:{PORT}  (no-cache mode) — press Ctrl+C to stop")
         httpd.serve_forever()

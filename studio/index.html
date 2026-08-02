@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" data-appearance="dark" data-theme-mode="night">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Served from /studio/ but the shared scripts use root-relative assets (content.json, etc.) — resolve them from the site root. -->
+  <base href="/" />
+  <meta name="robots" content="noindex, nofollow" />
+  <script>
+    // Dedicated studio app page. The landing never loads here — this IS the studio's own page.
+    // Flag studio mode + pin a dark theme so the shared scripts skip all landing wiring and just
+    // open the gate. window.__theme is a tiny dark shim (the real one lives on the landing).
+    (function () {
+      try {
+        window.__STUDIO_PAGE = true;
+        window.__theme = window.__theme || {
+          mode: function () { return "night"; },
+          isLight: function () { return false; },
+          set: function () {},
+          apply: function () {}
+        };
+      } catch (e) {}
+    })();
+  </script>
+  <title>Studio — riteshk.work</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="stylesheet" href="/css/project.css" />
+  <link rel="stylesheet" href="/css/gensection.css" />
+  <link rel="stylesheet" href="/css/admin.css" />
+  <link rel="stylesheet" href="/css/journey.css" />
+  <style>
+    html, body { margin: 0; background: #08080a; min-height: 100vh; }
+    .studio-splash {
+      position: fixed; inset: 0; display: grid; place-items: center; z-index: 0; pointer-events: none;
+      color: #6f6a64; font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: .74rem; letter-spacing: .16em; text-transform: uppercase;
+    }
+    .studio-splash a { color: #8f8a84; text-decoration: none; }
+    .studio-splash a:hover { color: #ECE7E1; }
+  </style>
+</head>
+<body class="studio-page">
+  <div class="studio-splash">Opening studio&hellip; &nbsp;·&nbsp; <a href="/">Back to riteshk.work</a></div>
+
+  <!-- Only what the studio needs: render.js exposes window.RK helpers; admin.js opens the gate,
+       then lazily injects admin-studio.js. No landing markup, no main.js/lenis/project/journey. -->
+  <script src="/js/render.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

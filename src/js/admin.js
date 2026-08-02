@@ -336,7 +336,7 @@ import {
     });
     return __studioLoading;
   }
-  function studioUrlExit() { try { document.documentElement.classList.remove("studio-boot"); } catch (e) {} try { if (location.pathname === "/studio") history.replaceState({}, "", "/"); } catch (e) {} }
+  function studioUrlExit() { try { document.documentElement.classList.remove("studio-boot"); } catch (e) {} try { if (window.__STUDIO_PAGE) { location.href = "/"; return; } if (location.pathname === "/studio") history.replaceState({}, "", "/"); } catch (e) {} }
   function openStudio() {
     loadStudio().then(function () {
       if (window.__RKStudio) {
@@ -1024,6 +1024,12 @@ import {
 
   /* ---------- bootstrap ---------- */
   function init() {
+    if (window.__STUDIO_PAGE) {
+      // Dedicated /studio page: no landing to wire — just open the gate.
+      try { if (window.RK) window.RK.requestAccess = requestAccessModal; } catch (e) {}
+      setTimeout(gate, 60);
+      return;
+    }
     const clock = document.getElementById("clock");
     if (clock) clock.addEventListener("click", toggleMenu);
     const more = document.getElementById("moreBtn");
