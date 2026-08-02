@@ -7430,18 +7430,35 @@ import {
     ["coach", "Coach", "Prompt + timed plan, then feedback on your approach"],
     ["mock", "Mock interview", "I play the interviewer \u2014 back-and-forth, then a scorecard"]
   ];
+  var WB_LEVELS = [
+    ["exec", "VP / Exec", "Outcomes, strategy, business altitude"],
+    ["staff", "Staff / Principal", "Ambiguity, systems, cross-team leverage"],
+    ["senior", "Senior", "Craft, decisions &amp; the how"]
+  ];
   var WB_KEY = "rk:wb";
   var wbState = (function () { try { var o = JSON.parse(localStorage.getItem(WB_KEY)); return (o && typeof o === "object") ? o : {}; } catch (e) { return {}; } })();
   if (!wbState.mins) wbState.mins = "60";
   if (!wbState.mode) wbState.mode = "coach";
-  function wbSave() { try { localStorage.setItem(WB_KEY, JSON.stringify({ mins: wbState.mins, mode: wbState.mode, brief: wbState.brief || "", company: wbState.company || "", jd: wbState.jd || "" })); } catch (e) {} }
+  if (!wbState.level) wbState.level = "staff";
+  function wbSave() { try { localStorage.setItem(WB_KEY, JSON.stringify({ mins: wbState.mins, mode: wbState.mode, level: wbState.level, brief: wbState.brief || "", company: wbState.company || "", jd: wbState.jd || "" })); } catch (e) {} }
   function wbMinsLabel(m) { for (var i = 0; i < WB_MINS.length; i++) if (WB_MINS[i][0] === m) return WB_MINS[i][1]; return m + " min"; }
   function wbCompany() { return String(wbState.company || "").trim(); }
   function wbJdText() { var t = String(wbState.jd || "").trim(); return t || storyJdText(); }
+  function wbLevelMeta(id) { for (var i = 0; i < WB_LEVELS.length; i++) if (WB_LEVELS[i][0] === id) return WB_LEVELS[i]; return null; }
+  function wbLevelLine() {
+    var l = wbLevelMeta(wbState.level); if (!l) return "";
+    var guide = {
+      exec: "Calibrate the whole exercise to a VP / Executive design altitude: the prompt and every probe should pull toward business outcomes, strategy, org-level trade-offs and measurable impact \u2014 not pixels. Grade vision, prioritisation and executive-level communication the hardest.",
+      staff: "Calibrate the whole exercise to a Staff / Principal altitude: reward navigating ambiguity, systems thinking, cross-team leverage and crisp problem-framing over polished UI. Push hardest on scope, trade-offs and how decisions ripple across teams and surfaces.",
+      senior: "Calibrate the whole exercise to a Senior altitude: reward strong craft, sound design decisions and clear reasoning about the how \u2014 solid end-to-end execution with good user focus, structure and communication."
+    };
+    return "\n\n# LEVEL: " + l[1] + "\n" + (guide[wbState.level] || "");
+  }
   function wbRoleLine() {
     var jd = wbJdText(), co = wbCompany();
-    if (!jd && !co) return "";
-    var s = "\n\n# TARGET";
+    var s = wbLevelLine();
+    if (!jd && !co) return s;
+    s += "\n\n# TARGET";
     if (co) s += "\nCompany: " + co + " \u2014 tailor the exercise to how " + co + " actually runs design interviews at this level: the kind of whiteboard prompt they favour, the structure and answer depth they expect, and the collaboration/interaction they look for in the room.";
     if (jd) s += "\nJob description (what the role demands \u2014 bias the prompt, the probes and the scoring toward these):\n" + jd;
     return s;
@@ -7561,7 +7578,7 @@ import {
   function wbRepeat(ch, n) { var s = ""; for (var i = 0; i < n; i++) s += ch; return s; }
   function wbModal() {
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { wbModal(); }); return; }
-    var st = wbState; if (!st.mins) st.mins = "60"; if (!st.mode) st.mode = "coach";
+    var st = wbState; if (!st.mins) st.mins = "60"; if (!st.mode) st.mode = "coach"; if (!st.level) st.level = "staff";
     var prompt = null, transcript = "";
     var modal = document.createElement("div");
     modal.className = "pass pass--wide wb-modal";
@@ -7575,7 +7592,10 @@ import {
         '<div class="af"><label class="af__label">Mode</label><div class="story__opts">' +
           WB_MODES.map(function (d) { return '<button type="button" class="story__opt' + (st.mode === d[0] ? " is-on" : "") + '" data-wb-mode="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
         "</div></div>" +
-        '<div class="af"><label class="af__label">Company &amp; job description <span class="af__opt">(optional)</span></label>' +
+        '<div class="af"><label class="af__label">The level you\u2019re whiteboarding for</label><div class="iprep__levels wb__levels">' +
+          WB_LEVELS.map(function (d) { return '<button type="button" class="iprep__lvl' + (st.level === d[0] ? " is-on" : "") + '" data-wb-lvl="' + d[0] + '"><span class="iprep__lvl-name">' + d[1] + '</span><span class="iprep__lvl-desc">' + d[2] + "</span></button>"; }).join("") +
+        '</div><div class="af__hint">Sets the altitude \u2014 the prompt, the probes and the scoring all shift to match.</div></div>' +
+        '<div class="af"><label class="af__label">Company &amp; job description <span class="af__opt">(optional)</span></label>' + +
           '<input type="text" class="wb__company" placeholder="Company you\u2019re interviewing at \u2014 e.g. Stripe, Google\u2026" value="' + escAttr(st.company || "") + '" />' +
           '<textarea class="cl__jd wb__jd" rows="4" placeholder="Paste the job description \u2014 I\u2019ll bias the prompt, the probes and the scoring toward what the role demands.">' + escHtml(st.jd || "") + '</textarea>' +
           '<div class="af__hint">Company \u2192 I match how they interview at this level (prompt type, answer depth, collaboration). ' + (storyJdText() ? 'Leave the description blank to reuse your \u201cAlign to a role\u201d target from the storyteller.' : 'Both optional.') + '</div>' +
@@ -7609,6 +7629,7 @@ import {
     modal.querySelector("[data-cancel]").addEventListener("click", close);
     modal.querySelectorAll("[data-wb-mins]").forEach(function (b) { b.addEventListener("click", function () { st.mins = b.dataset.wbMins; modal.querySelectorAll("[data-wb-mins]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     modal.querySelectorAll("[data-wb-mode]").forEach(function (b) { b.addEventListener("click", function () { st.mode = b.dataset.wbMode; modal.querySelectorAll("[data-wb-mode]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
+    modal.querySelectorAll("[data-wb-lvl]").forEach(function (b) { b.addEventListener("click", function () { st.level = b.dataset.wbLvl; modal.querySelectorAll("[data-wb-lvl]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     if (briefEl) briefEl.addEventListener("input", function () { st.brief = briefEl.value; wbSave(); });
     if (companyEl) companyEl.addEventListener("input", function () { st.company = companyEl.value; wbSave(); });
     if (jdEl) jdEl.addEventListener("input", function () { st.jd = jdEl.value; wbSave(); });

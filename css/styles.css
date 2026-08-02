@@ -636,7 +636,8 @@ main, .footer { transition: opacity .45s ease; }
 
 @media (max-width: 720px) {
   .nav__links, .nav__meta { display: none; }
-  .nav__toggle { display: block; }
+  .nav__meta { margin-left: auto; }
+  .nav__toggle { display: block; order: -1; margin-right: .4rem; }
   .extra { grid-template-columns: 1fr; }
   .tl { grid-template-columns: 1fr; gap: .4rem; }
   .tl__year { padding-top: 0; }
