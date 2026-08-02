@@ -437,6 +437,21 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .rkqg__row--toggle .rkacc__switch { margin: 0; }
 .pass__box .rkqg { border: 0; background: none; padding: 0; margin: .1rem 0 .4rem; }
 .rkinbox__acts .svshare, .rkinbox__acts .svshare__btn { width: 100%; }
+.adm__settings { position: absolute; inset: 0; z-index: 40; background: rgba(0,0,0,.5); opacity: 0; transition: opacity .28s ease; }
+.adm__settings.is-open { opacity: 1; }
+.adm__settings[hidden] { display: none; }
+.adm__set-sheet { position: absolute; top: 0; right: 0; bottom: 0; width: min(820px, 100%); background: var(--bg-2); border-left: 1px solid var(--line); display: flex; flex-direction: column; transform: translateX(100%); transition: transform .3s cubic-bezier(.4,0,.2,1); box-shadow: -24px 0 70px rgba(0,0,0,.5); }
+.adm__settings.is-open .adm__set-sheet { transform: translateX(0); }
+.adm__set-head { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.3rem; border-bottom: 1px solid var(--line); flex: 0 0 auto; }
+.adm__set-head h2 { margin: 0; font-family: var(--mono); font-size: .74rem; letter-spacing: .09em; text-transform: uppercase; color: var(--text-dim); }
+.adm__set-x { padding: .3rem .5rem; }
+.adm__set-body { flex: 1 1 auto; display: grid; grid-template-columns: 200px 1fr; min-height: 0; }
+.adm__set-nav { border-right: 1px solid var(--line); padding: .8rem; display: flex; flex-direction: column; gap: .15rem; overflow-y: auto; }
+.adm__set-tab { text-align: left; background: transparent; border: 0; border-radius: 9px; padding: .62rem .75rem; color: var(--text-dim); font-family: var(--sans); font-size: .84rem; cursor: pointer; transition: background .15s, color .15s; }
+.adm__set-tab:hover { background: var(--bg-elev); color: var(--text); }
+.adm__set-tab.is-on { background: var(--bg-elev); color: var(--text); }
+.adm__set-panel { padding: 1.3rem 1.5rem; overflow-y: auto; }
+@media (max-width: 640px) { .adm__set-body { grid-template-columns: 1fr; } .adm__set-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); } }
 .rkacc__tabs { display: flex; gap: .3rem; padding: .5rem .55rem; border-bottom: 1px solid var(--line); background: var(--bg-2); }
 .rkacc__tab { font-family: var(--mono); font-size: .64rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); background: transparent; border: 1px solid transparent; border-radius: 100px; padding: .32rem .7rem; cursor: pointer; }
 .rkacc__tab:hover { color: var(--text); }

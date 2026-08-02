@@ -3383,6 +3383,59 @@ import {
     previewLanding();
     if (opts.render !== false) renderBody();
   }
+  // ---------- Settings side-pane (right drawer): declutters the "\u22EF" menu; each setting is a panel
+  // instead of a stacked dialog. Simple ones inline (One-tap Allow / Recruiter / Backup); Passkeys /
+  // Publishing / AI launch their existing proven dialogs from here.
+  var SET_CATS = [["allow", "\u26A1 One-tap Allow"], ["recruiter", "\uD83C\uDFAB Recruiter mode"], ["passkeys", "\uD83D\uDD11 Passkeys"], ["publish", "\u2699 Publishing"], ["ai", "\u2728 AI"], ["backup", "\uD83D\uDCBE Backup"]];
+  var setPane, setNav, setPanel, activeSetCat = "allow";
+  function openSettings() {
+    if (!setPane) return;
+    setPane.hidden = false;
+    requestAnimationFrame(function () { setPane.classList.add("is-open"); });
+    renderSettings();
+    var esc = function (ev) { if (ev.key === "Escape" && !document.querySelector(".pass")) { closeSettings(); } };
+    document.addEventListener("keydown", esc, true);
+    setPane._esc = esc;
+  }
+  function closeSettings() {
+    if (!setPane) return;
+    if (setPane._esc) { document.removeEventListener("keydown", setPane._esc, true); setPane._esc = null; }
+    setPane.classList.remove("is-open");
+    setTimeout(function () { if (setPane && !setPane.classList.contains("is-open")) setPane.hidden = true; }, 260);
+  }
+  function renderSettings() {
+    if (!setNav) return;
+    setNav.innerHTML = SET_CATS.map(function (c) { return '<button class="adm__set-tab' + (activeSetCat === c[0] ? " is-on" : "") + '" data-act="settings-cat" data-cat="' + c[0] + '" type="button">' + escHtml(c[1]) + "</button>"; }).join("");
+    renderSetPanel();
+  }
+  function renderSetPanel() {
+    if (!setPanel) return;
+    if (activeSetCat === "allow") { computeAllowMeta().then(function () { if (setPanel) setPanel.innerHTML = quickGrantPanel(); }); return; }
+    setPanel.innerHTML = settingsPanelHtml(activeSetCat);
+    if (activeSetCat === "recruiter") recruiterStateSync();
+  }
+  function launchPanelHtml(title, sub, act, label) {
+    return '<div class="rkqg"><div class="rkqg__head">' + escHtml(title) + "</div>" +
+      '<div class="af__hint" style="margin:.2rem 0 .9rem">' + escHtml(sub) + "</div>" +
+      '<div class="rkqg__row"><button class="btn btn--primary" data-act="' + act + '">' + escHtml(label) + "</button></div></div>";
+  }
+  function settingsPanelHtml(cat) {
+    if (cat === "recruiter") {
+      var on = !!data.recruiterMode;
+      return '<div class="rkqg"><div class="rkqg__head">Recruiter mode <span class="rkqg__sub">show the ticket prompt to every visitor</span></div>' +
+        '<div class="rkqg__row rkqg__row--toggle"><label class="rkacc__switch"><input type="checkbox" data-act="recruiter-toggle"' + (on ? " checked" : "") + " /> Show the ticket prompt on landing</label> <span data-recstate style=\"opacity:.55;font-family:var(--mono);font-size:.7rem\"></span></div>" +
+        '<div class="af__hint">When on, every visitor to your live site sees the \u201center a ticket\u201d prompt. <b>Publish</b> to apply.</div></div>';
+    }
+    if (cat === "backup") {
+      return '<div class="rkqg"><div class="rkqg__head">Content backup <span class="rkqg__sub">a local copy of your content</span></div>' +
+        '<div class="rkqg__row"><button class="btn btn--primary" data-act="backup-dl">\uD83D\uDCBE Download content backup</button></div>' +
+        '<div class="af__hint">Saves an unencrypted <code>content.json</code> to this device \u2014 keep it private. Handy before big edits.</div></div>';
+    }
+    if (cat === "passkeys") return launchPanelHtml("Passkeys", "Sign in with Windows Hello, Face ID or a security key \u2014 no password after the first one.", "open-passkeys", "Manage passkeys");
+    if (cat === "publish") return launchPanelHtml("Publishing", "Connect GitHub, replace the token, or publish manually.", "open-publish", "Open publishing settings");
+    if (cat === "ai") return launchPanelHtml("AI", "Connect OpenAI, Gemini or Claude for the Prepare tools.", "open-ai", "Open AI settings");
+    return "";
+  }
   function l2PreviewApply() {
     var off = localStorage.getItem(L2PREV_KEY) === "0";
     if (root) root.classList.toggle("is-noprev", off && (openStudy >= 0 || journeyOpen));
@@ -3606,6 +3659,7 @@ import {
     });
   }
   function onClick(e) {
+    if (e.target && e.target.classList && e.target.classList.contains("adm__settings")) { closeSettings(); return; }
     if (root && !e.target.closest(".hsize")) { var _oh = root.querySelectorAll(".hsize.is-open"); if (_oh.length) _oh.forEach(function (x) { x.classList.remove("is-open"); }); }
     const rtb = e.target.closest("[data-rt]");
     if (rtb) { rtAction(rtb); return; }
@@ -3613,6 +3667,15 @@ import {
     const b = e.target.closest("[data-act]");
     if (!b) return;
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
+    if (act === "settings-close") { closeSettings(); return; }
+    if (act === "settings-cat") { activeSetCat = b.dataset.cat; renderSettings(); return; }
+    if (act === "allow-toggle") { toggleAllowDefault(renderSetPanel); return; }
+    if (act === "allow-edit") { allowEditModal(renderSetPanel); return; }
+    if (act === "recruiter-toggle") { recruiterToggle(); renderSetPanel(); return; }
+    if (act === "backup-dl") { downloadContentBackup(); return; }
+    if (act === "open-passkeys") { passkeyModal(); return; }
+    if (act === "open-publish") { publishModal(); return; }
+    if (act === "open-ai") { aiSettingsModal(); return; }
     if (act === "sv-add") {
       data.specialViews = data.specialViews || [];
       if (data.specialViews.length >= 6) { status("Up to 6 special views."); return; }
@@ -7947,12 +8010,7 @@ import {
           '<div class="adm__more" data-more-wrap>' +
             '<button class="btn btn--ghost adm__more-btn" data-more type="button" aria-haspopup="true" aria-expanded="false" aria-label="More options" title="More">\u22EF</button>' +
             '<div class="adm__more-pop" hidden>' +
-              '<button class="adm__more-item" data-passkeys type="button"><span class="adm__more-ic">\uD83D\uDD11</span><span class="adm__more-tx"><b>Passkeys</b><small>Sign in with Windows Hello, Face ID or a security key</small></span></button>' +
-              '<button class="adm__more-item" data-pubcfg type="button"><span class="adm__more-ic">\u2699</span><span class="adm__more-tx"><b>Publishing settings</b><small>Connect GitHub, replace the token, or publish manually</small></span></button>' +
-              '<button class="adm__more-item" data-aicfg type="button"><span class="adm__more-ic">\u2728</span><span class="adm__more-tx"><b>AI settings</b><small>Connect OpenAI, Gemini or Claude for the Prepare tools</small></span></button>' +
-              '<button class="adm__more-item" data-backup type="button"><span class="adm__more-ic">\uD83D\uDCBE</span><span class="adm__more-tx"><b>Download content backup</b><small>Save an unencrypted copy to this device \u2014 keep it private</small></span></button>' +
-              '<button class="adm__more-item" data-recruiter type="button"><span class="adm__more-ic">\uD83C\uDFAB</span><span class="adm__more-tx"><b>Recruiter mode <span data-recstate style="opacity:.55;font-weight:400"></span></b><small>Show the ticket prompt to every visitor on landing</small></span></button>' +
-              '<button class="adm__more-item" data-allowcfg type="button"><span class="adm__more-ic">\u26A1</span><span class="adm__more-tx"><b>One-tap Allow</b><small>What the request notification\u2019s Allow button hands out</small></span></button>' +
+              '<button class="adm__more-item" data-opensettings type="button"><span class="adm__more-ic">\u2699</span><span class="adm__more-tx"><b>Settings</b><small>Passkeys, publishing, AI, recruiter mode, one-tap Allow, backup</small></span></button>' +
               '<div class="adm__more-sep"></div>' +
               '<div class="adm__auto" data-autopub>' +
                 '<button class="adm__auto-sw" type="button" data-autopub-toggle role="switch" aria-checked="false" title="Auto-publish on a timer">' +
@@ -7997,13 +8055,20 @@ import {
           '<div class="adm__preview-head"><span class="adm__preview-dot"></span>Live preview<small>riteshk.work</small></div>' +
           '<iframe class="adm__frame" title="Live preview of your site" src="' + PREVIEW_SRC + '"></iframe>' +
         "</section>" +
-      "</div>";
+      "</div>" +
+      '<div class="adm__settings" hidden><div class="adm__set-sheet">' +
+        '<div class="adm__set-head"><h2>Settings</h2><button class="btn btn--ghost adm__set-x" data-act="settings-close" type="button" aria-label="Close settings">\u2715</button></div>' +
+        '<div class="adm__set-body"><nav class="adm__set-nav" data-set-nav></nav><div class="adm__set-panel" data-set-panel></div></div>' +
+      "</div></div>";
     document.body.appendChild(root);
     body = root.querySelector(".adm__body");
     l2 = root.querySelector(".adm__l2");
     l2body = root.querySelector(".adm__l2-body");
     l2title = root.querySelector(".adm__l2-title");
     frame = root.querySelector(".adm__frame");
+    setPane = root.querySelector(".adm__settings");
+    setNav = root.querySelector("[data-set-nav]");
+    setPanel = root.querySelector("[data-set-panel]");
 
     // Guaranteed wheel scrolling for the editor pane. The site's Lenis smooth-scroll
     // captures the page wheel and preventDefaults it (even data-lenis-prevent can be
@@ -8040,9 +8105,7 @@ import {
     var _undo = root.querySelector("[data-undo]"); if (_undo) _undo.addEventListener("click", histUndo);
     var _redo = root.querySelector("[data-redo]"); if (_redo) _redo.addEventListener("click", histRedo);
     root.querySelector("[data-publish]").addEventListener("click", publish);
-    var _pubcfg = root.querySelector("[data-pubcfg]"); if (_pubcfg) _pubcfg.addEventListener("click", () => { closeBarPops(); publishModal(); });
-    var _bkp = root.querySelector("[data-backup]"); if (_bkp) _bkp.addEventListener("click", () => { closeBarPops(); downloadContentBackup(); });
-    var _rec = root.querySelector("[data-recruiter]"); if (_rec) { _rec.addEventListener("click", recruiterToggle); recruiterStateSync(); }
+    var _sett = root.querySelector("[data-opensettings]"); if (_sett) _sett.addEventListener("click", () => { closeBarPops(); openSettings(); });
     root.querySelector("[data-autopub-toggle]").addEventListener("click", autopubToggle);
     const autoWrap = root.querySelector("[data-autopub]");
     var _apMenu = root.querySelector("[data-autopub-menu]");
@@ -8052,9 +8115,6 @@ import {
       pop.hidden = !opening; e.currentTarget.setAttribute("aria-expanded", opening ? "true" : "false");
     });
     autoWrap.querySelectorAll("[data-autopub-every]").forEach((r) => r.addEventListener("change", () => autopubSetEvery(+r.value)));
-    var _pk = root.querySelector("[data-passkeys]"); if (_pk) _pk.addEventListener("click", () => { closeBarPops(); passkeyModal(); });
-    var _aicfg = root.querySelector("[data-aicfg]"); if (_aicfg) _aicfg.addEventListener("click", () => { closeBarPops(); aiSettingsModal(); });
-    var _allowcfg = root.querySelector("[data-allowcfg]"); if (_allowcfg) _allowcfg.addEventListener("click", () => { closeBarPops(); allowSettingsModal(); });
     const pubCloseBtn = root.querySelector("[data-pub-close]");
     if (pubCloseBtn) pubCloseBtn.addEventListener("click", pubHide);
     // "\u22EF" more-menu: Passkeys / Publishing settings / Auto-publish
