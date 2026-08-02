@@ -2818,7 +2818,8 @@ import {
       }
     } catch (e) { status("Couldn\u2019t reach the server \u2014 try again.", false); }
   }
-  function allowEditModal(onDone) {
+  function allowEditModal(onDone, opts) {
+    opts = opts || {};
     ensureFullAccessView().then(function (sv) {
       var works = data.work || [], highs = data.highlights || [], caps = data.capabilities || [];
       var wOpts = works.map(function (w, wi) { return '<label class="svchk"><input type="checkbox" data-cur="work" value="' + escAttr(w.id) + '"' + ((sv.workIds || []).indexOf(w.id) !== -1 ? " checked" : "") + ' /><span>' + escHtml(w.client || w.title || ("Work " + (wi + 1))) + "</span></label>"; }).join("");
@@ -2826,18 +2827,21 @@ import {
       var cOpts = caps.map(function (c, ci) { return '<label class="svchk"><input type="checkbox" data-cur="cap" value="' + ci + '"' + ((sv.capabilityIdx || []).indexOf(ci) !== -1 ? " checked" : "") + ' /><span>' + escHtml(c) + "</span></label>"; }).join("");
       var modal = document.createElement("div"); modal.className = "pass";
       modal.innerHTML =
-        '<div class="pass__box pass__box--wide"><div class="pass__title">One-tap Allow \u2014 what they see</div>' +
+        '<div class="pass__box pass__box--wide"><div class="pass__title">Select what they see</div>' +
         '<div class="pass__sub">Leave a section untouched to show everything (recommended). Tick items only to narrow what an approved recruiter sees.</div>' +
         '<details open class="rkcur__grp"><summary>Work shown <span>(none ticked = all work)</span></summary><div class="svchk__grid">' + wOpts + "</div></details>" +
         '<details class="rkcur__grp"><summary>Numbers shown <span>(all by default)</span></summary><div class="svchk__grid">' + hOpts + "</div></details>" +
         '<details class="rkcur__grp"><summary>Capabilities shown <span>(all by default)</span></summary><div class="svchk__grid">' + cOpts + "</div></details>" +
         '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button><button class="btn btn--primary" data-go>Save scope</button></div></div>';
       document.body.appendChild(modal);
-      var done = function () { modal.remove(); };
+      settingsMount(modal, opts);
+      var done = function () { if (opts.onClose) opts.onClose(); else modal.remove(); };
       var pick = function (sel) { return Array.prototype.map.call(modal.querySelectorAll('[data-cur="' + sel + '"]:checked'), function (x) { return x.value; }); };
       modal.querySelector("[data-cancel]").addEventListener("click", done);
-      modal.addEventListener("click", function (e) { if (e.target === modal) done(); });
-      modal.addEventListener("keydown", function (e) { if (e.key === "Escape") done(); });
+      if (!opts.mount) {
+        modal.addEventListener("click", function (e) { if (e.target === modal) done(); });
+        modal.addEventListener("keydown", function (e) { if (e.key === "Escape") done(); });
+      }
       modal.querySelector("[data-go]").addEventListener("click", function () {
         sv.workIds = pick("work");
         sv.highlightIdx = pick("high").map(Number);
@@ -2847,7 +2851,7 @@ import {
         sv.highlightIdx.sort(function (a, b) { return a - b; });
         sv.capabilityIdx.sort(function (a, b) { return a - b; });
         saveDraft(true); done();
-        (onDone || function () { if (activeTab === "special") renderBody(); })();
+        if (!opts.mount) (onDone || function () { if (activeTab === "special") renderBody(); })();
         status("Scope saved \u2014 publish to apply.", true);
       });
     });
@@ -3387,10 +3391,11 @@ import {
   // instead of a stacked dialog. Simple ones inline (One-tap Allow / Recruiter / Backup); Passkeys /
   // Publishing / AI launch their existing proven dialogs from here.
   var SET_CATS = [["allow", "\u26A1 One-tap Allow"], ["recruiter", "\uD83C\uDFAB Recruiter mode"], ["autopub", "\u21BB Auto-publish"], ["passkeys", "\uD83D\uDD11 Passkeys"], ["publish", "\u2699 Publishing"], ["ai", "\u2728 AI"], ["backup", "\uD83D\uDCBE Backup"]];
-  var setPane, setNav, setPanel, activeSetCat = "allow";
+  var setPane, setNav, setPanel, activeSetCat = "allow", setSub = null;
   function openSettings() {
     if (!setPane) return;
     setPane.hidden = false;
+    setSub = null;
     requestAnimationFrame(function () { setPane.classList.add("is-open"); });
     renderSettings();
     var esc = function (ev) { if (ev.key === "Escape" && !document.querySelector(".pass")) { closeSettings(); } };
@@ -3410,10 +3415,25 @@ import {
   }
   function renderSetPanel() {
     if (!setPanel) return;
-    if (activeSetCat === "allow") { computeAllowMeta().then(function () { if (setPanel) setPanel.innerHTML = quickGrantPanel(); }); return; }
+    if (setSub) { renderSetSub(); return; }
+    if (activeSetCat === "allow") { computeAllowMeta().then(function () { if (setPanel && !setSub) setPanel.innerHTML = quickGrantPanel(); }); return; }
     if (activeSetCat === "autopub") { setPanel.innerHTML = autopubPanelHtml(); wireAutopub(setPanel); return; }
     setPanel.innerHTML = settingsPanelHtml(activeSetCat);
     if (activeSetCat === "recruiter") recruiterStateSync();
+  }
+  // Drill into a deeper view (Select what they see / Passkeys / Publishing / AI) inside the right
+  // panel, keeping the rail visible, with a back arrow to the category's main view.
+  function renderSetSub() {
+    if (!setPanel) return;
+    setPanel.innerHTML = '<button class="adm__set-back" data-act="set-back" type="button"><span aria-hidden="true">\u2190</span> Back</button>' +
+      '<div class="adm__set-sub" data-set-sub></div>';
+    var host = setPanel.querySelector("[data-set-sub]");
+    var back = function () { setSub = null; renderSetPanel(); };
+    if (setSub === "allow-edit") allowEditModal(null, { mount: host, onClose: back });
+    else if (setSub === "passkeys") passkeyModal({ mount: host, onClose: back });
+    else if (setSub === "publish") publishModal(null, { mount: host, onClose: back });
+    else if (setSub === "ai") aiSettingsModal({ mount: host, onClose: back });
+    else { setSub = null; renderSetPanel(); }
   }
   function launchPanelHtml(title, sub, act, label) {
     return '<div class="rkqg"><div class="rkqg__head">' + escHtml(title) + "</div>" +
@@ -3451,18 +3471,14 @@ import {
     c.querySelectorAll("[data-autopub-every]").forEach(function (r) { r.addEventListener("change", function () { autopubSetEvery(+r.value); }); });
     autopubSync();
   }
-  // Render a settings dialog as an L2 right-slide pane (over the settings drawer) instead of a centered
-  // dialog, with a "Back" affordance. Same modal logic \u2014 only the framing changes.
-  function passL2ify(modal, opts) {
-    if (!opts || !opts.l2 || !modal) return;
-    modal.classList.add("pass--l2");
-    var box = modal.querySelector(".pass__box");
-    if (!box) return;
-    var back = document.createElement("button");
-    back.type = "button"; back.className = "pass__back";
-    back.innerHTML = "\u2039 Settings";
-    back.addEventListener("click", function () { modal.remove(); });
-    box.insertBefore(back, box.firstChild);
+  // Mount a settings dialog INSIDE the settings panel (in-panel drill-down) instead of a centered
+  // dialog: strips the modal chrome so its content renders in the right panel. Returns true if mounted.
+  function settingsMount(modal, opts) {
+    if (!opts || !opts.mount || !modal) return false;
+    modal.classList.add("pass--inpanel");
+    opts.mount.innerHTML = "";
+    opts.mount.appendChild(modal);
+    return true;
   }
   function l2PreviewApply() {
     var off = localStorage.getItem(L2PREV_KEY) === "0";
@@ -3696,14 +3712,15 @@ import {
     if (!b) return;
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
     if (act === "settings-close") { closeSettings(); return; }
-    if (act === "settings-cat") { var _sc = b.dataset.cat; if (_sc === "passkeys") { passkeyModal({ l2: true }); return; } if (_sc === "publish") { publishModal(null, { l2: true }); return; } if (_sc === "ai") { aiSettingsModal({ l2: true }); return; } activeSetCat = _sc; renderSettings(); return; }
+    if (act === "settings-cat") { activeSetCat = b.dataset.cat; setSub = null; renderSettings(); return; }
     if (act === "allow-toggle") { toggleAllowDefault(renderSetPanel); return; }
-    if (act === "allow-edit") { allowEditModal(renderSetPanel); return; }
+    if (act === "allow-edit") { setSub = "allow-edit"; renderSetPanel(); return; }
+    if (act === "set-back") { setSub = null; renderSetPanel(); return; }
     if (act === "recruiter-toggle") { recruiterToggle(); renderSetPanel(); return; }
     if (act === "backup-dl") { downloadContentBackup(); return; }
-    if (act === "open-passkeys") { passkeyModal({ l2: true }); return; }
-    if (act === "open-publish") { publishModal(null, { l2: true }); return; }
-    if (act === "open-ai") { aiSettingsModal({ l2: true }); return; }
+    if (act === "open-passkeys") { setSub = "passkeys"; renderSetPanel(); return; }
+    if (act === "open-publish") { setSub = "publish"; renderSetPanel(); return; }
+    if (act === "open-ai") { setSub = "ai"; renderSetPanel(); return; }
     if (act === "sv-add") {
       data.specialViews = data.specialViews || [];
       if (data.specialViews.length >= 6) { status("Up to 6 special views."); return; }
@@ -5152,10 +5169,10 @@ import {
       (saved ? '<button class="pass__link" data-forget>Forget saved token</button>' : "") +
       '<div class="pass__note">Prefer tighter access? Create a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">fine-grained token</a> limited to just this repo (Contents: Read and write).</div></div>';
     document.body.appendChild(modal);
-    passL2ify(modal, opts);
+    settingsMount(modal, opts);
     const inp = modal.querySelector("input"), err = modal.querySelector(".pass__err");
     setTimeout(() => { try { inp.focus(); } catch (e) {} }, 30);
-    const done = () => modal.remove();
+    const done = () => { if (opts && opts.onClose) opts.onClose(); else modal.remove(); };
     modal.addEventListener("click", (e) => { if (e.target === modal) done(); });
     const forget = modal.querySelector("[data-forget]");
     if (forget) forget.addEventListener("click", () => { localStorage.removeItem(GH_TOKEN_KEY); done(); status("Saved token forgotten."); });
@@ -6003,7 +6020,7 @@ import {
       '<div class="pass__actions"><button class="btn btn--ghost" data-clear>Remove keys</button><button class="btn btn--ghost" data-cancel>Close</button><button class="btn btn--primary" data-go>Save</button></div>' +
       '<div class="pass__note">Keys never touch your published site; they\u2019re sent only to the provider you pick. Some providers block browser calls (CORS) \u2014 OpenAI &amp; Gemini work directly, or route through your private proxy.</div></div>';
     document.body.appendChild(modal);
-    passL2ify(modal, opts);
+    settingsMount(modal, opts);
     var bodyEl = modal.querySelector(".aiset__body");
     function paint() {
       var same = aiSameKey();
@@ -6021,7 +6038,7 @@ import {
       if (sameCb) sameCb.addEventListener("change", function () { aiPersistVisible(modal); localStorage.setItem("rk:ai:same", sameCb.checked ? "1" : "0"); paint(); });
     }
     paint();
-    var close = function () { modal.remove(); };
+    var close = function () { if (opts && opts.onClose) opts.onClose(); else modal.remove(); };
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     modal.querySelector("[data-cancel]").addEventListener("click", close);
     modal.querySelector("[data-clear]").addEventListener("click", function () {
@@ -8275,8 +8292,9 @@ import {
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Done</button>' +
       '<button class="btn btn--primary" data-add>\uFF0B Add a passkey</button></div></div>';
     document.body.appendChild(modal);
+    settingsMount(modal, opts);
     const err = modal.querySelector(".pass__err"), listEl = modal.querySelector("[data-pklist]");
-    const done = () => modal.remove();
+    const done = () => { if (opts && opts.onClose) opts.onClose(); else modal.remove(); };
     modal.querySelector("[data-cancel]").addEventListener("click", done);
     modal.addEventListener("click", (e) => { if (e.target === modal) done(); });
     modal.addEventListener("keydown", (e) => { if (e.key === "Escape") done(); });
@@ -8308,7 +8326,7 @@ import {
     refresh();
   }
 
-  function changeKeyModal() {
+  function changeKeyModal(opts) {
     const stored = localStorage.getItem(HASH_KEY);
     const modal = document.createElement("div");
     modal.className = "pass";
@@ -8322,10 +8340,10 @@ import {
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
       '<button class="btn btn--primary" data-go>Update key</button></div></div>';
     document.body.appendChild(modal);
-    passL2ify(modal, opts);
+    settingsMount(modal, opts);
     const cur = modal.querySelector("[data-cur]"), nw = modal.querySelector("[data-new]"), cf = modal.querySelector("[data-confirm]"), err = modal.querySelector(".pass__err");
     setTimeout(function () { try { cur.focus(); } catch (e) {} }, 30);
-    const done = () => modal.remove();
+    const done = () => { if (opts && opts.onClose) opts.onClose(); else modal.remove(); };
     modal.querySelector("[data-cancel]").addEventListener("click", done);
     modal.addEventListener("click", (e) => { if (e.target === modal) done(); });
     async function submit() {

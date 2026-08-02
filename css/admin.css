@@ -453,11 +453,13 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .adm__set-panel { padding: 1.3rem 1.5rem; overflow-y: auto; }
 @media (max-width: 640px) { .adm__set-body { grid-template-columns: 1fr; } .adm__set-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); } }
 .adm__gear svg { display: block; }
-.pass--l2 { place-items: stretch end; padding: 0; background: rgba(0,0,0,.42); overflow: hidden; }
-.pass--l2 .pass__box { width: min(600px, 100%); max-width: none; height: 100vh; max-height: none; margin: 0; border-radius: 0; border-left: 1px solid var(--line); text-align: left; overflow-y: auto; animation: passL2In .3s cubic-bezier(.4,0,.2,1); }
-@keyframes passL2In { from { transform: translateX(44px); opacity: .5; } to { transform: translateX(0); opacity: 1; } }
-.pass__back { display: inline-flex; align-items: center; gap: .35rem; background: none; border: 0; color: var(--text-dim); font-family: var(--mono); font-size: .72rem; letter-spacing: .04em; cursor: pointer; padding: 0 0 .9rem; margin: 0; }
-.pass__back:hover { color: var(--text); }
+.pass--inpanel { position: static; inset: auto; display: block; z-index: auto; padding: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; place-items: stretch; }
+.pass--inpanel .pass__box { width: auto; max-width: none; height: auto; max-height: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; text-align: left; box-shadow: none; animation: none; }
+.adm__set-sub { animation: setSubIn .22s cubic-bezier(.4,0,.2,1); }
+@keyframes setSubIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+.adm__set-back { display: inline-flex; align-items: center; gap: .45rem; background: none; border: 0; color: var(--text-dim); font-family: var(--mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; padding: 0 0 1rem; margin: 0; }
+.adm__set-back:hover { color: var(--text); }
+.adm__set-back span { font-size: 1.05em; }
 .rkacc__tabs { display: flex; gap: .3rem; padding: .5rem .55rem; border-bottom: 1px solid var(--line); background: var(--bg-2); }
 .rkacc__tab { font-family: var(--mono); font-size: .64rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); background: transparent; border: 1px solid transparent; border-radius: 100px; padding: .32rem .7rem; cursor: pointer; }
 .rkacc__tab:hover { color: var(--text); }
