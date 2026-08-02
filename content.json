@@ -3754,6 +3754,18 @@
         21,
         22
       ]
+    },
+    {
+      "id": "sv-fullaccess-msbzqjl8",
+      "name": "Full access",
+      "fullAccess": true,
+      "audience": "",
+      "ticketHash": "282fe121438bd67c6aec08daa19a129ed66a300d72d8639f920b31a706d1c3f4",
+      "createdAt": 1785686668460,
+      "days": 0,
+      "workIds": [],
+      "highlightIdx": [],
+      "capabilityIdx": []
     }
   ],
   "journey": {
