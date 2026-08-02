@@ -432,6 +432,10 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .rkqg__status.is-on { color: var(--text); }
 .rkqg__acts { display: flex; gap: .4rem; margin-left: auto; flex-wrap: wrap; }
 .rkqg__acts .btn { font-size: .72rem; padding: .3rem .6rem; }
+.rkqg.is-on { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.rkqg__row--toggle { justify-content: space-between; }
+.rkqg__row--toggle .rkacc__switch { margin: 0; }
+.rkinbox__acts .svshare, .rkinbox__acts .svshare__btn { width: 100%; }
 .rkacc__tabs { display: flex; gap: .3rem; padding: .5rem .55rem; border-bottom: 1px solid var(--line); background: var(--bg-2); }
 .rkacc__tab { font-family: var(--mono); font-size: .64rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); background: transparent; border: 1px solid transparent; border-radius: 100px; padding: .32rem .7rem; cursor: pointer; }
 .rkacc__tab:hover { color: var(--text); }

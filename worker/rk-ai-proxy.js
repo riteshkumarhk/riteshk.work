@@ -113,6 +113,7 @@ export default {
       if (!rec || !rec.email) return _reply("Already handled \u2014 nothing to send.");
       const qg = await env.VAULT_GRANTS.get("quickgrant:full", "json");
       if (!qg || !qg.code) return _reply("No Full-access quick-grant is set up yet. Open the studio, mark a special view as Full access, then tap Allow again.");
+      if (qg.enabled === false) return _reply("One-tap Allow is turned off. Turn it back on in the studio, then tap Allow again.");
       if (qg.expiresAt && Date.now() > qg.expiresAt) return _reply("Your Full-access link has expired. Refresh it in the studio, then tap Allow again.");
       const who = String(rec.name || "there"), me = env.OWNER_EMAIL || "riteshkumarhk@gmail.com";
       const minted = await mintAccessLink(env, { email: rec.email, name: rec.name, company: rec.company, reqId: _id });
@@ -613,11 +614,20 @@ export default {
         try {
           const b = await request.json();
           if (b && b.revoke) { await env.VAULT_GRANTS.delete("quickgrant:full"); return json({ ok: true, revoked: true }, 200, cors); }
+          // On/off toggle without touching the code: keeps already-minted recruiter links resolving
+          // (redeem only needs the code to exist) while /req/allow refuses NEW mints when disabled.
+          if (b && (b.code == null || b.code === "") && typeof b.enabled === "boolean") {
+            const cur = (await env.VAULT_GRANTS.get("quickgrant:full", "json")) || null;
+            if (!cur || !cur.code) return json({ error: "Set up the Full-access code first." }, 400, cors);
+            cur.enabled = b.enabled; cur.updatedAt = Date.now();
+            await env.VAULT_GRANTS.put("quickgrant:full", JSON.stringify(cur));
+            return json({ ok: true, enabled: cur.enabled, updatedAt: cur.updatedAt }, 200, cors);
+          }
           const code = String((b && b.code) || "").trim();
           if (!code) return json({ error: "Add the Full-access code first." }, 400, cors);
-          const rec = { code, expiresAt: Number((b && b.expiresAt) || 0) || 0, updatedAt: Date.now() };
+          const rec = { code, expiresAt: Number((b && b.expiresAt) || 0) || 0, enabled: (b && b.enabled === false) ? false : true, updatedAt: Date.now() };
           await env.VAULT_GRANTS.put("quickgrant:full", JSON.stringify(rec));
-          return json({ ok: true, expiresAt: rec.expiresAt, updatedAt: rec.updatedAt }, 200, cors);
+          return json({ ok: true, expiresAt: rec.expiresAt, enabled: rec.enabled, updatedAt: rec.updatedAt }, 200, cors);
         } catch (e) { return json({ error: "Save failed" }, 400, cors); }
       }
       return json({ error: "Method not allowed" }, 405, cors);

@@ -2746,22 +2746,98 @@ import {
     var d = Math.ceil((qgCache.expiresAt - Date.now()) / 86400000);
     return "Active \u00b7 " + (d <= 0 ? "expires today" : d + " day" + (d > 1 ? "s" : "") + " left") + ".";
   }
+  // The pinned "One-tap Allow" control + its dedicated hidden "Full access" special view (empty scope =
+  // all work) that the notification's Allow button hands out. Decoupled from your shareable views; on/off
+  // + editable scope. Duration is NOT set here (each recruiter link is minted with its own 15-day life).
+  function fullAccessView() { return (data.specialViews || []).filter(function (v) { return v && v.fullAccess; })[0] || null; }
+  async function ensureFullAccessView() {
+    var v = fullAccessView();
+    if (v) return v;
+    data.specialViews = data.specialViews || [];
+    var phrase = "fa-" + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 8);
+    v = { id: "sv-fullaccess-" + Date.now().toString(36), name: "Full access", fullAccess: true, audience: "", ticketHash: await sha256(phrase), createdAt: Date.now(), days: 0, workIds: [], highlightIdx: [], capabilityIdx: [] };
+    ticketPlain[v.id] = phrase;
+    data.specialViews.push(v);
+    saveDraft(true);
+    return v;
+  }
+  function allowIsOn() { return !!(qgCache && qgCache.code && qgCache.enabled !== false); }
   function quickGrantPanel() {
-    var views = data.specialViews || [];
-    var set = !!(qgCache && qgCache.code);
-    var opts = views.map(function (sv, i) { return '<option value="' + escAttr(sv.id) + '">' + escHtml(sv.name || ("View " + (i + 1))) + "</option>"; }).join("");
-    return '<div class="rkqg">' +
-      '<div class="rkqg__head">One-tap Full access <span class="rkqg__sub">the link the request notification\u2019s <b>Allow</b> button emails</span></div>' +
-      (views.length
-        ? '<div class="rkqg__row"><select data-qg-view>' + opts + "</select>" +
-          '<input data-qg-days type="number" min="0" step="1" value="0" placeholder="days" title="Auto-expire after (days) \u2014 0 = never" />' +
-          '<button class="btn btn--primary" data-act="qg-set">' + (set ? "Update" : "Set") + "</button></div>"
-        : '<div class="af__hint">Create a \u201cFull access\u201d special view below (all work selected + a ticket phrase), then set it here.</div>') +
-      '<div class="rkqg__status' + (set ? " is-on" : "") + '"><span>' + escHtml(qgStatusText()) + "</span>" +
-        (set ? '<span class="rkqg__acts"><button class="btn btn--ghost" data-act="qg-copylink">Copy link</button><button class="btn btn--ghost" data-act="qg-copycode">Copy code</button><button class="btn btn--danger" data-act="qg-revoke">Revoke</button></span>' : "") +
-      "</div>" +
-      '<div class="af__hint">Set your \u201cFull access\u201d view here so tapping <b>Allow</b> on a request notification instantly emails that link. Publish the view first so the link opens. Change the days or Revoke anytime.</div>' +
+    var v = fullAccessView();
+    var on = allowIsOn();
+    var nWork = v ? (v.workIds || []).length : 0;
+    var scope = (!v || !nWork) ? "all your work" : (nWork + (nWork > 1 ? " works" : " work"));
+    return '<div class="rkqg' + (on ? " is-on" : "") + '">' +
+      '<div class="rkqg__head">One-tap Allow <span class="rkqg__sub">what tapping <b>Allow</b> on a request hands out</span></div>' +
+      '<div class="rkqg__row rkqg__row--toggle"><label class="rkacc__switch"><input type="checkbox" data-act="allow-toggle"' + (on ? " checked" : "") + " /> Enable one-tap Allow</label>" +
+        '<button class="btn btn--ghost" data-act="allow-edit">Edit scope\u2026</button></div>' +
+      '<div class="rkqg__status' + (on ? " is-on" : "") + '"><span>' + (on
+        ? "On \u00b7 approved recruiters see <b>" + escHtml(scope) + "</b> on a fresh 15-day link"
+        : "Off \u2014 tapping <b>Allow</b> won\u2019t hand out access") + "</span></div>" +
+      '<div class="af__hint">A unique 15-day link is minted per recruiter (duration is per link, not set here). This controls <b>whether</b> Allow works and <b>what</b> they see \u2014 all your work by default. <b>Publish</b> after turning it on or editing scope so the links resolve. Turning it off stops new approvals but won\u2019t cut off recruiters you already approved.</div>' +
     "</div>";
+  }
+  async function toggleAllowDefault() {
+    var sess = adminSession(); if (!sess) return;
+    var on = allowIsOn();
+    try {
+      if (on) {
+        var r = await fetch(ADMIN_WORKER + "/admin/quickgrant", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ enabled: false }) });
+        if (!r.ok) throw 0;
+        qgCache = qgCache || {}; qgCache.enabled = false;
+        if (activeTab === "special") renderBody();
+        status("One-tap Allow turned off \u2014 links you already sent still work.", true);
+      } else if (qgCache && qgCache.code) {
+        var r2 = await fetch(ADMIN_WORKER + "/admin/quickgrant", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ enabled: true }) });
+        if (!r2.ok) throw 0;
+        qgCache.enabled = true;
+        if (activeTab === "special") renderBody();
+        status("One-tap Allow is on.", true);
+      } else {
+        var v = await ensureFullAccessView();
+        var phrase = ticketPlain[v.id];
+        if (!phrase) { status("Couldn\u2019t set up the default \u2014 try again.", false); return; }
+        var r3 = await fetch(ADMIN_WORKER + "/admin/quickgrant", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ code: phrase, enabled: true, expiresAt: 0 }) });
+        if (!r3.ok) throw 0;
+        qgCache = { code: phrase, enabled: true, expiresAt: 0, updatedAt: Date.now() };
+        if (activeTab === "special") renderBody();
+        status("One-tap Allow set up \u2014 hit Publish to make it live.", true);
+      }
+    } catch (e) { status("Couldn\u2019t reach the server \u2014 try again.", false); }
+  }
+  function allowEditModal() {
+    ensureFullAccessView().then(function (sv) {
+      var works = data.work || [], highs = data.highlights || [], caps = data.capabilities || [];
+      var wOpts = works.map(function (w, wi) { return '<label class="svchk"><input type="checkbox" data-cur="work" value="' + escAttr(w.id) + '"' + ((sv.workIds || []).indexOf(w.id) !== -1 ? " checked" : "") + ' /><span>' + escHtml(w.client || w.title || ("Work " + (wi + 1))) + "</span></label>"; }).join("");
+      var hOpts = highs.map(function (hh, hi) { return '<label class="svchk"><input type="checkbox" data-cur="high" value="' + hi + '"' + ((sv.highlightIdx || []).indexOf(hi) !== -1 ? " checked" : "") + ' /><span>' + escHtml((hh.value || "") + " \u00b7 " + (hh.label || "")) + "</span></label>"; }).join("");
+      var cOpts = caps.map(function (c, ci) { return '<label class="svchk"><input type="checkbox" data-cur="cap" value="' + ci + '"' + ((sv.capabilityIdx || []).indexOf(ci) !== -1 ? " checked" : "") + ' /><span>' + escHtml(c) + "</span></label>"; }).join("");
+      var modal = document.createElement("div"); modal.className = "pass";
+      modal.innerHTML =
+        '<div class="pass__box pass__box--wide"><div class="pass__title">One-tap Allow \u2014 what they see</div>' +
+        '<div class="pass__sub">Leave a section untouched to show everything (recommended). Tick items only to narrow what an approved recruiter sees.</div>' +
+        '<details open class="rkcur__grp"><summary>Work shown <span>(none ticked = all work)</span></summary><div class="svchk__grid">' + wOpts + "</div></details>" +
+        '<details class="rkcur__grp"><summary>Numbers shown <span>(all by default)</span></summary><div class="svchk__grid">' + hOpts + "</div></details>" +
+        '<details class="rkcur__grp"><summary>Capabilities shown <span>(all by default)</span></summary><div class="svchk__grid">' + cOpts + "</div></details>" +
+        '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button><button class="btn btn--primary" data-go>Save scope</button></div></div>';
+      document.body.appendChild(modal);
+      var done = function () { modal.remove(); };
+      var pick = function (sel) { return Array.prototype.map.call(modal.querySelectorAll('[data-cur="' + sel + '"]:checked'), function (x) { return x.value; }); };
+      modal.querySelector("[data-cancel]").addEventListener("click", done);
+      modal.addEventListener("click", function (e) { if (e.target === modal) done(); });
+      modal.addEventListener("keydown", function (e) { if (e.key === "Escape") done(); });
+      modal.querySelector("[data-go]").addEventListener("click", function () {
+        sv.workIds = pick("work");
+        sv.highlightIdx = pick("high").map(Number);
+        sv.capabilityIdx = pick("cap").map(Number);
+        var order = (data.work || []).map(function (w) { return w.id; });
+        sv.workIds.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
+        sv.highlightIdx.sort(function (a, b) { return a - b; });
+        sv.capabilityIdx.sort(function (a, b) { return a - b; });
+        saveDraft(true); done();
+        if (activeTab === "special") renderBody();
+        status("Scope saved \u2014 publish to apply.", true);
+      });
+    });
   }
   async function loadQuickGrant() {
     try {
@@ -2854,16 +2930,18 @@ import {
   function customViewsPane() {
     const list = data.specialViews || (data.specialViews = []);
     const showRevoked = accShowRevoked;
-    const shown = list.map(function (sv, i) { return { sv: sv, i: i }; }).filter(function (x) { return !!x.sv.revoked === showRevoked; });
+    // The hidden "Full access" view (the Allow default) never shows as a shareable card.
+    const shown = list.map(function (sv, i) { return { sv: sv, i: i }; }).filter(function (x) { return !x.sv.fullAccess && !!x.sv.revoked === showRevoked; });
+    const userCount = list.filter(function (sv) { return !sv.fullAccess; }).length;
     let html = '<label class="rkacc__switch"><input type="checkbox" data-act="acc-revoked"' + (showRevoked ? " checked" : "") + " /> Show revoked</label>";
+    if (!showRevoked) html += quickGrantPanel();
     if (!showRevoked) html += '<p class="af__hint" style="margin:.1rem 0 1rem">Curated, ticketed versions of the site for one audience (say an automotive company). Choose the work, numbers and skills they see, set a ticket phrase and an optional expiry. Up to 6. <em>Tickets are a soft gate \u2014 the curated content still ships in your published file, so don\u2019t put anything confidential here.</em></p>';
     if (!shown.length) html += '<div class="adm__empty">' + (showRevoked ? "No revoked views." : "No special views yet.") + "</div>";
     shown.forEach(function (x) { html += svCard(x.sv, x.i); });
     if (!showRevoked) {
-      html += '<div class="adm__addbar rolekit__bar"><button class="btn btn--add" data-act="sv-add"' + (list.length >= 6 ? " disabled" : "") + '>+ New special view</button>' +
+      html += '<div class="adm__addbar rolekit__bar"><button class="btn btn--add" data-act="sv-add"' + (userCount >= 6 ? " disabled" : "") + '>+ New special view</button>' +
         '<button class="btn btn--auto rolekit__cta" data-act="sv-tailor">\u2728 Tailor to a role</button></div>';
-      if (list.length >= 6) html += '<div class="af__hint">Maximum of 6 special views reached.</div>';
-      html += quickGrantPanel();
+      if (userCount >= 6) html += '<div class="af__hint">Maximum of 6 special views reached.</div>';
     }
     return html;
   }
@@ -2950,17 +3028,20 @@ import {
     const exp = !sv.days ? "no expiry" : expired ? "expired" : (left <= 0 ? "expires today" : left + "d left");
     const nWork = (sv.workIds || []).length;
     const meta = (sv.audience ? escHtml(sv.audience) + " \u00b7 " : "") + (sv.ticketHash ? "ticket set" : "no ticket") + " \u00b7 " + (nWork ? nWork + (nWork > 1 ? " works" : " work") : "all work") + " \u00b7 " + exp;
+    const badge = revoked ? ' <span class="rkinbox__ago">revoked</span>' : (expired ? ' <span class="rkinbox__ago">expired</span>' : "");
     const acts = revoked
-      ? '<button class="btn btn--ghost" data-act="sv-restore" data-index="' + i + '">Restore</button>' +
+      ? '<button class="btn btn--primary" data-act="sv-restore" data-index="' + i + '">Restore</button>' +
         '<button class="btn btn--danger" data-act="sv-delete" data-index="' + i + '">Delete</button>'
       : '<div class="svshare"><button class="btn btn--ghost svshare__btn" data-act="sv-share" data-index="' + i + '">Share \u25be</button>' +
           '<div class="svshare__menu" hidden><button class="svshare__item" data-act="sv-copylink" data-index="' + i + '">Copy link</button><button class="svshare__item" data-act="sv-copycode" data-index="' + i + '">Copy code</button></div></div>' +
         '<button class="btn btn--ghost" data-act="sv-edit" data-index="' + i + '">Edit</button>' +
         '<button class="btn btn--warn" data-act="sv-revoke" data-index="' + i + '">Revoke</button>';
-    return '<div class="svrow' + (revoked ? " svrow--off" : (expired ? " svrow--exp" : "")) + '">' +
-      '<div class="svrow__main"><div class="svrow__name">' + escHtml(sv.name || ("View " + (i + 1))) + (revoked ? ' <span class="sv-badge">revoked</span>' : (expired ? ' <span class="sv-badge">expired</span>' : "")) + "</div>" +
-        '<div class="svrow__meta">' + meta + "</div></div>" +
-        '<div class="svrow__acts">' + acts + "</div>" +
+    return '<div class="rkinbox__row' + (revoked ? " is-off" : "") + '">' +
+      '<div class="rkinbox__main">' +
+        '<div class="rkinbox__who"><b>' + escHtml(sv.name || ("View " + (i + 1))) + "</b>" + badge + "</div>" +
+        '<div class="rkinbox__ctx">' + meta + "</div>" +
+      "</div>" +
+      '<div class="rkinbox__acts">' + acts + "</div>" +
     "</div>";
   }
   // Low-density Edit dialog for a special view: name / audience / ticket / expiry + foldable Work / Numbers /
@@ -3509,6 +3590,8 @@ import {
     }
     if (act === "sv-remove") { (data.specialViews || []).splice(i, 1); saveDraft(true); renderBody(); return; }
     if (act === "sv-edit") { svEditModal(i); return; }
+    if (act === "allow-toggle") { toggleAllowDefault(); return; }
+    if (act === "allow-edit") { allowEditModal(); return; }
     if (act === "sv-share") { var _shm = b.parentNode.querySelector(".svshare__menu"); var _wh = _shm && _shm.hidden; if (root) root.querySelectorAll(".svshare__menu").forEach(function (m) { m.hidden = true; }); if (_shm) _shm.hidden = !_wh; return; }
     if (act === "sv-revoke") { var _rv = (data.specialViews || [])[i]; if (_rv) { _rv.revoked = true; saveDraft(true); renderBody(); status("View revoked \u2014 tick Show revoked to restore or delete it.", true); } return; }
     if (act === "sv-restore") { var _rs = (data.specialViews || [])[i]; if (_rs) { _rs.revoked = false; saveDraft(true); renderBody(); status("View restored.", true); } return; }
