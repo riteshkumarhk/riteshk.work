@@ -336,7 +336,7 @@ import {
     });
     return __studioLoading;
   }
-  function studioUrlExit() { try { document.documentElement.classList.remove("studio-boot"); } catch (e) {} try { if (window.__STUDIO_PAGE) { location.href = "/"; return; } if (location.pathname === "/studio") history.replaceState({}, "", "/"); } catch (e) {} }
+  function studioUrlExit() { try { if (window.__STUDIO_PAGE) { location.href = "/"; return; } if (location.pathname === "/studio") history.replaceState({}, "", "/"); } catch (e) {} }
   function openStudio() {
     loadStudio().then(function () {
       if (window.__RKStudio) {
@@ -1037,14 +1037,6 @@ import {
     musInit();
     if (window.RK) window.RK.requestAccess = requestAccessModal;
     afterRender(recruiterInit);
-    // Direct studio entry: /studio (and /admin) arrive here as ?studio=1 via the 404 SPA
-    // fallback. Tidy the address bar to /studio and open the same gate the clock menu uses.
-    try {
-      if (new URLSearchParams(location.search || "").get("studio") === "1") {
-        try { history.replaceState({}, "", "/studio"); } catch (e) {}
-        setTimeout(gate, 350);
-      }
-    } catch (e) {}
   }
   if (window.__siteRendered) init();
   else document.addEventListener("site:rendered", init, { once: true });

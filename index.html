@@ -37,11 +37,6 @@
       apply(); schedule();
     })();
   </script>
-  <script>
-    // Dedicated /studio entry (arrives as ?studio=1 via the 404 SPA fallback): flag it before first
-    // paint so the landing is hidden and the page IS the studio, not an overlay on a visible landing.
-    try { if (new URLSearchParams(location.search).get("studio") === "1") document.documentElement.classList.add("studio-boot"); } catch (e) {}
-  </script>
   <title>Ritesh Kumar — Senior Product Designer</title>
   <meta name="description" content="Ritesh Kumar — Senior Product Designer working on growth, AI and identity experiences across Microsoft Edge, Windows and Microsoft Search. Thoughtful, strategic product design." />
   <meta name="author" content="Ritesh Kumar" />
@@ -66,9 +61,6 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90' font-family='serif' fill='%23ECE7E1'>R</text></svg>" />
 </head>
 <body class="site-loading">
-  <!-- Studio-only escape hatch: shown only on /studio, before the gate/studio load (or if content fails). -->
-  <a class="studio-boot-exit" href="/">&larr; Back to riteshk.work</a>
-
   <!-- Custom cursor -->
   <div class="cursor" aria-hidden="true">
     <div class="cursor__dot"></div>
