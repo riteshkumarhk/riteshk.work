@@ -3386,7 +3386,7 @@ import {
   // ---------- Settings side-pane (right drawer): declutters the "\u22EF" menu; each setting is a panel
   // instead of a stacked dialog. Simple ones inline (One-tap Allow / Recruiter / Backup); Passkeys /
   // Publishing / AI launch their existing proven dialogs from here.
-  var SET_CATS = [["allow", "\u26A1 One-tap Allow"], ["recruiter", "\uD83C\uDFAB Recruiter mode"], ["passkeys", "\uD83D\uDD11 Passkeys"], ["publish", "\u2699 Publishing"], ["ai", "\u2728 AI"], ["backup", "\uD83D\uDCBE Backup"]];
+  var SET_CATS = [["allow", "\u26A1 One-tap Allow"], ["recruiter", "\uD83C\uDFAB Recruiter mode"], ["autopub", "\u21BB Auto-publish"], ["passkeys", "\uD83D\uDD11 Passkeys"], ["publish", "\u2699 Publishing"], ["ai", "\u2728 AI"], ["backup", "\uD83D\uDCBE Backup"]];
   var setPane, setNav, setPanel, activeSetCat = "allow";
   function openSettings() {
     if (!setPane) return;
@@ -3411,6 +3411,7 @@ import {
   function renderSetPanel() {
     if (!setPanel) return;
     if (activeSetCat === "allow") { computeAllowMeta().then(function () { if (setPanel) setPanel.innerHTML = quickGrantPanel(); }); return; }
+    if (activeSetCat === "autopub") { setPanel.innerHTML = autopubPanelHtml(); wireAutopub(setPanel); return; }
     setPanel.innerHTML = settingsPanelHtml(activeSetCat);
     if (activeSetCat === "recruiter") recruiterStateSync();
   }
@@ -3435,6 +3436,33 @@ import {
     if (cat === "publish") return launchPanelHtml("Publishing", "Connect GitHub, replace the token, or publish manually.", "open-publish", "Open publishing settings");
     if (cat === "ai") return launchPanelHtml("AI", "Connect OpenAI, Gemini or Claude for the Prepare tools.", "open-ai", "Open AI settings");
     return "";
+  }
+  function autopubPanelHtml() {
+    return '<div class="rkqg"><div class="rkqg__head">Auto-publish <span class="rkqg__sub">publish your draft on a timer</span></div>' +
+      '<div class="adm__auto" data-autopub>' +
+        '<button class="adm__auto-sw" type="button" data-autopub-toggle role="switch" aria-checked="false" title="Auto-publish on a timer"><span class="adm__auto-lbl">Auto-publish</span><span class="adm__auto-track"><span class="adm__auto-knob"></span></span></button>' +
+        '<label class="adm__auto-opt"><input type="radio" name="autopub-every" value="30" data-autopub-every /><span>Every 30 minutes</span></label>' +
+        '<label class="adm__auto-opt"><input type="radio" name="autopub-every" value="60" data-autopub-every /><span>Every hour</span></label>' +
+      "</div>" +
+      '<div class="af__hint">When on, your draft publishes automatically on the interval you pick. You can still Publish manually anytime.</div></div>';
+  }
+  function wireAutopub(c) {
+    var tog = c.querySelector("[data-autopub-toggle]"); if (tog) tog.addEventListener("click", autopubToggle);
+    c.querySelectorAll("[data-autopub-every]").forEach(function (r) { r.addEventListener("change", function () { autopubSetEvery(+r.value); }); });
+    autopubSync();
+  }
+  // Render a settings dialog as an L2 right-slide pane (over the settings drawer) instead of a centered
+  // dialog, with a "Back" affordance. Same modal logic \u2014 only the framing changes.
+  function passL2ify(modal, opts) {
+    if (!opts || !opts.l2 || !modal) return;
+    modal.classList.add("pass--l2");
+    var box = modal.querySelector(".pass__box");
+    if (!box) return;
+    var back = document.createElement("button");
+    back.type = "button"; back.className = "pass__back";
+    back.innerHTML = "\u2039 Settings";
+    back.addEventListener("click", function () { modal.remove(); });
+    box.insertBefore(back, box.firstChild);
   }
   function l2PreviewApply() {
     var off = localStorage.getItem(L2PREV_KEY) === "0";
@@ -3668,14 +3696,14 @@ import {
     if (!b) return;
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
     if (act === "settings-close") { closeSettings(); return; }
-    if (act === "settings-cat") { activeSetCat = b.dataset.cat; renderSettings(); return; }
+    if (act === "settings-cat") { var _sc = b.dataset.cat; if (_sc === "passkeys") { passkeyModal({ l2: true }); return; } if (_sc === "publish") { publishModal(null, { l2: true }); return; } if (_sc === "ai") { aiSettingsModal({ l2: true }); return; } activeSetCat = _sc; renderSettings(); return; }
     if (act === "allow-toggle") { toggleAllowDefault(renderSetPanel); return; }
     if (act === "allow-edit") { allowEditModal(renderSetPanel); return; }
     if (act === "recruiter-toggle") { recruiterToggle(); renderSetPanel(); return; }
     if (act === "backup-dl") { downloadContentBackup(); return; }
-    if (act === "open-passkeys") { passkeyModal(); return; }
-    if (act === "open-publish") { publishModal(); return; }
-    if (act === "open-ai") { aiSettingsModal(); return; }
+    if (act === "open-passkeys") { passkeyModal({ l2: true }); return; }
+    if (act === "open-publish") { publishModal(null, { l2: true }); return; }
+    if (act === "open-ai") { aiSettingsModal({ l2: true }); return; }
     if (act === "sv-add") {
       data.specialViews = data.specialViews || [];
       if (data.specialViews.length >= 6) { status("Up to 6 special views."); return; }
@@ -5101,7 +5129,7 @@ import {
     status("Downloaded + copied \u2014 paste into the GitHub tab and Commit.", true);
   }
 
-  function publishModal(msg) {
+  function publishModal(msg, opts) {
     const saved = localStorage.getItem(GH_TOKEN_KEY);
     const modal = document.createElement("div");
     modal.className = "pass";
@@ -5124,6 +5152,7 @@ import {
       (saved ? '<button class="pass__link" data-forget>Forget saved token</button>' : "") +
       '<div class="pass__note">Prefer tighter access? Create a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">fine-grained token</a> limited to just this repo (Contents: Read and write).</div></div>';
     document.body.appendChild(modal);
+    passL2ify(modal, opts);
     const inp = modal.querySelector("input"), err = modal.querySelector(".pass__err");
     setTimeout(() => { try { inp.focus(); } catch (e) {} }, 30);
     const done = () => modal.remove();
@@ -5963,7 +5992,7 @@ import {
   // Full AI settings dialog, opened from the More (...) menu. Mirrors the old AI-tab config: private proxy +
   // one/two provider blocks + save/remove. Self-contained (its own handlers) since it lives outside the tab
   // body, and persists via aiPersistVisible(modal) scoped to its own inputs.
-  function aiSettingsModal() {
+  function aiSettingsModal(opts) {
     var modal = document.createElement("div");
     modal.className = "pass";
     modal.innerHTML =
@@ -5974,6 +6003,7 @@ import {
       '<div class="pass__actions"><button class="btn btn--ghost" data-clear>Remove keys</button><button class="btn btn--ghost" data-cancel>Close</button><button class="btn btn--primary" data-go>Save</button></div>' +
       '<div class="pass__note">Keys never touch your published site; they\u2019re sent only to the provider you pick. Some providers block browser calls (CORS) \u2014 OpenAI &amp; Gemini work directly, or route through your private proxy.</div></div>';
     document.body.appendChild(modal);
+    passL2ify(modal, opts);
     var bodyEl = modal.querySelector(".aiset__body");
     function paint() {
       var same = aiSameKey();
@@ -8007,21 +8037,7 @@ import {
           '<div class="adm__actions-r">' +
             '<button class="btn btn--ghost adm__viewtoggle" data-view>Preview</button>' +
             '<button class="btn btn--primary adm__publish" data-publish hidden>Publish</button>' +
-          '<div class="adm__more" data-more-wrap>' +
-            '<button class="btn btn--ghost adm__more-btn" data-more type="button" aria-haspopup="true" aria-expanded="false" aria-label="More options" title="More">\u22EF</button>' +
-            '<div class="adm__more-pop" hidden>' +
-              '<button class="adm__more-item" data-opensettings type="button"><span class="adm__more-ic">\u2699</span><span class="adm__more-tx"><b>Settings</b><small>Passkeys, publishing, AI, recruiter mode, one-tap Allow, backup</small></span></button>' +
-              '<div class="adm__more-sep"></div>' +
-              '<div class="adm__auto" data-autopub>' +
-                '<button class="adm__auto-sw" type="button" data-autopub-toggle role="switch" aria-checked="false" title="Auto-publish on a timer">' +
-                  '<span class="adm__auto-lbl">Auto-publish</span>' +
-                  '<span class="adm__auto-track"><span class="adm__auto-knob"></span></span>' +
-                "</button>" +
-                '<label class="adm__auto-opt"><input type="radio" name="autopub-every" value="30" data-autopub-every /><span>Every 30 minutes</span></label>' +
-                '<label class="adm__auto-opt"><input type="radio" name="autopub-every" value="60" data-autopub-every /><span>Every hour</span></label>' +
-              "</div>" +
-            "</div>" +
-          "</div>" +
+          '<button class="btn btn--ghost adm__gear" data-opensettings type="button" aria-label="Settings" title="Settings"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>' +
           '<div class="adm__exitwrap" data-exit-wrap>' +
             '<button class="btn adm__exit" data-exit type="button" aria-label="Exit studio" title="Exit">\u2715</button>' +
             '<div class="adm__exit-pop" hidden>' +
@@ -8106,25 +8122,8 @@ import {
     var _redo = root.querySelector("[data-redo]"); if (_redo) _redo.addEventListener("click", histRedo);
     root.querySelector("[data-publish]").addEventListener("click", publish);
     var _sett = root.querySelector("[data-opensettings]"); if (_sett) _sett.addEventListener("click", () => { closeBarPops(); openSettings(); });
-    root.querySelector("[data-autopub-toggle]").addEventListener("click", autopubToggle);
-    const autoWrap = root.querySelector("[data-autopub]");
-    var _apMenu = root.querySelector("[data-autopub-menu]");
-    if (_apMenu) _apMenu.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const pop = autoWrap.querySelector(".adm__auto-pop"); const opening = pop.hidden;
-      pop.hidden = !opening; e.currentTarget.setAttribute("aria-expanded", opening ? "true" : "false");
-    });
-    autoWrap.querySelectorAll("[data-autopub-every]").forEach((r) => r.addEventListener("change", () => autopubSetEvery(+r.value)));
     const pubCloseBtn = root.querySelector("[data-pub-close]");
     if (pubCloseBtn) pubCloseBtn.addEventListener("click", pubHide);
-    // "\u22EF" more-menu: Passkeys / Publishing settings / Auto-publish
-    var _more = root.querySelector("[data-more]");
-    if (_more) _more.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const pop = root.querySelector(".adm__more-pop"); if (!pop) return;
-      const opening = pop.hidden; closeExitPop(); pop.hidden = !opening;
-      _more.setAttribute("aria-expanded", opening ? "true" : "false");
-    });
     // "\u2715" close: when there are unsaved changes, offer Save / Discard; a clean studio just exits.
     root.querySelector("[data-exit]").addEventListener("click", (e) => {
       e.stopPropagation(); closeMorePop();
@@ -8134,10 +8133,6 @@ import {
     var _exSave = root.querySelector("[data-exit-save]"); if (_exSave) _exSave.addEventListener("click", () => { closeExitPop(); exit(); });
     var _exDiscard = root.querySelector("[data-exit-discard]"); if (_exDiscard) _exDiscard.addEventListener("click", () => { closeExitPop(); revert(); });
     document.addEventListener("click", (e) => {
-      const pop = autoWrap.querySelector(".adm__auto-pop");
-      if (pop && !pop.hidden && !autoWrap.contains(e.target)) { pop.hidden = true; const cv = autoWrap.querySelector("[data-autopub-menu]"); if (cv) cv.setAttribute("aria-expanded", "false"); }
-      const mw = root.querySelector("[data-more-wrap]");
-      if (mw && !mw.contains(e.target)) closeMorePop();
       const ew = root.querySelector("[data-exit-wrap]");
       if (ew && !ew.contains(e.target)) closeExitPop();
     });
@@ -8268,7 +8263,7 @@ import {
       modal.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); if (e.key === "Escape") done(false); });
     });
   }
-  async function passkeyModal() {
+  async function passkeyModal(opts) {
     if (!webauthnSupported()) { status("This browser doesn\u2019t support passkeys.", false); return; }
     const modal = document.createElement("div");
     modal.className = "pass";
@@ -8327,6 +8322,7 @@ import {
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
       '<button class="btn btn--primary" data-go>Update key</button></div></div>';
     document.body.appendChild(modal);
+    passL2ify(modal, opts);
     const cur = modal.querySelector("[data-cur]"), nw = modal.querySelector("[data-new]"), cf = modal.querySelector("[data-confirm]"), err = modal.querySelector(".pass__err");
     setTimeout(function () { try { cur.focus(); } catch (e) {} }, 30);
     const done = () => modal.remove();
