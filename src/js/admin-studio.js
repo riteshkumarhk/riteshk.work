@@ -2761,48 +2761,60 @@ import {
     saveDraft(true);
     return v;
   }
-  function allowIsOn() { return !!(qgCache && qgCache.code && qgCache.enabled !== false); }
-  function quickGrantPanel() {
+  var allowMeta = { on: false, legacy: false, scope: "all your work" };
+  async function computeAllowMeta() {
     var v = fullAccessView();
-    var on = allowIsOn();
+    var code = qgCache && qgCache.code;
+    var enabled = !!(qgCache && qgCache.enabled !== false);
+    var pointsFull = false;
+    if (v && code) { try { pointsFull = (await sha256(code)) === v.ticketHash; } catch (e) {} }
     var nWork = v ? (v.workIds || []).length : 0;
-    var scope = (!v || !nWork) ? "all your work" : (nWork + (nWork > 1 ? " works" : " work"));
+    allowMeta = {
+      on: !!(code && enabled && pointsFull),
+      legacy: !!(code && !pointsFull),
+      scope: (!v || !nWork) ? "all your work" : (nWork + (nWork > 1 ? " works" : " work"))
+    };
+  }
+  function quickGrantPanel() {
+    var on = allowMeta.on, legacy = allowMeta.legacy, scope = allowMeta.scope;
     return '<div class="rkqg' + (on ? " is-on" : "") + '">' +
       '<div class="rkqg__head">One-tap Allow <span class="rkqg__sub">what tapping <b>Allow</b> on a request hands out</span></div>' +
       '<div class="rkqg__row rkqg__row--toggle"><label class="rkacc__switch"><input type="checkbox" data-act="allow-toggle"' + (on ? " checked" : "") + " /> Enable one-tap Allow</label>" +
         '<button class="btn btn--ghost" data-act="allow-edit">Edit scope\u2026</button></div>' +
       '<div class="rkqg__status' + (on ? " is-on" : "") + '"><span>' + (on
         ? "On \u00b7 approved recruiters see <b>" + escHtml(scope) + "</b> on a fresh 15-day link"
-        : "Off \u2014 tapping <b>Allow</b> won\u2019t hand out access") + "</span></div>" +
+        : legacy
+          ? "\u26A0 Allow is wired to an older link right now. Turn it on to switch it to <b>full access</b> \u2014 all your work."
+          : "Off \u2014 tapping <b>Allow</b> won\u2019t hand out access") + "</span></div>" +
       '<div class="af__hint">A unique 15-day link is minted per recruiter (duration is per link, not set here). This controls <b>whether</b> Allow works and <b>what</b> they see \u2014 all your work by default. <b>Publish</b> after turning it on or editing scope so the links resolve. Turning it off stops new approvals but won\u2019t cut off recruiters you already approved.</div>' +
     "</div>";
   }
   async function toggleAllowDefault(onDone) {
     var sess = adminSession(); if (!sess) return;
-    var on = allowIsOn();
     var refresh = onDone || function () { if (activeTab === "special") renderBody(); };
     try {
-      if (on) {
+      if (allowMeta.on) {
         var r = await fetch(ADMIN_WORKER + "/admin/quickgrant", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ enabled: false }) });
         if (!r.ok) throw 0;
         qgCache = qgCache || {}; qgCache.enabled = false;
         refresh();
         status("One-tap Allow turned off \u2014 links you already sent still work.", true);
-      } else if (qgCache && qgCache.code) {
-        var r2 = await fetch(ADMIN_WORKER + "/admin/quickgrant", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ enabled: true }) });
-        if (!r2.ok) throw 0;
-        qgCache.enabled = true;
-        refresh();
-        status("One-tap Allow is on.", true);
       } else {
+        // ON = ensure the hidden Full-access view + point the quick-grant AT IT (fresh phrase),
+        // enabled + permanent. This repoints away from any older/legacy code (e.g. Adobe).
         var v = await ensureFullAccessView();
         var phrase = ticketPlain[v.id];
-        if (!phrase) { status("Couldn\u2019t set up the default \u2014 try again.", false); return; }
+        if (!phrase) {
+          phrase = "fa-" + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 8);
+          ticketPlain[v.id] = phrase;
+          v.ticketHash = await sha256(phrase);
+          saveDraft(true);
+        }
         var r3 = await fetch(ADMIN_WORKER + "/admin/quickgrant", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ code: phrase, enabled: true, expiresAt: 0 }) });
         if (!r3.ok) throw 0;
         qgCache = { code: phrase, enabled: true, expiresAt: 0, updatedAt: Date.now() };
         refresh();
-        status("One-tap Allow set up \u2014 hit Publish to make it live.", true);
+        status("One-tap Allow is on \u2014 hit Publish to make it live.", true);
       }
     } catch (e) { status("Couldn\u2019t reach the server \u2014 try again.", false); }
   }
@@ -2846,7 +2858,7 @@ import {
     document.body.appendChild(modal);
     var body = modal.querySelector("[data-allow-body]");
     var done = function () { modal.remove(); };
-    var paint = function () { body.innerHTML = quickGrantPanel(); };
+    var paint = function () { computeAllowMeta().then(function () { body.innerHTML = quickGrantPanel(); }); };
     paint();
     // refresh from the server so the toggle reflects the true current state, then repaint the sheet
     (async function () { try { var sess = adminSession(); if (!sess) return; var r = await fetch(ADMIN_WORKER + "/admin/quickgrant", { headers: { Authorization: "Bearer " + sess } }); if (r.ok) { qgCache = await r.json(); paint(); } } catch (e) {} })();
