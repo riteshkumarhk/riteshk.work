@@ -3390,7 +3390,7 @@ import {
   // ---------- Settings side-pane (right drawer): declutters the "\u22EF" menu; each setting is a panel
   // instead of a stacked dialog. Simple ones inline (One-tap Allow / Recruiter / Backup); Passkeys /
   // Publishing / AI launch their existing proven dialogs from here.
-  var SET_CATS = [["allow", "\u26A1 One-tap Allow"], ["recruiter", "\uD83C\uDFAB Recruiter mode"], ["autopub", "\u21BB Auto-publish"], ["passkeys", "\uD83D\uDD11 Passkeys"], ["publish", "\u2699 Publishing"], ["ai", "\u2728 AI"], ["backup", "\uD83D\uDCBE Backup"]];
+  var SET_CATS = [["allow", "\u26A1 One-tap Allow"], ["recruiter", "\uD83C\uDFAB Recruiter mode"], ["autopub", "\u21BB Auto-publish"], ["security", "\uD83D\uDD10 Security"], ["publish", "\u2699 Publishing"], ["ai", "\u2728 AI"], ["backup", "\uD83D\uDCBE Backup"]];
   var setPane, setNav, setPanel, activeSetCat = "allow", setSub = null;
   function openSettings() {
     if (!setPane) return;
@@ -3433,6 +3433,7 @@ import {
     else if (setSub === "passkeys") passkeyModal({ mount: host, onClose: back });
     else if (setSub === "publish") publishModal(null, { mount: host, onClose: back });
     else if (setSub === "ai") aiSettingsModal({ mount: host, onClose: back });
+    else if (setSub === "adminkey") changeKeyModal({ mount: host, onClose: back });
     else { setSub = null; renderSetPanel(); }
   }
   function launchPanelHtml(title, sub, act, label) {
@@ -3452,7 +3453,12 @@ import {
         '<div class="rkqg__row"><button class="btn btn--primary" data-act="backup-dl">\uD83D\uDCBE Download content backup</button></div>' +
         '<div class="af__hint">Saves an unencrypted <code>content.json</code> to this device \u2014 keep it private. Handy before big edits.</div></div>';
     }
-    if (cat === "passkeys") return launchPanelHtml("Passkeys", "Sign in with Windows Hello, Face ID or a security key \u2014 no password after the first one.", "open-passkeys", "Manage passkeys");
+    if (cat === "security") {
+      return '<div class="rkqg"><div class="rkqg__head">Security <span class="rkqg__sub">how you sign in to the studio</span></div>' +
+        '<div class="af__hint" style="margin:.2rem 0 1rem">Sign in with a passkey \u2014 Windows Hello, Face ID or a security key \u2014 or change the admin key you type on this device. Both keep working.</div>' +
+        '<div class="rkqg__row"><button class="btn btn--primary" data-act="open-passkeys">\uD83D\uDD11 Manage passkeys</button></div>' +
+        '<div class="rkqg__row" style="margin-top:.6rem"><button class="btn btn--ghost" data-act="open-adminkey">\uD83D\uDD12 Change admin key</button></div></div>';
+    }
     if (cat === "publish") return launchPanelHtml("Publishing", "Connect GitHub, replace the token, or publish manually.", "open-publish", "Open publishing settings");
     if (cat === "ai") return launchPanelHtml("AI", "Connect OpenAI, Gemini or Claude for the Prepare tools.", "open-ai", "Open AI settings");
     return "";
@@ -3721,6 +3727,7 @@ import {
     if (act === "open-passkeys") { setSub = "passkeys"; renderSetPanel(); return; }
     if (act === "open-publish") { setSub = "publish"; renderSetPanel(); return; }
     if (act === "open-ai") { setSub = "ai"; renderSetPanel(); return; }
+    if (act === "open-adminkey") { setSub = "adminkey"; renderSetPanel(); return; }
     if (act === "sv-add") {
       data.specialViews = data.specialViews || [];
       if (data.specialViews.length >= 6) { status("Up to 6 special views."); return; }
