@@ -631,7 +631,7 @@
       '<div class="pjb__lock"><div class="pjb__lock-ico" aria-hidden="true">' + LOCK_SVG + "</div>" +
       '<p class="pjb__lock-txt">This deeper cut is shared on request.</p>' +
       '<button type="button" class="pj__btn pj__btn--primary" data-pj="unlock">Unlock the full case study</button>' +
-      '<div class="pjb__lock-hint">Enter the pass you were given.</div></div>';
+      '<div class="pjb__lock-hint">Recruiter or hiring manager? Enter the pass you were given.</div></div>';
   }
 
   function stickiesBlock(b) {
