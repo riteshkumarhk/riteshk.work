@@ -609,7 +609,7 @@ import {
           }).join("") +
         "</div></div>" +
       '<div class="cmenu__sep"></div>' +
-      '<button class="cmenu__item" data-open="special"><span class="cmenu__ico">\u25c7</span><span><b>Special view</b><i>Enter a ticket for a curated view</i></span></button>' +
+      '<button class="cmenu__item" data-open="special"><span class="cmenu__ico">\u25c7</span><span><b>Recruiter or hiring manager</b><i>Enter a ticket for a curated view</i></span></button>' +
       (owner ? '<button class="cmenu__item" data-open="present"><span class="cmenu__ico">\u25b6</span><span><b>Present mode</b><i>Unlock all work for presenting, not editing</i></span></button>' : "") +
       '<button class="cmenu__item" data-open="admin"' + (narrow ? " disabled" : "") + '><span class="cmenu__ico">\u2726</span><span><b>Admin mode</b><i>' + (narrow ? "Needs a wider screen" : "Edit &amp; curate the site") + "</i></span></button>";
     document.body.appendChild(menuEl);
@@ -667,7 +667,7 @@ import {
     const modal = document.createElement("div");
     modal.className = "pass";
     modal.innerHTML =
-      '<div class="pass__box"><div class="pass__title">Special view</div>' +
+      '<div class="pass__box"><div class="pass__title">Recruiter or hiring manager</div>' +
       '<div class="pass__sub">Enter the ticket you were given — a code or a link — to unlock a curated view of the work.</div>' +
       '<input type="text" placeholder="Ticket code or link" autocomplete="off" autofocus />' +
       '<div class="pass__err"></div>' +
@@ -802,7 +802,7 @@ import {
     el.className = "rkfly";
     el.innerHTML =
       '<button class="rkfly__x" type="button" aria-label="Dismiss">\u00d7</button>' +
-      '<div class="rkfly__title">Special view</div>' +
+      '<div class="rkfly__title">Recruiter or hiring manager</div>' +
       '<div class="rkfly__sub">Recruiting? Enter the ticket you were given to unlock the NDA case studies shared with you \u2014 everything else here is already open.</div>' +
       '<input class="rkfly__inp" type="text" placeholder="Ticket code or link" autocomplete="off" />' +
       '<div class="rkfly__err"></div>' +
