@@ -257,6 +257,13 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .af { margin-bottom: 1rem; }
 .af__label { display: block; font-family: var(--mono); font-size: .64rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); margin-bottom: .35rem; }
 .af__hint { font-size: .68rem; color: var(--text-faint); margin-top: .35rem; line-height: 1.4; }
+.mdbar { display: flex; gap: 4px; margin-bottom: 6px; }
+.mdbar__b { width: 26px; height: 24px; display: inline-flex; align-items: center; justify-content: center; padding: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; color: var(--text-dim); font-family: var(--serif); font-size: .82rem; line-height: 1; cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
+.mdbar__b:hover { border-color: var(--accent); color: var(--text); }
+.mdbar__b b { font-weight: 700; }
+.mdbar__b i { font-style: italic; }
+.mdbar__b--acc { color: var(--accent); font-style: italic; }
+.mdbar__b--acc:hover { background: var(--accent); border-color: var(--accent); color: #0a0a0a; }
 .af__row { display: flex; gap: .6rem; }
 .af__row .af { flex: 1; }
 

@@ -429,10 +429,49 @@ import {
     } else {
       control = '<input type="text" data-path="' + path + '" value="' + escAttr(val) + '" />';
     }
-    return '<div class="af"><label class="af__label">' + label + "</label>" + control + hint + "</div>";
+    return '<div class="af' + (opts.md ? " af--md" : "") + '"><label class="af__label">' + label + "</label>" + (opts.md ? mdBar() : "") + control + hint + "</div>";
   }
-
-  // item field: edits data[list][index][field]
+  // A small formatting toolbar for the mini-markdown fields. It only wraps the current selection with
+  // the same **bold** / *italic* / [[bronze]] markers the site already understands — the stored text
+  // and every existing accent stay exactly as they are; clicking a button toggles its marker on/off.
+  function mdBar() {
+    return '<div class="mdbar" role="toolbar" aria-label="Formatting">' +
+      '<button type="button" class="mdbar__b" data-act="md-fmt" data-md="bold" title="Bold \u2014 **text**"><b>B</b></button>' +
+      '<button type="button" class="mdbar__b" data-act="md-fmt" data-md="italic" title="Italic \u2014 *text*"><i>I</i></button>' +
+      '<button type="button" class="mdbar__b mdbar__b--acc" data-act="md-fmt" data-md="accent" title="Bronze accent \u2014 [[text]]">A</button>' +
+      "</div>";
+  }
+  function mdFmt(btn) {
+    var af = btn.closest(".af"); if (!af) return;
+    var field = af.querySelector("textarea[data-path], input[data-path]"); if (!field) return;
+    var pairs = { bold: ["**", "**"], italic: ["*", "*"], accent: ["[[", "]]"] };
+    var p = pairs[btn.dataset.md]; if (!p) return;
+    mdWrap(field, p[0], p[1], btn.dataset.md);
+  }
+  // Toggle-aware: if the selection (or its immediate surroundings) already carries the marker, strip
+  // it; otherwise wrap. Guards against mistaking ** (bold) for * (italic) so nothing gets corrupted.
+  function mdWrap(el, before, after, kind) {
+    var v = el.value, s = el.selectionStart, e = el.selectionEnd;
+    if (s == null) { s = e = v.length; }
+    var sel = v.slice(s, e);
+    var italicClash = kind === "italic" && v.slice(Math.max(0, s - 2), s) === "**";
+    if (sel.length >= before.length + after.length && sel.slice(0, before.length) === before && sel.slice(sel.length - after.length) === after && !(kind === "italic" && sel.slice(0, 2) === "**")) {
+      var inner = sel.slice(before.length, sel.length - after.length);
+      el.value = v.slice(0, s) + inner + v.slice(e);
+      el.setSelectionRange(s, s + inner.length); mdFire(el); return;
+    }
+    if (v.slice(Math.max(0, s - before.length), s) === before && v.slice(e, e + after.length) === after && !italicClash) {
+      el.value = v.slice(0, s - before.length) + sel + v.slice(e + after.length);
+      el.setSelectionRange(s - before.length, e - before.length); mdFire(el); return;
+    }
+    var ph = sel || (kind === "accent" ? "product" : kind === "bold" ? "bold text" : "text");
+    el.value = v.slice(0, s) + before + ph + after + v.slice(e);
+    el.setSelectionRange(s + before.length, s + before.length + ph.length); mdFire(el);
+  }
+  function mdFire(el) {
+    try { el.focus(); } catch (x) {}
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
   function itemField(list, index, field, label, opts) {
     opts = opts || {};
     const val = (data[list][index] || {})[field];
@@ -2561,12 +2600,12 @@ import {
         '<div class="adm__autobar"><button class="btn btn--auto" data-act="autostyle">Auto-style landing</button><button class="btn btn--auto" data-act="landing-ai" style="margin-left:.5rem">\u2728 Draft with AI</button><span class="adm__auto-note">Auto-style paints the accents; <em>Draft with AI</em> writes the hero, highlights, capabilities &amp; about from a brief \u2014 preview before applying.</span></div>' +
         input("Eyebrow", "landing.eyebrow") +
         input("Domains", "landing.domains", { hint: "e.g. Growth · AI · Identity" }) +
-        input("Main statement", "landing.statement", { type: "textarea", rows: 3, hint: "One line per row. The closing word (why / how) gets the italic accent." }) +
-        input("Description", "landing.intro", { type: "textarea", rows: 4, hint: "Products auto-bronze; “leading …” phrases auto-bold." }) +
-        input("Footer line", "landing.presence", { hint: "e.g. Currently at Microsoft — Hyderabad, India" }) +
-        input("About — lead line", "landing.aboutLead", { type: "textarea", rows: 2, hint: "The big opening line of the About section. *italic* for emphasis." }) +
-        input("About — paragraphs", "landing.about", { type: "textarea", rows: 7, hint: "Separate paragraphs with a blank line. **bold**, *italic*, [[Product]] bronze." }) +
-        input("About — sign-off", "landing.aboutSign", { hint: "The closing personal line, e.g. an off-the-clock note." })
+        input("Main statement", "landing.statement", { md: true, type: "textarea", rows: 3, hint: "One line per row. The closing word (why / how) gets the italic accent." }) +
+        input("Description", "landing.intro", { md: true, type: "textarea", rows: 4, hint: "Products auto-bronze; “leading …” phrases auto-bold." }) +
+        input("Footer line", "landing.presence", { md: true, hint: "e.g. Currently at Microsoft — Hyderabad, India" }) +
+        input("About — lead line", "landing.aboutLead", { md: true, type: "textarea", rows: 2, hint: "The big opening line of the About section. *italic* for emphasis." }) +
+        input("About — paragraphs", "landing.about", { md: true, type: "textarea", rows: 7, hint: "Separate paragraphs with a blank line. **bold**, *italic*, [[Product]] bronze." }) +
+        input("About — sign-off", "landing.aboutSign", { md: true, hint: "The closing personal line, e.g. an off-the-clock note." })
       );
     },
     contact() {
@@ -3716,6 +3755,7 @@ import {
     if (e.target.closest("[data-grip]")) return; // grip is a drag handle, not a click target
     const b = e.target.closest("[data-act]");
     if (!b) return;
+    if (b.dataset.act === "md-fmt") { mdFmt(b); return; }
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
     if (act === "settings-close") { closeSettings(); return; }
     if (act === "settings-cat") { activeSetCat = b.dataset.cat; setSub = null; renderSettings(); return; }
@@ -8152,7 +8192,7 @@ import {
     // Drag-to-reorder any list with a grip handle (arrows still work).
     root.addEventListener("pointerdown", sortStart);
     // Keep the caret inside the rich-text area when a toolbar button is pressed.
-    root.addEventListener("mousedown", function (e) { if (e.target.closest("[data-rt]")) e.preventDefault(); });
+    root.addEventListener("mousedown", function (e) { if (e.target.closest("[data-rt], [data-md]")) e.preventDefault(); });
     // Paste into a rich-text body as plain text (no foreign colours/fonts).
     root.addEventListener("paste", onRtPaste);
     root.querySelectorAll(".adm__tab").forEach((t) =>
