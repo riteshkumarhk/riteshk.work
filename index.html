@@ -272,8 +272,33 @@
   <script src="js/admin.js"></script>
   <script src="js/journey.js"></script>
 
-  <!-- Cloudflare Web Analytics (privacy-first, cookieless; auto-tracks SPA route changes) -->
-  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "b4123aee7d8a4077bc9296922e52e803"}'></script>
+  <!-- Cloudflare Web Analytics (privacy-first, cookieless). Skipped for the site owner and the
+       /studio admin surface, so your own visits don't skew the numbers. Per browser you can toggle it:
+       ?analytics=off mutes this browser, ?analytics=on starts counting it again. -->
+  <script>
+    (function () {
+      var TOKEN = '{"token": "b4123aee7d8a4077bc9296922e52e803"}';
+      function load() {
+        var s = document.createElement("script");
+        s.defer = true;
+        s.src = "https://static.cloudflareinsights.com/beacon.min.js";
+        s.setAttribute("data-cf-beacon", TOKEN);
+        (document.head || document.body).appendChild(s);
+      }
+      try {
+        var qs = new URLSearchParams(location.search);
+        if (qs.has("analytics")) {
+          if (qs.get("analytics") === "off") localStorage.setItem("rk:noanalytics", "1");
+          else localStorage.removeItem("rk:noanalytics");
+        }
+        var mine = localStorage.getItem("rk:noanalytics") === "1"      // this browser opted out
+          || /^\/studio(\/|$)/.test(location.pathname)                  // admin surface, never a real visitor
+          || localStorage.getItem("rk:admin:hash")                     // this device set an admin key = owner
+          || localStorage.getItem("rk:admin:sess");                    // active admin session
+        if (!mine) load();
+      } catch (e) { load(); }
+    })();
+  </script>
   <!-- End Cloudflare Web Analytics -->
 </body>
 </html>

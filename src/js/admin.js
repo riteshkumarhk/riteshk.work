@@ -338,6 +338,7 @@ import {
   }
   function studioUrlExit() { try { if (window.__STUDIO_PAGE) { location.href = "/"; return; } if (location.pathname === "/studio") history.replaceState({}, "", "/"); } catch (e) {} }
   function openStudio() {
+    try { localStorage.setItem("rk:noanalytics", "1"); } catch (e) {}   // stop counting the owner's own visits in Web Analytics
     loadStudio().then(function () {
       if (window.__RKStudio) {
         window.__RKStudio.open({ musSilence: musSilence, musRestore: musRestore, thDismiss: thDismiss, onExit: studioUrlExit });
