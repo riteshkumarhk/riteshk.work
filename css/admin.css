@@ -388,8 +388,6 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
   opacity: 0; pointer-events: none; transition: opacity .32s ease, transform .32s cubic-bezier(.2, .7, .2, 1);
 }
 .rkfly.is-on { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
-/* arrow pointing up at the ··· menu button this lives under */
-.rkfly::after { content: ""; position: absolute; top: -6.5px; right: 11px; width: 13px; height: 13px; background: var(--bg-2); border-left: 1px solid var(--line); border-top: 1px solid var(--line); transform: rotate(45deg); }
 .rkfly__x { position: absolute; top: 9px; right: 11px; background: none; border: 0; color: var(--text-faint); font-size: 17px; line-height: 1; cursor: pointer; padding: 4px; }
 .rkfly__x:hover { color: var(--text); }
 .rkfly__title { font-family: var(--serif); font-size: 1.2rem; color: var(--text); margin-bottom: 5px; padding-right: 16px; }
@@ -403,6 +401,19 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .rkfly__req { margin: 10px 2px 0; font-size: .72rem; color: var(--text-faint); }
 .rkfly__reqbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
 .rkfly__reqbtn:hover { color: var(--text); }
+/* Step buttons hidden by default — wide screens show the whole form at once */
+.rkfly__back, .rkfly__next { display: none; }
+/* Small real estate: split into two steps (intro → code entry) to keep the card short */
+@media (max-width: 560px) {
+  .rkfly:not(.is-step2) .rkfly__inp,
+  .rkfly:not(.is-step2) .rkfly__err,
+  .rkfly:not(.is-step2) .rkfly__go { display: none; }
+  .rkfly:not(.is-step2) .rkfly__next { display: inline-flex; }
+  .rkfly.is-step2 .rkfly__sub,
+  .rkfly.is-step2 .rkfly__cancel,
+  .rkfly.is-step2 .rkfly__req { display: none; }
+  .rkfly.is-step2 .rkfly__back { display: inline-flex; }
+}
 @media (max-width: 480px) { .rkfly { top: 56px; width: min(340px, calc(100vw - 20px)); } }
 
 /* ---------- special-view admin cards ---------- */

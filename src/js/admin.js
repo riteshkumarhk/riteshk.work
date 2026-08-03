@@ -806,7 +806,12 @@ import {
       '<div class="rkfly__sub">Recruiting? Enter the ticket you were given to unlock the NDA case studies shared with you \u2014 everything else here is already open.</div>' +
       '<input class="rkfly__inp" type="text" placeholder="Ticket code or link" autocomplete="off" />' +
       '<div class="rkfly__err"></div>' +
-      '<div class="rkfly__row"><button class="btn btn--ghost rkfly__cancel" type="button">Not now</button><button class="btn btn--primary rkfly__go" type="button">Unlock</button></div>' +
+      '<div class="rkfly__row">' +
+        '<button class="btn btn--ghost rkfly__cancel" type="button">Not now</button>' +
+        '<button class="btn btn--ghost rkfly__back" type="button">Back</button>' +
+        '<button class="btn btn--primary rkfly__next" type="button">I have a ticket</button>' +
+        '<button class="btn btn--primary rkfly__go" type="button">Unlock</button>' +
+      '</div>' +
       '<div class="rkfly__req">No code? <button type="button" class="rkfly__reqbtn">Request access</button></div>';
     document.body.appendChild(el);
     var inp = el.querySelector(".rkfly__inp"), errEl = el.querySelector(".rkfly__err"), go = el.querySelector(".rkfly__go");
@@ -823,6 +828,8 @@ import {
     el.querySelector(".rkfly__cancel").addEventListener("click", function () { dismiss(); });
     el.querySelector(".rkfly__x").addEventListener("click", function () { dismiss(); });
     var _req = el.querySelector(".rkfly__reqbtn"); if (_req) _req.addEventListener("click", function () { requestAccessModal({}); });
+    var _next = el.querySelector(".rkfly__next"); if (_next) _next.addEventListener("click", function () { el.classList.add("is-step2"); placeSoundToast(); setTimeout(function () { try { inp.focus(); } catch (e) {} }, 40); });
+    var _back = el.querySelector(".rkfly__back"); if (_back) _back.addEventListener("click", function () { el.classList.remove("is-step2"); placeSoundToast(); });
     async function submit() {
       var v = inp.value.trim(); if (!v) { errEl.textContent = "Enter your ticket or link"; return; }
       go.disabled = true; errEl.textContent = "";
@@ -832,8 +839,8 @@ import {
       if (el.parentNode) el.remove(); placeSoundToast();
     }
     go.addEventListener("click", submit);
-    el.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); if (e.key === "Escape") dismiss(); });
-    setTimeout(function () { try { inp.focus(); } catch (e) {} }, 350);
+    el.addEventListener("keydown", function (e) { if (e.key === "Enter" && inp.offsetParent !== null) submit(); if (e.key === "Escape") dismiss(); });
+    setTimeout(function () { try { if (inp.offsetParent !== null) inp.focus(); } catch (e) {} }, 350);
   }
   // Exchange a per-recruiter ?k= link for the current access code (the Worker checks it's live, not
   // expired or revoked). Returns the code, or null after surfacing a friendly message.
