@@ -7635,7 +7635,7 @@ import {
         '<div class="af"><label class="af__label">The level you\u2019re whiteboarding for</label><div class="iprep__levels wb__levels">' +
           WB_LEVELS.map(function (d) { return '<button type="button" class="iprep__lvl' + (st.level === d[0] ? " is-on" : "") + '" data-wb-lvl="' + d[0] + '"><span class="iprep__lvl-name">' + d[1] + '</span><span class="iprep__lvl-desc">' + d[2] + "</span></button>"; }).join("") +
         '</div><div class="af__hint">Sets the altitude \u2014 the prompt, the probes and the scoring all shift to match.</div></div>' +
-        '<div class="af"><label class="af__label">Company &amp; job description <span class="af__opt">(optional)</span></label>' + +
+        '<div class="af"><label class="af__label">Company &amp; job description <span class="af__opt">(optional)</span></label>' +
           '<input type="text" class="wb__company" placeholder="Company you\u2019re interviewing at \u2014 e.g. Stripe, Google\u2026" value="' + escAttr(st.company || "") + '" />' +
           '<textarea class="cl__jd wb__jd" rows="4" placeholder="Paste the job description \u2014 I\u2019ll bias the prompt, the probes and the scoring toward what the role demands.">' + escHtml(st.jd || "") + '</textarea>' +
           '<div class="af__hint">Company \u2192 I match how they interview at this level (prompt type, answer depth, collaboration). ' + (storyJdText() ? 'Leave the description blank to reuse your \u201cAlign to a role\u201d target from the storyteller.' : 'Both optional.') + '</div>' +
