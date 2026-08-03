@@ -15,6 +15,11 @@ export const escAttr = (s) => escHtml(s).replace(/"/g, "&quot;");
    through the Worker so the GitHub token never has to live in the browser. If the Worker
    isn't reachable, callers fall back to the existing local gate + repo token. */
 export const ADMIN_WORKER = "https://rk-ai-proxy.riteshkumarhk.workers.dev"; // your Cloudflare Worker URL
+// Cloudflare Turnstile site key (PUBLIC) for the "Request access" human-check. EMPTY = check OFF
+// (the form then behaves exactly as before). To turn it on: create a Turnstile widget in the
+// Cloudflare dashboard, paste its site key here, AND set the matching secret on the Worker
+// (`wrangler secret put TURNSTILE_SECRET`). Both must be set together for the check to be enforced.
+export const TURNSTILE_SITEKEY = "";
 export const ADMIN_SESSION_KEY = "rk:admin:sess";
 export function adminSession() {
   try {

@@ -13,7 +13,7 @@ import {
   clone, escHtml, escAttr, RK_KDF_IT, sha256,
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
-  rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath, adminLogin, ADMIN_WORKER,
+  rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath, adminLogin, ADMIN_WORKER, TURNSTILE_SITEKEY,
   vaultSignedUrl, vaultRedeem, ownerVaultGrant, webauthnSupported, webauthnList, webauthnAuth, authStatus, cachedAuthMode, recoverWithPassphrase
 } from "./admin-core.js";
 
@@ -733,6 +733,23 @@ import {
   }
   // Shared “request a code” panel — reachable from the recruiter flyout and the case-study deeper cut.
   // Posts to the Worker (which logs it + pings the owner); the owner then approves and issues a code.
+  // Cloudflare Turnstile loader for the Request-access form. Lazy + only when a site key is set, so it
+  // costs nothing on normal page loads and stays inert until TURNSTILE_SITEKEY + the Worker secret exist.
+  var _tsLoad = null;
+  function ensureTurnstile() {
+    if (!TURNSTILE_SITEKEY) return Promise.resolve(false);
+    if (window.turnstile) return Promise.resolve(true);
+    if (_tsLoad) return _tsLoad;
+    _tsLoad = new Promise(function (resolve) {
+      var s = document.createElement("script");
+      s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      s.async = true; s.defer = true;
+      s.onload = function () { resolve(!!window.turnstile); };
+      s.onerror = function () { resolve(false); };
+      document.head.appendChild(s);
+    });
+    return _tsLoad;
+  }
   function requestAccessModal(opts) {
     opts = opts || {};
     if (document.querySelector(".rkreq")) return;
@@ -748,22 +765,37 @@ import {
         '<input data-f="company" type="text" placeholder="Company / role" autocomplete="organization" />' +
         '<input data-f="note" type="text" placeholder="Anything specific? (optional)" />' +
         '<input data-f="hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" />' +
+        '<div class="rkreq__ts" hidden></div>' +
         '<div class="pass__err"></div>' +
         '<div class="pass__actions"><button class="btn btn--ghost" data-cancel type="button">Cancel</button><button class="btn btn--primary" data-go type="button">Send request</button></div>' +
       '</div>';
     document.body.appendChild(modal);
     var box = modal.querySelector(".pass__box"), errEl = modal.querySelector(".pass__err"), go = modal.querySelector("[data-go]");
     if (opts.context) { var cx = modal.querySelector(".rkreq__ctx"); cx.textContent = "Requesting: " + opts.context; cx.hidden = false; }
-    function done() { if (modal.parentNode) modal.remove(); }
+    var tsWidget = null, tsEl = modal.querySelector(".rkreq__ts");
+    if (TURNSTILE_SITEKEY && tsEl) {
+      ensureTurnstile().then(function (ok) {
+        if (!ok || !window.turnstile || !modal.parentNode) return;
+        tsEl.hidden = false;
+        try { tsWidget = window.turnstile.render(tsEl, { sitekey: TURNSTILE_SITEKEY, theme: "auto", action: "request-access" }); } catch (e) {}
+      });
+    }
+    function tsReset() { if (TURNSTILE_SITEKEY && window.turnstile && tsWidget != null) { try { window.turnstile.reset(tsWidget); } catch (e) {} } }
+    function done() { if (TURNSTILE_SITEKEY && window.turnstile && tsWidget != null) { try { window.turnstile.remove(tsWidget); } catch (e) {} } if (modal.parentNode) modal.remove(); }
     function val(f) { var e2 = modal.querySelector('[data-f="' + f + '"]'); return e2 ? e2.value.trim() : ""; }
     async function submit() {
       var name = val("name"), email = val("email"), company = val("company"), note = val("note"), hp = val("hp");
       if (!name || !company || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { errEl.textContent = "Add your name, company/role and a valid work email."; return; }
+      var tsToken = "";
+      if (TURNSTILE_SITEKEY) {
+        try { tsToken = (window.turnstile && tsWidget != null) ? window.turnstile.getResponse(tsWidget) : ""; } catch (e) { tsToken = ""; }
+        if (!tsToken) { errEl.textContent = "One moment \u2014 finishing the human check, then tap Send again."; return; }
+      }
       go.disabled = true; errEl.textContent = "Sending\u2026";
       try {
-        var res = await fetch(ADMIN_WORKER + "/request-access", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name, email: email, company: company, note: note, context: opts.context || "", hp: hp }) });
+        var res = await fetch(ADMIN_WORKER + "/request-access", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name, email: email, company: company, note: note, context: opts.context || "", hp: hp, turnstileToken: tsToken }) });
         var j = await res.json().catch(function () { return {}; });
-        if (!res.ok || !j || !j.ok) { go.disabled = false; errEl.textContent = (j && j.error) || "Couldn\u2019t send that \u2014 try again."; return; }
+        if (!res.ok || !j || !j.ok) { go.disabled = false; tsReset(); errEl.textContent = (j && j.error) || "Couldn\u2019t send that \u2014 try again."; return; }
         box.innerHTML = '<div class="pass__title">Request sent</div><div class="pass__sub"></div><div class="pass__actions"><button class="btn btn--primary" data-done type="button">Done</button></div>';
         box.querySelector(".pass__sub").textContent = "Thanks \u2014 I\u2019ll email a code to " + email + " soon. Everything else on the site is already open.";
         box.querySelector("[data-done]").addEventListener("click", done);

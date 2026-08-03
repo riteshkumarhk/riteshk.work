@@ -64,6 +64,13 @@ export default {
         const clip = (s, n) => String(s == null ? "" : s).replace(/\s+/g, " ").trim().slice(0, n);
         const name = clip(b && b.name, 80), email = clip(b && b.email, 140), company = clip(b && b.company, 140), note = clip(b && b.note, 400), context = clip(b && b.context, 160);
         if (!name || !company || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "Add your name, company/role and a valid work email." }, 400, cors);
+        // Cloudflare Turnstile human-check — enforced only once TURNSTILE_SECRET is set on the Worker.
+        // Until then the form behaves exactly as before (honeypot + rate limit above stay as backstops).
+        if (env.TURNSTILE_SECRET) {
+          const tsTok = String((b && b.turnstileToken) || "");
+          if (!tsTok) return json({ error: "Please complete the human check and try again." }, 400, cors);
+          if (!(await verifyTurnstile(env.TURNSTILE_SECRET, tsTok, reqIp))) return json({ error: "That human check didn\u2019t pass \u2014 please try again." }, 403, cors);
+        }
         await env.VAULT_GRANTS.put(reqRl, String(reqTries + 1), { expirationTtl: 3600 });
         const rec = { name, email, company, note, context, status: "pending", at: new Date().toISOString(), ip: reqIp, ua: clip(request.headers.get("User-Agent"), 200) };
         const reqId = "req:" + Date.now() + ":" + Math.random().toString(36).slice(2, 8);
@@ -928,6 +935,25 @@ function reqOwnerEmail(o) {
     '</div></div>';
   const text = "New access request\n" + o.name + (o.company ? " \u00b7 " + o.company : "") + "\n" + o.email + (o.note ? "\n\n\"" + o.note + "\"" : "") + "\n\nReview: " + o.inbox;
   return { html: html, text: text };
+}
+
+// Verify a Cloudflare Turnstile token server-side. Returns true only on a confirmed human. Never
+// throws — a network error returns false (fail-closed), so a retry (guarded by the rate limit) is the
+// path forward and bots can't slip through on an exception.
+async function verifyTurnstile(secret, token, ip) {
+  try {
+    const form = new URLSearchParams();
+    form.set("secret", secret);
+    form.set("response", token);
+    if (ip && ip !== "0") form.set("remoteip", ip);
+    const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+    });
+    const j = await r.json();
+    return !!(j && j.success);
+  } catch (e) { return false; }
 }
 
 async function sendEmail(env, msg) {
