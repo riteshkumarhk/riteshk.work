@@ -3762,7 +3762,7 @@ import { WORLD_LAND } from "./worldland.js";
   // ---------- Settings side-pane (right drawer): declutters the "\u22EF" menu; each setting is a panel
   // instead of a stacked dialog. Simple ones inline (One-tap Allow / Recruiter / Backup); Passkeys /
   // Publishing / AI launch their existing proven dialogs from here.
-  var SET_CATS = [["allow", "\u26A1 One-tap Allow"], ["recruiter", "\uD83C\uDFAB Recruiter mode"], ["autopub", "\u21BB Auto-publish"], ["security", "\uD83D\uDD10 Security"], ["publish", "\u2699 Publishing"], ["ai", "\u2728 AI"], ["backup", "\uD83D\uDCBE Backup"]];
+  var SET_CATS = [["allow", "\u26A1 One-tap Allow"], ["recruiter", "\uD83C\uDFAB Recruiter mode"], ["autopub", "\u21BB Auto-publish"], ["security", "\uD83D\uDD10 Security"], ["publish", "\u2699 Publishing"], ["ai", "\u2728 AI"], ["history", "\uD83D\uDD52 Version history"], ["backup", "\uD83D\uDCBE Backup"]];
   var setPane, setNav, setPanel, activeSetCat = "allow", setSub = null;
   function openSettings() {
     if (!setPane) return;
@@ -3790,6 +3790,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (setSub) { renderSetSub(); return; }
     if (activeSetCat === "allow") { computeAllowMeta().then(function () { if (setPanel && !setSub) setPanel.innerHTML = quickGrantPanel(); }); return; }
     if (activeSetCat === "autopub") { setPanel.innerHTML = autopubPanelHtml(); wireAutopub(setPanel); return; }
+    if (activeSetCat === "history") { setPanel.innerHTML = versionsPanelHtml(); loadVersions(); return; }
     setPanel.innerHTML = settingsPanelHtml(activeSetCat);
     if (activeSetCat === "recruiter") recruiterStateSync();
   }
@@ -3848,6 +3849,78 @@ import { WORLD_LAND } from "./worldland.js";
     var tog = c.querySelector("[data-autopub-toggle]"); if (tog) tog.addEventListener("click", autopubToggle);
     c.querySelectorAll("[data-autopub-every]").forEach(function (r) { r.addEventListener("change", function () { autopubSetEvery(+r.value); }); });
     autopubSync();
+  }
+  // ---------- version history: browse & restore past published content.json ----------
+  // Every Publish is a GitHub commit to content.json, so its commit log IS the version
+  // history. We list those commits (GET, allowed by the proxy) and can load any past
+  // version straight into the editor — the owner reviews it in the live preview and
+  // Publishes to roll back (or Reverts to discard). No new write route needed.
+  var versionList = null, versionsLoading = false;
+  function versionsPanelHtml() {
+    return '<div class="rkqg"><div class="rkqg__head">Version history <span class="rkqg__sub">every published version of your content</span></div>' +
+      '<div class="af__hint" style="margin:.2rem 0 .9rem">Every time you Publish, a snapshot is kept. Load an older one into the editor, review it in the preview, then <b>Publish</b> to roll back \u2014 or <b>Revert</b> to discard.</div>' +
+      '<div class="rkver" data-versions>Loading history\u2026</div>' +
+      '<div class="rkqg__row" style="margin-top:.7rem"><button class="btn btn--ghost" data-act="ver-refresh" type="button">\u21BB Refresh</button></div></div>';
+  }
+  function verHost() { return setPanel && setPanel.querySelector("[data-versions]"); }
+  async function loadVersions() {
+    versionsLoading = true; var host = verHost(); if (host) host.textContent = "Loading history\u2026";
+    try {
+      var url = ghApiRoot() + "/repos/" + GH_OWNER + "/" + GH_REPO + "/commits?path=content.json&per_page=30";
+      var r = await fetch(url, { headers: ghHeaders() });
+      if (!r.ok) throw new Error("http " + r.status);
+      versionList = await r.json();
+    } catch (e) { versionList = e; }
+    versionsLoading = false;
+    paintVersions();
+  }
+  function verAgo(iso) {
+    var t = new Date(iso).getTime(); if (!t) return "";
+    var s = Math.max(1, Math.round((Date.now() - t) / 1000));
+    if (s < 60) return s + "s ago";
+    var m = Math.round(s / 60); if (m < 60) return m + "m ago";
+    var h = Math.round(m / 60); if (h < 24) return h + "h ago";
+    var d = Math.round(h / 24); if (d < 30) return d + "d ago";
+    var mo = Math.round(d / 30); if (mo < 12) return mo + "mo ago";
+    return Math.round(mo / 12) + "y ago";
+  }
+  function paintVersions() {
+    var host = verHost(); if (!host) return;
+    if (versionsLoading) { host.textContent = "Loading history\u2026"; return; }
+    if (!Array.isArray(versionList)) { host.innerHTML = '<div class="rkver__empty">Couldn\u2019t load history \u2014 check your connection and Refresh.</div>'; return; }
+    if (!versionList.length) { host.innerHTML = '<div class="rkver__empty">No history yet \u2014 Publish once to start a trail.</div>'; return; }
+    host.innerHTML = versionList.map(function (c, i) {
+      var msg = (((c.commit && c.commit.message) || "").split("\n")[0]) || "(no message)";
+      var when = (c.commit && c.commit.author && c.commit.author.date) || "";
+      var who = (c.author && c.author.login) || (c.commit && c.commit.author && c.commit.author.name) || "";
+      var sha = c.sha || "";
+      var cur = i === 0;
+      var sub = escHtml(verAgo(when)) + (who ? " \u00B7 " + escHtml(who) : "") + " \u00B7 " + escHtml(sha.slice(0, 7));
+      return '<div class="rkver__row' + (cur ? " is-current" : "") + '">' +
+        '<div class="rkver__meta"><span class="rkver__msg">' + escHtml(msg) + '</span><span class="rkver__sub">' + sub + (cur ? " \u00B7 live now" : "") + "</span></div>" +
+        (cur ? '<span class="rkver__cur">Current</span>'
+             : '<button class="rkver__btn" data-act="ver-load" data-sha="' + escAttr(sha) + '" data-when="' + escAttr(verAgo(when)) + '" type="button">Load</button>') +
+        "</div>";
+    }).join("");
+  }
+  async function applyVersion(sha, whenLabel) {
+    if (!sha) return;
+    status("Loading that version\u2026");
+    try {
+      var url = ghApiRoot() + "/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/content.json?ref=" + encodeURIComponent(sha);
+      var r = await fetch(url, { headers: ghHeaders() });
+      if (!r.ok) throw new Error("http " + r.status);
+      var j = await r.json();
+      var parsed = JSON.parse(new TextDecoder().decode(b64ToBytes(String(j.content || "").replace(/\s/g, ""))));
+      data = parsed;
+      renderBody();
+      apply(true);
+      histReset();
+      closeSettings();
+      status("Loaded the version from " + (whenLabel || "history") + " \u2014 review it in the preview, then Publish to roll back (or Revert to discard).", true);
+    } catch (e) {
+      status("\u26A0 Couldn\u2019t load that version \u2014 " + ((e && e.message) || "try again") + ".");
+    }
   }
   // Mount a settings dialog INSIDE the settings panel (in-panel drill-down) instead of a centered
   // dialog: strips the modal chrome so its content renders in the right panel. Returns true if mounted.
@@ -4109,6 +4182,8 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "media-refresh") { mediaLoad(); return; }
     if (act === "media-delorphans") { mediaDelOrphans(); return; }
     if (act === "media-del") { if (confirm("Delete " + (b.dataset.name || "this file") + "? This commits a deletion to your repo.")) mediaDel(b.dataset.name, b.dataset.sha, b); return; }
+    if (act === "ver-refresh") { loadVersions(); return; }
+    if (act === "ver-load") { if (confirm("Load this version into the editor? Your current unsaved edits will be replaced \u2014 Publishing is still required to make it live.")) applyVersion(b.dataset.sha, b.dataset.when); return; }
     if (act === "settings-close") { closeSettings(); return; }
     if (act === "settings-cat") { activeSetCat = b.dataset.cat; setSub = null; renderSettings(); return; }
     if (act === "allow-toggle") { toggleAllowDefault(renderSetPanel); return; }

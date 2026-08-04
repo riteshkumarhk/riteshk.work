@@ -1475,6 +1475,18 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .mlib__del:hover { background: #c0392b; }
 .mlib__note { padding: .8rem 1.2rem; border-top: 1px solid var(--line); font-size: .72rem; color: var(--text-dim); }
 .mlib__empty { padding: 3rem; text-align: center; color: var(--text-dim); }
+
+/* ---------- version history (Settings) ---------- */
+.rkver { display: flex; flex-direction: column; gap: .5rem; max-height: 46vh; overflow: auto; }
+.rkver__row { display: flex; align-items: center; justify-content: space-between; gap: .8rem; padding: .6rem .75rem; border: 1px solid var(--line); border-radius: 9px; background: var(--bg-2, #0d0d10); }
+.rkver__row.is-current { border-color: rgba(216,166,71,.5); background: rgba(216,166,71,.06); }
+.rkver__meta { min-width: 0; }
+.rkver__msg { display: block; font-size: .82rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rkver__sub { display: block; margin-top: .15rem; font-family: var(--mono); font-size: .66rem; color: var(--text-dim); }
+.rkver__cur { flex: none; font-family: var(--mono); font-size: .64rem; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; }
+.rkver__btn { flex: none; border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 7px; padding: .35rem .8rem; font-size: .74rem; cursor: pointer; transition: border-color .15s, color .15s; }
+.rkver__btn:hover { border-color: var(--accent); color: var(--accent); }
+.rkver__empty { padding: 1.5rem; text-align: center; color: var(--text-dim); font-size: .8rem; }
 .ins__map-note { fill: var(--text-faint); font-size: 13px; }
 .ins__grat line { stroke: rgba(255, 255, 255, .05); stroke-width: 1; }
 .ins__bub circle { fill: rgba(216, 166, 87, .26); stroke: var(--accent); stroke-width: 1.2; }
