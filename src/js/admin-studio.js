@@ -8696,7 +8696,7 @@ import { WORLD_LAND } from "./worldland.js";
       data = clone(pub);
     }
     if (!root) buildShell();
-    activeTab = "landing";
+    activeTab = "insights";
     openStudy = -1;
     journeyOpen = false;
     if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
