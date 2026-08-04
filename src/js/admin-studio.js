@@ -2702,6 +2702,13 @@ import { WORLD_LAND } from "./worldland.js";
       return '<div class="ins__bar"><span class="ins__bar-l" title="' + escAttr(label) + '">' + escHtml(label) + '</span><span class="ins__bar-t"><span class="ins__bar-f" style="width:' + Math.round(e[1] / max * 100) + '%"></span></span><span class="ins__bar-n">' + e[1] + "</span></div>";
     }).join("") + "</div>";
   }
+  // Map a case-open target (a work id like w1784\u2026) to its human title so the Insights
+  // "Most-opened cases" list + recent feed read like case studies, not opaque ids.
+  function insCaseLabels() {
+    var m = {};
+    (data.work || []).forEach(function (w) { if (w && w.id) m[w.id] = w.title || w.client || w.id; });
+    return m;
+  }
   function insTopList(arr, keyName) {
     arr = arr || [];
     if (!arr.length) return '<div class="ins__empty">Nothing yet.</div>';
@@ -2726,9 +2733,10 @@ import { WORLD_LAND } from "./worldland.js";
   }
   function insRecent(recent) {
     if (!recent || !recent.length) return '<div class="ins__empty">No events captured yet.</div>';
+    var cl = insCaseLabels();
     return '<ul class="ins__feed">' + recent.slice(0, 20).map(function (r) {
       var label = INS_EV_LABEL[r.t] || r.t;
-      var what = r.id ? (' <b>' + escHtml(r.id) + "</b>") : "";
+      var what = r.id ? (' <b>' + escHtml(cl[r.id] || r.id) + "</b>") : "";
       var where = r.c ? (insFlag(r.c) + " ") : "";
       return '<li><span class="ins__feed-w">' + where + '</span><span class="ins__feed-l">' + escHtml(label) + what + '</span><span class="ins__feed-t">' + insAgo(r.at) + "</span></li>";
     }).join("") + "</ul>";
@@ -2763,7 +2771,7 @@ import { WORLD_LAND } from "./worldland.js";
     } else {
       trafficBlock = trendPanel + '<div class="ins__connect"><div class="ins__connect-h">Add referrers, top pages &amp; Cloudflare geo</div><p>Page views, devices, browsers, OS and the country map are already live from first-party data. Connect a Cloudflare API token (<b>Account \u00b7 Account Analytics \u00b7 Read</b>) to also see referrers and top pages:</p><pre class="ins__code">cd worker\nnpx wrangler secret put CF_ANALYTICS_TOKEN</pre>' + (tr.error ? '<p class="ins__connect-err">Cloudflare said: ' + escHtml(tr.error) + "</p>" : "") + "</div>";
     }
-    var eventsBlock = '<div class="ins__grid2"><div class="ins__panel"><div class="ins__panel-h">Intent events</div>' + insBars(ev.types, INS_EV_LABEL) + '</div><div class="ins__panel"><div class="ins__panel-h">Most-opened cases</div>' + insBars((ev.targets || {}).case_open, null) + '</div></div><div class="ins__panel"><div class="ins__panel-h">Recent activity</div>' + insRecent(ev.recent) + "</div>";
+    var eventsBlock = '<div class="ins__grid2"><div class="ins__panel"><div class="ins__panel-h">Intent events</div>' + insBars(ev.types, INS_EV_LABEL) + '</div><div class="ins__panel"><div class="ins__panel-h">Most-opened cases</div>' + insBars((ev.targets || {}).case_open, insCaseLabels()) + '</div></div><div class="ins__panel"><div class="ins__panel-h">Recent activity</div>' + insRecent(ev.recent) + "</div>";
     return head + controls + cards + mapBlock + techBlock + trafficBlock + eventsBlock;
   }
 
