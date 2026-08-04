@@ -19,6 +19,7 @@
   }
 
   function initInteractions() {
+  try { if (window.__rkTrack) window.__rkTrack("pageview"); } catch (e) {}
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const isTouch = window.matchMedia("(pointer: coarse)").matches;
 

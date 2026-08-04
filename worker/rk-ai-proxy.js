@@ -75,7 +75,7 @@ export default {
         const rec = { name, email, company, note, context, status: "pending", at: new Date().toISOString(), ip: reqIp, ua: clip(request.headers.get("User-Agent"), 200) };
         const reqId = "req:" + Date.now() + ":" + Math.random().toString(36).slice(2, 8);
         try { await env.VAULT_GRANTS.put(reqId, JSON.stringify(rec), { expirationTtl: 90 * 24 * 3600 }); } catch (e) {}
-        try { await recordEvent(env, "request_access", company || "", (request.cf && request.cf.country) || ""); } catch (e) {}
+        try { await recordEvent(env, "request_access", company || "", (request.cf && request.cf.country) || "", parseUA(request.headers.get("User-Agent"))); } catch (e) {}
         // Web Push fan-out to the owner's installed inbox PWA(s). The payload carries signed one-tap
         // capability links so the notification's Allow / Decline buttons act without opening the app.
         try {
@@ -648,8 +648,8 @@ export default {
     if (url.pathname === "/event") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
       if (!env.VAULT_GRANTS) return json({ ok: true }, 200, cors);
-      const oOK = !origin || corsHeaders(origin, env)["Access-Control-Allow-Origin"] === origin;
-      if (!oOK) return json({ ok: true }, 200, cors);                       // drop cross-site beacons
+      const oOK = !!origin && corsHeaders(origin, env)["Access-Control-Allow-Origin"] === origin;
+      if (!oOK) return json({ ok: true }, 200, cors);                       // drop cross-site + origin-less (curl/bot) beacons
       const evIp = request.headers.get("CF-Connecting-IP") || "0";
       const evRl = "rl:ev:" + evIp;
       const evN = parseInt((await env.VAULT_GRANTS.get(evRl)) || "0", 10) || 0;
@@ -657,12 +657,13 @@ export default {
       try {
         const b = await request.json();
         const t = String((b && b.t) || "").trim();
-        const EV_OK = ["case_open", "deepcut_unlock", "resume_download", "contact_submit", "request_access", "vcard_download", "booking_open", "skim_open"];
+        const EV_OK = ["pageview", "case_open", "deepcut_unlock", "resume_download", "contact_submit", "request_access", "vcard_download", "booking_open", "skim_open"];
         if (EV_OK.indexOf(t) === -1) return json({ ok: true }, 200, cors);
         const id = String((b && b.id) || "").replace(/[^\w:.\-\/ ]+/g, "").trim().slice(0, 48);
         const country = (request.cf && request.cf.country) || "";
+        const uaInfo = parseUA(request.headers.get("User-Agent"));
         await env.VAULT_GRANTS.put(evRl, String(evN + 1), { expirationTtl: 3600 });
-        await recordEvent(env, t, id, country);
+        await recordEvent(env, t, id, country, uaInfo);
         return json({ ok: true }, 200, cors);
       } catch (e) { return json({ ok: true }, 200, cors); }
     }
@@ -933,7 +934,27 @@ export default {
 // Stored as ONE rolling KV doc ("ev:agg"): {days:{YYYY-MM-DD:{total,types,geo}}, targets:{type:{id:n}}, recent:[]}.
 // One read per dashboard load, one read-modify-write per event. Fine for a portfolio's volume; owner hits
 // never arrive here (filtered client-side). Days older than ~95d are pruned so the doc stays small.
-async function recordEvent(env, t, id, country) {
+// Coarse User-Agent classification (first-party, so it works without the Cloudflare token).
+function parseUA(ua) {
+  ua = String(ua || "");
+  var os = "Other", browser = "Other", device = "Desktop";
+  if (/Windows NT/.test(ua)) os = "Windows";
+  else if (/iPhone|iPad|iPod/.test(ua)) os = "iOS";
+  else if (/Android/.test(ua)) os = "Android";
+  else if (/Mac OS X/.test(ua)) os = "macOS";
+  else if (/CrOS/.test(ua)) os = "ChromeOS";
+  else if (/Linux/.test(ua)) os = "Linux";
+  if (/iPad|Tablet/.test(ua)) device = "Tablet";
+  else if (/Mobi|Android|iPhone|iPod/.test(ua)) device = "Mobile";
+  if (/Edg\//.test(ua)) browser = "Edge";
+  else if (/OPR\/|Opera/.test(ua)) browser = "Opera";
+  else if (/SamsungBrowser/.test(ua)) browser = "Samsung Internet";
+  else if (/Firefox\//.test(ua)) browser = "Firefox";
+  else if (/Chrome\//.test(ua)) browser = "Chrome";
+  else if (/Safari\//.test(ua)) browser = "Safari";
+  return { os: os, browser: browser, device: device };
+}
+async function recordEvent(env, t, id, country, ua) {
   let agg = null;
   try { agg = await env.VAULT_GRANTS.get("ev:agg", "json"); } catch (e) {}
   if (!agg || typeof agg !== "object") agg = { v: 1, days: {}, targets: {}, recent: [] };
@@ -941,13 +962,18 @@ async function recordEvent(env, t, id, country) {
   if (!agg.targets) agg.targets = {};
   if (!agg.recent) agg.recent = [];
   const day = new Date().toISOString().slice(0, 10);
-  const d = agg.days[day] || (agg.days[day] = { total: 0, types: {}, geo: {} });
-  d.total = (d.total || 0) + 1;
-  d.types[t] = (d.types[t] || 0) + 1;
-  if (country) d.geo[country] = (d.geo[country] || 0) + 1;
-  if (id) { const tg = agg.targets[t] || (agg.targets[t] = {}); tg[id] = (tg[id] || 0) + 1; }
-  agg.recent.unshift({ t: t, id: id || "", c: country || "", at: Date.now() });
-  if (agg.recent.length > 50) agg.recent.length = 50;
+  const d = agg.days[day] || (agg.days[day] = { pv: 0, types: {}, geo: {}, dev: {}, brow: {}, os: {} });
+  if (!d.dev) { d.dev = {}; d.brow = {}; d.os = {}; }               // migrate older day buckets
+  if (t === "pageview") {
+    d.pv = (d.pv || 0) + 1;                                          // page views = all visitors (owner excluded upstream)
+    if (country) d.geo[country] = (d.geo[country] || 0) + 1;
+    if (ua) { d.dev[ua.device] = (d.dev[ua.device] || 0) + 1; d.brow[ua.browser] = (d.brow[ua.browser] || 0) + 1; d.os[ua.os] = (d.os[ua.os] || 0) + 1; }
+  } else {
+    d.types[t] = (d.types[t] || 0) + 1;                             // intent events only
+    if (id) { const tg = agg.targets[t] || (agg.targets[t] = {}); tg[id] = (tg[id] || 0) + 1; }
+    agg.recent.unshift({ t: t, id: id || "", c: country || "", at: Date.now() });
+    if (agg.recent.length > 50) agg.recent.length = 50;
+  }
   const cutoff = Date.now() - 95 * 864e5;
   for (const k of Object.keys(agg.days)) { if (new Date(k + "T00:00:00Z").getTime() < cutoff) delete agg.days[k]; }
   try { await env.VAULT_GRANTS.put("ev:agg", JSON.stringify(agg)); } catch (e) {}
@@ -955,20 +981,26 @@ async function recordEvent(env, t, id, country) {
 async function readInsights(env, days) {
   let agg = null;
   try { agg = await env.VAULT_GRANTS.get("ev:agg", "json"); } catch (e) {}
-  if (!agg) return { total: 0, types: {}, targets: {}, geo: {}, series: [], recent: [] };
+  if (!agg) return { total: 0, pageviews: 0, types: {}, targets: {}, geo: {}, devices: {}, browsers: {}, os: {}, series: [], recent: [] };
   const since = Date.now() - days * 864e5;
-  const series = [], types = {}, geo = {};
-  let total = 0;
+  const series = [], types = {}, geo = {}, devices = {}, browsers = {}, osv = {};
+  let total = 0, pageviews = 0;
   const dayKeys = Object.keys(agg.days || {}).sort();
   for (const k of dayKeys) {
     if (new Date(k + "T00:00:00Z").getTime() < since) continue;
     const d = agg.days[k];
-    total += d.total || 0;
-    series.push({ date: k, count: d.total || 0 });
-    for (const e of Object.entries(d.types || {})) types[e[0]] = (types[e[0]] || 0) + e[1];
+    let dTot = 0;
+    for (const e of Object.entries(d.types || {})) { types[e[0]] = (types[e[0]] || 0) + e[1]; dTot += e[1]; }
+    total += dTot;
+    const pv = d.pv != null ? d.pv : (d.total || 0);
+    pageviews += pv;
+    series.push({ date: k, count: pv });
     for (const e of Object.entries(d.geo || {})) geo[e[0]] = (geo[e[0]] || 0) + e[1];
+    for (const e of Object.entries(d.dev || {})) devices[e[0]] = (devices[e[0]] || 0) + e[1];
+    for (const e of Object.entries(d.brow || {})) browsers[e[0]] = (browsers[e[0]] || 0) + e[1];
+    for (const e of Object.entries(d.os || {})) osv[e[0]] = (osv[e[0]] || 0) + e[1];
   }
-  return { total: total, types: types, targets: agg.targets || {}, geo: geo, series: series, recent: (agg.recent || []).slice(0, 50) };
+  return { total: total, pageviews: pageviews, types: types, targets: agg.targets || {}, geo: geo, devices: devices, browsers: browsers, os: osv, series: series, recent: (agg.recent || []).slice(0, 50) };
 }
 // Cloudflare Web Analytics (RUM) via the GraphQL Analytics API. Lights up once CF_ANALYTICS_TOKEN
 // (Account Analytics: Read) is set; CF_ACCOUNT_ID + CF_SITE_TAG are public and live in wrangler vars.

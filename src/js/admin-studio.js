@@ -17,6 +17,7 @@ import {
   ADMIN_WORKER, adminSession, clearAdminSession, vaultUpload, vaultRegisterGrant, vaultSignedUrl,
   webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig, authStatus, authConfig, deviceTrust, deviceTrusted, stepUp, keyringGet, keyringPut
 } from "./admin-core.js";
+import { WORLD_LAND } from "./worldland.js";
 
 (function () {
   "use strict";
@@ -2650,20 +2651,23 @@ import {
     var W = 760, H = 380, pad = 10;
     function px(lon) { return pad + (lon + 180) / 360 * (W - 2 * pad); }
     function py(lat) { return pad + (90 - lat) / 180 * (H - 2 * pad); }
+    var land = "";
+    for (var li = 0; li < WORLD_LAND.length; li++) {
+      var ring = WORLD_LAND[li], seg = "";
+      for (var pi = 0; pi < ring.length; pi += 2) seg += (pi === 0 ? "M" : "L") + px(ring[pi]).toFixed(1) + "," + py(ring[pi + 1]).toFixed(1);
+      land += seg + "Z";
+    }
     var entries = [];
     for (var iso in isoGeo) { if (iso === "__other") continue; var c = INS_CENTROID[iso]; if (c) entries.push([iso, isoGeo[iso], c]); }
-    if (!entries.length) return '<div class="ins__map-empty">No located visits in this window yet.</div>';
     var max = entries.reduce(function (m, e) { return Math.max(m, e[1]); }, 1);
     entries.sort(function (a, b) { return a[1] - b[1]; });
-    var grid = "";
-    for (var lon = -150; lon <= 150; lon += 30) grid += '<line x1="' + px(lon).toFixed(1) + '" y1="' + pad + '" x2="' + px(lon).toFixed(1) + '" y2="' + (H - pad) + '"/>';
-    for (var lat = -60; lat <= 60; lat += 30) grid += '<line x1="' + pad + '" y1="' + py(lat).toFixed(1) + '" x2="' + (W - pad) + '" y2="' + py(lat).toFixed(1) + '"/>';
     var bubbles = entries.map(function (e) {
       var r = 5 + Math.sqrt(e[1] / max) * 26;
       var x = px(e[2][2]).toFixed(1), y = py(e[2][1]).toFixed(1);
       return '<g class="ins__bub"><title>' + escHtml(e[2][0]) + " \u2014 " + e[1] + '</title><circle cx="' + x + '" cy="' + y + '" r="' + r.toFixed(1) + '"/><text x="' + x + '" y="' + (parseFloat(y) + 4).toFixed(1) + '">' + insFlag(e[0]) + "</text></g>";
     }).join("");
-    return '<svg class="ins__map" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Visitor world map"><rect class="ins__map-bg" x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="10"/><g class="ins__grat">' + grid + "</g>" + bubbles + "</svg>";
+    var note = entries.length ? "" : '<text class="ins__map-note" x="' + (W / 2) + '" y="' + (H / 2) + '" text-anchor="middle">No located visits in this window yet</text>';
+    return '<svg class="ins__map" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Visitor world map"><rect class="ins__map-bg" x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="10"/><path class="ins__land" d="' + land + '"/>' + bubbles + note + "</svg>";
   }
   function insSpark(series) {
     series = series || [];
@@ -2722,29 +2726,31 @@ import {
   function insightsSection() {
     if (!insLoaded && !insLoading) loadInsights();
     var muted = localStorage.getItem("rk:owner") === "1";
-    var head = secHead("Insights", "How your portfolio is doing \u2014 Cloudflare traffic plus the intent signals only your site can see (case opens, unlocks, r\u00e9sum\u00e9, contact). Your own visits are excluded.");
+    var head = secHead("Insights", "How your portfolio is doing \u2014 page views, geography, devices and the intent signals only your site can see (case opens, unlocks, r\u00e9sum\u00e9, contact). Your own visits are excluded.");
     var dayBtns = [7, 30, 90].map(function (d) { return '<button class="ins__dbtn' + (insDays === d ? " is-on" : "") + '" data-act="ins-days" data-days="' + d + '">' + d + "d</button>"; }).join("");
     var controls = '<div class="ins__ctrls"><div class="ins__days">' + dayBtns + '</div><button class="btn btn--ghost" data-act="ins-refresh">\u21bb Refresh</button><button class="ins__mute' + (muted ? " is-on" : "") + '" data-act="ins-mute" title="When on, this device\u2019s visits don\u2019t count">' + (muted ? "\u25cf This device muted" : "\u25cb Count this device") + "</button></div>";
     if (insErr) return head + controls + '<div class="ins__err">' + escHtml(insErr) + "</div>";
     if (!insData) return head + controls + '<div class="ins__loading">Loading your numbers\u2026</div>';
     var ev = insData.events || {}, tr = insData.traffic || {};
     var isoGeo = insGeoToIso(tr.configured ? tr.geo : ev.geo);
-    var pv = tr.configured ? (tr.total || 0) : null;
+    var pvNum = tr.configured ? (tr.total || 0) : (ev.pageviews || 0);
     var cards = '<div class="ins__cards">' +
-      insCard(pv == null ? "\u2014" : insNum(pv), "Page views", tr.configured ? (insDays + "d \u00b7 Cloudflare") : "Connect Cloudflare") +
+      insCard(insNum(pvNum), "Page views", tr.configured ? (insDays + "d \u00b7 Cloudflare") : (insDays + "d \u00b7 first-party")) +
       insCard(insNum(ev.total || 0), "Intent events", insDays + "d \u00b7 first-party") +
       insCard(insNum((ev.types && ev.types.case_open) || 0), "Case opens", insTop((ev.targets || {}).case_open)) +
       insCard(insNum((ev.types && ev.types.deepcut_unlock) || 0), "Deeper-cut unlocks", insTop((ev.targets || {}).deepcut_unlock)) +
       "</div>";
     var mapBlock = '<div class="ins__panel"><div class="ins__panel-h">Where visitors are</div>' + insMap(isoGeo) + insCountryList(isoGeo) + "</div>";
+    var techBlock = '<div class="ins__grid3"><div class="ins__panel"><div class="ins__panel-h">Devices</div>' + insBars(ev.devices, null) + '</div><div class="ins__panel"><div class="ins__panel-h">Browsers</div>' + insBars(ev.browsers, null) + '</div><div class="ins__panel"><div class="ins__panel-h">Operating system</div>' + insBars(ev.os, null) + "</div></div>";
+    var trendPanel = '<div class="ins__panel"><div class="ins__panel-h">Traffic trend \u00b7 ' + (tr.configured ? "Cloudflare" : "first-party page views") + '</div>' + insSpark(tr.configured ? tr.series : ev.series) + "</div>";
     var trafficBlock;
     if (tr.configured && !tr.error) {
-      trafficBlock = '<div class="ins__grid2"><div class="ins__panel"><div class="ins__panel-h">Traffic trend</div>' + insSpark(tr.series) + '</div><div class="ins__panel"><div class="ins__panel-h">Top referrers</div>' + insTopList(tr.referers, "host") + '</div></div><div class="ins__panel"><div class="ins__panel-h">Top pages</div>' + insTopList(tr.pages, "path") + "</div>";
+      trafficBlock = trendPanel + '<div class="ins__grid2"><div class="ins__panel"><div class="ins__panel-h">Top referrers</div>' + insTopList(tr.referers, "host") + '</div><div class="ins__panel"><div class="ins__panel-h">Top pages</div>' + insTopList(tr.pages, "path") + "</div></div>";
     } else {
-      trafficBlock = '<div class="ins__connect"><div class="ins__connect-h">Turn on traffic &amp; the country map</div><p>First-party events are already live. To add page views, referrers and full geo, create a Cloudflare API token (<b>Account \u00b7 Account Analytics \u00b7 Read</b>) and set it on the Worker:</p><pre class="ins__code">cd worker\nnpx wrangler secret put CF_ANALYTICS_TOKEN</pre>' + (tr.error ? '<p class="ins__connect-err">Cloudflare said: ' + escHtml(tr.error) + "</p>" : "") + "</div>";
+      trafficBlock = trendPanel + '<div class="ins__connect"><div class="ins__connect-h">Add referrers, top pages &amp; Cloudflare geo</div><p>Page views, devices, browsers, OS and the country map are already live from first-party data. Connect a Cloudflare API token (<b>Account \u00b7 Account Analytics \u00b7 Read</b>) to also see referrers and top pages:</p><pre class="ins__code">cd worker\nnpx wrangler secret put CF_ANALYTICS_TOKEN</pre>' + (tr.error ? '<p class="ins__connect-err">Cloudflare said: ' + escHtml(tr.error) + "</p>" : "") + "</div>";
     }
     var eventsBlock = '<div class="ins__grid2"><div class="ins__panel"><div class="ins__panel-h">Intent events</div>' + insBars(ev.types, INS_EV_LABEL) + '</div><div class="ins__panel"><div class="ins__panel-h">Most-opened cases</div>' + insBars((ev.targets || {}).case_open, null) + '</div></div><div class="ins__panel"><div class="ins__panel-h">Recent activity</div>' + insRecent(ev.recent) + "</div>";
-    return head + controls + cards + mapBlock + trafficBlock + eventsBlock;
+    return head + controls + cards + mapBlock + techBlock + trafficBlock + eventsBlock;
   }
 
   const sections = {
