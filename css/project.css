@@ -372,7 +372,7 @@ video.pjb__media-el { background: #000; }
 /* Laptop — thin-bezel lid on a deck that's clearly WIDER than the lid (the key
    laptop tell), with a rounded front edge + a hinge notch so it reads as a clamshell. */
 .pjb__dev--laptop { width: clamp(300px, 92vw, 560px); }
-.pjb__dev--laptop .pjb__dev-frame { padding: 10px 10px 0; border-radius: .85rem .85rem .2rem .2rem; background: linear-gradient(155deg, #34343d, #131317); border: 1px solid var(--line); border-bottom: none; margin-bottom: 15px; }
+.pjb__dev--laptop .pjb__dev-frame { padding: 10px 10px 0; border-radius: .85rem .85rem .2rem .2rem; background: linear-gradient(155deg, #34343d, #131317); border: 1px solid var(--line); border-bottom: none; margin: 0 8% 15px; }
 .pjb__dev--laptop .pjb__dev-screen { border-radius: .3rem .3rem 0 0; margin-bottom: 11px; }
 .pjb__dev--laptop .pjb__dev-frame::after { content: ""; position: absolute; left: -8%; right: -8%; bottom: -15px; height: 15px; background: linear-gradient(180deg, #3c3c46, #25252c 42%, #141418); border: 1px solid var(--line); border-radius: 2px 2px 12px 12px; box-shadow: 0 20px 30px -15px rgba(0, 0, 0, .9); }
 .pjb__dev--laptop .pjb__dev-frame::before { content: ""; position: absolute; left: 50%; transform: translateX(-50%); bottom: -1px; width: 15%; height: 5px; background: linear-gradient(#0a0a0c, #191920); border-radius: 0 0 7px 7px; z-index: 3; }
