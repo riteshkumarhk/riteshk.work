@@ -513,6 +513,36 @@ export default {
         return json(await issueTrust(env), 200, cors);
       } catch (e) { return json({ error: "Step-up failed" }, 400, cors); }
     }
+    // Owner's bookings inbox: Cal.com bookings captured by /cal/webhook (session-gated). Newest first.
+    if (url.pathname === "/admin/bookings") {
+      if (request.method !== "GET") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ bookings: [] }, 200, cors);
+      try {
+        const l = await env.VAULT_GRANTS.list({ prefix: "book:" });
+        const out = [];
+        for (const k of l.keys) {
+          const v = await env.VAULT_GRANTS.get(k.name, "json"); if (!v || !v.uid) continue;
+          const pending = v.trig === "BOOKING_REQUESTED";
+          const rec = { uid: v.uid, who: v.who, email: v.email, when: v.when, title: v.title, notes: v.notes, trig: v.trig, at: v.at || 0, pending: pending, manage: (env.CAL_APP_URL || "https://app.cal.com") + "/booking/" + encodeURIComponent(v.uid) };
+          if (pending) {
+            rec.accept = url.origin + "/cal/accept?uid=" + encodeURIComponent(v.uid) + "&t=" + (await hmac(env.SESSION_SECRET || "", "calaccept." + v.uid));
+            rec.decline = url.origin + "/cal/decline?uid=" + encodeURIComponent(v.uid) + "&t=" + (await hmac(env.SESSION_SECRET || "", "caldecline." + v.uid));
+          }
+          out.push(rec);
+        }
+        out.sort((a, b) => (b.at || 0) - (a.at || 0));
+        return json({ bookings: out.slice(0, 60) }, 200, cors);
+      } catch (e) { return json({ bookings: [] }, 200, cors); }
+    }
+    // Owner dismisses a booking from the studio list (session-gated).
+    if (url.pathname === "/admin/bookings/delete") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ ok: true }, 200, cors);
+      try { const b = await request.json(); if (b && b.uid) await env.VAULT_GRANTS.delete("book:" + String(b.uid)); } catch (e) {}
+      return json({ ok: true }, 200, cors);
+    }
     // Owner's request inbox: the access requests visitors have sent (session-gated). Newest first.
     if (url.pathname === "/admin/requests") {
       if (request.method !== "GET") return json({ error: "Method not allowed" }, 405, cors);

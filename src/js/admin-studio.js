@@ -2877,7 +2877,8 @@ import { WORLD_LAND } from "./worldland.js";
     },
     autofill() {
       return (
-        secHead("More", "Your phone notifications app, a one-page PDF r\u00e9sum\u00e9, and the browser autofill extension.") +
+        secHead("More", "Bookings, your phone notifications app, a one-page PDF r\u00e9sum\u00e9, and the browser autofill extension.") +
+        bookingsBlock() +
         '<div class="adm__ext">' +
           '<div class="adm__ext-head"><span class="adm__ext-logo">\uD83D\uDCF1</span><div><b>Phone \u2014 requests app</b><span>Approve requests from your phone</span></div></div>' +
           '<p class="adm__ext-lead">First add your phone as a passkey: <b>\u22EF \u2192 Passkeys \u2192 Add a passkey</b>, then pick <b>\u201cUse a phone or tablet\u201d</b> and scan with your phone. Then open <b>riteshk.work/inbox</b> on the phone, verify with that passkey, and Add\u00a0to\u00a0Home\u00a0Screen. Enrolment happens only here in the studio \u2014 the phone can only <i>verify</i>, never create a passkey, so a link alone can never grant access.</p>' +
@@ -3133,6 +3134,88 @@ import { WORLD_LAND } from "./worldland.js";
   function accSyncBadges() {
     if (!accShowDeclined) accPendingCount = accReqCache.length;
     updateAccessBadges();
+  }
+
+  /* ---------- Bookings (Cal.com) — list in the More tab + a new-count badge on that tab ---------- */
+  var bookCache = [], bookLoaded = false, bookLoading = false, bookLastNew = -1;
+  function bookSeen() { try { return parseInt(localStorage.getItem("rk:book:seen") || "0", 10) || 0; } catch (e) { return 0; } }
+  function bookNew() { var s = bookSeen(), n = 0; for (var i = 0; i < bookCache.length; i++) if ((bookCache[i].at || 0) > s) n++; return n; }
+  function updateBookBadge() {
+    var n = bookNew();
+    var el = document.querySelector("[data-bookbadge]");
+    if (el) el.textContent = n > 0 ? (n > 99 ? "99+" : String(n)) : "";
+    if (bookLastNew >= 0 && n > bookLastNew) pulseBadges();
+    bookLastNew = n;
+  }
+  function bookMarkSeen() {
+    var mx = 0; for (var i = 0; i < bookCache.length; i++) if ((bookCache[i].at || 0) > mx) mx = bookCache[i].at;
+    try { localStorage.setItem("rk:book:seen", String(Math.max(mx, Date.now()))); } catch (e) {}
+    bookLastNew = 0; updateBookBadge(); if (activeTab === "autofill") renderBody();
+  }
+  async function loadBookings() {
+    var sess = adminSession(); if (!sess || bookLoading) return;
+    bookLoading = true; if (activeTab === "autofill" && !bookLoaded) renderBody();
+    try {
+      var r = await fetch(ADMIN_WORKER + "/admin/bookings", { headers: { Authorization: "Bearer " + sess } });
+      if (r.ok) { bookCache = (await r.json()).bookings || []; bookLoaded = true; }
+    } catch (e) {}
+    bookLoading = false; updateBookBadge(); if (activeTab === "autofill") renderBody();
+  }
+  async function bookDo(uid, action, btn) {
+    var b = null; for (var i = 0; i < bookCache.length; i++) if (bookCache[i].uid === uid) { b = bookCache[i]; break; }
+    if (!b) return;
+    if (btn) { btn.disabled = true; btn.textContent = "\u2026"; }
+    try {
+      var ok = false;
+      if (action === "dismiss") {
+        var rd = await fetch(ADMIN_WORKER + "/admin/bookings/delete", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ uid: uid }) });
+        ok = rd.ok;
+      } else {
+        var link = action === "accept" ? b.accept : b.decline;
+        if (link) { var ra = await fetch(link, { method: "POST" }); ok = ra.ok; }
+      }
+      if (ok) {
+        bookCache = bookCache.filter(function (x) { return x.uid !== uid; });
+        status(action === "accept" ? "Accepted \u2014 it\u2019s on your calendar \u2713" : action === "decline" ? "Declined \u2713" : "Dismissed");
+        updateBookBadge(); if (activeTab === "autofill") renderBody();
+      } else { status("Couldn\u2019t " + action + " \u2014 try again, or open it in Cal.com."); if (activeTab === "autofill") renderBody(); }
+    } catch (e) { status("Couldn\u2019t " + action + " \u2014 check your connection."); if (activeTab === "autofill") renderBody(); }
+  }
+  function bookStatusLabel(b) {
+    if (b.pending) return "Pending";
+    return b.trig === "BOOKING_CANCELLED" ? "Cancelled" : b.trig === "BOOKING_REJECTED" ? "Declined" : b.trig === "BOOKING_RESCHEDULED" ? "Rescheduled" : "Confirmed";
+  }
+  function bookingCard(b) {
+    var acts = b.pending
+      ? '<button class="btn btn--primary" data-act="book-accept" data-uid="' + escAttr(b.uid) + '">Accept</button>' +
+        '<button class="btn btn--ghost" data-act="book-decline" data-uid="' + escAttr(b.uid) + '">Decline</button>' +
+        (b.manage ? '<a class="btn btn--ghost" href="' + escAttr(b.manage) + '" target="_blank" rel="noopener">Reschedule \u2197</a>' : "")
+      : (b.manage ? '<a class="btn btn--ghost" href="' + escAttr(b.manage) + '" target="_blank" rel="noopener">Open \u2197</a>' : "") +
+        '<button class="btn btn--ghost" data-act="book-dismiss" data-uid="' + escAttr(b.uid) + '">Dismiss</button>';
+    var isNew = (b.at || 0) > bookSeen();
+    return '<div class="rkinbox__row">' +
+      '<div class="rkinbox__main">' +
+        '<div class="rkinbox__who">' + (isNew ? '<span title="New" style="color:var(--accent)">\u25cf</span> ' : "") + "<b>" + escHtml(b.who || "Someone") + "</b>" +
+          ' <span class="rkinbox__co">\u00b7 ' + escHtml(bookStatusLabel(b)) + "</span>" +
+          (b.when ? ' <span class="rkinbox__ago">' + escHtml(b.when) + "</span>" : "") + "</div>" +
+        '<div class="rkinbox__ctx">' + escHtml(b.title || "Call") + "</div>" +
+        (b.email ? '<a class="rkinbox__mail" href="mailto:' + escAttr(b.email) + '">' + escHtml(b.email) + "</a>" : "") +
+        (b.notes ? '<div class="rkinbox__note">\u201c' + escHtml(b.notes) + "\u201d</div>" : "") +
+      "</div>" +
+      '<div class="rkinbox__acts">' + acts + "</div>" +
+    "</div>";
+  }
+  function bookingsBlock() {
+    var inner;
+    if (!adminSession()) inner = '<p class="adm__ext-lead">Sign in to see your bookings.</p>';
+    else if (bookLoading && !bookLoaded) inner = '<div class="spinner"></div>';
+    else if (!bookCache.length) inner = '<p class="adm__ext-lead">No bookings yet. When someone books a call through your <b>Book a call</b> link, it appears here \u2014 accept, decline or reschedule right from this panel, and it syncs to your calendar.</p>';
+    else inner = '<div class="rkinbox">' + bookCache.map(bookingCard).join("") + "</div>";
+    return '<div class="adm__ext">' +
+      '<div class="adm__ext-head"><span class="adm__ext-logo">\uD83D\uDCC5</span><div><b>Bookings</b><span>Call requests \u2014 accept, decline or reschedule</span></div></div>' +
+      '<div class="imgblk__row"><button class="btn btn--ghost" data-act="book-refresh">\u21bb Refresh</button></div>' +
+      inner +
+    "</div>";
   }
   function accGrantLeft(g) {
     if (g.revoked) return "revoked";
@@ -3937,6 +4020,10 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "ins-days") { loadInsights(+b.dataset.days || 30); return; }
     if (act === "ins-refresh") { loadInsights(); return; }
     if (act === "ins-mute") { insToggleMute(); return; }
+    if (act === "book-accept") { bookDo(b.dataset.uid, "accept", b); return; }
+    if (act === "book-decline") { bookDo(b.dataset.uid, "decline", b); return; }
+    if (act === "book-dismiss") { bookDo(b.dataset.uid, "dismiss", b); return; }
+    if (act === "book-refresh") { loadBookings(); return; }
     if (act === "settings-close") { closeSettings(); return; }
     if (act === "settings-cat") { activeSetCat = b.dataset.cat; setSub = null; renderSettings(); return; }
     if (act === "allow-toggle") { toggleAllowDefault(renderSetPanel); return; }
@@ -8288,7 +8375,7 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="adm__brand"><span class="adm__pulse"></span>Admin Mode <small>content studio</small></div>' +
         '<div class="adm__tabswrap">' +
           '<button class="adm__tabflip adm__tabflip--prev" data-tabflip="-1" type="button" aria-label="Scroll tabs left" hidden>\u2039</button>' +
-          '<nav class="adm__tabs">' + TABS.map((t) => '<button class="adm__tab" data-tab="' + t[0] + '">' + t[1] + (t[0] === "special" ? '<span class="adm__tabbadge" data-accbadge></span>' : "") + "</button>").join("") + "</nav>" +
+          '<nav class="adm__tabs">' + TABS.map((t) => '<button class="adm__tab" data-tab="' + t[0] + '">' + t[1] + (t[0] === "special" ? '<span class="adm__tabbadge" data-accbadge></span>' : t[0] === "autofill" ? '<span class="adm__tabbadge" data-bookbadge></span>' : "") + "</button>").join("") + "</nav>" +
           '<button class="adm__tabflip adm__tabflip--next" data-tabflip="1" type="button" aria-label="Scroll tabs right" hidden>\u203A</button>' +
         "</div>" +
         '<div class="adm__actions">' +
@@ -8376,7 +8463,7 @@ import { WORLD_LAND } from "./worldland.js";
     // Paste into a rich-text body as plain text (no foreign colours/fonts).
     root.addEventListener("paste", onRtPaste);
     root.querySelectorAll(".adm__tab").forEach((t) =>
-      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); if (activeTab === "special") { loadAccessData(); loadQuickGrant(); } try { t.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {} tabsSync(); })
+      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); if (activeTab === "special") { loadAccessData(); loadQuickGrant(); } if (activeTab === "autofill") { loadBookings(); bookMarkSeen(); } try { t.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {} tabsSync(); })
     );
     // tab-strip overflow flippers (\u2039 \u203A)
     root.querySelectorAll("[data-tabflip]").forEach((b) => b.addEventListener("click", () => tabScroll(+b.dataset.tabflip)));
@@ -8457,9 +8544,10 @@ import { WORLD_LAND } from "./worldland.js";
     renderBody();
     loadQuickGrant(); // prefetch the one-tap Full-access quick-grant status
     loadAccessData(); // prefetch requests + grants for the merged Special Views tab
+    loadBookings(); // prefetch Cal.com bookings so the More-tab badge shows a count on open
     // Live-ish: when the owner returns to this tab while the studio is open, re-check pending so a request
     // that arrived meanwhile shows up (and the badge pulses). Gated on adm-lock so it never runs when closed.
-    if (!accVisBound) { accVisBound = true; document.addEventListener("visibilitychange", function () { if (!document.hidden && document.documentElement.classList.contains("adm-lock") && adminSession()) loadAccessData(); }); }
+    if (!accVisBound) { accVisBound = true; document.addEventListener("visibilitychange", function () { if (!document.hidden && document.documentElement.classList.contains("adm-lock") && adminSession()) { loadAccessData(); loadBookings(); } }); }
     musSilence(); // silence the ambient music while editing
     thDismiss(true); // belt-and-suspenders: the ticket nudge must never linger over the editor
     document.documentElement.classList.add("adm-lock");
