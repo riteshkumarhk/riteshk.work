@@ -149,6 +149,71 @@ export default {
       return _reply("Sent a cancellation note to " + rec.email + " (replies come to you). \u2713");
     }
 
+    // ---------- Cal.com booking webhook: verify signature, store the booking, push a one-tap notification ----------
+    if (url.pathname === "/cal/webhook") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!env.CAL_WEBHOOK_SECRET) return json({ error: "Booking webhook isn\u2019t configured." }, 503, cors);
+      const raw = await request.text();
+      const sig = (request.headers.get("x-cal-signature-256") || "").trim().toLowerCase();
+      const expect = (await hmacHex(env.CAL_WEBHOOK_SECRET, raw)).toLowerCase();
+      if (!sig || !timingSafeEqual(sig, expect)) return json({ error: "Bad signature" }, 401, cors);
+      let evt = {}; try { evt = JSON.parse(raw); } catch (e) { return json({ ok: true }, 200, cors); }
+      const trig = String(evt.triggerEvent || "");
+      const p = evt.payload || {};
+      const uid = String(p.uid || p.bookingUid || "");
+      if (!uid) return json({ ok: true }, 200, cors);
+      const att = (p.attendees && p.attendees[0]) || {};
+      const rsp = p.responses || {};
+      const who = String(att.name || (rsp.name && rsp.name.value) || "Someone").slice(0, 80);
+      const email = String(att.email || (rsp.email && rsp.email.value) || "").slice(0, 140);
+      const when = calWhen(p.startTime, env);
+      const notes = String(p.additionalNotes || (rsp.notes && rsp.notes.value) || "").replace(/\s+/g, " ").trim().slice(0, 200);
+      const title = String(p.title || p.eventTitle || "Call").slice(0, 120);
+      try { await env.VAULT_GRANTS.put("book:" + uid, JSON.stringify({ uid: uid, who: who, email: email, when: when, title: title, notes: notes, trig: trig, at: Date.now() }), { expirationTtl: 90 * 24 * 3600 }); } catch (e) {}
+      const manage = (env.CAL_APP_URL || "https://app.cal.com") + "/booking/" + encodeURIComponent(uid);
+      if (env.VAPID_PRIVATE) {
+        try {
+          const pending = trig === "BOOKING_REQUESTED";
+          let head, body;
+          if (pending) { head = "New call request"; body = who + (when ? " \u00b7 " + when : "") + "\n" + title + (notes ? "\n\u201c" + notes + "\u201d" : ""); }
+          else if (trig === "BOOKING_CREATED") { head = "Call booked \u2713"; body = who + (when ? " \u00b7 " + when : "") + "\n" + title; }
+          else if (trig === "BOOKING_RESCHEDULED") { head = "Call rescheduled"; body = who + (when ? " \u2192 " + when : "") + "\n" + title; }
+          else if (trig === "BOOKING_CANCELLED") { head = "Call cancelled"; body = who + (when ? " \u00b7 " + when : "") + "\n" + title; }
+          else if (trig === "BOOKING_REJECTED") { head = "Call declined"; body = who + "\n" + title; }
+          else { head = "Booking update"; body = who + "\n" + title; }
+          const payloadObj = { kind: "booking", title: head, body: body, tag: "book:" + uid, url: manage, timestamp: Date.now() };
+          if (pending) {
+            payloadObj.accept = url.origin + "/cal/accept?uid=" + encodeURIComponent(uid) + "&t=" + (await hmac(env.SESSION_SECRET || "", "calaccept." + uid));
+            payloadObj.decline = url.origin + "/cal/decline?uid=" + encodeURIComponent(uid) + "&t=" + (await hmac(env.SESSION_SECRET || "", "caldecline." + uid));
+          }
+          await pushToAll(env, payloadObj);
+        } catch (e) {}
+      }
+      try {
+        if (trig === "BOOKING_REQUESTED" || trig === "BOOKING_CREATED") {
+          const subj = (trig === "BOOKING_REQUESTED" ? "New call request \u2014 " : "Call booked \u2014 ") + who;
+          const h = "<p><b>" + emailEsc(who) + "</b>" + (email ? " (" + emailEsc(email) + ")" : "") + "</p><p>" + emailEsc(title) + (when ? " \u2014 " + emailEsc(when) : "") + "</p>" + (notes ? "<p>\u201c" + emailEsc(notes) + "\u201d</p>" : "") + '<p><a href="' + manage + '">Open in Cal.com</a></p>';
+          await sendEmail(env, { to: (env.OWNER_EMAIL || "riteshkumarhk@gmail.com"), subject: subj, html: h, text: who + " \u2014 " + title + (when ? " (" + when + ")" : ""), replyTo: email || undefined });
+        }
+      } catch (e) {}
+      return json({ ok: true }, 200, cors);
+    }
+
+    // ---------- one-tap Accept / Decline from the booking notification (signed link \u2192 Cal.com confirm/decline) ----------
+    if (url.pathname === "/cal/accept" || url.pathname === "/cal/decline") {
+      if (request.method !== "POST") return new Response("Method not allowed", { status: 405, headers: cors });
+      const _uid = url.searchParams.get("uid") || "", _t = url.searchParams.get("t") || "";
+      const _reply = (s) => new Response(s, { status: 200, headers: Object.assign({ "Content-Type": "text/plain; charset=utf-8" }, cors) });
+      const isAccept = url.pathname === "/cal/accept";
+      if (!_uid || !_t) return new Response("Bad request", { status: 400, headers: cors });
+      const expTok = await hmac(env.SESSION_SECRET || "", (isAccept ? "calaccept." : "caldecline.") + _uid);
+      if (!timingSafeEqual(_t, expTok)) return new Response("Invalid or expired link", { status: 403, headers: cors });
+      const r = await calBookingAction(env, _uid, isAccept ? "confirm" : "decline");
+      if (!r.ok) return _reply((isAccept ? "Couldn\u2019t accept" : "Couldn\u2019t decline") + " (" + (r.msg || ("Cal.com said " + r.status)) + "). Open Cal.com to do it manually.");
+      try { await env.VAULT_GRANTS.delete("book:" + _uid); } catch (e) {}
+      return _reply(isAccept ? "Accepted \u2014 it\u2019s on your calendar. \u2713" : "Declined. \u2713");
+    }
+
     // ---------- public: a recruiter's unique ?k= link resolves to the current Full-access code ----------
     if (url.pathname === "/access/redeem") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
@@ -1192,6 +1257,33 @@ async function hmac(secret, msg) {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(msg));
   return b64urlFromBytes(sig);
+}
+// HMAC-SHA256 as lowercase hex — Cal.com signs its webhooks this way (x-cal-signature-256).
+async function hmacHex(secret, msg) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(msg)));
+  let h = ""; for (let i = 0; i < sig.length; i++) h += sig[i].toString(16).padStart(2, "0");
+  return h;
+}
+// Human time for the booking notification, in the owner's timezone (Hyderabad by default).
+function calWhen(iso, env) {
+  if (!iso) return "";
+  try {
+    const tz = (env && env.OWNER_TZ) || "Asia/Kolkata";
+    return new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: tz }).format(new Date(iso));
+  } catch (e) { return ""; }
+}
+// Confirm or decline a pending (opt-in) Cal.com booking on the owner's behalf (API v2).
+async function calBookingAction(env, uid, action) {
+  if (!env.CAL_API_KEY) return { ok: false, status: 0, msg: "no Cal.com API key set" };
+  try {
+    const r = await fetch("https://api.cal.com/v2/bookings/" + encodeURIComponent(uid) + "/" + action, {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + env.CAL_API_KEY, "cal-api-version": "2026-02-25", "Content-Type": "application/json" },
+      body: action === "decline" ? JSON.stringify({ reason: "Not available at this time." }) : "{}",
+    });
+    return { ok: r.status >= 200 && r.status < 300, status: r.status };
+  } catch (e) { return { ok: false, status: 0, msg: String((e && e.message) || e) }; }
 }
 async function issueSession(env) {
   const exp = Date.now() + SESSION_TTL_MS;

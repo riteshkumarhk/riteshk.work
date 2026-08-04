@@ -1,7 +1,7 @@
 /* Riteshk Requests — service worker.
    Caches the app shell for a fast, offline-tolerant launch (API calls to the Worker always pass
    straight through, never cached) + handles Web Push ("push" + "notificationclick"). */
-const CACHE = "rk-inbox-v18";
+const CACHE = "rk-inbox-v19";
 const SHELL = [
   "/inbox/",
   "/inbox/index.html",
@@ -40,7 +40,7 @@ function refreshBadge() {
   try {
     if (!self.registration.getNotifications) return;
     self.registration.getNotifications().then((ns) => {
-      const n = ns.filter((x) => x.data && (x.data.allow || x.data.cancel || x.data.reveal)).length;
+      const n = ns.filter((x) => x.data && (x.data.allow || x.data.cancel || x.data.accept || x.data.decline || x.data.reveal)).length;
       if (self.navigator && self.navigator.setAppBadge) {
         if (n > 0) self.navigator.setAppBadge(n).catch(() => {});
         else if (self.navigator.clearAppBadge) self.navigator.clearAppBadge().catch(() => {});
@@ -53,17 +53,24 @@ function refreshBadge() {
 self.addEventListener("push", (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (x) { d = {}; }
-  const title = d.title || "New access request";
+  const booking = d.kind === "booking";
+  const title = d.title || (booking ? "New booking" : "New access request");
   const body = d.body || "Open the app to review.";
-  const tag = d.tag || "rk-req";
+  const tag = d.tag || (booking ? "rk-book" : "rk-req");
   // iOS reveals notification actions only on long-press (a normal tap opens the PWA) and desktop clicks
-  // are deliberate, so we attach the Allow/Decline buttons up front there. Android renders action buttons
+  // are deliberate, so we attach the action buttons up front there. Android renders action buttons
   // INLINE with no long-press gate, so we start WITHOUT them and reveal on the first tap instead (see
   // notificationclick): first tap shows the buttons, a second tap opens the PWA - a stray tap sends nothing.
+  // Booking = Accept/Decline (Cal.com); access request = Allow/Decline.
   const ua = (self.navigator && self.navigator.userAgent) || "";
   const isAndroid = /Android/i.test(ua);
-  const hasActions = !!(d.allow || d.cancel);
-  const actions = (!isAndroid && hasActions) ? [{ action: "allow", title: "Allow" }, { action: "decline", title: "Decline" }] : [];
+  const yes = booking ? (d.accept || "") : (d.allow || "");
+  const no = booking ? (d.decline || "") : (d.cancel || "");
+  const hasActions = !!(yes || no);
+  const actDefs = booking
+    ? [{ action: "bk-accept", title: "Accept" }, { action: "bk-decline", title: "Decline" }]
+    : [{ action: "allow", title: "Allow" }, { action: "decline", title: "Decline" }];
+  const actions = (!isAndroid && hasActions) ? actDefs : [];
   e.waitUntil(self.registration.showNotification(title, {
     body: body,
     icon: "/inbox/icon-192.png",
@@ -71,10 +78,10 @@ self.addEventListener("push", (e) => {
     tag: tag,
     timestamp: d.timestamp || Date.now(),
     renotify: true,
-    requireInteraction: true,   // stay on screen until tapped - a recruiter ping must not be missed
+    requireInteraction: true,   // stay on screen until tapped - a ping must not be missed
     vibrate: [90, 40, 90, 40, 90],
     actions: actions,
-    data: { url: d.url || "/inbox/", allow: d.allow || "", cancel: d.cancel || "", title: title, body: body, tag: tag, reveal: isAndroid && hasActions, stage: "initial" }
+    data: { kind: d.kind || "request", url: d.url || "/inbox/", allow: d.allow || "", cancel: d.cancel || "", accept: d.accept || "", decline: d.decline || "", title: title, body: body, tag: tag, reveal: isAndroid && hasActions, stage: "initial" }
   }).then(refreshBadge));
 });
 
@@ -84,43 +91,49 @@ self.addEventListener("pushsubscriptionchange", (e) => {
   e.waitUntil(self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKey() }).catch(() => {}));
 });
 
-// Tapping the notification (or its Allow / Decline action). The one-tap actions POST the signed
-// capability link straight from the SW and flash the result — no app open needed; a plain tap
-// focuses an open inbox tab or opens the app.
+// Tapping the notification (or an action button). One-tap actions POST the signed capability link
+// straight from the SW and flash the result — no app open needed; a plain tap focuses/opens the app.
 self.addEventListener("notificationclick", (e) => {
   const data = e.notification.data || {};
   const act = e.action;
-  if (act === "allow" || act === "decline") {
-    // Verify the target matches this action's OWN endpoint, so a stale or mismatched payload can never
-    // fire the opposite action - tapping Allow can only ever POST /req/allow (grant), never the decline
-    // note. Anything missing or mismatched falls through to simply opening the app.
+  // Each action maps to its OWN signed URL + the endpoint it MUST contain, so a stale/mismatched payload
+  // can never fire the opposite action (Accept can only ever POST /cal/accept, etc.). Booking = accept/
+  // decline (Cal.com confirm/reject); access request = allow/cancel.
+  const ACT = {
+    "allow": { url: data.allow, ep: "/req/allow", ok: "Access sent \u2713" },
+    "decline": { url: data.cancel, ep: "/req/cancel", ok: "Declined \u2713" },
+    "bk-accept": { url: data.accept, ep: "/cal/accept", ok: "Accepted \u2713" },
+    "bk-decline": { url: data.decline, ep: "/cal/decline", ok: "Declined \u2713" }
+  };
+  if (ACT[act]) {
     e.notification.close();
     refreshBadge();
-    const url = act === "allow" ? data.allow : data.cancel;
-    const endpoint = act === "allow" ? "/req/allow" : "/req/cancel";
-    if (url && url.indexOf(endpoint) !== -1) {
-      const okTitle = act === "allow" ? "Access sent \u2713" : "Declined \u2713";
+    const a = ACT[act];
+    if (a.url && a.url.indexOf(a.ep) !== -1) {
       e.waitUntil(
-        fetch(url, { method: "POST" })
+        fetch(a.url, { method: "POST" })
           .then((r) => r.text().catch(() => ""))
-          .then((msg) => self.registration.showNotification(okTitle, { body: String(msg || "Done.").slice(0, 140), icon: "/inbox/icon-192.png", badge: "/inbox/icon-192.png", tag: "rk-req-done" }))
-          .catch(() => self.registration.showNotification("Couldn\u2019t reach the server", { body: "Open the app and try again.", icon: "/inbox/icon-192.png", badge: "/inbox/icon-192.png", tag: "rk-req-done" }))
+          .then((msg) => self.registration.showNotification(a.ok, { body: String(msg || "Done.").slice(0, 140), icon: "/inbox/icon-192.png", badge: "/inbox/icon-192.png", tag: "rk-act-done" }))
+          .catch(() => self.registration.showNotification("Couldn\u2019t reach the server", { body: "Open the app and try again.", icon: "/inbox/icon-192.png", badge: "/inbox/icon-192.png", tag: "rk-act-done" }))
       );
       return;
     }
   } else if (data.reveal && data.stage !== "shown") {
-    // Android two-stage: the FIRST tap on the notification body reveals the Allow/Decline buttons in place
-    // (no app launch, nothing sent); a SECOND tap opens the PWA. Keeps a stray single tap from ever firing
-    // an action, while still giving the quick buttons on a deliberate first tap.
-    e.waitUntil(self.registration.showNotification(data.title || "New access request", {
+    // Android two-stage: the FIRST tap reveals the action buttons in place (no app launch, nothing sent);
+    // a SECOND tap opens the app (or, for a booking, the Cal.com manage page to reschedule).
+    const booking = data.kind === "booking";
+    const revealActs = booking
+      ? [{ action: "bk-accept", title: "Accept" }, { action: "bk-decline", title: "Decline" }]
+      : [{ action: "allow", title: "Allow" }, { action: "decline", title: "Decline" }];
+    e.waitUntil(self.registration.showNotification(data.title || (booking ? "New booking" : "New access request"), {
       body: (data.body || "Open the app to review.") + " \u2014 tap again to open",
       icon: "/inbox/icon-192.png",
       badge: "/inbox/icon-192.png",
-      tag: data.tag || "rk-req",
+      tag: data.tag || (booking ? "rk-book" : "rk-req"),
       renotify: false,
       silent: true,
       requireInteraction: true,
-      actions: [{ action: "allow", title: "Allow" }, { action: "decline", title: "Decline" }],
+      actions: revealActs,
       data: Object.assign({}, data, { stage: "shown" })
     }));
     return;
