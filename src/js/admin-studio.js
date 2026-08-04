@@ -2754,17 +2754,21 @@ import { WORLD_LAND } from "./worldland.js";
     if (insErr) return head + controls + '<div class="ins__err">' + escHtml(insErr) + "</div>";
     if (!insData) return head + controls + '<div class="ins__loading">Loading your numbers\u2026</div>';
     var ev = insData.events || {}, tr = insData.traffic || {};
-    var isoGeo = insGeoToIso(tr.configured ? tr.geo : ev.geo);
-    var pvNum = tr.configured ? (tr.total || 0) : (ev.pageviews || 0);
+    // Once Cloudflare is connected, prefer its (owner-excluded, bot-filtered) numbers — but only when it
+    // actually has data. Until a real visitor lands, keep showing the first-party page views + map so
+    // connecting Cloudflare never blanks the dashboard (CF excludes your own visits, so it reads 0 at first).
+    var cfHas = tr.configured && !tr.error && (tr.total || 0) > 0;
+    var isoGeo = insGeoToIso(cfHas ? tr.geo : ev.geo);
+    var pvNum = cfHas ? (tr.total || 0) : (ev.pageviews || 0);
     var cards = '<div class="ins__cards">' +
-      insCard(insNum(pvNum), "Page views", tr.configured ? (insDays + "d \u00b7 Cloudflare") : (insDays + "d \u00b7 first-party")) +
+      insCard(insNum(pvNum), "Page views", cfHas ? (insDays + "d \u00b7 Cloudflare") : (insDays + "d \u00b7 first-party")) +
       insCard(insNum(ev.total || 0), "Intent events", insDays + "d \u00b7 first-party") +
       insCard(insNum((ev.types && ev.types.case_open) || 0), "Case opens", insTop((ev.targets || {}).case_open)) +
       insCard(insNum((ev.types && ev.types.deepcut_unlock) || 0), "Deeper-cut unlocks", insTop((ev.targets || {}).deepcut_unlock)) +
       "</div>";
     var mapBlock = '<div class="ins__panel"><div class="ins__panel-h">Where visitors are</div>' + insMap(isoGeo) + insCountryList(isoGeo) + "</div>";
     var techBlock = '<div class="ins__grid3"><div class="ins__panel"><div class="ins__panel-h">Devices</div>' + insBars(ev.devices, null) + '</div><div class="ins__panel"><div class="ins__panel-h">Browsers</div>' + insBars(ev.browsers, null) + '</div><div class="ins__panel"><div class="ins__panel-h">Operating system</div>' + insBars(ev.os, null) + "</div></div>";
-    var trendPanel = '<div class="ins__panel"><div class="ins__panel-h">Traffic trend \u00b7 ' + (tr.configured ? "Cloudflare" : "first-party page views") + '</div>' + insSpark(tr.configured ? tr.series : ev.series) + "</div>";
+    var trendPanel = '<div class="ins__panel"><div class="ins__panel-h">Traffic trend \u00b7 ' + (cfHas ? "Cloudflare" : "first-party page views") + '</div>' + insSpark(cfHas ? tr.series : ev.series) + "</div>";
     var trafficBlock;
     if (tr.configured && !tr.error) {
       trafficBlock = trendPanel + '<div class="ins__grid2"><div class="ins__panel"><div class="ins__panel-h">Top referrers</div>' + insTopList(tr.referers, "host") + '</div><div class="ins__panel"><div class="ins__panel-h">Top pages</div>' + insTopList(tr.pages, "path") + "</div></div>";
