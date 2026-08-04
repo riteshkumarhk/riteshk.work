@@ -288,7 +288,7 @@
         h("button", { class: "iconbtn", title: "Refresh", onclick: loadTab, html: "&#8635;" })
       ])]),
       notifNudge(),
-      h("div", { class: "tabs" }, [tabBtn("requests", "Requests"), tabBtn("approved", "Approved"), tabBtn("curated", "Curated")]),
+      h("div", { class: "tabs" }, [tabBtn("requests", "Requests"), tabBtn("bookings", "Bookings"), tabBtn("approved", "Approved"), tabBtn("curated", "Curated")]),
       h("div", { class: "tabbody", id: "tabbody" }, [h("div", { class: "spinner" })])
     ].filter(Boolean));
   }
@@ -296,7 +296,71 @@
   async function loadTab() {
     setBody([h("div", { class: "spinner" })]);
     if (accessTab === "requests") return loadRequests();
+    if (accessTab === "bookings") return loadBookings();
     return loadGrants();
+  }
+  async function loadBookings() {
+    var r = await api("/admin/bookings", { headers: authHdr() });
+    if (r.status === 401) { localStorage.removeItem(SS); return showVerify(); }
+    if (r.status === 0) return setBody([offlineState()]);
+    if (!r.ok) return setBody([h("div", { class: "note err", text: (r.json && r.json.error) || "Couldn\u2019t load." })]);
+    var books = (r.json && r.json.bookings) || [];
+    var kids = [];
+    if (books.length) books.forEach(function (b) { kids.push(bookingCard(b)); });
+    else kids.push(h("div", { class: "empty" }, [h("p", { class: "muted", text: "No bookings yet. When someone books a call, it shows here \u2014 accept or decline right from your phone." })]));
+    setBody(kids);
+  }
+  function bookStatusLabel(b) {
+    if (b.pending) return "Pending";
+    return b.trig === "BOOKING_CANCELLED" ? "Cancelled" : b.trig === "BOOKING_REJECTED" ? "Declined" : b.trig === "BOOKING_RESCHEDULED" ? "Rescheduled" : "Confirmed";
+  }
+  function bookLinkBtn(label, url) {
+    return h("a", { class: "btn ghost", href: url, target: "_blank", rel: "noopener" }, [label]);
+  }
+  function bookingCard(b) {
+    var acts = b.pending
+      ? [bookActBtn("Accept", "primary", b, "accept"), bookActBtn("Decline", "ghost", b, "decline"), (b.manage ? bookLinkBtn("Reschedule", b.manage) : null)]
+      : [(b.manage ? bookLinkBtn("Open", b.manage) : null), bookActBtn("Dismiss", "ghost", b, "dismiss")];
+    return h("div", { class: "req" }, [
+      h("div", { class: "req__top" }, [
+        h("div", {}, [h("span", { class: "req__name", text: b.who || "Someone" }), h("span", { class: "req__co", text: " \u00b7 " + bookStatusLabel(b) })]),
+        h("span", { class: "req__time", text: b.when || "" })
+      ]),
+      h("div", { class: "req__meta", text: b.title || "Call" }),
+      b.email ? h("a", { class: "req__email", href: "mailto:" + b.email, text: b.email }) : false,
+      b.notes ? h("div", { class: "req__note", text: "\u201c" + b.notes + "\u201d" }) : false,
+      h("div", { class: "req__acts" }, acts.filter(Boolean))
+    ]);
+  }
+  function bookActBtn(label, cls, b, action) {
+    var bb = btn(label, cls);
+    bb.addEventListener("click", async function () {
+      var card = bb.closest(".req");
+      var acts = card && card.querySelector(".req__acts");
+      if (acts) Array.prototype.forEach.call(acts.querySelectorAll("button"), function (x) { x.disabled = true; });
+      bb.textContent = "\u2026";
+      var ok = false;
+      try {
+        if (action === "dismiss") {
+          var rd = await api("/admin/bookings/delete", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHdr()), body: JSON.stringify({ uid: b.uid }) });
+          if (rd.status === 401) { localStorage.removeItem(SS); return showVerify(); }
+          ok = rd.ok;
+        } else {
+          var link = action === "accept" ? b.accept : b.decline;
+          if (link) { var rr = await fetch(link, { method: "POST" }); ok = rr.ok; }
+        }
+      } catch (e) { ok = false; }
+      if (ok) {
+        card.classList.add("done");
+        acts.replaceWith(h("div", { class: "req__done", text: action === "accept" ? "Accepted \u2713" : action === "decline" ? "Declined \u2713" : "Dismissed" }));
+      } else {
+        if (acts) Array.prototype.forEach.call(acts.querySelectorAll("button"), function (x) { x.disabled = false; });
+        bb.textContent = label;
+        var ex = card.querySelector(".note"); if (ex) ex.remove();
+        card.appendChild(h("div", { class: "note err", text: "Failed \u2014 try again, or open it in Cal.com." }));
+      }
+    });
+    return bb;
   }
   async function loadRequests() {
     var r = await api("/admin/requests?status=" + (showDeclined ? "declined" : "pending"), { headers: authHdr() });
