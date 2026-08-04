@@ -344,21 +344,23 @@ video.pjb__media-el { background: #000; }
 .pjb__dev-screen > .pjb__shot-ph { width: 100%; height: 100%; display: grid; place-items: center; min-height: 8rem; }
 .pjb__dev-cap { font-family: var(--mono); font-size: .66rem; letter-spacing: .04em; color: var(--text-dim); line-height: 1.4; text-align: center; max-width: 26ch; margin: 0 auto; }
 
-/* Phone — thin frame; speaker + home indicator sit in the top/bottom bezels */
-.pjb__dev--phone { width: clamp(148px, 44vw, 196px); }
+/* Phone — thin, even bezel; a Dynamic Island floats at the top of the screen (modern) */
+.pjb__dev--phone { width: clamp(150px, 44vw, 198px); }
 .pjb__dev--phone.pjb__dev--phone-land { width: clamp(300px, 76vw, 400px); }
-.pjb__dev--phone .pjb__dev-frame { padding: 15px 9px; border-radius: 2.1rem; background: linear-gradient(155deg, #303038, #131317); border: 1px solid var(--line); box-shadow: 0 20px 42px -24px rgba(0,0,0,.85), inset 0 0 0 1.5px rgba(255,255,255,.04); }
-.pjb__dev--phone .pjb__dev-screen { border-radius: 1.5rem; }
-.pjb__dev--phone .pjb__dev-frame::before { content: ""; position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 24%; height: 4px; border-radius: 100px; background: rgba(255, 255, 255, .12); }
-.pjb__dev--phone .pjb__dev-frame::after { content: ""; position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 30%; height: 4px; border-radius: 100px; background: rgba(255, 255, 255, .16); }
+.pjb__dev--phone .pjb__dev-frame { padding: 6px; border-radius: 1.7rem; background: linear-gradient(155deg, #2b2b33, #101014); border: 1px solid var(--line); box-shadow: 0 20px 42px -24px rgba(0,0,0,.85), inset 0 0 0 1.1px rgba(255,255,255,.06); }
+.pjb__dev--phone .pjb__dev-screen { border-radius: 1.35rem; }
+.pjb__dev--phone .pjb__dev-frame::before { content: ""; position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 25%; height: 8px; border-radius: 100px; background: #050506; z-index: 2; }
+.pjb__dev--phone .pjb__dev-frame::after { content: none; }
+.pjb__dev--phone.pjb__dev--phone-land .pjb__dev-frame::before { top: 50%; left: 11px; transform: translateY(-50%); width: 8px; height: 25%; }
 
-/* Watch — rounded / round frame, bronze crown, faint straps behind */
+/* Watch — squircle/round body on straps (bands behind), with a Digital Crown */
 .pjb__dev--watch { width: clamp(116px, 32vw, 150px); }
-.pjb__dev--watch .pjb__dev-frame { padding: 9px; background: linear-gradient(155deg, #303038, #131317); border: 1px solid var(--line); box-shadow: 0 14px 30px -18px rgba(0, 0, 0, .85); }
+.pjb__dev--watch .pjb__dev-frame { padding: 8px; background: linear-gradient(155deg, #33333c, #121216); border: 1px solid var(--line); box-shadow: 0 14px 30px -18px rgba(0, 0, 0, .85); }
 .pjb__dev--watch-circle .pjb__dev-frame, .pjb__dev--watch-circle .pjb__dev-screen { border-radius: 50%; }
-.pjb__dev--watch-square .pjb__dev-frame { border-radius: 32%; }
-.pjb__dev--watch-square .pjb__dev-screen { border-radius: 24%; }
-.pjb__dev--watch .pjb__dev-frame::after { content: ""; position: absolute; right: -3px; top: 40%; width: 5px; height: 18%; border-radius: 3px; background: var(--accent); opacity: .85; }
+.pjb__dev--watch-square .pjb__dev-frame { border-radius: 34%; }
+.pjb__dev--watch-square .pjb__dev-screen { border-radius: 26%; }
+.pjb__dev--watch .pjb__dev-frame::before { content: ""; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 66%; height: 152%; background: linear-gradient(#2b2b31, #17171c); border-radius: 26px; z-index: -1; }
+.pjb__dev--watch .pjb__dev-frame::after { content: ""; position: absolute; right: -4px; top: 37%; width: 5px; height: 17%; border-radius: 3px; background: linear-gradient(#e6c088, var(--accent)); box-shadow: 0 0 0 1px rgba(0, 0, 0, .3); }
 
 /* Tablet — even bezel, small camera dot */
 .pjb__dev--tablet { width: clamp(210px, 58vw, 290px); }
