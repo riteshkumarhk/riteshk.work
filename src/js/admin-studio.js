@@ -2529,6 +2529,12 @@ import { WORLD_LAND } from "./worldland.js";
       smeta(i, "tagline", "Tagline", "one line under the title") +
       '<div class="af__row">' + smeta(i, "role", "Role") + smeta(i, "timeline", "Timeline", "Optional \u2014 leave blank to reuse the Period shown on the home card.", w.period || "") + "</div>" +
       '<div class="af__row">' + smeta(i, "team", "Team") + smeta(i, "scope", "Scope") + "</div>" +
+      '<div class="af"><label class="af__label">Skim summary (optional)</label>' +
+      '<textarea rows="3" data-study="' + i + '" data-sfield="skim" placeholder="The 30-second version \u2014 one or two punchy lines.">' + escHtml((st.skim && st.skim.summary) || "") + "</textarea>" +
+      '<div class="af__hint">Shown in <b>Skim</b> view (the opt-in short read). Blank = auto-uses the tagline.</div></div>' +
+      '<div class="af"><label class="af__label">Skim metrics (optional)</label>' +
+      '<textarea rows="3" data-study="' + i + '" data-sfield="skimpts" placeholder="One per line \u2014 value | label\n175K+ | passkeys in 10 days">' + escHtml(((st.skim && st.skim.points) || []).map(function (p) { return (p.value || "") + " | " + (p.label || ""); }).join("\n")) + "</textarea>" +
+      '<div class="af__hint">Up to 3, shown as big numbers in Skim. Format <b>value | label</b> per line.</div></div>' +
       "</section>";
     var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
     var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
@@ -2569,6 +2575,14 @@ import { WORLD_LAND } from "./worldland.js";
     var i = +t.dataset.study; var w = data.work[i]; if (!w || !w.study) return;
     var f = t.dataset.sfield;
     if (f === "unlock") { studyUnlockPlain[w.id] = t.value; setStudyUnlock(w.study, t.value); return; }
+    if (f === "skim") { w.study.skim = w.study.skim || {}; w.study.skim.summary = t.value; if (!t.value.trim() && (!w.study.skim.points || !w.study.skim.points.length)) delete w.study.skim; saveDraft(); refreshL2Preview(); return; }
+    if (f === "skimpts") {
+      var pts = t.value.split(/\r?\n/).map(function (ln) { var pp = ln.split("|"); return { value: (pp[0] || "").trim(), label: (pp[1] || "").trim() }; }).filter(function (p) { return p.value || p.label; }).slice(0, 3);
+      w.study.skim = w.study.skim || {};
+      if (pts.length) w.study.skim.points = pts; else delete w.study.skim.points;
+      if (!((w.study.skim.summary || "").trim()) && !(w.study.skim.points && w.study.skim.points.length)) delete w.study.skim;
+      saveDraft(); refreshL2Preview(); return;
+    }
     // Timeline is a year range — auto-swap any typed hyphen for the site's em dash
     // ("2023 - 2024" -> "2023 — 2024"). It's a 1:1 character swap, so the caret stays put.
     if (f === "timeline" && t.value.indexOf("-") !== -1) {

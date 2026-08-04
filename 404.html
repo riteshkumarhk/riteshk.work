@@ -21,7 +21,7 @@
         var base = location.origin;
         var path = location.pathname || "";
         var m = path.match(/\/work\/([^\/?#]+)/);
-        if (m) { location.replace(base + "/?work=" + encodeURIComponent(m[1]) + location.hash); }
+        if (m) { var skim = /[?&]skim(=|&|$)/.test(location.search || "") ? "&skim" : ""; location.replace(base + "/?work=" + encodeURIComponent(m[1]) + skim + location.hash); }
         else if (/^\/(studio|admin)\/?$/i.test(path)) { location.replace(base + "/studio/"); }
         else { location.replace(base + "/"); }
       } catch (e) { location.replace("/"); }

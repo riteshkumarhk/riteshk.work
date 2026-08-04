@@ -133,7 +133,7 @@
     el.style.maskImage = v;
   }
 
-  var overlay = null, scroller = null, activeId = null;
+  var overlay = null, scroller = null, activeId = null, skimOn = false;
   var returnScrollY = 0, lastFocus = null, spyRaf = 0;
   var previewSelIdx = -1; // admin live-preview: index of the section whose floating action toolbar is shown
 
@@ -991,6 +991,48 @@
       '<div class="pj__foot-cards">' + card(prevW, "prev") + card(nextW, "next") + "</div>" +
       '<button class="pj__btn pj__btn--ghost pj__foot-back" data-pj="back">← All work</button></footer>';
   }
+  function skimData(w) {
+    var st = w.study || {};
+    var sk = st.skim || {};
+    var summary = (sk.summary && String(sk.summary).trim()) || "";
+    var points = Array.isArray(sk.points) ? sk.points.filter(function (p) { return p && (p.value || p.label); }) : [];
+    if (!points.length) {
+      var mb = (st.blocks || []).filter(function (b) { return b && b.type === "metrics" && b.items && b.items.length; })[0];
+      if (mb) points = mb.items.slice(0);
+    }
+    if (!summary) {
+      summary = st.tagline || "";
+      if (!summary) { var sb = (st.blocks || []).filter(function (b) { return b && b.type === "statement" && b.body; })[0]; if (sb) summary = sb.body; }
+      if (!summary) summary = w.desc || "";
+    }
+    return { summary: summary, points: points.slice(0, 3) };
+  }
+  function skimHtml(w, prevW, nextW) {
+    var st = w.study || {};
+    var sd = skimData(w);
+    var hasCover = !!(w.image || (st && st.cover));
+    var cover = hasCover ? coverHtml(w, st) : "";
+    var hero =
+      '<header class="pj__hero">' +
+        '<div class="pj__eyebrow">' + esc(w.client) + (w.period ? " · " + esc(w.period) : "") + "</div>" +
+        '<h1 class="pj__title">' + md(w.title) + "</h1>" +
+        '<p class="pj__tagline">' + md(st.tagline || w.desc || "") + "</p>" +
+        metaGrid(st, w.period) +
+      "</header>";
+    var summary = sd.summary ? '<div class="pj__skim-sum">' + md(sd.summary) + "</div>" : "";
+    var metrics = sd.points.length ? '<dl class="pj__skim-metrics">' + sd.points.map(function (p) {
+      return '<div class="pj__skim-metric"><dt>' + esc(p.value || "") + "</dt><dd>" + esc(p.label || "") + "</dd></div>";
+    }).join("") + "</dl>" : "";
+    var body =
+      '<div class="pj__body pj__body--skim">' +
+        '<section class="pjb pjb--skim">' +
+          '<div class="pj__skim-tag">The 30-second version</div>' +
+          summary + metrics +
+          '<button class="pj__btn pj__btn--primary pj__skim-more" type="button" data-pj="full">Read the full case <span aria-hidden="true">↓</span></button>' +
+        "</section>" +
+      "</div>";
+    return cover + hero + body + navFoot(prevW, nextW);
+  }
   function contentHtml(w) {
     var st = w.study || {};
     var blocks = st.blocks || [];
@@ -998,6 +1040,7 @@
     var idx = sibs.findIndex(function (x) { return x.id === w.id; });
     var nextW = sibs.length > 1 ? sibs[(idx + 1 + sibs.length) % sibs.length] : null;
     var prevW = sibs.length > 1 ? sibs[(idx - 1 + sibs.length) % sibs.length] : null;
+    if (!PREVIEW && skimOn && blocks.length) return skimHtml(w, prevW, nextW);
     var hero =
       '<header class="pj__hero">' +
         '<div class="pj__eyebrow">' + esc(w.client) + (w.period ? " · " + esc(w.period) : "") + "</div>" +
@@ -1132,6 +1175,10 @@
         '<div class="pj__shell">' +
           '<aside class="pj__side">' +
             '<div class="pj__side-head" data-crumb></div>' +
+            '<div class="pj__mode" data-mode>' +
+              '<button class="pj__mode-b is-active" type="button" data-pj="full">Full</button>' +
+              '<button class="pj__mode-b" type="button" data-pj="skim">Skim</button>' +
+            '</div>' +
             '<nav class="pj__toc" data-toc aria-label="Sections"></nav>' +
             '<button class="pj__side-back" data-pj="back"><span aria-hidden="true">←</span> All work</button>' +
           '</aside>' +
@@ -1256,6 +1303,8 @@
       if (kind === "back" || kind === "close") { e.preventDefault(); closeProject({ push: true }); }
       else if (kind === "prev") nav(-1);
       else if (kind === "next") nav(1);
+      else if (kind === "skim") { e.preventDefault(); setMode(true); }
+      else if (kind === "full") { e.preventDefault(); setMode(false); }
       else if (kind === "unlock") unlockFlow();
       else if (kind === "resume") { e.preventDefault(); var dz = data(); var rz = dz && dz.contact && dz.contact.resume; if (rz) { if (window.RK && window.RK.openResume) window.RK.openResume(rz); else window.open(rz, "_blank", "noopener"); } }
       else if (kind === "contact") { e.preventDefault(); closeProject({ push: true }); setTimeout(function () { var c = document.getElementById("contact"); if (c) c.scrollIntoView({ behavior: "smooth" }); }, 320); }
@@ -1533,12 +1582,19 @@
     else if (a.top != null) scroller.scrollTop = a.top;
   }
   function fillContent(w, keepAnchor) {
+    var skim = !PREVIEW && skimOn;
+    overlay.classList.toggle("pj--skim", skim);
     var head = overlay.querySelector("[data-crumb]");
     head.innerHTML = '<b>' + esc(w.client || "") + "</b>" + (w.plateTag ? "<span>" + esc(w.plateTag) + "</span>" : "");
     var st = w.study || {};
     var blocks = st.blocks || [];
     var showIntro = !!(w.image || st.cover) || blocks.length > 0;
-    overlay.querySelector("[data-toc]").innerHTML = tocHtml(blocks, showIntro);
+    var modeEl = overlay.querySelector("[data-mode]");
+    if (modeEl) {
+      modeEl.style.display = (!PREVIEW && blocks.length) ? "" : "none";
+      modeEl.querySelectorAll(".pj__mode-b").forEach(function (b) { b.classList.toggle("is-active", (b.getAttribute("data-pj") === "skim") === skim); });
+    }
+    overlay.querySelector("[data-toc]").innerHTML = skim ? "" : tocHtml(blocks, showIntro);
     var contentEl = overlay.querySelector("[data-content]");
     var html = contentHtml(w);
     // In the admin live-preview, re-rendering the SAME project on every keystroke
@@ -1619,6 +1675,18 @@
     var target = sibs[(idx + dir + sibs.length) % sibs.length];
     if (target) openProject(target.id, { push: true });
   }
+  function skimInUrl() { try { return new URLSearchParams(location.search).has("skim"); } catch (e) { return false; } }
+  function setMode(on) {
+    on = !!on;
+    if (PREVIEW || skimOn === on) return;
+    skimOn = on;
+    var w = workById(activeId);
+    if (!w) return;
+    if (on) { try { window.__rkTrack && window.__rkTrack("skim_open", activeId); } catch (e) {} }
+    fillContent(w);
+    if (scroller) scroller.scrollTop = 0;
+    try { history.replaceState({ rkWork: activeId }, "", "/work/" + activeId + (on ? "?skim" : "")); } catch (e) {}
+  }
 
   /* ---------- scroll-spy + jump ---------- */
   function topOffset() {
@@ -1688,10 +1756,11 @@
     }
     activeId = id;
     try { window.__rkTrack && window.__rkTrack("case_open", id); } catch (e) {}
+    if (!PREVIEW && skimOn) { try { window.__rkTrack && window.__rkTrack("skim_open", id); } catch (e) {} }
     var keepAnchor = opts.keepScroll ? captureAnchor() : null;
     fillContent(w, keepAnchor);
     document.title = w.title ? (plain(w.title) + " \u2014 Ritesh Kumar") : DEFAULT_TITLE;
-    if (opts.push !== false) { try { history.pushState({ rkWork: id }, "", "/work/" + id); } catch (e) {} }
+    if (opts.push !== false) { try { history.pushState({ rkWork: id }, "", "/work/" + id + (!PREVIEW && skimOn ? "?skim" : "")); } catch (e) {} }
     if (opts.keepScroll) restoreAnchor(keepAnchor); else scroller.scrollTop = 0;
     if (firstOpen) requestAnimationFrame(function () { overlay.classList.add("is-open"); requestAnimationFrame(updateSpy); });
     else updateSpy();
@@ -1717,6 +1786,7 @@
     }
     if (activeId) { delete vaultResolving[activeId]; delete vaultTried[activeId]; }   // let a reopened project re-attempt + re-show the "Unlocking…" state (recovers from a transient fetch fail)
     activeId = null;
+    skimOn = false;
     previewSelIdx = -1;
     if (opts.push !== false) { try { history.pushState({}, "", "/"); } catch (e) {} }
     try { document.dispatchEvent(new Event("rk:route")); } catch (e) {}
@@ -1796,7 +1866,7 @@
   }
   function route() {
     var id = pathWorkId();
-    if (id && workById(id)) openProject(id, { push: false });
+    if (id && workById(id)) { skimOn = !PREVIEW && skimInUrl(); openProject(id, { push: false }); }
     else closeProject({ push: false });
   }
   function onDocLinkClick(e) {
@@ -1806,13 +1876,15 @@
     var id = a.getAttribute("data-work");
     if (!id || !workById(id)) return;
     e.preventDefault();
+    skimOn = false;
     openProject(id, { push: true });
   }
   function initDeepLink() {
     var id = pathWorkId();
     if (!id) return;
     if (!workById(id)) { try { history.replaceState({}, "", "/"); } catch (e) {} return; }
-    try { history.replaceState({ rkWork: id }, "", "/work/" + id); } catch (e) {}
+    skimOn = !PREVIEW && skimInUrl();
+    try { history.replaceState({ rkWork: id }, "", "/work/" + id + (skimOn ? "?skim" : "")); } catch (e) {}
     openProject(id, { push: false });
   }
 
