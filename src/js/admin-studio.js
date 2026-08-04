@@ -102,7 +102,7 @@ import {
   ];
 
   let data = null;
-  let activeTab = "landing";
+  let activeTab = "insights";
   let openStudy = -1; // index of the work item whose case-study editor is expanded
   let openBlock = -1; // which section (block) is expanded in the L2 sections accordion
   let journeyOpen = false; // is the Design Journey editor open in the L2 panel?
@@ -121,6 +121,7 @@ import {
   const hostedBytes = {}; // "/assets/uploads/<hash>.<ext>" -> data URI (this session) for instant local preview
 
   const TABS = [
+    ["insights", "Insights"],
     ["landing", "Landing"],
     ["highlights", "Highlights"],
     ["capabilities", "Capabilities"],
@@ -2593,7 +2594,161 @@ import {
   }
 
   /* ---------- section renderers ---------- */
+  // ============================ INSIGHTS (analytics readout) ============================
+  // First-party intent events (from the site's track()) via the Worker's KV, plus Cloudflare Web
+  // Analytics traffic/geo when CF_ANALYTICS_TOKEN is set. Your own visits are excluded upstream.
+  let insData = null, insLoading = false, insErr = "", insDays = 30, insLoaded = false;
+
+  async function loadInsights(days) {
+    if (typeof days === "number") insDays = days;
+    var sess = adminSession();
+    if (!sess) { insErr = "Sign in to view analytics."; insLoaded = true; if (activeTab === "insights") renderBody(); return; }
+    insLoading = true; insErr = "";
+    if (activeTab === "insights") renderBody();
+    try {
+      var r = await fetch(ADMIN_WORKER + "/admin/insights?days=" + insDays, { headers: { Authorization: "Bearer " + sess } });
+      if (r.status === 401) { insErr = "Your studio session expired \u2014 sign in again."; insData = null; }
+      else if (!r.ok) { insErr = "Couldn\u2019t load analytics (" + r.status + ")."; }
+      else { insData = await r.json(); insErr = ""; }
+    } catch (e) { insErr = "Network error loading analytics."; }
+    insLoading = false; insLoaded = true;
+    if (activeTab === "insights") renderBody();
+  }
+
+  function insToggleMute() {
+    var muted = localStorage.getItem("rk:owner") === "1";
+    try { if (muted) localStorage.removeItem("rk:owner"); else localStorage.setItem("rk:owner", "1"); } catch (e) {}
+    status(muted ? "This device now counts in analytics." : "This device is muted \u2014 your visits won\u2019t count.", true);
+    if (activeTab === "insights") renderBody();
+  }
+
+  function insFlag(cc) {
+    cc = String(cc || "").toUpperCase();
+    if (!/^[A-Z]{2}$/.test(cc)) return "\uD83C\uDF10";
+    return String.fromCodePoint.apply(null, [].map.call(cc, function (c) { return 127397 + c.charCodeAt(0); }));
+  }
+  // ISO-2 -> [name, lat, lon] centroids for a working set of well-trafficked countries.
+  const INS_CENTROID = { US: ["United States", 39, -98], CA: ["Canada", 56, -106], MX: ["Mexico", 23, -102], BR: ["Brazil", -10, -55], AR: ["Argentina", -34, -64], CL: ["Chile", -33, -71], CO: ["Colombia", 4, -73], GB: ["United Kingdom", 54, -2], IE: ["Ireland", 53, -8], FR: ["France", 46, 2], DE: ["Germany", 51, 10], ES: ["Spain", 40, -4], PT: ["Portugal", 39.5, -8], IT: ["Italy", 42, 12], NL: ["Netherlands", 52, 5], BE: ["Belgium", 50.5, 4.5], CH: ["Switzerland", 47, 8], AT: ["Austria", 47.5, 14], SE: ["Sweden", 62, 15], NO: ["Norway", 62, 10], DK: ["Denmark", 56, 10], FI: ["Finland", 64, 26], PL: ["Poland", 52, 19], CZ: ["Czechia", 49.8, 15.5], RU: ["Russia", 61, 90], UA: ["Ukraine", 49, 32], TR: ["Turkey", 39, 35], IN: ["India", 22, 79], PK: ["Pakistan", 30, 70], BD: ["Bangladesh", 24, 90], LK: ["Sri Lanka", 7.5, 80.7], CN: ["China", 35, 105], JP: ["Japan", 36, 138], KR: ["South Korea", 36.5, 128], TW: ["Taiwan", 23.7, 121], HK: ["Hong Kong", 22.3, 114.2], SG: ["Singapore", 1.35, 103.8], MY: ["Malaysia", 4, 102], ID: ["Indonesia", -2, 118], TH: ["Thailand", 15, 101], VN: ["Vietnam", 16, 106], PH: ["Philippines", 13, 122], AU: ["Australia", -25, 133], NZ: ["New Zealand", -41, 174], AE: ["UAE", 24, 54], SA: ["Saudi Arabia", 24, 45], IL: ["Israel", 31, 35], EG: ["Egypt", 26, 30], ZA: ["South Africa", -29, 24], NG: ["Nigeria", 10, 8], KE: ["Kenya", 0, 38], MA: ["Morocco", 32, -6] };
+  const INS_NAME2ISO = (function () { var m = {}; for (var k in INS_CENTROID) m[INS_CENTROID[k][0].toLowerCase()] = k; m["united states of america"] = "US"; m["usa"] = "US"; m["uk"] = "GB"; m["russian federation"] = "RU"; m["viet nam"] = "VN"; m["republic of korea"] = "KR"; m["korea, south"] = "KR"; m["united arab emirates"] = "AE"; return m; })();
+  const INS_EV_LABEL = { case_open: "Case opened", deepcut_unlock: "Deeper-cut unlocked", resume_download: "R\u00e9sum\u00e9 opened", contact_submit: "Contact clicked", request_access: "Access requested", vcard_download: "Contact saved (vCard)", booking_open: "Booking opened", skim_open: "Skim view" };
+
+  function insGeoToIso(geo) {
+    var out = {};
+    for (var k in (geo || {})) {
+      var n = geo[k] || 0; if (!n) continue;
+      var iso = /^[A-Za-z]{2}$/.test(k) ? k.toUpperCase() : (INS_NAME2ISO[k.toLowerCase()] || "");
+      if (!iso) { out.__other = (out.__other || 0) + n; continue; }
+      out[iso] = (out[iso] || 0) + n;
+    }
+    return out;
+  }
+  function insNum(n) { n = n || 0; if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M"; if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "k"; return String(n); }
+  function insTop(obj) { if (!obj) return ""; var best = "", bn = -1; for (var k in obj) { if (obj[k] > bn) { bn = obj[k]; best = k; } } return best ? ("Top: " + best) : ""; }
+  function insAgo(ts) { var s = Math.max(0, (Date.now() - (ts || 0)) / 1000); if (s < 60) return "just now"; if (s < 3600) return Math.floor(s / 60) + "m ago"; if (s < 86400) return Math.floor(s / 3600) + "h ago"; return Math.floor(s / 86400) + "d ago"; }
+
+  function insMap(isoGeo) {
+    var W = 760, H = 380, pad = 10;
+    function px(lon) { return pad + (lon + 180) / 360 * (W - 2 * pad); }
+    function py(lat) { return pad + (90 - lat) / 180 * (H - 2 * pad); }
+    var entries = [];
+    for (var iso in isoGeo) { if (iso === "__other") continue; var c = INS_CENTROID[iso]; if (c) entries.push([iso, isoGeo[iso], c]); }
+    if (!entries.length) return '<div class="ins__map-empty">No located visits in this window yet.</div>';
+    var max = entries.reduce(function (m, e) { return Math.max(m, e[1]); }, 1);
+    entries.sort(function (a, b) { return a[1] - b[1]; });
+    var grid = "";
+    for (var lon = -150; lon <= 150; lon += 30) grid += '<line x1="' + px(lon).toFixed(1) + '" y1="' + pad + '" x2="' + px(lon).toFixed(1) + '" y2="' + (H - pad) + '"/>';
+    for (var lat = -60; lat <= 60; lat += 30) grid += '<line x1="' + pad + '" y1="' + py(lat).toFixed(1) + '" x2="' + (W - pad) + '" y2="' + py(lat).toFixed(1) + '"/>';
+    var bubbles = entries.map(function (e) {
+      var r = 5 + Math.sqrt(e[1] / max) * 26;
+      var x = px(e[2][2]).toFixed(1), y = py(e[2][1]).toFixed(1);
+      return '<g class="ins__bub"><title>' + escHtml(e[2][0]) + " \u2014 " + e[1] + '</title><circle cx="' + x + '" cy="' + y + '" r="' + r.toFixed(1) + '"/><text x="' + x + '" y="' + (parseFloat(y) + 4).toFixed(1) + '">' + insFlag(e[0]) + "</text></g>";
+    }).join("");
+    return '<svg class="ins__map" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Visitor world map"><rect class="ins__map-bg" x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="10"/><g class="ins__grat">' + grid + "</g>" + bubbles + "</svg>";
+  }
+  function insSpark(series) {
+    series = series || [];
+    if (series.length < 2) return '<div class="ins__spark-empty">Not enough data yet for a trend.</div>';
+    var W = 720, H = 90, pad = 6, n = series.length;
+    var max = series.reduce(function (m, p) { return Math.max(m, p.count || 0); }, 1);
+    var pts = series.map(function (p, i) { var x = pad + i / (n - 1) * (W - 2 * pad); var y = H - pad - (p.count || 0) / max * (H - 2 * pad); return x.toFixed(1) + "," + y.toFixed(1); });
+    var area = "M" + pad + "," + (H - pad) + " L" + pts.join(" L") + " L" + (W - pad) + "," + (H - pad) + " Z";
+    return '<svg class="ins__spark" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true"><path class="ins__spark-area" d="' + area + '"/><polyline class="ins__spark-line" points="' + pts.join(" ") + '"/></svg>';
+  }
+  function insBars(obj, labelMap) {
+    var arr = Object.keys(obj || {}).map(function (k) { return [k, obj[k]]; }).filter(function (e) { return e[1]; });
+    if (!arr.length) return '<div class="ins__empty">Nothing yet.</div>';
+    arr.sort(function (a, b) { return b[1] - a[1]; });
+    var max = arr[0][1] || 1;
+    return '<div class="ins__bars">' + arr.map(function (e) {
+      var label = (labelMap && labelMap[e[0]]) || e[0];
+      return '<div class="ins__bar"><span class="ins__bar-l" title="' + escAttr(label) + '">' + escHtml(label) + '</span><span class="ins__bar-t"><span class="ins__bar-f" style="width:' + Math.round(e[1] / max * 100) + '%"></span></span><span class="ins__bar-n">' + e[1] + "</span></div>";
+    }).join("") + "</div>";
+  }
+  function insTopList(arr, keyName) {
+    arr = arr || [];
+    if (!arr.length) return '<div class="ins__empty">Nothing yet.</div>';
+    var max = arr[0].count || 1;
+    return '<div class="ins__bars">' + arr.slice(0, 10).map(function (e) {
+      var v = e[keyName] || "\u2014";
+      return '<div class="ins__bar"><span class="ins__bar-l" title="' + escAttr(v) + '">' + escHtml(v) + '</span><span class="ins__bar-t"><span class="ins__bar-f" style="width:' + Math.round((e.count || 0) / max * 100) + '%"></span></span><span class="ins__bar-n">' + (e.count || 0) + "</span></div>";
+    }).join("") + "</div>";
+  }
+  function insCountryList(isoGeo) {
+    var arr = [];
+    for (var iso in isoGeo) { if (iso === "__other") continue; arr.push([iso, isoGeo[iso]]); }
+    if (isoGeo.__other) arr.push(["__other", isoGeo.__other]);
+    if (!arr.length) return "";
+    arr.sort(function (a, b) { return b[1] - a[1]; });
+    var max = arr[0][1] || 1;
+    return '<div class="ins__countries">' + arr.slice(0, 12).map(function (e) {
+      var name = e[0] === "__other" ? "Other" : ((INS_CENTROID[e[0]] && INS_CENTROID[e[0]][0]) || e[0]);
+      var fl = e[0] === "__other" ? "\uD83C\uDF10" : insFlag(e[0]);
+      return '<div class="ins__ctry"><span class="ins__ctry-f">' + fl + '</span><span class="ins__ctry-n">' + escHtml(name) + '</span><span class="ins__bar-t"><span class="ins__bar-f" style="width:' + Math.round(e[1] / max * 100) + '%"></span></span><span class="ins__ctry-c">' + e[1] + "</span></div>";
+    }).join("") + "</div>";
+  }
+  function insRecent(recent) {
+    if (!recent || !recent.length) return '<div class="ins__empty">No events captured yet.</div>';
+    return '<ul class="ins__feed">' + recent.slice(0, 20).map(function (r) {
+      var label = INS_EV_LABEL[r.t] || r.t;
+      var what = r.id ? (' <b>' + escHtml(r.id) + "</b>") : "";
+      var where = r.c ? (insFlag(r.c) + " ") : "";
+      return '<li><span class="ins__feed-w">' + where + '</span><span class="ins__feed-l">' + escHtml(label) + what + '</span><span class="ins__feed-t">' + insAgo(r.at) + "</span></li>";
+    }).join("") + "</ul>";
+  }
+  function insCard(n, label, sub) {
+    return '<div class="ins__card"><div class="ins__card-n">' + n + '</div><div class="ins__card-l">' + escHtml(label) + "</div>" + (sub ? '<div class="ins__card-s">' + escHtml(sub) + "</div>" : "") + "</div>";
+  }
+
+  function insightsSection() {
+    if (!insLoaded && !insLoading) loadInsights();
+    var muted = localStorage.getItem("rk:owner") === "1";
+    var head = secHead("Insights", "How your portfolio is doing \u2014 Cloudflare traffic plus the intent signals only your site can see (case opens, unlocks, r\u00e9sum\u00e9, contact). Your own visits are excluded.");
+    var dayBtns = [7, 30, 90].map(function (d) { return '<button class="ins__dbtn' + (insDays === d ? " is-on" : "") + '" data-act="ins-days" data-days="' + d + '">' + d + "d</button>"; }).join("");
+    var controls = '<div class="ins__ctrls"><div class="ins__days">' + dayBtns + '</div><button class="btn btn--ghost" data-act="ins-refresh">\u21bb Refresh</button><button class="ins__mute' + (muted ? " is-on" : "") + '" data-act="ins-mute" title="When on, this device\u2019s visits don\u2019t count">' + (muted ? "\u25cf This device muted" : "\u25cb Count this device") + "</button></div>";
+    if (insErr) return head + controls + '<div class="ins__err">' + escHtml(insErr) + "</div>";
+    if (!insData) return head + controls + '<div class="ins__loading">Loading your numbers\u2026</div>';
+    var ev = insData.events || {}, tr = insData.traffic || {};
+    var isoGeo = insGeoToIso(tr.configured ? tr.geo : ev.geo);
+    var pv = tr.configured ? (tr.total || 0) : null;
+    var cards = '<div class="ins__cards">' +
+      insCard(pv == null ? "\u2014" : insNum(pv), "Page views", tr.configured ? (insDays + "d \u00b7 Cloudflare") : "Connect Cloudflare") +
+      insCard(insNum(ev.total || 0), "Intent events", insDays + "d \u00b7 first-party") +
+      insCard(insNum((ev.types && ev.types.case_open) || 0), "Case opens", insTop((ev.targets || {}).case_open)) +
+      insCard(insNum((ev.types && ev.types.deepcut_unlock) || 0), "Deeper-cut unlocks", insTop((ev.targets || {}).deepcut_unlock)) +
+      "</div>";
+    var mapBlock = '<div class="ins__panel"><div class="ins__panel-h">Where visitors are</div>' + insMap(isoGeo) + insCountryList(isoGeo) + "</div>";
+    var trafficBlock;
+    if (tr.configured && !tr.error) {
+      trafficBlock = '<div class="ins__grid2"><div class="ins__panel"><div class="ins__panel-h">Traffic trend</div>' + insSpark(tr.series) + '</div><div class="ins__panel"><div class="ins__panel-h">Top referrers</div>' + insTopList(tr.referers, "host") + '</div></div><div class="ins__panel"><div class="ins__panel-h">Top pages</div>' + insTopList(tr.pages, "path") + "</div>";
+    } else {
+      trafficBlock = '<div class="ins__connect"><div class="ins__connect-h">Turn on traffic &amp; the country map</div><p>First-party events are already live. To add page views, referrers and full geo, create a Cloudflare API token (<b>Account \u00b7 Account Analytics \u00b7 Read</b>) and set it on the Worker:</p><pre class="ins__code">cd worker\nnpx wrangler secret put CF_ANALYTICS_TOKEN</pre>' + (tr.error ? '<p class="ins__connect-err">Cloudflare said: ' + escHtml(tr.error) + "</p>" : "") + "</div>";
+    }
+    var eventsBlock = '<div class="ins__grid2"><div class="ins__panel"><div class="ins__panel-h">Intent events</div>' + insBars(ev.types, INS_EV_LABEL) + '</div><div class="ins__panel"><div class="ins__panel-h">Most-opened cases</div>' + insBars((ev.targets || {}).case_open, null) + '</div></div><div class="ins__panel"><div class="ins__panel-h">Recent activity</div>' + insRecent(ev.recent) + "</div>";
+    return head + controls + cards + mapBlock + trafficBlock + eventsBlock;
+  }
+
   const sections = {
+    insights() { return insightsSection(); },
     landing() {
       return (
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
@@ -3757,6 +3912,9 @@ import {
     if (!b) return;
     if (b.dataset.act === "md-fmt") { mdFmt(b); return; }
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
+    if (act === "ins-days") { loadInsights(+b.dataset.days || 30); return; }
+    if (act === "ins-refresh") { loadInsights(); return; }
+    if (act === "ins-mute") { insToggleMute(); return; }
     if (act === "settings-close") { closeSettings(); return; }
     if (act === "settings-cat") { activeSetCat = b.dataset.cat; setSub = null; renderSettings(); return; }
     if (act === "allow-toggle") { toggleAllowDefault(renderSetPanel); return; }

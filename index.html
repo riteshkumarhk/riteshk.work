@@ -305,6 +305,7 @@
           else localStorage.removeItem("rk:noanalytics");
         }
         var mine = localStorage.getItem("rk:noanalytics") === "1"      // this browser opted out
+          || localStorage.getItem("rk:owner")                          // durable owner flag (set on studio sign-in)
           || /^\/studio(\/|$)/.test(location.pathname)                  // admin surface, never a real visitor
           || localStorage.getItem("rk:admin:hash")                     // this device set an admin key = owner
           || localStorage.getItem("rk:admin:sess");                    // active admin session

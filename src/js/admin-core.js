@@ -30,6 +30,9 @@ export function adminSession() {
 }
 export function saveAdminSession(token, exp) {
   try { localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token, exp })); } catch (e) {}
+  // Durably mark this device as the owner's so first-party analytics + the Cloudflare beacon never
+  // count your own visits — on this PC or your phone — even after the admin session later expires.
+  try { localStorage.setItem("rk:owner", "1"); } catch (e) {}
 }
 export function clearAdminSession() { try { localStorage.removeItem(ADMIN_SESSION_KEY); } catch (e) {} }
 // ---------- device-trust: this browser/device passed a 2-factor step-up (recovery passphrase + admin

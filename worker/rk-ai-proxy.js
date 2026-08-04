@@ -75,6 +75,7 @@ export default {
         const rec = { name, email, company, note, context, status: "pending", at: new Date().toISOString(), ip: reqIp, ua: clip(request.headers.get("User-Agent"), 200) };
         const reqId = "req:" + Date.now() + ":" + Math.random().toString(36).slice(2, 8);
         try { await env.VAULT_GRANTS.put(reqId, JSON.stringify(rec), { expirationTtl: 90 * 24 * 3600 }); } catch (e) {}
+        try { await recordEvent(env, "request_access", company || "", (request.cf && request.cf.country) || ""); } catch (e) {}
         // Web Push fan-out to the owner's installed inbox PWA(s). The payload carries signed one-tap
         // capability links so the notification's Allow / Decline buttons act without opening the app.
         try {
@@ -640,6 +641,43 @@ export default {
       return json({ error: "Method not allowed" }, 405, cors);
     }
 
+    // ---------- public: first-party analytics events (the intent signals Cloudflare's pageview beacon can't see) ----------
+    // Fire-and-forget from the site's track(); owner devices are filtered CLIENT-side (same markers as the
+    // Cloudflare beacon, so your own PC + phone never count). Same-origin + rate-limit + a fixed event
+    // allowlist keep it abuse-resistant. Never errors the caller (analytics must never break a page).
+    if (url.pathname === "/event") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!env.VAULT_GRANTS) return json({ ok: true }, 200, cors);
+      const oOK = !origin || corsHeaders(origin, env)["Access-Control-Allow-Origin"] === origin;
+      if (!oOK) return json({ ok: true }, 200, cors);                       // drop cross-site beacons
+      const evIp = request.headers.get("CF-Connecting-IP") || "0";
+      const evRl = "rl:ev:" + evIp;
+      const evN = parseInt((await env.VAULT_GRANTS.get(evRl)) || "0", 10) || 0;
+      if (evN >= 120) return json({ ok: true }, 200, cors);                  // silently cap floods
+      try {
+        const b = await request.json();
+        const t = String((b && b.t) || "").trim();
+        const EV_OK = ["case_open", "deepcut_unlock", "resume_download", "contact_submit", "request_access", "vcard_download", "booking_open", "skim_open"];
+        if (EV_OK.indexOf(t) === -1) return json({ ok: true }, 200, cors);
+        const id = String((b && b.id) || "").replace(/[^\w:.\-\/ ]+/g, "").trim().slice(0, 48);
+        const country = (request.cf && request.cf.country) || "";
+        await env.VAULT_GRANTS.put(evRl, String(evN + 1), { expirationTtl: 3600 });
+        await recordEvent(env, t, id, country);
+        return json({ ok: true }, 200, cors);
+      } catch (e) { return json({ ok: true }, 200, cors); }
+    }
+
+    // ---------- admin: analytics readout (first-party KV aggregates + Cloudflare traffic/geo) ----------
+    if (url.pathname === "/admin/insights") {
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Store not configured" }, 500, cors);
+      const days = Math.max(1, Math.min(90, parseInt(url.searchParams.get("days") || "30", 10) || 30));
+      const events = await readInsights(env, days);
+      let traffic = { configured: false };
+      try { traffic = await fetchCfTraffic(env, days); } catch (e) { traffic = { configured: !!env.CF_ANALYTICS_TOKEN, error: "fetch-failed" }; }
+      return json({ ok: true, days: days, events: events, traffic: traffic }, 200, cors);
+    }
+
     // ---------- admin: authenticated GitHub proxy (holds the GH token server-side) ----------
     if (url.pathname.startsWith("/admin/gh/")) {
       const sess = bearer(request.headers.get("Authorization"));
@@ -890,6 +928,78 @@ export default {
     return new Response(upstream.body, { status: upstream.status, headers: out });
   },
 };
+
+// ---------- first-party analytics ----------
+// Stored as ONE rolling KV doc ("ev:agg"): {days:{YYYY-MM-DD:{total,types,geo}}, targets:{type:{id:n}}, recent:[]}.
+// One read per dashboard load, one read-modify-write per event. Fine for a portfolio's volume; owner hits
+// never arrive here (filtered client-side). Days older than ~95d are pruned so the doc stays small.
+async function recordEvent(env, t, id, country) {
+  let agg = null;
+  try { agg = await env.VAULT_GRANTS.get("ev:agg", "json"); } catch (e) {}
+  if (!agg || typeof agg !== "object") agg = { v: 1, days: {}, targets: {}, recent: [] };
+  if (!agg.days) agg.days = {};
+  if (!agg.targets) agg.targets = {};
+  if (!agg.recent) agg.recent = [];
+  const day = new Date().toISOString().slice(0, 10);
+  const d = agg.days[day] || (agg.days[day] = { total: 0, types: {}, geo: {} });
+  d.total = (d.total || 0) + 1;
+  d.types[t] = (d.types[t] || 0) + 1;
+  if (country) d.geo[country] = (d.geo[country] || 0) + 1;
+  if (id) { const tg = agg.targets[t] || (agg.targets[t] = {}); tg[id] = (tg[id] || 0) + 1; }
+  agg.recent.unshift({ t: t, id: id || "", c: country || "", at: Date.now() });
+  if (agg.recent.length > 50) agg.recent.length = 50;
+  const cutoff = Date.now() - 95 * 864e5;
+  for (const k of Object.keys(agg.days)) { if (new Date(k + "T00:00:00Z").getTime() < cutoff) delete agg.days[k]; }
+  try { await env.VAULT_GRANTS.put("ev:agg", JSON.stringify(agg)); } catch (e) {}
+}
+async function readInsights(env, days) {
+  let agg = null;
+  try { agg = await env.VAULT_GRANTS.get("ev:agg", "json"); } catch (e) {}
+  if (!agg) return { total: 0, types: {}, targets: {}, geo: {}, series: [], recent: [] };
+  const since = Date.now() - days * 864e5;
+  const series = [], types = {}, geo = {};
+  let total = 0;
+  const dayKeys = Object.keys(agg.days || {}).sort();
+  for (const k of dayKeys) {
+    if (new Date(k + "T00:00:00Z").getTime() < since) continue;
+    const d = agg.days[k];
+    total += d.total || 0;
+    series.push({ date: k, count: d.total || 0 });
+    for (const e of Object.entries(d.types || {})) types[e[0]] = (types[e[0]] || 0) + e[1];
+    for (const e of Object.entries(d.geo || {})) geo[e[0]] = (geo[e[0]] || 0) + e[1];
+  }
+  return { total: total, types: types, targets: agg.targets || {}, geo: geo, series: series, recent: (agg.recent || []).slice(0, 50) };
+}
+// Cloudflare Web Analytics (RUM) via the GraphQL Analytics API. Lights up once CF_ANALYTICS_TOKEN
+// (Account Analytics: Read) is set; CF_ACCOUNT_ID + CF_SITE_TAG are public and live in wrangler vars.
+async function fetchCfTraffic(env, days) {
+  if (!env.CF_ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID || !env.CF_SITE_TAG) return { configured: false };
+  const iso = (d) => d.toISOString().slice(0, 10);
+  const start = iso(new Date(Date.now() - days * 864e5)), end = iso(new Date());
+  const q =
+    "query($a:String!,$s:String!,$start:Date!,$end:Date!){viewer{accounts(filter:{accountTag:$a}){" +
+    "series:rumPageloadEventsAdaptiveGroups(limit:100,filter:{siteTag:$s,date_geq:$start,date_leq:$end},orderBy:[date_ASC]){count dimensions{date}}" +
+    "countries:rumPageloadEventsAdaptiveGroups(limit:250,filter:{siteTag:$s,date_geq:$start,date_leq:$end},orderBy:[count_DESC]){count dimensions{countryName}}" +
+    "referers:rumPageloadEventsAdaptiveGroups(limit:20,filter:{siteTag:$s,date_geq:$start,date_leq:$end},orderBy:[count_DESC]){count dimensions{refererHost}}" +
+    "pages:rumPageloadEventsAdaptiveGroups(limit:20,filter:{siteTag:$s,date_geq:$start,date_leq:$end},orderBy:[count_DESC]){count dimensions{requestPath}}" +
+    "totals:rumPageloadEventsAdaptiveGroups(limit:1,filter:{siteTag:$s,date_geq:$start,date_leq:$end}){count}" +
+    "}}}";
+  const r = await fetch("https://api.cloudflare.com/client/v4/graphql", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + env.CF_ANALYTICS_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ query: q, variables: { a: env.CF_ACCOUNT_ID, s: env.CF_SITE_TAG, start: start, end: end } }),
+  });
+  const j = await r.json().catch(() => null);
+  const acc = j && j.data && j.data.viewer && j.data.viewer.accounts && j.data.viewer.accounts[0];
+  if (!acc) return { configured: true, error: (j && j.errors && j.errors[0] && j.errors[0].message) || "no-data" };
+  const series = (acc.series || []).map((g) => ({ date: g.dimensions.date, count: g.count }));
+  const geo = {};
+  for (const g of (acc.countries || [])) { const c = g.dimensions.countryName || "Unknown"; geo[c] = (geo[c] || 0) + g.count; }
+  const referers = (acc.referers || []).map((g) => ({ host: g.dimensions.refererHost || "(direct)", count: g.count }));
+  const pages = (acc.pages || []).map((g) => ({ path: g.dimensions.requestPath || "/", count: g.count }));
+  const total = (acc.totals && acc.totals[0] && acc.totals[0].count) || 0;
+  return { configured: true, total: total, series: series, geo: geo, referers: referers, pages: pages };
+}
 
 function corsHeaders(origin, env) {
   const allow = String(env.ALLOW_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);

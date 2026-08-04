@@ -21,6 +21,11 @@ id = "ec6ed36fa1fd4dbfb9483a147d003aef"
 ALLOW_ORIGIN = "https://riteshk.work"
 OWNER = "riteshkumarhk"
 REPO = "riteshk.work"
+# Public Cloudflare identifiers for the studio Insights readout (NOT secrets). The paired
+# CF_ANALYTICS_TOKEN (Account Analytics: Read) is set via `wrangler secret put` and unlocks
+# the traffic/referrers/country-map half; until then Insights shows first-party events only.
+CF_ACCOUNT_ID = "6ccabe73a5dd6fb67572fec087b83bdb"
+CF_SITE_TAG = "b4123aee7d8a4077bc9296922e52e803"
 
 [observability]
 enabled = true

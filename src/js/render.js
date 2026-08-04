@@ -8,6 +8,31 @@
 
   const DRAFT_KEY = "rk:content:draft";
 
+  /* ---------- first-party analytics ----------
+     Fire-and-forget intent events (case opens, deeper-cut unlocks, résumé, contact) to the Worker's
+     /event. Owner devices are excluded using the SAME markers the Cloudflare beacon uses, plus a durable
+     rk:owner flag set when you sign into the studio — so your own visits (PC or phone) never count. */
+  const RK_EVENT_URL = "https://rk-ai-proxy.riteshkumarhk.workers.dev/event";
+  function rkIsOwner() {
+    try {
+      return localStorage.getItem("rk:noanalytics") === "1"
+        || localStorage.getItem("rk:owner") === "1"
+        || !!localStorage.getItem("rk:admin:hash")
+        || !!localStorage.getItem("rk:admin:sess")
+        || /^\/studio(\/|$)/.test(location.pathname);
+    } catch (e) { return false; }
+  }
+  function track(t, id) {
+    try {
+      if (!t || rkIsOwner()) return;
+      const body = JSON.stringify({ t: t, id: id || "" });
+      // text/plain keeps it a "simple" request (no CORS preflight); the Worker parses the body as JSON.
+      if (navigator.sendBeacon) { navigator.sendBeacon(RK_EVENT_URL, new Blob([body], { type: "text/plain;charset=UTF-8" })); return; }
+      fetch(RK_EVENT_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: body, keepalive: true, credentials: "omit" }).catch(function () {});
+    } catch (e) {}
+  }
+  window.__rkTrack = track;
+
   /* Safety: never leave the page hidden if something fails */
   setTimeout(function () {
     document.body && document.body.classList.remove("site-loading");
@@ -35,6 +60,7 @@
      navigation to data: URLs, so convert those to a Blob URL first. */
   function openResume(src) {
     if (!src) return;
+    track("resume_download");
     try {
       if (/^data:/.test(src)) {
         const m = src.match(/^data:([^;,]+)?(;base64)?,([\s\S]*)$/);
@@ -177,7 +203,7 @@
     set("educationList", (data.education || []).map(awardEl).join(""));
 
     const mail = byId("contactMail");
-    if (mail) mail.setAttribute("href", "mailto:" + (C.email || ""));
+    if (mail) { mail.setAttribute("href", "mailto:" + (C.email || "")); mail.onclick = function () { track("contact_submit"); }; }
     set("contactRow",
       '<a href="mailto:' + esc(C.email) + '" class="contact__pill" data-cursor="hover">' + esc(C.email) + "</a>" +
       (C.phone ? '<a href="tel:' + esc(C.phoneRaw || "") + '" class="contact__pill" data-cursor="hover">' + esc(C.phone) + "</a>" : "") +

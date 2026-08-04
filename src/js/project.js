@@ -181,7 +181,7 @@
     return Array.prototype.map.call(new Uint8Array(b), function (x) { return x.toString(16).padStart(2, "0"); }).join("");
   }
   function isUnlocked(id) { try { return sessionStorage.getItem(UNLOCK_KEY + id) === "1"; } catch (e) { return false; } }
-  function setUnlocked(id) { try { sessionStorage.setItem(UNLOCK_KEY + id, "1"); } catch (e) {} }
+  function setUnlocked(id) { try { var was = sessionStorage.getItem(UNLOCK_KEY + id) === "1"; sessionStorage.setItem(UNLOCK_KEY + id, "1"); if (!was) { try { window.__rkTrack && window.__rkTrack("deepcut_unlock", id); } catch (e) {} } } catch (e) {} }
 
   /* ---------- locked-section decryption (envelope) ----------
      Protected blocks ship as ciphertext stubs. A credential (deeper-cut pass or a
@@ -1687,6 +1687,7 @@
       setSiteInert(true);
     }
     activeId = id;
+    try { window.__rkTrack && window.__rkTrack("case_open", id); } catch (e) {}
     var keepAnchor = opts.keepScroll ? captureAnchor() : null;
     fillContent(w, keepAnchor);
     document.title = w.title ? (plain(w.title) + " \u2014 Ritesh Kumar") : DEFAULT_TITLE;
