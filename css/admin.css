@@ -171,7 +171,10 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__more .adm__auto.is-on .adm__auto-sw { color: var(--accent); border: 0; }
 .adm__more .adm__auto-opt { padding: .34rem .55rem; }
 /* "\2715" exit button is neutral now (destructive choice lives inside its flyout) */
-.adm__actions .adm__exit { padding: .3rem .58rem; font-size: 1rem; line-height: 1; color: var(--text-dim); }
+/* gear + exit: identical icon buttons, sized to match the pill buttons' height */
+.adm__actions .adm__gear,
+.adm__actions .adm__exit { width: 2.125rem; height: 2.125rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; font-size: 1rem; line-height: 1; color: var(--text-dim); }
+.adm__actions .adm__gear:hover,
 .adm__actions .adm__exit:hover { color: var(--text); border-color: var(--accent); }
 .adm__exit-pop-h { font-family: var(--mono); font-size: .58rem; letter-spacing: .09em; text-transform: uppercase; color: var(--text-faint); padding: .4rem .55rem .3rem; }
 .adm__exit-opt { display: flex; width: 100%; text-align: left; padding: .5rem .55rem; border: 0; border-radius: 8px; background: none; cursor: pointer; }
