@@ -827,6 +827,17 @@ import {
     modal.addEventListener("click", function (e) { if (e.target === modal) done(); });
     modal.addEventListener("keydown", function (e) { if (e.key === "Escape") done(); });
   }
+  // Anchor the recruiter flyout right under the ··· button — the same placement the ··· menu
+  // uses (positionMenu), so it drops from the button's bottom-right instead of a fixed corner.
+  function positionFlyout(el) {
+    el = el || document.querySelector(".rkfly");
+    var anchor = document.getElementById("moreBtn") || document.getElementById("clock");
+    if (!el || !anchor) return;
+    var r = anchor.getBoundingClientRect();
+    if (!r.width && !r.height) return;   // anchor hidden — leave the CSS corner fallback in place
+    el.style.top = (r.bottom + 12) + "px";
+    el.style.right = Math.max(12, Math.round(window.innerWidth - r.right)) + "px";
+  }
   // Soft, non-blocking landing prompt (anchored under the ··· menu) to enter a ticket (code or link).
   // Shown to every visitor once per session when the owner has turned Recruiter mode on.
   function recruiterFlyout(errNote) {
@@ -847,17 +858,20 @@ import {
       '</div>' +
       '<div class="rkfly__req">No code? <button type="button" class="rkfly__reqbtn">Request access</button></div>';
     document.body.appendChild(el);
+    positionFlyout(el);
+    window.addEventListener("resize", positionFlyout);
     var inp = el.querySelector(".rkfly__inp"), errEl = el.querySelector(".rkfly__err"), go = el.querySelector(".rkfly__go");
     if (errNote) errEl.textContent = errNote;
-    requestAnimationFrame(function () { el.classList.add("is-on"); placeSoundToast(); });   // push any live “sound on” toast below the flyout
+    requestAnimationFrame(function () { el.classList.add("is-on"); positionFlyout(el); placeSoundToast(); });   // push any live “sound on” toast below the flyout
     function dismiss(instant) {
       try { sessionStorage.setItem("rk:fly:dismissed", "1"); } catch (e) {}
       el.classList.remove("is-on");
+      window.removeEventListener("resize", positionFlyout);
       var kill = function () { if (el.parentNode) el.remove(); placeSoundToast(); };   // return the toast to the corner once we're gone
       if (instant) kill(); else setTimeout(kill, 300);
     }
     el.__dismiss = dismiss;   // let the ··· menu fold this away when it opens
-    el.__hide = function () { if (el.parentNode) el.remove(); placeSoundToast(); };   // route change — remove WITHOUT marking it dismissed
+    el.__hide = function () { window.removeEventListener("resize", positionFlyout); if (el.parentNode) el.remove(); placeSoundToast(); };   // route change — remove WITHOUT marking it dismissed
     el.querySelector(".rkfly__cancel").addEventListener("click", function () { dismiss(); });
     el.querySelector(".rkfly__x").addEventListener("click", function () { dismiss(); });
     var _req = el.querySelector(".rkfly__reqbtn"); if (_req) _req.addEventListener("click", function () { requestAccessModal({}); });
