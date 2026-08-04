@@ -508,6 +508,9 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .svshare__item:hover { background: rgba(255,255,255,.06); }
 .rkacc__switch { display: flex; align-items: center; gap: .5rem; font-size: .76rem; color: var(--text-dim); cursor: pointer; padding: .7rem .9rem; border-top: 1px solid var(--line); }
 .rkacc__switch input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+/* Special Views (Custom tab): keep the add-bar + hint off the card edges, aligned with the .9rem row gutter */
+.rkinbox .adm__addbar { padding-left: .9rem; padding-right: .9rem; }
+.rkinbox .af__hint { padding-left: .9rem; padding-right: .9rem; }
 .rkinbox__row.is-off { opacity: .5; }
 .pass__box--wide { max-width: 560px; width: min(560px, calc(100vw - 2rem)); }
 .rkcur__grp { border: 1px solid var(--line); border-radius: 10px; margin: .5rem 0; background: var(--bg); overflow: hidden; }
