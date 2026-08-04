@@ -2773,6 +2773,7 @@ import { WORLD_LAND } from "./worldland.js";
       return (
         secHead("Contact", "Used across the contact section, menu, footer and the floating dock.") +
         avatarBlock() +
+        input("Full name", "contact.name", { hint: "used for the \u201cSave contact\u201d vCard download" }) +
         input("Email", "contact.email") +
         '<div class="af__row">' +
         input("Phone (display)", "contact.phone") +
@@ -2780,6 +2781,7 @@ import { WORLD_LAND } from "./worldland.js";
         "</div>" +
         input("LinkedIn URL", "contact.linkedin") +
         input("Website URL", "contact.website") +
+        input("Booking link", "contact.booking", { hint: "Cal.com / Calendly / any scheduler URL \u2014 shows a \u201cBook a call\u201d button in Contact. Leave blank to hide." }) +
         resumeBlock()
       );
     },

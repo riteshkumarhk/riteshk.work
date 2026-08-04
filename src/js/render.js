@@ -33,6 +33,35 @@
   }
   window.__rkTrack = track;
 
+  /* Build + download a vCard (.vcf) from the contact model — a "save my details" for recruiters.
+     Pure client-side (Blob), no dependency. vCard 3.0 with CRLF line breaks. */
+  function vcEsc(s) { return String(s == null ? "" : s).replace(/([\\,;])/g, "\\$1").replace(/\r?\n/g, "\\n"); }
+  function saveVCard(C) {
+    const name = String((C && C.name) || "").trim();
+    const parts = name ? name.split(/\s+/) : [];
+    const last = parts.length > 1 ? parts.pop() : "";
+    const first = parts.join(" ");
+    const lines = [
+      "BEGIN:VCARD", "VERSION:3.0",
+      "N:" + vcEsc(last) + ";" + vcEsc(first) + ";;;",
+      "FN:" + vcEsc(name || "Contact"),
+      C.email ? "EMAIL;TYPE=INTERNET:" + vcEsc(C.email) : "",
+      C.phoneRaw ? "TEL;TYPE=CELL:" + vcEsc(C.phoneRaw) : "",
+      C.website ? "URL:" + vcEsc(C.website) : "",
+      C.linkedin ? "URL:" + vcEsc(C.linkedin) : "",
+      "END:VCARD"
+    ].filter(Boolean);
+    try {
+      const blob = new Blob([lines.join("\r\n") + "\r\n"], { type: "text/vcard;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = (name || "contact").replace(/\s+/g, "-") + ".vcf";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+    } catch (e) {}
+    track("vcard_download");
+  }
+
   /* Safety: never leave the page hidden if something fails */
   setTimeout(function () {
     document.body && document.body.classList.remove("site-loading");
@@ -208,9 +237,15 @@
       '<a href="mailto:' + esc(C.email) + '" class="contact__pill" data-cursor="hover">' + esc(C.email) + "</a>" +
       (C.phone ? '<a href="tel:' + esc(C.phoneRaw || "") + '" class="contact__pill" data-cursor="hover">' + esc(C.phone) + "</a>" : "") +
       (C.linkedin ? '<a href="' + esc(C.linkedin) + '" class="contact__pill" target="_blank" rel="noopener" data-cursor="hover">LinkedIn \u2197</a>' : "") +
+      (C.booking ? '<a id="contactBook" href="' + esc(C.booking) + '" class="contact__pill contact__pill--book" target="_blank" rel="noopener" data-cursor="hover">Book a call \u2197</a>' : "") +
+      '<button type="button" id="contactVcard" class="contact__pill contact__pill--vcard" data-cursor="hover">Save contact \u2193</button>' +
       (C.resume ? '<a id="contactResume" href="' + (/^data:/.test(C.resume) ? "#" : esc(C.resume)) + '" class="contact__pill contact__pill--resume" data-cursor="hover">R\u00e9sum\u00e9 \u2193</a>' : ""));
     const cRes = byId("contactResume");
     if (cRes) cRes.onclick = function (e) { e.preventDefault(); openResume(C.resume); };
+    const cBook = byId("contactBook");
+    if (cBook) cBook.onclick = function () { track("booking_open"); };
+    const cVc = byId("contactVcard");
+    if (cVc) cVc.onclick = function () { saveVCard(C); };
 
     set("menuFoot",
       '<a href="mailto:' + esc(C.email) + '">' + esc(C.email) + "</a>" +
