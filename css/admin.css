@@ -399,7 +399,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
   opacity: 0; pointer-events: none; transition: opacity .32s ease, transform .32s cubic-bezier(.2, .7, .2, 1);
 }
 .rkfly.is-on { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
-.rkfly__x { position: absolute; top: 9px; right: 11px; background: none; border: 0; color: var(--text-faint); font-size: 17px; line-height: 1; cursor: pointer; padding: 4px; }
+.rkfly__x { position: absolute; top: 8px; right: 9px; background: none; border: 0; color: var(--text-faint); font-size: 22px; line-height: 1; cursor: pointer; padding: 6px; }
 .rkfly__x:hover { color: var(--text); }
 .rkfly__title { font-family: var(--serif); font-size: 1.2rem; color: var(--text); margin-bottom: 5px; padding-right: 16px; }
 .rkfly__sub { font-size: .78rem; line-height: 1.5; color: var(--text-dim); margin-bottom: 13px; }
