@@ -2896,26 +2896,26 @@ import { WORLD_LAND } from "./worldland.js";
         secHead("More", "Bookings, your phone notifications app, a one-page PDF r\u00e9sum\u00e9, and the browser autofill extension.") +
         bookingsBlock() +
         '<div class="adm__ext">' +
-          '<div class="adm__ext-head"><span class="adm__ext-logo">\uD83D\uDCF1</span><div><b>Phone \u2014 requests app</b><span>Approve requests from your phone</span></div></div>' +
+          '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("phone") + '</span><div><b>Phone \u2014 requests app</b><span>Approve requests from your phone</span></div></div>' +
           '<p class="adm__ext-lead">First add your phone as a passkey: <b>\u22EF \u2192 Passkeys \u2192 Add a passkey</b>, then pick <b>\u201cUse a phone or tablet\u201d</b> and scan with your phone. Then open <b>riteshk.work/inbox</b> on the phone, verify with that passkey, and Add\u00a0to\u00a0Home\u00a0Screen. Enrolment happens only here in the studio \u2014 the phone can only <i>verify</i>, never create a passkey, so a link alone can never grant access.</p>' +
-          '<div class="imgblk__row"><button class="btn btn--primary" data-act="phone-qr">\uD83D\uDCF2 Show inbox QR</button></div>' +
+          '<div class="imgblk__row"><button class="btn btn--primary" data-act="phone-qr">' + extIcon("qr", 15) + ' Show inbox QR</button></div>' +
           '<div data-phoneqr style="margin-top:14px"></div>' +
         "</div>" +
         '<div class="adm__ext">' +
-          '<div class="adm__ext-head"><span class="adm__ext-logo">\uD83D\uDCC4</span><div><b>One-page r\u00e9sum\u00e9 \u2014 PDF</b><span>Clickable case-study links + QR codes</span></div></div>' +
+          '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("doc") + '</span><div><b>One-page r\u00e9sum\u00e9 \u2014 PDF</b><span>Clickable case-study links + QR codes</span></div></div>' +
           '<p class="adm__ext-lead">A print-ready A4 one-pager built live from your content: positioning, key metrics, your top four case studies (each a live link), experience, capabilities, recognition and education. A real PDF with clickable links \u2014 no browser print dialog.</p>' +
-          '<div class="imgblk__row"><button class="btn btn--primary" data-act="resume-pdf">\u2b07 Download PDF r\u00e9sum\u00e9</button></div>' +
+          '<div class="imgblk__row"><button class="btn btn--primary" data-act="resume-pdf">' + extIcon("dl", 15) + ' Download PDF r\u00e9sum\u00e9</button></div>' +
           '<div class="af__hint">Built from what you have in admin right now \u2014 publish first so the case-study links resolve on your live site (they point to riteshk.work/work/\u2026).</div>' +
         "</div>" +
         '<div class="adm__ext">' +
-          '<div class="adm__ext-head"><span class="adm__ext-logo">\uD83D\uDDC2\uFE0F</span><div><b>Media library</b><span>See every uploaded file, spot unused ones, free up space</span></div></div>' +
+          '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("media") + '</span><div><b>Media library</b><span>See every uploaded file, spot unused ones, free up space</span></div></div>' +
           '<p class="adm__ext-lead">Your images and PDFs live in the repo at <code>assets/uploads</code>. Open the library to see totals, find files your content no longer references, and delete the unused ones.</p>' +
-          '<div class="imgblk__row"><button class="btn btn--primary" data-act="media-open">\uD83D\uDDBC Manage media</button></div>' +
+          '<div class="imgblk__row"><button class="btn btn--primary" data-act="media-open">' + extIcon("media", 15) + ' Manage media</button></div>' +
         "</div>" +
         '<div class="adm__ext">' +
-          '<div class="adm__ext-head"><span class="adm__ext-logo">\u26A1</span><div><b>R\u00e9sum\u00e9 Autofill</b><span>Edge / Chrome extension</span></div></div>' +
+          '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("zap") + '</span><div><b>R\u00e9sum\u00e9 Autofill</b><span>Edge / Chrome extension</span></div></div>' +
           '<p class="adm__ext-lead">On any job site: open the floating \u26A1 button, right-click a field, or use the inline chip \u2014 pick <b>Full</b> or <b>Snippet</b> and it drops your experience straight into the form.</p>' +
-          '<div class="imgblk__row"><button class="btn btn--primary" data-act="ext-download">\u2b07 Download the extension (.zip)</button></div>' +
+          '<div class="imgblk__row"><button class="btn btn--primary" data-act="ext-download">' + extIcon("dl", 15) + ' Download the extension (.zip)</button></div>' +
           '<ol class="adm__ext-steps">' +
             "<li>Unzip the downloaded file somewhere you\u2019ll keep it.</li>" +
             "<li>Open <code>edge://extensions</code> (or <code>chrome://extensions</code>) and turn on <b>Developer mode</b>.</li>" +
@@ -3226,6 +3226,21 @@ import { WORLD_LAND } from "./worldland.js";
       '<div class="rkinbox__acts">' + acts + "</div>" +
     "</div>";
   }
+  // Consistent monochrome line-icons for the More-tab "ext" cards (white on the purple chip, or
+  // currentColor on buttons) — replaces the tiny mismatched emojis.
+  function extIcon(k, s) {
+    s = s || 21;
+    var P = {
+      phone: '<rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/>',
+      doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>',
+      media: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/>',
+      zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+      cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+      qr: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="17.5" y1="14" x2="17.5" y2="21"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="17.5" x2="17.5" y2="17.5"/>',
+      dl: '<path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><line x1="5" y1="21" x2="19" y2="21"/>'
+    };
+    return '<svg viewBox="0 0 24 24" width="' + s + '" height="' + s + '" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[k] || "") + "</svg>";
+  }
   function bookingsBlock() {
     var inner;
     if (!adminSession()) inner = '<p class="adm__ext-lead">Sign in to see your bookings.</p>';
@@ -3233,7 +3248,7 @@ import { WORLD_LAND } from "./worldland.js";
     else if (!bookCache.length) inner = '<p class="adm__ext-lead">No bookings yet. When someone books a call through your <b>Book a call</b> link, it appears here \u2014 accept, decline or reschedule right from this panel, and it syncs to your calendar.</p>';
     else inner = '<div class="rkinbox">' + bookCache.map(bookingCard).join("") + "</div>";
     return '<div class="adm__ext">' +
-      '<div class="adm__ext-head"><span class="adm__ext-logo">\uD83D\uDCC5</span><div><b>Bookings</b><span>Call requests \u2014 accept, decline or reschedule</span></div></div>' +
+      '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("cal") + '</span><div><b>Bookings</b><span>Call requests \u2014 accept, decline or reschedule</span></div></div>' +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="book-refresh">\u21bb Refresh</button></div>' +
       inner +
     "</div>";

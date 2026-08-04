@@ -1125,9 +1125,12 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .btn--add.is-on { border-color: var(--accent); color: var(--accent); }
 
 /* Résumé Autofill extension card (Autofill tab) */
-.adm__ext { border: 1px solid var(--line); border-radius: 14px; padding: 1.1rem 1.2rem; background: var(--bg-2); margin-top: .4rem; }
-.adm__ext-head { display: flex; align-items: center; gap: .7rem; margin-bottom: .5rem; }
-.adm__ext-logo { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 19px; }
+.adm__ext { border: 1px solid var(--line); border-radius: 14px; padding: 1rem 1.1rem; background: var(--bg-2); margin-top: 1rem; }
+.adm__ext-head { display: flex; align-items: center; gap: .6rem; margin-bottom: .7rem; }
+.adm__ext-logo { width: 36px; height: 36px; flex: none; border-radius: 9px; background: rgba(216, 166, 71, .1); border: 1px solid rgba(216, 166, 71, .4); color: var(--accent); display: flex; align-items: center; justify-content: center; }
+.adm__ext-logo svg { display: block; }
+.adm__ext .btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; }
+.adm__ext .btn svg { display: block; }
 .adm__ext-head b { display: block; font-size: .96rem; }
 .adm__ext-head span { display: block; font-size: .72rem; color: var(--text-dim); }
 .adm__ext-lead { font-size: .86rem; color: var(--text-dim); line-height: 1.55; margin: .1rem 0 .9rem; }
