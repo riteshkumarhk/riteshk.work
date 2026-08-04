@@ -2778,6 +2778,10 @@ import { WORLD_LAND } from "./worldland.js";
         input("Main statement", "landing.statement", { md: true, type: "textarea", rows: 3, hint: "One line per row. The closing word (why / how) gets the italic accent." }) +
         input("Description", "landing.intro", { md: true, type: "textarea", rows: 4, hint: "Products auto-bronze; “leading …” phrases auto-bold." }) +
         input("Footer line", "landing.presence", { md: true, hint: "e.g. Currently at Microsoft — Hyderabad, India" }) +
+        '<div class="af"><label class="af__label">Availability badge</label>' +
+        '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="avail-toggle"' + ((((data.landing || {}).available) || {}).on ? " checked" : "") + ' /><span>Show an \u201copen to work\u201d pill in the hero</span></label>' +
+        '<div class="af__hint">Off by default. A quiet pill with a live green dot appears under the hero when on.</div></div>' +
+        input("Availability text", "landing.available.text", { hint: "e.g. Open to Principal / Staff Product Design roles" }) +
         input("About — lead line", "landing.aboutLead", { md: true, type: "textarea", rows: 2, hint: "The big opening line of the About section. *italic* for emphasis." }) +
         input("About — paragraphs", "landing.about", { md: true, type: "textarea", rows: 7, hint: "Separate paragraphs with a blank line. **bold**, *italic*, [[Product]] bronze." }) +
         input("About — sign-off", "landing.aboutSign", { md: true, hint: "The closing personal line, e.g. an off-the-clock note." })
@@ -3932,6 +3936,13 @@ import { WORLD_LAND } from "./worldland.js";
     } else if (t.dataset.act === "present") {
       data.path[+t.dataset.index].present = t.checked;
       apply(true);
+    } else if (t.dataset.act === "avail-toggle") {
+      data.landing = data.landing || {};
+      data.landing.available = data.landing.available || {};
+      data.landing.available.on = t.checked;
+      saveDraft(true);
+      apply(true);
+      renderBody();
     } else if (t.tagName === "SELECT" && t.dataset.list) {
       data[t.dataset.list][+t.dataset.index][t.dataset.field] = t.value;
       apply(true);

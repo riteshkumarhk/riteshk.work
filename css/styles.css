@@ -598,6 +598,15 @@ button.contact__pill { background: transparent; cursor: pointer; margin: 0; -web
 .contact__pill--book { color: var(--accent); border-color: var(--accent); }
 .contact__pill--book:hover { color: #0a0a0a; background: var(--accent); border-color: var(--accent); }
 
+.hero__avail { display: inline-flex; align-items: center; gap: .6rem; margin-top: 1.5rem; padding: .55rem 1rem; border: 1px solid var(--line); border-radius: 100px; font-family: var(--mono); font-size: .74rem; letter-spacing: .03em; color: var(--text-dim); animation: availIn .7s .9s both; }
+.hero__avail:empty { display: none; }
+.hero__avail strong, .hero__avail .accent { color: var(--text); font-weight: 500; }
+.hero__avail-dot { width: 7px; height: 7px; border-radius: 50%; background: #57b979; box-shadow: 0 0 0 0 rgba(87,185,121,.5); animation: availPulse 2.6s ease-out infinite; flex: none; }
+@keyframes availIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes availPulse { 0% { box-shadow: 0 0 0 0 rgba(87,185,121,.5); } 70% { box-shadow: 0 0 0 8px rgba(87,185,121,0); } 100% { box-shadow: 0 0 0 0 rgba(87,185,121,0); } }
+html.lite .hero__avail { animation: none; }
+html.lite .hero__avail-dot { animation: none; }
+
 /* =================================================================
    FOOTER
    ================================================================= */

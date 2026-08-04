@@ -203,6 +203,9 @@
 
     set("heroIntro", md(L.intro));
     set("heroNowText", md(L.presence));
+    const av = L.available || {};
+    const avEl = byId("heroAvail");
+    if (avEl) avEl.innerHTML = (av.on && av.text) ? ('<span class="hero__avail-dot" aria-hidden="true"></span>' + md(av.text)) : "";
 
     if (L.aboutLead) set("aboutLead", md(L.aboutLead));
     const aboutParas = String(L.about || "").split(/\n\n+/).map((p) => p.trim()).filter(Boolean);

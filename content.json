@@ -16,6 +16,7 @@
     }
   ],
   "landing": {
+    "available": { "on": false, "text": "Open to Principal / Staff Product Design roles" },
     "eyebrow": "Product Design Leadership",
     "domains": "Growth · AI · Identity",
     "statement": "I shape\nwhat gets built,\nand *why.*",
