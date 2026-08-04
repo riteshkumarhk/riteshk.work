@@ -775,6 +775,39 @@ export default {
     }
 
     // ---------- admin: authenticated GitHub proxy (holds the GH token server-side) ----------
+    // ---------- admin: delete an UNUSED media file from assets/uploads (guarded like a publish) ----------
+    // The generic /admin/gh proxy deliberately blocks DELETE, so media cleanup gets its own route with the
+    // SAME write-guards (session + device-trust + optional publish 2FA). Restricted to assets/uploads only.
+    if (url.pathname === "/admin/media/delete") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.GH_TOKEN) return json({ error: "GitHub is not configured on the server" }, 500, cors);
+      const owner = env.OWNER || "", repo = env.REPO || "";
+      if (!owner || !repo) return json({ error: "Repo not configured" }, 500, cors);
+      if (env.VAULT_GRANTS && !(await verifyTrust(request.headers.get("X-Device-Trust"), env))) return json({ error: "This device isn\u2019t verified to delete media yet.", needStepup: true }, 403, cors);
+      if (env.VAULT_GRANTS && (await env.VAULT_GRANTS.get("cfg:publish2fa")) === "1") {
+        if (!(await verifyPublishToken(request.headers.get("X-Publish-Token"), env))) return json({ error: "Deleting media needs a passkey step-up." }, 401, cors);
+        const stored = await env.VAULT_GRANTS.get("cfg:publishproof");
+        const proof = request.headers.get("X-Publish-Proof") || "";
+        const proofHash = proof ? bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(proof))) : "";
+        if (!stored || !timingSafeEqual(proofHash, stored)) return json({ error: "Deleting media needs your recovery passphrase." }, 401, cors);
+      }
+      let name = "", sha = "";
+      try { const b = await request.json(); name = String((b && b.name) || "").replace(/[^\w.\-]/g, ""); sha = String((b && b.sha) || ""); } catch (e) {}
+      if (!name || !sha) return json({ error: "Missing file name or sha" }, 400, cors);
+      const ghUrl = "https://api.github.com/repos/" + owner + "/" + repo + "/contents/assets/uploads/" + name;
+      let r;
+      try {
+        r = await fetch(ghUrl, {
+          method: "DELETE",
+          headers: { "Authorization": "token " + env.GH_TOKEN, "Accept": "application/vnd.github+json", "User-Agent": "rk-admin-proxy", "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "Delete unused media " + name + " via admin", sha: sha }),
+        });
+      } catch (e) { return json({ error: "GitHub request failed" }, 502, cors); }
+      if (r.status < 200 || r.status >= 300) { let m = ""; try { m = (await r.json()).message || ""; } catch (e) {} return json({ error: "GitHub delete failed (" + r.status + ") " + m }, 502, cors); }
+      return json({ ok: true }, 200, cors);
+    }
+
     if (url.pathname.startsWith("/admin/gh/")) {
       const sess = bearer(request.headers.get("Authorization"));
       if (!(await verifySession(sess, env))) return json({ error: "Unauthorized" }, 401, cors);

@@ -2896,6 +2896,11 @@ import { WORLD_LAND } from "./worldland.js";
           '<div class="af__hint">Built from what you have in admin right now \u2014 publish first so the case-study links resolve on your live site (they point to riteshk.work/work/\u2026).</div>' +
         "</div>" +
         '<div class="adm__ext">' +
+          '<div class="adm__ext-head"><span class="adm__ext-logo">\uD83D\uDDC2\uFE0F</span><div><b>Media library</b><span>See every uploaded file, spot unused ones, free up space</span></div></div>' +
+          '<p class="adm__ext-lead">Your images and PDFs live in the repo at <code>assets/uploads</code>. Open the library to see totals, find files your content no longer references, and delete the unused ones.</p>' +
+          '<div class="imgblk__row"><button class="btn btn--primary" data-act="media-open">\uD83D\uDDBC Manage media</button></div>' +
+        "</div>" +
+        '<div class="adm__ext">' +
           '<div class="adm__ext-head"><span class="adm__ext-logo">\u26A1</span><div><b>R\u00e9sum\u00e9 Autofill</b><span>Edge / Chrome extension</span></div></div>' +
           '<p class="adm__ext-lead">On any job site: open the floating \u26A1 button, right-click a field, or use the inline chip \u2014 pick <b>Full</b> or <b>Snippet</b> and it drops your experience straight into the form.</p>' +
           '<div class="imgblk__row"><button class="btn btn--primary" data-act="ext-download">\u2b07 Download the extension (.zip)</button></div>' +
@@ -3221,6 +3226,70 @@ import { WORLD_LAND } from "./worldland.js";
       inner +
     "</div>";
   }
+  /* ---------- Media library (More tab): list assets/uploads, flag unused, delete via guarded route ---------- */
+  var mediaOverlay = null, mediaFiles = null, mediaLoading = false;
+  function mediaRefs() { try { return JSON.stringify(data); } catch (e) { return ""; } }
+  function mediaUsed(name, refs) { return refs.indexOf(name) !== -1; }
+  function mediaFmt(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
+  function mediaOpen() {
+    if (!adminSession()) { status("Sign in to manage media."); return; }
+    mediaOverlay = document.createElement("div"); mediaOverlay.className = "mlib"; document.body.appendChild(mediaOverlay);
+    mediaFiles = null; mediaPaint(); mediaLoad();
+  }
+  function mediaClose() { if (mediaOverlay) { mediaOverlay.remove(); mediaOverlay = null; } }
+  async function mediaLoad() {
+    mediaLoading = true; mediaPaint();
+    try {
+      var r = await fetch(ghContentsUrl("assets/uploads"), { headers: ghHeaders() });
+      if (r.ok) { var arr = await r.json(); mediaFiles = (Array.isArray(arr) ? arr : []).filter(function (f) { return f.type === "file"; }).map(function (f) { return { name: f.name, size: f.size || 0, sha: f.sha }; }); }
+      else mediaFiles = [];
+    } catch (e) { mediaFiles = []; }
+    mediaLoading = false; mediaPaint();
+  }
+  function mediaPaint() {
+    if (!mediaOverlay) return;
+    var refs = mediaRefs(), files = mediaFiles || [];
+    var orphans = files.filter(function (f) { return !mediaUsed(f.name, refs); });
+    var totalB = files.reduce(function (a, f) { return a + f.size; }, 0);
+    var orphanB = orphans.reduce(function (a, f) { return a + f.size; }, 0);
+    var head = '<div class="mlib__bar"><div class="mlib__h"><b>Media library</b><span>' + files.length + ' files \u00b7 ' + mediaFmt(totalB) + (files.length ? (orphans.length ? ' \u00b7 ' + orphans.length + ' unused (' + mediaFmt(orphanB) + ')' : ' \u00b7 all in use') : '') + '</span></div><div class="mlib__acts">' + (orphans.length ? '<button class="btn btn--ghost" data-act="media-delorphans">Delete ' + orphans.length + ' unused</button>' : "") + '<button class="btn btn--ghost" data-act="media-refresh" title="Refresh">\u21bb</button><button class="btn adm__exit" data-act="media-close" aria-label="Close">\u2715</button></div></div>';
+    var body;
+    if (mediaLoading || mediaFiles === null) body = '<div class="mlib__grid"><div class="spinner"></div></div>';
+    else if (!files.length) body = '<div class="mlib__empty">No uploaded media in <code>assets/uploads</code> yet.</div>';
+    else {
+      var sorted = files.slice().sort(function (a, b2) { var ao = !mediaUsed(a.name, refs), bo = !mediaUsed(b2.name, refs); if (ao !== bo) return ao ? -1 : 1; return b2.size - a.size; });
+      body = '<div class="mlib__grid">' + sorted.map(function (f) {
+        var used = mediaUsed(f.name, refs);
+        var isImg = /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(f.name);
+        var thumb = isImg ? '<img loading="lazy" src="/assets/uploads/' + escAttr(f.name) + '" alt="" />' : '<div class="mlib__file">' + escHtml((f.name.split(".").pop() || "?").toUpperCase()) + '</div>';
+        return '<div class="mlib__card' + (used ? "" : " is-orphan") + '"><div class="mlib__thumb">' + thumb + '</div><div class="mlib__meta"><span class="mlib__tag">' + (used ? "In use" : "Unused") + '</span><span class="mlib__size">' + mediaFmt(f.size) + '</span></div><button class="mlib__del" data-act="media-del" data-name="' + escAttr(f.name) + '" data-sha="' + escAttr(f.sha) + '" title="Delete">\u2715</button></div>';
+      }).join("") + "</div>";
+    }
+    mediaOverlay.innerHTML = '<div class="mlib__sheet">' + head + body + '<div class="mlib__note">\u201cIn use\u201d = the filename appears in your current content. Deleting commits a file removal to your repo \u2014 only remove <b>Unused</b> ones; it can\u2019t be undone from here.</div></div>';
+  }
+  async function mediaDel(name, sha, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = "\u2026"; }
+    try {
+      var r = await fetch(ADMIN_WORKER + "/admin/media/delete", { method: "POST", headers: ghHeaders(), body: JSON.stringify({ name: name, sha: sha }) });
+      var j = null; try { j = await r.json(); } catch (e) {}
+      if (r.ok) { mediaFiles = (mediaFiles || []).filter(function (f) { return f.name !== name; }); mediaPaint(); return true; }
+      if (j && j.needStepup) status("This device isn\u2019t verified to delete \u2014 run a Publish once to set it up.");
+      else status((j && j.error) || "Delete failed.");
+    } catch (e) { status("Delete failed \u2014 check your connection."); }
+    if (btn) { btn.disabled = false; btn.textContent = "\u2715"; }
+    return false;
+  }
+  async function mediaDelOrphans() {
+    var refs = mediaRefs();
+    var orphans = (mediaFiles || []).filter(function (f) { return !mediaUsed(f.name, refs); });
+    if (!orphans.length) return;
+    if (!confirm("Delete " + orphans.length + " unused media file(s)? This commits deletions to your repo and can\u2019t be undone.")) return;
+    status("Deleting " + orphans.length + " unused files\u2026");
+    var done = 0;
+    for (var i = 0; i < orphans.length; i++) { if (await mediaDel(orphans[i].name, orphans[i].sha, null)) done++; }
+    status("Deleted " + done + " of " + orphans.length + " unused files.");
+  }
+
   function accGrantLeft(g) {
     if (g.revoked) return "revoked";
     if (!g.expiresAt) return "no expiry";
@@ -4035,6 +4104,11 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "book-decline") { bookDo(b.dataset.uid, "decline", b); return; }
     if (act === "book-dismiss") { bookDo(b.dataset.uid, "dismiss", b); return; }
     if (act === "book-refresh") { loadBookings(); return; }
+    if (act === "media-open") { mediaOpen(); return; }
+    if (act === "media-close") { mediaClose(); return; }
+    if (act === "media-refresh") { mediaLoad(); return; }
+    if (act === "media-delorphans") { mediaDelOrphans(); return; }
+    if (act === "media-del") { if (confirm("Delete " + (b.dataset.name || "this file") + "? This commits a deletion to your repo.")) mediaDel(b.dataset.name, b.dataset.sha, b); return; }
     if (act === "settings-close") { closeSettings(); return; }
     if (act === "settings-cat") { activeSetCat = b.dataset.cat; setSub = null; renderSettings(); return; }
     if (act === "allow-toggle") { toggleAllowDefault(renderSetPanel); return; }
