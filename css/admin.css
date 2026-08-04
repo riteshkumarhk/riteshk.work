@@ -595,7 +595,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 
 /* fix: the public site uses cursor:none for its custom cursor — restore a normal
    pointer inside admin mode and modal dialogs, and hide the custom dot in admin. */
-.adm, .pass { cursor: auto; }
+.adm, .pass, .mlib { cursor: auto; }
 body.adm-lock .cursor { display: none !important; }
 
 /* ---------- project imagery controls (Work tab) ---------- */
@@ -1477,16 +1477,21 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .mlib__seg.is-on { color: #0a0a0a; background: var(--accent); }
 .mlib__clean { margin-left: auto; }
 .mlib__cleanbtn { color: var(--accent); border-color: rgba(216,166,71,.4); }
-.mlib__body { overflow: auto; }
-.mlib__group { border-bottom: 1px solid var(--line); }
-.mlib__group:last-child { border-bottom: 0; }
-.mlib__grouphd { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: .55rem; width: 100%; text-align: left; background: var(--bg-elev, #111116); border: 0; padding: .7rem 1.2rem; cursor: pointer; color: var(--text); }
-.mlib__grouphd:hover { background: var(--bg-2, #0d0d10); }
-.mlib__gchev { color: var(--text-faint); font-size: .7rem; width: .8rem; text-align: center; }
-.mlib__gname { font-size: .84rem; font-weight: 500; }
-.mlib__grouphd.is-unused .mlib__gname { color: var(--accent); }
-.mlib__gmeta { margin-left: auto; font-family: var(--mono); font-size: .66rem; color: var(--text-dim); }
+.mlib__main { flex: 1; display: flex; min-height: 0; }
+.mlib__panel { flex: 1; min-width: 0; overflow: auto; }
+.mlib__panelhd { position: sticky; top: 0; z-index: 2; display: flex; align-items: baseline; gap: .6rem; padding: .8rem 1.2rem .55rem; background: var(--bg-elev, #111116); }
+.mlib__panelhd b { font-size: .9rem; font-weight: 500; }
+.mlib__panelhd span { font-family: var(--mono); font-size: .66rem; color: var(--text-dim); }
+.mlib__nav { flex: 0 0 210px; overflow: auto; border-left: 1px solid var(--line); background: var(--bg-2, #0d0d10); padding: .4rem; }
+.mlib__navhd { font-family: var(--mono); font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); padding: .5rem .6rem .45rem; }
+.mlib__navitem { display: flex; flex-direction: column; gap: .12rem; width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: .5rem .6rem; margin-bottom: .12rem; cursor: pointer; color: var(--text-dim); transition: background .15s, color .15s; }
+.mlib__navitem:hover { background: var(--bg-elev, #111116); color: var(--text); }
+.mlib__navitem.is-on { background: var(--accent); color: #0a0a0a; }
+.mlib__navname { font-size: .78rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mlib__navmeta { font-family: var(--mono); font-size: .62rem; opacity: .82; }
+.mlib__navitem.is-unused:not(.is-on) .mlib__navname { color: var(--accent); }
 .mlib__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: .9rem; padding: .2rem 1.2rem 1.1rem; }
+@media (max-width: 680px) { .mlib__main { flex-direction: column-reverse; } .mlib__nav { flex: 0 0 auto; max-height: 34%; border-left: 0; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: .3rem; } .mlib__navhd { width: 100%; } .mlib__navitem { flex: 1 1 auto; width: auto; margin-bottom: 0; } }
 .mlib__card { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg-2, #0d0d10); }
 .mlib__card.is-orphan { border-color: rgba(216,166,71,.55); }
 .mlib__thumb { aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #0a0a0c; }
