@@ -3238,53 +3238,126 @@ import { WORLD_LAND } from "./worldland.js";
       inner +
     "</div>";
   }
-  /* ---------- Media library (More tab): list assets/uploads, flag unused, delete via guarded route ---------- */
+  /* ---------- Media library (More tab): grouped by where-used, searchable, size-labelled ---------- */
   var mediaOverlay = null, mediaFiles = null, mediaLoading = false;
-  function mediaRefs() { try { return JSON.stringify(data); } catch (e) { return ""; } }
-  function mediaUsed(name, refs) { return refs.indexOf(name) !== -1; }
+  var mediaSearch = "", mediaSeg = "all", mediaSort = "size", mediaCollapsed = {};
   function mediaFmt(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
+  function mediaShort(s) { s = String(s || "").replace(/\s+/g, " ").trim(); return s.length > 34 ? s.slice(0, 32) + "\u2026" : s; }
+  // Walk the content and map each uploaded filename -> the human places it's used (case study / section).
+  function mediaUsage() {
+    var map = {}, files = mediaFiles || [];
+    if (!files.length) return map;
+    var fileSet = {}; files.forEach(function (f) { fileSet[f.name] = true; });
+    function add(name, label) { (map[name] || (map[name] = [])); if (map[name].indexOf(label) === -1) map[name].push(label); }
+    function scan(str, label) {
+      if (!str || str.indexOf("assets/uploads/") === -1) return;
+      var re = /assets\/uploads\/([\w.\-]+)/g, m;
+      while ((m = re.exec(str))) { if (fileSet[m[1]]) add(m[1], label); }
+    }
+    function walk(node, label) {
+      if (node == null) return;
+      var t = typeof node;
+      if (t === "string") { scan(node, label); return; }
+      if (t !== "object") return;
+      if (Array.isArray(node)) { for (var i = 0; i < node.length; i++) walk(node[i], label); return; }
+      for (var k in node) { if (Object.prototype.hasOwnProperty.call(node, k)) walk(node[k], label); }
+    }
+    var SECT = { landing: "Landing & hero", contact: "Contact & r\u00e9sum\u00e9", highlights: "Highlights", capabilities: "Capabilities", recognition: "Recognition", education: "Education", specialViews: "Special views", journey: "Journey" };
+    var d = data || {};
+    for (var k in d) {
+      if (!Object.prototype.hasOwnProperty.call(d, k)) continue;
+      if (k === "work" && Array.isArray(d.work)) { d.work.forEach(function (w) { walk(w, mediaShort((w && (w.client || w.title)) || "Case study")); }); }
+      else walk(d[k], SECT[k] || k);
+    }
+    return map;
+  }
   function mediaOpen() {
     if (!adminSession()) { status("Sign in to manage media."); return; }
-    mediaOverlay = document.createElement("div"); mediaOverlay.className = "mlib"; document.body.appendChild(mediaOverlay);
-    mediaFiles = null; mediaPaint(); mediaLoad();
+    mediaSearch = ""; mediaSeg = "all"; mediaSort = "size"; mediaCollapsed = {}; mediaFiles = null;
+    mediaOverlay = document.createElement("div"); mediaOverlay.className = "mlib";
+    mediaOverlay.innerHTML = mediaShell();
+    document.body.appendChild(mediaOverlay);
+    var srch = mediaOverlay.querySelector("[data-mlib-search]");
+    if (srch) srch.addEventListener("input", function () { mediaSearch = this.value.toLowerCase(); mediaRender(); });
+    mediaRender(); mediaLoad();
   }
   function mediaClose() { if (mediaOverlay) { mediaOverlay.remove(); mediaOverlay = null; } }
+  function mediaShell() {
+    return '<div class="mlib__sheet">' +
+      '<div class="mlib__bar"><div class="mlib__h"><b>Media library</b><span data-mlib-sum>Loading\u2026</span></div>' +
+        '<div class="mlib__acts"><button class="btn btn--ghost" data-act="media-refresh" title="Refresh">\u21bb</button><button class="btn adm__exit" data-act="media-close" aria-label="Close">\u2715</button></div></div>' +
+      '<div class="mlib__controls">' +
+        '<input class="mlib__search" data-mlib-search type="search" placeholder="Search by name or where it\u2019s used\u2026" autocomplete="off" />' +
+        '<div class="mlib__segs" data-mlib-segs><button class="mlib__seg is-on" data-act="media-seg" data-seg="all">All</button><button class="mlib__seg" data-act="media-seg" data-seg="inuse">In use</button><button class="mlib__seg" data-act="media-seg" data-seg="unused">Unused</button></div>' +
+        '<div class="mlib__segs" data-mlib-sortsegs><button class="mlib__seg is-on" data-act="media-sort" data-sort="size">Largest</button><button class="mlib__seg" data-act="media-sort" data-sort="name">Name</button></div>' +
+        '<span class="mlib__clean" data-mlib-clean></span>' +
+      '</div>' +
+      '<div class="mlib__body" data-mlib-body></div>' +
+      '<div class="mlib__note">\u201cIn use\u201d = the file is referenced in your current content. Deleting commits a removal to your repo \u2014 remove <b>Unused</b> ones only; it can\u2019t be undone from here.</div>' +
+    "</div>";
+  }
   async function mediaLoad() {
-    mediaLoading = true; mediaPaint();
+    mediaLoading = true; mediaRender();
     try {
       var r = await fetch(ghContentsUrl("assets/uploads"), { headers: ghHeaders() });
       if (r.ok) { var arr = await r.json(); mediaFiles = (Array.isArray(arr) ? arr : []).filter(function (f) { return f.type === "file"; }).map(function (f) { return { name: f.name, size: f.size || 0, sha: f.sha }; }); }
       else mediaFiles = [];
     } catch (e) { mediaFiles = []; }
-    mediaLoading = false; mediaPaint();
+    mediaLoading = false; mediaRender();
   }
-  function mediaPaint() {
+  function mediaRender() {
     if (!mediaOverlay) return;
-    var refs = mediaRefs(), files = mediaFiles || [];
-    var orphans = files.filter(function (f) { return !mediaUsed(f.name, refs); });
+    var sumEl = mediaOverlay.querySelector("[data-mlib-sum]");
+    var bodyEl = mediaOverlay.querySelector("[data-mlib-body]");
+    var cleanEl = mediaOverlay.querySelector("[data-mlib-clean]");
+    if (!bodyEl) return;
+    mediaOverlay.querySelectorAll("[data-mlib-segs] .mlib__seg").forEach(function (b) { b.classList.toggle("is-on", b.getAttribute("data-seg") === mediaSeg); });
+    mediaOverlay.querySelectorAll("[data-mlib-sortsegs] .mlib__seg").forEach(function (b) { b.classList.toggle("is-on", b.getAttribute("data-sort") === mediaSort); });
+    if (mediaLoading || mediaFiles === null) { if (sumEl) sumEl.textContent = "Loading\u2026"; if (cleanEl) cleanEl.innerHTML = ""; bodyEl.innerHTML = '<div class="mlib__empty">Loading your media\u2026</div>'; return; }
+    var files = mediaFiles || [], usage = mediaUsage();
     var totalB = files.reduce(function (a, f) { return a + f.size; }, 0);
-    var orphanB = orphans.reduce(function (a, f) { return a + f.size; }, 0);
-    var head = '<div class="mlib__bar"><div class="mlib__h"><b>Media library</b><span>' + files.length + ' files \u00b7 ' + mediaFmt(totalB) + (files.length ? (orphans.length ? ' \u00b7 ' + orphans.length + ' unused (' + mediaFmt(orphanB) + ')' : ' \u00b7 all in use') : '') + '</span></div><div class="mlib__acts">' + (orphans.length ? '<button class="btn btn--ghost" data-act="media-delorphans">Delete ' + orphans.length + ' unused</button>' : "") + '<button class="btn btn--ghost" data-act="media-refresh" title="Refresh">\u21bb</button><button class="btn adm__exit" data-act="media-close" aria-label="Close">\u2715</button></div></div>';
-    var body;
-    if (mediaLoading || mediaFiles === null) body = '<div class="mlib__grid"><div class="spinner"></div></div>';
-    else if (!files.length) body = '<div class="mlib__empty">No uploaded media in <code>assets/uploads</code> yet.</div>';
-    else {
-      var sorted = files.slice().sort(function (a, b2) { var ao = !mediaUsed(a.name, refs), bo = !mediaUsed(b2.name, refs); if (ao !== bo) return ao ? -1 : 1; return b2.size - a.size; });
-      body = '<div class="mlib__grid">' + sorted.map(function (f) {
-        var used = mediaUsed(f.name, refs);
+    var unused = files.filter(function (f) { return !(usage[f.name] && usage[f.name].length); });
+    var unusedB = unused.reduce(function (a, f) { return a + f.size; }, 0);
+    if (sumEl) sumEl.innerHTML = files.length + " files \u00b7 " + mediaFmt(totalB) + " \u00b7 " + (files.length - unused.length) + " in use" + (unused.length ? ' \u00b7 <b class="mlib__unw">' + unused.length + " unused (" + mediaFmt(unusedB) + ")</b>" : " \u00b7 all in use");
+    if (cleanEl) cleanEl.innerHTML = unused.length ? '<button class="btn btn--ghost mlib__cleanbtn" data-act="media-delorphans">Delete ' + unused.length + " unused</button>" : "";
+    if (!files.length) { bodyEl.innerHTML = '<div class="mlib__empty">No uploaded media in <code>assets/uploads</code> yet.</div>'; return; }
+    var q = mediaSearch.trim();
+    var groups = {}, order = [];
+    function grp(label) { if (!groups[label]) { groups[label] = { files: [], size: 0 }; order.push(label); } return groups[label]; }
+    files.forEach(function (f) {
+      var labels = usage[f.name] || [], isUnused = !labels.length;
+      if (mediaSeg === "inuse" && isUnused) return;
+      if (mediaSeg === "unused" && !isUnused) return;
+      if (q && (f.name + " " + labels.join(" ")).toLowerCase().indexOf(q) === -1) return;
+      var g = grp(isUnused ? "Unused" : labels[0]); g.files.push(f); g.size += f.size;
+    });
+    if (!order.length) { bodyEl.innerHTML = '<div class="mlib__empty">Nothing matches \u2014 try a different search or filter.</div>'; return; }
+    order.sort(function (a, b) { if (a === "Unused") return -1; if (b === "Unused") return 1; return groups[b].size - groups[a].size; });
+    var sortFn = mediaSort === "name" ? function (a, b) { return a.name.localeCompare(b.name); } : function (a, b) { return b.size - a.size; };
+    bodyEl.innerHTML = order.map(function (label) {
+      var g = groups[label]; g.files.sort(sortFn);
+      var collapsed = !!mediaCollapsed[label], isUn = label === "Unused";
+      var head = '<button class="mlib__grouphd' + (isUn ? " is-unused" : "") + '" data-act="media-group" data-group="' + escAttr(label) + '"><span class="mlib__gchev">' + (collapsed ? "\u25b8" : "\u25be") + '</span><span class="mlib__gname">' + escHtml(label) + '</span><span class="mlib__gmeta">' + g.files.length + (g.files.length === 1 ? " item" : " items") + " \u00b7 " + mediaFmt(g.size) + "</span></button>";
+      var grid = collapsed ? "" : '<div class="mlib__grid">' + g.files.map(function (f) {
+        var flabels = usage[f.name] || [], isUnused = !flabels.length;
         var isImg = /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(f.name);
-        var thumb = isImg ? '<img loading="lazy" src="/assets/uploads/' + escAttr(f.name) + '" alt="" />' : '<div class="mlib__file">' + escHtml((f.name.split(".").pop() || "?").toUpperCase()) + '</div>';
-        return '<div class="mlib__card' + (used ? "" : " is-orphan") + '"><div class="mlib__thumb">' + thumb + '</div><div class="mlib__meta"><span class="mlib__tag">' + (used ? "In use" : "Unused") + '</span><span class="mlib__size">' + mediaFmt(f.size) + '</span></div><button class="mlib__del" data-act="media-del" data-name="' + escAttr(f.name) + '" data-sha="' + escAttr(f.sha) + '" title="Delete">\u2715</button></div>';
+        var thumb = isImg ? '<img loading="lazy" src="/assets/uploads/' + escAttr(f.name) + '" alt="" />' : '<div class="mlib__file">' + escHtml((f.name.split(".").pop() || "?").toUpperCase()) + "</div>";
+        var extra = flabels.length > 1 ? '<span class="mlib__more" title="' + escAttr("Also in: " + flabels.slice(1).join(", ")) + '">+' + (flabels.length - 1) + "</span>" : "";
+        return '<div class="mlib__card' + (isUnused ? " is-orphan" : "") + '">' +
+          '<div class="mlib__thumb">' + thumb + '</div>' +
+          '<div class="mlib__meta"><span class="mlib__size">' + mediaFmt(f.size) + '</span>' + (isUnused ? '<span class="mlib__tag">Unused</span>' : extra) + '</div>' +
+          '<button class="mlib__del" data-act="media-del" data-name="' + escAttr(f.name) + '" data-sha="' + escAttr(f.sha) + '" title="Delete">\u2715</button>' +
+        '</div>';
       }).join("") + "</div>";
-    }
-    mediaOverlay.innerHTML = '<div class="mlib__sheet">' + head + body + '<div class="mlib__note">\u201cIn use\u201d = the filename appears in your current content. Deleting commits a file removal to your repo \u2014 only remove <b>Unused</b> ones; it can\u2019t be undone from here.</div></div>';
+      return '<div class="mlib__group">' + head + grid + "</div>";
+    }).join("");
   }
   async function mediaDel(name, sha, btn) {
     if (btn) { btn.disabled = true; btn.textContent = "\u2026"; }
     try {
       var r = await fetch(ADMIN_WORKER + "/admin/media/delete", { method: "POST", headers: ghHeaders(), body: JSON.stringify({ name: name, sha: sha }) });
       var j = null; try { j = await r.json(); } catch (e) {}
-      if (r.ok) { mediaFiles = (mediaFiles || []).filter(function (f) { return f.name !== name; }); mediaPaint(); return true; }
+      if (r.ok) { mediaFiles = (mediaFiles || []).filter(function (f) { return f.name !== name; }); mediaRender(); return true; }
       if (j && j.needStepup) status("This device isn\u2019t verified to delete \u2014 run a Publish once to set it up.");
       else status((j && j.error) || "Delete failed.");
     } catch (e) { status("Delete failed \u2014 check your connection."); }
@@ -3292,8 +3365,8 @@ import { WORLD_LAND } from "./worldland.js";
     return false;
   }
   async function mediaDelOrphans() {
-    var refs = mediaRefs();
-    var orphans = (mediaFiles || []).filter(function (f) { return !mediaUsed(f.name, refs); });
+    var usage = mediaUsage();
+    var orphans = (mediaFiles || []).filter(function (f) { return !(usage[f.name] && usage[f.name].length); });
     if (!orphans.length) return;
     if (!confirm("Delete " + orphans.length + " unused media file(s)? This commits deletions to your repo and can\u2019t be undone.")) return;
     status("Deleting " + orphans.length + " unused files\u2026");
@@ -4194,6 +4267,9 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "media-refresh") { mediaLoad(); return; }
     if (act === "media-delorphans") { mediaDelOrphans(); return; }
     if (act === "media-del") { if (confirm("Delete " + (b.dataset.name || "this file") + "? This commits a deletion to your repo.")) mediaDel(b.dataset.name, b.dataset.sha, b); return; }
+    if (act === "media-seg") { mediaSeg = b.dataset.seg || "all"; mediaRender(); return; }
+    if (act === "media-sort") { mediaSort = b.dataset.sort || "size"; mediaRender(); return; }
+    if (act === "media-group") { var _mg = b.dataset.group || ""; mediaCollapsed[_mg] = !mediaCollapsed[_mg]; mediaRender(); return; }
     if (act === "ver-refresh") { loadVersions(); return; }
     if (act === "ver-load") { if (confirm("Load this version into the editor? Your current unsaved edits will be replaced \u2014 Publishing is still required to make it live.")) applyVersion(b.dataset.sha, b.dataset.when); return; }
     if (act === "settings-close") { closeSettings(); return; }

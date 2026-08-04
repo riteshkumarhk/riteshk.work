@@ -1461,21 +1461,41 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 
 /* ---------- media library (More tab) ---------- */
 .mlib { position: fixed; inset: 0; z-index: 10050; background: rgba(6,6,8,.86); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); display: flex; padding: 3vh 3vw; }
-.mlib__sheet { margin: auto; width: 100%; max-width: 980px; max-height: 94vh; display: flex; flex-direction: column; background: var(--bg-elev, #111116); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.mlib__sheet { margin: auto; width: 100%; max-width: 1040px; max-height: 94vh; display: flex; flex-direction: column; background: var(--bg-elev, #111116); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
 .mlib__bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.2rem; border-bottom: 1px solid var(--line); }
 .mlib__h b { display: block; }
 .mlib__h span { font-family: var(--mono); font-size: .72rem; color: var(--text-dim); }
+.mlib__unw { color: var(--accent); font-weight: 400; }
 .mlib__acts { display: flex; align-items: center; gap: .5rem; }
-.mlib__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .9rem; padding: 1.1rem 1.2rem; overflow: auto; }
+.mlib__controls { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; padding: .7rem 1.2rem; border-bottom: 1px solid var(--line); background: var(--bg-2, #0d0d10); }
+.mlib__search { flex: 1 1 200px; min-width: 150px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem; font-family: var(--mono); font-size: .76rem; }
+.mlib__search:focus { outline: none; border-color: var(--accent); }
+.mlib__search::placeholder { color: var(--text-faint); }
+.mlib__segs { display: inline-flex; gap: .2rem; background: var(--bg); border: 1px solid var(--line); border-radius: 100px; padding: .18rem; }
+.mlib__seg { font-family: var(--mono); font-size: .64rem; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); background: none; border: 0; border-radius: 100px; padding: .32rem .68rem; cursor: pointer; transition: color .2s, background .2s; }
+.mlib__seg:hover { color: var(--text); }
+.mlib__seg.is-on { color: #0a0a0a; background: var(--accent); }
+.mlib__clean { margin-left: auto; }
+.mlib__cleanbtn { color: var(--accent); border-color: rgba(216,166,71,.4); }
+.mlib__body { overflow: auto; }
+.mlib__group { border-bottom: 1px solid var(--line); }
+.mlib__group:last-child { border-bottom: 0; }
+.mlib__grouphd { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: .55rem; width: 100%; text-align: left; background: var(--bg-elev, #111116); border: 0; padding: .7rem 1.2rem; cursor: pointer; color: var(--text); }
+.mlib__grouphd:hover { background: var(--bg-2, #0d0d10); }
+.mlib__gchev { color: var(--text-faint); font-size: .7rem; width: .8rem; text-align: center; }
+.mlib__gname { font-size: .84rem; font-weight: 500; }
+.mlib__grouphd.is-unused .mlib__gname { color: var(--accent); }
+.mlib__gmeta { margin-left: auto; font-family: var(--mono); font-size: .66rem; color: var(--text-dim); }
+.mlib__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: .9rem; padding: .2rem 1.2rem 1.1rem; }
 .mlib__card { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg-2, #0d0d10); }
 .mlib__card.is-orphan { border-color: rgba(216,166,71,.55); }
 .mlib__thumb { aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #0a0a0c; }
 .mlib__thumb img { width: 100%; height: 100%; object-fit: cover; }
 .mlib__file { font-family: var(--mono); font-size: .9rem; color: var(--text-dim); }
-.mlib__meta { display: flex; align-items: center; justify-content: space-between; padding: .45rem .6rem; font-family: var(--mono); font-size: .66rem; }
-.mlib__tag { color: var(--text-dim); }
-.mlib__card.is-orphan .mlib__tag { color: var(--accent); }
-.mlib__size { color: var(--text-faint); }
+.mlib__meta { display: flex; align-items: center; justify-content: space-between; gap: .4rem; padding: .45rem .6rem; font-family: var(--mono); font-size: .66rem; }
+.mlib__size { color: var(--text); font-weight: 500; }
+.mlib__tag { color: var(--accent); }
+.mlib__more { color: var(--text-faint); }
 .mlib__del { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgba(0,0,0,.62); color: #fff; cursor: pointer; opacity: 0; transition: opacity .2s; }
 .mlib__card:hover .mlib__del { opacity: 1; }
 .mlib__del:hover { background: #c0392b; }
