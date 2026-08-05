@@ -2515,6 +2515,72 @@ import { WORLD_LAND } from "./worldland.js";
       });
     });
   }
+  // ---------- AI-generated Skim: read the whole case, distil an impact-first, visual-forward highlight reel ----------
+  function skimGather(w) {
+    var st = w.study || {}, media = [], seen = {};
+    function add(src, caption) { if (src && typeof src === "string" && !seen[src] && media.length < 40) { seen[src] = 1; media.push({ src: src, caption: caption || "" }); } }
+    function walk(node) { if (!node || typeof node !== "object") return; if (Array.isArray(node)) { node.forEach(walk); return; } if (typeof node.src === "string") add(node.src, node.caption); for (var k in node) { var v = node[k]; if (v && typeof v === "object") walk(v); } }
+    function sm(s) { return String(s || "").replace(/\[\[|\]\]|\*\*|\*/g, "").trim(); }
+    add((st.cover && typeof st.cover === "object") ? st.cover.src : st.cover, "cover");
+    add(w.image, "");
+    var lines = ["TITLE: " + (w.title || "")];
+    if (st.tagline) lines.push("TAGLINE: " + sm(st.tagline));
+    var meta = [st.role && ("Role " + st.role), st.team && ("Team " + st.team), (st.timeline || w.period) && ("Timeline " + (st.timeline || w.period)), st.scope && ("Scope " + st.scope)].filter(Boolean);
+    if (meta.length) lines.push("META: " + meta.join(" \u00b7 "));
+    (st.blocks || []).forEach(function (b) {
+      if (!b || b.locked) return;
+      walk(b);
+      if (b.kicker) lines.push("(" + b.kicker + ")");
+      if (b.heading) lines.push("## " + sm(b.heading));
+      if (b.body) lines.push(sm(b.body));
+      if (b.sub) lines.push(sm(b.sub));
+      (b.list || []).forEach(function (x) { lines.push("- " + sm(x)); });
+      (b.items || []).forEach(function (m) {
+        if (b.type === "metrics") lines.push("METRIC: " + (m.value || "") + " \u2014 " + (m.label || ""));
+        else if (b.type === "steps") lines.push("STEP: " + (m.title || "") + " \u2014 " + sm(m.body || ""));
+        else if (b.type === "faq") lines.push("Q: " + (m.q || "") + " / A: " + sm(m.a || ""));
+        else if (m.caption) lines.push("[image: " + sm(m.caption) + "]");
+      });
+      (b.left || []).forEach(function (x) { lines.push((b.leftLabel || "") + ": " + sm(x)); });
+      (b.right || []).forEach(function (x) { lines.push((b.rightLabel || "") + ": " + sm(x)); });
+    });
+    return { text: lines.join("\n"), media: media };
+  }
+  async function skimGenerate(i, btn) {
+    var w = data.work[i];
+    if (!w || !w.study) { status("Add some case-study sections first."); return; }
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { skimGenerate(i, btn); }); return; }
+    var g = skimGather(w);
+    if (!g.text || g.text.length < 60) { status("Not enough case content to skim yet \u2014 add a few sections first."); return; }
+    if (btn) { btn.disabled = true; btn.textContent = "Reading the case\u2026"; }
+    status("Reading the case & writing the skim\u2026");
+    var mediaList = g.media.map(function (m, k) { return k + ". " + m.src + (m.caption ? "  (" + m.caption + ")" : ""); }).join("\n") || "(none)";
+    var system = "You are a senior product-design portfolio editor. You write a fast \"skim\" of a case study for a time-pressed recruiter or hiring manager: impact-first, low-verbosity, concrete and specific. Use ONLY facts, outcomes and metrics that appear in the case \u2014 never invent numbers or media. Return STRICT JSON only, no prose around it.";
+    var user = "CASE STUDY:\n" + g.text + "\n\nAVAILABLE MEDIA (copy src values EXACTLY):\n" + mediaList +
+      "\n\nReturn JSON with these keys:\n" +
+      "summary: one or two punchy sentences \u2014 the what, why and impact.\n" +
+      "points: array of 3 to 4 objects {value,label} \u2014 the headline metrics/outcomes from the case (value = the number or short phrase, label = 2-5 words).\n" +
+      "takeaways: array of 2 to 3 sharp one-line design or strategy takeaways.\n" +
+      "visuals: array of 2 to 5 objects {src,caption} \u2014 the STRONGEST media, ordered to follow the narrative. src MUST be copied exactly from AVAILABLE MEDIA. caption = a tight one-liner. If there is no media, return an empty array.";
+    try {
+      var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 1200, temperature: 0.4, json: true });
+      var j = csgenParse(out);
+      if (!j || typeof j !== "object") { status("The AI didn\u2019t return usable skim JSON \u2014 try again."); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate skim with AI"; } return; }
+      var srcs = {}; g.media.forEach(function (m) { srcs[m.src] = 1; });
+      var skim = {
+        summary: String(j.summary || "").trim(),
+        points: (Array.isArray(j.points) ? j.points : []).filter(function (p) { return p && (p.value || p.label); }).slice(0, 4).map(function (p) { return { value: String(p.value || ""), label: String(p.label || "") }; }),
+        takeaways: (Array.isArray(j.takeaways) ? j.takeaways : []).filter(function (t) { return t && String(t).trim(); }).slice(0, 4).map(function (t) { return String(t).trim(); }),
+        visuals: (Array.isArray(j.visuals) ? j.visuals : []).filter(function (v) { return v && v.src && srcs[v.src]; }).slice(0, 6).map(function (v) { return { src: v.src, caption: String(v.caption || "").trim() }; }),
+        generatedAt: Date.now()
+      };
+      w.study.skim = skim;
+      saveDraft(true);
+      if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate skim with AI"; }
+      status("Skim generated \u2014 " + skim.points.length + " metrics, " + skim.takeaways.length + " takeaways, " + skim.visuals.length + " visuals. Preview \u2192 Skim.", true);
+      if (openStudy === i) renderL2();
+    } catch (e) { status("Skim generation failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate skim with AI"; } }
+  }
   function studyEditor(w, i) {
     var st = w.study;
     var blocks = st.blocks || (st.blocks = []);
@@ -2529,9 +2595,14 @@ import { WORLD_LAND } from "./worldland.js";
       smeta(i, "tagline", "Tagline", "one line under the title") +
       '<div class="af__row">' + smeta(i, "role", "Role") + smeta(i, "timeline", "Timeline", "Optional \u2014 leave blank to reuse the Period shown on the home card.", w.period || "") + "</div>" +
       '<div class="af__row">' + smeta(i, "team", "Team") + smeta(i, "scope", "Scope") + "</div>" +
+      '<div class="af"><label class="af__label">Skim view \u2014 AI highlight reel</label>' +
+      '<div class="adm__autobar"><button class="btn btn--auto" data-act="skim-gen" data-index="' + i + '">\u2728 Generate skim with AI</button>' +
+      '<span class="adm__auto-note">Reads the whole case \u2014 writes an impact-first summary, key metrics, takeaways &amp; picks the strongest visuals to feature. Saved &amp; shown in <b>Skim</b> view.</span></div>' +
+      (st.skim && st.skim.generatedAt ? '<div class="af__hint">Last generated ' + new Date(st.skim.generatedAt).toLocaleDateString() + ' \u00b7 ' + ((st.skim.takeaways || []).length) + ' takeaways \u00b7 ' + ((st.skim.visuals || []).length) + ' visuals</div>' : "") +
+      "</div>" +
       '<div class="af"><label class="af__label">Skim summary (optional)</label>' +
       '<textarea rows="3" data-study="' + i + '" data-sfield="skim" placeholder="The 30-second version \u2014 one or two punchy lines.">' + escHtml((st.skim && st.skim.summary) || "") + "</textarea>" +
-      '<div class="af__hint">Shown in <b>Skim</b> view (the opt-in short read). Blank = auto-uses the tagline.</div></div>' +
+      '<div class="af__hint">Shown in <b>Skim</b> view. Auto-filled by Generate; edit freely. Blank = auto-uses the tagline.</div></div>' +
       '<div class="af"><label class="af__label">Skim metrics (optional)</label>' +
       '<textarea rows="3" data-study="' + i + '" data-sfield="skimpts" placeholder="One per line \u2014 value | label\n175K+ | passkeys in 10 days">' + escHtml(((st.skim && st.skim.points) || []).map(function (p) { return (p.value || "") + " | " + (p.label || ""); }).join("\n")) + "</textarea>" +
       '<div class="af__hint">Up to 3, shown as big numbers in Skim. Format <b>value | label</b> per line.</div></div>' +
@@ -4489,6 +4560,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "fbrev-open") { fbReviewModal(i); return; }
     if (act === "iprep-open") { iprepModal(i); return; }
     if (act === "story-open") { storyModal(i); return; }
+    if (act === "skim-gen") { skimGenerate(i, b); return; }
     if (act === "wb-open") { wbModal(); return; }
     if (act === "iprep-open-ai") { iprepModal(); return; }
     if (act === "story-open-ai") { storyModal(); return; }

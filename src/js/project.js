@@ -996,6 +996,8 @@
     var sk = st.skim || {};
     var summary = (sk.summary && String(sk.summary).trim()) || "";
     var points = Array.isArray(sk.points) ? sk.points.filter(function (p) { return p && (p.value || p.label); }) : [];
+    var takeaways = Array.isArray(sk.takeaways) ? sk.takeaways.filter(function (t) { return t && String(t).trim(); }) : [];
+    var visuals = Array.isArray(sk.visuals) ? sk.visuals.filter(function (v) { return v && v.src; }) : [];
     if (!points.length) {
       var mb = (st.blocks || []).filter(function (b) { return b && b.type === "metrics" && b.items && b.items.length; })[0];
       if (mb) points = mb.items.slice(0);
@@ -1005,7 +1007,7 @@
       if (!summary) { var sb = (st.blocks || []).filter(function (b) { return b && b.type === "statement" && b.body; })[0]; if (sb) summary = sb.body; }
       if (!summary) summary = w.desc || "";
     }
-    return { summary: summary, points: points.slice(0, 3) };
+    return { summary: summary, points: points.slice(0, 4), takeaways: takeaways.slice(0, 4), visuals: visuals.slice(0, 8) };
   }
   function skimHtml(w, prevW, nextW) {
     var st = w.study || {};
@@ -1019,17 +1021,22 @@
         '<p class="pj__tagline">' + md(st.tagline || w.desc || "") + "</p>" +
         metaGrid(st, w.period) +
       "</header>";
-    var summary = sd.summary ? '<div class="pj__skim-sum">' + md(sd.summary) + "</div>" : "";
+    var summary = sd.summary ? '<p class="pj__skim-sum">' + md(sd.summary) + "</p>" : "";
     var metrics = sd.points.length ? '<dl class="pj__skim-metrics">' + sd.points.map(function (p) {
       return '<div class="pj__skim-metric"><dt>' + esc(p.value || "") + "</dt><dd>" + esc(p.label || "") + "</dd></div>";
     }).join("") + "</dl>" : "";
+    var takeaways = sd.takeaways.length ? '<ul class="pj__skim-takeaways">' + sd.takeaways.map(function (t) {
+      return '<li><span class="pj__skim-tk-i" aria-hidden="true"></span>' + md(t) + "</li>";
+    }).join("") + "</ul>" : "";
+    var reel = sd.visuals.length ? '<div class="pj__skim-reel">' + sd.visuals.map(function (v) {
+      var cap = v.caption ? '<figcaption class="pj__skim-cap">' + esc(v.caption) + "</figcaption>" : "";
+      return '<figure class="pj__skim-shot">' + mediaEl(v, "pjb__media-el") + cap + "</figure>";
+    }).join("") + "</div>" : "";
     var body =
       '<div class="pj__body pj__body--skim">' +
-        '<section class="pjb pjb--skim">' +
-          '<div class="pj__skim-tag">The 30-second version</div>' +
-          summary + metrics +
-          '<button class="pj__btn pj__btn--primary pj__skim-more" type="button" data-pj="full">Read the full case <span aria-hidden="true">↓</span></button>' +
-        "</section>" +
+        '<div class="pj__skim-tag">The 30-second version</div>' +
+        summary + metrics + takeaways + reel +
+        '<button class="pj__btn pj__btn--primary pj__skim-more" type="button" data-pj="full">Read the full case <span aria-hidden="true">↓</span></button>' +
       "</div>";
     return cover + hero + body + navFoot(prevW, nextW);
   }
