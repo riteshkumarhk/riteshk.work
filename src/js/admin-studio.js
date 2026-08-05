@@ -2658,7 +2658,7 @@ import { WORLD_LAND } from "./worldland.js";
     return out;
   }
   function insNum(n) { n = n || 0; if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M"; if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "k"; return String(n); }
-  function insTop(obj) { if (!obj) return ""; var best = "", bn = -1; for (var k in obj) { if (obj[k] > bn) { bn = obj[k]; best = k; } } return best ? ("Top: " + best) : ""; }
+  function insTop(obj) { if (!obj) return ""; var best = "", bn = -1; for (var k in obj) { if (obj[k] > bn) { bn = obj[k]; best = k; } } if (!best) return ""; var w = ((data && data.work) || []).filter(function (x) { return x && x.id === best; })[0]; var label = w ? (w.client || w.title || best) : best; if (label.length > 24) label = label.slice(0, 22) + "\u2026"; return "Top: " + label; }
   function insAgo(ts) { var s = Math.max(0, (Date.now() - (ts || 0)) / 1000); if (s < 60) return "just now"; if (s < 3600) return Math.floor(s / 60) + "m ago"; if (s < 86400) return Math.floor(s / 3600) + "h ago"; return Math.floor(s / 86400) + "d ago"; }
 
   function insMap(isoGeo) {
