@@ -2520,29 +2520,40 @@ import { WORLD_LAND } from "./worldland.js";
     var st = w.study || {}, media = [], seen = {};
     function add(src, caption) { if (src && typeof src === "string" && !seen[src] && media.length < 40) { seen[src] = 1; media.push({ src: src, caption: caption || "" }); } }
     function walk(node) { if (!node || typeof node !== "object") return; if (Array.isArray(node)) { node.forEach(walk); return; } if (typeof node.src === "string") add(node.src, node.caption); for (var k in node) { var v = node[k]; if (v && typeof v === "object") walk(v); } }
-    function sm(s) { return String(s || "").replace(/\[\[|\]\]|\*\*|\*/g, "").trim(); }
+    function sm(s) { return String(s == null ? "" : s).replace(/<[^>]+>/g, " ").replace(/\[\[|\]\]|\*\*|\*/g, "").replace(/\s+/g, " ").trim(); }
+    function arr(x) { return Array.isArray(x) ? x : []; }
+    function colText(val, label) {
+      var push = function (v) { var t = sm(v); if (t) lines.push((label ? sm(label) + ": " : "") + t); };
+      if (Array.isArray(val)) val.forEach(push); else if (val) push(val);
+    }
     add((st.cover && typeof st.cover === "object") ? st.cover.src : st.cover, "cover");
     add(w.image, "");
     var lines = ["TITLE: " + (w.title || "")];
     if (st.tagline) lines.push("TAGLINE: " + sm(st.tagline));
     var meta = [st.role && ("Role " + st.role), st.team && ("Team " + st.team), (st.timeline || w.period) && ("Timeline " + (st.timeline || w.period)), st.scope && ("Scope " + st.scope)].filter(Boolean);
     if (meta.length) lines.push("META: " + meta.join(" \u00b7 "));
-    (st.blocks || []).forEach(function (b) {
+    arr(st.blocks).forEach(function (b) {
       if (!b || b.locked) return;
       walk(b);
-      if (b.kicker) lines.push("(" + b.kicker + ")");
+      // media that lives on bare string fields (before/after + split images), not caught by walk()
+      add(b.beforeSrc, sm(b.beforeLabel || b.heading || ""));
+      add(b.afterSrc, sm(b.afterLabel || b.heading || ""));
+      add(b.leftImg, sm(b.leftLabel || ""));
+      add(b.rightImg, sm(b.rightLabel || ""));
+      if (b.kicker) lines.push("(" + sm(b.kicker) + ")");
       if (b.heading) lines.push("## " + sm(b.heading));
       if (b.body) lines.push(sm(b.body));
       if (b.sub) lines.push(sm(b.sub));
-      (b.list || []).forEach(function (x) { lines.push("- " + sm(x)); });
-      (b.items || []).forEach(function (m) {
+      arr(b.list).forEach(function (x) { var t = sm(x); if (t) lines.push("- " + t); });
+      arr(b.items).forEach(function (m) {
+        if (!m || typeof m !== "object") { var mt = sm(m); if (mt) lines.push("- " + mt); return; }
         if (b.type === "metrics") lines.push("METRIC: " + (m.value || "") + " \u2014 " + (m.label || ""));
         else if (b.type === "steps") lines.push("STEP: " + (m.title || "") + " \u2014 " + sm(m.body || ""));
         else if (b.type === "faq") lines.push("Q: " + (m.q || "") + " / A: " + sm(m.a || ""));
         else if (m.caption) lines.push("[image: " + sm(m.caption) + "]");
       });
-      (b.left || []).forEach(function (x) { lines.push((b.leftLabel || "") + ": " + sm(x)); });
-      (b.right || []).forEach(function (x) { lines.push((b.rightLabel || "") + ": " + sm(x)); });
+      colText(b.left, b.leftLabel);
+      colText(b.right, b.rightLabel);
     });
     return { text: lines.join("\n"), media: media };
   }
@@ -2550,7 +2561,8 @@ import { WORLD_LAND } from "./worldland.js";
     var w = data.work[i];
     if (!w || !w.study) { status("Add some case-study sections first."); return; }
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { skimGenerate(i, btn); }); return; }
-    var g = skimGather(w);
+    var g;
+    try { g = skimGather(w); } catch (e) { status("Couldn\u2019t read this case study: " + ((e && e.message) || "error")); return; }
     if (!g.text || g.text.length < 60) { status("Not enough case content to skim yet \u2014 add a few sections first."); return; }
     if (btn) { btn.disabled = true; btn.textContent = "Reading the case\u2026"; }
     status("Reading the case & writing the skim\u2026");
