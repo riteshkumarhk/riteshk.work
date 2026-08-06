@@ -1150,7 +1150,29 @@
               "outcome": "Scales across Passkeys, UAC, Store, and Remote Desktop"
             }
           ],
-          "generatedAt": 1786004084155
+          "generatedAt": 1786004084155,
+          "media": [
+            {
+              "src": "/assets/uploads/8f89f35b51cfe5eecbe0210ae40939c80d1356668fd0a5ed12a0ae70b94df533.png",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/95d84ac2371ca02110b9883b8b8a8a25b238afbecd4ea7dbd4ab4292fed4e1e5.png",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/2e85061e07e1071fef52e964058a5ba2af8dfbbd9632e1da818fa153f82d7d6a.png",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/dae49f624c07657b5a8ddb3f2e37c101f34b642579aee0c0671d1179eeb2e2bd.png",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/1e65960d5a1f0acd80ce95329fcb12274785dfec11f82dddc58e40facbaa59dc.png",
+              "caption": ""
+            }
+          ]
         }
       }
     },
