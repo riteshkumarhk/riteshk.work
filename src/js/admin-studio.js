@@ -2569,9 +2569,15 @@ import { WORLD_LAND } from "./worldland.js";
     if (!g.text || g.text.length < 60) { status("Not enough case content to skim yet \u2014 add a few sections first."); return; }
     if (btn) { btn.disabled = true; btn.textContent = "Reading the case\u2026"; }
     status("Reading the case & finding the key moves\u2026");
-    var system = "You are a senior product-design portfolio editor. From a case study you extract the 2-3 decisions that show senior design judgement \u2014 the moves a hiring manager should remember. Use ONLY facts and outcomes that appear in the case \u2014 never invent numbers. Return STRICT JSON only, no prose around it.";
+    var system = "You are a senior product-design portfolio editor. From a case study you extract the 2-3 decisions that show senior design judgement \u2014 the moves a hiring manager should remember, written as SHORT PUNCHY HEADLINES, never full sentences. Use ONLY facts and outcomes that appear in the case \u2014 never invent numbers. Return STRICT JSON only, no prose around it.";
     var user = "CASE STUDY:\n" + g.text +
-      "\n\nReturn JSON {\"beats\":[{\"problem\":\"\",\"move\":\"\",\"outcome\":\"\"}]} \u2014 an array of 2 to 3 objects: the key moves that show senior design judgement. problem = the tension in 5-9 words; move = the decision you made, one sharp line; outcome = the concrete result (a metric or a real shift), short. Order them strongest-first.";
+      "\n\nExtract the 2-3 decisions that show senior design judgement \u2014 the moves a hiring manager should remember. Order them strongest-first." +
+      "\n\nReturn STRICT JSON only: {\"beats\":[{\"problem\":\"\",\"move\":\"\",\"outcome\":\"\"}]}." +
+      "\n\nEvery field is a punchy HEADLINE FRAGMENT, not a sentence. Keep each one glanceable and tight:" +
+      "\n- problem = the tension, MAX 7 words. e.g. \"Trust buried in dense dialog text\"." +
+      "\n- move = the decision, MAX 6 words \u2014 a crisp noun phrase or imperative. e.g. \"One glanceable context object\"." +
+      "\n- outcome = the concrete result or shift, MAX 6 words. e.g. \"Approve before you authenticate\"." +
+      "\n\nHard rules: NO full sentences. NO trailing clauses (never \"keeping\u2026\", \"becoming\u2026\", \"which\u2026\", \"reducing\u2026\"). NO stacking multiple ideas with commas. NO explanations or sub-text. If a field reads like a sentence, rewrite it shorter. Prefer strong plain words over jargon.";
     try {
       var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 1500, temperature: 0.4, json: true });
       var j = csgenParse(out);
