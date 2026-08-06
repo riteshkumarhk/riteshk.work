@@ -2586,6 +2586,13 @@ import { WORLD_LAND } from "./worldland.js";
       if (openStudy === i) renderL2();
     } catch (e) { status("Key moves generation failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate Key Moves"; } }
   }
+  function beatEditor(i, b, j) {
+    return '<div class="adm__beat"><div class="adm__beat-h"><span class="adm__beat-n">' + (j + 1) + '</span> Key move ' + (j + 1) + '<button type="button" class="adm__beat-x" data-act="beat-remove" data-index="' + i + '" data-bindex="' + j + '" title="Remove this key move" aria-label="Remove key move ' + (j + 1) + '">\u2715</button></div>' +
+      '<input type="text" class="adm__beat-f" data-beat="' + i + '" data-bindex="' + j + '" data-bkey="problem" value="' + escAttr(b.problem || "") + '" placeholder="Problem \u2014 the tension, in a few words" />' +
+      '<textarea class="adm__beat-f" rows="2" data-beat="' + i + '" data-bindex="' + j + '" data-bkey="move" placeholder="Move \u2014 the decision you made">' + escHtml(b.move || "") + '</textarea>' +
+      '<input type="text" class="adm__beat-f" data-beat="' + i + '" data-bindex="' + j + '" data-bkey="outcome" value="' + escAttr(b.outcome || "") + '" placeholder="Outcome \u2014 the concrete result" />' +
+      '</div>';
+  }
   function studyEditor(w, i) {
     var st = w.study;
     var blocks = st.blocks || (st.blocks = []);
@@ -2603,8 +2610,10 @@ import { WORLD_LAND } from "./worldland.js";
       '<div class="af"><label class="af__label">Key moves \u2014 AI-generated</label>' +
       '<div class="adm__autobar"><button class="btn btn--auto" data-act="skim-gen" data-index="' + i + '">\u2728 Generate Key Moves</button>' +
       '<span class="adm__auto-note">Reads the whole case and writes the 2\u20133 decisions that show senior judgement (problem \u2192 move \u2192 outcome). They appear as cards at the top of the case study, above <b>Read the full case</b>.</span></div>' +
-      (st.skim && st.skim.beats && st.skim.beats.length ? '<div class="af__hint">' + st.skim.beats.length + ' move' + (st.skim.beats.length > 1 ? "s" : "") + (st.skim.generatedAt ? ' \u00b7 generated ' + new Date(st.skim.generatedAt).toLocaleDateString() : "") + '</div>' : "") +
+      (st.skim && st.skim.beats && st.skim.beats.length ? '<div class="af__hint">' + st.skim.beats.length + ' move' + (st.skim.beats.length > 1 ? "s" : "") + (st.skim.generatedAt ? ' \u00b7 generated ' + new Date(st.skim.generatedAt).toLocaleDateString() : "") + ' \u00b7 edit or remove to refine</div>' : "") +
       "</div>" +
+      (st.skim && st.skim.beats && st.skim.beats.length ? st.skim.beats.map(function (b, j) { return beatEditor(i, b, j); }).join("") : "") +
+      '<button type="button" class="btn btn--add adm__beat-add" data-act="beat-add" data-index="' + i + '">+ Add a key move</button>' +
       "</section>";
     var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
     var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
@@ -2666,6 +2675,12 @@ import { WORLD_LAND } from "./worldland.js";
     w.study[f] = t.value;
     saveDraft();
     refreshL2Preview();
+  }
+  function onBeatEdit(t) {
+    var i = +t.dataset.beat, j = +t.dataset.bindex, k = t.dataset.bkey;
+    var w = data.work[i]; if (!w || !w.study || !w.study.skim || !Array.isArray(w.study.skim.beats) || !w.study.skim.beats[j]) return;
+    w.study.skim.beats[j][k] = t.value;
+    saveDraft(); refreshL2Preview();
   }
   function onStudyBlock(t) {
     var i = +t.dataset.sblock, j = +t.dataset.bindex, f = t.dataset.bfield;
@@ -4191,6 +4206,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (t.dataset.cell !== undefined && t.dataset.cfield) { onCellInput(t); return; }
     if (t.dataset.fann !== undefined && t.dataset.afield) { onFocusAnn(t); return; }
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
+    if (t.dataset.beat !== undefined && t.dataset.bkey) { onBeatEdit(t); return; }
     if (t.dataset.study !== undefined && t.dataset.sfield) { onStudyMeta(t); return; }
     if (t.dataset.sblock !== undefined && t.dataset.bfield && t.dataset.bfield !== "locked") { onStudyBlock(t); return; }
     if (t.dataset.path) { setPath(data, t.dataset.path, t.value); apply(); return; }
@@ -4563,6 +4579,19 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "iprep-open") { iprepModal(i); return; }
     if (act === "story-open") { storyModal(i); return; }
     if (act === "skim-gen") { skimGenerate(i, b); return; }
+    if (act === "beat-add") {
+      const bw = data.work[i]; if (!bw || !bw.study) return;
+      bw.study.skim = bw.study.skim || {};
+      if (!Array.isArray(bw.study.skim.beats)) bw.study.skim.beats = [];
+      bw.study.skim.beats.push({ problem: "", move: "", outcome: "" });
+      saveDraft(true); renderL2(); status("Key move added \u2014 fill it in.", true); return;
+    }
+    if (act === "beat-remove") {
+      const bw = data.work[i], arr = bw && bw.study && bw.study.skim && bw.study.skim.beats;
+      if (!Array.isArray(arr)) return;
+      arr.splice(+b.dataset.bindex, 1);
+      saveDraft(true); renderL2(); status("Key move removed.", true); return;
+    }
     if (act === "wb-open") { wbModal(); return; }
     if (act === "iprep-open-ai") { iprepModal(); return; }
     if (act === "story-open-ai") { storyModal(); return; }

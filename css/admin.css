@@ -248,6 +248,12 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__auto-note { font-size: .68rem; color: var(--text-faint); line-height: 1.4; flex: 1; min-width: 140px; }
 .btn--auto { background: linear-gradient(120deg, var(--accent), var(--accent-2)); border-color: var(--accent); color: #0a0a0a; font-weight: 600; }
 .btn--auto:hover { filter: brightness(1.08); border-color: var(--accent); }
+.adm__beat { margin: .55rem 0 0; padding: .7rem .75rem .8rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); display: flex; flex-direction: column; gap: .4rem; }
+.adm__beat-h { font-family: var(--mono); font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); display: flex; align-items: center; gap: .45rem; margin-bottom: .05rem; }
+.adm__beat-n { display: inline-flex; align-items: center; justify-content: center; width: 1.05rem; height: 1.05rem; border-radius: 50%; background: var(--accent); color: #0a0a0a; font-size: .6rem; font-weight: 600; }
+.adm__beat-x { margin-left: auto; background: none; border: 0; color: var(--text-faint); cursor: pointer; font-size: .8rem; line-height: 1; padding: .15rem .35rem; border-radius: 6px; transition: color .15s, background .15s; }
+.adm__beat-x:hover { color: #e5484d; background: rgba(229, 72, 77, .12); }
+.adm__beat-add { margin-top: .6rem; }
 
 /* live preview pane */
 .adm__preview { position: relative; display: flex; flex-direction: column; min-height: 0; background: #050506; }
