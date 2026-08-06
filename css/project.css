@@ -751,4 +751,7 @@ html.lite .pjb { animation: none; }
 .pj__skim-beat-o { margin: .6rem 0 0; font-size: .92rem; line-height: 1.5; color: var(--accent); }
 .pj__skim-beat-o strong { font-weight: 600; }
 .pj__skim-more { margin-top: .4rem; }
+/* "Key moves" band — the 3 decision cards + CTA at the top of every case study */
+.pj__moves { max-width: var(--pjcw); margin: 0 auto; padding: clamp(1.6rem, 3.2vw, 2.6rem) 0 clamp(1.8rem, 3.5vw, 3rem); border-top: 1px solid var(--line); }
+.pj__moves-cta { margin-top: clamp(1.5rem, 3vw, 2.2rem); }
 @media (max-width: 620px) { .pj__skim-metrics { grid-template-columns: 1fr 1fr; gap: 1.1rem; } }
