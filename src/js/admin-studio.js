@@ -2569,15 +2569,14 @@ import { WORLD_LAND } from "./worldland.js";
     if (!g.text || g.text.length < 60) { status("Not enough case content to skim yet \u2014 add a few sections first."); return; }
     if (btn) { btn.disabled = true; btn.textContent = "Reading the case\u2026"; }
     status("Reading the case & finding the key moves\u2026");
-    var system = "You are a senior product-design portfolio editor. From a case study you extract the 2-3 decisions that show senior design judgement \u2014 the moves a hiring manager should remember, written as SHORT PUNCHY HEADLINES, never full sentences. Use ONLY facts and outcomes that appear in the case \u2014 never invent numbers. Return STRICT JSON only, no prose around it.";
+    var system = "You are a senior product-design portfolio editor. From a case study you extract the 2-3 decisions that show senior design judgement \u2014 the moves a hiring manager should remember. Write each as a crisp, confident, COMPLETE one-liner (a quotable headline), concrete and specific to THIS case \u2014 not a clipped telegram and not a vague abstraction. Use ONLY facts that appear in the case \u2014 never invent numbers. Return STRICT JSON only, no prose around it.";
     var user = "CASE STUDY:\n" + g.text +
-      "\n\nExtract the 2-3 decisions that show senior design judgement \u2014 the moves a hiring manager should remember. Order them strongest-first." +
-      "\n\nReturn STRICT JSON only: {\"beats\":[{\"problem\":\"\",\"move\":\"\",\"outcome\":\"\"}]}." +
-      "\n\nEvery field is a punchy HEADLINE FRAGMENT, not a sentence. Keep each one glanceable and tight:" +
-      "\n- problem = the tension, MAX 7 words. e.g. \"Trust buried in dense dialog text\"." +
-      "\n- move = the decision, MAX 6 words \u2014 a crisp noun phrase or imperative. e.g. \"One glanceable context object\"." +
-      "\n- outcome = the concrete result or shift, MAX 6 words. e.g. \"Approve before you authenticate\"." +
-      "\n\nHard rules: NO full sentences. NO trailing clauses (never \"keeping\u2026\", \"becoming\u2026\", \"which\u2026\", \"reducing\u2026\"). NO stacking multiple ideas with commas. NO explanations or sub-text. If a field reads like a sentence, rewrite it shorter. Prefer strong plain words over jargon.";
+      "\n\nExtract the 2-3 decisions that show senior design judgement, strongest-first. Return STRICT JSON only: {\"beats\":[{\"problem\":\"\",\"move\":\"\",\"outcome\":\"\"}]}." +
+      "\n\nEach field is a crisp, confident, COMPLETE one-liner \u2014 a quotable headline that stands on its own, concrete and specific to this case. Not a clipped telegram, not a vague abstraction." +
+      "\n- problem = the tension, \u22647 words.  good: \"Trust buried in dense dialog text\"" +
+      "\n- move = the decision, \u22646 words.  good: \"One glanceable context object\"" +
+      "\n- outcome = the payoff \u2014 name the real systems or scenarios it now serves, \u22648 words.  good: \"Scales across Passkeys, UAC and Store\"" +
+      "\n\nAVOID cryptic fragments that feel unfinished (bad: \"framework born\") and vague abstractions (bad: \"scalable architecture across all Windows auth\"). No full sentences, no trailing clauses (keeping\u2026/becoming\u2026/which\u2026/reducing\u2026), no forced poetic verbs (bad: \"crown authentication\"). Prefer strong plain words. Every line must read as a finished, confident thought.";
     try {
       var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 1500, temperature: 0.4, json: true });
       var j = csgenParse(out);
