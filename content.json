@@ -1131,6 +1131,26 @@
               }
             }
           }
+        },
+        "skim": {
+          "beats": [
+            {
+              "problem": "Security context was buried inside dense paragraphs, forcing users to read and interpret before they could act with confidence.",
+              "move": "Condensed identity, destination, and intent into a single glanceable Context Object surfaced at the top of every auth dialog.",
+              "outcome": "People understand what they are approving the moment the dialog opens, before they ever touch a credential."
+            },
+            {
+              "problem": "The Context Object became so prominent that users explored it instead of authenticating, pulling attention away from the primary task.",
+              "move": "Reframed the architecture so authentication remained the hero and the Context Object became a confidence signal, not a focal point.",
+              "outcome": "Users move through verification faster because the experience guides intent rather than inviting exploration."
+            },
+            {
+              "problem": "Authentication methods, account controls, and secondary actions were mixed inside a single undifferentiated menu with no grouping or ranking logic.",
+              "move": "Separated core authentication choices from secondary actions into a structured, reusable framework that scaled across Passkeys, UAC, Remote Desktop, and Store scenarios.",
+              "outcome": "The same clear architecture now serves every Windows trust moment without requiring a bespoke screen for each one."
+            }
+          ],
+          "generatedAt": 1786002520332
         }
       }
     },
