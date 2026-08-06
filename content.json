@@ -1135,22 +1135,22 @@
         "skim": {
           "beats": [
             {
-              "problem": "Security context was buried inside dense paragraphs, forcing users to read and interpret before they could act with confidence.",
-              "move": "Condensed identity, destination, and intent into a single glanceable Context Object surfaced at the top of every auth dialog.",
-              "outcome": "People understand what they are approving the moment the dialog opens, before they ever touch a credential."
+              "problem": "Context needed to authenticate was scattered across dense text, generic titles, and low-value security copy, forcing users to read and interpret before they could act with confidence.",
+              "move": "Condensed identity, destination, and intent into a single glanceable Context Object surfaced at the top of every authentication flow.",
+              "outcome": "Users understood what they were approving before touching a credential, removing hesitation from the moment of trust."
             },
             {
-              "problem": "The Context Object became so prominent that users explored it instead of authenticating, pulling attention away from the primary task.",
-              "move": "Reframed the architecture so authentication remained the hero and the Context Object became a confidence signal, not a focal point.",
-              "outcome": "Users move through verification faster because the experience guides intent rather than inviting exploration."
+              "problem": "The Context Object became so prominent during testing that users explored it before authenticating, pulling focus away from the primary job of verifying identity.",
+              "move": "Reframed the architecture so authentication remained the hero and the Context Object became a confidence signal, not a destination.",
+              "outcome": "People move through Passkeys, UAC, and Store purchase flows with less friction because the experience guides intent rather than competing with it."
             },
             {
-              "problem": "Authentication methods, account controls, and secondary actions were mixed inside a single undifferentiated menu with no grouping or ranking logic.",
-              "move": "Separated core authentication choices from secondary actions into a structured, reusable framework that scaled across Passkeys, UAC, Remote Desktop, and Store scenarios.",
-              "outcome": "The same clear architecture now serves every Windows trust moment without requiring a bespoke screen for each one."
+              "problem": "Authentication methods, account switching, and advanced options were mixed inside a single undifferentiated menu with no grouping or ranking logic.",
+              "move": "Separated core authentication choices from secondary controls into a structured, reusable CredUI architecture that scaled across every Windows trust scenario.",
+              "outcome": "The same framework now serves Passkeys, UAC, Remote Desktop, and Store without bespoke screens, giving Windows a consistent foundation for its passwordless future."
             }
           ],
-          "generatedAt": 1786002520332
+          "generatedAt": 1786003820018
         }
       }
     },
