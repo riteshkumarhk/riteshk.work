@@ -2519,7 +2519,7 @@ import { WORLD_LAND } from "./worldland.js";
     });
   }
   // ---------- AI-generated Skim: read the whole case, distil an impact-first, visual-forward highlight reel ----------
-  function skimGather(w) {
+  function skimGather(w, includeLocked) {
     var st = w.study || {}, media = [], seen = {};
     function add(src, caption) { if (src && typeof src === "string" && !seen[src] && media.length < 40) { seen[src] = 1; media.push({ src: src, caption: caption || "" }); } }
     function walk(node) { if (!node || typeof node !== "object") return; if (Array.isArray(node)) { node.forEach(walk); return; } if (typeof node.src === "string") add(node.src, node.caption); for (var k in node) { var v = node[k]; if (v && typeof v === "object") walk(v); } }
@@ -2536,7 +2536,8 @@ import { WORLD_LAND } from "./worldland.js";
     var meta = [st.role && ("Role " + st.role), st.team && ("Team " + st.team), (st.timeline || w.period) && ("Timeline " + (st.timeline || w.period)), st.scope && ("Scope " + st.scope)].filter(Boolean);
     if (meta.length) lines.push("META: " + meta.join(" \u00b7 "));
     arr(st.blocks).forEach(function (b) {
-      if (!b || b.locked) return;
+      if (!b || b.encStub) return;
+      if (b.locked && !includeLocked) return;
       walk(b);
       // media that lives on bare string fields (before/after + split images), not caught by walk()
       add(b.beforeSrc, sm(b.beforeLabel || b.heading || ""));
@@ -2560,23 +2561,75 @@ import { WORLD_LAND } from "./worldland.js";
     });
     return { text: lines.join("\n"), media: media };
   }
+  // Instance-only: deep-clone the work with locked sections decrypted (vault + .enc) so AI/vision can
+  // read the full project. Never persisted — the real draft stays locked. null = user cancelled/failed.
+  async function skimUnlockedClone(w) {
+    var clone;
+    try { clone = JSON.parse(JSON.stringify(w)); } catch (e) { return null; }
+    var st = clone.study; if (!st || !Array.isArray(st.blocks)) return clone;
+    var wrap = st.enc && st.enc.wraps && st.enc.wraps.owner;
+    var hasVault = st.blocks.some(function (b) { return b && b.locked && b.vaultBlock; });
+    if (hasVault && typeof adminSession === "function" && adminSession()) {
+      try {
+        for (var k = 0; k < st.blocks.length; k++) {
+          var bk = st.blocks[k];
+          if (bk && bk.locked && bk.vaultBlock) {
+            var url = await vaultSignedUrl(bk.vaultBlock);
+            if (url) { var full = await (await fetch(url)).json(); if (full && typeof full === "object") { full.locked = true; st.blocks[k] = full; } }
+          }
+        }
+      } catch (e) {}
+    }
+    if (wrap) {
+      var recovery = await ensureRecoveryPass();
+      if (recovery === null) return null;
+      var sek;
+      try { sek = await rkUnwrapSek(recovery, wrap); }
+      catch (e) { recoveryPassCache = null; status("That recovery passphrase didn’t unlock this project."); return null; }
+      try {
+        for (var m = 0; m < st.blocks.length; m++) { var bb = st.blocks[m]; if (bb && bb.encStub && bb.iv && bb.ct) { st.blocks[m] = await rkDecWithSek(sek, bb); await rkResolveEncToDataUri(st.blocks[m], sek); } }
+      } catch (e) {}
+    }
+    return clone;
+  }
   async function skimGenerate(i, btn) {
     var w = data.work[i];
     if (!w || !w.study) { status("Add some case-study sections first."); return; }
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { skimGenerate(i, btn); }); return; }
+    var srcW = w, includeLocked = false;
+    var lockedN = (w.study.blocks || []).filter(function (b) { return b && b.locked; }).length;
+    if (lockedN) {
+      includeLocked = await confirmModal({ title: "Include your locked sections?", sub: "Let the AI + vision read your " + lockedN + " locked section" + (lockedN > 1 ? "s" : "") + " so the key moves capture the full project. Used only for this run \u2014 nothing is saved unlocked. The moves may reference locked details, so review them before you publish.", cancel: "Public only", cta: "Include locked" });
+      if (includeLocked) { var uc = await skimUnlockedClone(w); if (uc) srcW = uc; else includeLocked = false; }
+    }
     var g;
-    try { g = skimGather(w); } catch (e) { status("Couldn\u2019t read this case study: " + ((e && e.message) || "error")); return; }
+    try { g = skimGather(srcW, includeLocked); } catch (e) { status("Couldn\u2019t read this case study: " + ((e && e.message) || "error")); return; }
     if (!g.text || g.text.length < 60) { status("Not enough case content to skim yet \u2014 add a few sections first."); return; }
     if (btn) { btn.disabled = true; btn.textContent = "Reading the case\u2026"; }
     status("Reading the case & finding the key moves\u2026");
-    var system = "You are a senior product-design portfolio editor. From a case study you extract the 2-3 decisions that show senior design judgement \u2014 the moves a hiring manager should remember. Write each as a crisp, confident, COMPLETE one-liner (a quotable headline), concrete and specific to THIS case \u2014 not a clipped telegram and not a vague abstraction. Use ONLY facts that appear in the case \u2014 never invent numbers. Return STRICT JSON only, no prose around it.";
-    var user = "CASE STUDY:\n" + g.text +
-      "\n\nExtract the 2-3 decisions that show senior design judgement, strongest-first. Return STRICT JSON only: {\"beats\":[{\"problem\":\"\",\"move\":\"\",\"outcome\":\"\"}]}." +
-      "\n\nEach field is a crisp, confident, COMPLETE one-liner \u2014 a quotable headline that stands on its own, concrete and specific to this case. Not a clipped telegram, not a vague abstraction." +
-      "\n- problem = the tension, \u22647 words.  good: \"Trust buried in dense dialog text\"" +
-      "\n- move = the decision, \u22646 words.  good: \"One glanceable context object\"" +
-      "\n- outcome = the payoff \u2014 name the real systems or scenarios it now serves, \u22648 words.  good: \"Scales across Passkeys, UAC and Store\"" +
-      "\n\nAVOID cryptic fragments that feel unfinished (bad: \"framework born\") and vague abstractions (bad: \"scalable architecture across all Windows auth\"). No full sentences, no trailing clauses (keeping\u2026/becoming\u2026/which\u2026/reducing\u2026), no forced poetic verbs (bad: \"crown authentication\"). Prefer strong plain words. Every line must read as a finished, confident thought.";
+    var cfg = aiCfg("txt");
+    // Optional vision grounding: let the model SEE the case screens so the moves stay concrete + accurate.
+    // Fully graceful - any failure (no vision model, CORS, error) falls back to text-only silently.
+    var visualNote = "";
+    try {
+      if (g.media && g.media.length && ((AI_VISION_MODEL[cfg.provider] || []).length || (cfg.provider === "custom" && cfg.model))) {
+        status("Looking at the case screens\u2026");
+        var enr = await visionEnrich(cfg, g.media.slice(0, 8));
+        var vseen = {}, vlines = [];
+        g.media.forEach(function (m) { var v = enr && enr[m.src]; if (v && v.ux && v.desc && !vseen[v.desc]) { vseen[v.desc] = 1; vlines.push("- " + v.desc + (m.caption ? " (" + m.caption + ")" : "")); } });
+        if (vlines.length) visualNote = "\n\nWHAT THE CASE SCREENS SHOW (seen by vision - use to keep the moves concrete and accurate):\n" + vlines.slice(0, 14).join("\n");
+      }
+    } catch (e) { visualNote = ""; }
+    status("Writing the key moves\u2026");
+    var system = "You are a senior product designer writing the 'Key Moves' summary for your own case study - the 2 or 3 decisions a hiring UX manager should remember. Voice: a confident senior designer telling their story - clear, precise, human, never robotic, never a to-do list. Each move has three parts, each with a specific grammar: problem = a COMPLETE, PAST-TENSE statement of the tension; move = what YOU DID, led by a strong PAST-TENSE verb (Condensed, Made, Turned, Introduced, Separated, Unified, Replaced, Reframed) and naming the specific thing you built; outcome = the HUMAN payoff in plain words - what people can now do, or the real systems it now serves. Use ONLY facts from the case; never invent numbers. Order the moves strongest-first so the three read as one clear narrative. Return STRICT JSON only, no prose.";
+    var user = "CASE STUDY:\n" + g.text + visualNote +
+      "\n\nWrite the 2-3 Key Moves for THIS case. Match the voice, grammar and rhythm of this gold-standard example EXACTLY (copy the STYLE, never the words):" +
+      "\n{\"beats\":[" +
+      "\n {\"problem\":\"Trust was buried in dense dialog text\",\"move\":\"Condensed identity, destination & intent into one Context Object\",\"outcome\":\"People see what they're approving before they authenticate\"}," +
+      "\n {\"problem\":\"A 'more choices' menu stole focus from the task\",\"move\":\"Made authentication the hero; controls stay secondary\",\"outcome\":\"Confidence first - auth remains the primary job\"}," +
+      "\n {\"problem\":\"Every scenario was a bespoke screen\",\"move\":\"Turned the pattern into one reusable framework\",\"outcome\":\"Scales across Passkeys, UAC, Remote Desktop & Store\"}" +
+      "\n]}" +
+      "\n\nRules: problem = a complete PAST-TENSE tension (e.g. 'Trust was buried...', 'Every scenario was...'). move = STARTS WITH A PAST-TENSE VERB (Condensed/Made/Turned/Introduced/Separated/Unified/Replaced/Reframed) naming the specific thing you built - NEVER an imperative command (not 'Demote', 'Separate', 'Condense'). outcome = the human payoff in plain confident words, naming the real systems or scenarios where they exist. Write moves true to THIS case - do not reuse the example's words. No cryptic fragments ('framework born'), no forced verbs ('crown'), no vague abstractions ('all Windows auth'). Return STRICT JSON {\"beats\":[{\"problem\":\"\",\"move\":\"\",\"outcome\":\"\"}]} only.";
     try {
       var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 1500, temperature: 0.4, json: true });
       var j = csgenParse(out);
