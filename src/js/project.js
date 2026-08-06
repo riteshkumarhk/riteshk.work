@@ -1018,13 +1018,14 @@
   }
   // ---- Overview stage: Steam-style big preview + thumbnail strip (cover + up to 6 media) ----
   function isGifM(m) { var u = mediaSrc(m); return !!(m && (m.kind === "gif" || /\.gif($|\?|#)/i.test(u) || /^data:image\/gif/i.test(u))); }
+  function isEncSrc(u) { return /^vault:/i.test(u || "") || /\.enc($|\?|#)/i.test(u || ""); }
   function stageSlides(w, st) {
     var slides = [];
     var cov = w.image || (st && st.cover);
     var covM = typeof cov === "string" ? (cov ? { src: cov } : null) : (cov && (cov.src || cov.image) ? cov : null);
-    if (covM && mediaSrc(covM)) slides.push(covM);
+    if (covM && mediaSrc(covM) && !isEncSrc(mediaSrc(covM))) slides.push(covM);
     var extra = (st.skim && Array.isArray(st.skim.media)) ? st.skim.media : [];
-    for (var k = 0; k < extra.length && slides.length < 7; k++) { if (extra[k] && mediaSrc(extra[k])) slides.push(extra[k]); }
+    for (var k = 0; k < extra.length && slides.length < 7; k++) { var es = extra[k] && mediaSrc(extra[k]); if (es && !isEncSrc(es)) slides.push(extra[k]); }
     return slides;
   }
   function stageSlideMedia(m) {
