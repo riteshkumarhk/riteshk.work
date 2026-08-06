@@ -1158,6 +1158,10 @@
         '<div class="pj__shell">' +
           '<aside class="pj__side">' +
             '<div class="pj__side-head" data-crumb></div>' +
+            '<div class="pj__viewseg" data-viewseg hidden>' +
+              '<button class="pj__viewseg-btn is-active" type="button" data-view="overview">Overview</button>' +
+              '<button class="pj__viewseg-btn" type="button" data-view="full">Full</button>' +
+            '</div>' +
             '<nav class="pj__toc" data-toc aria-label="Sections"></nav>' +
             '<button class="pj__side-back" data-pj="back"><span aria-hidden="true">←</span> All work</button>' +
           '</aside>' +
@@ -1274,6 +1278,12 @@
     }
     var goto = e.target.closest("[data-goto]");
     if (goto) { gotoSection(goto.getAttribute("data-goto")); return; }
+    var view = e.target.closest("[data-view]");
+    if (view) {
+      if (view.getAttribute("data-view") === "full") scrollToCase();
+      else { try { scroller.scrollTo({ top: 0, behavior: "smooth" }); } catch (e2) { scroller.scrollTop = 0; } }
+      return;
+    }
     var open = e.target.closest("[data-open]");
     if (open) { openProject(open.getAttribute("data-open"), { push: true }); return; }
     var act = e.target.closest("[data-pj]");
@@ -1577,6 +1587,13 @@
       contentEl.innerHTML = html;
     }
     contentEl.setAttribute("data-wid", String(w.id));
+    var seg = overlay.querySelector("[data-viewseg]");
+    if (seg) {
+      var hasOverview = !!contentEl.querySelector(".pj__moves");
+      var segBodyEl = contentEl.querySelector(".pj__body");
+      seg.hidden = !(hasOverview && segBodyEl && segBodyEl.children.length);
+      seg.querySelectorAll(".pj__viewseg-btn").forEach(function (b) { b.classList.toggle("is-active", b.getAttribute("data-view") === "overview"); });
+    }
     requestAnimationFrame(function () {
       updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); graphWire(contentEl); galleryNav(contentEl);
       resolveVaultMedia(contentEl); // swap vault placeholders for signed URLs (authorised viewers only)
@@ -1661,9 +1678,15 @@
   }
   function updateSpy() {
     if (!overlay || !overlay.classList.contains("is-open")) return;
+    var y = scroller.scrollTop + topOffset() + 14;
+    var seg = overlay.querySelector("[data-viewseg]");
+    if (seg && !seg.hidden) {
+      var segBody = overlay.querySelector(".pj__body");
+      var atFull = segBody ? (y >= segBody.offsetTop) : false;
+      seg.querySelectorAll(".pj__viewseg-btn").forEach(function (b) { b.classList.toggle("is-active", atFull ? b.getAttribute("data-view") === "full" : b.getAttribute("data-view") === "overview"); });
+    }
     var secs = [].slice.call(overlay.querySelectorAll("[data-nav]"));
     if (!secs.length) return;
-    var y = scroller.scrollTop + topOffset() + 14;
     var id;
     if (overlay.querySelector(".pj__toc-chip--intro") && y < secs[0].offsetTop) {
       id = "__intro";
