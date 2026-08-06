@@ -69,6 +69,9 @@ import { WORLD_LAND } from "./worldland.js";
   ];
   const AI_DEFAULT_MODEL = { openai: "gpt-image-1", gemini: "gemini-2.0-flash-preview-image-generation", anthropic: "claude-3-5-sonnet-latest", custom: "" };
   const AI_TEXT_MODEL = { openai: "gpt-4o", gemini: "gemini-2.0-flash", anthropic: "claude-3-5-sonnet-latest", custom: "" };
+  // Vision-capable models (cheap first) used to LOOK at case images and curate the skim reel.
+  const AI_VISION_MODEL = { openai: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"], gemini: ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"], anthropic: ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest", "claude-3-haiku-20240307"], custom: [] };
+  const visionCache = {}; // src -> { type, ux, desc } (session-only, never published)
   const AI_DEFAULT_BASE = { openai: "https://api.openai.com/v1", gemini: "https://generativelanguage.googleapis.com/v1beta", anthropic: "https://api.anthropic.com/v1", custom: "" };
   const AI_IMAGE_PROVIDERS = ["openai", "gemini", "custom"];
   // Ranked preferences (best first) used to auto-pick the strongest AVAILABLE model per provider.
@@ -2566,14 +2569,25 @@ import { WORLD_LAND } from "./worldland.js";
     if (!g.text || g.text.length < 60) { status("Not enough case content to skim yet \u2014 add a few sections first."); return; }
     if (btn) { btn.disabled = true; btn.textContent = "Reading the case\u2026"; }
     status("Reading the case & writing the skim\u2026");
-    var mediaList = g.media.map(function (m, k) { return k + ". " + m.src + (m.caption ? "  (" + m.caption + ")" : ""); }).join("\n") || "(none)";
+    var vision = {};
+    if (g.media.length) {
+      try { status("Looking at the visuals..."); vision = await visionEnrich(aiCfg("txt"), g.media); }
+      catch (e) { vision = {}; }
+    }
+    var BAD_VIS = { article: 1, logo: 1, decorative: 1 };
+    var mediaList = g.media.map(function (m, k) {
+      var v = vision[m.src];
+      var tag = v ? " [" + v.type + (v.ux ? "" : "/NOT-UX") + "]" : "";
+      var desc = (v && v.desc) || m.caption || "";
+      return k + ". " + m.src + tag + (desc ? "  - " + desc : "");
+    }).join("\n") || "(none)";
     var system = "You are a senior product-design portfolio editor. You write a fast \"skim\" of a case study for a time-pressed recruiter or hiring manager: impact-first, low-verbosity, concrete and specific. Use ONLY facts, outcomes and metrics that appear in the case \u2014 never invent numbers or media. Return STRICT JSON only, no prose around it.";
     var user = "CASE STUDY:\n" + g.text + "\n\nAVAILABLE MEDIA (copy src values EXACTLY):\n" + mediaList +
       "\n\nReturn JSON with these keys:\n" +
       "hook: ONE punchy sentence \u2014 the single most impressive thing about this work (impact + why it mattered). No preamble.\n" +
       "points: array of 3 to 4 objects {value,label} \u2014 the headline metrics/outcomes (value = the number or short phrase, label = 2-5 words).\n" +
       "beats: array of 2 to 3 objects {problem,move,outcome} \u2014 the decisions that show senior judgement. problem = the tension in 5-9 words; move = the decision you made, one line; outcome = the concrete result (a metric or a shift), short.\n" +
-      "visuals: array of 3 to 6 objects {src,caption} \u2014 the STRONGEST, most visual media, ordered to tell the story at a glance. src MUST be copied EXACTLY from AVAILABLE MEDIA. caption = a tight one-liner. Prefer real screens, before/afters and diagrams over decorative shots. If there is no media, return an empty array.";
+      "visuals: array of 3 to 6 objects {src,caption} \u2014 the STRONGEST design artifacts, ordered to tell the story at a glance. Each media line is tagged with its type from a vision pass; CHOOSE ONLY genuine product/UX visuals (ui, beforeafter, diagram, dataviz, flow) and NEVER choose anything tagged NOT-UX, article, logo or decorative. src MUST be copied EXACTLY from AVAILABLE MEDIA. caption = a tight one-liner on what the screen shows. If none qualify, return an empty array.";
     try {
       var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 1500, temperature: 0.4, json: true });
       var j = csgenParse(out);
@@ -2583,9 +2597,13 @@ import { WORLD_LAND } from "./worldland.js";
         hook: String(j.hook || j.summary || "").trim(),
         points: (Array.isArray(j.points) ? j.points : []).filter(function (p) { return p && (p.value || p.label); }).slice(0, 4).map(function (p) { return { value: String(p.value || ""), label: String(p.label || "") }; }),
         beats: (Array.isArray(j.beats) ? j.beats : []).filter(function (b) { return b && (b.problem || b.move || b.outcome); }).slice(0, 3).map(function (b) { return { problem: String(b.problem || "").trim(), move: String(b.move || "").trim(), outcome: String(b.outcome || "").trim() }; }),
-        visuals: (Array.isArray(j.visuals) ? j.visuals : []).filter(function (v) { return v && v.src && srcs[v.src]; }).slice(0, 8).map(function (v) { return { src: v.src, caption: String(v.caption || "").trim() }; }),
+        visuals: (Array.isArray(j.visuals) ? j.visuals : []).filter(function (v) { if (!v || !v.src || !srcs[v.src]) return false; var vi = vision[v.src]; return !(vi && (vi.ux === false || BAD_VIS[vi.type])); }).slice(0, 8).map(function (v) { return { src: v.src, caption: String(v.caption || (vision[v.src] && vision[v.src].desc) || "").trim() }; }),
         generatedAt: Date.now()
       };
+      if (!skim.visuals.length) {
+        var good = g.media.filter(function (m) { var vi = vision[m.src]; return vi && vi.ux !== false && !BAD_VIS[vi.type]; }).slice(0, 5);
+        skim.visuals = good.map(function (m) { return { src: m.src, caption: (vision[m.src] && vision[m.src].desc) || m.caption || "" }; });
+      }
       w.study.skim = skim;
       saveDraft(true);
       if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate skim with AI"; }
@@ -6888,6 +6906,97 @@ import { WORLD_LAND } from "./worldland.js";
     j = await res.json().catch(function () { return null; });
     if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
     return { ok: true, text: ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim() };
+  }
+  // ---- Vision: actually LOOK at case images so the reel features real UI/design, not press screenshots ----
+  async function imgToVisionPart(src) {
+    try {
+      var uri = src;
+      if (!/^data:/.test(src)) {
+        var blob = await (await fetch(src)).blob();
+        uri = await new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res(String(fr.result)); }; fr.onerror = rej; fr.readAsDataURL(blob); });
+      }
+      var small = await compressDataUri(uri, 512, 0.6); // downscale: classification doesn't need full res
+      var parts = await dataUriParts(small);
+      if (!parts.b64 || /svg/i.test(parts.mime)) return null;
+      return { src: src, mime: parts.mime || "image/jpeg", b64: parts.b64 };
+    } catch (e) { return null; }
+  }
+  async function aiVisionOnce(cfg, model, system, prompt, imgs) {
+    var p = cfg.provider, key = cfg.key, base = cfg.base, res, j;
+    if (p === "anthropic") {
+      var content = [{ type: "text", text: prompt }];
+      imgs.forEach(function (im) { content.push({ type: "image", source: { type: "base64", media_type: im.mime, data: im.b64 } }); });
+      res = await fetch(base + "/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: model, max_tokens: 2000, system: system, messages: [{ role: "user", content: content }] }) });
+      j = await res.json().catch(function () { return null; });
+      if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
+      return { ok: true, text: (((j && j.content) || []).map(function (b) { return b.text || ""; }).join("")).trim() };
+    }
+    if (p === "gemini") {
+      var parts = [{ text: prompt }];
+      imgs.forEach(function (im) { parts.push({ inline_data: { mime_type: im.mime, data: im.b64 } }); });
+      var gurl = base + "/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key);
+      var gb = { contents: [{ role: "user", parts: parts }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { responseMimeType: "application/json", maxOutputTokens: 2200 } };
+      res = await fetch(gurl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(gb) });
+      j = await res.json().catch(function () { return null; });
+      if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
+      var cand = (j && j.candidates && j.candidates[0]) || {};
+      return { ok: true, text: (((cand.content && cand.content.parts) || []).map(function (x) { return x.text || ""; }).join("")).trim() };
+    }
+    var msgs = [{ role: "system", content: system }, { role: "user", content: [{ type: "text", text: prompt }].concat(imgs.map(function (im) { return { type: "image_url", image_url: { url: "data:" + im.mime + ";base64," + im.b64 } }; })) }];
+    var ob = { model: model, messages: msgs, max_tokens: 2200, temperature: 0, response_format: { type: "json_object" } };
+    res = await fetch(base + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify(ob) });
+    j = await res.json().catch(function () { return null; });
+    if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
+    return { ok: true, text: ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim() };
+  }
+  async function visionModels(cfg) {
+    if (cfg.provider === "custom") return cfg.model ? [cfg.model] : [];
+    var want = AI_VISION_MODEL[cfg.provider] || [];
+    var ids = await aiListModels(cfg), out = [];
+    if (ids && ids.length) {
+      want.forEach(function (m) { if (ids.indexOf(m) !== -1 && out.indexOf(m) === -1) out.push(m); });
+      ids.forEach(function (id) { if (out.indexOf(id) === -1 && /gpt-4o|gpt-4\.1|gemini.*(flash|pro)|claude-3|sonnet|haiku|vision/i.test(id) && !/audio|realtime|embed|tts|whisper|image|dall|imagen/i.test(id)) out.push(id); });
+    }
+    want.forEach(function (m) { if (out.indexOf(m) === -1) out.push(m); });
+    return out;
+  }
+  var VISION_SYS = "You are a meticulous design-portfolio image classifier with vision. Judge whether each image is a real product/UX artifact worth featuring in a case-study reel, or filler like a press screenshot or logo. Return STRICT JSON only.";
+  function visionPrompt(n) {
+    return "You are given " + n + " image(s), indexed 0 to " + (n - 1) + " in the order provided. Look at each and return STRICT JSON: {\"items\":[{\"i\":<index>,\"type\":\"<ui|beforeafter|diagram|dataviz|flow|photo|article|logo|decorative|other>\",\"ux\":<true|false>,\"desc\":\"<= 8 words on what it shows\"}]}. Set ux=true ONLY for genuine product/UX design artifacts: real interface screens, mockups, wireframes, user flows, before/after UI comparisons, annotated product screens, design systems or data-viz from the work. Set ux=false for news / blog / press screenshots, marketing or landing pages, logos, headshots, stock photos and decorative gradients.";
+  }
+  async function visionEnrich(cfg, media) {
+    var out = {}, cand = [];
+    media.forEach(function (m) { if (m && m.src && cand.indexOf(m.src) === -1 && !/\.(mp4|webm|mov|ogg)(\?|$)/i.test(m.src) && !/^data:image\/svg/i.test(m.src) && !/\.svg(\?|$)/i.test(m.src)) cand.push(m.src); });
+    cand = cand.slice(0, 24);
+    var todo = cand.filter(function (s) { return !visionCache[s]; });
+    if (todo.length) {
+      var models = await visionModels(cfg); if (!models.length) models = [cfg.model].filter(Boolean);
+      if (!models.length) throw new Error("no vision model available");
+      var BATCH = 5, model = null;
+      for (var b = 0; b < todo.length; b += BATCH) {
+        var batch = todo.slice(b, b + BATCH);
+        status("Looking at the visuals... " + Math.min(b + batch.length, todo.length) + "/" + todo.length);
+        var imgs = [];
+        for (var k = 0; k < batch.length; k++) { var part = await imgToVisionPart(batch[k]); if (part) imgs.push(part); }
+        if (!imgs.length) continue;
+        var r = model ? await aiVisionOnce(cfg, model, VISION_SYS, visionPrompt(imgs.length), imgs) : null;
+        if (!model || (r && !r.ok && aiIsModelErr(r))) {
+          for (var mi = 0; mi < models.length; mi++) {
+            if (models[mi] === model) continue;
+            var rr = await aiVisionOnce(cfg, models[mi], VISION_SYS, visionPrompt(imgs.length), imgs);
+            r = rr; if (rr.ok) { model = models[mi]; break; }
+            if (!aiIsModelErr(rr)) break;
+          }
+        }
+        if (!r || !r.ok) throw new Error((r && r.err) || "vision unavailable");
+        var j = csgenParse(r.text);
+        var items = (j && (j.items || j.results)) || (Array.isArray(j) ? j : []);
+        (items || []).forEach(function (it) { var idx = +it.i; if (idx >= 0 && idx < imgs.length) visionCache[imgs[idx].src] = { type: String(it.type || "other").toLowerCase(), ux: it.ux !== false && it.ux !== "false" && it.ux !== 0, desc: String(it.desc || "").trim() }; });
+        imgs.forEach(function (im) { if (!visionCache[im.src]) visionCache[im.src] = { type: "other", ux: true, desc: "" }; });
+      }
+    }
+    cand.forEach(function (s) { if (visionCache[s]) out[s] = visionCache[s]; });
+    return out;
   }
   async function aiText(cfg, system, user, opts) {
     opts = opts || {};
