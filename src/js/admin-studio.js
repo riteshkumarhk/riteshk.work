@@ -2568,48 +2568,23 @@ import { WORLD_LAND } from "./worldland.js";
     try { g = skimGather(w); } catch (e) { status("Couldn\u2019t read this case study: " + ((e && e.message) || "error")); return; }
     if (!g.text || g.text.length < 60) { status("Not enough case content to skim yet \u2014 add a few sections first."); return; }
     if (btn) { btn.disabled = true; btn.textContent = "Reading the case\u2026"; }
-    status("Reading the case & writing the skim\u2026");
-    var vision = {};
-    if (g.media.length) {
-      try { status("Looking at the visuals..."); vision = await visionEnrich(aiCfg("txt"), g.media); }
-      catch (e) { vision = {}; }
-    }
-    var BAD_VIS = { article: 1, logo: 1, decorative: 1 };
-    var mediaList = g.media.map(function (m, k) {
-      var v = vision[m.src];
-      var tag = v ? " [" + v.type + (v.ux ? "" : "/NOT-UX") + "]" : "";
-      var desc = (v && v.desc) || m.caption || "";
-      return k + ". " + m.src + tag + (desc ? "  - " + desc : "");
-    }).join("\n") || "(none)";
-    var system = "You are a senior product-design portfolio editor. You write a fast \"skim\" of a case study for a time-pressed recruiter or hiring manager: impact-first, low-verbosity, concrete and specific. Use ONLY facts, outcomes and metrics that appear in the case \u2014 never invent numbers or media. Return STRICT JSON only, no prose around it.";
-    var user = "CASE STUDY:\n" + g.text + "\n\nAVAILABLE MEDIA (copy src values EXACTLY):\n" + mediaList +
-      "\n\nReturn JSON with these keys:\n" +
-      "hook: ONE punchy sentence \u2014 the single most impressive thing about this work (impact + why it mattered). No preamble.\n" +
-      "points: array of 3 to 4 objects {value,label} \u2014 the headline metrics/outcomes (value = the number or short phrase, label = 2-5 words).\n" +
-      "beats: array of 2 to 3 objects {problem,move,outcome} \u2014 the decisions that show senior judgement. problem = the tension in 5-9 words; move = the decision you made, one line; outcome = the concrete result (a metric or a shift), short.\n" +
-      "visuals: array of 3 to 6 objects {src,caption} \u2014 the STRONGEST design artifacts, ordered to tell the story at a glance. Each media line is tagged with its type from a vision pass; CHOOSE ONLY genuine product/UX visuals (ui, beforeafter, diagram, dataviz, flow) and NEVER choose anything tagged NOT-UX, article, logo or decorative. src MUST be copied EXACTLY from AVAILABLE MEDIA. caption = a tight one-liner on what the screen shows. If none qualify, return an empty array.";
+    status("Reading the case & finding the key moves\u2026");
+    var system = "You are a senior product-design portfolio editor. From a case study you extract the 2-3 decisions that show senior design judgement \u2014 the moves a hiring manager should remember. Use ONLY facts and outcomes that appear in the case \u2014 never invent numbers. Return STRICT JSON only, no prose around it.";
+    var user = "CASE STUDY:\n" + g.text +
+      "\n\nReturn JSON {\"beats\":[{\"problem\":\"\",\"move\":\"\",\"outcome\":\"\"}]} \u2014 an array of 2 to 3 objects: the key moves that show senior design judgement. problem = the tension in 5-9 words; move = the decision you made, one sharp line; outcome = the concrete result (a metric or a real shift), short. Order them strongest-first.";
     try {
       var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 1500, temperature: 0.4, json: true });
       var j = csgenParse(out);
-      if (!j || typeof j !== "object") { status("The AI didn\u2019t return usable skim JSON \u2014 try again."); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate skim with AI"; } return; }
-      var srcs = {}; g.media.forEach(function (m) { srcs[m.src] = 1; });
-      var skim = {
-        hook: String(j.hook || j.summary || "").trim(),
-        points: (Array.isArray(j.points) ? j.points : []).filter(function (p) { return p && (p.value || p.label); }).slice(0, 4).map(function (p) { return { value: String(p.value || ""), label: String(p.label || "") }; }),
-        beats: (Array.isArray(j.beats) ? j.beats : []).filter(function (b) { return b && (b.problem || b.move || b.outcome); }).slice(0, 3).map(function (b) { return { problem: String(b.problem || "").trim(), move: String(b.move || "").trim(), outcome: String(b.outcome || "").trim() }; }),
-        visuals: (Array.isArray(j.visuals) ? j.visuals : []).filter(function (v) { if (!v || !v.src || !srcs[v.src]) return false; var vi = vision[v.src]; return !(vi && (vi.ux === false || BAD_VIS[vi.type])); }).slice(0, 8).map(function (v) { return { src: v.src, caption: String(v.caption || (vision[v.src] && vision[v.src].desc) || "").trim() }; }),
-        generatedAt: Date.now()
-      };
-      if (!skim.visuals.length) {
-        var good = g.media.filter(function (m) { var vi = vision[m.src]; return vi && vi.ux !== false && !BAD_VIS[vi.type]; }).slice(0, 5);
-        skim.visuals = good.map(function (m) { return { src: m.src, caption: (vision[m.src] && vision[m.src].desc) || m.caption || "" }; });
-      }
-      w.study.skim = skim;
+      var beats = (j && Array.isArray(j.beats) ? j.beats : []).filter(function (b) { return b && (b.problem || b.move || b.outcome); }).slice(0, 3).map(function (b) { return { problem: String(b.problem || "").trim(), move: String(b.move || "").trim(), outcome: String(b.outcome || "").trim() }; });
+      if (!beats.length) { status("The AI didn\u2019t return usable key moves \u2014 try again."); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate Key Moves"; } return; }
+      w.study.skim = w.study.skim || {};
+      w.study.skim.beats = beats;
+      w.study.skim.generatedAt = Date.now();
       saveDraft(true);
-      if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate skim with AI"; }
-      status("Skim generated \u2014 " + skim.points.length + " numbers, " + skim.beats.length + " moves, " + skim.visuals.length + " visuals. Preview \u2192 Skim.", true);
+      if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate Key Moves"; }
+      status("Key moves generated \u2014 " + beats.length + " card" + (beats.length > 1 ? "s" : "") + ". They show at the top of the case.", true);
       if (openStudy === i) renderL2();
-    } catch (e) { status("Skim generation failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate skim with AI"; } }
+    } catch (e) { status("Key moves generation failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate Key Moves"; } }
   }
   function studyEditor(w, i) {
     var st = w.study;
@@ -2625,17 +2600,11 @@ import { WORLD_LAND } from "./worldland.js";
       smeta(i, "tagline", "Tagline", "one line under the title") +
       '<div class="af__row">' + smeta(i, "role", "Role") + smeta(i, "timeline", "Timeline", "Optional \u2014 leave blank to reuse the Period shown on the home card.", w.period || "") + "</div>" +
       '<div class="af__row">' + smeta(i, "team", "Team") + smeta(i, "scope", "Scope") + "</div>" +
-      '<div class="af"><label class="af__label">Skim view \u2014 AI highlight reel</label>' +
-      '<div class="adm__autobar"><button class="btn btn--auto" data-act="skim-gen" data-index="' + i + '">\u2728 Generate skim with AI</button>' +
-      '<span class="adm__auto-note">Reads the whole case \u2014 writes a one-line hook, the key numbers and 2-3 decision beats &amp; picks the strongest visuals to feature. Saved &amp; shown in <b>Skim</b> view.</span></div>' +
-      (st.skim && st.skim.generatedAt ? '<div class="af__hint">Last generated ' + new Date(st.skim.generatedAt).toLocaleDateString() + ' \u00b7 ' + ((st.skim.beats || []).length) + ' moves \u00b7 ' + ((st.skim.visuals || []).length) + ' visuals</div>' : "") +
+      '<div class="af"><label class="af__label">Key moves \u2014 AI-generated</label>' +
+      '<div class="adm__autobar"><button class="btn btn--auto" data-act="skim-gen" data-index="' + i + '">\u2728 Generate Key Moves</button>' +
+      '<span class="adm__auto-note">Reads the whole case and writes the 2\u20133 decisions that show senior judgement (problem \u2192 move \u2192 outcome). They appear as cards at the top of the case study, above <b>Read the full case</b>.</span></div>' +
+      (st.skim && st.skim.beats && st.skim.beats.length ? '<div class="af__hint">' + st.skim.beats.length + ' move' + (st.skim.beats.length > 1 ? "s" : "") + (st.skim.generatedAt ? ' \u00b7 generated ' + new Date(st.skim.generatedAt).toLocaleDateString() : "") + '</div>' : "") +
       "</div>" +
-      '<div class="af"><label class="af__label">Skim hook (optional)</label>' +
-      '<textarea rows="3" data-study="' + i + '" data-sfield="skim" placeholder="The 30-second version \u2014 one or two punchy lines.">' + escHtml((st.skim && (st.skim.hook || st.skim.summary)) || "") + "</textarea>" +
-      '<div class="af__hint">Shown in <b>Skim</b> view. Auto-filled by Generate; edit freely. Blank = auto-uses the tagline.</div></div>' +
-      '<div class="af"><label class="af__label">Skim numbers (optional)</label>' +
-      '<textarea rows="3" data-study="' + i + '" data-sfield="skimpts" placeholder="One per line \u2014 value | label\n175K+ | passkeys in 10 days">' + escHtml(((st.skim && st.skim.points) || []).map(function (p) { return (p.value || "") + " | " + (p.label || ""); }).join("\n")) + "</textarea>" +
-      '<div class="af__hint">Up to 4, shown as big numbers in Skim. Format <b>value | label</b> per line. Decision beats and visuals come from Generate.</div></div>' +
       "</section>";
     var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
     var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
