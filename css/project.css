@@ -727,22 +727,28 @@ html.lite .pjb { animation: none; }
 
 .pj__body--skim { max-width: 820px; padding-top: clamp(1rem, 3vw, 2.4rem); }
 .pj__skim-tag { font-family: var(--mono); font-size: .7rem; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin: 0 0 1.5rem; }
-.pj__skim-sum { font-family: var(--serif); font-weight: 300; font-size: clamp(1.4rem, 3.2vw, 2.1rem); line-height: 1.34; letter-spacing: -.01em; color: var(--text); margin: 0 0 2.4rem; }
-.pj__skim-sum strong { font-weight: 500; }
-.pj__skim-sum strong.accent, .pj__skim-sum em { color: var(--accent); font-style: normal; }
-.pj__skim-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 1.4rem; margin: 0 0 2.6rem; padding: 1.9rem 0 0; border-top: 1px solid var(--line); }
+/* Skim hook — one punchy line under the title (not a paragraph) */
+.pj__skim-hook strong { font-weight: 500; }
+.pj__skim-hook em, .pj__skim-hook strong.accent { color: var(--accent); font-style: normal; }
+.pj__skim-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 1.4rem; margin: 0 0 2.8rem; padding: 1.9rem 0 0; border-top: 1px solid var(--line); }
 .pj__skim-metric dt { font-family: var(--serif); font-weight: 300; font-size: clamp(1.7rem, 4.2vw, 2.7rem); line-height: 1; letter-spacing: -.02em; color: var(--accent); }
 .pj__skim-metric dd { margin: .55rem 0 0; font-family: var(--mono); font-size: .72rem; letter-spacing: .03em; line-height: 1.45; color: var(--text-dim); }
-/* Skim takeaways — a few sharp one-liners */
-.pj__skim-takeaways { list-style: none; margin: 0 0 2.8rem; padding: 0; display: flex; flex-direction: column; gap: 1.05rem; }
-.pj__skim-takeaways li { position: relative; padding-left: 1.5rem; font-size: clamp(1.02rem, 2vw, 1.16rem); line-height: 1.5; color: var(--text); }
-.pj__skim-tk-i { position: absolute; left: 0; top: .66em; width: .8rem; height: 2px; background: var(--accent); }
-.pj__skim-takeaways strong { font-weight: 500; }
-.pj__skim-takeaways em, .pj__skim-takeaways strong.accent { color: var(--accent); font-style: normal; }
-/* Skim visual reel — the strongest media, one after another (AI-curated) */
-.pj__skim-reel { display: flex; flex-direction: column; gap: clamp(1.3rem, 3vw, 2.2rem); margin: 0 0 2.8rem; }
-.pj__skim-shot { margin: 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--line-soft); background: var(--bg-2); }
+/* Skim visual reel — the star: the strongest media, one after another (AI-curated) */
+.pj__skim-reel { display: flex; flex-direction: column; gap: clamp(1.4rem, 3.2vw, 2.4rem); margin: 0 0 3rem; }
+.pj__skim-shot { margin: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--line-soft); background: var(--bg-2); box-shadow: 0 18px 44px -30px rgba(0,0,0,.9); }
 .pj__skim-shot .pjb__media-el { display: block; width: 100%; height: auto; }
-.pj__skim-cap { font-family: var(--mono); font-size: .68rem; letter-spacing: .03em; color: var(--text-dim); padding: .7rem .9rem .85rem; line-height: 1.5; }
+.pj__skim-cap { font-family: var(--mono); font-size: .68rem; letter-spacing: .03em; color: var(--text-dim); padding: .75rem .95rem .9rem; line-height: 1.5; }
+/* Skim key moves — problem → move → outcome, the seniority signal */
+.pj__skim-moves { margin: 0 0 2.8rem; }
+.pj__skim-moves-h { font-family: var(--mono); font-size: .7rem; letter-spacing: .16em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 1.2rem; }
+.pj__skim-beats { list-style: none; margin: 0; padding: 0; counter-reset: beat; display: flex; flex-direction: column; gap: 1rem; }
+.pj__skim-beat { counter-increment: beat; position: relative; padding: 1.2rem 1.35rem 1.25rem 3.2rem; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--bg-2); }
+.pj__skim-beat::before { content: counter(beat, decimal-leading-zero); position: absolute; left: 1.3rem; top: 1.35rem; font-family: var(--mono); font-size: .72rem; letter-spacing: .04em; color: var(--accent); }
+.pj__skim-beat-p { font-family: var(--mono); font-size: .64rem; letter-spacing: .13em; text-transform: uppercase; color: var(--text-faint); margin: 0 0 .45rem; }
+.pj__skim-beat-m { font-family: var(--serif); font-weight: 300; font-size: clamp(1.12rem, 2.4vw, 1.42rem); line-height: 1.36; letter-spacing: -.01em; color: var(--text); }
+.pj__skim-beat-m strong { font-weight: 500; }
+.pj__skim-beat-m em, .pj__skim-beat-m strong.accent { color: var(--accent); font-style: normal; }
+.pj__skim-beat-o { margin: .6rem 0 0; font-size: .92rem; line-height: 1.5; color: var(--accent); }
+.pj__skim-beat-o strong { font-weight: 600; }
 .pj__skim-more { margin-top: .4rem; }
 @media (max-width: 620px) { .pj__skim-metrics { grid-template-columns: 1fr 1fr; gap: 1.1rem; } }

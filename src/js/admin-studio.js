@@ -2570,26 +2570,26 @@ import { WORLD_LAND } from "./worldland.js";
     var system = "You are a senior product-design portfolio editor. You write a fast \"skim\" of a case study for a time-pressed recruiter or hiring manager: impact-first, low-verbosity, concrete and specific. Use ONLY facts, outcomes and metrics that appear in the case \u2014 never invent numbers or media. Return STRICT JSON only, no prose around it.";
     var user = "CASE STUDY:\n" + g.text + "\n\nAVAILABLE MEDIA (copy src values EXACTLY):\n" + mediaList +
       "\n\nReturn JSON with these keys:\n" +
-      "summary: one or two punchy sentences \u2014 the what, why and impact.\n" +
-      "points: array of 3 to 4 objects {value,label} \u2014 the headline metrics/outcomes from the case (value = the number or short phrase, label = 2-5 words).\n" +
-      "takeaways: array of 2 to 3 sharp one-line design or strategy takeaways.\n" +
-      "visuals: array of 2 to 5 objects {src,caption} \u2014 the STRONGEST media, ordered to follow the narrative. src MUST be copied exactly from AVAILABLE MEDIA. caption = a tight one-liner. If there is no media, return an empty array.";
+      "hook: ONE punchy sentence \u2014 the single most impressive thing about this work (impact + why it mattered). No preamble.\n" +
+      "points: array of 3 to 4 objects {value,label} \u2014 the headline metrics/outcomes (value = the number or short phrase, label = 2-5 words).\n" +
+      "beats: array of 2 to 3 objects {problem,move,outcome} \u2014 the decisions that show senior judgement. problem = the tension in 5-9 words; move = the decision you made, one line; outcome = the concrete result (a metric or a shift), short.\n" +
+      "visuals: array of 3 to 6 objects {src,caption} \u2014 the STRONGEST, most visual media, ordered to tell the story at a glance. src MUST be copied EXACTLY from AVAILABLE MEDIA. caption = a tight one-liner. Prefer real screens, before/afters and diagrams over decorative shots. If there is no media, return an empty array.";
     try {
-      var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 1200, temperature: 0.4, json: true });
+      var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 1500, temperature: 0.4, json: true });
       var j = csgenParse(out);
       if (!j || typeof j !== "object") { status("The AI didn\u2019t return usable skim JSON \u2014 try again."); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate skim with AI"; } return; }
       var srcs = {}; g.media.forEach(function (m) { srcs[m.src] = 1; });
       var skim = {
-        summary: String(j.summary || "").trim(),
+        hook: String(j.hook || j.summary || "").trim(),
         points: (Array.isArray(j.points) ? j.points : []).filter(function (p) { return p && (p.value || p.label); }).slice(0, 4).map(function (p) { return { value: String(p.value || ""), label: String(p.label || "") }; }),
-        takeaways: (Array.isArray(j.takeaways) ? j.takeaways : []).filter(function (t) { return t && String(t).trim(); }).slice(0, 4).map(function (t) { return String(t).trim(); }),
-        visuals: (Array.isArray(j.visuals) ? j.visuals : []).filter(function (v) { return v && v.src && srcs[v.src]; }).slice(0, 6).map(function (v) { return { src: v.src, caption: String(v.caption || "").trim() }; }),
+        beats: (Array.isArray(j.beats) ? j.beats : []).filter(function (b) { return b && (b.problem || b.move || b.outcome); }).slice(0, 3).map(function (b) { return { problem: String(b.problem || "").trim(), move: String(b.move || "").trim(), outcome: String(b.outcome || "").trim() }; }),
+        visuals: (Array.isArray(j.visuals) ? j.visuals : []).filter(function (v) { return v && v.src && srcs[v.src]; }).slice(0, 8).map(function (v) { return { src: v.src, caption: String(v.caption || "").trim() }; }),
         generatedAt: Date.now()
       };
       w.study.skim = skim;
       saveDraft(true);
       if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate skim with AI"; }
-      status("Skim generated \u2014 " + skim.points.length + " metrics, " + skim.takeaways.length + " takeaways, " + skim.visuals.length + " visuals. Preview \u2192 Skim.", true);
+      status("Skim generated \u2014 " + skim.points.length + " numbers, " + skim.beats.length + " moves, " + skim.visuals.length + " visuals. Preview \u2192 Skim.", true);
       if (openStudy === i) renderL2();
     } catch (e) { status("Skim generation failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate skim with AI"; } }
   }
@@ -2609,15 +2609,15 @@ import { WORLD_LAND } from "./worldland.js";
       '<div class="af__row">' + smeta(i, "team", "Team") + smeta(i, "scope", "Scope") + "</div>" +
       '<div class="af"><label class="af__label">Skim view \u2014 AI highlight reel</label>' +
       '<div class="adm__autobar"><button class="btn btn--auto" data-act="skim-gen" data-index="' + i + '">\u2728 Generate skim with AI</button>' +
-      '<span class="adm__auto-note">Reads the whole case \u2014 writes an impact-first summary, key metrics, takeaways &amp; picks the strongest visuals to feature. Saved &amp; shown in <b>Skim</b> view.</span></div>' +
-      (st.skim && st.skim.generatedAt ? '<div class="af__hint">Last generated ' + new Date(st.skim.generatedAt).toLocaleDateString() + ' \u00b7 ' + ((st.skim.takeaways || []).length) + ' takeaways \u00b7 ' + ((st.skim.visuals || []).length) + ' visuals</div>' : "") +
+      '<span class="adm__auto-note">Reads the whole case \u2014 writes a one-line hook, the key numbers and 2-3 decision beats &amp; picks the strongest visuals to feature. Saved &amp; shown in <b>Skim</b> view.</span></div>' +
+      (st.skim && st.skim.generatedAt ? '<div class="af__hint">Last generated ' + new Date(st.skim.generatedAt).toLocaleDateString() + ' \u00b7 ' + ((st.skim.beats || []).length) + ' moves \u00b7 ' + ((st.skim.visuals || []).length) + ' visuals</div>' : "") +
       "</div>" +
-      '<div class="af"><label class="af__label">Skim summary (optional)</label>' +
-      '<textarea rows="3" data-study="' + i + '" data-sfield="skim" placeholder="The 30-second version \u2014 one or two punchy lines.">' + escHtml((st.skim && st.skim.summary) || "") + "</textarea>" +
+      '<div class="af"><label class="af__label">Skim hook (optional)</label>' +
+      '<textarea rows="3" data-study="' + i + '" data-sfield="skim" placeholder="The 30-second version \u2014 one or two punchy lines.">' + escHtml((st.skim && (st.skim.hook || st.skim.summary)) || "") + "</textarea>" +
       '<div class="af__hint">Shown in <b>Skim</b> view. Auto-filled by Generate; edit freely. Blank = auto-uses the tagline.</div></div>' +
-      '<div class="af"><label class="af__label">Skim metrics (optional)</label>' +
+      '<div class="af"><label class="af__label">Skim numbers (optional)</label>' +
       '<textarea rows="3" data-study="' + i + '" data-sfield="skimpts" placeholder="One per line \u2014 value | label\n175K+ | passkeys in 10 days">' + escHtml(((st.skim && st.skim.points) || []).map(function (p) { return (p.value || "") + " | " + (p.label || ""); }).join("\n")) + "</textarea>" +
-      '<div class="af__hint">Up to 3, shown as big numbers in Skim. Format <b>value | label</b> per line.</div></div>' +
+      '<div class="af__hint">Up to 4, shown as big numbers in Skim. Format <b>value | label</b> per line. Decision beats and visuals come from Generate.</div></div>' +
       "</section>";
     var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
     var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
@@ -2658,12 +2658,15 @@ import { WORLD_LAND } from "./worldland.js";
     var i = +t.dataset.study; var w = data.work[i]; if (!w || !w.study) return;
     var f = t.dataset.sfield;
     if (f === "unlock") { studyUnlockPlain[w.id] = t.value; setStudyUnlock(w.study, t.value); return; }
-    if (f === "skim") { w.study.skim = w.study.skim || {}; w.study.skim.summary = t.value; if (!t.value.trim() && (!w.study.skim.points || !w.study.skim.points.length)) delete w.study.skim; saveDraft(); refreshL2Preview(); return; }
-    if (f === "skimpts") {
-      var pts = t.value.split(/\r?\n/).map(function (ln) { var pp = ln.split("|"); return { value: (pp[0] || "").trim(), label: (pp[1] || "").trim() }; }).filter(function (p) { return p.value || p.label; }).slice(0, 3);
-      w.study.skim = w.study.skim || {};
-      if (pts.length) w.study.skim.points = pts; else delete w.study.skim.points;
-      if (!((w.study.skim.summary || "").trim()) && !(w.study.skim.points && w.study.skim.points.length)) delete w.study.skim;
+    if (f === "skim" || f === "skimpts") {
+      var sk = w.study.skim = w.study.skim || {};
+      if (f === "skim") { if (t.value.trim()) sk.hook = t.value; else delete sk.hook; delete sk.summary; }
+      else {
+        var pts = t.value.split(/\r?\n/).map(function (ln) { var pp = ln.split("|"); return { value: (pp[0] || "").trim(), label: (pp[1] || "").trim() }; }).filter(function (p) { return p.value || p.label; }).slice(0, 4);
+        if (pts.length) sk.points = pts; else delete sk.points;
+      }
+      var empty = !((sk.hook || "").trim()) && !(sk.points && sk.points.length) && !(sk.beats && sk.beats.length) && !(sk.visuals && sk.visuals.length) && !sk.generatedAt;
+      if (empty) delete w.study.skim;
       saveDraft(); refreshL2Preview(); return;
     }
     // Timeline is a year range — auto-swap any typed hyphen for the site's em dash

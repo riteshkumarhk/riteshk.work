@@ -991,23 +991,43 @@
       '<div class="pj__foot-cards">' + card(prevW, "prev") + card(nextW, "next") + "</div>" +
       '<button class="pj__btn pj__btn--ghost pj__foot-back" data-pj="back">← All work</button></footer>';
   }
+  function skimReelFallback(st) {
+    var out = [], seen = {};
+    var strip = function (s) { return String(s == null ? "" : s).replace(/<[^>]+>/g, " ").replace(/\[\[|\]\]|\*\*|\*/g, "").replace(/\s+/g, " ").trim(); };
+    var push = function (src, cap) { if (src && typeof src === "string" && !seen[src] && out.length < 4) { seen[src] = 1; out.push({ src: src, caption: strip(cap) }); } };
+    var cov = st.cover && typeof st.cover === "object" ? st.cover.src : st.cover;
+    push(cov, "");
+    (st.blocks || []).forEach(function (b) {
+      if (!b || b.locked || out.length >= 4) return;
+      if (typeof b.src === "string") push(b.src, b.heading || b.caption);
+      push(b.beforeSrc, b.beforeLabel); push(b.afterSrc, b.afterLabel);
+      push(b.leftImg, b.leftLabel); push(b.rightImg, b.rightLabel);
+      (b.items || []).forEach(function (m) { if (m && m.src) push(m.src, m.caption); });
+    });
+    return out;
+  }
   function skimData(w) {
     var st = w.study || {};
     var sk = st.skim || {};
-    var summary = (sk.summary && String(sk.summary).trim()) || "";
+    var hook = (sk.hook && String(sk.hook).trim()) || (sk.summary && String(sk.summary).trim()) || "";
     var points = Array.isArray(sk.points) ? sk.points.filter(function (p) { return p && (p.value || p.label); }) : [];
-    var takeaways = Array.isArray(sk.takeaways) ? sk.takeaways.filter(function (t) { return t && String(t).trim(); }) : [];
+    var beats = Array.isArray(sk.beats) ? sk.beats.filter(function (b) { return b && (b.problem || b.move || b.outcome); }) : [];
     var visuals = Array.isArray(sk.visuals) ? sk.visuals.filter(function (v) { return v && v.src; }) : [];
     if (!points.length) {
       var mb = (st.blocks || []).filter(function (b) { return b && b.type === "metrics" && b.items && b.items.length; })[0];
       if (mb) points = mb.items.slice(0);
     }
-    if (!summary) {
-      summary = st.tagline || "";
-      if (!summary) { var sb = (st.blocks || []).filter(function (b) { return b && b.type === "statement" && b.body; })[0]; if (sb) summary = sb.body; }
-      if (!summary) summary = w.desc || "";
+    // legacy skims stored flat takeaways — surface them as move-only beats
+    if (!beats.length && Array.isArray(sk.takeaways)) {
+      beats = sk.takeaways.filter(function (t) { return t && String(t).trim(); }).map(function (t) { return { move: String(t).trim() }; });
     }
-    return { summary: summary, points: points.slice(0, 4), takeaways: takeaways.slice(0, 4), visuals: visuals.slice(0, 8) };
+    if (!hook) {
+      hook = st.tagline || "";
+      if (!hook) { var sb = (st.blocks || []).filter(function (b) { return b && b.type === "statement" && b.body; })[0]; if (sb) hook = sb.body; }
+      if (!hook) hook = w.desc || "";
+    }
+    if (!visuals.length) visuals = skimReelFallback(st);
+    return { hook: hook, points: points.slice(0, 4), beats: beats.slice(0, 3), visuals: visuals.slice(0, 8) };
   }
   function skimHtml(w, prevW, nextW) {
     var st = w.study || {};
@@ -1018,24 +1038,27 @@
       '<header class="pj__hero">' +
         '<div class="pj__eyebrow">' + esc(w.client) + (w.period ? " · " + esc(w.period) : "") + "</div>" +
         '<h1 class="pj__title">' + md(w.title) + "</h1>" +
-        '<p class="pj__tagline">' + md(st.tagline || w.desc || "") + "</p>" +
+        (sd.hook ? '<p class="pj__tagline pj__skim-hook">' + md(sd.hook) + "</p>" : "") +
         metaGrid(st, w.period) +
       "</header>";
-    var summary = sd.summary ? '<p class="pj__skim-sum">' + md(sd.summary) + "</p>" : "";
     var metrics = sd.points.length ? '<dl class="pj__skim-metrics">' + sd.points.map(function (p) {
       return '<div class="pj__skim-metric"><dt>' + esc(p.value || "") + "</dt><dd>" + esc(p.label || "") + "</dd></div>";
     }).join("") + "</dl>" : "";
-    var takeaways = sd.takeaways.length ? '<ul class="pj__skim-takeaways">' + sd.takeaways.map(function (t) {
-      return '<li><span class="pj__skim-tk-i" aria-hidden="true"></span>' + md(t) + "</li>";
-    }).join("") + "</ul>" : "";
     var reel = sd.visuals.length ? '<div class="pj__skim-reel">' + sd.visuals.map(function (v) {
       var cap = v.caption ? '<figcaption class="pj__skim-cap">' + esc(v.caption) + "</figcaption>" : "";
       return '<figure class="pj__skim-shot">' + mediaEl(v, "pjb__media-el") + cap + "</figure>";
     }).join("") + "</div>" : "";
+    var beats = sd.beats.length ? '<div class="pj__skim-moves"><div class="pj__skim-moves-h">Key moves</div><ol class="pj__skim-beats">' + sd.beats.map(function (b) {
+      var parts = "";
+      if (b.problem) parts += '<div class="pj__skim-beat-p">' + md(b.problem) + "</div>";
+      if (b.move) parts += '<div class="pj__skim-beat-m">' + md(b.move) + "</div>";
+      if (b.outcome) parts += '<div class="pj__skim-beat-o">' + md(b.outcome) + "</div>";
+      return '<li class="pj__skim-beat">' + parts + "</li>";
+    }).join("") + "</ol></div>" : "";
     var body =
       '<div class="pj__body pj__body--skim">' +
         '<div class="pj__skim-tag">The 30-second version</div>' +
-        summary + metrics + takeaways + reel +
+        metrics + reel + beats +
         '<button class="pj__btn pj__btn--primary pj__skim-more" type="button" data-pj="full">Read the full case <span aria-hidden="true">↓</span></button>' +
       "</div>";
     return cover + hero + body + navFoot(prevW, nextW);
