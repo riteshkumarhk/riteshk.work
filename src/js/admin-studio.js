@@ -2651,6 +2651,42 @@ import { WORLD_LAND } from "./worldland.js";
       '<input type="text" class="adm__beat-f" data-beat="' + i + '" data-bindex="' + j + '" data-bkey="outcome" value="' + escAttr(b.outcome || "") + '" placeholder="Outcome \u2014 the concrete result" />' +
       '</div>';
   }
+  function ovmArr(i) { var w = data.work[i]; return w && w.study && w.study.skim && Array.isArray(w.study.skim.media) ? w.study.skim.media : null; }
+  function ovmItem(i, m, j, n) {
+    var src = m.src || "";
+    var thumb = src ? (isVideoVal(src) ? '<video src="' + escAttr(previewSrc(src)) + '" muted></video>' : '<img src="' + escAttr(previewSrc(src)) + '" alt="" />') : '<span class="adm__ovm-empty">empty</span>';
+    return '<div class="adm__ovm">' +
+      '<div class="adm__ovm-h"><span class="adm__ovm-n">' + (j + 1) + '</span>' +
+        '<div class="adm__ovm-ops">' +
+          '<button type="button" data-act="ovm-up" data-index="' + i + '" data-ovmindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
+          '<button type="button" data-act="ovm-down" data-index="' + i + '" data-ovmindex="' + j + '"' + (j === n - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+          '<button type="button" data-act="ovm-remove" data-index="' + i + '" data-ovmindex="' + j + '" title="Remove">\u2715</button>' +
+        '</div></div>' +
+      '<div class="adm__ovm-body">' +
+        '<div class="adm__ovm-thumb' + (src ? " has" : "") + '">' + thumb + '</div>' +
+        '<div class="adm__ovm-fields">' +
+          '<input type="text" class="adm__ovm-f" data-ovm="' + i + '" data-ovmindex="' + j + '" data-ovmfield="src" value="' + escAttr(src) + '" placeholder="Image / GIF / video URL\u2026" />' +
+          '<div class="imgblk__row"><button class="btn btn--ghost" data-act="ovm-upload" data-index="' + i + '" data-ovmindex="' + j + '">Upload\u2026</button>' + (src ? '<button class="btn btn--ghost" data-act="ovm-clear" data-index="' + i + '" data-ovmindex="' + j + '">Clear</button>' : "") + mediaSizeTag(src) + '</div>' +
+          '<input type="text" class="adm__ovm-f" data-ovm="' + i + '" data-ovmindex="' + j + '" data-ovmfield="caption" value="' + escAttr(m.caption || "") + '" placeholder="Caption (optional)" />' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+  function overviewMediaBlock(w, i) {
+    var st = w.study || (w.study = {});
+    var sk = st.skim || (st.skim = {});
+    var media = Array.isArray(sk.media) ? sk.media : (sk.media = []);
+    var MAX = 6;
+    var items = media.map(function (m, j) { return ovmItem(i, m, j, media.length); }).join("");
+    var addBtn = media.length < MAX
+      ? '<button type="button" class="btn btn--add" data-act="ovm-add" data-index="' + i + '">+ Add media</button>'
+      : '<div class="af__hint">Up to ' + MAX + ' extra media (plus your cover = ' + (MAX + 1) + ' slides).</div>';
+    return '<section class="l2grp"><div class="l2grp__head">Overview slideshow <span>\u2014 cover + up to 6 media, shown as a preview reel atop the case</span></div>' +
+      '<div class="af__hint" style="margin:-.2rem 0 .6rem">Your cover image is slide 1. Add images, GIFs or short videos to build a Steam-style preview \u2014 each auto-plays (3.5s; videos play fully), and visitors can click a thumbnail or go fullscreen.</div>' +
+      (items || '<div class="adm__empty">No extra media yet \u2014 just the cover shows.</div>') +
+      addBtn +
+      "</section>";
+  }
   function studyEditor(w, i) {
     var st = w.study;
     var blocks = st.blocks || (st.blocks = []);
@@ -2681,7 +2717,7 @@ import { WORLD_LAND } from "./worldland.js";
       "</section>";
     return '<div class="study__panel">' +
       csgenPanel(w, i) +
-      header + meta +
+      header + meta + overviewMediaBlock(w, i) +
       '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span>' + (blocks.length ? '<span class="l2grp__actions"><button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">\u2728 Review feedback</button><button class="btn btn--auto l2grp__ai" data-act="iprep-open" data-index="' + i + '" title="Generate likely interview questions from this case study">\uD83C\uDF99 Interview prep</button><button class="btn btn--auto l2grp__ai" data-act="story-open" data-index="' + i + '" title="Build a presentation narrative \u2014 pick a length &amp; audience, get story angles + a beat-by-beat script">\uD83D\uDCD6 Design storyteller</button></span>' : "") + "</div>" +
       '<div class="study__blocks">' + list + "</div>" + add + "</section>" +
       unlockBlock +
@@ -2738,6 +2774,13 @@ import { WORLD_LAND } from "./worldland.js";
     var i = +t.dataset.beat, j = +t.dataset.bindex, k = t.dataset.bkey;
     var w = data.work[i]; if (!w || !w.study || !w.study.skim || !Array.isArray(w.study.skim.beats) || !w.study.skim.beats[j]) return;
     w.study.skim.beats[j][k] = t.value;
+    saveDraft(); refreshL2Preview();
+  }
+  function onOvmEdit(t) {
+    var i = +t.dataset.ovm, j = +t.dataset.ovmindex, f = t.dataset.ovmfield;
+    var arr = ovmArr(i); if (!arr || !arr[j]) return;
+    arr[j][f] = t.value;
+    if (f === "src") { if (isVideoVal(t.value)) arr[j].kind = "video"; else delete arr[j].kind; }
     saveDraft(); refreshL2Preview();
   }
   function onStudyBlock(t) {
@@ -4265,6 +4308,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (t.dataset.fann !== undefined && t.dataset.afield) { onFocusAnn(t); return; }
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
     if (t.dataset.beat !== undefined && t.dataset.bkey) { onBeatEdit(t); return; }
+    if (t.dataset.ovm !== undefined && t.dataset.ovmfield) { onOvmEdit(t); return; }
     if (t.dataset.study !== undefined && t.dataset.sfield) { onStudyMeta(t); return; }
     if (t.dataset.sblock !== undefined && t.dataset.bfield && t.dataset.bfield !== "locked") { onStudyBlock(t); return; }
     if (t.dataset.path) { setPath(data, t.dataset.path, t.value); apply(); return; }
@@ -4650,6 +4694,12 @@ import { WORLD_LAND } from "./worldland.js";
       arr.splice(+b.dataset.bindex, 1);
       saveDraft(true); renderL2(); status("Key move removed.", true); return;
     }
+    if (act === "ovm-add") { const ow = data.work[i]; if (!ow) return; ow.study = ow.study || {}; ow.study.skim = ow.study.skim || {}; if (!Array.isArray(ow.study.skim.media)) ow.study.skim.media = []; if (ow.study.skim.media.length < 6) { ow.study.skim.media.push({ src: "", caption: "" }); saveDraft(true); renderL2(); } return; }
+    if (act === "ovm-remove") { const arr = ovmArr(i); if (arr) { arr.splice(+b.dataset.ovmindex, 1); saveDraft(true); renderL2(); } return; }
+    if (act === "ovm-up") { const arr = ovmArr(i), k = +b.dataset.ovmindex; if (arr && k > 0) { const tmp = arr[k - 1]; arr[k - 1] = arr[k]; arr[k] = tmp; saveDraft(true); renderL2(); } return; }
+    if (act === "ovm-down") { const arr = ovmArr(i), k = +b.dataset.ovmindex; if (arr && k < arr.length - 1) { const tmp = arr[k + 1]; arr[k + 1] = arr[k]; arr[k] = tmp; saveDraft(true); renderL2(); } return; }
+    if (act === "ovm-clear") { const arr = ovmArr(i), it = arr && arr[+b.dataset.ovmindex]; if (it) { it.src = ""; delete it.kind; saveDraft(true); renderL2(); } return; }
+    if (act === "ovm-upload") { const k = +b.dataset.ovmindex; pickMedia(function (uri) { const arr = ovmArr(i); if (arr && arr[k]) { arr[k].src = uri; if (isVideoVal(uri)) arr[k].kind = "video"; else delete arr[k].kind; saveDraft(true); renderL2(); } }); return; }
     if (act === "wb-open") { wbModal(); return; }
     if (act === "iprep-open-ai") { iprepModal(); return; }
     if (act === "story-open-ai") { storyModal(); return; }

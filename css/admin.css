@@ -254,6 +254,18 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__beat-x { margin-left: auto; background: none; border: 0; color: var(--text-faint); cursor: pointer; font-size: .8rem; line-height: 1; padding: .15rem .35rem; border-radius: 6px; transition: color .15s, background .15s; }
 .adm__beat-x:hover { color: #e5484d; background: rgba(229, 72, 77, .12); }
 .adm__beat-add { margin-top: .6rem; }
+.adm__ovm { margin: .5rem 0 0; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: .6rem .7rem .7rem; }
+.adm__ovm-h { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+.adm__ovm-n { display: inline-flex; align-items: center; justify-content: center; width: 1.05rem; height: 1.05rem; border-radius: 50%; background: var(--accent); color: #0a0a0a; font-size: .6rem; font-weight: 600; font-family: var(--mono); }
+.adm__ovm-ops { margin-left: auto; display: inline-flex; gap: .2rem; }
+.adm__ovm-ops button { background: none; border: 1px solid var(--line); color: var(--text-dim); width: 24px; height: 24px; border-radius: 6px; cursor: pointer; font-size: .75rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+.adm__ovm-ops button:hover:not(:disabled) { color: var(--text); border-color: var(--text-faint); }
+.adm__ovm-ops button:disabled { opacity: .35; cursor: default; }
+.adm__ovm-body { display: flex; gap: .7rem; align-items: flex-start; }
+.adm__ovm-thumb { flex: 0 0 auto; width: 104px; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); background: var(--bg-2, #0d0d10); display: grid; place-items: center; }
+.adm__ovm-thumb img, .adm__ovm-thumb video { width: 100%; height: 100%; object-fit: cover; }
+.adm__ovm-empty { font-family: var(--mono); font-size: .58rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text-faint); }
+.adm__ovm-fields { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: .4rem; }
 
 /* live preview pane */
 .adm__preview { position: relative; display: flex; flex-direction: column; min-height: 0; background: #050506; }
