@@ -1199,10 +1199,10 @@
       "image": "/assets/uploads/3f4eacf62b981354ad308c6e03d2a6b0ee1e291aa4eed6992bd83363a3531136.webp",
       "study": {
         "tagline": "Transforming onboarding from a setup flow into a growth platform for activation, retention, and long-term engagement.",
-        "role": "Led onboarding vision, growth strategy, concept development, executive storytelling, product alignment, and final UX design for the next generation FRE",
-        "team": "Design • PM • Engineering • Research • Content Design • Privacy • Data Science",
+        "role": "Led onboarding vision, growth strategy, concept development, executive storytelling, product alignment, and final UX design",
+        "team": "1 Designer, 1 Product Manager, 3 Engineers, 1 Content Designer, Privacy, Data Science",
         "timeline": "2025 – Current",
-        "scope": "New Device First Run Experience • Activation • Retention • Personalization • Consent • Data Import",
+        "scope": "First Run Experience targeted for user activation, personalization, and retention on new Windows devices",
         "cover": "",
         "unlockHash": "",
         "blocks": [
@@ -1898,7 +1898,28 @@
             }
           ],
           "generatedAt": 1786092537081,
-          "media": []
+          "media": [
+            {
+              "src": "/assets/uploads/6a342292431811050d42b0a761d46ec086cce109de8f71dd343186a3644e476d.png",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/21fca3e623b6b621bd6c5d9fa6ce29349c6a7d56ac9b7a26fc4c29c19be30312.png",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/48f559d262df194a654572b22cb1d960052f966d84d75689d58faae493b3c913.png",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/acf7b4c215de0c4c2001217ddd638f4528a54a8c8bd26ed065eba5a28f0efa0f.png",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/9bf88ef87e44fcc5b8e4fd6a24fcba205c2189ed8892991c6775925b346b938c.png",
+              "caption": ""
+            }
+          ]
         }
       },
       "hidden": false
