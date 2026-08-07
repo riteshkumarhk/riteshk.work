@@ -1653,7 +1653,9 @@
       idx = ((i % count) + count) % count;
       slides.forEach(function (s, k) { s.classList.toggle("is-active", k === idx); });
       thumbs.forEach(function (t, k) { t.classList.toggle("is-active", k === idx); });
-      if (thumbs[idx]) { try { thumbs[idx].scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" }); } catch (e) {} }
+      // Centre the active thumbnail within the strip HORIZONTALLY only (scrollIntoView would
+      // scroll the whole overlay vertically on short screens and crop the title above the stage).
+      if (thumbs[idx] && strip) { try { var tb = thumbs[idx]; strip.scrollBy({ left: (tb.getBoundingClientRect().left - strip.getBoundingClientRect().left) - (strip.clientWidth - tb.offsetWidth) / 2, behavior: "smooth" }); } catch (e) {} }
       var s = slides[idx];
       if (s.getAttribute("data-kind") === "video") {
         var v = s.querySelector("video");
