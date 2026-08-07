@@ -1882,22 +1882,23 @@
         "skim": {
           "beats": [
             {
-              "problem": "Onboarding was scattered across disconnected surfaces and teams",
-              "move": "Unified setup, consent, and personalization into one continuous journey",
-              "outcome": "Users configure Edge once, inside a single coherent flow"
+              "problem": "Sign-in, import, consent, personalization: disconnected surfaces",
+              "move": "[[Unified]] continuous journey replaces fragmented flows",
+              "outcome": "Single framework scales across **activation, consent & personalization**"
             },
             {
-              "problem": "Personalization was treated as a secondary afterthought",
-              "move": "Reframed customization as the earliest identity-building moment",
-              "outcome": "Ownership and attachment form before setup ends"
+              "problem": "Personalization buried behind high-friction business steps",
+              "move": "Personalization moments promoted ahead of setup screens",
+              "outcome": "People feel attachment to Edge before setup ends"
             },
             {
-              "problem": "Every growth segment needed different things from onboarding",
-              "move": "Turned the unified journey into an experimentable framework",
-              "outcome": "Activation, retention, and conversion theories can now be tested"
+              "problem": "One onboarding narrative can't serve every user type",
+              "move": "Framework built for experimenting at scale, not a hard-coded flow",
+              "outcome": "Enables segment level targeting for a more personalised experience"
             }
           ],
-          "generatedAt": 1786021089681
+          "generatedAt": 1786092537081,
+          "media": []
         }
       },
       "hidden": false
@@ -2453,22 +2454,23 @@
         "skim": {
           "beats": [
             {
-              "problem": "Consent was fragmented across every Microsoft product surface",
-              "move": "Unified scattered notices into one Microsoft Account experience",
-              "outcome": "Users recognise one relationship, not many separate dialogs"
+              "problem": "Consent fragmented across five product surfaces",
+              "move": "Replaces product level privacy dialogs with one [[MSA-branded]] experience",
+              "outcome": "People recognize account ownership, not app permission"
             },
             {
-              "problem": "Dense disclosure buried the value behind expandable text",
-              "move": "Reframed the notice around benefit-first MSA visual language",
-              "outcome": "Comprehension landed immediately, not after exploration"
+              "problem": "Disclosure-first layout buried the value proposition",
+              "move": "Illustration and MSA visual language surface value before copy",
+              "outcome": "Comprehension lands without expanding accordion sections"
             },
             {
-              "problem": "Every new compliance need required rebuilding from scratch",
-              "move": "Turned the design into a reusable cross-platform consent framework",
-              "outcome": "DMA and future regulations onboard without new product work"
+              "problem": "Every new regulation required a rebuilt consent screen",
+              "move": "One reusable framework across all environments and ecosystem",
+              "outcome": "Framework that scales to **~1B MAU** without rebuilding, bakes into Win32, Web, Mobile, MacOS, OOBE"
             }
           ],
-          "generatedAt": 1786021153243
+          "generatedAt": 1786092876537,
+          "media": []
         }
       }
     },
@@ -2935,22 +2937,28 @@
         "skim": {
           "beats": [
             {
-              "problem": "Team was optimizing cancellations, not building subscriber value",
-              "move": "Reframed the strategy around the full customer lifecycle",
-              "outcome": "Five principles guided every design decision forward"
+              "problem": "Team optimizing cancellation, not lifecycle value",
+              "move": "Reframed cancel-prevention to a [[subscription lifecycle]] map",
+              "outcome": "Strategy shifts to **acquisition, retention & reactivation**"
             },
             {
-              "problem": "All churn looked the same, so responses were generic",
-              "move": "Separated churn into types, each with its own recovery path",
-              "outcome": "Personalized retention now targets cost, content, and time"
+              "problem": "Cancellation flow led with plan downgrades",
+              "move": "Content-led retention flow: games, releases, benefits first",
+              "outcome": "136K incremental subscribers; $15M annualized revenue"
             },
             {
-              "problem": "Windows' massive user base was untapped for Game Pass",
-              "move": "Introduced a Settings-native acquisition surface for Xbox",
-              "outcome": "TAM grew from ~1M to ~80M potential subscribers"
+              "problem": "Xbox acquisition ignored 80M Windows people",
+              "move": "Upleveling OS to a Game Pass discovery and acquisition medium",
+              "outcome": "65K–365K annual acquisitions from one existing control"
             }
           ],
-          "generatedAt": 1786021189139
+          "generatedAt": 1786093128874,
+          "media": [
+            {
+              "src": "",
+              "caption": ""
+            }
+          ]
         }
       }
     },
