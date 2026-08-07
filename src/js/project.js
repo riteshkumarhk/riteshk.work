@@ -1685,9 +1685,11 @@
     function resume() { if (userPaused || !paused) return; paused = false; playCurrent(); }
     // Clicking a thumbnail jumps to that slide and PAUSES autoplay (sticky — hover-out won't resume it).
     strip.addEventListener("click", function (e) { var t = e.target.closest("[data-thumb]"); if (!t) return; e.preventDefault(); userPaused = true; paused = true; show(+t.getAttribute("data-thumb")); });
-    main.addEventListener("mouseenter", pause);
-    main.addEventListener("mouseleave", resume);
+    // Autoplay keeps running while the cursor merely HOVERS the big preview (no hover-pause — it used
+    // to freeze the instant the cursor landed on it when a case opened). It pauses only when the viewer
+    // actually opens a slide fullscreen / in the lightbox, and STAYS paused (sticky) after they close it.
     main.addEventListener("click", function (e) {
+      if (e.target.closest("[data-stage-fs], video[data-stage-video], img[data-zoom]")) { userPaused = true; pause(); }
       if (e.target.closest("[data-stage-fs]")) { e.preventDefault(); var s = slides[idx]; if (s.getAttribute("data-kind") === "video" && curVid) reqFs(curVid); else { var im = s.querySelector("img[data-zoom]"); if (im) im.click(); } return; }
       var vid = e.target.closest("video[data-stage-video]"); if (vid) { e.preventDefault(); reqFs(vid); }
     });
