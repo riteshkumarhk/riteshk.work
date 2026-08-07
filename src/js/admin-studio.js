@@ -2994,7 +2994,8 @@ import { WORLD_LAND } from "./worldland.js";
         secHead("Contact", "Used across the contact section, menu, footer and the floating dock.") +
         avatarBlock() +
         input("Full name", "contact.name", { hint: "used for the \u201cSave contact\u201d vCard download" }) +
-        input("Email", "contact.email") +
+        input("Display email", "contact.email", { hint: "Shown on your site, the CV / r\u00e9sum\u00e9 PDF and the Save-contact card." }) +
+        input("Service email", "contact.serviceEmail", { hint: "Where access-request and booking alerts are sent (also the reply-to). Leave blank to use your display email." }) +
         '<div class="af__row">' +
         input("Phone (display)", "contact.phone") +
         input("Phone (dial)", "contact.phoneRaw", { hint: "no spaces, e.g. +918197809767" }) +

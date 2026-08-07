@@ -41,6 +41,24 @@ const TRUST_TTL_MS = 180 * 24 * 60 * 60 * 1000;    // device-trust token lifetim
 // VAPID_PRIVATE secret (a JWK). The same value is hardcoded in inbox/inbox.js (applicationServerKey).
 const VAPID_PUBLIC = "BNvPqxaZXo1uLqMAXeW-l6WCPMceklB7Z5RzgpAL3p8N8MtkATL5j0w6YMwdFmNPD0nkcN4NWY_msYNewlZKCHQ";
 
+// --- service email ---------------------------------------------------------
+// Where owner notifications, reply-to and bcc go. Resolved (and edge-cached for
+// ~5 min) from the published site so the studio's "Service email" field drives it.
+// Precedence: contact.serviceEmail (studio) -> OWNER_EMAIL secret (private inbox)
+// -> contact.email (the public display email) -> hardcoded fallback.
+let _svcEmail = { at: 0, s: "", d: "" };
+async function ownerEmail(env) {
+  try {
+    if (Date.now() - _svcEmail.at > 300000) {
+      const base = String(env.ALLOW_ORIGIN || "https://riteshk.work").split(",")[0].trim() || "https://riteshk.work";
+      const r = await fetch(base + "/content.json", { cf: { cacheTtl: 300, cacheEverything: true } });
+      if (r.ok) { const c = ((await r.json()) || {}).contact || {}; _svcEmail = { at: Date.now(), s: String(c.serviceEmail || "").trim(), d: String(c.email || "").trim() }; }
+      else { _svcEmail.at = Date.now(); }
+    }
+  } catch (e) {}
+  return _svcEmail.s || env.OWNER_EMAIL || _svcEmail.d || "riteshkumarhk@gmail.com";
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
@@ -95,7 +113,7 @@ export default {
         // auto-approve) -- you approve/decline securely in the passkey-gated inbox. Reply-To = recruiter.
         try {
           const om = reqOwnerEmail({ name: name, email: email, company: company, context: context, note: note, inbox: url.origin + "/inbox/" });
-          await sendEmail(env, { to: (env.OWNER_EMAIL || "riteshkumarhk@gmail.com"), subject: "New access request \u2014 " + name + (company ? " \u00b7 " + company : ""), html: om.html, text: om.text, replyTo: email });
+          await sendEmail(env, { to: (await ownerEmail(env)), subject: "New access request \u2014 " + name + (company ? " \u00b7 " + company : ""), html: om.html, text: om.text, replyTo: email });
         } catch (e) {}
         return json({ ok: true }, 200, cors);
       } catch (e) { return json({ error: "Couldn\u2019t send that \u2014 try again." }, 400, cors); }
@@ -123,7 +141,7 @@ export default {
       if (!qg || !qg.code) return _reply("No Full-access quick-grant is set up yet. Open the studio, mark a special view as Full access, then tap Allow again.");
       if (qg.enabled === false) return _reply("One-tap Allow is turned off. Turn it back on in the studio, then tap Allow again.");
       if (qg.expiresAt && Date.now() > qg.expiresAt) return _reply("Your Full-access link has expired. Refresh it in the studio, then tap Allow again.");
-      const who = String(rec.name || "there"), me = env.OWNER_EMAIL || "riteshkumarhk@gmail.com";
+      const who = String(rec.name || "there"), me = await ownerEmail(env);
       const minted = await mintAccessLink(env, { email: rec.email, name: rec.name, company: rec.company, reqId: _id });
       const mail = fullAccessEmail(env, minted.link, who, 15);
       const sent = await sendEmail(env, { to: rec.email, subject: mail.subject, html: mail.html, text: mail.text, replyTo: me, bcc: me });
@@ -140,7 +158,7 @@ export default {
       if (!timingSafeEqual(_t, await hmac(env.SESSION_SECRET || "", "reqcancel." + _id))) return new Response("Invalid or expired link", { status: 403, headers: cors });
       const rec = await env.VAULT_GRANTS.get(_id, "json");
       if (!rec || !rec.email) return _reply("Already handled.");
-      const who = String(rec.name || "there"), me = env.OWNER_EMAIL || "riteshkumarhk@gmail.com";
+      const who = String(rec.name || "there"), me = await ownerEmail(env);
       const html = "<p>Hi " + emailEsc(who) + ",</p><p>Thanks for reaching out about my work. I\u2019m not able to share access right now \u2014 feel free to reply here and we can talk.</p><p>\u2014 Ritesh Kumar</p>";
       const text = "Hi " + who + ",\n\nThanks for reaching out about my work. I'm not able to share access right now \u2014 feel free to reply here and we can talk.\n\n\u2014 Ritesh Kumar";
       const sent = await sendEmail(env, { to: rec.email, subject: "About your access request \u2014 Ritesh Kumar", html, text, replyTo: me });
@@ -193,7 +211,7 @@ export default {
         if (trig === "BOOKING_REQUESTED" || trig === "BOOKING_CREATED") {
           const subj = (trig === "BOOKING_REQUESTED" ? "New call request \u2014 " : "Call booked \u2014 ") + who;
           const h = "<p><b>" + emailEsc(who) + "</b>" + (email ? " (" + emailEsc(email) + ")" : "") + "</p><p>" + emailEsc(title) + (when ? " \u2014 " + emailEsc(when) : "") + "</p>" + (notes ? "<p>\u201c" + emailEsc(notes) + "\u201d</p>" : "") + '<p><a href="' + manage + '">Open in Cal.com</a></p>';
-          await sendEmail(env, { to: (env.OWNER_EMAIL || "riteshkumarhk@gmail.com"), subject: subj, html: h, text: who + " \u2014 " + title + (when ? " (" + when + ")" : ""), replyTo: email || undefined });
+          await sendEmail(env, { to: (await ownerEmail(env)), subject: subj, html: h, text: who + " \u2014 " + title + (when ? " (" + when + ")" : ""), replyTo: email || undefined });
         }
       } catch (e) {}
       return json({ ok: true }, 200, cors);
@@ -585,7 +603,7 @@ export default {
         const qg = await env.VAULT_GRANTS.get("quickgrant:full", "json");
         if (!qg || !qg.code) return json({ error: "No Full-access quick-grant is set up yet \u2014 mark a special view as Full access in the studio first." }, 400, cors);
         if (qg.expiresAt && Date.now() > qg.expiresAt) return json({ error: "Your Full-access link has expired \u2014 refresh it in the studio." }, 400, cors);
-        const who = String(rec.name || "there"), me = env.OWNER_EMAIL || "riteshkumarhk@gmail.com";
+        const who = String(rec.name || "there"), me = await ownerEmail(env);
         const minted = await mintAccessLink(env, { email: rec.email, name: rec.name, company: rec.company, reqId: _id });
         const mail = fullAccessEmail(env, minted.link, who, 15);
         const sent = await sendEmail(env, { to: rec.email, subject: mail.subject, html: mail.html, text: mail.text, replyTo: me, bcc: me });
@@ -604,7 +622,7 @@ export default {
         if (!_id) return json({ error: "Missing id" }, 400, cors);
         const rec = await env.VAULT_GRANTS.get(_id, "json");
         if (!rec || !rec.email) return json({ ok: true, note: "already handled" }, 200, cors);
-        const who = String(rec.name || "there"), me = env.OWNER_EMAIL || "riteshkumarhk@gmail.com";
+        const who = String(rec.name || "there"), me = await ownerEmail(env);
         const html = "<p>Hi " + emailEsc(who) + ",</p><p>Thanks for reaching out about my work. I\u2019m not able to share access right now \u2014 feel free to reply here and we can talk.</p><p>\u2014 Ritesh Kumar</p>";
         const text = "Hi " + who + ",\n\nThanks for reaching out about my work. I'm not able to share access right now \u2014 feel free to reply here and we can talk.\n\n\u2014 Ritesh Kumar";
         const sent = await sendEmail(env, { to: rec.email, subject: "About your access request \u2014 Ritesh Kumar", html, text, replyTo: me });
@@ -629,7 +647,7 @@ export default {
         const capabilityIdx = Array.isArray(b.capabilityIdx) ? b.capabilityIdx : null;
         const days = parseInt(b.days, 10) > 0 ? Math.min(parseInt(b.days, 10), 365) : 15;
         const phrase = String((b && b.phrase) || "").trim() || null;
-        const who = String(rec.name || "there"), me = env.OWNER_EMAIL || "riteshkumarhk@gmail.com";
+        const who = String(rec.name || "there"), me = await ownerEmail(env);
         const minted = await mintAccessLink(env, { email: rec.email, name: rec.name, company: rec.company, reqId: _id, mode: "curated", workIds: workIds, highlightIdx: highlightIdx, capabilityIdx: capabilityIdx, phrase: phrase, status: "curated", days: days });
         const mail = fullAccessEmail(env, minted.link, who, days);
         const sent = await sendEmail(env, { to: rec.email, subject: mail.subject, html: mail.html, text: mail.text, replyTo: me, bcc: me });
