@@ -122,10 +122,10 @@
       ],
       "image": "/assets/uploads/8d9844fdff6e7ea32003681054946c5ef3e6b0fa875abf1964bb61a54cd1b98d.png",
       "study": {
-        "tagline": "Designing a faster, more intuitive, and more trustworthy authentication experience for hundreds of millions of Windows users.",
-        "role": "Product Designer II | Consumer Identity Experiences",
+        "tagline": "Designing a faster, scalable, more intuitive and trustworthy authentication experience for hundreds of millions of Windows users.",
+        "role": "Product Designer II leading end to end design for the Credential experiences",
         "team": "1 Product Manager, 1 Design, 3 Engineers, 1 Researcher",
-        "timeline": "2023 — 2024",
+        "timeline": "2023 — 2024: Available on Windows 11",
         "scope": "Modernizing Auth UX for Windows Hello and Credential UX",
         "cover": "",
         "unlockHash": "",
@@ -1135,13 +1135,13 @@
         "skim": {
           "beats": [
             {
-              "problem": "Context was buried inside dense, unreadable dialog text",
+              "problem": "Context buried inside dense, unreadable dialog text",
               "move": "Condensed identity, intent, and destination into one glanceable object",
               "outcome": "Users see what they're approving before authenticating"
             },
             {
-              "problem": "The context card competed with authentication itself",
-              "move": "Reframed the layout so authentication stayed the hero",
+              "problem": "Choices menu stole focus from the actual task",
+              "move": "Made authentication the hero; controls stay secondary",
               "outcome": "Confidence supports the task, never replaces it"
             },
             {
