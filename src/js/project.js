@@ -915,9 +915,15 @@
     var el = scroller.querySelector(".pj__cover-el");
     if (!el) return;
     var cov = el.parentNode;
-    var h = (cov && cov.clientHeight) || 300;
-    var ty = Math.max(0, Math.min(h * 0.14, scroller.scrollTop * 0.2));
-    el.style.transform = "translate3d(0," + ty.toFixed(1) + "px,0)";
+    var r = cov.getBoundingClientRect();
+    if (!r.height) return;
+    var vh = window.innerHeight || document.documentElement.clientHeight || 800;
+    // Viewport-relative: 0 as the cover enters (centre at viewport bottom) -> 1 as it leaves
+    // (centre at top). Keeps the drift animating no matter where the cover sits in the scroll
+    // container (the hero/stage now precede it), instead of clamping on global scrollTop.
+    var p = 1 - (r.top + r.height / 2) / vh;
+    p = p < 0 ? 0 : p > 1 ? 1 : p;
+    el.style.transform = "translate3d(0," + (p * r.height * 0.14).toFixed(1) + "px,0)";
   }
   // Isometric parallax: layers start stacked (progress 0) and fan out to their full
   // --distance (progress 1) as the section travels from the bottom of the viewport up to
