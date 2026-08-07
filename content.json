@@ -1135,19 +1135,19 @@
         "skim": {
           "beats": [
             {
-              "problem": "Context buried inside dense, unreadable dialog text",
-              "move": "Condensed identity, intent, and destination into one glanceable object",
-              "outcome": "Users see what they're approving before authenticating"
+              "problem": "Trust was buried in dense dialog text",
+              "move": "Condensed identity, destination & intent into one [[Context Object]]",
+              "outcome": "People see what they're approving **before** they authenticate"
             },
             {
-              "problem": "Choices menu stole focus from the actual task",
+              "problem": "A 'more choices' menu stole focus from the task",
               "move": "Made authentication the hero; controls stay secondary",
-              "outcome": "Confidence supports the task, never replaces it"
+              "outcome": "Confidence first — auth remains the primary job"
             },
             {
-              "problem": "Every auth scenario was a bespoke, disconnected screen",
-              "move": "Unified the pattern into one scalable Credential UX framework",
-              "outcome": "Scales across Passkeys, UAC, Store, and Remote Desktop"
+              "problem": "Every scenario was a bespoke screen",
+              "move": "Turned the pattern into one reusable framework",
+              "outcome": "Scales across **Passkeys, UAC, Remote Desktop & Store**"
             }
           ],
           "generatedAt": 1786004084155,
