@@ -1135,22 +1135,22 @@
         "skim": {
           "beats": [
             {
-              "problem": "Trust was buried in dense dialog text",
-              "move": "Condensed identity, destination & intent into one [[Context Object]]",
-              "outcome": "People see what they're approving **before** they authenticate"
+              "problem": "Security dialog text buried trust signals",
+              "move": "[[Context Object]] surfaces identity, intent & destination upfront",
+              "outcome": "People grasp what they're approving at a glance"
             },
             {
-              "problem": "A 'more choices' menu stole focus from the task",
-              "move": "Made authentication the hero; controls stay secondary",
-              "outcome": "Confidence first — auth remains the primary job"
+              "problem": "'More choices' menu mixed auth with unrelated controls",
+              "move": "Auth stays hero; secondary controls step back",
+              "outcome": "Focus lands on **verifying, not navigating**"
             },
             {
-              "problem": "Every scenario was a bespoke screen",
-              "move": "Turned the pattern into one reusable framework",
-              "outcome": "Scales across **Passkeys, UAC, Remote Desktop & Store**"
+              "problem": "Every scenario — UAC, passkeys, Remote Desktop — bespoke",
+              "move": "One reusable framework scales across all trust moments",
+              "outcome": "175K passkeys in 10 days; architecture ready to grow"
             }
           ],
-          "generatedAt": 1786004084155,
+          "generatedAt": 1786092189628,
           "media": [
             {
               "src": "/assets/uploads/8f89f35b51cfe5eecbe0210ae40939c80d1356668fd0a5ed12a0ae70b94df533.png",
