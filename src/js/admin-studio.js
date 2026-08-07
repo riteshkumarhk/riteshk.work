@@ -2939,7 +2939,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (!insLoaded && !insLoading) loadInsights();
     var muted = localStorage.getItem("rk:owner") === "1";
     var head = secHead("Insights", "How your portfolio is doing \u2014 page views, geography, devices and the intent signals only your site can see (case opens, unlocks, r\u00e9sum\u00e9, contact). Your own visits are excluded.");
-    var dayBtns = [7, 30, 90].map(function (d) { return '<button class="ins__dbtn' + (insDays === d ? " is-on" : "") + '" data-act="ins-days" data-days="' + d + '">' + d + "d</button>"; }).join("");
+    var dayBtns = [1, 7, 30, 90].map(function (d) { return '<button class="ins__dbtn' + (insDays === d ? " is-on" : "") + '" data-act="ins-days" data-days="' + d + '">' + (d === 1 ? "24h" : d + "d") + "</button>"; }).join("");
     var controls = '<div class="ins__ctrls"><div class="ins__days">' + dayBtns + '</div><button class="btn btn--ghost" data-act="ins-refresh">\u21bb Refresh</button><button class="ins__mute' + (muted ? " is-on" : "") + '" data-act="ins-mute" title="When on, this device\u2019s visits don\u2019t count">' + (muted ? "\u25cf This device muted" : "\u25cb Count this device") + "</button></div>";
     if (insErr) return head + controls + '<div class="ins__err">' + escHtml(insErr) + "</div>";
     if (!insData) return head + controls + '<div class="ins__loading">Loading your numbers\u2026</div>';
@@ -2950,9 +2950,10 @@ import { WORLD_LAND } from "./worldland.js";
     var cfHas = tr.configured && !tr.error && (tr.total || 0) > 0;
     var isoGeo = insGeoToIso(cfHas ? tr.geo : ev.geo);
     var pvNum = cfHas ? (tr.total || 0) : (ev.pageviews || 0);
+    var rng = insDays === 1 ? "24h" : insDays + "d";
     var cards = '<div class="ins__cards">' +
-      insCard(insNum(pvNum), "Page views", cfHas ? (insDays + "d \u00b7 Cloudflare") : (insDays + "d \u00b7 first-party")) +
-      insCard(insNum(ev.total || 0), "Intent events", insDays + "d \u00b7 first-party") +
+      insCard(insNum(pvNum), "Page views", cfHas ? (rng + " \u00b7 Cloudflare") : (rng + " \u00b7 first-party")) +
+      insCard(insNum(ev.total || 0), "Intent events", rng + " \u00b7 first-party") +
       insCard(insNum((ev.types && ev.types.case_open) || 0), "Case opens", insTop((ev.targets || {}).case_open)) +
       insCard(insNum((ev.types && ev.types.deepcut_unlock) || 0), "Deeper-cut unlocks", insTop((ev.targets || {}).deepcut_unlock)) +
       "</div>";
