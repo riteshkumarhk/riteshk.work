@@ -1061,7 +1061,7 @@
     var mains = slides.map(function (m, j) {
       var kind = mediaKind(m);
       var stKind = kind === "video" ? "video" : (isGifM(m) ? "gif" : (kind === "image" ? "image" : "frame"));
-      var dur = m.dur ? Math.max(1, +m.dur) * 1000 : (stKind === "gif" ? 5000 : 3500);
+      var dur = m.dur ? Math.max(1, +m.dur) * 1000 : 5000;
       return '<div class="pj__stage-slide' + (j === 0 ? " is-active" : "") + '" data-slide="' + j + '" data-kind="' + stKind + '" data-dur="' + dur + '">' + stageSlideMedia(m) + "</div>";
     }).join("");
     var thumbs = slides.map(function (m, j) { return stageThumbEl(m, j, j === 0); }).join("");
@@ -1640,7 +1640,7 @@
     var thumbs = [].slice.call(stage.querySelectorAll(".pj__stage-thumb"));
     var fill = stage.querySelector("[data-stage-fill]");
     var noAuto = document.documentElement.classList.contains("lite") || PREVIEW;
-    var idx = 0, timer = 0, paused = false, visible = true, curVid = null, onEnd = null, onTime = null, io = null;
+    var idx = 0, timer = 0, paused = false, userPaused = false, visible = true, curVid = null, onEnd = null, onTime = null, io = null;
     function clearTimer() { if (timer) { clearTimeout(timer); timer = 0; } }
     function detachVid() { if (curVid) { if (onEnd) curVid.removeEventListener("ended", onEnd); if (onTime) curVid.removeEventListener("timeupdate", onTime); } curVid = null; onEnd = null; onTime = null; }
     function stopVideos() { slides.forEach(function (s) { var v = s.querySelector("video"); if (v) { try { v.pause(); v.currentTime = 0; } catch (e) {} } }); }
@@ -1668,11 +1668,12 @@
       var s = slides[idx];
       if (s.getAttribute("data-kind") === "video" && curVid) {
         try { if (curVid.ended) curVid.currentTime = 0; curVid.play().catch(function () { startTimer(4000); }); } catch (e) { startTimer(4000); }
-      } else { startTimer(+s.getAttribute("data-dur") || 3500); }
+      } else { startTimer(+s.getAttribute("data-dur") || 5000); }
     }
     function pause() { paused = true; clearTimer(); if (curVid) { try { curVid.pause(); } catch (e) {} } if (fill) { try { var w = getComputedStyle(fill).width; fill.style.transition = "none"; fill.style.width = w; } catch (e) {} } }
-    function resume() { if (!paused) return; paused = false; playCurrent(); }
-    strip.addEventListener("click", function (e) { var t = e.target.closest("[data-thumb]"); if (!t) return; e.preventDefault(); paused = false; show(+t.getAttribute("data-thumb")); });
+    function resume() { if (userPaused || !paused) return; paused = false; playCurrent(); }
+    // Clicking a thumbnail jumps to that slide and PAUSES autoplay (sticky — hover-out won't resume it).
+    strip.addEventListener("click", function (e) { var t = e.target.closest("[data-thumb]"); if (!t) return; e.preventDefault(); userPaused = true; paused = true; show(+t.getAttribute("data-thumb")); });
     main.addEventListener("mouseenter", pause);
     main.addEventListener("mouseleave", resume);
     main.addEventListener("click", function (e) {
