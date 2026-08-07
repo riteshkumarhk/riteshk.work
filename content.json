@@ -2491,7 +2491,29 @@
             }
           ],
           "generatedAt": 1786092876537,
-          "media": []
+          "media": [
+            {
+              "src": "/assets/uploads/08d4bcd129304699369ea53d59427dda1baeda92e7cc111af6dbd68c3b9b5b87.png",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/9e89a84b15ed6256152697fda4a1a57dd7c986033a26f5c79d77c3f7811b437f.mp4",
+              "caption": "",
+              "kind": "video"
+            },
+            {
+              "src": "/assets/uploads/e31630f2564f85366606fdfa049c98f848fc9aaad1807615e04fea966ccdb249.png",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/0bd55e8e76cfaf1acfbba45c1f83d2905c36c40a2401082363d59ba24c70b2ee.png",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/98e56ba21986de0f752cdf8153d9f4b667d331307a2983e0ef303b03059e5170.png",
+              "caption": ""
+            }
+          ]
         }
       }
     },
