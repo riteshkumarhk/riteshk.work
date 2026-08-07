@@ -984,17 +984,26 @@
     if (!out) return "";
     return '<div class="pj__cta"><div class="pj__cta-dock">' + out + "</div></div>";
   }
-  function navFoot(prevW, nextW) {
-    var card = function (w, dir) {
-      if (!w) return '<div class="pj__foot-card pj__foot-card--empty"></div>';
-      return '<button class="pj__foot-card" data-open="' + attr(w.id) + '">' +
-        '<span class="pj__foot-dir">' + (dir === "next" ? "Next project \u2192" : "\u2190 Previous") + "</span>" +
-        '<span class="pj__foot-title">' + esc(w.title) + "</span>" +
-        '<span class="pj__foot-client">' + esc(w.client) + "</span></button>";
+  function navFoot(cur) {
+    var curId = cur && cur.id;
+    var others = siblings(curId).filter(function (o) { return o && o.id !== curId && !o.encWork; });
+    var moreCard = function (o) {
+      var src = o.image || (o.study && o.study.cover);
+      var s = typeof src === "string" ? src : (src && (src.src || src.image));
+      var media = (s && !isEncSrc(s))
+        ? '<span class="pj__more-media"><img src="' + attr(s) + '" alt="" loading="lazy" /></span>'
+        : '<span class="pj__more-media pj__more-media--ph pjb__shot-ph--' + esc(o.theme || "edge") + '"></span>';
+      return '<button class="pj__more-card" data-open="' + attr(o.id) + '" data-cursor="view">' + media +
+        '<span class="pj__more-info"><span class="pj__more-client">' + esc(o.client) + "</span>" +
+        '<span class="pj__more-title">' + esc(o.title) + "</span></span></button>";
     };
+    var more = others.length
+      ? '<div class="pj__more"><div class="pj__more-head">More case studies</div><div class="pj__more-grid">' +
+          others.slice(0, 4).map(moreCard).join("") + "</div></div>"
+      : "";
     return '<footer class="pj__foot">' +
       contactDock() +
-      '<div class="pj__foot-cards">' + card(prevW, "prev") + card(nextW, "next") + "</div>" +
+      more +
       '<button class="pj__btn pj__btn--ghost pj__foot-back" data-pj="back">← All work</button></footer>';
   }
   // Key moves — the 2-3 problem -> move -> outcome cards that open every case study,
@@ -1090,7 +1099,7 @@
     var meta = metaGrid(st, w.period);
     var moves = movesHtml(w);
     var bodyBlocks = blocks.length ? blocks.map(renderBlock).join("") : emptyStudy(w);
-    return hero + stage + meta + moves + '<div class="pj__body">' + bodyBlocks + "</div>" + navFoot(prevW, nextW);
+    return hero + stage + meta + moves + '<div class="pj__body">' + bodyBlocks + "</div>" + navFoot(w);
   }
 
   /* ---------- media lightbox (image zoom / pan) + fullscreen ---------- */

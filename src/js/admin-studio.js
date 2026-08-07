@@ -3025,7 +3025,13 @@ import { WORLD_LAND } from "./worldland.js";
     work() {
       const list = data.work || [];
       const featured = list.filter((w) => w.featured).length;
-      let html = secHead("Selected Work", "Your projects. Tick up to 4 to feature on the homepage (currently " + featured + "/4). Title, story, images, tags &amp; theme all live inside each project\u2019s case-study editor.") + addBar("work", "Add work");
+      const wl = data.workLayout || "grid-2";
+      const wlOpt = (v, lbl) => '<option value="' + v + '"' + (wl === v ? " selected" : "") + ">" + lbl + "</option>";
+      let html = secHead("Selected Work", "Your projects. Tick up to 4 to feature on the homepage (currently " + featured + "/4). Title, story, images, tags &amp; theme all live inside each project\u2019s case-study editor.") +
+        '<div class="af"><label class="af__label">Homepage layout</label><select data-worklayout>' +
+          wlOpt("grid-2", "Grid \u2014 2 columns") + wlOpt("grid-3", "Grid \u2014 3 columns") + wlOpt("list", "Linear list") +
+        '</select><div class="af__hint">How projects are arranged on the homepage. A grid surfaces more case studies at once, so visitors explore beyond the first one.</div></div>' +
+        addBar("work", "Add work");
       list.forEach((w, i) => {
         if (w.encWork) {
           html += '<div class="card workcard workcard--enc">' +
@@ -4347,6 +4353,7 @@ import { WORLD_LAND } from "./worldland.js";
 
   function onChange(e) {
     const t = e.target;
+    if (t.dataset.worklayout !== undefined) { data.workLayout = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.gpath !== undefined) { onGenEdit(t); return; }
     if (t.dataset.jsel !== undefined) { onJourneyEdit(t); return; }
     if (t.dataset.act === "journey-toggle") { journeyData().enabled = t.checked; saveDraft(true); apply(true); renderBody(); return; }

@@ -505,6 +505,27 @@ main, .footer { transition: opacity .45s ease; }
   padding: .3rem .7rem; border: 1px solid var(--line); border-radius: 100px;
 }
 
+/* ---- work grid layouts (list | 2-col | 3-col, chosen in the studio -> data.workLayout) ---- */
+.cases--g2, .cases--g3 { display: grid; gap: clamp(1.8rem, 3.2vw, 3rem) clamp(1.5rem, 3vw, 2.5rem); }
+.cases--g2 { grid-template-columns: repeat(2, 1fr); }
+.cases--g3 { grid-template-columns: repeat(3, 1fr); }
+.cases--g2 > .case, .cases--g3 > .case { border: 0; }
+.cases--g2 > .case .case__link, .cases--g3 > .case .case__link {
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: clamp(1rem, 1.6vw, 1.35rem); padding: 0;
+}
+.cases--g2 > .case .case__link:hover, .cases--g3 > .case .case__link:hover { padding-left: 0; }
+.cases--g2 .case__title { font-size: clamp(1.3rem, 2vw, 1.95rem); margin-bottom: .5rem; }
+.cases--g3 .case__title { font-size: clamp(1.15rem, 1.5vw, 1.5rem); margin-bottom: .4rem; }
+.cases--g2 .case__meta, .cases--g3 .case__meta { margin-bottom: .85rem; }
+.cases--g2 .case__desc, .cases--g3 .case__desc {
+  max-width: none; font-size: clamp(.88rem, 1vw, .97rem);
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.cases--g2 .case__tags, .cases--g3 .case__tags { display: none; }
+@media (max-width: 900px) { .cases--g3 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .cases--g2, .cases--g3 { grid-template-columns: 1fr; gap: 2rem; } }
+
 /* =================================================================
    ABOUT
    ================================================================= */

@@ -717,6 +717,20 @@ video.pjb__media-el { background: #000; }
 .pj__foot-client { font-family: var(--mono); font-size: .72rem; color: var(--text-faint); }
 .pj__foot-back { margin-top: 1.6rem; }
 
+/* "More case studies" grid at the end of a case — exit-capture so visitors explore beyond one */
+.pj__more { margin-bottom: clamp(2rem, 4vw, 3rem); }
+.pj__more-head { font-family: var(--mono); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 1.2rem; }
+.pj__more-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: clamp(1rem, 2.2vw, 1.8rem); }
+.pj__more-card { display: flex; flex-direction: column; gap: .75rem; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; color: inherit; }
+.pj__more-media { display: block; aspect-ratio: 16 / 9; border-radius: 5px; overflow: hidden; border: 1px solid var(--line-soft); background: var(--bg-2, #0d0d10); }
+.pj__more-media img { width: 100%; height: 100%; object-fit: cover; display: block; filter: saturate(.9); transition: transform .6s var(--ease), filter .6s var(--ease); }
+.pj__more-card:hover .pj__more-media img { transform: scale(1.04); filter: saturate(1.05); }
+.pj__more-info { display: flex; flex-direction: column; gap: .3rem; }
+.pj__more-client { font-family: var(--mono); font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); }
+.pj__more-title { font-family: var(--serif); font-weight: 300; font-size: clamp(1.05rem, 1.7vw, 1.4rem); line-height: 1.2; color: var(--text); transition: color .3s; }
+.pj__more-card:hover .pj__more-title { color: var(--accent); }
+@media (max-width: 560px) { .pj__more-grid { gap: 1rem; } }
+
 /* background lock while overlay open */
 html.pj-lock, html.pj-lock body { overflow: hidden; }
 

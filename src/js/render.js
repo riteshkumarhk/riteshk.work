@@ -222,6 +222,9 @@
     // project that's hidden-from-default (ticket-only) — now decrypted — so the owner can
     // present the confidential work too. Non-featured, non-hidden work stays hidden.
     set("cases", (data.work || []).filter((w) => presentActive ? (!w.encWork && (w.featured || w.hidden)) : (w.featured && !w.encWork && !w.hidden)).slice(0, presentActive ? 999 : 6).map(caseEl).join(""));
+    // Work list layout is configurable from the studio: list | grid-2 | grid-3 (default grid-2).
+    const casesEl = byId("cases");
+    if (casesEl) { const wl = data.workLayout || "grid-2"; casesEl.className = "cases" + (wl === "grid-3" ? " cases--g3" : wl === "list" ? "" : " cases--g2"); }
 
     set("capsList", caps.map((c) => '<li data-reveal>' + esc(c) + "</li>").join(""));
 
