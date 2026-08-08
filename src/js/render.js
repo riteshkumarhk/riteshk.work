@@ -225,6 +225,13 @@
     return '<li><span class="award__main">' + ico + '<span class="award__title">' + esc(a.title) + "</span></span><i>" + esc(a.meta) + "</i></li>";
   }
 
+  function galleryEl(g) {
+    const src = (g && g.src) ? String(g.src).replace(/"/g, "&quot;") : "";
+    if (!src) return "";
+    const cap = (g && g.caption) ? '<figcaption class="gallery__cap">' + esc(g.caption) + "</figcaption>" : "";
+    return '<figure class="gallery__item" data-reveal><img class="gallery__img" src="' + src + '" alt="' + esc((g && g.caption) || "") + '" loading="lazy" />' + cap + "</figure>";
+  }
+
   /* ---------- About-page section layout (order + visibility) ----------
      The About page is composed of independent sections the owner can reorder and
      show/hide from the studio (data.aboutSections = [{key,on}]). Unknown/new keys
@@ -235,6 +242,7 @@
     ["capabilities", "Capabilities"],
     ["path", "The Path"],
     ["education", "Education"],
+    ["gallery", "Photos"],
   ];
   function aboutLayout(data) {
     const known = ABOUT_SECTIONS.map((s) => s[0]);
@@ -252,14 +260,17 @@
   function applyAboutLayout(data) {
     const wrap = byId("aboutSections");
     if (!wrap) return;
+    // An empty Photos grid never shows a bare "Photos" header — auto-hidden until photos exist.
+    const galleryEmpty = !(((data && data.aboutGallery) || []).some(function (g) { return g && g.src; }));
     const visible = [];
     aboutLayout(data).forEach((s) => {
       const el = document.getElementById("sec-" + s.key);
       if (!el) return;
-      el.hidden = !s.on;
+      const on = s.on && !(s.key === "gallery" && galleryEmpty);
+      el.hidden = !on;
       el.classList.remove("sec--first", "sec--last");
       wrap.appendChild(el); // move into layout order (appendChild reorders existing nodes)
-      if (s.on) visible.push(el);
+      if (on) visible.push(el);
     });
     // Mark the first/last *visible* section so the top one clears the fixed nav and the
     // bottom one keeps breathing room — robust even when a leading section is hidden.
@@ -318,6 +329,7 @@
     set("journeyCta", (jrnHas && presentActive) ? '<button type="button" class="path__journey" data-journey-open data-cursor="hover">View full journey <span aria-hidden="true">\u2192</span></button>' : "");
     set("recognitionList", (data.recognition || []).map(awardEl).join(""));
     set("educationList", (data.education || []).map(awardEl).join(""));
+    set("aboutGallery", (data.aboutGallery || []).filter((g) => g && g.src).slice(0, 6).map(galleryEl).join(""));
 
     applyAboutLayout(data);
 

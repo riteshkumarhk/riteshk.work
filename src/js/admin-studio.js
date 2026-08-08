@@ -2996,10 +2996,7 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="af"><label class="af__label">Availability badge</label>' +
         '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="avail-toggle"' + ((((data.landing || {}).available) || {}).on ? " checked" : "") + ' /><span>Show an \u201copen to work\u201d pill in the hero</span></label>' +
         '<div class="af__hint">Off by default. A quiet pill with a live green dot appears under the hero when on.</div></div>' +
-        input("Availability text", "landing.available.text", { hint: "e.g. Open to Principal / Staff Product Design roles" }) +
-        input("About — lead line", "landing.aboutLead", { md: true, type: "textarea", rows: 2, hint: "The big opening line of the About section. *italic* for emphasis." }) +
-        input("About — paragraphs", "landing.about", { md: true, type: "textarea", rows: 7, hint: "Separate paragraphs with a blank line. **bold**, *italic*, [[Product]] bronze." }) +
-        input("About — sign-off", "landing.aboutSign", { md: true, hint: "The closing personal line, e.g. an off-the-clock note." })
+        input("Availability text", "landing.available.text", { hint: "e.g. Open to Principal / Staff Product Design roles" })
       );
     },
     contact() {
@@ -3069,11 +3066,11 @@ import { WORLD_LAND } from "./worldland.js";
     },
     aboutpage() {
       const RK = window.RK || {};
-      const defs = RK.ABOUT_SECTIONS || [["about", "About"], ["recognition", "Recognition"], ["capabilities", "Capabilities"], ["path", "The Path"], ["education", "Education"]];
+      const defs = RK.ABOUT_SECTIONS || [["about", "About"], ["recognition", "Recognition"], ["capabilities", "Capabilities"], ["path", "The Path"], ["education", "Education"], ["gallery", "Photos"]];
       const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
-      const where = { about: "Edit in the Landing tab (About fields)", recognition: "Edit in the Recognition tab", capabilities: "Edit in the Capabilities tab", path: "Edit in the Path tab", education: "Edit in the Education tab" };
+      const where = { about: "Edit the text below in this tab", recognition: "Edit in the Recognition tab", capabilities: "Edit in the Capabilities tab", path: "Edit in the Path tab", education: "Edit in the Education tab", gallery: "Add photos below in this tab" };
       const layout = RK.aboutLayout ? RK.aboutLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
-      let html = secHead("About page", "Reorder the sections on your About page and show or hide any of them. Use the arrows to move a section up or down, and untick to hide it from visitors. Each section\u2019s content is edited in its own tab.");
+      let html = secHead("About page", "Reorder the sections on your About page and show or hide any of them. Use the arrows to move a section up or down, and untick to hide it from visitors. Each section\u2019s content is edited in its own tab \u2014 the About text and Photos live right here.");
       html += '<ul class="adm__seclist">';
       layout.forEach((s, i) => {
         html += '<li class="adm__secrow' + (s.on ? "" : " is-off") + '">' +
@@ -3086,6 +3083,11 @@ import { WORLD_LAND } from "./worldland.js";
           "</li>";
       });
       html += "</ul>";
+      html += secHead("About text", "The opening lines of your About section. (Also written by \u2728 Draft with AI in the Landing tab.)") +
+        input("Lead line", "landing.aboutLead", { md: true, type: "textarea", rows: 2, hint: "The big opening line of the About section. *italic* for emphasis." }) +
+        input("Paragraphs", "landing.about", { md: true, type: "textarea", rows: 7, hint: "Separate paragraphs with a blank line. **bold**, *italic*, [[Product]] bronze." }) +
+        input("Sign-off", "landing.aboutSign", { md: true, hint: "The closing personal line, e.g. an off-the-clock note." });
+      html += aboutGalleryBlock();
       return html;
     },
     path() {
@@ -3941,6 +3943,41 @@ import { WORLD_LAND } from "./worldland.js";
     if (activeTab === list) renderBody();
   }
 
+  /* ---------- About-page photo grid (up to 6) ---------- */
+  function aboutGalleryArr() { return Array.isArray(data.aboutGallery) ? data.aboutGallery : (data.aboutGallery = []); }
+  function galleryItemEditor(g, j, n) {
+    const src = g.src || "";
+    const thumb = src ? '<img src="' + escAttr(previewSrc(src)) + '" alt="" />' : '<span class="adm__gal-empty">empty</span>';
+    return '<div class="adm__gal-item">' +
+      '<div class="adm__gal-h"><span class="adm__ovm-n">' + (j + 1) + "</span>" +
+        '<div class="adm__ovm-ops">' +
+          '<button type="button" data-act="gal-up" data-gindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
+          '<button type="button" data-act="gal-down" data-gindex="' + j + '"' + (j === n - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+          '<button type="button" data-act="gal-remove" data-gindex="' + j + '" title="Remove">\u2715</button>' +
+        "</div></div>" +
+      '<div class="adm__gal-thumb' + (src ? " has" : "") + '">' + thumb + "</div>" +
+      '<div class="imgblk__row"><button class="btn btn--ghost" data-act="gal-upload" data-gindex="' + j + '">' + (src ? "Replace\u2026" : "Upload\u2026") + "</button>" + (src ? '<button class="btn btn--ghost" data-act="gal-clear" data-gindex="' + j + '">Clear</button>' : "") + mediaSizeTag(src) + "</div>" +
+      '<input type="text" class="adm__gal-cap" data-galedit="' + j + '" data-galfield="caption" value="' + escAttr(g.caption || "") + '" placeholder="Caption (optional)" />' +
+      "</div>";
+  }
+  function aboutGalleryBlock() {
+    const arr = aboutGalleryArr();
+    const MAX = 6;
+    const items = arr.map(function (g, j) { return galleryItemEditor(g, j, arr.length); }).join("");
+    const add = arr.length < MAX
+      ? '<button type="button" class="btn btn--add" data-act="gal-add">+ Add photo</button>'
+      : '<div class="af__hint">Up to ' + MAX + " photos.</div>";
+    return secHead("Photos", "A grid of up to 6 personal shots \u2014 you working, riding, whatever tells your story. It shows as the Photos section (reorder it in the list above) and stays hidden until you add one.") +
+      '<div class="adm__gal">' + (items || '<div class="adm__empty">No photos yet \u2014 add up to 6.</div>') + "</div>" +
+      add;
+  }
+  function onGalEdit(t) {
+    const arr = data.aboutGallery, j = +t.dataset.galedit;
+    if (!arr || !arr[j]) return;
+    arr[j][t.dataset.galfield] = t.value;
+    apply();
+  }
+
   /* ---------- About-page section order + visibility ---------- */
   function aboutLayoutArr() {
     const RK = window.RK || {};
@@ -4438,6 +4475,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
     if (t.dataset.beat !== undefined && t.dataset.bkey) { onBeatEdit(t); return; }
     if (t.dataset.ovm !== undefined && t.dataset.ovmfield) { onOvmEdit(t); return; }
+    if (t.dataset.galedit !== undefined && t.dataset.galfield) { onGalEdit(t); return; }
     if (t.dataset.study !== undefined && t.dataset.sfield) { onStudyMeta(t); return; }
     if (t.dataset.sblock !== undefined && t.dataset.bfield && t.dataset.bfield !== "locked") { onStudyBlock(t); return; }
     if (t.dataset.path) { setPath(data, t.dataset.path, t.value); apply(); return; }
@@ -4628,6 +4666,12 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "icon-gen-all") { iconGenerateAll(list, b); return; }
     if (act === "icon-regen") { iconRegen(list, i); return; }
     if (act === "icon-remove") { iconRemove(list, i); return; }
+    if (act === "gal-add") { const arr = aboutGalleryArr(); if (arr.length < 6) { arr.push({ src: "", caption: "" }); saveDraft(true); renderBody(); } return; }
+    if (act === "gal-remove") { const arr = data.aboutGallery, k = +b.dataset.gindex; if (arr && arr[k] !== undefined) { arr.splice(k, 1); apply(true); renderBody(); } return; }
+    if (act === "gal-up") { const arr = data.aboutGallery, k = +b.dataset.gindex; if (arr && k > 0) { const tmp = arr[k - 1]; arr[k - 1] = arr[k]; arr[k] = tmp; apply(true); renderBody(); } return; }
+    if (act === "gal-down") { const arr = data.aboutGallery, k = +b.dataset.gindex; if (arr && k < arr.length - 1) { const tmp = arr[k + 1]; arr[k + 1] = arr[k]; arr[k] = tmp; apply(true); renderBody(); } return; }
+    if (act === "gal-clear") { const arr = data.aboutGallery, k = +b.dataset.gindex; if (arr && arr[k]) { arr[k].src = ""; apply(true); renderBody(); } return; }
+    if (act === "gal-upload") { const k = +b.dataset.gindex; pickImage(function (uri) { const arr = data.aboutGallery; if (arr && arr[k]) { arr[k].src = uri; apply(true); renderBody(); } }); return; }
     if (act === "ins-days") { loadInsights(+b.dataset.days || 30); return; }
     if (act === "ins-refresh") { loadInsights(); return; }
     if (act === "ins-mute") { insToggleMute(); return; }
