@@ -377,15 +377,17 @@ html.lite .page { animation: none; }
 /* Each logo sits in a uniform rounded chip so mixed full-colour brands feel like one
    set. main.js scales .logo__card for the elastic entrance; the name sits outside it. */
 .logo__card {
-  display: grid; place-items: center;
+  display: grid; place-items: center; overflow: hidden;
   width: clamp(108px, 13.5vw, 152px); height: clamp(58px, 7.5vw, 78px);
   background: var(--bg-elev); border: 1px solid var(--line-soft); border-radius: 14px;
   transform-origin: center;
   transition: border-color .3s var(--ease), box-shadow .3s var(--ease);
 }
-.logo__img { max-height: 60%; max-width: 64%; width: auto; object-fit: contain; -webkit-user-drag: none; user-select: none; }
-.logo__card--sm .logo__img { max-height: 44%; max-width: 50%; }
-.logo__card--lg .logo__img { max-height: 78%; max-width: 82%; }
+/* max-height must be a DEFINITE length — a percentage doesn't resolve against the grid
+   card's height, so tall logos used to overflow. max-width % is fine (card width is definite). */
+.logo__img { max-height: clamp(34px, 4.6vw, 47px); max-width: 64%; width: auto; object-fit: contain; -webkit-user-drag: none; user-select: none; }
+.logo__card--sm .logo__img { max-height: clamp(25px, 3.3vw, 34px); max-width: 50%; }
+.logo__card--lg .logo__img { max-height: clamp(44px, 5.9vw, 61px); max-width: 82%; }
 .logo:hover .logo__card { border-color: var(--accent); box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28); }
 /* Light mode: lift the chip lighter than the cream page (the elevated var is a darker tan),
    with a soft shadow — the airy "card" feel from the reference. */
