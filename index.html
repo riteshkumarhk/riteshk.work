@@ -66,7 +66,7 @@
   <link rel="preload" href="fonts/fraunces-normal-300600-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="css/fonts.css" />
 
-  <link rel="stylesheet" href="css/styles.css?v=4" />
+  <link rel="stylesheet" href="css/styles.css?v=5" />
     <link rel="stylesheet" href="css/project.css?v=13" />
   <link rel="stylesheet" href="css/gensection.css" />
   <link rel="stylesheet" href="css/admin.css?v=6" />
@@ -88,17 +88,15 @@
 
   <!-- ============ NAV ============ -->
   <header class="nav" id="nav">
-    <a href="#top" class="nav__brand" data-cursor="hover" aria-label="Ritesh Kumar — home">
+    <a href="/" class="nav__brand" data-page-link="work" data-cursor="hover" aria-label="Ritesh Kumar — home">
       <span class="nav__mark">RK</span>
       <span class="nav__name">Ritesh&nbsp;Kumar</span>
     </a>
 
     <nav class="nav__links" aria-label="Primary">
-      <a href="#work" data-cursor="hover"><span class="idx">01</span> Work</a>
-      <a href="#about" data-cursor="hover"><span class="idx">02</span> About</a>
-      <a href="#path" data-cursor="hover"><span class="idx">03</span> Path</a>
-      <a href="#contact" data-cursor="hover"><span class="idx">04</span> Contact</a>
-      <a href="#" class="nav__resume" id="navResume" data-cursor="hover" target="_blank" rel="noopener" hidden aria-label="Open résumé"><span class="idx">05</span> Résumé<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 11l5 5 5-5"/><path d="M5 21h14"/></svg></a>
+      <a href="/" data-page-link="work" data-cursor="hover"><span class="idx">01</span> Work</a>
+      <a href="/about" data-page-link="about" data-cursor="hover"><span class="idx">02</span> About</a>
+      <a href="#" class="nav__resume" id="navResume" data-cursor="hover" target="_blank" rel="noopener" hidden aria-label="Open résumé"><span class="idx">03</span> Résumé<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 11l5 5 5-5"/><path d="M5 21h14"/></svg></a>
     </nav>
 
     <div class="nav__meta">
@@ -126,16 +124,17 @@
   <!-- Mobile menu -->
   <div class="menu" id="menu" aria-hidden="true">
     <nav class="menu__inner" aria-label="Mobile">
-      <a href="#work"><span class="idx">01</span> Work</a>
-      <a href="#about"><span class="idx">02</span> About</a>
-      <a href="#path"><span class="idx">03</span> Path</a>
-      <a href="#contact"><span class="idx">04</span> Contact</a>
+      <a href="/" data-page-link="work"><span class="idx">01</span> Work</a>
+      <a href="/about" data-page-link="about"><span class="idx">02</span> About</a>
       <a href="#" class="menu__resume" id="menuResume" target="_blank" rel="noopener" hidden><span class="idx">↓</span> Résumé</a>
     </nav>
     <div class="menu__foot" id="menuFoot"></div>
   </div>
 
   <main id="top">
+    <!-- ===== WORK PAGE — landing · numbers · selected work (+ shared contact) ===== -->
+    <div class="page page--work is-active" data-page="work">
+
     <!-- ============ HERO ============ -->
     <section class="hero" id="hero">
       <div class="hero__label reveal" data-reveal id="heroLabel"></div>
@@ -178,6 +177,10 @@
 
       <ol class="cases" id="cases"></ol>
     </section>
+    </div><!-- /.page--work -->
+
+    <!-- ===== ABOUT PAGE — about · path · capabilities · recognition (+ shared contact) ===== -->
+    <div class="page page--about" data-page="about" hidden>
 
     <!-- ============ ABOUT ============ -->
     <section class="about" id="about">
@@ -240,8 +243,9 @@
         </div>
       </div>
     </section>
+    </div><!-- /.page--about -->
 
-    <!-- ============ CONTACT ============ -->
+    <!-- ============ CONTACT — shared, shows on both Work & About ============ -->
     <section class="contact" id="contact">
       <span class="section-head__idx reveal" data-reveal>04 — Let's talk</span>
       <a href="mailto:riteshkumarhk@gmail.com" class="contact__mail" data-cursor="hover" data-magnetic id="contactMail">
@@ -281,7 +285,7 @@
 
   <script src="js/lenis.min.js"></script>
   <script src="js/render.js?v=3"></script>
-  <script src="js/main.js?v=2"></script>
+  <script src="js/main.js?v=3"></script>
   <script src="js/gensection.js?v=2"></script>
   <script src="js/project.js?v=10"></script>
   <script src="js/admin.js?v=2"></script>

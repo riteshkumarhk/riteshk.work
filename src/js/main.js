@@ -254,6 +254,93 @@
   }
 
   /* -------------------------------------------------
+     7b. Page routing — Work / About as distinct views
+     Client-side switch between the two page wrappers. Real paths
+     ("/", "/about") via the History API; a direct /about load is
+     served by the 404 SPA fallback as /?view=about (see 404.html),
+     which we then tidy back to /about. The case-study overlay
+     (project.js) owns /work/<id> and is left untouched.
+  ------------------------------------------------- */
+  (function pageRouter() {
+    const pages = [...document.querySelectorAll("[data-page]")];
+    if (pages.length < 2) return;
+    const pageEl = (name) => pages.find((p) => p.getAttribute("data-page") === name);
+    const navLinks = [...document.querySelectorAll("[data-page-link]")];
+    const titles = {
+      work: "Ritesh Kumar — Product Design Leadership",
+      about: "About — Ritesh Kumar",
+    };
+
+    const fromLocation = () => {
+      const p = new URLSearchParams(location.search);
+      if (p.get("view") === "about") return "about";
+      if (/^\/about\/?$/i.test(location.pathname)) return "about";
+      return "work";
+    };
+
+    // Reveal the [data-reveal] elements already in view on the freshly-shown page
+    // (the IntersectionObserver handles the rest as the user scrolls). Also re-runs
+    // the hero line-reveal when landing back on Work.
+    const revealShown = (root) => {
+      const vh = window.innerHeight || 800;
+      root.querySelectorAll("[data-reveal]").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.top < vh * 0.92) el.classList.add("is-in");
+      });
+    };
+
+    let active = null;
+    function showPage(name, opts) {
+      opts = opts || {};
+      if (name !== "work" && name !== "about") name = "work";
+      if (name === active && !opts.force) return;
+      active = name;
+      pages.forEach((pg) => {
+        const on = pg.getAttribute("data-page") === name;
+        pg.hidden = !on;
+        pg.classList.toggle("is-active", on);
+      });
+      navLinks.forEach((a) => {
+        a.classList.toggle("is-current", a.getAttribute("data-page-link") === name);
+      });
+      document.title = titles[name] || document.title;
+      if (opts.scroll !== false) {
+        if (lenis) lenis.scrollTo(0, { immediate: true });
+        else window.scrollTo(0, 0);
+      }
+      const shown = pageEl(name);
+      if (shown) requestAnimationFrame(() => revealShown(shown));
+      if (opts.push) {
+        try { history.pushState({ rkPage: name }, "", name === "about" ? "/about" : "/"); } catch (e) {}
+      }
+      onScroll(); // refresh nav scrolled/hidden + progress for the new page height
+    }
+    window.__rkShowPage = showPage;
+
+    navLinks.forEach((a) => {
+      a.addEventListener("click", (e) => {
+        const name = a.getAttribute("data-page-link");
+        if (name !== "work" && name !== "about") return;
+        e.preventDefault();
+        showPage(name, { push: true });
+      });
+    });
+
+    window.addEventListener("popstate", () => {
+      // The case-study overlay owns /work/<id>; project.js handles that popstate.
+      if (/^\/work\//i.test(location.pathname)) return;
+      showPage(fromLocation(), { push: false });
+    });
+
+    // Initial view: resolve from ?view / path, then tidy /?view=about → /about.
+    const initial = fromLocation();
+    if (new URLSearchParams(location.search).get("view") === "about") {
+      try { history.replaceState({ rkPage: "about" }, "", "/about"); } catch (e) {}
+    }
+    showPage(initial, { push: false, scroll: false, force: true });
+  })();
+
+  /* -------------------------------------------------
      8. Magnetic elements (subtle pull toward cursor)
   ------------------------------------------------- */
   if (!isTouch && !lite) {

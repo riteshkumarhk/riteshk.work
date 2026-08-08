@@ -166,6 +166,18 @@ main, .footer { transition: opacity .45s ease; }
 .nav__links a:hover { color: var(--text); }
 .nav__links a:hover .idx { color: var(--accent); }
 .nav__links a:hover::after { width: 100%; }
+/* Active page (Work / About) — persistent version of the hover state. */
+.nav__links a.is-current { color: var(--text); }
+.nav__links a.is-current .idx { color: var(--accent); }
+.nav__links a.is-current::after { width: 100%; }
+
+/* Two-page IA: the active page shows, the other is removed from flow.
+   The shared Contact section lives outside both, so it appears on Work & About. */
+.page[hidden] { display: none !important; }
+.page { animation: pageFade .5s var(--ease) both; }
+@keyframes pageFade { from { opacity: 0; } to { opacity: 1; } }
+html.lite .page { animation: none; }
+@media (prefers-reduced-motion: reduce) { .page { animation: none; } }
 
 .nav__meta { display: flex; align-items: center; gap: .6rem; font-family: var(--mono); font-size: .68rem; color: var(--text-dim); letter-spacing: .05em; }
 .nav__status { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 rgba(216,166,87,.6); animation: pulse 2.4s infinite; }
