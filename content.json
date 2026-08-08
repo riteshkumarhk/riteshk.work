@@ -30,7 +30,41 @@
     "aboutSign": "When I'm off the clock, I'm on a mountain bike — founder of a small riding community and a national cross-country racer.",
     "show": {
       "presence": false
-    }
+    },
+    "logos": [
+      {
+        "src": "/assets/uploads/ff8a819ac9081d67e353bc9fc2654a583a5a0631ea6eb617a130ecc9bf8b010a.png",
+        "name": ""
+      },
+      {
+        "src": "/assets/uploads/9e08196c9adbdead5bcb9f2b12674f405c3538ff1fa01e930a8fb35eb1fa6c1e.png",
+        "name": ""
+      },
+      {
+        "src": "/assets/uploads/a298aa80c9caace6b963271138a60de155fa33fdb8c8ee75f73f5acc38384434.webp",
+        "name": ""
+      },
+      {
+        "src": "/assets/uploads/83b101a1fe17a91d834080b34d3ae5714979cfc5b954ce597366da253aac27b5.png",
+        "name": ""
+      },
+      {
+        "src": "/assets/uploads/3bb8a3d13c7a207335f182e292a038a381b59831eabeb6f6dcf5a0f58e9cc424.png",
+        "name": ""
+      },
+      {
+        "src": "/assets/uploads/6200a994ccb5c9a1be6f591336f018e4729fde52271b6d5f75d82ac0be56dd6a.png",
+        "name": ""
+      },
+      {
+        "src": "/assets/uploads/25833bfcc25d95e0ab7edf0f0bf2184b540a2e425fbdb8df548bbe388ed5d456.png",
+        "name": ""
+      },
+      {
+        "src": "/assets/uploads/d04f18e03f357c06525e69918a86df5739e8042dfa4e244ab4b99419f9bf9c6a.png",
+        "name": ""
+      }
+    ]
   },
   "contact": {
     "name": "Ritesh Kumar",
