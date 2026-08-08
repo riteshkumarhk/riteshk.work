@@ -258,9 +258,24 @@
     if (!vp || !track) return;
     const easeOutBack = (p) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
     let off = 0, setW = 0, last = 0, paused = false, running = false, raf = 0;
-    function measure() {
-      const kids = track.children, half = kids.length / 2;
-      setW = (kids.length && kids[half]) ? kids[half].offsetLeft : 0;
+    let baseHTML = "", baseCount = 0, rz = 0;
+    const mo = new MutationObserver(onSource);
+    // render.js drops ONE set of logos in the track; repeat it enough to always
+    // exceed the marquee's width so the loop never runs out (no empty gap).
+    function onSource() { baseHTML = track.innerHTML; baseCount = track.children.length; fill(); }
+    function fill() {
+      stop();
+      if (!baseCount) { setW = 0; track.style.transform = ""; return; }
+      mo.disconnect();                                   // our own edits mustn't retrigger onSource
+      track.innerHTML = baseHTML;                        // one set → measure it
+      const oneW = track.scrollWidth || 1;
+      let copies = Math.ceil(((vp.clientWidth || 0) + oneW) / oneW);
+      if (copies < 2) copies = 2; else if (copies > 20) copies = 20;
+      track.innerHTML = baseHTML.repeat(copies);
+      mo.observe(track, { childList: true });
+      setW = track.children[baseCount] ? track.children[baseCount].offsetLeft : oneW;
+      off = 0; last = 0;
+      if (setW > 0) start();
     }
     function step(ts) {
       if (!running) return;
@@ -284,14 +299,13 @@
       }
       raf = requestAnimationFrame(step);
     }
-    function start() { measure(); if (setW <= 0 || running) return; running = true; last = 0; raf = requestAnimationFrame(step); }
+    function start() { if (running || setW <= 0) return; running = true; last = 0; raf = requestAnimationFrame(step); }
     function stop() { running = false; if (raf) cancelAnimationFrame(raf); }
     vp.addEventListener("mouseenter", () => { paused = true; });   // pause so a logo's name is readable
     vp.addEventListener("mouseleave", () => { paused = false; });
-    window.addEventListener("resize", measure, { passive: true });
-    // render.js (re)fills the track on load, SPA nav and studio preview → restart.
-    new MutationObserver(() => { stop(); start(); }).observe(track, { childList: true });
-    start();
+    window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(fill, 180); }, { passive: true });
+    mo.observe(track, { childList: true });
+    onSource();                                          // render already populated the track
   })();
 
   /* -------------------------------------------------

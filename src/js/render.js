@@ -338,11 +338,11 @@
     set("marqueeTrack", one + one);
 
     // Logo marquee (brands & products): full-colour logos with a hover name; the
-    // per-logo elastic scroll is driven by main.js. Duplicated for a seamless loop.
+    // per-logo elastic scroll + seamless repeat-to-fill are driven by main.js.
     const logos = (L.logos || []).filter((g) => g && g.src);
     const logoMarq = byId("logoMarquee");
     if (logoMarq) {
-      if (logos.length) { const dup = logos.map(logoItem).join(""); set("logoTrack", dup + dup); logoMarq.hidden = false; }
+      if (logos.length) { set("logoTrack", logos.map(logoItem).join("")); logoMarq.hidden = false; }
       else { set("logoTrack", ""); logoMarq.hidden = true; }
     }
 
