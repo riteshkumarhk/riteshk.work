@@ -608,20 +608,23 @@ html.lite .page { animation: none; }
 .awards--feature .award__ico svg { width: 1.7rem; height: 1.7rem; }
 .awards--feature li i { font-size: .8rem; letter-spacing: .04em; }
 
-/* Photos — a small horizontal strip, part of the About section (no header) */
+/* Photos — part of About: small tiles that wrap into balanced rows by count
+   (6 → 4 + 2, 5 → 3 + 2, 1–4 → a single row) */
 .about__strip {
   max-width: var(--maxw); margin: clamp(1.3rem, 2.6vw, 2rem) auto 0; padding: 0 var(--pad);
-  display: flex; gap: clamp(.5rem, 1vw, .8rem);
-  overflow-x: auto; scroll-snap-type: x proximity;
-  scrollbar-width: none; -ms-overflow-style: none;
+  --photo-w: clamp(135px, 16vw, 178px); --cols: 3;
+  display: grid; grid-template-columns: repeat(var(--cols), var(--photo-w));
+  gap: clamp(.6rem, 1.1vw, 1rem); justify-content: start;
 }
 .about__strip:empty { display: none; }
-.about__strip::-webkit-scrollbar { display: none; }
+.about__strip[data-count="1"] { --cols: 1; }
+.about__strip[data-count="2"] { --cols: 2; }
+.about__strip[data-count="4"] { --cols: 4; }
+.about__strip[data-count="6"] { --cols: 4; }
+/* data-count 3 and 5 keep the default 3 columns → 3, and 3 + 2 */
 .gallery__item {
-  position: relative; margin: 0; flex: 0 0 auto;
-  width: clamp(110px, 13vw, 150px); aspect-ratio: 4 / 5; overflow: hidden;
+  position: relative; margin: 0; aspect-ratio: 4 / 5; overflow: hidden;
   border-radius: 10px; border: 1px solid var(--line); background: var(--bg-elev);
-  scroll-snap-align: start;
 }
 .gallery__img {
   width: 100%; height: 100%; object-fit: cover; display: block; filter: saturate(.92);
@@ -634,6 +637,10 @@ html.lite .page { animation: none; }
   background: linear-gradient(transparent, rgba(6,6,8,.85)); opacity: 0; transition: opacity .4s;
 }
 .gallery__item:hover .gallery__cap { opacity: 1; }
+@media (max-width: 620px) {
+  .about__strip[data-count] { --cols: 2; }
+  .about__strip[data-count="1"] { --cols: 1; }
+}
 
 /* =================================================================
    CONTACT

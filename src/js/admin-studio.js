@@ -3013,7 +3013,8 @@ import { WORLD_LAND } from "./worldland.js";
         input("LinkedIn URL", "contact.linkedin") +
         input("Website URL", "contact.website") +
         input("Booking link", "contact.booking", { hint: "Cal.com / Calendly / any scheduler URL \u2014 shows a \u201cBook a call\u201d button in Contact. Leave blank to hide." }) +
-        resumeBlock()
+        resumeBlock() +
+        contactBadgesBlock()
       );
     },
     highlights() {
@@ -3978,6 +3979,24 @@ import { WORLD_LAND } from "./worldland.js";
     apply();
   }
 
+  /* ---------- contact section badges (which pills to show) ---------- */
+  const CONTACT_BADGES = [
+    ["email", "Email"],
+    ["phone", "Phone"],
+    ["linkedin", "LinkedIn"],
+    ["vcard", "Save contact"],
+    ["resume", "R\u00e9sum\u00e9"],
+    ["booking", "Book a call"],
+  ];
+  function contactBadgesBlock() {
+    const B = (data.contact && data.contact.badges) || {};
+    const rows = CONTACT_BADGES.map(function (d) {
+      return '<label class="chk"><input type="checkbox" data-act="badge-toggle" data-badge="' + d[0] + '"' + (B[d[0]] !== false ? " checked" : "") + " /> " + escHtml(d[1]) + "</label>";
+    }).join("");
+    return secHead("Contact badges", "Choose which pills show in the contact section. A pill still needs its value above to appear (e.g. Book a call needs a booking link).") +
+      '<div class="adm__badges">' + rows + "</div>";
+  }
+
   /* ---------- About-page section order + visibility ---------- */
   function aboutLayoutArr() {
     const RK = window.RK || {};
@@ -4524,6 +4543,13 @@ import { WORLD_LAND } from "./worldland.js";
     if (t.dataset.iconpick !== undefined) {
       const arr = data[t.dataset.iconpick] || [], it = arr[+t.dataset.index];
       if (it) { if (t.value) it.icon = t.value; else delete it.icon; apply(true); if (activeTab === t.dataset.iconpick) renderBody(); }
+      return;
+    }
+    if (t.dataset.act === "badge-toggle") {
+      data.contact = data.contact || {};
+      data.contact.badges = data.contact.badges || {};
+      data.contact.badges[t.dataset.badge] = t.checked;
+      apply(true);
       return;
     }
     if (t.dataset.gpath !== undefined) { onGenEdit(t); return; }
