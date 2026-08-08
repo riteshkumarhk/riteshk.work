@@ -1212,7 +1212,9 @@
             }
           ]
         }
-      }
+      },
+      "parDir": "down",
+      "parAmt": 50
     },
     {
       "id": "w1783840785203",
@@ -1964,7 +1966,9 @@
           ]
         }
       },
-      "hidden": false
+      "hidden": false,
+      "parDir": "down",
+      "parAmt": 50
     },
     {
       "id": "w1783924971648",
@@ -3057,7 +3061,9 @@
             }
           ]
         }
-      }
+      },
+      "parDir": "down",
+      "parAmt": 50
     },
     {
       "id": "xbox",
