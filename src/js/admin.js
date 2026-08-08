@@ -13,7 +13,7 @@ import {
   clone, escHtml, escAttr, RK_KDF_IT, sha256,
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
-  rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath, adminLogin, ADMIN_WORKER, TURNSTILE_SITEKEY,
+  rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath, adminLogin, adminSession, ADMIN_WORKER, TURNSTILE_SITEKEY,
   vaultSignedUrl, vaultRedeem, ownerVaultGrant, webauthnSupported, webauthnList, webauthnAuth, authStatus, cachedAuthMode, recoverWithPassphrase
 } from "./admin-core.js";
 
@@ -162,7 +162,6 @@ import {
   ];
   /* ---------- passphrase gate (always asks) ---------- */
   function gate() {
-    if (window.innerWidth < ADMIN_MIN) { flash("Admin mode needs a wider screen — open it on a laptop or desktop."); return; }
     thDismiss(true);   // clear the landing “have a ticket?” nudge before the gate/editor (it sits above them)
     const publishedGate = (window.RK && window.RK.published && window.RK.published.adminGate) || null;
     const avatarUrl = (window.RK && window.RK.published && window.RK.published.contact && window.RK.published.contact.avatar) || "";
@@ -338,6 +337,7 @@ import {
   }
   function studioUrlExit() { try { if (window.__STUDIO_PAGE) { location.href = "/"; return; } if (location.pathname === "/studio") history.replaceState({}, "", "/"); } catch (e) {} }
   function openStudio() {
+    if (window.innerWidth < ADMIN_MIN) { mobileSignedIn(); return; }   // phone: recognise device + read-only insights; the editor is desktop-only
     try { localStorage.setItem("rk:noanalytics", "1"); } catch (e) {}   // stop counting the owner's own visits in Web Analytics
     loadStudio().then(function () {
       if (window.__RKStudio) {
@@ -587,19 +587,91 @@ import {
     if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musAutoStart();
   }
 
-  // A visitor-friendly analytics opt-out shown in the menu. Works on ANY device/browser — including
-  // the owner's phone, where the desktop-only studio sign-in (the usual owner tell) isn't available.
-  // Toggles the durable rk:noanalytics flag that BOTH the page-view beacon (index.html) and the
-  // intent events (render.js) already honour, so this device stops counting from the next load.
-  function naInner(on) {
-    return '<span class="cmenu__ico">' + (on ? "\u25c9" : "\u25cb") + '</span><span><b>' + (on ? "Not counting this device" : "Don\u2019t count my visits") + '</b><i>' + (on ? "This device is excluded from analytics" : "Keep this device out of site analytics") + "</i></span>";
+  // ---- Mobile owner: sign in to recognise this device (excludes it from analytics) + a lean,
+  // read-only Insights readout. The full studio (editing/publishing) stays desktop-only; recruiter
+  // approvals happen in the Requests PWA. rk:owner is set by saveAdminSession on auth. ----
+  var mobEl = null, mobDays = 7;
+  function mobileSignedIn() {
+    try { localStorage.setItem("rk:owner", "1"); localStorage.setItem("rk:noanalytics", "1"); } catch (e) {}
+    mobOpen("confirm");
+  }
+  function mobClose() { if (mobEl) { mobEl.remove(); mobEl = null; document.body.style.overflow = ""; } }
+  function mobOpen(view) {
+    mobClose();
+    mobEl = document.createElement("div");
+    mobEl.className = "mobadm";
+    document.body.appendChild(mobEl);
+    document.body.style.overflow = "hidden";
+    mobEl.addEventListener("click", onMobClick);
+    mobRender(view || "confirm");
+  }
+  function mobRender(view) {
+    if (!mobEl) return;
+    if (view === "insights") { mobEl.innerHTML = mobInsShell(); mobLoadInsights(); }
+    else mobEl.innerHTML = mobConfirmHtml();
+  }
+  function onMobClick(e) {
+    var b = e.target.closest("[data-mob]");
+    if (!b) { if (e.target === mobEl) mobClose(); return; }
+    var a = b.dataset.mob;
+    if (a === "close") mobClose();
+    else if (a === "confirm") mobRender("confirm");
+    else if (a === "insights") mobRender("insights");
+    else if (a === "days") { mobDays = +b.dataset.d || 7; if (mobEl) mobEl.querySelectorAll(".mobins__d").forEach(function (x) { x.classList.toggle("is-on", x === b); }); mobLoadInsights(); }
+  }
+  function mobConfirmHtml() {
+    return '<div class="mobadm__box">' +
+      '<button class="mobadm__x" data-mob="close" aria-label="Close">\u2715</button>' +
+      '<div class="mobadm__check">\u2713</div>' +
+      '<h2 class="mobadm__title">This device is recognised</h2>' +
+      '<p class="mobadm__sub">You\u2019re signed in as the owner. This phone <b>won\u2019t be counted</b> in your analytics.</p>' +
+      '<p class="mobadm__note">Editing &amp; publishing live in the <b>desktop studio</b>. Recruiter approvals come through the <b>Requests</b> app.</p>' +
+      '<div class="mobadm__actions"><button class="btn btn--ghost" data-mob="close">Done</button><button class="btn btn--primary" data-mob="insights">View insights</button></div>' +
+      "</div>";
+  }
+  function mobInsShell() {
+    var dayBtns = [1, 7, 30].map(function (d) { return '<button class="mobins__d' + (mobDays === d ? " is-on" : "") + '" data-mob="days" data-d="' + d + '">' + (d === 1 ? "24h" : d + "d") + "</button>"; }).join("");
+    return '<div class="mobadm__box mobadm__box--wide">' +
+      '<div class="mobins__bar"><button class="mobadm__back" data-mob="confirm" aria-label="Back">\u2039</button><b>Insights</b><button class="mobadm__x mobadm__x--inline" data-mob="close" aria-label="Close">\u2715</button></div>' +
+      '<div class="mobins__days">' + dayBtns + "</div>" +
+      '<div class="mobins__body" data-mobins><div class="mobins__msg">Loading your numbers\u2026</div></div>' +
+      "</div>";
+  }
+  async function mobLoadInsights() {
+    var body = mobEl && mobEl.querySelector("[data-mobins]"); if (!body) return;
+    var sess = adminSession();
+    if (!sess) { body.innerHTML = '<div class="mobins__msg">Your session expired \u2014 sign in again.</div>'; return; }
+    body.innerHTML = '<div class="mobins__msg">Loading your numbers\u2026</div>';
+    try {
+      var r = await fetch(ADMIN_WORKER + "/admin/insights?days=" + mobDays, { headers: { Authorization: "Bearer " + sess } });
+      if (!r.ok) { body.innerHTML = '<div class="mobins__msg">Couldn\u2019t load analytics (' + r.status + ").</div>"; return; }
+      body.innerHTML = mobInsHtml(await r.json());
+    } catch (e) { body.innerHTML = '<div class="mobins__msg">Network error.</div>'; }
+  }
+  function mobInsHtml(d) {
+    var ev = d.events || {}, tr = d.traffic || {};
+    var cfHas = tr.configured && !tr.error && (tr.total || 0) > 0;
+    var pv = cfHas ? (tr.total || 0) : (ev.pageviews || 0);
+    var EVL = { case_open: "Case opened", deepcut_unlock: "Deeper-cut unlocked", resume_download: "R\u00e9sum\u00e9 opened", contact_submit: "Contact clicked", request_access: "Access requested", vcard_download: "Contact saved", booking_open: "Booking opened", skim_open: "Skim view" };
+    var cl = {}; try { ((window.RK && window.RK.published && window.RK.published.work) || []).forEach(function (w) { if (w && w.id) cl[w.id] = w.title || w.client || w.id; }); } catch (e) {}
+    function num(n) { n = n || 0; if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M"; if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "k"; return String(n); }
+    function ago(ts) { var s = Math.max(0, (Date.now() - (ts || 0)) / 1000); if (s < 60) return "just now"; if (s < 3600) return Math.floor(s / 60) + "m"; if (s < 86400) return Math.floor(s / 3600) + "h"; return Math.floor(s / 86400) + "d"; }
+    function flag(cc) { cc = String(cc || "").toUpperCase(); if (!/^[A-Z]{2}$/.test(cc)) return "\uD83C\uDF10"; return String.fromCodePoint.apply(null, [].map.call(cc, function (c) { return 127397 + c.charCodeAt(0); })); }
+    function card(n, l) { return '<div class="mobins__card"><div class="mobins__card-n">' + n + '</div><div class="mobins__card-l">' + escHtml(l) + "</div></div>"; }
+    function bars(obj, map) { var arr = Object.keys(obj || {}).map(function (k) { return [k, obj[k]]; }).filter(function (e) { return e[1]; }); if (!arr.length) return '<div class="mobins__empty">Nothing yet.</div>'; arr.sort(function (a, b) { return b[1] - a[1]; }); var max = arr[0][1] || 1; return '<div class="mobins__bars">' + arr.slice(0, 8).map(function (e) { var l = (map && map[e[0]]) || e[0]; return '<div class="mobins__row"><span class="mobins__row-l" title="' + escAttr(l) + '">' + escHtml(l) + '</span><span class="mobins__row-t"><span class="mobins__row-f" style="width:' + Math.round(e[1] / max * 100) + '%"></span></span><span class="mobins__row-n">' + e[1] + "</span></div>"; }).join("") + "</div>"; }
+    function countries(geo) { var arr = []; for (var k in (geo || {})) { var n = geo[k] || 0; if (!n) continue; arr.push([/^[A-Za-z]{2}$/.test(k) ? k.toUpperCase() : k, n]); } if (!arr.length) return '<div class="mobins__empty">No located visits yet.</div>'; arr.sort(function (a, b) { return b[1] - a[1]; }); var max = arr[0][1] || 1; return '<div class="mobins__bars">' + arr.slice(0, 8).map(function (e) { return '<div class="mobins__row"><span class="mobins__row-l">' + flag(e[0]) + " " + escHtml(e[0]) + '</span><span class="mobins__row-t"><span class="mobins__row-f" style="width:' + Math.round(e[1] / max * 100) + '%"></span></span><span class="mobins__row-n">' + e[1] + "</span></div>"; }).join("") + "</div>"; }
+    function recent(list) { if (!list || !list.length) return '<div class="mobins__empty">No events yet.</div>'; return '<ul class="mobins__feed">' + list.slice(0, 15).map(function (r) { var lbl = EVL[r.t] || r.t; var what = r.id ? (" \u2014 " + escHtml(cl[r.id] || r.id)) : ""; var where = r.c ? (flag(r.c) + " ") : ""; return '<li><span class="mobins__feed-l">' + where + escHtml(lbl) + what + '</span><span class="mobins__feed-t">' + ago(r.at) + "</span></li>"; }).join("") + "</ul>"; }
+    return '<div class="mobins__cards">' + card(num(pv), "Page views") + card(num(ev.total || 0), "Intent events") + card(num((ev.types && ev.types.case_open) || 0), "Case opens") + card(num((ev.types && ev.types.deepcut_unlock) || 0), "Unlocks") + "</div>" +
+      '<div class="mobins__sec"><h3>Intent events</h3>' + bars(ev.types, EVL) + "</div>" +
+      '<div class="mobins__sec"><h3>Most-opened cases</h3>' + bars((ev.targets || {}).case_open, cl) + "</div>" +
+      '<div class="mobins__sec"><h3>Where visitors are</h3>' + countries(cfHas ? tr.geo : ev.geo) + "</div>" +
+      '<div class="mobins__sec"><h3>Recent activity</h3>' + recent(ev.recent) + "</div>";
   }
   function buildMenu() {
     var _fly = document.querySelector(".rkfly"); if (_fly && _fly.__dismiss) _fly.__dismiss(true);   // fold the recruiter flyout away — the menu itself offers “Special view”
     const theme = (window.__theme ? window.__theme.mode() : (localStorage.getItem(THEME_KEY) || "system"));
     const narrow = window.innerWidth < ADMIN_MIN;
     const owner = !!localStorage.getItem(HASH_KEY);   // only the owner's own browser gets Present mode
-    const noCount = localStorage.getItem("rk:noanalytics") === "1";
     menuEl = document.createElement("div");
     menuEl.className = "cmenu";
     menuEl.innerHTML =
@@ -620,9 +692,7 @@ import {
       '<div class="cmenu__sep"></div>' +
       '<button class="cmenu__item" data-open="special"><span class="cmenu__ico">\u25c7</span><span><b>Recruiter or hiring manager</b><i>Enter a ticket for a curated view</i></span></button>' +
       (owner ? '<button class="cmenu__item" data-open="present"><span class="cmenu__ico">\u25b6</span><span><b>Present mode</b><i>Unlock all work for presenting, not editing</i></span></button>' : "") +
-      '<button class="cmenu__item" data-open="admin"' + (narrow ? " disabled" : "") + '><span class="cmenu__ico">\u2726</span><span><b>Admin mode</b><i>' + (narrow ? "Needs a wider screen" : "Edit &amp; curate the site") + "</i></span></button>" +
-      '<div class="cmenu__sep"></div>' +
-      '<button class="cmenu__item cmenu__item--na" data-na>' + naInner(noCount) + "</button>";
+      '<button class="cmenu__item" data-open="admin"><span class="cmenu__ico">\u2726</span><span><b>' + (narrow ? "Recognise this device" : "Admin mode") + '</b><i>' + (narrow ? "Sign in so this phone isn\u2019t counted" : "Edit &amp; curate the site") + "</i></span></button>";
     document.body.appendChild(menuEl);
     positionMenu();
     placeSoundToast();   // push any live “sound on” toast below the menu we just opened
@@ -662,15 +732,6 @@ import {
       if (window.__theme) window.__theme.set(th.dataset.theme);
       else localStorage.setItem(THEME_KEY, th.dataset.theme);
       menuEl.querySelectorAll(".cmenu__theme").forEach(function (b) { b.classList.toggle("is-on", b === th); });
-      return;
-    }
-    const na = e.target.closest("[data-na]");
-    if (na) {
-      e.stopPropagation();   // keep the menu open (and don't let the innerHTML swap trip the outside-click close)
-      var _on = localStorage.getItem("rk:noanalytics") === "1";
-      try { if (_on) localStorage.removeItem("rk:noanalytics"); else localStorage.setItem("rk:noanalytics", "1"); } catch (x) {}
-      na.innerHTML = naInner(!_on);
-      flash(_on ? "This device will be counted in analytics again." : "Done \u2014 this device won\u2019t be counted in analytics.");
       return;
     }
     const it = e.target.closest("[data-open]");
