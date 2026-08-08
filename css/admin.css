@@ -242,8 +242,12 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__sec-title { font-family: var(--serif); font-weight: 300; font-size: 1.55rem; color: var(--text); margin-bottom: .25rem; }
 .adm__sec-note { font-size: .76rem; color: var(--text-dim); margin-bottom: 1.2rem; line-height: 1.55; }
 .adm__sec-note em { color: var(--accent); font-style: normal; }
-/* Separate stacked groups within a tab (e.g. About: sections / About text / Photos) with a divider + breathing room. */
-.adm__sec-title:not(:first-child) { margin-top: 1.9rem; padding-top: 1.9rem; border-top: 1px solid var(--line); }
+/* Card-like group sections within a tab (About: About me / Photos · Contact: fields / résumé / badges).
+   A secHead placed inside a card becomes a small mono heading; the tab's top secHead stays serif. */
+.adm__group { border: 1px solid var(--line); border-radius: 12px; padding: 1.1rem 1.15rem 1.25rem; margin-bottom: 1rem; background: var(--bg-2); }
+.adm__group > .adm__sec-title { font-family: var(--mono); font-weight: 400; font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim); margin-bottom: .35rem; }
+.adm__group > .adm__sec-note { margin-bottom: 1rem; }
+.adm__group > *:last-child { margin-bottom: 0; }
 
 /* auto-style affordance */
 .adm__autobar { display: flex; align-items: center; gap: .7rem; margin-bottom: 1.4rem; flex-wrap: wrap; }

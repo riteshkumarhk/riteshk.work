@@ -3002,19 +3002,21 @@ import { WORLD_LAND } from "./worldland.js";
     contact() {
       return (
         secHead("Contact", "Used across the contact section, menu, footer and the floating dock.") +
-        avatarBlock() +
-        input("Full name", "contact.name", { hint: "used for the \u201cSave contact\u201d vCard download" }) +
-        input("Display email", "contact.email", { hint: "Shown on your site, the CV / r\u00e9sum\u00e9 PDF and the Save-contact card." }) +
-        input("Service email", "contact.serviceEmail", { hint: "Where access-request and booking alerts are sent (also the reply-to). Leave blank to use your display email." }) +
-        '<div class="af__row">' +
-        input("Phone (display)", "contact.phone") +
-        input("Phone (dial)", "contact.phoneRaw", { hint: "no spaces, e.g. +918197809767" }) +
-        "</div>" +
-        input("LinkedIn URL", "contact.linkedin") +
-        input("Website URL", "contact.website") +
-        input("Booking link", "contact.booking", { hint: "Cal.com / Calendly / any scheduler URL \u2014 shows a \u201cBook a call\u201d button in Contact. Leave blank to hide." }) +
-        resumeBlock() +
-        contactBadgesBlock()
+        group(avatarBlock()) +
+        group(
+          input("Full name", "contact.name", { hint: "used for the \u201cSave contact\u201d vCard download" }) +
+          input("Display email", "contact.email", { hint: "Shown on your site, the CV / r\u00e9sum\u00e9 PDF and the Save-contact card." }) +
+          input("Service email", "contact.serviceEmail", { hint: "Where access-request and booking alerts are sent (also the reply-to). Leave blank to use your display email." }) +
+          '<div class="af__row">' +
+          input("Phone (display)", "contact.phone") +
+          input("Phone (dial)", "contact.phoneRaw", { hint: "no spaces, e.g. +918197809767" }) +
+          "</div>" +
+          input("LinkedIn URL", "contact.linkedin") +
+          input("Website URL", "contact.website") +
+          input("Booking link", "contact.booking", { hint: "Cal.com / Calendly / any scheduler URL \u2014 shows a \u201cBook a call\u201d button in Contact. Leave blank to hide." })
+        ) +
+        group(resumeBlock()) +
+        group(contactBadgesBlock())
       );
     },
     highlights() {
@@ -3084,11 +3086,13 @@ import { WORLD_LAND } from "./worldland.js";
           "</li>";
       });
       html += "</ul>";
-      html += secHead("About text", "The opening lines of your About section. (Also written by \u2728 Draft with AI in the Landing tab.)") +
+      html += group(
+        secHead("About me", "The opening lines of your About section. (Also written by \u2728 Draft with AI in the Landing tab.)") +
         input("Lead line", "landing.aboutLead", { md: true, type: "textarea", rows: 2, hint: "The big opening line of the About section. *italic* for emphasis." }) +
         input("Paragraphs", "landing.about", { md: true, type: "textarea", rows: 7, hint: "Separate paragraphs with a blank line. **bold**, *italic*, [[Product]] bronze." }) +
-        input("Sign-off", "landing.aboutSign", { md: true, hint: "The closing personal line, e.g. an off-the-clock note." });
-      html += aboutGalleryBlock();
+        input("Sign-off", "landing.aboutSign", { md: true, hint: "The closing personal line, e.g. an off-the-clock note." })
+      );
+      html += group(aboutGalleryBlock());
       return html;
     },
     path() {
@@ -4011,6 +4015,10 @@ import { WORLD_LAND } from "./worldland.js";
 
   function secHead(title, note) {
     return '<div class="adm__sec-title">' + title + '</div><div class="adm__sec-note">' + note + "</div>";
+  }
+  // Wrap a group of controls in a card. A secHead inside a card renders as a small mono heading.
+  function group(inner) {
+    return '<section class="adm__group">' + inner + "</section>";
   }
 
   /* ---------- Design Journey editor (L2 panel) ---------- */
