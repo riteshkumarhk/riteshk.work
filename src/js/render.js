@@ -325,10 +325,7 @@
     set("journeyCta", (jrnHas && presentActive) ? '<button type="button" class="path__journey" data-journey-open data-cursor="hover">View full journey <span aria-hidden="true">\u2192</span></button>' : "");
     set("recognitionList", (data.recognition || []).map(awardEl).join(""));
     set("educationList", (data.education || []).map(awardEl).join(""));
-    const galItems = (data.aboutGallery || []).filter((g) => g && g.src).slice(0, 6);
-    set("aboutGallery", galItems.map(galleryEl).join(""));
-    const galEl = byId("aboutGallery");
-    if (galEl) galEl.setAttribute("data-count", String(galItems.length)); // drives the row-wrap layout (6→4+2, 5→3+2)
+    set("aboutGallery", (data.aboutGallery || []).filter((g) => g && g.src).slice(0, 6).map(galleryEl).join(""));
 
     applyAboutLayout(data);
 
@@ -336,13 +333,17 @@
     if (mail) { mail.setAttribute("href", "mailto:" + (C.email || "")); mail.onclick = function () { track("contact_submit"); }; }
     const cb = C.badges || {};
     const badgeOn = (k) => cb[k] !== false; // absent = shown (backward compatible); only false hides
-    set("contactRow",
-      ((C.email && badgeOn("email")) ? '<a href="mailto:' + esc(C.email) + '" class="contact__pill" data-cursor="hover">' + esc(C.email) + "</a>" : "") +
-      ((C.phone && badgeOn("phone")) ? '<a href="tel:' + esc(C.phoneRaw || "") + '" class="contact__pill" data-cursor="hover">' + esc(C.phone) + "</a>" : "") +
-      ((C.linkedin && badgeOn("linkedin")) ? '<a href="' + esc(C.linkedin) + '" class="contact__pill" target="_blank" rel="noopener" data-cursor="hover">LinkedIn \u2197</a>' : "") +
-      (badgeOn("vcard") ? '<button type="button" id="contactVcard" class="contact__pill contact__pill--vcard" data-cursor="hover">Save contact \u2193</button>' : "") +
-      ((C.resume && badgeOn("resume")) ? '<a id="contactResume" href="' + (/^data:/.test(C.resume) ? "#" : esc(C.resume)) + '" class="contact__pill contact__pill--resume" data-cursor="hover">R\u00e9sum\u00e9 \u2193</a>' : "") +
-      ((C.booking && badgeOn("booking")) ? '<a id="contactBook" href="' + esc(C.booking) + '" class="contact__pill contact__pill--book" target="_blank" rel="noopener" data-cursor="hover">Book a call \u2197</a>' : ""));
+    const badges = [];
+    if (C.email && badgeOn("email")) badges.push('<a href="mailto:' + esc(C.email) + '" class="contact__pill" data-cursor="hover">' + esc(C.email) + "</a>");
+    if (C.phone && badgeOn("phone")) badges.push('<a href="tel:' + esc(C.phoneRaw || "") + '" class="contact__pill" data-cursor="hover">' + esc(C.phone) + "</a>");
+    if (C.linkedin && badgeOn("linkedin")) badges.push('<a href="' + esc(C.linkedin) + '" class="contact__pill" target="_blank" rel="noopener" data-cursor="hover">LinkedIn \u2197</a>');
+    if (badgeOn("vcard")) badges.push('<button type="button" id="contactVcard" class="contact__pill contact__pill--vcard" data-cursor="hover">Save contact \u2193</button>');
+    if (C.resume && badgeOn("resume")) badges.push('<a id="contactResume" href="' + (/^data:/.test(C.resume) ? "#" : esc(C.resume)) + '" class="contact__pill contact__pill--resume" data-cursor="hover">R\u00e9sum\u00e9 \u2193</a>');
+    if (C.booking && badgeOn("booking")) badges.push('<a id="contactBook" href="' + esc(C.booking) + '" class="contact__pill contact__pill--book" target="_blank" rel="noopener" data-cursor="hover">Book a call \u2197</a>');
+    // Balanced rows: 6 badges → 4 + 2, 5 → 3 + 2, 1–4 → a single row.
+    const firstRow = badges.length === 6 ? 4 : badges.length === 5 ? 3 : badges.length;
+    const badgeLines = (firstRow < badges.length) ? [badges.slice(0, firstRow), badges.slice(firstRow)] : [badges];
+    set("contactRow", badgeLines.map((ln) => '<div class="contact__line">' + ln.join("") + "</div>").join(""));
     const cRes = byId("contactResume");
     if (cRes) cRes.onclick = function (e) { e.preventDefault(); openResume(C.resume); };
     const cBook = byId("contactBook");
