@@ -242,6 +242,8 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__sec-title { font-family: var(--serif); font-weight: 300; font-size: 1.55rem; color: var(--text); margin-bottom: .25rem; }
 .adm__sec-note { font-size: .76rem; color: var(--text-dim); margin-bottom: 1.2rem; line-height: 1.55; }
 .adm__sec-note em { color: var(--accent); font-style: normal; }
+/* Separate stacked groups within a tab (e.g. About: sections / About text / Photos) with a divider + breathing room. */
+.adm__sec-title:not(:first-child) { margin-top: 1.9rem; padding-top: 1.9rem; border-top: 1px solid var(--line); }
 
 /* auto-style affordance */
 .adm__autobar { display: flex; align-items: center; gap: .7rem; margin-bottom: 1.4rem; flex-wrap: wrap; }
