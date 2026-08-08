@@ -4014,6 +4014,11 @@ import { WORLD_LAND } from "./worldland.js";
       '<div class="adm__gal-thumb' + (src ? " has" : "") + '">' + thumb + "</div>" +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="logo-upload" data-lindex="' + j + '">' + (src ? "Replace\u2026" : "Upload\u2026") + "</button>" + (src ? '<button class="btn btn--ghost" data-act="logo-clear" data-lindex="' + j + '">Clear</button>' : "") + mediaSizeTag(src) + "</div>" +
       '<input type="text" class="adm__gal-cap" data-logoedit="' + j + '" data-logofield="name" value="' + escAttr(g.name || "") + '" placeholder="Name (shown on hover)" />' +
+      '<select class="adm__logo-size" data-logosize="' + j + '" style="width:100%;margin-top:.4rem" title="Logo size within its card">' +
+        '<option value="sm"' + (g.size === "sm" ? " selected" : "") + ">Small</option>" +
+        '<option value="md"' + (!g.size || g.size === "md" ? " selected" : "") + ">Medium</option>" +
+        '<option value="lg"' + (g.size === "lg" ? " selected" : "") + ">Large</option>" +
+      "</select>" +
       "</div>";
   }
   function logosBlock() {
@@ -4594,6 +4599,7 @@ import { WORLD_LAND } from "./worldland.js";
   function onChange(e) {
     const t = e.target;
     if (t.dataset.worklayout !== undefined) { data.workLayout = t.value; saveDraft(true); apply(true); return; }
+    if (t.dataset.logosize !== undefined) { const arr = (data.landing || {}).logos, k = +t.dataset.logosize; if (arr && arr[k]) { arr[k].size = t.value; apply(true); } return; }
     if (t.dataset.act === "aboutsec-toggle") {
       const arr = aboutLayoutArr(), key = t.dataset.key;
       for (let k = 0; k < arr.length; k++) if (arr[k].key === key) arr[k].on = t.checked;

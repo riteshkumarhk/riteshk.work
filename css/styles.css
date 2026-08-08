@@ -367,19 +367,26 @@ html.lite .page { animation: none; }
    ================================================================= */
 .logos {
   position: relative; overflow: hidden;
-  padding: clamp(1.5rem, 3vw, 2.6rem) 0;
+  padding: clamp(1rem, 2vw, 1.7rem) 0;
   border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft);
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
           mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
 }
-.logos__track { display: flex; align-items: center; gap: clamp(2.2rem, 5vw, 4.5rem); width: max-content; will-change: transform; }
-.logo { position: relative; flex: 0 0 auto; display: grid; place-items: center; height: clamp(34px, 5.5vw, 52px); }
-.logo__img {
-  max-height: 100%; max-width: clamp(84px, 12vw, 148px); width: auto; object-fit: contain;
-  transform-origin: center; transition: filter .3s var(--ease);
-  -webkit-user-drag: none; user-select: none;
+.logos__track { display: flex; align-items: center; gap: clamp(0.85rem, 1.5vw, 1.4rem); width: max-content; will-change: transform; }
+.logo { position: relative; flex: 0 0 auto; }
+/* Each logo sits in a uniform rounded chip so mixed full-colour brands feel like one
+   set. main.js scales .logo__card for the elastic entrance; the name sits outside it. */
+.logo__card {
+  display: grid; place-items: center;
+  width: clamp(108px, 13.5vw, 152px); height: clamp(58px, 7.5vw, 78px);
+  background: var(--bg-elev); border: 1px solid var(--line-soft); border-radius: 14px;
+  transform-origin: center;
+  transition: border-color .3s var(--ease), box-shadow .3s var(--ease);
 }
-.logo:hover .logo__img { filter: invert(1); }        /* full colour → negative on hover */
+.logo__img { max-height: 60%; max-width: 64%; width: auto; object-fit: contain; -webkit-user-drag: none; user-select: none; }
+.logo__card--sm .logo__img { max-height: 44%; max-width: 50%; }
+.logo__card--lg .logo__img { max-height: 78%; max-width: 82%; }
+.logo:hover .logo__card { border-color: var(--accent); box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28); }
 .logo__name {
   position: absolute; bottom: calc(100% + 9px); left: 50%;
   transform: translateX(-50%) translateY(4px);

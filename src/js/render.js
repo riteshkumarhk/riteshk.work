@@ -177,8 +177,11 @@
     const nm = esc(g.name || "");
     const nmAttr = nm.replace(/"/g, "&quot;");
     const src = esc(g.src || "").replace(/"/g, "&quot;");
+    const size = (g.size === "sm" || g.size === "lg") ? g.size : "md";
     return '<span class="logo" data-name="' + nmAttr + '">' +
-      '<img class="logo__img" src="' + src + '" alt="' + nmAttr + '" loading="lazy" draggable="false" />' +
+      '<span class="logo__card logo__card--' + size + '">' +
+        '<img class="logo__img" src="' + src + '" alt="' + nmAttr + '" loading="lazy" draggable="false" />' +
+      "</span>" +
       (nm ? '<span class="logo__name">' + nm + "</span>" : "") +
       "</span>";
   }
