@@ -282,16 +282,35 @@
     const C = data.contact || {};
     const caps = data.capabilities || [];
 
+    // Landing pieces the owner can individually show/hide from the studio
+    // (data.landing.show = {eyebrow,domains,intro,presence}; missing = shown).
+    // The main statement is the hero anchor and always renders.
+    const show = L.show || {};
+    const showEyebrow = show.eyebrow !== false && !!L.eyebrow;
+    const showDomains = show.domains !== false && !!L.domains;
     set("heroLabel",
-      '<span class="tick">◦</span> ' + esc(L.eyebrow) +
-      ' <span class="hero__label-sep">/</span> ' + esc(L.domains));
+      (showEyebrow || showDomains)
+        ? ('<span class="tick">◦</span> ' +
+           (showEyebrow ? esc(L.eyebrow) : "") +
+           (showEyebrow && showDomains ? ' <span class="hero__label-sep">/</span> ' : "") +
+           (showDomains ? esc(L.domains) : ""))
+        : "");
+    const heroLabelEl = byId("heroLabel");
+    if (heroLabelEl) heroLabelEl.hidden = !(showEyebrow || showDomains);
 
     const lines = String(L.statement || "").split("\n").filter((x) => x.length);
     set("heroTitle",
       lines.map((ln) => '<span class="line" data-reveal><span>' + md(ln) + "</span></span>").join(""));
 
-    set("heroIntro", md(L.intro));
-    set("heroNowText", md(L.presence));
+    const showIntro = show.intro !== false;
+    set("heroIntro", showIntro ? md(L.intro) : "");
+    const heroIntroEl = byId("heroIntro");
+    if (heroIntroEl) heroIntroEl.hidden = !showIntro;
+
+    const showPresence = show.presence !== false;
+    set("heroNowText", showPresence ? md(L.presence) : "");
+    const heroNowEl = document.querySelector(".hero__now");
+    if (heroNowEl) heroNowEl.hidden = !showPresence;
     const av = L.available || {};
     const avEl = byId("heroAvail");
     if (avEl) avEl.innerHTML = (av.on && av.text) ? ('<span class="hero__avail-dot" aria-hidden="true"></span>' + md(av.text)) : "";

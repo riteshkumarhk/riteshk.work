@@ -284,6 +284,14 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 /* ---------- form controls ---------- */
 .af { margin-bottom: 1rem; }
 .af__label { display: block; font-family: var(--mono); font-size: .64rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); margin-bottom: .35rem; }
+/* label + show/hide switch on one row (landing content toggles) */
+.af__labelrow { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .35rem; }
+.af__labelrow .af__label { margin-bottom: 0; }
+.af__tog { display: inline-flex; align-items: center; gap: .4rem; flex: 0 0 auto; cursor: pointer; font-family: var(--mono); font-size: .58rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); user-select: none; }
+.af__tog input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+.af__tog-state { min-width: 3.4em; }
+.af__tog input:checked + .af__tog-state { color: var(--accent); }
+.af--off textarea, .af--off input[data-path] { opacity: .45; }
 .af__hint { font-size: .68rem; color: var(--text-faint); margin-top: .35rem; line-height: 1.4; }
 .mdbar { display: flex; gap: 4px; margin-bottom: 6px; }
 .mdbar__b { width: 26px; height: 24px; display: inline-flex; align-items: center; justify-content: center; padding: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; color: var(--text-dim); font-family: var(--serif); font-size: .82rem; line-height: 1; cursor: pointer; transition: border-color .15s, color .15s, background .15s; }

@@ -446,7 +446,22 @@ import { WORLD_LAND } from "./worldland.js";
     } else {
       control = '<input type="text" data-path="' + path + '" value="' + escAttr(val) + '" />';
     }
-    return '<div class="af' + (opts.md ? " af--md" : "") + '"><label class="af__label">' + label + "</label>" + (opts.md ? mdBar() : "") + control + hint + "</div>";
+    // opts.toggle = a landing show-key ("eyebrow" etc.). Adds a Shown/Hidden switch on the
+    // label row that flips data.landing.show[key]; the field stays editable while hidden.
+    let labelBlock, off = false;
+    if (opts.toggle) {
+      const on = landingShown(opts.toggle); off = !on;
+      labelBlock = '<div class="af__labelrow"><label class="af__label">' + label + "</label>" +
+        '<label class="af__tog" title="Show this on the landing page"><input type="checkbox" data-act="landing-show" data-showkey="' + opts.toggle + '"' + (on ? " checked" : "") + ' /><span class="af__tog-state">' + (on ? "Shown" : "Hidden") + "</span></label></div>";
+    } else {
+      labelBlock = '<label class="af__label">' + label + "</label>";
+    }
+    return '<div class="af' + (opts.md ? " af--md" : "") + (off ? " af--off" : "") + '">' + labelBlock + (opts.md ? mdBar() : "") + control + hint + "</div>";
+  }
+  // A landing content piece is shown unless its show-flag is explicitly false (back-compat: missing = shown).
+  function landingShown(key) {
+    const s = ((data.landing || {}).show) || {};
+    return s[key] !== false;
   }
   // A small formatting toolbar for the mini-markdown fields. It only wraps the current selection with
   // the same **bold** / *italic* / [[bronze]] markers the site already understands — the stored text
@@ -2988,11 +3003,11 @@ import { WORLD_LAND } from "./worldland.js";
       return (
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
         '<div class="adm__autobar"><button class="btn btn--auto" data-act="autostyle">Auto-style landing</button><button class="btn btn--auto" data-act="landing-ai" style="margin-left:.5rem">\u2728 Draft with AI</button><span class="adm__auto-note">Auto-style paints the accents; <em>Draft with AI</em> writes the hero, highlights, capabilities &amp; about from a brief \u2014 preview before applying.</span></div>' +
-        input("Eyebrow", "landing.eyebrow") +
-        input("Domains", "landing.domains", { hint: "e.g. Growth · AI · Identity" }) +
+        input("Eyebrow", "landing.eyebrow", { toggle: "eyebrow" }) +
+        input("Domains", "landing.domains", { toggle: "domains", hint: "e.g. Growth · AI · Identity" }) +
         input("Main statement", "landing.statement", { md: true, type: "textarea", rows: 3, hint: "One line per row. The closing word (why / how) gets the italic accent." }) +
-        input("Description", "landing.intro", { md: true, type: "textarea", rows: 4, hint: "Products auto-bronze; “leading …” phrases auto-bold." }) +
-        input("Footer line", "landing.presence", { md: true, hint: "e.g. Currently at Microsoft — Hyderabad, India" }) +
+        input("Description", "landing.intro", { md: true, type: "textarea", rows: 4, toggle: "intro", hint: "Products auto-bronze; “leading …” phrases auto-bold." }) +
+        input("Footer line", "landing.presence", { md: true, toggle: "presence", hint: "e.g. Currently at Microsoft — Hyderabad, India" }) +
         '<div class="af"><label class="af__label">Availability badge</label>' +
         '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="avail-toggle"' + ((((data.landing || {}).available) || {}).on ? " checked" : "") + ' /><span>Show an \u201copen to work\u201d pill in the hero</span></label>' +
         '<div class="af__hint">Off by default. A quiet pill with a live green dot appears under the hero when on.</div></div>' +
@@ -4546,6 +4561,15 @@ import { WORLD_LAND } from "./worldland.js";
       const arr = aboutLayoutArr(), key = t.dataset.key;
       for (let k = 0; k < arr.length; k++) if (arr[k].key === key) arr[k].on = t.checked;
       setAboutLayout(arr);
+      return;
+    }
+    if (t.dataset.act === "landing-show") {
+      data.landing = data.landing || {};
+      data.landing.show = data.landing.show || {};
+      data.landing.show[t.dataset.showkey] = t.checked;
+      saveDraft(true);
+      apply(true);
+      if (activeTab === "landing") renderBody();
       return;
     }
     if (t.dataset.iconpick !== undefined) {
