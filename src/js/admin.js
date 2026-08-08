@@ -587,11 +587,19 @@ import {
     if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musAutoStart();
   }
 
+  // A visitor-friendly analytics opt-out shown in the menu. Works on ANY device/browser — including
+  // the owner's phone, where the desktop-only studio sign-in (the usual owner tell) isn't available.
+  // Toggles the durable rk:noanalytics flag that BOTH the page-view beacon (index.html) and the
+  // intent events (render.js) already honour, so this device stops counting from the next load.
+  function naInner(on) {
+    return '<span class="cmenu__ico">' + (on ? "\u25c9" : "\u25cb") + '</span><span><b>' + (on ? "Not counting this device" : "Don\u2019t count my visits") + '</b><i>' + (on ? "This device is excluded from analytics" : "Keep this device out of site analytics") + "</i></span>";
+  }
   function buildMenu() {
     var _fly = document.querySelector(".rkfly"); if (_fly && _fly.__dismiss) _fly.__dismiss(true);   // fold the recruiter flyout away — the menu itself offers “Special view”
     const theme = (window.__theme ? window.__theme.mode() : (localStorage.getItem(THEME_KEY) || "system"));
     const narrow = window.innerWidth < ADMIN_MIN;
     const owner = !!localStorage.getItem(HASH_KEY);   // only the owner's own browser gets Present mode
+    const noCount = localStorage.getItem("rk:noanalytics") === "1";
     menuEl = document.createElement("div");
     menuEl.className = "cmenu";
     menuEl.innerHTML =
@@ -612,7 +620,9 @@ import {
       '<div class="cmenu__sep"></div>' +
       '<button class="cmenu__item" data-open="special"><span class="cmenu__ico">\u25c7</span><span><b>Recruiter or hiring manager</b><i>Enter a ticket for a curated view</i></span></button>' +
       (owner ? '<button class="cmenu__item" data-open="present"><span class="cmenu__ico">\u25b6</span><span><b>Present mode</b><i>Unlock all work for presenting, not editing</i></span></button>' : "") +
-      '<button class="cmenu__item" data-open="admin"' + (narrow ? " disabled" : "") + '><span class="cmenu__ico">\u2726</span><span><b>Admin mode</b><i>' + (narrow ? "Needs a wider screen" : "Edit &amp; curate the site") + "</i></span></button>";
+      '<button class="cmenu__item" data-open="admin"' + (narrow ? " disabled" : "") + '><span class="cmenu__ico">\u2726</span><span><b>Admin mode</b><i>' + (narrow ? "Needs a wider screen" : "Edit &amp; curate the site") + "</i></span></button>" +
+      '<div class="cmenu__sep"></div>' +
+      '<button class="cmenu__item cmenu__item--na" data-na>' + naInner(noCount) + "</button>";
     document.body.appendChild(menuEl);
     positionMenu();
     placeSoundToast();   // push any live “sound on” toast below the menu we just opened
@@ -652,6 +662,15 @@ import {
       if (window.__theme) window.__theme.set(th.dataset.theme);
       else localStorage.setItem(THEME_KEY, th.dataset.theme);
       menuEl.querySelectorAll(".cmenu__theme").forEach(function (b) { b.classList.toggle("is-on", b === th); });
+      return;
+    }
+    const na = e.target.closest("[data-na]");
+    if (na) {
+      e.stopPropagation();   // keep the menu open (and don't let the innerHTML swap trip the outside-click close)
+      var _on = localStorage.getItem("rk:noanalytics") === "1";
+      try { if (_on) localStorage.removeItem("rk:noanalytics"); else localStorage.setItem("rk:noanalytics", "1"); } catch (x) {}
+      na.innerHTML = naInner(!_on);
+      flash(_on ? "This device will be counted in analytics again." : "Done \u2014 this device won\u2019t be counted in analytics.");
       return;
     }
     const it = e.target.closest("[data-open]");
