@@ -155,7 +155,7 @@
     const imgSrc = esc(w.image).replace(/"/g, "&quot;");
     const media = w.image
       ? '<div class="case__media case__media--photo" aria-hidden="true">' +
-          '<img class="case__img" src="' + imgSrc + '" alt="" loading="lazy" />' +
+          '<div class="case__par"><img class="case__img" src="' + imgSrc + '" alt="" loading="lazy" /></div>' +
           '<span class="plate__idx">' + n + '</span>' +
           '<span class="plate__tag">' + esc(w.plateTag) + '</span></div>'
       : '<div class="case__media case__media--' + esc(w.theme) + '" aria-hidden="true">' +

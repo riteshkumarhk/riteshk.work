@@ -203,6 +203,27 @@
   const progress = document.querySelector(".scroll-progress span");
   let lastY = window.scrollY;
 
+  // Work thumbnails drift vertically as they scroll through the viewport — a
+  // different amount and direction per card (a uniform value feels mechanical).
+  // Composes with the CSS hover-zoom, which lives on the inner <img>.
+  const PAR_FACTORS = [0.06, -0.10, 0.08, -0.05, 0.11, -0.07];
+  const parLite = document.documentElement.classList.contains("lite");
+  const updateParallax = () => {
+    if (parLite) return;
+    const pars = document.querySelectorAll(".case__par");
+    const vh = window.innerHeight;
+    for (let i = 0; i < pars.length; i++) {
+      const r = pars[i].getBoundingClientRect();
+      if (r.bottom < -100 || r.top > vh + 100) continue; // skip offscreen
+      const h = r.height;
+      const t = (r.top + h / 2 - vh / 2) / vh;            // 0 when centred in the viewport
+      let yv = t * h * PAR_FACTORS[i % PAR_FACTORS.length];
+      const max = h * 0.09;                               // stay within the 12% headroom
+      if (yv > max) yv = max; else if (yv < -max) yv = -max;
+      pars[i].style.transform = "translate3d(0," + yv.toFixed(1) + "px,0)";
+    }
+  };
+
   const onScroll = () => {
     const y = window.scrollY;
 
@@ -219,10 +240,13 @@
       const h = document.documentElement.scrollHeight - window.innerHeight;
       progress.style.width = (h > 0 ? (y / h) * 100 : 0) + "%";
     }
+
+    updateParallax();
   };
   window.addEventListener("scroll", onScroll, { passive: true });
   if (lenis) lenis.on("scroll", onScroll);
   onScroll();
+  window.addEventListener("resize", updateParallax, { passive: true });
 
   /* -------------------------------------------------
      7. Mobile menu
