@@ -4249,7 +4249,7 @@
     ],
     "eyebrow": ""
   },
-  "recruiterMode": true,
+  "recruiterMode": false,
   "aboutSections": [
     {
       "key": "recognition",
