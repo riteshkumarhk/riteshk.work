@@ -366,7 +366,7 @@ html.lite .page { animation: none; }
    LOGO MARQUEE — brands & products (per-logo elastic scroll driven by main.js)
    ================================================================= */
 .logos {
-  position: relative; overflow: hidden;
+  position: relative; overflow: hidden; overflow-anchor: none;
   width: 100%; max-width: var(--maxw); margin: 0 auto;
   padding: clamp(1rem, 2vw, 1.7rem) 0;
   border-top: 1px solid var(--line-soft);

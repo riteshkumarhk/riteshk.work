@@ -262,7 +262,7 @@
     const easeOutBack = (p) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
     let off = 0, setW = 0, last = 0, paused = false, running = false, raf = 0, onScreen = true;
     let baseHTML = "", baseCount = 0, rz = 0;
-    let geo = [], W = 0, entry = 0, zone = 1;            // geometry cached once — the loop never reads layout
+    let geo = [], W = 0, entry = 0, zone = 1, lastW = -1;            // geometry cached once — the loop never reads layout
     const mo = new MutationObserver(onSource);
     // render.js drops ONE set of logos in the track; repeat it enough to always
     // exceed the marquee's width so the loop never runs out (no empty gap).
@@ -270,7 +270,7 @@
     function measure() {
       // Cache each card's static offset once, so the animation is pure arithmetic (no layout
       // thrashing) — that's what keeps it smooth on phones while the page scrolls.
-      W = vp.clientWidth || 0;
+      W = vp.clientWidth || 0; lastW = W;
       entry = W * 0.86;                                  // pop begins at the right fade edge, into the clear (reads on phones)
       zone = Math.max(W * 0.22, 150) || 1;               // enough travel that the pop is visible on a narrow screen
       geo = [];
@@ -315,7 +315,9 @@
     function stop() { running = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } }
     vp.addEventListener("mouseenter", () => { paused = true; });   // pause so a logo's name is readable
     vp.addEventListener("mouseleave", () => { paused = false; });
-    window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(fill, 180); }, { passive: true });
+    // Rebuild only on a WIDTH change. Mobile browsers fire resize on EVERY vertical scroll (URL bar
+    // show/hide); rebuilding then swaps the scroll-anchor node and bounces the page back to a logo.
+    window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(function () { if (vp.clientWidth !== lastW) fill(); }, 180); }, { passive: true });
     // Only animate while the marquee is on screen — no wasted work (or scroll jank) once it's scrolled past.
     if ("IntersectionObserver" in window) {
       new IntersectionObserver((es) => { onScreen = es[0].isIntersecting; if (onScreen) start(); else stop(); }, { rootMargin: "150px 0px" }).observe(vp);
