@@ -260,17 +260,28 @@
     const track = document.getElementById("logoTrack");
     if (!vp || !track) return;
     const easeOutBack = (p) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
-    let off = 0, setW = 0, last = 0, paused = false, running = false, raf = 0;
+    let off = 0, setW = 0, last = 0, paused = false, running = false, raf = 0, onScreen = true;
     let baseHTML = "", baseCount = 0, rz = 0;
+    let geo = [], W = 0, entry = 0, zone = 1;            // geometry cached once — the loop never reads layout
     const mo = new MutationObserver(onSource);
     // render.js drops ONE set of logos in the track; repeat it enough to always
     // exceed the marquee's width so the loop never runs out (no empty gap).
     function onSource() { baseHTML = track.innerHTML; baseCount = track.children.length; fill(); }
+    function measure() {
+      // Cache each card's static offset once, so the animation is pure arithmetic (no layout
+      // thrashing) — that's what keeps it smooth on phones while the page scrolls.
+      W = vp.clientWidth || 0;
+      entry = W * 0.86;                                  // pop begins at the right fade edge, into the clear (reads on phones)
+      zone = Math.max(W * 0.22, 150) || 1;               // enough travel that the pop is visible on a narrow screen
+      geo = [];
+      const kids = track.children;
+      for (let i = 0; i < kids.length; i++) geo.push({ left: kids[i].offsetLeft, w: kids[i].offsetWidth, card: kids[i].firstElementChild });
+    }
     function fill() {
       stop();
       if (!baseCount) { setW = 0; track.style.transform = ""; return; }
       mo.disconnect();                                   // our own edits mustn't retrigger onSource
-      track.innerHTML = baseHTML;                        // one set → measure it
+      track.innerHTML = baseHTML;                        // one set, to measure it
       const oneW = track.scrollWidth || 1;
       let copies = Math.ceil(((vp.clientWidth || 0) + oneW) / oneW);
       if (copies < 2) copies = 2; else if (copies > 20) copies = 20;
@@ -278,7 +289,8 @@
       mo.observe(track, { childList: true });
       setW = track.children[baseCount] ? track.children[baseCount].offsetLeft : oneW;
       off = 0; last = 0;
-      if (setW > 0) start();
+      measure();                                         // cache offsets + width once per (re)build
+      if (setW > 0 && onScreen) start();
     }
     function step(ts) {
       if (!running) return;
@@ -289,24 +301,25 @@
         if (off >= setW) off -= setW;
         track.style.transform = "translate3d(" + (-off) + "px,0,0)";
       }
-      const vr = vp.getBoundingClientRect(), W = vr.width, zone = (W * 0.20) || 1;
-      const kids = track.children;
-      for (let i = 0; i < kids.length; i++) {
-        const r = kids[i].getBoundingClientRect();
-        const cx = r.left + r.width / 2 - vr.left;
-        if (cx < -120 || cx > W + 120) continue;         // skip well off-stage
-        let p = (W - cx) / zone; if (p < 0) p = 0; else if (p > 1) p = 1;
-        const s = 0.72 + 0.28 * easeOutBack(p);          // elastic pop as it enters (right)
-        const img = kids[i].firstElementChild;
-        if (img) img.style.transform = "scale(" + s.toFixed(3) + ")";
+      for (let i = 0; i < geo.length; i++) {             // analytic positions — zero per-frame layout reads
+        const g = geo[i];
+        const cx = g.left + g.w / 2 - off;               // visual centre relative to the container's left
+        if (cx < -80 || cx > W + 80) continue;           // fully off-stage
+        let p = (entry - cx) / zone; if (p < 0) p = 0; else if (p > 1) p = 1;
+        const s = 0.72 + 0.28 * easeOutBack(p);          // elastic pop as it clears the right fade
+        if (g.card) g.card.style.transform = "scale(" + s.toFixed(3) + ")";
       }
       raf = requestAnimationFrame(step);
     }
-    function start() { if (running || setW <= 0) return; running = true; last = 0; raf = requestAnimationFrame(step); }
-    function stop() { running = false; if (raf) cancelAnimationFrame(raf); }
+    function start() { if (running || setW <= 0 || !onScreen) return; running = true; last = 0; raf = requestAnimationFrame(step); }
+    function stop() { running = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } }
     vp.addEventListener("mouseenter", () => { paused = true; });   // pause so a logo's name is readable
     vp.addEventListener("mouseleave", () => { paused = false; });
     window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(fill, 180); }, { passive: true });
+    // Only animate while the marquee is on screen — no wasted work (or scroll jank) once it's scrolled past.
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver((es) => { onScreen = es[0].isIntersecting; if (onScreen) start(); else stop(); }, { rootMargin: "150px 0px" }).observe(vp);
+    }
     mo.observe(track, { childList: true });
     onSource();                                          // render already populated the track
   })();
