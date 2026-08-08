@@ -115,6 +115,8 @@
   }
 
   /* ---------- section renderers ---------- */
+  // A highlight now rides in the numbers marquee (a chip like the brand logos). The number keeps
+  // its count-up + bronze suffix; word values and the label can carry *italic* / **bold** / [[bronze]].
   function highlightEl(h) {
     const m = String(h.value || "").match(/^(\d+)(.*)$/);
     let numHtml, wordClass = "";
@@ -123,12 +125,12 @@
         '<span class="count" data-count="' + m[1] + '">0</span>' +
         (m[2] ? "<i>" + esc(m[2]) + "</i>" : "");
     } else {
-      numHtml = esc(h.value);
-      wordClass = " stat__num--word";
+      numHtml = md(h.value);
+      wordClass = " hi__num--word";
     }
     return (
-      '<div class="stat reveal" data-reveal><div class="stat__num' + wordClass + '">' +
-      numHtml + '</div><div class="stat__label">' + esc(h.label) + "</div></div>"
+      '<span class="hi"><span class="hi__card"><span class="hi__num' + wordClass + '">' +
+      numHtml + '</span><span class="hi__label">' + md(h.label) + "</span></span></span>"
     );
   }
 
@@ -357,7 +359,13 @@
       else { set("logoTrack", ""); logoMarq.hidden = true; }
     }
 
-    set("stats", (data.highlights || []).slice(0, 8).map(highlightEl).join(""));
+    // Highlights run as a marquee of number chips (main.js drives the scroll + count-up).
+    const highlights = (data.highlights || []).slice(0, 8);
+    const hiMarq = byId("hiMarquee");
+    if (hiMarq) {
+      if (highlights.length) { set("hiTrack", highlights.map(highlightEl).join("")); hiMarq.hidden = false; }
+      else { set("hiTrack", ""); hiMarq.hidden = true; }
+    }
 
     // Present mode shows the SAME curated set as the home page (featured), PLUS any
     // project that's hidden-from-default (ticket-only) — now decrypted — so the owner can

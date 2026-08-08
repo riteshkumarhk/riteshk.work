@@ -156,17 +156,19 @@
   })();
 
   /* -------------------------------------------------
-     4. Count-up stats
+     4. Count-up numbers — each .count animates once, the first time it is
+     60% on screen. observeCounts() is re-run by the highlights marquee after
+     it repeats the chips, so every chip counts up on its first pass and then
+     holds (no re-counting once it is simply looping).
   ------------------------------------------------- */
-  const counts = document.querySelectorAll(".count");
-  if ("IntersectionObserver" in window && counts.length) {
+  let observeCounts = function () {};
+  if ("IntersectionObserver" in window) {
     const cio = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (!entry.isIntersecting) return;
           const el = entry.target;
           const target = parseInt(el.dataset.count, 10);
-          let cur = 0;
           const dur = 1400;
           const start = performance.now();
           (function tick(now) {
@@ -180,7 +182,9 @@
       },
       { threshold: 0.6 }
     );
-    counts.forEach((el) => cio.observe(el));
+    observeCounts = function (root) {
+      (root || document).querySelectorAll(".count").forEach((el) => cio.observe(el));
+    };
   }
 
   /* -------------------------------------------------
@@ -252,27 +256,35 @@
   window.addEventListener("resize", updateParallax, { passive: true });
 
   /* -------------------------------------------------
-     6b. Logo marquee — continuous right-to-left; each logo springs in
-     (elastic) from the right and fades out via the CSS edge mask on the left.
+     6b. Marquee engine — continuous scroll where each chip springs in from the
+     entering edge and fades out via the CSS edge mask on the far edge. Drives
+     BOTH the brand/product logos (right-to-left, elastic) and the highlights
+     numbers (left-to-right, softer scale-in + count-up on first pass).
   ------------------------------------------------- */
-  (function logoMarquee() {
-    const vp = document.getElementById("logoMarquee");
-    const track = document.getElementById("logoTrack");
+  function marquee(vp, track, opts) {
     if (!vp || !track) return;
-    const easeOutBack = (p) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
+    opts = opts || {};
+    const speed = opts.speed || 46;                    // px/s
+    const dir = opts.dir === -1 ? -1 : 1;              // 1 = right-to-left (logos), -1 = left-to-right (numbers)
+    const popMin = opts.popMin != null ? opts.popMin : 0.72;   // entrance start scale (higher = softer)
+    const popRange = 1 - popMin;
+    const ease = opts.ease === "cubic"
+      ? (p) => 1 - Math.pow(1 - p, 3)                  // clean scale-in, no overshoot (numbers stay readable)
+      : (p) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); }; // elastic back
+    const onBuild = typeof opts.onBuild === "function" ? opts.onBuild : null;
     let off = 0, setW = 0, last = 0, paused = false, running = false, raf = 0, onScreen = true;
     let baseHTML = "", baseCount = 0, rz = 0;
     let geo = [], W = 0, entry = 0, zone = 1, lastW = -1;            // geometry cached once — the loop never reads layout
     const mo = new MutationObserver(onSource);
-    // render.js drops ONE set of logos in the track; repeat it enough to always
+    // render.js drops ONE set of chips in the track; repeat it enough to always
     // exceed the marquee's width so the loop never runs out (no empty gap).
     function onSource() { baseHTML = track.innerHTML; baseCount = track.children.length; fill(); }
     function measure() {
       // Cache each card's static offset once, so the animation is pure arithmetic (no layout
       // thrashing) — that's what keeps it smooth on phones while the page scrolls.
       W = vp.clientWidth || 0; lastW = W;
-      entry = W * 0.86;                                  // pop begins at the right fade edge, into the clear (reads on phones)
-      zone = Math.max(W * 0.22, 150) || 1;               // enough travel that the pop is visible on a narrow screen
+      entry = dir === 1 ? W * 0.86 : W * 0.14;          // pop begins at the entering fade edge
+      zone = Math.max(W * 0.22, 150) || 1;              // enough travel that the pop is visible on a narrow screen
       geo = [];
       const kids = track.children;
       for (let i = 0; i < kids.length; i++) geo.push({ left: kids[i].offsetLeft, w: kids[i].offsetWidth, card: kids[i].firstElementChild });
@@ -290,6 +302,7 @@
       setW = track.children[baseCount] ? track.children[baseCount].offsetLeft : oneW;
       off = 0; last = 0;
       measure();                                         // cache offsets + width once per (re)build
+      if (onBuild) onBuild(track);                       // e.g. wire count-up onto the repeated chips
       if (setW > 0 && onScreen) start();
     }
     function step(ts) {
@@ -297,26 +310,27 @@
       if (!last) last = ts;
       const dt = Math.min(0.05, (ts - last) / 1000); last = ts;
       if (!paused && setW > 0) {
-        off += dt * 46;                                  // ~46px/s, right-to-left
-        if (off >= setW) off -= setW;
+        off += dir * dt * speed;                         // dir 1 = right-to-left, -1 = left-to-right
+        if (off >= setW) off -= setW; else if (off < 0) off += setW;
         track.style.transform = "translate3d(" + (-off) + "px,0,0)";
       }
       for (let i = 0; i < geo.length; i++) {             // analytic positions — zero per-frame layout reads
         const g = geo[i];
         const cx = g.left + g.w / 2 - off;               // visual centre relative to the container's left
         if (cx < -80 || cx > W + 80) continue;           // fully off-stage
-        let p = (entry - cx) / zone; if (p < 0) p = 0; else if (p > 1) p = 1;
-        const s = 0.72 + 0.28 * easeOutBack(p);          // elastic pop as it clears the right fade
+        let p = dir === 1 ? (entry - cx) / zone : (cx - entry) / zone;
+        if (p < 0) p = 0; else if (p > 1) p = 1;
+        const s = popMin + popRange * ease(p);           // (elastic / soft) pop as it clears the entering fade
         if (g.card) g.card.style.transform = "scale(" + s.toFixed(3) + ")";
       }
       raf = requestAnimationFrame(step);
     }
     function start() { if (running || setW <= 0 || !onScreen) return; running = true; last = 0; raf = requestAnimationFrame(step); }
     function stop() { running = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } }
-    vp.addEventListener("mouseenter", () => { paused = true; });   // pause so a logo's name is readable
+    vp.addEventListener("mouseenter", () => { paused = true; });   // pause so a name / number is readable
     vp.addEventListener("mouseleave", () => { paused = false; });
     // Rebuild only on a WIDTH change. Mobile browsers fire resize on EVERY vertical scroll (URL bar
-    // show/hide); rebuilding then swaps the scroll-anchor node and bounces the page back to a logo.
+    // show/hide); rebuilding then swaps the scroll-anchor node and bounces the page back to a chip.
     window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(function () { if (vp.clientWidth !== lastW) fill(); }, 180); }, { passive: true });
     // Only animate while the marquee is on screen — no wasted work (or scroll jank) once it's scrolled past.
     if ("IntersectionObserver" in window) {
@@ -324,6 +338,22 @@
     }
     mo.observe(track, { childList: true });
     onSource();                                          // render already populated the track
+  }
+
+  // Brands & products — right-to-left, full elastic pop.
+  marquee(document.getElementById("logoMarquee"), document.getElementById("logoTrack"), {});
+
+  // Highlights numbers — left-to-right, softer scale-in. Count up on the first pass,
+  // then hold: a later width-change rebuild just restores the final values (no re-count).
+  (function () {
+    let counted = false;
+    marquee(document.getElementById("hiMarquee"), document.getElementById("hiTrack"), {
+      dir: -1, popMin: 0.86, ease: "cubic",
+      onBuild: function (track) {
+        if (counted) { track.querySelectorAll(".count").forEach((el) => { el.textContent = el.dataset.count; }); }
+        else { counted = true; observeCounts(track); }
+      }
+    });
   })();
 
   /* -------------------------------------------------

@@ -475,7 +475,7 @@ import { WORLD_LAND } from "./worldland.js";
   }
   function mdFmt(btn) {
     var af = btn.closest(".af"); if (!af) return;
-    var field = af.querySelector("textarea[data-path], input[data-path]"); if (!field) return;
+    var field = af.querySelector("textarea[data-path], input[data-path], textarea[data-field], input[data-field]"); if (!field) return;
     var pairs = { bold: ["**", "**"], italic: ["*", "*"], accent: ["[[", "]]"] };
     var p = pairs[btn.dataset.md]; if (!p) return;
     mdWrap(field, p[0], p[1], btn.dataset.md);
@@ -515,7 +515,7 @@ import { WORLD_LAND } from "./worldland.js";
       control = '<input type="text" ' + attrs + ' value="' + escAttr(val) + '" />';
     }
     const hint = opts.hint ? '<div class="af__hint">' + escHtml(opts.hint) + "</div>" : "";
-    return '<div class="af"><label class="af__label">' + label + "</label>" + control + hint + "</div>";
+    return '<div class="af' + (opts.md ? " af--md" : "") + '"><label class="af__label">' + label + "</label>" + (opts.md ? mdBar() : "") + control + hint + "</div>";
   }
 
   function ops(list, i, len, dupAct) {
@@ -3087,8 +3087,7 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="af"><label class="af__label">Availability badge</label>' +
         '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="avail-toggle"' + ((((data.landing || {}).available) || {}).on ? " checked" : "") + ' /><span>Show an \u201copen to work\u201d pill in the hero</span></label>' +
         '<div class="af__hint">Off by default. A quiet pill with a live green dot appears under the hero when on.</div></div>' +
-        input("Availability text", "landing.available.text", { hint: "e.g. Open to Principal / Staff Product Design roles" }) +
-        group(logosBlock())
+        input("Availability text", "landing.available.text", { hint: "e.g. Open to Principal / Staff Product Design roles" })
       );
     },
     contact() {
@@ -3113,12 +3112,12 @@ import { WORLD_LAND } from "./worldland.js";
     },
     highlights() {
       const list = data.highlights || [];
-      let html = secHead("Highlights", "The numbers after the reel. Up to 8 (stack 4×2). Values like <em>11+</em>, <em>Billions</em>, <em>2B+</em> — leading digits count up.") + addBar("highlights", "Add highlight", list.length >= 8);
+      let html = secHead("Highlights", "The at-a-glance numbers &mdash; they run as a marquee under the hero. Up to 8. Values like <em>11+</em>, <em>Billions</em>, <em>2B+</em>: leading digits count up as each chip scrolls in. Select text, then use B / I / A for bold, italic or a bronze accent.") + addBar("highlights", "Add highlight", list.length >= 8);
       list.forEach((h, i) => {
         html += '<div class="card">' + cardHead("Highlight " + (i + 1), "highlights", i, list.length) +
-          '<div class="af__row">' + itemField("highlights", i, "value", "Value") + itemField("highlights", i, "label", "Label") + "</div></div>";
+          '<div class="af__row">' + itemField("highlights", i, "value", "Value", { md: true }) + itemField("highlights", i, "label", "Label", { md: true }) + "</div></div>";
       });
-      return html;
+      return html + group(logosBlock());
     },
     capabilities() {
       const list = data.capabilities || [];
