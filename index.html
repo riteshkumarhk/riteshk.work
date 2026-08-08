@@ -71,6 +71,9 @@
   <link rel="stylesheet" href="css/gensection.css" />
   <link rel="stylesheet" href="css/admin.css?v=12" />
   <link rel="stylesheet" href="css/journey.css" />
+  <!-- Minimal manifest: not for installing the site (no icons/display) — it only declares the
+       "Requests" inbox PWA as a related app so getInstalledRelatedApps() can tell it's the owner's phone. -->
+  <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90' font-family='serif' fill='%23ECE7E1'>R</text></svg>" />
 </head>
 <body class="site-loading">
@@ -322,11 +325,20 @@
           else localStorage.removeItem("rk:noanalytics");
         }
         var mine = localStorage.getItem("rk:noanalytics") === "1"      // this browser opted out
-          || localStorage.getItem("rk:owner")                          // durable owner flag (set on studio sign-in)
+          || localStorage.getItem("rk:owner")                          // durable owner flag (studio sign-in, or the owner's phone below)
           || /^\/studio(\/|$)/.test(location.pathname)                  // admin surface, never a real visitor
           || localStorage.getItem("rk:admin:hash")                     // this device set an admin key = owner
           || localStorage.getItem("rk:admin:sess");                    // active admin session
-        if (!mine) load();
+        if (mine) return;
+        // Owner's phone: admin mode is off on mobile, so the tell is the "Requests" PWA being installed.
+        // If it is, this is the owner's device — mark it durably and don't count it. (Android shares this
+        // flag with the installed app; getInstalledRelatedApps is Chrome/Android, harmless elsewhere.)
+        if (navigator.getInstalledRelatedApps) {
+          navigator.getInstalledRelatedApps().then(function (apps) {
+            if (apps && apps.length) { try { localStorage.setItem("rk:owner", "1"); } catch (e) {} }
+            else load();
+          }).catch(load);
+        } else load();
       } catch (e) { load(); }
     })();
   </script>

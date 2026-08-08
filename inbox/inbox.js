@@ -52,6 +52,10 @@
   }
   function sess() { return localStorage.getItem(SS) || ""; }
   function authHdr() { return { "Authorization": "Bearer " + sess() }; }
+  // This inbox only lives on the owner's phone (its passkey is added from the desktop studio), so mark
+  // the device as owner → the main site never counts it in Insights. Same origin as riteshk.work, so on
+  // Android this flag is shared with the browser too; the site also detects the install directly.
+  function markOwner() { try { localStorage.setItem("rk:owner", "1"); } catch (e) {} }
 
   /* ---------- WebAuthn (verify only — enrolment happens in the desktop studio) ---------- */
   async function authPasskey() {
@@ -105,6 +109,7 @@
     ]);
   }
   async function afterVerify() {
+    markOwner();
     var subscribed = false;
     try { if (("serviceWorker" in navigator) && ("PushManager" in window)) { var reg = await navigator.serviceWorker.ready; subscribed = !!(await reg.pushManager.getSubscription()); } } catch (e) {}
     if (subscribed && isInstalled()) return openInbox();   // fully set up (push + Home Screen) → inbox
@@ -546,6 +551,7 @@
     }
     // Strip any legacy ?pair token from an old QR — enrolment happens only in the desktop studio now.
     if (new URLSearchParams(location.search).get("pair")) { try { history.replaceState({}, "", "/inbox/"); } catch (e) {} }
+    if (isStandalone() || sess()) markOwner();
     if (sess()) return openInbox();
     return showVerify();
   })();

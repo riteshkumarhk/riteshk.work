@@ -1,0 +1,7 @@
+{
+  "name": "Ritesh Kumar",
+  "scope": "/",
+  "related_applications": [
+    { "platform": "webapp", "url": "https://riteshk.work/inbox/manifest.webmanifest", "id": "https://riteshk.work/inbox/" }
+  ]
+}
