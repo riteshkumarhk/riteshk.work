@@ -580,7 +580,7 @@ import { WORLD_LAND } from "./worldland.js";
         '<button type="button" class="parx__dirbtn' + (dir === "down" ? " is-on" : "") + '" data-act="par-dir" data-index="' + i + '" data-dir="down" title="Drift down as you scroll">\u2193</button>' +
       '</div>' +
       '<input type="range" class="parx__range" min="0" max="100" step="1" value="' + amt + '" data-parx="' + i + '" aria-label="Parallax intensity" />' +
-      '<span class="parx__val" data-parxval="' + i + '">' + amt + '</span>' +
+      '<input type="text" inputmode="numeric" maxlength="3" class="parx__val" data-parxnum="' + i + '" value="' + amt + '" aria-label="Parallax intensity value" title="Intensity value - copy &amp; paste across cases" />' +
       '</div>';
   }
 
@@ -590,10 +590,25 @@ import { WORLD_LAND } from "./worldland.js";
     const amt = Math.max(0, Math.min(100, parseInt(t.value, 10) || 0));
     w.parAmt = amt;
     if (w.parDir !== "up" && w.parDir !== "down") w.parDir = "up";
-    const lab = root && root.querySelector('[data-parxval="' + i + '"]');
-    if (lab) lab.textContent = amt;
+    const box = root && root.querySelector('[data-parxnum="' + i + '"]');
+    if (box) box.value = amt;
     parxDemoUpdate();   // live feedback on the cover preview
     saveDraft();        // debounced persist (the homepage effect shows on the live site / on scroll)
+  }
+
+  // The numeric field mirrors the slider (two-way) so a value can be read, copied and pasted across cases.
+  function onParxNum(t) {
+    const i = +t.dataset.parxnum, w = data.work[i];
+    if (!w) return;
+    let amt = parseInt(t.value, 10);
+    if (isNaN(amt)) amt = 0;
+    amt = Math.max(0, Math.min(100, amt));
+    w.parAmt = amt;
+    if (w.parDir !== "up" && w.parDir !== "down") w.parDir = "up";
+    const rng = root && root.querySelector('[data-parx="' + i + '"]');
+    if (rng) rng.value = amt;
+    parxDemoUpdate();
+    saveDraft();
   }
 
   // Live demo: the cover-image preview parallaxes as the editor scrolls, using the same math as
@@ -4608,6 +4623,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (t.dataset.jmeta !== undefined || t.dataset.jname !== undefined || t.dataset.jfield !== undefined || t.dataset.jimg !== undefined) { onJourneyEdit(t); return; }
     if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.parx !== undefined) { onParxInput(t); return; }
+    if (t.dataset.parxnum !== undefined) { onParxNum(t); return; }
     if (t.dataset.sitem !== undefined && t.dataset.ifield) { onItemInput(t); return; }
     if (t.dataset.cell !== undefined && t.dataset.cfield) { onCellInput(t); return; }
     if (t.dataset.fann !== undefined && t.dataset.afield) { onFocusAnn(t); return; }
@@ -4656,6 +4672,7 @@ import { WORLD_LAND } from "./worldland.js";
     const t = e.target;
     if (t.dataset.worklayout !== undefined) { data.workLayout = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.logosize !== undefined) { const arr = (data.landing || {}).logos, k = +t.dataset.logosize; if (arr && arr[k]) { arr[k].size = t.value; apply(true); } return; }
+    if (t.dataset.parxnum !== undefined) { const _pw = data.work[+t.dataset.parxnum]; if (_pw) t.value = (_pw.parAmt != null ? _pw.parAmt : 0); return; }
     if (t.dataset.act === "aboutsec-toggle") {
       const arr = aboutLayoutArr(), key = t.dataset.key;
       for (let k = 0; k < arr.length; k++) if (arr[k].key === key) arr[k].on = t.checked;
@@ -5012,7 +5029,7 @@ import { WORLD_LAND } from "./worldland.js";
       const grp = b.parentNode; if (grp) grp.querySelectorAll(".parx__dirbtn").forEach(function (x) { x.classList.toggle("is-on", x === b); });
       const box = b.closest(".parx"), range = box && box.querySelector(".parx__range");
       if (range) range.value = pw.parAmt;
-      const lab = root && root.querySelector('[data-parxval="' + i + '"]'); if (lab) lab.textContent = pw.parAmt;
+      const num = box && box.querySelector(".parx__val"); if (num) num.value = pw.parAmt;
       parxDemoUpdate();
       saveDraft(true);
       return;
