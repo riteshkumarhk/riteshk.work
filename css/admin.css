@@ -679,6 +679,18 @@ body.adm-lock .cursor { display: none !important; }
 .imgblk__preview.has { border-style: solid; }
 .imgblk__preview img { width: 100%; height: 100%; object-fit: cover; }
 .imgblk__preview span { font-size: .7rem; color: var(--text-faint); padding: 1rem; text-align: center; }
+/* Parallax control overlaid on the cover preview; the preview itself drifts as the editor scrolls. */
+.imgblk__preview--parx { position: relative; }
+.imgblk__preview--parx img { position: absolute; top: -20%; left: 0; width: 100%; height: 140%; object-fit: cover; will-change: transform; }
+.parx { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 3; display: flex; align-items: center; gap: .5rem; padding: .3rem .45rem; border-radius: 10px; border: 1px solid rgba(255,255,255,.14); background: rgba(10,10,12,.6); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.parx__lead { font-family: var(--mono); font-size: .56rem; letter-spacing: .09em; text-transform: uppercase; color: #ECE7E1; opacity: .82; white-space: nowrap; }
+.parx__dir { display: inline-flex; flex: 0 0 auto; border: 1px solid rgba(255,255,255,.2); border-radius: 7px; overflow: hidden; }
+.parx__dirbtn { border: 0; background: transparent; color: #ECE7E1; font-size: .82rem; line-height: 1; padding: .26rem .44rem; cursor: pointer; opacity: .72; transition: background .15s, color .15s, opacity .15s; }
+.parx__dirbtn:hover { opacity: 1; }
+.parx__dirbtn + .parx__dirbtn { border-left: 1px solid rgba(255,255,255,.16); }
+.parx__dirbtn.is-on { background: var(--accent); color: #0a0a0a; opacity: 1; }
+.parx__range { flex: 1 1 auto; min-width: 54px; height: 4px; accent-color: var(--accent); cursor: pointer; }
+.parx__val { font-family: var(--mono); font-size: .62rem; color: #ECE7E1; min-width: 1.7em; text-align: right; opacity: .88; }
 .imgblk__row { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
 .af__msize { margin-left: auto; align-self: center; font-family: var(--mono); font-size: .62rem; letter-spacing: .02em; color: var(--text-faint); background: rgba(236,231,225,.05); border: 1px solid var(--line); border-radius: 5px; padding: .16rem .42rem; white-space: nowrap; }
 .af__msize--big { color: #e8b84b; border-color: rgba(232,184,75,.45); background: rgba(232,184,75,.08); }

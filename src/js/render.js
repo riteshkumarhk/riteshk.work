@@ -149,13 +149,25 @@
     }
   }
 
+  // Per-thumbnail scroll parallax: the studio writes w.parDir ("up"/"down") + w.parAmt (0..100).
+  // When set, emit a signed factor + a clamp fraction; unset works fall back to the varied
+  // index-based defaults in main.js so their motion is unchanged.
+  function parAttrs(w) {
+    if (w == null || w.parAmt == null || w.parAmt === "") return "";
+    const amt = Math.max(0, Math.min(100, +w.parAmt || 0));
+    const sign = (w.parDir === "down") ? -1 : 1;   // "up" = positive factor (see main.js)
+    const factor = sign * (amt / 100) * 0.24;
+    const maxFrac = 0.03 + (amt / 100) * 0.10;     // 3%..13% of the tile height (within the 20% headroom)
+    return ' data-par="' + factor.toFixed(4) + '" data-par-max="' + maxFrac.toFixed(3) + '"';
+  }
+
   function caseEl(w, idx) {
     const n = String(idx + 1).padStart(2, "0");
     const tags = (w.tags || []).map((t) => "<span>" + esc(t) + "</span>").join("");
     const imgSrc = esc(w.image).replace(/"/g, "&quot;");
     const media = w.image
       ? '<div class="case__media case__media--photo" aria-hidden="true">' +
-          '<div class="case__par"><img class="case__img" src="' + imgSrc + '" alt="" loading="lazy" /></div>' +
+          '<div class="case__par"' + parAttrs(w) + '><img class="case__img" src="' + imgSrc + '" alt="" loading="lazy" /></div>' +
           '<span class="plate__idx">' + n + '</span>' +
           '<span class="plate__tag">' + esc(w.plateTag) + '</span></div>'
       : '<div class="case__media case__media--' + esc(w.theme) + '" aria-hidden="true">' +

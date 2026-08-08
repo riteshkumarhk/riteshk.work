@@ -554,7 +554,7 @@ import { WORLD_LAND } from "./worldland.js";
     }).join("");
     return '<div class="imgblk"><div class="af__label">Cover image</div>' +
       '<div class="af__hint" style="margin:-.15rem 0 .5rem">Used as the case-study cover AND the homepage card thumbnail. Leave empty to show an animated plate below.</div>' +
-      '<div class="imgblk__preview' + (has ? " has" : "") + '">' + (has ? '<img src="' + escAttr(previewSrc(w.image)) + '" alt="" />' : "<span>No image \u2014 the animated placeholder is shown</span>") + "</div>" +
+      '<div class="imgblk__preview' + (has ? " has imgblk__preview--parx" : "") + '"' + (has ? ' data-parx-prev="' + i + '"' : "") + '>' + (has ? '<img src="' + escAttr(previewSrc(w.image)) + '" alt="" />' + parxOverlay(w, i) : "<span>No image \u2014 the animated placeholder is shown</span>") + "</div>" +
       '<input type="text" data-list="work" data-index="' + i + '" data-field="image" value="' + escAttr(w.image || "") + '" placeholder="Paste an image URL\u2026" />' +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="img-upload" data-index="' + i + '">Upload\u2026</button>' +
       (has ? '<button class="btn btn--ghost" data-act="img-clear" data-index="' + i + '">Remove</button>' : "") + mediaSizeTag(w.image) + "</div>" +
@@ -565,6 +565,60 @@ import { WORLD_LAND } from "./worldland.js";
       '<div class="imgblk__row"><button class="btn btn--auto" data-act="img-generate" data-index="' + i + '"' + (canGen ? "" : " disabled") + ">Generate</button>" +
       '<button class="btn btn--ghost" data-act="img-modify" data-index="' + i + '"' + (canGen && has ? "" : " disabled") + ">Modify current</button></div>" +
       '<div class="imgblk__hint">Uploads are embedded at full, original quality \u2014 no compression or resizing. For very large images, host them and paste a URL to keep the published file lean.</div></div></div>';
+  }
+
+  // Compact parallax control overlaid on the cover-image preview (keeps the header card tidy).
+  // Direction (up/down) + intensity (0..100, 0 = off). Persists to w.parDir / w.parAmt.
+  function parxOverlay(w, i) {
+    const set = w.parAmt != null && w.parAmt !== "";
+    const amt = set ? Math.max(0, Math.min(100, +w.parAmt || 0)) : 50;
+    const dir = w.parDir === "down" ? "down" : "up";
+    return '<div class="parx" title="Scroll parallax for this thumbnail \u2014 scroll the editor to preview it">' +
+      '<span class="parx__lead">Parallax</span>' +
+      '<div class="parx__dir" role="group" aria-label="Parallax direction">' +
+        '<button type="button" class="parx__dirbtn' + (dir === "up" ? " is-on" : "") + '" data-act="par-dir" data-index="' + i + '" data-dir="up" title="Drift up as you scroll">\u2191</button>' +
+        '<button type="button" class="parx__dirbtn' + (dir === "down" ? " is-on" : "") + '" data-act="par-dir" data-index="' + i + '" data-dir="down" title="Drift down as you scroll">\u2193</button>' +
+      '</div>' +
+      '<input type="range" class="parx__range" min="0" max="100" step="1" value="' + amt + '" data-parx="' + i + '" aria-label="Parallax intensity" />' +
+      '<span class="parx__val" data-parxval="' + i + '">' + amt + '</span>' +
+      '</div>';
+  }
+
+  function onParxInput(t) {
+    const i = +t.dataset.parx, w = data.work[i];
+    if (!w) return;
+    const amt = Math.max(0, Math.min(100, parseInt(t.value, 10) || 0));
+    w.parAmt = amt;
+    if (w.parDir !== "up" && w.parDir !== "down") w.parDir = "up";
+    const lab = root && root.querySelector('[data-parxval="' + i + '"]');
+    if (lab) lab.textContent = amt;
+    parxDemoUpdate();   // live feedback on the cover preview
+    saveDraft();        // debounced persist (the homepage effect shows on the live site / on scroll)
+  }
+
+  // Live demo: the cover-image preview parallaxes as the editor scrolls, using the same math as
+  // the site, so the direction + intensity can be felt right here without publishing.
+  let parxRaf = 0;
+  function parxScheduleDemo() { if (parxRaf) return; parxRaf = requestAnimationFrame(function () { parxRaf = 0; parxDemoUpdate(); }); }
+  function parxDemoUpdate() {
+    const el = root && root.querySelector(".imgblk__preview--parx");
+    if (!el) return;
+    const img = el.querySelector("img");
+    if (!img) return;
+    const w = data.work[+el.dataset.parxPrev];
+    if (!w) { img.style.transform = ""; return; }
+    const set = w.parAmt != null && w.parAmt !== "";
+    const amt = set ? Math.max(0, Math.min(100, +w.parAmt || 0)) : 50;
+    if (amt <= 0) { img.style.transform = "translateY(0)"; return; }
+    const sign = w.parDir === "down" ? -1 : 1;
+    const factor = sign * (amt / 100) * 0.24;
+    const r = el.getBoundingClientRect();
+    const vh = window.innerHeight || 800;
+    const tt = (r.top + r.height / 2 - vh / 2) / vh;
+    let yv = tt * r.height * factor;
+    const max = r.height * (0.03 + (amt / 100) * 0.10);
+    if (yv > max) yv = max; else if (yv < -max) yv = -max;
+    img.style.transform = "translateY(" + yv.toFixed(1) + "px)";
   }
 
   function resumeBlock() {
@@ -4299,6 +4353,7 @@ import { WORLD_LAND } from "./worldland.js";
     l2body.innerHTML = studyEditor(w, openStudy);
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
     resolveMediaSizes(l2body);
+    parxScheduleDemo();
     previewProject(w.id, true);
   }
   function closeL2(opts) {
@@ -4552,6 +4607,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined || t.dataset.rtcellfield !== undefined || t.dataset.rtjrn !== undefined) { rtSerialize(t); return; }
     if (t.dataset.jmeta !== undefined || t.dataset.jname !== undefined || t.dataset.jfield !== undefined || t.dataset.jimg !== undefined) { onJourneyEdit(t); return; }
     if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
+    if (t.dataset.parx !== undefined) { onParxInput(t); return; }
     if (t.dataset.sitem !== undefined && t.dataset.ifield) { onItemInput(t); return; }
     if (t.dataset.cell !== undefined && t.dataset.cfield) { onCellInput(t); return; }
     if (t.dataset.fann !== undefined && t.dataset.afield) { onFocusAnn(t); return; }
@@ -4949,6 +5005,18 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "img-upload") { pickImage(function (uri) { data.work[i].image = uri; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); }); return; }
     if (act === "img-generate") { imgGenerate(i); return; }
     if (act === "img-modify") { imgModify(i); return; }
+    if (act === "par-dir") {
+      const pw = data.work[i]; if (!pw) return;
+      pw.parDir = b.dataset.dir === "down" ? "down" : "up";
+      if (pw.parAmt == null || pw.parAmt === "") pw.parAmt = 50;
+      const grp = b.parentNode; if (grp) grp.querySelectorAll(".parx__dirbtn").forEach(function (x) { x.classList.toggle("is-on", x === b); });
+      const box = b.closest(".parx"), range = box && box.querySelector(".parx__range");
+      if (range) range.value = pw.parAmt;
+      const lab = root && root.querySelector('[data-parxval="' + i + '"]'); if (lab) lab.textContent = pw.parAmt;
+      parxDemoUpdate();
+      saveDraft(true);
+      return;
+    }
     if (act === "resume-upload") { pickResume(function (uri) { setPath(data, "contact.resume", uri); apply(true); renderBody(); status("R\u00e9sum\u00e9 embedded \u2014 the dock button is now visible.", true); }); return; }
     if (act === "resume-clear") { setPath(data, "contact.resume", ""); apply(true); renderBody(); status("R\u00e9sum\u00e9 removed."); return; }
     if (act === "avatar-upload") { pickImage(function (uri) { setPath(data, "contact.avatar", uri); apply(true); renderBody(); status("Display picture updated.", true); }); return; }
@@ -9332,6 +9400,8 @@ import { WORLD_LAND } from "./worldland.js";
     root.addEventListener("pointerdown", faPointerDown);
     root.addEventListener("click", onClick);
     root.addEventListener("dblclick", onDblClick);
+    // Live thumbnail-parallax demo: reflect the effect on the cover preview as the editor scrolls.
+    root.addEventListener("scroll", parxScheduleDemo, true);
     // Drag-to-reorder any list with a grip handle (arrows still work).
     root.addEventListener("pointerdown", sortStart);
     // Keep the caret inside the rich-text area when a toolbar button is pressed.
