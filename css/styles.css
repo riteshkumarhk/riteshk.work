@@ -30,6 +30,11 @@
 /* ---------- Reset ---------- */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* The [hidden] attribute must always win — several elements (.hero__now, .hero__label…)
+   set an explicit display, which would otherwise override the UA's hidden { display:none }
+   and leave the element (e.g. the presence dot) visible when the studio hides it. */
+[hidden] { display: none !important; }
+
 html {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
