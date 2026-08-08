@@ -115,15 +115,17 @@
   }
 
   /* ---------- section renderers ---------- */
-  // A highlight now rides in the numbers marquee (a chip like the brand logos). The number keeps
-  // its count-up + bronze suffix; word values and the label can carry *italic* / **bold** / [[bronze]].
+  // A highlight rides in the numbers marquee (a chip like the brand logos). The digits count up and
+  // the trailing unit keeps the bronze suffix; an optional non-digit prefix (e.g. a "$" for revenue)
+  // shows but isn't animated. Values with no digits, and the label, can carry *italic* / **bold** / [[bronze]].
   function highlightEl(h) {
-    const m = String(h.value || "").match(/^(\d+)(.*)$/);
+    const m = String(h.value || "").match(/^(\D*)(\d+)(.*)$/);
     let numHtml, wordClass = "";
     if (m) {
       numHtml =
-        '<span class="count" data-count="' + m[1] + '">0</span>' +
-        (m[2] ? "<i>" + esc(m[2]) + "</i>" : "");
+        (m[1] ? '<span class="hi__pre">' + esc(m[1]) + "</span>" : "") +
+        '<span class="count" data-count="' + m[2] + '">0</span>' +
+        (m[3] ? "<i>" + esc(m[3]) + "</i>" : "");
     } else {
       numHtml = md(h.value);
       wordClass = " hi__num--word";

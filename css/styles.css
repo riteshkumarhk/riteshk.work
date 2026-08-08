@@ -441,6 +441,7 @@ html[data-appearance="light"] .logo:hover .logo__card { box-shadow: 0 8px 22px r
   line-height: 1; letter-spacing: -0.02em; display: flex; align-items: baseline; white-space: nowrap;
 }
 .hi__num i { font-style: normal; color: var(--accent); font-size: .5em; margin-left: .1em; }
+.hi__num .hi__pre { font-style: normal; color: var(--text); }
 .hi__num .accent { color: var(--accent); font-weight: inherit; }
 .hi__num em { font-style: italic; }
 .hi__num--word { color: var(--text); }
