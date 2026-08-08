@@ -387,6 +387,10 @@ html.lite .page { animation: none; }
 .logo__card--sm .logo__img { max-height: 44%; max-width: 50%; }
 .logo__card--lg .logo__img { max-height: 78%; max-width: 82%; }
 .logo:hover .logo__card { border-color: var(--accent); box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28); }
+/* Light mode: lift the chip lighter than the cream page (the elevated var is a darker tan),
+   with a soft shadow — the airy "card" feel from the reference. */
+html[data-appearance="light"] .logo__card { background: #faf8f2; border-color: rgba(28, 24, 18, 0.09); box-shadow: 0 1px 3px rgba(28, 24, 18, 0.05); }
+html[data-appearance="light"] .logo:hover .logo__card { box-shadow: 0 8px 22px rgba(28, 24, 18, 0.1); }
 .logo__name {
   position: absolute; bottom: calc(100% + 9px); left: 50%;
   transform: translateX(-50%) translateY(4px);
