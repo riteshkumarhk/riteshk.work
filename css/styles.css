@@ -353,7 +353,7 @@ html.lite .page { animation: none; }
   display: inline-flex; align-items: center; gap: 2.5rem;
   font-family: var(--serif); font-size: clamp(1.5rem, 3vw, 2.3rem); font-weight: 300;
   color: var(--text-dim); will-change: transform;
-  animation: marquee 20s linear infinite;
+  animation: marquee 40s linear infinite;
 }
 .marquee:hover .marquee__track { animation-play-state: paused; }
 .marquee__track .dot { color: var(--accent); font-size: .7em; }
