@@ -316,6 +316,21 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .iconbtn:disabled { opacity: .3; cursor: not-allowed; }
 .iconbtn--danger:hover { color: #ff7a7a; border-color: #ff7a7a; }
 
+/* ---------- About-page section list (reorder + show/hide) ---------- */
+.adm__seclist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .55rem; }
+.adm__secrow { display: flex; align-items: center; gap: .75rem; padding: .55rem .7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); transition: opacity .2s, border-color .2s; }
+.adm__secrow.is-off { opacity: .55; }
+.adm__secrow-ops { display: flex; flex-direction: column; gap: .25rem; flex: 0 0 auto; }
+.adm__secrow-ops .iconbtn { width: 24px; height: 20px; font-size: .7rem; }
+.adm__secrow-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: .12rem; }
+.adm__secrow-name { font-family: var(--serif); font-weight: 300; font-size: 1.15rem; color: var(--text); line-height: 1.2; }
+.adm__secrow.is-off .adm__secrow-name { color: var(--text-dim); }
+.adm__secrow-where { font-family: var(--mono); font-size: .6rem; letter-spacing: .04em; text-transform: uppercase; color: var(--text-faint); }
+.adm__secrow-tog { display: inline-flex; align-items: center; gap: .45rem; flex: 0 0 auto; cursor: pointer; font-family: var(--mono); font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); }
+.adm__secrow-tog input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.adm__secrow-state { min-width: 3.4em; }
+.adm__secrow:not(.is-off) .adm__secrow-state { color: var(--accent); }
+
 /* ---------- buttons ---------- */
 .btn {
   font-family: var(--mono); font-size: .7rem; letter-spacing: .05em; text-transform: uppercase;

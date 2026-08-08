@@ -130,6 +130,7 @@ import { WORLD_LAND } from "./worldland.js";
     ["highlights", "Highlights"],
     ["capabilities", "Capabilities"],
     ["work", "Work"],
+    ["aboutpage", "About"],
     ["path", "Path"],
     ["recognition", "Recognition"],
     ["education", "Education"],
@@ -210,6 +211,17 @@ import { WORLD_LAND } from "./worldland.js";
     if (w && w.RK && w.RK.render) {
       try { w.RK.render(resolvePreviewData(data)); forceRevealDoc(w.document); } catch (e) {}
     }
+    syncPreviewPage();
+  }
+
+  // Keep the preview on the page whose content the active tab edits, so About-page
+  // tabs (layout, path, recognition, education, capabilities) show the About page.
+  const ABOUT_TABS = { aboutpage: 1, path: 1, recognition: 1, education: 1, capabilities: 1 };
+  function syncPreviewPage() {
+    const w = frame && frame.contentWindow;
+    if (!(w && typeof w.__rkShowPage === "function")) return;
+    if (openStudy >= 0 || journeyOpen) return; // a case study / journey owns the preview
+    try { w.__rkShowPage(ABOUT_TABS[activeTab] ? "about" : "work"); } catch (e) {}
   }
 
   function forceRevealDoc(doc) {
@@ -3055,6 +3067,27 @@ import { WORLD_LAND } from "./worldland.js";
       });
       return html;
     },
+    aboutpage() {
+      const RK = window.RK || {};
+      const defs = RK.ABOUT_SECTIONS || [["about", "About"], ["recognition", "Recognition"], ["capabilities", "Capabilities"], ["path", "The Path"], ["education", "Education"]];
+      const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
+      const where = { about: "Edit in the Landing tab (About fields)", recognition: "Edit in the Recognition tab", capabilities: "Edit in the Capabilities tab", path: "Edit in the Path tab", education: "Edit in the Education tab" };
+      const layout = RK.aboutLayout ? RK.aboutLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
+      let html = secHead("About page", "Reorder the sections on your About page and show or hide any of them. Use the arrows to move a section up or down, and untick to hide it from visitors. Each section\u2019s content is edited in its own tab.");
+      html += '<ul class="adm__seclist">';
+      layout.forEach((s, i) => {
+        html += '<li class="adm__secrow' + (s.on ? "" : " is-off") + '">' +
+          '<span class="adm__secrow-ops">' +
+            '<button class="iconbtn" data-act="aboutsec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
+            '<button class="iconbtn" data-act="aboutsec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+          "</span>" +
+          '<span class="adm__secrow-main"><span class="adm__secrow-name">' + escHtml(labels[s.key] || s.key) + '</span><span class="adm__secrow-where">' + escHtml(where[s.key] || "") + "</span></span>" +
+          '<label class="adm__secrow-tog"><input type="checkbox" data-act="aboutsec-toggle" data-key="' + s.key + '"' + (s.on ? " checked" : "") + ' /><span class="adm__secrow-state">' + (s.on ? "Shown" : "Hidden") + "</span></label>" +
+          "</li>";
+      });
+      html += "</ul>";
+      return html;
+    },
     path() {
       const list = data.path || [];
       let html = secHead("The Path", "Your experience timeline.") + addBar("path", "Add experience");
@@ -3834,6 +3867,18 @@ import { WORLD_LAND } from "./worldland.js";
     return html;
   }
 
+  /* ---------- About-page section order + visibility ---------- */
+  function aboutLayoutArr() {
+    const RK = window.RK || {};
+    if (RK.aboutLayout) return RK.aboutLayout(data).map((s) => ({ key: s.key, on: s.on !== false }));
+    return (RK.ABOUT_SECTIONS || []).map((s) => ({ key: s[0], on: true }));
+  }
+  function setAboutLayout(arr) {
+    data.aboutSections = arr.map((s) => ({ key: s.key, on: s.on !== false }));
+    apply(true);
+    if (activeTab === "aboutpage") renderBody();
+  }
+
   function secHead(title, note) {
     return '<div class="adm__sec-title">' + title + '</div><div class="adm__sec-note">' + note + "</div>";
   }
@@ -4003,6 +4048,7 @@ import { WORLD_LAND } from "./worldland.js";
     body.innerHTML = sections[activeTab]();
     root.querySelectorAll(".adm__tab").forEach((t) => t.classList.toggle("is-active", t.dataset.tab === activeTab));
     resolveMediaSizes(body);
+    syncPreviewPage();
   }
 
   /* ---------- L2 case-study editor + auto live preview ---------- */
@@ -4357,6 +4403,12 @@ import { WORLD_LAND } from "./worldland.js";
   function onChange(e) {
     const t = e.target;
     if (t.dataset.worklayout !== undefined) { data.workLayout = t.value; saveDraft(true); apply(true); return; }
+    if (t.dataset.act === "aboutsec-toggle") {
+      const arr = aboutLayoutArr(), key = t.dataset.key;
+      for (let k = 0; k < arr.length; k++) if (arr[k].key === key) arr[k].on = t.checked;
+      setAboutLayout(arr);
+      return;
+    }
     if (t.dataset.gpath !== undefined) { onGenEdit(t); return; }
     if (t.dataset.jsel !== undefined) { onJourneyEdit(t); return; }
     if (t.dataset.act === "journey-toggle") { journeyData().enabled = t.checked; saveDraft(true); apply(true); renderBody(); return; }
@@ -4487,6 +4539,13 @@ import { WORLD_LAND } from "./worldland.js";
     if (!b) return;
     if (b.dataset.act === "md-fmt") { mdFmt(b); return; }
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
+    if (act === "aboutsec-up" || act === "aboutsec-down") {
+      const arr = aboutLayoutArr(), idx = +b.dataset.i, j = act === "aboutsec-up" ? idx - 1 : idx + 1;
+      if (idx < 0 || j < 0 || j >= arr.length) return;
+      const tmp = arr[j]; arr[j] = arr[idx]; arr[idx] = tmp;
+      setAboutLayout(arr);
+      return;
+    }
     if (act === "ins-days") { loadInsights(+b.dataset.days || 30); return; }
     if (act === "ins-refresh") { loadInsights(); return; }
     if (act === "ins-mute") { insToggleMute(); return; }

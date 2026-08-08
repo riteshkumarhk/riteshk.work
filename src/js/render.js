@@ -187,6 +187,50 @@
     return "<li><span>" + esc(a.title) + "</span><i>" + esc(a.meta) + "</i></li>";
   }
 
+  /* ---------- About-page section layout (order + visibility) ----------
+     The About page is composed of independent sections the owner can reorder and
+     show/hide from the studio (data.aboutSections = [{key,on}]). Unknown/new keys
+     fall back to the canonical order, all shown. */
+  const ABOUT_SECTIONS = [
+    ["about", "About"],
+    ["recognition", "Recognition"],
+    ["capabilities", "Capabilities"],
+    ["path", "The Path"],
+    ["education", "Education"],
+  ];
+  function aboutLayout(data) {
+    const known = ABOUT_SECTIONS.map((s) => s[0]);
+    const saved = (data && Array.isArray(data.aboutSections)) ? data.aboutSections : [];
+    const out = [], seen = {};
+    saved.forEach((s) => {
+      if (s && known.indexOf(s.key) !== -1 && !seen[s.key]) {
+        seen[s.key] = 1;
+        out.push({ key: s.key, on: s.on !== false });
+      }
+    });
+    known.forEach((k) => { if (!seen[k]) out.push({ key: k, on: true }); });
+    return out;
+  }
+  function applyAboutLayout(data) {
+    const wrap = byId("aboutSections");
+    if (!wrap) return;
+    const visible = [];
+    aboutLayout(data).forEach((s) => {
+      const el = document.getElementById("sec-" + s.key);
+      if (!el) return;
+      el.hidden = !s.on;
+      el.classList.remove("sec--first", "sec--last");
+      wrap.appendChild(el); // move into layout order (appendChild reorders existing nodes)
+      if (s.on) visible.push(el);
+    });
+    // Mark the first/last *visible* section so the top one clears the fixed nav and the
+    // bottom one keeps breathing room — robust even when a leading section is hidden.
+    if (visible.length) {
+      visible[0].classList.add("sec--first");
+      visible[visible.length - 1].classList.add("sec--last");
+    }
+  }
+
   /* ---------- master render ---------- */
   function render(data) {
     const L = data.landing || {};
@@ -236,6 +280,8 @@
     set("journeyCta", (jrnHas && presentActive) ? '<button type="button" class="path__journey" data-journey-open data-cursor="hover">View full journey <span aria-hidden="true">\u2192</span></button>' : "");
     set("recognitionList", (data.recognition || []).map(awardEl).join(""));
     set("educationList", (data.education || []).map(awardEl).join(""));
+
+    applyAboutLayout(data);
 
     const mail = byId("contactMail");
     if (mail) { mail.setAttribute("href", "mailto:" + (C.email || "")); mail.onclick = function () { track("contact_submit"); }; }
@@ -654,6 +700,8 @@
       esc: esc,
       openResume: openResume,
       plateInner: plateInner,
+      ABOUT_SECTIONS: ABOUT_SECTIONS,
+      aboutLayout: aboutLayout,
       DRAFT_KEY: DRAFT_KEY,
       applySpecialView: applySpecialView,
       applyCuratedView: applyCuratedView,
