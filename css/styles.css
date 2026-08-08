@@ -386,7 +386,7 @@ html.lite .page { animation: none; }
 .logo__card {
   display: grid; place-items: center; overflow: hidden;
   width: clamp(108px, 13.5vw, 152px); height: clamp(58px, 7.5vw, 78px);
-  background: var(--bg-elev); border: 1px solid var(--line-soft); border-radius: 14px;
+  background: var(--bg-elev); border: 1px solid var(--line-soft); border-radius: 14px; corner-shape: squircle;
   transform-origin: center;
   transition: border-color .3s var(--ease), box-shadow .3s var(--ease);
 }
@@ -431,7 +431,7 @@ html[data-appearance="light"] .logo:hover .logo__card { box-shadow: 0 8px 22px r
 .hi__card {
   display: flex; flex-direction: column; justify-content: center; gap: .5rem;
   padding: clamp(1rem, 1.7vw, 1.5rem) clamp(1.3rem, 2vw, 1.9rem);
-  background: var(--bg-elev); border: 1px solid var(--line-soft); border-radius: 16px;
+  background: var(--bg-elev); border: 1px solid var(--line-soft); border-radius: 16px; corner-shape: squircle;
   transform-origin: center;
   transition: border-color .3s var(--ease), box-shadow .3s var(--ease);
 }
