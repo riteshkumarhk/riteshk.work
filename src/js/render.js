@@ -183,8 +183,46 @@
     );
   }
 
+  /* ---------- recognition / education icons (AI-matched crisp line icons) ---------- */
+  const RECOGNITION_ICONS = [
+    ["trophy", "Trophy \u2014 award, honour, win"],
+    ["award", "Medal \u2014 recognition, placed"],
+    ["mic", "Mic \u2014 talk, speaker, conference"],
+    ["zap", "Lightning \u2014 hackathon, sprint"],
+    ["bike", "Bike \u2014 cycling, race"],
+    ["flag", "Flag \u2014 championship, competition"],
+    ["certificate", "Certificate \u2014 certification, certified"],
+    ["graduation", "Graduation cap \u2014 degree, university"],
+    ["book", "Book \u2014 schooling, study"],
+    ["star", "Star \u2014 distinction, top honour"],
+    ["sparkles", "Sparkles \u2014 AI, innovation"],
+    ["mountain", "Mountain \u2014 outdoors, trail"],
+  ];
+  const RECOGNITION_ICON_SVG = {
+    trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+    award: '<circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>',
+    mic: '<path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/><path d="M8 22h8"/>',
+    zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+    bike: '<circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/>',
+    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
+    certificate: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="m9 15 2 2 4-4"/>',
+    graduation: '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
+    book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/>',
+    star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    sparkles: '<path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3z"/>',
+    mountain: '<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>',
+  };
+  function recIcon(name) {
+    const inner = RECOGNITION_ICON_SVG[name];
+    if (!inner) return "";
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + "</svg>";
+  }
+
   function awardEl(a) {
-    return "<li><span>" + esc(a.title) + "</span><i>" + esc(a.meta) + "</i></li>";
+    const ico = (a && a.icon && RECOGNITION_ICON_SVG[a.icon])
+      ? '<span class="award__ico" aria-hidden="true">' + recIcon(a.icon) + "</span>"
+      : "";
+    return '<li><span class="award__main">' + ico + '<span class="award__title">' + esc(a.title) + "</span></span><i>" + esc(a.meta) + "</i></li>";
   }
 
   /* ---------- About-page section layout (order + visibility) ----------
@@ -702,6 +740,9 @@
       plateInner: plateInner,
       ABOUT_SECTIONS: ABOUT_SECTIONS,
       aboutLayout: aboutLayout,
+      RECOGNITION_ICONS: RECOGNITION_ICONS,
+      RECOGNITION_ICON_SVG: RECOGNITION_ICON_SVG,
+      recIcon: recIcon,
       DRAFT_KEY: DRAFT_KEY,
       applySpecialView: applySpecialView,
       applyCuratedView: applyCuratedView,

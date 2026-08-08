@@ -3859,12 +3859,86 @@ import { WORLD_LAND } from "./worldland.js";
 
   function titleMetaList(list, name, note) {
     const items = data[list] || [];
-    let html = secHead(name, note) + addBar(list, "Add " + name.toLowerCase());
+    let html = secHead(name, note) +
+      '<div class="adm__autobar"><button class="btn btn--auto" data-act="icon-gen-all" data-list="' + list + '"' + (items.length ? "" : " disabled") + '>\u2728 Auto-icons</button>' +
+      '<span class="adm__auto-note">AI reads each entry and matches a crisp line icon. Pick, regenerate (\u2728) or remove (\u2715) any icon below.</span></div>' +
+      addBar(list, "Add " + name.toLowerCase());
     items.forEach((a, i) => {
       html += '<div class="card">' + cardHead(name + " " + (i + 1), list, i, items.length) +
-        itemField(list, i, "title", "Title") + itemField(list, i, "meta", "Meta / date") + "</div>";
+        itemField(list, i, "title", "Title") + itemField(list, i, "meta", "Meta / date") +
+        iconField(list, i, a) + "</div>";
     });
     return html;
+  }
+
+  // Per-entry icon control: live preview + manual picker + AI regenerate + remove.
+  function iconField(list, i, a) {
+    const RK = window.RK || {};
+    const set = RK.RECOGNITION_ICONS || [];
+    const cur = (a && a.icon && (!RK.RECOGNITION_ICON_SVG || RK.RECOGNITION_ICON_SVG[a.icon])) ? a.icon : "";
+    const preview = (cur && RK.recIcon) ? RK.recIcon(cur) : '<span class="adm__iconf-none">\u2014</span>';
+    const opts = '<option value="">No icon</option>' + set.map(function (s) {
+      return '<option value="' + s[0] + '"' + (s[0] === cur ? " selected" : "") + ">" + escHtml(s[1]) + "</option>";
+    }).join("");
+    return '<div class="af adm__iconf"><label class="af__label">Icon</label>' +
+      '<div class="adm__iconf-row">' +
+        '<span class="adm__iconf-prev' + (cur ? " has" : "") + '">' + preview + "</span>" +
+        '<select data-iconpick="' + list + '" data-index="' + i + '">' + opts + "</select>" +
+        '<button class="iconbtn" data-act="icon-regen" data-list="' + list + '" data-index="' + i + '" title="Regenerate with AI" aria-label="Regenerate icon with AI">\u2728</button>' +
+        '<button class="iconbtn iconbtn--danger" data-act="icon-remove" data-list="' + list + '" data-index="' + i + '" title="Remove icon" aria-label="Remove icon"' + (cur ? "" : " disabled") + ">\u2715</button>" +
+      "</div></div>";
+  }
+
+  /* ---------- AI-matched recognition / education icons ---------- */
+  function iconEntryStr(a) { return [a && a.title, a && a.meta].map(function (x) { return String(x || "").trim(); }).filter(Boolean).join(" \u2014 "); }
+  async function aiPickIcons(entries) {
+    const RK = window.RK || {};
+    const set = RK.RECOGNITION_ICONS || [];
+    const names = set.map(function (s) { return s[0]; });
+    const listDesc = set.map(function (s) { return "- " + s[0] + ": " + s[1]; }).join("\n");
+    const system = "You label each portfolio entry (an award, talk, hackathon, certification, degree, competition, sport result or similar) with the single best-fitting icon from a FIXED set, matching on the MEANING/type of the entry. Return STRICT JSON only: {\"icons\":[\"name\", ...]} with exactly one icon name per entry, IN THE SAME ORDER as given. Use only names from the set. If nothing fits well, use \"star\".";
+    const user = "ICON SET (name: when to use):\n" + listDesc +
+      "\n\nENTRIES (label each, in order):\n" + entries.map(function (e, k) { return (k + 1) + ". " + e; }).join("\n") +
+      "\n\nReturn {\"icons\":[...]} with exactly " + entries.length + " icon name" + (entries.length > 1 ? "s" : "") + ", one per entry, in order.";
+    const out = await aiText(aiCfg("txt"), system, user, { json: true, maxTokens: 500, temperature: 0.2 });
+    const j = csgenParse(out);
+    const arr = (j && Array.isArray(j.icons)) ? j.icons : [];
+    return entries.map(function (_, k) { const n = String(arr[k] || "").trim().toLowerCase(); return names.indexOf(n) !== -1 ? n : "star"; });
+  }
+  async function iconGenerateAll(list, btn) {
+    const items = data[list] || [];
+    if (!items.length) { status("Add some entries first."); return; }
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { iconGenerateAll(list, btn); }); return; }
+    if (btn) { btn.disabled = true; btn.textContent = "Matching icons\u2026"; }
+    status("Reading your entries and matching icons\u2026");
+    try {
+      const icons = await aiPickIcons(items.map(iconEntryStr));
+      items.forEach(function (a, k) { a.icon = icons[k] || "star"; });
+      apply(true);
+      if (activeTab === list) renderBody();
+      status("Matched " + items.length + " icon" + (items.length > 1 ? "s" : "") + " \u2014 pick, regenerate or remove any below.", true);
+    } catch (e) { status("Icon matching failed: " + ((e && e.message) || "error")); }
+    if (btn) { btn.disabled = false; btn.textContent = "\u2728 Auto-icons"; }
+  }
+  async function iconRegen(list, i) {
+    const a = (data[list] || [])[i];
+    if (!a) return;
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { iconRegen(list, i); }); return; }
+    status("Matching an icon\u2026");
+    try {
+      const icons = await aiPickIcons([iconEntryStr(a)]);
+      a.icon = icons[0] || "star";
+      apply(true);
+      if (activeTab === list) renderBody();
+      status("Icon updated.", true);
+    } catch (e) { status("Couldn\u2019t match an icon: " + ((e && e.message) || "error")); }
+  }
+  function iconRemove(list, i) {
+    const a = (data[list] || [])[i];
+    if (!a) return;
+    delete a.icon;
+    apply(true);
+    if (activeTab === list) renderBody();
   }
 
   /* ---------- About-page section order + visibility ---------- */
@@ -4409,6 +4483,11 @@ import { WORLD_LAND } from "./worldland.js";
       setAboutLayout(arr);
       return;
     }
+    if (t.dataset.iconpick !== undefined) {
+      const arr = data[t.dataset.iconpick] || [], it = arr[+t.dataset.index];
+      if (it) { if (t.value) it.icon = t.value; else delete it.icon; apply(true); if (activeTab === t.dataset.iconpick) renderBody(); }
+      return;
+    }
     if (t.dataset.gpath !== undefined) { onGenEdit(t); return; }
     if (t.dataset.jsel !== undefined) { onJourneyEdit(t); return; }
     if (t.dataset.act === "journey-toggle") { journeyData().enabled = t.checked; saveDraft(true); apply(true); renderBody(); return; }
@@ -4546,6 +4625,9 @@ import { WORLD_LAND } from "./worldland.js";
       setAboutLayout(arr);
       return;
     }
+    if (act === "icon-gen-all") { iconGenerateAll(list, b); return; }
+    if (act === "icon-regen") { iconRegen(list, i); return; }
+    if (act === "icon-remove") { iconRemove(list, i); return; }
     if (act === "ins-days") { loadInsights(+b.dataset.days || 30); return; }
     if (act === "ins-refresh") { loadInsights(); return; }
     if (act === "ins-mute") { insToggleMute(); return; }
