@@ -368,7 +368,7 @@ html.lite .page { animation: none; }
 .logos {
   position: relative; overflow: hidden;
   padding: clamp(1rem, 2vw, 1.7rem) 0;
-  border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft);
+  border-top: 1px solid var(--line-soft);
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
           mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
 }
@@ -409,7 +409,7 @@ html[data-appearance="light"] .logo:hover .logo__card { box-shadow: 0 8px 22px r
    ================================================================= */
 .stats {
   max-width: var(--maxw); margin: 0 auto;
-  padding: clamp(4rem, 9vw, 8rem) var(--pad);
+  padding: clamp(1.5rem, 3vw, 2.2rem) var(--pad) clamp(4rem, 9vw, 8rem);
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem;
 }
 .stat { border-top: 1px solid var(--line); padding-top: 1.4rem; }
