@@ -362,6 +362,12 @@ html.lite .page { animation: none; }
 /* Skills reel in its relocated home (below Selected Work, above Contact) */
 .marquee--reel { margin-top: clamp(2.5rem, 6vw, 5rem); }
 
+/* Narrow / portrait screens (phones in portrait): run the reel right-to-left. Left-to-right is
+   harder to track on a narrow strip; landscape phones + larger screens keep the default direction. */
+@media (max-width: 600px) {
+  .marquee--reel .marquee__track { animation-direction: reverse; }
+}
+
 /* =================================================================
    LOGO MARQUEE — brands & products (per-logo elastic scroll driven by main.js)
    ================================================================= */
