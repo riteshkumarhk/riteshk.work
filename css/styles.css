@@ -731,6 +731,13 @@ html.lite .hero__avail-dot { animation: none; }
   .footer__links { text-align: left; }
   .footer__top { align-items: flex-start; }
   .hero__foot { flex-direction: column; align-items: flex-start; }
+  /* First screen = hero at the top + skills marquee pinned to the bottom, so the
+     moving band shows on load and you scroll past it to reach the numbers. The
+     hero grows to fill the space above the marquee; dropping the full-height
+     centering also lifts the "Selected work" cue + now-line clear of the dock. */
+  .hero-screen { min-height: 100svh; display: flex; flex-direction: column; }
+  .hero { min-height: 0; flex: 1 0 auto; justify-content: flex-start; padding-top: clamp(6rem, 19vw, 8rem); padding-bottom: 2rem; }
+  .hero__now { position: static; align-self: flex-start; margin-top: 1.6rem; }
 }
 
 @media (max-width: 400px) {

@@ -66,7 +66,7 @@
   <link rel="preload" href="fonts/fraunces-normal-300600-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="css/fonts.css" />
 
-  <link rel="stylesheet" href="css/styles.css?v=13" />
+  <link rel="stylesheet" href="css/styles.css?v=14" />
     <link rel="stylesheet" href="css/project.css?v=14" />
   <link rel="stylesheet" href="css/gensection.css" />
   <link rel="stylesheet" href="css/admin.css?v=12" />
@@ -138,6 +138,8 @@
     <!-- ===== WORK PAGE — landing · numbers · selected work (+ shared contact) ===== -->
     <div class="page page--work is-active" data-page="work">
 
+    <!-- ===== First screen: hero (top) + marquee (pinned to the bottom on mobile) ===== -->
+    <div class="hero-screen">
     <!-- ============ HERO ============ -->
     <section class="hero" id="hero">
       <div class="hero__label reveal" data-reveal id="heroLabel"></div>
@@ -165,6 +167,7 @@
     <div class="marquee" aria-hidden="true">
       <div class="marquee__track" id="marqueeTrack"></div>
     </div>
+    </div><!-- /.hero-screen -->
 
     <!-- ============ STATS ============ -->
     <section class="stats" aria-label="At a glance" id="stats"></section>
