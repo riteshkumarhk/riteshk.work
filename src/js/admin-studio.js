@@ -567,6 +567,8 @@ import { WORLD_LAND } from "./worldland.js";
       '<div class="imgblk__hint">Uploads are embedded at full, original quality \u2014 no compression or resizing. For very large images, host them and paste a URL to keep the published file lean.</div></div></div>';
   }
 
+  var PARX_COPY_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  var PARX_CHECK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
   // Compact parallax control overlaid on the cover-image preview (keeps the header card tidy).
   // Direction (up/down) + intensity (0..100, 0 = off). Persists to w.parDir / w.parAmt.
   function parxOverlay(w, i) {
@@ -579,8 +581,11 @@ import { WORLD_LAND } from "./worldland.js";
         '<button type="button" class="parx__dirbtn' + (dir === "up" ? " is-on" : "") + '" data-act="par-dir" data-index="' + i + '" data-dir="up" title="Drift up as you scroll">\u2191</button>' +
         '<button type="button" class="parx__dirbtn' + (dir === "down" ? " is-on" : "") + '" data-act="par-dir" data-index="' + i + '" data-dir="down" title="Drift down as you scroll">\u2193</button>' +
       '</div>' +
-      '<input type="range" class="parx__range" min="0" max="100" step="1" value="' + amt + '" data-parx="' + i + '" aria-label="Parallax intensity" />' +
-      '<input type="text" inputmode="numeric" maxlength="3" class="parx__val" data-parxnum="' + i + '" value="' + amt + '" aria-label="Parallax intensity value" title="Intensity value - copy &amp; paste across cases" />' +
+      '<input type="range" class="parx__range" min="0" max="100" step="1" value="' + amt + '" style="--fill:' + amt + '%" data-parx="' + i + '" aria-label="Parallax intensity" />' +
+      '<span class="parx__valwrap">' +
+        '<input type="text" inputmode="numeric" maxlength="3" class="parx__val" data-parxnum="' + i + '" value="' + amt + '" aria-label="Parallax intensity value" title="Intensity value - paste across cases" />' +
+        '<button type="button" class="parx__copy" data-act="par-copy" data-index="' + i + '" title="Copy intensity value" aria-label="Copy intensity value">' + PARX_COPY_SVG + '</button>' +
+      '</span>' +
       '</div>';
   }
 
@@ -592,6 +597,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (w.parDir !== "up" && w.parDir !== "down") w.parDir = "up";
     const box = root && root.querySelector('[data-parxnum="' + i + '"]');
     if (box) box.value = amt;
+    parxSetFill(t, amt);
     parxDemoUpdate();   // live feedback on the cover preview
     saveDraft();        // debounced persist (the homepage effect shows on the live site / on scroll)
   }
@@ -606,13 +612,14 @@ import { WORLD_LAND } from "./worldland.js";
     w.parAmt = amt;
     if (w.parDir !== "up" && w.parDir !== "down") w.parDir = "up";
     const rng = root && root.querySelector('[data-parx="' + i + '"]');
-    if (rng) rng.value = amt;
+    if (rng) { rng.value = amt; parxSetFill(rng, amt); }
     parxDemoUpdate();
     saveDraft();
   }
 
   // Live demo: the cover-image preview parallaxes as the editor scrolls, using the same math as
   // the site, so the direction + intensity can be felt right here without publishing.
+  function parxSetFill(el, amt) { if (el) el.style.setProperty("--fill", Math.max(0, Math.min(100, amt)) + "%"); }
   let parxRaf = 0;
   function parxScheduleDemo() { if (parxRaf) return; parxRaf = requestAnimationFrame(function () { parxRaf = 0; parxDemoUpdate(); }); }
   function parxDemoUpdate() {
@@ -5028,10 +5035,19 @@ import { WORLD_LAND } from "./worldland.js";
       if (pw.parAmt == null || pw.parAmt === "") pw.parAmt = 50;
       const grp = b.parentNode; if (grp) grp.querySelectorAll(".parx__dirbtn").forEach(function (x) { x.classList.toggle("is-on", x === b); });
       const box = b.closest(".parx"), range = box && box.querySelector(".parx__range");
-      if (range) range.value = pw.parAmt;
+      if (range) { range.value = pw.parAmt; parxSetFill(range, pw.parAmt); }
       const num = box && box.querySelector(".parx__val"); if (num) num.value = pw.parAmt;
       parxDemoUpdate();
       saveDraft(true);
+      return;
+    }
+    if (act === "par-copy") {
+      const pw = data.work[i];
+      const nb = root && root.querySelector('[data-parxnum="' + i + '"]');
+      const val = nb ? nb.value : (pw && pw.parAmt != null ? String(pw.parAmt) : "");
+      const flash = function () { b.classList.add("is-copied"); b.innerHTML = PARX_CHECK_SVG; setTimeout(function () { b.innerHTML = PARX_COPY_SVG; b.classList.remove("is-copied"); }, 1200); status("Copied intensity " + val, true); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(val).then(flash, function () { status(val); });
+      else flash();
       return;
     }
     if (act === "resume-upload") { pickResume(function (uri) { setPath(data, "contact.resume", uri); apply(true); renderBody(); status("R\u00e9sum\u00e9 embedded \u2014 the dock button is now visible.", true); }); return; }
