@@ -150,14 +150,13 @@
   }
 
   // Per-thumbnail scroll parallax: the studio writes w.parDir ("up"/"down") + w.parAmt (0..100).
-  // When set, emit a signed factor + a clamp fraction; unset works fall back to the varied
-  // index-based defaults in main.js so their motion is unchanged.
+  // Always emit an explicit factor so the homepage motion matches the studio control exactly.
+  // Unset cases use the SAME default the editor shows (up / 50), not a hidden per-position value.
   function parAttrs(w) {
-    if (w == null || w.parAmt == null || w.parAmt === "") return "";
-    const amt = Math.max(0, Math.min(100, +w.parAmt || 0));
-    const sign = (w.parDir === "down") ? -1 : 1;   // "up" = positive factor (see main.js)
+    const amt = (w && w.parAmt != null && w.parAmt !== "") ? Math.max(0, Math.min(100, +w.parAmt || 0)) : 50;
+    const sign = (w && w.parDir === "down") ? -1 : 1;   // "up" = positive factor (see main.js)
     const factor = sign * (amt / 100) * 0.24;
-    const maxFrac = 0.03 + (amt / 100) * 0.10;     // 3%..13% of the tile height (within the 20% headroom)
+    const maxFrac = 0.03 + (amt / 100) * 0.10;          // 3%..13% of the tile height (within the 20% headroom)
     return ' data-par="' + factor.toFixed(4) + '" data-par-max="' + maxFrac.toFixed(3) + '"';
   }
 

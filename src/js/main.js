@@ -203,10 +203,9 @@
   const progress = document.querySelector(".scroll-progress span");
   let lastY = window.scrollY;
 
-  // Work thumbnails drift vertically as they scroll through the viewport — a
-  // different amount and direction per card (a uniform value feels mechanical).
-  // Composes with the CSS hover-zoom, which lives on the inner <img>.
-  const PAR_FACTORS = [0.11, -0.17, 0.14, -0.09, 0.19, -0.13];
+  // Work thumbnails drift vertically as they scroll. render.js writes each card's amount and
+  // direction as data-par / data-par-max (from the studio control, or the default up / 50 the
+  // editor shows), so the homepage motion always matches exactly what the studio shows.
   const parLite = document.documentElement.classList.contains("lite");
   const updateParallax = () => {
     if (parLite) return;
@@ -218,14 +217,8 @@
       const h = r.height;
       const t = (r.top + h / 2 - vh / 2) / vh;            // 0 when centred in the viewport
       const ds = pars[i].dataset;
-      let factor, maxFrac;
-      if (ds.par !== undefined && ds.par !== "") {        // per-thumbnail value set in the studio
-        factor = parseFloat(ds.par) || 0;
-        maxFrac = parseFloat(ds.parMax) || 0.12;
-      } else {                                            // varied automatic default per position
-        factor = PAR_FACTORS[i % PAR_FACTORS.length];
-        maxFrac = 0.12;
-      }
+      const factor = (ds.par !== undefined && ds.par !== "") ? (parseFloat(ds.par) || 0) : 0.12;   // default = up / 50
+      const maxFrac = (ds.parMax !== undefined && ds.parMax !== "") ? (parseFloat(ds.parMax) || 0.08) : 0.08;
       if (!factor) { pars[i].style.transform = "translate3d(0,0,0)"; continue; } // intensity 0 = static
       let yv = t * h * factor;
       const max = h * maxFrac;                            // stay within the 20% headroom
