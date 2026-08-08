@@ -1729,6 +1729,7 @@
       seg.querySelectorAll(".pj__viewseg-btn").forEach(function (b) { b.classList.toggle("is-active", b.getAttribute("data-view") === "overview"); });
     }
     requestAnimationFrame(function () {
+      lastSpyId = null;
       updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); graphWire(contentEl); galleryNav(contentEl); initStage(contentEl);
       resolveVaultMedia(contentEl); // swap vault placeholders for signed URLs (authorised viewers only)
       autoResolveVaultBlocks(w);    // fetch vault-hosted locked sections if the viewer is already authorised
@@ -1810,6 +1811,7 @@
     var side = overlay.querySelector(".pj__side");
     return side ? side.offsetHeight + 8 : 60;
   }
+  var lastSpyId = null; // last spied section id - auto-scroll the mobile nav only when it changes
   function updateSpy() {
     if (!overlay || !overlay.classList.contains("is-open")) return;
     var y = scroller.scrollTop + topOffset() + 14;
@@ -1832,6 +1834,20 @@
     overlay.querySelectorAll(".pj__toc-chip").forEach(function (c) {
       c.classList.toggle("is-active", c.getAttribute("data-goto") === id);
     });
+    // Keep the active chip visible in the mobile horizontal nav: only when the section actually
+    // changes (so we never fight a manual sideways scroll), and scroll the bar itself horizontally
+    // (scrollBy on the bar, never scrollIntoView, so the page never moves).
+    if (id !== lastSpyId) {
+      lastSpyId = id;
+      var bar = overlay.querySelector(".pj__side");
+      var chip = overlay.querySelector(".pj__toc-chip.is-active");
+      if (bar && chip && bar.scrollWidth > bar.clientWidth + 4) {
+        try {
+          var bRect = bar.getBoundingClientRect(), cRect = chip.getBoundingClientRect();
+          bar.scrollBy({ left: (cRect.left - bRect.left) - (bar.clientWidth - cRect.width) / 2, behavior: "smooth" });
+        } catch (e) {}
+      }
+    }
   }
   function gotoSection(id) {
     if (id === "__intro") {
