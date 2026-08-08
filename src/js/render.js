@@ -173,6 +173,16 @@
     );
   }
 
+  function logoItem(g) {
+    const nm = esc(g.name || "");
+    const nmAttr = nm.replace(/"/g, "&quot;");
+    const src = esc(g.src || "").replace(/"/g, "&quot;");
+    return '<span class="logo" data-name="' + nmAttr + '">' +
+      '<img class="logo__img" src="' + src + '" alt="' + nmAttr + '" loading="lazy" draggable="false" />' +
+      (nm ? '<span class="logo__name">' + nm + "</span>" : "") +
+      "</span>";
+  }
+
   function tlEl(p) {
     return (
       '<li class="tl reveal' + (p.present ? " tl--present" : "") + '" data-reveal>' +
@@ -323,6 +333,15 @@
 
     const one = caps.map((c) => "<span>" + esc(c) + '</span><span class="dot">✦</span>').join("");
     set("marqueeTrack", one + one);
+
+    // Logo marquee (brands & products): full-colour logos with a hover name; the
+    // per-logo elastic scroll is driven by main.js. Duplicated for a seamless loop.
+    const logos = (L.logos || []).filter((g) => g && g.src);
+    const logoMarq = byId("logoMarquee");
+    if (logoMarq) {
+      if (logos.length) { const dup = logos.map(logoItem).join(""); set("logoTrack", dup + dup); logoMarq.hidden = false; }
+      else { set("logoTrack", ""); logoMarq.hidden = true; }
+    }
 
     set("stats", (data.highlights || []).slice(0, 8).map(highlightEl).join(""));
 

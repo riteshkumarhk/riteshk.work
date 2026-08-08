@@ -66,7 +66,7 @@
   <link rel="preload" href="fonts/fraunces-normal-300600-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="css/fonts.css" />
 
-  <link rel="stylesheet" href="css/styles.css?v=19" />
+  <link rel="stylesheet" href="css/styles.css?v=20" />
     <link rel="stylesheet" href="css/project.css?v=14" />
   <link rel="stylesheet" href="css/gensection.css" />
   <link rel="stylesheet" href="css/admin.css?v=13" />
@@ -163,9 +163,9 @@
       <div class="hero__avail" id="heroAvail"></div>
     </section>
 
-    <!-- ============ MARQUEE ============ -->
-    <div class="marquee" aria-hidden="true">
-      <div class="marquee__track" id="marqueeTrack"></div>
+    <!-- ============ LOGO MARQUEE — brands & products (studio: Landing → Brands) ============ -->
+    <div class="logos" id="logoMarquee" aria-label="Brands and products I've worked with" hidden>
+      <div class="logos__track" id="logoTrack"></div>
     </div>
     </div><!-- /.hero-screen -->
 
@@ -183,6 +183,11 @@
 
       <ol class="cases" id="cases"></ol>
     </section>
+
+    <!-- ============ CAPABILITIES REEL — moved below Selected Work, above Contact ============ -->
+    <div class="marquee marquee--reel" aria-hidden="true">
+      <div class="marquee__track" id="marqueeTrack"></div>
+    </div>
     </div><!-- /.page--work -->
 
     <!-- ===== ABOUT PAGE — reorderable, toggleable sections (studio → About tab) + shared contact ===== -->
@@ -301,8 +306,8 @@
   </div>
 
   <script src="js/lenis.min.js"></script>
-  <script src="js/render.js?v=11"></script>
-  <script src="js/main.js?v=5"></script>
+  <script src="js/render.js?v=12"></script>
+  <script src="js/main.js?v=6"></script>
   <script src="js/gensection.js?v=2"></script>
   <script src="js/project.js?v=11"></script>
   <script src="js/admin.js?v=2"></script>

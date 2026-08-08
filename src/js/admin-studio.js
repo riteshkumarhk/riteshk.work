@@ -3011,7 +3011,8 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="af"><label class="af__label">Availability badge</label>' +
         '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="avail-toggle"' + ((((data.landing || {}).available) || {}).on ? " checked" : "") + ' /><span>Show an \u201copen to work\u201d pill in the hero</span></label>' +
         '<div class="af__hint">Off by default. A quiet pill with a live green dot appears under the hero when on.</div></div>' +
-        input("Availability text", "landing.available.text", { hint: "e.g. Open to Principal / Staff Product Design roles" })
+        input("Availability text", "landing.available.text", { hint: "e.g. Open to Principal / Staff Product Design roles" }) +
+        group(logosBlock())
       );
     },
     contact() {
@@ -3998,6 +3999,41 @@ import { WORLD_LAND } from "./worldland.js";
     apply();
   }
 
+  /* ---------- Landing brands / product logos (marquee) ---------- */
+  function logosArr() { return Array.isArray((data.landing || {}).logos) ? data.landing.logos : ((data.landing = data.landing || {}).logos = []); }
+  function logoItemEditor(g, j, n) {
+    const src = g.src || "";
+    const thumb = src ? '<img src="' + escAttr(previewSrc(src)) + '" alt="" />' : '<span class="adm__gal-empty">empty</span>';
+    return '<div class="adm__gal-item">' +
+      '<div class="adm__gal-h"><span class="adm__ovm-n">' + (j + 1) + "</span>" +
+        '<div class="adm__ovm-ops">' +
+          '<button type="button" data-act="logo-up" data-lindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
+          '<button type="button" data-act="logo-down" data-lindex="' + j + '"' + (j === n - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+          '<button type="button" data-act="logo-remove" data-lindex="' + j + '" title="Remove">\u2715</button>' +
+        "</div></div>" +
+      '<div class="adm__gal-thumb' + (src ? " has" : "") + '">' + thumb + "</div>" +
+      '<div class="imgblk__row"><button class="btn btn--ghost" data-act="logo-upload" data-lindex="' + j + '">' + (src ? "Replace\u2026" : "Upload\u2026") + "</button>" + (src ? '<button class="btn btn--ghost" data-act="logo-clear" data-lindex="' + j + '">Clear</button>' : "") + mediaSizeTag(src) + "</div>" +
+      '<input type="text" class="adm__gal-cap" data-logoedit="' + j + '" data-logofield="name" value="' + escAttr(g.name || "") + '" placeholder="Name (shown on hover)" />' +
+      "</div>";
+  }
+  function logosBlock() {
+    const arr = logosArr();
+    const MAX = 24;
+    const items = arr.map(function (g, j) { return logoItemEditor(g, j, arr.length); }).join("");
+    const add = arr.length < MAX
+      ? '<button type="button" class="btn btn--add" data-act="logo-add">+ Add logo</button>'
+      : '<div class="af__hint">Up to ' + MAX + " logos.</div>";
+    return secHead("Brands &amp; products", "Logos of the companies and products you\u2019ve worked with \u2014 they run in a marquee at the bottom of the landing\u2019s first screen (the name shows on hover). Transparent PNG or SVG works best. Hidden until you add one.") +
+      '<div class="adm__gal">' + (items || '<div class="adm__empty">No logos yet.</div>') + "</div>" +
+      add;
+  }
+  function onLogoEdit(t) {
+    const arr = (data.landing || {}).logos, j = +t.dataset.logoedit;
+    if (!arr || !arr[j]) return;
+    arr[j][t.dataset.logofield] = t.value;
+    apply();
+  }
+
   /* ---------- contact section badges (which pills to show) ---------- */
   const CONTACT_BADGES = [
     ["email", "Email"],
@@ -4518,6 +4554,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (t.dataset.beat !== undefined && t.dataset.bkey) { onBeatEdit(t); return; }
     if (t.dataset.ovm !== undefined && t.dataset.ovmfield) { onOvmEdit(t); return; }
     if (t.dataset.galedit !== undefined && t.dataset.galfield) { onGalEdit(t); return; }
+    if (t.dataset.logoedit !== undefined && t.dataset.logofield) { onLogoEdit(t); return; }
     if (t.dataset.study !== undefined && t.dataset.sfield) { onStudyMeta(t); return; }
     if (t.dataset.sblock !== undefined && t.dataset.bfield && t.dataset.bfield !== "locked") { onStudyBlock(t); return; }
     if (t.dataset.path) { setPath(data, t.dataset.path, t.value); apply(); return; }
@@ -4730,6 +4767,12 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "gal-down") { const arr = data.aboutGallery, k = +b.dataset.gindex; if (arr && k < arr.length - 1) { const tmp = arr[k + 1]; arr[k + 1] = arr[k]; arr[k] = tmp; apply(true); renderBody(); } return; }
     if (act === "gal-clear") { const arr = data.aboutGallery, k = +b.dataset.gindex; if (arr && arr[k]) { arr[k].src = ""; apply(true); renderBody(); } return; }
     if (act === "gal-upload") { const k = +b.dataset.gindex; pickImage(function (uri) { const arr = data.aboutGallery; if (arr && arr[k]) { arr[k].src = uri; apply(true); renderBody(); } }); return; }
+    if (act === "logo-add") { const arr = logosArr(); if (arr.length < 24) { arr.push({ src: "", name: "" }); saveDraft(true); renderBody(); } return; }
+    if (act === "logo-remove") { const arr = (data.landing || {}).logos, k = +b.dataset.lindex; if (arr && arr[k] !== undefined) { arr.splice(k, 1); apply(true); renderBody(); } return; }
+    if (act === "logo-up") { const arr = (data.landing || {}).logos, k = +b.dataset.lindex; if (arr && k > 0) { const tmp = arr[k - 1]; arr[k - 1] = arr[k]; arr[k] = tmp; apply(true); renderBody(); } return; }
+    if (act === "logo-down") { const arr = (data.landing || {}).logos, k = +b.dataset.lindex; if (arr && k < arr.length - 1) { const tmp = arr[k + 1]; arr[k + 1] = arr[k]; arr[k] = tmp; apply(true); renderBody(); } return; }
+    if (act === "logo-clear") { const arr = (data.landing || {}).logos, k = +b.dataset.lindex; if (arr && arr[k]) { arr[k].src = ""; apply(true); renderBody(); } return; }
+    if (act === "logo-upload") { const k = +b.dataset.lindex; pickImage(function (uri) { const arr = (data.landing || {}).logos; if (arr && arr[k]) { arr[k].src = uri; apply(true); renderBody(); } }); return; }
     if (act === "ins-days") { loadInsights(+b.dataset.days || 30); return; }
     if (act === "ins-refresh") { loadInsights(); return; }
     if (act === "ins-mute") { insToggleMute(); return; }

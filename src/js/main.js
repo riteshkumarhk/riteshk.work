@@ -249,6 +249,52 @@
   window.addEventListener("resize", updateParallax, { passive: true });
 
   /* -------------------------------------------------
+     6b. Logo marquee — continuous right-to-left; each logo springs in
+     (elastic) from the right and fades out via the CSS edge mask on the left.
+  ------------------------------------------------- */
+  (function logoMarquee() {
+    const vp = document.getElementById("logoMarquee");
+    const track = document.getElementById("logoTrack");
+    if (!vp || !track) return;
+    const easeOutBack = (p) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
+    let off = 0, setW = 0, last = 0, paused = false, running = false, raf = 0;
+    function measure() {
+      const kids = track.children, half = kids.length / 2;
+      setW = (kids.length && kids[half]) ? kids[half].offsetLeft : 0;
+    }
+    function step(ts) {
+      if (!running) return;
+      if (!last) last = ts;
+      const dt = Math.min(0.05, (ts - last) / 1000); last = ts;
+      if (!paused && setW > 0) {
+        off += dt * 46;                                  // ~46px/s, right-to-left
+        if (off >= setW) off -= setW;
+        track.style.transform = "translate3d(" + (-off) + "px,0,0)";
+      }
+      const vr = vp.getBoundingClientRect(), W = vr.width, zone = (W * 0.20) || 1;
+      const kids = track.children;
+      for (let i = 0; i < kids.length; i++) {
+        const r = kids[i].getBoundingClientRect();
+        const cx = r.left + r.width / 2 - vr.left;
+        if (cx < -120 || cx > W + 120) continue;         // skip well off-stage
+        let p = (W - cx) / zone; if (p < 0) p = 0; else if (p > 1) p = 1;
+        const s = 0.72 + 0.28 * easeOutBack(p);          // elastic pop as it enters (right)
+        const img = kids[i].firstElementChild;
+        if (img) img.style.transform = "scale(" + s.toFixed(3) + ")";
+      }
+      raf = requestAnimationFrame(step);
+    }
+    function start() { measure(); if (setW <= 0 || running) return; running = true; last = 0; raf = requestAnimationFrame(step); }
+    function stop() { running = false; if (raf) cancelAnimationFrame(raf); }
+    vp.addEventListener("mouseenter", () => { paused = true; });   // pause so a logo's name is readable
+    vp.addEventListener("mouseleave", () => { paused = false; });
+    window.addEventListener("resize", measure, { passive: true });
+    // render.js (re)fills the track on load, SPA nav and studio preview → restart.
+    new MutationObserver(() => { stop(); start(); }).observe(track, { childList: true });
+    start();
+  })();
+
+  /* -------------------------------------------------
      7. Mobile menu
   ------------------------------------------------- */
   const toggle = document.getElementById("navToggle");
