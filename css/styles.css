@@ -439,7 +439,7 @@ html.lite .page { animation: none; }
 .case__media--photo { position: relative; background: var(--bg-elev); }
 /* Parallax layer — a touch taller than the frame so the image can drift vertically
    as the card scrolls without revealing an edge. main.js sets its transform. */
-.case__par { position: absolute; inset: -14% 0; will-change: transform; }
+.case__par { position: absolute; inset: -20% 0; will-change: transform; }
 .case__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: saturate(0.9); transition: transform .7s var(--ease), filter .7s var(--ease); }
 .case__link:hover .case__img { transform: scale(1.03); filter: saturate(1.08); }
 .case__media--photo::after { content: ""; position: absolute; inset: 0; z-index: 2; background: linear-gradient(180deg, rgba(8,8,10,.4) 0%, rgba(8,8,10,0) 28%, rgba(8,8,10,0) 62%, rgba(8,8,10,.55) 100%); }

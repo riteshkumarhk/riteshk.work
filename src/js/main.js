@@ -206,7 +206,7 @@
   // Work thumbnails drift vertically as they scroll through the viewport — a
   // different amount and direction per card (a uniform value feels mechanical).
   // Composes with the CSS hover-zoom, which lives on the inner <img>.
-  const PAR_FACTORS = [0.06, -0.10, 0.08, -0.05, 0.11, -0.07];
+  const PAR_FACTORS = [0.11, -0.17, 0.14, -0.09, 0.19, -0.13];
   const parLite = document.documentElement.classList.contains("lite");
   const updateParallax = () => {
     if (parLite) return;
@@ -218,7 +218,7 @@
       const h = r.height;
       const t = (r.top + h / 2 - vh / 2) / vh;            // 0 when centred in the viewport
       let yv = t * h * PAR_FACTORS[i % PAR_FACTORS.length];
-      const max = h * 0.09;                               // stay within the 12% headroom
+      const max = h * 0.12;                               // stay within the 20% headroom
       if (yv > max) yv = max; else if (yv < -max) yv = -max;
       pars[i].style.transform = "translate3d(0," + yv.toFixed(1) + "px,0)";
     }
