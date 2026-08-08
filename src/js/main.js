@@ -281,8 +281,6 @@
       // Cache each card's static offset once, so the animation is pure arithmetic (no layout
       // thrashing) — that's what keeps it smooth on phones while the page scrolls.
       W = vp.clientWidth || 0; lastW = W;
-      entry = dir === 1 ? W * 0.86 : W * 0.14;          // pop begins at the entering fade edge
-      zone = Math.max(W * 0.22, 150) || 1;              // enough travel that the pop is visible on a narrow screen
       geo = [];
       const kids = track.children;
       for (let i = 0; i < kids.length; i++) geo.push({ left: kids[i].offsetLeft, w: kids[i].offsetWidth, card: kids[i].firstElementChild });
@@ -314,13 +312,14 @@
       }
       for (let i = 0; i < geo.length; i++) {             // analytic positions — zero per-frame layout reads
         const g = geo[i]; if (!g.card) continue;
-        const cx = g.left + g.w / 2 - off;               // visual centre relative to the container's left
-        // scale is a pure function of on-screen position, so every card (even off-stage) is already at
-        // its correct/entry size before it appears - that kills the old "enter, then snap + pop" hiccup.
-        let p = dir === 1 ? (entry - cx) / zone : (cx - entry) / zone;
+        const half = g.w / 2;
+        const cx = g.left + half - off;                  // card centre in viewport coords (0..W)
+        // Elastic entry tied to each card's OWN entry: it stays small until it is ~half in, then grows
+        // over the SECOND HALF of its entry so it is fully grown exactly as it finishes entering. Cards
+        // that are off-stage or fully in clamp to small / full, so there is no stale-scale snap.
+        let p = dir === 1 ? (W - cx) / half : cx / half;
         if (p < 0) p = 0; else if (p > 1) p = 1;
-        const s = popMin + popRange * ease(p);           // (elastic / soft) pop as it clears the entering fade
-        if (g.card) g.card.style.transform = "scale(" + s.toFixed(3) + ")";
+        g.card.style.transform = "scale(" + (popMin + popRange * ease(p)).toFixed(3) + ")";
       }
       raf = requestAnimationFrame(step);
     }
