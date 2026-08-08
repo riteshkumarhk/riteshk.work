@@ -612,21 +612,24 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
 .cases--g2 { grid-template-columns: repeat(2, 1fr); }
 .cases--g3 { grid-template-columns: repeat(3, 1fr); }
 .cases--g2 > .case, .cases--g3 > .case { border: 0; }
-/* Grid layouts render each project as a contained CARD: cover flush at the top,
-   text padded inside, elevated surface + border + rounded corners (the same card
-   language as the highlight chips and brand logos). */
+/* Grid layouts render each project as a contained CARD. The cover is INSET so the card
+   surface frames it on every side, and both the card and the cover use squircle corners
+   (corner-shape, progressively enhanced — falls back to normal rounding where unsupported). */
 .cases--g2 > .case .case__link, .cases--g3 > .case .case__link {
   display: flex; flex-direction: column; align-items: stretch; height: 100%;
-  gap: 0; padding: 0; overflow: hidden;
-  background: var(--bg-elev); border: 1px solid var(--line-soft); border-radius: 16px;
+  gap: clamp(0.9rem, 1.35vw, 1.2rem); padding: clamp(0.8rem, 1.2vw, 1rem);
+  background: var(--bg-elev); border: 1px solid var(--line-soft);
+  border-radius: 24px; corner-shape: squircle;
   transition: border-color .3s var(--ease), box-shadow .3s var(--ease), transform .3s var(--ease);
 }
 .cases--g2 > .case .case__link:hover, .cases--g3 > .case .case__link:hover {
-  padding-left: 0; border-color: var(--accent);
+  padding-left: clamp(0.8rem, 1.2vw, 1rem); border-color: var(--accent);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.32); transform: translateY(-3px);
 }
-.cases--g2 > .case .case__media, .cases--g3 > .case .case__media { border-radius: 0; }
-.cases--g2 > .case .case__body, .cases--g3 > .case .case__body { padding: clamp(1.1rem, 1.7vw, 1.55rem); }
+.cases--g2 > .case .case__media, .cases--g3 > .case .case__media {
+  border-radius: 15px; corner-shape: squircle;
+}
+.cases--g2 > .case .case__body, .cases--g3 > .case .case__body { padding: 0 0 clamp(0.2rem, 0.5vw, 0.45rem); }
 .cases--g2 .case__title { font-size: clamp(1.3rem, 2vw, 1.95rem); margin-bottom: .5rem; }
 .cases--g3 .case__title { font-size: clamp(1.15rem, 1.5vw, 1.5rem); margin-bottom: .4rem; }
 .cases--g2 .case__meta, .cases--g3 .case__meta { margin-bottom: .85rem; }
