@@ -173,6 +173,51 @@
     );
   }
 
+  /* ---------- hero featured-work stage (auto-cycling flagship covers) ---------- */
+  let heroStageTimer = 0;
+  function buildHeroStage(data) {
+    const stage = byId("heroStage");
+    if (!stage) return;
+    if (heroStageTimer) { clearInterval(heroStageTimer); heroStageTimer = 0; }
+    const feat = (data.work || []).filter((w) => w.featured && !w.encWork && !w.hidden).slice(0, 5);
+    if (feat.length < 1) { stage.innerHTML = ""; stage.hidden = true; return; }
+    stage.hidden = false;
+    const slide = (w, i) =>
+      '<figure class="hero__stage-slide' + (i === 0 ? " is-active" : "") + '" data-i="' + i + '">' +
+      (w.image
+        ? '<img class="hero__stage-img" src="' + esc(w.image).replace(/"/g, "&quot;") + '" alt="" loading="' + (i === 0 ? "eager" : "lazy") + '" />'
+        : '<div class="hero__stage-plate case__media--' + esc(w.theme) + '"><div class="plate">' + plateInner(w.theme) + "</div></div>") +
+      "</figure>";
+    const dot = (w, i) =>
+      '<button type="button" class="hero__stage-dot' + (i === 0 ? " is-active" : "") + '" data-i="' + i + '" aria-label="Show ' + esc(w.client) + '"></button>';
+    stage.innerHTML =
+      '<a class="hero__stage-frame" href="/work/' + esc(feat[0].id) + '" data-work="' + esc(feat[0].id) + '" data-cursor="view" aria-label="Open the featured case study">' + feat.map(slide).join("") +
+      '<figcaption class="hero__stage-cap"><span class="hero__stage-cap-k">Featured work</span>' +
+      '<span class="hero__stage-cap-t" id="heroStageCap"></span></figcaption></a>' +
+      '<div class="hero__stage-dots">' + feat.map(dot).join("") + "</div>";
+    const slides = stage.querySelectorAll(".hero__stage-slide");
+    const dots = stage.querySelectorAll(".hero__stage-dot");
+    const frame = stage.querySelector(".hero__stage-frame");
+    const cap = byId("heroStageCap");
+    const setCap = (i) => { if (cap) cap.innerHTML = "<strong>" + esc(feat[i].client) + "</strong> \u2014 " + esc(feat[i].title); };
+    const show = (i) => {
+      slides.forEach((s, si) => s.classList.toggle("is-active", si === i));
+      dots.forEach((d, di) => d.classList.toggle("is-active", di === i));
+      if (frame) { frame.setAttribute("href", "/work/" + feat[i].id); frame.setAttribute("data-work", feat[i].id); }
+      setCap(i);
+    };
+    setCap(0);
+    let cur = 0;
+    const lite = new URLSearchParams(location.search).has("lite");
+    const start = () => { if (heroStageTimer) clearInterval(heroStageTimer); if (feat.length > 1 && !lite) heroStageTimer = setInterval(() => { cur = (cur + 1) % feat.length; show(cur); }, 4600); };
+    dots.forEach((d) => d.addEventListener("click", () => { cur = +d.getAttribute("data-i"); show(cur); start(); }));
+    if (frame) {
+      frame.addEventListener("mouseenter", () => { if (heroStageTimer) { clearInterval(heroStageTimer); heroStageTimer = 0; } });
+      frame.addEventListener("mouseleave", start);
+    }
+    start();
+  }
+
   function tlEl(p) {
     return (
       '<li class="tl reveal' + (p.present ? " tl--present" : "") + '" data-reveal>' +
@@ -225,6 +270,8 @@
     // Work list layout is configurable from the studio: list | grid-2 | grid-3 (default grid-2).
     const casesEl = byId("cases");
     if (casesEl) { const wl = data.workLayout || "grid-2"; casesEl.className = "cases" + (wl === "grid-3" ? " cases--g3" : wl === "list" ? "" : " cases--g2"); }
+
+    buildHeroStage(data);
 
     set("capsList", caps.map((c) => '<li data-reveal>' + esc(c) + "</li>").join(""));
 
