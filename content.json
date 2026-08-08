@@ -3848,27 +3848,33 @@
   "recognition": [
     {
       "title": "Microsoft Design Thinking Award",
-      "meta": "Aug 2024"
+      "meta": "Aug 2024",
+      "icon": "trophy"
     },
     {
       "title": "Speaker — Authenticate 2024",
-      "meta": "Oct 2024"
+      "meta": "Oct 2024",
+      "icon": "mic"
     },
     {
-      "title": "SPACE Fix·Hack·Learn Winner",
-      "meta": "Feb 2023"
+      "title": "Microsoft Fix Hack Learn Winner",
+      "meta": "Feb 2023",
+      "icon": "award"
     },
     {
-      "title": "MSAI Fix·Hack·Learn Winner",
-      "meta": "Nov 2020"
+      "title": "Microsoft Fix Hack Learn Winner",
+      "meta": "Nov 2020",
+      "icon": "award"
     },
     {
       "title": "28th — National XC MTB Championship",
-      "meta": "Oct 2021"
+      "meta": "Oct 2021",
+      "icon": "bike"
     },
     {
       "title": "Top-distinction UX Certified — IxDF",
-      "meta": "—"
+      "meta": "—",
+      "icon": "star"
     }
   ],
   "education": [
@@ -4243,5 +4249,27 @@
     ],
     "eyebrow": ""
   },
-  "recruiterMode": true
+  "recruiterMode": true,
+  "aboutSections": [
+    {
+      "key": "recognition",
+      "on": true
+    },
+    {
+      "key": "about",
+      "on": true
+    },
+    {
+      "key": "path",
+      "on": true
+    },
+    {
+      "key": "capabilities",
+      "on": true
+    },
+    {
+      "key": "education",
+      "on": false
+    }
+  ]
 }
