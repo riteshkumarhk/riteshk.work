@@ -745,6 +745,7 @@ html.pj-lock, html.pj-lock body { overflow: hidden; }
     background: rgba(8, 8, 10, 0.85); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
     overflow-x: auto; scrollbar-width: none;
   }
+  html[data-appearance="light"] .pj__side { background: rgba(242, 238, 230, 0.85); border-bottom-color: var(--line); }
   .pj__side::-webkit-scrollbar { display: none; }
   .pj__side-head, .pj__side-back { display: none; }
   .pj__viewseg { margin-bottom: 0; flex: 0 0 auto; }
