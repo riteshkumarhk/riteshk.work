@@ -266,11 +266,9 @@
     opts = opts || {};
     const speed = opts.speed || 46;                    // px/s
     const dir = opts.dir === -1 ? -1 : 1;              // 1 = right-to-left (logos), -1 = left-to-right (numbers)
-    const popMin = opts.popMin != null ? opts.popMin : 0.72;   // entrance start scale (higher = softer)
+    const popMin = opts.popMin != null ? opts.popMin : 0.92;   // entrance start scale - a subtle grow to 100% (higher = subtler)
     const popRange = 1 - popMin;
-    const ease = opts.ease === "cubic"
-      ? (p) => 1 - Math.pow(1 - p, 3)                  // clean scale-in, no overshoot (numbers stay readable)
-      : (p) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); }; // elastic back
+    const ease = (p) => 1 - Math.pow(1 - p, 3);        // smooth ease-out, no elastic overshoot
     const onBuild = typeof opts.onBuild === "function" ? opts.onBuild : null;
     let off = 0, setW = 0, last = 0, paused = false, running = false, raf = 0, onScreen = true;
     let baseHTML = "", baseCount = 0, rz = 0;
@@ -315,9 +313,10 @@
         track.style.transform = "translate3d(" + (-off) + "px,0,0)";
       }
       for (let i = 0; i < geo.length; i++) {             // analytic positions — zero per-frame layout reads
-        const g = geo[i];
+        const g = geo[i]; if (!g.card) continue;
         const cx = g.left + g.w / 2 - off;               // visual centre relative to the container's left
-        if (cx < -80 || cx > W + 80) continue;           // fully off-stage
+        // scale is a pure function of on-screen position, so every card (even off-stage) is already at
+        // its correct/entry size before it appears - that kills the old "enter, then snap + pop" hiccup.
         let p = dir === 1 ? (entry - cx) / zone : (cx - entry) / zone;
         if (p < 0) p = 0; else if (p > 1) p = 1;
         const s = popMin + popRange * ease(p);           // (elastic / soft) pop as it clears the entering fade
@@ -340,7 +339,7 @@
     onSource();                                          // render already populated the track
   }
 
-  // Brands & products — right-to-left, full elastic pop.
+  // Brands & products — right-to-left, subtle smooth scale-in (no elastic overshoot).
   marquee(document.getElementById("logoMarquee"), document.getElementById("logoTrack"), {});
 
   // Highlights numbers — left-to-right, softer scale-in. Count up on the first pass,
@@ -348,7 +347,7 @@
   (function () {
     let counted = false;
     marquee(document.getElementById("hiMarquee"), document.getElementById("hiTrack"), {
-      dir: -1, popMin: 0.86, ease: "cubic",
+      dir: -1,
       onBuild: function (track) {
         if (counted) { track.querySelectorAll(".count").forEach((el) => { el.textContent = el.dataset.count; }); }
         else { counted = true; observeCounts(track); }
