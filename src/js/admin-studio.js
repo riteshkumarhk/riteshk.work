@@ -4029,7 +4029,7 @@ import { WORLD_LAND } from "./worldland.js";
       ? '<button type="button" class="btn btn--add" data-act="logo-add">+ Add logo</button>'
       : '<div class="af__hint">Up to ' + MAX + " logos.</div>";
     return secHead("Brands &amp; products", "Logos of the companies and products you\u2019ve worked with \u2014 they run in a marquee at the bottom of the landing\u2019s first screen (the name shows on hover). Transparent PNG or SVG works best. Hidden until you add one.") +
-      '<div class="adm__gal">' + (items || '<div class="adm__empty">No logos yet.</div>') + "</div>" +
+      '<div class="adm__gal adm__gal--logos">' + (items || '<div class="adm__empty">No logos yet.</div>') + "</div>" +
       add;
   }
   function onLogoEdit(t) {
