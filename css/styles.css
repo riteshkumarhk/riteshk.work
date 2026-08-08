@@ -374,7 +374,7 @@ html.lite .page { animation: none; }
 .logos {
   position: relative; overflow: hidden; overflow-anchor: none;
   width: 100%; max-width: var(--maxw); margin: 0 auto;
-  padding: clamp(1rem, 2vw, 1.7rem) 0;
+  padding: 1.9rem 0 clamp(1rem, 2vw, 1.7rem);
   border-top: 1px solid var(--line-soft);
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
           mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
@@ -401,7 +401,7 @@ html.lite .page { animation: none; }
 html[data-appearance="light"] .logo__card { background: #faf8f2; border-color: rgba(28, 24, 18, 0.09); box-shadow: 0 1px 3px rgba(28, 24, 18, 0.05); }
 html[data-appearance="light"] .logo:hover .logo__card { box-shadow: 0 8px 22px rgba(28, 24, 18, 0.1); }
 .logo__name {
-  position: absolute; bottom: calc(100% + 9px); left: 50%;
+  position: absolute; bottom: calc(100% + 5px); left: 50%;
   transform: translateX(-50%) translateY(4px);
   font-family: var(--mono); font-size: .6rem; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap;
   color: var(--text); background: var(--bg-2); border: 1px solid var(--line);
