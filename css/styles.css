@@ -608,28 +608,32 @@ html.lite .page { animation: none; }
 .awards--feature .award__ico svg { width: 1.7rem; height: 1.7rem; }
 .awards--feature li i { font-size: .8rem; letter-spacing: .04em; }
 
-/* Photos — a grid of up to 6 personal shots */
-.gallery-grid {
-  max-width: var(--maxw); margin: clamp(1.6rem, 3vw, 2.4rem) auto 0; padding: 0 var(--pad);
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(.7rem, 1.6vw, 1.3rem);
+/* Photos — a small horizontal strip, part of the About section (no header) */
+.about__strip {
+  max-width: var(--maxw); margin: clamp(1.3rem, 2.6vw, 2rem) auto 0; padding: 0 var(--pad);
+  display: flex; gap: clamp(.5rem, 1vw, .8rem);
+  overflow-x: auto; scroll-snap-type: x proximity;
+  scrollbar-width: none; -ms-overflow-style: none;
 }
+.about__strip:empty { display: none; }
+.about__strip::-webkit-scrollbar { display: none; }
 .gallery__item {
-  position: relative; margin: 0; aspect-ratio: 4 / 5; overflow: hidden;
-  border-radius: 12px; border: 1px solid var(--line); background: var(--bg-elev);
+  position: relative; margin: 0; flex: 0 0 auto;
+  width: clamp(110px, 13vw, 150px); aspect-ratio: 4 / 5; overflow: hidden;
+  border-radius: 10px; border: 1px solid var(--line); background: var(--bg-elev);
+  scroll-snap-align: start;
 }
 .gallery__img {
   width: 100%; height: 100%; object-fit: cover; display: block; filter: saturate(.92);
   transition: transform .7s var(--ease), filter .7s var(--ease);
 }
-.gallery__item:hover .gallery__img { transform: scale(1.04); filter: saturate(1.06); }
+.gallery__item:hover .gallery__img { transform: scale(1.05); filter: saturate(1.06); }
 .gallery__cap {
-  position: absolute; left: 0; right: 0; bottom: 0; padding: 1.5rem .85rem .7rem;
-  font-family: var(--mono); font-size: .66rem; letter-spacing: .03em; color: var(--text);
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 1.1rem .6rem .5rem;
+  font-family: var(--mono); font-size: .58rem; letter-spacing: .02em; color: var(--text);
   background: linear-gradient(transparent, rgba(6,6,8,.85)); opacity: 0; transition: opacity .4s;
 }
 .gallery__item:hover .gallery__cap { opacity: 1; }
-@media (max-width: 720px) { .gallery-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 440px) { .gallery-grid { grid-template-columns: 1fr; } }
 
 /* =================================================================
    CONTACT

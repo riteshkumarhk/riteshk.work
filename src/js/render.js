@@ -242,7 +242,6 @@
     ["capabilities", "Capabilities"],
     ["path", "The Path"],
     ["education", "Education"],
-    ["gallery", "Photos"],
   ];
   function aboutLayout(data) {
     const known = ABOUT_SECTIONS.map((s) => s[0]);
@@ -260,17 +259,14 @@
   function applyAboutLayout(data) {
     const wrap = byId("aboutSections");
     if (!wrap) return;
-    // An empty Photos grid never shows a bare "Photos" header — auto-hidden until photos exist.
-    const galleryEmpty = !(((data && data.aboutGallery) || []).some(function (g) { return g && g.src; }));
     const visible = [];
     aboutLayout(data).forEach((s) => {
       const el = document.getElementById("sec-" + s.key);
       if (!el) return;
-      const on = s.on && !(s.key === "gallery" && galleryEmpty);
-      el.hidden = !on;
+      el.hidden = !s.on;
       el.classList.remove("sec--first", "sec--last");
       wrap.appendChild(el); // move into layout order (appendChild reorders existing nodes)
-      if (on) visible.push(el);
+      if (s.on) visible.push(el);
     });
     // Mark the first/last *visible* section so the top one clears the fixed nav and the
     // bottom one keeps breathing room — robust even when a leading section is hidden.

@@ -3066,9 +3066,9 @@ import { WORLD_LAND } from "./worldland.js";
     },
     aboutpage() {
       const RK = window.RK || {};
-      const defs = RK.ABOUT_SECTIONS || [["about", "About"], ["recognition", "Recognition"], ["capabilities", "Capabilities"], ["path", "The Path"], ["education", "Education"], ["gallery", "Photos"]];
+      const defs = RK.ABOUT_SECTIONS || [["about", "About"], ["recognition", "Recognition"], ["capabilities", "Capabilities"], ["path", "The Path"], ["education", "Education"]];
       const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
-      const where = { about: "Edit the text below in this tab", recognition: "Edit in the Recognition tab", capabilities: "Edit in the Capabilities tab", path: "Edit in the Path tab", education: "Edit in the Education tab", gallery: "Add photos below in this tab" };
+      const where = { about: "Edit the text + photos below in this tab", recognition: "Edit in the Recognition tab", capabilities: "Edit in the Capabilities tab", path: "Edit in the Path tab", education: "Edit in the Education tab" };
       const layout = RK.aboutLayout ? RK.aboutLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
       let html = secHead("About page", "Reorder the sections on your About page and show or hide any of them. Use the arrows to move a section up or down, and untick to hide it from visitors. Each section\u2019s content is edited in its own tab \u2014 the About text and Photos live right here.");
       html += '<ul class="adm__seclist">';
@@ -3967,7 +3967,7 @@ import { WORLD_LAND } from "./worldland.js";
     const add = arr.length < MAX
       ? '<button type="button" class="btn btn--add" data-act="gal-add">+ Add photo</button>'
       : '<div class="af__hint">Up to ' + MAX + " photos.</div>";
-    return secHead("Photos", "A grid of up to 6 personal shots \u2014 you working, riding, whatever tells your story. It shows as the Photos section (reorder it in the list above) and stays hidden until you add one.") +
+    return secHead("Photos", "A small strip of up to 6 personal shots \u2014 you working, riding, whatever tells your story. It shows right after your About text (hidden until you add one).") +
       '<div class="adm__gal">' + (items || '<div class="adm__empty">No photos yet \u2014 add up to 6.</div>') + "</div>" +
       add;
   }
