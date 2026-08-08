@@ -737,6 +737,11 @@ html.lite .hero__avail-dot { animation: none; }
      it just grows inside the flex column so the marquee sits flush at the bottom. */
   .hero-screen { min-height: 100svh; display: flex; flex-direction: column; }
   .hero { min-height: 0; flex: 1 0 auto; }
+  /* The presence line can run long (e.g. "…Previously Jaguar Land Rover and Tata
+     Elxsi"). Cap its width so it wraps in the lower-right — right-aligned, a page
+     gutter off the edge (right stays var(--pad)), and clear of the bottom-left dock. */
+  .hero__now { display: block; text-align: right; max-width: min(70vw, 22rem); }
+  .hero__now-dot { display: inline-block; vertical-align: middle; margin-right: .45rem; }
 }
 
 @media (max-width: 400px) {
