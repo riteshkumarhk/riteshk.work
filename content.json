@@ -4324,15 +4324,15 @@
       "on": true
     },
     {
-      "key": "about",
-      "on": true
-    },
-    {
       "key": "path",
       "on": true
     },
     {
       "key": "capabilities",
+      "on": true
+    },
+    {
+      "key": "about",
       "on": true
     },
     {
