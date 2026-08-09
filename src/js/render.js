@@ -168,15 +168,20 @@
     const n = String(idx + 1).padStart(2, "0");
     const tags = (w.tags || []).map((t) => "<span>" + esc(t) + "</span>").join("");
     const imgSrc = esc(w.image).replace(/"/g, "&quot;");
+    // In the GRID layout, client + period are surfaced as an overlay inside the image
+    // (styled to appear only for .cases--g2/.cases--g3). The below-image .case__meta stays in
+    // the DOM as the accessible copy (screen-reader-only in grid) since the media is aria-hidden.
+    const overlayMeta = '<div class="case__cm"><span class="case__cm-client">' + esc(w.client) +
+      '</span><span class="case__cm-period">' + esc(w.period) + '</span></div>';
     const media = w.image
       ? '<div class="case__media case__media--photo" aria-hidden="true">' +
           '<div class="case__par"' + parAttrs(w) + '><img class="case__img" src="' + imgSrc + '" alt="" loading="lazy" /></div>' +
           '<span class="plate__idx">' + n + '</span>' +
-          '<span class="plate__tag">' + esc(w.plateTag) + '</span></div>'
+          '<span class="plate__tag">' + esc(w.plateTag) + '</span>' + overlayMeta + '</div>'
       : '<div class="case__media case__media--' + esc(w.theme) + '" aria-hidden="true">' +
           '<div class="plate"><span class="plate__idx">' + n + "</span>" +
           plateInner(w.theme) +
-          '<span class="plate__tag">' + esc(w.plateTag) + "</span></div></div>";
+          '<span class="plate__tag">' + esc(w.plateTag) + "</span>" + overlayMeta + "</div></div>";
     return (
       '<li class="case" data-reveal><a class="case__link" href="/work/' + esc(w.id) + '" data-work="' + esc(w.id) + '" data-cursor="view">' +
       media +

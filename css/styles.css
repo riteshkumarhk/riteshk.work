@@ -505,6 +505,8 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
   color: var(--text); padding: .35rem .7rem; border: 1px solid var(--line);
   border-radius: 100px; background: rgba(8,8,10,0.4); backdrop-filter: blur(4px);
 }
+/* In-image client + timeline overlay — only shown in the grid layouts (see .cases--g2/.cases--g3). */
+.case__cm { display: none; }
 
 /* Plate visual themes */
 .case__media--edge .plate { background: radial-gradient(120% 120% at 20% 20%, #16324f 0%, #0b1522 45%, #08080a 100%); }
@@ -627,12 +629,33 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.32); transform: translateY(-3px);
 }
 .cases--g2 > .case .case__media, .cases--g3 > .case .case__media {
-  border-radius: 26px; corner-shape: squircle;
+  border-radius: 26px; corner-shape: squircle; aspect-ratio: 16 / 12;
+}
+/* Surface client + timeline inside the image (bottom-left), move the tag pill to the top-right
+   so the four corners read cleanly: index / tag / client / timeline. */
+.cases--g2 > .case .case__cm, .cases--g3 > .case .case__cm {
+  display: flex; flex-direction: column; gap: .3rem;
+  position: absolute; left: 1.2rem; right: 1.2rem; bottom: 1.05rem; z-index: 3;
+  font-family: var(--mono); letter-spacing: .06em; text-transform: uppercase;
+  text-shadow: 0 1px 5px rgba(8, 8, 10, 0.6);
+}
+.cases--g2 > .case .case__cm-client, .cases--g3 > .case .case__cm-client { color: var(--text); font-size: .72rem; }
+.cases--g2 > .case .case__cm-period, .cases--g3 > .case .case__cm-period { color: var(--text-dim); font-size: .66rem; }
+.cases--g2 > .case .plate__tag, .cases--g3 > .case .plate__tag {
+  top: 1rem; bottom: auto; left: auto; right: 1.2rem; background: rgba(8, 8, 10, 0.55);
+}
+.cases--g2 > .case .case__media--photo::after, .cases--g3 > .case .case__media--photo::after {
+  background: linear-gradient(180deg, rgba(8,8,10,.3) 0%, rgba(8,8,10,0) 24%, rgba(8,8,10,0) 44%, rgba(8,8,10,.76) 100%);
 }
 .cases--g2 > .case .case__body, .cases--g3 > .case .case__body { padding: 0 0 clamp(0.2rem, 0.5vw, 0.45rem); }
 .cases--g2 .case__title { font-size: clamp(1.3rem, 2vw, 1.95rem); margin-bottom: .5rem; }
 .cases--g3 .case__title { font-size: clamp(1.15rem, 1.5vw, 1.5rem); margin-bottom: .4rem; }
-.cases--g2 .case__meta, .cases--g3 .case__meta { margin-bottom: .85rem; }
+/* The visible client/timeline now lives inside the image (.case__cm); keep the below-image
+   copy in the DOM but screen-reader-only so grid cards stay accessible. */
+.cases--g2 .case__meta, .cases--g3 .case__meta {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 .cases--g2 .case__desc, .cases--g3 .case__desc {
   max-width: none; font-size: clamp(.88rem, 1vw, .97rem);
   display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
