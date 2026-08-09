@@ -492,7 +492,7 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
   font-size: clamp(1.9rem, 5vw, 4.2rem); line-height: 1.05; letter-spacing: -0.02em;
   max-width: 18ch;
 }
-.section-head__title em { color: var(--text-dim); }
+.section-head__title em { color: var(--accent); }
 
 /* =================================================================
    WORK / CASES
