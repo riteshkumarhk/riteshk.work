@@ -797,10 +797,20 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
 .contact__line { display: flex; justify-content: center; flex-wrap: wrap; gap: .7rem; }
 .contact__pill {
   font-family: var(--mono); font-size: .74rem; letter-spacing: .02em; color: var(--text-dim);
-  padding: .58rem 1.15rem; border: 1px solid var(--line); border-radius: 100px;
+  padding: .58rem 1.15rem; border: 1px solid transparent; border-radius: 100px; background: transparent;
   transition: color .4s, border-color .4s, background .4s;
 }
-.contact__pill:hover { color: var(--text); border-color: var(--accent); background: var(--line-soft); }
+/* Quiet by default: on desktop the outline + soft fill only fade in on hover, so at rest the row reads as calm mono links. */
+@media (hover: hover) {
+  .contact__pill:hover { color: var(--text); border-color: var(--accent); background: var(--line-soft); }
+}
+/* Touch has no hover to reveal the outline, so keep a faint resting border (obvious tap target) + a press state. */
+@media (hover: none) {
+  .contact__pill { border-color: var(--line-soft); }
+  .contact__pill:active { color: var(--text); border-color: var(--accent); background: var(--line-soft); }
+}
+/* Keyboard focus stays visible on every device. */
+.contact__pill:focus-visible { outline: none; color: var(--text); border-color: var(--accent); background: var(--line-soft); box-shadow: 0 0 0 2px var(--line-soft); }
 button.contact__pill { background: transparent; cursor: pointer; margin: 0; -webkit-appearance: none; appearance: none; }
 
 .hero__avail { display: inline-flex; align-items: center; gap: .6rem; margin-top: 1.5rem; padding: .55rem 1rem; border: 1px solid var(--line); border-radius: 100px; font-family: var(--mono); font-size: .74rem; letter-spacing: .03em; color: var(--text-dim); animation: availIn .7s .9s both; }
