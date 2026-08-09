@@ -61,26 +61,48 @@ import { initDepth } from "./depth.js";
     }
   };
 
+  // The hero "Selected work" cue tucks the brand marquee up behind the nav and lands on the
+  // stat highlights (which flow into the work section). Land the stat chips just below the nav,
+  // with a gap of HALF the horizontal space between the chips, for a tight, deliberate seam.
+  const scrollStatsUnderNav = (stats) => {
+    const nav = document.getElementById("nav");
+    // The nav compacts (smaller padding) once scrolled, and it WILL be scrolled at the landing.
+    // Measure THAT compact height without animating or committing the class: kill the transition,
+    // toggle is-scrolled on, read the height, toggle back, restore — all before the next paint.
+    let navH = 60;
+    if (nav) {
+      const inline = nav.style.transition;
+      const wasScrolled = nav.classList.contains("is-scrolled");
+      nav.style.transition = "none";
+      nav.classList.add("is-scrolled");
+      navH = nav.offsetHeight;
+      if (!wasScrolled) nav.classList.remove("is-scrolled");
+      nav.style.transition = inline;
+    }
+    const track = stats.querySelector(".himarq__track");
+    const chipGap = track ? (parseFloat(getComputedStyle(track).columnGap) || 20) : 20;
+    const card = stats.querySelector(".hi__card") || stats;
+    const cardTopDoc = card.getBoundingClientRect().top + window.scrollY;
+    const y = Math.max(0, Math.round(cardTopDoc - navH - chipGap / 2));
+    if (lenis) lenis.scrollTo(y, { duration: 1.2 });
+    else window.scrollTo({ top: y, behavior: reduceMotion ? "auto" : "smooth" });
+  };
+
   // Smooth-scroll for in-page anchor links (menu links handled separately)
   document.querySelectorAll('a[href^="#"]').forEach((a) => {
     if (a.closest("#menu")) return;
     a.addEventListener("click", (e) => {
       const hash = a.getAttribute("href");
       if (!hash || hash.length < 2) return;
-      let target = document.querySelector(hash);
-      let offset = 0;
-      // The hero "Selected work" cue tucks the brand marquee up behind the nav and lands on
-      // the stat highlights (which flow into the work section) — not on #work itself.
+      // The hero "Selected work" cue lands on the stat highlights just below the nav.
       if (a.classList.contains("hero__cue")) {
         const stats = document.querySelector(".himarq");
-        if (stats && !stats.hidden) {
-          target = stats;
-          offset = -((document.getElementById("nav") || {}).offsetHeight || 70);
-        }
+        if (stats && !stats.hidden) { e.preventDefault(); scrollStatsUnderNav(stats); return; }
       }
+      const target = document.querySelector(hash);
       if (!target) return;
       e.preventDefault();
-      smoothTo(target, offset);
+      smoothTo(target);
     });
   });
 
