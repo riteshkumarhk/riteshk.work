@@ -64,11 +64,12 @@ import { initDepth } from "./depth.js";
   // The hero "Selected work" cue tucks the brand marquee up behind the nav and lands on the
   // stat highlights (which flow into the work section). Land the stat chips just below the nav,
   // with a gap of HALF the horizontal space between the chips, for a tight, deliberate seam.
-  const scrollStatsUnderNav = (stats) => {
+  // Scroll so an element's top sits just below the nav. The nav compacts (smaller padding)
+  // once scrolled and WILL be scrolled at the landing, so measure THAT compact height without
+  // animating or committing the class: kill the transition, toggle is-scrolled on, read the
+  // height, toggle back, restore -- all before the next paint (no visual flicker).
+  const scrollBelowNav = (el, gap) => {
     const nav = document.getElementById("nav");
-    // The nav compacts (smaller padding) once scrolled, and it WILL be scrolled at the landing.
-    // Measure THAT compact height without animating or committing the class: kill the transition,
-    // toggle is-scrolled on, read the height, toggle back, restore — all before the next paint.
     let navH = 60;
     if (nav) {
       const inline = nav.style.transition;
@@ -79,11 +80,8 @@ import { initDepth } from "./depth.js";
       if (!wasScrolled) nav.classList.remove("is-scrolled");
       nav.style.transition = inline;
     }
-    const track = stats.querySelector(".himarq__track");
-    const chipGap = track ? (parseFloat(getComputedStyle(track).columnGap) || 20) : 20;
-    const card = stats.querySelector(".hi__card") || stats;
-    const cardTopDoc = card.getBoundingClientRect().top + window.scrollY;
-    const y = Math.max(0, Math.round(cardTopDoc - navH - chipGap / 2));
+    const topDoc = el.getBoundingClientRect().top + window.scrollY;
+    const y = Math.max(0, Math.round(topDoc - navH - (gap || 0)));
     if (lenis) lenis.scrollTo(y, { duration: 1.2 });
     else window.scrollTo({ top: y, behavior: reduceMotion ? "auto" : "smooth" });
   };
@@ -94,10 +92,11 @@ import { initDepth } from "./depth.js";
     a.addEventListener("click", (e) => {
       const hash = a.getAttribute("href");
       if (!hash || hash.length < 2) return;
-      // The hero "Selected work" cue lands on the stat highlights just below the nav.
+      // The hero "Selected work" cue lands right where the Selected Work section starts,
+      // just below the nav (scrolling past both marquees).
       if (a.classList.contains("hero__cue")) {
-        const stats = document.querySelector(".himarq");
-        if (stats && !stats.hidden) { e.preventDefault(); scrollStatsUnderNav(stats); return; }
+        const work = document.querySelector("#work");
+        if (work) { e.preventDefault(); scrollBelowNav(work); return; }
       }
       const target = document.querySelector(hash);
       if (!target) return;
