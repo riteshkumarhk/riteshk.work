@@ -706,6 +706,24 @@ body.adm-lock .cursor { display: none !important; }
 .parx__copy:hover { opacity: 1; color: var(--accent); background: rgba(255,255,255,.07); }
 .parx__copy.is-copied { color: var(--accent); opacity: 1; }
 .parx__copy svg { display: block; }
+.parx__more { display: grid; place-items: center; width: 24px; height: 22px; flex: 0 0 auto; padding: 0; border: 1px solid rgba(255,255,255,.18); border-radius: 7px; background: rgba(0,0,0,.42); color: #ECE7E1; opacity: .7; cursor: pointer; transition: opacity .16s var(--ease), color .16s var(--ease), border-color .16s var(--ease); }
+.parx__more:hover, .parx__more.is-on { opacity: 1; color: var(--accent); border-color: var(--accent); }
+.parx__more svg { display: block; }
+
+/* 3D depth per-cover panel (opened by the "..." on the cover overlay) */
+.depthp { margin: .55rem 0 .2rem; padding: .75rem .85rem; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.02); }
+.depthp[hidden] { display: none; }
+.depthp__head { font-size: .82rem; font-weight: 600; color: var(--text); margin-bottom: .55rem; }
+.depthp__sub { font-weight: 400; color: var(--text-faint); font-size: .7rem; }
+.depthp__toggle { display: inline-flex; align-items: center; gap: .45rem; font-size: .8rem; color: var(--text-dim); margin-bottom: .55rem; cursor: pointer; }
+.depthp__toggle input { accent-color: var(--accent); }
+.depthp__row { display: grid; grid-template-columns: 96px 1fr 44px; align-items: center; gap: .55rem; margin: .3rem 0 .05rem; }
+.depthp__lbl { font-size: .74rem; color: var(--text-dim); }
+.depthp__range { width: 100%; height: 18px; accent-color: var(--accent); cursor: pointer; }
+.depthp__val { font-family: var(--mono); font-size: .68rem; color: var(--accent); text-align: right; }
+.depthp__hint { font-size: .68rem; color: var(--text-faint); margin: .05rem 0 .35rem; }
+.depthp__gen { margin-top: .7rem; display: flex; flex-direction: column; gap: .35rem; align-items: flex-start; }
+.depthp__note { font-size: .68rem; color: var(--text-faint); line-height: 1.4; }
 
 /* ===== Mobile owner panel: passkey sign-in confirmation + read-only Insights (studio is desktop-only) ===== */
 .mobadm { position: fixed; inset: 0; z-index: 9000; background: rgba(6,6,8,.94); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: max(18px, env(safe-area-inset-top)) 13px calc(28px + env(safe-area-inset-bottom)); }

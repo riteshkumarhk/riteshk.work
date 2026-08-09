@@ -555,6 +555,7 @@ import { WORLD_LAND } from "./worldland.js";
     return '<div class="imgblk"><div class="af__label">Cover image</div>' +
       '<div class="af__hint" style="margin:-.15rem 0 .5rem">Used as the case-study cover AND the homepage card thumbnail. Leave empty to show an animated plate below.</div>' +
       '<div class="imgblk__preview' + (has ? " has imgblk__preview--parx" : "") + '"' + (has ? ' data-parx-prev="' + i + '"' : "") + '>' + (has ? '<img src="' + escAttr(previewSrc(w.image)) + '" alt="" />' + parxOverlay(w, i) : "<span>No image \u2014 the animated placeholder is shown</span>") + "</div>" +
+      (has ? depthPanel(w, i) : "") +
       '<input type="text" data-list="work" data-index="' + i + '" data-field="image" value="' + escAttr(w.image || "") + '" placeholder="Paste an image URL\u2026" />' +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="img-upload" data-index="' + i + '">Upload\u2026</button>' +
       (has ? '<button class="btn btn--ghost" data-act="img-clear" data-index="' + i + '">Remove</button>' : "") + mediaSizeTag(w.image) + "</div>" +
@@ -569,6 +570,7 @@ import { WORLD_LAND } from "./worldland.js";
 
   var PARX_COPY_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
   var PARX_CHECK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  var DEPTH_DOTS_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>';
   // Compact parallax control overlaid on the cover-image preview (keeps the header card tidy).
   // Direction (up/down) + intensity (0..100, 0 = off). Persists to w.parDir / w.parAmt.
   function parxOverlay(w, i) {
@@ -586,7 +588,53 @@ import { WORLD_LAND } from "./worldland.js";
         '<input type="text" inputmode="numeric" maxlength="3" class="parx__val" data-parxnum="' + i + '" value="' + amt + '" aria-label="Parallax intensity value" title="Intensity value - paste across cases" />' +
         '<button type="button" class="parx__copy" data-act="par-copy" data-index="' + i + '" title="Copy intensity value" aria-label="Copy intensity value">' + PARX_COPY_SVG + '</button>' +
       '</span>' +
+      '<button type="button" class="parx__more" data-act="depth-open" data-index="' + i + '" title="3D depth settings" aria-label="3D depth settings">' + DEPTH_DOTS_SVG + '</button>' +
       '</div>';
+  }
+
+  // "3D depth" per-cover controls (the "..." on the cover overlay opens this panel). Persists to
+  // w.depth {on,strength,softness,focus,zoom}; render.js emits them as data-depth-* for the runtime.
+  function depthOf(w) {
+    var d = w.depth || {};
+    return {
+      on: d.on !== false,
+      strength: d.strength != null && d.strength !== "" ? +d.strength : 0.028,
+      softness: d.softness != null && d.softness !== "" ? +d.softness : 0.014,
+      focus: d.focus != null && d.focus !== "" ? +d.focus : 0.5,
+      zoom: d.zoom != null && d.zoom !== "" ? +d.zoom : 1.075
+    };
+  }
+  function ensureDepth(w) { if (!w.depth) w.depth = {}; return w.depth; }
+  function depthPanel(w, i) {
+    var d = depthOf(w);
+    function sl(field, label, min, max, step, val, hint) {
+      return '<div class="depthp__row"><span class="depthp__lbl">' + label + '</span>' +
+        '<input type="range" class="depthp__range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '" data-depth-field="' + field + '" data-index="' + i + '" />' +
+        '<span class="depthp__val">' + val + '</span></div>' +
+        (hint ? '<div class="depthp__hint">' + hint + '</div>' : '');
+    }
+    return '<div class="depthp" data-depth-panel="' + i + '" hidden>' +
+      '<div class="depthp__head">3D depth <span class="depthp__sub">cursor \u00b7 tilt parallax on this cover</span></div>' +
+      '<label class="depthp__toggle"><input type="checkbox" data-depth-on="' + i + '"' + (d.on ? " checked" : "") + ' /> <span>Enabled</span></label>' +
+      sl("strength", "Strength", 0, 0.09, 0.002, d.strength) +
+      sl("zoom", "Depth pull-back", 1, 1.3, 0.005, d.zoom, "Lower = a bigger dolly-out on hover = more sense of depth.") +
+      sl("softness", "Edge softness", 0, 0.03, 0.001, d.softness) +
+      sl("focus", "Focus plane", 0, 1, 0.02, d.focus) +
+      '<div class="depthp__gen"><button class="btn btn--auto" data-act="depth-gen" data-index="' + i + '" disabled title="On-device WebGPU depth generation \u2014 shipping next">Generate depth map</button>' +
+      '<span class="depthp__note">Tuning applies to covers that already have a depth map. Auto-generate for new covers ships next.</span></div>' +
+    '</div>';
+  }
+  function onDepthSlider(t) {
+    var i = +t.dataset.index, w = data.work[i]; if (!w) return;
+    ensureDepth(w)[t.dataset.depthField] = parseFloat(t.value);
+    var row = t.closest(".depthp__row"), vo = row && row.querySelector(".depthp__val");
+    if (vo) vo.textContent = t.value;
+    saveDraft(); apply();
+  }
+  function onDepthToggle(t) {
+    var i = +t.dataset.depthOn, w = data.work[i]; if (!w) return;
+    ensureDepth(w).on = t.checked;
+    saveDraft(true); apply(true);
   }
 
   function onParxInput(t) {
@@ -4630,6 +4678,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.parx !== undefined) { onParxInput(t); return; }
     if (t.dataset.parxnum !== undefined) { onParxNum(t); return; }
+    if (t.dataset.depthField !== undefined) { onDepthSlider(t); return; }
     if (t.dataset.sitem !== undefined && t.dataset.ifield) { onItemInput(t); return; }
     if (t.dataset.cell !== undefined && t.dataset.cfield) { onCellInput(t); return; }
     if (t.dataset.fann !== undefined && t.dataset.afield) { onFocusAnn(t); return; }
@@ -4679,6 +4728,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (t.dataset.worklayout !== undefined) { data.workLayout = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.logosize !== undefined) { const arr = (data.landing || {}).logos, k = +t.dataset.logosize; if (arr && arr[k]) { arr[k].size = t.value; apply(true); } return; }
     if (t.dataset.parxnum !== undefined) { const _pw = data.work[+t.dataset.parxnum]; if (_pw) t.value = (_pw.parAmt != null ? _pw.parAmt : 0); return; }
+    if (t.dataset.depthOn !== undefined) { onDepthToggle(t); return; }
     if (t.dataset.act === "aboutsec-toggle") {
       const arr = aboutLayoutArr(), key = t.dataset.key;
       for (let k = 0; k < arr.length; k++) if (arr[k].key === key) arr[k].on = t.checked;
@@ -4836,6 +4886,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (!b) return;
     if (b.dataset.act === "md-fmt") { mdFmt(b); return; }
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
+    if (act === "depth-open") { var _dp = root.querySelector('[data-depth-panel="' + i + '"]'); if (_dp) { _dp.hidden = !_dp.hidden; b.classList.toggle("is-on", !_dp.hidden); } return; }
     if (act === "aboutsec-up" || act === "aboutsec-down") {
       const arr = aboutLayoutArr(), idx = +b.dataset.i, j = act === "aboutsec-up" ? idx - 1 : idx + 1;
       if (idx < 0 || j < 0 || j >= arr.length) return;

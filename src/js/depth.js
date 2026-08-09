@@ -67,6 +67,7 @@ export function initDepth() {
 }
 
 function setupCover(media) {
+  if (media.dataset.depthOff) return;   // per-cover off switch (studio "3D depth" menu)
   const img = media.querySelector(".case__img");
   if (!img) return;
   const depthUrl = deriveDepthUrl(img.getAttribute("src") || img.src);
