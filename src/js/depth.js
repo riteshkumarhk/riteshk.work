@@ -53,10 +53,12 @@ const FRAG =
 // a gentle dolly-back that reveals more of the scene and deepens the parallax; on leave it eases
 // back to 1.40 before fading out. If .case__par inset changes, set zoomRest = 1 + 2*inset.
 const DEFAULTS = { strength: 0.028, softness: 0.014, focus: 0.5, zoomRest: 1.40, zoomHover: 1.075 };
-// On touch devices the canvas mounts INSIDE the parallax layer (.case__par) so it drifts with the
-// scroll exactly like the <img>; it therefore fills the same box as the image and needs only a hair
-// of zoom for tilt headroom (there is no hover dolly on mobile).
-const MOBILE_ZOOM = 1.05;
+// Mobile (gyro) mounts the canvas over the FRAME (not the tall .case__par) so it shows the WHOLE
+// scene at rest = greater depth of field. Instead of a par translate, it dollies the zoom by scroll:
+// resting ZOOMED OUT when the card is centred and easing IN as it scrolls away, plus a depth-aware
+// vertical parallax. Desktop is unchanged (rests at 1.40 matching the <img>, dollies out on hover).
+const MOBILE_ZOOM_OUT = 1.08;   // rest: the whole scene, most depth of field
+const MOBILE_ZOOM_IN = 1.30;    // scrolled off-centre: dollied in
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 let activeGyro = null;   // the current device-orientation controller (torn down + rebuilt on re-render)
@@ -109,11 +111,11 @@ function readSettings(media) {
 
 function attach(media, img, depthImg, ctx) {
   const gyro = !!(ctx && ctx.gyro);
-  // On touch/gyro, mount the canvas INSIDE the parallax layer (.case__par) so it drifts with the
-  // scroll parallax exactly like the <img>; on desktop it sits over the whole frame (dolly on hover).
-  const mount = gyro ? (media.querySelector(".case__par") || media) : media;
-  const box = mount;                                   // the canvas fills - and is measured against - its mount
-  const REST = gyro ? MOBILE_ZOOM : DEFAULTS.zoomRest;
+  // Always mount over the frame (16:10). Mobile shows the whole scene (zoomed out) and dollies the
+  // zoom on scroll; desktop rests at 1.40 and dollies out on hover.
+  const mount = media;
+  const box = media;                                   // the canvas fills - and is measured against - the frame
+  const REST = gyro ? MOBILE_ZOOM_OUT : DEFAULTS.zoomRest;
 
   const canvas = document.createElement("canvas");
   canvas.className = "case__depth";
@@ -172,10 +174,22 @@ function attach(media, img, depthImg, ctx) {
     cur.x += (target.x - cur.x) * 0.09;
     cur.y += (target.y - cur.y) * 0.09;
     const s = readSettings(media);
-    const zoomTarget = (active && dollyOn) ? s.zoomHover : REST;   // desktop hover dollies out; gyro stays at rest
+    let zoomTarget, panY = 0;
+    if (gyro) {
+      // Scroll drives the dolly: zoomed OUT (whole scene) when the card is centred, easing IN as it
+      // scrolls toward the edges, plus a depth-aware vertical parallax (panY feeds the displacement).
+      const r = media.getBoundingClientRect();
+      const vh = window.innerHeight || 1;
+      const t = (r.top + r.height / 2 - vh / 2) / vh;            // 0 centred, ~+/-0.5 at the edges
+      const p = clamp((Math.abs(t) - 0.1) / 0.4, 0, 1);         // wide central rest band stays zoomed out
+      zoomTarget = MOBILE_ZOOM_OUT + (MOBILE_ZOOM_IN - MOBILE_ZOOM_OUT) * p;
+      panY = clamp(t * 1.2, -1, 1) * 0.45;
+    } else {
+      zoomTarget = (active && dollyOn) ? s.zoomHover : REST;     // desktop hover dollies out; else rest
+    }
     zoomCur += (zoomTarget - zoomCur) * 0.06;
     resize();
-    gl.uniform2f(U.uPointer, cur.x, cur.y);
+    gl.uniform2f(U.uPointer, cur.x, clamp(cur.y + panY, -1, 1));
     gl.uniform1f(U.uStrength, s.strength);
     gl.uniform1f(U.uSoft, s.softness);
     gl.uniform1f(U.uFocus, s.focus);
@@ -207,7 +221,7 @@ function attach(media, img, depthImg, ctx) {
     wake();
   }
 
-  const controller = { el: media, isActive: () => active, setTilt(x, y) { target.x = x; target.y = y; wake(); }, activate, deactivate };
+  const controller = { el: media, isActive: () => active, wake, setTilt(x, y) { target.x = x; target.y = y; wake(); }, activate, deactivate };
   media.__depthCtrl = controller;
 
   if (gyro) {
@@ -248,8 +262,10 @@ function createGyroCtx() {
 
   let started = false, tapReq = null, listening = false;
   function listen() { if (listening) return; listening = true; window.addEventListener("deviceorientation", onOrient, true); }
+  function onScroll() { for (let i = 0; i < observed.length; i++) if (observed[i].isActive()) observed[i].wake(); }
   function start() {
     if (started) return; started = true;
+    window.addEventListener("scroll", onScroll, { passive: true });   // drive the scroll dolly on in-view covers
     const DOE = window.DeviceOrientationEvent;
     if (DOE && typeof DOE.requestPermission === "function") {
       // iOS 13+: sensor access needs a user gesture. The first touch anywhere grants it.
@@ -269,6 +285,7 @@ function createGyroCtx() {
     start,
     destroy() {
       try { io.disconnect(); } catch (e) {}
+      window.removeEventListener("scroll", onScroll);
       if (listening) window.removeEventListener("deviceorientation", onOrient, true);
       if (tapReq) { document.removeEventListener("pointerdown", tapReq); document.removeEventListener("touchend", tapReq); }
     }
