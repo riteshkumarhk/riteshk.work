@@ -1,0 +1,179 @@
+/* Depth parallax — cursor-driven "3D photo" depth on case-study COVER images.
+ *
+ * Progressive enhancement: a cover gets the effect ONLY if
+ *   (a) it has a depth map next to it (naming convention: <cover>.<ext> -> <cover>.depth.png), and
+ *   (b) the device has a real GPU + WebGL2 + a fine pointer + motion allowed.
+ * Otherwise the existing static image + scroll parallax remain untouched — nothing regresses.
+ *
+ * The effect is lazy: WebGL is created only when a card is first hovered, and the render loop
+ * runs only while a card is hovered, so idle cards cost nothing. The scroll parallax (on
+ * .case__par) is left fully intact; depth takes over on hover, parallax on scroll.
+ *
+ * ?depth  = force the effect on (bypasses the GPU/motion gates, still needs WebGL2) — for testing.
+ * ?nodepth = force the effect off.
+ */
+
+const SOFT_RENDERER = /swiftshader|llvmpipe|software|basic render|microsoft basic|paravirtual|mesa offscreen/;
+
+function gpuOk() {
+  if ((navigator.hardwareConcurrency || 8) <= 2) return false;
+  try {
+    const c = document.createElement("canvas");
+    const gl = c.getContext("webgl") || c.getContext("experimental-webgl");
+    if (!gl) return false;
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    const r = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "").toLowerCase() : "";
+    if (r && SOFT_RENDERER.test(r)) return false;
+  } catch (e) { return false; }
+  return true;
+}
+
+// Depth map lives next to the cover: /assets/uploads/<hash>.<ext> -> /assets/uploads/<hash>.depth.png
+function deriveDepthUrl(src) {
+  if (!src) return "";
+  const m = src.match(/^(.*\/assets\/uploads\/[^./?#]+)\.[a-z0-9]+([?#].*)?$/i);
+  return m ? m[1] + ".depth.png" : "";
+}
+
+const VERT =
+  "#version 300 es\nout vec2 vUv;void main(){vec2 uv=vec2((gl_VertexID<<1)&2, gl_VertexID&2);vUv=uv;gl_Position=vec4(uv*2.0-1.0,0.0,1.0);}";
+const FRAG =
+  "#version 300 es\nprecision highp float;in vec2 vUv;out vec4 o;" +
+  "uniform sampler2D uColor;uniform sampler2D uDepth;uniform vec2 uPointer;" +
+  "uniform float uStrength,uFocus,uZoom,uImgA,uBoxA,uSoft;" +
+  "vec2 fitCover(vec2 uv){float ia=uImgA,ba=uBoxA;vec2 s=vec2(1.0);if(ia>ba)s.x=ba/ia;else s.y=ia/ba;return (uv-0.5)*s+0.5;}" +
+  "float dsample(vec2 uv){if(uSoft<0.0006)return texture(uDepth,uv).r;float d=texture(uDepth,uv).r*0.28;for(int i=0;i<8;i++){float a=0.7853982*float(i);vec2 o2=vec2(cos(a),sin(a))*uSoft;d+=texture(uDepth,uv+o2).r*0.09;}return d;}" +
+  "void main(){vec2 st=vec2(vUv.x,1.0-vUv.y);vec2 base=fitCover(st);vec2 z=(base-0.5)/uZoom+0.5;" +
+  "float d=dsample(z);float rel=d-uFocus;vec2 off=uPointer*uStrength*rel;" +
+  "vec3 col=texture(uColor,z+off).rgb;o=vec4(col,1.0);}";
+
+const DEFAULTS = { strength: 0.028, softness: 0.014, focus: 0.5, zoom: 1.075 };
+
+export function initDepth() {
+  const q = new URLSearchParams(location.search);
+  if (q.has("nodepth") || q.has("lite")) return;
+  const force = q.has("depth");
+  if (!force) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.matchMedia("(pointer: coarse)").matches) return;
+    if (!gpuOk()) return;
+  }
+  document.querySelectorAll(".case__media--photo").forEach(setupCover);
+}
+
+function setupCover(media) {
+  const img = media.querySelector(".case__img");
+  if (!img) return;
+  const depthUrl = deriveDepthUrl(img.getAttribute("src") || img.src);
+  if (!depthUrl) return;
+  const dImg = new Image();
+  dImg.decoding = "async";
+  dImg.onload = () => attach(media, img, dImg);
+  dImg.onerror = () => {};   // no depth map for this cover -> keep scroll parallax only
+  dImg.src = depthUrl;
+}
+
+function readSettings(media) {
+  const d = media.dataset;
+  const num = (v, dflt) => (v !== undefined && v !== "" && !isNaN(+v) ? +v : dflt);
+  return {
+    strength: num(d.depthStrength, DEFAULTS.strength),
+    softness: num(d.depthSoftness, DEFAULTS.softness),
+    focus: num(d.depthFocus, DEFAULTS.focus),
+    zoom: DEFAULTS.zoom
+  };
+}
+
+function attach(media, img, depthImg) {
+  const canvas = document.createElement("canvas");
+  canvas.className = "case__depth";
+  canvas.setAttribute("aria-hidden", "true");
+  media.appendChild(canvas);
+
+  let gl = null, prog = null, U = null, colorTex = null, depthTex = null;
+  let active = false, raf = 0;
+  const target = { x: 0, y: 0 }, cur = { x: 0, y: 0 };
+  let settleFrames = 0;
+
+  function makeTex(unit, src) {
+    const t = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+    return t;
+  }
+  function sh(type, s) { const o = gl.createShader(type); gl.shaderSource(o, s); gl.compileShader(o); return o; }
+
+  function initGL() {
+    if (gl) return true;
+    if (!(img.complete && img.naturalWidth)) return false;   // cover not decoded yet
+    gl = canvas.getContext("webgl2", { antialias: true, premultipliedAlpha: false, alpha: false });
+    if (!gl) return false;
+    prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { gl = null; return false; }
+    gl.useProgram(prog);
+    U = {};
+    ["uColor", "uDepth", "uPointer", "uStrength", "uFocus", "uZoom", "uImgA", "uBoxA", "uSoft"].forEach((n) => { U[n] = gl.getUniformLocation(prog, n); });
+    gl.uniform1i(U.uColor, 0); gl.uniform1i(U.uDepth, 1);
+    gl.bindVertexArray(gl.createVertexArray());
+    colorTex = makeTex(0, img);
+    depthTex = makeTex(1, depthImg);
+    return true;
+  }
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(2, Math.round(media.clientWidth * dpr));
+    const h = Math.max(2, Math.round(media.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+
+  function frame() {
+    if (!gl) return;
+    cur.x += (target.x - cur.x) * 0.09;
+    cur.y += (target.y - cur.y) * 0.09;
+    const s = readSettings(media);
+    resize();
+    gl.uniform2f(U.uPointer, cur.x, cur.y);
+    gl.uniform1f(U.uStrength, s.strength);
+    gl.uniform1f(U.uSoft, s.softness);
+    gl.uniform1f(U.uFocus, s.focus);
+    gl.uniform1f(U.uZoom, s.zoom);
+    gl.uniform1f(U.uImgA, img.naturalWidth / img.naturalHeight);
+    gl.uniform1f(U.uBoxA, media.clientWidth / Math.max(1, media.clientHeight));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    const moving = Math.abs(target.x - cur.x) + Math.abs(target.y - cur.y) > 0.0008;
+    if (active || moving || settleFrames-- > 0) { raf = requestAnimationFrame(frame); }
+    else { raf = 0; canvas.classList.remove("is-on"); }
+  }
+
+  function activate() {
+    if (!initGL()) return;
+    active = true;
+    canvas.classList.add("is-on");
+    if (!raf) raf = requestAnimationFrame(frame);
+  }
+  function deactivate() {
+    active = false;
+    target.x = 0; target.y = 0;
+    settleFrames = 40;                 // keep rendering briefly so it eases back to centre
+    if (!raf && gl) raf = requestAnimationFrame(frame);
+  }
+
+  media.addEventListener("pointerenter", activate);
+  media.addEventListener("pointerleave", deactivate);
+  media.addEventListener("pointermove", (e) => {
+    const r = media.getBoundingClientRect();
+    target.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+    target.y = -(((e.clientY - r.top) / r.height) * 2 - 1);
+  });
+}

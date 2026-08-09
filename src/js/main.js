@@ -2,6 +2,8 @@
    RITESH KUMAR — Digital CV
    Micro-interactions & motion (vanilla, dependency-free)
    ================================================================= */
+import { initDepth } from "./depth.js";
+
 (function () {
   "use strict";
 
@@ -561,6 +563,10 @@
     });
     resize(); step();
   }
+
+  // Cursor-driven depth on covers that have a depth map (progressive; GPU + WebGL2 gated,
+  // otherwise the static image + scroll parallax remain). See src/js/depth.js.
+  initDepth();
   } // end initInteractions
 
   if (window.__siteRendered) initInteractions();
