@@ -1970,7 +1970,10 @@
       "parDir": "down",
       "parAmt": 50,
       "depth": {
-        "strength": 0.036
+        "strength": 0.048,
+        "zoom": 1.03,
+        "softness": 0.02,
+        "focus": 0.16
       }
     },
     {
