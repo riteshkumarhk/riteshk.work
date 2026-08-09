@@ -53,9 +53,12 @@ import { initDepth } from "./depth.js";
   // Expose the Lenis instance so the project overlay can pause/resume page scroll.
   window.__lenis = lenis;
 
-  const smoothTo = (target) => {
-    if (lenis) lenis.scrollTo(target, { offset: 0, duration: 1.2 });
-    else target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+  const smoothTo = (target, offset = 0) => {
+    if (lenis) lenis.scrollTo(target, { offset, duration: 1.2 });
+    else {
+      const y = target.getBoundingClientRect().top + window.scrollY + offset;
+      window.scrollTo({ top: y, behavior: reduceMotion ? "auto" : "smooth" });
+    }
   };
 
   // Smooth-scroll for in-page anchor links (menu links handled separately)
@@ -64,10 +67,20 @@ import { initDepth } from "./depth.js";
     a.addEventListener("click", (e) => {
       const hash = a.getAttribute("href");
       if (!hash || hash.length < 2) return;
-      const target = document.querySelector(hash);
+      let target = document.querySelector(hash);
+      let offset = 0;
+      // The hero "Selected work" cue tucks the brand marquee up behind the nav and lands on
+      // the stat highlights (which flow into the work section) — not on #work itself.
+      if (a.classList.contains("hero__cue")) {
+        const stats = document.querySelector(".himarq");
+        if (stats && !stats.hidden) {
+          target = stats;
+          offset = -((document.getElementById("nav") || {}).offsetHeight || 70);
+        }
+      }
       if (!target) return;
       e.preventDefault();
-      smoothTo(target);
+      smoothTo(target, offset);
     });
   });
 
