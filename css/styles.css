@@ -893,7 +893,7 @@ html.lite .hero__avail-dot { animation: none; }
      shows on load and you scroll past it to reach the numbers. Keep the hero's
      own centered content and absolute bottom-right "now" line (as on desktop) —
      it just grows inside the flex column so the marquee sits flush at the bottom. */
-  .hero { justify-content: flex-start; }
+  .hero { justify-content: center; }
   /* The presence line can run long (e.g. "…Previously Jaguar Land Rover and Tata
      Elxsi"). Cap its width so it wraps in the lower-right — right-aligned, a page
      gutter off the edge (right stays var(--pad)), and clear of the bottom-left dock. */
