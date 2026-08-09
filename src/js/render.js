@@ -175,6 +175,7 @@
     if (d.softness != null && d.softness !== "") s += ' data-depth-softness="' + (+d.softness) + '"';
     if (d.focus != null && d.focus !== "") s += ' data-depth-focus="' + (+d.focus) + '"';
     if (d.zoom != null && d.zoom !== "") s += ' data-depth-zoom="' + (+d.zoom) + '"';
+    if (d.map) s += ' data-depth-map="' + esc(String(d.map)).replace(/"/g, "&quot;") + '"';
     return s;
   }
 

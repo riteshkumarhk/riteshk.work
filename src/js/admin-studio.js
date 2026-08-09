@@ -606,6 +606,7 @@ import { WORLD_LAND } from "./worldland.js";
   }
   function ensureDepth(w) { if (!w.depth) w.depth = {}; return w.depth; }
   function depthMapUrl(w) {
+    if (w.depth && w.depth.map) return previewSrc(w.depth.map);
     var m = String(w.image || "").match(/(\/?assets\/uploads\/[^./?#]+)\.[a-z0-9]+$/i);
     if (!m) return "";
     var p = m[1] + ".depth.png";
@@ -627,7 +628,7 @@ import { WORLD_LAND } from "./worldland.js";
         sl("zoom", "Depth pull-back", 1, 1.3, 0.005, d.zoom, "Lower = a bigger dolly-out on hover = more sense of depth.") +
         sl("softness", "Edge softness", 0, 0.03, 0.001, d.softness) +
         sl("focus", "Focus plane", 0, 1, 0.02, d.focus) +
-        '<div class="depthp__gen"><button class="btn btn--auto" data-act="depth-gen" data-index="' + i + '" disabled title="On-device WebGPU depth generation \u2014 shipping next">Generate depth map</button>' +
+        '<div class="depthp__gen"><button class="btn btn--auto" data-act="depth-gen" data-index="' + i + '" title="Generate a depth map on your GPU (WebGPU)">Generate depth map</button>' +
         '<span class="depthp__note">Tuning applies to covers that already have a depth map. Auto-generate for new covers ships next.</span></div>' +
       '</div>' +
       '<div class="depthp__preview is-empty" data-depth-preview>' +
@@ -659,6 +660,64 @@ import { WORLD_LAND } from "./worldland.js";
     probe.onload = function () { mapDiv.style.backgroundImage = "url('" + src + "')"; mapDiv.dataset.loaded = "1"; box.classList.remove("is-empty"); };
     probe.onerror = function () { box.classList.add("is-empty"); };
     probe.src = src;
+  }
+
+  // --- Piece 2b: generate a depth map on the owner's GPU (transformers.js Depth-Anything, WebGPU). ---
+  // The model + lib load ONLY on click (lazy, then browser-cached) so the studio stays light otherwise.
+  function ensureDepthLib() {
+    if (ensureDepthLib._p) return ensureDepthLib._p;
+    var cdn = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
+    ensureDepthLib._p = import(cdn).catch(function (e) { ensureDepthLib._p = null; throw e; });
+    return ensureDepthLib._p;
+  }
+  function getDepthPipe(t) {
+    if (getDepthPipe._p) return getDepthPipe._p;
+    var dev = (typeof navigator !== "undefined" && navigator.gpu) ? "webgpu" : "wasm";
+    getDepthPipe._p = t.pipeline("depth-estimation", "onnx-community/depth-anything-v2-small", { device: dev })
+      .catch(function (e) { getDepthPipe._p = null; throw e; });
+    return getDepthPipe._p;
+  }
+  function rawDepthToPng(raw, maxDim) {
+    var w = raw.width, h = raw.height, ch = raw.channels || 1, dat = raw.data;
+    var s = document.createElement("canvas"); s.width = w; s.height = h;
+    var sc = s.getContext("2d"), id = sc.createImageData(w, h), px = id.data;
+    for (var i = 0; i < w * h; i++) { var v = dat[i * ch]; px[i * 4] = v; px[i * 4 + 1] = v; px[i * 4 + 2] = v; px[i * 4 + 3] = 255; }
+    sc.putImageData(id, 0, 0);
+    var scale = Math.min(1, maxDim / Math.max(w, h));
+    var dw = Math.max(1, Math.round(w * scale)), dh = Math.max(1, Math.round(h * scale));
+    var d = document.createElement("canvas"); d.width = dw; d.height = dh;
+    d.getContext("2d").drawImage(s, 0, 0, dw, dh);
+    return d.toDataURL("image/png");
+  }
+  async function depthGenerate(idx, btn) {
+    var w = data.work[idx]; if (!w || !w.image) { status("Add a cover image first."); return; }
+    if (typeof navigator === "undefined" || !navigator.gpu) status("No WebGPU here - use Chrome or Edge for GPU speed; falling back to CPU (slower).");
+    var lbl = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "Loading model..."; }
+    status("Loading the depth model (one-time ~40MB, then cached)...");
+    try {
+      var t = await ensureDepthLib();
+      var pipe = await getDepthPipe(t);
+      if (btn) btn.textContent = "Generating...";
+      status("Generating depth on your GPU...");
+      var out = await pipe(previewSrc(w.image));
+      var raw = out && (out.depth || out);
+      if (!raw || !raw.data) throw new Error("no depth output");
+      var uri = rawDepthToPng(raw, 900);
+      var panel = root.querySelector('[data-depth-panel="' + idx + '"]');
+      if (panel) {
+        var md = panel.querySelector(".depthp__map"); if (md) { md.dataset.depthSrc = uri; md.dataset.loaded = ""; }
+        var cbx = panel.querySelector("[data-depth-on]"); if (cbx) cbx.checked = true;
+        depthPreviewLoad(panel);
+      }
+      ensureDepth(w).on = true; ensureDepth(w).map = uri; saveDraft(true);
+      hostUploaded(uri, { name: (w.id || "cover") + ".depth.png" }, function (path) { ensureDepth(w).map = path; saveDraft(true); apply(true); });
+      status("Depth map generated. Hover the cover on the live site to see it.", true);
+    } catch (e) {
+      status("Depth generation failed: " + ((e && e.message) || e));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = lbl; }
+    }
   }
 
   function onParxInput(t) {
@@ -4911,6 +4970,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (b.dataset.act === "md-fmt") { mdFmt(b); return; }
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
     if (act === "depth-open") { var _dp = root.querySelector('[data-depth-panel="' + i + '"]'); if (_dp) { _dp.hidden = !_dp.hidden; b.classList.toggle("is-on", !_dp.hidden); if (!_dp.hidden) depthPreviewLoad(_dp); } return; }
+    if (act === "depth-gen") { depthGenerate(i, b); return; }
     if (act === "aboutsec-up" || act === "aboutsec-down") {
       const arr = aboutLayoutArr(), idx = +b.dataset.i, j = act === "aboutsec-up" ? idx - 1 : idx + 1;
       if (idx < 0 || j < 0 || j >= arr.length) return;

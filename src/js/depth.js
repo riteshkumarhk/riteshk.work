@@ -70,7 +70,7 @@ function setupCover(media) {
   if (media.dataset.depthOff) return;   // per-cover off switch (studio "3D depth" menu)
   const img = media.querySelector(".case__img");
   if (!img) return;
-  const depthUrl = deriveDepthUrl(img.getAttribute("src") || img.src);
+  const depthUrl = media.dataset.depthMap || deriveDepthUrl(img.getAttribute("src") || img.src);
   if (!depthUrl) return;
   const dImg = new Image();
   dImg.decoding = "async";
