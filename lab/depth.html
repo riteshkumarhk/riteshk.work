@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Depth parallax — lab</title>
+<style>
+  :root{ --bg:#08080a; --bg-2:#0d0d10; --bg-elev:#111116; --text:#ECE7E1; --dim:#8f8a84; --faint:#5a5650; --accent:#D8A657; --line:rgba(236,231,225,.12); }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--bg); color:var(--text); font-family:Inter,system-ui,sans-serif; }
+  .wrap{ min-height:300vh; }               /* tall so we can scroll to test scroll-parallax */
+  .head{ padding:2rem clamp(1rem,4vw,3rem) .5rem; }
+  .head h1{ font-family:Georgia,serif; font-weight:400; font-size:clamp(1.4rem,3vw,2.1rem); margin:0 0 .3rem; }
+  .head p{ color:var(--dim); font-size:.9rem; margin:.2rem 0; max-width:60ch; }
+  .mono{ font-family:'JetBrains Mono',ui-monospace,monospace; font-size:.72rem; letter-spacing:.04em; color:var(--faint); text-transform:uppercase; }
+  .spacer{ height:66vh; display:grid; place-items:center; color:var(--faint); }
+  .stagewrap{ display:grid; place-items:center; padding:2vh 0; }
+  .stage{ width:min(560px,86vw); aspect-ratio:16/12; border-radius:40px; overflow:hidden; corner-shape:squircle;
+          border:1px solid var(--line); background:var(--bg-elev); box-shadow:0 30px 80px rgba(0,0,0,.5); position:relative; will-change:transform; }
+  .stage canvas{ display:block; width:100%; height:100%; }
+  .stage .fallback{ position:absolute; inset:0; display:grid; place-items:center; color:var(--dim); font-size:.85rem; text-align:center; padding:2rem; }
+  .stage .fallback[hidden]{ display:none; }
+  .panel{ position:fixed; right:1rem; top:1rem; width:250px; background:rgba(13,13,16,.92); backdrop-filter:blur(10px);
+          border:1px solid var(--line); border-radius:16px; padding:1rem 1rem 1.1rem; z-index:10; font-size:.8rem; }
+  .panel h2{ font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); margin:.2rem 0 .8rem; font-weight:600; }
+  .row{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; margin:.55rem 0; }
+  .row label{ color:var(--dim); }
+  .row output{ font-family:'JetBrains Mono',monospace; color:var(--accent); font-size:.72rem; min-width:2.6em; text-align:right; }
+  input[type=range]{ width:130px; accent-color:var(--accent); }
+  input[type=checkbox]{ accent-color:var(--accent); }
+  .covers{ display:flex; flex-wrap:wrap; gap:.4rem; margin:.2rem 0 .9rem; }
+  .covers button{ font:inherit; font-size:.72rem; padding:.3rem .55rem; border-radius:8px; cursor:pointer;
+                  background:var(--bg-elev); color:var(--dim); border:1px solid var(--line); }
+  .covers button.on{ color:var(--bg); background:var(--accent); border-color:var(--accent); font-weight:600; }
+  .hint{ color:var(--faint); font-size:.68rem; line-height:1.5; margin-top:.7rem; border-top:1px solid var(--line); padding-top:.6rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div class="mono">Lab · not indexed</div>
+    <h1>Depth parallax prototype</h1>
+    <p>Move your cursor over the card — layers shift by real depth. Scroll the page: the card also keeps the original scroll-parallax (both effects run together). Tune with the panel; this is a throwaway page, nothing here is on the live site.</p>
+  </div>
+
+  <div class="spacer mono">↓ scroll · card below ↓</div>
+
+  <div class="stagewrap">
+    <div class="stage" id="stage" data-cursor="view">
+      <canvas id="c"></canvas>
+      <div class="fallback" id="fallback" hidden>WebGL2 unavailable — this is where the flat cover + scroll parallax would show.</div>
+    </div>
+  </div>
+
+  <div class="spacer mono">↑ keep scrolling to feel scroll-parallax ↑</div>
+</div>
+
+<div class="panel">
+  <h2>Depth controls</h2>
+  <div class="covers" id="covers"></div>
+  <div class="row"><label>Depth motion</label><input type="checkbox" id="depthOn" checked></div>
+  <div class="row"><label>Strength</label><input type="range" id="strength" min="0" max="0.09" step="0.002" value="0.032"><output id="strengthV"></output></div>
+  <div class="row"><label>Focus plane</label><input type="range" id="focus" min="0" max="1" step="0.02" value="0.5"><output id="focusV"></output></div>
+  <div class="row"><label>Idle drift</label><input type="range" id="drift" min="0" max="0.6" step="0.02" value="0.15"><output id="driftV"></output></div>
+  <div class="row"><label>Overscan</label><input type="range" id="zoom" min="1" max="1.15" step="0.005" value="1.075"><output id="zoomV"></output></div>
+  <div class="row"><label>Card crop 16:12</label><input type="checkbox" id="crop" checked></div>
+  <div class="row"><label>Invert depth</label><input type="checkbox" id="invert"></div>
+  <div class="row"><label>Show depth map</label><input type="checkbox" id="showDepth"></div>
+  <div class="hint">brighter depth = nearer. Focus plane = what stays still; nearer/farther slide opposite ways. Overscan hides edges at high strength.</div>
+</div>
+
+<script type="text/javascript">
+(function(){
+  "use strict";
+  var COVERS = [
+    { key:"hello",   name:"Windows Hello", img:"/assets/uploads/8d9844fdff6e7ea32003681054946c5ef3e6b0fa875abf1964bb61a54cd1b98d.png", depth:"/lab/hello.depth.png",   focus:0.55 },
+    { key:"edge",    name:"Edge",          img:"/assets/uploads/3f4eacf62b981354ad308c6e03d2a6b0ee1e291aa4eed6992bd83363a3531136.webp", depth:"/lab/edge.depth.png",    focus:0.5 },
+    { key:"consent", name:"One Consent",   img:"/assets/uploads/cd132b9755109dcf36ed4b8d48738d7f489a514bf872c64722a1a3aee50862d3.png", depth:"/lab/consent.depth.png", focus:0.5 },
+    { key:"xbox",    name:"Xbox",          img:"/assets/uploads/42d6e21daf6b701ae17ec68a85d784ee94504a9800ea6c52719040b568617152.png", depth:"/lab/xbox.depth.png",    focus:0.5 }
+  ];
+
+  var canvas = document.getElementById("c");
+  var fallback = document.getElementById("fallback");
+  var stage = document.getElementById("stage");
+  var gl = canvas.getContext("webgl2", { antialias:true, premultipliedAlpha:false });
+  if(!gl){ fallback.hidden = false; return; }
+
+  var VERT = "#version 300 es\nout vec2 vUv;void main(){vec2 uv=vec2((gl_VertexID<<1)&2, gl_VertexID&2);vUv=uv;gl_Position=vec4(uv*2.0-1.0,0.0,1.0);}";
+  var FRAG =
+    "#version 300 es\nprecision highp float;in vec2 vUv;out vec4 o;" +
+    "uniform sampler2D uColor;uniform sampler2D uDepth;uniform vec2 uPointer;" +
+    "uniform float uStrength,uFocus,uZoom,uInvert,uShowDepth,uDepthOn,uImgA,uBoxA;" +
+    "vec2 fitCover(vec2 uv){float ia=uImgA,ba=uBoxA;vec2 s=vec2(1.0);if(ia>ba)s.x=ba/ia;else s.y=ia/ba;return (uv-0.5)*s+0.5;}" +
+    "void main(){vec2 st=vec2(vUv.x,1.0-vUv.y);vec2 base=fitCover(st);vec2 z=(base-0.5)/uZoom+0.5;" +
+    "float d=texture(uDepth,z).r;if(uInvert>0.5)d=1.0-d;float rel=d-uFocus;" +
+    "vec2 off=(uDepthOn>0.5)?uPointer*uStrength*rel:vec2(0.0);" +
+    "vec3 col=texture(uColor,z+off).rgb;if(uShowDepth>0.5)col=vec3(d);o=vec4(col,1.0);}";
+
+  function sh(type, src){ var s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+    if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){ console.error(gl.getShaderInfoLog(s)); } return s; }
+  var prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){ console.error(gl.getProgramInfoLog(prog)); fallback.hidden=false; return; }
+  gl.useProgram(prog);
+  var U = {};
+  ["uColor","uDepth","uPointer","uStrength","uFocus","uZoom","uInvert","uShowDepth","uDepthOn","uImgA","uBoxA"].forEach(function(n){ U[n]=gl.getUniformLocation(prog,n); });
+  gl.uniform1i(U.uColor, 0); gl.uniform1i(U.uDepth, 1);
+  var vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+
+  function makeTex(unit){ var t=gl.createTexture(); gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,t);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR); return t; }
+  var colorTex=makeTex(0), depthTex=makeTex(1);
+  function upload(unit, tex, img){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,tex);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img); }
+
+  var state = { strength:0.032, focus:0.5, drift:0.15, zoom:1.075, depthOn:true, crop:true, showDepth:false, invert:false, imgA:1.6 };
+  var target={x:0,y:0}, cur={x:0,y:0}, hovering=false, t0=performance.now();
+
+  function loadImg(src){ return new Promise(function(res,rej){ var im=new Image(); im.crossOrigin="anonymous"; im.onload=function(){res(im);}; im.onerror=rej; im.src=src; }); }
+  var current=null;
+  function setCover(cov){
+    current=cov; state.focus=cov.focus; document.getElementById("focus").value=cov.focus; syncOutputs();
+    Promise.all([loadImg(cov.img), loadImg(cov.depth)]).then(function(r){
+      var im=r[0], dp=r[1]; state.imgA = im.naturalWidth/im.naturalHeight;
+      upload(0,colorTex,im); upload(1,depthTex,dp); resize();
+      [].forEach.call(document.querySelectorAll("#covers button"), function(b){ b.classList.toggle("on", b.dataset.k===cov.key); });
+    }).catch(function(){ fallback.hidden=false; });
+  }
+
+  function resize(){
+    var dpr=Math.min(window.devicePixelRatio||1, 2);
+    var r=canvas.getBoundingClientRect();
+    var w=Math.max(2,Math.round(r.width*dpr)), h=Math.max(2,Math.round(r.height*dpr));
+    if(canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; }
+    gl.viewport(0,0,canvas.width,canvas.height);
+  }
+
+  function render(now){
+    var t=(now-t0)/1000;
+    // ease cursor toward target
+    cur.x += (target.x-cur.x)*0.08; cur.y += (target.y-cur.y)*0.08;
+    var dx=cur.x, dy=cur.y;
+    if(state.drift>0){ dx += Math.sin(t*0.5)*state.drift*(hovering?0.25:1.0); dy += Math.cos(t*0.37)*state.drift*(hovering?0.25:1.0); }
+    var boxA = state.crop ? (16/12) : state.imgA;
+    gl.uniform2f(U.uPointer, dx, dy);
+    gl.uniform1f(U.uStrength, state.strength);
+    gl.uniform1f(U.uFocus, state.focus);
+    gl.uniform1f(U.uZoom, state.zoom);
+    gl.uniform1f(U.uInvert, state.invert?1:0);
+    gl.uniform1f(U.uShowDepth, state.showDepth?1:0);
+    gl.uniform1f(U.uDepthOn, state.depthOn?1:0);
+    gl.uniform1f(U.uImgA, state.imgA);
+    gl.uniform1f(U.uBoxA, boxA);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+    requestAnimationFrame(render);
+  }
+
+  // pointer → normalized -1..1 within the stage
+  stage.addEventListener("pointermove", function(e){ var r=stage.getBoundingClientRect();
+    target.x = ((e.clientX-r.left)/r.width)*2-1; target.y = -(((e.clientY-r.top)/r.height)*2-1); hovering=true; });
+  stage.addEventListener("pointerleave", function(){ target.x=0; target.y=0; hovering=false; });
+
+  // scroll parallax on the whole card (mirrors the site's coverParallax), runs WITH the depth effect
+  function scrollPar(){ var r=stage.getBoundingClientRect(); var vh=window.innerHeight;
+    var p=1-((r.top+r.height/2)/vh); p=Math.max(-1,Math.min(1,p));
+    stage.style.transform="translate3d(0,"+(p*22).toFixed(1)+"px,0)"; }
+  window.addEventListener("scroll", scrollPar, {passive:true});
+  window.addEventListener("resize", function(){ resize(); scrollPar(); });
+
+  // controls
+  function bindRange(id, key){ var el=document.getElementById(id); el.addEventListener("input", function(){ state[key]=parseFloat(el.value); syncOutputs(); }); }
+  function bindCheck(id, key){ var el=document.getElementById(id); el.addEventListener("change", function(){ state[key]=el.checked; }); }
+  bindRange("strength","strength"); bindRange("focus","focus"); bindRange("drift","drift"); bindRange("zoom","zoom");
+  bindCheck("depthOn","depthOn"); bindCheck("crop","crop"); bindCheck("showDepth","showDepth"); bindCheck("invert","invert");
+  function syncOutputs(){ document.getElementById("strengthV").textContent=state.strength.toFixed(3);
+    document.getElementById("focusV").textContent=state.focus.toFixed(2);
+    document.getElementById("driftV").textContent=state.drift.toFixed(2);
+    document.getElementById("zoomV").textContent=state.zoom.toFixed(3); }
+
+  var cw=document.getElementById("covers");
+  COVERS.forEach(function(cov){ var b=document.createElement("button"); b.textContent=cov.name; b.dataset.k=cov.key;
+    b.addEventListener("click", function(){ setCover(cov); }); cw.appendChild(b); });
+
+  syncOutputs(); resize(); scrollPar(); setCover(COVERS[0]); requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>
