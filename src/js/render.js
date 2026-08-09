@@ -221,6 +221,73 @@
       "</span>";
   }
 
+  // ---- Header brand mark + favicon from landing.siteIcon (falls back to the RK monogram) ----
+  function svgSan(s) {
+    return String(s || "")
+      .replace(/<\?xml[\s\S]*?\?>/gi, "")
+      .replace(/<!DOCTYPE[\s\S]*?>/gi, "")
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, "")
+      .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
+      .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
+      .replace(/(?:href|xlink:href)\s*=\s*(["'])\s*(?:javascript:|data:text\/html)[^"']*\1/gi, "")
+      .trim();
+  }
+  function svgAspect(svg) {
+    var vb = /viewBox\s*=\s*["']\s*[\d.eE+-]+[\s,]+[\d.eE+-]+[\s,]+([\d.eE+-]+)[\s,]+([\d.eE+-]+)/i.exec(svg || "");
+    if (vb) { var w = parseFloat(vb[1]), h = parseFloat(vb[2]); if (w > 0 && h > 0) return w / h; }
+    return 1;
+  }
+  function iconDataUrl(ic) {
+    if (ic && ic.svg) return "data:image/svg+xml," + encodeURIComponent(svgSan(ic.svg)).replace(/'/g, "%27");
+    return (ic && ic.src) || "";
+  }
+  function applyBrand(L) {
+    var mark = document.querySelector(".nav__mark");
+    if (!mark) return;
+    var ic = L && L.siteIcon, has = !!(ic && (ic.svg || ic.src)), mono = !!(has && ic.mono && ic.svg);
+    mark.classList.toggle("nav__mark--logo", has);
+    mark.classList.toggle("nav__mark--mono", mono);
+    if (!has) { mark.style.removeProperty("--icon"); mark.style.removeProperty("--icon-ar"); mark.innerHTML = "RK"; return; }
+    var url = iconDataUrl(ic);
+    if (mono) {
+      mark.innerHTML = "";
+      mark.style.setProperty("--icon", "url('" + url + "')");
+      mark.style.setProperty("--icon-ar", String(svgAspect(ic.svg)));
+    } else {
+      mark.style.removeProperty("--icon"); mark.style.removeProperty("--icon-ar");
+      mark.innerHTML = '<img class="nav__mark-img" src="' + String(url).replace(/"/g, "&quot;") + '" alt="" />';
+    }
+  }
+  var _favBound = false, _favDefault = null, _lastIcon = null;
+  function favColor() { try { return (window.__theme && window.__theme.isLight()) ? "#141417" : "#ECE7E1"; } catch (e) { return "#ECE7E1"; } }
+  function svgRecolor(svg, color) {
+    var s = svgSan(svg);
+    s = s.replace(/(fill|stroke)\s*=\s*(["'])(?!\s*(?:none|transparent|url\())[^"']*\2/gi, '$1="' + color + '"');
+    s = s.replace(/(fill|stroke)\s*:\s*(?!\s*(?:none|transparent|url\())[^;"'}]+/gi, '$1:' + color);
+    if (!/<svg[^>]*\bfill\s*=/i.test(s)) s = s.replace(/<svg\b/i, '<svg fill="' + color + '"');
+    return s;
+  }
+  function favHref(ic) {
+    if (ic && ic.svg) return "data:image/svg+xml," + encodeURIComponent(ic.mono ? svgRecolor(ic.svg, favColor()) : svgSan(ic.svg));
+    return (ic && ic.src) || "";
+  }
+  function applyFavicon(L) {
+    var link = document.querySelector('link[rel="icon"]');
+    if (!link) return;
+    if (_favDefault === null) _favDefault = link.getAttribute("href") || "";
+    var ic = L && L.siteIcon;
+    _lastIcon = (ic && (ic.svg || ic.src)) ? ic : null;
+    link.setAttribute("href", _lastIcon ? favHref(_lastIcon) : _favDefault);
+    if (!_favBound) {
+      _favBound = true;
+      window.addEventListener("theme:change", function () {
+        var l = document.querySelector('link[rel="icon"]');
+        if (l && _lastIcon) l.setAttribute("href", favHref(_lastIcon));
+      });
+    }
+  }
+
   function tlEl(p) {
     return (
       '<li class="tl reveal' + (p.present ? " tl--present" : "") + '" data-reveal>' +
@@ -329,6 +396,7 @@
     const L = data.landing || {};
     const C = data.contact || {};
     const caps = data.capabilities || [];
+    applyBrand(L); applyFavicon(L);
 
     // Landing pieces the owner can individually show/hide from the studio
     // (data.landing.show = {eyebrow,domains,intro,presence}; missing = shown).

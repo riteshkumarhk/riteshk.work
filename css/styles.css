@@ -160,6 +160,11 @@ main, .footer { transition: opacity .45s ease; }
 }
 .nav__brand:hover .nav__mark { border-color: var(--accent); color: var(--accent); }
 .nav__name { font-size: .82rem; letter-spacing: .04em; font-weight: 500; }
+/* Uploaded site logo in the header brand (else the RK monogram above shows). SVG shown as-is, no frame. */
+.nav__mark--logo { border: 0; border-radius: 0; width: auto; min-width: 0; height: 30px; padding: 0; place-items: center; }
+.nav__mark--logo .nav__mark-img { height: 100%; width: auto; max-width: 160px; display: block; object-fit: contain; }
+/* Monochrome SVG: masked + filled with the current text colour, so it flips with the theme (and bronzes on hover). */
+.nav__mark--mono { height: 30px; aspect-ratio: var(--icon-ar, 1); background: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
 
 .nav__links { display: flex; gap: 2.2rem; }
 .nav__links a {

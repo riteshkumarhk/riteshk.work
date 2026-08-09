@@ -873,6 +873,85 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="imgblk__row" style="margin:0"><button class="btn btn--ghost" data-act="avatar-upload">' + (has ? "Replace\u2026" : "Upload photo\u2026") + '</button>' + (has ? '<button class="btn btn--ghost" data-act="avatar-clear">Remove</button>' : "") + "</div>" +
       "</div></div>";
   }
+  // ---- Site icon / logo (favicon + header brand mark; a monochrome SVG adapts to light/dark) ----
+  function svgSanitizeIcon(s) {
+    return String(s || "")
+      .replace(/<\?xml[\s\S]*?\?>/gi, "")
+      .replace(/<!DOCTYPE[\s\S]*?>/gi, "")
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, "")
+      .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
+      .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
+      .replace(/(?:href|xlink:href)\s*=\s*(["'])\s*(?:javascript:|data:text\/html)[^"']*\1/gi, "")
+      .trim();
+  }
+  function svgIsMono(s) {
+    s = String(s || "");
+    if (/<(?:linear|radial)Gradient|url\(\s*#/i.test(s)) return false;
+    var colors = {}, re = /(?:fill|stroke)\s*[:=]\s*["']?\s*(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|[a-zA-Z]+)/g, m;
+    while ((m = re.exec(s))) {
+      var c = m[1].toLowerCase();
+      if (c === "none" || c === "transparent" || c === "currentcolor" || c === "inherit" || c === "context-fill" || c === "context-stroke") continue;
+      colors[c] = 1;
+    }
+    return Object.keys(colors).length <= 1;
+  }
+  function svgAspectIcon(s) {
+    var vb = /viewBox\s*=\s*["']\s*[\d.eE+-]+[\s,]+[\d.eE+-]+[\s,]+([\d.eE+-]+)[\s,]+([\d.eE+-]+)/i.exec(s || "");
+    if (vb) { var w = parseFloat(vb[1]), h = parseFloat(vb[2]); if (w > 0 && h > 0) return w / h; }
+    return 1;
+  }
+  function pickIcon() {
+    var inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "image/svg+xml,image/png,image/jpeg,.svg,.png,.jpg,.jpeg";
+    inp.onchange = function () {
+      var f = inp.files && inp.files[0]; if (!f) return;
+      var isSvg = /svg/i.test(f.type) || /\.svg$/i.test(f.name);
+      if (isSvg) {
+        var rd = new FileReader();
+        rd.onload = function () {
+          var svg = svgSanitizeIcon(rd.result);
+          if (!/<svg[\s>]/i.test(svg)) { status("That file doesn't look like an SVG."); return; }
+          var mono = svgIsMono(svg);
+          data.landing = data.landing || {};
+          data.landing.siteIcon = { svg: svg, mono: mono };
+          saveDraft(true); apply(true); renderBody();
+          status(mono ? "Logo added - monochrome SVG, so it adapts to light and dark automatically." : "Logo added - multi-colour SVG, used as-is.", true);
+        };
+        rd.readAsText(f);
+      } else if (/^image\/(png|jpe?g)$/i.test(f.type) || /\.(png|jpe?g)$/i.test(f.name)) {
+        fileToDataUri(f).then(function (uri) {
+          data.landing = data.landing || {};
+          data.landing.siteIcon = { src: uri, mono: false };
+          saveDraft(true); apply(true); renderBody();
+          hostUploaded(uri, f, function (path) { if (data.landing && data.landing.siteIcon) { data.landing.siteIcon.src = path; saveDraft(true); apply(true); } });
+          status("Logo added - image used as-is (no light/dark switching).", true);
+        });
+      } else { status("Use an SVG, PNG or JPEG."); }
+    };
+    inp.click();
+  }
+  function siteIconBlock() {
+    var ic = (data.landing && data.landing.siteIcon) || null;
+    var has = !!(ic && (ic.svg || ic.src));
+    var isSvg = !!(ic && ic.svg);
+    var mono = !!(ic && ic.mono && isSvg);
+    var url = has ? (isSvg ? ("data:image/svg+xml," + encodeURIComponent(ic.svg).replace(/'/g, "%27")) : previewSrc(ic.src)) : "";
+    var inner;
+    if (!has) inner = '<span style="font-family:var(--serif);font-size:1.15rem;color:var(--text-dim)">RK</span>';
+    else if (mono) inner = '<span style="height:26px;aspect-ratio:' + svgAspectIcon(ic.svg).toFixed(3) + ';background:currentColor;-webkit-mask:url(\'' + url + '\') center/contain no-repeat;mask:url(\'' + url + '\') center/contain no-repeat;display:block"></span>';
+    else inner = '<img src="' + escAttr(url) + '" alt="" style="max-width:100%;max-height:100%;object-fit:contain" />';
+    var toggle = isSvg
+      ? '<label class="chk" style="margin-top:.7rem;display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="siteicon-mono"' + (mono ? " checked" : "") + ' /> <span>Adapt to light &amp; dark (treat as monochrome)</span></label>' +
+        '<div class="af__hint">' + (svgIsMono(ic.svg) ? "Auto-detected as monochrome." : "This SVG looks multi-colour - turning this on flattens it to one colour.") + '</div>'
+      : "";
+    return '<div class="imgblk"><div class="af__label">Site icon / logo</div>' +
+      '<div class="af__hint" style="margin-bottom:.6rem">Shown as the header brand mark (replacing the &ldquo;RK&rdquo; monogram) and the browser-tab favicon. SVG, PNG or JPEG. A <strong>monochrome SVG</strong> auto-switches colour for light &amp; dark; a multi-colour SVG or a PNG/JPEG is used exactly as uploaded. No logo keeps the RK initials.</div>' +
+      '<div style="display:flex;align-items:center;gap:14px">' +
+        '<div style="width:72px;height:46px;border-radius:8px;background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--text)">' + inner + '</div>' +
+        '<div class="imgblk__row" style="margin:0"><button class="btn btn--ghost" data-act="siteicon-upload">' + (has ? "Replace..." : "Upload logo...") + '</button>' + (has ? '<button class="btn btn--ghost" data-act="siteicon-clear">Remove</button>' : "") + "</div>" +
+      "</div>" + toggle + "</div>";
+  }
   function atsPanelHtml(has) {
     var lvls = IPREP_LEVELS.map(function (l) {
       return '<button type="button" class="ats__lvl' + (atsLevel === l[0] ? " is-on" : "") + '" data-act="ats-level" data-lvl="' + l[0] + '"><b>' + l[1] + "</b><span>" + l[2] + "</span></button>";
@@ -3287,6 +3366,7 @@ import { WORLD_LAND } from "./worldland.js";
       return (
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
         '<div class="adm__autobar"><button class="btn btn--auto" data-act="autostyle">Auto-style landing</button><button class="btn btn--auto" data-act="landing-ai" style="margin-left:.5rem">\u2728 Draft with AI</button><span class="adm__auto-note">Auto-style paints the accents; <em>Draft with AI</em> writes the hero, highlights, capabilities &amp; about from a brief \u2014 preview before applying.</span></div>' +
+        group(siteIconBlock()) +
         input("Eyebrow", "landing.eyebrow", { toggle: "eyebrow" }) +
         input("Domains", "landing.domains", { toggle: "domains", hint: "e.g. Growth · AI · Identity" }) +
         input("Main statement", "landing.statement", { md: true, type: "textarea", rows: 3, hint: "One line per row. The closing word (why / how) gets the italic accent." }) +
@@ -4916,6 +4996,10 @@ import { WORLD_LAND } from "./worldland.js";
       apply(true);
       return;
     }
+    if (t.dataset.act === "siteicon-mono") {
+      if (data.landing && data.landing.siteIcon) { data.landing.siteIcon.mono = t.checked; saveDraft(true); apply(true); if (activeTab === "landing") renderBody(); }
+      return;
+    }
     if (t.dataset.gpath !== undefined) { onGenEdit(t); return; }
     if (t.dataset.jsel !== undefined) { onJourneyEdit(t); return; }
     if (t.dataset.act === "journey-toggle") { journeyData().enabled = t.checked; saveDraft(true); apply(true); renderBody(); return; }
@@ -5266,6 +5350,8 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "resume-clear") { setPath(data, "contact.resume", ""); apply(true); renderBody(); status("R\u00e9sum\u00e9 removed."); return; }
     if (act === "avatar-upload") { pickImage(function (uri) { setPath(data, "contact.avatar", uri); apply(true); renderBody(); status("Display picture updated.", true); }); return; }
     if (act === "avatar-clear") { setPath(data, "contact.avatar", ""); apply(true); renderBody(); status("Display picture removed."); return; }
+    if (act === "siteicon-upload") { pickIcon(); return; }
+    if (act === "siteicon-clear") { if (data.landing) delete data.landing.siteIcon; saveDraft(true); apply(true); renderBody(); status("Logo removed - the RK initials are back."); return; }
     if (act === "resume-open") { const u = data.contact && data.contact.resume; if (u && window.RK && window.RK.openResume) window.RK.openResume(u); else if (u) window.open(u, "_blank", "noopener"); return; }
     if (act === "ai-save") { aiSave(); return; }
     if (act === "ai-clear") { Object.keys(localStorage).forEach(function (k) { if (/^rk:ai:[a-z]+:key$/.test(k)) localStorage.removeItem(k); }); renderBody(); status("Keys removed."); return; }
