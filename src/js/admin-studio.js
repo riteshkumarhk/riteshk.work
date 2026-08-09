@@ -670,7 +670,21 @@ import { WORLD_LAND } from "./worldland.js";
     var urls = ["https://esm.sh/@huggingface/transformers@3", "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/+esm"];
     ensureDepthLib._p = (async function () {
       var lastErr;
-      for (var k = 0; k < urls.length; k++) { try { return await import(urls[k]); } catch (e) { lastErr = e; } }
+      for (var k = 0; k < urls.length; k++) {
+        try {
+          var lib = await import(urls[k]);
+          // transformers.js hardcodes jsdelivr for its ONNX-runtime WebGPU files
+          // (ort-wasm-*.jsep.mjs); some networks can't reach jsdelivr, so point them at
+          // unpkg, which serves the raw runtime files. numThreads=1: GitHub Pages isn't
+          // cross-origin isolated, so SharedArrayBuffer (threads) is unavailable.
+          try {
+            var ver = (lib.env && lib.env.version) || "3.8.1";
+            lib.env.backends.onnx.wasm.wasmPaths = "https://unpkg.com/@huggingface/transformers@" + ver + "/dist/";
+            lib.env.backends.onnx.wasm.numThreads = 1;
+          } catch (e2) {}
+          return lib;
+        } catch (e) { lastErr = e; }
+      }
       throw lastErr || new Error("could not load the depth library");
     })().catch(function (e) { ensureDepthLib._p = null; throw e; });
     return ensureDepthLib._p;
