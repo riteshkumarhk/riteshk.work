@@ -399,7 +399,7 @@ import { initDepth } from "./depth.js";
     const pageEl = (name) => pages.find((p) => p.getAttribute("data-page") === name);
     const navLinks = [...document.querySelectorAll("[data-page-link]")];
     const titles = {
-      work: "Ritesh Kumar — Product Design Leadership",
+      work: "Ritesh Kumar — Product Design Lead",
       about: "About — Ritesh Kumar",
     };
 
