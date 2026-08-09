@@ -1970,10 +1970,12 @@
       "parDir": "down",
       "parAmt": 50,
       "depth": {
-        "strength": 0.048,
-        "zoom": 1.03,
-        "softness": 0.02,
-        "focus": 0.16
+        "strength": 0.028,
+        "zoom": 1.075,
+        "softness": 0.014,
+        "focus": 0.5,
+        "on": true,
+        "map": "/assets/uploads/6f5984c38b1f2eafd7c5f86965e5056309f9c7c830192b12745dc437d72f6a2e.png"
       }
     },
     {
