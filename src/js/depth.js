@@ -47,11 +47,12 @@ const FRAG =
   "float d=dsample(z);float rel=d-uFocus;vec2 off=uPointer*uStrength*rel;" +
   "vec3 col=texture(uColor,z+off).rgb;o=vec4(col,1.0);}";
 
-// zoom 1.40 matches the .case__par -20% inset (par = 140% of the media height): the static cover
-// <img> fills that oversized box, so the depth canvas must use the same 1.40 "fill" to render the
-// IDENTICAL framing — hovering then adds depth with no zoom jump. strength is trimmed so the
-// on-screen displacement feel stays the same at the higher zoom.
-const DEFAULTS = { strength: 0.022, softness: 0.012, focus: 0.5, zoom: 1.40 };
+// The RESTING zoom (1.40) matches the static cover <img>, which fills the oversized .case__par
+// (inset -20% = 140% of the media height, kept for scroll parallax) — so the canvas fades in at the
+// EXACT same framing as the image = seamless handoff. On hover it eases OUT to zoomHover (1.075):
+// a gentle dolly-back that reveals more of the scene and deepens the parallax; on leave it eases
+// back to 1.40 before fading out. If .case__par inset changes, set zoomRest = 1 + 2*inset.
+const DEFAULTS = { strength: 0.028, softness: 0.014, focus: 0.5, zoomRest: 1.40, zoomHover: 1.075 };
 
 export function initDepth() {
   const q = new URLSearchParams(location.search);
@@ -84,7 +85,8 @@ function readSettings(media) {
     strength: num(d.depthStrength, DEFAULTS.strength),
     softness: num(d.depthSoftness, DEFAULTS.softness),
     focus: num(d.depthFocus, DEFAULTS.focus),
-    zoom: DEFAULTS.zoom
+    zoomRest: DEFAULTS.zoomRest,
+    zoomHover: num(d.depthZoom, DEFAULTS.zoomHover)
   };
 }
 
@@ -98,7 +100,7 @@ function attach(media, img, depthImg) {
   let gl = null, prog = null, U = null, colorTex = null, depthTex = null;
   let active = false, raf = 0;
   const target = { x: 0, y: 0 }, cur = { x: 0, y: 0 };
-  let settleFrames = 0;
+  let settleFrames = 0, zoomCur = DEFAULTS.zoomRest;
 
   function makeTex(unit, src) {
     const t = gl.createTexture();
@@ -146,18 +148,21 @@ function attach(media, img, depthImg) {
     cur.x += (target.x - cur.x) * 0.09;
     cur.y += (target.y - cur.y) * 0.09;
     const s = readSettings(media);
+    const zoomTarget = active ? s.zoomHover : s.zoomRest;   // ease OUT on hover, back IN on leave
+    zoomCur += (zoomTarget - zoomCur) * 0.06;
     resize();
     gl.uniform2f(U.uPointer, cur.x, cur.y);
     gl.uniform1f(U.uStrength, s.strength);
     gl.uniform1f(U.uSoft, s.softness);
     gl.uniform1f(U.uFocus, s.focus);
-    gl.uniform1f(U.uZoom, s.zoom);
+    gl.uniform1f(U.uZoom, zoomCur);
     gl.uniform1f(U.uImgA, img.naturalWidth / img.naturalHeight);
     gl.uniform1f(U.uBoxA, media.clientWidth / Math.max(1, media.clientHeight));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     const moving = Math.abs(target.x - cur.x) + Math.abs(target.y - cur.y) > 0.0008;
-    if (active || moving || settleFrames-- > 0) { raf = requestAnimationFrame(frame); }
+    const zooming = Math.abs(zoomTarget - zoomCur) > 0.0008;
+    if (active || moving || zooming || settleFrames-- > 0) { raf = requestAnimationFrame(frame); }
     else { raf = 0; canvas.classList.remove("is-on"); }
   }
 
