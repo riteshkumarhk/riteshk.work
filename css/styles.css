@@ -880,7 +880,9 @@ html.lite .hero__avail-dot { animation: none; }
   .footer__links { text-align: left; }
   .footer__top { align-items: flex-start; }
   .hero__foot { flex-direction: column; align-items: flex-start; }
-  .hero__cue { align-self: flex-end; }   /* keep the cue on the right (like desktop), above the marquee */
+  /* Pin the cue to the bottom-right of the hero (just above the brand marquee); the presence
+     line then flows straight under the intro. */
+  .hero__cue { position: absolute; right: var(--pad); bottom: clamp(.7rem, 2.5vw, 1.2rem); }
   /* First screen = hero + skills marquee pinned to the bottom, so the moving band
      shows on load and you scroll past it to reach the numbers. Keep the hero's
      own centered content and absolute bottom-right "now" line (as on desktop) —
