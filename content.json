@@ -1968,7 +1968,10 @@
       },
       "hidden": false,
       "parDir": "down",
-      "parAmt": 50
+      "parAmt": 50,
+      "depth": {
+        "strength": 0.036
+      }
     },
     {
       "id": "w1783924971648",
