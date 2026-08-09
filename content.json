@@ -34,40 +34,48 @@
     "logos": [
       {
         "src": "/assets/uploads/ff8a819ac9081d67e353bc9fc2654a583a5a0631ea6eb617a130ecc9bf8b010a.png",
-        "name": "Microsoft"
+        "name": "Microsoft",
+        "size": "sm"
       },
       {
         "src": "/assets/uploads/9e08196c9adbdead5bcb9f2b12674f405c3538ff1fa01e930a8fb35eb1fa6c1e.png",
-        "name": "Bing"
+        "name": "Bing",
+        "size": "sm"
       },
       {
         "src": "/assets/uploads/a298aa80c9caace6b963271138a60de155fa33fdb8c8ee75f73f5acc38384434.webp",
-        "name": "Windows 11"
+        "name": "Windows 11",
+        "size": "sm"
       },
       {
         "src": "/assets/uploads/83b101a1fe17a91d834080b34d3ae5714979cfc5b954ce597366da253aac27b5.png",
-        "name": "Microsoft Edge"
+        "name": "Microsoft Edge",
+        "size": "sm"
       },
       {
         "src": "/assets/uploads/3bb8a3d13c7a207335f182e292a038a381b59831eabeb6f6dcf5a0f58e9cc424.png",
         "name": "Xbox Game Pass",
-        "size": "md"
+        "size": "sm"
       },
       {
         "src": "/assets/uploads/9a096015787dbe4186ed25e22fe8a7cbb4a0d0e04982423b6066a391cee28f35.png",
-        "name": ""
+        "name": "Copilot",
+        "size": "sm"
       },
       {
         "src": "/assets/uploads/555c15fa04f6d5a745783321724737f51d30c2484f9c03bca008eca5e3f3e5e5.png",
-        "name": "Tata Elxsi"
+        "name": "Tata Elxsi",
+        "size": "sm"
       },
       {
         "src": "/assets/uploads/25833bfcc25d95e0ab7edf0f0bf2184b540a2e425fbdb8df548bbe388ed5d456.png",
-        "name": "Jaguar"
+        "name": "Jaguar",
+        "size": "sm"
       },
       {
         "src": "/assets/uploads/d04f18e03f357c06525e69918a86df5739e8042dfa4e244ab4b99419f9bf9c6a.png",
-        "name": "Land Rover"
+        "name": "Land Rover",
+        "size": "sm"
       }
     ],
     "siteIcon": {
