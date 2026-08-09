@@ -275,9 +275,11 @@ html.lite .page { animation: none; }
 /* =================================================================
    HERO
    ================================================================= */
+/* First screen = hero + brand marquee, so the marquee is in view on load (all breakpoints). */
+.hero-screen { min-height: 100svh; display: flex; flex-direction: column; }
 .hero {
-  min-height: 100svh;
-  padding: 9rem var(--pad) 3rem;
+  min-height: 0; flex: 1 0 auto;
+  padding: clamp(6.25rem, 11vh, 9rem) var(--pad) clamp(2rem, 3.5vh, 3rem);
   display: flex; flex-direction: column; justify-content: center;
   max-width: var(--maxw); margin: 0 auto; position: relative;
 }
@@ -300,7 +302,7 @@ html.lite .page { animation: none; }
 
 .hero__foot {
   display: flex; justify-content: space-between; align-items: flex-end; gap: 2rem;
-  margin-top: clamp(2.5rem, 6vw, 4.5rem); flex-wrap: wrap;
+  margin-top: clamp(2.25rem, 5vh, 4.5rem); flex-wrap: wrap;
 }
 .hero__intro { max-width: 36ch; font-size: clamp(1rem, 1.4vw, 1.18rem); color: var(--text-dim); line-height: 1.55; }
 .hero__intro strong { color: var(--text); font-weight: 500; }
@@ -322,6 +324,10 @@ html.lite .page { animation: none; }
   .hero__cue { border-color: var(--line-soft); }
 }
 .hero__cue:focus-visible { outline: none; border-color: var(--accent); background: var(--line-soft); box-shadow: 0 0 0 2px var(--line-soft); }
+/* .hero__cue is a [data-reveal] element; [data-reveal]'s opacity/transform transition would otherwise
+   override the pill's hover transition (same specificity, later in the file) and make the hover snap.
+   Restate both here, more specifically, so the reveal AND the hover stay smooth (like the contact pills). */
+a.hero__cue { transition: opacity .9s var(--ease), transform .9s var(--ease), color .4s, border-color .4s, background .4s; }
 .hero__cue svg { animation: bob 2.2s var(--ease-io) infinite; }
 @keyframes bob { 0%,100% { transform: translateY(0);} 50% { transform: translateY(4px);} }
 
@@ -882,13 +888,12 @@ html.lite .hero__avail-dot { animation: none; }
   .hero__foot { flex-direction: column; align-items: flex-start; }
   /* Pin the cue to the bottom-right of the hero (just above the brand marquee); the presence
      line then flows straight under the intro. */
-  .hero__cue { position: absolute; right: var(--pad); bottom: clamp(.5rem, 2vw, 1rem); }
+  .hero__cue { position: absolute; right: var(--pad); bottom: clamp(1.4rem, 4vw, 2.4rem); }
   /* First screen = hero + skills marquee pinned to the bottom, so the moving band
      shows on load and you scroll past it to reach the numbers. Keep the hero's
      own centered content and absolute bottom-right "now" line (as on desktop) —
      it just grows inside the flex column so the marquee sits flush at the bottom. */
-  .hero-screen { min-height: 100svh; display: flex; flex-direction: column; }
-  .hero { min-height: 0; flex: 1 0 auto; justify-content: flex-start; }
+  .hero { justify-content: flex-start; }
   /* The presence line can run long (e.g. "…Previously Jaguar Land Rover and Tata
      Elxsi"). Cap its width so it wraps in the lower-right — right-aligned, a page
      gutter off the edge (right stays var(--pad)), and clear of the bottom-left dock. */
