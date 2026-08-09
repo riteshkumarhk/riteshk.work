@@ -605,6 +605,12 @@ import { WORLD_LAND } from "./worldland.js";
     };
   }
   function ensureDepth(w) { if (!w.depth) w.depth = {}; return w.depth; }
+  function depthMapUrl(w) {
+    var m = String(w.image || "").match(/(\/?assets\/uploads\/[^./?#]+)\.[a-z0-9]+$/i);
+    if (!m) return "";
+    var p = m[1] + ".depth.png";
+    return p.charAt(0) === "/" ? p : "/" + p;
+  }
   function depthPanel(w, i) {
     var d = depthOf(w);
     function sl(field, label, min, max, step, val, hint) {
@@ -615,13 +621,20 @@ import { WORLD_LAND } from "./worldland.js";
     }
     return '<div class="depthp" data-depth-panel="' + i + '" hidden>' +
       '<div class="depthp__head">3D depth <span class="depthp__sub">cursor \u00b7 tilt parallax on this cover</span></div>' +
-      '<label class="depthp__toggle"><input type="checkbox" data-depth-on="' + i + '"' + (d.on ? " checked" : "") + ' /> <span>Enabled</span></label>' +
-      sl("strength", "Strength", 0, 0.09, 0.002, d.strength) +
-      sl("zoom", "Depth pull-back", 1, 1.3, 0.005, d.zoom, "Lower = a bigger dolly-out on hover = more sense of depth.") +
-      sl("softness", "Edge softness", 0, 0.03, 0.001, d.softness) +
-      sl("focus", "Focus plane", 0, 1, 0.02, d.focus) +
-      '<div class="depthp__gen"><button class="btn btn--auto" data-act="depth-gen" data-index="' + i + '" disabled title="On-device WebGPU depth generation \u2014 shipping next">Generate depth map</button>' +
-      '<span class="depthp__note">Tuning applies to covers that already have a depth map. Auto-generate for new covers ships next.</span></div>' +
+      '<div class="depthp__body">' +
+        '<label class="depthp__toggle"><input type="checkbox" data-depth-on="' + i + '"' + (d.on ? " checked" : "") + ' /> <span>Enabled</span></label>' +
+        sl("strength", "Strength", 0, 0.09, 0.002, d.strength) +
+        sl("zoom", "Depth pull-back", 1, 1.3, 0.005, d.zoom, "Lower = a bigger dolly-out on hover = more sense of depth.") +
+        sl("softness", "Edge softness", 0, 0.03, 0.001, d.softness) +
+        sl("focus", "Focus plane", 0, 1, 0.02, d.focus) +
+        '<div class="depthp__gen"><button class="btn btn--auto" data-act="depth-gen" data-index="' + i + '" disabled title="On-device WebGPU depth generation \u2014 shipping next">Generate depth map</button>' +
+        '<span class="depthp__note">Tuning applies to covers that already have a depth map. Auto-generate for new covers ships next.</span></div>' +
+      '</div>' +
+      '<div class="depthp__preview is-empty" data-depth-preview>' +
+        '<div class="depthp__map" data-depth-src="' + escAttr(depthMapUrl(w)) + '"></div>' +
+        '<div class="depthp__ph"><span class="depthp__ph-t">No depth map yet</span><span class="depthp__ph-s">Generate one to preview it here</span></div>' +
+        '<span class="depthp__preview-cap">Depth map</span>' +
+      '</div>' +
     '</div>';
   }
   function onDepthSlider(t) {
@@ -635,6 +648,17 @@ import { WORLD_LAND } from "./worldland.js";
     var i = +t.dataset.depthOn, w = data.work[i]; if (!w) return;
     ensureDepth(w).on = t.checked;
     saveDraft(true); apply(true);
+  }
+  // Probe the cover's depth map (naming convention) and show it in the panel preview, else the placeholder.
+  function depthPreviewLoad(panel) {
+    var box = panel.querySelector("[data-depth-preview]"), mapDiv = panel.querySelector(".depthp__map");
+    if (!box || !mapDiv || mapDiv.dataset.loaded) return;
+    var src = mapDiv.dataset.depthSrc || "";
+    if (!src) { box.classList.add("is-empty"); return; }
+    var probe = new Image();
+    probe.onload = function () { mapDiv.style.backgroundImage = "url('" + src + "')"; mapDiv.dataset.loaded = "1"; box.classList.remove("is-empty"); };
+    probe.onerror = function () { box.classList.add("is-empty"); };
+    probe.src = src;
   }
 
   function onParxInput(t) {
@@ -4886,7 +4910,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (!b) return;
     if (b.dataset.act === "md-fmt") { mdFmt(b); return; }
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
-    if (act === "depth-open") { var _dp = root.querySelector('[data-depth-panel="' + i + '"]'); if (_dp) { _dp.hidden = !_dp.hidden; b.classList.toggle("is-on", !_dp.hidden); } return; }
+    if (act === "depth-open") { var _dp = root.querySelector('[data-depth-panel="' + i + '"]'); if (_dp) { _dp.hidden = !_dp.hidden; b.classList.toggle("is-on", !_dp.hidden); if (!_dp.hidden) depthPreviewLoad(_dp); } return; }
     if (act === "aboutsec-up" || act === "aboutsec-down") {
       const arr = aboutLayoutArr(), idx = +b.dataset.i, j = act === "aboutsec-up" ? idx - 1 : idx + 1;
       if (idx < 0 || j < 0 || j >= arr.length) return;
