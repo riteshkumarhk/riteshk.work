@@ -564,11 +564,16 @@ import { initDepth } from "./depth.js";
     resize(); step();
   }
 
-  // Cursor-driven depth on covers that have a depth map (progressive; GPU + WebGL2 gated,
-  // otherwise the static image + scroll parallax remain). See src/js/depth.js.
-  initDepth();
   } // end initInteractions
 
   if (window.__siteRendered) initInteractions();
   else document.addEventListener("site:rendered", initInteractions, { once: true });
+
+  // Cursor / gyroscope depth on covers that have a depth map (progressive; GPU + WebGL2 gated,
+  // otherwise the static image + scroll parallax remain). See src/js/depth.js. It runs on the live
+  // site AND re-runs after every render (idempotent per cover) so the studio preview reflects live
+  // depth edits; exposed as __rkInitDepth so the studio can refresh it after RK.render().
+  window.__rkInitDepth = initDepth;
+  if (window.__siteRendered) initDepth();
+  document.addEventListener("site:rendered", initDepth);
 })();

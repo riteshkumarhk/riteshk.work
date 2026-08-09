@@ -53,29 +53,45 @@ const FRAG =
 // a gentle dolly-back that reveals more of the scene and deepens the parallax; on leave it eases
 // back to 1.40 before fading out. If .case__par inset changes, set zoomRest = 1 + 2*inset.
 const DEFAULTS = { strength: 0.028, softness: 0.014, focus: 0.5, zoomRest: 1.40, zoomHover: 1.075 };
+// On touch devices the canvas mounts INSIDE the parallax layer (.case__par) so it drifts with the
+// scroll exactly like the <img>; it therefore fills the same box as the image and needs only a hair
+// of zoom for tilt headroom (there is no hover dolly on mobile).
+const MOBILE_ZOOM = 1.05;
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+
+let activeGyro = null;   // the current device-orientation controller (torn down + rebuilt on re-render)
 
 export function initDepth() {
   const q = new URLSearchParams(location.search);
-  if (q.has("nodepth") || q.has("lite")) return;
-  const force = q.has("depth");
+  if (q.has("nodepth")) return;
+  const preview = q.has("preview");
+  if (q.has("lite") && !preview) return;                 // lite disables depth, EXCEPT the studio preview iframe
+  if (activeGyro) { activeGyro.destroy(); activeGyro = null; }   // re-render replaces the DOM
+
+  const force = q.has("depth") || preview;               // ?preview forces depth on so the studio can show it
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  const gyro = coarse && typeof window.DeviceOrientationEvent !== "undefined";
   if (!force) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    if (window.matchMedia("(pointer: coarse)").matches) return;
+    if (coarse && !gyro) return;                         // touch device w/o motion sensors -> nothing drives depth
     if (!gpuOk()) return;
   }
-  document.querySelectorAll(".case__media--photo").forEach(setupCover);
+  const ctx = gyro ? createGyroCtx() : null;
+  document.querySelectorAll(".case__media--photo").forEach((m) => setupCover(m, ctx));
+  if (ctx) { ctx.start(); activeGyro = ctx; }
 }
 
-function setupCover(media) {
-  if (media.dataset.depthOff) return;   // per-cover off switch (studio "3D depth" menu)
+function setupCover(media, ctx) {
+  if (media.dataset.depthOff) return;                    // per-cover off switch (studio "3D depth" menu)
+  if (media.querySelector(".case__depth")) return;       // already wired (idempotent across re-renders / preview)
   const img = media.querySelector(".case__img");
   if (!img) return;
   const depthUrl = media.dataset.depthMap || deriveDepthUrl(img.getAttribute("src") || img.src);
   if (!depthUrl) return;
   const dImg = new Image();
   dImg.decoding = "async";
-  dImg.onload = () => attach(media, img, dImg);
-  dImg.onerror = () => {};   // no depth map for this cover -> keep scroll parallax only
+  dImg.onload = () => attach(media, img, dImg, ctx);
+  dImg.onerror = () => {};                               // no depth map for this cover -> keep scroll parallax only
   dImg.src = depthUrl;
 }
 
@@ -91,17 +107,24 @@ function readSettings(media) {
   };
 }
 
-function attach(media, img, depthImg) {
+function attach(media, img, depthImg, ctx) {
+  const gyro = !!(ctx && ctx.gyro);
+  // On touch/gyro, mount the canvas INSIDE the parallax layer (.case__par) so it drifts with the
+  // scroll parallax exactly like the <img>; on desktop it sits over the whole frame (dolly on hover).
+  const mount = gyro ? (media.querySelector(".case__par") || media) : media;
+  const box = mount;                                   // the canvas fills - and is measured against - its mount
+  const REST = gyro ? MOBILE_ZOOM : DEFAULTS.zoomRest;
+
   const canvas = document.createElement("canvas");
   canvas.className = "case__depth";
   canvas.setAttribute("aria-hidden", "true");
-  media.appendChild(canvas);
+  mount.appendChild(canvas);
   media.classList.add("is-depth");
 
   let gl = null, prog = null, U = null, colorTex = null, depthTex = null;
-  let active = false, raf = 0;
+  let active = false, dollyOn = false, raf = 0;
   const target = { x: 0, y: 0 }, cur = { x: 0, y: 0 };
-  let settleFrames = 0, zoomCur = DEFAULTS.zoomRest;
+  let settleFrames = 0, zoomCur = REST;
 
   function makeTex(unit, src) {
     const t = gl.createTexture();
@@ -138,8 +161,8 @@ function attach(media, img, depthImg) {
 
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = Math.max(2, Math.round(media.clientWidth * dpr));
-    const h = Math.max(2, Math.round(media.clientHeight * dpr));
+    const w = Math.max(2, Math.round(box.clientWidth * dpr));
+    const h = Math.max(2, Math.round(box.clientHeight * dpr));
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
     gl.viewport(0, 0, canvas.width, canvas.height);
   }
@@ -149,7 +172,7 @@ function attach(media, img, depthImg) {
     cur.x += (target.x - cur.x) * 0.09;
     cur.y += (target.y - cur.y) * 0.09;
     const s = readSettings(media);
-    const zoomTarget = active ? s.zoomHover : s.zoomRest;   // ease OUT on hover, back IN on leave
+    const zoomTarget = (active && dollyOn) ? s.zoomHover : REST;   // desktop hover dollies out; gyro stays at rest
     zoomCur += (zoomTarget - zoomCur) * 0.06;
     resize();
     gl.uniform2f(U.uPointer, cur.x, cur.y);
@@ -158,33 +181,96 @@ function attach(media, img, depthImg) {
     gl.uniform1f(U.uFocus, s.focus);
     gl.uniform1f(U.uZoom, zoomCur);
     gl.uniform1f(U.uImgA, img.naturalWidth / img.naturalHeight);
-    gl.uniform1f(U.uBoxA, media.clientWidth / Math.max(1, media.clientHeight));
+    gl.uniform1f(U.uBoxA, box.clientWidth / Math.max(1, box.clientHeight));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     const moving = Math.abs(target.x - cur.x) + Math.abs(target.y - cur.y) > 0.0008;
     const zooming = Math.abs(zoomTarget - zoomCur) > 0.0008;
-    if (active || moving || zooming || settleFrames-- > 0) { raf = requestAnimationFrame(frame); }
-    else { raf = 0; canvas.classList.remove("is-on"); }
+    const sustain = active && !gyro;                     // desktop hover keeps the loop alive; gyro sleeps when still
+    if (sustain || moving || zooming || settleFrames-- > 0) { raf = requestAnimationFrame(frame); }
+    else { raf = 0; if (!gyro) canvas.classList.remove("is-on"); }
   }
 
-  function activate() {
-    if (!initGL()) return;
+  function wake() { if (!raf && gl) raf = requestAnimationFrame(frame); }
+  function activate(dolly) {
+    dollyOn = !!dolly;
+    if (!initGL()) { if (!(img.complete && img.naturalWidth)) img.addEventListener("load", () => activate(dolly), { once: true }); return; }
     active = true;
     canvas.classList.add("is-on");
-    if (!raf) raf = requestAnimationFrame(frame);
+    wake();
   }
   function deactivate() {
     active = false;
+    if (gyro) { canvas.classList.remove("is-on"); return; }   // leaving the viewport: just fade the canvas out
     target.x = 0; target.y = 0;
-    settleFrames = 40;                 // keep rendering briefly so it eases back to centre
-    if (!raf && gl) raf = requestAnimationFrame(frame);
+    settleFrames = 40;                 // desktop: keep rendering briefly so it eases back to centre
+    wake();
   }
 
-  media.addEventListener("pointerenter", activate);
-  media.addEventListener("pointerleave", deactivate);
-  media.addEventListener("pointermove", (e) => {
-    const r = media.getBoundingClientRect();
-    target.x = ((e.clientX - r.left) / r.width) * 2 - 1;
-    target.y = -(((e.clientY - r.top) / r.height) * 2 - 1);
-  });
+  const controller = { el: media, isActive: () => active, setTilt(x, y) { target.x = x; target.y = y; wake(); }, activate, deactivate };
+  media.__depthCtrl = controller;
+
+  if (gyro) {
+    ctx.observe(controller);                             // IntersectionObserver activates it while in view
+  } else {
+    media.addEventListener("pointerenter", () => activate(true));
+    media.addEventListener("pointerleave", deactivate);
+    media.addEventListener("pointermove", (e) => {
+      const r = media.getBoundingClientRect();
+      target.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+      target.y = -(((e.clientY - r.top) / r.height) * 2 - 1);
+    });
+  }
+}
+
+// One device-orientation controller shared by every gyro cover: it tilts the pointer from the
+// phone's motion sensors and activates covers only while they're in the viewport (IntersectionObserver).
+function createGyroCtx() {
+  const observed = [];
+  let baseG = null, baseB = null;                        // calibrate to however the phone is first held
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      const ctrl = e.target.__depthCtrl;
+      if (!ctrl) continue;
+      if (e.isIntersecting) ctrl.activate(false); else ctrl.deactivate();
+    }
+  }, { threshold: 0.2 });
+
+  function onOrient(ev) {
+    let g = ev.gamma, b = ev.beta;
+    if (g == null && b == null) return;
+    g = g || 0; b = b || 0;
+    if (baseG == null) { baseG = g; baseB = b; }
+    const x = clamp((g - baseG) / 22, -1, 1);            // ~22deg of tilt = full deflection (kept subtle)
+    const y = clamp((b - baseB) / 22, -1, 1);
+    for (let i = 0; i < observed.length; i++) if (observed[i].isActive()) observed[i].setTilt(x, y);
+  }
+
+  let started = false, tapReq = null, listening = false;
+  function listen() { if (listening) return; listening = true; window.addEventListener("deviceorientation", onOrient, true); }
+  function start() {
+    if (started) return; started = true;
+    const DOE = window.DeviceOrientationEvent;
+    if (DOE && typeof DOE.requestPermission === "function") {
+      // iOS 13+: sensor access needs a user gesture. The first touch anywhere grants it.
+      tapReq = function () {
+        try { DOE.requestPermission().then((s) => { if (s === "granted") listen(); }).catch(() => {}); } catch (e) {}
+        document.removeEventListener("pointerdown", tapReq); document.removeEventListener("touchend", tapReq);
+      };
+      document.addEventListener("pointerdown", tapReq, { once: true });
+      document.addEventListener("touchend", tapReq, { once: true });
+    } else {
+      listen();
+    }
+  }
+  return {
+    gyro: true,
+    observe(ctrl) { observed.push(ctrl); io.observe(ctrl.el); },
+    start,
+    destroy() {
+      try { io.disconnect(); } catch (e) {}
+      if (listening) window.removeEventListener("deviceorientation", onOrient, true);
+      if (tapReq) { document.removeEventListener("pointerdown", tapReq); document.removeEventListener("touchend", tapReq); }
+    }
+  };
 }

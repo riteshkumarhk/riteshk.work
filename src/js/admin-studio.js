@@ -209,7 +209,7 @@ import { WORLD_LAND } from "./worldland.js";
   function previewApply() {
     const w = frame && frame.contentWindow;
     if (w && w.RK && w.RK.render) {
-      try { w.RK.render(resolvePreviewData(data)); forceRevealDoc(w.document); } catch (e) {}
+      try { w.RK.render(resolvePreviewData(data)); forceRevealDoc(w.document); if (w.__rkInitDepth) w.__rkInitDepth(); } catch (e) {}
     }
     syncPreviewPage();
   }
@@ -629,7 +629,8 @@ import { WORLD_LAND } from "./worldland.js";
         sl("softness", "Edge softness", 0, 0.03, 0.001, d.softness) +
         sl("focus", "Focus plane", 0, 1, 0.02, d.focus) +
         '<div class="depthp__gen"><button class="btn btn--auto" data-act="depth-gen" data-index="' + i + '" title="Generate a depth map on your GPU (WebGPU)">Generate depth map</button>' +
-        '<span class="depthp__note">Tuning applies to covers that already have a depth map. Auto-generate for new covers ships next.</span></div>' +
+        '<button class="btn btn--ghost" data-act="depth-suggest" data-index="' + i + '" title="Let AI look at the cover and suggest strength, focus &amp; pull-back">Suggest settings</button>' +
+        '<span class="depthp__note">Generate builds the depth map on your GPU. Suggest uses your AI key to tune strength / focus / pull-back for this cover.</span></div>' +
       '</div>' +
       '<div class="depthp__preview is-empty" data-depth-preview>' +
         '<div class="depthp__map" data-depth-src="' + escAttr(depthMapUrl(w)) + '"></div>' +
@@ -734,6 +735,63 @@ import { WORLD_LAND } from "./worldland.js";
       status("Depth map generated. Hover the cover on the live site to see it.", true);
     } catch (e) {
       status("Depth generation failed: " + ((e && e.message) || e));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = lbl; }
+    }
+  }
+
+  // --- Piece 3: let AI look at the cover and suggest tasteful depth settings. ---
+  function syncDepthPanel(panel, d) {
+    if (!panel) return;
+    var setR = function (field, val) {
+      var inp = panel.querySelector('.depthp__range[data-depth-field="' + field + '"]');
+      if (!inp) return;
+      inp.value = val;
+      var row = inp.closest(".depthp__row"), vo = row && row.querySelector(".depthp__val");
+      if (vo) vo.textContent = inp.value;
+    };
+    setR("strength", d.strength); setR("zoom", d.zoom); setR("softness", d.softness); setR("focus", d.focus);
+    var cbx = panel.querySelector("[data-depth-on]"); if (cbx) cbx.checked = d.on !== false;
+  }
+  async function depthSuggest(idx, btn) {
+    var w = data.work[idx]; if (!w || !w.image) { status("Add a cover image first."); return; }
+    var cfg = aiCfg("txt");
+    if (!cfg || !cfg.key) { status("Add an AI provider key in the AI tab first - Suggest reads the cover with vision."); return; }
+    var lbl = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "Looking..."; }
+    status("Looking at the cover to suggest depth settings...");
+    try {
+      var part = await imgToVisionPart(previewSrc(w.image));
+      if (!part) throw new Error("couldn't read the cover image (vector/SVG isn't supported)");
+      var models = await visionModels(cfg); if (!models.length) models = [cfg.model].filter(Boolean);
+      if (!models.length) throw new Error("no vision-capable model available for this provider");
+      var sys = "You tune a subtle cursor/tilt 'depth parallax' effect on a portfolio case-study COVER image. The effect displaces pixels by a depth map toward the pointer; too much warps the image. Judge the image and answer with STRICT JSON only.";
+      var prompt = "Look at this case-study cover and recommend settings for a subtle depth-parallax effect. Return STRICT JSON with keys: suitable (true or false), strength (0.00 to 0.09), focus (0.0 to 1.0), zoom (1.00 to 1.15), subject (up to 6 words), reason (up to 14 words). Rules: set suitable=false for flat UI screenshots, text-heavy screens, diagrams or logos because depth would warp them, and then keep strength tiny. strength: a clear foreground vs background such as people, products or scenes with real depth = 0.03 to 0.05; mild or mixed = 0.02 to 0.03; flat <= 0.015. focus: the depth plane the MAIN SUBJECT sits on so it stays stable, where 0 is far background and 1 is near foreground, usually 0.35 to 0.6. zoom: the hover dolly-back from 1.03 to 1.10 where lower means more depth, about 1.05 by default and 1.03 only for strong depth. Be conservative and tasteful.";
+      var r = null;
+      for (var mi = 0; mi < models.length; mi++) {
+        r = await aiVisionOnce(cfg, models[mi], sys, prompt, [part]);
+        if (r && r.ok) break;
+        if (!aiIsModelErr(r)) break;
+      }
+      if (!r || !r.ok) throw new Error((r && r.err) || "AI unavailable");
+      var j = csgenParse(r.text) || {};
+      var rnd = function (v, step, lo, hi, dflt) { v = parseFloat(v); if (isNaN(v)) v = dflt; v = Math.round(v / step) * step; return Math.max(lo, Math.min(hi, +v.toFixed(4))); };
+      var d = ensureDepth(w);
+      var st = rnd(j.strength, 0.002, 0, 0.09, 0.03);
+      var fo = rnd(j.focus, 0.02, 0, 1, 0.5);
+      var zo = rnd(j.zoom, 0.005, 1, 1.3, 1.05);
+      d.strength = st; d.focus = fo; d.zoom = zo;
+      if (j.suitable === false) {
+        status("AI: this cover looks flat - " + (j.reason || "depth may warp it") + ". Applied a gentle setting; consider turning 3D off for it.", true);
+      } else {
+        d.on = true;
+        status("Suggested - strength " + st.toFixed(3) + ", focus " + fo.toFixed(2) + ", pull-back " + zo.toFixed(2) + (j.subject ? " (" + j.subject + ")" : ""), true);
+      }
+      var panel = root.querySelector('[data-depth-panel="' + idx + '"]');
+      if (panel) syncDepthPanel(panel, depthOf(w));
+      saveDraft(true); apply(true);
+    } catch (e) {
+      status("Suggest failed: " + ((e && e.message) || e));
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = lbl; }
     }
@@ -4990,6 +5048,7 @@ import { WORLD_LAND } from "./worldland.js";
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
     if (act === "depth-open") { var _dp = root.querySelector('[data-depth-panel="' + i + '"]'); if (_dp) { _dp.hidden = !_dp.hidden; b.classList.toggle("is-on", !_dp.hidden); if (!_dp.hidden) depthPreviewLoad(_dp); } return; }
     if (act === "depth-gen") { depthGenerate(i, b); return; }
+    if (act === "depth-suggest") { depthSuggest(i, b); return; }
     if (act === "aboutsec-up" || act === "aboutsec-down") {
       const arr = aboutLayoutArr(), idx = +b.dataset.i, j = act === "aboutsec-up" ? idx - 1 : idx + 1;
       if (idx < 0 || j < 0 || j >= arr.length) return;
