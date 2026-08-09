@@ -311,7 +311,17 @@ html.lite .page { animation: none; }
   display: inline-flex; align-items: center; gap: .6rem;
   font-family: var(--mono); font-size: .78rem; letter-spacing: .06em; text-transform: uppercase;
   color: var(--text); white-space: nowrap;
+  padding: .5rem 1.05rem; border: 1px solid transparent; border-radius: 100px; background: transparent;
+  transition: color .4s, border-color .4s, background .4s;
 }
+/* Same quiet pill treatment as the contact CTAs: borderless at rest; outline + soft fill fade in on hover (desktop); a faint resting outline on touch; a visible focus ring everywhere. */
+@media (hover: hover) {
+  .hero__cue:hover { border-color: var(--accent); background: var(--line-soft); }
+}
+@media (hover: none) {
+  .hero__cue { border-color: var(--line-soft); }
+}
+.hero__cue:focus-visible { outline: none; border-color: var(--accent); background: var(--line-soft); box-shadow: 0 0 0 2px var(--line-soft); }
 .hero__cue svg { animation: bob 2.2s var(--ease-io) infinite; }
 @keyframes bob { 0%,100% { transform: translateY(0);} 50% { transform: translateY(4px);} }
 
@@ -338,11 +348,11 @@ html.lite .page { animation: none; }
 @keyframes cueSparkAmbient { 0% { transform: translateY(3px) scale(.4); opacity: 0; } 32% { opacity: .5; } 100% { transform: translateY(-15px) scale(.85); opacity: 0; } }
 
 .hero__now {
-  position: absolute; bottom: 2.2rem; right: var(--pad);
+  margin-top: clamp(.9rem, 2vw, 1.5rem);
   font-family: var(--mono); font-size: .68rem; letter-spacing: .06em; color: var(--text-faint);
-  display: flex; align-items: center; gap: .55rem;
+  text-align: right;
 }
-.hero__now-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+.hero__now-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; display: inline-block; vertical-align: middle; margin-right: .45rem; }
 
 /* =================================================================
    MARQUEE
@@ -870,6 +880,7 @@ html.lite .hero__avail-dot { animation: none; }
   .footer__links { text-align: left; }
   .footer__top { align-items: flex-start; }
   .hero__foot { flex-direction: column; align-items: flex-start; }
+  .hero__cue { align-self: flex-end; }   /* keep the cue on the right (like desktop), above the marquee */
   /* First screen = hero + skills marquee pinned to the bottom, so the moving band
      shows on load and you scroll past it to reach the numbers. Keep the hero's
      own centered content and absolute bottom-right "now" line (as on desktop) —
@@ -879,8 +890,7 @@ html.lite .hero__avail-dot { animation: none; }
   /* The presence line can run long (e.g. "…Previously Jaguar Land Rover and Tata
      Elxsi"). Cap its width so it wraps in the lower-right — right-aligned, a page
      gutter off the edge (right stays var(--pad)), and clear of the bottom-left dock. */
-  .hero__now { display: block; text-align: right; max-width: min(70vw, 22rem); }
-  .hero__now-dot { display: inline-block; vertical-align: middle; margin-right: .45rem; }
+  .hero__now { max-width: min(80vw, 24rem); margin-left: auto; }
 }
 
 @media (max-width: 400px) {
