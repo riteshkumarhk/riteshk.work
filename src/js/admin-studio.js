@@ -3365,6 +3365,7 @@ import { WORLD_LAND } from "./worldland.js";
     landing() {
       return (
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
+        group(workReorderBlock()) +
         '<div class="adm__autobar"><button class="btn btn--auto" data-act="autostyle">Auto-style landing</button><button class="btn btn--auto" data-act="landing-ai" style="margin-left:.5rem">\u2728 Draft with AI</button><span class="adm__auto-note">Auto-style paints the accents; <em>Draft with AI</em> writes the hero, highlights, capabilities &amp; about from a brief \u2014 preview before applying.</span></div>' +
         group(siteIconBlock()) +
         input("Eyebrow", "landing.eyebrow", { toggle: "eyebrow" }) +
@@ -4432,6 +4433,39 @@ import { WORLD_LAND } from "./worldland.js";
     if (activeTab === "aboutpage") renderBody();
   }
 
+  /* ---------- Landing / work-page section order + visibility ---------- */
+  function workLayoutArr() {
+    const RK = window.RK || {};
+    if (RK.workLayout) return RK.workLayout(data).map((s) => ({ key: s.key, on: s.on !== false }));
+    return (RK.WORK_SECTIONS || []).map((s) => ({ key: s[0], on: true }));
+  }
+  function setWorkLayout(arr) {
+    data.workSections = arr.map((s) => ({ key: s.key, on: s.on !== false }));
+    apply(true);
+    if (activeTab === "landing") renderBody();
+  }
+  function workReorderBlock() {
+    const RK = window.RK || {};
+    const defs = RK.WORK_SECTIONS || [["hero", "Hero"], ["himarq", "Numbers"], ["work", "Selected work"], ["capabilities", "Capabilities"]];
+    const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
+    const where = { hero: "Statement + brand marquee (fields below)", himarq: "Edit in the Highlights tab", work: "Edit in the Work tab", capabilities: "Edit in the Capabilities tab" };
+    const layout = RK.workLayout ? RK.workLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
+    let html = secHead("Landing sections", "Reorder the landing sections and show or hide any of them \u2014 use the arrows to move a section, untick to hide it. Contact always stays at the end.");
+    html += '<ul class="adm__seclist">';
+    layout.forEach((s, i) => {
+      html += '<li class="adm__secrow' + (s.on ? "" : " is-off") + '">' +
+        '<span class="adm__secrow-ops">' +
+        '<button class="iconbtn" data-act="worksec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
+        '<button class="iconbtn" data-act="worksec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+        "</span>" +
+        '<span class="adm__secrow-main"><span class="adm__secrow-name">' + escHtml(labels[s.key] || s.key) + '</span><span class="adm__secrow-where">' + escHtml(where[s.key] || "") + "</span></span>" +
+        '<label class="adm__secrow-tog"><input type="checkbox" data-act="worksec-toggle" data-key="' + s.key + '"' + (s.on ? " checked" : "") + ' /><span class="adm__secrow-state">' + (s.on ? "Shown" : "Hidden") + "</span></label>" +
+        "</li>";
+    });
+    html += "</ul>";
+    return html;
+  }
+
   function secHead(title, note) {
     return '<div class="adm__sec-title">' + title + '</div><div class="adm__sec-note">' + note + "</div>";
   }
@@ -4975,6 +5009,12 @@ import { WORLD_LAND } from "./worldland.js";
       setAboutLayout(arr);
       return;
     }
+    if (t.dataset.act === "worksec-toggle") {
+      const arr = workLayoutArr(), key = t.dataset.key;
+      for (let k = 0; k < arr.length; k++) if (arr[k].key === key) arr[k].on = t.checked;
+      setWorkLayout(arr);
+      return;
+    }
     if (t.dataset.act === "landing-show") {
       data.landing = data.landing || {};
       data.landing.show = data.landing.show || {};
@@ -5138,6 +5178,13 @@ import { WORLD_LAND } from "./worldland.js";
       if (idx < 0 || j < 0 || j >= arr.length) return;
       const tmp = arr[j]; arr[j] = arr[idx]; arr[idx] = tmp;
       setAboutLayout(arr);
+      return;
+    }
+    if (act === "worksec-up" || act === "worksec-down") {
+      const arr = workLayoutArr(), idx = +b.dataset.i, j = act === "worksec-up" ? idx - 1 : idx + 1;
+      if (idx < 0 || j < 0 || j >= arr.length) return;
+      const tmp = arr[j]; arr[j] = arr[idx]; arr[idx] = tmp;
+      setWorkLayout(arr);
       return;
     }
     if (act === "icon-gen-all") { iconGenerateAll(list, b); return; }

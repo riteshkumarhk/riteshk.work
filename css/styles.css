@@ -276,7 +276,12 @@ html.lite .page { animation: none; }
    HERO
    ================================================================= */
 /* First screen = hero + brand marquee, so the marquee is in view on load (all breakpoints). */
-.hero-screen { min-height: 100svh; display: flex; flex-direction: column; }
+.hero-screen { display: flex; flex-direction: column; }
+/* The hero screen only fills the viewport when it's the FIRST landing section (studio order);
+   reordered below another section it takes its natural height. */
+#wsec-hero.sec--first .hero-screen { min-height: 100svh; }
+/* When a non-hero section leads the landing (e.g. Selected Work first), clear the fixed nav. */
+#workSections > .wsec.sec--first:not(#wsec-hero) { padding-top: clamp(4.5rem, 8vw, 6.5rem); }
 .hero {
   min-height: 0; flex: 1 0 auto;
   padding: clamp(6.25rem, 11vh, 9rem) var(--pad) clamp(2rem, 3.5vh, 3rem);

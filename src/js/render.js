@@ -391,6 +391,53 @@
     }
   }
 
+  // ---- Work / landing page: reorderable + show/hide sections (mirrors the About model) ----
+  const WORK_SECTIONS = [
+    ["hero", "Hero"],
+    ["himarq", "Numbers"],
+    ["work", "Selected work"],
+    ["capabilities", "Capabilities"],
+  ];
+  function workLayout(data) {
+    const known = WORK_SECTIONS.map((s) => s[0]);
+    const saved = (data && Array.isArray(data.workSections)) ? data.workSections : [];
+    const out = [], seen = {};
+    saved.forEach((s) => {
+      if (s && known.indexOf(s.key) !== -1 && !seen[s.key]) {
+        seen[s.key] = 1;
+        out.push({ key: s.key, on: s.on !== false });
+      }
+    });
+    known.forEach((k) => { if (!seen[k]) out.push({ key: k, on: true }); });
+    return out;
+  }
+  function applyWorkLayout(data) {
+    const wrap = byId("workSections");
+    if (!wrap) return;
+    const order = workLayout(data);
+    const visible = [];
+    order.forEach((s) => {
+      const el = document.getElementById("wsec-" + s.key);
+      if (!el) return;
+      el.hidden = !s.on;
+      el.classList.remove("sec--first", "sec--last");
+      wrap.appendChild(el);
+      if (s.on) visible.push(el);
+    });
+    if (visible.length) {
+      visible[0].classList.add("sec--first");
+      visible[visible.length - 1].classList.add("sec--last");
+    }
+    // The hero "Selected work" cue only makes sense when the hero leads and the work
+    // section sits below it; otherwise hide it.
+    const cue = document.querySelector(".hero__cue");
+    if (cue) {
+      const iHero = order.findIndex((s) => s.key === "hero" && s.on);
+      const iWork = order.findIndex((s) => s.key === "work" && s.on);
+      cue.style.display = (iHero !== -1 && iWork > iHero) ? "" : "none";
+    }
+  }
+
   /* ---------- master render ---------- */
   function render(data) {
     const L = data.landing || {};
@@ -478,6 +525,7 @@
     set("aboutGallery", (data.aboutGallery || []).filter((g) => g && g.src).slice(0, 6).map(galleryEl).join(""));
 
     applyAboutLayout(data);
+    applyWorkLayout(data);
 
     const mail = byId("contactMail");
     if (mail) { mail.setAttribute("href", "mailto:" + (C.email || "")); mail.onclick = function () { track("contact_submit"); }; }
@@ -904,6 +952,8 @@
       plateInner: plateInner,
       ABOUT_SECTIONS: ABOUT_SECTIONS,
       aboutLayout: aboutLayout,
+      WORK_SECTIONS: WORK_SECTIONS,
+      workLayout: workLayout,
       RECOGNITION_ICONS: RECOGNITION_ICONS,
       RECOGNITION_ICON_SVG: RECOGNITION_ICON_SVG,
       recIcon: recIcon,

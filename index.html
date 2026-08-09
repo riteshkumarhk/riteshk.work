@@ -66,7 +66,7 @@
   <link rel="preload" href="fonts/fraunces-normal-300600-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="css/fonts.css" />
 
-    <link rel="stylesheet" href="css/styles.css?v=55" />
+    <link rel="stylesheet" href="css/styles.css?v=56" />
     <link rel="stylesheet" href="css/project.css?v=14" />
   <link rel="stylesheet" href="css/gensection.css" />
   <link rel="stylesheet" href="css/admin.css?v=24" />
@@ -137,8 +137,12 @@
   <main id="top">
     <!-- ===== WORK PAGE — landing · numbers · selected work (+ shared contact) ===== -->
     <div class="page page--work is-active" data-page="work">
+    <div class="work-wrap" id="workSections">
 
-    <!-- ===== First screen: hero (top) + marquee (pinned to the bottom on mobile) ===== -->
+    <!-- Landing sections: reorder + show/hide from the studio Landing tab. Each block is wrapped
+         in a .wsec so render.js can reorder/hide it by id (wsec-<key>). -->
+    <div class="wsec sec--first" id="wsec-hero" data-wsec="hero">
+    <!-- First screen: hero (top) + brand marquee (pinned to the bottom on mobile) -->
     <div class="hero-screen">
     <!-- ============ HERO ============ -->
     <section class="hero" id="hero">
@@ -168,13 +172,17 @@
       <div class="logos__track" id="logoTrack"></div>
     </div>
     </div><!-- /.hero-screen -->
+    </div><!-- /#wsec-hero -->
 
     <!-- ============ HIGHLIGHTS — at-a-glance numbers running as a marquee (studio: Highlights) ============ -->
+    <div class="wsec" id="wsec-himarq" data-wsec="himarq">
     <div class="himarq" id="hiMarquee" aria-label="At a glance" hidden>
       <div class="himarq__track" id="hiTrack"></div>
     </div>
+    </div><!-- /#wsec-himarq -->
 
     <!-- ============ WORK ============ -->
+    <div class="wsec" id="wsec-work" data-wsec="work">
     <section class="work" id="work">
       <div class="section-head">
         <h2 class="section-head__title reveal" data-reveal>
@@ -184,11 +192,16 @@
 
       <ol class="cases" id="cases"></ol>
     </section>
+    </div><!-- /#wsec-work -->
 
     <!-- ============ CAPABILITIES REEL — moved below Selected Work, above Contact ============ -->
+    <div class="wsec" id="wsec-capabilities" data-wsec="capabilities">
     <div class="marquee marquee--reel" aria-hidden="true">
       <div class="marquee__track" id="marqueeTrack"></div>
     </div>
+    </div><!-- /#wsec-capabilities -->
+
+    </div><!-- /#workSections -->
     </div><!-- /.page--work -->
 
     <!-- ===== ABOUT PAGE — reorderable, toggleable sections (studio → About tab) + shared contact ===== -->
@@ -306,7 +319,7 @@
   </div>
 
   <script src="js/lenis.min.js"></script>
-    <script src="js/render.js?v=22"></script>
+    <script src="js/render.js?v=23"></script>
     <script src="js/main.js?v=26"></script>
   <script src="js/gensection.js?v=2"></script>
   <script src="js/project.js?v=11"></script>
