@@ -666,8 +666,13 @@ import { WORLD_LAND } from "./worldland.js";
   // The model + lib load ONLY on click (lazy, then browser-cached) so the studio stays light otherwise.
   function ensureDepthLib() {
     if (ensureDepthLib._p) return ensureDepthLib._p;
-    var cdn = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
-    ensureDepthLib._p = import(cdn).catch(function (e) { ensureDepthLib._p = null; throw e; });
+    // esm.sh serves a proper ES module (the bare jsdelivr URL served CommonJS -> import() fails).
+    var urls = ["https://esm.sh/@huggingface/transformers@3", "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/+esm"];
+    ensureDepthLib._p = (async function () {
+      var lastErr;
+      for (var k = 0; k < urls.length; k++) { try { return await import(urls[k]); } catch (e) { lastErr = e; } }
+      throw lastErr || new Error("could not load the depth library");
+    })().catch(function (e) { ensureDepthLib._p = null; throw e; });
     return ensureDepthLib._p;
   }
   function getDepthPipe(t) {
