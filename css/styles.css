@@ -526,6 +526,9 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
    labels (z3). Fades in on hover; when off, the static image + scroll parallax show through. */
 .case__depth { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; display: block; opacity: 0; transition: opacity .28s var(--ease); pointer-events: none; }
 .case__depth.is-on { opacity: 1; }
+/* Depth canvas renders the cover on hover, so suppress the img's hover zoom to avoid a double
+   transform during the crossfade (the depth motion is the hover affordance). */
+.case__link:hover .case__media.is-depth .case__img { transform: none; }
 .case__media--photo::after { content: ""; position: absolute; inset: 0; z-index: 2; background: linear-gradient(180deg, rgba(8,8,10,.4) 0%, rgba(8,8,10,0) 28%, rgba(8,8,10,0) 62%, rgba(8,8,10,.55) 100%); }
 
 .plate__grid {

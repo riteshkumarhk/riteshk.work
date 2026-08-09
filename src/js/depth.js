@@ -47,7 +47,11 @@ const FRAG =
   "float d=dsample(z);float rel=d-uFocus;vec2 off=uPointer*uStrength*rel;" +
   "vec3 col=texture(uColor,z+off).rgb;o=vec4(col,1.0);}";
 
-const DEFAULTS = { strength: 0.028, softness: 0.014, focus: 0.5, zoom: 1.075 };
+// zoom 1.40 matches the .case__par -20% inset (par = 140% of the media height): the static cover
+// <img> fills that oversized box, so the depth canvas must use the same 1.40 "fill" to render the
+// IDENTICAL framing — hovering then adds depth with no zoom jump. strength is trimmed so the
+// on-screen displacement feel stays the same at the higher zoom.
+const DEFAULTS = { strength: 0.022, softness: 0.012, focus: 0.5, zoom: 1.40 };
 
 export function initDepth() {
   const q = new URLSearchParams(location.search);
@@ -89,6 +93,7 @@ function attach(media, img, depthImg) {
   canvas.className = "case__depth";
   canvas.setAttribute("aria-hidden", "true");
   media.appendChild(canvas);
+  media.classList.add("is-depth");
 
   let gl = null, prog = null, U = null, colorTex = null, depthTex = null;
   let active = false, raf = 0;
