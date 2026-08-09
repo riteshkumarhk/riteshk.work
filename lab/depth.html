@@ -60,7 +60,8 @@
   <h2>Depth controls</h2>
   <div class="covers" id="covers"></div>
   <div class="row"><label>Depth motion</label><input type="checkbox" id="depthOn" checked></div>
-  <div class="row"><label>Strength</label><input type="range" id="strength" min="0" max="0.09" step="0.002" value="0.032"><output id="strengthV"></output></div>
+  <div class="row"><label>Strength</label><input type="range" id="strength" min="0" max="0.09" step="0.002" value="0.028"><output id="strengthV"></output></div>
+  <div class="row"><label>Edge softness</label><input type="range" id="soft" min="0" max="0.03" step="0.001" value="0.012"><output id="softV"></output></div>
   <div class="row"><label>Focus plane</label><input type="range" id="focus" min="0" max="1" step="0.02" value="0.5"><output id="focusV"></output></div>
   <div class="row"><label>Idle drift</label><input type="range" id="drift" min="0" max="0.6" step="0.02" value="0.15"><output id="driftV"></output></div>
   <div class="row"><label>Overscan</label><input type="range" id="zoom" min="1" max="1.15" step="0.005" value="1.075"><output id="zoomV"></output></div>
@@ -90,10 +91,11 @@
   var FRAG =
     "#version 300 es\nprecision highp float;in vec2 vUv;out vec4 o;" +
     "uniform sampler2D uColor;uniform sampler2D uDepth;uniform vec2 uPointer;" +
-    "uniform float uStrength,uFocus,uZoom,uInvert,uShowDepth,uDepthOn,uImgA,uBoxA;" +
+    "uniform float uStrength,uFocus,uZoom,uInvert,uShowDepth,uDepthOn,uImgA,uBoxA,uSoft;" +
     "vec2 fitCover(vec2 uv){float ia=uImgA,ba=uBoxA;vec2 s=vec2(1.0);if(ia>ba)s.x=ba/ia;else s.y=ia/ba;return (uv-0.5)*s+0.5;}" +
+    "float dsample(vec2 uv){if(uSoft<0.0006)return texture(uDepth,uv).r;float d=texture(uDepth,uv).r*0.28;for(int i=0;i<8;i++){float a=0.7853982*float(i);vec2 o2=vec2(cos(a),sin(a))*uSoft;d+=texture(uDepth,uv+o2).r*0.09;}return d;}" +
     "void main(){vec2 st=vec2(vUv.x,1.0-vUv.y);vec2 base=fitCover(st);vec2 z=(base-0.5)/uZoom+0.5;" +
-    "float d=texture(uDepth,z).r;if(uInvert>0.5)d=1.0-d;float rel=d-uFocus;" +
+    "float d=dsample(z);if(uInvert>0.5)d=1.0-d;float rel=d-uFocus;" +
     "vec2 off=(uDepthOn>0.5)?uPointer*uStrength*rel:vec2(0.0);" +
     "vec3 col=texture(uColor,z+off).rgb;if(uShowDepth>0.5)col=vec3(d);o=vec4(col,1.0);}";
 
@@ -106,7 +108,7 @@
   if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){ console.error(gl.getProgramInfoLog(prog)); fallback.hidden=false; return; }
   gl.useProgram(prog);
   var U = {};
-  ["uColor","uDepth","uPointer","uStrength","uFocus","uZoom","uInvert","uShowDepth","uDepthOn","uImgA","uBoxA"].forEach(function(n){ U[n]=gl.getUniformLocation(prog,n); });
+  ["uColor","uDepth","uPointer","uStrength","uFocus","uZoom","uInvert","uShowDepth","uDepthOn","uImgA","uBoxA","uSoft"].forEach(function(n){ U[n]=gl.getUniformLocation(prog,n); });
   gl.uniform1i(U.uColor, 0); gl.uniform1i(U.uDepth, 1);
   var vao = gl.createVertexArray(); gl.bindVertexArray(vao);
 
@@ -117,7 +119,7 @@
   function upload(unit, tex, img){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D,tex);
     gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img); }
 
-  var state = { strength:0.032, focus:0.5, drift:0.15, zoom:1.075, depthOn:true, crop:true, showDepth:false, invert:false, imgA:1.6 };
+  var state = { strength:0.028, softness:0.012, focus:0.5, drift:0.15, zoom:1.075, depthOn:true, crop:true, showDepth:false, invert:false, imgA:1.6 };
   var target={x:0,y:0}, cur={x:0,y:0}, hovering=false, t0=performance.now();
 
   function loadImg(src){ return new Promise(function(res,rej){ var im=new Image(); im.crossOrigin="anonymous"; im.onload=function(){res(im);}; im.onerror=rej; im.src=src; }); }
@@ -148,6 +150,7 @@
     var boxA = state.crop ? (16/12) : state.imgA;
     gl.uniform2f(U.uPointer, dx, dy);
     gl.uniform1f(U.uStrength, state.strength);
+    gl.uniform1f(U.uSoft, state.softness);
     gl.uniform1f(U.uFocus, state.focus);
     gl.uniform1f(U.uZoom, state.zoom);
     gl.uniform1f(U.uInvert, state.invert?1:0);
@@ -174,9 +177,10 @@
   // controls
   function bindRange(id, key){ var el=document.getElementById(id); el.addEventListener("input", function(){ state[key]=parseFloat(el.value); syncOutputs(); }); }
   function bindCheck(id, key){ var el=document.getElementById(id); el.addEventListener("change", function(){ state[key]=el.checked; }); }
-  bindRange("strength","strength"); bindRange("focus","focus"); bindRange("drift","drift"); bindRange("zoom","zoom");
+  bindRange("strength","strength"); bindRange("soft","softness"); bindRange("focus","focus"); bindRange("drift","drift"); bindRange("zoom","zoom");
   bindCheck("depthOn","depthOn"); bindCheck("crop","crop"); bindCheck("showDepth","showDepth"); bindCheck("invert","invert");
   function syncOutputs(){ document.getElementById("strengthV").textContent=state.strength.toFixed(3);
+    document.getElementById("softV").textContent=state.softness.toFixed(3);
     document.getElementById("focusV").textContent=state.focus.toFixed(2);
     document.getElementById("driftV").textContent=state.drift.toFixed(2);
     document.getElementById("zoomV").textContent=state.zoom.toFixed(3); }
