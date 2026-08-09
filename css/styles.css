@@ -407,9 +407,11 @@ a.hero__cue { transition: opacity .9s var(--ease), transform .9s var(--ease), co
 .logo__card {
   display: grid; place-items: center; overflow: hidden;
   width: clamp(108px, 13.5vw, 152px); height: clamp(58px, 7.5vw, 78px);
-  background: var(--bg-elev); border: 1px solid var(--line-soft); border-radius: 14px; corner-shape: squircle;
+  background: color-mix(in srgb, var(--bg-elev) calc(var(--chrome, 1) * 100%), transparent);
+  border: 1px solid color-mix(in srgb, var(--line-soft) calc(var(--chrome, 1) * 100%), transparent);
+  border-radius: 14px; corner-shape: squircle;
   transform-origin: center;
-  transition: border-color .3s var(--ease), box-shadow .3s var(--ease);
+  transition: box-shadow .3s var(--ease);
 }
 /* max-height must be a DEFINITE length — a percentage doesn't resolve against the grid
    card's height, so tall logos used to overflow. max-width % is fine (card width is definite). */
@@ -419,7 +421,7 @@ a.hero__cue { transition: opacity .9s var(--ease), transform .9s var(--ease), co
 .logo:hover .logo__card { border-color: var(--accent); box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28); }
 /* Light mode: lift the chip lighter than the cream page (the elevated var is a darker tan),
    with a soft shadow — the airy "card" feel from the reference. */
-html[data-appearance="light"] .logo__card { background: #faf8f2; border-color: rgba(28, 24, 18, 0.09); box-shadow: 0 1px 3px rgba(28, 24, 18, 0.05); }
+html[data-appearance="light"] .logo__card { background: color-mix(in srgb, #faf8f2 calc(var(--chrome, 1) * 100%), transparent); border-color: color-mix(in srgb, rgba(28, 24, 18, 0.09) calc(var(--chrome, 1) * 100%), transparent); box-shadow: 0 1px 3px color-mix(in srgb, rgba(28, 24, 18, 0.05) calc(var(--chrome, 1) * 100%), transparent); }
 html[data-appearance="light"] .logo:hover .logo__card { box-shadow: 0 8px 22px rgba(28, 24, 18, 0.1); }
 .logo__name {
   position: absolute; bottom: calc(100% + 5px); left: 50%;
@@ -452,9 +454,11 @@ html[data-appearance="light"] .logo:hover .logo__card { box-shadow: 0 8px 22px r
 .hi__card {
   display: flex; flex-direction: column; justify-content: center; gap: .5rem;
   padding: clamp(1rem, 1.7vw, 1.5rem) clamp(1.3rem, 2vw, 1.9rem);
-  background: var(--bg-elev); border: 1px solid var(--line-soft); border-radius: 16px; corner-shape: squircle;
+  background: color-mix(in srgb, var(--bg-elev) calc(var(--chrome, 1) * 100%), transparent);
+  border: 1px solid color-mix(in srgb, var(--line-soft) calc(var(--chrome, 1) * 100%), transparent);
+  border-radius: 16px; corner-shape: squircle;
   transform-origin: center;
-  transition: border-color .3s var(--ease), box-shadow .3s var(--ease);
+  transition: box-shadow .3s var(--ease);
 }
 .hi:hover .hi__card { border-color: var(--accent); box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28); }
 .hi__num {
@@ -472,7 +476,7 @@ html[data-appearance="light"] .logo:hover .logo__card { box-shadow: 0 8px 22px r
 }
 .hi__label .accent { color: var(--accent); }
 .hi__label em { font-style: italic; }
-html[data-appearance="light"] .hi__card { background: #faf8f2; border-color: rgba(28, 24, 18, 0.09); box-shadow: 0 1px 3px rgba(28, 24, 18, 0.05); }
+html[data-appearance="light"] .hi__card { background: color-mix(in srgb, #faf8f2 calc(var(--chrome, 1) * 100%), transparent); border-color: color-mix(in srgb, rgba(28, 24, 18, 0.09) calc(var(--chrome, 1) * 100%), transparent); box-shadow: 0 1px 3px color-mix(in srgb, rgba(28, 24, 18, 0.05) calc(var(--chrome, 1) * 100%), transparent); }
 html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(28, 24, 18, 0.1); }
 
 /* =================================================================

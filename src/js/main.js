@@ -233,6 +233,23 @@ import { initDepth } from "./depth.js";
     }
   };
 
+  // Marquee chip chrome fades in as the second (stats) marquee scrolls into view: in the
+  // hero (only the brand marquee showing) the chips are invisible — just the floating logos
+  // and numbers — then they fade to full by the time both marquees sit in view. Scroll-linked
+  // via a --chrome (0..1) custom prop the card backgrounds/borders read through color-mix.
+  const updateMarqueeChrome = () => {
+    const logosEl = document.querySelector(".logos");
+    const himarqEl = document.querySelector(".himarq");
+    if (!logosEl || !himarqEl || himarqEl.hidden) return;
+    const vh = window.innerHeight;
+    const top = himarqEl.getBoundingClientRect().top;
+    let p = (vh - top) / (vh * 0.55);   // 0 as m2's top touches the fold, 1 after ~0.55vh of scroll
+    p = p < 0 ? 0 : p > 1 ? 1 : p;
+    const v = p.toFixed(3);
+    logosEl.style.setProperty("--chrome", v);
+    himarqEl.style.setProperty("--chrome", v);
+  };
+
   const onScroll = () => {
     const y = window.scrollY;
 
@@ -251,11 +268,12 @@ import { initDepth } from "./depth.js";
     }
 
     updateParallax();
+    updateMarqueeChrome();
   };
   window.addEventListener("scroll", onScroll, { passive: true });
   if (lenis) lenis.on("scroll", onScroll);
   onScroll();
-  window.addEventListener("resize", updateParallax, { passive: true });
+  window.addEventListener("resize", () => { updateParallax(); updateMarqueeChrome(); }, { passive: true });
 
   /* -------------------------------------------------
      6b. Marquee engine — continuous scroll where each chip springs in from the
