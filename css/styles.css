@@ -784,7 +784,7 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
 .contact .section-head__idx { text-align: center; }
 .contact__mail {
   display: inline-block; font-family: var(--serif); font-weight: 300;
-  font-size: clamp(2.6rem, 11vw, 9rem); line-height: 0.98; letter-spacing: -0.02em;
+  font-size: clamp(2.1rem, 7vw, 5.6rem); line-height: 1.0; letter-spacing: -0.015em;
   margin: 1rem 0; transition: color .4s;
 }
 .contact__mail-line { display: block; overflow: hidden; }
@@ -793,11 +793,11 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
 .contact__mail:hover { color: var(--text-dim); }
 .contact__mail:hover em { color: var(--text); }
 
-.contact__row { display: flex; flex-direction: column; align-items: center; gap: 1rem; margin-top: clamp(2.5rem, 5vw, 4rem); }
-.contact__line { display: flex; justify-content: center; flex-wrap: wrap; gap: 1rem; }
+.contact__row { display: flex; flex-direction: column; align-items: center; gap: .7rem; margin-top: clamp(2rem, 4vw, 3rem); }
+.contact__line { display: flex; justify-content: center; flex-wrap: wrap; gap: .7rem; }
 .contact__pill {
-  font-family: var(--mono); font-size: .82rem; letter-spacing: .03em; color: var(--text-dim);
-  padding: .85rem 1.5rem; border: 1px solid var(--line); border-radius: 100px;
+  font-family: var(--mono); font-size: .74rem; letter-spacing: .02em; color: var(--text-dim);
+  padding: .58rem 1.15rem; border: 1px solid var(--line); border-radius: 100px;
   transition: color .4s, border-color .4s, background .4s;
 }
 .contact__pill:hover { color: var(--text); border-color: var(--accent); background: var(--line-soft); }
