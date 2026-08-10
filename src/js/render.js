@@ -468,14 +468,14 @@
     set("heroTitle",
       lines.map((ln) => '<span class="line" data-reveal><span>' + md(ln) + "</span></span>").join(""));
     const heroTitleEl = byId("heroTitle");
-    if (heroTitleEl) heroTitleEl.className = "hero__title hero__title--" + (L.statementSize || "large");
+    if (heroTitleEl) heroTitleEl.className = "hero__title hero__title--" + (L.statementSize || "large") + " hero__title--align-" + (L.statementAlign || "left");
 
     const showIntro = show.intro !== false;
     set("heroIntro", showIntro ? md(L.intro) : "");
     const heroIntroEl = byId("heroIntro");
     if (heroIntroEl) heroIntroEl.hidden = !showIntro;
     const introBlockEl = byId("introBlock");
-    if (introBlockEl) introBlockEl.className = "intro intro--" + (L.introSpacing || "standard");
+    if (introBlockEl) introBlockEl.className = "intro intro--" + (L.introSpacing || "standard") + " intro--align-" + (L.introAlign || "left");
 
     const showPresence = show.presence !== false;
     set("heroNowText", showPresence ? md(L.presence) : "");
@@ -518,9 +518,16 @@
     // Work list layout is configurable from the studio: list | grid-2 | grid-3 (default grid-2).
     const casesEl = byId("cases");
     if (casesEl) { const wl = data.workLayout || "grid-2"; casesEl.className = "cases" + (wl === "grid-3" ? " cases--g3" : wl === "list" ? "" : " cases--g2"); }
-    set("workHeading", md(L.workTitle || "A few things I've *designed* and the thinking behind them."));
+    // Work heading: authored one line per row (like the statement) so each line is wrapped in a
+    // .section-head__line overflow box and its descenders crop to match the statement's treatment.
+    set("workHeading", String(L.workTitle || "A few things I've *designed* and the thinking behind them.").split("\n").filter((x) => x.length).map((ln) => '<span class="section-head__line">' + md(ln) + "</span>").join(""));
     const whEl = byId("workHeading");
-    if (whEl) { whEl.classList.remove("section-head__title--standard", "section-head__title--large", "section-head__title--compact"); whEl.classList.add("section-head__title--" + (L.workTitleSize || "compact")); }
+    if (whEl) {
+      whEl.classList.remove("section-head__title--standard", "section-head__title--large", "section-head__title--compact");
+      whEl.classList.add("section-head__title--" + (L.workTitleSize || "compact"));
+      whEl.classList.remove("section-head__title--align-left", "section-head__title--align-center", "section-head__title--align-right");
+      whEl.classList.add("section-head__title--align-" + (L.workTitleAlign || "left"));
+    }
 
     set("capsList", caps.map((c) => '<li data-reveal>' + esc(c) + "</li>").join(""));
 

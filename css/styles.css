@@ -324,6 +324,10 @@ html.lite .workcue svg { animation: none; }
    down; compact matches the Selected-work heading, for when the statement sits lower in the page. */
 .hero__title--standard { font-size: clamp(2.3rem, min(7vw, 9vh), 6rem); }
 .hero__title--compact { font-size: clamp(1.9rem, 5vw, 4.2rem); line-height: 1.02; }
+/* Studio "Statement alignment" (Landing tab) - applies to the statement lines. */
+.hero__title--align-left { text-align: left; }
+.hero__title--align-center { text-align: center; }
+.hero__title--align-right { text-align: right; }
 .hero__title .line { display: block; overflow: hidden; transition: transform .22s var(--ease-io); }
 .hero__title .line > span { display: block; transform: translateY(105%); }
 .hero__title em { color: var(--accent); font-weight: 300; }
@@ -340,6 +344,13 @@ html.lite .workcue svg { animation: none; }
 .intro { max-width: var(--maxw); margin: 0 auto; padding: clamp(2.5rem, 5.5vw, 4rem) var(--pad); }
 .intro--compact { padding-top: clamp(1rem, 2.5vw, 1.75rem); padding-bottom: clamp(1rem, 2.5vw, 1.75rem); }
 .intro--large { padding-top: clamp(3.75rem, 8vw, 6rem); padding-bottom: clamp(3.75rem, 8vw, 6rem); }
+/* Studio "Intro alignment" - aligns the eyebrow/domains flex row + the description together. */
+.intro--align-center { text-align: center; }
+.intro--align-center .hero__label { justify-content: center; }
+.intro--align-center .hero__intro { margin-left: auto; margin-right: auto; }
+.intro--align-right { text-align: right; }
+.intro--align-right .hero__label { justify-content: flex-end; }
+.intro--align-right .hero__intro { margin-left: auto; margin-right: 0; }
 .intro .hero__label { margin-bottom: clamp(1rem, 2.5vw, 1.6rem); }
 
 .hero__cue {
@@ -530,6 +541,16 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
 .section-head__title--standard { font-size: clamp(2.3rem, min(7vw, 9vh), 6rem); max-width: 20ch; }
 .section-head__title--large { font-size: clamp(2.9rem, min(11.5vw, 14.5vh), 10rem); line-height: 0.98; max-width: 16ch; }
 .section-head__title em { color: var(--accent); }
+/* Work heading: authored lines each crop their descenders to match the statement (render wraps
+   each line in .section-head__line). Tight leading makes the crop bite; the width cap is lifted so
+   short authored rows run full (like the statement) instead of force-wrapping and losing the crop. */
+#workHeading { line-height: 0.95; max-width: none; }
+.section-head__line { display: block; overflow: hidden; }
+/* Studio "Heading alignment" (Landing tab). The heading box is max-width capped, so centre/right
+   also re-anchor the box, not just the text. */
+.section-head__title--align-left { text-align: left; }
+.section-head__title--align-center { text-align: center; margin-left: auto; margin-right: auto; }
+.section-head__title--align-right { text-align: right; margin-left: auto; margin-right: 0; }
 
 /* =================================================================
    WORK / CASES

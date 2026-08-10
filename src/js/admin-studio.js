@@ -3372,9 +3372,12 @@ import { WORLD_LAND } from "./worldland.js";
         input("Domains", "landing.domains", { toggle: "domains", hint: "e.g. Growth · AI · Identity" }) +
         input("Main statement", "landing.statement", { md: true, type: "textarea", rows: 3, hint: "One line per row. The closing word (why / how) gets the italic accent." }) +
         stmtSizeBlock() +
-        input("Selected-work heading", "landing.workTitle", { md: true, hint: "The heading above your projects. Use *word* for the bronze italic accent." }) +
+        alignSelect("Statement alignment", "statementalign", ((data.landing || {}).statementAlign) || "left", "Left, centre or right-align the statement lines.") +
+        input("Selected-work heading", "landing.workTitle", { md: true, type: "textarea", rows: 2, hint: "One line per row, like the statement - each line's descenders crop to match. Use *word* for the bronze italic accent." }) +
         sizeSelect("Heading size", "worktitlesize", ((data.landing || {}).workTitleSize) || "compact", "Compact is the default; Large makes it a hero-scale heading, useful when Selected work leads the reordered page.") +
+        alignSelect("Heading alignment", "worktitlealign", ((data.landing || {}).workTitleAlign) || "left", "Left, centre or right-align the Selected-work heading.") +
         sizeSelect("Intro spacing", "introspacing", ((data.landing || {}).introSpacing) || "standard", "Space above and below the eyebrow, domains and description block.") +
+        alignSelect("Intro alignment", "introalign", ((data.landing || {}).introAlign) || "left", "Aligns the eyebrow, domains and description block together.") +
         input("Description", "landing.intro", { md: true, type: "textarea", rows: 4, toggle: "intro", hint: "Products auto-bronze; “leading …” phrases auto-bold." }) +
         input("Footer line", "landing.presence", { md: true, toggle: "presence", hint: "e.g. Currently at Microsoft — Hyderabad, India" }) +
         '<div class="af"><label class="af__label">Availability badge</label>' +
@@ -4479,6 +4482,12 @@ import { WORLD_LAND } from "./worldland.js";
       opt("large", "Large") + opt("standard", "Standard") + opt("compact", "Compact") +
       '</select><div class="af__hint">' + hint + "</div></div>";
   }
+  function alignSelect(label, attr, cur, hint) {
+    var opt = function (v, lbl) { return '<option value="' + v + '"' + (cur === v ? " selected" : "") + ">" + lbl + "</option>"; };
+    return '<div class="af"><label class="af__label">' + label + '</label><select data-' + attr + '>' +
+      opt("left", "Left") + opt("center", "Centre") + opt("right", "Right") +
+      '</select><div class="af__hint">' + hint + "</div></div>";
+  }
   function stmtSizeBlock() {
     return sizeSelect("Statement size", "statementsize", ((data.landing || {}).statementSize) || "large",
       "Large is the full hero scale; Compact matches the \u201cSelected work\u201d heading \u2014 handy when the statement sits lower in the page.");
@@ -5019,7 +5028,10 @@ import { WORLD_LAND } from "./worldland.js";
     if (t.dataset.worklayout !== undefined) { data.workLayout = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.statementsize !== undefined) { data.landing = data.landing || {}; data.landing.statementSize = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.worktitlesize !== undefined) { data.landing = data.landing || {}; data.landing.workTitleSize = t.value; saveDraft(true); apply(true); return; }
+    if (t.dataset.worktitlealign !== undefined) { data.landing = data.landing || {}; data.landing.workTitleAlign = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.introspacing !== undefined) { data.landing = data.landing || {}; data.landing.introSpacing = t.value; saveDraft(true); apply(true); return; }
+    if (t.dataset.statementalign !== undefined) { data.landing = data.landing || {}; data.landing.statementAlign = t.value; saveDraft(true); apply(true); return; }
+    if (t.dataset.introalign !== undefined) { data.landing = data.landing || {}; data.landing.introAlign = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.logosize !== undefined) { const arr = (data.landing || {}).logos, k = +t.dataset.logosize; if (arr && arr[k]) { arr[k].size = t.value; apply(true); } return; }
     if (t.dataset.parxnum !== undefined) { const _pw = data.work[+t.dataset.parxnum]; if (_pw) t.value = (_pw.parAmt != null ? _pw.parAmt : 0); return; }
     if (t.dataset.depthOn !== undefined) { onDepthToggle(t); return; }
