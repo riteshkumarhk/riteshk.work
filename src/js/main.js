@@ -106,7 +106,7 @@ import { initDepth } from "./depth.js";
       if (!hash || hash.length < 2) return;
       // The hero "Selected work" cue lands right where the Selected Work section starts,
       // just below the nav (scrolling past both marquees).
-      if (a.classList.contains("hero__cue")) {
+      if (a.classList.contains("hero__cue") || a.classList.contains("workcue")) {
         const work = document.querySelector("#work");
         if (work) { e.preventDefault(); scrollBelowNav(work); return; }
       }
@@ -296,6 +296,23 @@ import { initDepth } from "./depth.js";
     himarqEl.style.setProperty("--chrome", v);
   };
 
+  // "Jump to work" bait (fixed bottom-right): visible only while the work tiles are still below the
+  // fold, so on tall desktops / phones where the grid is already on screen at load it never appears.
+  const workCueEl = document.querySelector(".workcue");
+  const updateWorkCue = () => {
+    if (!workCueEl) return;
+    const RK = window.RK;
+    const enabled = !(RK && RK.data && RK.data.landing && RK.data.landing.show && RK.data.landing.show.cue === false);
+    const cases = document.getElementById("cases");
+    const wsec = document.getElementById("wsec-work");
+    let show = false;
+    if (enabled && cases && cases.children.length && !(wsec && wsec.hidden)) {
+      const r = cases.getBoundingClientRect();
+      show = r.top > window.innerHeight - 60; // tiles still below the fold
+    }
+    workCueEl.classList.toggle("is-in", show);
+  };
+
   const onScroll = () => {
     const y = window.scrollY;
 
@@ -315,11 +332,12 @@ import { initDepth } from "./depth.js";
 
     updateParallax();
     updateMarqueeChrome();
+    updateWorkCue();
   };
   window.addEventListener("scroll", onScroll, { passive: true });
   if (lenis) lenis.on("scroll", onScroll);
   onScroll();
-  window.addEventListener("resize", () => { updateParallax(); updateMarqueeChrome(); }, { passive: true });
+  window.addEventListener("resize", () => { updateParallax(); updateMarqueeChrome(); updateWorkCue(); }, { passive: true });
 
   /* -------------------------------------------------
      6b. Marquee engine — continuous scroll where each chip springs in from the

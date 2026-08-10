@@ -3382,8 +3382,8 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="af__hint">Off by default. A quiet pill with a live green dot appears under the hero when on.</div></div>' +
         input("Availability text", "landing.available.text", { hint: "e.g. Open to Principal / Staff Product Design roles" }) +
         '<div class="af"><label class="af__label">Selected-work cue</label>' +
-        '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="cue-toggle"' + (((((data.landing || {}).show) || {}).cue !== false) ? " checked" : "") + ' /><span>Show the \u201cSelected work \u2193\u201d cue in the hero</span></label>' +
-        '<div class="af__hint">A gentle scroll hint at the bottom of the hero. Shown by default; auto-hidden if Selected&nbsp;work sits above the hero.</div></div>'
+        '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="cue-toggle"' + (((((data.landing || {}).show) || {}).cue !== false) ? " checked" : "") + ' /><span>Show the \u201cSelected work\u201d jump bait</span></label>' +
+        '<div class="af__hint">A floating bait, bottom-right (opposite your contact dock). Shows only while the work tiles are still below the fold, then hides once they scroll into view \u2014 so it never appears on tall or mobile screens where the grid is already visible.</div></div>'
       );
     },
     contact() {

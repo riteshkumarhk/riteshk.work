@@ -439,15 +439,6 @@
       visible[0].classList.add("sec--first");
       visible[visible.length - 1].classList.add("sec--last");
     }
-    // The hero "Selected work" cue only makes sense when the hero leads and the work
-    // section sits below it; otherwise hide it.
-    const cue = document.querySelector(".hero__cue");
-    if (cue) {
-      const iHero = order.findIndex((s) => s.key === "hero" && s.on);
-      const iWork = order.findIndex((s) => s.key === "work" && s.on);
-      const showCue = !(data.landing && data.landing.show && data.landing.show.cue === false);
-      cue.style.display = (showCue && iHero !== -1 && iWork > iHero) ? "" : "none";
-    }
   }
 
   /* ---------- master render ---------- */
