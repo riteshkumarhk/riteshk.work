@@ -3374,6 +3374,7 @@ import { WORLD_LAND } from "./worldland.js";
         stmtSizeBlock() +
         input("Selected-work heading", "landing.workTitle", { md: true, hint: "The heading above your projects. Use *word* for the bronze italic accent." }) +
         sizeSelect("Heading size", "worktitlesize", ((data.landing || {}).workTitleSize) || "compact", "Compact is the default; Large makes it a hero-scale heading, useful when Selected work leads the reordered page.") +
+        sizeSelect("Intro spacing", "introspacing", ((data.landing || {}).introSpacing) || "standard", "Space above and below the eyebrow, domains and description block.") +
         input("Description", "landing.intro", { md: true, type: "textarea", rows: 4, toggle: "intro", hint: "Products auto-bronze; “leading …” phrases auto-bold." }) +
         input("Footer line", "landing.presence", { md: true, toggle: "presence", hint: "e.g. Currently at Microsoft — Hyderabad, India" }) +
         '<div class="af"><label class="af__label">Availability badge</label>' +
@@ -4475,7 +4476,7 @@ import { WORLD_LAND } from "./worldland.js";
   function sizeSelect(label, attr, cur, hint) {
     var opt = function (v, lbl) { return '<option value="' + v + '"' + (cur === v ? " selected" : "") + ">" + lbl + "</option>"; };
     return '<div class="af"><label class="af__label">' + label + '</label><select data-' + attr + '>' +
-      opt("large", "Large \u2014 hero scale") + opt("standard", "Standard") + opt("compact", "Compact") +
+      opt("large", "Large") + opt("standard", "Standard") + opt("compact", "Compact") +
       '</select><div class="af__hint">' + hint + "</div></div>";
   }
   function stmtSizeBlock() {
@@ -5018,6 +5019,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (t.dataset.worklayout !== undefined) { data.workLayout = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.statementsize !== undefined) { data.landing = data.landing || {}; data.landing.statementSize = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.worktitlesize !== undefined) { data.landing = data.landing || {}; data.landing.workTitleSize = t.value; saveDraft(true); apply(true); return; }
+    if (t.dataset.introspacing !== undefined) { data.landing = data.landing || {}; data.landing.introSpacing = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.logosize !== undefined) { const arr = (data.landing || {}).logos, k = +t.dataset.logosize; if (arr && arr[k]) { arr[k].size = t.value; apply(true); } return; }
     if (t.dataset.parxnum !== undefined) { const _pw = data.work[+t.dataset.parxnum]; if (_pw) t.value = (_pw.parAmt != null ? _pw.parAmt : 0); return; }
     if (t.dataset.depthOn !== undefined) { onDepthToggle(t); return; }

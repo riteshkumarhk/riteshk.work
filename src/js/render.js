@@ -483,6 +483,8 @@
     set("heroIntro", showIntro ? md(L.intro) : "");
     const heroIntroEl = byId("heroIntro");
     if (heroIntroEl) heroIntroEl.hidden = !showIntro;
+    const introBlockEl = byId("introBlock");
+    if (introBlockEl) introBlockEl.className = "intro intro--" + (L.introSpacing || "standard");
 
     const showPresence = show.presence !== false;
     set("heroNowText", showPresence ? md(L.presence) : "");
