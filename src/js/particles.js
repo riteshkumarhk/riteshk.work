@@ -143,18 +143,29 @@ export function initNodeWeb(opts) {
     canvas.style.width = window.innerWidth + "px";
     canvas.style.height = window.innerHeight + "px";
     const count = Math.round(clamp(window.innerWidth * window.innerHeight / 8500, 80, 300));
-    // seed the majority of particles INTO the red zone (the statement column) so constellations
-    // concentrate there. x tracks the statement text (scroll-independent); y ~ viewport centre, where
-    // the statement sits when the web is active. The rest spread for the ambient/outer faint shapes.
+    // seed the majority of particles INTO the red zone so constellations concentrate there. Both the x
+    // column AND the y band are derived from the ELEMENT rects (statement text + contact), so the cluster
+    // matches the visible red zone at ANY window size — it does NOT diffuse on tall/full screens (which
+    // was why a smaller window looked dense but full-screen went sparse).
     const trc = (() => { const e = document.getElementById("heroTitle"); return e ? e.getBoundingClientRect() : null; })();
+    const heroR = (() => { const e = document.getElementById("wsec-hero"); return e ? e.getBoundingClientRect() : null; })();
+    const contR = (() => { const e = document.getElementById("contact"); return e ? e.getBoundingClientRect() : null; })();
     const cxSeed = (trc ? (trc.left + trc.right) / 2 : window.innerWidth / 2) * DPR;
     const colSeed = clamp(trc ? trc.width * 0.55 + 210 : window.innerWidth * 0.3, 300, 620) * DPR;
+    // where the statement TEXT + contact will sit vertically when the hero is centred (the intensity
+    // peak). Derived from a scroll-independent shift so the cluster hugs the VISIBLE red band on any
+    // screen size — and frames the statement evenly instead of knotting above it.
+    const delta = heroR ? ((window.innerHeight - heroR.height) / 2 - heroR.top) : 0;
+    const bandTop = (trc ? trc.top : (heroR ? heroR.top : window.innerHeight * 0.4)) + delta;
+    const bandBot = (contR ? contR.bottom : (heroR ? heroR.bottom : window.innerHeight * 0.62)) + delta;
+    const bandCenter = ((bandTop + bandBot) / 2) * DPR;
+    const bandHalf = ((bandBot - bandTop) / 2 + 30) * DPR;
     parts = new Array(count).fill(0).map(() => {
       const depth = Math.random(); // 0 = far (big soft bokeh) .. 1 = near (small crisp node)
       let x, y;
       if (Math.random() < 0.64) { // ~64% clustered in the red column; the rest spread across the page
         x = clamp(cxSeed + ((Math.random() + Math.random() + Math.random()) / 3 - 0.5) * 2 * colSeed, 4, W - 4);
-        y = clamp(H * 0.5 + ((Math.random() + Math.random()) / 2 - 0.5) * 2 * (H * 0.34), 4, H - 4);
+        y = clamp(bandCenter + ((Math.random() + Math.random()) / 2 - 0.5) * 2 * bandHalf, 4, H - 4);
       } else {
         x = Math.random() * W; y = Math.random() * H;
       }
