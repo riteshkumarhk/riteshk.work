@@ -170,8 +170,10 @@ export function initNodeWeb(opts) {
         x = Math.random() * W; y = Math.random() * H;
       }
       return {
-        x: x, y: y,
-        vx: (Math.random() - 0.5) * 0.10 * DPR, vy: (Math.random() - 0.5) * 0.10 * DPR,
+        x: x, y: y, hx: x, hy: y,              // home = seed position; the particle wobbles around it
+        wob: (5 + Math.random() * 13) * DPR,   // wobble radius (bounded, so the cluster never disperses)
+        wph: Math.random() * 6.2832,           // phase
+        wsp: 0.00018 + Math.random() * 0.00038, // angular speed (slow breathing)
         depth,
         size: (2.5 + (1 - depth) * 9) * DPR,   // far particles are the big soft bokeh
         baseA: 0.12 + depth * 0.26,            // near particles read a touch brighter
@@ -409,45 +411,47 @@ export function initNodeWeb(opts) {
     }
 
     // --- position + alpha pre-pass ---
+    const tt = performance.now();
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
-      p.x += p.vx; p.y += p.vy;
-      const dx = mx - p.x, dy = my - p.y;
-      if (dx * dx + dy * dy < near2) { p.x += dx * 0.0006; p.y += dy * 0.0006; }
-      if (p.x < -30) p.x = W + 30; else if (p.x > W + 30) p.x = -30;
-      if (p.y < -30) p.y = H + 30; else if (p.y > H + 30) p.y = -30;
+      // gentle bounded wobble around the seed HOME -> the constellation STAYS put (it breathes, never
+      // disperses); a soft pull toward the cursor lets the pointer nudge the web locally.
+      let hx = p.hx, hy = p.hy;
+      const dxm = mx - hx, dym = my - hy;
+      if (dxm * dxm + dym * dym < near2) { hx += dxm * 0.04; hy += dym * 0.04; }
+      p.x = hx + Math.cos(tt * p.wsp + p.wph) * p.wob;
+      p.y = hy + Math.sin(tt * p.wsp * 0.9 + p.wph * 1.3) * p.wob * 0.7;
 
-      const vis = clamp((intensity - p.birth) / 0.4, 0, 1);
       p.focus += ((p.focusTarget || 0) - p.focus) * 0.18;
       const px = p.x / DPR, py = p.y / DPR;
       const hole = inHole(px, py);
       const zf = hole ? 0 : zoneFactor(curBands, px, py);
       p.zf = zf;
-      let a = p.baseA * (0.18 + 0.82 * vis);              // faint seed floor -> grows in
-      // DOTS: a low base so the outer/yellow area shows almost no dots, rising to a bright frame right
-      // around the text; the hole kill keeps the text region itself clean. (Links gate separately below.)
-      a *= (0.06 + 0.94 * zf) * intensity + 0.3 * (1 - intensity);
+      // AMBIENT node everywhere from page load (a faint starfield), rising to PROMINENT in the red zone
+      // as the statement engages. The hole keeps the type clean. (Links form the constellations below.)
+      let a = p.baseA * (0.4 + 1.15 * zf * (0.45 + 0.55 * intensity));
       if (hole) a *= 0.05;
       p.a = clamp(a * themeMul, 0, 0.85);
     }
 
-    // --- connection pass (behind the dots): the network wires up as it grows ---
-    if (intensity > 0.1) {
+    // --- connection pass (behind the dots): ambient webs form as you scroll, PROMINENT in the red zone ---
+    if (intensity > 0.05) {
       const ld = LINK(), ld2 = ld * ld;
       ctx.lineWidth = Math.max(1, DPR * 0.55);
+      const engage = 0.14 + 0.86 * intensity; // constellations FORM as you scroll toward the statement
       for (let i = 0; i < parts.length; i++) {
         const a = parts[i];
-        if (a.zf < 0.02) continue;                        // gate on ZONE, not dot alpha, so faint links
-        for (let j = i + 1; j < parts.length; j++) {      // still form in the outer area where dots don't
+        if (a.a < 0.03) continue;              // gate on presence so faint AMBIENT webs also form, not just red
+        for (let j = i + 1; j < parts.length; j++) {
           const b = parts[j];
-          if (b.zf < 0.02) continue;
+          if (b.a < 0.03) continue;
           const dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy;
           if (d2 > ld2) continue;
           // never draw a line across a text hole
           if (inHole(((a.x + b.x) / 2) / DPR, ((a.y + b.y) / 2) / DPR)) continue;
           const prox = 1 - Math.sqrt(d2) / ld;
-          // bold web in the maroon (product of zones), a faint floor so shapes still form outside it
-          const la = prox * intensity * intensity * 0.5 * themeMul * (0.12 + 0.88 * a.zf * b.zf);
+          // vague everywhere, bold in the red zone (product of zones)
+          const la = prox * engage * 0.5 * themeMul * (0.18 + 0.82 * a.zf * b.zf);
           if (la < 0.02) continue;
           ctx.globalAlpha = Math.min(0.46, la);
           ctx.strokeStyle = (a.accent || b.accent) ? ACCENT : IVORY;
