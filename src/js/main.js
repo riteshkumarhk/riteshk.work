@@ -3,6 +3,7 @@
    Micro-interactions & motion (vanilla, dependency-free)
    ================================================================= */
 import { initDepth } from "./depth.js";
+import { initNodeWeb } from "./particles.js";
 
 (function () {
   "use strict";
@@ -599,72 +600,11 @@ import { initDepth } from "./depth.js";
   /* -------------------------------------------------
      10. Ambient background particle field — auto-off on low-power / software GPUs
   ------------------------------------------------- */
-  const bgCapable = () => {
-    if ((navigator.hardwareConcurrency || 8) <= 2 || (navigator.deviceMemory || 8) <= 2) return false;
-    try {
-      const gc = document.createElement("canvas");
-      const gl = gc.getContext("webgl") || gc.getContext("experimental-webgl");
-      if (!gl) return false;
-      const ext = gl.getExtension("WEBGL_debug_renderer_info");
-      const r = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "").toLowerCase() : "";
-      if (r && /swiftshader|llvmpipe|software|basic render|microsoft basic|paravirtual|mesa offscreen/.test(r)) return false;
-    } catch (e) { return false; }
-    return true;
-  };
-  if (!lite && bgCapable()) {
-    const canvas = document.createElement("canvas");
-    canvas.className = "bg-field";
-    canvas.setAttribute("aria-hidden", "true");
-    document.body.insertBefore(canvas, document.body.firstChild);
-    const ctx = canvas.getContext("2d");
-    let W = 0, H = 0, DPR = 1, parts = [], mX = -9999, mY = -9999, rafId = 0, running = true, f = 0, sampleT0 = 0, checked = false;
-    const accent = () => (getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#D8A657");
-    const resize = () => {
-      DPR = Math.min(window.devicePixelRatio || 1, 2);
-      W = canvas.width = Math.floor(window.innerWidth * DPR);
-      H = canvas.height = Math.floor(window.innerHeight * DPR);
-      canvas.style.width = window.innerWidth + "px";
-      canvas.style.height = window.innerHeight + "px";
-      const count = Math.max(18, Math.min(70, Math.round(window.innerWidth * window.innerHeight / 26000)));
-      parts = new Array(count).fill(0).map(() => ({
-        x: Math.random() * W, y: Math.random() * H,
-        vx: (Math.random() - 0.5) * 0.12 * DPR, vy: (Math.random() - 0.5) * 0.12 * DPR,
-        r: (Math.random() * 1.3 + 0.5) * DPR, a: Math.random() * 0.32 + 0.05,
-      }));
-    };
-    const step = () => {
-      if (!running) return;
-      ctx.clearRect(0, 0, W, H);
-      const col = accent(), mx = mX * DPR, my = mY * DPR, near = 150 * DPR;
-      const aMul = document.documentElement.getAttribute("data-appearance") === "light" ? 2.1 : 1; // dark-gold on cream needs more presence than bronze on black
-      for (let i = 0; i < parts.length; i++) {
-        const p = parts[i];
-        p.x += p.vx; p.y += p.vy;
-        const dx = mx - p.x, dy = my - p.y;
-        if (dx * dx + dy * dy < near * near) { p.x += dx * 0.0009; p.y += dy * 0.0009; }
-        if (p.x < 0) p.x += W; else if (p.x > W) p.x -= W;
-        if (p.y < 0) p.y += H; else if (p.y > H) p.y -= H;
-        ctx.globalAlpha = Math.min(0.62, p.a * aMul); ctx.fillStyle = col;
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.283); ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-      // Measure real FPS over a warm window; if the device can't keep up, switch the field off.
-      f++;
-      if (f === 30) sampleT0 = performance.now();
-      else if (!checked && f === 90) { checked = true; if ((60000 / (performance.now() - sampleT0)) < 38) { disableBg(); return; } }
-      rafId = requestAnimationFrame(step);
-    };
-    const disableBg = () => { running = false; if (rafId) cancelAnimationFrame(rafId); rafId = 0; window.removeEventListener("resize", resize); if (canvas.parentNode) canvas.remove(); };
-    window.addEventListener("resize", resize, { passive: true });
-    window.addEventListener("mousemove", (e) => { mX = e.clientX; mY = e.clientY; }, { passive: true });
-    document.addEventListener("visibilitychange", () => {
-      if (!canvas.parentNode) return;
-      running = !document.hidden;
-      if (running) { f = 0; checked = false; sampleT0 = 0; if (!rafId) rafId = requestAnimationFrame(step); }  // re-measure fresh after returning
-      else if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
-    });
-    resize(); step();
-  }
+  initNodeWeb({
+    lite: lite,
+    force: new URLSearchParams(location.search).has("nodes"),
+    getData: function () { return (window.RK && window.RK.data) || null; },
+  });
 
   } // end initInteractions
 

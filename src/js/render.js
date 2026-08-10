@@ -397,7 +397,6 @@
     ["intro", "Intro"],
     ["highlights", "Highlights"],
     ["work", "Selected work"],
-    ["capabilities", "Capabilities"],
   ];
   function workLayout(data) {
     const known = WORK_SECTIONS.map((s) => s[0]);
@@ -490,9 +489,6 @@
     if (aboutParas.length || L.aboutSign) set("aboutBody",
       aboutParas.map((p) => "<p>" + md(p) + "</p>").join("") +
       (L.aboutSign ? '<p class="about__sign">' + md(L.aboutSign) + "</p>" : ""));
-
-    const one = caps.map((c) => "<span>" + esc(c) + '</span><span class="dot">✦</span>').join("");
-    set("marqueeTrack", one + one);
 
     // Logo marquee (brands & products): full-colour logos with a hover name; the
     // per-logo elastic scroll + seamless repeat-to-fill are driven by main.js.
