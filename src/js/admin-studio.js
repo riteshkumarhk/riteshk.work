@@ -3372,6 +3372,8 @@ import { WORLD_LAND } from "./worldland.js";
         input("Domains", "landing.domains", { toggle: "domains", hint: "e.g. Growth · AI · Identity" }) +
         input("Main statement", "landing.statement", { md: true, type: "textarea", rows: 3, hint: "One line per row. The closing word (why / how) gets the italic accent." }) +
         stmtSizeBlock() +
+        input("Selected-work heading", "landing.workTitle", { md: true, hint: "The heading above your projects. Use *word* for the bronze italic accent." }) +
+        sizeSelect("Heading size", "worktitlesize", ((data.landing || {}).workTitleSize) || "compact", "Compact is the default; Large makes it a hero-scale heading, useful when Selected work leads the reordered page.") +
         input("Description", "landing.intro", { md: true, type: "textarea", rows: 4, toggle: "intro", hint: "Products auto-bronze; “leading …” phrases auto-bold." }) +
         input("Footer line", "landing.presence", { md: true, toggle: "presence", hint: "e.g. Currently at Microsoft — Hyderabad, India" }) +
         '<div class="af"><label class="af__label">Availability badge</label>' +
@@ -4470,12 +4472,15 @@ import { WORLD_LAND } from "./worldland.js";
     return html;
   }
 
+  function sizeSelect(label, attr, cur, hint) {
+    var opt = function (v, lbl) { return '<option value="' + v + '"' + (cur === v ? " selected" : "") + ">" + lbl + "</option>"; };
+    return '<div class="af"><label class="af__label">' + label + '</label><select data-' + attr + '>' +
+      opt("large", "Large \u2014 hero scale") + opt("standard", "Standard") + opt("compact", "Compact") +
+      '</select><div class="af__hint">' + hint + "</div></div>";
+  }
   function stmtSizeBlock() {
-    var sz = ((data.landing || {}).statementSize) || "large";
-    var opt = function (v, lbl) { return '<option value="' + v + '"' + (sz === v ? " selected" : "") + ">" + lbl + "</option>"; };
-    return '<div class="af"><label class="af__label">Statement size</label><select data-statementsize>' +
-      opt("large", "Large \u2014 full hero") + opt("standard", "Standard") + opt("compact", "Compact \u2014 matches Selected work") +
-      '</select><div class="af__hint">Large is the full hero scale. Compact matches the \u201cSelected work\u201d heading \u2014 handy when the statement sits lower in the page.</div></div>';
+    return sizeSelect("Statement size", "statementsize", ((data.landing || {}).statementSize) || "large",
+      "Large is the full hero scale; Compact matches the \u201cSelected work\u201d heading \u2014 handy when the statement sits lower in the page.");
   }
   function secHead(title, note) {
     return '<div class="adm__sec-title">' + title + '</div><div class="adm__sec-note">' + note + "</div>";
@@ -5012,6 +5017,7 @@ import { WORLD_LAND } from "./worldland.js";
     const t = e.target;
     if (t.dataset.worklayout !== undefined) { data.workLayout = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.statementsize !== undefined) { data.landing = data.landing || {}; data.landing.statementSize = t.value; saveDraft(true); apply(true); return; }
+    if (t.dataset.worktitlesize !== undefined) { data.landing = data.landing || {}; data.landing.workTitleSize = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.logosize !== undefined) { const arr = (data.landing || {}).logos, k = +t.dataset.logosize; if (arr && arr[k]) { arr[k].size = t.value; apply(true); } return; }
     if (t.dataset.parxnum !== undefined) { const _pw = data.work[+t.dataset.parxnum]; if (_pw) t.value = (_pw.parAmt != null ? _pw.parAmt : 0); return; }
     if (t.dataset.depthOn !== undefined) { onDepthToggle(t); return; }

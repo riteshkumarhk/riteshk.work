@@ -514,6 +514,9 @@
     // Work list layout is configurable from the studio: list | grid-2 | grid-3 (default grid-2).
     const casesEl = byId("cases");
     if (casesEl) { const wl = data.workLayout || "grid-2"; casesEl.className = "cases" + (wl === "grid-3" ? " cases--g3" : wl === "list" ? "" : " cases--g2"); }
+    set("workHeading", md(L.workTitle || "A few things I've *designed* and the thinking behind them."));
+    const whEl = byId("workHeading");
+    if (whEl) { whEl.classList.remove("section-head__title--standard", "section-head__title--large", "section-head__title--compact"); whEl.classList.add("section-head__title--" + (L.workTitleSize || "compact")); }
 
     set("capsList", caps.map((c) => '<li data-reveal>' + esc(c) + "</li>").join(""));
 

@@ -500,6 +500,10 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
   font-size: clamp(1.9rem, 5vw, 4.2rem); line-height: 1.05; letter-spacing: -0.02em;
   max-width: 18ch;
 }
+/* Studio "Heading size" (Landing tab): compact is the default section scale; standard/large let
+   the Selected-work heading grow toward hero scale when it leads the reordered page. */
+.section-head__title--standard { font-size: clamp(2.3rem, min(7vw, 9vh), 6rem); max-width: 20ch; }
+.section-head__title--large { font-size: clamp(2.9rem, min(11.5vw, 14.5vh), 10rem); line-height: 0.98; max-width: 16ch; }
 .section-head__title em { color: var(--accent); }
 
 /* =================================================================
