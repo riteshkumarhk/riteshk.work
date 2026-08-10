@@ -150,8 +150,10 @@ export function initNodeWeb(opts) {
     const trc = (() => { const e = document.getElementById("heroTitle"); return e ? e.getBoundingClientRect() : null; })();
     const heroR = (() => { const e = document.getElementById("wsec-hero"); return e ? e.getBoundingClientRect() : null; })();
     const contR = (() => { const e = document.getElementById("contact"); return e ? e.getBoundingClientRect() : null; })();
+    const mobile = window.innerWidth < 760;
     const cxSeed = (trc ? (trc.left + trc.right) / 2 : window.innerWidth / 2) * DPR;
-    const colSeed = clamp(trc ? trc.width * 0.55 + 210 : window.innerWidth * 0.3, 300, 620) * DPR;
+    // looser column, capped to the viewport so it never piles at the edges on narrow/mobile screens
+    const colSeed = Math.min(clamp(trc ? trc.width * 0.7 + 240 : window.innerWidth * 0.34, 340, 780), window.innerWidth * 0.46) * DPR;
     // where the statement TEXT + contact will sit vertically when the hero is centred (the intensity
     // peak). Derived from a scroll-independent shift so the cluster hugs the VISIBLE red band on any
     // screen size — and frames the statement evenly instead of knotting above it.
@@ -159,21 +161,22 @@ export function initNodeWeb(opts) {
     const bandTop = (trc ? trc.top : (heroR ? heroR.top : window.innerHeight * 0.4)) + delta;
     const bandBot = (contR ? contR.bottom : (heroR ? heroR.bottom : window.innerHeight * 0.62)) + delta;
     const bandCenter = ((bandTop + bandBot) / 2) * DPR;
-    const bandHalf = ((bandBot - bandTop) / 2 + 30) * DPR;
+    const bandHalf = Math.min((bandBot - bandTop) / 2 + 70, window.innerHeight * 0.42) * DPR;
+    const biasChance = mobile ? 0 : 0.5; // desktop: ~half cluster in the red zone; mobile: all ambient (was better)
     parts = new Array(count).fill(0).map(() => {
       const depth = Math.random(); // 0 = far (big soft bokeh) .. 1 = near (small crisp node)
       let x, y;
-      if (Math.random() < 0.64) { // ~64% clustered in the red column; the rest spread across the page
+      if (Math.random() < biasChance) { // desktop clusters ~half in the red zone; mobile stays all-ambient
         x = clamp(cxSeed + ((Math.random() + Math.random() + Math.random()) / 3 - 0.5) * 2 * colSeed, 4, W - 4);
         y = clamp(bandCenter + ((Math.random() + Math.random()) / 2 - 0.5) * 2 * bandHalf, 4, H - 4);
       } else {
         x = Math.random() * W; y = Math.random() * H;
       }
       return {
-        x: x, y: y, hx: x, hy: y,              // home = seed position; the particle wobbles around it
-        wob: (5 + Math.random() * 13) * DPR,   // wobble radius (bounded, so the cluster never disperses)
-        wph: Math.random() * 6.2832,           // phase
-        wsp: 0.00018 + Math.random() * 0.00038, // angular speed (slow breathing)
+        x: x, y: y, hx: x, hy: y,              // home = seed position (a soft spring keeps it here)
+        vx: 0, vy: 0,                          // velocity -> organic, inertial, damped motion
+        wa: Math.random() * 6.2832,            // wander angle
+        was: 0.006 + Math.random() * 0.012,    // wander rotation speed (each particle unique)
         depth,
         size: (2.5 + (1 - depth) * 9) * DPR,   // far particles are the big soft bokeh
         baseA: 0.12 + depth * 0.26,            // near particles read a touch brighter
@@ -411,16 +414,17 @@ export function initNodeWeb(opts) {
     }
 
     // --- position + alpha pre-pass ---
-    const tt = performance.now();
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
-      // gentle bounded wobble around the seed HOME -> the constellation STAYS put (it breathes, never
-      // disperses); a soft pull toward the cursor lets the pointer nudge the web locally.
-      let hx = p.hx, hy = p.hy;
-      const dxm = mx - hx, dym = my - hy;
-      if (dxm * dxm + dym * dym < near2) { hx += dxm * 0.04; hy += dym * 0.04; }
-      p.x = hx + Math.cos(tt * p.wsp + p.wph) * p.wob;
-      p.y = hy + Math.sin(tt * p.wsp * 0.9 + p.wph * 1.3) * p.wob * 0.7;
+      // organic bounded motion: a slow wander + a soft spring back to home (so the constellation stays
+      // put and never disperses) + a gentle INERTIAL pull toward the cursor (natural, not robotic). Damped.
+      p.wa += p.was;
+      p.vx += Math.cos(p.wa) * 0.024 * DPR + (p.hx - p.x) * 0.005;
+      p.vy += Math.sin(p.wa) * 0.024 * DPR + (p.hy - p.y) * 0.005;
+      const dxm = mx - p.x, dym = my - p.y;
+      if (dxm * dxm + dym * dym < near2) { p.vx += dxm * 0.0011; p.vy += dym * 0.0011; }
+      p.vx *= 0.9; p.vy *= 0.9;
+      p.x += p.vx; p.y += p.vy;
 
       p.focus += ((p.focusTarget || 0) - p.focus) * 0.18;
       const px = p.x / DPR, py = p.y / DPR;
@@ -475,13 +479,14 @@ export function initNodeWeb(opts) {
         ctx.lineWidth = DPR;
         ctx.strokeStyle = ACCENT;
         ctx.beginPath(); ctx.arc(p.x, p.y, rr + 6 * DPR, 0, 6.2832); ctx.stroke();
-      } else if (p.depth > 0.62) {
-        // near: a crisp small node (the network's vertices)
+      } else if (curLight || p.depth > 0.62) {
+        // crisp small node. On LIGHT mode ALL particles render crisp -> soft bokeh glows turn into muddy
+        // 'mould' blobs on the cream background; on dark, only the near ones are crisp.
         ctx.globalAlpha = p.a;
         ctx.fillStyle = p.accent ? ACCENT : IVORY;
-        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, p.size * 0.26), 0, 6.2832); ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, p.size * (curLight ? 0.17 : 0.26)), 0, 6.2832); ctx.fill();
       } else {
-        // far: a soft bokeh orb
+        // dark far: a soft bokeh orb (fake depth-of-field)
         ctx.globalAlpha = p.a;
         const g = p.accent ? glowAccent : glowIvory;
         const s = p.size;
