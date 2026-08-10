@@ -170,34 +170,61 @@ export function initNodeWeb(opts) {
     return clamp(1 - d * 1.3, 0, 1);
   };
   // --- energy zones (from the user's map): the STATEMENT + CONTACT form the PRIMARY column — densest
-  //     nodes AND densest link structures — the band under the cards is SECONDARY, the footer is
-  //     TERTIARY, all with a soft horizontal centre-bias so it reads as a centred constellation rather
-  //     than a full-width wash. Boundaries come from the live element rects (CSS px). ---
+  //     nodes AND densest link structures — the band under the cards is SECONDARY, the footer TERTIARY.
+  //     Horizontally it's a TIGHT column centred on the statement text (so on wide screens the empty
+  //     far side stays near-dead — minimal nodes/links). Boundaries come from live element rects (CSS px). ---
   let curBands = null;
   const computeBands = () => {
     const R = (s) => { const e = document.querySelector(s); return e ? e.getBoundingClientRect() : null; };
-    const cs = R("#cases"), hero = R("#wsec-hero"), ct = R("#contact"), ft = R("footer, .footer");
+    const cs = R("#cases"), hero = R("#wsec-hero"), title = R("#heroTitle"), ct = R("#contact"), ft = R("footer, .footer");
     const vw = window.innerWidth, vh = window.innerHeight;
     const casesBottom = cs ? cs.bottom : -1e9;
     const primaryTop = hero ? hero.top : (ct ? ct.top : vh * 0.4);
     const primaryBottom = ct ? ct.bottom : (hero ? hero.bottom : vh * 0.7);
     const footerBottom = ft ? ft.bottom : primaryBottom + 200;
-    const cx = hero ? (hero.left + hero.right) / 2 : vw / 2;
-    return { casesBottom, primaryTop, primaryBottom, footerBottom, cx, vw };
+    // centre on the actual STATEMENT text so the column follows left/centre/right alignment (not the
+    // full-width section, which would pin the constellation to the viewport centre on wide screens)
+    const cx = title ? (title.left + title.right) / 2 : (hero ? (hero.left + hero.right) / 2 : vw / 2);
+    // a comfortable frame AROUND the statement (extends ~200px beyond the text each side), fixed-ish so
+    // wide screens keep the far sides dark
+    const colHalf = clamp((title ? title.width * 0.5 + 200 : vw * 0.28), 300, 560);
+    return { casesBottom, primaryTop, primaryBottom, footerBottom, cx, colHalf, vw };
   };
   // vertical weight: PRIMARY (1.0) across the statement+contact column, a modest SECONDARY band under
-  // the cards, easing to TERTIARY through the footer; zero outside the spawn area. Kept clearly below
-  // primary so the densest nodes/links/chips gather in the red column, not the empty band up top.
+  // the cards, LOW TERTIARY through the footer (the yellow area — kept minimal); zero outside.
   const vWeight = (b, y) => {
     if (y < b.casesBottom - 30 || y > b.footerBottom + 14) return 0;
-    if (y < b.primaryTop) return 0.42;             // SECONDARY: band under the cards (flat, modest)
+    if (y < b.primaryTop) return 0.4;              // SECONDARY: band under the cards
     if (y <= b.primaryBottom) return 1;            // PRIMARY: statement + contact
     const t = (y - b.primaryBottom) / Math.max(1, b.footerBottom - b.primaryBottom);
-    return clamp(0.5 - 0.24 * t, 0.26, 0.5);       // contact edge -> footer (TERTIARY)
+    return clamp(0.34 - 0.26 * t, 0.08, 0.34);     // TERTIARY footer: low, fading toward the bottom
   };
-  // horizontal weight: 1 down the centre column, easing to ~0.34 at the far edges
-  const hWeight = (b, x) => clamp(1 - Math.abs(x - b.cx) / (b.vw * 0.5) * 0.92, 0.34, 1);
+  // horizontal weight: a TIGHT column around the statement, falling off QUADRATICALLY to a near-zero
+  // floor outside it — this is what keeps wide-screen far/yellow areas quiet.
+  const hWeight = (b, x) => { const d = Math.abs(x - b.cx) / b.colHalf; return clamp(1 - d * d * 0.85, 0.06, 1); };
   const zoneFactor = (b, x, y) => vWeight(b, y) * hWeight(b, x);
+
+  // --- text collision holes: the statement lines, the contact block and the footer are NO-SPAWN. Node
+  //     dots and links are carved out of these rects (+ a small margin) so the type sits on clean space
+  //     and the constellation forms AROUND it (matching the user's painted spawn map). ---
+  let curHoles = [];
+  const HOLE_SEL = "#heroTitle .line, #contact, footer, .footer";
+  const HM = 14; // hole margin (CSS px)
+  const computeHoles = () => {
+    const out = [];
+    document.querySelectorAll(HOLE_SEL).forEach((e) => {
+      const r = e.getBoundingClientRect();
+      if (r.width > 1 && r.height > 1 && r.bottom > -HM && r.top < window.innerHeight + HM) out.push(r);
+    });
+    return out;
+  };
+  const inHole = (x, y) => {
+    for (let i = 0; i < curHoles.length; i++) {
+      const r = curHoles[i];
+      if (x > r.left - HM && x < r.right + HM && y > r.top - HM && y < r.bottom + HM) return true;
+    }
+    return false;
+  };
 
   const LINK = () => 128 * DPR;
 
@@ -229,6 +256,7 @@ export function initNodeWeb(opts) {
       const p = parts[i];
       if (p.focusTarget || p.depth > 0.6) continue;         // only a soft orb gets pulled sharp
       if (p.x < 44 * DPR || p.x > W - 44 * DPR) continue;   // just off the extreme edges (label can take either side)
+      if (inHole(p.x / DPR, p.y / DPR)) continue;           // the node dot must not sit on the text
       const w = zoneFactor(b, p.x / DPR, p.y / DPR);
       if (w < 0.12) continue;
       cands.push({ p: p, key: Math.pow(Math.random(), 1 / w) }); // weighted-random order: higher zone weight spawns more often
@@ -324,6 +352,7 @@ export function initNodeWeb(opts) {
 
     const mx = mX * DPR, my = mY * DPR, near = 150 * DPR, near2 = near * near;
     curBands = computeBands();
+    curHoles = computeHoles();
     const themeMul = curLight ? 1.4 : 1;
 
     // --- cursor focus-lens: the nearest soft orb under the pointer snaps sharp (a quiet, discoverable
@@ -333,7 +362,7 @@ export function initNodeWeb(opts) {
       let best = null, bd = lr2;
       for (let i = 0; i < parts.length; i++) {
         const p = parts[i];
-        if (p.chip || p.depth > 0.6 || p.a < 0.03) continue;
+        if (p.chip || p.depth > 0.6 || p.a < 0.03 || inHole(p.x / DPR, p.y / DPR)) continue;
         const dx = mx - p.x, dy = my - p.y, d2 = dx * dx + dy * dy;
         if (d2 < bd) { bd = d2; best = p; }
       }
@@ -358,11 +387,15 @@ export function initNodeWeb(opts) {
 
       const vis = clamp((intensity - p.birth) / 0.4, 0, 1);
       p.focus += ((p.focusTarget || 0) - p.focus) * 0.18;
-      let a = p.baseA * (0.18 + 0.82 * vis);              // faint seed floor -> grows in
-      // shape by the zone map when the statement is engaged; a flat, faint ambient field otherwise
-      const zf = zoneFactor(curBands, p.x / DPR, p.y / DPR);
+      const px = p.x / DPR, py = p.y / DPR;
+      const hole = inHole(px, py);
+      const zf = hole ? 0 : zoneFactor(curBands, px, py);
       p.zf = zf;
-      a *= (0.32 + 0.68 * zf) * intensity + 0.6 * (1 - intensity);
+      let a = p.baseA * (0.18 + 0.82 * vis);              // faint seed floor -> grows in
+      // DOTS: a low base so the outer/yellow area shows almost no dots, rising to a bright frame right
+      // around the text; the hole kill keeps the text region itself clean. (Links gate separately below.)
+      a *= (0.06 + 0.94 * zf) * intensity + 0.3 * (1 - intensity);
+      if (hole) a *= 0.05;
       p.a = clamp(a * themeMul, 0, 0.85);
     }
 
@@ -372,15 +405,17 @@ export function initNodeWeb(opts) {
       ctx.lineWidth = Math.max(1, DPR * 0.55);
       for (let i = 0; i < parts.length; i++) {
         const a = parts[i];
-        if (a.a < 0.04) continue;
-        for (let j = i + 1; j < parts.length; j++) {
+        if (a.zf < 0.02) continue;                        // gate on ZONE, not dot alpha, so faint links
+        for (let j = i + 1; j < parts.length; j++) {      // still form in the outer area where dots don't
           const b = parts[j];
-          if (b.a < 0.04) continue;
+          if (b.zf < 0.02) continue;
           const dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy;
           if (d2 > ld2) continue;
+          // never draw a line across a text hole
+          if (inHole(((a.x + b.x) / 2) / DPR, ((a.y + b.y) / 2) / DPR)) continue;
           const prox = 1 - Math.sqrt(d2) / ld;
-          // denser, bolder links inside the primary column; they thin out toward the edges/footer
-          const la = prox * intensity * intensity * 0.34 * themeMul * clamp((a.zf + b.zf) * 0.9, 0.28, 1.25);
+          // bold web in the maroon (product of zones), a faint floor so shapes still form outside it
+          const la = prox * intensity * intensity * 0.36 * themeMul * (0.12 + 0.88 * a.zf * b.zf);
           if (la < 0.02) continue;
           ctx.globalAlpha = Math.min(0.46, la);
           ctx.strokeStyle = (a.accent || b.accent) ? ACCENT : IVORY;
