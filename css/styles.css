@@ -542,9 +542,10 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
 .section-head__title--large { font-size: clamp(2.9rem, min(11.5vw, 14.5vh), 10rem); line-height: 0.98; max-width: 16ch; }
 .section-head__title em { color: var(--accent); }
 /* Work heading: authored lines each crop their descenders to match the statement (render wraps
-   each line in .section-head__line). Tight leading makes the crop bite; the width cap is lifted so
-   short authored rows run full (like the statement) instead of force-wrapping and losing the crop. */
-#workHeading { line-height: 0.95; max-width: none; }
+   each line in .section-head__line). Leading is a light 1.05 so the descender tail is trimmed but
+   the g stays legible; the width cap is lifted so short authored rows run full (like the statement)
+   instead of force-wrapping and losing the crop. */
+#workHeading { line-height: 1.05; max-width: none; }
 .section-head__line { display: block; overflow: hidden; }
 /* Studio "Heading alignment" (Landing tab). The heading box is max-width capped, so centre/right
    also re-anchor the box, not just the text. */
