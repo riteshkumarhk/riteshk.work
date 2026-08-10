@@ -4,9 +4,14 @@
    statement. Evolves the old ambient bg-field into the "capabilities moment".
 
    Perf: DPR-capped, pre-rendered glow sprites (fake bokeh, no per-frame blur),
-   paused off-screen / tab-hidden, real-FPS self-disable. Gated off on software
-   GPUs (bgCapable) unless forced (?nodes) — a static fallback lands in a later
-   phase. Chips (the tip-tip capability reveal) land in phase 2.
+   paused off-screen / tab-hidden, real-FPS self-disable. On software GPUs /
+   low-power devices (bgCapable false) — or if the live FPS can't hold up — it
+   degrades to a calm STATIC bokeh frame instead of a blank void (?nodes forces
+   the full animated web on for testing).
+
+   Interaction: capability chips fade in beside nodes that snap sharp (the
+   "tip-tip" reveal, zone-weighted + collision-avoiding), and the cursor pulls
+   the nearest soft orb into focus (a quiet focus-lens).
    ================================================================= */
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -45,7 +50,6 @@ export function initNodeWeb(opts) {
   opts = opts || {};
   if (opts.lite) return;
   const force = !!opts.force;
-  if (!force && !bgCapable()) return; // static fallback comes later
 
   const root = document.documentElement;
   const cssVar = (v, d) => (getComputedStyle(root).getPropertyValue(v).trim() || d);
@@ -69,9 +73,56 @@ export function initNodeWeb(opts) {
   const ctx = canvas.getContext("2d");
 
   let W = 0, H = 0, DPR = 1, parts = [];
-  let mX = -9999, mY = -9999, rafId = 0, running = true;
+  let mX = -9999, mY = -9999, rafId = 0, running = true, frozen = false;
   let f = 0, sampleT0 = 0, checked = false;
   let intensity = 0; // 0 = ambient seeds .. 1 = full network (statement centred)
+  let lensNode = null; // the soft orb currently pulled sharp by the cursor focus-lens
+
+  // Calm STATIC fallback — a single still bokeh frame (no rAF, no chips). Used on software GPUs /
+  // low-power devices, and when the live FPS can't sustain the animated web. The About page still
+  // lists every capability, so this is a graceful degrade, not a loss of content.
+  function renderStatic() {
+    syncTheme();
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    const vw = window.innerWidth, vh = window.innerHeight;
+    W = canvas.width = Math.floor(vw * DPR);
+    H = canvas.height = Math.floor(vh * DPR);
+    canvas.style.width = vw + "px";
+    canvas.style.height = vh + "px";
+    ctx.clearRect(0, 0, W, H);
+    // bias the halo toward the statement (or the viewport centre on other pages)
+    let cy = 0.42;
+    const heroEl = document.getElementById("wsec-hero");
+    if (heroEl) { const r = heroEl.getBoundingClientRect(); if (r.height && r.top < vh && r.bottom > 0) cy = clamp((r.top + r.height / 2) / vh, 0.15, 0.85); }
+    const n = Math.round(clamp(vw * vh / 28000, 22, 60));
+    ctx.globalCompositeOperation = curLight ? "source-over" : "lighter";
+    for (let i = 0; i < n; i++) {
+      const depth = Math.random(), accent = Math.random() < 0.16;
+      const x = Math.random() * W;
+      const yb = cy + ((Math.random() + Math.random() + Math.random()) / 3 - 0.5) * 0.9;
+      const y = clamp(yb, 0.02, 0.98) * H;
+      ctx.globalAlpha = clamp((0.06 + depth * 0.16) * (curLight ? 1.5 : 1), 0, 0.55);
+      if (depth < 0.62) {
+        const s = (3 + (1 - depth) * 9) * DPR;
+        ctx.drawImage(accent ? glowAccent : glowIvory, x - s, y - s, s * 2, s * 2);
+      } else {
+        ctx.fillStyle = accent ? ACCENT : IVORY;
+        ctx.beginPath(); ctx.arc(x, y, Math.max(1, 2 * DPR), 0, 6.2832); ctx.fill();
+      }
+    }
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+  }
+
+  // Software GPU / low-power (and not forced): render one calm still frame and stop — no animation.
+  if (!force && !bgCapable()) {
+    renderStatic();
+    const reStatic = () => renderStatic();
+    window.addEventListener("resize", reStatic, { passive: true });
+    try { new MutationObserver(reStatic).observe(root, { attributes: true, attributeFilter: ["data-appearance"] }); } catch (e) {}
+    window.__nodeWeb = { static: true, redraw: renderStatic };
+    return;
+  }
 
   // Capability chips — the "tip-tip" focus-pull reveal. A fixed DOM layer above the
   // content (styled in css); each chip fades in beside a node that has snapped crisp.
@@ -82,8 +133,10 @@ export function initNodeWeb(opts) {
   let chips = [], capPool = [], capIdx = 0, nextSpawnAt = 0, lastScrollY = 0;
 
   const resize = () => {
+    if (frozen) { renderStatic(); return; } // after an FPS freeze we only keep the still frame fresh
     for (let i = 0; i < chips.length; i++) chips[i].el.remove();
     chips = [];
+    lensNode = null;
     DPR = Math.min(window.devicePixelRatio || 1, 2);
     W = canvas.width = Math.floor(window.innerWidth * DPR);
     H = canvas.height = Math.floor(window.innerHeight * DPR);
@@ -100,7 +153,7 @@ export function initNodeWeb(opts) {
         baseA: 0.12 + depth * 0.26,            // near particles read a touch brighter
         birth: Math.pow(Math.random(), 1.6),   // most only fade in as the network grows
         accent: Math.random() < 0.16,          // sparse bronze; the rest ivory
-        a: 0, focus: 0, focusTarget: 0,
+        a: 0, focus: 0, focusTarget: 0, chip: false, zf: 0,
       };
     });
   };
@@ -116,13 +169,35 @@ export function initNodeWeb(opts) {
     const d = Math.abs(c - window.innerHeight / 2) / window.innerHeight;
     return clamp(1 - d * 1.3, 0, 1);
   };
-  const statementCanvasY = () => {
-    const el = document.getElementById("wsec-hero");
-    if (!el || el.hidden) return -1;
-    const r = el.getBoundingClientRect();
-    if (r.height === 0) return -1;
-    return (r.top + r.height / 2) * DPR;
+  // --- energy zones (from the user's map): the STATEMENT + CONTACT form the PRIMARY column — densest
+  //     nodes AND densest link structures — the band under the cards is SECONDARY, the footer is
+  //     TERTIARY, all with a soft horizontal centre-bias so it reads as a centred constellation rather
+  //     than a full-width wash. Boundaries come from the live element rects (CSS px). ---
+  let curBands = null;
+  const computeBands = () => {
+    const R = (s) => { const e = document.querySelector(s); return e ? e.getBoundingClientRect() : null; };
+    const cs = R("#cases"), hero = R("#wsec-hero"), ct = R("#contact"), ft = R("footer, .footer");
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const casesBottom = cs ? cs.bottom : -1e9;
+    const primaryTop = hero ? hero.top : (ct ? ct.top : vh * 0.4);
+    const primaryBottom = ct ? ct.bottom : (hero ? hero.bottom : vh * 0.7);
+    const footerBottom = ft ? ft.bottom : primaryBottom + 200;
+    const cx = hero ? (hero.left + hero.right) / 2 : vw / 2;
+    return { casesBottom, primaryTop, primaryBottom, footerBottom, cx, vw };
   };
+  // vertical weight: PRIMARY (1.0) across the statement+contact column, a modest SECONDARY band under
+  // the cards, easing to TERTIARY through the footer; zero outside the spawn area. Kept clearly below
+  // primary so the densest nodes/links/chips gather in the red column, not the empty band up top.
+  const vWeight = (b, y) => {
+    if (y < b.casesBottom - 30 || y > b.footerBottom + 14) return 0;
+    if (y < b.primaryTop) return 0.42;             // SECONDARY: band under the cards (flat, modest)
+    if (y <= b.primaryBottom) return 1;            // PRIMARY: statement + contact
+    const t = (y - b.primaryBottom) / Math.max(1, b.footerBottom - b.primaryBottom);
+    return clamp(0.5 - 0.24 * t, 0.26, 0.5);       // contact edge -> footer (TERTIARY)
+  };
+  // horizontal weight: 1 down the centre column, easing to ~0.34 at the far edges
+  const hWeight = (b, x) => clamp(1 - Math.abs(x - b.cx) / (b.vw * 0.5) * 0.92, 0.34, 1);
+  const zoneFactor = (b, x, y) => vWeight(b, y) * hWeight(b, x);
 
   const LINK = () => 128 * DPR;
 
@@ -146,31 +221,16 @@ export function initNodeWeb(opts) {
   const rectsOverlap = (a, b) => !(a.right + 12 < b.left || a.left - 12 > b.right || a.bottom + 10 < b.top || a.top - 10 > b.bottom);
   const pickNode = (estW) => {
     if (!titleRect()) return null;
-    // Priority zones (from the user's area map): rare above the card line, PRIMARY just below the
-    // cards around the statement, SECONDARY over contact, TERTIARY over the footer. Spawn is weighted
-    // toward primary and never lands away from these bands.
-    const casesEl = document.getElementById("cases");
-    const contactEl = document.getElementById("contact");
-    const footerEl = document.querySelector("footer, .footer");
-    const cardsBottom = casesEl ? casesEl.getBoundingClientRect().bottom : -1e9;
-    const cr = contactEl ? contactEl.getBoundingClientRect() : null;
-    const contactTop = cr ? cr.top : window.innerHeight;
-    const contactBottom = cr ? cr.bottom : window.innerHeight;
-    const footerBottom = footerEl ? footerEl.getBoundingClientRect().bottom : contactBottom + 220;
-    const zoneW = (y) => {
-      if (y < cardsBottom - 30 || y > footerBottom + 12) return 0;  // outside the spawn area
-      if (y < cardsBottom) return 0.1;                              // above the card line: rare
-      if (y < contactTop) return 1;                                // PRIMARY: below cards, around the statement
-      if (y < contactBottom) return 0.5;                           // SECONDARY: contact
-      return 0.25;                                                 // TERTIARY: footer
-    };
+    // Chips ride the SAME zone map as the nodes/links: primarily the statement+contact column, some
+    // in the band under the cards, sparse over the footer — weighted toward the primary centre.
+    const b = curBands || computeBands();
     const cands = [];
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
       if (p.focusTarget || p.depth > 0.6) continue;         // only a soft orb gets pulled sharp
       if (p.x < 44 * DPR || p.x > W - 44 * DPR) continue;   // just off the extreme edges (label can take either side)
-      const w = zoneW(p.y / DPR);
-      if (w <= 0) continue;
+      const w = zoneFactor(b, p.x / DPR, p.y / DPR);
+      if (w < 0.12) continue;
       cands.push({ p: p, key: Math.pow(Math.random(), 1 / w) }); // weighted-random order: higher zone weight spawns more often
     }
     cands.sort((a, b) => b.key - a.key);
@@ -181,9 +241,10 @@ export function initNodeWeb(opts) {
       const r = e.getBoundingClientRect();
       if (r.width > 1 && r.height > 1 && r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth) occ.push(r);
     });
-    const M = 16;
+    const M = window.innerWidth < 760 ? 10 : 16; // tighter clearance on phones so a chip still fits
+    const edge = window.innerWidth < 760 ? 4 : 6;
     const fits = (box) => {
-      if (box.left < 6 || box.right > window.innerWidth - 6) return false;
+      if (box.left < edge || box.right > window.innerWidth - edge) return false;
       for (let k = 0; k < occ.length; k++) { const o = occ[k]; if (!(box.right + M < o.left || box.left - M > o.right || box.bottom + M < o.top || box.top - M > o.bottom)) return false; }
       for (let k = 0; k < existing.length; k++) { if (rectsOverlap(box, existing[k])) return false; }
       return true;
@@ -207,10 +268,12 @@ export function initNodeWeb(opts) {
   };
   const spawnChip = () => {
     const cap = nextCap(); if (!cap) return;
-    const estW = Math.min(250, String(cap).length * 7.2 + 22);
+    const mobile = window.innerWidth < 760;
+    const estW = Math.min(mobile ? 188 : 250, String(cap).length * (mobile ? 6.4 : 7.2) + (mobile ? 16 : 22));
     const res = pickNode(estW); if (!res) return;
     const p = res.p;
     p.focusTarget = 1;
+    p.chip = true; // claimed by a chip: the cursor-lens leaves it alone
     const el = document.createElement("div");
     el.className = "node-chip" + (res.side === "right" ? " node-chip--r" : "");
     el.textContent = String(cap);
@@ -227,7 +290,7 @@ export function initNodeWeb(opts) {
     const sy = window.scrollY || window.pageYOffset || 0;
     if (Math.abs(sy - lastScrollY) > 1.5) {
       lastScrollY = sy;
-      for (let i = chips.length - 1; i >= 0; i--) { chips[i].el.remove(); chips[i].p.focusTarget = 0; }
+      for (let i = chips.length - 1; i >= 0; i--) { chips[i].el.remove(); chips[i].p.focusTarget = 0; chips[i].p.chip = false; }
       chips.length = 0;
       nextSpawnAt = now + 350; // let the scroll settle before revealing again
       return;
@@ -247,6 +310,7 @@ export function initNodeWeb(opts) {
         chip.p.focusTarget = 0;
       } else if (chip.state === "out" && now - chip.outAt > 480) {
         chip.el.remove();
+        chip.p.chip = false;
         chips.splice(i, 1);
       }
     }
@@ -259,8 +323,29 @@ export function initNodeWeb(opts) {
     ctx.clearRect(0, 0, W, H);
 
     const mx = mX * DPR, my = mY * DPR, near = 150 * DPR, near2 = near * near;
-    const stmtY = statementCanvasY();
+    curBands = computeBands();
     const themeMul = curLight ? 1.4 : 1;
+
+    // --- cursor focus-lens: the nearest soft orb under the pointer snaps sharp (a quiet, discoverable
+    //     delight that reuses the same focus-pull the chips use). Chip-claimed orbs are left alone. ---
+    if (mX > -9998) {
+      const lr2 = (118 * DPR) * (118 * DPR);
+      let best = null, bd = lr2;
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        if (p.chip || p.depth > 0.6 || p.a < 0.03) continue;
+        const dx = mx - p.x, dy = my - p.y, d2 = dx * dx + dy * dy;
+        if (d2 < bd) { bd = d2; best = p; }
+      }
+      if (best !== lensNode) {
+        if (lensNode && !lensNode.chip) lensNode.focusTarget = 0;
+        lensNode = best;
+      }
+      if (lensNode) lensNode.focusTarget = 1;
+    } else if (lensNode) {
+      if (!lensNode.chip) lensNode.focusTarget = 0;
+      lensNode = null;
+    }
 
     // --- position + alpha pre-pass ---
     for (let i = 0; i < parts.length; i++) {
@@ -274,11 +359,11 @@ export function initNodeWeb(opts) {
       const vis = clamp((intensity - p.birth) / 0.4, 0, 1);
       p.focus += ((p.focusTarget || 0) - p.focus) * 0.18;
       let a = p.baseA * (0.18 + 0.82 * vis);              // faint seed floor -> grows in
-      if (stmtY >= 0) {                                    // concentrate around the statement band
-        const band = clamp(1 - Math.abs(p.y - stmtY) / (H * 0.62), 0, 1);
-        a *= 0.55 + 0.45 * band * intensity + 0.55 * (1 - intensity);
-      }
-      p.a = clamp(a * themeMul, 0, 0.8);
+      // shape by the zone map when the statement is engaged; a flat, faint ambient field otherwise
+      const zf = zoneFactor(curBands, p.x / DPR, p.y / DPR);
+      p.zf = zf;
+      a *= (0.32 + 0.68 * zf) * intensity + 0.6 * (1 - intensity);
+      p.a = clamp(a * themeMul, 0, 0.85);
     }
 
     // --- connection pass (behind the dots): the network wires up as it grows ---
@@ -294,9 +379,10 @@ export function initNodeWeb(opts) {
           const dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy;
           if (d2 > ld2) continue;
           const prox = 1 - Math.sqrt(d2) / ld;
-          const la = prox * intensity * intensity * 0.34 * themeMul;
+          // denser, bolder links inside the primary column; they thin out toward the edges/footer
+          const la = prox * intensity * intensity * 0.34 * themeMul * clamp((a.zf + b.zf) * 0.9, 0.28, 1.25);
           if (la < 0.02) continue;
-          ctx.globalAlpha = Math.min(0.42, la);
+          ctx.globalAlpha = Math.min(0.46, la);
           ctx.strokeStyle = (a.accent || b.accent) ? ACCENT : IVORY;
           ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
         }
@@ -335,14 +421,27 @@ export function initNodeWeb(opts) {
     ctx.globalAlpha = 1;
     updateChips(performance.now());
 
-    // real-FPS self-disable (skipped when forced on for testing)
+    // real-FPS self-disable (skipped when forced on for testing) — degrade to the calm still frame
     f++;
     if (f === 30) sampleT0 = performance.now();
     else if (!force && !checked && f === 90) {
       checked = true;
-      if (60000 / (performance.now() - sampleT0) < 34) { disable(); return; }
+      if (60000 / (performance.now() - sampleT0) < 34) { freezeStatic(); return; }
     }
     rafId = requestAnimationFrame(step);
+  };
+
+  // Stop the animation but keep a tasteful still frame (chips + lens gone), instead of a blank void.
+  const freezeStatic = () => {
+    frozen = true;
+    running = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = 0;
+    window.removeEventListener("mousemove", onMove);
+    for (let i = 0; i < chips.length; i++) chips[i].el.remove();
+    chips = [];
+    if (chipLayer.parentNode) chipLayer.remove();
+    renderStatic();
   };
 
   const disable = () => {
@@ -350,16 +449,18 @@ export function initNodeWeb(opts) {
     if (rafId) cancelAnimationFrame(rafId);
     rafId = 0;
     window.removeEventListener("resize", resize);
+    window.removeEventListener("mousemove", onMove);
     for (let i = 0; i < chips.length; i++) chips[i].el.remove();
     chips = [];
     if (chipLayer.parentNode) chipLayer.remove();
     if (canvas.parentNode) canvas.remove();
   };
 
+  const onMove = (e) => { mX = e.clientX; mY = e.clientY; };
   window.addEventListener("resize", resize, { passive: true });
-  window.addEventListener("mousemove", (e) => { mX = e.clientX; mY = e.clientY; }, { passive: true });
+  window.addEventListener("mousemove", onMove, { passive: true });
   document.addEventListener("visibilitychange", () => {
-    if (!canvas.parentNode) return;
+    if (!canvas.parentNode || frozen) return;
     running = !document.hidden;
     if (running) { if (!rafId) rafId = requestAnimationFrame(step); }
     else if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }

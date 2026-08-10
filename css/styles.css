@@ -1010,6 +1010,10 @@ html.lite .bg-field { display: none; }
 html.lite .node-chips { display: none; }
 /* Light theme: the label text is dark ink, so give it a light pill (not the dark one). */
 html[data-appearance="light"] .node-chip { background: rgba(250, 248, 242, 0.8); border-color: rgba(28, 24, 18, 0.12); }
+/* Phones: a slightly smaller pill so a single label actually fits the narrow gutter beside a node. */
+@media (max-width: 760px) {
+  .node-chip { font-size: .6rem; letter-spacing: .05em; padding: .26rem .5rem; }
+}
 /* ---------- Light appearance ---------- */
 html[data-appearance="light"] {
   --bg: #f2eee6; --bg-2: #eae5db; --bg-elev: #e2dcd0;
