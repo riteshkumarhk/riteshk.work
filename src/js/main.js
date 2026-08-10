@@ -7,6 +7,12 @@ import { initDepth } from "./depth.js";
 (function () {
   "use strict";
 
+  /* Own the scroll position on (re)load: the site renders its content asynchronously, so the
+     browser's default "auto" restoration can land you mid-page. Take manual control so a fresh
+     load / hard refresh always starts at the top (internal nav + overlay close still restore
+     their own positions explicitly). */
+  try { if ("scrollRestoration" in history) history.scrollRestoration = "manual"; } catch (e) {}
+
   /* Discourage casual media saving on the public site: swallow the right-click
      menu and drag-to-save on images / video / canvas — including project media
      rendered later (galleries, lightbox, focus). Deterrent only: DevTools and the
@@ -521,7 +527,7 @@ import { initDepth } from "./depth.js";
     if (new URLSearchParams(location.search).get("view") === "about") {
       try { history.replaceState({ rkPage: "about" }, "", "/about"); } catch (e) {}
     }
-    showPage(initial, { push: false, scroll: false, force: true });
+    showPage(initial, { push: false, force: true });
   })();
 
   /* -------------------------------------------------
