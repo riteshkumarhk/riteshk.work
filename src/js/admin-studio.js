@@ -4452,9 +4452,9 @@ import { WORLD_LAND } from "./worldland.js";
   }
   function workReorderBlock() {
     const RK = window.RK || {};
-    const defs = RK.WORK_SECTIONS || [["hero", "Hero"], ["highlights", "Highlights"], ["work", "Selected work"], ["capabilities", "Capabilities"]];
+    const defs = RK.WORK_SECTIONS || [["hero", "Statement"], ["intro", "Intro"], ["highlights", "Highlights"], ["work", "Selected work"], ["capabilities", "Capabilities"]];
     const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
-    const where = { hero: "The statement, intro & cue (fields below)", highlights: "Brands & numbers, from the Highlights tab", work: "Edit in the Work tab", capabilities: "Edit in the Capabilities tab" };
+    const where = { hero: "The statement + scroll cue (fields below)", intro: "Eyebrow, domains & description (fields below)", highlights: "Brands & numbers, from the Highlights tab", work: "Edit in the Work tab", capabilities: "Edit in the Capabilities tab" };
     const layout = RK.workLayout ? RK.workLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
     let html = secHead("Landing sections", "Reorder the landing sections and show or hide any of them \u2014 use the arrows to move a section, untick to hide it. Contact always stays at the end.");
     html += '<ul class="adm__seclist">';

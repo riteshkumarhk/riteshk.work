@@ -316,6 +316,10 @@ html.lite .page { animation: none; }
 .hero__intro { max-width: 36ch; font-size: clamp(1rem, 1.4vw, 1.18rem); color: var(--text-dim); line-height: 1.55; }
 .hero__intro strong { color: var(--text); font-weight: 500; }
 .hero__intro strong.accent { color: var(--accent); }
+/* Intro block: eyebrow/domains + description, split out of the hero so it can be reordered on its
+   own (studio Landing tab). Standalone section wrapper matching the page gutter + rhythm. */
+.intro { max-width: var(--maxw); margin: 0 auto; padding: clamp(2rem, 5vw, 3.5rem) var(--pad); }
+.intro .hero__label { margin-bottom: clamp(1rem, 2.5vw, 1.6rem); }
 
 .hero__cue {
   position: relative;

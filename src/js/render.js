@@ -393,7 +393,8 @@
 
   // ---- Work / landing page: reorderable + show/hide sections (mirrors the About model) ----
   const WORK_SECTIONS = [
-    ["hero", "Hero"],
+    ["hero", "Statement"],
+    ["intro", "Intro"],
     ["highlights", "Highlights"],
     ["work", "Selected work"],
     ["capabilities", "Capabilities"],
@@ -408,7 +409,17 @@
         out.push({ key: s.key, on: s.on !== false });
       }
     });
-    known.forEach((k) => { if (!seen[k]) out.push({ key: k, on: true }); });
+    known.forEach((k, i) => {
+      if (seen[k]) return;
+      // Insert a key that's missing from the saved order (e.g. a newly-added section) next to its
+      // canonical neighbour rather than dumping it at the end, so an upgrade stays sensible.
+      let at = out.length;
+      for (let j = i - 1; j >= 0; j--) {
+        const idx = out.findIndex((o) => o.key === known[j]);
+        if (idx !== -1) { at = idx + 1; break; }
+      }
+      out.splice(at, 0, { key: k, on: true });
+    });
     return out;
   }
   function applyWorkLayout(data) {
