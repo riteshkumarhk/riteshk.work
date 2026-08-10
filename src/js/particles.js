@@ -79,7 +79,7 @@ export function initNodeWeb(opts) {
   chipLayer.className = "node-chips";
   chipLayer.setAttribute("aria-hidden", "true");
   document.body.appendChild(chipLayer);
-  let chips = [], capPool = [], capIdx = 0, nextSpawnAt = 0;
+  let chips = [], capPool = [], capIdx = 0, nextSpawnAt = 0, lastScrollY = 0, recentPts = [];
 
   const resize = () => {
     for (let i = 0; i < chips.length; i++) chips[i].el.remove();
@@ -144,20 +144,34 @@ export function initNodeWeb(opts) {
   // Pull a SOFT (out-of-focus) orb in the statement's halo into focus, but only where its label —
   // which sits to the LEFT of the node — lands entirely on empty space (never over content/UI).
   const rectsOverlap = (a, b) => !(a.right + 12 < b.left || a.left - 12 > b.right || a.bottom + 10 < b.top || a.top - 10 > b.bottom);
+  const chipZone = (nx, ny) => {
+    const tr = titleRect(); if (!tr) return 0;
+    const ce = document.getElementById("contact");
+    const cr = ce ? ce.getBoundingClientRect() : null;
+    const cx = (tr.left + tr.right) / 2;
+    const colHalf = clamp(tr.width * 0.5 + 230, 320, 560);
+    const dx = (nx - cx) / colHalf;
+    const hw = window.innerWidth < 760 ? 1 : clamp(1 - dx * dx, 0, 1); // full width on phones (no room to column it there)
+    const topLimit = tr.top - 130, botLimit = cr ? cr.bottom + 24 : tr.bottom + 220;
+    if (ny < topLimit || ny > botLimit) return 0;                // nothing above the statement or below contact
+    const vw = ny <= tr.bottom + 30 ? 1 : 0.4;                   // PRIMARY: the open space flanking the statement; SECONDARY: contact whitespace
+    let w = hw * vw;
+    for (let k = 0; k < recentPts.length; k++) { const d = recentPts[k]; if ((nx - d.x) * (nx - d.x) + (ny - d.y) * (ny - d.y) < 160 * 160) { w *= 0.12; break; } } // spread spawns out
+    return w;
+  };
   const pickNode = (estW) => {
     const tr = titleRect();
     if (!tr) return null;
-    const tcy = ((tr.top + tr.bottom) / 2) * DPR;
-    const bandTop = tcy - H * 0.46, bandBot = tcy + H * 0.46;
     const cands = [];
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
       if (p.focusTarget || p.depth > 0.6) continue;         // only a soft orb gets pulled sharp
-      if (p.y < bandTop || p.y > bandBot) continue;
       if (p.x < 44 * DPR || p.x > W - 44 * DPR) continue;   // just off the extreme edges (label can take either side)
-      cands.push(p);
+      const w = chipZone(p.x / DPR, p.y / DPR);
+      if (w <= 0.05) continue;                              // outside the considered region
+      cands.push({ p: p, k: Math.pow(Math.random(), 1 / w) }); // weighted-random: region-heavy but still varied
     }
-    for (let n = cands.length - 1; n > 0; n--) { const m = (Math.random() * (n + 1)) | 0; const t = cands[n]; cands[n] = cands[m]; cands[m] = t; }
+    cands.sort((a, b) => b.k - a.k);
     const existing = chips.map((c) => c.el.getBoundingClientRect());
     // every real content rect currently in view — the label keeps a clear 16px margin from all of them
     const occ = [];
@@ -165,16 +179,17 @@ export function initNodeWeb(opts) {
       const r = e.getBoundingClientRect();
       if (r.width > 1 && r.height > 1 && r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth) occ.push(r);
     });
-    const M = 16;
+    const mob = window.innerWidth < 760;
+    const M = mob ? 9 : 16, EG = mob ? 4 : 6;                     // tighter clearance on narrow screens so a label can still fit
     const fits = (box) => {
-      if (box.left < 6 || box.right > window.innerWidth - 6) return false;
+      if (box.left < EG || box.right > window.innerWidth - EG) return false;
       for (let k = 0; k < occ.length; k++) { const o = occ[k]; if (!(box.right + M < o.left || box.left - M > o.right || box.bottom + M < o.top || box.top - M > o.bottom)) return false; }
       for (let k = 0; k < existing.length; k++) { if (rectsOverlap(box, existing[k])) return false; }
       return true;
     };
     let fallback = null;
     for (let i = 0; i < cands.length; i++) {
-      const p = cands[i], nx = p.x / DPR, ny = p.y / DPR;
+      const p = cands[i].p, nx = p.x / DPR, ny = p.y / DPR;
       const leftOk = fits({ left: nx - 11 - estW, right: nx - 11, top: ny - 15, bottom: ny + 15 });
       const rightOk = fits({ left: nx + 11, right: nx + 11 + estW, top: ny - 15, bottom: ny + 15 });
       // primarily LEFT: take the first left-capable node (occasionally RIGHT when both have room)...
@@ -186,12 +201,21 @@ export function initNodeWeb(opts) {
   };
   const positionChip = (chip) => {
     const nx = chip.p.x / DPR, ny = chip.p.y / DPR;
-    chip.el.style.left = (chip.side === "right" ? nx + 11 : nx - 11) + "px"; // 11px gap on whichever side of the dot
+    if (!chip.w) chip.w = chip.el.offsetWidth || 0;               // measure the rendered pill once
+    const vw = window.innerWidth;
+    let left = chip.side === "right" ? nx + 11 : nx - 11;         // 11px gap on whichever side of the dot
+    if (chip.side === "right") left = Math.max(4, Math.min(left, vw - 4 - chip.w)); // keep the label fully on-screen
+    else left = Math.min(vw - 4, Math.max(left, chip.w + 4));
+    chip.el.style.left = left + "px";
     chip.el.style.top = ny + "px";
   };
   const spawnChip = () => {
     const cap = nextCap(); if (!cap) return;
-    const estW = Math.min(250, String(cap).length * 7.2 + 22);
+    // accurate label footprint per screen (smaller mono pill on mobile); the positionChip clamp
+    // then guarantees the pill never spills off a viewport edge even if this estimate is tight.
+    const estW = window.innerWidth < 760
+      ? Math.min(190, String(cap).length * 6.2 + 16)
+      : Math.min(250, String(cap).length * 7.2 + 22);
     const res = pickNode(estW); if (!res) return;
     const p = res.p;
     p.focusTarget = 1;
@@ -203,9 +227,25 @@ export function initNodeWeb(opts) {
     positionChip(chip);
     requestAnimationFrame(() => el.classList.add("is-in"));
     chips.push(chip);
+    recentPts.push({ x: p.x / DPR, y: p.y / DPR });
+    if (recentPts.length > 5) recentPts.shift();
   };
   const updateChips = (now) => {
-    if (intensity > 0.34 && chips.length < (window.innerWidth < 760 ? 1 : 3) && now >= nextSpawnAt) {
+    // chips live on a viewport-FIXED layer while the page scrolls underneath, so a chip that spawned
+    // clear ends up over other content once you scroll. Clear them the instant the page scrolls and
+    // let them respawn once you settle back on the statement.
+    if (Math.abs(window.scrollY - lastScrollY) > 1.5) {
+      lastScrollY = window.scrollY;
+      for (let i = chips.length - 1; i >= 0; i--) { chips[i].el.remove(); chips[i].p.focusTarget = 0; }
+      chips.length = 0;
+      nextSpawnAt = now + 350;
+      return;
+    }
+    lastScrollY = window.scrollY;
+    // On phones the centred statement + contact + marquee fill the width, leaving no clear space for a
+    // label — so a chip could only ever sit ON content. Chips are a desktop delight; phones get the calm field.
+    const maxChips = window.innerWidth < 760 ? 0 : 3;
+    if (intensity > 0.34 && chips.length < maxChips && now >= nextSpawnAt) {
       spawnChip();
       nextSpawnAt = now + 820 + Math.random() * 520;
     }
