@@ -517,6 +517,9 @@ import { initDepth } from "./depth.js";
       navLinks.forEach((a) => {
         a.classList.toggle("is-current", a.getAttribute("data-page-link") === name);
       });
+      // The big "Let's build" contact headline is landing-clutter on Work -- keep it for About only.
+      const contactEl = document.getElementById("contact");
+      if (contactEl) contactEl.classList.toggle("contact--nohead", name === "work");
       document.title = titles[name] || document.title;
       if (opts.scroll !== false) {
         if (lenis) lenis.scrollTo(0, { immediate: true });
