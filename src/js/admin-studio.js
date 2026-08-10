@@ -3376,7 +3376,10 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="af"><label class="af__label">Availability badge</label>' +
         '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="avail-toggle"' + ((((data.landing || {}).available) || {}).on ? " checked" : "") + ' /><span>Show an \u201copen to work\u201d pill in the hero</span></label>' +
         '<div class="af__hint">Off by default. A quiet pill with a live green dot appears under the hero when on.</div></div>' +
-        input("Availability text", "landing.available.text", { hint: "e.g. Open to Principal / Staff Product Design roles" })
+        input("Availability text", "landing.available.text", { hint: "e.g. Open to Principal / Staff Product Design roles" }) +
+        '<div class="af"><label class="af__label">Selected-work cue</label>' +
+        '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="cue-toggle"' + (((((data.landing || {}).show) || {}).cue !== false) ? " checked" : "") + ' /><span>Show the \u201cSelected work \u2193\u201d cue in the hero</span></label>' +
+        '<div class="af__hint">A gentle scroll hint at the bottom of the hero. Shown by default; auto-hidden if Selected&nbsp;work sits above the hero.</div></div>'
       );
     },
     contact() {
@@ -4446,9 +4449,9 @@ import { WORLD_LAND } from "./worldland.js";
   }
   function workReorderBlock() {
     const RK = window.RK || {};
-    const defs = RK.WORK_SECTIONS || [["hero", "Hero"], ["himarq", "Numbers"], ["work", "Selected work"], ["capabilities", "Capabilities"]];
+    const defs = RK.WORK_SECTIONS || [["hero", "Hero"], ["highlights", "Highlights"], ["work", "Selected work"], ["capabilities", "Capabilities"]];
     const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
-    const where = { hero: "Statement + brand marquee (fields below)", himarq: "Edit in the Highlights tab", work: "Edit in the Work tab", capabilities: "Edit in the Capabilities tab" };
+    const where = { hero: "The statement, intro & cue (fields below)", highlights: "Brands & numbers, from the Highlights tab", work: "Edit in the Work tab", capabilities: "Edit in the Capabilities tab" };
     const layout = RK.workLayout ? RK.workLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
     let html = secHead("Landing sections", "Reorder the landing sections and show or hide any of them \u2014 use the arrows to move a section, untick to hide it. Contact always stays at the end.");
     html += '<ul class="adm__seclist">';
@@ -5082,6 +5085,13 @@ import { WORLD_LAND } from "./worldland.js";
       data.landing = data.landing || {};
       data.landing.available = data.landing.available || {};
       data.landing.available.on = t.checked;
+      saveDraft(true);
+      apply(true);
+      renderBody();
+    } else if (t.dataset.act === "cue-toggle") {
+      data.landing = data.landing || {};
+      data.landing.show = data.landing.show || {};
+      data.landing.show.cue = t.checked;
       saveDraft(true);
       apply(true);
       renderBody();

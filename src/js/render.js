@@ -394,7 +394,7 @@
   // ---- Work / landing page: reorderable + show/hide sections (mirrors the About model) ----
   const WORK_SECTIONS = [
     ["hero", "Hero"],
-    ["himarq", "Numbers"],
+    ["highlights", "Highlights"],
     ["work", "Selected work"],
     ["capabilities", "Capabilities"],
   ];
@@ -434,7 +434,8 @@
     if (cue) {
       const iHero = order.findIndex((s) => s.key === "hero" && s.on);
       const iWork = order.findIndex((s) => s.key === "work" && s.on);
-      cue.style.display = (iHero !== -1 && iWork > iHero) ? "" : "none";
+      const showCue = !(data.landing && data.landing.show && data.landing.show.cue === false);
+      cue.style.display = (showCue && iHero !== -1 && iWork > iHero) ? "" : "none";
     }
   }
 

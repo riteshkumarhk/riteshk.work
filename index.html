@@ -66,7 +66,7 @@
   <link rel="preload" href="fonts/fraunces-normal-300600-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="css/fonts.css" />
 
-    <link rel="stylesheet" href="css/styles.css?v=56" />
+    <link rel="stylesheet" href="css/styles.css?v=57" />
     <link rel="stylesheet" href="css/project.css?v=14" />
   <link rel="stylesheet" href="css/gensection.css" />
   <link rel="stylesheet" href="css/admin.css?v=24" />
@@ -142,7 +142,7 @@
     <!-- Landing sections: reorder + show/hide from the studio Landing tab. Each block is wrapped
          in a .wsec so render.js can reorder/hide it by id (wsec-<key>). -->
     <div class="wsec sec--first" id="wsec-hero" data-wsec="hero">
-    <!-- First screen: hero (top) + brand marquee (pinned to the bottom on mobile) -->
+    <!-- First screen: the statement (the brand marquee now lives in the Highlights block below). -->
     <div class="hero-screen">
     <!-- ============ HERO ============ -->
     <section class="hero" id="hero">
@@ -166,20 +166,20 @@
 
       <div class="hero__avail" id="heroAvail"></div>
     </section>
-
-    <!-- ============ LOGO MARQUEE — brands & products (studio: Landing → Brands) ============ -->
-    <div class="logos" id="logoMarquee" aria-label="Brands and products I've worked with" hidden>
-      <div class="logos__track" id="logoTrack"></div>
-    </div>
     </div><!-- /.hero-screen -->
     </div><!-- /#wsec-hero -->
 
-    <!-- ============ HIGHLIGHTS — at-a-glance numbers running as a marquee (studio: Highlights) ============ -->
-    <div class="wsec" id="wsec-himarq" data-wsec="himarq">
+    <!-- ============ HIGHLIGHTS — brand marquee + at-a-glance numbers (studio: Highlights) ============ -->
+    <div class="wsec" id="wsec-highlights" data-wsec="highlights">
+    <!-- Brands & products (studio: Highlights) -->
+    <div class="logos" id="logoMarquee" aria-label="Brands and products I've worked with" hidden>
+      <div class="logos__track" id="logoTrack"></div>
+    </div>
+    <!-- At-a-glance numbers (studio: Highlights) -->
     <div class="himarq" id="hiMarquee" aria-label="At a glance" hidden>
       <div class="himarq__track" id="hiTrack"></div>
     </div>
-    </div><!-- /#wsec-himarq -->
+    </div><!-- /#wsec-highlights -->
 
     <!-- ============ WORK ============ -->
     <div class="wsec" id="wsec-work" data-wsec="work">
@@ -319,7 +319,7 @@
   </div>
 
   <script src="js/lenis.min.js"></script>
-    <script src="js/render.js?v=23"></script>
+    <script src="js/render.js?v=24"></script>
     <script src="js/main.js?v=26"></script>
   <script src="js/gensection.js?v=2"></script>
   <script src="js/project.js?v=11"></script>
