@@ -3371,6 +3371,7 @@ import { WORLD_LAND } from "./worldland.js";
         input("Eyebrow", "landing.eyebrow", { toggle: "eyebrow" }) +
         input("Domains", "landing.domains", { toggle: "domains", hint: "e.g. Growth · AI · Identity" }) +
         input("Main statement", "landing.statement", { md: true, type: "textarea", rows: 3, hint: "One line per row. The closing word (why / how) gets the italic accent." }) +
+        stmtSizeBlock() +
         input("Description", "landing.intro", { md: true, type: "textarea", rows: 4, toggle: "intro", hint: "Products auto-bronze; “leading …” phrases auto-bold." }) +
         input("Footer line", "landing.presence", { md: true, toggle: "presence", hint: "e.g. Currently at Microsoft — Hyderabad, India" }) +
         '<div class="af"><label class="af__label">Availability badge</label>' +
@@ -4469,6 +4470,13 @@ import { WORLD_LAND } from "./worldland.js";
     return html;
   }
 
+  function stmtSizeBlock() {
+    var sz = ((data.landing || {}).statementSize) || "large";
+    var opt = function (v, lbl) { return '<option value="' + v + '"' + (sz === v ? " selected" : "") + ">" + lbl + "</option>"; };
+    return '<div class="af"><label class="af__label">Statement size</label><select data-statementsize>' +
+      opt("large", "Large \u2014 full hero") + opt("standard", "Standard") + opt("compact", "Compact \u2014 matches Selected work") +
+      '</select><div class="af__hint">Large is the full hero scale. Compact matches the \u201cSelected work\u201d heading \u2014 handy when the statement sits lower in the page.</div></div>';
+  }
   function secHead(title, note) {
     return '<div class="adm__sec-title">' + title + '</div><div class="adm__sec-note">' + note + "</div>";
   }
@@ -5003,6 +5011,7 @@ import { WORLD_LAND } from "./worldland.js";
   function onChange(e) {
     const t = e.target;
     if (t.dataset.worklayout !== undefined) { data.workLayout = t.value; saveDraft(true); apply(true); return; }
+    if (t.dataset.statementsize !== undefined) { data.landing = data.landing || {}; data.landing.statementSize = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.logosize !== undefined) { const arr = (data.landing || {}).logos, k = +t.dataset.logosize; if (arr && arr[k]) { arr[k].size = t.value; apply(true); } return; }
     if (t.dataset.parxnum !== undefined) { const _pw = data.work[+t.dataset.parxnum]; if (_pw) t.value = (_pw.parAmt != null ? _pw.parAmt : 0); return; }
     if (t.dataset.depthOn !== undefined) { onDepthToggle(t); return; }

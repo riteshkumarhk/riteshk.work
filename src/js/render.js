@@ -465,6 +465,8 @@
     const lines = String(L.statement || "").split("\n").filter((x) => x.length);
     set("heroTitle",
       lines.map((ln) => '<span class="line" data-reveal><span>' + md(ln) + "</span></span>").join(""));
+    const heroTitleEl = byId("heroTitle");
+    if (heroTitleEl) heroTitleEl.className = "hero__title hero__title--" + (L.statementSize || "large");
 
     const showIntro = show.intro !== false;
     set("heroIntro", showIntro ? md(L.intro) : "");

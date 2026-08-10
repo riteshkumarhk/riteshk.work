@@ -301,6 +301,10 @@ html.lite .page { animation: none; }
   font-size: clamp(2.9rem, min(11.5vw, 14.5vh), 10rem);
   line-height: 0.95; letter-spacing: -0.02em;
 }
+/* Studio "Statement size" (Landing tab): large = full hero scale (default); standard steps it
+   down; compact matches the Selected-work heading, for when the statement sits lower in the page. */
+.hero__title--standard { font-size: clamp(2.3rem, min(7vw, 9vh), 6rem); }
+.hero__title--compact { font-size: clamp(1.9rem, 5vw, 4.2rem); line-height: 1.02; }
 .hero__title .line { display: block; overflow: hidden; transition: transform .22s var(--ease-io); }
 .hero__title .line > span { display: block; transform: translateY(105%); }
 .hero__title em { color: var(--accent); font-weight: 300; }
