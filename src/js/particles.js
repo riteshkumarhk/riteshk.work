@@ -4,14 +4,9 @@
    statement. Evolves the old ambient bg-field into the "capabilities moment".
 
    Perf: DPR-capped, pre-rendered glow sprites (fake bokeh, no per-frame blur),
-   paused off-screen / tab-hidden, real-FPS self-disable. On software GPUs /
-   low-power devices (bgCapable false) — or if the live FPS can't hold up — it
-   degrades to a calm STATIC bokeh frame instead of a blank void (?nodes forces
-   the full animated web on for testing).
-
-   Interaction: capability chips fade in beside nodes that snap sharp (the
-   "tip-tip" reveal, zone-weighted + collision-avoiding), and the cursor pulls
-   the nearest soft orb into focus (a quiet focus-lens).
+   paused off-screen / tab-hidden, real-FPS self-disable. Gated off on software
+   GPUs (bgCapable) unless forced (?nodes) — a static fallback lands in a later
+   phase. Chips (the tip-tip capability reveal) land in phase 2.
    ================================================================= */
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -50,6 +45,7 @@ export function initNodeWeb(opts) {
   opts = opts || {};
   if (opts.lite) return;
   const force = !!opts.force;
+  if (!force && !bgCapable()) return; // static fallback comes later
 
   const root = document.documentElement;
   const cssVar = (v, d) => (getComputedStyle(root).getPropertyValue(v).trim() || d);
@@ -73,56 +69,9 @@ export function initNodeWeb(opts) {
   const ctx = canvas.getContext("2d");
 
   let W = 0, H = 0, DPR = 1, parts = [];
-  let mX = -9999, mY = -9999, rafId = 0, running = true, frozen = false;
+  let mX = -9999, mY = -9999, rafId = 0, running = true;
   let f = 0, sampleT0 = 0, checked = false;
   let intensity = 0; // 0 = ambient seeds .. 1 = full network (statement centred)
-  let lensNode = null; // the soft orb currently pulled sharp by the cursor focus-lens
-
-  // Calm STATIC fallback — a single still bokeh frame (no rAF, no chips). Used on software GPUs /
-  // low-power devices, and when the live FPS can't sustain the animated web. The About page still
-  // lists every capability, so this is a graceful degrade, not a loss of content.
-  function renderStatic() {
-    syncTheme();
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
-    const vw = window.innerWidth, vh = window.innerHeight;
-    W = canvas.width = Math.floor(vw * DPR);
-    H = canvas.height = Math.floor(vh * DPR);
-    canvas.style.width = vw + "px";
-    canvas.style.height = vh + "px";
-    ctx.clearRect(0, 0, W, H);
-    // bias the halo toward the statement (or the viewport centre on other pages)
-    let cy = 0.42;
-    const heroEl = document.getElementById("wsec-hero");
-    if (heroEl) { const r = heroEl.getBoundingClientRect(); if (r.height && r.top < vh && r.bottom > 0) cy = clamp((r.top + r.height / 2) / vh, 0.15, 0.85); }
-    const n = Math.round(clamp(vw * vh / 28000, 22, 60));
-    ctx.globalCompositeOperation = curLight ? "source-over" : "lighter";
-    for (let i = 0; i < n; i++) {
-      const depth = Math.random(), accent = Math.random() < 0.16;
-      const x = Math.random() * W;
-      const yb = cy + ((Math.random() + Math.random() + Math.random()) / 3 - 0.5) * 0.9;
-      const y = clamp(yb, 0.02, 0.98) * H;
-      ctx.globalAlpha = clamp((0.06 + depth * 0.16) * (curLight ? 1.5 : 1), 0, 0.55);
-      if (depth < 0.62) {
-        const s = (3 + (1 - depth) * 9) * DPR;
-        ctx.drawImage(accent ? glowAccent : glowIvory, x - s, y - s, s * 2, s * 2);
-      } else {
-        ctx.fillStyle = accent ? ACCENT : IVORY;
-        ctx.beginPath(); ctx.arc(x, y, Math.max(1, 2 * DPR), 0, 6.2832); ctx.fill();
-      }
-    }
-    ctx.globalCompositeOperation = "source-over";
-    ctx.globalAlpha = 1;
-  }
-
-  // Software GPU / low-power (and not forced): render one calm still frame and stop — no animation.
-  if (!force && !bgCapable()) {
-    renderStatic();
-    const reStatic = () => renderStatic();
-    window.addEventListener("resize", reStatic, { passive: true });
-    try { new MutationObserver(reStatic).observe(root, { attributes: true, attributeFilter: ["data-appearance"] }); } catch (e) {}
-    window.__nodeWeb = { static: true, redraw: renderStatic };
-    return;
-  }
 
   // Capability chips — the "tip-tip" focus-pull reveal. A fixed DOM layer above the
   // content (styled in css); each chip fades in beside a node that has snapped crisp.
@@ -130,59 +79,28 @@ export function initNodeWeb(opts) {
   chipLayer.className = "node-chips";
   chipLayer.setAttribute("aria-hidden", "true");
   document.body.appendChild(chipLayer);
-  let chips = [], capPool = [], capIdx = 0, nextSpawnAt = 0, lastScrollY = 0;
+  let chips = [], capPool = [], capIdx = 0, nextSpawnAt = 0;
 
   const resize = () => {
-    if (frozen) { renderStatic(); return; } // after an FPS freeze we only keep the still frame fresh
     for (let i = 0; i < chips.length; i++) chips[i].el.remove();
     chips = [];
-    lensNode = null;
     DPR = Math.min(window.devicePixelRatio || 1, 2);
     W = canvas.width = Math.floor(window.innerWidth * DPR);
     H = canvas.height = Math.floor(window.innerHeight * DPR);
     canvas.style.width = window.innerWidth + "px";
     canvas.style.height = window.innerHeight + "px";
-    const count = Math.round(clamp(window.innerWidth * window.innerHeight / 8500, 80, 300));
-    // seed the majority of particles INTO the red zone so constellations concentrate there. Both the x
-    // column AND the y band are derived from the ELEMENT rects (statement text + contact), so the cluster
-    // matches the visible red zone at ANY window size — it does NOT diffuse on tall/full screens (which
-    // was why a smaller window looked dense but full-screen went sparse).
-    const trc = (() => { const e = document.getElementById("heroTitle"); return e ? e.getBoundingClientRect() : null; })();
-    const heroR = (() => { const e = document.getElementById("wsec-hero"); return e ? e.getBoundingClientRect() : null; })();
-    const contR = (() => { const e = document.getElementById("contact"); return e ? e.getBoundingClientRect() : null; })();
-    const mobile = window.innerWidth < 760;
-    const cxSeed = (trc ? (trc.left + trc.right) / 2 : window.innerWidth / 2) * DPR;
-    // looser column, capped to the viewport so it never piles at the edges on narrow/mobile screens
-    const colSeed = Math.min(clamp(trc ? trc.width * 0.7 + 240 : window.innerWidth * 0.34, 340, 780), window.innerWidth * 0.46) * DPR;
-    // where the statement TEXT + contact will sit vertically when the hero is centred (the intensity
-    // peak). Derived from a scroll-independent shift so the cluster hugs the VISIBLE red band on any
-    // screen size — and frames the statement evenly instead of knotting above it.
-    const delta = heroR ? ((window.innerHeight - heroR.height) / 2 - heroR.top) : 0;
-    const bandTop = (trc ? trc.top : (heroR ? heroR.top : window.innerHeight * 0.4)) + delta;
-    const bandBot = (contR ? contR.bottom : (heroR ? heroR.bottom : window.innerHeight * 0.62)) + delta;
-    const bandCenter = ((bandTop + bandBot) / 2) * DPR;
-    const bandHalf = Math.min((bandBot - bandTop) / 2 + 70, window.innerHeight * 0.42) * DPR;
-    const biasChance = mobile ? 0 : 0.5; // desktop: ~half cluster in the red zone; mobile: all ambient (was better)
+    const count = Math.round(clamp(window.innerWidth * window.innerHeight / 16000, 40, 140));
     parts = new Array(count).fill(0).map(() => {
       const depth = Math.random(); // 0 = far (big soft bokeh) .. 1 = near (small crisp node)
-      let x, y;
-      if (Math.random() < biasChance) { // desktop clusters ~half in the red zone; mobile stays all-ambient
-        x = clamp(cxSeed + ((Math.random() + Math.random() + Math.random()) / 3 - 0.5) * 2 * colSeed, 4, W - 4);
-        y = clamp(bandCenter + ((Math.random() + Math.random()) / 2 - 0.5) * 2 * bandHalf, 4, H - 4);
-      } else {
-        x = Math.random() * W; y = Math.random() * H;
-      }
       return {
-        x: x, y: y, hx: x, hy: y,              // home = seed position (a soft spring keeps it here)
-        vx: 0, vy: 0,                          // velocity -> organic, inertial, damped motion
-        wa: Math.random() * 6.2832,            // wander angle
-        was: 0.006 + Math.random() * 0.012,    // wander rotation speed (each particle unique)
+        x: Math.random() * W, y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.10 * DPR, vy: (Math.random() - 0.5) * 0.10 * DPR,
         depth,
         size: (2.5 + (1 - depth) * 9) * DPR,   // far particles are the big soft bokeh
         baseA: 0.12 + depth * 0.26,            // near particles read a touch brighter
         birth: Math.pow(Math.random(), 1.6),   // most only fade in as the network grows
         accent: Math.random() < 0.16,          // sparse bronze; the rest ivory
-        a: 0, focus: 0, focusTarget: 0, chip: false, zf: 0,
+        a: 0, focus: 0, focusTarget: 0,
       };
     });
   };
@@ -198,61 +116,12 @@ export function initNodeWeb(opts) {
     const d = Math.abs(c - window.innerHeight / 2) / window.innerHeight;
     return clamp(1 - d * 1.3, 0, 1);
   };
-  // --- energy zones (from the user's map): the STATEMENT + CONTACT form the PRIMARY column — densest
-  //     nodes AND densest link structures — the band under the cards is SECONDARY, the footer TERTIARY.
-  //     Horizontally it's a TIGHT column centred on the statement text (so on wide screens the empty
-  //     far side stays near-dead — minimal nodes/links). Boundaries come from live element rects (CSS px). ---
-  let curBands = null;
-  const computeBands = () => {
-    const R = (s) => { const e = document.querySelector(s); return e ? e.getBoundingClientRect() : null; };
-    const cs = R("#cases"), hero = R("#wsec-hero"), title = R("#heroTitle"), ct = R("#contact"), ft = R("footer, .footer");
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const casesBottom = cs ? cs.bottom : -1e9;
-    const primaryTop = hero ? hero.top : (ct ? ct.top : vh * 0.4);
-    const primaryBottom = ct ? ct.bottom : (hero ? hero.bottom : vh * 0.7);
-    const footerBottom = ft ? ft.bottom : primaryBottom + 200;
-    // centre on the actual STATEMENT text so the column follows left/centre/right alignment (not the
-    // full-width section, which would pin the constellation to the viewport centre on wide screens)
-    const cx = title ? (title.left + title.right) / 2 : (hero ? (hero.left + hero.right) / 2 : vw / 2);
-    // a comfortable frame AROUND the statement (extends ~200px beyond the text each side), fixed-ish so
-    // wide screens keep the far sides dark
-    const colHalf = clamp((title ? title.width * 0.5 + 200 : vw * 0.28), 300, 560);
-    return { casesBottom, primaryTop, primaryBottom, footerBottom, cx, colHalf, vw };
-  };
-  // vertical weight: PRIMARY (1.0) across the statement+contact column, a modest SECONDARY band under
-  // the cards, LOW TERTIARY through the footer (the yellow area — kept minimal); zero outside.
-  const vWeight = (b, y) => {
-    if (y < b.casesBottom - 30 || y > b.footerBottom + 14) return 0;
-    if (y < b.primaryTop) return 0.4;              // SECONDARY: band under the cards
-    if (y <= b.primaryBottom) return 1;            // PRIMARY: statement + contact
-    const t = (y - b.primaryBottom) / Math.max(1, b.footerBottom - b.primaryBottom);
-    return clamp(0.34 - 0.26 * t, 0.08, 0.34);     // TERTIARY footer: low, fading toward the bottom
-  };
-  // horizontal weight: a TIGHT column around the statement, falling off QUADRATICALLY to a near-zero
-  // floor outside it — this is what keeps wide-screen far/yellow areas quiet.
-  const hWeight = (b, x) => { const d = Math.abs(x - b.cx) / b.colHalf; return clamp(1 - d * d * 0.85, 0.06, 1); };
-  const zoneFactor = (b, x, y) => vWeight(b, y) * hWeight(b, x);
-
-  // --- text collision holes: the statement lines, the contact block and the footer are NO-SPAWN. Node
-  //     dots and links are carved out of these rects (+ a small margin) so the type sits on clean space
-  //     and the constellation forms AROUND it (matching the user's painted spawn map). ---
-  let curHoles = [];
-  const HOLE_SEL = "#heroTitle .line, #contact, footer, .footer";
-  const HM = 14; // hole margin (CSS px)
-  const computeHoles = () => {
-    const out = [];
-    document.querySelectorAll(HOLE_SEL).forEach((e) => {
-      const r = e.getBoundingClientRect();
-      if (r.width > 1 && r.height > 1 && r.bottom > -HM && r.top < window.innerHeight + HM) out.push(r);
-    });
-    return out;
-  };
-  const inHole = (x, y) => {
-    for (let i = 0; i < curHoles.length; i++) {
-      const r = curHoles[i];
-      if (x > r.left - HM && x < r.right + HM && y > r.top - HM && y < r.bottom + HM) return true;
-    }
-    return false;
+  const statementCanvasY = () => {
+    const el = document.getElementById("wsec-hero");
+    if (!el || el.hidden) return -1;
+    const r = el.getBoundingClientRect();
+    if (r.height === 0) return -1;
+    return (r.top + r.height / 2) * DPR;
   };
 
   const LINK = () => 128 * DPR;
@@ -276,29 +145,19 @@ export function initNodeWeb(opts) {
   // which sits to the LEFT of the node — lands entirely on empty space (never over content/UI).
   const rectsOverlap = (a, b) => !(a.right + 12 < b.left || a.left - 12 > b.right || a.bottom + 10 < b.top || a.top - 10 > b.bottom);
   const pickNode = (estW) => {
-    if (!titleRect()) return null;
-    // Chips ride the SAME zone map as the nodes/links: primarily the statement+contact column, some
-    // in the band under the cards, sparse over the footer — weighted toward the primary centre.
-    const b = curBands || computeBands();
-    const strong = [];  // nodes woven into a constellation (>= 2 links) — chips ride these
-    const weak = [];    // solo / lightly-linked orbs — only a fallback if no constellation node fits
-    const LK2 = LINK() * LINK();
+    const tr = titleRect();
+    if (!tr) return null;
+    const tcy = ((tr.top + tr.bottom) / 2) * DPR;
+    const bandTop = tcy - H * 0.46, bandBot = tcy + H * 0.46;
+    const cands = [];
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
       if (p.focusTarget || p.depth > 0.6) continue;         // only a soft orb gets pulled sharp
+      if (p.y < bandTop || p.y > bandBot) continue;
       if (p.x < 44 * DPR || p.x > W - 44 * DPR) continue;   // just off the extreme edges (label can take either side)
-      if (inHole(p.x / DPR, p.y / DPR)) continue;           // the node dot must not sit on the text
-      const w = zoneFactor(b, p.x / DPR, p.y / DPR);
-      if (w < 0.12) continue;
-      // count neighbours within link distance -> only nodes woven into a constellation are preferred
-      let conn = 0;
-      for (let k = 0; k < parts.length; k++) { if (k === i) continue; const q = parts[k]; if (q.zf < 0.05) continue; const qx = p.x - q.x, qy = p.y - q.y; if (qx * qx + qy * qy < LK2) { if (++conn >= 8) break; } }
-      if (conn >= 2) strong.push({ p: p, key: Math.pow(Math.random(), 1 / (w * (1 + conn * conn * 0.5))) }); // conn^2 -> densest cluster nodes win
-      else weak.push({ p: p, key: Math.pow(Math.random(), 1 / w) });
+      cands.push(p);
     }
-    strong.sort((a, b) => b.key - a.key);
-    weak.sort((a, b) => b.key - a.key);
-    const cands = strong.concat(weak);                       // constellation nodes first, solo only as fallback
+    for (let n = cands.length - 1; n > 0; n--) { const m = (Math.random() * (n + 1)) | 0; const t = cands[n]; cands[n] = cands[m]; cands[m] = t; }
     const existing = chips.map((c) => c.el.getBoundingClientRect());
     // every real content rect currently in view — the label keeps a clear 16px margin from all of them
     const occ = [];
@@ -306,17 +165,16 @@ export function initNodeWeb(opts) {
       const r = e.getBoundingClientRect();
       if (r.width > 1 && r.height > 1 && r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth) occ.push(r);
     });
-    const M = window.innerWidth < 760 ? 10 : 16; // tighter clearance on phones so a chip still fits
-    const edge = window.innerWidth < 760 ? 4 : 6;
+    const M = 16;
     const fits = (box) => {
-      if (box.left < edge || box.right > window.innerWidth - edge) return false;
+      if (box.left < 6 || box.right > window.innerWidth - 6) return false;
       for (let k = 0; k < occ.length; k++) { const o = occ[k]; if (!(box.right + M < o.left || box.left - M > o.right || box.bottom + M < o.top || box.top - M > o.bottom)) return false; }
       for (let k = 0; k < existing.length; k++) { if (rectsOverlap(box, existing[k])) return false; }
       return true;
     };
     let fallback = null;
     for (let i = 0; i < cands.length; i++) {
-      const p = cands[i].p, nx = p.x / DPR, ny = p.y / DPR;
+      const p = cands[i], nx = p.x / DPR, ny = p.y / DPR;
       const leftOk = fits({ left: nx - 11 - estW, right: nx - 11, top: ny - 15, bottom: ny + 15 });
       const rightOk = fits({ left: nx + 11, right: nx + 11 + estW, top: ny - 15, bottom: ny + 15 });
       // primarily LEFT: take the first left-capable node (occasionally RIGHT when both have room)...
@@ -333,12 +191,10 @@ export function initNodeWeb(opts) {
   };
   const spawnChip = () => {
     const cap = nextCap(); if (!cap) return;
-    const mobile = window.innerWidth < 760;
-    const estW = Math.min(mobile ? 188 : 250, String(cap).length * (mobile ? 6.4 : 7.2) + (mobile ? 16 : 22));
+    const estW = Math.min(250, String(cap).length * 7.2 + 22);
     const res = pickNode(estW); if (!res) return;
     const p = res.p;
     p.focusTarget = 1;
-    p.chip = true; // claimed by a chip: the cursor-lens leaves it alone
     const el = document.createElement("div");
     el.className = "node-chip" + (res.side === "right" ? " node-chip--r" : "");
     el.textContent = String(cap);
@@ -349,18 +205,6 @@ export function initNodeWeb(opts) {
     chips.push(chip);
   };
   const updateChips = (now) => {
-    // The node-web is a FIXED layer: nodes don't scroll, but the page content does. So a label that
-    // spawned in clear space ends up over a card/text once you scroll. Retire chips the instant the
-    // page scrolls (they respawn once you settle back on the statement).
-    const sy = window.scrollY || window.pageYOffset || 0;
-    if (Math.abs(sy - lastScrollY) > 1.5) {
-      lastScrollY = sy;
-      for (let i = chips.length - 1; i >= 0; i--) { chips[i].el.remove(); chips[i].p.focusTarget = 0; chips[i].p.chip = false; }
-      chips.length = 0;
-      nextSpawnAt = now + 350; // let the scroll settle before revealing again
-      return;
-    }
-    lastScrollY = sy;
     if (intensity > 0.34 && chips.length < (window.innerWidth < 760 ? 1 : 3) && now >= nextSpawnAt) {
       spawnChip();
       nextSpawnAt = now + 820 + Math.random() * 520;
@@ -375,7 +219,6 @@ export function initNodeWeb(opts) {
         chip.p.focusTarget = 0;
       } else if (chip.state === "out" && now - chip.outAt > 480) {
         chip.el.remove();
-        chip.p.chip = false;
         chips.splice(i, 1);
       }
     }
@@ -388,76 +231,44 @@ export function initNodeWeb(opts) {
     ctx.clearRect(0, 0, W, H);
 
     const mx = mX * DPR, my = mY * DPR, near = 150 * DPR, near2 = near * near;
-    curBands = computeBands();
-    curHoles = computeHoles();
+    const stmtY = statementCanvasY();
     const themeMul = curLight ? 1.4 : 1;
-
-    // --- cursor focus-lens: the nearest soft orb under the pointer snaps sharp (a quiet, discoverable
-    //     delight that reuses the same focus-pull the chips use). Chip-claimed orbs are left alone. ---
-    if (mX > -9998) {
-      const lr2 = (118 * DPR) * (118 * DPR);
-      let best = null, bd = lr2;
-      for (let i = 0; i < parts.length; i++) {
-        const p = parts[i];
-        if (p.chip || p.depth > 0.6 || p.a < 0.03 || inHole(p.x / DPR, p.y / DPR)) continue;
-        const dx = mx - p.x, dy = my - p.y, d2 = dx * dx + dy * dy;
-        if (d2 < bd) { bd = d2; best = p; }
-      }
-      if (best !== lensNode) {
-        if (lensNode && !lensNode.chip) lensNode.focusTarget = 0;
-        lensNode = best;
-      }
-      if (lensNode) lensNode.focusTarget = 1;
-    } else if (lensNode) {
-      if (!lensNode.chip) lensNode.focusTarget = 0;
-      lensNode = null;
-    }
 
     // --- position + alpha pre-pass ---
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
-      // organic bounded motion: a slow wander + a soft spring back to home (so the constellation stays
-      // put and never disperses) + a gentle INERTIAL pull toward the cursor (natural, not robotic). Damped.
-      p.wa += p.was;
-      p.vx += Math.cos(p.wa) * 0.024 * DPR + (p.hx - p.x) * 0.005;
-      p.vy += Math.sin(p.wa) * 0.024 * DPR + (p.hy - p.y) * 0.005;
-      const dxm = mx - p.x, dym = my - p.y;
-      if (dxm * dxm + dym * dym < near2) { p.vx += dxm * 0.0011; p.vy += dym * 0.0011; }
-      p.vx *= 0.9; p.vy *= 0.9;
       p.x += p.vx; p.y += p.vy;
+      const dx = mx - p.x, dy = my - p.y;
+      if (dx * dx + dy * dy < near2) { p.x += dx * 0.0006; p.y += dy * 0.0006; }
+      if (p.x < -30) p.x = W + 30; else if (p.x > W + 30) p.x = -30;
+      if (p.y < -30) p.y = H + 30; else if (p.y > H + 30) p.y = -30;
 
+      const vis = clamp((intensity - p.birth) / 0.4, 0, 1);
       p.focus += ((p.focusTarget || 0) - p.focus) * 0.18;
-      const px = p.x / DPR, py = p.y / DPR;
-      const hole = inHole(px, py);
-      const zf = hole ? 0 : zoneFactor(curBands, px, py);
-      p.zf = zf;
-      // AMBIENT node everywhere from page load (a faint starfield), rising to PROMINENT in the red zone
-      // as the statement engages. The hole keeps the type clean. (Links form the constellations below.)
-      let a = p.baseA * (0.4 + 1.15 * zf * (0.45 + 0.55 * intensity));
-      if (hole) a *= 0.05;
-      p.a = clamp(a * themeMul, 0, 0.85);
+      let a = p.baseA * (0.18 + 0.82 * vis);              // faint seed floor -> grows in
+      if (stmtY >= 0) {                                    // concentrate around the statement band
+        const band = clamp(1 - Math.abs(p.y - stmtY) / (H * 0.62), 0, 1);
+        a *= 0.55 + 0.45 * band * intensity + 0.55 * (1 - intensity);
+      }
+      p.a = clamp(a * themeMul, 0, 0.8);
     }
 
-    // --- connection pass (behind the dots): ambient webs form as you scroll, PROMINENT in the red zone ---
-    if (intensity > 0.05) {
+    // --- connection pass (behind the dots): the network wires up as it grows ---
+    if (intensity > 0.1) {
       const ld = LINK(), ld2 = ld * ld;
       ctx.lineWidth = Math.max(1, DPR * 0.55);
-      const engage = 0.14 + 0.86 * intensity; // constellations FORM as you scroll toward the statement
       for (let i = 0; i < parts.length; i++) {
         const a = parts[i];
-        if (a.a < 0.03) continue;              // gate on presence so faint AMBIENT webs also form, not just red
+        if (a.a < 0.04) continue;
         for (let j = i + 1; j < parts.length; j++) {
           const b = parts[j];
-          if (b.a < 0.03) continue;
+          if (b.a < 0.04) continue;
           const dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy;
           if (d2 > ld2) continue;
-          // never draw a line across a text hole
-          if (inHole(((a.x + b.x) / 2) / DPR, ((a.y + b.y) / 2) / DPR)) continue;
           const prox = 1 - Math.sqrt(d2) / ld;
-          // vague everywhere, bold in the red zone (product of zones)
-          const la = prox * engage * 0.5 * themeMul * (0.18 + 0.82 * a.zf * b.zf);
+          const la = prox * intensity * intensity * 0.34 * themeMul;
           if (la < 0.02) continue;
-          ctx.globalAlpha = Math.min(0.46, la);
+          ctx.globalAlpha = Math.min(0.42, la);
           ctx.strokeStyle = (a.accent || b.accent) ? ACCENT : IVORY;
           ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
         }
@@ -479,14 +290,13 @@ export function initNodeWeb(opts) {
         ctx.lineWidth = DPR;
         ctx.strokeStyle = ACCENT;
         ctx.beginPath(); ctx.arc(p.x, p.y, rr + 6 * DPR, 0, 6.2832); ctx.stroke();
-      } else if (curLight || p.depth > 0.62) {
-        // crisp small node. On LIGHT mode ALL particles render crisp -> soft bokeh glows turn into muddy
-        // 'mould' blobs on the cream background; on dark, only the near ones are crisp.
+      } else if (p.depth > 0.62) {
+        // near: a crisp small node (the network's vertices)
         ctx.globalAlpha = p.a;
         ctx.fillStyle = p.accent ? ACCENT : IVORY;
-        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, p.size * (curLight ? 0.17 : 0.26)), 0, 6.2832); ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, p.size * 0.26), 0, 6.2832); ctx.fill();
       } else {
-        // dark far: a soft bokeh orb (fake depth-of-field)
+        // far: a soft bokeh orb
         ctx.globalAlpha = p.a;
         const g = p.accent ? glowAccent : glowIvory;
         const s = p.size;
@@ -497,27 +307,14 @@ export function initNodeWeb(opts) {
     ctx.globalAlpha = 1;
     updateChips(performance.now());
 
-    // real-FPS self-disable (skipped when forced on for testing) — degrade to the calm still frame
+    // real-FPS self-disable (skipped when forced on for testing)
     f++;
     if (f === 30) sampleT0 = performance.now();
     else if (!force && !checked && f === 90) {
       checked = true;
-      if (60000 / (performance.now() - sampleT0) < 34) { freezeStatic(); return; }
+      if (60000 / (performance.now() - sampleT0) < 34) { disable(); return; }
     }
     rafId = requestAnimationFrame(step);
-  };
-
-  // Stop the animation but keep a tasteful still frame (chips + lens gone), instead of a blank void.
-  const freezeStatic = () => {
-    frozen = true;
-    running = false;
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = 0;
-    window.removeEventListener("mousemove", onMove);
-    for (let i = 0; i < chips.length; i++) chips[i].el.remove();
-    chips = [];
-    if (chipLayer.parentNode) chipLayer.remove();
-    renderStatic();
   };
 
   const disable = () => {
@@ -525,18 +322,16 @@ export function initNodeWeb(opts) {
     if (rafId) cancelAnimationFrame(rafId);
     rafId = 0;
     window.removeEventListener("resize", resize);
-    window.removeEventListener("mousemove", onMove);
     for (let i = 0; i < chips.length; i++) chips[i].el.remove();
     chips = [];
     if (chipLayer.parentNode) chipLayer.remove();
     if (canvas.parentNode) canvas.remove();
   };
 
-  const onMove = (e) => { mX = e.clientX; mY = e.clientY; };
   window.addEventListener("resize", resize, { passive: true });
-  window.addEventListener("mousemove", onMove, { passive: true });
+  window.addEventListener("mousemove", (e) => { mX = e.clientX; mY = e.clientY; }, { passive: true });
   document.addEventListener("visibilitychange", () => {
-    if (!canvas.parentNode || frozen) return;
+    if (!canvas.parentNode) return;
     running = !document.hidden;
     if (running) { if (!rafId) rafId = requestAnimationFrame(step); }
     else if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
