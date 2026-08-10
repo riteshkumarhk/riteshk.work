@@ -7,11 +7,17 @@ import { initDepth } from "./depth.js";
 (function () {
   "use strict";
 
-  /* Own the scroll position on (re)load: the site renders its content asynchronously, so the
-     browser's default "auto" restoration can land you mid-page. Take manual control so a fresh
-     load / hard refresh always starts at the top (internal nav + overlay close still restore
-     their own positions explicitly). */
+  /* Preserve the scroll position across reloads ourselves: the site renders its content
+     asynchronously (and can reorder sections), which defeats the browser's built-in "auto"
+     scroll restoration, so a refresh could land you mid-page. Take manual control, remember
+     the position per page on the way out, and restore it once the content is on screen. */
   try { if ("scrollRestoration" in history) history.scrollRestoration = "manual"; } catch (e) {}
+  var RK_SCROLL_KEY = "rk:scrollY:";
+  function rkSaveScroll() {
+    try { sessionStorage.setItem(RK_SCROLL_KEY + location.pathname, String(Math.round(window.scrollY || window.pageYOffset || 0))); } catch (e) {}
+  }
+  addEventListener("pagehide", rkSaveScroll);
+  addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") rkSaveScroll(); });
 
   /* Discourage casual media saving on the public site: swallow the right-click
      menu and drag-to-save on images / video / canvas — including project media
@@ -527,7 +533,24 @@ import { initDepth } from "./depth.js";
     if (new URLSearchParams(location.search).get("view") === "about") {
       try { history.replaceState({ rkPage: "about" }, "", "/about"); } catch (e) {}
     }
-    showPage(initial, { push: false, force: true });
+    // Restore where you were before the reload (saved by rkSaveScroll on the way out); the
+    // browser's own restore can't, since our content renders after load. No saved value = top.
+    function rkRestoreScroll() {
+      if (location.hash && location.hash.length > 1) return; // let an in-page anchor win
+      var y = 0;
+      try { y = parseInt(sessionStorage.getItem(RK_SCROLL_KEY + location.pathname), 10) || 0; } catch (e) {}
+      var apply = function () { if (lenis) lenis.scrollTo(y, { immediate: true }); else window.scrollTo(0, y); };
+      apply();
+      requestAnimationFrame(function () {
+        apply();
+        var vh = window.innerHeight || 800;
+        document.querySelectorAll(".page.is-active [data-reveal]").forEach(function (el) {
+          if (el.getBoundingClientRect().top < vh * 0.92) el.classList.add("is-in");
+        });
+      });
+    }
+    showPage(initial, { push: false, scroll: false, force: true });
+    rkRestoreScroll();
   })();
 
   /* -------------------------------------------------
