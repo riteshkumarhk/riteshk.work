@@ -4340,5 +4340,23 @@
       "on": false
     }
   ],
-  "aboutGallery": []
+  "aboutGallery": [],
+  "workSections": [
+    {
+      "key": "highlights",
+      "on": true
+    },
+    {
+      "key": "work",
+      "on": true
+    },
+    {
+      "key": "hero",
+      "on": true
+    },
+    {
+      "key": "capabilities",
+      "on": true
+    }
+  ]
 }
