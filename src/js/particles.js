@@ -142,7 +142,7 @@ export function initNodeWeb(opts) {
     H = canvas.height = Math.floor(window.innerHeight * DPR);
     canvas.style.width = window.innerWidth + "px";
     canvas.style.height = window.innerHeight + "px";
-    const count = Math.round(clamp(window.innerWidth * window.innerHeight / 8500, 80, 220));
+    const count = Math.round(clamp(window.innerWidth * window.innerHeight / 8500, 80, 250));
     parts = new Array(count).fill(0).map(() => {
       const depth = Math.random(); // 0 = far (big soft bokeh) .. 1 = near (small crisp node)
       return {
