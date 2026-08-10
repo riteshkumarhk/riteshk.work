@@ -142,7 +142,7 @@ export function initNodeWeb(opts) {
     H = canvas.height = Math.floor(window.innerHeight * DPR);
     canvas.style.width = window.innerWidth + "px";
     canvas.style.height = window.innerHeight + "px";
-    const count = Math.round(clamp(window.innerWidth * window.innerHeight / 16000, 40, 140));
+    const count = Math.round(clamp(window.innerWidth * window.innerHeight / 8500, 80, 220));
     parts = new Array(count).fill(0).map(() => {
       const depth = Math.random(); // 0 = far (big soft bokeh) .. 1 = near (small crisp node)
       return {
@@ -252,6 +252,7 @@ export function initNodeWeb(opts) {
     // in the band under the cards, sparse over the footer — weighted toward the primary centre.
     const b = curBands || computeBands();
     const cands = [];
+    const LK2 = LINK() * LINK();
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
       if (p.focusTarget || p.depth > 0.6) continue;         // only a soft orb gets pulled sharp
@@ -259,7 +260,11 @@ export function initNodeWeb(opts) {
       if (inHole(p.x / DPR, p.y / DPR)) continue;           // the node dot must not sit on the text
       const w = zoneFactor(b, p.x / DPR, p.y / DPR);
       if (w < 0.12) continue;
-      cands.push({ p: p, key: Math.pow(Math.random(), 1 / w) }); // weighted-random order: higher zone weight spawns more often
+      // prefer a node that is part of a STRUCTURE (has neighbours within link distance) over a solo orb
+      let conn = 0;
+      for (let k = 0; k < parts.length; k++) { if (k === i) continue; const q = parts[k]; if (q.zf < 0.05) continue; const qx = p.x - q.x, qy = p.y - q.y; if (qx * qx + qy * qy < LK2) { if (++conn >= 5) break; } }
+      const cw = w * (1 + conn * 1.1);                       // connectivity boost -> chips ride the web
+      cands.push({ p: p, key: Math.pow(Math.random(), 1 / cw) });
     }
     cands.sort((a, b) => b.key - a.key);
     const existing = chips.map((c) => c.el.getBoundingClientRect());
@@ -415,7 +420,7 @@ export function initNodeWeb(opts) {
           if (inHole(((a.x + b.x) / 2) / DPR, ((a.y + b.y) / 2) / DPR)) continue;
           const prox = 1 - Math.sqrt(d2) / ld;
           // bold web in the maroon (product of zones), a faint floor so shapes still form outside it
-          const la = prox * intensity * intensity * 0.36 * themeMul * (0.12 + 0.88 * a.zf * b.zf);
+          const la = prox * intensity * intensity * 0.5 * themeMul * (0.12 + 0.88 * a.zf * b.zf);
           if (la < 0.02) continue;
           ctx.globalAlpha = Math.min(0.46, la);
           ctx.strokeStyle = (a.accent || b.accent) ? ACCENT : IVORY;
