@@ -142,11 +142,24 @@ export function initNodeWeb(opts) {
     H = canvas.height = Math.floor(window.innerHeight * DPR);
     canvas.style.width = window.innerWidth + "px";
     canvas.style.height = window.innerHeight + "px";
-    const count = Math.round(clamp(window.innerWidth * window.innerHeight / 8500, 80, 250));
+    const count = Math.round(clamp(window.innerWidth * window.innerHeight / 8500, 80, 300));
+    // seed the majority of particles INTO the red zone (the statement column) so constellations
+    // concentrate there. x tracks the statement text (scroll-independent); y ~ viewport centre, where
+    // the statement sits when the web is active. The rest spread for the ambient/outer faint shapes.
+    const trc = (() => { const e = document.getElementById("heroTitle"); return e ? e.getBoundingClientRect() : null; })();
+    const cxSeed = (trc ? (trc.left + trc.right) / 2 : window.innerWidth / 2) * DPR;
+    const colSeed = clamp(trc ? trc.width * 0.55 + 210 : window.innerWidth * 0.3, 300, 620) * DPR;
     parts = new Array(count).fill(0).map(() => {
       const depth = Math.random(); // 0 = far (big soft bokeh) .. 1 = near (small crisp node)
+      let x, y;
+      if (Math.random() < 0.64) { // ~64% clustered in the red column; the rest spread across the page
+        x = clamp(cxSeed + ((Math.random() + Math.random() + Math.random()) / 3 - 0.5) * 2 * colSeed, 4, W - 4);
+        y = clamp(H * 0.5 + ((Math.random() + Math.random()) / 2 - 0.5) * 2 * (H * 0.34), 4, H - 4);
+      } else {
+        x = Math.random() * W; y = Math.random() * H;
+      }
       return {
-        x: Math.random() * W, y: Math.random() * H,
+        x: x, y: y,
         vx: (Math.random() - 0.5) * 0.10 * DPR, vy: (Math.random() - 0.5) * 0.10 * DPR,
         depth,
         size: (2.5 + (1 - depth) * 9) * DPR,   // far particles are the big soft bokeh
@@ -251,7 +264,8 @@ export function initNodeWeb(opts) {
     // Chips ride the SAME zone map as the nodes/links: primarily the statement+contact column, some
     // in the band under the cards, sparse over the footer — weighted toward the primary centre.
     const b = curBands || computeBands();
-    const cands = [];
+    const strong = [];  // nodes woven into a constellation (>= 2 links) — chips ride these
+    const weak = [];    // solo / lightly-linked orbs — only a fallback if no constellation node fits
     const LK2 = LINK() * LINK();
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
@@ -260,13 +274,15 @@ export function initNodeWeb(opts) {
       if (inHole(p.x / DPR, p.y / DPR)) continue;           // the node dot must not sit on the text
       const w = zoneFactor(b, p.x / DPR, p.y / DPR);
       if (w < 0.12) continue;
-      // prefer a node that is part of a STRUCTURE (has neighbours within link distance) over a solo orb
+      // count neighbours within link distance -> only nodes woven into a constellation are preferred
       let conn = 0;
-      for (let k = 0; k < parts.length; k++) { if (k === i) continue; const q = parts[k]; if (q.zf < 0.05) continue; const qx = p.x - q.x, qy = p.y - q.y; if (qx * qx + qy * qy < LK2) { if (++conn >= 5) break; } }
-      const cw = w * (1 + conn * 1.1);                       // connectivity boost -> chips ride the web
-      cands.push({ p: p, key: Math.pow(Math.random(), 1 / cw) });
+      for (let k = 0; k < parts.length; k++) { if (k === i) continue; const q = parts[k]; if (q.zf < 0.05) continue; const qx = p.x - q.x, qy = p.y - q.y; if (qx * qx + qy * qy < LK2) { if (++conn >= 8) break; } }
+      if (conn >= 2) strong.push({ p: p, key: Math.pow(Math.random(), 1 / (w * (1 + conn * conn * 0.5))) }); // conn^2 -> densest cluster nodes win
+      else weak.push({ p: p, key: Math.pow(Math.random(), 1 / w) });
     }
-    cands.sort((a, b) => b.key - a.key);
+    strong.sort((a, b) => b.key - a.key);
+    weak.sort((a, b) => b.key - a.key);
+    const cands = strong.concat(weak);                       // constellation nodes first, solo only as fallback
     const existing = chips.map((c) => c.el.getBoundingClientRect());
     // every real content rect currently in view — the label keeps a clear 16px margin from all of them
     const occ = [];
