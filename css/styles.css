@@ -992,20 +992,21 @@ html.lite .bg-field { display: none; }
 /* Ambient background particle field */
 .bg-field { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
 
-/* Capability chips revealed by the node-web focus-pull ("tip-tip"): a fixed layer above the
-   content (below the nav); each pill fades in beside a node that has snapped into focus. */
+/* Capability labels revealed by the node-web focus-pull ("tip-tip"): a fixed layer above the
+   content (below the nav). Each label sits to the LEFT of the node that snapped into focus —
+   the node itself is the single dot the text aligns against. */
 .node-chips { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
 .node-chip {
-  position: absolute; transform: translate(-50%, calc(-50% + 8px));
-  display: inline-flex; align-items: center; gap: .45rem; white-space: nowrap;
+  position: absolute; transform: translate(-100%, calc(-50% + 6px)); white-space: nowrap;
   font-family: var(--mono); font-size: .66rem; letter-spacing: .07em; text-transform: uppercase;
-  color: var(--text); padding: .34rem .72rem .34rem .58rem;
-  background: rgba(10, 10, 12, .62); border: 1px solid var(--line); border-radius: 100px;
+  color: var(--text); padding: .3rem .62rem;
+  background: rgba(10, 10, 12, .5); border: 1px solid var(--line-soft); border-radius: 100px;
   opacity: 0; transition: opacity .5s var(--ease), transform .5s var(--ease); will-change: opacity, transform;
 }
-.node-chip.is-in { opacity: 1; transform: translate(-50%, -50%); }
-.node-chip__dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px rgba(216, 166, 87, .85); flex: none; }
+.node-chip.is-in { opacity: 1; transform: translate(-100%, -50%); }
 html.lite .node-chips { display: none; }
+/* Light theme: the label text is dark ink, so give it a light pill (not the dark one). */
+html[data-appearance="light"] .node-chip { background: rgba(250, 248, 242, 0.8); border-color: rgba(28, 24, 18, 0.12); }
 /* ---------- Light appearance ---------- */
 html[data-appearance="light"] {
   --bg: #f2eee6; --bg-2: #eae5db; --bg-elev: #e2dcd0;

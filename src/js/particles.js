@@ -49,10 +49,18 @@ export function initNodeWeb(opts) {
 
   const root = document.documentElement;
   const cssVar = (v, d) => (getComputedStyle(root).getPropertyValue(v).trim() || d);
-  const ACCENT = cssVar("--accent", "#D8A657");
-  const IVORY = cssVar("--text", "#ECE7E1");
-  const glowIvory = makeGlow(IVORY);
-  const glowAccent = makeGlow(ACCENT);
+  // Colours + glow sprites follow the theme (re-synced whenever it changes): ivory/bronze glowing
+  // on the dark theme; dark ink/gold on the light theme so nothing washes out on cream.
+  let ACCENT = "#D8A657", IVORY = "#ECE7E1", glowIvory = makeGlow("#ECE7E1"), glowAccent = makeGlow("#D8A657"), curLight = null;
+  const syncTheme = () => {
+    const light = root.getAttribute("data-appearance") === "light";
+    if (light === curLight) return;
+    curLight = light;
+    ACCENT = cssVar("--accent", light ? "#9c6b1a" : "#D8A657");
+    IVORY = cssVar("--text", light ? "#1b1915" : "#ECE7E1");
+    glowIvory = makeGlow(IVORY);
+    glowAccent = makeGlow(ACCENT);
+  };
 
   const canvas = document.createElement("canvas");
   canvas.className = "bg-field"; // reuse existing fixed / z-index:-1 / pointer-events:none rule
@@ -72,8 +80,6 @@ export function initNodeWeb(opts) {
   chipLayer.setAttribute("aria-hidden", "true");
   document.body.appendChild(chipLayer);
   let chips = [], capPool = [], capIdx = 0, nextSpawnAt = 0;
-
-  const lightTheme = () => root.getAttribute("data-appearance") === "light";
 
   const resize = () => {
     for (let i = 0; i < chips.length; i++) chips[i].el.remove();
@@ -133,37 +139,56 @@ export function initNodeWeb(opts) {
     return capPool[capIdx++];
   };
   const titleRect = () => { const t = document.getElementById("heroTitle"); return t ? t.getBoundingClientRect() : null; };
-  // A candidate node lives in the statement's vertical halo, off the edges, and clear of the
-  // statement text — so a chip never lands on the words.
-  const pickNode = () => {
+  // Anything a chip must never cover: text, media, links, buttons and the fixed UI.
+  const OCCUPIED = "a,button,input,textarea,select,label,h1,h2,h3,h4,h5,h6,p,li,img,svg,nav,header,footer,.marquee,.logos,.himarq,.dock,.workcue,.hero__now,.hero__label,.hero__avail";
+  // Pull a SOFT (out-of-focus) orb in the statement's halo into focus, but only where its label —
+  // which sits to the LEFT of the node — lands entirely on empty space (never over content/UI).
+  const rectsOverlap = (a, b) => !(a.right + 12 < b.left || a.left - 12 > b.right || a.bottom + 10 < b.top || a.top - 10 > b.bottom);
+  const pickNode = (estW) => {
     const tr = titleRect();
     if (!tr) return null;
     const tcy = ((tr.top + tr.bottom) / 2) * DPR;
-    const bandTop = tcy - H * 0.44, bandBot = tcy + H * 0.44;
-    const clx0 = (tr.left - 26) * DPR, clx1 = (tr.right + 26) * DPR, cly0 = (tr.top - 16) * DPR, cly1 = (tr.bottom + 16) * DPR;
-    const edge = 66 * DPR, cands = [];
+    const bandTop = tcy - H * 0.46, bandBot = tcy + H * 0.46;
+    const cands = [];
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
-      if (p.focusTarget) continue;
+      if (p.focusTarget || p.depth > 0.6) continue;         // only a soft orb gets pulled sharp
       if (p.y < bandTop || p.y > bandBot) continue;
-      if (p.x < edge || p.x > W - edge) continue;
-      if (p.x > clx0 && p.x < clx1 && p.y > cly0 && p.y < cly1) continue;
+      if (p.x < 250 * DPR || p.x > W - 72 * DPR) continue;  // leave room for the leftward label
       cands.push(p);
     }
-    return cands.length ? cands[(Math.random() * cands.length) | 0] : null;
+    for (let n = cands.length - 1; n > 0; n--) { const m = (Math.random() * (n + 1)) | 0; const t = cands[n]; cands[n] = cands[m]; cands[m] = t; }
+    const existing = chips.map((c) => c.el.getBoundingClientRect());
+    // every real content rect currently in view — the label keeps a clear 16px margin from all of them
+    const occ = [];
+    document.querySelectorAll(OCCUPIED).forEach((e) => {
+      const r = e.getBoundingClientRect();
+      if (r.width > 1 && r.height > 1 && r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth) occ.push(r);
+    });
+    const M = 16;
+    for (let i = 0; i < cands.length; i++) {
+      const p = cands[i], nx = p.x / DPR, ny = p.y / DPR;
+      const box = { left: nx - 11 - estW, right: nx - 11, top: ny - 15, bottom: ny + 15 };
+      let bad = false;
+      for (let k = 0; k < occ.length; k++) { const o = occ[k]; if (!(box.right + M < o.left || box.left - M > o.right || box.bottom + M < o.top || box.top - M > o.bottom)) { bad = true; break; } }
+      if (bad) continue;
+      for (let k = 0; k < existing.length; k++) { if (rectsOverlap(box, existing[k])) { bad = true; break; } }
+      if (!bad) return p;
+    }
+    return null;
   };
   const positionChip = (chip) => {
-    chip.el.style.left = (chip.p.x / DPR) + "px";
-    chip.el.style.top = (chip.p.y / DPR - 15) + "px";
+    chip.el.style.left = (chip.p.x / DPR - 11) + "px"; // label right-edge sits just left of the focused dot
+    chip.el.style.top = (chip.p.y / DPR) + "px";
   };
   const spawnChip = () => {
     const cap = nextCap(); if (!cap) return;
-    const p = pickNode(); if (!p) return;
+    const estW = Math.min(250, String(cap).length * 7.2 + 22);
+    const p = pickNode(estW); if (!p) return;
     p.focusTarget = 1;
     const el = document.createElement("div");
     el.className = "node-chip";
-    el.innerHTML = '<span class="node-chip__dot"></span><span class="node-chip__t"></span>';
-    el.querySelector(".node-chip__t").textContent = String(cap);
+    el.textContent = String(cap);
     chipLayer.appendChild(el);
     const chip = { p: p, el: el, born: performance.now(), state: "in", outAt: 0 };
     positionChip(chip);
@@ -192,12 +217,13 @@ export function initNodeWeb(opts) {
 
   const step = () => {
     if (!running) return;
+    syncTheme();
     intensity += (targetIntensity() - intensity) * 0.07;
     ctx.clearRect(0, 0, W, H);
 
     const mx = mX * DPR, my = mY * DPR, near = 150 * DPR, near2 = near * near;
     const stmtY = statementCanvasY();
-    const themeMul = lightTheme() ? 1.8 : 1;
+    const themeMul = curLight ? 1.4 : 1;
 
     // --- position + alpha pre-pass ---
     for (let i = 0; i < parts.length; i++) {
@@ -209,7 +235,7 @@ export function initNodeWeb(opts) {
       if (p.y < -30) p.y = H + 30; else if (p.y > H + 30) p.y = -30;
 
       const vis = clamp((intensity - p.birth) / 0.4, 0, 1);
-      p.focus += ((p.focusTarget || 0) - p.focus) * 0.14;
+      p.focus += ((p.focusTarget || 0) - p.focus) * 0.18;
       let a = p.baseA * (0.18 + 0.82 * vis);              // faint seed floor -> grows in
       if (stmtY >= 0) {                                    // concentrate around the statement band
         const band = clamp(1 - Math.abs(p.y - stmtY) / (H * 0.62), 0, 1);
@@ -240,21 +266,21 @@ export function initNodeWeb(opts) {
       }
     }
 
-    // --- dot pass (additive, so glows read as light on the dark) ---
-    ctx.globalCompositeOperation = "lighter";
+    // --- dot pass: additive glow on dark; normal blend (dark marks) on light so it never washes out ---
+    ctx.globalCompositeOperation = curLight ? "source-over" : "lighter";
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
       if (p.a < 0.012 && p.focus < 0.02) continue;
       if (p.focus > 0.02) {
-        // focused: a soft orb snaps into a crisp bronze vertex with a halo ring
-        const rr = (2.2 + p.focus * 1.7) * DPR;
-        ctx.globalAlpha = clamp(Math.max(p.a, 0.16) + p.focus * 0.55, 0, 1);
+        // focused: a soft orb pulls into a single crisp bronze dot with a brief halo ring
+        const rr = (2.6 + p.focus * 2.2) * DPR;
+        ctx.globalAlpha = clamp(Math.max(p.a, 0.2) + p.focus * 0.6, 0, 1);
         ctx.fillStyle = ACCENT;
         ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, 6.2832); ctx.fill();
-        ctx.globalAlpha = p.focus * 0.42;
+        ctx.globalAlpha = p.focus * 0.4;
         ctx.lineWidth = DPR;
         ctx.strokeStyle = ACCENT;
-        ctx.beginPath(); ctx.arc(p.x, p.y, rr + 5 * DPR, 0, 6.2832); ctx.stroke();
+        ctx.beginPath(); ctx.arc(p.x, p.y, rr + 6 * DPR, 0, 6.2832); ctx.stroke();
       } else if (p.depth > 0.62) {
         // near: a crisp small node (the network's vertices)
         ctx.globalAlpha = p.a;
