@@ -154,7 +154,7 @@ export function initNodeWeb(opts) {
       const p = parts[i];
       if (p.focusTarget || p.depth > 0.6) continue;         // only a soft orb gets pulled sharp
       if (p.y < bandTop || p.y > bandBot) continue;
-      if (p.x < 250 * DPR || p.x > W - 72 * DPR) continue;  // leave room for the leftward label
+      if (p.x < 44 * DPR || p.x > W - 44 * DPR) continue;   // just off the extreme edges (label can take either side)
       cands.push(p);
     }
     for (let n = cands.length - 1; n > 0; n--) { const m = (Math.random() * (n + 1)) | 0; const t = cands[n]; cands[n] = cands[m]; cands[m] = t; }
@@ -166,31 +166,40 @@ export function initNodeWeb(opts) {
       if (r.width > 1 && r.height > 1 && r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth) occ.push(r);
     });
     const M = 16;
+    const fits = (box) => {
+      if (box.left < 6 || box.right > window.innerWidth - 6) return false;
+      for (let k = 0; k < occ.length; k++) { const o = occ[k]; if (!(box.right + M < o.left || box.left - M > o.right || box.bottom + M < o.top || box.top - M > o.bottom)) return false; }
+      for (let k = 0; k < existing.length; k++) { if (rectsOverlap(box, existing[k])) return false; }
+      return true;
+    };
+    let fallback = null;
     for (let i = 0; i < cands.length; i++) {
       const p = cands[i], nx = p.x / DPR, ny = p.y / DPR;
-      const box = { left: nx - 11 - estW, right: nx - 11, top: ny - 15, bottom: ny + 15 };
-      let bad = false;
-      for (let k = 0; k < occ.length; k++) { const o = occ[k]; if (!(box.right + M < o.left || box.left - M > o.right || box.bottom + M < o.top || box.top - M > o.bottom)) { bad = true; break; } }
-      if (bad) continue;
-      for (let k = 0; k < existing.length; k++) { if (rectsOverlap(box, existing[k])) { bad = true; break; } }
-      if (!bad) return p;
+      const leftOk = fits({ left: nx - 11 - estW, right: nx - 11, top: ny - 15, bottom: ny + 15 });
+      const rightOk = fits({ left: nx + 11, right: nx + 11 + estW, top: ny - 15, bottom: ny + 15 });
+      // primarily LEFT: take the first left-capable node (occasionally RIGHT when both have room)...
+      if (leftOk) return { p: p, side: (rightOk && Math.random() < 0.28) ? "right" : "left" };
+      // ...and only fall back to a RIGHT-only node when nothing can take a left label
+      if (rightOk && !fallback) fallback = { p: p, side: "right" };
     }
-    return null;
+    return fallback;
   };
   const positionChip = (chip) => {
-    chip.el.style.left = (chip.p.x / DPR - 11) + "px"; // label right-edge sits just left of the focused dot
-    chip.el.style.top = (chip.p.y / DPR) + "px";
+    const nx = chip.p.x / DPR, ny = chip.p.y / DPR;
+    chip.el.style.left = (chip.side === "right" ? nx + 11 : nx - 11) + "px"; // 11px gap on whichever side of the dot
+    chip.el.style.top = ny + "px";
   };
   const spawnChip = () => {
     const cap = nextCap(); if (!cap) return;
     const estW = Math.min(250, String(cap).length * 7.2 + 22);
-    const p = pickNode(estW); if (!p) return;
+    const res = pickNode(estW); if (!res) return;
+    const p = res.p;
     p.focusTarget = 1;
     const el = document.createElement("div");
-    el.className = "node-chip";
+    el.className = "node-chip" + (res.side === "right" ? " node-chip--r" : "");
     el.textContent = String(cap);
     chipLayer.appendChild(el);
-    const chip = { p: p, el: el, born: performance.now(), state: "in", outAt: 0 };
+    const chip = { p: p, el: el, born: performance.now(), state: "in", outAt: 0, side: res.side };
     positionChip(chip);
     requestAnimationFrame(() => el.classList.add("is-in"));
     chips.push(chip);

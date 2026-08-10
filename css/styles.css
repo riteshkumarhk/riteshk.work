@@ -1004,6 +1004,9 @@ html.lite .bg-field { display: none; }
   opacity: 0; transition: opacity .5s var(--ease), transform .5s var(--ease); will-change: opacity, transform;
 }
 .node-chip.is-in { opacity: 1; transform: translate(-100%, -50%); }
+/* Label to the RIGHT of the dot (used when the left has no room, or occasionally for variety). */
+.node-chip--r { transform: translate(0, calc(-50% + 6px)); }
+.node-chip--r.is-in { transform: translate(0, -50%); }
 html.lite .node-chips { display: none; }
 /* Light theme: the label text is dark ink, so give it a light pill (not the dark one). */
 html[data-appearance="light"] .node-chip { background: rgba(250, 248, 242, 0.8); border-color: rgba(28, 24, 18, 0.12); }
