@@ -89,7 +89,8 @@
     },
     "workTitle": "A few things I've *designed* and the [[thinking]] behind them.",
     "workTitleSize": "compact",
-    "introSpacing": "large"
+    "introSpacing": "compact",
+    "statementSize": "compact"
   },
   "contact": {
     "name": "Ritesh Kumar",
