@@ -79,7 +79,7 @@ export function initNodeWeb(opts) {
   chipLayer.className = "node-chips";
   chipLayer.setAttribute("aria-hidden", "true");
   document.body.appendChild(chipLayer);
-  let chips = [], capPool = [], capIdx = 0, nextSpawnAt = 0;
+  let chips = [], capPool = [], capIdx = 0, nextSpawnAt = 0, lastScrollY = 0;
 
   const resize = () => {
     for (let i = 0; i < chips.length; i++) chips[i].el.remove();
@@ -145,19 +145,35 @@ export function initNodeWeb(opts) {
   // which sits to the LEFT of the node — lands entirely on empty space (never over content/UI).
   const rectsOverlap = (a, b) => !(a.right + 12 < b.left || a.left - 12 > b.right || a.bottom + 10 < b.top || a.top - 10 > b.bottom);
   const pickNode = (estW) => {
-    const tr = titleRect();
-    if (!tr) return null;
-    const tcy = ((tr.top + tr.bottom) / 2) * DPR;
-    const bandTop = tcy - H * 0.46, bandBot = tcy + H * 0.46;
+    if (!titleRect()) return null;
+    // Priority zones (from the user's area map): rare above the card line, PRIMARY just below the
+    // cards around the statement, SECONDARY over contact, TERTIARY over the footer. Spawn is weighted
+    // toward primary and never lands away from these bands.
+    const casesEl = document.getElementById("cases");
+    const contactEl = document.getElementById("contact");
+    const footerEl = document.querySelector("footer, .footer");
+    const cardsBottom = casesEl ? casesEl.getBoundingClientRect().bottom : -1e9;
+    const cr = contactEl ? contactEl.getBoundingClientRect() : null;
+    const contactTop = cr ? cr.top : window.innerHeight;
+    const contactBottom = cr ? cr.bottom : window.innerHeight;
+    const footerBottom = footerEl ? footerEl.getBoundingClientRect().bottom : contactBottom + 220;
+    const zoneW = (y) => {
+      if (y < cardsBottom - 30 || y > footerBottom + 12) return 0;  // outside the spawn area
+      if (y < cardsBottom) return 0.1;                              // above the card line: rare
+      if (y < contactTop) return 1;                                // PRIMARY: below cards, around the statement
+      if (y < contactBottom) return 0.5;                           // SECONDARY: contact
+      return 0.25;                                                 // TERTIARY: footer
+    };
     const cands = [];
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
       if (p.focusTarget || p.depth > 0.6) continue;         // only a soft orb gets pulled sharp
-      if (p.y < bandTop || p.y > bandBot) continue;
       if (p.x < 44 * DPR || p.x > W - 44 * DPR) continue;   // just off the extreme edges (label can take either side)
-      cands.push(p);
+      const w = zoneW(p.y / DPR);
+      if (w <= 0) continue;
+      cands.push({ p: p, key: Math.pow(Math.random(), 1 / w) }); // weighted-random order: higher zone weight spawns more often
     }
-    for (let n = cands.length - 1; n > 0; n--) { const m = (Math.random() * (n + 1)) | 0; const t = cands[n]; cands[n] = cands[m]; cands[m] = t; }
+    cands.sort((a, b) => b.key - a.key);
     const existing = chips.map((c) => c.el.getBoundingClientRect());
     // every real content rect currently in view — the label keeps a clear 16px margin from all of them
     const occ = [];
@@ -174,7 +190,7 @@ export function initNodeWeb(opts) {
     };
     let fallback = null;
     for (let i = 0; i < cands.length; i++) {
-      const p = cands[i], nx = p.x / DPR, ny = p.y / DPR;
+      const p = cands[i].p, nx = p.x / DPR, ny = p.y / DPR;
       const leftOk = fits({ left: nx - 11 - estW, right: nx - 11, top: ny - 15, bottom: ny + 15 });
       const rightOk = fits({ left: nx + 11, right: nx + 11 + estW, top: ny - 15, bottom: ny + 15 });
       // primarily LEFT: take the first left-capable node (occasionally RIGHT when both have room)...
@@ -205,6 +221,18 @@ export function initNodeWeb(opts) {
     chips.push(chip);
   };
   const updateChips = (now) => {
+    // The node-web is a FIXED layer: nodes don't scroll, but the page content does. So a label that
+    // spawned in clear space ends up over a card/text once you scroll. Retire chips the instant the
+    // page scrolls (they respawn once you settle back on the statement).
+    const sy = window.scrollY || window.pageYOffset || 0;
+    if (Math.abs(sy - lastScrollY) > 1.5) {
+      lastScrollY = sy;
+      for (let i = chips.length - 1; i >= 0; i--) { chips[i].el.remove(); chips[i].p.focusTarget = 0; }
+      chips.length = 0;
+      nextSpawnAt = now + 350; // let the scroll settle before revealing again
+      return;
+    }
+    lastScrollY = sy;
     if (intensity > 0.34 && chips.length < (window.innerWidth < 760 ? 1 : 3) && now >= nextSpawnAt) {
       spawnChip();
       nextSpawnAt = now + 820 + Math.random() * 520;
