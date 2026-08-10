@@ -234,6 +234,16 @@ export function initNodeWeb(opts) {
     const stmtY = statementCanvasY();
     const themeMul = curLight ? 1.4 : 1;
 
+    // keep the ambient field OUT of the readable content so it never sits over the type and hurts
+    // legibility (worst on the light theme). Cheap: a few rects, gathered once per frame.
+    const avoid = [];
+    document.querySelectorAll("#heroTitle, #contact, #workHeading, .hero__intro, .hero__label").forEach((e) => {
+      const r = e.getBoundingClientRect();
+      if (r.width > 1 && r.height > 1 && r.bottom > -24 && r.top < window.innerHeight + 24) avoid.push(r);
+    });
+    const AM = 8; // clearance margin around the text (CSS px)
+    const inAvoid = (cxp, cyp) => { const x = cxp / DPR, y = cyp / DPR; for (let k = 0; k < avoid.length; k++) { const r = avoid[k]; if (x > r.left - AM && x < r.right + AM && y > r.top - AM && y < r.bottom + AM) return true; } return false; };
+
     // --- position + alpha pre-pass ---
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
@@ -251,6 +261,7 @@ export function initNodeWeb(opts) {
         a *= 0.55 + 0.45 * band * intensity + 0.55 * (1 - intensity);
       }
       p.a = clamp(a * themeMul, 0, 0.8);
+      if (inAvoid(p.x, p.y)) p.a = 0;      // never render the field over the readable text
     }
 
     // --- connection pass (behind the dots): the network wires up as it grows ---
@@ -265,6 +276,7 @@ export function initNodeWeb(opts) {
           if (b.a < 0.04) continue;
           const dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy;
           if (d2 > ld2) continue;
+          if (inAvoid((a.x + b.x) / 2, (a.y + b.y) / 2)) continue; // don't draw a line across the text
           const prox = 1 - Math.sqrt(d2) / ld;
           const la = prox * intensity * intensity * 0.34 * themeMul;
           if (la < 0.02) continue;
