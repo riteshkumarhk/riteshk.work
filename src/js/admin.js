@@ -671,7 +671,10 @@ import {
     var _fly = document.querySelector(".rkfly"); if (_fly && _fly.__dismiss) _fly.__dismiss(true);   // fold the recruiter flyout away — the menu itself offers “Special view”
     const theme = (window.__theme ? window.__theme.mode() : (localStorage.getItem(THEME_KEY) || "system"));
     const narrow = window.innerWidth < ADMIN_MIN;
-    const owner = !!localStorage.getItem(HASH_KEY);   // only the owner's own browser gets Present mode
+    // "Owner device" = set an admin key here (HASH_KEY) OR ever signed in as admin (rk:owner is durable —
+    // saveAdminSession writes it on every sign-in and it survives exit). So Present mode stays available on a
+    // trusted device even after admin mode is closed; the unlock itself still asks for the recovery passphrase.
+    const owner = !!(localStorage.getItem(HASH_KEY) || localStorage.getItem("rk:owner"));
     // Installing the site as an app is offered only to the owner (signed in / their device) - never nagged to visitors.
     const canInstall = !!window.__rkInstall && (owner || !!(localStorage.getItem("rk:admin:sess") || localStorage.getItem("rk:owner")));
     menuEl = document.createElement("div");

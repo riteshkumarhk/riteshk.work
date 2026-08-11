@@ -6187,16 +6187,38 @@ import { WORLD_LAND } from "./worldland.js";
   }
   var RECOVERY_HASH_KEY = "rk:recovery:hash";
   var recoveryPassCache = null;
+  // The first owner-wrapped SEK in the loaded content proves a recovery passphrase already exists — the SAME
+  // one unlocks it on ANY device (the derived key comes from the passphrase + the salt stored in the wrap).
+  // The local hash below is only a per-browser convenience for the "set vs enter" choice + quick typo checks.
+  function firstOwnerWrap() {
+    var works = (data && data.work) || [];
+    for (var i = 0; i < works.length; i++) {
+      var w = works[i]; if (!w) continue;
+      if (w.enc && w.enc.wraps && w.enc.wraps.owner) return w.enc.wraps.owner;
+      var st = w.study;
+      if (st && st.enc && st.enc.wraps && st.enc.wraps.owner) return st.enc.wraps.owner;
+    }
+    return null;
+  }
   async function ensureRecoveryPass() {
     if (recoveryPassCache !== null) return recoveryPassCache;
     var have = localStorage.getItem(RECOVERY_HASH_KEY);
-    var pass = await credModal(have
-      ? { title: "Recovery passphrase", sub: "Enter your recovery passphrase to protect and re-open your NDA content.", cta: "Unlock", verifyHash: have, mismatch: "That\u2019s not your recovery passphrase." }
-      : { title: "Set a recovery passphrase", sub: "Your master key for all NDA / protected content \u2014 it lets you always edit, even on a new device. Store it safely: it can\u2019t be reset without losing access to that content.", cta: "Set", confirm: true, minLen: 8 });
-    if (pass === null) return null;
-    if (!have) localStorage.setItem(RECOVERY_HASH_KEY, await sha256(rkNormPass(pass)));
-    recoveryPassCache = pass;
-    return pass;
+    var wrap = have ? null : firstOwnerWrap();   // fresh browser, but protected content already exists on the site
+    while (true) {
+      var pass = await credModal(have
+        ? { title: "Recovery passphrase", sub: "Enter your recovery passphrase to protect and re-open your NDA content.", cta: "Unlock", verifyHash: have, mismatch: "That\u2019s not your recovery passphrase." }
+        : wrap
+        ? { title: "Recovery passphrase", sub: "Enter the recovery passphrase you set on your other device \u2014 the same one unlocks your protected content everywhere.", cta: "Unlock" }
+        : { title: "Set a recovery passphrase", sub: "Your master key for all NDA / protected content \u2014 it lets you always edit, even on a new device. Store it safely: it can\u2019t be reset without losing access to that content.", cta: "Set", confirm: true, minLen: 8 });
+      if (pass === null) return null;
+      if (wrap) {                                 // verify against the real wrap so a wrong pass is never trusted (rkUnwrapSek throws on mismatch)
+        try { await rkUnwrapSek(pass, wrap); }
+        catch (e) { status("That recovery passphrase didn\u2019t unlock your protected content \u2014 try again."); continue; }
+      }
+      if (!have) localStorage.setItem(RECOVERY_HASH_KEY, await sha256(rkNormPass(pass)));
+      recoveryPassCache = pass;
+      return pass;
+    }
   }
   async function ensureTicketCode(sv) {
     if (rkNormPass(ticketPlain[sv.id])) return ticketPlain[sv.id];
