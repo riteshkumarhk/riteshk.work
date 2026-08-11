@@ -4353,10 +4353,6 @@
   "aboutGallery": [],
   "workSections": [
     {
-      "key": "highlights",
-      "on": true
-    },
-    {
       "key": "intro",
       "on": true
     },
@@ -4365,11 +4361,11 @@
       "on": true
     },
     {
-      "key": "hero",
+      "key": "highlights",
       "on": true
     },
     {
-      "key": "capabilities",
+      "key": "hero",
       "on": true
     }
   ]
