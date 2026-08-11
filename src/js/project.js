@@ -1216,9 +1216,9 @@
     overlay.innerHTML =
       '<div class="pj__scroll">' +
         '<div class="pj__ctrl">' +
-          '<button class="pj__icon" data-pj="prev" aria-label="Previous project" title="Previous">‹</button>' +
-          '<button class="pj__icon" data-pj="next" aria-label="Next project" title="Next">›</button>' +
-          '<button class="pj__icon pj__icon--close" data-pj="close" aria-label="Close case study" title="Close">✕</button>' +
+          '<button class="pj__icon" data-pj="prev" aria-label="Previous project" title="Previous"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>' +
+          '<button class="pj__icon" data-pj="next" aria-label="Next project" title="Next"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button>' +
+          '<button class="pj__icon pj__icon--close" data-pj="close" aria-label="Close case study" title="Close"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
         '</div>' +
         '<div class="pj__shell">' +
           '<aside class="pj__side">' +
