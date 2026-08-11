@@ -341,6 +341,9 @@ video.pjb__media-el { background: #000; }
 .pjb__gallery-nav--prev { left: .55rem; }
 .pjb__gallery-nav--next { right: .55rem; }
 @media (hover: none) { .pjb__gallery-nav { display: none; } }
+/* Light theme: match the cream glass (like the --ondark variant) so the flipper never reads as a dark blob on the light page. */
+html[data-appearance="light"] .pjb__gallery-nav { background: rgba(238, 236, 232, .82); color: #14110c; border-color: rgba(20, 17, 12, .14); }
+html[data-appearance="light"] .pjb__gallery-nav:hover { background: rgba(247, 246, 243, .96); border-color: var(--accent); color: #000; }
 .pjb__gallery-track { display: flex; gap: 1.1rem; }
 .pjb__slide { flex: 0 0 84%; max-width: 84%; scroll-snap-align: center; }
 .pjb__slide-media { border-radius: 6px; overflow: hidden; border: 1px solid var(--line-soft); }
