@@ -57,8 +57,8 @@ export function initNodeWeb(opts) {
     if (light === curLight) return;
     curLight = light;
     ACCENT = cssVar("--accent", light ? "#9c6b1a" : "#D8A657");
-    // On light the ambient web is a cool SLATE (crisp), not the muddy ink bokeh that read as 'mould' on cream.
-    IVORY = light ? "#6b7690" : cssVar("--text", "#ECE7E1");
+    // On light the ambient web is a deep INK-NAVY (crisp): strong contrast on cream, cool + editorial, never the muddy bokeh 'mould'.
+    IVORY = light ? "#33405e" : cssVar("--text", "#ECE7E1");
     glowIvory = makeGlow(IVORY);
     glowAccent = makeGlow(ACCENT);
   };
@@ -332,9 +332,9 @@ export function initNodeWeb(opts) {
           if (d2 > ld2) continue;
           if (inAvoid((a.x + b.x) / 2, (a.y + b.y) / 2)) continue; // don't draw a line across the text
           const prox = 1 - Math.sqrt(d2) / ld;
-          const la = prox * intensity * intensity * 0.34 * themeMul;
+          const la = prox * intensity * intensity * 0.34 * themeMul * (curLight ? 1.6 : 1);
           if (la < 0.02) continue;
-          ctx.globalAlpha = Math.min(0.42, la);
+          ctx.globalAlpha = Math.min(curLight ? 0.55 : 0.42, la);
           ctx.strokeStyle = (!curLight && (a.accent || b.accent)) ? ACCENT : IVORY;
           ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
         }
@@ -359,7 +359,7 @@ export function initNodeWeb(opts) {
       } else if (curLight || p.depth > 0.62) {
         // crisp small node. On LIGHT every particle is crisp (soft bokeh muddies into 'mould' on
         // cream) and the ambient web is cool slate; bronze stays reserved for the focused/chip nodes.
-        ctx.globalAlpha = p.a;
+        ctx.globalAlpha = curLight ? Math.min(0.9, p.a * 1.3) : p.a;
         ctx.fillStyle = (p.accent && !curLight) ? ACCENT : IVORY;
         ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, p.size * (p.depth > 0.62 ? 0.26 : 0.16)), 0, 6.2832); ctx.fill();
       } else {
