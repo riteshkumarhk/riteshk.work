@@ -352,10 +352,10 @@
      show/hide from the studio (data.aboutSections = [{key,on}]). Unknown/new keys
      fall back to the canonical order, all shown. */
   const ABOUT_SECTIONS = [
-    ["about", "About"],
+    ["about", "About me"],
     ["recognition", "Recognition"],
-    ["capabilities", "Capabilities"],
-    ["path", "The Path"],
+    ["capabilities", "Skills"],
+    ["path", "Journey"],
     ["education", "Education"],
   ];
   function aboutLayout(data) {

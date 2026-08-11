@@ -128,10 +128,10 @@ import { WORLD_LAND } from "./worldland.js";
     ["insights", "Insights"],
     ["landing", "Landing"],
     ["highlights", "Highlights"],
-    ["capabilities", "Capabilities"],
+    ["capabilities", "Skills"],
     ["work", "Work"],
     ["aboutpage", "About"],
-    ["path", "Path"],
+    ["path", "Journey"],
     ["recognition", "Recognition"],
     ["education", "Education"],
     ["contact", "Contact"],
@@ -1550,7 +1550,7 @@ import { WORLD_LAND } from "./worldland.js";
     }
 
     if (caps.length) {
-      pdfSec("Capabilities");
+      pdfSec("Skills");
       mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
       var capStr = caps.map(function (x) { return rpdfPlain(x); }).join("   \u00b7   ");
       var cl = doc.splitTextToSize(capStr, CW); need(cl.length * 4.4 + 4); doc.text(cl, M, y); y += cl.length * 4.4 + 5;
@@ -3366,7 +3366,7 @@ import { WORLD_LAND } from "./worldland.js";
       return (
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
         group(workReorderBlock()) +
-        '<div class="adm__autobar"><button class="btn btn--auto" data-act="autostyle">Auto-style landing</button><button class="btn btn--auto" data-act="landing-ai" style="margin-left:.5rem">\u2728 Draft with AI</button><span class="adm__auto-note">Auto-style paints the accents; <em>Draft with AI</em> writes the hero, highlights, capabilities &amp; about from a brief \u2014 preview before applying.</span></div>' +
+        '<div class="adm__autobar"><button class="btn btn--auto" data-act="autostyle">Auto-style landing</button><button class="btn btn--auto" data-act="landing-ai" style="margin-left:.5rem">\u2728 Draft with AI</button><span class="adm__auto-note">Auto-style paints the accents; <em>Draft with AI</em> writes the hero, highlights, skills &amp; about from a brief \u2014 preview before applying.</span></div>' +
         group(siteIconBlock()) +
         input("Eyebrow", "landing.eyebrow", { toggle: "eyebrow" }) +
         input("Domains", "landing.domains", { toggle: "domains", hint: "e.g. Growth · AI · Identity" }) +
@@ -3420,7 +3420,7 @@ import { WORLD_LAND } from "./worldland.js";
     },
     capabilities() {
       const list = data.capabilities || [];
-      let html = secHead("Capabilities", "Drives the Capabilities list AND the scrolling reel.") + addBar("capabilities", "Add capability");
+      let html = secHead("Skills", "Drives the Skills list AND the scrolling reel.") + addBar("capabilities", "Add skill");
       list.forEach((c, i) => {
         html += '<div class="card"><div class="card__bar" style="margin-bottom:.5rem"><span class="sortgrip" data-grip data-sortkey="list:capabilities" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span><span class="card__idx">' + (i + 1) + "</span>" + ops("capabilities", i, list.length) + "</div>" +
           '<input type="text" data-list="capabilities" data-index="' + i + '" data-scalar="1" value="' + escAttr(c) + '" /></div>';
@@ -3459,9 +3459,9 @@ import { WORLD_LAND } from "./worldland.js";
     },
     aboutpage() {
       const RK = window.RK || {};
-      const defs = RK.ABOUT_SECTIONS || [["about", "About"], ["recognition", "Recognition"], ["capabilities", "Capabilities"], ["path", "The Path"], ["education", "Education"]];
+      const defs = RK.ABOUT_SECTIONS || [["about", "About me"], ["recognition", "Recognition"], ["capabilities", "Skills"], ["path", "Journey"], ["education", "Education"]];
       const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
-      const where = { about: "Edit the text + photos below in this tab", recognition: "Edit in the Recognition tab", capabilities: "Edit in the Capabilities tab", path: "Edit in the Path tab", education: "Edit in the Education tab" };
+      const where = { about: "Edit the text + photos below in this tab", recognition: "Edit in the Recognition tab", capabilities: "Edit in the Skills tab", path: "Edit in the Journey tab", education: "Edit in the Education tab" };
       const layout = RK.aboutLayout ? RK.aboutLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
       let html = secHead("About page", "Reorder the sections on your About page and show or hide any of them. Use the arrows to move a section up or down, and untick to hide it from visitors. Each section\u2019s content is edited in its own tab \u2014 the About text and Photos live right here.");
       html += '<ul class="adm__seclist">';
@@ -3487,7 +3487,7 @@ import { WORLD_LAND } from "./worldland.js";
     },
     path() {
       const list = data.path || [];
-      let html = secHead("The Path", "Your experience timeline.") + addBar("path", "Add experience");
+      let html = secHead("Journey", "Your experience timeline.") + addBar("path", "Add experience");
       list.forEach((p, i) => {
         html += '<div class="card">' + cardHead(p.role || "Role " + (i + 1), "path", i, list.length) +
           '<div class="af__row">' + itemField("path", i, "years", "Years") +
@@ -3531,7 +3531,7 @@ import { WORLD_LAND } from "./worldland.js";
         "</div>" +
         '<div class="adm__ext">' +
           '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("doc") + '</span><div><b>One-page r\u00e9sum\u00e9 \u2014 PDF</b><span>Clickable case-study links + QR codes</span></div></div>' +
-          '<p class="adm__ext-lead">A print-ready A4 one-pager built live from your content: positioning, key metrics, your top four case studies (each a live link), experience, capabilities, recognition and education. A real PDF with clickable links \u2014 no browser print dialog.</p>' +
+          '<p class="adm__ext-lead">A print-ready A4 one-pager built live from your content: positioning, key metrics, your top four case studies (each a live link), experience, skills, recognition and education. A real PDF with clickable links \u2014 no browser print dialog.</p>' +
           '<div class="imgblk__row"><button class="btn btn--primary" data-act="resume-pdf">' + extIcon("dl", 15) + ' Download PDF r\u00e9sum\u00e9</button></div>' +
           '<div class="af__hint">Built from what you have in admin right now \u2014 publish first so the case-study links resolve on your live site (they point to riteshk.work/work/\u2026).</div>' +
         "</div>" +
@@ -3697,7 +3697,7 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="pass__sub">Leave a section untouched to show everything (recommended). Tick items only to narrow what an approved recruiter sees.</div>' +
         '<details open class="rkcur__grp"><summary>Work shown <span>(none ticked = all work)</span></summary><div class="svchk__grid">' + wOpts + "</div></details>" +
         '<details class="rkcur__grp"><summary>Numbers shown <span>(all by default)</span></summary><div class="svchk__grid">' + hOpts + "</div></details>" +
-        '<details class="rkcur__grp"><summary>Capabilities shown <span>(all by default)</span></summary><div class="svchk__grid">' + cOpts + "</div></details>" +
+        '<details class="rkcur__grp"><summary>Skills shown <span>(all by default)</span></summary><div class="svchk__grid">' + cOpts + "</div></details>" +
         '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button><button class="btn btn--primary" data-go>Save scope</button></div></div>';
       document.body.appendChild(modal);
       settingsMount(modal, opts);
@@ -3905,7 +3905,7 @@ import { WORLD_LAND } from "./worldland.js";
       if (Array.isArray(node)) { for (var i = 0; i < node.length; i++) walk(node[i], label); return; }
       for (var k in node) { if (Object.prototype.hasOwnProperty.call(node, k)) walk(node[k], label); }
     }
-    var SECT = { landing: "Landing & hero", contact: "Contact & r\u00e9sum\u00e9", highlights: "Highlights", capabilities: "Capabilities", recognition: "Recognition", education: "Education", specialViews: "Special views", journey: "Journey" };
+    var SECT = { landing: "Landing & hero", contact: "Contact & r\u00e9sum\u00e9", highlights: "Highlights", capabilities: "Skills", recognition: "Recognition", education: "Education", specialViews: "Special views", journey: "Design Journey" };
     var d = data || {};
     for (var k in d) {
       if (!Object.prototype.hasOwnProperty.call(d, k)) continue;
@@ -4143,7 +4143,7 @@ import { WORLD_LAND } from "./worldland.js";
       '<div class="pass__sub">Approving emails a private link scoped to exactly this selection.</div>' +
       '<details open class="rkcur__grp"><summary>Work shown <span>(none ticked = all work)</span></summary><div class="svchk__grid">' + wOpts + "</div></details>" +
       '<details class="rkcur__grp"><summary>Numbers shown <span>(all by default)</span></summary><div class="svchk__grid">' + hOpts + "</div></details>" +
-      '<details class="rkcur__grp"><summary>Capabilities shown <span>(all by default)</span></summary><div class="svchk__grid">' + cOpts + "</div></details>" +
+      '<details class="rkcur__grp"><summary>Skills shown <span>(all by default)</span></summary><div class="svchk__grid">' + cOpts + "</div></details>" +
       '<div class="rkcur__days"><label>Link lasts <input type="number" min="0" step="1" value="15" data-cur-days /> days <span>(0 = no expiry)</span></label></div>' +
       '<div class="pass__err"></div>' +
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
@@ -4216,7 +4216,7 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="af"><label class="af__label">Auto-hide after (days)</label><input type="number" min="0" step="1" data-e="days" value="' + (sv.days || 0) + '" /><div class="af__hint">0 = never</div></div></div>' +
       '<details open class="rkcur__grp"><summary>Work shown <span>(none ticked = all work)</span></summary><div class="svchk__grid">' + wOpts + "</div></details>" +
       '<details class="rkcur__grp"><summary>Numbers shown <span>(all by default)</span></summary><div class="svchk__grid">' + hOpts + "</div></details>" +
-      '<details class="rkcur__grp"><summary>Capabilities shown <span>(all by default)</span></summary><div class="svchk__grid">' + cOpts + "</div></details>" +
+      '<details class="rkcur__grp"><summary>Skills shown <span>(all by default)</span></summary><div class="svchk__grid">' + cOpts + "</div></details>" +
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button><button class="btn btn--ghost" data-preview>Preview \u2192</button><button class="btn btn--primary" data-go>Save</button></div></div>';
     document.body.appendChild(modal);
     const done = function () { modal.remove(); };
@@ -4456,9 +4456,9 @@ import { WORLD_LAND } from "./worldland.js";
   }
   function workReorderBlock() {
     const RK = window.RK || {};
-    const defs = RK.WORK_SECTIONS || [["hero", "Statement"], ["intro", "Intro"], ["highlights", "Highlights"], ["work", "Selected work"], ["capabilities", "Capabilities"]];
+    const defs = RK.WORK_SECTIONS || [["hero", "Statement"], ["intro", "Intro"], ["highlights", "Highlights"], ["work", "Selected work"], ["capabilities", "Skills"]];
     const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
-    const where = { hero: "The statement + scroll cue (fields below)", intro: "Eyebrow, domains & description (fields below)", highlights: "Brands & numbers, from the Highlights tab", work: "Edit in the Work tab", capabilities: "Edit in the Capabilities tab" };
+    const where = { hero: "The statement + scroll cue (fields below)", intro: "Eyebrow, domains & description (fields below)", highlights: "Brands & numbers, from the Highlights tab", work: "Edit in the Work tab", capabilities: "Edit in the Skills tab" };
     const layout = RK.workLayout ? RK.workLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
     let html = secHead("Landing sections", "Reorder the landing sections and show or hide any of them \u2014 use the arrows to move a section, untick to hide it. Contact always stays at the end.");
     html += '<ul class="adm__seclist">';
@@ -4960,7 +4960,7 @@ import { WORLD_LAND } from "./worldland.js";
   function blank(list) {
     switch (list) {
       case "highlights": return { value: "0+", label: "New metric" };
-      case "capabilities": return "New capability";
+      case "capabilities": return "New skill";
       case "work": return { id: "w" + Date.now(), featured: false, theme: "grid", plateTag: "Tag", client: "Client", period: "Year", title: "", desc: "What you did and the impact.", tags: ["Tag"], image: "" };
       case "path": return { years: "Year", present: false, role: "Role", org: "Organisation", desc: "What you did." };
       case "recognition":
@@ -8219,7 +8219,7 @@ import { WORLD_LAND } from "./worldland.js";
       '<div class="af"><label class="af__label">Write</label><div class="laig__picks">' +
       '<label class="chk"><input type="checkbox" data-laig="hero" checked /> Hero</label>' +
       '<label class="chk"><input type="checkbox" data-laig="highlights" checked /> Highlights</label>' +
-      '<label class="chk"><input type="checkbox" data-laig="capabilities" checked /> Capabilities</label>' +
+      '<label class="chk"><input type="checkbox" data-laig="capabilities" checked /> Skills</label>' +
       '<label class="chk"><input type="checkbox" data-laig="about" checked /> About</label>' +
       "</div></div></div></div>" +
       '<div class="laig__review" hidden></div>' +
@@ -8239,7 +8239,7 @@ import { WORLD_LAND } from "./worldland.js";
       if (picks.hero) h += '<div class="laig__grp"><div class="laig__grptitle">Hero</div>' + fld("Eyebrow", "rvEyebrow", o.eyebrow) + fld("Domains", "rvDomains", o.domains) + fld("Statement (one line per row)", "rvStatement", Array.isArray(o.statement) ? o.statement.join("\n") : o.statement, true, 3) + fld("Intro", "rvIntro", o.intro, true, 3) + fld("Presence", "rvPresence", o.presence) + "</div>";
       if (picks.about) h += '<div class="laig__grp"><div class="laig__grptitle">About</div>' + fld("Lead line", "rvAboutLead", o.aboutLead, true, 2) + fld("Paragraphs (blank line between)", "rvAbout", Array.isArray(o.about) ? o.about.join("\n\n") : o.about, true, 6) + fld("Sign-off", "rvAboutSign", o.aboutSign) + "</div>";
       if (picks.highlights) h += '<div class="laig__grp"><div class="laig__grptitle">Highlights</div>' + fld("value | label per line", "rvHighlights", (o.highlights || []).map(function (x) { x = x || {}; return (x.value || "") + " | " + (x.label || ""); }).join("\n"), true, 5) + "</div>";
-      if (picks.capabilities) h += '<div class="laig__grp"><div class="laig__grptitle">Capabilities</div>' + fld("one per line", "rvCaps", (o.capabilities || []).join("\n"), true, 6) + "</div>";
+      if (picks.capabilities) h += '<div class="laig__grp"><div class="laig__grptitle">Skills</div>' + fld("one per line", "rvCaps", (o.capabilities || []).join("\n"), true, 6) + "</div>";
       review.innerHTML = h;
     }
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
@@ -8709,7 +8709,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (t.why) h += '<div class="rolekit__why">' + escHtml(t.why) + "</div>";
     h += '<div class="rolekit__pick"><span class="rolekit__pick-h">Featured work \u00b7 ' + works.length + "</span><ol>" + works.map(function (w) { return "<li>" + escHtml((w.client ? w.client + " \u2014 " : "") + (w.title || w.id)) + "</li>"; }).join("") + "</ol></div>";
     if (highs.length) h += '<div class="rolekit__pick"><span class="rolekit__pick-h">Numbers</span><div class="rolekit__chips">' + highs.map(function (x) { return '<span class="rolekit__chip">' + escHtml((x.value || "") + " \u00b7 " + (x.label || "")) + "</span>"; }).join("") + "</div></div>";
-    if (caps.length) h += '<div class="rolekit__pick"><span class="rolekit__pick-h">Capabilities</span><div class="rolekit__chips">' + caps.map(function (c) { return '<span class="rolekit__chip">' + escHtml(iprepFlat(c)) + "</span>"; }).join("") + "</div></div>";
+    if (caps.length) h += '<div class="rolekit__pick"><span class="rolekit__pick-h">Skills</span><div class="rolekit__chips">' + caps.map(function (c) { return '<span class="rolekit__chip">' + escHtml(iprepFlat(c)) + "</span>"; }).join("") + "</div></div>";
     h += '<div class="rolekit__act"><button class="btn btn--primary" data-rk-createview>Create this Special View \u2192</button><span class="af__hint">Adds it to Special Views \u2014 set a ticket &amp; publish to share.</span></div></div>';
     return h;
   }

@@ -127,9 +127,9 @@ import {
   const TABS = [
     ["landing", "Landing"],
     ["highlights", "Highlights"],
-    ["capabilities", "Capabilities"],
+    ["capabilities", "Skills"],
     ["work", "Work"],
-    ["path", "Path"],
+    ["path", "Journey"],
     ["recognition", "Recognition"],
     ["education", "Education"],
     ["contact", "Contact"],
