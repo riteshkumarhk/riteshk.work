@@ -89,7 +89,11 @@ export function initNodeWeb(opts) {
     H = canvas.height = Math.floor(window.innerHeight * DPR);
     canvas.style.width = window.innerWidth + "px";
     canvas.style.height = window.innerHeight + "px";
-    const count = Math.round(clamp(window.innerWidth * window.innerHeight / 16000, 40, 140));
+    // Node count tracks screen AREA so the density (nodes per pixel) stays constant on every screen —
+    // a laptop and a 4K display read at the same calm density, the big screen just holds more of the
+    // same field (more nodes within link range = richer constellations). Cap keeps huge displays sane;
+    // at constant density the drawn-link count scales linearly, so this stays cheap.
+    const count = Math.round(clamp(window.innerWidth * window.innerHeight / 16000, 40, 300));
     parts = new Array(count).fill(0).map(() => {
       const depth = Math.random(); // 0 = far (big soft bokeh) .. 1 = near (small crisp node)
       return {
