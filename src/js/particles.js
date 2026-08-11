@@ -259,9 +259,9 @@ export function initNodeWeb(opts) {
       return;
     }
     lastScrollY = window.scrollY;
-    // On phones the centred statement + contact + marquee fill the width, leaving no clear space for a
-    // label — so a chip could only ever sit ON content. Chips are a desktop delight; phones get the calm field.
-    const maxChips = window.innerWidth < 760 ? 0 : 3;
+    // Phones get fewer chips (2 vs 3) and only where a label genuinely fits — fits() below guarantees a
+    // chip never sits on the statement/contact/marquee, so on a cramped screen it simply won't spawn.
+    const maxChips = window.innerWidth < 760 ? 2 : 3;
     if (intensity > 0.34 && chips.length < maxChips && now >= nextSpawnAt) {
       spawnChip();
       nextSpawnAt = now + 820 + Math.random() * 520;
