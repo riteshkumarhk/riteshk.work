@@ -93,7 +93,7 @@ export function initNodeWeb(opts) {
     // a laptop and a 4K display read at the same calm density, the big screen just holds more of the
     // same field (more nodes within link range = richer constellations). Cap keeps huge displays sane;
     // at constant density the drawn-link count scales linearly, so this stays cheap.
-    const count = Math.round(clamp(window.innerWidth * window.innerHeight / 16000, 40, 300));
+    const count = Math.round(clamp(window.innerWidth * window.innerHeight / 16000, 40, 520)); // constant density; cap gives 4K full density
     parts = new Array(count).fill(0).map(() => {
       const depth = Math.random(); // 0 = far (big soft bokeh) .. 1 = near (small crisp node)
       return {
@@ -150,22 +150,24 @@ export function initNodeWeb(opts) {
   const rectsOverlap = (a, b) => !(a.right + 12 < b.left || a.left - 12 > b.right || a.bottom + 10 < b.top || a.top - 10 > b.bottom);
   const chipZone = (nx, ny) => {
     const tr = titleRect(); if (!tr) return 0;
+    const cx = (tr.left + tr.right) / 2, cy = (tr.top + tr.bottom) / 2;
     const ce = document.getElementById("contact");
-    const cr = ce ? ce.getBoundingClientRect() : null;
-    const cx = (tr.left + tr.right) / 2;
-    const colHalf = clamp(tr.width * 0.5 + 230, 320, 560);
-    const dx = (nx - cx) / colHalf;
-    const hw = window.innerWidth < 760 ? 1 : clamp(1 - dx * dx, 0, 1); // full width on phones (no room to column it there)
-    const topLimit = tr.top - 130, botLimit = cr ? cr.bottom + 24 : tr.bottom + 220;
-    if (ny < topLimit || ny > botLimit) return 0;                // nothing above the statement or below contact
-    const vw = ny <= tr.bottom + 30 ? 1 : 0.4;                   // PRIMARY: the open space flanking the statement; SECONDARY: contact whitespace
-    let w = hw * vw;
+    const topLimit = tr.top - 200;                                 // up into the open space above the words
+    const botLimit = ce ? Math.min(tr.bottom + 90, ce.getBoundingClientRect().top - 26) : tr.bottom + 90; // stop ABOVE the contact block
+    if (ny < topLimit || ny > botLimit) return 0;
+    // a broad HALO around the statement: the weight eases with distance from the words so chips gather
+    // AROUND "I shape what gets built, and why", reaching well into the side gutters where the
+    // constellations form, and fading at the far edges.
+    const rx = (nx - cx) / (tr.width * 0.5 + 560);
+    const ry = (ny - cy) / 300;
+    let w = clamp(1 - (rx * rx + ry * ry) * 0.7, 0.06, 1);
     for (let k = 0; k < recentPts.length; k++) { const d = recentPts[k]; if ((nx - d.x) * (nx - d.x) + (ny - d.y) * (ny - d.y) < 160 * 160) { w *= 0.12; break; } } // spread spawns out
     return w;
   };
   const pickNode = (estW) => {
     const tr = titleRect();
     if (!tr) return null;
+    const ld2 = LINK() * LINK();
     const cands = [];
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
@@ -173,13 +175,18 @@ export function initNodeWeb(opts) {
       if (p.x < 44 * DPR || p.x > W - 44 * DPR) continue;   // just off the extreme edges (label can take either side)
       const w = chipZone(p.x / DPR, p.y / DPR);
       if (w <= 0.05) continue;                              // outside the considered region
-      cands.push({ p: p, k: Math.pow(Math.random(), 1 / w) }); // weighted-random: region-heavy but still varied
+      // NO SOLO SPAWNS: the node must be linked into the web; PREFER denser constellations, keep variety
+      let conn = 0;
+      for (let j = 0; j < parts.length; j++) { if (j === i) continue; const q = parts[j]; if (q.a < 0.04) continue; const ddx = p.x - q.x, ddy = p.y - q.y; if (ddx * ddx + ddy * ddy <= ld2) { if (++conn >= 6) break; } }
+      if (conn < 1) continue;                                // never a lone/floating node
+      cands.push({ p: p, k: Math.pow(Math.random(), 1 / (w * (1 + conn * conn * 0.3))) }); // strongly prefer the densest constellations
     }
     cands.sort((a, b) => b.k - a.k);
     const existing = chips.map((c) => c.el.getBoundingClientRect());
     // every real content rect currently in view — the label keeps a clear 16px margin from all of them
     const occ = [];
     document.querySelectorAll(OCCUPIED).forEach((e) => {
+      if (e.closest("#menu")) return;                       // skip the mobile-menu overlay: a hidden full-width phantom on desktop (pointer-events:none)
       const r = e.getBoundingClientRect();
       if (r.width > 1 && r.height > 1 && r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth) occ.push(r);
     });
@@ -283,10 +290,12 @@ export function initNodeWeb(opts) {
     const avoid = [];
     document.querySelectorAll("#heroTitle, #contact, #workHeading, .hero__intro, .hero__label").forEach((e) => {
       const r = e.getBoundingClientRect();
-      if (r.width > 1 && r.height > 1 && r.bottom > -24 && r.top < window.innerHeight + 24) avoid.push(r);
+      if (r.width > 1 && r.height > 1 && r.bottom > -24 && r.top < window.innerHeight + 24) {
+        const m = e.id === "contact" ? 46 : 8; // keep the field WELL clear of the contact details (bigger halo)
+        avoid.push({ x0: r.left - m, x1: r.right + m, y0: r.top - m, y1: r.bottom + m });
+      }
     });
-    const AM = 8; // clearance margin around the text (CSS px)
-    const inAvoid = (cxp, cyp) => { const x = cxp / DPR, y = cyp / DPR; for (let k = 0; k < avoid.length; k++) { const r = avoid[k]; if (x > r.left - AM && x < r.right + AM && y > r.top - AM && y < r.bottom + AM) return true; } return false; };
+    const inAvoid = (cxp, cyp) => { const x = cxp / DPR, y = cyp / DPR; for (let k = 0; k < avoid.length; k++) { const a = avoid[k]; if (x > a.x0 && x < a.x1 && y > a.y0 && y < a.y1) return true; } return false; };
 
     // --- position + alpha pre-pass ---
     for (let i = 0; i < parts.length; i++) {
