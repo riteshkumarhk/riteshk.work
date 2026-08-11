@@ -57,7 +57,8 @@ export function initNodeWeb(opts) {
     if (light === curLight) return;
     curLight = light;
     ACCENT = cssVar("--accent", light ? "#9c6b1a" : "#D8A657");
-    IVORY = cssVar("--text", light ? "#1b1915" : "#ECE7E1");
+    // On light the ambient web is a cool SLATE (crisp), not the muddy ink bokeh that read as 'mould' on cream.
+    IVORY = light ? "#6b7690" : cssVar("--text", "#ECE7E1");
     glowIvory = makeGlow(IVORY);
     glowAccent = makeGlow(ACCENT);
   };
@@ -334,7 +335,7 @@ export function initNodeWeb(opts) {
           const la = prox * intensity * intensity * 0.34 * themeMul;
           if (la < 0.02) continue;
           ctx.globalAlpha = Math.min(0.42, la);
-          ctx.strokeStyle = (a.accent || b.accent) ? ACCENT : IVORY;
+          ctx.strokeStyle = (!curLight && (a.accent || b.accent)) ? ACCENT : IVORY;
           ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
         }
       }
@@ -355,13 +356,14 @@ export function initNodeWeb(opts) {
         ctx.lineWidth = DPR;
         ctx.strokeStyle = ACCENT;
         ctx.beginPath(); ctx.arc(p.x, p.y, rr + 6 * DPR, 0, 6.2832); ctx.stroke();
-      } else if (p.depth > 0.62) {
-        // near: a crisp small node (the network's vertices)
+      } else if (curLight || p.depth > 0.62) {
+        // crisp small node. On LIGHT every particle is crisp (soft bokeh muddies into 'mould' on
+        // cream) and the ambient web is cool slate; bronze stays reserved for the focused/chip nodes.
         ctx.globalAlpha = p.a;
-        ctx.fillStyle = p.accent ? ACCENT : IVORY;
-        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, p.size * 0.26), 0, 6.2832); ctx.fill();
+        ctx.fillStyle = (p.accent && !curLight) ? ACCENT : IVORY;
+        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, p.size * (p.depth > 0.62 ? 0.26 : 0.16)), 0, 6.2832); ctx.fill();
       } else {
-        // far: a soft bokeh orb
+        // dark, far: a soft bokeh orb
         ctx.globalAlpha = p.a;
         const g = p.accent ? glowAccent : glowIvory;
         const s = p.size;
