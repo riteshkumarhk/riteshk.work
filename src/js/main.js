@@ -547,6 +547,14 @@ import { initNodeWeb } from "./particles.js";
       });
     }
     window.__rkGoCapabilities = goToCapabilities;
+    // The CTA stays hidden until a capability chip is clicked; the chip reveals it, then it deep-links.
+    function revealCapsCta() {
+      const el = document.getElementById("heroCapsCta");
+      if (!el || el.classList.contains("is-revealed")) return;
+      el.classList.add("is-shown");
+      requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.add("is-revealed"); }); });
+    }
+    window.__rkRevealCapsCta = revealCapsCta;
     const capsCta = document.getElementById("heroCapsCta");
     if (capsCta) capsCta.addEventListener("click", function (e) { e.preventDefault(); goToCapabilities(); });
 

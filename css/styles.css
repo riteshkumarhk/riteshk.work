@@ -997,13 +997,16 @@ html.lite .bg-field { display: none; }
    the node itself is the single dot the text aligns against. */
 /* "View all capabilities" CTA under the statement -> jumps to the About capabilities section */
 .hero__caps {
-  align-self: center; display: inline-flex; align-items: center; gap: .55rem; width: fit-content;
-  margin-top: clamp(1.5rem, 3.4vw, 2.6rem);
+  display: none; align-self: center; align-items: center; gap: .55rem; width: fit-content;
+  margin-top: clamp(1.4rem, 3vw, 2.4rem);
   font-family: var(--mono); font-size: .72rem; letter-spacing: .14em; text-transform: uppercase;
   color: var(--accent); text-decoration: none;
   padding: .5rem .15rem; border-bottom: 1px solid transparent;
-  transition: opacity .9s var(--ease), transform .9s var(--ease), color .3s var(--ease), border-color .3s var(--ease);
+  opacity: 0; transform: translateY(8px);
+  transition: opacity .55s var(--ease), transform .55s var(--ease), color .3s var(--ease), border-color .3s var(--ease);
 }
+.hero__caps.is-shown { display: inline-flex; }
+.hero__caps.is-revealed { opacity: 1; transform: translateY(0); }
 .hero__caps svg { transition: transform .3s var(--ease); }
 .hero__caps:hover { color: var(--text); border-color: var(--line-soft); }
 .hero__caps:hover svg { transform: translateX(5px); }

@@ -240,7 +240,7 @@ export function initNodeWeb(opts) {
     // interactive: hovering HOLDS the chip (so it's easy to click); clicking jumps to the About capabilities section
     el.addEventListener("pointerenter", () => { chip.hover = true; });
     el.addEventListener("pointerleave", () => { chip.hover = false; chip.born = performance.now(); });
-    el.addEventListener("click", () => { if (window.__rkGoCapabilities) window.__rkGoCapabilities(); });
+    el.addEventListener("click", () => { if (window.__rkRevealCapsCta) window.__rkRevealCapsCta(); });
     positionChip(chip);
     requestAnimationFrame(() => el.classList.add("is-in"));
     chips.push(chip);

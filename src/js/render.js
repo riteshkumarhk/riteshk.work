@@ -473,7 +473,6 @@
     if (capsCtaEl) {
       capsCtaEl.classList.remove("hero__caps--align-left", "hero__caps--align-center", "hero__caps--align-right");
       capsCtaEl.classList.add("hero__caps--align-" + (L.statementAlign || "left"));
-      capsCtaEl.hidden = !((data.capabilities || []).length);
     }
 
     const showIntro = show.intro !== false;
