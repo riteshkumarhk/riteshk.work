@@ -1047,6 +1047,8 @@ html[data-appearance="light"] .nav { mix-blend-mode: normal; }
 html[data-appearance="light"] .nav.is-scrolled { background: rgba(242,238,230,0.72); }
 html[data-appearance="light"] .dock__btn { background: rgba(242,238,230,0.6); }
 html[data-appearance="light"] .dock__btn:hover { background: rgba(242,238,230,0.85); }
+html[data-appearance="light"] .workcue { background: rgba(242,238,230,0.72); }
+html[data-appearance="light"] .workcue:hover { background: rgba(242,238,230,0.9); }
 html[data-appearance="light"] .skip-link { color: #fff; }
 /* Keep the project thumbnails as premium dark plates in light mode: pin the dark
    palette inside them so their labels/grid stay visible, and lift them off the cream. */
