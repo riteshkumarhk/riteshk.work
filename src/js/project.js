@@ -1125,6 +1125,13 @@
     lbxApply();
   }
   function lbxReset() { lbxScale = 1; lbxX = 0; lbxY = 0; lbxApply(); }
+  function lbxScaleTo(t) {                                 // set an absolute zoom level (used by pinch/spread)
+    var prev = lbxScale;
+    lbxScale = Math.max(1, Math.min(6, t));
+    if (lbxScale <= 1.001) { lbxScale = 1; lbxX = 0; lbxY = 0; }
+    else { var r = lbxScale / prev; lbxX *= r; lbxY *= r; }
+    lbxApply();
+  }
   function buildLbx() {
     lbx = document.createElement("div");
     lbx.className = "pjx";
@@ -1156,30 +1163,44 @@
       if (e.target === lbx || e.target === stage) closeLbx();
     });
     stage.addEventListener("wheel", function (e) { e.preventDefault(); lbxZoom(e.deltaY < 0 ? 1.18 : 1 / 1.18); }, { passive: false });
-    var dragging = false, swiping = false, sx = 0, sy = 0, ox = 0, oy = 0;
+    // Touch/pointer gestures on the image: 1 finger = swipe to change image (unzoomed) or pan (zoomed);
+    // 2 fingers = pinch/spread to zoom. CSS touch-action:none lets us own these gestures on touch screens.
+    var pts = {}, nPts = 0, dragging = false, swiping = false, sx = 0, sy = 0, ox = 0, oy = 0, pinchD0 = 0, pinchS0 = 1;
+    function twoDist() { var k = Object.keys(pts), a = pts[k[0]], b = pts[k[1]], dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
     lbxImg.addEventListener("pointerdown", function (e) {
-      if (!e.isPrimary) return;
-      sx = e.clientX; sy = e.clientY;
-      if (lbxScale > 1) {                                  // zoomed in -> drag to pan around the image
-        dragging = true; ox = lbxX; oy = lbxY;
-        try { lbxImg.setPointerCapture(e.pointerId); } catch (er) {}
-        lbx.classList.add("is-grab");
-      } else if (lbxGroup.length > 1) {                    // not zoomed -> track a horizontal swipe to change image
-        swiping = true;
-        try { lbxImg.setPointerCapture(e.pointerId); } catch (er) {}
+      if (!pts[e.pointerId]) nPts++;
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+      try { lbxImg.setPointerCapture(e.pointerId); } catch (er) {}
+      if (nPts === 2) {                                   // second finger down -> begin a pinch
+        swiping = false; dragging = false; lbx.classList.remove("is-grab");
+        pinchD0 = twoDist(); pinchS0 = lbxScale;
+      } else if (nPts === 1) {
+        sx = e.clientX; sy = e.clientY;
+        if (lbxScale > 1) { dragging = true; ox = lbxX; oy = lbxY; lbx.classList.add("is-grab"); }   // zoomed -> pan
+        else if (lbxGroup.length > 1) { swiping = true; }                                            // unzoomed -> maybe swipe
       }
     });
-    lbxImg.addEventListener("pointermove", function (e) { if (!dragging) return; lbxX = ox + (e.clientX - sx); lbxY = oy + (e.clientY - sy); lbxApply(); });
-    var endDrag = function (e) {
-      if (swiping) {                                       // swipe left -> next image, swipe right -> prev (clear horizontal flick only)
-        swiping = false;
-        var dx = e.clientX - sx, dy = e.clientY - sy;
-        if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.4) lbxGo(dx < 0 ? 1 : -1);
+    lbxImg.addEventListener("pointermove", function (e) {
+      if (!pts[e.pointerId]) return;
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+      if (nPts >= 2) { if (pinchD0 > 0) lbxScaleTo(pinchS0 * twoDist() / pinchD0); return; }   // pinch/spread -> zoom
+      if (dragging) { lbxX = ox + (e.clientX - sx); lbxY = oy + (e.clientY - sy); lbxApply(); }
+    });
+    function endPointer(e) {
+      if (!pts[e.pointerId]) return;
+      var wasSwipe = swiping && nPts === 1, ex = e.clientX, ey = e.clientY;
+      delete pts[e.pointerId]; nPts = Math.max(0, nPts - 1);
+      if (nPts < 2) pinchD0 = 0;                          // a finger lifted -> pinch is over
+      if (nPts === 0) {
+        if (wasSwipe) {                                    // swipe left -> next image, right -> prev (clear horizontal flick only)
+          var dx = ex - sx, dy = ey - sy;
+          if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.4) lbxGo(dx < 0 ? 1 : -1);
+        }
+        dragging = false; swiping = false; lbx.classList.remove("is-grab");
       }
-      dragging = false; lbx.classList.remove("is-grab");
-    };
-    lbxImg.addEventListener("pointerup", endDrag);
-    lbxImg.addEventListener("pointercancel", endDrag);
+    }
+    lbxImg.addEventListener("pointerup", endPointer);
+    lbxImg.addEventListener("pointercancel", endPointer);
     lbxImg.addEventListener("dblclick", function () { if (lbxScale > 1) lbxReset(); else lbxZoom(2.2); });
     document.addEventListener("keydown", function (e) {
       if (!lbx || !lbx.classList.contains("is-open")) return;

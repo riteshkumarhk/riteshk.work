@@ -74,6 +74,12 @@
   <!-- Minimal manifest: not for installing the site (no icons/display) — it only declares the
        "Requests" inbox PWA as a related app so getInstalledRelatedApps() can tell it's the owner's phone. -->
   <link rel="manifest" href="/manifest.webmanifest" />
+  <script>
+    // Don't nag regular visitors to "install" the site. Suppress the browser's automatic install
+    // prompt and stash it so the owner can install deliberately from the More menu (once signed in).
+    window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); window.__rkInstall = e; });
+    window.addEventListener("appinstalled", function () { window.__rkInstall = null; });
+  </script>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90' font-family='serif' fill='%23ECE7E1'>R</text></svg>" />
 </head>
 <body class="site-loading">
@@ -318,8 +324,8 @@
     <script src="js/render.js?v=33"></script>
     <script src="js/main.js?v=63"></script>
   <script src="js/gensection.js?v=2"></script>
-  <script src="js/project.js?v=14"></script>
-  <script src="js/admin.js?v=5"></script>
+  <script src="js/project.js?v=15"></script>
+  <script src="js/admin.js?v=6"></script>
   <script src="js/journey.js?v=2"></script>
 
   <!-- Cloudflare Web Analytics (privacy-first, cookieless). Skipped for the site owner and the
