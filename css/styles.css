@@ -689,8 +689,8 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
 }
 .case__meta span:last-child { color: var(--text-faint); }
 .case__title {
-  font-family: var(--serif); font-weight: 300; font-size: clamp(1.5rem, 3.2vw, 2.6rem);
-  line-height: 1.08; letter-spacing: -0.01em; margin-bottom: 1rem; transition: color .4s;
+  font-family: var(--serif); font-weight: 400; font-size: clamp(1.5rem, 3.2vw, 2.6rem);
+  line-height: 1.04; letter-spacing: -0.02em; margin-bottom: 1rem; transition: color .4s;
 }
 .case__link:hover .case__title { color: var(--accent); }
 .case__desc { color: var(--text-dim); font-size: clamp(.95rem, 1.1vw, 1.05rem); line-height: 1.6; max-width: 52ch; }
