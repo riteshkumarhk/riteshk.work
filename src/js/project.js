@@ -631,7 +631,9 @@
       '<div class="pjb__lock"><div class="pjb__lock-ico" aria-hidden="true">' + LOCK_SVG + "</div>" +
       '<p class="pjb__lock-txt">This deeper cut is shared on request.</p>' +
       '<button type="button" class="pj__btn pj__btn--primary" data-pj="unlock">Unlock the full case study</button>' +
-      '<div class="pjb__lock-hint">Recruiter or hiring manager? Enter the pass you were given.</div></div>';
+      '<div class="pjb__lock-hint">Recruiter or hiring manager? Enter the pass you were given.</div>' +
+      '<button type="button" class="pjb__lock-req" data-pj="request">No pass? Request access</button>' +
+      '</div>';
   }
 
   function stickiesBlock(b) {
@@ -1359,6 +1361,7 @@
       else if (kind === "next") nav(1);
       else if (kind === "read") { e.preventDefault(); scrollToCase(); }
       else if (kind === "unlock") unlockFlow();
+      else if (kind === "request") { var rw = workById(activeId); if (rw && window.RK && window.RK.requestAccess) window.RK.requestAccess({ context: "Deeper cut \u2014 " + plain(rw.title) }); }
       else if (kind === "resume") { e.preventDefault(); var dz = data(); var rz = dz && dz.contact && dz.contact.resume; if (rz) { if (window.RK && window.RK.openResume) window.RK.openResume(rz); else window.open(rz, "_blank", "noopener"); } }
       else if (kind === "contact") { e.preventDefault(); closeProject({ push: true }); setTimeout(function () { var c = document.getElementById("contact"); if (c) c.scrollIntoView({ behavior: "smooth" }); }, 320); }
       return;

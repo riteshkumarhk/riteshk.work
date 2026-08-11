@@ -691,6 +691,8 @@ html[data-appearance="light"] .pjb__gallery-nav:hover { background: rgba(247, 24
 .pjb__lock-ico { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--accent); }
 .pjb__lock-txt { color: var(--text-dim); font-size: 1rem; }
 .pjb__lock-hint { font-family: var(--mono); font-size: .7rem; letter-spacing: .04em; text-transform: uppercase; color: var(--text-faint); }
+.pjb__lock-req { font-family: var(--mono); font-size: .7rem; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); text-decoration: underline; text-underline-offset: 3px; background: none; border: 0; cursor: pointer; padding: 0; transition: color .3s; }
+.pjb__lock-req:hover { color: var(--accent); }
 .pjb__lock-spin { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: pjb-lock-spin .8s linear infinite; }
 @keyframes pjb-lock-spin { to { transform: rotate(360deg); } }
 
