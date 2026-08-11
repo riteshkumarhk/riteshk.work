@@ -237,6 +237,10 @@ export function initNodeWeb(opts) {
     el.textContent = String(cap);
     chipLayer.appendChild(el);
     const chip = { p: p, el: el, born: performance.now(), state: "in", outAt: 0, side: res.side };
+    // interactive: hovering HOLDS the chip (so it's easy to click); clicking jumps to the About capabilities section
+    el.addEventListener("pointerenter", () => { chip.hover = true; });
+    el.addEventListener("pointerleave", () => { chip.hover = false; chip.born = performance.now(); });
+    el.addEventListener("click", () => { if (window.__rkGoCapabilities) window.__rkGoCapabilities(); });
     positionChip(chip);
     requestAnimationFrame(() => el.classList.add("is-in"));
     chips.push(chip);
@@ -266,7 +270,7 @@ export function initNodeWeb(opts) {
     for (let i = chips.length - 1; i >= 0; i--) {
       const chip = chips[i];
       positionChip(chip);
-      if (chip.state === "in" && (now - chip.born > 2600 || dropping)) {
+      if (chip.state === "in" && !chip.hover && (now - chip.born > 2600 || dropping)) {
         chip.state = "out"; chip.outAt = now;
         chip.el.classList.remove("is-in");
         chip.p.focusTarget = 0;

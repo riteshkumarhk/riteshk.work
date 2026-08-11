@@ -535,6 +535,21 @@ import { initNodeWeb } from "./particles.js";
     }
     window.__rkShowPage = showPage;
 
+    // Deep-link helper: jump to the Capabilities section on the About page (used by the hero
+    // "View all capabilities" CTA and by clicking a capability chip in the node-web).
+    function goToCapabilities() {
+      showPage("about", { push: true, scroll: false });
+      requestAnimationFrame(function () {
+        const el = document.getElementById("sec-capabilities");
+        if (!el) return;
+        if (lenis) lenis.scrollTo(el, { offset: -24 });
+        else el.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+    window.__rkGoCapabilities = goToCapabilities;
+    const capsCta = document.getElementById("heroCapsCta");
+    if (capsCta) capsCta.addEventListener("click", function (e) { e.preventDefault(); goToCapabilities(); });
+
     navLinks.forEach((a) => {
       a.addEventListener("click", (e) => {
         const name = a.getAttribute("data-page-link");

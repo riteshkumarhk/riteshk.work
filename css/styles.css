@@ -995,15 +995,34 @@ html.lite .bg-field { display: none; }
 /* Capability labels revealed by the node-web focus-pull ("tip-tip"): a fixed layer above the
    content (below the nav). Each label sits to the LEFT of the node that snapped into focus —
    the node itself is the single dot the text aligns against. */
+/* "View all capabilities" CTA under the statement -> jumps to the About capabilities section */
+.hero__caps {
+  align-self: center; display: inline-flex; align-items: center; gap: .55rem; width: fit-content;
+  margin-top: clamp(1.5rem, 3.4vw, 2.6rem);
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--accent); text-decoration: none;
+  padding: .5rem .15rem; border-bottom: 1px solid transparent;
+  transition: opacity .9s var(--ease), transform .9s var(--ease), color .3s var(--ease), border-color .3s var(--ease);
+}
+.hero__caps svg { transition: transform .3s var(--ease); }
+.hero__caps:hover { color: var(--text); border-color: var(--line-soft); }
+.hero__caps:hover svg { transform: translateX(5px); }
+.hero__caps:focus-visible { outline: none; color: var(--text); border-color: var(--accent); }
+.hero__caps--align-left { align-self: flex-start; }
+.hero__caps--align-center { align-self: center; }
+.hero__caps--align-right { align-self: flex-end; }
+
 .node-chips { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
 .node-chip {
   position: absolute; transform: translate(-100%, calc(-50% + 6px)); white-space: nowrap;
   font-family: var(--mono); font-size: .66rem; letter-spacing: .07em; text-transform: uppercase;
   color: var(--text); padding: .3rem .62rem;
   background: rgba(10, 10, 12, .5); border: 1px solid var(--line-soft); border-radius: 100px;
-  opacity: 0; transition: opacity .5s var(--ease), transform .5s var(--ease); will-change: opacity, transform;
+  pointer-events: auto; cursor: pointer;
+  opacity: 0; transition: opacity .5s var(--ease), transform .5s var(--ease), color .25s, border-color .25s; will-change: opacity, transform;
 }
 .node-chip.is-in { opacity: 1; transform: translate(-100%, -50%); }
+.node-chip:hover { color: var(--accent); border-color: var(--accent); }
 /* Label to the RIGHT of the dot (used when the left has no room, or occasionally for variety). */
 .node-chip--r { transform: translate(0, calc(-50% + 6px)); }
 .node-chip--r.is-in { transform: translate(0, -50%); }
