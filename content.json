@@ -1241,7 +1241,8 @@
         }
       },
       "parDir": "down",
-      "parAmt": 50
+      "parAmt": 50,
+      "cardDesc": "Windows Hello's redesign to feel modern and trustworthy across passkeys, new devices, and evolving security models."
     },
     {
       "id": "w1783840785203",
@@ -2003,7 +2004,8 @@
         "focus": 0.5,
         "on": true,
         "map": "/assets/uploads/6f5984c38b1f2eafd7c5f86965e5056309f9c7c830192b12745dc437d72f6a2e.png"
-      }
+      },
+      "cardDesc": "Defining Microsoft Edge's onboarding journey end-to-end, shaping multi-year strategy and securing leadership investment for the next-gen experience."
     },
     {
       "id": "w1783924971648",
@@ -2596,7 +2598,8 @@
             }
           ]
         }
-      }
+      },
+      "cardDesc": "Consent framework to unifying product level permissions across Windows, sign-in, and app entry points to an account level consent."
     },
     {
       "id": "w1783695671548",
@@ -3098,7 +3101,8 @@
         }
       },
       "parDir": "down",
-      "parAmt": 50
+      "parAmt": 50,
+      "cardDesc": "Shaped end-to-end Game Pass growth strategy across acquisition, retention, and reactivation to reduce churn and guide future investment."
     },
     {
       "id": "xbox",
