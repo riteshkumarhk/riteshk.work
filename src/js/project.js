@@ -1131,9 +1131,9 @@
     lbx.setAttribute("role", "dialog"); lbx.setAttribute("aria-modal", "true"); lbx.setAttribute("aria-label", "Image viewer");
     lbx.innerHTML =
       '<div class="pjx__ctrl">' +
-        '<button class="pjx__btn" type="button" data-lz="out" aria-label="Zoom out" title="Zoom out">\u2212</button>' +
         '<button class="pjx__btn" type="button" data-lz="in" aria-label="Zoom in" title="Zoom in">+</button>' +
-        '<button class="pjx__btn" type="button" data-lz="reset" aria-label="Reset zoom" title="Reset">\u21ba</button>' +
+        '<button class="pjx__btn pjx__btn--zctl" type="button" data-lz="out" aria-label="Zoom out" title="Zoom out">\u2212</button>' +
+        '<button class="pjx__btn pjx__btn--zctl" type="button" data-lz="reset" aria-label="Reset zoom" title="Reset">\u21ba</button>' +
         '<button class="pjx__btn pjx__btn--close" type="button" data-lx aria-label="Close" title="Close">\u2715</button>' +
       '</div>' +
       '<figure class="pjx__stage"><img class="pjx__img" alt="" draggable="false" /></figure>' +
@@ -1156,15 +1156,28 @@
       if (e.target === lbx || e.target === stage) closeLbx();
     });
     stage.addEventListener("wheel", function (e) { e.preventDefault(); lbxZoom(e.deltaY < 0 ? 1.18 : 1 / 1.18); }, { passive: false });
-    var dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+    var dragging = false, swiping = false, sx = 0, sy = 0, ox = 0, oy = 0;
     lbxImg.addEventListener("pointerdown", function (e) {
-      if (lbxScale <= 1) return;
-      dragging = true; sx = e.clientX; sy = e.clientY; ox = lbxX; oy = lbxY;
-      try { lbxImg.setPointerCapture(e.pointerId); } catch (er) {}
-      lbx.classList.add("is-grab");
+      if (!e.isPrimary) return;
+      sx = e.clientX; sy = e.clientY;
+      if (lbxScale > 1) {                                  // zoomed in -> drag to pan around the image
+        dragging = true; ox = lbxX; oy = lbxY;
+        try { lbxImg.setPointerCapture(e.pointerId); } catch (er) {}
+        lbx.classList.add("is-grab");
+      } else if (lbxGroup.length > 1) {                    // not zoomed -> track a horizontal swipe to change image
+        swiping = true;
+        try { lbxImg.setPointerCapture(e.pointerId); } catch (er) {}
+      }
     });
     lbxImg.addEventListener("pointermove", function (e) { if (!dragging) return; lbxX = ox + (e.clientX - sx); lbxY = oy + (e.clientY - sy); lbxApply(); });
-    var endDrag = function () { dragging = false; lbx.classList.remove("is-grab"); };
+    var endDrag = function (e) {
+      if (swiping) {                                       // swipe left -> next image, swipe right -> prev (clear horizontal flick only)
+        swiping = false;
+        var dx = e.clientX - sx, dy = e.clientY - sy;
+        if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.4) lbxGo(dx < 0 ? 1 : -1);
+      }
+      dragging = false; lbx.classList.remove("is-grab");
+    };
     lbxImg.addEventListener("pointerup", endDrag);
     lbxImg.addEventListener("pointercancel", endDrag);
     lbxImg.addEventListener("dblclick", function () { if (lbxScale > 1) lbxReset(); else lbxZoom(2.2); });
@@ -1686,13 +1699,17 @@
     }
     function pause() { paused = true; clearTimer(); if (curVid) { try { curVid.pause(); } catch (e) {} } if (fill) { try { var w = getComputedStyle(fill).width; fill.style.transition = "none"; fill.style.width = w; } catch (e) {} } }
     function resume() { if (userPaused || !paused) return; paused = false; playCurrent(); }
-    // Clicking a thumbnail jumps to that slide and PAUSES autoplay (sticky — hover-out won't resume it).
-    strip.addEventListener("click", function (e) { var t = e.target.closest("[data-thumb]"); if (!t) return; e.preventDefault(); userPaused = true; paused = true; show(+t.getAttribute("data-thumb")); });
+    // A manual interaction (opening a slide fullscreen or picking a thumbnail) pauses autoplay, but only
+    // for a while: after 2 minutes with no further interaction, auto-switching resumes on its own.
+    var resumeTimer = 0;
+    function stickyPause() { userPaused = true; if (resumeTimer) clearTimeout(resumeTimer); resumeTimer = setTimeout(function () { userPaused = false; resume(); }, 120000); }
+    // Clicking a thumbnail jumps to that slide and pauses autoplay (auto-resumes after 2 min).
+    strip.addEventListener("click", function (e) { var t = e.target.closest("[data-thumb]"); if (!t) return; e.preventDefault(); stickyPause(); paused = true; show(+t.getAttribute("data-thumb")); });
     // Autoplay keeps running while the cursor merely HOVERS the big preview (no hover-pause — it used
     // to freeze the instant the cursor landed on it when a case opened). It pauses only when the viewer
     // actually opens a slide fullscreen / in the lightbox, and STAYS paused (sticky) after they close it.
     main.addEventListener("click", function (e) {
-      if (e.target.closest("[data-stage-fs], video[data-stage-video], img[data-zoom]")) { userPaused = true; pause(); }
+      if (e.target.closest("[data-stage-fs], video[data-stage-video], img[data-zoom]")) { stickyPause(); pause(); }
       if (e.target.closest("[data-stage-fs]")) { e.preventDefault(); var s = slides[idx]; if (s.getAttribute("data-kind") === "video" && curVid) reqFs(curVid); else { var im = s.querySelector("img[data-zoom]"); if (im) im.click(); } return; }
       var vid = e.target.closest("video[data-stage-video]"); if (vid) { e.preventDefault(); reqFs(vid); }
     });
@@ -1702,7 +1719,7 @@
       }, { threshold: [0, 0.3, 0.6] });
       io.observe(main);
     }
-    stageCtl = { destroy: function () { clearTimer(); detachVid(); if (io) { try { io.disconnect(); } catch (e) {} } } };
+    stageCtl = { destroy: function () { clearTimer(); if (resumeTimer) clearTimeout(resumeTimer); detachVid(); if (io) { try { io.disconnect(); } catch (e) {} } } };
     show(0);
   }
 
