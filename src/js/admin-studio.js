@@ -3035,6 +3035,27 @@ import { WORLD_LAND } from "./worldland.js";
       if (openStudy === i) renderL2();
     } catch (e) { status("Key moves generation failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate Key Moves"; } }
   }
+  async function cardDescGenerate(i, btn) {
+    var w = data.work[i];
+    if (!w) return;
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { cardDescGenerate(i, btn); }); return; }
+    var src = String(w.desc || "").trim();
+    if (src.length < 40) { status("Add a fuller Description first \u2014 the AI shortens that into the card line."); return; }
+    if (btn) { btn.disabled = true; btn.textContent = "Writing\u2026"; }
+    status("Writing a punchy card line\u2026");
+    var system = "You are a senior product-design portfolio editor. Write the ONE-LINE card description shown under a project title on a portfolio homepage: punchy, concrete and specific \u2014 a single sentence a busy hiring manager grasps at a glance. Lead with the substance (what you did and why it mattered), cut throat-clearing and filler, present tense, no trailing ellipsis, no Title Casing, no surrounding quotes. 12\u201320 words. Return ONLY the sentence.";
+    var user = "PROJECT: " + (w.title || "Untitled") + (w.client ? " \u2014 " + w.client : "") + "\n\nFULL DESCRIPTION:\n" + src + "\n\nWrite the single punchy card line: 12\u201320 words, one sentence, concrete, lead with what matters, no ellipsis, no quotes. Return only the line.";
+    try {
+      var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 120, temperature: 0.5 });
+      var line = String(out || "").trim().replace(/\s+/g, " ").replace(/^["'\u201c\u2018\u00ab]+|["'\u201d\u2019\u00bb]+$/g, "").trim();
+      if (!line) { status("The AI didn\u2019t return a line \u2014 try again."); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate short card line"; } return; }
+      w.cardDesc = line;
+      saveDraft(true);
+      if (openStudy === i) renderL2();
+      status("Card line generated \u2014 edit it below, then Publish.", true);
+      if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate short card line"; }
+    } catch (e) { status("Card line generation failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate short card line"; } }
+  }
   function beatEditor(i, b, j) {
     return '<div class="adm__beat"><div class="adm__beat-h"><span class="adm__beat-n">' + (j + 1) + '</span> Key move ' + (j + 1) + '<button type="button" class="adm__beat-x" data-act="beat-remove" data-index="' + i + '" data-bindex="' + j + '" title="Remove this key move" aria-label="Remove key move ' + (j + 1) + '">\u2715</button></div>' +
       '<input type="text" class="adm__beat-f" data-beat="' + i + '" data-bindex="' + j + '" data-bkey="problem" value="' + escAttr(b.problem || "") + '" placeholder="Problem \u2014 the tension, in a few words" />' +
@@ -3084,7 +3105,10 @@ import { WORLD_LAND } from "./worldland.js";
     var unlockVal = studyUnlockPlain[w.id] || "";
     var header = '<section class="l2grp"><div class="l2grp__head">Project header <span>\u2014 the homepage card &amp; case-study hero</span></div>' +
       itemField("work", i, "title", "Title") +
-      itemField("work", i, "desc", "Description", { type: "textarea", rows: 3, hint: "The card summary and the case-study intro fallback." }) +
+      itemField("work", i, "desc", "Description", { type: "textarea", rows: 3, hint: "The heavier summary \u2014 the case-study intro fallback, and the source the AI shortens into the card line below." }) +
+      itemField("work", i, "cardDesc", "Card line", { type: "textarea", rows: 2, hint: "The short, punchy line shown on the homepage card. Leave blank to fall back to the Description above." }) +
+      '<div class="adm__autobar"><button class="btn btn--auto" data-act="carddesc-gen" data-index="' + i + '">\u2728 Generate short card line</button>' +
+      '<span class="adm__auto-note">Reads your Description above and writes one punchy line for the homepage card \u2014 it drops into the box so you can edit it, then Publish.</span></div>' +
       itemField("work", i, "tags", "Tags", { hint: "comma-separated" }) +
       imageryBlock(w, i) +
       "</section>";
@@ -5468,6 +5492,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "iprep-open") { iprepModal(i); return; }
     if (act === "story-open") { storyModal(i); return; }
     if (act === "skim-gen") { skimGenerate(i, b); return; }
+    if (act === "carddesc-gen") { cardDescGenerate(i, b); return; }
     if (act === "beat-add") {
       const bw = data.work[i]; if (!bw || !bw.study) return;
       bw.study.skim = bw.study.skim || {};

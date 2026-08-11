@@ -74,7 +74,10 @@ export function initDepth() {
   const coarse = window.matchMedia("(pointer: coarse)").matches;
   const gyro = coarse && typeof window.DeviceOrientationEvent !== "undefined";
   if (!force) {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // Signature motion on this site runs regardless of OS "reduce motion" (a deliberate, site-wide
+    // choice that also covers Lenis / cursor / reveals) — so depth is NOT gated on prefers-reduced-motion.
+    // On touch the dolly + parallax are driven purely by scroll (see the gyro branch of frame()), so it
+    // stays alive even before the iOS motion-sensor permission is granted; the tilt just layers on after.
     if (coarse && !gyro) return;                         // touch device w/o motion sensors -> nothing drives depth
     if (!gpuOk()) return;
   }

@@ -203,7 +203,7 @@
       '<div class="case__body"><div class="case__meta"><span>' + esc(w.client) +
       "</span><span>" + esc(w.period) + "</span></div>" +
       '<h3 class="case__title">' + esc(w.title) + "</h3>" +
-      '<p class="case__desc">' + esc(w.desc) + "</p>" +
+      '<p class="case__desc">' + esc(w.cardDesc || w.desc) + "</p>" +
       '<div class="case__tags">' + tags + "</div></div></a></li>"
     );
   }
