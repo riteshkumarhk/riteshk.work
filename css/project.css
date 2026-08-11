@@ -167,7 +167,8 @@ img[data-zoom] { cursor: zoom-in; }
 .pj__tagline strong { color: var(--text); font-weight: 500; }
 .pj__tagline strong.accent, .pj__tagline em { color: var(--accent); }
 
-.pj__meta { max-width: var(--pjcw); margin: clamp(2rem, 4vw, 3rem) auto 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.4rem; border-top: 1px solid var(--line); padding-top: 1.6rem; padding-bottom: clamp(1.6rem, 3vw, 2.4rem); }
+.pj__meta { max-width: var(--pjcw); margin: clamp(2rem, 4vw, 3rem) auto 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.pj__meta-cell { border: 1px solid var(--line-soft); border-radius: 12px; background: var(--bg-2); padding: 1.1rem 1.25rem; }
 .pj__meta-cell dt { font-family: var(--mono); font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); margin-bottom: .5rem; }
 .pj__meta-cell dd { font-size: .95rem; line-height: 1.4; color: var(--text); }
 
@@ -809,6 +810,6 @@ html.lite .pjb { animation: none; }
 .pj__skim-beat-o strong { font-weight: 600; }
 .pj__skim-more { margin-top: .4rem; }
 /* "Key moves" band — the 3 decision cards + CTA at the top of every case study */
-.pj__moves { max-width: var(--pjcw); margin: 0 auto; padding: clamp(1.6rem, 3.2vw, 2.6rem) 0 clamp(1.8rem, 3.5vw, 3rem); border-top: 1px solid var(--line); }
+.pj__moves { max-width: var(--pjcw); margin: 0 auto; padding: clamp(1.6rem, 3.2vw, 2.6rem) 0 clamp(1.8rem, 3.5vw, 3rem); }
 .pj__moves-cta { margin-top: clamp(1.5rem, 3vw, 2.2rem); }
 @media (max-width: 620px) { .pj__skim-metrics { grid-template-columns: 1fr 1fr; gap: 1.1rem; } }
