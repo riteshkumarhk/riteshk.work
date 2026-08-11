@@ -28,13 +28,13 @@ function bgCapable() {
 
 // Pre-rendered soft radial glow (a single bokeh dot). Drawn scaled per particle,
 // so there is zero per-frame blur cost.
-function makeGlow(color) {
+function makeGlow(color, core) {
   const s = 64, c = document.createElement("canvas");
   c.width = c.height = s;
   const g = c.getContext("2d");
   const grd = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
   grd.addColorStop(0, color);
-  grd.addColorStop(0.25, color);
+  grd.addColorStop(core == null ? 0.25 : core, color);
   grd.addColorStop(1, "transparent");
   g.globalAlpha = 1; g.fillStyle = grd;
   g.beginPath(); g.arc(s / 2, s / 2, s / 2, 0, 6.2832); g.fill();
@@ -59,8 +59,9 @@ export function initNodeWeb(opts) {
     ACCENT = cssVar("--accent", light ? "#9c6b1a" : "#D8A657");
     // On light the ambient web is a deep INK-NAVY (crisp): strong contrast on cream, cool + editorial, never the muddy bokeh 'mould'.
     IVORY = light ? "#33405e" : cssVar("--text", "#ECE7E1");
-    glowIvory = makeGlow(IVORY);
-    glowAccent = makeGlow(ACCENT);
+    // tighter feather on light so a far/defocused dot reads as gentle depth-of-field, not a mould smudge
+    glowIvory = makeGlow(IVORY, light ? 0.5 : 0.25);
+    glowAccent = makeGlow(ACCENT, light ? 0.5 : 0.25);
   };
 
   const canvas = document.createElement("canvas");
@@ -356,17 +357,17 @@ export function initNodeWeb(opts) {
         ctx.lineWidth = DPR;
         ctx.strokeStyle = ACCENT;
         ctx.beginPath(); ctx.arc(p.x, p.y, rr + 6 * DPR, 0, 6.2832); ctx.stroke();
-      } else if (curLight || p.depth > 0.62) {
-        // crisp small node. On LIGHT every particle is crisp (soft bokeh muddies into 'mould' on
-        // cream) and the ambient web is cool slate; bronze stays reserved for the focused/chip nodes.
+      } else if (p.depth > 0.62) {
+        // near: a crisp small node (the network's vertices) on both themes
         ctx.globalAlpha = curLight ? Math.min(0.9, p.a * 1.3) : p.a;
         ctx.fillStyle = (p.accent && !curLight) ? ACCENT : IVORY;
-        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, p.size * (p.depth > 0.62 ? 0.26 : 0.16)), 0, 6.2832); ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, p.size * 0.26), 0, 6.2832); ctx.fill();
       } else {
-        // dark, far: a soft bokeh orb
-        ctx.globalAlpha = p.a;
-        const g = p.accent ? glowAccent : glowIvory;
-        const s = p.size;
+        // far: depth-of-field soft orb. Dark = additive bokeh; light = a COMPACT, tight-feathered
+        // ink-navy dot (a gentle defocus, not the big pale blob that read as 'mould' on cream).
+        ctx.globalAlpha = curLight ? Math.min(0.72, p.a * 1.1) : p.a;
+        const g = (p.accent && !curLight) ? glowAccent : glowIvory;
+        const s = p.size * (curLight ? 0.55 : 1);
         ctx.drawImage(g, p.x - s, p.y - s, s * 2, s * 2);
       }
     }
