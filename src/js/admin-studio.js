@@ -436,6 +436,18 @@ import { WORLD_LAND } from "./worldland.js";
   }
 
   /* ---------- field builders ---------- */
+  // Eye show/hide toggle: a functional but visually-hidden checkbox with an inline SVG eye on
+  // top - eye OPEN = shown (bronze), eye-OFF (slashed) = hidden (faint). Rendered entirely in
+  // JS with inline styles/colours so it never depends on the admin.css cache version.
+  const EYE_ON = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const EYE_OFF = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+  function eyeToggle(attrs, on, cls) {
+    const color = on ? "var(--accent)" : "var(--text-faint)";
+    const title = on ? "Shown - click to hide" : "Hidden - click to show";
+    return '<label class="' + (cls || "af__tog") + '" title="' + title + '" style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:30px;height:26px;color:' + color + ';cursor:pointer">' +
+      '<input type="checkbox" ' + attrs + (on ? " checked" : "") + ' style="position:absolute;top:0;left:0;width:100%;height:100%;margin:0;padding:0;opacity:0;cursor:pointer" />' +
+      (on ? EYE_ON : EYE_OFF) + "</label>";
+  }
   function input(label, path, opts) {
     opts = opts || {};
     const val = getPath(data, path);
@@ -452,7 +464,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (opts.toggle) {
       const on = landingShown(opts.toggle); off = !on;
       labelBlock = '<div class="af__labelrow"><label class="af__label">' + label + "</label>" +
-        '<label class="af__tog" title="' + (on ? "Shown - click to hide" : "Hidden - click to show") + '"><input type="checkbox" data-act="landing-show" data-showkey="' + opts.toggle + '"' + (on ? " checked" : "") + ' /></label></div>';
+        eyeToggle('data-act="landing-show" data-showkey="' + opts.toggle + '"', on) + "</div>";
     } else {
       labelBlock = '<label class="af__label">' + label + "</label>";
     }
@@ -4522,7 +4534,7 @@ import { WORLD_LAND } from "./worldland.js";
           '<div class="adm__lsec-ops">' +
             '<button class="iconbtn" data-act="worksec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
             '<button class="iconbtn" data-act="worksec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
-            '<label class="adm__lsec-tog" title="' + (s.on ? "Shown - click to hide" : "Hidden - click to show") + '"><input type="checkbox" data-act="worksec-toggle" data-key="' + s.key + '"' + (s.on ? " checked" : "") + ' /></label>' +
+            eyeToggle('data-act="worksec-toggle" data-key="' + s.key + '"', s.on, "adm__lsec-tog") +
           "</div>" +
         "</div>" +
         (body ? '<div class="adm__lsec-body">' + body + "</div>" : "") +
