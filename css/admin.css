@@ -345,6 +345,21 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__secrow-state { min-width: 3.4em; }
 .adm__secrow:not(.is-off) .adm__secrow-state { color: var(--accent); }
 
+/* Landing tab: each landing section is a card (reorder/hide in the header, its fields nested below) */
+.adm__lsec { position: relative; }
+.adm__lsec-head { position: relative; text-align: center; padding: .1rem 7rem .9rem; margin-bottom: .3rem; }
+.adm__lsec-titles { display: inline-flex; flex-direction: column; gap: .12rem; }
+.adm__lsec-title { font-family: var(--serif); font-weight: 300; font-size: 1.3rem; color: var(--text); line-height: 1.1; }
+.adm__lsec.is-off .adm__lsec-title { color: var(--text-dim); }
+.adm__lsec-sub { font-family: var(--mono); font-size: .58rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); }
+.adm__lsec-ops { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: .3rem; }
+.adm__lsec-ops .iconbtn { width: 26px; height: 24px; }
+.adm__lsec-tog { display: inline-flex; align-items: center; gap: .35rem; cursor: pointer; font-family: var(--mono); font-size: .56rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); }
+.adm__lsec-tog input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+.adm__lsec:not(.is-off) .adm__lsec-tog { color: var(--accent); }
+.adm__lsec.is-off { opacity: .62; }
+.adm__lsec-body > *:last-child { margin-bottom: 0; }
+
 /* ---------- per-entry icon control (recognition / education) ---------- */
 .adm__iconf { margin-top: .6rem; }
 .adm__iconf-row { display: flex; align-items: center; gap: .45rem; }

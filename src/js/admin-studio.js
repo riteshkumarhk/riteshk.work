@@ -3389,28 +3389,9 @@ import { WORLD_LAND } from "./worldland.js";
     landing() {
       return (
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
-        group(workReorderBlock()) +
         '<div class="adm__autobar"><button class="btn btn--auto" data-act="autostyle">Auto-style landing</button><button class="btn btn--auto" data-act="landing-ai" style="margin-left:.5rem">\u2728 Draft with AI</button><span class="adm__auto-note">Auto-style paints the accents; <em>Draft with AI</em> writes the hero, highlights, skills &amp; about from a brief \u2014 preview before applying.</span></div>' +
-        group(siteIconBlock()) +
-        input("Eyebrow", "landing.eyebrow", { toggle: "eyebrow" }) +
-        input("Domains", "landing.domains", { toggle: "domains", hint: "e.g. Growth · AI · Identity" }) +
-        input("Main statement", "landing.statement", { md: true, type: "textarea", rows: 3, hint: "One line per row. The closing word (why / how) gets the italic accent." }) +
-        stmtSizeBlock() +
-        alignSelect("Statement alignment", "statementalign", ((data.landing || {}).statementAlign) || "left", "Left, centre or right-align the statement lines.") +
-        input("Selected-work heading", "landing.workTitle", { md: true, type: "textarea", rows: 2, hint: "One line per row, like the statement - each line's descenders crop to match. Use *word* for the bronze italic accent." }) +
-        sizeSelect("Heading size", "worktitlesize", ((data.landing || {}).workTitleSize) || "compact", "Compact is the default; Large makes it a hero-scale heading, useful when Selected work leads the reordered page.") +
-        alignSelect("Heading alignment", "worktitlealign", ((data.landing || {}).workTitleAlign) || "left", "Left, centre or right-align the Selected-work heading.") +
-        sizeSelect("Intro spacing", "introspacing", ((data.landing || {}).introSpacing) || "standard", "Space above and below the eyebrow, domains and description block.") +
-        alignSelect("Intro alignment", "introalign", ((data.landing || {}).introAlign) || "left", "Aligns the eyebrow, domains and description block together.") +
-        input("Description", "landing.intro", { md: true, type: "textarea", rows: 4, toggle: "intro", hint: "Products auto-bronze; “leading …” phrases auto-bold." }) +
-        input("Footer line", "landing.presence", { md: true, toggle: "presence", hint: "e.g. Currently at Microsoft — Hyderabad, India" }) +
-        '<div class="af"><label class="af__label">Availability badge</label>' +
-        '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="avail-toggle"' + ((((data.landing || {}).available) || {}).on ? " checked" : "") + ' /><span>Show an \u201copen to work\u201d pill in the hero</span></label>' +
-        '<div class="af__hint">Off by default. A quiet pill with a live green dot appears under the hero when on.</div></div>' +
-        input("Availability text", "landing.available.text", { hint: "e.g. Open to Principal / Staff Product Design roles" }) +
-        '<div class="af"><label class="af__label">Selected-work cue</label>' +
-        '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="cue-toggle"' + (((((data.landing || {}).show) || {}).cue !== false) ? " checked" : "") + ' /><span>Show the \u201cSelected work\u201d jump bait</span></label>' +
-        '<div class="af__hint">A floating bait, bottom-right (opposite your contact dock). Shows only while the work tiles are still below the fold, then hides once they scroll into view \u2014 so it never appears on tall or mobile screens where the grid is already visible.</div></div>'
+        landingSectionCards() +
+        group(siteIconBlock())
       );
     },
     contact() {
@@ -4522,6 +4503,73 @@ import { WORLD_LAND } from "./worldland.js";
   // Wrap a group of controls in a card. A secHead inside a card renders as a small mono heading.
   function group(inner) {
     return '<section class="adm__group">' + inner + "</section>";
+  }
+  // ---- Landing as per-section cards: each landing section is a reorderable / hideable card (like the
+  // Work tab) with that section's own fields nested inside. Order + show-hide reuse the worksec-* handlers.
+  function landingSectionCards() {
+    const RK = window.RK || {};
+    const defs = RK.WORK_SECTIONS || [["hero", "Statement"], ["intro", "Intro"], ["highlights", "Highlights"], ["work", "Selected work"], ["capabilities", "Skills"]];
+    const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
+    const where = { hero: "The statement, footer & scroll cue", intro: "Eyebrow, domains & description", highlights: "Brands & numbers \u2014 edited in the Highlights tab", work: "Heading here; tiles edit in the Work tab", capabilities: "Edited in the Skills tab" };
+    const layout = RK.workLayout ? RK.workLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
+    let html = "";
+    layout.forEach((s, i) => {
+      const body = landingSectionFields(s.key);
+      html += '<section class="adm__group adm__lsec' + (s.on ? "" : " is-off") + '">' +
+        '<div class="adm__lsec-head">' +
+          '<div class="adm__lsec-titles"><span class="adm__lsec-title">' + escHtml(labels[s.key] || s.key) + "</span>" +
+            (where[s.key] ? '<span class="adm__lsec-sub">' + escHtml(where[s.key]) + "</span>" : "") + "</div>" +
+          '<div class="adm__lsec-ops">' +
+            '<button class="iconbtn" data-act="worksec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
+            '<button class="iconbtn" data-act="worksec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+            '<label class="adm__lsec-tog" title="Show this section on the landing page"><input type="checkbox" data-act="worksec-toggle" data-key="' + s.key + '"' + (s.on ? " checked" : "") + ' /><span>' + (s.on ? "Shown" : "Hidden") + "</span></label>" +
+          "</div>" +
+        "</div>" +
+        (body ? '<div class="adm__lsec-body">' + body + "</div>" : "") +
+        "</section>";
+    });
+    return html;
+  }
+  function landingSectionFields(key) {
+    const L = data.landing || {};
+    if (key === "intro") {
+      return input("Eyebrow", "landing.eyebrow", { toggle: "eyebrow" }) +
+        input("Domains", "landing.domains", { toggle: "domains", hint: "e.g. Growth \u00b7 AI \u00b7 Identity" }) +
+        '<div class="af__row">' +
+          sizeSelect("Intro spacing", "introspacing", L.introSpacing || "standard", "Space above and below the eyebrow, domains and description block.") +
+          alignSelect("Intro alignment", "introalign", L.introAlign || "left", "Aligns the eyebrow, domains and description block together.") +
+        "</div>" +
+        input("Description", "landing.intro", { md: true, type: "textarea", rows: 4, toggle: "intro", hint: "Products auto-bronze; \u201cleading \u2026\u201d phrases auto-bold." }) +
+        availBadgeBlock() +
+        input("Availability text", "landing.available.text", { hint: "e.g. Open to Principal / Staff Product Design roles" }) +
+        cueBlock();
+    }
+    if (key === "work") {
+      return input("Selected-work heading", "landing.workTitle", { md: true, type: "textarea", rows: 2, hint: "One line per row, like the statement - each line's descenders crop to match. Use *word* for the bronze italic accent." }) +
+        '<div class="af__row">' +
+          sizeSelect("Heading size", "worktitlesize", L.workTitleSize || "compact", "Compact is the default; Large makes it a hero-scale heading, useful when Selected work leads the reordered page.") +
+          alignSelect("Heading alignment", "worktitlealign", L.workTitleAlign || "left", "Left, centre or right-align the Selected-work heading.") +
+        "</div>";
+    }
+    if (key === "hero") {
+      return input("Main statement", "landing.statement", { md: true, type: "textarea", rows: 3, hint: "One line per row. The closing word (why / how) gets the italic accent." }) +
+        '<div class="af__row">' +
+          stmtSizeBlock() +
+          alignSelect("Statement alignment", "statementalign", L.statementAlign || "left", "Left, centre or right-align the statement lines.") +
+        "</div>" +
+        input("Footer line", "landing.presence", { md: true, toggle: "presence", hint: "e.g. Currently at Microsoft \u2014 Hyderabad, India" });
+    }
+    return "";
+  }
+  function availBadgeBlock() {
+    return '<div class="af"><label class="af__label">Availability badge</label>' +
+      '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="avail-toggle"' + ((((data.landing || {}).available) || {}).on ? " checked" : "") + ' /><span>Show an \u201copen to work\u201d pill in the hero</span></label>' +
+      '<div class="af__hint">Off by default. A quiet pill with a live green dot appears under the hero when on.</div></div>';
+  }
+  function cueBlock() {
+    return '<div class="af"><label class="af__label">Selected-work cue</label>' +
+      '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="cue-toggle"' + (((((data.landing || {}).show) || {}).cue !== false) ? " checked" : "") + ' /><span>Show the \u201cSelected work\u201d jump bait</span></label>' +
+      '<div class="af__hint">A floating bait, bottom-right (opposite your contact dock). Shows only while the work tiles are still below the fold, then hides once they scroll into view \u2014 so it never appears on tall or mobile screens where the grid is already visible.</div></div>';
   }
 
   /* ---------- Design Journey editor (L2 panel) ---------- */
