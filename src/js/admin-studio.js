@@ -4467,13 +4467,15 @@ import { WORLD_LAND } from "./worldland.js";
   var hlModal = null, hlPage = "stats";
   function hlStatsBody() {
     const list = data.highlights || [];
-    let html = secHead("Stats", "At-a-glance numbers that run as a marquee under the hero. Up to 8. Values like <em>11+</em>, <em>Billions</em>, <em>2B+</em> \u2014 leading digits count up as each chip scrolls in. Select text, then use B / I / A for bold, italic or a bronze accent.") +
-      addBar("highlights", "Add stat", list.length >= 8);
+    let cards = "";
     list.forEach((h, i) => {
-      html += '<div class="card">' + cardHead("Stat " + (i + 1), "highlights", i, list.length) +
-        '<div class="af__row">' + itemField("highlights", i, "value", "Value", { md: true }) + itemField("highlights", i, "label", "Label", { md: true }) + "</div></div>";
+      cards += '<div class="card" style="margin:0">' + cardHead("Stat " + (i + 1), "highlights", i, list.length) +
+        itemField("highlights", i, "value", "Value", { md: true }) +
+        itemField("highlights", i, "label", "Label", { md: true }) + "</div>";
     });
-    return html;
+    return secHead("Stats", "At-a-glance numbers that run as a marquee under the hero. Up to 8. Values like <em>11+</em>, <em>Billions</em>, <em>2B+</em> \u2014 leading digits count up as each chip scrolls in. Select text, then use B / I / A for bold, italic or a bronze accent.") +
+      addBar("highlights", "Add stat", list.length >= 8) +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.7rem;align-items:start">' + cards + "</div>";
   }
   function hlPanelBody(page) {
     return '<div style="padding:1rem 1.2rem 1.4rem">' + (page === "brands" ? logosBlock() : hlStatsBody()) + "</div>";
