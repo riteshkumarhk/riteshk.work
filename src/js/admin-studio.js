@@ -3107,7 +3107,8 @@ import { WORLD_LAND } from "./worldland.js";
     var MAX = 6;
     var items = media.map(function (m, j) { return ovmItem(i, m, j, media.length); }).join("");
     var addBtn = media.length < MAX
-      ? '<button type="button" class="btn btn--add" data-act="ovm-add" data-index="' + i + '">+ Add media</button>'
+      ? '<button type="button" class="btn btn--add" data-act="ovm-upload-multi" data-index="' + i + '" title="Pick several images, GIFs or videos at once \u2014 each becomes a new slide">+ Add media\u2026</button>' +
+        '<button type="button" class="btn btn--ghost" data-act="ovm-add" data-index="' + i + '" style="display:block;margin:.4rem auto 0;font-size:.66rem;opacity:.72" title="Add an empty slot to paste an image / video / Figma URL">or add a blank slot for a URL</button>'
       : '<div class="af__hint">Up to ' + MAX + ' extra media (plus your cover = ' + (MAX + 1) + ' slides).</div>';
     return '<section class="l2grp"><div class="l2grp__head">Overview slideshow <span>\u2014 cover + up to 6 media, shown as a preview reel atop the case</span></div>' +
       '<div class="af__hint" style="margin:-.2rem 0 .6rem">Your cover image is slide 1. Add images, GIFs or short videos to build a Steam-style preview \u2014 each auto-plays (3.5s; videos play fully), and visitors can click a thumbnail or go fullscreen.</div>' +
@@ -5784,7 +5785,25 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "ovm-up") { const arr = ovmArr(i), k = +b.dataset.ovmindex; if (arr && k > 0) { const tmp = arr[k - 1]; arr[k - 1] = arr[k]; arr[k] = tmp; saveDraft(true); renderL2(); } return; }
     if (act === "ovm-down") { const arr = ovmArr(i), k = +b.dataset.ovmindex; if (arr && k < arr.length - 1) { const tmp = arr[k + 1]; arr[k + 1] = arr[k]; arr[k] = tmp; saveDraft(true); renderL2(); } return; }
     if (act === "ovm-clear") { const arr = ovmArr(i), it = arr && arr[+b.dataset.ovmindex]; if (it) { it.src = ""; delete it.kind; saveDraft(true); renderL2(); } return; }
-    if (act === "ovm-upload") { const k = +b.dataset.ovmindex; pickMedia(function (uri) { const arr = ovmArr(i); if (arr && arr[k]) { arr[k].src = uri; if (isVideoVal(uri)) arr[k].kind = "video"; else delete arr[k].kind; saveDraft(true); renderL2(); } }); return; }
+    if (act === "ovm-upload") {
+      const k = +b.dataset.ovmindex; const arr = ovmArr(i); if (!arr || !arr[k]) return;
+      let firstOvm = true;
+      pickMediaMulti(function () {
+        if (firstOvm) { firstOvm = false; delete arr[k].kind; delete arr[k].controls; return arr[k]; }   // first file replaces THIS slot; extra files append as new slides (up to 6)
+        const it = { src: "", caption: "" }; if (arr.length < 6) arr.push(it); return it;
+      }, function () { saveDraft(true); renderL2(); });
+      return;
+    }
+    if (act === "ovm-upload-multi") {
+      const ow = data.work[i]; if (!ow) return;
+      ow.study = ow.study || {}; ow.study.skim = ow.study.skim || {};
+      if (!Array.isArray(ow.study.skim.media)) ow.study.skim.media = [];
+      const arr = ow.study.skim.media;
+      pickMediaMulti(function () {
+        const it = { src: "", caption: "" }; if (arr.length < 6) arr.push(it); return it;
+      }, function () { saveDraft(true); renderL2(); });
+      return;
+    }
     if (act === "wb-open") { wbModal(); return; }
     if (act === "iprep-open-ai") { iprepModal(); return; }
     if (act === "story-open-ai") { storyModal(); return; }
