@@ -452,7 +452,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (opts.toggle) {
       const on = landingShown(opts.toggle); off = !on;
       labelBlock = '<div class="af__labelrow"><label class="af__label">' + label + "</label>" +
-        '<label class="af__tog" title="Show this on the landing page"><input type="checkbox" data-act="landing-show" data-showkey="' + opts.toggle + '"' + (on ? " checked" : "") + ' /><span class="af__tog-state">' + (on ? "Shown" : "Hidden") + "</span></label></div>";
+        '<label class="af__tog" title="' + (on ? "Shown - click to hide" : "Hidden - click to show") + '"><input type="checkbox" data-act="landing-show" data-showkey="' + opts.toggle + '"' + (on ? " checked" : "") + ' /></label></div>';
     } else {
       labelBlock = '<label class="af__label">' + label + "</label>";
     }
@@ -4522,7 +4522,7 @@ import { WORLD_LAND } from "./worldland.js";
           '<div class="adm__lsec-ops">' +
             '<button class="iconbtn" data-act="worksec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
             '<button class="iconbtn" data-act="worksec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
-            '<label class="adm__lsec-tog" title="Show this section on the landing page"><input type="checkbox" data-act="worksec-toggle" data-key="' + s.key + '"' + (s.on ? " checked" : "") + ' /><span>' + (s.on ? "Shown" : "Hidden") + "</span></label>" +
+            '<label class="adm__lsec-tog" title="' + (s.on ? "Shown - click to hide" : "Hidden - click to show") + '"><input type="checkbox" data-act="worksec-toggle" data-key="' + s.key + '"' + (s.on ? " checked" : "") + ' /></label>' +
           "</div>" +
         "</div>" +
         (body ? '<div class="adm__lsec-body">' + body + "</div>" : "") +

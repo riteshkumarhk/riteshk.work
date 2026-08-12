@@ -287,10 +287,20 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 /* label + show/hide switch on one row (landing content toggles) */
 .af__labelrow { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .35rem; }
 .af__labelrow .af__label { margin-bottom: 0; }
-.af__tog { display: inline-flex; align-items: center; gap: .4rem; flex: 0 0 auto; cursor: pointer; font-family: var(--mono); font-size: .58rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); user-select: none; }
-.af__tog input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
-.af__tog-state { min-width: 3.4em; }
-.af__tog input:checked + .af__tog-state { color: var(--accent); }
+/* Show/hide EYE toggle (landing field labels + landing section cards): a restyled checkbox — eye open = shown (bronze), eye closed = hidden (faint). */
+.af__tog { display: inline-flex; align-items: center; flex: 0 0 auto; cursor: pointer; }
+.af__tog input, .adm__lsec-tog input {
+  -webkit-appearance: none; appearance: none; width: 30px; height: 26px; margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer;
+  background-color: var(--text-faint); opacity: .78; transition: background-color .2s, opacity .2s;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24'/%3E%3Cline x1='1' y1='1' x2='23' y2='23'/%3E%3C/svg%3E") center / 20px 20px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24'/%3E%3Cline x1='1' y1='1' x2='23' y2='23'/%3E%3C/svg%3E") center / 20px 20px no-repeat;
+}
+.af__tog input:hover, .adm__lsec-tog input:hover { opacity: 1; background-color: var(--text-dim); }
+.af__tog input:checked, .adm__lsec-tog input:checked {
+  opacity: 1; background-color: var(--accent);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+}
 .af--off textarea, .af--off input[data-path] { opacity: .45; }
 .af__hint { font-size: .68rem; color: var(--text-faint); margin-top: .35rem; line-height: 1.4; }
 .mdbar { display: flex; gap: 4px; margin-bottom: 6px; }
@@ -354,9 +364,7 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__lsec-sub { font-family: var(--mono); font-size: .58rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); }
 .adm__lsec-ops { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: .3rem; }
 .adm__lsec-ops .iconbtn { width: 26px; height: 24px; }
-.adm__lsec-tog { display: inline-flex; align-items: center; gap: .35rem; cursor: pointer; font-family: var(--mono); font-size: .56rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); }
-.adm__lsec-tog input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
-.adm__lsec:not(.is-off) .adm__lsec-tog { color: var(--accent); }
+.adm__lsec-tog { display: inline-flex; align-items: center; cursor: pointer; }
 .adm__lsec.is-off { opacity: .62; }
 .adm__lsec-body > *:last-child { margin-bottom: 0; }
 
