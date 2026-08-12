@@ -127,12 +127,8 @@ import { WORLD_LAND } from "./worldland.js";
   const TABS = [
     ["insights", "Insights"],
     ["landing", "Landing"],
-    ["capabilities", "Skills"],
     ["work", "Work"],
     ["aboutpage", "About"],
-    ["path", "Journey"],
-    ["recognition", "Recognition"],
-    ["education", "Education"],
     ["contact", "Contact"],
     ["special", "Special Views"],
     ["ai", "Prepare"],
@@ -2129,7 +2125,7 @@ import { WORLD_LAND } from "./worldland.js";
      Keys: "list:<name>" (L1 lists) · "block:<i>" (case-study sections) ·
      "item:<i>:<j>" (repeater items). Pointer-based, so it's reliable across
      browsers and auto-scrolls the editor when you drag near an edge. */
-  var SORT_ROW_SEL = ".rep__item, .study__block, .card, .cellrow, .adm__lsec";
+  var SORT_ROW_SEL = ".rep__item, .study__block, .card, .cellrow, .adm__lsec, .adm__asec";
   function sortRowsFor(key) {
     return [].slice.call(root.querySelectorAll('[data-grip][data-sortkey="' + key + '"]'))
       .map(function (g) { return g.closest(SORT_ROW_SEL); }).filter(Boolean);
@@ -2196,6 +2192,7 @@ import { WORLD_LAND } from "./worldland.js";
     var p = key.split(":"), arr = null, after = null;
     if (p[0] === "list") { arr = data[p[1]]; after = function () { apply(true); renderBody(); }; }
     else if (p[0] === "lsec") { arr = workLayoutArr(); after = function () { setWorkLayout(arr); }; }
+    else if (p[0] === "asec") { arr = aboutLayoutArr(); after = function () { setAboutLayout(arr); }; }
     else if (p[0] === "block") {
       var bi = +p[1], st = data.work[bi] && data.work[bi].study; if (!st || !st.blocks) return; arr = st.blocks;
       after = function () {
@@ -3475,32 +3472,7 @@ import { WORLD_LAND } from "./worldland.js";
       return html;
     },
     aboutpage() {
-      const RK = window.RK || {};
-      const defs = RK.ABOUT_SECTIONS || [["about", "About me"], ["recognition", "Recognition"], ["capabilities", "Skills"], ["path", "Journey"], ["education", "Education"]];
-      const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
-      const where = { about: "Edit the text + photos below in this tab", recognition: "Edit in the Recognition tab", capabilities: "Edit in the Skills tab", path: "Edit in the Journey tab", education: "Edit in the Education tab" };
-      const layout = RK.aboutLayout ? RK.aboutLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
-      let html = secHead("About page", "Reorder the sections on your About page and show or hide any of them. Use the arrows to move a section up or down, and untick to hide it from visitors. Each section\u2019s content is edited in its own tab \u2014 the About text and Photos live right here.");
-      html += '<ul class="adm__seclist">';
-      layout.forEach((s, i) => {
-        html += '<li class="adm__secrow' + (s.on ? "" : " is-off") + '">' +
-          '<span class="adm__secrow-ops">' +
-            '<button class="iconbtn" data-act="aboutsec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
-            '<button class="iconbtn" data-act="aboutsec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
-          "</span>" +
-          '<span class="adm__secrow-main"><span class="adm__secrow-name">' + escHtml(labels[s.key] || s.key) + '</span><span class="adm__secrow-where">' + escHtml(where[s.key] || "") + "</span></span>" +
-          '<label class="adm__secrow-tog"><input type="checkbox" data-act="aboutsec-toggle" data-key="' + s.key + '"' + (s.on ? " checked" : "") + ' /><span class="adm__secrow-state">' + (s.on ? "Shown" : "Hidden") + "</span></label>" +
-          "</li>";
-      });
-      html += "</ul>";
-      html += group(
-        secHead("About me", "The opening lines of your About section. (Also written by \u2728 Draft with AI in the Landing tab.)") +
-        input("Lead line", "landing.aboutLead", { md: true, type: "textarea", rows: 2, hint: "The big opening line of the About section. *italic* for emphasis." }) +
-        input("Paragraphs", "landing.about", { md: true, type: "textarea", rows: 7, hint: "Separate paragraphs with a blank line. **bold**, *italic*, [[Product]] bronze." }) +
-        input("Sign-off", "landing.aboutSign", { md: true, hint: "The closing personal line, e.g. an off-the-clock note." })
-      );
-      html += group(aboutGalleryBlock());
-      return html;
+      return secHead("About", "The sections that make up your About page. Drag the grip or use the arrows to reorder them, and the eye to show or hide any. The About text &amp; photos edit here; Recognition, Skills, Journey and Education open a Manage dialog.") + aboutSectionCards();
     },
     path() {
       const list = data.path || [];
@@ -4460,6 +4432,94 @@ import { WORLD_LAND } from "./worldland.js";
     if (activeTab === "aboutpage") renderBody();
   }
 
+  /* ---------- About tab as per-section CARDS (mirrors the Landing cards) + a "Manage" dialog
+     (reuses the .mlib shell) holding the Recognition / Skills / Journey / Education editors.
+     Those four used to be their own top-level tabs; they now live inside the About tab. ---------- */
+  var aboutSecModal = null, asecPage = "recognition";
+  var ASEC_KEYS = ["recognition", "capabilities", "path", "education"];
+  var ASEC_LABEL = { recognition: "Recognition", capabilities: "Skills", path: "Journey", education: "Education" };
+  var ASEC_NOUN = { recognition: "award", capabilities: "skill", path: "experience", education: "entry" };
+  function aboutSectionFields(key) {
+    if (key === "about") {
+      return input("Lead line", "landing.aboutLead", { md: true, type: "textarea", rows: 2, hint: "The big opening line of the About section. *italic* for emphasis." }) +
+        input("Paragraphs", "landing.about", { md: true, type: "textarea", rows: 7, hint: "Separate paragraphs with a blank line. **bold**, *italic*, [[Product]] bronze." }) +
+        input("Sign-off", "landing.aboutSign", { md: true, hint: "The closing personal line, e.g. an off-the-clock note." }) +
+        aboutGalleryBlock();
+    }
+    if (ASEC_KEYS.indexOf(key) < 0) return "";
+    var n = (data[key] || []).length;
+    return '<button type="button" class="btn btn--primary" data-act="open-aboutsec" data-asec="' + key + '" style="width:100%">Manage ' + escHtml(ASEC_LABEL[key].toLowerCase()) + " \u2192</button>" +
+      '<div class="af__hint" style="margin:.45rem 0 0">' + n + " " + ASEC_NOUN[key] + (n === 1 ? "" : "s") + "</div>";
+  }
+  function aboutSectionCards() {
+    const RK = window.RK || {};
+    const defs = RK.ABOUT_SECTIONS || [["about", "About me"], ["recognition", "Recognition"], ["capabilities", "Skills"], ["path", "Journey"], ["education", "Education"]];
+    const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
+    const where = { about: "Lead line, paragraphs, sign-off & photos", recognition: "Awards, talks & honours", capabilities: "Your skills (also the landing reel)", path: "Experience timeline + Design Journey", education: "Degrees & schooling" };
+    const layout = RK.aboutLayout ? RK.aboutLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
+    let html = "";
+    layout.forEach((s, i) => {
+      const body = aboutSectionFields(s.key);
+      html += '<section class="adm__group adm__lsec adm__asec' + (s.on ? "" : " is-off") + '">' +
+        '<div class="adm__lsec-head">' +
+          '<span class="sortgrip" data-grip data-sortkey="asec" title="Drag to reorder" aria-label="Drag to reorder" style="position:absolute;left:0;top:0">' + GRIP_SVG + "</span>" +
+          '<div class="adm__lsec-titles"><span class="adm__lsec-title">' + escHtml(labels[s.key] || s.key) + "</span>" +
+            (where[s.key] ? '<span class="adm__lsec-sub">' + escHtml(where[s.key]) + "</span>" : "") + "</div>" +
+          '<div class="adm__lsec-ops">' +
+            '<button class="iconbtn" data-act="aboutsec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
+            '<button class="iconbtn" data-act="aboutsec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+            eyeToggle('data-act="aboutsec-toggle" data-key="' + s.key + '"', s.on, "adm__lsec-tog") +
+          "</div>" +
+        "</div>" +
+        (body ? '<div class="adm__lsec-body">' + body + "</div>" : "") +
+        "</section>";
+    });
+    return html;
+  }
+  function aboutSecPanelBody(key) {
+    var fn = sections[key];
+    return '<div style="padding:1rem 1.2rem 1.4rem">' + (typeof fn === "function" ? fn() : "") + "</div>";
+  }
+  function aboutSecNav() {
+    let items = "";
+    ASEC_KEYS.forEach((k) => {
+      var n = (data[k] || []).length;
+      items += '<button type="button" class="mlib__navitem' + (asecPage === k ? " is-on" : "") + '" data-act="asec-nav" data-asecpage="' + k + '"><span class="mlib__navname">' + ASEC_LABEL[k] + '</span><span class="mlib__navmeta">' + n + " " + ASEC_NOUN[k] + (n === 1 ? "" : "s") + "</span></button>";
+    });
+    return '<nav class="mlib__nav" style="border-left:0;border-right:1px solid var(--line)"><div class="mlib__navhd">Manage</div>' + items + "</nav>";
+  }
+  function aboutSecShell() {
+    return '<div class="mlib__sheet">' +
+      '<div class="mlib__bar"><div class="mlib__h"><b>About content</b><span>Recognition, skills, journey &amp; education</span></div>' +
+        '<div class="mlib__acts"><button class="btn adm__exit" data-act="asec-close" aria-label="Close">\u2715</button></div></div>' +
+      '<div class="mlib__main" data-asec-main>' + aboutSecNav() + '<div class="mlib__panel" data-asec-panel>' + aboutSecPanelBody(asecPage) + "</div></div>" +
+      "</div>";
+  }
+  function refreshAboutSecModal() {
+    if (!aboutSecModal) return;
+    var main = aboutSecModal.querySelector("[data-asec-main]"); if (!main) return;
+    var panel = main.querySelector("[data-asec-panel]");
+    var sc = panel ? panel.scrollTop : 0;
+    main.innerHTML = aboutSecNav() + '<div class="mlib__panel" data-asec-panel>' + aboutSecPanelBody(asecPage) + "</div>";
+    var np = main.querySelector("[data-asec-panel]"); if (np) np.scrollTop = sc;
+  }
+  function asecEsc(e) { if (e.key === "Escape" && aboutSecModal) { e.stopPropagation(); closeAboutSecModal(); } }
+  function openAboutSecModal(key) {
+    closeAboutSecModal();
+    asecPage = ASEC_KEYS.indexOf(key) >= 0 ? key : "recognition";
+    aboutSecModal = document.createElement("div");
+    aboutSecModal.className = "mlib";
+    aboutSecModal.innerHTML = aboutSecShell();
+    aboutSecModal.addEventListener("mousedown", function (e) { if (e.target === aboutSecModal) closeAboutSecModal(); });
+    root.appendChild(aboutSecModal);
+    document.addEventListener("keydown", asecEsc, true);
+  }
+  function closeAboutSecModal() {
+    if (!aboutSecModal) return;
+    document.removeEventListener("keydown", asecEsc, true);
+    aboutSecModal.remove(); aboutSecModal = null;
+  }
+
   /* ---------- Landing / work-page section order + visibility ---------- */
   /* ---------- Landing highlights dialog (Stats + Brands & products) — reuses the media-library
      shell (.mlib). Mounted INSIDE root so the shared list/card/grip/input handlers keep working;
@@ -4591,7 +4651,7 @@ import { WORLD_LAND } from "./worldland.js";
     const RK = window.RK || {};
     const defs = RK.WORK_SECTIONS || [["hero", "Statement"], ["intro", "Intro"], ["highlights", "Highlights"], ["work", "Selected work"], ["capabilities", "Skills"]];
     const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
-    const where = { hero: "The statement, footer & scroll cue", intro: "Eyebrow, domains & description", highlights: "At-a-glance numbers + brand logos", work: "Heading here; tiles edit in the Work tab", capabilities: "Edited in the Skills tab" };
+    const where = { hero: "The statement, footer & scroll cue", intro: "Eyebrow, domains & description", highlights: "At-a-glance numbers + brand logos", work: "Heading here; tiles edit in the Work tab", capabilities: "Edited in the About tab" };
     const layout = RK.workLayout ? RK.workLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
     let html = "";
     layout.forEach((s, i) => {
@@ -4839,6 +4899,7 @@ import { WORLD_LAND } from "./worldland.js";
     resolveMediaSizes(body);
     syncPreviewPage();
     if (hlModal) refreshHlPanel();
+    if (aboutSecModal) refreshAboutSecModal();
   }
 
   /* ---------- L2 case-study editor + auto live preview ---------- */
@@ -5417,6 +5478,9 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "open-highlights") { openHlModal(); return; }
     if (act === "hl-close") { closeHlModal(); return; }
     if (act === "hl-nav") { hlPage = b.dataset.hlpage === "brands" ? "brands" : "stats"; refreshHlPanel(); return; }
+    if (act === "open-aboutsec") { openAboutSecModal(b.dataset.asec); return; }
+    if (act === "asec-close") { closeAboutSecModal(); return; }
+    if (act === "asec-nav") { asecPage = b.dataset.asecpage; refreshAboutSecModal(); return; }
     if (act === "hi-order-up" || act === "hi-order-down") {
       const arr = hiOrderArr(), oi = +b.dataset.oi, j = act === "hi-order-up" ? oi - 1 : oi + 1;
       if (j < 0 || j >= arr.length) return;
