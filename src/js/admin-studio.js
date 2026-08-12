@@ -2130,7 +2130,7 @@ import { WORLD_LAND } from "./worldland.js";
      Keys: "list:<name>" (L1 lists) · "block:<i>" (case-study sections) ·
      "item:<i>:<j>" (repeater items). Pointer-based, so it's reliable across
      browsers and auto-scrolls the editor when you drag near an edge. */
-  var SORT_ROW_SEL = ".rep__item, .study__block, .card, .cellrow";
+  var SORT_ROW_SEL = ".rep__item, .study__block, .card, .cellrow, .adm__lsec";
   function sortRowsFor(key) {
     return [].slice.call(root.querySelectorAll('[data-grip][data-sortkey="' + key + '"]'))
       .map(function (g) { return g.closest(SORT_ROW_SEL); }).filter(Boolean);
@@ -2196,6 +2196,7 @@ import { WORLD_LAND } from "./worldland.js";
   function sortApply(key, from, to) {
     var p = key.split(":"), arr = null, after = null;
     if (p[0] === "list") { arr = data[p[1]]; after = function () { apply(true); renderBody(); }; }
+    else if (p[0] === "lsec") { arr = workLayoutArr(); after = function () { setWorkLayout(arr); }; }
     else if (p[0] === "block") {
       var bi = +p[1], st = data.work[bi] && data.work[bi].study; if (!st || !st.blocks) return; arr = st.blocks;
       after = function () {
@@ -4529,6 +4530,7 @@ import { WORLD_LAND } from "./worldland.js";
       const body = landingSectionFields(s.key);
       html += '<section class="adm__group adm__lsec' + (s.on ? "" : " is-off") + '">' +
         '<div class="adm__lsec-head">' +
+          '<span class="sortgrip" data-grip data-sortkey="lsec" title="Drag to reorder" aria-label="Drag to reorder" style="position:absolute;left:0;top:0">' + GRIP_SVG + "</span>" +
           '<div class="adm__lsec-titles"><span class="adm__lsec-title">' + escHtml(labels[s.key] || s.key) + "</span>" +
             (where[s.key] ? '<span class="adm__lsec-sub">' + escHtml(where[s.key]) + "</span>" : "") + "</div>" +
           '<div class="adm__lsec-ops">' +
