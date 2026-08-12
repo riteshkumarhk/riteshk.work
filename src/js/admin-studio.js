@@ -3136,8 +3136,10 @@ import { WORLD_LAND } from "./worldland.js";
     var MAX = 6;
     var items = media.map(function (m, j) { return ovmItem(i, m, j, media.length); }).join("");
     var addBtn = media.length < MAX
-      ? '<button type="button" class="btn btn--add" data-act="ovm-upload-multi" data-index="' + i + '" title="Pick several images, GIFs or videos at once \u2014 each becomes a new slide">+ Add media\u2026</button>' +
-        '<button type="button" class="btn btn--ghost" data-act="ovm-add" data-index="' + i + '" style="display:block;margin:.4rem auto 0;font-size:.66rem;opacity:.72" title="Add an empty slot to paste an image / video / Figma URL">or add a blank slot for a URL</button>'
+      ? '<div style="display:flex;gap:.5rem;align-items:stretch;margin-top:.5rem">' +
+          '<button type="button" class="btn btn--add" data-act="ovm-upload-multi" data-index="' + i + '" style="flex:1;margin-top:0" title="Pick several images, GIFs or videos at once \u2014 each becomes a new slide">+ Add media\u2026</button>' +
+          '<button type="button" class="btn btn--ghost" data-act="ovm-add" data-index="' + i + '" style="flex:0 0 auto;white-space:nowrap" title="Add an empty slot to paste an image / video / Figma URL">or a blank URL slot</button>' +
+        '</div>'
       : '<div class="af__hint">Up to ' + MAX + ' extra media (plus your cover = ' + (MAX + 1) + ' slides).</div>';
     return '<section class="l2grp"><div class="l2grp__head">Overview slideshow <span>\u2014 cover + up to 6 media, shown as a preview reel atop the case</span></div>' +
       '<div class="af__hint" style="margin:-.2rem 0 .6rem">Your cover image is slide 1. Add images, GIFs or short videos to build a Steam-style preview \u2014 each auto-plays (3.5s; videos play fully), and visitors can click a thumbnail or go fullscreen.</div>' +
