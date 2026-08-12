@@ -44,19 +44,20 @@ const VAPID_PUBLIC = "BNvPqxaZXo1uLqMAXeW-l6WCPMceklB7Z5RzgpAL3p8N8MtkATL5j0w6YM
 // --- service email ---------------------------------------------------------
 // Where owner notifications, reply-to and bcc go. Resolved (and edge-cached for
 // ~5 min) from the published site so the studio's "Service email" field drives it.
-// Precedence: contact.serviceEmail (studio) -> OWNER_EMAIL secret (private inbox)
-// -> contact.email (the public display email) -> hardcoded fallback.
-let _svcEmail = { at: 0, s: "", d: "" };
+// ALWAYS the SERVICE email (functional). Precedence: contact.serviceEmail (studio)
+// -> OWNER_EMAIL secret (private inbox) -> hardcoded owner inbox. The public DISPLAY
+// email (contact.email) is intentionally NEVER used for sending — it is cosmetic only.
+let _svcEmail = { at: 0, s: "" };
 async function ownerEmail(env) {
   try {
     if (Date.now() - _svcEmail.at > 300000) {
       const base = String(env.ALLOW_ORIGIN || "https://riteshk.work").split(",")[0].trim() || "https://riteshk.work";
       const r = await fetch(base + "/content.json", { cf: { cacheTtl: 300, cacheEverything: true } });
-      if (r.ok) { const c = ((await r.json()) || {}).contact || {}; _svcEmail = { at: Date.now(), s: String(c.serviceEmail || "").trim(), d: String(c.email || "").trim() }; }
+      if (r.ok) { const c = ((await r.json()) || {}).contact || {}; _svcEmail = { at: Date.now(), s: String(c.serviceEmail || "").trim() }; }
       else { _svcEmail.at = Date.now(); }
     }
   } catch (e) {}
-  return _svcEmail.s || env.OWNER_EMAIL || _svcEmail.d || "riteshkumarhk@gmail.com";
+  return _svcEmail.s || env.OWNER_EMAIL || "riteshkumarhk@gmail.com";
 }
 
 export default {
