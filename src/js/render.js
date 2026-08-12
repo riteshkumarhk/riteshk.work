@@ -179,6 +179,25 @@
     return s;
   }
 
+  // Enforce TITLE CASE for case-study titles (display only): capitalize principal words, keep minor
+  // words (a/for/of/the...) lowercase except first/last, and preserve brand/acronym casing (Edge, iOS, AI).
+  function titleCase(s) {
+    if (s == null) return "";
+    var minor = { a:1,an:1,and:1,as:1,at:1,but:1,by:1,for:1,from:1,if:1,in:1,into:1,nor:1,of:1,on:1,onto:1,or:1,over:1,per:1,the:1,to:1,up:1,via:1,vs:1,with:1 };
+    var parts = String(s).split(/(\s+)/);
+    var total = parts.filter(function (p) { return !/^\s*$/.test(p); }).length, wi = 0;
+    return parts.map(function (p) {
+      if (/^\s*$/.test(p)) return p;
+      wi++;
+      if (/[a-z][A-Z]/.test(p)) return p;                                                // iOS, PowerPoint — keep
+      var letters = p.replace(/[^A-Za-z]/g, "");
+      if (letters && letters === letters.toUpperCase() && letters.length <= 4) return p; // AI, UAC — keep acronyms
+      var core = p.toLowerCase().replace(/^[^a-z0-9]+/, "").replace(/[^a-z0-9]+$/, "");
+      if (wi !== 1 && wi !== total && minor[core]) return p.toLowerCase();               // minor word (not first/last)
+      return p.toLowerCase().replace(/[a-z]/, function (c) { return c.toUpperCase(); }); // capitalize first letter
+    }).join("");
+  }
+
   function caseEl(w, idx) {
     const n = String(idx + 1).padStart(2, "0");
     const tags = (w.tags || []).map((t) => "<span>" + esc(t) + "</span>").join("");
@@ -202,7 +221,7 @@
       media +
       '<div class="case__body"><div class="case__meta"><span>' + esc(w.client) +
       "</span><span>" + esc(w.period) + "</span></div>" +
-      '<h3 class="case__title">' + esc(w.title) + "</h3>" +
+      '<h3 class="case__title">' + esc(titleCase(w.title)) + "</h3>" +
       '<p class="case__desc">' + esc(w.cardDesc || w.desc) + "</p>" +
       '<div class="case__tags">' + tags + "</div></div></a></li>"
     );

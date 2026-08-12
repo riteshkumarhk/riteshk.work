@@ -986,6 +986,23 @@
     if (!out) return "";
     return '<div class="pj__cta"><div class="pj__cta-dock">' + out + "</div></div>";
   }
+  // TITLE CASE for case-study titles (display only) — mirrors render.js titleCase().
+  function titleCase(s) {
+    if (s == null) return "";
+    var minor = { a:1,an:1,and:1,as:1,at:1,but:1,by:1,for:1,from:1,if:1,in:1,into:1,nor:1,of:1,on:1,onto:1,or:1,over:1,per:1,the:1,to:1,up:1,via:1,vs:1,with:1 };
+    var parts = String(s).split(/(\s+)/);
+    var total = parts.filter(function (p) { return !/^\s*$/.test(p); }).length, wi = 0;
+    return parts.map(function (p) {
+      if (/^\s*$/.test(p)) return p;
+      wi++;
+      if (/[a-z][A-Z]/.test(p)) return p;
+      var letters = p.replace(/[^A-Za-z]/g, "");
+      if (letters && letters === letters.toUpperCase() && letters.length <= 4) return p;
+      var core = p.toLowerCase().replace(/^[^a-z0-9]+/, "").replace(/[^a-z0-9]+$/, "");
+      if (wi !== 1 && wi !== total && minor[core]) return p.toLowerCase();
+      return p.toLowerCase().replace(/[a-z]/, function (c) { return c.toUpperCase(); });
+    }).join("");
+  }
   function navFoot(cur) {
     var curId = cur && cur.id;
     var others = siblings(curId).filter(function (o) { return o && o.id !== curId && !o.encWork; });
@@ -997,7 +1014,7 @@
         : '<span class="pj__more-media pj__more-media--ph pjb__shot-ph--' + esc(o.theme || "edge") + '"></span>';
       return '<button class="pj__more-card" data-open="' + attr(o.id) + '" data-cursor="view">' + media +
         '<span class="pj__more-info"><span class="pj__more-client">' + esc(o.client) + "</span>" +
-        '<span class="pj__more-title">' + esc(o.title) + "</span></span></button>";
+        '<span class="pj__more-title">' + esc(titleCase(o.title)) + "</span></span></button>";
     };
     var more = others.length
       ? '<div class="pj__more"><div class="pj__more-head">More case studies</div><div class="pj__more-grid">' +
@@ -1094,7 +1111,7 @@
     var hero =
       '<header class="pj__hero">' +
         '<div class="pj__eyebrow">' + esc(w.client) + (w.period ? " · " + esc(w.period) : "") + "</div>" +
-        '<h1 class="pj__title">' + md(w.title) + "</h1>" +
+        '<h1 class="pj__title">' + md(titleCase(w.title)) + "</h1>" +
         '<p class="pj__tagline">' + md(st.tagline || w.desc || "") + "</p>" +
       "</header>";
     var stage = stageHtml(w, st, blocks.length);
@@ -1937,7 +1954,7 @@
     try { window.__rkTrack && window.__rkTrack("case_open", id); } catch (e) {}
     var keepAnchor = opts.keepScroll ? captureAnchor() : null;
     fillContent(w, keepAnchor);
-    document.title = w.title ? (plain(w.title) + " \u2014 Ritesh Kumar") : DEFAULT_TITLE;
+    document.title = w.title ? (plain(titleCase(w.title)) + " \u2014 Ritesh Kumar") : DEFAULT_TITLE;
     if (opts.push !== false) { try { history.pushState({ rkWork: id }, "", "/work/" + id); } catch (e) {} }
     if (opts.keepScroll) restoreAnchor(keepAnchor); else scroller.scrollTop = 0;
     if (firstOpen) requestAnimationFrame(function () { overlay.classList.add("is-open"); requestAnimationFrame(updateSpy); });
