@@ -91,7 +91,11 @@
     "workTitleSize": "compact",
     "introSpacing": "compact",
     "statementSize": "compact",
-    "statementAlign": "center"
+    "statementAlign": "center",
+    "highlightsOrder": [
+      "stats",
+      "brands"
+    ]
   },
   "contact": {
     "name": "Ritesh Kumar",
