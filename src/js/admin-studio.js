@@ -127,7 +127,6 @@ import { WORLD_LAND } from "./worldland.js";
   const TABS = [
     ["insights", "Insights"],
     ["landing", "Landing"],
-    ["highlights", "Highlights"],
     ["capabilities", "Skills"],
     ["work", "Work"],
     ["aboutpage", "About"],
@@ -4462,6 +4461,67 @@ import { WORLD_LAND } from "./worldland.js";
   }
 
   /* ---------- Landing / work-page section order + visibility ---------- */
+  /* ---------- Landing highlights dialog (Stats + Brands & products) — reuses the media-library
+     shell (.mlib). Mounted INSIDE root so the shared list/card/grip/input handlers keep working;
+     the shell is inline-styled where new so it renders regardless of the admin.css cache. ---------- */
+  var hlModal = null, hlPage = "stats";
+  function hlStatsBody() {
+    const list = data.highlights || [];
+    let html = secHead("Stats", "At-a-glance numbers that run as a marquee under the hero. Up to 8. Values like <em>11+</em>, <em>Billions</em>, <em>2B+</em> \u2014 leading digits count up as each chip scrolls in. Select text, then use B / I / A for bold, italic or a bronze accent.") +
+      addBar("highlights", "Add stat", list.length >= 8);
+    list.forEach((h, i) => {
+      html += '<div class="card">' + cardHead("Stat " + (i + 1), "highlights", i, list.length) +
+        '<div class="af__row">' + itemField("highlights", i, "value", "Value", { md: true }) + itemField("highlights", i, "label", "Label", { md: true }) + "</div></div>";
+    });
+    return html;
+  }
+  function hlPanelBody(page) {
+    return '<div style="padding:1rem 1.2rem 1.4rem">' + (page === "brands" ? logosBlock() : hlStatsBody()) + "</div>";
+  }
+  function hlNav() {
+    const nStats = (data.highlights || []).length, nLogos = logosArr().length;
+    function item(pg, name, meta) {
+      return '<button type="button" class="mlib__navitem' + (hlPage === pg ? " is-on" : "") + '" data-act="hl-nav" data-hlpage="' + pg + '">' +
+        '<span class="mlib__navname">' + name + '</span><span class="mlib__navmeta">' + meta + "</span></button>";
+    }
+    return '<nav class="mlib__nav" data-hl-nav style="border-left:0;border-right:1px solid var(--line)">' +
+      '<div class="mlib__navhd">Manage</div>' +
+      item("stats", "Stats", nStats + " number" + (nStats === 1 ? "" : "s")) +
+      item("brands", "Brands &amp; products", nLogos + " logo" + (nLogos === 1 ? "" : "s")) +
+      "</nav>";
+  }
+  function hlShell() {
+    return '<div class="mlib__sheet">' +
+      '<div class="mlib__bar"><div class="mlib__h"><b>Landing highlights</b><span>Stats &amp; brand logos shown under the hero</span></div>' +
+        '<div class="mlib__acts"><button class="btn adm__exit" data-act="hl-close" aria-label="Close">\u2715</button></div></div>' +
+      '<div class="mlib__main" data-hl-main>' + hlNav() + '<div class="mlib__panel" data-hl-panel>' + hlPanelBody(hlPage) + "</div></div>" +
+      "</div>";
+  }
+  function refreshHlPanel() {
+    if (!hlModal) return;
+    var main = hlModal.querySelector("[data-hl-main]"); if (!main) return;
+    var panel = main.querySelector("[data-hl-panel]");
+    var sc = panel ? panel.scrollTop : 0;
+    main.innerHTML = hlNav() + '<div class="mlib__panel" data-hl-panel>' + hlPanelBody(hlPage) + "</div>";
+    var np = main.querySelector("[data-hl-panel]"); if (np) np.scrollTop = sc;
+  }
+  function hlEsc(e) { if (e.key === "Escape" && hlModal) { e.stopPropagation(); closeHlModal(); } }
+  function openHlModal() {
+    closeHlModal();
+    hlPage = "stats";
+    hlModal = document.createElement("div");
+    hlModal.className = "mlib";
+    hlModal.innerHTML = hlShell();
+    hlModal.addEventListener("mousedown", function (e) { if (e.target === hlModal) closeHlModal(); });
+    root.appendChild(hlModal);
+    document.addEventListener("keydown", hlEsc, true);
+  }
+  function closeHlModal() {
+    if (!hlModal) return;
+    document.removeEventListener("keydown", hlEsc, true);
+    hlModal.remove(); hlModal = null;
+  }
+
   function workLayoutArr() {
     const RK = window.RK || {};
     if (RK.workLayout) return RK.workLayout(data).map((s) => ({ key: s.key, on: s.on !== false }));
@@ -4523,7 +4583,7 @@ import { WORLD_LAND } from "./worldland.js";
     const RK = window.RK || {};
     const defs = RK.WORK_SECTIONS || [["hero", "Statement"], ["intro", "Intro"], ["highlights", "Highlights"], ["work", "Selected work"], ["capabilities", "Skills"]];
     const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
-    const where = { hero: "The statement, footer & scroll cue", intro: "Eyebrow, domains & description", highlights: "Brands & numbers \u2014 edited in the Highlights tab", work: "Heading here; tiles edit in the Work tab", capabilities: "Edited in the Skills tab" };
+    const where = { hero: "The statement, footer & scroll cue", intro: "Eyebrow, domains & description", highlights: "At-a-glance numbers + brand logos", work: "Heading here; tiles edit in the Work tab", capabilities: "Edited in the Skills tab" };
     const layout = RK.workLayout ? RK.workLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
     let html = "";
     layout.forEach((s, i) => {
@@ -4572,6 +4632,12 @@ import { WORLD_LAND } from "./worldland.js";
           alignSelect("Statement alignment", "statementalign", L.statementAlign || "left", "Left, centre or right-align the statement lines.") +
         "</div>" +
         input("Footer line", "landing.presence", { md: true, toggle: "presence", hint: "e.g. Currently at Microsoft \u2014 Hyderabad, India" });
+    }
+    if (key === "highlights") {
+      const nStats = (data.highlights || []).length, nLogos = logosArr().length;
+      return '<div class="af"><div class="af__hint" style="margin:0 0 .55rem">At-a-glance numbers and the brand / product logo marquee under the hero.</div>' +
+        '<button type="button" class="btn btn--primary" data-act="open-highlights" style="width:100%">Manage stats &amp; brand logos \u2192</button>' +
+        '<div class="af__hint" style="margin:.45rem 0 0">' + nStats + " stat" + (nStats === 1 ? "" : "s") + " \u00b7 " + nLogos + " logo" + (nLogos === 1 ? "" : "s") + "</div></div>";
     }
     return "";
   }
@@ -4752,6 +4818,7 @@ import { WORLD_LAND } from "./worldland.js";
     root.querySelectorAll(".adm__tab").forEach((t) => t.classList.toggle("is-active", t.dataset.tab === activeTab));
     resolveMediaSizes(body);
     syncPreviewPage();
+    if (hlModal) refreshHlPanel();
   }
 
   /* ---------- L2 case-study editor + auto live preview ---------- */
@@ -5327,6 +5394,9 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "logo-down") { const arr = (data.landing || {}).logos, k = +b.dataset.lindex; if (arr && k < arr.length - 1) { const tmp = arr[k + 1]; arr[k + 1] = arr[k]; arr[k] = tmp; apply(true); renderBody(); } return; }
     if (act === "logo-clear") { const arr = (data.landing || {}).logos, k = +b.dataset.lindex; if (arr && arr[k]) { arr[k].src = ""; apply(true); renderBody(); } return; }
     if (act === "logo-upload") { const k = +b.dataset.lindex; pickImage(function (uri) { const arr = (data.landing || {}).logos; if (arr && arr[k]) { arr[k].src = uri; apply(true); renderBody(); } }); return; }
+    if (act === "open-highlights") { openHlModal(); return; }
+    if (act === "hl-close") { closeHlModal(); return; }
+    if (act === "hl-nav") { hlPage = b.dataset.hlpage === "brands" ? "brands" : "stats"; refreshHlPanel(); return; }
     if (act === "ins-days") { loadInsights(+b.dataset.days || 30); return; }
     if (act === "ins-refresh") { loadInsights(); return; }
     if (act === "ins-mute") { insToggleMute(); return; }
