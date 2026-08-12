@@ -607,7 +607,7 @@ export default {
         const minted = await mintAccessLink(env, { email: rec.email, name: rec.name, company: rec.company, reqId: _id });
         const mail = fullAccessEmail(env, minted.link, who, 15);
         const sent = await sendEmail(env, { to: rec.email, subject: mail.subject, html: mail.html, text: mail.text, replyTo: me, bcc: me });
-        if (!sent.ok) return json({ error: "Couldn\u2019t send the email (" + (sent.status || "no email service") + ")." }, 502, cors);
+        if (!sent.ok) return json({ error: "Couldn\u2019t send the email (" + (sent.status || "no email service") + ")." + emailErrSuffix(sent.detail), detail: emailErrReason(sent.detail) }, 502, cors);
         try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
         return json({ ok: true, sentTo: rec.email }, 200, cors);
       } catch (e) { return json({ error: "Allow failed" }, 400, cors); }
@@ -622,14 +622,15 @@ export default {
         if (!_id) return json({ error: "Missing id" }, 400, cors);
         const rec = await env.VAULT_GRANTS.get(_id, "json");
         if (!rec || !rec.email) return json({ ok: true, note: "already handled" }, 200, cors);
+        // Archive as declined FIRST — the polite note is a courtesy and must NEVER block the decline.
+        // (A flaky email service returning 422 was leaving requests stuck as pending in the PWA.)
+        rec.status = "declined"; rec.declinedAt = new Date().toISOString();   // keep as an archive (Requests tab "Show declined"), not delete
+        try { await env.VAULT_GRANTS.put(_id, JSON.stringify(rec), { expirationTtl: 365 * 24 * 3600 }); } catch (e) {}
         const who = String(rec.name || "there"), me = await ownerEmail(env);
         const html = "<p>Hi " + emailEsc(who) + ",</p><p>Thanks for reaching out about my work. I\u2019m not able to share access right now \u2014 feel free to reply here and we can talk.</p><p>\u2014 Ritesh Kumar</p>";
         const text = "Hi " + who + ",\n\nThanks for reaching out about my work. I'm not able to share access right now \u2014 feel free to reply here and we can talk.\n\n\u2014 Ritesh Kumar";
         const sent = await sendEmail(env, { to: rec.email, subject: "About your access request \u2014 Ritesh Kumar", html, text, replyTo: me });
-        if (!sent.ok) return json({ error: "Couldn\u2019t send the note (" + (sent.status || "no email service") + ")." }, 502, cors);
-        rec.status = "declined"; rec.declinedAt = new Date().toISOString();   // keep as an archive (Requests tab "Show declined"), not delete
-        try { await env.VAULT_GRANTS.put(_id, JSON.stringify(rec), { expirationTtl: 365 * 24 * 3600 }); } catch (e) {}
-        return json({ ok: true, sentTo: rec.email, declined: true }, 200, cors);
+        return json({ ok: true, sentTo: rec.email, declined: true, emailed: !!sent.ok, emailStatus: sent.status || 0, emailDetail: sent.ok ? "" : emailErrReason(sent.detail) }, 200, cors);
       } catch (e) { return json({ error: "Decline failed" }, 400, cors); }
     }
     // Owner CURATES a request (session-gated): mint a curated grant (subset of works + optional custom phrase + duration) + email + move to Curated.
@@ -651,7 +652,7 @@ export default {
         const minted = await mintAccessLink(env, { email: rec.email, name: rec.name, company: rec.company, reqId: _id, mode: "curated", workIds: workIds, highlightIdx: highlightIdx, capabilityIdx: capabilityIdx, phrase: phrase, status: "curated", days: days });
         const mail = fullAccessEmail(env, minted.link, who, days);
         const sent = await sendEmail(env, { to: rec.email, subject: mail.subject, html: mail.html, text: mail.text, replyTo: me, bcc: me });
-        if (!sent.ok) return json({ error: "Couldn\u2019t send the email (" + (sent.status || "no email service") + ")." }, 502, cors);
+        if (!sent.ok) return json({ error: "Couldn\u2019t send the email (" + (sent.status || "no email service") + ")." + emailErrSuffix(sent.detail), detail: emailErrReason(sent.detail) }, 502, cors);
         try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
         return json({ ok: true, sentTo: rec.email, token: minted.token, link: minted.link }, 200, cors);
       } catch (e) { return json({ error: "Curate failed" }, 400, cors); }
@@ -1261,6 +1262,14 @@ async function sendEmail(env, msg) {
     return { ok: r.ok, status: r.status, detail: String(detail).slice(0, 300) };
   } catch (e) { return { ok: false, status: 0, detail: String((e && e.message) || e) }; }
 }
+
+// Pull a human-readable reason out of Resend's error body ({ name, message }) so the owner sees WHY
+// an email failed (e.g. an unverified from-address or invalid recipient) instead of a bare status code.
+function emailErrReason(detail) {
+  if (!detail) return "";
+  try { const j = JSON.parse(detail); return String(j.message || j.error || j.name || "").slice(0, 180); } catch (e) { return String(detail).slice(0, 180); }
+}
+function emailErrSuffix(detail) { const r = emailErrReason(detail); return r ? " " + r : ""; }
 
 // Recruiter access links: a unique, revocable, trackable token per approval. The shared decryption
 // code never travels in the email — the link resolves to it server-side via /access/redeem, so a
