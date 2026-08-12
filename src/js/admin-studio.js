@@ -629,9 +629,10 @@ import { WORLD_LAND } from "./worldland.js";
   function depthPanel(w, i) {
     var d = depthOf(w);
     function sl(field, label, min, max, step, val, hint) {
+      var pct = Math.round(((val - min) / (max - min)) * 100);
       return '<div class="depthp__row"><span class="depthp__lbl">' + label + '</span>' +
-        '<input type="range" class="depthp__range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '" data-depth-field="' + field + '" data-index="' + i + '" />' +
-        '<span class="depthp__val">' + val + '</span></div>' +
+        '<input type="range" class="depthp__range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '" style="--fill:' + pct + '%" data-depth-field="' + field + '" data-index="' + i + '" />' +
+        '<span class="depthp__valwrap"><span class="depthp__val">' + val + '</span></span></div>' +
         (hint ? '<div class="depthp__hint">' + hint + '</div>' : '');
     }
     return '<div class="depthp" data-depth-panel="' + i + '" hidden>' +
@@ -642,6 +643,10 @@ import { WORLD_LAND } from "./worldland.js";
         sl("zoom", "Depth pull-back", 1, 1.3, 0.005, d.zoom, "Lower = a bigger dolly-out on hover = more sense of depth.") +
         sl("softness", "Edge softness", 0, 0.03, 0.001, d.softness) +
         sl("focus", "Focus plane", 0, 1, 0.02, d.focus) +
+        '<div class="depthp__props">' +
+          '<button type="button" class="depthp__prop" data-act="depth-copy" data-index="' + i + '" title="Copy these four slider values">' + PARX_COPY_SVG + ' Copy properties</button>' +
+          '<button type="button" class="depthp__prop" data-act="depth-paste" data-index="' + i + '" title="Paste slider values you copied from another cover"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg> Paste properties</button>' +
+        '</div>' +
         '<div class="depthp__gen"><button class="btn btn--auto" data-act="depth-gen" data-index="' + i + '" title="Generate a depth map on your GPU (WebGPU)">Generate depth map</button>' +
         '<button class="btn btn--ghost" data-act="depth-suggest" data-index="' + i + '" title="Let AI look at the cover and suggest strength, focus &amp; pull-back">Suggest settings</button>' +
         '<span class="depthp__note">Generate builds the depth map on your GPU. Suggest uses your AI key to tune strength / focus / pull-back for this cover.</span></div>' +
@@ -656,6 +661,8 @@ import { WORLD_LAND } from "./worldland.js";
   function onDepthSlider(t) {
     var i = +t.dataset.index, w = data.work[i]; if (!w) return;
     ensureDepth(w)[t.dataset.depthField] = parseFloat(t.value);
+    var pct = Math.round(((t.value - t.min) / (t.max - t.min)) * 100);
+    t.style.setProperty("--fill", (isFinite(pct) ? pct : 0) + "%");
     var row = t.closest(".depthp__row"), vo = row && row.querySelector(".depthp__val");
     if (vo) vo.textContent = t.value;
     saveDraft(); apply();
@@ -664,6 +671,26 @@ import { WORLD_LAND } from "./worldland.js";
     var i = +t.dataset.depthOn, w = data.work[i]; if (!w) return;
     ensureDepth(w).on = t.checked;
     saveDraft(true); apply(true);
+  }
+  // Copy the four depth slider values so they can be pasted onto another cover (persists in localStorage).
+  function depthCopyProps(i, btn) {
+    var w = data.work[i]; if (!w) return;
+    var d = depthOf(w);
+    try { localStorage.setItem("rk:depthProps", JSON.stringify({ strength: d.strength, zoom: d.zoom, softness: d.softness, focus: d.focus })); } catch (e) {}
+    if (btn) { var h = btn.innerHTML; btn.classList.add("is-copied"); btn.innerHTML = PARX_CHECK_SVG + " Copied"; setTimeout(function () { btn.innerHTML = h; btn.classList.remove("is-copied"); }, 1300); }
+    status("Depth properties copied \u2014 paste them onto another cover.", true);
+  }
+  function depthPasteProps(i, btn) {
+    var w = data.work[i]; if (!w) return;
+    var p; try { p = JSON.parse(localStorage.getItem("rk:depthProps") || "null"); } catch (e) {}
+    if (!p) { status("Nothing to paste yet \u2014 Copy properties from a cover first."); return; }
+    var d = ensureDepth(w);
+    ["strength", "zoom", "softness", "focus"].forEach(function (k) { if (p[k] != null) d[k] = +p[k]; });
+    saveDraft(true); apply(true);
+    var panel = root && root.querySelector('[data-depth-panel="' + i + '"]');
+    if (panel) syncDepthPanel(panel, depthOf(w));
+    if (btn) { var h2 = btn.innerHTML; btn.classList.add("is-copied"); btn.innerHTML = PARX_CHECK_SVG + " Pasted"; setTimeout(function () { btn.innerHTML = h2; btn.classList.remove("is-copied"); }, 1300); }
+    status("Depth properties pasted.", true);
   }
   // Probe the cover's depth map (naming convention) and show it in the panel preview, else the placeholder.
   function depthPreviewLoad(panel) {
@@ -761,6 +788,8 @@ import { WORLD_LAND } from "./worldland.js";
       var inp = panel.querySelector('.depthp__range[data-depth-field="' + field + '"]');
       if (!inp) return;
       inp.value = val;
+      var pct = Math.round(((+val - +inp.min) / (+inp.max - +inp.min)) * 100);
+      inp.style.setProperty("--fill", (isFinite(pct) ? pct : 0) + "%");
       var row = inp.closest(".depthp__row"), vo = row && row.querySelector(".depthp__val");
       if (vo) vo.textContent = inp.value;
     };
@@ -5496,6 +5525,8 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "depth-open") { var _dp = root.querySelector('[data-depth-panel="' + i + '"]'); if (_dp) { _dp.hidden = !_dp.hidden; b.classList.toggle("is-on", !_dp.hidden); if (!_dp.hidden) depthPreviewLoad(_dp); } return; }
     if (act === "depth-gen") { depthGenerate(i, b); return; }
     if (act === "depth-suggest") { depthSuggest(i, b); return; }
+    if (act === "depth-copy") { depthCopyProps(i, b); return; }
+    if (act === "depth-paste") { depthPasteProps(i, b); return; }
     if (act === "aboutsec-up" || act === "aboutsec-down") {
       const arr = aboutLayoutArr(), idx = +b.dataset.i, j = act === "aboutsec-up" ? idx - 1 : idx + 1;
       if (idx < 0 || j < 0 || j >= arr.length) return;
