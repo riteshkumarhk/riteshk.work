@@ -6471,14 +6471,17 @@ import { WORLD_LAND } from "./worldland.js";
   }
   /* ---------- publish progress bar + live-site confirmation ---------- */
   let pubCreep = null;
+  let pubDismiss = null;   // success-only auto-dismiss timer for the publish banner
   function pubEl() { return root && root.querySelector(".adm__pub"); }
   function pubProgress(pct, label, opts) {
     opts = opts || {};
+    if (pubDismiss) { clearTimeout(pubDismiss); pubDismiss = null; }   // a fresh update cancels any pending auto-dismiss
     const el = pubEl();
     // The publish bar (row 3) is the single home for progress/status while publishing — don't
     // also mirror the message into the top .adm__status (that was the duplicated text on screen).
     if (!el) { status(label, !!opts.done); return; }
     el.hidden = false;
+    el.style.opacity = ""; el.style.transition = "";   // undo any in-flight fade-out from a previous auto-dismiss
     el.classList.toggle("is-done", !!opts.done);
     el.classList.toggle("is-error", !!opts.error);
     const p = Math.max(0, Math.min(100, Math.round(pct)));
@@ -6494,9 +6497,17 @@ import { WORLD_LAND } from "./worldland.js";
     if (view) { if (opts.viewUrl) { view.href = opts.viewUrl; view.hidden = false; } else view.hidden = true; }
     if (close) close.hidden = !(opts.done || opts.error);
     if (hint) hint.hidden = !!(opts.done || opts.error);
+    // A successful publish auto-dismisses after a few seconds; an error stays put so the owner can read and retry.
+    if (opts.done && !opts.error) pubDismiss = setTimeout(pubFadeOut, 6000);
   }
   function pubStopCreep() { if (pubCreep) { clearInterval(pubCreep); pubCreep = null; } }
-  function pubHide() { pubStopCreep(); const el = pubEl(); if (el) el.hidden = true; }
+  function pubHide() { pubStopCreep(); if (pubDismiss) { clearTimeout(pubDismiss); pubDismiss = null; } const el = pubEl(); if (el) { el.hidden = true; el.style.opacity = ""; el.style.transition = ""; } }
+  function pubFadeOut() {                                  // gentle fade, then hide (after a successful publish)
+    pubDismiss = null;
+    const el = pubEl(); if (!el) return;
+    el.style.transition = "opacity .4s ease"; el.style.opacity = "0";
+    pubDismiss = setTimeout(function () { pubDismiss = null; const e2 = pubEl(); if (e2) { e2.hidden = true; e2.style.opacity = ""; e2.style.transition = ""; } }, 440);
+  }
   // Ease the bar toward a target over N seconds while we wait on GitHub Pages.
   function pubCreepTo(target, seconds) {
     pubStopCreep();
