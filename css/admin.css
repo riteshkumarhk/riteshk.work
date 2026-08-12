@@ -332,9 +332,24 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 
 /* ---------- list item cards ---------- */
 .card { border: 1px solid var(--line); border-radius: 10px; padding: .85rem; margin-bottom: .85rem; background: var(--bg); }
-/* Work-tab project cards read as top-level panels (match the About/Landing section cards) */
-.card.workcard { background: var(--bg-2); }
 .card__bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: .7rem; }
+
+/* ---------- Work project cards: sleek panel mirroring the About/Landing .adm__lsec cards ---------- */
+.workcard .adm__lsec-head { padding: .1rem 9.5rem 1rem; }
+.workcard .adm__lsec-titles { max-width: 100%; }
+.workcard .adm__lsec-ops { gap: .15rem; }
+.workcard .adm__lsec-title { font-size: 1.15rem; }
+.workcard__title-hint { font-style: italic; color: var(--text-faint); font-weight: 400; font-size: .95rem; }
+.workcard .adm__lsec-sub svg { vertical-align: -1px; margin-right: .15rem; }
+.workcard__foot { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; border-top: 1px solid var(--line-soft); margin-top: 1rem; padding-top: .9rem; }
+.workcard__private { cursor: pointer; }
+.workcard__private svg { flex: none; opacity: .75; }
+.workcard__private.is-disabled { opacity: .38; cursor: not-allowed; }
+.workcard__private input:disabled { cursor: not-allowed; }
+.workcard__foot .study__toggle { margin: 0; padding: 0; border-top: none; gap: .5rem; flex: 0 0 auto; }
+.workcard__foot .study__editbtn { flex: 0 0 auto; }
+.workcard.is-private .adm__lsec-sub { color: var(--accent); }
+.workcard__enc-note { margin-top: .5rem; }
 .card__idx { font-family: var(--mono); font-size: .64rem; letter-spacing: .06em; color: var(--text-faint); text-transform: uppercase; }
 .card__ops { display: flex; gap: .3rem; }
 .iconbtn { background: none; border: 1px solid var(--line); color: var(--text-dim); border-radius: 6px; width: 27px; height: 27px; cursor: pointer; font-size: .8rem; display: grid; place-items: center; line-height: 1; }

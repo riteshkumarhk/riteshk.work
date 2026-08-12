@@ -436,11 +436,18 @@ import { WORLD_LAND } from "./worldland.js";
   // JS with inline styles/colours so it never depends on the admin.css cache version.
   const EYE_ON = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   const EYE_OFF = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
-  function eyeToggle(attrs, on, cls) {
+  const LOCK_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+  const DUP_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  // eye = a show/hide (or feature) toggle. opts.disabled locks it (dimmed, not clickable); opts.title overrides the tooltip.
+  function eyeToggle(attrs, on, cls, opts) {
+    opts = opts || {};
+    const disabled = !!opts.disabled;
     const color = on ? "var(--accent)" : "var(--text-faint)";
-    const title = on ? "Shown - click to hide" : "Hidden - click to show";
-    return '<label class="' + (cls || "af__tog") + '" title="' + title + '" style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:30px;height:26px;color:' + color + ';cursor:pointer">' +
-      '<input type="checkbox" ' + attrs + (on ? " checked" : "") + ' style="position:absolute;top:0;left:0;width:100%;height:100%;margin:0;padding:0;opacity:0;cursor:pointer" />' +
+    const title = opts.title || (on ? "Shown - click to hide" : "Hidden - click to show");
+    const cur = disabled ? "not-allowed" : "pointer";
+    const dim = disabled ? ";opacity:.35" : "";
+    return '<label class="' + (cls || "af__tog") + (disabled ? " is-disabled" : "") + '" title="' + title + '" style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:30px;height:26px;color:' + color + ';cursor:' + cur + dim + '">' +
+      '<input type="checkbox" ' + attrs + (on ? " checked" : "") + (disabled ? " disabled" : "") + ' style="position:absolute;top:0;left:0;width:100%;height:100%;margin:0;padding:0;opacity:0;cursor:' + cur + '" />' +
       (on ? EYE_ON : EYE_OFF) + "</label>";
   }
   function input(label, path, opts) {
@@ -3153,11 +3160,10 @@ import { WORLD_LAND } from "./worldland.js";
     if (openStudy === i) {
       return '<div class="study__toggle is-open"><button class="btn study__editbtn is-open" data-act="study-toggle" data-index="' + i + '">\u25be Close case-study editor</button></div>';
     }
-    var count = n ? n + " section" + (n > 1 ? "s" : "") + " \u00b7 click to edit" : (w.study ? "empty \u2014 add sections" : "no page yet \u2014 click to build one");
     var preview = n ? '<a class="btn btn--ghost study__previewbtn" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '" title="Open this project page in a new tab">Preview \u2197</a>' : "";
     return '<div class="study__toggle">' +
       '<button class="btn study__editbtn" data-act="study-toggle" data-index="' + i + '">\u270e Edit case-study page</button>' +
-      '<span class="study__meta">' + count + "</span>" + preview +
+      preview +
       "</div>";
   }
   function setStudyUnlock(st, phrase) {
@@ -3453,21 +3459,54 @@ import { WORLD_LAND } from "./worldland.js";
         addBar("work", "Add work");
       list.forEach((w, i) => {
         if (w.encWork) {
-          html += '<div class="card workcard workcard--enc">' +
-            '<div class="workcard__enc-head"><span class="study__block-badge">\uD83D\uDD12 Hidden &amp; encrypted project</span></div>' +
-            '<div class="study__enc-note">Hidden from the default site \u2014 its content isn\u2019t in your published file. <button class="btn btn--ghost" data-act="work-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
-            '</div>';
+          html += '<section class="adm__group adm__lsec workcard workcard--enc">' +
+            '<div class="adm__lsec-head">' +
+              '<span class="sortgrip" data-grip data-sortkey="list:work" title="Drag to reorder" aria-label="Drag to reorder" style="position:absolute;left:0;top:0">' + GRIP_SVG + '</span>' +
+              '<div class="adm__lsec-titles"><span class="adm__lsec-title">' + escHtml((w.title && w.title !== "Project title") ? w.title : (w.client || "Encrypted project")) + '</span>' +
+                '<span class="adm__lsec-sub">' + LOCK_SVG + ' Private \u00b7 encrypted</span></div>' +
+              '<div class="adm__lsec-ops">' +
+                '<button class="iconbtn" data-act="up" data-list="work" data-index="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
+                '<button class="iconbtn" data-act="down" data-list="work" data-index="' + i + '"' + (i === list.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+                '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="work" data-index="' + i + '" title="Remove">\u2715</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="study__enc-note workcard__enc-note">This project is encrypted in your published file \u2014 unlock it with your recovery pass to edit. <button class="btn btn--ghost" data-act="work-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
+            '</section>';
           return;
         }
-        html += '<div class="card workcard">' + cardHead(w.client || w.title || ("Work " + (i + 1)), "work", i, list.length, "work-dup") +
-          '<div class="block-flags workcard__flags">' +
-            '<label class="chk workcard__feat"><input type="checkbox" data-act="feature" data-index="' + i + '"' + (w.featured ? " checked" : "") + " /> Feature on homepage</label>" +
-            '<label class="chk"><input type="checkbox" data-act="work-hidden" data-index="' + i + '"' + (w.hidden ? " checked" : "") + " /> Hidden from the default site \u2014 only shown via a ticket</label>" +
+        const featd = !!w.featured;
+        const priv = !!w.hidden && !featd;   // Private only if hidden AND not featured (invariant: never both)
+        const nSec = (w.study && w.study.blocks && w.study.blocks.length) || 0;
+        const secText = nSec ? (nSec + " section" + (nSec > 1 ? "s" : "")) : (w.study ? "no sections yet" : "no case study yet");
+        const hasTitle = w.title && w.title !== "Project title";
+        const titleHtml = hasTitle ? escHtml(w.title) : '<span class="workcard__title-hint">Untitled \u2014 add a title in the case study</span>';
+        const eyeTitle = featd ? "On the homepage - click to remove" : (priv ? "Untick Make private first to feature" : "Feature on the homepage");
+        const privTitle = featd ? "Remove from the homepage first" : "Encrypt this project - it opens only via a ticket or your recovery pass";
+        html += '<section class="adm__group adm__lsec workcard' + (priv ? " is-private" : "") + (featd ? " is-featured" : "") + '">' +
+          '<div class="adm__lsec-head">' +
+            '<span class="sortgrip" data-grip data-sortkey="list:work" title="Drag to reorder" aria-label="Drag to reorder" style="position:absolute;left:0;top:0">' + GRIP_SVG + '</span>' +
+            '<div class="adm__lsec-titles">' +
+              '<span class="adm__lsec-title">' + titleHtml + '</span>' +
+              '<span class="adm__lsec-sub">' + escHtml(w.client || "No client") + ' \u00b7 ' + secText + '</span>' +
+            '</div>' +
+            '<div class="adm__lsec-ops">' +
+              eyeToggle('data-act="feature" data-index="' + i + '"', featd, "adm__lsec-tog", { disabled: priv, title: eyeTitle }) +
+              '<button class="iconbtn" data-act="up" data-list="work" data-index="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
+              '<button class="iconbtn" data-act="down" data-list="work" data-index="' + i + '"' + (i === list.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+              '<button class="iconbtn" data-act="work-dup" data-list="work" data-index="' + i + '" title="Duplicate - creates a hidden copy">' + DUP_SVG + '</button>' +
+              '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="work" data-index="' + i + '" title="Remove">\u2715</button>' +
+            '</div>' +
           '</div>' +
-          '<div class="af__row">' + itemField("work", i, "client", "Client") + itemField("work", i, "period", "Period") + "</div>" +
-          '<div class="workcard__name' + (w.title && w.title !== "Project title" ? "" : " workcard__name--hint") + '">' + (w.title && w.title !== "Project title" ? escHtml(w.title) : "Edit the case study to add a project title") + "</div>" +
-          studyToggle(w, i) +
-          "</div>";
+          '<div class="adm__lsec-body">' +
+            '<div class="af__row">' + itemField("work", i, "client", "Client") + itemField("work", i, "period", "Period") + '</div>' +
+            '<div class="workcard__foot">' +
+              '<label class="chk workcard__private' + (featd ? " is-disabled" : "") + '" title="' + privTitle + '">' +
+                '<input type="checkbox" data-act="work-hidden" data-index="' + i + '"' + (priv ? " checked" : "") + (featd ? " disabled" : "") + ' /> ' +
+                LOCK_SVG + ' Make private: shown only via a ticket</label>' +
+              studyToggle(w, i) +
+            '</div>' +
+          '</div>' +
+          '</section>';
       });
       return html;
     },
@@ -5327,16 +5366,27 @@ import { WORLD_LAND } from "./worldland.js";
     if (t.dataset.sv !== undefined && t.dataset.sel) { onSvToggle(t); return; }
     if (t.dataset.act === "feature") {
       const i = +t.dataset.index;
-      if (t.checked && data.work.filter((w) => w.featured).length >= 4) {
-        t.checked = false;
-        status("Only 4 works can be featured — unfeature one first");
-        return;
+      const w = data.work[i];
+      if (!w) return;
+      if (t.checked) {
+        if (data.work.filter((x) => x.featured).length >= 4) {
+          status("Only 4 projects can be featured \u2014 remove one first");
+          renderBody();
+          return;
+        }
+        w.featured = true;
+        w.hidden = false;   // Public can't be Private: clears + re-locks the Make-private checkbox
+      } else {
+        w.featured = false;
       }
-      data.work[i].featured = t.checked;
+      saveDraft(true);
       apply(true);
       renderBody();
     } else if (t.dataset.act === "work-hidden") {
-      data.work[+t.dataset.index].hidden = t.checked;
+      const w = data.work[+t.dataset.index];
+      if (!w) return;
+      w.hidden = t.checked;
+      if (t.checked) w.featured = false;   // Private can't be Public: closes + locks the eye
       saveDraft(true);
       apply(true);
       renderBody();
