@@ -1205,7 +1205,7 @@
           "beats": [
             {
               "problem": "Security dialog text buried trust signals",
-              "move": "[[Context Object]] surfaces identity, intent & destination upfront",
+              "move": "Identified [[Context Object]] to surface identity, intent & destination",
               "outcome": "People grasp what they're approving at a glance"
             },
             {
