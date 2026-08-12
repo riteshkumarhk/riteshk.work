@@ -437,10 +437,13 @@ a.hero__cue { transition: opacity .9s var(--ease), transform .9s var(--ease), co
 /* =================================================================
    LOGO MARQUEE — brands & products (per-logo elastic scroll driven by main.js)
    ================================================================= */
+/* The two marquees share identical vertical padding so reordering them (landing.highlightsOrder)
+   never changes the spacing — only the order swaps. The container owns the extra bottom gap. */
+#wsec-highlights { padding-bottom: clamp(1.4rem, 3vw, 3.4rem); }
 .logos {
   position: relative; overflow: hidden; overflow-anchor: none;
   width: 100%; max-width: var(--maxw); margin: 0 auto;
-  padding: 1.9rem 0 2rem;
+  padding: 1.9rem 0 1.1rem;
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
           mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
 }
@@ -486,7 +489,7 @@ html[data-appearance="light"] .logo:hover .logo__card { box-shadow: 0 8px 22px r
 .himarq {
   position: relative; overflow: hidden; overflow-anchor: none;
   width: 100%; max-width: var(--maxw); margin: 0 auto;
-  padding: 1rem 0 clamp(2.5rem, 5vw, 4.5rem);
+  padding: 1.9rem 0 1.1rem;
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12%, #000 88%, transparent 100%);
           mask-image: linear-gradient(90deg, transparent 0, #000 12%, #000 88%, transparent 100%);
 }
