@@ -3487,7 +3487,6 @@ import { WORLD_LAND } from "./worldland.js";
           itemField("path", i, "desc", "Description", { type: "textarea", rows: 3 }) +
           "</div>";
       });
-      html += journeyCard();
       return html;
     },
     recognition() {
@@ -4447,8 +4446,9 @@ import { WORLD_LAND } from "./worldland.js";
     if (key === "photos") return aboutGalleryBlock();
     if (ASEC_KEYS.indexOf(key) < 0) return "";
     var n = (data[key] || []).length;
-    return '<button type="button" class="btn btn--primary" data-act="open-aboutsec" data-asec="' + key + '" style="width:100%">Manage ' + escHtml(ASEC_LABEL[key].toLowerCase()) + " \u2192</button>" +
-      '<div class="af__hint" style="margin:.45rem 0 0">' + n + " " + ASEC_NOUN[key] + (n === 1 ? "" : "s") + "</div>";
+    var manageBtn = '<button type="button" class="btn btn--primary" data-act="open-aboutsec" data-asec="' + key + '" style="width:100%">Manage ' + escHtml(key === "path" ? "experiences" : ASEC_LABEL[key].toLowerCase()) + " \u2192</button>";
+    var count = '<div class="af__hint" style="margin:.45rem 0 ' + (key === "path" ? ".9rem" : "0") + '">' + n + " " + ASEC_NOUN[key] + (n === 1 ? "" : "s") + "</div>";
+    return manageBtn + count + (key === "path" ? journeyCard() : "");
   }
   function aboutSectionCards() {
     const RK = window.RK || {};
