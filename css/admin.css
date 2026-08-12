@@ -332,6 +332,8 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 
 /* ---------- list item cards ---------- */
 .card { border: 1px solid var(--line); border-radius: 10px; padding: .85rem; margin-bottom: .85rem; background: var(--bg); }
+/* Work-tab project cards read as top-level panels (match the About/Landing section cards) */
+.card.workcard { background: var(--bg-2); }
 .card__bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: .7rem; }
 .card__idx { font-family: var(--mono); font-size: .64rem; letter-spacing: .06em; color: var(--text-faint); text-transform: uppercase; }
 .card__ops { display: flex; gap: .3rem; }
