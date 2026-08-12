@@ -810,7 +810,7 @@ html.lite .pjb { animation: none; }
 .pj__skim-beats { list-style: none; margin: 0; padding: 0; counter-reset: beat; display: flex; flex-direction: column; gap: 1rem; }
 .pj__skim-beat { counter-increment: beat; position: relative; padding: 1.2rem 1.35rem 1.25rem 3.2rem; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--bg-2); }
 .pj__skim-beat::before { content: counter(beat, decimal-leading-zero); position: absolute; left: 1.3rem; top: 1.35rem; font-family: var(--mono); font-size: .72rem; letter-spacing: .04em; color: var(--accent); }
-.pj__skim-beat-p { font-family: var(--mono); font-size: .64rem; letter-spacing: .13em; text-transform: uppercase; color: var(--text-faint); margin: 0 0 .45rem; }
+.pj__skim-beat-p { font-family: var(--sans); font-size: .8rem; line-height: 1.4; letter-spacing: 0; color: var(--text-dim); margin: 0 0 .5rem; }
 .pj__skim-beat-m { font-family: var(--serif); font-weight: 300; font-size: clamp(1.12rem, 2.4vw, 1.42rem); line-height: 1.36; letter-spacing: -.01em; color: var(--text); }
 .pj__skim-beat-m strong { font-weight: 500; }
 .pj__skim-beat-m em, .pj__skim-beat-m strong.accent { color: var(--accent); font-style: normal; }
