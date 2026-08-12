@@ -513,6 +513,14 @@
       else { set("hiTrack", ""); hiMarq.hidden = true; }
     }
 
+    // Order the two marquees (brand logos vs number chips) per landing.highlightsOrder (default: brands first).
+    const hiWrap = byId("wsec-highlights");
+    if (hiWrap && logoMarq && hiMarq) {
+      const ord = Array.isArray(L.highlightsOrder) && L.highlightsOrder.length === 2 ? L.highlightsOrder : ["brands", "stats"];
+      const marqMap = { brands: logoMarq, stats: hiMarq };
+      ord.forEach((k) => { const el = marqMap[k]; if (el) hiWrap.appendChild(el); });
+    }
+
     // Present mode shows the SAME curated set as the home page (featured), PLUS any
     // project that's hidden-from-default (ticket-only) — now decrypted — so the owner can
     // present the confidential work too. Non-featured, non-hidden work stays hidden.

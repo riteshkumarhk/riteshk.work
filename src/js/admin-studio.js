@@ -4465,6 +4465,11 @@ import { WORLD_LAND } from "./worldland.js";
      shell (.mlib). Mounted INSIDE root so the shared list/card/grip/input handlers keep working;
      the shell is inline-styled where new so it renders regardless of the admin.css cache. ---------- */
   var hlModal = null, hlPage = "stats";
+  function hiOrderArr() {
+    const o = (data.landing || {}).highlightsOrder;
+    if (Array.isArray(o) && o.length === 2 && o.indexOf("brands") >= 0 && o.indexOf("stats") >= 0) return o.slice();
+    return ["brands", "stats"];
+  }
   function hlStatsBody() {
     const list = data.highlights || [];
     let cards = "";
@@ -4473,9 +4478,7 @@ import { WORLD_LAND } from "./worldland.js";
         itemField("highlights", i, "value", "Value", { md: true }) +
         itemField("highlights", i, "label", "Label", { md: true }) + "</div>";
     });
-    const add = list.length < 8
-      ? '<button type="button" class="btn btn--add" data-act="add" data-list="highlights">+ Add stat</button>'
-      : '<div class="af__hint">Up to 8 stats.</div>';
+    const add = '<button type="button" class="btn btn--add" data-act="add" data-list="highlights"' + (list.length >= 8 ? ' disabled title="Up to 8 stats"' : "") + ">+ Add stat</button>";
     return secHead("Stats", "At-a-glance numbers that run as a marquee under the hero. Up to 8. Values like <em>11+</em>, <em>Billions</em>, <em>2B+</em> \u2014 leading digits count up as each chip scrolls in. Select text, then use B / I / A for bold, italic or a bronze accent.") +
       '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.7rem;align-items:start;margin-bottom:.7rem">' + cards + "</div>" +
       add;
@@ -4640,9 +4643,21 @@ import { WORLD_LAND } from "./worldland.js";
     }
     if (key === "highlights") {
       const nStats = (data.highlights || []).length, nLogos = logosArr().length;
+      const order = hiOrderArr(), hlab = { brands: "Brands & products", stats: "Stats numbers" };
+      let rows = "";
+      order.forEach((k, oi) => {
+        rows += '<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.4rem .55rem;border:1px solid var(--line);border-radius:7px;margin-top:.4rem">' +
+          '<span style="font-size:.85rem">' + hlab[k] + '</span><span style="display:flex;gap:.25rem">' +
+          '<button type="button" class="iconbtn" data-act="hi-order-up" data-oi="' + oi + '"' + (oi === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
+          '<button type="button" class="iconbtn" data-act="hi-order-down" data-oi="' + oi + '"' + (oi === order.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+          "</span></div>";
+      });
       return '<div class="af"><div class="af__hint" style="margin:0 0 .55rem">At-a-glance numbers and the brand / product logo marquee under the hero.</div>' +
         '<button type="button" class="btn btn--primary" data-act="open-highlights" style="width:100%">Manage stats &amp; brand logos \u2192</button>' +
-        '<div class="af__hint" style="margin:.45rem 0 0">' + nStats + " stat" + (nStats === 1 ? "" : "s") + " \u00b7 " + nLogos + " logo" + (nLogos === 1 ? "" : "s") + "</div></div>";
+        '<div class="af__hint" style="margin:.45rem 0 0">' + nStats + " stat" + (nStats === 1 ? "" : "s") + " \u00b7 " + nLogos + " logo" + (nLogos === 1 ? "" : "s") + "</div>" +
+        '<label class="af__label" style="display:block;margin-top:.9rem">Marquee order</label>' +
+        '<div class="af__hint" style="margin:.1rem 0 0">Which marquee shows first under the hero.</div>' + rows +
+        "</div>";
     }
     return "";
   }
@@ -5402,6 +5417,14 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "open-highlights") { openHlModal(); return; }
     if (act === "hl-close") { closeHlModal(); return; }
     if (act === "hl-nav") { hlPage = b.dataset.hlpage === "brands" ? "brands" : "stats"; refreshHlPanel(); return; }
+    if (act === "hi-order-up" || act === "hi-order-down") {
+      const arr = hiOrderArr(), oi = +b.dataset.oi, j = act === "hi-order-up" ? oi - 1 : oi + 1;
+      if (j < 0 || j >= arr.length) return;
+      const t = arr[j]; arr[j] = arr[oi]; arr[oi] = t;
+      (data.landing = data.landing || {}).highlightsOrder = arr;
+      apply(true); if (activeTab === "landing") renderBody();
+      return;
+    }
     if (act === "ins-days") { loadInsights(+b.dataset.days || 30); return; }
     if (act === "ins-refresh") { loadInsights(); return; }
     if (act === "ins-mute") { insToggleMute(); return; }
