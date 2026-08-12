@@ -411,7 +411,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .btn--danger:hover { color: #fff; border-color: #ff7a7a; background: rgba(255, 90, 90, .15); }
 .btn--add { width: 100%; border-style: dashed; color: var(--text-dim); margin-top: .2rem; }
 .btn--add:hover { color: var(--text); }
-.adm__addbar { position: sticky; top: 0; z-index: 6; background: linear-gradient(var(--bg) 60%, transparent); padding: .5rem 0 .95rem; margin: -.2rem 0 .2rem; }
+.adm__addbar { padding: .5rem 0 .95rem; margin: -.2rem 0 .2rem; }
 .adm__addbar .btn--add { margin-top: 0; }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 /* AI-processing spinner — a CTA shows a spinner while its async AI action runs */

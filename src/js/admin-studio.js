@@ -4351,8 +4351,7 @@ import { WORLD_LAND } from "./worldland.js";
     const add = arr.length < MAX
       ? '<button type="button" class="btn btn--add" data-act="gal-add">+ Add photo</button>'
       : '<div class="af__hint">Up to ' + MAX + " photos.</div>";
-    return secHead("Photos", "A small strip of up to 6 personal shots \u2014 you working, riding, whatever tells your story. It shows right after your About text (hidden until you add one).") +
-      '<div class="adm__gal">' + (items || '<div class="adm__empty">No photos yet \u2014 add up to 6.</div>') + "</div>" +
+    return '<div class="adm__gal">' + (items || '<div class="adm__empty">No photos yet \u2014 add up to 6.</div>') + "</div>" +
       add;
   }
   function onGalEdit(t) {
@@ -4443,9 +4442,9 @@ import { WORLD_LAND } from "./worldland.js";
     if (key === "about") {
       return input("Lead line", "landing.aboutLead", { md: true, type: "textarea", rows: 2, hint: "The big opening line of the About section. *italic* for emphasis." }) +
         input("Paragraphs", "landing.about", { md: true, type: "textarea", rows: 7, hint: "Separate paragraphs with a blank line. **bold**, *italic*, [[Product]] bronze." }) +
-        input("Sign-off", "landing.aboutSign", { md: true, hint: "The closing personal line, e.g. an off-the-clock note." }) +
-        aboutGalleryBlock();
+        input("Sign-off", "landing.aboutSign", { md: true, hint: "The closing personal line, e.g. an off-the-clock note." });
     }
+    if (key === "photos") return aboutGalleryBlock();
     if (ASEC_KEYS.indexOf(key) < 0) return "";
     var n = (data[key] || []).length;
     return '<button type="button" class="btn btn--primary" data-act="open-aboutsec" data-asec="' + key + '" style="width:100%">Manage ' + escHtml(ASEC_LABEL[key].toLowerCase()) + " \u2192</button>" +
@@ -4453,9 +4452,9 @@ import { WORLD_LAND } from "./worldland.js";
   }
   function aboutSectionCards() {
     const RK = window.RK || {};
-    const defs = RK.ABOUT_SECTIONS || [["about", "About me"], ["recognition", "Recognition"], ["capabilities", "Skills"], ["path", "Journey"], ["education", "Education"]];
+    const defs = RK.ABOUT_SECTIONS || [["about", "About me"], ["photos", "Photos"], ["recognition", "Recognition"], ["capabilities", "Skills"], ["path", "Journey"], ["education", "Education"]];
     const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
-    const where = { about: "Lead line, paragraphs, sign-off & photos", recognition: "Awards, talks & honours", capabilities: "Your skills (also the landing reel)", path: "Experience timeline + Design Journey", education: "Degrees & schooling" };
+    const where = { about: "Lead line, paragraphs & sign-off", photos: "Up to 6 personal shots, hidden until you add one", recognition: "Awards, talks & honours", capabilities: "Your skills (also the landing reel)", path: "Experience timeline + Design Journey", education: "Degrees & schooling" };
     const layout = RK.aboutLayout ? RK.aboutLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
     let html = "";
     layout.forEach((s, i) => {

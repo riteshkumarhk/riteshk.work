@@ -353,6 +353,7 @@
      fall back to the canonical order, all shown. */
   const ABOUT_SECTIONS = [
     ["about", "About me"],
+    ["photos", "Photos"],
     ["recognition", "Recognition"],
     ["capabilities", "Skills"],
     ["path", "Journey"],
@@ -369,6 +370,12 @@
       }
     });
     known.forEach((k) => { if (!seen[k]) out.push({ key: k, on: true }); });
+    // "photos" is a newer section; if a saved order predates it, slot it right after "about"
+    if (saved.length && !seen.photos) {
+      const pIdx = out.findIndex((s) => s.key === "photos");
+      const aIdx = out.findIndex((s) => s.key === "about");
+      if (aIdx > -1 && pIdx > aIdx) out.splice(aIdx + 1, 0, out.splice(pIdx, 1)[0]);
+    }
     return out;
   }
   function applyAboutLayout(data) {
@@ -378,10 +385,12 @@
     aboutLayout(data).forEach((s) => {
       const el = document.getElementById("sec-" + s.key);
       if (!el) return;
-      el.hidden = !s.on;
+      let on = s.on;
+      if (s.key === "photos" && !(data.aboutGallery || []).some((g) => g && g.src)) on = false; // an empty Photos section stays hidden
+      el.hidden = !on;
       el.classList.remove("sec--first", "sec--last");
       wrap.appendChild(el); // move into layout order (appendChild reorders existing nodes)
-      if (s.on) visible.push(el);
+      if (on) visible.push(el);
     });
     // Mark the first/last *visible* section so the top one clears the fixed nav and the
     // bottom one keeps breathing room — robust even when a leading section is hidden.
