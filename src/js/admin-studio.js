@@ -4478,8 +4478,8 @@ import { WORLD_LAND } from "./worldland.js";
         itemField("highlights", i, "value", "Value", { md: true }) +
         itemField("highlights", i, "label", "Label", { md: true }) + "</div>";
     });
-    const add = '<button type="button" class="btn btn--add" data-act="add" data-list="highlights"' + (list.length >= 8 ? ' disabled title="Up to 8 stats"' : "") + ">+ Add stat</button>";
-    return secHead("Stats", "At-a-glance numbers that run as a marquee under the hero. Up to 8. Values like <em>11+</em>, <em>Billions</em>, <em>2B+</em> \u2014 leading digits count up as each chip scrolls in. Select text, then use B / I / A for bold, italic or a bronze accent.") +
+    const add = '<button type="button" class="btn btn--add" data-act="add" data-list="highlights">+ Add stat</button>';
+    return secHead("Stats", "At-a-glance numbers that run as a marquee under the hero. Values like <em>11+</em>, <em>Billions</em>, <em>2B+</em> \u2014 leading digits count up as each chip scrolls in. Select text, then use B / I / A for bold, italic or a bronze accent.") +
       '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.7rem;align-items:start;margin-bottom:.7rem">' + cards + "</div>" +
       add;
   }

@@ -506,7 +506,7 @@
     }
 
     // Highlights run as a marquee of number chips (main.js drives the scroll + count-up).
-    const highlights = (data.highlights || []).slice(0, 8);
+    const highlights = data.highlights || [];
     const hiMarq = byId("hiMarquee");
     if (hiMarq) {
       if (highlights.length) { set("hiTrack", highlights.map(highlightEl).join("")); hiMarq.hidden = false; }
