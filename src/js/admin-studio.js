@@ -3551,19 +3551,29 @@ import { WORLD_LAND } from "./worldland.js";
       '<button type="button" class="adm__tcard-rm" data-act="type-remove" data-id="' + escAttr(s.id) + '">Remove</button></div>';
     return '<div class="adm__tcard-wrap">' + pick + acts + "</div>";
   }
+  var typeSubTab = null;       // Fonts sub-tabs: null = auto (the active system's group), else "builtin" (Preloaded) | "gen" (AI generated)
   function typographySection() {
     var t = ensureTypography(data);
-    var cards = t.systems.map(function (s) { return typeCard(s, s.id === t.active); }).join("");
     var active = t.systems.filter(function (s) { return s.id === t.active; })[0] || {};
+    var builtins = t.systems.filter(function (s) { return s.builtin; });
+    var gens = t.systems.filter(function (s) { return !s.builtin; });
+    var tab = typeSubTab || (active.id && !active.builtin ? "gen" : "builtin");
+    var cards = (tab === "gen" ? gens : builtins).map(function (s) { return typeCard(s, s.id === t.active); }).join("");
     var aw = (active.display && +active.display.weight) || 300;
     var wbtn = function (w, lab) { return '<button type="button" data-act="type-weight" data-w="' + w + '"' + (aw === w ? ' class="is-on"' : "") + ">" + lab + "</button>"; };
+    var sub = function (id, lab, n) { return '<button type="button" data-act="type-tab" data-tab="' + id + '"' + (tab === id ? ' class="is-on"' : "") + ">" + lab + ' <span class="adm__tsub-n">' + n + "</span></button>"; };
+    var genPanel = tab === "gen"
+      ? '<div class="adm__tgen"><button class="btn btn--auto" type="button" data-act="type-gen">\u2728 Generate a system</button>' +
+        '<input type="text" class="adm__tgen-brief" data-tbrief placeholder="Optional direction \u2014 e.g. \u201cwarmer &amp; literary\u201d or \u201cbold modern grotesque\u201d" /></div>' +
+        (gens.length ? "" : '<p class="adm__tempty">No AI systems yet. Generate one from your AI key \u2014 it\u2019s composed from real faces, saved to your library and previewed instantly; Publish makes it live.</p>')
+      : "";
     return secHead("Fonts", "One font system drives the whole site \u2014 display, body and mono. Click a system to preview it live on the right, then <em>Publish</em> to set it as your site\u2019s type.") +
-      '<div class="adm__tgen"><button class="btn btn--auto" type="button" data-act="type-gen">\u2728 Generate a system</button>' +
-      '<input type="text" class="adm__tgen-brief" data-tbrief placeholder="Optional direction \u2014 e.g. \u201cwarmer &amp; literary\u201d or \u201cbold modern grotesque\u201d" /></div>' +
+      '<div class="adm__tsub">' + sub("builtin", "Preloaded", builtins.length) + sub("gen", "AI generated", gens.length) + "</div>" +
+      genPanel +
       '<div class="adm__tcards">' + cards + "</div>" +
       '<div class="adm__twt"><span class="adm__twt-label">Heading weight</span><div class="adm__twt-seg">' + wbtn(300, "Light") + wbtn(400, "Regular") + wbtn(500, "Medium") + wbtn(600, "Semibold") + "</div>" +
       '<span class="adm__twt-hint">Display weight for \u201c' + escHtml(active.name || "the active system") + '\u201d \u2014 each system keeps its own.</span></div>' +
-      '<p class="adm__tnote">Built-in systems load self-hosted or via Google&nbsp;Fonts / Fontshare. <em>Generate</em> uses your AI key to compose a new one from real faces \u2014 it\u2019s saved to your library (survives refresh) and applied to the preview; Publish makes it live. Generated systems can be removed.</p>';
+      '<p class="adm__tnote">Preloaded systems load via Google&nbsp;Fonts (self-host any from its card once published). <em>AI generated</em> systems are composed from real faces with your AI key \u2014 saved to your library (survive refresh) and removable.</p>';
   }
   function typeSanRole(r, kind) {
     r = r || {};
@@ -6081,6 +6091,7 @@ import { WORLD_LAND } from "./worldland.js";
       return;
     }
     if (act === "landing-ai") { landingAiModal(); return; }
+    if (act === "type-tab") { typeSubTab = b.dataset.tab; renderBody(); return; }
     if (act === "type-pick") {
       ensureTypography(data);
       var _tid = b.dataset.id;
