@@ -3519,6 +3519,58 @@ import { WORLD_LAND } from "./worldland.js";
     { id: "patrick", name: "Patrick", note: "Handwriting \u00b7 friendly", builtin: true,
       display: { family: "Patrick Hand", stack: '"Patrick Hand", "Segoe Script", cursive', src: "google", css: "Patrick+Hand", weight: 400 },
       text: { family: "Work Sans", stack: '"Work Sans", system-ui, -apple-system, sans-serif', src: "google", css: "Work+Sans:wght@300..700" },
+      mono: { family: "IBM Plex Mono", stack: '"IBM Plex Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "IBM+Plex+Mono:wght@400;500;600" } },
+
+    /* --- Sans-serif (more) --- */
+    { id: "manrope", name: "Manrope", note: "Sans \u00b7 geometric", builtin: true,
+      display: { family: "Manrope", stack: '"Manrope", system-ui, -apple-system, sans-serif', src: "google", css: "Manrope:wght@300..800", weight: 600 },
+      text: { family: "Inter", stack: '"Inter", system-ui, -apple-system, sans-serif', src: "google", css: "Inter:wght@300..700" },
+      mono: { family: "Space Mono", stack: '"Space Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "Space+Mono:wght@400;700" } },
+    { id: "jakarta", name: "Jakarta", note: "Sans \u00b7 contemporary", builtin: true,
+      display: { family: "Plus Jakarta Sans", stack: '"Plus Jakarta Sans", system-ui, -apple-system, sans-serif', src: "google", css: "Plus+Jakarta+Sans:wght@300..800", weight: 600 },
+      text: { family: "Figtree", stack: '"Figtree", system-ui, -apple-system, sans-serif', src: "google", css: "Figtree:wght@300..800" },
+      mono: { family: "JetBrains Mono", stack: '"JetBrains Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "JetBrains+Mono:wght@400..700" } },
+
+    /* --- Display (more) --- */
+    { id: "instrument", name: "Instrument", note: "Display \u00b7 editorial", builtin: true,
+      display: { family: "Instrument Serif", stack: '"Instrument Serif", Georgia, "Times New Roman", serif', src: "google", css: "Instrument+Serif:ital@0;1", weight: 400 },
+      text: { family: "Inter", stack: '"Inter", system-ui, -apple-system, sans-serif', src: "google", css: "Inter:wght@300..700" },
+      mono: { family: "IBM Plex Mono", stack: '"IBM Plex Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "IBM+Plex+Mono:wght@400;500;600" } },
+    { id: "dmserif", name: "DM Serif", note: "Display \u00b7 high-contrast", builtin: true,
+      display: { family: "DM Serif Display", stack: '"DM Serif Display", Georgia, "Times New Roman", serif', src: "google", css: "DM+Serif+Display:ital@0;1", weight: 400 },
+      text: { family: "Mulish", stack: '"Mulish", system-ui, -apple-system, sans-serif', src: "google", css: "Mulish:wght@300..800" },
+      mono: { family: "DM Mono", stack: '"DM Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "DM+Mono:wght@300;400;500" } },
+    { id: "anton", name: "Anton", note: "Display \u00b7 poster", builtin: true,
+      display: { family: "Anton", stack: '"Anton", system-ui, -apple-system, sans-serif', src: "google", css: "Anton", weight: 400 },
+      text: { family: "Inter", stack: '"Inter", system-ui, -apple-system, sans-serif', src: "google", css: "Inter:wght@300..700" },
+      mono: { family: "Space Mono", stack: '"Space Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "Space+Mono:wght@400;700" } },
+
+    /* --- Monospace (more) --- */
+    { id: "jetmono", name: "JetBrains", note: "Mono \u00b7 code", builtin: true,
+      display: { family: "JetBrains Mono", stack: '"JetBrains Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "JetBrains+Mono:wght@400..700", weight: 600 },
+      text: { family: "Inter", stack: '"Inter", system-ui, -apple-system, sans-serif', src: "google", css: "Inter:wght@300..700" },
+      mono: { family: "JetBrains Mono", stack: '"JetBrains Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "JetBrains+Mono:wght@400..700" } },
+    { id: "firacode", name: "Fira Code", note: "Mono \u00b7 ligatures", builtin: true,
+      display: { family: "Fira Code", stack: '"Fira Code", ui-monospace, "SF Mono", monospace', src: "google", css: "Fira+Code:wght@400..700", weight: 500 },
+      text: { family: "Inter", stack: '"Inter", system-ui, -apple-system, sans-serif', src: "google", css: "Inter:wght@300..700" },
+      mono: { family: "Fira Code", stack: '"Fira Code", ui-monospace, "SF Mono", monospace', src: "google", css: "Fira+Code:wght@400..700" } },
+    { id: "spline", name: "Spline", note: "Mono \u00b7 humanist", builtin: true,
+      display: { family: "Spline Sans Mono", stack: '"Spline Sans Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "Spline+Sans+Mono:wght@400..700", weight: 500 },
+      text: { family: "Hanken Grotesk", stack: '"Hanken Grotesk", system-ui, -apple-system, sans-serif', src: "google", css: "Hanken+Grotesk:wght@300..800" },
+      mono: { family: "Spline Sans Mono", stack: '"Spline Sans Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "Spline+Sans+Mono:wght@400..700" } },
+
+    /* --- Handwriting (more) --- */
+    { id: "shantell", name: "Shantell", note: "Handwriting \u00b7 expressive", builtin: true,
+      display: { family: "Shantell Sans", stack: '"Shantell Sans", "Segoe Script", cursive', src: "google", css: "Shantell+Sans:wght@300..800", weight: 500 },
+      text: { family: "Inter", stack: '"Inter", system-ui, -apple-system, sans-serif', src: "google", css: "Inter:wght@300..700" },
+      mono: { family: "JetBrains Mono", stack: '"JetBrains Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "JetBrains+Mono:wght@400..700" } },
+    { id: "dancing", name: "Dancing", note: "Handwriting \u00b7 script", builtin: true,
+      display: { family: "Dancing Script", stack: '"Dancing Script", "Segoe Script", cursive', src: "google", css: "Dancing+Script:wght@400..700", weight: 600 },
+      text: { family: "Mulish", stack: '"Mulish", system-ui, -apple-system, sans-serif', src: "google", css: "Mulish:wght@300..800" },
+      mono: { family: "DM Mono", stack: '"DM Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "DM+Mono:wght@300;400;500" } },
+    { id: "architects", name: "Architects", note: "Handwriting \u00b7 sketch", builtin: true,
+      display: { family: "Architects Daughter", stack: '"Architects Daughter", "Segoe Script", cursive', src: "google", css: "Architects+Daughter", weight: 400 },
+      text: { family: "Work Sans", stack: '"Work Sans", system-ui, -apple-system, sans-serif', src: "google", css: "Work+Sans:wght@300..700" },
       mono: { family: "IBM Plex Mono", stack: '"IBM Plex Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "IBM+Plex+Mono:wght@400;500;600" } }
   ];
   function typeDefaults() { return JSON.parse(JSON.stringify(TYPE_DEFAULTS)); }
@@ -3552,7 +3604,7 @@ import { WORLD_LAND } from "./worldland.js";
     return '<div class="adm__tcard-wrap">' + pick + acts + "</div>";
   }
   var typeSubTab = null;       // Fonts sub-tabs: null = auto (the active system's group), else "builtin" (Preloaded) | "gen" (AI generated)
-  var TYPE_CATS = { original: "serif", atelier: "serif", newsprint: "serif", baskerville: "serif", garamond: "serif", cardinal: "serif", bureau: "sans", grotesk: "sans", archivo: "sans", sora: "sans", unbounded: "display", syne: "display", bricolage: "display", terminal: "mono", plex: "mono", martian: "mono", caveat: "hand", kalam: "hand", patrick: "hand" };
+  var TYPE_CATS = { original: "serif", atelier: "serif", newsprint: "serif", baskerville: "serif", garamond: "serif", cardinal: "serif", bureau: "sans", grotesk: "sans", archivo: "sans", sora: "sans", manrope: "sans", jakarta: "sans", unbounded: "display", syne: "display", bricolage: "display", instrument: "display", dmserif: "display", anton: "display", terminal: "mono", plex: "mono", martian: "mono", jetmono: "mono", firacode: "mono", spline: "mono", caveat: "hand", kalam: "hand", patrick: "hand", shantell: "hand", dancing: "hand", architects: "hand" };
   var TYPE_CAT_ORDER = [["serif", "Serif"], ["sans", "Sans"], ["display", "Display"], ["mono", "Mono"], ["hand", "Hand"]];
   function sysCat(s) { return (s && (s.cat || TYPE_CATS[s.id])) || "serif"; }
   function typographySection() {
@@ -3570,10 +3622,11 @@ import { WORLD_LAND } from "./worldland.js";
     var wbtn = function (w, lab) { return '<button type="button" data-act="type-weight" data-w="' + w + '"' + (aw === w ? ' class="is-on"' : "") + ">" + lab + "</button>"; };
     var sub = function (id, lab, n) { return '<button type="button" data-act="type-tab" data-tab="' + id + '"' + (tab === id ? ' class="is-on"' : "") + ">" + lab + ' <span class="adm__tsub-n">' + n + "</span></button>"; };
     var tabsHtml = catTabs.map(function (c) { return sub(c[0], c[1], builtins.filter(function (s) { return sysCat(s) === c[0]; }).length); }).join("") + sub("gen", "AI generated", gens.length);
+    var genFull = gens.length >= 6;
     var genPanel = tab === "gen"
-      ? '<div class="adm__tgen"><button class="btn btn--auto" type="button" data-act="type-gen">\u2728 Generate a system</button>' +
+      ? '<div class="adm__tgen"><button class="btn btn--auto" type="button" data-act="type-gen"' + (genFull ? " disabled" : "") + '>\u2728 Generate a system</button>' +
         '<input type="text" class="adm__tgen-brief" data-tbrief placeholder="Optional direction \u2014 e.g. \u201cwarmer &amp; literary\u201d or \u201cbold modern grotesque\u201d" /></div>' +
-        (gens.length ? "" : '<p class="adm__tempty">No AI systems yet. Generate one from your AI key \u2014 it\u2019s composed from real faces, saved to your library and previewed instantly; Publish makes it live.</p>')
+        (genFull ? '<p class="adm__tempty">You\u2019ve reached the limit of 6 AI systems \u2014 remove one below, then generate another.</p>' : (gens.length ? "" : '<p class="adm__tempty">No AI systems yet. Generate one from your AI key \u2014 it\u2019s composed from real faces, saved to your library and previewed instantly; Publish makes it live.</p>'))
       : "";
     return secHead("Fonts", "One font system drives the whole site \u2014 display, body and mono. Click a system to preview it live on the right, then <em>Publish</em> to set it as your site\u2019s type.") +
       '<div class="adm__tsub">' + tabsHtml + "</div>" +
@@ -3601,6 +3654,8 @@ import { WORLD_LAND } from "./worldland.js";
   async function typeGenerate(btn) {
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { typeGenerate(btn); }); return; }
     ensureTypography(data);
+    var genCount = (data.typography.systems || []).filter(function (s) { return s && !s.builtin; }).length;
+    if (genCount >= 6) { status("You can keep up to 6 AI systems. Remove one from the AI generated tab, then generate another."); return; }
     var brief = "";
     var bi = body && body.querySelector("[data-tbrief]"); if (bi) brief = String(bi.value || "").trim();
     var used = [];
