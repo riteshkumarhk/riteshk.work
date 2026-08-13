@@ -1018,6 +1018,12 @@ html.lite .hero__avail-dot { animation: none; }
    ================================================================= */
 [data-reveal] { opacity: 0; transform: translateY(28px); transition: opacity .9s var(--ease), transform .9s var(--ease); }
 [data-reveal].is-in { opacity: 1; transform: translateY(0); }
+/* Grid work cards carry a backdrop-filter (frosted glass). A settled reveal transform of
+   translateY(0) still forms a stacking context, which can stop that backdrop-filter from
+   sampling the fixed hero ambient behind the card (the frost would blur nothing). `none` is
+   the identical resting position but creates no stacking context, so the glass reliably
+   frosts the ambient. The .9s entrance still animates translateY(28px) -> none smoothly. */
+.cases--g2 > .case.is-in, .cases--g3 > .case.is-in { transform: none; }
 
 /* Hero line stagger handled by JS class */
 .hero__title .line.is-in > span { transform: translateY(0); transition: transform 1s var(--ease); }
