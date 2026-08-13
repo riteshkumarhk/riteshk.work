@@ -466,8 +466,14 @@ a.hero__cue { transition: opacity .9s var(--ease), transform .9s var(--ease), co
   display: grid; place-items: center; overflow: hidden;
   width: clamp(108px, 13.5vw, 152px); height: clamp(58px, 7.5vw, 78px);
   background: color-mix(in srgb, var(--bg-elev) calc(var(--chrome, 1) * 100%), transparent);
-  border: 1px solid color-mix(in srgb, var(--line-soft) calc(var(--chrome, 1) * 100%), transparent);
+  border: 1px solid color-mix(in srgb, rgba(236, 231, 225, 0.16) calc(var(--chrome, 1) * 100%), transparent);
   border-radius: 14px; corner-shape: squircle;
+  /* Dark: match the work cards' glass-card language - bright rim + hairline ring + top highlight + a
+     soft lift, all faded by --chrome so a chip stays invisible while it floats in the hero. Light below. */
+  box-shadow:
+    0 4px 12px color-mix(in srgb, rgba(0, 0, 0, 0.4) calc(var(--chrome, 1) * 100%), transparent),
+    0 0 0 1px color-mix(in srgb, rgba(255, 255, 255, 0.04) calc(var(--chrome, 1) * 100%), transparent),
+    inset 0 1px 0 color-mix(in srgb, rgba(255, 255, 255, 0.1) calc(var(--chrome, 1) * 100%), transparent);
   transform-origin: center;
   transition: box-shadow .3s var(--ease);
 }
@@ -476,7 +482,7 @@ a.hero__cue { transition: opacity .9s var(--ease), transform .9s var(--ease), co
 .logo__img { max-height: clamp(34px, 4.6vw, 47px); max-width: 64%; width: auto; object-fit: contain; -webkit-user-drag: none; user-select: none; }
 .logo__card--sm .logo__img { max-height: clamp(25px, 3.3vw, 34px); max-width: 50%; }
 .logo__card--lg .logo__img { max-height: clamp(44px, 5.9vw, 61px); max-width: 82%; }
-.logo:hover .logo__card { border-color: var(--accent); box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28); }
+.logo:hover .logo__card { border-color: var(--accent); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
 /* Light mode: lift the chip lighter than the cream page (the elevated var is a darker tan),
    with a soft shadow — the airy "card" feel from the reference. */
 html[data-appearance="light"] .logo__card { background: color-mix(in srgb, #faf8f2 calc(var(--chrome, 1) * 100%), transparent); border-color: color-mix(in srgb, rgba(28, 24, 18, 0.09) calc(var(--chrome, 1) * 100%), transparent); box-shadow: 0 1px 3px color-mix(in srgb, rgba(28, 24, 18, 0.05) calc(var(--chrome, 1) * 100%), transparent); }
@@ -513,12 +519,18 @@ html[data-appearance="light"] .logo:hover .logo__card { box-shadow: 0 8px 22px r
   display: flex; flex-direction: column; justify-content: center; gap: .5rem;
   padding: clamp(1rem, 1.7vw, 1.5rem) clamp(1.3rem, 2vw, 1.9rem);
   background: color-mix(in srgb, var(--bg-elev) calc(var(--chrome, 1) * 100%), transparent);
-  border: 1px solid color-mix(in srgb, var(--line-soft) calc(var(--chrome, 1) * 100%), transparent);
+  border: 1px solid color-mix(in srgb, rgba(236, 231, 225, 0.16) calc(var(--chrome, 1) * 100%), transparent);
   border-radius: 16px; corner-shape: squircle;
+  /* Dark: match the work cards' glass-card language - bright rim + hairline ring + top highlight + a
+     soft lift, all faded by --chrome. Light overrides below. */
+  box-shadow:
+    0 4px 12px color-mix(in srgb, rgba(0, 0, 0, 0.4) calc(var(--chrome, 1) * 100%), transparent),
+    0 0 0 1px color-mix(in srgb, rgba(255, 255, 255, 0.04) calc(var(--chrome, 1) * 100%), transparent),
+    inset 0 1px 0 color-mix(in srgb, rgba(255, 255, 255, 0.1) calc(var(--chrome, 1) * 100%), transparent);
   transform-origin: center;
   transition: box-shadow .3s var(--ease);
 }
-.hi:hover .hi__card { border-color: var(--accent); box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28); }
+.hi:hover .hi__card { border-color: var(--accent); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
 .hi__num {
   font-family: var(--serif); font-size: clamp(2rem, 4vw, 3.1rem); font-weight: 300;
   line-height: 1; letter-spacing: -0.02em; display: flex; align-items: baseline; white-space: nowrap;
