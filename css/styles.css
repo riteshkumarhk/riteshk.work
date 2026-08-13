@@ -797,13 +797,13 @@ body:has(.pass) .lt-amb, body:has(.pass) .lt-scrim { opacity: 0 !important; }
 .cases--g2 > .case .case__link, .cases--g3 > .case .case__link {
   display: flex; flex-direction: column; align-items: stretch; height: 100%;
   gap: clamp(0.9rem, 1.35vw, 1.2rem); padding: clamp(0.8rem, 1.2vw, 1rem);
-  background: rgba(17, 17, 22, 0.7); border: 1px solid rgba(236, 231, 225, 0.16);
+  background: rgba(17, 17, 22, 0.8); border: 1px solid rgba(236, 231, 225, 0.16);
   border-radius: 40px; corner-shape: squircle;
   /* Frosted glass: blur the hero ambient behind the translucent card so it reads as real glass,
      not just a faded panel. Light mode uses an opaque surface (below), so this is dark-only in effect.
      GPU-only — the DevBox software renderer garbles backdrop-filter; verify the look on real hardware. */
-  -webkit-backdrop-filter: blur(18px) saturate(1.2);
-  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(44px) saturate(1.3);
+  backdrop-filter: blur(44px) saturate(1.3);
   /* Resting lift: a deep soft drop-shadow + a glass-edge rim (hairline ring + top highlight) so each
      card reads as a clearly elevated panel floating on the hero ambient. Light mode resets this below. */
   box-shadow: 0 30px 66px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.1);
