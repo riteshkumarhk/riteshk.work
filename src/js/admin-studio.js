@@ -3439,7 +3439,7 @@ import { WORLD_LAND } from "./worldland.js";
       text: { family: "Inter", stack: '"Inter", system-ui, -apple-system, sans-serif', selfHosted: true },
       mono: { family: "JetBrains Mono", stack: '"JetBrains Mono", ui-monospace, "SF Mono", monospace', selfHosted: true } },
     { id: "atelier", name: "Atelier", note: "Couture contrast serif", builtin: true,
-      display: { family: "Gambetta", stack: '"Gambetta", Georgia, "Times New Roman", serif', selfHosted: true },
+      display: { family: "Gambetta", stack: '"Gambetta", Georgia, "Times New Roman", serif', selfHosted: true, weight: 400 },
       text: { family: "General Sans", stack: '"General Sans", system-ui, -apple-system, sans-serif', selfHosted: true },
       mono: { family: "Fragment Mono", stack: '"Fragment Mono", ui-monospace, "SF Mono", monospace', selfHosted: true } },
     { id: "newsprint", name: "Newsprint", note: "Literary editorial", builtin: true,
@@ -3520,6 +3520,7 @@ import { WORLD_LAND } from "./worldland.js";
       var d = typeSanRole(j && j.display, "display"), t = typeSanRole(j && j.text, "text"), m = typeSanRole(j && j.mono, "mono");
       if (!d || !t || !m) { status("The AI didn\u2019t return a usable system \u2014 try again."); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate a system"; } return; }
       [d, t, m].forEach(function (r) { r.src = "google"; if (!r.css) r.css = r.family.replace(/\s+/g, "+"); });
+      if (d) d.weight = 400;
       var sysObj = { id: "gen-" + Date.now().toString(36), name: (String((j && j.name) || "Generated").trim() || "Generated").slice(0, 32), note: String((j && j.note) || "AI system").trim().slice(0, 44), builtin: false, display: d, text: t, mono: m };
       ensureTypography(data).systems.push(sysObj);
       data.typography.active = sysObj.id;

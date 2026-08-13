@@ -519,6 +519,7 @@
     try { ensureTypeLinks(sys); } catch (e) {}
     try { injectTypeFaces(sys); } catch (e) {}
     if (sys.display && sys.display.stack) el.style.setProperty("--serif", sys.display.stack);
+    if (sys.display && sys.display.weight) el.style.setProperty("--serif-weight", String(sys.display.weight)); else el.style.removeProperty("--serif-weight");
     if (sys.text && sys.text.stack) el.style.setProperty("--sans", sys.text.stack);
     if (sys.mono && sys.mono.stack) el.style.setProperty("--mono", sys.mono.stack);
   }

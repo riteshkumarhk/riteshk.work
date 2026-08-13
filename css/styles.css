@@ -316,7 +316,7 @@ html.lite .workcue svg { animation: none; }
 .hero__label-sep { color: var(--text-faint); }
 
 .hero__title {
-  font-family: var(--serif); font-weight: 300;
+  font-family: var(--serif); font-weight: var(--serif-weight, 300);
   font-size: clamp(2.9rem, min(11.5vw, 14.5vh), 10rem);
   line-height: 0.95; letter-spacing: -0.02em;
 }
@@ -330,7 +330,7 @@ html.lite .workcue svg { animation: none; }
 .hero__title--align-right { text-align: right; }
 .hero__title .line { display: block; overflow: hidden; transition: transform .22s var(--ease-io); }
 .hero__title .line > span { display: block; transform: translateY(105%); }
-.hero__title em { color: var(--accent); font-weight: 300; }
+.hero__title em { color: var(--accent); font-weight: var(--serif-weight, 300); }
 
 .hero__foot {
   display: flex; justify-content: space-between; align-items: flex-end; gap: 2rem;
@@ -535,7 +535,7 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
   text-transform: uppercase; color: var(--accent); margin-bottom: 1.4rem;
 }
 .section-head__title {
-  font-family: var(--serif); font-weight: 300;
+  font-family: var(--serif); font-weight: var(--serif-weight, 300);
   font-size: clamp(1.9rem, 5vw, 4.2rem); line-height: 1.05; letter-spacing: -0.02em;
   max-width: 18ch;
 }
@@ -772,7 +772,7 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
   display: grid; grid-template-columns: 1.1fr 0.9fr; gap: clamp(2rem, 6vw, 6rem); align-items: start;
 }
 .about__lead {
-  font-family: var(--serif); font-weight: 300; font-size: clamp(1.8rem, 4vw, 3.4rem);
+  font-family: var(--serif); font-weight: var(--serif-weight, 300); font-size: clamp(1.8rem, 4vw, 3.4rem);
   line-height: 1.15; letter-spacing: -0.015em;
 }
 .about__lead em { color: var(--accent); }
@@ -786,7 +786,7 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
   display: flex; flex-wrap: wrap; gap: 0; border-top: 1px solid var(--line);
 }
 .caps__list li {
-  font-family: var(--serif); font-weight: 300; font-size: clamp(1.1rem, 2.4vw, 2rem);
+  font-family: var(--serif); font-weight: var(--serif-weight, 300); font-size: clamp(1.1rem, 2.4vw, 2rem);
   color: var(--text-dim); padding: 1rem 1.6rem 1rem 0; position: relative;
   transition: color .4s, transform .4s var(--ease);
 }
@@ -805,7 +805,7 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
 .tl:last-child { border-bottom: 1px solid var(--line); }
 .tl:hover { background: linear-gradient(90deg, var(--line-soft), transparent 60%); }
 .tl__year { font-family: var(--mono); font-size: .82rem; letter-spacing: .04em; color: var(--accent); padding-top: .4rem; }
-.tl__main h3 { font-family: var(--serif); font-weight: 300; font-size: clamp(1.4rem, 3vw, 2.3rem); line-height: 1.1; margin-bottom: .5rem; }
+.tl__main h3 { font-family: var(--serif); font-weight: var(--serif-weight, 300); font-size: clamp(1.4rem, 3vw, 2.3rem); line-height: 1.1; margin-bottom: .5rem; }
 .tl__org { display: block; font-family: var(--mono); font-size: .74rem; letter-spacing: .03em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 1rem; }
 .tl__main p { color: var(--text-dim); font-size: clamp(.95rem, 1.1vw, 1.05rem); line-height: 1.6; max-width: 60ch; }
 

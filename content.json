@@ -4496,7 +4496,8 @@
         "display": {
           "family": "Gambetta",
           "stack": "\"Gambetta\", Georgia, \"Times New Roman\", serif",
-          "selfHosted": true
+          "selfHosted": true,
+          "weight": 400
         },
         "text": {
           "family": "General Sans",
