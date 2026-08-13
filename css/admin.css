@@ -1812,6 +1812,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .adm__twt-seg button.is-on { background: var(--accent); color: #0a0a0a; }
 .adm__twt-hint { font-family: var(--sans); font-size: .72rem; color: var(--text-faint); flex: 1 1 100%; }
 /* Hero motion controls (Landing tab) — living type + ambient work */
+.adm__hm-wrap { margin-top: 2rem; padding-top: 1.9rem; border-top: 1px solid var(--line); }
 .adm__hm { margin-top: 1rem; display: flex; flex-direction: column; gap: .85rem; }
 .adm__hm-ctl { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
 .adm__hm-label { min-width: 8.5rem; font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); }

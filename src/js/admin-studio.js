@@ -3644,7 +3644,7 @@ import { WORLD_LAND } from "./worldland.js";
 
   const sections = {
     insights() { return insightsSection(); },
-    type() { return typographySection() + group(heroMotionBlock()); },
+    type() { return typographySection() + '<div class="adm__hm-wrap">' + heroMotionBlock() + '</div>'; },
     landing() {
       return (
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
