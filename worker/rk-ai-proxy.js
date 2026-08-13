@@ -829,6 +829,25 @@ export default {
       return json({ ok: true }, 200, cors);
     }
 
+    // Self-host fonts: proxy ONLY the Google Fonts css2 stylesheet (the host is hardcoded here, so
+    // there is no SSRF surface — only the family= fragments come from the client, and they are
+    // validated). The studio reads the returned @font-face list, then downloads the woff2 itself
+    // (fonts.gstatic.com is CORS-open) and commits them via /admin/gh. Session-gated; returns text/css.
+    if (url.pathname === "/admin/font-css") {
+      const sess = bearer(request.headers.get("Authorization"));
+      if (!(await verifySession(sess, env))) return json({ error: "Unauthorized" }, 401, cors);
+      const frags = url.searchParams.getAll("f").map((s) => s.trim()).filter(Boolean).slice(0, 4);
+      if (!frags.length) return json({ error: "No font families" }, 400, cors);
+      for (const f of frags) { if (f.length > 200 || /[\s&\r\n?#]/.test(f)) return json({ error: "Bad family" }, 400, cors); }
+      const target = "https://fonts.googleapis.com/css2?" + frags.map((f) => "family=" + f).join("&") + "&display=swap";
+      try {
+        const r = await fetch(target, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "Accept": "text/css,*/*;q=0.1" } });
+        if (!r.ok) return json({ error: "Google Fonts " + r.status }, 502, cors);
+        const css = await r.text();
+        return new Response(css, { status: 200, headers: { ...cors, "Content-Type": "text/css; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
+      } catch (e) { return json({ error: "fetch failed" }, 502, cors); }
+    }
+
     if (url.pathname.startsWith("/admin/gh/")) {
       const sess = bearer(request.headers.get("Authorization"));
       if (!(await verifySession(sess, env))) return json({ error: "Unauthorized" }, 401, cors);
