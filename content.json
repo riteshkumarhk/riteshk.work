@@ -4561,5 +4561,9 @@
         }
       }
     ]
+  },
+  "heroMotion": {
+    "ambient": "media",
+    "field": "letter"
   }
 }
