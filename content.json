@@ -4496,20 +4496,17 @@
         "display": {
           "family": "Gambetta",
           "stack": "\"Gambetta\", Georgia, \"Times New Roman\", serif",
-          "src": "fontshare",
-          "css": "gambetta"
+          "selfHosted": true
         },
         "text": {
           "family": "General Sans",
           "stack": "\"General Sans\", system-ui, -apple-system, sans-serif",
-          "src": "fontshare",
-          "css": "general-sans@400,500,600"
+          "selfHosted": true
         },
         "mono": {
           "family": "Fragment Mono",
           "stack": "\"Fragment Mono\", ui-monospace, \"SF Mono\", monospace",
-          "src": "google",
-          "css": "Fragment+Mono:ital@0;1"
+          "selfHosted": true
         }
       },
       {
