@@ -566,7 +566,11 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
 /* Animatable word/letter units. Only active when main.js adds .lt-on (feature on
    + heading visible + not lite/touch on a weak device). Inert otherwise = identical
    to the normal heading, so the studio-controlled structure is never disturbed. */
-#workHeading.lt-on .lt-u { display: inline-block; transform: translateZ(0); will-change: transform, font-variation-settings; }
+/* NOTE: deliberately NO permanent transform / will-change here. Promoting each unit to its own
+   compositing layer makes the hero ESCAPE a modal's backdrop-filter blur (the statement stays sharp
+   while the cards behind the dialog blur = looks broken). The hover lift sets a transient transform
+   in JS instead, only while hovering the hero (never while a dialog is open). */
+#workHeading.lt-on .lt-u { display: inline-block; }
 #workHeading.lt-on .lt-word { display: inline-block; white-space: nowrap; }
 /* Lock the authored line breaks on hover-capable devices so the weight field can never
    rewrap the headline (the 3<->4 line jump). Touch keeps natural wrapping + static weight. */
@@ -617,6 +621,9 @@ body[data-hero-amb="media"] .lt-scrim { opacity: var(--lt-amb-fade, 1); }
 body[data-hero-nodes="off"] canvas.bg-field, body[data-hero-nodes="off"] .node-chips { display: none !important; }
 /* Never render the ambient on lite / reduced-hardware (matches .bg-field policy). */
 html.lite .lt-amb, html.lite .lt-scrim { display: none; }
+/* While a frosted dialog (.pass = admin gate / recruiter ticket) is open, hide the ambient so it
+   can't tint the cards blurred by the modal's backdrop-filter (keeps modals clean + consistent). */
+body:has(.pass) .lt-amb, body:has(.pass) .lt-scrim { opacity: 0 !important; }
 
 /* =================================================================
    WORK / CASES
