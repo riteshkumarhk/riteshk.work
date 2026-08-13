@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en" data-appearance="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Living type hero — lab</title>
+<link rel="stylesheet" href="../css/fonts.css" />
+<style>
+  /* ---- tokens (mirrors the site; Atelier type system active) ---- */
+  html[data-appearance="dark"]{
+    --bg:#08080a; --bg-2:#0d0d10; --bg-elev:#111116;
+    --text:#ECE7E1; --text-dim:#8f8a84; --text-faint:#5a5650;
+    --line:rgba(236,231,225,0.12); --line-soft:rgba(236,231,225,0.06);
+    --accent:#D8A657; --accent-2:#b8843a;
+    --amb-blend:screen;
+    --a1:#2ec5c0; --a2:#2f6fed; --a3:#D8A657; --a4:#57b45a;
+  }
+  html[data-appearance="light"]{
+    --bg:#f2eee6; --bg-2:#eae5db; --bg-elev:#e2dcd0;
+    --text:#1b1915; --text-dim:#5c5850; --text-faint:#918b80;
+    --line:rgba(28,24,18,0.14); --line-soft:rgba(28,24,18,0.07);
+    --accent:#9c6b1a; --accent-2:#7f5616;
+    --amb-blend:multiply;
+    --a1:#1f9c98; --a2:#2f6fed; --a3:#c58a2a; --a4:#3f8f42;
+  }
+  :root{
+    --serif:"Gambetta", Georgia, "Times New Roman", serif;
+    --sans:"General Sans", Inter, system-ui, sans-serif;
+    --mono:"Fragment Mono", "JetBrains Mono", ui-monospace, monospace;
+    --ease:cubic-bezier(0.16,1,0.3,1);
+    --pad:clamp(1.25rem,5vw,6rem);
+    --amb:0.55;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    background:var(--bg); color:var(--text); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    overflow:hidden; cursor:none;
+    transition:background .5s var(--ease), color .5s var(--ease);
+  }
+  @media (max-width:900px){ body{ cursor:auto; } }
+
+  /* ---- ambient work layers (behind everything) ---- */
+  .amb{ position:fixed; inset:0; z-index:0; pointer-events:none; }
+  .aura{ opacity:var(--amb); transition:opacity .6s ease; }
+  .aura b{
+    position:absolute; width:46vmax; height:46vmax; border-radius:50%;
+    filter:blur(72px); opacity:.55; mix-blend-mode:var(--amb-blend);
+    will-change:transform;
+  }
+  .aura b:nth-child(1){ background:radial-gradient(circle at 50% 50%, var(--a1), transparent 66%); left:-8vw; top:-6vh; animation:drift1 26s var(--ease) infinite alternate; }
+  .aura b:nth-child(2){ background:radial-gradient(circle at 50% 50%, var(--a2), transparent 66%); right:-10vw; top:8vh; animation:drift2 32s var(--ease) infinite alternate; }
+  .aura b:nth-child(3){ background:radial-gradient(circle at 50% 50%, var(--a3), transparent 66%); left:24vw; bottom:-14vh; animation:drift3 30s var(--ease) infinite alternate; }
+  .aura b:nth-child(4){ background:radial-gradient(circle at 50% 50%, var(--a4), transparent 66%); right:16vw; bottom:-8vh; animation:drift4 36s var(--ease) infinite alternate; }
+  @keyframes drift1{ to{ transform:translate3d(9vw,7vh,0) scale(1.18); } }
+  @keyframes drift2{ to{ transform:translate3d(-8vw,10vh,0) scale(1.24); } }
+  @keyframes drift3{ to{ transform:translate3d(7vw,-9vh,0) scale(1.14); } }
+  @keyframes drift4{ to{ transform:translate3d(-6vw,-7vh,0) scale(1.2); } }
+
+  .media{ opacity:0; transition:opacity .6s ease;
+    -webkit-mask-image:radial-gradient(120% 100% at 50% 42%, #000 30%, transparent 78%);
+            mask-image:radial-gradient(120% 100% at 50% 42%, #000 30%, transparent 78%); }
+  .media img{ position:absolute; inset:-6%; width:112%; height:112%; object-fit:cover;
+    filter:blur(58px) saturate(1.18); opacity:0; transition:opacity 2.4s ease; will-change:opacity; }
+  .media img.on{ opacity:var(--amb); }
+  body[data-amb="media"] .media{ opacity:1; }
+  body[data-amb="media"] .aura{ opacity:0; }
+  body[data-amb="off"] .aura{ opacity:0; }
+
+  /* faint film-grade vignette to seat the type */
+  .vig{ position:fixed; inset:0; z-index:1; pointer-events:none;
+    background:radial-gradient(130% 120% at 50% 34%, transparent 52%, color-mix(in srgb, var(--bg) 78%, transparent) 100%); }
+
+  /* ---- hero composition ---- */
+  .stage{ position:relative; z-index:2; height:100%; display:flex; flex-direction:column;
+    justify-content:center; padding:clamp(2rem,7vh,6rem) var(--pad); gap:clamp(1.4rem,3.4vh,2.6rem); }
+
+  .eyebrow{ display:flex; align-items:center; gap:.7ch; flex-wrap:wrap;
+    font-family:var(--mono); font-size:.76rem; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--text-faint); }
+  .eyebrow .dot{ color:var(--accent); }
+  .eyebrow .sep{ color:var(--line); }
+  .sub{ max-width:44ch; font-size:clamp(1rem,1.5vw,1.28rem); line-height:1.5; color:var(--text-dim); font-weight:300; }
+  .sub strong{ color:var(--text); font-weight:600; }
+  .sub .accent{ color:var(--accent); font-weight:600; }
+
+  .stmt{ font-family:var(--serif); line-height:1.06; letter-spacing:-0.022em;
+    font-size:clamp(2.6rem, min(9.2vw,13vh), 8.4rem); max-width:16ch; }
+  .stmt .line{ display:block; }
+  /* animatable unit — word (inline-block keeps letters together for wrapping) */
+  .u{ display:inline-block; white-space:pre; font-variation-settings:'wght' 350;
+    transform:translateZ(0); will-change:transform, font-variation-settings; }
+  .u.strong{ font-variation-settings:'wght' 600; }
+  .u.accent{ font-style:italic; color:var(--accent); }
+  /* entrance state */
+  .stmt .u{ opacity:0; transform:translateY(.5em); filter:blur(9px);
+    transition:opacity .9s var(--ease), transform 1s var(--ease), filter .9s var(--ease); }
+  .stmt.lit .u{ opacity:1; transform:translateY(0); filter:none; }
+
+  .cue{ display:flex; align-items:center; gap:.8ch; font-family:var(--mono);
+    font-size:.74rem; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); }
+  .cue .ln{ width:44px; height:1px; background:var(--line); position:relative; overflow:hidden; }
+  .cue .ln::after{ content:""; position:absolute; inset:0; width:40%;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent); animation:sweep 2.6s var(--ease) infinite; }
+  @keyframes sweep{ from{ transform:translateX(-120%);} to{ transform:translateX(280%);} }
+
+  /* ---- custom cursor ---- */
+  .cur{ position:fixed; top:0; left:0; z-index:50; pointer-events:none;
+    width:26px; height:26px; margin:-13px 0 0 -13px; border-radius:50%;
+    border:1px solid var(--text-faint); transition:width .25s var(--ease), height .25s var(--ease), margin .25s var(--ease), border-color .25s var(--ease);
+    will-change:transform; }
+  .cur.big{ width:66px; height:66px; margin:-33px 0 0 -33px; border-color:var(--accent); }
+  @media (max-width:900px){ .cur{ display:none; } }
+
+  /* ---- tuning panel ---- */
+  .panel{ position:fixed; right:1rem; top:1rem; z-index:60; width:264px;
+    background:color-mix(in srgb, var(--bg-2) 92%, transparent); backdrop-filter:blur(12px);
+    border:1px solid var(--line); border-radius:16px; padding:.9rem 1rem 1.1rem;
+    font-family:var(--sans); font-size:.82rem; color:var(--text); }
+  .panel.hide{ transform:translateX(calc(100% + 1.4rem)); }
+  .panel{ transition:transform .4s var(--ease); }
+  .panel h2{ font-family:var(--mono); font-size:.66rem; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--text-faint); margin:.1rem 0 .8rem; font-weight:500; display:flex; justify-content:space-between; }
+  .panel h2 .fps{ color:var(--accent); }
+  .seg{ display:flex; gap:.3rem; margin:.5rem 0 .8rem; }
+  .seg button{ flex:1; font:inherit; font-size:.72rem; padding:.34rem .3rem; border-radius:8px; cursor:pointer;
+    background:var(--bg-elev); color:var(--text-dim); border:1px solid var(--line); transition:.2s; }
+  .seg button.on{ background:var(--accent); color:#0a0a0a; border-color:var(--accent); font-weight:600; }
+  .row{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; margin:.5rem 0; }
+  .row label{ color:var(--text-dim); }
+  .row output{ font-family:var(--mono); color:var(--accent); font-size:.72rem; min-width:2.8em; text-align:right; }
+  input[type=range]{ width:120px; accent-color:var(--accent); }
+  .panel .act{ display:flex; gap:.4rem; margin-top:.7rem; }
+  .panel .act button{ flex:1; font:inherit; font-size:.74rem; padding:.42rem; border-radius:9px; cursor:pointer;
+    background:var(--bg-elev); color:var(--text); border:1px solid var(--line); }
+  .panel .act button:hover{ border-color:var(--accent); }
+  .hint{ color:var(--text-faint); font-size:.68rem; line-height:1.5; margin-top:.7rem;
+    border-top:1px solid var(--line); padding-top:.6rem; }
+  .toggle{ position:fixed; right:1rem; top:1rem; z-index:59; font-family:var(--mono); font-size:.66rem;
+    letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); background:var(--bg-2);
+    border:1px solid var(--line); border-radius:9px; padding:.4rem .6rem; cursor:pointer; opacity:0; transition:opacity .3s; }
+  .panel.hide ~ .toggle{ opacity:1; }
+</style>
+</head>
+<body data-amb="aurora">
+
+  <div class="amb aura"><b></b><b></b><b></b><b></b></div>
+  <div class="amb media" id="media">
+    <img src="/assets/uploads/3f4eacf62b981354ad308c6e03d2a6b0ee1e291aa4eed6992bd83363a3531136.webp" alt="" />
+    <img src="/assets/uploads/8d9844fdff6e7ea32003681054946c5ef3e6b0fa875abf1964bb61a54cd1b98d.png" alt="" />
+    <img src="/assets/uploads/cd132b9755109dcf36ed4b8d48738d7f489a514bf872c64722a1a3aee50862d3.png" alt="" />
+    <img src="/assets/uploads/42d6e21daf6b701ae17ec68a85d784ee94504a9800ea6c52719040b568617152.png" alt="" />
+  </div>
+  <div class="vig"></div>
+
+  <main class="stage">
+    <div class="eyebrow">
+      <span class="dot">&#9702;</span> Product Design Lead
+      <span class="sep">/</span> Growth &middot; AI &middot; Identity &middot; HCI/HMI
+    </div>
+    <p class="sub">Currently leading <strong>Growth Design for Microsoft Edge</strong>, part of <span class="accent">Microsoft AI</span>.</p>
+    <h1 class="stmt" id="stmt" aria-label="A few things I've designed and the thinking behind them."></h1>
+    <div class="cue"><span class="ln"></span> Selected work</div>
+  </main>
+
+  <div class="cur" id="cur"></div>
+
+  <div class="panel" id="panel">
+    <h2>Living type &middot; lab <span class="fps" id="fps">—</span></h2>
+
+    <div class="row" style="margin-top:.2rem"><label>Theme</label></div>
+    <div class="seg" id="segTheme">
+      <button data-v="dark" class="on">Dark</button>
+      <button data-v="light">Light</button>
+    </div>
+
+    <div class="row"><label>Ambient work</label></div>
+    <div class="seg" id="segAmb">
+      <button data-v="off">Off</button>
+      <button data-v="aurora" class="on">Aurora</button>
+      <button data-v="media">Media</button>
+    </div>
+
+    <div class="row"><label>Field</label></div>
+    <div class="seg" id="segField">
+      <button data-v="word" class="on">Word</button>
+      <button data-v="letter">Letter</button>
+    </div>
+
+    <div class="row"><label>Response radius</label><output id="oR">190</output></div>
+    <input type="range" id="rR" min="70" max="380" value="190" />
+    <div class="row"><label>Peak weight</label><output id="oP">660</output></div>
+    <input type="range" id="rP" min="420" max="700" value="660" />
+    <div class="row"><label>Rest weight</label><output id="oB">350</output></div>
+    <input type="range" id="rB" min="300" max="440" value="350" />
+    <div class="row"><label>Lift</label><output id="oL">7</output></div>
+    <input type="range" id="rL" min="0" max="16" value="7" />
+    <div class="row"><label>Idle breathing</label><output id="oW">24</output></div>
+    <input type="range" id="rW" min="0" max="70" value="24" />
+    <div class="row"><label>Ambient intensity</label><output id="oA">55</output></div>
+    <input type="range" id="rA" min="0" max="100" value="55" />
+
+    <div class="act">
+      <button id="replay">Replay entrance</button>
+      <button id="collapse">Hide</button>
+    </div>
+    <div class="hint">Move the cursor across the headline &mdash; weight follows you. Throwaway lab page, nothing here touches the live site. FPS is meaningless on a GPU-less DevBox; judge on real hardware.</div>
+  </div>
+  <button class="toggle" id="show">Controls</button>
+
+<script>
+(function(){
+  var S = {
+    mx: innerWidth/2, my: innerHeight*0.44, pointer:false,
+    radius:190, peak:660, base:350, lift:7, breath:24,
+    field:'word', entranceDone:false
+  };
+
+  // ---- build the statement into animatable units ----
+  var LINES = [
+    [ {t:"A"}, {t:"few"}, {t:"things"}, {t:"I've"}, {t:"designed", k:"accent"} ],
+    [ {t:"and"}, {t:"the"}, {t:"thinking", k:"strong"}, {t:"behind"} ],
+    [ {t:"them.", k:"end"} ]
+  ];
+  var stmt = document.getElementById('stmt');
+  var units = [];
+
+  function build(){
+    stmt.innerHTML = '';
+    units = [];
+    var idx = 0;
+    LINES.forEach(function(line){
+      var lineEl = document.createElement('span');
+      lineEl.className = 'line';
+      line.forEach(function(tok, wi){
+        var base = tok.k==='strong' ? 600 : S.base;
+        if(S.field==='letter' && tok.k!=='end'){
+          // wrap the word (keeps it unbreakable) then each letter is a unit
+          var word = document.createElement('span');
+          word.className = 'u' + (tok.k==='accent'?' accent':'') + (tok.k==='strong'?' strong':'');
+          word.style.whiteSpace = 'nowrap';
+          tok.t.split('').forEach(function(ch){
+            var s = document.createElement('span');
+            s.className = 'u' + (tok.k==='accent'?' accent':'') + (tok.k==='strong'?' strong':'');
+            s.textContent = ch;
+            s.style.transitionDelay = (idx*38)+'ms';
+            s.style.fontVariationSettings = "'wght' "+base;
+            word.appendChild(s);
+            units.push({el:s, base:base, cur:base, phase:idx*0.6});
+            idx++;
+          });
+          lineEl.appendChild(word);
+        } else {
+          var s = document.createElement('span');
+          s.className = 'u' + (tok.k==='accent'?' accent':'') + (tok.k==='strong'?' strong':'');
+          s.textContent = tok.t;
+          s.style.transitionDelay = ((tok.k==='accent'? idx+3 : idx)*46)+'ms';
+          s.style.fontVariationSettings = "'wght' "+base;
+          lineEl.appendChild(s);
+          units.push({el:s, base:base, cur:base, phase:idx*0.6});
+          idx++;
+        }
+        // trailing space between words
+        if(wi < line.length-1) lineEl.appendChild(document.createTextNode(' '));
+      });
+      stmt.appendChild(lineEl);
+    });
+    measure();
+  }
+
+  function measure(){
+    for(var i=0;i<units.length;i++){
+      var r = units[i].el.getBoundingClientRect();
+      units[i].cx = r.left + r.width/2;
+      units[i].cy = r.top + r.height/2;
+    }
+  }
+
+  // ---- entrance ----
+  function entrance(){
+    S.entranceDone = false;
+    stmt.classList.remove('lit');
+    // force reflow so re-adding .lit re-triggers the transition
+    void stmt.offsetWidth;
+    requestAnimationFrame(function(){ stmt.classList.add('lit'); });
+    var maxDelay = units.length*46 + 1200;
+    setTimeout(function(){ S.entranceDone = true; }, Math.min(maxDelay, 2600));
+  }
+
+  // ---- kinetic loop ----
+  var frame = 0, last = performance.now(), fpsAcc = 0, fpsN = 0, fpsEl = document.getElementById('fps');
+  function loop(now){
+    var dt = now - last; last = now;
+    fpsAcc += dt; fpsN++;
+    if(fpsN >= 30){ fpsEl.textContent = Math.round(1000/(fpsAcc/fpsN)) + 'fps'; fpsAcc=0; fpsN=0; }
+
+    frame++;
+    if(frame % 6 === 0) measure();          // refresh centres at ~10fps
+    var t = now/1000;
+    var twoSig = 2 * S.radius * S.radius;
+    var breathAmt = S.breath * (S.pointer ? 0.28 : 1);
+
+    for(var i=0;i<units.length;i++){
+      var u = units[i];
+      var target = u.base;
+      var g = 0;
+      if(S.pointer){
+        var dx = u.cx - S.mx, dy = u.cy - S.my;
+        g = Math.exp(-(dx*dx+dy*dy)/twoSig);
+        target += (S.peak - u.base) * g;
+      }
+      target += Math.sin(t*0.8 + u.phase) * breathAmt;
+      if(target < 300) target = 300; else if(target > 700) target = 700;
+
+      u.cur += (target - u.cur) * 0.16;
+      if(Math.abs(u.cur - (u.lastW||0)) > 0.8){
+        u.el.style.fontVariationSettings = "'wght' " + (u.cur|0);
+        u.lastW = u.cur;
+      }
+      if(S.entranceDone){
+        var ly = S.pointer ? -(S.lift * g) : 0;
+        u.el.style.transform = ly ? ('translate3d(0,'+ly.toFixed(2)+'px,0)') : '';
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // ---- pointer + cursor ----
+  var cur = document.getElementById('cur'), cx = S.mx, cy = S.my;
+  addEventListener('pointermove', function(e){
+    S.mx = e.clientX; S.my = e.clientY; S.pointer = true;
+  }, {passive:true});
+  addEventListener('pointerleave', function(){ S.pointer = false; });
+  (function curLoop(){
+    cx += (S.mx - cx)*0.2; cy += (S.my - cy)*0.2;
+    cur.style.transform = 'translate3d('+cx+'px,'+cy+'px,0)';
+    requestAnimationFrame(curLoop);
+  })();
+  stmt.addEventListener('pointerenter', function(){ cur.classList.add('big'); });
+  stmt.addEventListener('pointerleave', function(){ cur.classList.remove('big'); });
+
+  addEventListener('resize', measure, {passive:true});
+
+  // ---- media cross-fade ----
+  var mediaImgs = Array.prototype.slice.call(document.querySelectorAll('#media img')), mi = 0;
+  mediaImgs[0].classList.add('on');
+  setInterval(function(){
+    if(document.body.dataset.amb !== 'media') return;
+    mediaImgs[mi].classList.remove('on');
+    mi = (mi+1) % mediaImgs.length;
+    mediaImgs[mi].classList.add('on');
+  }, 4600);
+
+  // ---- panel wiring ----
+  function seg(id, fn){
+    var box = document.getElementById(id);
+    box.addEventListener('click', function(e){
+      var b = e.target.closest('button'); if(!b) return;
+      box.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x===b); });
+      fn(b.dataset.v);
+    });
+  }
+  seg('segTheme', function(v){ document.documentElement.dataset.appearance = v; });
+  seg('segAmb', function(v){ document.body.dataset.amb = v; });
+  seg('segField', function(v){ S.field = v; build(); });
+
+  function slider(rid, oid, fn){
+    var r = document.getElementById(rid), o = document.getElementById(oid);
+    r.addEventListener('input', function(){ o.textContent = r.value; fn(+r.value); });
+  }
+  slider('rR','oR', function(v){ S.radius = v; });
+  slider('rP','oP', function(v){ S.peak = v; });
+  slider('rB','oB', function(v){ S.base = v; units.forEach(function(u){ if(u.base!==600) u.base = v; }); });
+  slider('rL','oL', function(v){ S.lift = v; });
+  slider('rW','oW', function(v){ S.breath = v; });
+  slider('rA','oA', function(v){ document.documentElement.style.setProperty('--amb', (v/100).toFixed(2)); });
+
+  document.getElementById('replay').addEventListener('click', entrance);
+  var panel = document.getElementById('panel');
+  document.getElementById('collapse').addEventListener('click', function(){ panel.classList.add('hide'); });
+  document.getElementById('show').addEventListener('click', function(){ panel.classList.remove('hide'); });
+
+  // ---- boot (wait for the display font so measure() is accurate) ----
+  build();
+  if(document.fonts && document.fonts.ready){
+    document.fonts.ready.then(function(){ measure(); entrance(); });
+  } else { entrance(); }
+  entrance();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
