@@ -4563,7 +4563,7 @@
     ]
   },
   "heroMotion": {
-    "ambient": "media",
+    "ambient": "aurora",
     "field": "letter"
   }
 }
