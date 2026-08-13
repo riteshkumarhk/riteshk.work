@@ -89,7 +89,7 @@
     },
     "workTitle": "A few things I've *designed* \nand the [[thinking]] behind \nthem.",
     "workTitleSize": "compact",
-    "introSpacing": "compact",
+    "introSpacing": "standard",
     "statementSize": "compact",
     "statementAlign": "center",
     "highlightsOrder": [
