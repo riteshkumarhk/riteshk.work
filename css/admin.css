@@ -1781,8 +1781,12 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 }
 
 /* ---- Fonts tab: font-system cards ---- */
-.adm__tcards { display: grid; grid-template-columns: repeat(2, 1fr); gap: .8rem; margin-top: 1.1rem; }
-.adm__tcard { position: relative; text-align: left; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 1rem 1.1rem; cursor: pointer; display: flex; flex-direction: column; gap: .12rem; color: inherit; transition: border-color .2s var(--ease), background .2s, transform .2s var(--ease); }
+.adm__tgen { display: flex; gap: .6rem; margin-top: 1.1rem; align-items: stretch; flex-wrap: wrap; }
+.adm__tgen-brief { flex: 1; min-width: 200px; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 10px; padding: .5rem .8rem; color: var(--text); font-family: var(--sans); font-size: .82rem; }
+.adm__tgen-brief::placeholder { color: var(--text-faint); }
+.adm__tcards { display: grid; grid-template-columns: repeat(2, 1fr); gap: .8rem; margin-top: 1rem; }
+.adm__tcard-wrap { display: flex; flex-direction: column; gap: .4rem; }
+.adm__tcard { flex: 1; position: relative; text-align: left; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 1rem 1.1rem; cursor: pointer; display: flex; flex-direction: column; gap: .12rem; color: inherit; transition: border-color .2s var(--ease), background .2s, transform .2s var(--ease); }
 .adm__tcard:hover { transform: translateY(-2px); border-color: var(--text-faint); }
 .adm__tcard.is-active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--bg-elev)); }
 .adm__tcard-name { font-size: 1.15rem; font-weight: 600; color: var(--text); }
@@ -1792,5 +1796,8 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .adm__tcard-live, .adm__tcard-gen { position: absolute; top: .85rem; right: .95rem; font-family: var(--mono); font-size: .56rem; letter-spacing: .1em; text-transform: uppercase; padding: .16rem .48rem; border-radius: 100px; }
 .adm__tcard-live { color: #0a0a0a; background: var(--accent); }
 .adm__tcard-gen { color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+.adm__tcard-acts { display: flex; justify-content: flex-end; }
+.adm__tcard-rm { font-family: var(--mono); font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); background: none; border: 1px solid var(--line); border-radius: 100px; padding: .28rem .7rem; cursor: pointer; transition: color .2s, border-color .2s; }
+.adm__tcard-rm:hover { color: #e6795f; border-color: #e6795f; }
 .adm__tnote { font-size: .74rem; color: var(--text-faint); margin-top: .95rem; line-height: 1.6; }
 @media (max-width: 720px) { .adm__tcards { grid-template-columns: 1fr; } }

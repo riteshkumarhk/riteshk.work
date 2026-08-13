@@ -3460,7 +3460,7 @@ import { WORLD_LAND } from "./worldland.js";
   }
   function typeSystemById(id) { var t = data && data.typography; return t && (t.systems || []).filter(function (s) { return s && s.id === id; })[0]; }
   function typeCard(s, active) {
-    return '<button class="adm__tcard' + (active ? " is-active" : "") + '" type="button" data-act="type-pick" data-id="' + escAttr(s.id) + '">' +
+    var pick = '<button class="adm__tcard' + (active ? " is-active" : "") + '" type="button" data-act="type-pick" data-id="' + escAttr(s.id) + '">' +
       (active ? '<span class="adm__tcard-live">Live</span>' : (s.builtin ? "" : '<span class="adm__tcard-gen">Generated</span>')) +
       '<span class="adm__tcard-name">' + escHtml(s.name || s.id) + "</span>" +
       (s.note ? '<span class="adm__tcard-note">' + escHtml(s.note) + "</span>" : "") +
@@ -3468,13 +3468,54 @@ import { WORLD_LAND } from "./worldland.js";
       '<span class="adm__tcard-f"><span>Text</span><b>' + escHtml((s.text || {}).family || "\u2014") + "</b></span>" +
       '<span class="adm__tcard-f"><span>Mono</span><b>' + escHtml((s.mono || {}).family || "\u2014") + "</b></span>" +
       "</button>";
+    var acts = s.builtin ? "" : '<div class="adm__tcard-acts"><button type="button" class="adm__tcard-rm" data-act="type-remove" data-id="' + escAttr(s.id) + '">Remove</button></div>';
+    return '<div class="adm__tcard-wrap">' + pick + acts + "</div>";
   }
   function typographySection() {
     var t = ensureTypography(data);
     var cards = t.systems.map(function (s) { return typeCard(s, s.id === t.active); }).join("");
     return secHead("Fonts", "One font system drives the whole site \u2014 display, body and mono. Click a system to preview it live on the right, then <em>Publish</em> to set it as your site\u2019s type.") +
+      '<div class="adm__tgen"><button class="btn btn--auto" type="button" data-act="type-gen">\u2728 Generate a system</button>' +
+      '<input type="text" class="adm__tgen-brief" data-tbrief placeholder="Optional direction \u2014 e.g. \u201cwarmer &amp; literary\u201d or \u201cbold modern grotesque\u201d" /></div>' +
       '<div class="adm__tcards">' + cards + "</div>" +
-      '<p class="adm__tnote">Built-in systems load self-hosted or via Google&nbsp;Fonts / Fontshare. Your active choice is saved to the site on Publish.</p>';
+      '<p class="adm__tnote">Built-in systems load self-hosted or via Google&nbsp;Fonts / Fontshare. <em>Generate</em> uses your AI key to compose a new one from real faces \u2014 it\u2019s saved to your library (survives refresh) and applied to the preview; Publish makes it live. Generated systems can be removed.</p>';
+  }
+  function typeSanRole(r, kind) {
+    r = r || {};
+    var fam = String(r.family || "").trim();
+    if (!fam) return null;
+    var src = (r.src === "fontshare") ? "fontshare" : "google";
+    var css = String(r.css || "").trim();
+    if (!css) css = (src === "fontshare") ? fam.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") : fam.replace(/\s+/g, "+");
+    var generic = kind === "mono" ? 'ui-monospace, "SF Mono", monospace' : kind === "display" ? 'Georgia, "Times New Roman", serif' : 'system-ui, -apple-system, sans-serif';
+    var stack = String(r.stack || "").trim();
+    if (!stack || stack.indexOf(fam) === -1) stack = '"' + fam + '", ' + generic;
+    return { family: fam, src: src, css: css, stack: stack };
+  }
+  async function typeGenerate(btn) {
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { typeGenerate(btn); }); return; }
+    ensureTypography(data);
+    var brief = "";
+    var bi = body && body.querySelector("[data-tbrief]"); if (bi) brief = String(bi.value || "").trim();
+    if (btn) { btn.disabled = true; btn.textContent = "Composing\u2026"; }
+    status("Composing a font system\u2026");
+    var system = "You are a typography director for a dark, editorial, gallery-quiet product-design portfolio (warm ivory text on near-black, one restrained bronze accent). You compose FONT SYSTEMS of three roles: display (headlines - a serif or expressive face with real character), text (body + UI - highly readable), mono (labels, meta, numbers). Use ONLY real, free fonts from Google Fonts (preferred) or Fontshare. AVOID the overused vibe-coded defaults (Fraunces, Inter, Playfair Display, Poppins, Montserrat, Lora, DM Serif, Space Mono, Roboto) unless the brief asks. Choose faces that read senior, intentional and timeless - not trendy. For EACH role return: family (exact Google/Fontshare name), src ('google' or 'fontshare'), css (the exact stylesheet query fragment - for Google the text after 'family=' e.g. 'Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500' or 'Work+Sans:wght@300..700'; for Fontshare the f[] value e.g. 'switzer@400,500,600,700' or a bare slug 'gambetta' for the whole family - real available weights only), and stack (a CSS font-family list ending in the right generic: serif for display, sans-serif for text, monospace for mono). Also 'name' (1-2 evocative words) and 'note' (2-4 words for the vibe). Return STRICT JSON only, no prose.";
+    var user = "Compose ONE fresh font system for this portfolio." + (brief ? "\n\nDIRECTION: " + brief : "") +
+      "\n\nFORMAT reference (do NOT reuse these - invent a distinct system):\n" +
+      '{"name":"Atelier","note":"Couture contrast serif","display":{"family":"Gambetta","src":"fontshare","css":"gambetta","stack":"\\"Gambetta\\", Georgia, serif"},"text":{"family":"General Sans","src":"fontshare","css":"general-sans@400,500,600","stack":"\\"General Sans\\", system-ui, sans-serif"},"mono":{"family":"Fragment Mono","src":"google","css":"Fragment+Mono:ital@0;1","stack":"\\"Fragment Mono\\", ui-monospace, monospace"}}' +
+      "\n\nReturn STRICT JSON: {\"name\":\"\",\"note\":\"\",\"display\":{\"family\":\"\",\"src\":\"\",\"css\":\"\",\"stack\":\"\"},\"text\":{\"family\":\"\",\"src\":\"\",\"css\":\"\",\"stack\":\"\"},\"mono\":{\"family\":\"\",\"src\":\"\",\"css\":\"\",\"stack\":\"\"}}";
+    try {
+      var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 700, temperature: 0.85, json: true });
+      var j = csgenParse(out);
+      var d = typeSanRole(j && j.display, "display"), t = typeSanRole(j && j.text, "text"), m = typeSanRole(j && j.mono, "mono");
+      if (!d || !t || !m) { status("The AI didn\u2019t return a usable system \u2014 try again."); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate a system"; } return; }
+      var sysObj = { id: "gen-" + Date.now().toString(36), name: (String((j && j.name) || "Generated").trim() || "Generated").slice(0, 32), note: String((j && j.note) || "AI system").trim().slice(0, 44), builtin: false, display: d, text: t, mono: m };
+      ensureTypography(data).systems.push(sysObj);
+      data.typography.active = sysObj.id;
+      saveDraft(true); apply(true); renderBody();
+      status("Generated \u201c" + sysObj.name + "\u201d \u2014 previewing on the right. Publish to keep it live, or Remove it.", true);
+    } catch (e) { status("Font generation failed: " + ((e && e.message) || "error")); }
+    if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate a system"; }
   }
 
   const sections = {
@@ -5848,6 +5889,21 @@ import { WORLD_LAND } from "./worldland.js";
         var _ts = typeSystemById(_tid);
         status("Font system \u2192 " + (_ts ? _ts.name : _tid), true);
       }
+      return;
+    }
+    if (act === "type-gen") { typeGenerate(b); return; }
+    if (act === "type-remove") {
+      ensureTypography(data);
+      var _rid = b.dataset.id, _rsys = data.typography.systems || [];
+      var _rat = _rsys.map(function (s) { return s.id; }).indexOf(_rid);
+      if (_rat === -1) return;
+      var _rwasActive = data.typography.active === _rid;
+      _rsys.splice(_rat, 1);
+      if (_rwasActive) data.typography.active = (_rsys.filter(function (s) { return s.builtin; })[0] || _rsys[0] || {}).id || "atelier";
+      saveDraft(true);
+      if (_rwasActive) apply(true); else previewApply();
+      renderBody();
+      status("Font system removed.", true);
       return;
     }
     if (act === "csgen-run") { csgenRun(i, false); return; }
