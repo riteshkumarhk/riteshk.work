@@ -3552,28 +3552,36 @@ import { WORLD_LAND } from "./worldland.js";
     return '<div class="adm__tcard-wrap">' + pick + acts + "</div>";
   }
   var typeSubTab = null;       // Fonts sub-tabs: null = auto (the active system's group), else "builtin" (Preloaded) | "gen" (AI generated)
+  var TYPE_CATS = { original: "serif", atelier: "serif", newsprint: "serif", baskerville: "serif", garamond: "serif", cardinal: "serif", bureau: "sans", grotesk: "sans", archivo: "sans", sora: "sans", unbounded: "display", syne: "display", bricolage: "display", terminal: "mono", plex: "mono", martian: "mono", caveat: "hand", kalam: "hand", patrick: "hand" };
+  var TYPE_CAT_ORDER = [["serif", "Serif"], ["sans", "Sans"], ["display", "Display"], ["mono", "Mono"], ["hand", "Hand"]];
+  function sysCat(s) { return (s && (s.cat || TYPE_CATS[s.id])) || "serif"; }
   function typographySection() {
     var t = ensureTypography(data);
     var active = t.systems.filter(function (s) { return s.id === t.active; })[0] || {};
     var builtins = t.systems.filter(function (s) { return s.builtin; });
     var gens = t.systems.filter(function (s) { return !s.builtin; });
-    var tab = typeSubTab || (active.id && !active.builtin ? "gen" : "builtin");
-    var cards = (tab === "gen" ? gens : builtins).map(function (s) { return typeCard(s, s.id === t.active); }).join("");
+    var catTabs = TYPE_CAT_ORDER.filter(function (c) { return builtins.some(function (s) { return sysCat(s) === c[0]; }); });
+    var valid = catTabs.map(function (c) { return c[0]; }).concat(["gen"]);
+    var tab = typeSubTab || (active.id ? (active.builtin ? sysCat(active) : "gen") : (valid[0] || "gen"));
+    if (valid.indexOf(tab) === -1) tab = valid[0] || "gen";
+    var list = tab === "gen" ? gens : builtins.filter(function (s) { return sysCat(s) === tab; });
+    var cards = list.map(function (s) { return typeCard(s, s.id === t.active); }).join("");
     var aw = (active.display && +active.display.weight) || 300;
     var wbtn = function (w, lab) { return '<button type="button" data-act="type-weight" data-w="' + w + '"' + (aw === w ? ' class="is-on"' : "") + ">" + lab + "</button>"; };
     var sub = function (id, lab, n) { return '<button type="button" data-act="type-tab" data-tab="' + id + '"' + (tab === id ? ' class="is-on"' : "") + ">" + lab + ' <span class="adm__tsub-n">' + n + "</span></button>"; };
+    var tabsHtml = catTabs.map(function (c) { return sub(c[0], c[1], builtins.filter(function (s) { return sysCat(s) === c[0]; }).length); }).join("") + sub("gen", "AI generated", gens.length);
     var genPanel = tab === "gen"
       ? '<div class="adm__tgen"><button class="btn btn--auto" type="button" data-act="type-gen">\u2728 Generate a system</button>' +
         '<input type="text" class="adm__tgen-brief" data-tbrief placeholder="Optional direction \u2014 e.g. \u201cwarmer &amp; literary\u201d or \u201cbold modern grotesque\u201d" /></div>' +
         (gens.length ? "" : '<p class="adm__tempty">No AI systems yet. Generate one from your AI key \u2014 it\u2019s composed from real faces, saved to your library and previewed instantly; Publish makes it live.</p>')
       : "";
     return secHead("Fonts", "One font system drives the whole site \u2014 display, body and mono. Click a system to preview it live on the right, then <em>Publish</em> to set it as your site\u2019s type.") +
-      '<div class="adm__tsub">' + sub("builtin", "Preloaded", builtins.length) + sub("gen", "AI generated", gens.length) + "</div>" +
+      '<div class="adm__tsub">' + tabsHtml + "</div>" +
       genPanel +
       '<div class="adm__tcards">' + cards + "</div>" +
       '<div class="adm__twt"><span class="adm__twt-label">Heading weight</span><div class="adm__twt-seg">' + wbtn(300, "Light") + wbtn(400, "Regular") + wbtn(500, "Medium") + wbtn(600, "Semibold") + "</div>" +
       '<span class="adm__twt-hint">Display weight for \u201c' + escHtml(active.name || "the active system") + '\u201d \u2014 each system keeps its own.</span></div>' +
-      '<p class="adm__tnote">Preloaded systems load via Google&nbsp;Fonts (self-host any from its card once published). <em>AI generated</em> systems are composed from real faces with your AI key \u2014 saved to your library (survive refresh) and removable.</p>';
+      '<p class="adm__tnote">Fonts are grouped by category \u2014 Serif, Sans, Display, Mono and Hand \u2014 loaded via Google&nbsp;Fonts. <em>AI generated</em> systems are composed from real faces with your AI key and saved to your library (survive refresh, removable).</p>';
   }
   function typeSanRole(r, kind) {
     r = r || {};
@@ -10541,7 +10549,18 @@ import { WORLD_LAND } from "./worldland.js";
       const ed = root.querySelector(".adm__editor");
       if (!ed || !ed.contains(e.target)) return;
       const factor = e.deltaMode === 1 ? 32 : (e.deltaMode === 2 ? Math.round(ed.clientHeight * 0.9) : 1);
-      ed.scrollTop += e.deltaY * factor;
+      const dy = e.deltaY * factor;
+      // Let a nested scrollable panel (e.g. the capped font-card grid) consume the wheel
+      // first if it can still move in this direction; only then scroll the editor pane.
+      for (var n = e.target; n && n !== ed; n = n.parentNode) {
+        if (n.nodeType !== 1) continue;
+        var oy = getComputedStyle(n).overflowY;
+        if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight + 1) {
+          var atTop = n.scrollTop <= 0, atBot = n.scrollTop + n.clientHeight >= n.scrollHeight - 1;
+          if (!((dy < 0 && atTop) || (dy > 0 && atBot))) { n.scrollTop += dy; e.preventDefault(); e.stopPropagation(); return; }
+        }
+      }
+      ed.scrollTop += dy;
       e.preventDefault();
       e.stopPropagation();
     }, { passive: false, capture: true });
