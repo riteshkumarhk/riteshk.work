@@ -6493,9 +6493,60 @@ import { WORLD_LAND } from "./worldland.js";
     }
   }
 
+  // Reverse of autoVaultLockedForPublish. When a deeper-cut section is UNLOCKED (locked=false) but its
+  // media is still vault-hosted (vault=true, "vault:<key>" srcs), that media only resolves via the owner's
+  // signed URLs -> it's invisible to logged-out visitors (broken on phones / any public viewer). On publish
+  // we move it BACK to public hosting (/assets/uploads) and clear the `vault` flag so the now-public section
+  // shows its media to everyone. Operates on the live draft (a permanent one-time move), ATOMIC per section
+  // (only swaps refs + clears `vault` if every file re-hosts), and needs your session.
+  async function deVaultUnlockedForPublish(token) {
+    if (!adminSession()) return;                         // vault fetch + Worker hosting both need the session
+    var works = (data && data.work) || [];
+    var anyVaulted = works.some(function (w) { return w && w.study && Array.isArray(w.study.blocks) && w.study.blocks.some(function (b) { return b && !b.locked && b.vault && !b.vaultBlock && !b.encStub; }); });
+    if (!anyVaulted) return;                              // nothing unlocked-but-vaulted -> zero overhead on normal publishes
+    if (typeof pubProgress === "function") pubProgress(50, "Moving unlocked sections back to public hosting\u2026");
+    var moved = 0, failed = 0, changed = false;
+    for (var wi = 0; wi < works.length; wi++) {
+      var w = works[wi];
+      if (!w || !w.study || !Array.isArray(w.study.blocks)) continue;
+      var blocks = w.study.blocks;
+      for (var bi = 0; bi < blocks.length; bi++) {
+        var b = blocks[bi];
+        if (!b || b.locked || !b.vault || b.vaultBlock || b.encStub) continue;   // only UNLOCKED, media-vaulted sections
+        var targets = [];
+        (function scan(o) {
+          if (!o || typeof o !== "object") return;
+          for (var k in o) { var v = o[k]; if (typeof v === "string") { var mm = /^vault:(.+)$/i.exec(v); if (mm) targets.push({ o: o, k: k, key: mm[1] }); } else if (v && typeof v === "object") scan(v); }
+        })(b);
+        if (!targets.length) { delete b.vault; changed = true; continue; }   // nothing left vaulted -> just drop the flag
+        var swaps = [], ok = true;
+        for (var ti = 0; ti < targets.length; ti++) {
+          var t = targets[ti];
+          try {
+            var url = await vaultSignedUrl(t.key);
+            if (!url) { ok = false; break; }
+            var res = await fetch(url); if (!res.ok) { ok = false; break; }
+            var blob = await res.blob();
+            var web = await hostDataUri("data:" + (blob.type || "application/octet-stream") + ";base64," + bytesToB64(await blob.arrayBuffer()), token, vaultMediaExt(t.key, blob));
+            swaps.push({ o: t.o, k: t.k, path: web });
+          } catch (e) { if (e && e.auth) { clearAdminSession(); if (changed) saveDraft(true); return; } ok = false; break; }
+        }
+        if (!ok) { failed++; continue; }                 // leave this section vaulted (no worse than now); retry next publish
+        swaps.forEach(function (s) { s.o[s.k] = s.path; });
+        delete b.vault;
+        moved++; changed = true;
+      }
+    }
+    if (changed) saveDraft(true);
+    if (moved || failed) status(moved + " unlocked section" + (moved === 1 ? "" : "s") + " moved to public hosting" + (failed ? "; " + failed + " couldn\u2019t move \u2014 media too large, host externally" : "") + ".", !failed);
+  }
+
   async function buildPublishJson(token) {
     const styled = autoStyleLanding(false);
     if (styled) { if (activeTab === "landing") renderBody(); apply(true); }
+    // If a deeper-cut section was unlocked but its media is still vaulted, move that media back to
+    // public hosting first (so it isn't invisible to logged-out visitors / phones), then clone.
+    await deVaultUnlockedForPublish(token);
     const pubData = JSON.parse(JSON.stringify(data));
     // Never publish the admin-key hash — in a public repo it was an offline brute-force target. The
     // Cloudflare Worker is the source of truth for admin auth now (password login + passkeys).
