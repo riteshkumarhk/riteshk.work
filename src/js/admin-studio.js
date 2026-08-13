@@ -5268,6 +5268,19 @@ import { WORLD_LAND } from "./worldland.js";
     syncPreviewPage();
     if (hlModal) refreshHlPanel();
     if (aboutSecModal) refreshAboutSecModal();
+    if (activeTab === "type") scrollActiveFontIntoView();
+  }
+  // Keep the active font card visible inside the height-capped, scrollable card grid
+  // (only scrolls the inner grid, never the editor panel, and leaves already-visible cards put).
+  function scrollActiveFontIntoView() {
+    var box = body.querySelector(".adm__tcards");
+    if (!box) return;
+    var act = box.querySelector(".adm__tcard.is-active");
+    var wrap = act && (act.closest(".adm__tcard-wrap") || act);
+    if (!wrap) return;
+    var br = box.getBoundingClientRect(), cr = wrap.getBoundingClientRect();
+    if (cr.top >= br.top && cr.bottom <= br.bottom) return; // already fully visible
+    box.scrollTop += (cr.top - br.top) - (box.clientHeight - wrap.offsetHeight) / 2;
   }
 
   /* ---------- L2 case-study editor + auto live preview ---------- */
