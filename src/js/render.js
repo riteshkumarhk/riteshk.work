@@ -520,6 +520,8 @@
     try { injectTypeFaces(sys); } catch (e) {}
     if (sys.display && sys.display.stack) el.style.setProperty("--serif", sys.display.stack);
     if (sys.display && sys.display.weight) el.style.setProperty("--serif-weight", String(sys.display.weight)); else el.style.removeProperty("--serif-weight");
+    var _dw = sys.display && +sys.display.weight, _cw = (sys.display && +sys.display.cardWeight) || Math.min(700, (_dw || 300) + 200);
+    el.style.setProperty("--card-weight", String(_cw));
     if (sys.text && sys.text.stack) el.style.setProperty("--sans", sys.text.stack);
     if (sys.mono && sys.mono.stack) el.style.setProperty("--mono", sys.mono.stack);
   }
