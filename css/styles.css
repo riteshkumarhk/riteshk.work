@@ -139,7 +139,18 @@ main, .footer { transition: opacity .45s ease; }
   padding: 1.4rem var(--pad);
   transition: transform .5s var(--ease), background .5s, padding .5s, border-color .5s;
   border-bottom: 1px solid transparent;
-  mix-blend-mode: difference;
+}
+/* Legibility scrim: a soft dark gradient just behind the header so nav text stays
+   readable over busy media backgrounds. Invisible on a plain dark hero (dark-on-dark),
+   fades out by ~140px, and disappears once the nav goes solid on scroll.
+   This does NOT touch the media background itself. */
+.nav::before {
+  content: ""; position: fixed; top: 0; left: 0; right: 0; height: 140px;
+  background: linear-gradient(to bottom, rgba(8,8,10,0.6), rgba(8,8,10,0));
+  z-index: -1; pointer-events: none; transition: opacity .5s;
+}
+html[data-appearance="light"] .nav::before {
+  background: linear-gradient(to bottom, rgba(250,248,242,0.66), rgba(250,248,242,0));
 }
 .nav.is-scrolled {
   background: rgba(8,8,10,0.72);
@@ -147,8 +158,8 @@ main, .footer { transition: opacity .45s ease; }
   -webkit-backdrop-filter: blur(14px) saturate(1.1);
   padding-top: 1rem; padding-bottom: 1rem;
   border-color: var(--line-soft);
-  mix-blend-mode: normal;
 }
+.nav.is-scrolled::before { opacity: 0; }
 .nav.is-hidden { transform: translateY(-110%); }
 
 .nav__brand { display: flex; align-items: center; gap: .7rem; }
