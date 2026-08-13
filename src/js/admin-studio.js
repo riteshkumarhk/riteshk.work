@@ -3443,11 +3443,11 @@ import { WORLD_LAND } from "./worldland.js";
       text: { family: "General Sans", stack: '"General Sans", system-ui, -apple-system, sans-serif', selfHosted: true },
       mono: { family: "Fragment Mono", stack: '"Fragment Mono", ui-monospace, "SF Mono", monospace', selfHosted: true } },
     { id: "newsprint", name: "Newsprint", note: "Literary editorial", builtin: true,
-      display: { family: "Newsreader", stack: '"Newsreader", Georgia, "Times New Roman", serif', src: "google", css: "Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500" },
+      display: { family: "Newsreader", stack: '"Newsreader", Georgia, "Times New Roman", serif', src: "google", css: "Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500", weight: 400 },
       text: { family: "Switzer", stack: '"Switzer", system-ui, -apple-system, sans-serif', src: "fontshare", css: "switzer@400,500,600,700" },
       mono: { family: "IBM Plex Mono", stack: '"IBM Plex Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "IBM+Plex+Mono:wght@400;500;600" } },
     { id: "bureau", name: "Bureau", note: "Swiss grotesque", builtin: true,
-      display: { family: "Schibsted Grotesk", stack: '"Schibsted Grotesk", system-ui, -apple-system, sans-serif', src: "google", css: "Schibsted+Grotesk:wght@400..900" },
+      display: { family: "Schibsted Grotesk", stack: '"Schibsted Grotesk", system-ui, -apple-system, sans-serif', src: "google", css: "Schibsted+Grotesk:wght@400..900", weight: 500 },
       text: { family: "Hanken Grotesk", stack: '"Hanken Grotesk", system-ui, -apple-system, sans-serif', src: "google", css: "Hanken+Grotesk:wght@300..800" },
       mono: { family: "Martian Mono", stack: '"Martian Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "Martian+Mono:wght@300..700" } }
   ];
@@ -3478,10 +3478,15 @@ import { WORLD_LAND } from "./worldland.js";
   function typographySection() {
     var t = ensureTypography(data);
     var cards = t.systems.map(function (s) { return typeCard(s, s.id === t.active); }).join("");
+    var active = t.systems.filter(function (s) { return s.id === t.active; })[0] || {};
+    var aw = (active.display && +active.display.weight) || 300;
+    var wbtn = function (w, lab) { return '<button type="button" data-act="type-weight" data-w="' + w + '"' + (aw === w ? ' class="is-on"' : "") + ">" + lab + "</button>"; };
     return secHead("Fonts", "One font system drives the whole site \u2014 display, body and mono. Click a system to preview it live on the right, then <em>Publish</em> to set it as your site\u2019s type.") +
       '<div class="adm__tgen"><button class="btn btn--auto" type="button" data-act="type-gen">\u2728 Generate a system</button>' +
       '<input type="text" class="adm__tgen-brief" data-tbrief placeholder="Optional direction \u2014 e.g. \u201cwarmer &amp; literary\u201d or \u201cbold modern grotesque\u201d" /></div>' +
       '<div class="adm__tcards">' + cards + "</div>" +
+      '<div class="adm__twt"><span class="adm__twt-label">Heading weight</span><div class="adm__twt-seg">' + wbtn(300, "Light") + wbtn(400, "Regular") + wbtn(500, "Medium") + wbtn(600, "Semibold") + "</div>" +
+      '<span class="adm__twt-hint">Display weight for \u201c' + escHtml(active.name || "the active system") + '\u201d \u2014 each system keeps its own.</span></div>' +
       '<p class="adm__tnote">Built-in systems load self-hosted or via Google&nbsp;Fonts / Fontshare. <em>Generate</em> uses your AI key to compose a new one from real faces \u2014 it\u2019s saved to your library (survives refresh) and applied to the preview; Publish makes it live. Generated systems can be removed.</p>';
   }
   function typeSanRole(r, kind) {
@@ -3494,7 +3499,9 @@ import { WORLD_LAND } from "./worldland.js";
     var generic = kind === "mono" ? 'ui-monospace, "SF Mono", monospace' : kind === "display" ? 'Georgia, "Times New Roman", serif' : 'system-ui, -apple-system, sans-serif';
     var stack = String(r.stack || "").trim();
     if (!stack || stack.indexOf(fam) === -1) stack = '"' + fam + '", ' + generic;
-    return { family: fam, src: src, css: css, stack: stack };
+    var o = { family: fam, src: src, css: css, stack: stack };
+    var wt = parseInt(r.weight, 10); if (wt >= 100 && wt <= 900) o.weight = wt;
+    return o;
   }
   var TYPE_LENSES = ["a high-contrast Didone display serif", "a warm old-style Garalde serif", "a transitional serif with sturdy bracketed serifs", "an expressive slab serif", "a condensed editorial grotesque", "a geometric sans with real character", "a neo-grotesque with tight apertures", "a literary book serif", "a distinctive display serif", "a humanist sans with warmth", "a sharp modern serif", "a quirky contemporary serif"];
   async function typeGenerate(btn) {
@@ -3508,19 +3515,19 @@ import { WORLD_LAND } from "./worldland.js";
     var lens = TYPE_LENSES[Math.floor(Math.random() * TYPE_LENSES.length)];
     if (btn) { btn.disabled = true; btn.textContent = "Composing\u2026"; }
     status("Composing a font system\u2026");
-    var system = "You are a typography director for a dark, editorial, gallery-quiet product-design portfolio (warm ivory text on near-black, one restrained bronze accent). You compose FONT SYSTEMS of three roles: display (headlines - a serif or expressive face with real character), text (body + UI - highly readable), mono (labels, meta, numbers). Use ONLY real fonts that genuinely exist on GOOGLE FONTS (so they can be self-hosted) - never invent a family, never pick a font that isn't on Google Fonts. AVOID the overused vibe-coded defaults (Fraunces, Inter, Playfair Display, Poppins, Montserrat, Lora, DM Serif, Space Mono, Roboto, Cormorant, Satoshi). Choose faces that read senior, intentional and timeless. For EACH role return: family (the EXACT Google Fonts family name), src (always 'google'), css (the exact css2 query fragment after 'family=', e.g. 'Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500' or 'Work+Sans:wght@300..700' - use the font's REAL available weights/axes), stack (a CSS font-family list ending in the right generic: serif / sans-serif / monospace). Also 'name' (1-2 evocative words) and 'note' (2-4 words). Return STRICT JSON only, no prose.";
+    var system = "You are a typography director for a dark, editorial, gallery-quiet product-design portfolio (warm ivory text on near-black, one restrained bronze accent). You compose FONT SYSTEMS of three roles: display (headlines - a serif or expressive face with real character), text (body + UI - highly readable), mono (labels, meta, numbers). Use ONLY real fonts that genuinely exist on GOOGLE FONTS (so they can be self-hosted) - never invent a family, never pick a font that isn't on Google Fonts. AVOID the overused vibe-coded defaults (Fraunces, Inter, Playfair Display, Poppins, Montserrat, Lora, DM Serif, Space Mono, Roboto, Cormorant, Satoshi). Choose faces that read senior, intentional and timeless. For EACH role return: family (the EXACT Google Fonts family name), src (always 'google'), css (the exact css2 query fragment after 'family=', e.g. 'Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500' or 'Work+Sans:wght@300..700' - use the font's REAL available weights/axes), stack (a CSS font-family list ending in the right generic: serif / sans-serif / monospace). For the DISPLAY role also include weight \u2014 an integer 300-600 that makes the face look classy and substantial at large headline sizes (most editorial and contrast serifs want 400-500; avoid 300 unless the face is naturally heavy). Also 'name' (1-2 evocative words) and 'note' (2-4 words). Return STRICT JSON only, no prose.";
     var user = "Compose ONE fresh, DISTINCTIVE font system for this portfolio." + (brief ? "\n\nDIRECTION (follow this): " + brief : "") +
       "\n\nFor the DISPLAY face this time, lean into: " + lens + "." +
       "\n\nDo NOT use any of these families already in the library \u2014 pick genuinely DIFFERENT faces: " + (used.length ? used.join(", ") : "none yet") + "." +
       "\n\nVary the WHOLE personality from every previous system \u2014 a different display face, a different text face, a different mono. Real Google Fonts only." +
-      "\n\nReturn STRICT JSON: {\"name\":\"\",\"note\":\"\",\"display\":{\"family\":\"\",\"src\":\"google\",\"css\":\"\",\"stack\":\"\"},\"text\":{\"family\":\"\",\"src\":\"google\",\"css\":\"\",\"stack\":\"\"},\"mono\":{\"family\":\"\",\"src\":\"google\",\"css\":\"\",\"stack\":\"\"}}";
+      "\n\nReturn STRICT JSON: {\"name\":\"\",\"note\":\"\",\"display\":{\"family\":\"\",\"src\":\"google\",\"css\":\"\",\"stack\":\"\",\"weight\":400},\"text\":{\"family\":\"\",\"src\":\"google\",\"css\":\"\",\"stack\":\"\"},\"mono\":{\"family\":\"\",\"src\":\"google\",\"css\":\"\",\"stack\":\"\"}}";
     try {
       var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 700, temperature: 0.95, json: true });
       var j = csgenParse(out);
       var d = typeSanRole(j && j.display, "display"), t = typeSanRole(j && j.text, "text"), m = typeSanRole(j && j.mono, "mono");
       if (!d || !t || !m) { status("The AI didn\u2019t return a usable system \u2014 try again."); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate a system"; } return; }
       [d, t, m].forEach(function (r) { r.src = "google"; if (!r.css) r.css = r.family.replace(/\s+/g, "+"); });
-      if (d) d.weight = 400;
+      if (d && !d.weight) d.weight = 400;
       var sysObj = { id: "gen-" + Date.now().toString(36), name: (String((j && j.name) || "Generated").trim() || "Generated").slice(0, 32), note: String((j && j.note) || "AI system").trim().slice(0, 44), builtin: false, display: d, text: t, mono: m };
       ensureTypography(data).systems.push(sysObj);
       data.typography.active = sysObj.id;
@@ -5956,6 +5963,12 @@ import { WORLD_LAND } from "./worldland.js";
     }
     if (act === "type-gen") { typeGenerate(b); return; }
     if (act === "type-selfhost") { typeSelfHost(b.dataset.id, b); return; }
+    if (act === "type-weight") {
+      ensureTypography(data);
+      var _sw = typeSystemById(data.typography.active);
+      if (_sw && _sw.display) { _sw.display.weight = +b.dataset.w || 400; saveDraft(true); apply(true); renderBody(); status("Heading weight \u2192 " + b.dataset.w, true); }
+      return;
+    }
     if (act === "type-remove") {
       ensureTypography(data);
       var _rid = b.dataset.id, _rsys = data.typography.systems || [];

@@ -4519,7 +4519,8 @@
           "family": "Newsreader",
           "stack": "\"Newsreader\", Georgia, \"Times New Roman\", serif",
           "src": "google",
-          "css": "Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500"
+          "css": "Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500",
+          "weight": 400
         },
         "text": {
           "family": "Switzer",
@@ -4543,7 +4544,8 @@
           "family": "Schibsted Grotesk",
           "stack": "\"Schibsted Grotesk\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Schibsted+Grotesk:wght@400..900"
+          "css": "Schibsted+Grotesk:wght@400..900",
+          "weight": 500
         },
         "text": {
           "family": "Hanken Grotesk",
