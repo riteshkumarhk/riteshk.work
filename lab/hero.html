@@ -68,6 +68,15 @@
   body[data-amb="media"] .media{ opacity:1; }
   body[data-amb="media"] .aura{ opacity:0; }
   body[data-amb="off"] .aura{ opacity:0; }
+  /* darken the blurred media in DARK mode so bright wallpaper regions never wash the ivory type */
+  html[data-appearance="dark"] .media img{ filter:blur(60px) saturate(1.0) brightness(.55); }
+  html[data-appearance="light"] .media img{ filter:blur(60px) saturate(1.06) brightness(1.02); }
+
+  /* legibility scrim — protects the (left-aligned) text over media without hiding the
+     imagery on the right. Guarantees contrast even at high ambient intensity. */
+  .scrim{ position:fixed; inset:0; z-index:1; pointer-events:none; opacity:0; transition:opacity .5s ease;
+    background:linear-gradient(100deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 82%, transparent) 30%, transparent 64%); }
+  body[data-amb="media"] .scrim{ opacity:1; }
 
   /* node-web constellation (the REAL src/js/particles.js, imported below). The lab must
      supply its positioning since it doesn't load styles.css. It sits ABOVE the vignette so
@@ -164,6 +173,7 @@
     <img src="/assets/uploads/cd132b9755109dcf36ed4b8d48738d7f489a514bf872c64722a1a3aee50862d3.png" alt="" />
     <img src="/assets/uploads/42d6e21daf6b701ae17ec68a85d784ee94504a9800ea6c52719040b568617152.png" alt="" />
   </div>
+  <div class="scrim"></div>
   <div class="vig"></div>
 
   <main class="stage" id="wsec-hero">
