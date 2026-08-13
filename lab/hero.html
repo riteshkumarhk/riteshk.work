@@ -69,12 +69,19 @@
   body[data-amb="media"] .aura{ opacity:0; }
   body[data-amb="off"] .aura{ opacity:0; }
 
+  /* node-web constellation (the REAL src/js/particles.js, imported below). The lab must
+     supply its positioning since it doesn't load styles.css. It sits ABOVE the vignette so
+     the nodes keep full contrast; panel toggle shows/hides it. */
+  canvas.bg-field{ position:fixed; inset:0; z-index:2; pointer-events:none; }
+  .node-chips{ position:fixed; inset:0; z-index:3; pointer-events:none; }
+  body[data-nodes="off"] canvas.bg-field, body[data-nodes="off"] .node-chips{ display:none !important; }
+
   /* faint film-grade vignette to seat the type */
   .vig{ position:fixed; inset:0; z-index:1; pointer-events:none;
     background:radial-gradient(130% 120% at 50% 34%, transparent 52%, color-mix(in srgb, var(--bg) 78%, transparent) 100%); }
 
   /* ---- hero composition ---- */
-  .stage{ position:relative; z-index:2; height:100%; display:flex; flex-direction:column;
+  .stage{ position:relative; z-index:4; height:100%; display:flex; flex-direction:column;
     justify-content:center; padding:clamp(2rem,7vh,6rem) var(--pad); gap:clamp(1.4rem,3.4vh,2.6rem); }
 
   .eyebrow{ display:flex; align-items:center; gap:.7ch; flex-wrap:wrap;
@@ -86,9 +93,13 @@
   .sub strong{ color:var(--text); font-weight:600; }
   .sub .accent{ color:var(--accent); font-weight:600; }
 
-  .stmt{ font-family:var(--serif); line-height:1.06; letter-spacing:-0.022em;
-    font-size:clamp(2.6rem, min(9.2vw,13vh), 8.4rem); max-width:16ch; }
+  .stmt{ font-family:var(--serif); line-height:1.08; letter-spacing:-0.022em;
+    font-size:clamp(2.1rem, 6vw, 5.2rem); max-width:none; }
   .stmt .line{ display:block; }
+  /* Lock the authored line breaks on hover-capable devices so weight changes can never
+     rewrap the headline (kills the 3<->4 line jump). Touch keeps natural wrapping + a
+     static weight (no hover there), so it never reflows either. */
+  @media (hover:hover) and (pointer:fine){ .stmt .line{ white-space:nowrap; } }
   /* animatable unit — word (inline-block keeps letters together for wrapping) */
   .u{ display:inline-block; white-space:pre; font-variation-settings:'wght' 350;
     transform:translateZ(0); will-change:transform, font-variation-settings; }
@@ -144,7 +155,7 @@
   .panel.hide ~ .toggle{ opacity:1; }
 </style>
 </head>
-<body data-amb="aurora">
+<body data-amb="aurora" data-nodes="on">
 
   <div class="amb aura"><b></b><b></b><b></b><b></b></div>
   <div class="amb media" id="media">
@@ -155,7 +166,7 @@
   </div>
   <div class="vig"></div>
 
-  <main class="stage">
+  <main class="stage" id="wsec-hero">
     <div class="eyebrow">
       <span class="dot">&#9702;</span> Product Design Lead
       <span class="sep">/</span> Growth &middot; AI &middot; Identity &middot; HCI/HMI
@@ -181,6 +192,12 @@
       <button data-v="off">Off</button>
       <button data-v="aurora" class="on">Aurora</button>
       <button data-v="media">Media</button>
+    </div>
+
+    <div class="row"><label>Nodes (constellation)</label></div>
+    <div class="seg" id="segNodes">
+      <button data-v="on" class="on">On</button>
+      <button data-v="off">Off</button>
     </div>
 
     <div class="row"><label>Field</label></div>
@@ -212,6 +229,7 @@
 
 <script>
 (function(){
+  var HOVER = matchMedia('(hover:hover) and (pointer:fine)').matches;
   var S = {
     mx: innerWidth/2, my: innerHeight*0.44, pointer:false,
     radius:190, peak:660, base:350, lift:7, breath:24,
@@ -300,13 +318,15 @@
     if(frame % 6 === 0) measure();          // refresh centres at ~10fps
     var t = now/1000;
     var twoSig = 2 * S.radius * S.radius;
-    var breathAmt = S.breath * (S.pointer ? 0.28 : 1);
+    // Touch devices (no real hover) stay STATIC — no breathing, no field — so the
+    // naturally-wrapped headline never reflows on a phone.
+    var breathAmt = HOVER ? (S.breath * (S.pointer ? 0.28 : 1)) : 0;
 
     for(var i=0;i<units.length;i++){
       var u = units[i];
       var target = u.base;
       var g = 0;
-      if(S.pointer){
+      if(S.pointer && HOVER){
         var dx = u.cx - S.mx, dy = u.cy - S.my;
         g = Math.exp(-(dx*dx+dy*dy)/twoSig);
         target += (S.peak - u.base) * g;
@@ -366,6 +386,15 @@
   seg('segAmb', function(v){ document.body.dataset.amb = v; });
   seg('segField', function(v){ S.field = v; build(); });
 
+  // Node-web constellation = the real site module, loaded on demand + forced past the
+  // software-GPU gate so it shows here too (it self-disables on very low FPS).
+  var nwStarted = false;
+  function startNodes(){
+    if(nwStarted) return; nwStarted = true;
+    import('../src/js/particles.js').then(function(m){ m.initNodeWeb({ force:true }); }).catch(function(){});
+  }
+  seg('segNodes', function(v){ document.body.dataset.nodes = v; if(v==='on') startNodes(); });
+
   function slider(rid, oid, fn){
     var r = document.getElementById(rid), o = document.getElementById(oid);
     r.addEventListener('input', function(){ o.textContent = r.value; fn(+r.value); });
@@ -388,6 +417,7 @@
     document.fonts.ready.then(function(){ measure(); entrance(); });
   } else { entrance(); }
   entrance();
+  if(document.body.dataset.nodes === 'on') startNodes();
   requestAnimationFrame(loop);
 })();
 </script>
