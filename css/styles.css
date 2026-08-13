@@ -582,10 +582,6 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
 .lt-amb {
   position: fixed; inset: 0; z-index: -3; pointer-events: none;
   opacity: var(--lt-amb-fade, 1);
-  /* Confine the ambient to the HERO (top of the viewport) so it fades out BEFORE the work cards —
-     the cards then sit on clean dark instead of floating in the patchy media field behind them. */
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 36%, transparent 70%);
-          mask-image: linear-gradient(to bottom, #000 0%, #000 36%, transparent 70%);
   --a1: #2ec5c0; --a2: #2f6fed; --a3: #D8A657; --a4: #57b45a; --amb-blend: screen;
 }
 html[data-appearance="light"] .lt-amb { --a1: #1f9c98; --a2: #2f6fed; --a3: #c58a2a; --a4: #3f8f42; --amb-blend: multiply; }
@@ -790,7 +786,7 @@ body:has(.pass) .lt-amb, body:has(.pass) .lt-scrim { opacity: 0 !important; }
 .cases--g2 > .case .case__link, .cases--g3 > .case .case__link {
   display: flex; flex-direction: column; align-items: stretch; height: 100%;
   gap: clamp(0.9rem, 1.35vw, 1.2rem); padding: clamp(0.8rem, 1.2vw, 1rem);
-  background: var(--bg-elev); border: 1px solid rgba(236, 231, 225, 0.16);
+  background: rgba(17, 17, 22, 0.7); border: 1px solid rgba(236, 231, 225, 0.16);
   border-radius: 40px; corner-shape: squircle;
   /* Resting lift: a deep soft drop-shadow + a glass-edge rim (hairline ring + top highlight) so each
      card reads as a clearly elevated panel floating on the hero ambient. Light mode resets this below. */
