@@ -623,13 +623,157 @@ import { initNodeWeb } from "./particles.js";
   /* -------------------------------------------------
      10. Ambient background particle field — auto-off on low-power / software GPUs
   ------------------------------------------------- */
-  initNodeWeb({
+  if (ltCfg().nodes !== false) initNodeWeb({
     lite: lite,
     force: new URLSearchParams(location.search).has("nodes"),
     getData: function () { return (window.RK && window.RK.data) || null; },
   });
 
   } // end initInteractions
+
+  /* -------------------------------------------------
+     Living type — cursor-reactive variable weight on the statement (#workHeading)
+     + an ambient "whisper of work" layer behind the visual-top hero. Config from
+     data.heroMotion (defaults below); prototyped in lab/hero.html. The node-web
+     constellation (particles.js, anchored lower at #wsec-hero) is left untouched.
+  ------------------------------------------------- */
+  var LT_DEF = { on: true, field: "word", radius: 190, peak: 660, base: 350, lift: 7, breath: 24, ambient: "aurora", ambientAmt: 0.55, nodes: true };
+  var LT = { units: [], cfg: LT_DEF, mx: window.innerWidth / 2, my: window.innerHeight * 0.4, pointer: false, frame: 0, started: false };
+  var LT_HOVER = matchMedia("(hover: hover) and (pointer: fine)").matches;
+  var LT_PREVIEW = new URLSearchParams(location.search).has("preview");
+  function ltLite() { return document.documentElement.classList.contains("lite"); }
+  function ltCfg() {
+    var m = (window.RK && window.RK.data && window.RK.data.heroMotion) || {};
+    var c = {}; for (var k in LT_DEF) c[k] = (m[k] == null ? LT_DEF[k] : m[k]);
+    return c;
+  }
+  function ltEnc(u) { return !u || /^vault:/i.test(u) || /\.enc(\b|$)/i.test(u); }
+  function ltMediaSrcs() {
+    var w = (window.RK && window.RK.data && window.RK.data.work) || [], out = [];
+    w.filter(function (x) { return x && x.featured && !x.hidden; }).forEach(function (x) {
+      var s = x.image || (x.study && x.study.cover);
+      if (s && !ltEnc(s)) out.push(s);
+    });
+    return out.slice(0, 5);
+  }
+  var ltMediaTimer = 0, ltMediaIdx = 0;
+  function ltStartMediaFade() {
+    if (ltMediaTimer) return;
+    ltMediaTimer = setInterval(function () {
+      if (document.body.dataset.heroAmb !== "media") return;
+      var imgs = document.querySelectorAll("#lt-media img"); if (imgs.length < 2) return;
+      imgs[ltMediaIdx].classList.remove("on");
+      ltMediaIdx = (ltMediaIdx + 1) % imgs.length; imgs[ltMediaIdx].classList.add("on");
+    }, 4600);
+  }
+  function ltBuildAmbient(cfg, onLanding) {
+    var amb = document.getElementById("lt-amb");
+    if (!amb) {
+      amb = document.createElement("div"); amb.id = "lt-amb"; amb.className = "lt-amb"; amb.setAttribute("aria-hidden", "true");
+      amb.innerHTML = '<div class="lt-aura"><b></b><b></b><b></b><b></b></div><div class="lt-media" id="lt-media"></div>';
+      document.body.insertBefore(amb, document.body.firstChild);
+      var scrim = document.createElement("div"); scrim.className = "lt-scrim"; scrim.setAttribute("aria-hidden", "true");
+      document.body.insertBefore(scrim, amb.nextSibling);
+    }
+    var media = document.getElementById("lt-media");
+    if (media && onLanding && cfg.ambient === "media" && !media.dataset.built) {
+      media.innerHTML = ltMediaSrcs().map(function (s) { return '<img src="' + s + '" alt="" />'; }).join("");
+      media.dataset.built = "1";
+      var imgs = media.querySelectorAll("img"); if (imgs[0]) imgs[0].classList.add("on");
+      ltStartMediaFade();
+    }
+    document.body.dataset.heroAmb = onLanding ? cfg.ambient : "off";
+    document.body.dataset.heroNodes = (cfg.nodes === false ? "off" : "on");
+    document.documentElement.style.setProperty("--lt-amb", String(cfg.ambientAmt));
+  }
+  function ltWrapText(text, field, strong, frag) {
+    var w0 = strong ? Math.min(700, LT.cfg.base + 250) : LT.cfg.base;
+    text.split(/(\s+)/).forEach(function (tok) {
+      if (tok === "") return;
+      if (/^\s+$/.test(tok)) { frag.appendChild(document.createTextNode(tok)); return; }
+      if (field === "letter") {
+        var word = document.createElement("span"); word.className = "lt-word";
+        tok.split("").forEach(function (ch) {
+          var s = document.createElement("span"); s.className = "lt-u"; s.textContent = ch;
+          s.style.fontVariationSettings = "'wght' " + w0;
+          word.appendChild(s); LT.units.push({ el: s, strong: strong, cur: w0, phase: LT.units.length * 0.6 });
+        });
+        frag.appendChild(word);
+      } else {
+        var s2 = document.createElement("span"); s2.className = "lt-u"; s2.textContent = tok;
+        s2.style.fontVariationSettings = "'wght' " + w0;
+        frag.appendChild(s2); LT.units.push({ el: s2, strong: strong, cur: w0, phase: LT.units.length * 0.6 });
+      }
+    });
+  }
+  function ltSplit(cfg) {
+    var h = document.getElementById("workHeading"); if (!h) return;
+    LT.units = [];
+    var lines = h.querySelectorAll(".section-head__line");
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i], kids = Array.prototype.slice.call(line.childNodes), frag = document.createDocumentFragment();
+      kids.forEach(function (node) {
+        if (node.nodeType === 3) { ltWrapText(node.textContent, cfg.field, false, frag); }
+        else if (node.nodeType === 1) {
+          var strong = node.tagName === "STRONG";
+          var clone = node.cloneNode(false), inner = document.createDocumentFragment();
+          ltWrapText(node.textContent, cfg.field, strong, inner); clone.appendChild(inner); frag.appendChild(clone);
+        } else { frag.appendChild(node.cloneNode(true)); }
+      });
+      line.innerHTML = ""; line.appendChild(frag);
+    }
+  }
+  function ltMeasure() {
+    for (var i = 0; i < LT.units.length; i++) {
+      var r = LT.units[i].el.getBoundingClientRect();
+      LT.units[i].cx = r.left + r.width / 2; LT.units[i].cy = r.top + r.height / 2;
+    }
+  }
+  function ltHidden(h) { return !h || h.offsetParent === null; }
+  function livingTypeApply() {
+    var cfg = LT.cfg = ltCfg();
+    var h = document.getElementById("workHeading");
+    var onLanding = !!(h && !ltHidden(h));
+    ltBuildAmbient(cfg, onLanding);
+    var runFeature = onLanding && cfg.on && LT_HOVER && (!ltLite() || LT_PREVIEW);
+    if (runFeature) { ltSplit(cfg); h.classList.add("lt-on"); ltMeasure(); }
+    else { LT.units = []; if (h) h.classList.remove("lt-on"); }
+  }
+  function ltLoop(now) {
+    var cfg = LT.cfg, units = LT.units;
+    if (units.length) {
+      var twoSig = 2 * cfg.radius * cfg.radius, t = now / 1000;
+      var breathAmt = LT_HOVER ? (cfg.breath * (LT.pointer ? 0.28 : 1)) : 0;
+      if (LT.frame % 6 === 0) ltMeasure();
+      for (var i = 0; i < units.length; i++) {
+        var u = units[i], ubase = u.strong ? Math.min(700, cfg.base + 250) : cfg.base, target = ubase, g = 0;
+        if (LT.pointer && LT_HOVER) { var dx = u.cx - LT.mx, dy = u.cy - LT.my; g = Math.exp(-(dx * dx + dy * dy) / twoSig); target += (cfg.peak - ubase) * g; }
+        target += Math.sin(t * 0.8 + u.phase) * breathAmt;
+        if (target < 300) target = 300; else if (target > 700) target = 700;
+        u.cur += (target - u.cur) * 0.16;
+        if (Math.abs(u.cur - (u.lastW || 0)) > 0.8) { u.el.style.fontVariationSettings = "'wght' " + (u.cur | 0); u.lastW = u.cur; }
+        var ly = (LT.pointer && LT_HOVER) ? -(cfg.lift * g) : 0;
+        u.el.style.transform = ly ? "translate3d(0," + ly.toFixed(2) + "px,0)" : "";
+      }
+      LT.frame++;
+    }
+    requestAnimationFrame(ltLoop);
+  }
+  function ltScrollFade() {
+    var f = 1 - (window.pageYOffset || 0) / (window.innerHeight * 0.8);
+    document.documentElement.style.setProperty("--lt-amb-fade", (f < 0 ? 0 : f > 1 ? 1 : f).toFixed(3));
+  }
+  function livingTypeInit() {
+    if (LT.started) return; LT.started = true;
+    addEventListener("pointermove", function (e) { LT.mx = e.clientX; LT.my = e.clientY; LT.pointer = true; }, { passive: true });
+    addEventListener("resize", ltMeasure, { passive: true });
+    addEventListener("scroll", ltScrollFade, { passive: true });
+    ltScrollFade();
+    requestAnimationFrame(ltLoop);
+  }
+  window.__rkLivingType = livingTypeApply;
+  document.addEventListener("site:rendered", function () { livingTypeInit(); livingTypeApply(); });
+  if (window.__siteRendered) { livingTypeInit(); livingTypeApply(); }
 
   if (window.__siteRendered) initInteractions();
   else document.addEventListener("site:rendered", initInteractions, { once: true });

@@ -3588,6 +3588,60 @@ import { WORLD_LAND } from "./worldland.js";
     if (btn) { btn.disabled = false; btn.textContent = "Self-host"; }
   }
 
+  // ---------- Hero motion (living type + ambient) — mirrors lab/hero.html controls ----------
+  var HM_DEF = { on: true, field: "word", radius: 190, peak: 660, base: 350, lift: 7, breath: 24, ambient: "aurora", ambientAmt: 0.55, nodes: true };
+  function heroM() { data.heroMotion = data.heroMotion || {}; return data.heroMotion; }
+  function hmVal(k) { var m = data.heroMotion || {}; return (m[k] == null ? HM_DEF[k] : m[k]); }
+  function hmSave() { apply(true); if (activeTab === "landing") renderBody(); }
+  // Live slider feedback without a full re-render: push heroMotion into the preview iframe's
+  // data (its kinetic loop reads radius/peak/base/lift/breath every frame) + set the intensity var.
+  function hmPush() {
+    try {
+      var w = frame && frame.contentWindow;
+      if (!(w && w.RK && w.RK.data)) return;
+      w.RK.data.heroMotion = JSON.parse(JSON.stringify(data.heroMotion || {}));
+      if (w.document && w.document.documentElement) w.document.documentElement.style.setProperty("--lt-amb", String(hmVal("ambientAmt")));
+    } catch (e) {}
+  }
+  function onHeroMotion(t) {
+    var key = t.dataset.heromotion, v = +t.value;
+    heroM();
+    if (key === "ambientAmt") data.heroMotion.ambientAmt = v / 100; else data.heroMotion[key] = v;
+    var out = body && body.querySelector('[data-hmout="' + key + '"]'); if (out) out.textContent = t.value;
+    hmPush(); saveDraft();
+  }
+  function heroMotionBlock() {
+    var seg = function (act, val, opts) {
+      return '<div class="adm__hm-seg">' + opts.map(function (o) {
+        return '<button type="button" data-act="' + act + '" data-v="' + o[0] + '"' + (String(val) === String(o[0]) ? ' class="is-on"' : "") + ">" + o[1] + "</button>";
+      }).join("") + "</div>";
+    };
+    var slider = function (key, label, min, max) {
+      var v = key === "ambientAmt" ? Math.round(hmVal(key) * 100) : hmVal(key);
+      return '<div class="adm__hm-row"><label>' + label + "</label>" +
+        '<input type="range" class="adm__hm-range" data-heromotion="' + key + '" min="' + min + '" max="' + max + '" step="1" value="' + v + '" />' +
+        '<output class="adm__hm-out" data-hmout="' + key + '">' + v + "</output></div>";
+    };
+    var nodesV = hmVal("nodes") === false ? "off" : "on", onV = hmVal("on") === false ? "off" : "on";
+    return secHead("Hero motion", "The statement reacts to the cursor through your variable font, over an ambient \u201cwhisper of work\u201d. Everything previews live and publishes with the site. <em>Reset</em> restores the defaults.") +
+      '<div class="adm__hm">' +
+      '<div class="adm__hm-ctl"><span class="adm__hm-label">Living type</span>' + seg("hero-on", onV, [["on", "On"], ["off", "Off"]]) + "</div>" +
+      '<div class="adm__hm-ctl"><span class="adm__hm-label">Ambient work</span>' + seg("hero-amb", hmVal("ambient"), [["off", "Off"], ["aurora", "Aurora"], ["media", "Media"]]) + "</div>" +
+      '<div class="adm__hm-ctl"><span class="adm__hm-label">Field</span>' + seg("hero-field", hmVal("field"), [["word", "Word"], ["letter", "Letter"]]) + "</div>" +
+      '<div class="adm__hm-ctl"><span class="adm__hm-label">Constellation</span>' + seg("hero-nodes", nodesV, [["on", "On"], ["off", "Off"]]) + "</div>" +
+      '<div class="adm__hm-sliders">' +
+        slider("radius", "Response radius", 70, 380) +
+        slider("peak", "Peak weight", 420, 700) +
+        slider("base", "Rest weight", 300, 440) +
+        slider("lift", "Lift", 0, 16) +
+        slider("breath", "Idle breathing", 0, 70) +
+        slider("ambientAmt", "Ambient intensity", 0, 100) +
+      "</div>" +
+      '<div class="adm__hm-foot"><button type="button" class="btn btn--ghost" data-act="hero-reset">Reset to defaults</button>' +
+      '<span class="adm__hm-note">Ambient &amp; constellation render only on capable machines; the constellation stays at the page bottom, untouched.</span></div>' +
+      "</div>";
+  }
+
   const sections = {
     insights() { return insightsSection(); },
     type() { return typographySection(); },
@@ -3596,6 +3650,7 @@ import { WORLD_LAND } from "./worldland.js";
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
         '<div class="adm__autobar"><button class="btn btn--auto" data-act="autostyle">Auto-style landing</button><button class="btn btn--auto" data-act="landing-ai" style="margin-left:.5rem">\u2728 Draft with AI</button><span class="adm__auto-note">Auto-style paints the accents; <em>Draft with AI</em> writes the hero, highlights, skills &amp; about from a brief \u2014 preview before applying.</span></div>' +
         landingSectionCards() +
+        group(heroMotionBlock()) +
         group(siteIconBlock())
       );
     },
@@ -5434,6 +5489,7 @@ import { WORLD_LAND } from "./worldland.js";
   /* ---------- events ---------- */
   function onInput(e) {
     const t = e.target;
+    if (t.dataset.heromotion !== undefined) { onHeroMotion(t); return; }
     if (t.dataset.gpath !== undefined || t.dataset.genName !== undefined) { onGenEdit(t); return; }
     if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined || t.dataset.rtcellfield !== undefined || t.dataset.rtjrn !== undefined) { rtSerialize(t); return; }
     if (t.dataset.jmeta !== undefined || t.dataset.jname !== undefined || t.dataset.jfield !== undefined || t.dataset.jimg !== undefined) { onJourneyEdit(t); return; }
@@ -5983,6 +6039,11 @@ import { WORLD_LAND } from "./worldland.js";
       status("Font system removed.", true);
       return;
     }
+    if (act === "hero-on") { heroM().on = b.dataset.v !== "off"; hmSave(); return; }
+    if (act === "hero-amb") { heroM().ambient = b.dataset.v; hmSave(); return; }
+    if (act === "hero-field") { heroM().field = b.dataset.v; hmSave(); return; }
+    if (act === "hero-nodes") { heroM().nodes = b.dataset.v !== "off"; hmSave(); return; }
+    if (act === "hero-reset") { delete data.heroMotion; hmSave(); status("Hero motion reset to defaults.", true); return; }
     if (act === "csgen-run") { csgenRun(i, false); return; }
     if (act === "csgen-variant") { csgenRun(i, true); return; }
     if (act === "csgen-pdf") { csgenAddPdf(i); return; }

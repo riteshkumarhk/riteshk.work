@@ -557,6 +557,68 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
 .section-head__title--align-right { text-align: right; margin-left: auto; margin-right: 0; }
 
 /* =================================================================
+   LIVING TYPE — cursor-reactive weight on the statement (#workHeading)
+   + an ambient "whisper of work" layer behind the visual-top hero.
+   All driven by data.heroMotion via main.js; prototyped in lab/hero.html.
+   The node-web constellation (particles.js, anchored lower at #wsec-hero)
+   is untouched — this is a separate top-of-page atmosphere.
+   ================================================================= */
+/* Animatable word/letter units. Only active when main.js adds .lt-on (feature on
+   + heading visible + not lite/touch on a weak device). Inert otherwise = identical
+   to the normal heading, so the studio-controlled structure is never disturbed. */
+#workHeading.lt-on .lt-u { display: inline-block; transform: translateZ(0); will-change: transform, font-variation-settings; }
+#workHeading.lt-on .lt-word { display: inline-block; white-space: nowrap; }
+/* Lock the authored line breaks on hover-capable devices so the weight field can never
+   rewrap the headline (the 3<->4 line jump). Touch keeps natural wrapping + static weight. */
+@media (hover: hover) and (pointer: fine) {
+  #workHeading.lt-on .section-head__line { white-space: nowrap; }
+}
+
+/* Ambient layer (fixed, behind all content; fades out as you scroll past the hero). */
+.lt-amb {
+  position: fixed; inset: 0; z-index: -3; pointer-events: none;
+  opacity: var(--lt-amb-fade, 1);
+  --a1: #2ec5c0; --a2: #2f6fed; --a3: #D8A657; --a4: #57b45a; --amb-blend: screen;
+}
+html[data-appearance="light"] .lt-amb { --a1: #1f9c98; --a2: #2f6fed; --a3: #c58a2a; --a4: #3f8f42; --amb-blend: multiply; }
+.lt-aura { position: absolute; inset: 0; opacity: var(--lt-amb, .55); transition: opacity .5s var(--ease); }
+body[data-hero-amb="off"] .lt-aura, body[data-hero-amb="media"] .lt-aura { opacity: 0; }
+.lt-aura b {
+  position: absolute; width: 46vmax; height: 46vmax; border-radius: 50%;
+  filter: blur(72px); opacity: .55; mix-blend-mode: var(--amb-blend); will-change: transform;
+}
+.lt-aura b:nth-child(1) { background: radial-gradient(circle at 50% 50%, var(--a1), transparent 66%); left: -8vw; top: -6vh; animation: ltDrift1 26s var(--ease) infinite alternate; }
+.lt-aura b:nth-child(2) { background: radial-gradient(circle at 50% 50%, var(--a2), transparent 66%); right: -10vw; top: 8vh; animation: ltDrift2 32s var(--ease) infinite alternate; }
+.lt-aura b:nth-child(3) { background: radial-gradient(circle at 50% 50%, var(--a3), transparent 66%); left: 24vw; bottom: -14vh; animation: ltDrift3 30s var(--ease) infinite alternate; }
+.lt-aura b:nth-child(4) { background: radial-gradient(circle at 50% 50%, var(--a4), transparent 66%); right: 16vw; bottom: -8vh; animation: ltDrift4 36s var(--ease) infinite alternate; }
+@keyframes ltDrift1 { to { transform: translate3d(9vw, 7vh, 0) scale(1.18); } }
+@keyframes ltDrift2 { to { transform: translate3d(-8vw, 10vh, 0) scale(1.24); } }
+@keyframes ltDrift3 { to { transform: translate3d(7vw, -9vh, 0) scale(1.14); } }
+@keyframes ltDrift4 { to { transform: translate3d(-6vw, -7vh, 0) scale(1.2); } }
+
+.lt-media {
+  position: absolute; inset: 0; opacity: 0; transition: opacity .5s var(--ease);
+  -webkit-mask-image: radial-gradient(120% 100% at 50% 42%, #000 30%, transparent 78%);
+          mask-image: radial-gradient(120% 100% at 50% 42%, #000 30%, transparent 78%);
+}
+body[data-hero-amb="media"] .lt-media { opacity: 1; }
+.lt-media img { position: absolute; inset: -6%; width: 112%; height: 112%; object-fit: cover; opacity: 0; transition: opacity 2.4s ease; will-change: opacity; filter: blur(60px) saturate(1.1); }
+.lt-media img.on { opacity: var(--lt-amb, .55); }
+html[data-appearance="dark"] .lt-media img { filter: blur(60px) saturate(1.0) brightness(.55); }
+html[data-appearance="light"] .lt-media img { filter: blur(60px) saturate(1.06) brightness(1.02); }
+/* Legibility scrim — protects the left-aligned statement over media without hiding the
+   imagery on the right. Guarantees contrast even at high ambient intensity. */
+.lt-scrim {
+  position: fixed; inset: 0; z-index: -2; pointer-events: none; opacity: 0; transition: opacity .5s var(--ease);
+  background: linear-gradient(100deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 82%, transparent) 30%, transparent 64%);
+}
+body[data-hero-amb="media"] .lt-scrim { opacity: var(--lt-amb-fade, 1); }
+/* Studio nodes toggle — hide the constellation live without a reload. */
+body[data-hero-nodes="off"] canvas.bg-field, body[data-hero-nodes="off"] .node-chips { display: none !important; }
+/* Never render the ambient on lite / reduced-hardware (matches .bg-field policy). */
+html.lite .lt-amb, html.lite .lt-scrim { display: none; }
+
+/* =================================================================
    WORK / CASES
    ================================================================= */
 .work { padding: clamp(2.25rem, 5vw, 4rem) 0 clamp(4rem, 9vw, 8rem); }
