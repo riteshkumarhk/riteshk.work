@@ -608,10 +608,10 @@ body[data-hero-amb="off"] .lt-aura, body[data-hero-amb="media"] .lt-aura { opaci
 body[data-hero-amb="media"] .lt-media { opacity: 1; }
 .lt-media img { position: absolute; inset: -6%; width: 112%; height: 112%; object-fit: cover; opacity: 0; transition: opacity 2.4s ease; will-change: opacity; filter: blur(60px) saturate(1.1); }
 .lt-media img.on { opacity: var(--lt-amb, .55); }
-/* Dark: heavy blur + desaturate so the covers become a smooth tonal wash, not patchy blotches
-   (a product screenshot's own light/dark regions read as patches once darkened). Light mode is
-   airy and reads fine at a lighter touch, so it keeps its own gentler filter. */
-html[data-appearance="dark"] .lt-media img { filter: blur(110px) saturate(.55) brightness(.5); }
+/* Dark: enough blur to smooth the cover's patchy luminance into a soft gradient, but KEEP the colour
+   and a healthy brightness so the background stays interesting (not a dead flat wash). The left-anchored
+   .lt-scrim + the naturally darker left keep the statement legible. Light keeps its gentler filter. */
+html[data-appearance="dark"] .lt-media img { filter: blur(85px) saturate(1.0) brightness(.74); }
 html[data-appearance="light"] .lt-media img { filter: blur(60px) saturate(1.06) brightness(1.02); }
 /* Legibility scrim — protects the left-aligned statement over media without hiding the
    imagery on the right. Guarantees contrast even at high ambient intensity. */
