@@ -304,6 +304,16 @@ export function initNodeWeb(opts) {
     });
     const inAvoid = (cxp, cyp) => { const x = cxp / DPR, y = cyp / DPR; for (let k = 0; k < avoid.length; k++) { const a = avoid[k]; if (x > a.x0 && x < a.x1 && y > a.y0 && y < a.y1) return true; } return false; };
 
+    // Constellation guardrail: on big/4K screens a web that wires up edge-to-edge reads as noise. Only
+    // draw the connecting LINES in the band from the marquee section (top) down to the contact block -
+    // the region around the statement. ABOVE the marquee the nodes stay as loose particles (dots only).
+    // Measured live off the real sections so it tracks scroll + any layout (canvas coords = viewport * DPR).
+    let linkTopCY = -Infinity, linkBotCY = Infinity;
+    const marqEl = document.querySelector("#wsec-highlights") || document.querySelector(".himarq, .logos, .marquee");
+    if (marqEl) { const mr = marqEl.getBoundingClientRect(); if (mr.height > 1) linkTopCY = mr.top * DPR; }
+    const ctEl = document.getElementById("contact");
+    if (ctEl) { const cr = ctEl.getBoundingClientRect(); if (cr.height > 1) linkBotCY = cr.top * DPR; }
+
     // --- position + alpha pre-pass ---
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
@@ -336,7 +346,9 @@ export function initNodeWeb(opts) {
           if (b.a < 0.04) continue;
           const dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy;
           if (d2 > ld2) continue;
-          if (inAvoid((a.x + b.x) / 2, (a.y + b.y) / 2)) continue; // don't draw a line across the text
+          const cyMid = (a.y + b.y) / 2;
+          if (cyMid < linkTopCY || cyMid > linkBotCY) continue;    // guardrail: wire up only in the marquee -> contact band; outside = loose particles
+          if (inAvoid((a.x + b.x) / 2, cyMid)) continue; // don't draw a line across the text
           const prox = 1 - Math.sqrt(d2) / ld;
           const la = prox * intensity * intensity * 0.34 * themeMul * (curLight ? 1.6 : 1);
           if (la < 0.02) continue;
