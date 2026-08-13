@@ -3468,7 +3468,11 @@ import { WORLD_LAND } from "./worldland.js";
       '<span class="adm__tcard-f"><span>Text</span><b>' + escHtml((s.text || {}).family || "\u2014") + "</b></span>" +
       '<span class="adm__tcard-f"><span>Mono</span><b>' + escHtml((s.mono || {}).family || "\u2014") + "</b></span>" +
       "</button>";
-    var acts = s.builtin ? "" : '<div class="adm__tcard-acts"><button type="button" class="adm__tcard-rm" data-act="type-remove" data-id="' + escAttr(s.id) + '">Remove</button></div>';
+    var acts = s.builtin ? "" : '<div class="adm__tcard-acts">' +
+      (s.faces && s.faces.length
+        ? '<span class="adm__tcard-sh">\u2713 Self-hosted</span>'
+        : '<button type="button" class="adm__tcard-sh-btn" data-act="type-selfhost" data-id="' + escAttr(s.id) + '">Self-host</button>') +
+      '<button type="button" class="adm__tcard-rm" data-act="type-remove" data-id="' + escAttr(s.id) + '">Remove</button></div>';
     return '<div class="adm__tcard-wrap">' + pick + acts + "</div>";
   }
   function typographySection() {
@@ -3523,6 +3527,57 @@ import { WORLD_LAND } from "./worldland.js";
       status("Generated \u201c" + sysObj.name + "\u201d \u2014 previewing (loads via Google Fonts). Publish to keep it, or Remove it.", true);
     } catch (e) { status("Font generation failed: " + ((e && e.message) || "error")); }
     if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate a system"; }
+  }
+  function bytesToB64(buf) {
+    var u8 = new Uint8Array(buf), s = "", CH = 0x8000;
+    for (var i = 0; i < u8.length; i += CH) s += String.fromCharCode.apply(null, u8.subarray(i, i + CH));
+    return btoa(s);
+  }
+  function typeParseFaces(css) {
+    var out = [], rx = /@font-face\s*\{([^}]*)\}/g, m, KEEP = { latin: 1, "latin-ext": 1 };
+    while ((m = rx.exec(css))) {
+      var b = m[1];
+      var pre = css.slice(Math.max(0, m.index - 40), m.index);
+      var sc = /\/\*\s*([\w-]+)\s*\*\/\s*$/.exec(pre);
+      if (sc && sc[1] && !KEEP[sc[1]]) continue;
+      var fam = (/font-family:\s*'([^']+)'/.exec(b) || [])[1];
+      var u = (/url\((https:\/\/fonts\.gstatic\.com\/[^)]+\.woff2)\)/.exec(b) || [])[1];
+      if (!fam || !u) continue;
+      out.push({ family: fam.trim(), weight: ((/font-weight:\s*([^;]+)/.exec(b) || [])[1] || "400").trim(), style: ((/font-style:\s*(\w+)/.exec(b) || [])[1] || "normal"), unicodeRange: ((/unicode-range:\s*([^;]+)/.exec(b) || [])[1] || "").trim(), woff2: u });
+    }
+    return out;
+  }
+  async function typeSelfHost(id, btn) {
+    var sys = typeSystemById(id); if (!sys) return;
+    if (!adminSession()) { status("Sign in first to self-host fonts."); return; }
+    var roles = [sys.display, sys.text, sys.mono].filter(function (r) { return r && r.src === "google" && r.css && !r.selfHosted; });
+    if (!roles.length) { status("Nothing to self-host \u2014 this system is already local."); return; }
+    if (btn) { btn.disabled = true; btn.textContent = "Fetching\u2026"; }
+    status("Fetching the font files from Google\u2026");
+    try {
+      var qs = roles.map(function (r) { return "f=" + encodeURIComponent(r.css); }).join("&");
+      var cssRes = await fetch(ADMIN_WORKER + "/admin/font-css?" + qs, { headers: { Authorization: "Bearer " + adminSession() } });
+      if (!cssRes.ok) throw new Error("font proxy " + cssRes.status);
+      var descs = typeParseFaces(await cssRes.text());
+      if (!descs.length) throw new Error("no font faces found \u2014 check the families exist on Google Fonts");
+      var faces = [];
+      for (var i = 0; i < descs.length; i++) {
+        var fd = descs[i];
+        if (btn) btn.textContent = "Hosting " + (i + 1) + "/" + descs.length + "\u2026";
+        status("Committing " + fd.family + " " + fd.weight + " " + fd.style + " (" + (i + 1) + "/" + descs.length + ")\u2026");
+        var buf = await fetch(fd.woff2).then(function (r) { if (!r.ok) throw new Error("woff2 " + r.status); return r.arrayBuffer(); });
+        var uri = "data:font/woff2;base64," + bytesToB64(buf);
+        var path = await hostDataUri(uri, null, "woff2");
+        faces.push({ family: fd.family, weight: fd.weight, style: fd.style, unicodeRange: fd.unicodeRange, url: path });
+      }
+      sys.faces = faces;
+      [sys.display, sys.text, sys.mono].forEach(function (r) { if (r) { r.selfHosted = true; delete r.src; delete r.css; } });
+      saveDraft(true); apply(true); renderBody();
+      status("Self-hosted \u201c" + (sys.name || "system") + "\u201d \u2014 " + faces.length + " files committed. Loads locally now; Publish to go live.", true);
+    } catch (e) {
+      status("Self-host failed: " + ((e && e.message) || "error"));
+    }
+    if (btn) { btn.disabled = false; btn.textContent = "Self-host"; }
   }
 
   const sections = {
@@ -5899,6 +5954,7 @@ import { WORLD_LAND } from "./worldland.js";
       return;
     }
     if (act === "type-gen") { typeGenerate(b); return; }
+    if (act === "type-selfhost") { typeSelfHost(b.dataset.id, b); return; }
     if (act === "type-remove") {
       ensureTypography(data);
       var _rid = b.dataset.id, _rsys = data.typography.systems || [];

@@ -494,13 +494,30 @@
     setTypeLink("rk-type-google", g.length ? "https://fonts.googleapis.com/css2?family=" + g.join("&family=") + "&display=swap" : "");
     setTypeLink("rk-type-fontshare", f.length ? "https://api.fontshare.com/v2/css?f[]=" + f.join("&f[]=") + "&display=swap" : "");
   }
+  function injectTypeFaces(sys) {
+    var faces = sys && sys.faces, el = document.getElementById("rk-type-faces");
+    if (!faces || !faces.length) { if (el && el.parentNode) el.parentNode.removeChild(el); return; }
+    var fam = function (s) { return String(s == null ? "" : s).replace(/[^\w .\-]/g, ""); };
+    var ur = function (s) { return String(s == null ? "" : s).replace(/[^\w+,\s-]/g, ""); };
+    var css = faces.map(function (f) {
+      var url = String((f && f.url) || "");
+      if (!/^[\w./:%-]+$/.test(url)) return "";
+      var w = String((f && f.weight) || "400").replace(/[^\d\s]/g, "").trim() || "400";
+      var st = f && f.style === "italic" ? "italic" : "normal";
+      return "@font-face{font-family:'" + fam(f.family) + "';font-style:" + st + ";font-weight:" + w + ";font-display:swap;src:url('" + url + "') format('woff2');" + (f.unicodeRange ? "unicode-range:" + ur(f.unicodeRange) + ";" : "") + "}";
+    }).filter(Boolean).join("");
+    if (!css) { if (el && el.parentNode) el.parentNode.removeChild(el); return; }
+    if (!el) { el = document.createElement("style"); el.id = "rk-type-faces"; document.head.appendChild(el); }
+    if (el.textContent !== css) el.textContent = css;
+  }
   function applyTypography(data) {
     var el = document.documentElement, sys = typeActiveSystem(data);
     if (!sys) {
       el.style.removeProperty("--serif"); el.style.removeProperty("--sans"); el.style.removeProperty("--mono");
-      setTypeLink("rk-type-google", ""); setTypeLink("rk-type-fontshare", ""); return;
+      setTypeLink("rk-type-google", ""); setTypeLink("rk-type-fontshare", ""); injectTypeFaces(null); return;
     }
     try { ensureTypeLinks(sys); } catch (e) {}
+    try { injectTypeFaces(sys); } catch (e) {}
     if (sys.display && sys.display.stack) el.style.setProperty("--serif", sys.display.stack);
     if (sys.text && sys.text.stack) el.style.setProperty("--sans", sys.text.stack);
     if (sys.mono && sys.mono.stack) el.style.setProperty("--mono", sys.mono.stack);

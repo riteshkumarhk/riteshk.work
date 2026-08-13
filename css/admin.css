@@ -1796,7 +1796,11 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .adm__tcard-live, .adm__tcard-gen { position: absolute; top: .85rem; right: .95rem; font-family: var(--mono); font-size: .56rem; letter-spacing: .1em; text-transform: uppercase; padding: .16rem .48rem; border-radius: 100px; }
 .adm__tcard-live { color: #0a0a0a; background: var(--accent); }
 .adm__tcard-gen { color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
-.adm__tcard-acts { display: flex; justify-content: flex-end; }
+.adm__tcard-acts { display: flex; justify-content: flex-end; align-items: center; gap: .5rem; }
+.adm__tcard-sh-btn { font-family: var(--mono); font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); background: none; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 100px; padding: .28rem .7rem; cursor: pointer; transition: background .2s, color .2s; }
+.adm__tcard-sh-btn:hover { background: var(--accent); color: #0a0a0a; }
+.adm__tcard-sh-btn:disabled { opacity: .6; cursor: default; }
+.adm__tcard-sh { font-family: var(--mono); font-size: .6rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); }
 .adm__tcard-rm { font-family: var(--mono); font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); background: none; border: 1px solid var(--line); border-radius: 100px; padding: .28rem .7rem; cursor: pointer; transition: color .2s, border-color .2s; }
 .adm__tcard-rm:hover { color: #e6795f; border-color: #e6795f; }
 .adm__tnote { font-size: .74rem; color: var(--text-faint); margin-top: .95rem; line-height: 1.6; }
