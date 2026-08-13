@@ -140,15 +140,15 @@ main, .footer { transition: opacity .45s ease; }
   transition: transform .5s var(--ease), background .5s, padding .5s, border-color .5s;
   border-bottom: 1px solid transparent;
 }
-/* Legibility scrim: a soft dark gradient just behind the header so nav text stays
-   readable over busy media backgrounds. Invisible on a plain dark hero (dark-on-dark),
-   fades out by ~140px, and disappears once the nav goes solid on scroll.
-   This does NOT touch the media background itself. */
+/* Legibility scrim: a soft dark gradient just behind the header so nav text stays readable over
+   busy MEDIA covers. Gated to media mode only — the aurora / plain hero is soft enough that the nav
+   reads without it, and the scrim was over-darkening the top-right corner. Off on scroll (solid nav). */
 .nav::before {
   content: ""; position: fixed; top: 0; left: 0; right: 0; height: 140px;
   background: linear-gradient(to bottom, rgba(8,8,10,0.6), rgba(8,8,10,0));
-  z-index: -1; pointer-events: none; transition: opacity .5s;
+  z-index: -1; pointer-events: none; opacity: 0; transition: opacity .5s;
 }
+body[data-hero-amb="media"] .nav:not(.is-scrolled)::before { opacity: 1; }
 html[data-appearance="light"] .nav::before {
   background: linear-gradient(to bottom, rgba(250,248,242,0.66), rgba(250,248,242,0));
 }
