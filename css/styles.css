@@ -797,7 +797,7 @@ body:has(.pass) .lt-amb, body:has(.pass) .lt-scrim { opacity: 0 !important; }
 .cases--g2 > .case .case__link, .cases--g3 > .case .case__link {
   display: flex; flex-direction: column; align-items: stretch; height: 100%;
   gap: clamp(0.9rem, 1.35vw, 1.2rem); padding: clamp(0.8rem, 1.2vw, 1rem);
-  background: rgba(17, 17, 22, 0.8); border: 1px solid rgba(236, 231, 225, 0.16);
+  background: rgba(17, 17, 22, 0.92); border: 1px solid rgba(236, 231, 225, 0.16);
   border-radius: 40px; corner-shape: squircle;
   /* Frosted glass: blur the hero ambient behind the translucent card so it reads as real glass,
      not just a faded panel. Light mode uses an opaque surface (below), so this is dark-only in effect.
