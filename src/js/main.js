@@ -640,6 +640,8 @@ import { initNodeWeb } from "./particles.js";
   var LT_DEF = { on: true, field: "word", radius: 190, peak: 660, base: 350, lift: 7, breath: 24, ambient: "aurora", ambientAmt: 0.55, nodes: true };
   var LT = { units: [], cfg: LT_DEF, mx: window.innerWidth / 2, my: window.innerHeight * 0.4, pointer: false, frame: 0, started: false };
   var LT_HOVER = matchMedia("(hover: hover) and (pointer: fine)").matches;
+  var LT_TOUCH = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+  var LT_REACT = LT_HOVER || LT_TOUCH; // desktop hover OR a resting/swiping finger drives the letters
   var LT_PREVIEW = new URLSearchParams(location.search).has("preview");
   function ltLite() { return document.documentElement.classList.contains("lite"); }
   function ltCfg() {
@@ -735,7 +737,7 @@ import { initNodeWeb } from "./particles.js";
     var h = document.getElementById("workHeading");
     var onLanding = !!(h && !ltHidden(h));
     ltBuildAmbient(cfg, onLanding);
-    var runFeature = onLanding && cfg.on && LT_HOVER && (!ltLite() || LT_PREVIEW);
+    var runFeature = onLanding && cfg.on && LT_REACT && (!ltLite() || LT_PREVIEW);
     if (runFeature) { ltSplit(cfg); h.classList.add("lt-on"); ltMeasure(); }
     else { LT.units = []; if (h) h.classList.remove("lt-on"); }
   }
@@ -747,12 +749,12 @@ import { initNodeWeb } from "./particles.js";
       if (LT.frame % 6 === 0) ltMeasure();
       for (var i = 0; i < units.length; i++) {
         var u = units[i], ubase = u.strong ? Math.min(700, cfg.base + 250) : cfg.base, target = ubase, g = 0;
-        if (LT.pointer && LT_HOVER) { var dx = u.cx - LT.mx, dy = u.cy - LT.my; g = Math.exp(-(dx * dx + dy * dy) / twoSig); target += (cfg.peak - ubase) * g; }
+        if (LT.pointer && LT_REACT) { var dx = u.cx - LT.mx, dy = u.cy - LT.my; g = Math.exp(-(dx * dx + dy * dy) / twoSig); target += (cfg.peak - ubase) * g; }
         target += Math.sin(t * 0.8 + u.phase) * breathAmt;
         if (target < 300) target = 300; else if (target > 700) target = 700;
         u.cur += (target - u.cur) * 0.16;
         if (Math.abs(u.cur - (u.lastW || 0)) > 0.8) { u.el.style.fontVariationSettings = "'wght' " + (u.cur | 0); u.lastW = u.cur; }
-        var ly = (LT.pointer && LT_HOVER) ? -(cfg.lift * g) : 0;
+        var ly = (LT.pointer && LT_REACT) ? -(cfg.lift * g) : 0;
         u.el.style.transform = ly ? "translate3d(0," + ly.toFixed(2) + "px,0)" : "";
       }
       LT.frame++;
@@ -765,7 +767,27 @@ import { initNodeWeb } from "./particles.js";
   }
   function livingTypeInit() {
     if (LT.started) return; LT.started = true;
-    addEventListener("pointermove", function (e) { LT.mx = e.clientX; LT.my = e.clientY; LT.pointer = true; }, { passive: true });
+    // Mouse / pen hover drives the reaction on desktop (touch pointer events are handled below).
+    addEventListener("pointermove", function (e) {
+      if (e.pointerType === "touch") return;
+      LT.mx = e.clientX; LT.my = e.clientY; LT.pointer = true;
+    }, { passive: true });
+    // Touch: while a finger rests on / swipes across the page, treat its position like a hover so the
+    // hero letters react to it, then relax when it lifts. Passive listeners — never block scrolling.
+    if (LT_TOUCH) {
+      var ltTouch = function (e) {
+        var t = e.touches && e.touches[0]; if (!t) return;
+        LT.mx = t.clientX; LT.my = t.clientY; LT.pointer = true;
+      };
+      addEventListener("touchstart", ltTouch, { passive: true });
+      addEventListener("touchmove", ltTouch, { passive: true });
+      var ltTouchEnd = function (e) {
+        if (e.touches && e.touches.length) { LT.mx = e.touches[0].clientX; LT.my = e.touches[0].clientY; }
+        else { LT.pointer = false; }
+      };
+      addEventListener("touchend", ltTouchEnd, { passive: true });
+      addEventListener("touchcancel", ltTouchEnd, { passive: true });
+    }
     addEventListener("resize", ltMeasure, { passive: true });
     addEventListener("scroll", ltScrollFade, { passive: true });
     ltScrollFade();
