@@ -155,7 +155,7 @@
   .panel.hide ~ .toggle{ opacity:1; }
 </style>
 </head>
-<body data-amb="aurora" data-nodes="on">
+<body data-amb="aurora" data-nodes="off">
 
   <div class="amb aura"><b></b><b></b><b></b><b></b></div>
   <div class="amb media" id="media">
@@ -196,8 +196,8 @@
 
     <div class="row"><label>Nodes (constellation)</label></div>
     <div class="seg" id="segNodes">
-      <button data-v="on" class="on">On</button>
-      <button data-v="off">Off</button>
+      <button data-v="on">On</button>
+      <button data-v="off" class="on">Off</button>
     </div>
 
     <div class="row"><label>Field</label></div>
@@ -223,7 +223,7 @@
       <button id="replay">Replay entrance</button>
       <button id="collapse">Hide</button>
     </div>
-    <div class="hint">Move the cursor across the headline &mdash; weight follows you. Throwaway lab page, nothing here touches the live site. FPS is meaningless on a GPU-less DevBox; judge on real hardware.</div>
+    <div class="hint">Move the cursor across the headline &mdash; weight follows you. The node-web constellation stays at the page BOTTOM in production; this toggle just previews the module. Throwaway lab page, nothing here touches the live site. FPS is meaningless on a GPU-less DevBox; judge on real hardware.</div>
   </div>
   <button class="toggle" id="show">Controls</button>
 
