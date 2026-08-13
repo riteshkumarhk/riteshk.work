@@ -189,6 +189,7 @@ export function initNodeWeb(opts) {
     const occ = [];
     document.querySelectorAll(OCCUPIED).forEach((e) => {
       if (e.closest("#menu")) return;                       // skip the mobile-menu overlay: a hidden full-width phantom on desktop (pointer-events:none)
+      if (e.closest(".lt-amb")) return;                     // skip the fixed full-screen ambient (media img / aura): decorative bg, chips SHOULD sit over it (else media mode's full-screen img blocks every chip)
       const r = e.getBoundingClientRect();
       if (r.width > 1 && r.height > 1 && r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth) occ.push(r);
     });
