@@ -786,16 +786,16 @@ body:has(.pass) .lt-amb, body:has(.pass) .lt-scrim { opacity: 0 !important; }
 .cases--g2 > .case .case__link, .cases--g3 > .case .case__link {
   display: flex; flex-direction: column; align-items: stretch; height: 100%;
   gap: clamp(0.9rem, 1.35vw, 1.2rem); padding: clamp(0.8rem, 1.2vw, 1rem);
-  background: var(--bg-elev); border: 1px solid var(--line);
+  background: var(--bg-elev); border: 1px solid rgba(236, 231, 225, 0.16);
   border-radius: 40px; corner-shape: squircle;
-  /* Resting lift: a soft drop-shadow + a hairline top highlight so each card reads as a deliberate,
-     elevated panel floating on the hero ambient (not a flat rectangle). Light mode resets this below. */
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  /* Resting lift: a deep soft drop-shadow + a glass-edge rim (hairline ring + top highlight) so each
+     card reads as a clearly elevated panel floating on the hero ambient. Light mode resets this below. */
+  box-shadow: 0 30px 66px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   transition: border-color .3s var(--ease), box-shadow .3s var(--ease), transform .3s var(--ease);
 }
 .cases--g2 > .case .case__link:hover, .cases--g3 > .case .case__link:hover {
   padding-left: clamp(0.8rem, 1.2vw, 1rem); border-color: var(--accent);
-  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.07); transform: translateY(-3px);
+  box-shadow: 0 40px 84px rgba(0, 0, 0, 0.66), 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.12); transform: translateY(-3px);
 }
 .cases--g2 > .case .case__media, .cases--g3 > .case .case__media {
   border-radius: 26px; corner-shape: squircle; aspect-ratio: 16 / 12;
