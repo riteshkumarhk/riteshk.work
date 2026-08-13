@@ -127,6 +127,7 @@ import { WORLD_LAND } from "./worldland.js";
   const TABS = [
     ["insights", "Insights"],
     ["landing", "Landing"],
+    ["type", "Fonts"],
     ["work", "Work"],
     ["aboutpage", "About"],
     ["contact", "Contact"],
@@ -3431,8 +3432,54 @@ import { WORLD_LAND } from "./worldland.js";
     return head + controls + cards + mapBlock + techBlock + trafficBlock + eventsBlock;
   }
 
+  /* ---------- Typography: data-driven font systems (Fonts tab) ---------- */
+  const TYPE_DEFAULTS = [
+    { id: "original", name: "Original", note: "Fraunces \u00b7 Inter \u00b7 JetBrains Mono", builtin: true,
+      display: { family: "Fraunces", stack: '"Fraunces", Georgia, "Times New Roman", serif', selfHosted: true },
+      text: { family: "Inter", stack: '"Inter", system-ui, -apple-system, sans-serif', selfHosted: true },
+      mono: { family: "JetBrains Mono", stack: '"JetBrains Mono", ui-monospace, "SF Mono", monospace', selfHosted: true } },
+    { id: "atelier", name: "Atelier", note: "Couture contrast serif", builtin: true,
+      display: { family: "Gambetta", stack: '"Gambetta", Georgia, "Times New Roman", serif', src: "fontshare", css: "gambetta" },
+      text: { family: "General Sans", stack: '"General Sans", system-ui, -apple-system, sans-serif', src: "fontshare", css: "general-sans@400,500,600" },
+      mono: { family: "Fragment Mono", stack: '"Fragment Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "Fragment+Mono:ital@0;1" } },
+    { id: "newsprint", name: "Newsprint", note: "Literary editorial", builtin: true,
+      display: { family: "Newsreader", stack: '"Newsreader", Georgia, "Times New Roman", serif', src: "google", css: "Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500" },
+      text: { family: "Switzer", stack: '"Switzer", system-ui, -apple-system, sans-serif', src: "fontshare", css: "switzer@400,500,600,700" },
+      mono: { family: "IBM Plex Mono", stack: '"IBM Plex Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "IBM+Plex+Mono:wght@400;500;600" } },
+    { id: "bureau", name: "Bureau", note: "Swiss grotesque", builtin: true,
+      display: { family: "Schibsted Grotesk", stack: '"Schibsted Grotesk", system-ui, -apple-system, sans-serif', src: "google", css: "Schibsted+Grotesk:wght@400..900" },
+      text: { family: "Hanken Grotesk", stack: '"Hanken Grotesk", system-ui, -apple-system, sans-serif', src: "google", css: "Hanken+Grotesk:wght@300..800" },
+      mono: { family: "Martian Mono", stack: '"Martian Mono", ui-monospace, "SF Mono", monospace', src: "google", css: "Martian+Mono:wght@300..700" } }
+  ];
+  function typeDefaults() { return JSON.parse(JSON.stringify(TYPE_DEFAULTS)); }
+  function ensureTypography(d) {
+    d.typography = d.typography || {};
+    if (!Array.isArray(d.typography.systems) || !d.typography.systems.length) d.typography.systems = typeDefaults();
+    if (!d.typography.active || !d.typography.systems.some(function (s) { return s.id === d.typography.active; })) d.typography.active = (d.typography.systems[0] || {}).id || "atelier";
+    return d.typography;
+  }
+  function typeSystemById(id) { var t = data && data.typography; return t && (t.systems || []).filter(function (s) { return s && s.id === id; })[0]; }
+  function typeCard(s, active) {
+    return '<button class="adm__tcard' + (active ? " is-active" : "") + '" type="button" data-act="type-pick" data-id="' + escAttr(s.id) + '">' +
+      (active ? '<span class="adm__tcard-live">Live</span>' : (s.builtin ? "" : '<span class="adm__tcard-gen">Generated</span>')) +
+      '<span class="adm__tcard-name">' + escHtml(s.name || s.id) + "</span>" +
+      (s.note ? '<span class="adm__tcard-note">' + escHtml(s.note) + "</span>" : "") +
+      '<span class="adm__tcard-f"><span>Display</span><b>' + escHtml((s.display || {}).family || "\u2014") + "</b></span>" +
+      '<span class="adm__tcard-f"><span>Text</span><b>' + escHtml((s.text || {}).family || "\u2014") + "</b></span>" +
+      '<span class="adm__tcard-f"><span>Mono</span><b>' + escHtml((s.mono || {}).family || "\u2014") + "</b></span>" +
+      "</button>";
+  }
+  function typographySection() {
+    var t = ensureTypography(data);
+    var cards = t.systems.map(function (s) { return typeCard(s, s.id === t.active); }).join("");
+    return secHead("Fonts", "One font system drives the whole site \u2014 display, body and mono. Click a system to preview it live on the right, then <em>Publish</em> to set it as your site\u2019s type.") +
+      '<div class="adm__tcards">' + cards + "</div>" +
+      '<p class="adm__tnote">Built-in systems load self-hosted or via Google&nbsp;Fonts / Fontshare. Your active choice is saved to the site on Publish.</p>';
+  }
+
   const sections = {
     insights() { return insightsSection(); },
+    type() { return typographySection(); },
     landing() {
       return (
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
@@ -5792,6 +5839,17 @@ import { WORLD_LAND } from "./worldland.js";
       return;
     }
     if (act === "landing-ai") { landingAiModal(); return; }
+    if (act === "type-pick") {
+      ensureTypography(data);
+      var _tid = b.dataset.id;
+      if (data.typography.active !== _tid) {
+        data.typography.active = _tid;
+        saveDraft(true); apply(true); renderBody();
+        var _ts = typeSystemById(_tid);
+        status("Font system \u2192 " + (_ts ? _ts.name : _tid), true);
+      }
+      return;
+    }
     if (act === "csgen-run") { csgenRun(i, false); return; }
     if (act === "csgen-variant") { csgenRun(i, true); return; }
     if (act === "csgen-pdf") { csgenAddPdf(i); return; }

@@ -4463,5 +4463,103 @@
       "key": "hero",
       "on": true
     }
-  ]
+  ],
+  "typography": {
+    "active": "atelier",
+    "systems": [
+      {
+        "id": "original",
+        "name": "Original",
+        "note": "Fraunces · Inter · JetBrains Mono",
+        "builtin": true,
+        "display": {
+          "family": "Fraunces",
+          "stack": "\"Fraunces\", Georgia, \"Times New Roman\", serif",
+          "selfHosted": true
+        },
+        "text": {
+          "family": "Inter",
+          "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
+          "selfHosted": true
+        },
+        "mono": {
+          "family": "JetBrains Mono",
+          "stack": "\"JetBrains Mono\", ui-monospace, \"SF Mono\", monospace",
+          "selfHosted": true
+        }
+      },
+      {
+        "id": "atelier",
+        "name": "Atelier",
+        "note": "Couture contrast serif",
+        "builtin": true,
+        "display": {
+          "family": "Gambetta",
+          "stack": "\"Gambetta\", Georgia, \"Times New Roman\", serif",
+          "src": "fontshare",
+          "css": "gambetta"
+        },
+        "text": {
+          "family": "General Sans",
+          "stack": "\"General Sans\", system-ui, -apple-system, sans-serif",
+          "src": "fontshare",
+          "css": "general-sans@400,500,600"
+        },
+        "mono": {
+          "family": "Fragment Mono",
+          "stack": "\"Fragment Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "Fragment+Mono:ital@0;1"
+        }
+      },
+      {
+        "id": "newsprint",
+        "name": "Newsprint",
+        "note": "Literary editorial",
+        "builtin": true,
+        "display": {
+          "family": "Newsreader",
+          "stack": "\"Newsreader\", Georgia, \"Times New Roman\", serif",
+          "src": "google",
+          "css": "Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500"
+        },
+        "text": {
+          "family": "Switzer",
+          "stack": "\"Switzer\", system-ui, -apple-system, sans-serif",
+          "src": "fontshare",
+          "css": "switzer@400,500,600,700"
+        },
+        "mono": {
+          "family": "IBM Plex Mono",
+          "stack": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "IBM+Plex+Mono:wght@400;500;600"
+        }
+      },
+      {
+        "id": "bureau",
+        "name": "Bureau",
+        "note": "Swiss grotesque",
+        "builtin": true,
+        "display": {
+          "family": "Schibsted Grotesk",
+          "stack": "\"Schibsted Grotesk\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Schibsted+Grotesk:wght@400..900"
+        },
+        "text": {
+          "family": "Hanken Grotesk",
+          "stack": "\"Hanken Grotesk\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Hanken+Grotesk:wght@300..800"
+        },
+        "mono": {
+          "family": "Martian Mono",
+          "stack": "\"Martian Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "Martian+Mono:wght@300..700"
+        }
+      }
+    ]
+  }
 }

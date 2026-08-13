@@ -468,12 +468,50 @@
     }
   }
 
+  /* ---------- typography: data-driven font systems (studio-selectable, AI-generatable) ----------
+     data.typography = { active, systems:[ {id,name, display|text|mono:{family,stack,src,css,selfHosted}} ] }.
+     A system drives the site's --serif/--sans/--mono; non-self-hosted systems pull their faces from
+     Google Fonts / Fontshare at runtime (one link per source, swapped when the active system changes). */
+  function typeActiveSystem(data) {
+    var t = data && data.typography;
+    if (!t || !t.systems || !t.systems.length) return null;
+    var byId = t.systems.filter(function (s) { return s && s.id === t.active; })[0];
+    return byId || t.systems[0] || null;
+  }
+  function setTypeLink(id, href) {
+    var el = document.getElementById(id);
+    if (!href) { if (el && el.parentNode) el.parentNode.removeChild(el); return; }
+    if (!el) { el = document.createElement("link"); el.id = id; el.rel = "stylesheet"; document.head.appendChild(el); }
+    if (el.getAttribute("href") !== href) el.setAttribute("href", href);
+  }
+  function ensureTypeLinks(sys) {
+    var g = [], f = [];
+    [sys.display, sys.text, sys.mono].forEach(function (r) {
+      if (!r || !r.css || r.selfHosted) return;
+      if (r.src === "google") g.push(r.css);
+      else if (r.src === "fontshare") f.push(r.css);
+    });
+    setTypeLink("rk-type-google", g.length ? "https://fonts.googleapis.com/css2?family=" + g.join("&family=") + "&display=swap" : "");
+    setTypeLink("rk-type-fontshare", f.length ? "https://api.fontshare.com/v2/css?f[]=" + f.join("&f[]=") + "&display=swap" : "");
+  }
+  function applyTypography(data) {
+    var el = document.documentElement, sys = typeActiveSystem(data);
+    if (!sys) {
+      el.style.removeProperty("--serif"); el.style.removeProperty("--sans"); el.style.removeProperty("--mono");
+      setTypeLink("rk-type-google", ""); setTypeLink("rk-type-fontshare", ""); return;
+    }
+    try { ensureTypeLinks(sys); } catch (e) {}
+    if (sys.display && sys.display.stack) el.style.setProperty("--serif", sys.display.stack);
+    if (sys.text && sys.text.stack) el.style.setProperty("--sans", sys.text.stack);
+    if (sys.mono && sys.mono.stack) el.style.setProperty("--mono", sys.mono.stack);
+  }
+
   /* ---------- master render ---------- */
   function render(data) {
     const L = data.landing || {};
     const C = data.contact || {};
     const caps = data.capabilities || [];
-    applyBrand(L); applyFavicon(L);
+    applyBrand(L); applyFavicon(L); applyTypography(data);
 
     // Landing pieces the owner can individually show/hide from the studio
     // (data.landing.show = {eyebrow,domains,intro,presence}; missing = shown).
