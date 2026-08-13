@@ -127,7 +127,7 @@ import { WORLD_LAND } from "./worldland.js";
   const TABS = [
     ["insights", "Insights"],
     ["landing", "Landing"],
-    ["type", "Fonts"],
+    ["type", "Appearance"],
     ["work", "Work"],
     ["aboutpage", "About"],
     ["contact", "Contact"],
@@ -3592,7 +3592,7 @@ import { WORLD_LAND } from "./worldland.js";
   var HM_DEF = { on: true, field: "word", radius: 190, peak: 660, base: 350, lift: 7, breath: 24, ambient: "aurora", ambientAmt: 0.55, nodes: true };
   function heroM() { data.heroMotion = data.heroMotion || {}; return data.heroMotion; }
   function hmVal(k) { var m = data.heroMotion || {}; return (m[k] == null ? HM_DEF[k] : m[k]); }
-  function hmSave() { apply(true); if (activeTab === "landing") renderBody(); }
+  function hmSave() { apply(true); if (activeTab === "type") renderBody(); }
   // Live slider feedback without a full re-render: push heroMotion into the preview iframe's
   // data (its kinetic loop reads radius/peak/base/lift/breath every frame) + set the intensity var.
   function hmPush() {
@@ -3644,13 +3644,12 @@ import { WORLD_LAND } from "./worldland.js";
 
   const sections = {
     insights() { return insightsSection(); },
-    type() { return typographySection(); },
+    type() { return typographySection() + group(heroMotionBlock()); },
     landing() {
       return (
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
         '<div class="adm__autobar"><button class="btn btn--auto" data-act="autostyle">Auto-style landing</button><button class="btn btn--auto" data-act="landing-ai" style="margin-left:.5rem">\u2728 Draft with AI</button><span class="adm__auto-note">Auto-style paints the accents; <em>Draft with AI</em> writes the hero, highlights, skills &amp; about from a brief \u2014 preview before applying.</span></div>' +
         landingSectionCards() +
-        group(heroMotionBlock()) +
         group(siteIconBlock())
       );
     },
