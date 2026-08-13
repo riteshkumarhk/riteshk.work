@@ -582,6 +582,10 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
 .lt-amb {
   position: fixed; inset: 0; z-index: -3; pointer-events: none;
   opacity: var(--lt-amb-fade, 1);
+  /* Confine the ambient to the HERO (top of the viewport) so it fades out BEFORE the work cards —
+     the cards then sit on clean dark instead of floating in the patchy media field behind them. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 36%, transparent 70%);
+          mask-image: linear-gradient(to bottom, #000 0%, #000 36%, transparent 70%);
   --a1: #2ec5c0; --a2: #2f6fed; --a3: #D8A657; --a4: #57b45a; --amb-blend: screen;
 }
 html[data-appearance="light"] .lt-amb { --a1: #1f9c98; --a2: #2f6fed; --a3: #c58a2a; --a4: #3f8f42; --amb-blend: multiply; }
