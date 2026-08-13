@@ -370,6 +370,21 @@ import { initNodeWeb } from "./particles.js";
       const kids = track.children;
       for (let i = 0; i < kids.length; i++) geo.push({ left: kids[i].offsetLeft, w: kids[i].offsetWidth, card: kids[i].firstElementChild });
     }
+    // Fractional set stride (getBoundingClientRect delta is sub-pixel + transform-invariant, unlike
+    // the integer offsetLeft) so the wrap lands EXACTLY on a repeat and never micro-jumps.
+    function computeSetW() {
+      const a = track.children[0], b = track.children[baseCount];
+      if (!a || !b) return 0;
+      return (b.getBoundingClientRect().left - a.getBoundingClientRect().left) || 0;
+    }
+    // Refresh the cached geometry WITHOUT resetting the scroll position (off) - used when the track
+    // reflows after build (fonts loading, counts settling) so the loop seam stays exact.
+    function remeasure() {
+      if (!baseCount || !track.children[baseCount]) return;
+      const s = computeSetW();
+      if (s > 0) setW = s;
+      measure();
+    }
     function fill() {
       stop();
       if (!baseCount) { setW = 0; track.style.transform = ""; return; }
@@ -380,7 +395,7 @@ import { initNodeWeb } from "./particles.js";
       if (copies < 2) copies = 2; else if (copies > 20) copies = 20;
       track.innerHTML = baseHTML.repeat(copies);
       mo.observe(track, { childList: true });
-      setW = track.children[baseCount] ? track.children[baseCount].offsetLeft : oneW;
+      setW = computeSetW() || oneW;
       off = 0; last = 0;
       measure();                                         // cache offsets + width once per (re)build
       if (onBuild) onBuild(track);                       // e.g. wire count-up onto the repeated chips
@@ -419,6 +434,15 @@ import { initNodeWeb } from "./particles.js";
     if ("IntersectionObserver" in window) {
       new IntersectionObserver((es) => { onScreen = es[0].isIntersecting; if (onScreen) start(); else stop(); }, { rootMargin: "150px 0px" }).observe(vp);
     }
+    // Cached geometry can go stale when the track reflows AFTER build - e.g. web fonts finishing
+    // loading (the big numbers shift; bigger on desktop = a bigger jump) or the count-up settling.
+    // That made the loop seam (the first chip) jerk every cycle. Refresh on any track resize + once
+    // fonts land, without resetting the scroll position.
+    if ("ResizeObserver" in window) {
+      let rmz = 0;
+      new ResizeObserver(function () { clearTimeout(rmz); rmz = setTimeout(remeasure, 120); }).observe(track);
+    }
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { remeasure(); });
     mo.observe(track, { childList: true });
     onSource();                                          // render already populated the track
   }
