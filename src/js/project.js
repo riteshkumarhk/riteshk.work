@@ -971,7 +971,7 @@
     var d = data(); var c = (d && d.contact) || {};
     var out = "";
     if (c.resume) {
-      out += '<a class="dock__btn" data-pj="resume" href="' + (/^data:/.test(c.resume) ? "#" : attr(c.resume)) + '" target="_blank" rel="noopener" data-label="R\u00e9sum\u00e9" aria-label="Open r\u00e9sum\u00e9">' +
+      out += '<a class="dock__btn" data-pj="resume" href="' + (/^data:/.test(c.resume) ? "#" : attr(mediaUrl(c.resume))) + '" target="_blank" rel="noopener" data-label="R\u00e9sum\u00e9" aria-label="Open r\u00e9sum\u00e9">' +
         '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></a>';
     }
     if (c.linkedin) {

@@ -16,7 +16,7 @@
      origin ("https://rk-ai-proxy.riteshkumarhk.workers.dev/media"). This is the single flip
      point; project.js / journey.js / main.js / gensection.js all delegate here via
      window.RK.mediaUrl. */
-  const MEDIA_BASE = "";
+  const MEDIA_BASE = "https://rk-ai-proxy.riteshkumarhk.workers.dev/media";
   function mediaUrl(ref) {
     if (!MEDIA_BASE || !ref || typeof ref !== "string") return ref;
     if (/^(vault:|rkenc:|data:|blob:|https?:|\/\/)/i.test(ref)) return ref;
@@ -106,6 +106,7 @@
      navigation to data: URLs, so convert those to a Blob URL first. */
   function openResume(src) {
     if (!src) return;
+    src = mediaUrl(src);
     track("resume_download");
     try {
       if (/^data:/.test(src)) {
@@ -666,7 +667,7 @@
     if (C.phone && badgeOn("phone")) badges.push('<a href="tel:' + esc(C.phoneRaw || "") + '" class="contact__pill" data-cursor="hover">' + esc(C.phone) + "</a>");
     if (C.linkedin && badgeOn("linkedin")) badges.push('<a href="' + esc(C.linkedin) + '" class="contact__pill" target="_blank" rel="noopener" data-cursor="hover">LinkedIn \u2197</a>');
     if (badgeOn("vcard")) badges.push('<button type="button" id="contactVcard" class="contact__pill contact__pill--vcard" data-cursor="hover">Save contact \u2193</button>');
-    if (C.resume && badgeOn("resume")) badges.push('<a id="contactResume" href="' + (/^data:/.test(C.resume) ? "#" : esc(C.resume)) + '" class="contact__pill contact__pill--resume" data-cursor="hover">R\u00e9sum\u00e9 \u2193</a>');
+    if (C.resume && badgeOn("resume")) badges.push('<a id="contactResume" href="' + (/^data:/.test(C.resume) ? "#" : esc(mediaUrl(C.resume))) + '" class="contact__pill contact__pill--resume" data-cursor="hover">R\u00e9sum\u00e9 \u2193</a>');
     if (C.booking && badgeOn("booking")) badges.push('<a id="contactBook" href="' + esc(C.booking) + '" class="contact__pill contact__pill--book" target="_blank" rel="noopener" data-cursor="hover">Book a call \u2197</a>');
     // Balanced rows: 6 badges → 4 + 2, 5 → 3 + 2, 1–4 → a single row.
     const firstRow = badges.length === 6 ? 4 : badges.length === 5 ? 3 : badges.length;
@@ -695,7 +696,7 @@
     if (dRes) {
       if (C.resume) {
         dRes.hidden = false;
-        dRes.setAttribute("href", /^data:/.test(C.resume) ? "#" : C.resume);
+        dRes.setAttribute("href", /^data:/.test(C.resume) ? "#" : mediaUrl(C.resume));
         dRes.onclick = function (e) { e.preventDefault(); openResume(C.resume); };
       } else {
         dRes.hidden = true;
@@ -712,7 +713,7 @@
       if (!nr) return;
       if (C.resume) {
         nr.hidden = false;
-        nr.setAttribute("href", /^data:/.test(C.resume) ? "#" : C.resume);
+        nr.setAttribute("href", /^data:/.test(C.resume) ? "#" : mediaUrl(C.resume));
         nr.onclick = function (e) { e.preventDefault(); openResume(C.resume); };
       } else { nr.hidden = true; nr.onclick = null; }
     });

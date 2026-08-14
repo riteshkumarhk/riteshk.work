@@ -55,6 +55,11 @@ import { WORLD_LAND } from "./worldland.js";
   const GH_RAW = "https://raw.githubusercontent.com/" + GH_OWNER + "/" + GH_REPO + "/" + GH_BRANCH + "/";
   const GH_FILE_API = "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/";
   const UPLOAD_DIR = "assets/uploads/";
+  // Phase 1 (R2 migration): public media now lives in the rk-media R2 bucket, served by the Worker
+  // at /media/<key>. New studio uploads PUT to /admin/media/put; the editor preview + hosted refs
+  // resolve here too. Set localStorage rk:media:host="git" to fall back to committing into the repo.
+  const MEDIA_ORIGIN = "https://rk-ai-proxy.riteshkumarhk.workers.dev/media";
+  function useR2Media() { try { return localStorage.getItem("rk:media:host") !== "git"; } catch (e) { return true; } }
   // Where a visitor actually sees the site — used to confirm a publish is live.
   const LIVE_ORIGIN = (/(^|\.)riteshk\.work$/i.test(location.hostname) || /\.github\.io$/i.test(location.hostname)) ? location.origin : "https://riteshk.work";
   const PUBLISH_HARD_CAP = 40 * 1024 * 1024; // skip an obviously-doomed content.json commit (GitHub rejects very large blobs)
@@ -7117,7 +7122,13 @@ import { WORLD_LAND } from "./worldland.js";
     })[String(mime).toLowerCase()] || (/^image\//i.test(mime) ? "png" : "bin");
   }
   function isHostedPath(v) { return typeof v === "string" && v.indexOf("/" + UPLOAD_DIR) === 0; }
-  function rawUrlFor(path) { return GH_RAW + String(path).replace(/^\//, ""); }
+  function rawUrlFor(path) {
+    var p = String(path).replace(/^\//, "");
+    // Public media is in R2 now — serve the editor preview from there so it keeps working after the
+    // repo copies are removed. Any other repo file still comes from raw.githubusercontent.
+    if (useR2Media() && p.indexOf(UPLOAD_DIR) === 0) return MEDIA_ORIGIN + "/" + p.slice(UPLOAD_DIR.length);
+    return GH_RAW + p;
+  }
   // In the admin preview a hosted path can't load from localhost until it's pulled —
   // so show the in-memory bytes (instant) or the raw GitHub URL (works right after hosting).
   var mediaSizeCache = {};
@@ -7244,11 +7255,30 @@ import { WORLD_LAND } from "./worldland.js";
     const parts = parseDataUri(uri);
     if (!parts) throw new Error("not a file");
     const rawB64 = parts.base64 ? parts.data : b64(decodeURIComponent(parts.data));
+    const ext = String(extHint || extForMime(parts.mime)).toLowerCase();
     const hash = await sha256Hex(b64ToBytes(rawB64));
-    const name = hash + "." + String(extHint || extForMime(parts.mime)).toLowerCase();
+    const name = hash + "." + ext;
     const repoPath = UPLOAD_DIR + name;
     const webPath = "/" + repoPath;
     hostedBytes[webPath] = uri;
+    // Phase 1: upload PUBLIC media to R2 (rk-media) via the Worker — keeps the repo/Pages lean and
+    // handles large files the GitHub contents API rejects. Content-addressed, so the R2 key === name
+    // and the ref stays "/assets/uploads/<hash>.<ext>" (mediaUrl maps it to the R2 origin at render).
+    if (useR2Media() && adminSession()) {
+      let r2;
+      try { r2 = await fetch(ADMIN_WORKER + "/admin/media/put?ext=" + encodeURIComponent(ext), { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": parts.mime || "application/octet-stream" }, body: b64ToBytes(rawB64) }); }
+      catch (netErr) { const e = new Error("network"); e.network = 1; throw e; }
+      if (r2.status === 401 || r2.status === 403) { const e = new Error("auth"); e.auth = 1; throw e; }
+      if (!r2.ok) {
+        const j = await r2.json().catch(function () { return {}; });
+        const msg = (j && j.error) || ("HTTP " + r2.status);
+        const e = new Error(msg); e.http = r2.status;
+        if (r2.status === 413 || /too large|too big|exceed/i.test(msg)) e.tooLarge = 1;
+        throw e;
+      }
+      return webPath;
+    }
+    // Fallback (localStorage rk:media:host="git" or no session): commit the file into the repo.
     let put;
     try { put = await fetch(ghContentsUrl(repoPath), { method: "PUT", headers: ghHeaders(token), body: JSON.stringify({ message: "Add " + name + " via admin", content: rawB64, branch: GH_BRANCH }) }); }
     catch (netErr) { const e = new Error("network"); e.network = 1; throw e; }
