@@ -28,10 +28,12 @@ function gpuOk() {
   return true;
 }
 
-// Depth map lives next to the cover: /assets/uploads/<hash>.<ext> -> /assets/uploads/<hash>.depth.png
+// Depth map lives next to the cover: <cover-base>.<ext> -> <cover-base>.depth.png. Works on the
+// current /assets/uploads/<hash>.<ext> path AND the R2 origin URL after the migration flips MEDIA_BASE
+// (input is the already-resolved cover src in the DOM), so depth keeps working post-migration.
 function deriveDepthUrl(src) {
   if (!src) return "";
-  const m = src.match(/^(.*\/assets\/uploads\/[^./?#]+)\.[a-z0-9]+([?#].*)?$/i);
+  const m = src.match(/^(.*\/[^./?#]+)\.[a-z0-9]+([?#].*)?$/i);
   return m ? m[1] + ".depth.png" : "";
 }
 

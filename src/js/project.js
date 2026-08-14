@@ -26,6 +26,9 @@
     var f = /<iframe[^>]*\ssrc=["']([^"']+)["']/i.exec(s);
     return f ? f[1] : s;
   }
+  // Delegate to the single media resolver in render.js (window.RK.mediaUrl); falls back to the ref
+  // as-authored if render.js hasn't run. No-op in Phase 0 (MEDIA_BASE empty); R2 URLs after the flip.
+  function mediaUrl(ref) { try { return (window.RK && window.RK.mediaUrl) ? window.RK.mediaUrl(ref) : ref; } catch (e) { return ref; } }
   function isVideo(url, kind) {
     if (kind === "video") return true;
     if (kind === "image" || kind === "gif") return false;
@@ -64,7 +67,7 @@
       '<button class="pjb__fs" type="button" data-fs aria-label="Toggle fullscreen \u2014 ' + attr(label) + '" title="Fullscreen">' + FS_SVG + '<span>Fullscreen</span></button></div>';
   }
   function mediaEl(m, cls) {
-    var url = mediaSrc(m);
+    var url = mediaUrl(mediaSrc(m));
     if (!url) return "";
     var kind = mediaKind(m);
     if (kind === "figma") return frameEl(figmaEmbed(url), cls, "prototype");
@@ -76,7 +79,7 @@
     // URL after render (only for a viewer the Worker authorises; others stay locked/blank).
     var vk = /^vault:(.+)$/i.exec(url); vk = vk ? vk[1] : "";
     if (kind === "video") {
-      var poster = m.poster ? ' poster="' + attr(m.poster) + '"' : "";
+      var poster = m.poster ? ' poster="' + attr(mediaUrl(m.poster)) + '"' : "";
       var vsrc = vk ? ' data-vault="' + attr(vk) + '"' : ' src="' + attr(url) + '"';
       if (m.controls) return '<video class="' + cls + '"' + vsrc + poster + ' controls controlsList="nodownload noplaybackrate" disablepictureinpicture playsinline preload="metadata"></video>';
       return '<video class="' + cls + '"' + vsrc + poster + ' autoplay muted loop playsinline preload="metadata"></video>';
@@ -94,6 +97,7 @@
   // that resolveVaultMedia() swaps in post-render. For components that build their own <img> tag
   // instead of going through mediaEl() (compare slider, focus & annotate).
   function vaultSrcAttr(url) {
+    url = mediaUrl(url);
     var vk = /^vault:(.+)$/i.exec(url || ""); vk = vk ? vk[1] : "";
     if (vk) return ' data-vault="' + attr(vk) + '"';
     return url ? ' src="' + attr(url) + '"' : "";
@@ -787,7 +791,7 @@
       var depthEl = "";
       if (nSlices && url) {
         var ivk = /^vault:(.+)$/i.exec(url); ivk = ivk ? ivk[1] : "";
-        var murl = ivk ? "" : "url('" + attr(url) + "')";
+        var murl = ivk ? "" : "url('" + attr(mediaUrl(url)) + "')";
         var maskAttr = ivk ? ' data-vault-mask="' + attr(ivk) + '"' : "";
         var maskStyle = murl ? ";-webkit-mask-image:" + murl + ";mask-image:" + murl : "";
         var slices = "";
@@ -1010,7 +1014,7 @@
       var src = o.image || (o.study && o.study.cover);
       var s = typeof src === "string" ? src : (src && (src.src || src.image));
       var media = (s && !isEncSrc(s))
-        ? '<span class="pj__more-media"><img src="' + attr(s) + '" alt="" loading="lazy" /></span>'
+        ? '<span class="pj__more-media"><img src="' + attr(mediaUrl(s)) + '" alt="" loading="lazy" /></span>'
         : '<span class="pj__more-media pj__more-media--ph pjb__shot-ph--' + esc(o.theme || "edge") + '"></span>';
       return '<button class="pj__more-card" data-open="' + attr(o.id) + '" data-cursor="view">' + media +
         '<span class="pj__more-info"><span class="pj__more-client">' + esc(o.client) + "</span>" +
@@ -1064,10 +1068,10 @@
   }
   function stageSlideMedia(m) {
     if (mediaKind(m) === "video") {
-      var url = mediaSrc(m);
+      var url = mediaUrl(mediaSrc(m));
       var vk = /^vault:(.+)$/i.exec(url); vk = vk ? vk[1] : "";
       var src = vk ? ' data-vault="' + attr(vk) + '"' : ' src="' + attr(url) + '"';
-      var poster = m.poster ? ' poster="' + attr(m.poster) + '"' : "";
+      var poster = m.poster ? ' poster="' + attr(mediaUrl(m.poster)) + '"' : "";
       return '<video class="pj__stage-el" data-stage-video' + src + poster + ' muted playsinline preload="metadata"></video>';
     }
     return mediaEl(m, "pj__stage-el");
@@ -1075,7 +1079,7 @@
   function stageThumbEl(m, j, active) {
     var kind = mediaKind(m);
     var badge = (kind === "video" || kind === "embed" || kind === "figma") ? '<span class="pj__stage-thumb-play" aria-hidden="true"></span>' : "";
-    var tsrc = m.poster || (kind === "image" ? mediaSrc(m) : "");
+    var tsrc = mediaUrl(m.poster || (kind === "image" ? mediaSrc(m) : ""));
     var vk = /^vault:(.+)$/i.exec(tsrc || ""); vk = vk ? vk[1] : "";
     var img = tsrc ? (vk ? '<img data-vault="' + attr(vk) + '" alt="" loading="lazy" />' : '<img src="' + attr(tsrc) + '" alt="" loading="lazy" />') : '<span class="pj__stage-thumb-ph"></span>';
     return '<button class="pj__stage-thumb' + (active ? " is-active" : "") + '" type="button" data-thumb="' + j + '" aria-label="Show media ' + (j + 1) + '">' + img + badge + "</button>";

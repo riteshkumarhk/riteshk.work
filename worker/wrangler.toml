@@ -9,6 +9,11 @@ preview_urls = false
 binding = "VAULT"
 bucket_name = "rk-vault"
 
+# Public R2 bucket for folio media (covers, videos, gifs). Served publicly (no auth) via GET /media/<key>.
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "rk-media"
+
 # KV store for curated-view (ticket) grants: pass-hash -> {allowed vault keys, expiry}.
 [[kv_namespaces]]
 binding = "VAULT_GRANTS"

@@ -8,6 +8,23 @@
 
   const DRAFT_KEY = "rk:content:draft";
 
+  /* ---------- media resolver (R2 migration) ----------
+     Maps a PUBLIC media ref (assets/uploads/<hash>.<ext>) to MEDIA_BASE. Private refs
+     (vault:/rkenc:/.enc/assets/protected), data:/blob:, and absolute URLs pass straight
+     through untouched. MEDIA_BASE = "" -> serve exactly as authored (the current GitHub
+     Pages path), so mediaUrl is an IDENTITY no-op until Phase 1 flips MEDIA_BASE to the R2
+     origin ("https://rk-ai-proxy.riteshkumarhk.workers.dev/media"). This is the single flip
+     point; project.js / journey.js / main.js / gensection.js all delegate here via
+     window.RK.mediaUrl. */
+  const MEDIA_BASE = "";
+  function mediaUrl(ref) {
+    if (!MEDIA_BASE || !ref || typeof ref !== "string") return ref;
+    if (/^(vault:|rkenc:|data:|blob:|https?:|\/\/)/i.test(ref)) return ref;
+    if (ref.indexOf("assets/protected/") !== -1 || /\.enc($|[?#])/i.test(ref)) return ref;
+    const m = /^\/?assets\/uploads\/([^?#]+)([?#].*)?$/.exec(ref);
+    return m ? (MEDIA_BASE.replace(/\/+$/, "") + "/" + m[1] + (m[2] || "")) : ref;
+  }
+
   /* ---------- first-party analytics ----------
      Fire-and-forget intent events (case opens, deeper-cut unlocks, résumé, contact) to the Worker's
      /event. Owner devices are excluded using the SAME markers the Cloudflare beacon uses, plus a durable
@@ -175,7 +192,7 @@
     if (d.softness != null && d.softness !== "") s += ' data-depth-softness="' + (+d.softness) + '"';
     if (d.focus != null && d.focus !== "") s += ' data-depth-focus="' + (+d.focus) + '"';
     if (d.zoom != null && d.zoom !== "") s += ' data-depth-zoom="' + (+d.zoom) + '"';
-    if (d.map) s += ' data-depth-map="' + esc(String(d.map)).replace(/"/g, "&quot;") + '"';
+    if (d.map) s += ' data-depth-map="' + esc(mediaUrl(String(d.map))).replace(/"/g, "&quot;") + '"';
     return s;
   }
 
@@ -201,7 +218,7 @@
   function caseEl(w, idx) {
     const n = String(idx + 1).padStart(2, "0");
     const tags = (w.tags || []).map((t) => "<span>" + esc(t) + "</span>").join("");
-    const imgSrc = esc(w.image).replace(/"/g, "&quot;");
+    const imgSrc = esc(mediaUrl(w.image)).replace(/"/g, "&quot;");
     // In the GRID layout, client + period are surfaced as an overlay inside the image
     // (styled to appear only for .cases--g2/.cases--g3). The below-image .case__meta stays in
     // the DOM as the accessible copy (screen-reader-only in grid) since the media is aria-hidden.
@@ -230,7 +247,7 @@
   function logoItem(g) {
     const nm = esc(g.name || "");
     const nmAttr = nm.replace(/"/g, "&quot;");
-    const src = esc(g.src || "").replace(/"/g, "&quot;");
+    const src = esc(mediaUrl(g.src || "")).replace(/"/g, "&quot;");
     const size = (g.size === "sm" || g.size === "lg") ? g.size : "md";
     return '<span class="logo" data-name="' + nmAttr + '">' +
       '<span class="logo__card logo__card--' + size + '">' +
@@ -259,7 +276,7 @@
   }
   function iconDataUrl(ic) {
     if (ic && ic.svg) return "data:image/svg+xml," + encodeURIComponent(svgSan(ic.svg)).replace(/'/g, "%27");
-    return (ic && ic.src) || "";
+    return mediaUrl((ic && ic.src) || "");
   }
   function applyBrand(L) {
     var mark = document.querySelector(".nav__mark");
@@ -289,7 +306,7 @@
   }
   function favHref(ic) {
     if (ic && ic.svg) return "data:image/svg+xml," + encodeURIComponent(ic.mono ? svgRecolor(ic.svg, favColor()) : svgSan(ic.svg));
-    return (ic && ic.src) || "";
+    return mediaUrl((ic && ic.src) || "");
   }
   function applyFavicon(L) {
     var link = document.querySelector('link[rel="icon"]');
@@ -360,7 +377,7 @@
   }
 
   function galleryEl(g) {
-    const src = (g && g.src) ? String(g.src).replace(/"/g, "&quot;") : "";
+    const src = (g && g.src) ? String(mediaUrl(g.src)).replace(/"/g, "&quot;") : "";
     if (!src) return "";
     const cap = (g && g.caption) ? '<figcaption class="gallery__cap">' + esc(g.caption) + "</figcaption>" : "";
     return '<figure class="gallery__item" data-reveal><img class="gallery__img" src="' + src + '" alt="' + esc((g && g.caption) || "") + '" loading="lazy" />' + cap + "</figure>";
@@ -1061,6 +1078,7 @@
       render: render,
       md: md,
       esc: esc,
+      mediaUrl: mediaUrl,
       openResume: openResume,
       plateInner: plateInner,
       ABOUT_SECTIONS: ABOUT_SECTIONS,

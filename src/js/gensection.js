@@ -152,11 +152,12 @@
   function renderChildren(kids) {
     return (kids || []).map(function (c) { return renderNode(c); }).join("");
   }
+  function mediaUrl(ref) { try { return (window.RK && window.RK.mediaUrl) ? window.RK.mediaUrl(ref) : ref; } catch (e) { return ref; } }
   function mediaInner(n) {
     if (!n.src) return '<div class="gs-media-ph">Visual</div>';
-    if (n.kind === "video") return '<video class="gs-media-el" src="' + esc(n.src) + '" muted loop autoplay playsinline></video>';
-    if (n.kind === "embed") return '<iframe class="gs-media-el" src="' + esc(n.src) + '" loading="lazy" allowfullscreen referrerpolicy="no-referrer"></iframe>';
-    return '<img class="gs-media-el" src="' + esc(n.src) + '" alt="' + esc(n.alt) + '" loading="lazy">';
+    if (n.kind === "video") return '<video class="gs-media-el" src="' + esc(mediaUrl(n.src)) + '" muted loop autoplay playsinline></video>';
+    if (n.kind === "embed") return '<iframe class="gs-media-el" src="' + esc(mediaUrl(n.src)) + '" loading="lazy" allowfullscreen referrerpolicy="no-referrer"></iframe>';
+    return '<img class="gs-media-el" src="' + esc(mediaUrl(n.src)) + '" alt="' + esc(n.alt) + '" loading="lazy">';
   }
   function styleAttr(n) { return n.style ? ' style="' + esc(n.style) + '"' : ""; }
   function fxAttr(n) { return n.fx ? ' data-rk-fx="' + esc(n.fx) + '"' : ""; }

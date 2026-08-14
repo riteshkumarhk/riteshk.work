@@ -682,6 +682,7 @@ import { initNodeWeb } from "./particles.js";
     return c;
   }
   function ltEnc(u) { return !u || /^vault:/i.test(u) || /\.enc(\b|$)/i.test(u); }
+  function mediaUrl(ref) { try { return (window.RK && window.RK.mediaUrl) ? window.RK.mediaUrl(ref) : ref; } catch (e) { return ref; } }
   function ltMediaSrcs() {
     var w = (window.RK && window.RK.data && window.RK.data.work) || [], out = [];
     w.filter(function (x) { return x && x.featured && !x.hidden; }).forEach(function (x) {
@@ -711,7 +712,7 @@ import { initNodeWeb } from "./particles.js";
     }
     var media = document.getElementById("lt-media");
     if (media && onLanding && cfg.ambient === "media" && !media.dataset.built) {
-      media.innerHTML = ltMediaSrcs().map(function (s) { return '<img src="' + s + '" alt="" />'; }).join("");
+      media.innerHTML = ltMediaSrcs().map(function (s) { return '<img src="' + mediaUrl(s) + '" alt="" />'; }).join("");
       media.dataset.built = "1";
       var imgs = media.querySelectorAll("img"); if (imgs[0]) imgs[0].classList.add("on");
       ltStartMediaFade();

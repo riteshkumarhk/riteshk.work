@@ -829,6 +829,28 @@ export default {
       return json({ ok: true }, 200, cors);
     }
 
+    // ---------- public media: byte-for-byte folio assets in R2 (rk-media), served without a signature ----------
+    // Upload a PUBLIC media object. Same session gate + sha256+ext keying as /vault/upload, but the
+    // object is served openly via GET /media/<key>. Phase 1 flips the studio's upload step to this
+    // (instead of committing files to the repo). The bytes are stored verbatim -- no re-encoding.
+    if (url.pathname === "/admin/media/put") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.MEDIA) return json({ error: "Media storage is not configured" }, 500, cors);
+      try {
+        const ct = request.headers.get("Content-Type") || "application/octet-stream";
+        const buf = await request.arrayBuffer();
+        if (!buf || buf.byteLength === 0) return json({ error: "Empty upload" }, 400, cors);
+        const hash = bytesToHex(await crypto.subtle.digest("SHA-256", buf));
+        const ext = (url.searchParams.get("ext") || "").replace(/[^a-z0-9]/gi, "").slice(0, 8).toLowerCase();
+        const key = ext ? (hash + "." + ext) : hash;
+        await env.MEDIA.put(key, buf, { httpMetadata: { contentType: ct } });
+        return json({ key: key, size: buf.byteLength }, 200, cors);
+      } catch (e) {
+        return json({ error: "Upload failed", detail: String((e && e.message) || e) }, 500, cors);
+      }
+    }
+
     // Self-host fonts: proxy ONLY the Google Fonts css2 stylesheet (the host is hardcoded here, so
     // there is no SSRF surface — only the family= fragments come from the client, and they are
     // validated). The studio reads the returned @font-face list, then downloads the woff2 itself
@@ -1040,6 +1062,52 @@ export default {
       obj.writeHttpMetadata(headers);
       headers.set("Accept-Ranges", "bytes");
       headers.set("Cache-Control", "private, max-age=3600");
+      if (obj.range && rangeHeader) {
+        const off = obj.range.offset || 0;
+        const len = (obj.range.length != null) ? obj.range.length : (obj.size - off);
+        headers.set("Content-Range", "bytes " + off + "-" + (off + len - 1) + "/" + obj.size);
+        headers.set("Content-Length", String(len));
+        return new Response(obj.body, { status: 206, headers });
+      }
+      headers.set("Content-Length", String(obj.size));
+      return new Response(obj.body, { status: 200, headers });
+    }
+
+    // Serve a PUBLIC media object from R2 (rk-media). No auth/signature -- these are public folio
+    // assets. Content-addressed by sha256, so responses are immutable + long-cached. Range support
+    // for smooth video streaming (the mp4s). CORS is open (public CDN semantics) for canvas/fetch.
+    if (url.pathname.startsWith("/media/")) {
+      if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "Method not allowed" }, 405, cors);
+      if (!env.MEDIA) return json({ error: "Media storage is not configured" }, 500, cors);
+      const mkey = decodeURIComponent(url.pathname.slice("/media/".length));
+      if (!mkey || mkey.indexOf("..") !== -1 || mkey.indexOf("/") !== -1) return json({ error: "Bad key" }, 400, cors);
+      if (request.method === "HEAD") {
+        const h = await env.MEDIA.head(mkey);
+        if (!h) return json({ error: "Not found" }, 404, cors);
+        const hh = new Headers(); h.writeHttpMetadata(hh);
+        hh.set("Access-Control-Allow-Origin", "*");
+        hh.set("Accept-Ranges", "bytes");
+        hh.set("Cache-Control", "public, max-age=31536000, immutable");
+        hh.set("Content-Length", String(h.size));
+        return new Response(null, { status: 200, headers: hh });
+      }
+      const rangeHeader = request.headers.get("Range");
+      const getOpts = {};
+      if (rangeHeader) {
+        const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+        if (m && (m[1] || m[2])) {
+          if (m[1] && m[2]) getOpts.range = { offset: +m[1], length: (+m[2] - +m[1] + 1) };
+          else if (m[1]) getOpts.range = { offset: +m[1] };
+          else getOpts.range = { suffix: +m[2] };
+        }
+      }
+      const obj = await env.MEDIA.get(mkey, getOpts);
+      if (!obj) return json({ error: "Not found" }, 404, cors);
+      const headers = new Headers();
+      obj.writeHttpMetadata(headers);
+      headers.set("Access-Control-Allow-Origin", "*");
+      headers.set("Accept-Ranges", "bytes");
+      headers.set("Cache-Control", "public, max-age=31536000, immutable");
       if (obj.range && rangeHeader) {
         const off = obj.range.offset || 0;
         const len = (obj.range.length != null) ? obj.range.length : (obj.size - off);

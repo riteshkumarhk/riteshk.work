@@ -41,8 +41,9 @@
 
   /* ---------- media ---------- */
   function isVideo(src, im) { return (im && im.kind === "video") || /^data:video\//i.test(src) || /\.(mp4|webm|mov|m4v|ogv)($|\?|#)/i.test(src); }
+  function mediaUrl(ref) { try { return (window.RK && window.RK.mediaUrl) ? window.RK.mediaUrl(ref) : ref; } catch (e) { return ref; } }
   function mediaTag(im) {
-    var src = (im && im.src) || ""; if (!src) return "";
+    var src = mediaUrl((im && im.src) || ""); if (!src) return "";
     if (isVideo(src, im)) {
       return '<div class="jrn__fig jrn__fig--v"><video class="jrn__media" src="' + esc(src) + '" muted loop playsinline controls preload="metadata"></video>' +
         (im.caption ? '<div class="jrn__cap">' + esc(im.caption) + "</div>" : "") + "</div>";
@@ -84,7 +85,7 @@
     if (!entries.length) return "";
     return '<section class="jrn__chap" id="jrnc-' + ci + '" data-jchap="' + ci + '">' +
       '<header class="jrn__chap-head"><span class="jrn__chap-rule"></span><h2 class="jrn__chap-name">' + esc(chap.name || "Chapter " + (ci + 1)) + "</h2>" +
-      (chap.logo ? '<img class="jrn__chap-logo" src="' + esc(chap.logo) + '" alt="' + esc((chap.name || "Chapter") + " logo") + '" loading="lazy" draggable="false" />' : "") +
+      (chap.logo ? '<img class="jrn__chap-logo" src="' + esc(mediaUrl(chap.logo)) + '" alt="' + esc((chap.name || "Chapter") + " logo") + '" loading="lazy" draggable="false" />' : "") +
       "</header>" +
       entries.map(function (e, ei) { return entryHtml(e, ci, ei); }).join("") + "</section>";
   }
