@@ -324,6 +324,15 @@ import {
   function loadStudio() {
     if (window.__RKStudio) return Promise.resolve();
     if (__studioLoading) return __studioLoading;
+    // Load the freshest admin.css too. The static <link> in index.html is cache-busted by ?v=N, but a
+    // browser holding a stale index.html keeps serving the old stylesheet after a deploy (the JS stays
+    // current because admin-studio.js is ?v=Date.now()). A stylesheet injected now wins the cascade, so
+    // the studio always renders with the latest styles — no hard refresh needed for CSS changes.
+    try {
+      var lk = document.createElement("link");
+      lk.rel = "stylesheet"; lk.href = "/css/admin.css?v=" + Date.now();
+      document.head.appendChild(lk);
+    } catch (e) {}
     __studioLoading = new Promise(function (resolve, reject) {
       var s = document.createElement("script");
       // Cache-bust: the studio is owner-only and opened infrequently, so always load the freshest
