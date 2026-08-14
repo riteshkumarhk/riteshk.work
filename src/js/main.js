@@ -810,13 +810,13 @@ import { initNodeWeb } from "./particles.js";
         if (u.lift) { var ly = (LT.pointer && LT_REACT) ? -(u.lift * g) : 0; u.el.style.transform = ly ? "translate3d(0," + ly.toFixed(2) + "px,0)" : ""; }
       }
       if (cards && cards.length) {
-        var cSig = 2 * 210 * 210;
+        var cSig = 2 * 260 * 260;
         for (var c = 0; c < cards.length; c++) {
           var cd = cards[c], gg = 0;
           if (LT.pointer && LT_REACT) { var r = cd.el.getBoundingClientRect(); if (r.width) { var mdx = r.left + r.width / 2 - LT.mx, mdy = r.top + r.height / 2 - LT.my; gg = Math.exp(-(mdx * mdx + mdy * mdy) / cSig); } }
           cd.cur += (gg - cd.cur) * 0.16;
           if (cd.cur < 0.005) { if (cd.applied) { cd.el.style.transform = ""; cd.applied = false; } }
-          else { cd.el.style.transform = "translate3d(0," + (-6 * cd.cur).toFixed(2) + "px,0) scale(" + (1 + 0.06 * cd.cur).toFixed(4) + ")"; cd.applied = true; }
+          else { cd.el.style.transform = "translate3d(0," + (-12 * cd.cur).toFixed(2) + "px,0) scale(" + (1 + 0.09 * cd.cur).toFixed(4) + ")"; cd.applied = true; }
         }
       }
       LT.frame++;
