@@ -3757,6 +3757,7 @@ import { WORLD_LAND } from "./worldland.js";
     heroM();
     if (key === "ambientAmt") data.heroMotion.ambientAmt = v / 100; else data.heroMotion[key] = v;
     var out = body && body.querySelector('[data-hmout="' + key + '"]'); if (out) out.textContent = t.value;
+    t.style.setProperty("--fill", Math.round(((t.value - t.min) / (t.max - t.min)) * 100) + "%");
     hmPush(); saveDraft();
   }
   function heroMotionBlock() {
@@ -3767,9 +3768,10 @@ import { WORLD_LAND } from "./worldland.js";
     };
     var slider = function (key, label, min, max) {
       var v = key === "ambientAmt" ? Math.round(hmVal(key) * 100) : hmVal(key);
-      return '<div class="adm__hm-row"><label>' + label + "</label>" +
-        '<input type="range" class="adm__hm-range" data-heromotion="' + key + '" min="' + min + '" max="' + max + '" step="1" value="' + v + '" />' +
-        '<output class="adm__hm-out" data-hmout="' + key + '">' + v + "</output></div>";
+      var pct = Math.round(((v - min) / (max - min)) * 100);
+      return '<div class="adm__hm-row"><label class="adm__hm-rlbl">' + label + "</label>" +
+        '<input type="range" class="adm__hm-range" data-heromotion="' + key + '" min="' + min + '" max="' + max + '" step="1" value="' + v + '" style="--fill:' + pct + '%" />' +
+        '<span class="adm__hm-valwrap"><output class="adm__hm-out" data-hmout="' + key + '">' + v + "</output></span></div>";
     };
     var nodesV = hmVal("nodes") === false ? "off" : "on", onV = hmVal("on") === false ? "off" : "on";
     return secHead("Hero motion", "The statement reacts to the cursor through your variable font, over an ambient \u201cwhisper of work\u201d. Everything previews live and publishes with the site. <em>Reset</em> restores the defaults.") +
@@ -3793,7 +3795,7 @@ import { WORLD_LAND } from "./worldland.js";
 
   const sections = {
     insights() { return insightsSection(); },
-    type() { return typographySection() + '<div class="adm__hm-wrap">' + heroMotionBlock() + '</div>'; },
+    type() { return group(typographySection()) + group(heroMotionBlock()); },
     landing() {
       return (
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
