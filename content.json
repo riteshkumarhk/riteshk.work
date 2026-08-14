@@ -4456,7 +4456,7 @@
     }
   ],
   "typography": {
-    "active": "atelier",
+    "active": "bureau",
     "systems": [
       {
         "id": "original",
@@ -4536,7 +4536,7 @@
           "stack": "\"Schibsted Grotesk\", system-ui, -apple-system, sans-serif",
           "src": "google",
           "css": "Schibsted+Grotesk:wght@400..900",
-          "weight": 500
+          "weight": 400
         },
         "text": {
           "family": "Hanken Grotesk",
@@ -4661,7 +4661,7 @@
           "stack": "\"Archivo\", system-ui, -apple-system, sans-serif",
           "src": "google",
           "css": "Archivo:wght@400..800",
-          "weight": 600
+          "weight": 400
         },
         "text": {
           "family": "Libre Franklin",
