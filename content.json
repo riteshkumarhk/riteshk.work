@@ -649,66 +649,61 @@
             "nav": "",
             "kicker": "",
             "heading": "",
-            "beforeSrc": "vault:44c5d0303e7c5b1348dc7debf0311038068e448f11c4129e2677c330cedfab1e.png",
-            "afterSrc": "vault:516afc37331b2dbe359813d859ba660eabeeb0119e099d86596f6ed185cb6115.png",
+            "beforeSrc": "/assets/uploads/44c5d0303e7c5b1348dc7debf0311038068e448f11c4129e2677c330cedfab1e.png",
+            "afterSrc": "/assets/uploads/516afc37331b2dbe359813d859ba660eabeeb0119e099d86596f6ed185cb6115.png",
             "beforeLabel": "Before",
             "afterLabel": "After",
             "body": "",
             "sep": false,
-            "locked": false,
-            "vault": true
+            "locked": false
           },
           {
             "type": "compare",
             "nav": "",
             "kicker": "",
             "heading": "",
-            "beforeSrc": "vault:4c35ee989cbedbaf5bb7efe1b126d416ce7f0d780556272e6f8f56bdd2f70943.png",
-            "afterSrc": "vault:84b0569ded42d057bb9708883c1204ef97aea919c4f6715eb92a08baf83bfe43.png",
+            "beforeSrc": "/assets/uploads/4c35ee989cbedbaf5bb7efe1b126d416ce7f0d780556272e6f8f56bdd2f70943.png",
+            "afterSrc": "/assets/uploads/84b0569ded42d057bb9708883c1204ef97aea919c4f6715eb92a08baf83bfe43.png",
             "beforeLabel": "Before",
             "afterLabel": "After",
             "body": "",
-            "locked": false,
-            "vault": true
+            "locked": false
           },
           {
             "type": "compare",
             "nav": "",
             "kicker": "",
             "heading": "",
-            "beforeSrc": "vault:21fca3e623b6b621bd6c5d9fa6ce29349c6a7d56ac9b7a26fc4c29c19be30312.png",
-            "afterSrc": "vault:48f559d262df194a654572b22cb1d960052f966d84d75689d58faae493b3c913.png",
+            "beforeSrc": "/assets/uploads/21fca3e623b6b621bd6c5d9fa6ce29349c6a7d56ac9b7a26fc4c29c19be30312.png",
+            "afterSrc": "/assets/uploads/48f559d262df194a654572b22cb1d960052f966d84d75689d58faae493b3c913.png",
             "beforeLabel": "Before",
             "afterLabel": "After",
             "body": "",
-            "locked": false,
-            "vault": true
+            "locked": false
           },
           {
             "type": "compare",
             "nav": "",
             "kicker": "",
             "heading": "",
-            "beforeSrc": "vault:cf03c06816e79f38e9d2c705ed97062920e4b2cf1e4aa66120ea85a5203844a9.png",
-            "afterSrc": "vault:e83b4df612946b2ab14722a9b3eaeaf649aec47c67f181baa0bb607fa4b5ced3.png",
+            "beforeSrc": "/assets/uploads/cf03c06816e79f38e9d2c705ed97062920e4b2cf1e4aa66120ea85a5203844a9.png",
+            "afterSrc": "/assets/uploads/e83b4df612946b2ab14722a9b3eaeaf649aec47c67f181baa0bb607fa4b5ced3.png",
             "beforeLabel": "Before",
             "afterLabel": "After",
             "body": "",
-            "locked": false,
-            "vault": true
+            "locked": false
           },
           {
             "type": "compare",
             "nav": "",
             "kicker": "",
             "heading": "",
-            "beforeSrc": "vault:94d143ec75f2eefffbd10fa2fab0d4637cb4e22304de2e5cea1f0392c465357f.png",
-            "afterSrc": "vault:9cf476da740f2498cd4c3aabd437e445dab4803d7d3cb2fee22248a9b07cfdfb.png",
+            "beforeSrc": "/assets/uploads/94d143ec75f2eefffbd10fa2fab0d4637cb4e22304de2e5cea1f0392c465357f.png",
+            "afterSrc": "/assets/uploads/9cf476da740f2498cd4c3aabd437e445dab4803d7d3cb2fee22248a9b07cfdfb.png",
             "beforeLabel": "Before",
             "afterLabel": "After",
             "body": "",
-            "locked": false,
-            "vault": true
+            "locked": false
           },
           {
             "type": "text",
@@ -752,21 +747,20 @@
             "heading": "",
             "items": [
               {
-                "src": "vault:9bf88ef87e44fcc5b8e4fd6a24fcba205c2189ed8892991c6775925b346b938c.png",
+                "src": "/assets/uploads/9bf88ef87e44fcc5b8e4fd6a24fcba205c2189ed8892991c6775925b346b938c.png",
                 "caption": ""
               },
               {
-                "src": "vault:feeddf86a87a6288f4fc20b7cc2b9d87c750bc0b8e6d7dec45640cb3ed4b0969.png",
+                "src": "/assets/uploads/feeddf86a87a6288f4fc20b7cc2b9d87c750bc0b8e6d7dec45640cb3ed4b0969.png",
                 "caption": ""
               },
               {
-                "src": "vault:89852fe5afd71ae5fcf4e1f82b6c0d22a46bf75663a5fd059a1dae7898debc1b.png",
+                "src": "/assets/uploads/89852fe5afd71ae5fcf4e1f82b6c0d22a46bf75663a5fd059a1dae7898debc1b.png",
                 "caption": ""
               }
             ],
             "sep": false,
-            "locked": false,
-            "vault": true
+            "locked": false
           },
           {
             "type": "text",
@@ -785,14 +779,13 @@
             "heading": "",
             "items": [
               {
-                "src": "vault:bc482364bc00fb7be7b327d53e938357d7ad723f9762d96ddcbfd753e64047dd.mp4",
+                "src": "/assets/uploads/bc482364bc00fb7be7b327d53e938357d7ad723f9762d96ddcbfd753e64047dd.mp4",
                 "caption": "",
                 "controls": true
               }
             ],
             "sep": false,
-            "locked": false,
-            "vault": true
+            "locked": false
           },
           {
             "type": "text",
@@ -811,14 +804,13 @@
             "heading": "",
             "items": [
               {
-                "src": "vault:8162cbea7e3837a83f2570bb7018426b253edf5dfbfb7ea76a88adcc2a5b5465.mp4",
+                "src": "/assets/uploads/8162cbea7e3837a83f2570bb7018426b253edf5dfbfb7ea76a88adcc2a5b5465.mp4",
                 "caption": "",
                 "controls": true
               }
             ],
             "sep": true,
-            "locked": false,
-            "vault": true
+            "locked": false
           },
           {
             "type": "rows",
@@ -861,14 +853,13 @@
             "heading": "",
             "items": [
               {
-                "src": "vault:0e43e948d7b96107190b93c24a362b280657d997b323701ec3238484072cb74f.mp4",
+                "src": "/assets/uploads/0e43e948d7b96107190b93c24a362b280657d997b323701ec3238484072cb74f.mp4",
                 "caption": "",
                 "controls": true
               }
             ],
             "sep": true,
-            "locked": false,
-            "vault": true
+            "locked": false
           },
           {
             "type": "rows",
@@ -4920,6 +4911,281 @@
           "stack": "\"Patrick Hand\", \"Segoe Script\", cursive",
           "src": "google",
           "css": "Patrick+Hand",
+          "weight": 400
+        },
+        "text": {
+          "family": "Work Sans",
+          "stack": "\"Work Sans\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Work+Sans:wght@300..700"
+        },
+        "mono": {
+          "family": "IBM Plex Mono",
+          "stack": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "IBM+Plex+Mono:wght@400;500;600"
+        }
+      },
+      {
+        "id": "manrope",
+        "name": "Manrope",
+        "note": "Sans · geometric",
+        "builtin": true,
+        "display": {
+          "family": "Manrope",
+          "stack": "\"Manrope\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Manrope:wght@300..800",
+          "weight": 600
+        },
+        "text": {
+          "family": "Inter",
+          "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Inter:wght@300..700"
+        },
+        "mono": {
+          "family": "Space Mono",
+          "stack": "\"Space Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "Space+Mono:wght@400;700"
+        }
+      },
+      {
+        "id": "jakarta",
+        "name": "Jakarta",
+        "note": "Sans · contemporary",
+        "builtin": true,
+        "display": {
+          "family": "Plus Jakarta Sans",
+          "stack": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Plus+Jakarta+Sans:wght@300..800",
+          "weight": 600
+        },
+        "text": {
+          "family": "Figtree",
+          "stack": "\"Figtree\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Figtree:wght@300..800"
+        },
+        "mono": {
+          "family": "JetBrains Mono",
+          "stack": "\"JetBrains Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "JetBrains+Mono:wght@400..700"
+        }
+      },
+      {
+        "id": "instrument",
+        "name": "Instrument",
+        "note": "Display · editorial",
+        "builtin": true,
+        "display": {
+          "family": "Instrument Serif",
+          "stack": "\"Instrument Serif\", Georgia, \"Times New Roman\", serif",
+          "src": "google",
+          "css": "Instrument+Serif:ital@0;1",
+          "weight": 400
+        },
+        "text": {
+          "family": "Inter",
+          "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Inter:wght@300..700"
+        },
+        "mono": {
+          "family": "IBM Plex Mono",
+          "stack": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "IBM+Plex+Mono:wght@400;500;600"
+        }
+      },
+      {
+        "id": "dmserif",
+        "name": "DM Serif",
+        "note": "Display · high-contrast",
+        "builtin": true,
+        "display": {
+          "family": "DM Serif Display",
+          "stack": "\"DM Serif Display\", Georgia, \"Times New Roman\", serif",
+          "src": "google",
+          "css": "DM+Serif+Display:ital@0;1",
+          "weight": 400
+        },
+        "text": {
+          "family": "Mulish",
+          "stack": "\"Mulish\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Mulish:wght@300..800"
+        },
+        "mono": {
+          "family": "DM Mono",
+          "stack": "\"DM Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "DM+Mono:wght@300;400;500"
+        }
+      },
+      {
+        "id": "anton",
+        "name": "Anton",
+        "note": "Display · poster",
+        "builtin": true,
+        "display": {
+          "family": "Anton",
+          "stack": "\"Anton\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Anton",
+          "weight": 400
+        },
+        "text": {
+          "family": "Inter",
+          "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Inter:wght@300..700"
+        },
+        "mono": {
+          "family": "Space Mono",
+          "stack": "\"Space Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "Space+Mono:wght@400;700"
+        }
+      },
+      {
+        "id": "jetmono",
+        "name": "JetBrains",
+        "note": "Mono · code",
+        "builtin": true,
+        "display": {
+          "family": "JetBrains Mono",
+          "stack": "\"JetBrains Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "JetBrains+Mono:wght@400..700",
+          "weight": 600
+        },
+        "text": {
+          "family": "Inter",
+          "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Inter:wght@300..700"
+        },
+        "mono": {
+          "family": "JetBrains Mono",
+          "stack": "\"JetBrains Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "JetBrains+Mono:wght@400..700"
+        }
+      },
+      {
+        "id": "firacode",
+        "name": "Fira Code",
+        "note": "Mono · ligatures",
+        "builtin": true,
+        "display": {
+          "family": "Fira Code",
+          "stack": "\"Fira Code\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "Fira+Code:wght@400..700",
+          "weight": 500
+        },
+        "text": {
+          "family": "Inter",
+          "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Inter:wght@300..700"
+        },
+        "mono": {
+          "family": "Fira Code",
+          "stack": "\"Fira Code\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "Fira+Code:wght@400..700"
+        }
+      },
+      {
+        "id": "spline",
+        "name": "Spline",
+        "note": "Mono · humanist",
+        "builtin": true,
+        "display": {
+          "family": "Spline Sans Mono",
+          "stack": "\"Spline Sans Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "Spline+Sans+Mono:wght@400..700",
+          "weight": 500
+        },
+        "text": {
+          "family": "Hanken Grotesk",
+          "stack": "\"Hanken Grotesk\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Hanken+Grotesk:wght@300..800"
+        },
+        "mono": {
+          "family": "Spline Sans Mono",
+          "stack": "\"Spline Sans Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "Spline+Sans+Mono:wght@400..700"
+        }
+      },
+      {
+        "id": "shantell",
+        "name": "Shantell",
+        "note": "Handwriting · expressive",
+        "builtin": true,
+        "display": {
+          "family": "Shantell Sans",
+          "stack": "\"Shantell Sans\", \"Segoe Script\", cursive",
+          "src": "google",
+          "css": "Shantell+Sans:wght@300..800",
+          "weight": 500
+        },
+        "text": {
+          "family": "Inter",
+          "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Inter:wght@300..700"
+        },
+        "mono": {
+          "family": "JetBrains Mono",
+          "stack": "\"JetBrains Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "JetBrains+Mono:wght@400..700"
+        }
+      },
+      {
+        "id": "dancing",
+        "name": "Dancing",
+        "note": "Handwriting · script",
+        "builtin": true,
+        "display": {
+          "family": "Dancing Script",
+          "stack": "\"Dancing Script\", \"Segoe Script\", cursive",
+          "src": "google",
+          "css": "Dancing+Script:wght@400..700",
+          "weight": 600
+        },
+        "text": {
+          "family": "Mulish",
+          "stack": "\"Mulish\", system-ui, -apple-system, sans-serif",
+          "src": "google",
+          "css": "Mulish:wght@300..800"
+        },
+        "mono": {
+          "family": "DM Mono",
+          "stack": "\"DM Mono\", ui-monospace, \"SF Mono\", monospace",
+          "src": "google",
+          "css": "DM+Mono:wght@300;400;500"
+        }
+      },
+      {
+        "id": "architects",
+        "name": "Architects",
+        "note": "Handwriting · sketch",
+        "builtin": true,
+        "display": {
+          "family": "Architects Daughter",
+          "stack": "\"Architects Daughter\", \"Segoe Script\", cursive",
+          "src": "google",
+          "css": "Architects+Daughter",
           "weight": 400
         },
         "text": {
