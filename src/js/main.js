@@ -459,6 +459,9 @@ import { initNodeWeb } from "./particles.js";
       onBuild: function (track) {
         if (counted) { track.querySelectorAll(".count").forEach((el) => { el.textContent = el.dataset.count; }); }
         else { counted = true; observeCounts(track); }
+        // The track was just (re)built with fresh .hi chips — re-point the living-type card lift at
+        // them so the highlight chips actually rise on hover (they otherwise lift detached nodes).
+        ltCollectCards();
       }
     });
   })();
@@ -777,18 +780,32 @@ import { initNodeWeb } from "./particles.js";
     }
   }
   function ltHidden(h) { return !h || h.offsetParent === null; }
+  // Collect the highlights-marquee chips (.himarq .hi) as lift targets. Kept SEPARATE from the text
+  // split: the marquee engine REBUILDS its track (innerHTML.repeat) on first build + on width resize,
+  // which DESTROYS the .hi nodes this first grabbed. The marquee re-calls this from its onBuild so
+  // LT.cards always points at the LIVE chips — otherwise the lift lands on detached nodes and nothing
+  // moves (the bug that made the card lift appear only when livingTypeApply was re-fired by hand).
+  function ltCollectCards() {
+    if (LT.cards) LT.cards.forEach(function (c) { if (c.el) c.el.style.transform = ""; });
+    LT.cards = [];
+    var cfg = LT.cfg || (LT.cfg = ltCfg());
+    var anchor = document.getElementById("workHeading");
+    if (!(anchor && !ltHidden(anchor) && cfg.on && cfg.scope === "hero" && LT_REACT && (!ltLite() || LT_PREVIEW))) return;
+    var hc = document.querySelectorAll(".himarq .hi");
+    for (var i = 0; i < hc.length; i++) LT.cards.push({ el: hc[i], cur: 0, applied: false });
+  }
   function livingTypeApply() {
     var cfg = LT.cfg = ltCfg();
     var anchor = document.getElementById("workHeading");
     var onLanding = !!(anchor && !ltHidden(anchor));
     ltBuildAmbient(cfg, onLanding);
     var runFeature = onLanding && cfg.on && LT_REACT && (!ltLite() || LT_PREVIEW);
-    if (LT.cards) LT.cards.forEach(function (c) { c.el.style.transform = ""; });
+    if (LT.cards) LT.cards.forEach(function (c) { if (c.el) c.el.style.transform = ""; });
     LT.units = []; LT.cards = [];
     if (runFeature) {
       if (cfg.scope !== "hero") ["heroTitle", "heroLabel", "heroIntro"].forEach(function (id) { var e = document.getElementById(id); if (e) e.classList.remove("lt-on"); });
       ltTargets(cfg).forEach(function (t) { ltSplitTarget(t, cfg); });
-      if (cfg.scope === "hero") { var hc = document.querySelectorAll(".himarq .hi"); for (var i = 0; i < hc.length; i++) LT.cards.push({ el: hc[i], cur: 0, applied: false }); }
+      ltCollectCards();
       ltMeasure();
     } else {
       ["workHeading", "heroTitle", "heroLabel", "heroIntro"].forEach(function (id) { var e = document.getElementById(id); if (e) e.classList.remove("lt-on"); });
@@ -856,6 +873,7 @@ import { initNodeWeb } from "./particles.js";
     requestAnimationFrame(ltLoop);
   }
   window.__rkLivingType = livingTypeApply;
+  window.__rkLivingTypeCards = ltCollectCards;
   document.addEventListener("site:rendered", function () { livingTypeInit(); livingTypeApply(); });
   if (window.__siteRendered) { livingTypeInit(); livingTypeApply(); }
 
