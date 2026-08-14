@@ -3795,7 +3795,7 @@ import { WORLD_LAND } from "./worldland.js";
 
   const sections = {
     insights() { return insightsSection(); },
-    type() { return group(typographySection()) + group(heroMotionBlock()); },
+    type() { return secHead("Appearance", "Your site\u2019s typography and the hero\u2019s living motion \u2014 pick the font system that drives every headline, label and paragraph, then tune how the statement reacts to the cursor over its ambient backdrop. Everything previews live and publishes with the site.") + group(typographySection()) + group(heroMotionBlock()); },
     landing() {
       return (
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
