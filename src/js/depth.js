@@ -93,12 +93,27 @@ function setupCover(media, ctx) {
   if (media.querySelector(".case__depth")) return;       // already wired (idempotent across re-renders / preview)
   const img = media.querySelector(".case__img");
   if (!img) return;
-  const depthUrl = media.dataset.depthMap || deriveDepthUrl(img.getAttribute("src") || img.src);
+  const colorUrl = img.getAttribute("src") || img.src;
+  const depthUrl = media.dataset.depthMap || deriveDepthUrl(colorUrl);
   if (!depthUrl) return;
+  // WebGL textures must be CORS-clean or the cross-origin pixels taint the canvas -> it renders BLACK.
+  // Covers + depth maps are served cross-origin from R2 (/media on the Worker origin) WITH an
+  // Access-Control-Allow-Origin header, so we load DEDICATED crossOrigin="anonymous" images for the
+  // textures (crossOrigin set BEFORE .src). The visible .case__img is left untouched, so normal display
+  // never depends on CORS -- if the CORS fetch ever fails, depth just degrades to the scroll parallax.
+  const cImg = new Image();
+  cImg.crossOrigin = "anonymous";
+  cImg.decoding = "async";
   const dImg = new Image();
+  dImg.crossOrigin = "anonymous";
   dImg.decoding = "async";
-  dImg.onload = () => attach(media, img, dImg, ctx);
+  let cOk = false, dOk = false, fired = false;
+  const ready = () => { if (cOk && dOk && !fired) { fired = true; attach(media, cImg, dImg, ctx); } };
+  cImg.onload = () => { cOk = true; ready(); };
+  dImg.onload = () => { dOk = true; ready(); };
+  cImg.onerror = () => {};                               // CORS/network fail -> no depth, keep scroll parallax
   dImg.onerror = () => {};                               // no depth map for this cover -> keep scroll parallax only
+  cImg.src = colorUrl;
   dImg.src = depthUrl;
 }
 

@@ -1086,6 +1086,7 @@ export default {
         if (!h) return json({ error: "Not found" }, 404, cors);
         const hh = new Headers(); h.writeHttpMetadata(hh);
         hh.set("Access-Control-Allow-Origin", "*");
+        hh.set("Cross-Origin-Resource-Policy", "cross-origin");
         hh.set("Accept-Ranges", "bytes");
         hh.set("Cache-Control", "public, max-age=31536000, immutable");
         hh.set("Content-Length", String(h.size));
@@ -1106,6 +1107,7 @@ export default {
       const headers = new Headers();
       obj.writeHttpMetadata(headers);
       headers.set("Access-Control-Allow-Origin", "*");
+      headers.set("Cross-Origin-Resource-Policy", "cross-origin");
       headers.set("Accept-Ranges", "bytes");
       headers.set("Cache-Control", "public, max-age=31536000, immutable");
       if (obj.range && rangeHeader) {
