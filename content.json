@@ -1592,10 +1592,48 @@
           },
           {
             "type": "mediagrid",
-            "locked": true,
-            "vaultBlock": "aba306ab0db57f297822a3af84817da64612d96f3351715ee8b741421b1a2a98.json",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "gridLayout": "uniform",
+            "items": [
+              {
+                "src": "/assets/uploads/1c24462a3e0f0f7cf1adf0b2140121c0db034290346828536cb9b6d36ff17f8e.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/44c3e7914e1cfcd1f4275a047d86227ff586b970e79704d7ef74490e8f895391.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/0eea4bf705d252d1e26f5d0962f61f9595c4dc32194ed53757ff3090a5e8d686.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/7c8a4e4b8fc2c38dae1ec802efd9df4e77f0fa3db835bd720046add31808a70c.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/7d0210e63f271c4e22ed57f2308fe55c79e249e9ecfdc3ffe2b7a7312842421e.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/d5091cdc7174eca15a523f0b6c895298d1feb3006c95d271de75b686da7b91af.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/142998ae31518b65d09fe6b8d4779cf6b251e61cb287f2e0e3e76eb799f41952.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/fa4698de5a50bc96423ee87652bc254ba0d6a178659e269f824ee9d148d9906b.png",
+                "caption": ""
+              }
+            ],
+            "hsize": "sm",
             "sep": false,
-            "hsize": "sm"
+            "editorName": "All explorations",
+            "locked": false
           },
           {
             "type": "text",
