@@ -95,7 +95,8 @@
     "highlightsOrder": [
       "stats",
       "brands"
-    ]
+    ],
+    "pathTitle": "Eleven years, *building* for **clarity, scale,** and **impact**."
   },
   "contact": {
     "name": "Ritesh Kumar",
@@ -4429,6 +4430,10 @@
     },
     {
       "key": "about",
+      "on": false
+    },
+    {
+      "key": "photos",
       "on": true
     },
     {
