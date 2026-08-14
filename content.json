@@ -5205,6 +5205,7 @@
   },
   "heroMotion": {
     "ambient": "aurora",
-    "field": "letter"
+    "field": "letter",
+    "scope": "hero"
   }
 }
