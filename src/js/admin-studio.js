@@ -205,7 +205,7 @@ import { WORLD_LAND } from "./worldland.js";
   function previewApply() {
     const w = frame && frame.contentWindow;
     if (w && w.RK && w.RK.render) {
-      try { w.RK.render(resolvePreviewData(data)); forceRevealDoc(w.document); if (w.__rkInitDepth) w.__rkInitDepth(); } catch (e) {}
+      try { w.RK.render(resolvePreviewData(data)); forceRevealDoc(w.document); if (w.__rkInitDepth) w.__rkInitDepth(); if (w.__rkLivingType) w.__rkLivingType(); } catch (e) {}
     }
     syncPreviewPage();
   }
@@ -3738,7 +3738,7 @@ import { WORLD_LAND } from "./worldland.js";
   }
 
   // ---------- Hero motion (living type + ambient) — mirrors lab/hero.html controls ----------
-  var HM_DEF = { on: true, field: "word", radius: 190, peak: 660, base: 350, lift: 7, breath: 24, ambient: "aurora", ambientAmt: 0.55, nodes: true };
+  var HM_DEF = { on: true, field: "word", radius: 190, peak: 660, base: 350, lift: 7, breath: 24, ambient: "aurora", ambientAmt: 0.55, nodes: true, scope: "heading" };
   function heroM() { data.heroMotion = data.heroMotion || {}; return data.heroMotion; }
   function hmVal(k) { var m = data.heroMotion || {}; return (m[k] == null ? HM_DEF[k] : m[k]); }
   function hmSave() { apply(true); if (activeTab === "type") renderBody(); }
@@ -3777,6 +3777,7 @@ import { WORLD_LAND } from "./worldland.js";
     return secHead("Hero motion", "The statement reacts to the cursor through your variable font, over an ambient \u201cwhisper of work\u201d. Everything previews live and publishes with the site. <em>Reset</em> restores the defaults.") +
       '<div class="adm__hm">' +
       '<div class="adm__hm-ctl"><span class="adm__hm-label">Living type</span>' + seg("hero-on", onV, [["on", "On"], ["off", "Off"]]) + "</div>" +
+      '<div class="adm__hm-ctl"><span class="adm__hm-label">Reach</span>' + seg("hero-scope", hmVal("scope") === "hero" ? "hero" : "heading", [["heading", "Heading"], ["hero", "Whole hero"]]) + "</div>" +
       '<div class="adm__hm-ctl"><span class="adm__hm-label">Ambient work</span>' + seg("hero-amb", hmVal("ambient"), [["off", "Off"], ["aurora", "Aurora"], ["media", "Media"]]) + "</div>" +
       '<div class="adm__hm-ctl"><span class="adm__hm-label">Field</span>' + seg("hero-field", hmVal("field"), [["word", "Word"], ["letter", "Letter"]]) + "</div>" +
       '<div class="adm__hm-ctl"><span class="adm__hm-label">Constellation</span>' + seg("hero-nodes", nodesV, [["on", "On"], ["off", "Off"]]) + "</div>" +
@@ -6207,6 +6208,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "hero-amb") { heroM().ambient = b.dataset.v; hmSave(); return; }
     if (act === "hero-field") { heroM().field = b.dataset.v; hmSave(); return; }
     if (act === "hero-nodes") { heroM().nodes = b.dataset.v !== "off"; hmSave(); return; }
+    if (act === "hero-scope") { heroM().scope = b.dataset.v; hmSave(); return; }
     if (act === "hero-reset") { delete data.heroMotion; hmSave(); status("Hero motion reset to defaults.", true); return; }
     if (act === "csgen-run") { csgenRun(i, false); return; }
     if (act === "csgen-variant") { csgenRun(i, true); return; }

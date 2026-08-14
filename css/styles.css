@@ -581,8 +581,11 @@ html[data-appearance="light"] .hi:hover .hi__card { box-shadow: 0 8px 22px rgba(
    compositing layer makes the hero ESCAPE a modal's backdrop-filter blur (the statement stays sharp
    while the cards behind the dialog blur = looks broken). The hover lift sets a transient transform
    in JS instead, only while hovering the hero (never while a dialog is open). */
-#workHeading.lt-on .lt-u { display: inline-block; }
-#workHeading.lt-on .lt-word { display: inline-block; white-space: nowrap; }
+.lt-on .lt-u { display: inline-block; }
+.lt-on .lt-word { display: inline-block; white-space: nowrap; }
+/* Small-text run wrapper: keeps a whole text run (eyebrow / domains) as ONE flex item inside the
+   flex .hero__label, so per-word units flow normally instead of being flung apart by the flex gap. */
+.lt-on .lt-seg { display: inline-block; }
 /* Lock the authored line breaks on hover-capable devices so the weight field can never
    rewrap the headline (the 3<->4 line jump). Touch keeps natural wrapping + static weight. */
 @media (hover: hover) and (pointer: fine) {

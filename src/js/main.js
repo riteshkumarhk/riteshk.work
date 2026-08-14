@@ -661,8 +661,9 @@ import { initNodeWeb } from "./particles.js";
      data.heroMotion (defaults below); prototyped in lab/hero.html. The node-web
      constellation (particles.js, anchored lower at #wsec-hero) is left untouched.
   ------------------------------------------------- */
-  var LT_DEF = { on: true, field: "word", radius: 190, peak: 660, base: 350, lift: 7, breath: 24, ambient: "aurora", ambientAmt: 0.55, nodes: true };
-  var LT = { units: [], cfg: LT_DEF, mx: window.innerWidth / 2, my: window.innerHeight * 0.4, pointer: false, frame: 0, started: false };
+  var LT_DEF = { on: true, field: "word", radius: 190, peak: 660, base: 350, lift: 7, breath: 24, ambient: "aurora", ambientAmt: 0.55, nodes: true, scope: "heading" };
+  var LT = { units: [], cards: [], cfg: LT_DEF, mx: window.innerWidth / 2, my: window.innerHeight * 0.4, pointer: false, frame: 0, started: false };
+  var LT_GENTLE_RANGE = 150;   // weight a small-text (mono/sans) unit can gain above its resting weight
   var LT_HOVER = matchMedia("(hover: hover) and (pointer: fine)").matches;
   var LT_TOUCH = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
   var LT_REACT = LT_HOVER || LT_TOUCH; // desktop hover OR a resting/swiping finger drives the letters
@@ -712,42 +713,62 @@ import { initNodeWeb } from "./particles.js";
     document.body.dataset.heroNodes = (cfg.nodes === false ? "off" : "on");
     document.documentElement.style.setProperty("--lt-amb", String(cfg.ambientAmt));
   }
-  function ltWrapText(text, field, strong, frag) {
-    var w0 = strong ? Math.min(700, LT.cfg.base + 250) : LT.cfg.base;
+  function ltWrapText(text, field, strong, frag, p) {
+    // p = { base, peak, lift, breath, gentle } for this target
+    var w0 = strong ? Math.min(700, p.base + (p.gentle ? 90 : 250)) : p.base;
+    var mk = function (el) { LT.units.push({ el: el, w0: w0, wMax: p.peak, lift: p.lift, breath: p.breath, cur: w0, phase: LT.units.length * 0.6 }); };
     text.split(/(\s+)/).forEach(function (tok) {
       if (tok === "") return;
       if (/^\s+$/.test(tok)) { frag.appendChild(document.createTextNode(tok)); return; }
-      if (field === "letter") {
+      if (field === "letter" && !p.gentle) {   // per-letter only for the big headings; small text stays per-word
         var word = document.createElement("span"); word.className = "lt-word";
         tok.split("").forEach(function (ch) {
           var s = document.createElement("span"); s.className = "lt-u"; s.textContent = ch;
           s.style.fontVariationSettings = "'wght' " + w0;
-          word.appendChild(s); LT.units.push({ el: s, strong: strong, cur: w0, phase: LT.units.length * 0.6 });
+          word.appendChild(s); mk(s);
         });
         frag.appendChild(word);
       } else {
         var s2 = document.createElement("span"); s2.className = "lt-u"; s2.textContent = tok;
         s2.style.fontVariationSettings = "'wght' " + w0;
-        frag.appendChild(s2); LT.units.push({ el: s2, strong: strong, cur: w0, phase: LT.units.length * 0.6 });
+        frag.appendChild(s2); mk(s2);
       }
     });
   }
-  function ltSplit(cfg) {
-    var h = document.getElementById("workHeading"); if (!h) return;
-    LT.units = [];
-    var lines = h.querySelectorAll(".section-head__line");
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i], kids = Array.prototype.slice.call(line.childNodes), frag = document.createDocumentFragment();
+  // The reaction targets. #workHeading is the anchor; scope "hero" extends it to the statement +
+  // eyebrow/domains (a flex run) + description, gentler, so the whole hero breathes with the cursor.
+  function ltTargets(cfg) {
+    var out = [{ el: document.getElementById("workHeading"), lines: ".section-head__line", gentle: false, lift: cfg.lift }];
+    if (cfg.scope === "hero") {
+      out.push({ el: document.getElementById("heroTitle"), lines: ".line > span", gentle: false, lift: 0 });   // lift 0: .line clips overflow (reveal)
+      out.push({ el: document.getElementById("heroLabel"), lines: null, gentle: true, lift: cfg.lift * 0.45, flex: true });
+      out.push({ el: document.getElementById("heroIntro"), lines: null, gentle: true, lift: cfg.lift * 0.45 });
+    }
+    return out.filter(function (t) { return t.el && !ltHidden(t.el); });
+  }
+  function ltSplitTarget(t, cfg) {
+    var el = t.el;
+    if (el.querySelector(".lt-u")) return;   // already split (a re-render un-splits first) -> never double-wrap
+    var p;
+    if (t.gentle) { var w = parseInt(getComputedStyle(el).fontWeight, 10) || 400; p = { base: w, peak: Math.min(700, w + LT_GENTLE_RANGE), lift: t.lift, breath: cfg.breath * 0.5, gentle: true }; }
+    else { p = { base: cfg.base, peak: cfg.peak, lift: t.lift, breath: cfg.breath, gentle: false }; }
+    var containers = t.lines ? Array.prototype.slice.call(el.querySelectorAll(t.lines)) : [el];
+    containers.forEach(function (line) {
+      var kids = Array.prototype.slice.call(line.childNodes), frag = document.createDocumentFragment();
       kids.forEach(function (node) {
-        if (node.nodeType === 3) { ltWrapText(node.textContent, cfg.field, false, frag); }
-        else if (node.nodeType === 1) {
+        if (node.nodeType === 3) {
+          if (t.flex) { var seg = document.createElement("span"); seg.className = "lt-seg"; var sf = document.createDocumentFragment(); ltWrapText(node.textContent, cfg.field, false, sf, p); seg.appendChild(sf); frag.appendChild(seg); }
+          else { ltWrapText(node.textContent, cfg.field, false, frag, p); }
+        } else if (node.nodeType === 1) {
+          if (node.classList && (node.classList.contains("tick") || node.classList.contains("hero__label-sep"))) { frag.appendChild(node.cloneNode(true)); return; }
           var strong = node.tagName === "STRONG";
           var clone = node.cloneNode(false), inner = document.createDocumentFragment();
-          ltWrapText(node.textContent, cfg.field, strong, inner); clone.appendChild(inner); frag.appendChild(clone);
+          ltWrapText(node.textContent, cfg.field, strong, inner, p); clone.appendChild(inner); frag.appendChild(clone);
         } else { frag.appendChild(node.cloneNode(true)); }
       });
       line.innerHTML = ""; line.appendChild(frag);
-    }
+    });
+    el.classList.add("lt-on");
   }
   function ltMeasure() {
     for (var i = 0; i < LT.units.length; i++) {
@@ -758,28 +779,45 @@ import { initNodeWeb } from "./particles.js";
   function ltHidden(h) { return !h || h.offsetParent === null; }
   function livingTypeApply() {
     var cfg = LT.cfg = ltCfg();
-    var h = document.getElementById("workHeading");
-    var onLanding = !!(h && !ltHidden(h));
+    var anchor = document.getElementById("workHeading");
+    var onLanding = !!(anchor && !ltHidden(anchor));
     ltBuildAmbient(cfg, onLanding);
     var runFeature = onLanding && cfg.on && LT_REACT && (!ltLite() || LT_PREVIEW);
-    if (runFeature) { ltSplit(cfg); h.classList.add("lt-on"); ltMeasure(); }
-    else { LT.units = []; if (h) h.classList.remove("lt-on"); }
+    if (LT.cards) LT.cards.forEach(function (c) { c.el.style.transform = ""; });
+    LT.units = []; LT.cards = [];
+    if (runFeature) {
+      if (cfg.scope !== "hero") ["heroTitle", "heroLabel", "heroIntro"].forEach(function (id) { var e = document.getElementById(id); if (e) e.classList.remove("lt-on"); });
+      ltTargets(cfg).forEach(function (t) { ltSplitTarget(t, cfg); });
+      if (cfg.scope === "hero") { var hc = document.querySelectorAll(".himarq .hi"); for (var i = 0; i < hc.length; i++) LT.cards.push({ el: hc[i], cur: 0, applied: false }); }
+      ltMeasure();
+    } else {
+      ["workHeading", "heroTitle", "heroLabel", "heroIntro"].forEach(function (id) { var e = document.getElementById(id); if (e) e.classList.remove("lt-on"); });
+    }
   }
   function ltLoop(now) {
-    var cfg = LT.cfg, units = LT.units;
-    if (units.length) {
+    var cfg = LT.cfg, units = LT.units, cards = LT.cards;
+    if (units.length || (cards && cards.length)) {
       var twoSig = 2 * cfg.radius * cfg.radius, t = now / 1000;
-      var breathAmt = LT_HOVER ? (cfg.breath * (LT.pointer ? 0.28 : 1)) : 0;
+      var breathK = LT_HOVER ? (LT.pointer ? 0.28 : 1) : 0;
       if (LT.frame % 6 === 0) ltMeasure();
       for (var i = 0; i < units.length; i++) {
-        var u = units[i], ubase = u.strong ? Math.min(700, cfg.base + 250) : cfg.base, target = ubase, g = 0;
-        if (LT.pointer && LT_REACT) { var dx = u.cx - LT.mx, dy = u.cy - LT.my; g = Math.exp(-(dx * dx + dy * dy) / twoSig); target += (cfg.peak - ubase) * g; }
-        target += Math.sin(t * 0.8 + u.phase) * breathAmt;
+        var u = units[i], target = u.w0, g = 0;
+        if (LT.pointer && LT_REACT) { var dx = u.cx - LT.mx, dy = u.cy - LT.my; g = Math.exp(-(dx * dx + dy * dy) / twoSig); target += (u.wMax - u.w0) * g; }
+        target += Math.sin(t * 0.8 + u.phase) * u.breath * breathK;
         if (target < 300) target = 300; else if (target > 700) target = 700;
         u.cur += (target - u.cur) * 0.16;
         if (Math.abs(u.cur - (u.lastW || 0)) > 0.8) { u.el.style.fontVariationSettings = "'wght' " + (u.cur | 0); u.lastW = u.cur; }
-        var ly = (LT.pointer && LT_REACT) ? -(cfg.lift * g) : 0;
-        u.el.style.transform = ly ? "translate3d(0," + ly.toFixed(2) + "px,0)" : "";
+        if (u.lift) { var ly = (LT.pointer && LT_REACT) ? -(u.lift * g) : 0; u.el.style.transform = ly ? "translate3d(0," + ly.toFixed(2) + "px,0)" : ""; }
+      }
+      if (cards && cards.length) {
+        var cSig = 2 * 210 * 210;
+        for (var c = 0; c < cards.length; c++) {
+          var cd = cards[c], gg = 0;
+          if (LT.pointer && LT_REACT) { var r = cd.el.getBoundingClientRect(); if (r.width) { var mdx = r.left + r.width / 2 - LT.mx, mdy = r.top + r.height / 2 - LT.my; gg = Math.exp(-(mdx * mdx + mdy * mdy) / cSig); } }
+          cd.cur += (gg - cd.cur) * 0.16;
+          if (cd.cur < 0.005) { if (cd.applied) { cd.el.style.transform = ""; cd.applied = false; } }
+          else { cd.el.style.transform = "translate3d(0," + (-6 * cd.cur).toFixed(2) + "px,0) scale(" + (1 + 0.06 * cd.cur).toFixed(4) + ")"; cd.applied = true; }
+        }
       }
       LT.frame++;
     }
