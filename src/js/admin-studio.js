@@ -58,7 +58,7 @@ import { WORLD_LAND } from "./worldland.js";
   // Phase 1 (R2 migration): public media now lives in the rk-media R2 bucket, served by the Worker
   // at /media/<key>. New studio uploads PUT to /admin/media/put; the editor preview + hosted refs
   // resolve here too. Set localStorage rk:media:host="git" to fall back to committing into the repo.
-  const MEDIA_ORIGIN = "https://rk-ai-proxy.riteshkumarhk.workers.dev/media";
+  const MEDIA_ORIGIN = "https://media.riteshk.work";
   function useR2Media() { try { return localStorage.getItem("rk:media:host") !== "git"; } catch (e) { return true; } }
   // Where a visitor actually sees the site — used to confirm a publish is live.
   const LIVE_ORIGIN = (/(^|\.)riteshk\.work$/i.test(location.hostname) || /\.github\.io$/i.test(location.hostname)) ? location.origin : "https://riteshk.work";

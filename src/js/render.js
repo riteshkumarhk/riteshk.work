@@ -16,7 +16,7 @@
      origin ("https://rk-ai-proxy.riteshkumarhk.workers.dev/media"). This is the single flip
      point; project.js / journey.js / main.js / gensection.js all delegate here via
      window.RK.mediaUrl. */
-  const MEDIA_BASE = "https://rk-ai-proxy.riteshkumarhk.workers.dev/media";
+  const MEDIA_BASE = "https://media.riteshk.work";
   function mediaUrl(ref) {
     if (!MEDIA_BASE || !ref || typeof ref !== "string") return ref;
     if (/^(vault:|rkenc:|data:|blob:|https?:|\/\/)/i.test(ref)) return ref;
