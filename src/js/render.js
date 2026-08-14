@@ -646,6 +646,7 @@
     set("capsList", caps.map((c) => '<li data-reveal>' + esc(c) + "</li>").join(""));
 
     set("timeline", (data.path || []).map(tlEl).join(""));
+    set("pathHeading", md(L.pathTitle || "Eleven years, *one throughline*: clarity at scale."));
     var jrn = data.journey;
     var jrnHas = !!(jrn && jrn.enabled && Array.isArray(jrn.chapters) && jrn.chapters.some(function (c) { return c && c.entries && c.entries.some(function (e) { return e && (e.title || e.body || (e.images && e.images.length) || e.period); }); }));
     // The Design Journey is an owner-only presentation aid — the "View full journey" CTA
