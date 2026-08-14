@@ -113,7 +113,14 @@ function setupCover(media, ctx) {
   dImg.onload = () => { dOk = true; ready(); };
   cImg.onerror = () => {};                               // CORS/network fail -> no depth, keep scroll parallax
   dImg.onerror = () => {};                               // no depth map for this cover -> keep scroll parallax only
-  cImg.src = colorUrl;
+  // The visible <img> loads the cover WITHOUT crossOrigin. If depth's crossOrigin texture request hits
+  // the SAME url while the display request is still in flight, the browser COALESCES the two into the
+  // no-CORS request (whose response carries no Access-Control-Allow-Origin) -> the crossOrigin image
+  // fails -> that cover renders with no depth. LARGE covers hit this deterministically: their display
+  // request stays in flight long enough that the texture request always coalesces with it. A distinct
+  // url for the texture request avoids the coalesce, so it gets its own CORS response (ACAO present)
+  // and stays canvas-clean. The depth map (dImg) is only ever loaded here, so it never coalesces.
+  cImg.src = colorUrl + (colorUrl.indexOf("?") < 0 ? "?" : "&") + "tex=1";
   dImg.src = depthUrl;
 }
 
