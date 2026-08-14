@@ -111,16 +111,25 @@ function setupCover(media, ctx) {
   const ready = () => { if (cOk && dOk && !fired) { fired = true; attach(media, cImg, dImg, ctx); } };
   cImg.onload = () => { cOk = true; ready(); };
   dImg.onload = () => { dOk = true; ready(); };
-  cImg.onerror = () => {};                               // CORS/network fail -> no depth, keep scroll parallax
-  dImg.onerror = () => {};                               // no depth map for this cover -> keep scroll parallax only
   // The visible <img> loads the cover WITHOUT crossOrigin. If depth's crossOrigin texture request hits
   // the SAME url while the display request is still in flight, the browser COALESCES the two into the
   // no-CORS request (whose response carries no Access-Control-Allow-Origin) -> the crossOrigin image
-  // fails -> that cover renders with no depth. LARGE covers hit this deterministically: their display
-  // request stays in flight long enough that the texture request always coalesces with it. A distinct
-  // url for the texture request avoids the coalesce, so it gets its own CORS response (ACAO present)
-  // and stays canvas-clean. The depth map (dImg) is only ever loaded here, so it never coalesces.
-  cImg.src = colorUrl + (colorUrl.indexOf("?") < 0 ? "?" : "&") + "tex=1";
+  // fails -> that cover renders with no depth. LARGE covers hit this deterministically. So the colour
+  // texture uses a DISTINCT url (?tex=1); the depth map (dImg) is only ever loaded here so it never
+  // coalesces. On top of that, RETRY a failed texture load a few times with a cache-buster so a
+  // transient CORS/edge/network blip self-heals instead of permanently killing depth for this cover.
+  const colorTexUrl = colorUrl + (colorUrl.indexOf("?") < 0 ? "?" : "&") + "tex=1";
+  const MAX_TRY = 3;
+  function retryOnError(im, baseUrl) {
+    let n = 0;
+    im.onerror = () => {
+      if (++n >= MAX_TRY) return;                          // give up quietly -> the cover keeps its scroll parallax
+      setTimeout(() => { im.src = baseUrl + (baseUrl.indexOf("?") < 0 ? "?" : "&") + "r=" + n + "_" + Date.now(); }, 220 * n);
+    };
+  }
+  retryOnError(cImg, colorTexUrl);
+  retryOnError(dImg, depthUrl);
+  cImg.src = colorTexUrl;
   dImg.src = depthUrl;
 }
 
@@ -151,9 +160,15 @@ function attach(media, img, depthImg, ctx) {
   media.classList.add("is-depth");
 
   let gl = null, prog = null, U = null, colorTex = null, depthTex = null;
-  let active = false, dollyOn = false, raf = 0;
+  let active = false, dollyOn = false, raf = 0, glDead = false;
   const target = { x: 0, y: 0 }, cur = { x: 0, y: 0 };
   let settleFrames = 0, zoomCur = REST;
+
+  // A lost GPU context (driver reset, too many live contexts, tab parked too long) would otherwise
+  // leave a black canvas. Hide it on loss so the static <img> shows through, and allow a clean rebuild
+  // on restore -> the effect self-heals rather than leaving a broken-looking cover.
+  canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); active = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } canvas.classList.remove("is-on"); gl = null; }, false);
+  canvas.addEventListener("webglcontextrestored", () => { glDead = false; }, false);
 
   function makeTex(unit, src) {
     const t = gl.createTexture();
@@ -170,21 +185,24 @@ function attach(media, img, depthImg, ctx) {
 
   function initGL() {
     if (gl) return true;
+    if (glDead) return false;                                // a prior init hard-failed -> stay on scroll parallax
     if (!(img.complete && img.naturalWidth)) return false;   // cover not decoded yet
-    gl = canvas.getContext("webgl2", { antialias: true, premultipliedAlpha: false, alpha: false });
-    if (!gl) return false;
-    prog = gl.createProgram();
-    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT));
-    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
-    gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { gl = null; return false; }
-    gl.useProgram(prog);
-    U = {};
-    ["uColor", "uDepth", "uPointer", "uStrength", "uFocus", "uZoom", "uImgA", "uBoxA", "uSoft"].forEach((n) => { U[n] = gl.getUniformLocation(prog, n); });
-    gl.uniform1i(U.uColor, 0); gl.uniform1i(U.uDepth, 1);
-    gl.bindVertexArray(gl.createVertexArray());
-    colorTex = makeTex(0, img);
-    depthTex = makeTex(1, depthImg);
+    try {
+      gl = canvas.getContext("webgl2", { antialias: true, premultipliedAlpha: false, alpha: false });
+      if (!gl) return false;
+      prog = gl.createProgram();
+      gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT));
+      gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { gl = null; return false; }
+      gl.useProgram(prog);
+      U = {};
+      ["uColor", "uDepth", "uPointer", "uStrength", "uFocus", "uZoom", "uImgA", "uBoxA", "uSoft"].forEach((n) => { U[n] = gl.getUniformLocation(prog, n); });
+      gl.uniform1i(U.uColor, 0); gl.uniform1i(U.uDepth, 1);
+      gl.bindVertexArray(gl.createVertexArray());
+      colorTex = makeTex(0, img);
+      depthTex = makeTex(1, depthImg);
+    } catch (e) { gl = null; glDead = true; return false; }  // taint / GL failure -> degrade, never throw
     return true;
   }
 
