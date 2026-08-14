@@ -448,7 +448,11 @@ import { initNodeWeb } from "./particles.js";
   }
 
   // Brands & products — right-to-left, subtle smooth scale-in (no elastic overshoot).
-  marquee(document.getElementById("logoMarquee"), document.getElementById("logoTrack"), {});
+  marquee(document.getElementById("logoMarquee"), document.getElementById("logoTrack"), {
+    // onBuild re-points the hover lift at the fresh .logo chips after the track (re)builds, so the
+    // brand/product strip lifts on hover exactly like the At-a-glance numbers (same ltCollectCards).
+    onBuild: function () { ltCollectCards(); }
+  });
 
   // Highlights numbers — left-to-right, softer scale-in. Count up on the first pass,
   // then hold: a later width-change rebuild just restores the final values (no re-count).
@@ -791,8 +795,8 @@ import { initNodeWeb } from "./particles.js";
     var cfg = LT.cfg || (LT.cfg = ltCfg());
     var anchor = document.getElementById("workHeading");
     if (!(anchor && !ltHidden(anchor) && cfg.on && cfg.scope === "hero" && LT_REACT && (!ltLite() || LT_PREVIEW))) return;
-    var hc = document.querySelectorAll(".himarq .hi");
-    for (var i = 0; i < hc.length; i++) LT.cards.push({ el: hc[i], cur: 0, applied: false });
+    var chips = document.querySelectorAll(".himarq .hi, .logos .logo, .contact__pill");   // both marquees + the contact pills lift on cursor proximity
+    for (var i = 0; i < chips.length; i++) LT.cards.push({ el: chips[i], cur: 0, applied: false });
   }
   function livingTypeApply() {
     var cfg = LT.cfg = ltCfg();
