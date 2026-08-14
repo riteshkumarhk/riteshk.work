@@ -1592,48 +1592,11 @@
           },
           {
             "type": "mediagrid",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "gridLayout": "uniform",
-            "items": [
-              {
-                "src": "/assets/uploads/1c24462a3e0f0f7cf1adf0b2140121c0db034290346828536cb9b6d36ff17f8e.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/44c3e7914e1cfcd1f4275a047d86227ff586b970e79704d7ef74490e8f895391.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/0eea4bf705d252d1e26f5d0962f61f9595c4dc32194ed53757ff3090a5e8d686.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/7c8a4e4b8fc2c38dae1ec802efd9df4e77f0fa3db835bd720046add31808a70c.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/7d0210e63f271c4e22ed57f2308fe55c79e249e9ecfdc3ffe2b7a7312842421e.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/d5091cdc7174eca15a523f0b6c895298d1feb3006c95d271de75b686da7b91af.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/142998ae31518b65d09fe6b8d4779cf6b251e61cb287f2e0e3e76eb799f41952.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/fa4698de5a50bc96423ee87652bc254ba0d6a178659e269f824ee9d148d9906b.png",
-                "caption": ""
-              }
-            ],
-            "hsize": "sm",
-            "sep": false,
-            "editorName": "All explorations",
-            "locked": false
+            "locked": true,
+            "encStub": true,
+            "iv": "nX92QINUxRQU3RwG",
+            "ct": "/PvrIB5ChhFPemqCAaamSGGcy4fY3NnNIINBjxayQ7fqYZQkHKbNQ6fLm2bTBt9HoLXu6WsPGB2i9sAypkaq95JMoC2cjrkIGi1XNwrE/Gdqjy08DAt9qZh0oUxC7SnefGQ62IO+OVkmo5EFHdQTzp2VgMzOL+D74aRf9hzMR1851tIMTN9+Y0iAjgp1aso5SY0Hweo2nAFh0YZ3hrBTbdbAhLulYVQipuijb92k5Q8W6adR80pnrgbrKpt9NySHS47CudmxQOs3ROWQ4r9KCDvWpL4qjKAJw0YhroopYPkvwXVHWWT/L/CQHmRm3SLFjXiZP/dWe06FHxaYvTY92LPoVY1v7EPMFsDGhy8Q6rKHJ+E6wmrULNVYHEpYmqFqgW7PASXN6ev/hcZxZ4SbiQlGYj2pXhIGvR+4pCHu0kKNcEdKITMD6uWvz2UF0SRPXzDQ4BH5yWiK3wM2QFuJ2qOtszADKpiBfMh4VbXFL4nRZA6aLt3tpxplXzFoeXmKB82Y6OU+2ZceBTwwv0qxgg6L35vVePe1uEuky9LBqH3BQulHPeqtqyeGj3K3tHB6JxV/n8cNAKYSpRySQnWZCZFXNOH2VIrqq9AjYTQxISmZrxnsTHMJtLId/9ss1xPvtZ6BLyWiaXy75m5ilKSRx4g6XyvL3EqOeiQByBEfSYSH5Mz0nzy8yRkKMHuZw6rQgT4AwgTp64TLVTJ58UaD7VrWBIq0AblrQuSJn/3dDTkJEs82ZCcg09SX/rZKvBaKd0oOm6MtmjNcp2YRw1x/Wlh3BVArb8AlxAjtkMNyFbVE5dEhzBUU0rQnv6Yg3pli6izmov1a+aLqDf+Co3IUqm/takpxotz+JoteEyErj8onQTV2nMZPE3SH9mRoNtpWhI4nrUHFnAod8qEoYRLGzva0nEjuuR82ah06DtASnprrhJ2VS4i5Gcj2lqePm1jMXD9x4YzLxO9yXFCVuwG75lRkOMtFuKCvUCJrfRyKIhzsodnJZOvuWAdkWAEn7LEcgmOoX/5Bxs/Xpev2fp1Aly46KJ+7OY18eIA+0koqkdldEQTpYjYHtXKVYbT0U7s6SVtDVZRn2DvpK1cm5Q21lMQbbzLORtE42+5ukwL0WQQnj9tqaiP2ZUFadlA5yp+LTUo43cv9RcbIT2QNMB3Dg4ZCAyyyyJQZXkaO1fgAgciSFdaSe5h3sjmC3l9GIjsfildTxep7jYMVm4Ifu8s5nh56rUfbBfU1MSogXCxDlJZ6HOzfqOiWG7gBbaAXKv2zEA/sAGx4BrasKrZxouIy1yq/n1BeFbh6D/DVO62OezVWE856B0fjPwORkUjGuQYYVGKKUs+7npQrbfhS2qUnKVeJEbELboozjivU7Pb8",
+            "sep": false
           },
           {
             "type": "text",
@@ -2066,15 +2029,15 @@
           "it": 210000,
           "wraps": {
             "owner": {
-              "salt": "9xVcteWptiQYtnw+Ioq+Zg==",
-              "iv": "MCETQ0xnXkbutgK1",
-              "ct": "uY38rA5eIL3CqVofYkcKpM5JVU7a5F2WIYxaavpNRbrNjkffF93w3Nsm6QTu+3FP"
+              "salt": "OqEYqhjn2Yjl10IMU/z/vg==",
+              "iv": "I7xD/G/V6nQWr7Jc",
+              "ct": "IIeGAY9QeoQe42UG2KRMW0Teh44txE0+l8ta9hr2QBXInFJCS0KWxFgo4S1Ofa45"
             },
             "tickets": {
               "svms2t5b5t": {
-                "salt": "88TAzN/iwwa2KpA0pxonPg==",
-                "iv": "oicux1+VZ7XYCmtM",
-                "ct": "BhLbDslH7Fr289E+QgFHiX1PSHETfsTqXsUx1cYPFiqo5lcfG/Suv+zuJrtflBAE"
+                "salt": "+FOEkkm00OnPmgSvuF4Rpw==",
+                "iv": "KC0mHd7IOWEy1HLK",
+                "ct": "bxEUnF1u/pRpej58azIvu7ZPB+QHw73BZgMdcPGKU3A4GhYt9Hvo6Yn/P4ucJ8OA"
               }
             }
           }
