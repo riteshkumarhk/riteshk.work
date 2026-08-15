@@ -24,6 +24,27 @@
     const m = /^\/?assets\/uploads\/([^?#]+)([?#].*)?$/.exec(ref);
     return m ? (MEDIA_BASE.replace(/\/+$/, "") + "/" + m[1] + (m[2] || "")) : ref;
   }
+  // ---- media safety net (R2 migration) ----
+  // Belt-and-suspenders so a missed ref can never 404 again: any <img>/<video>/<source>/<audio> whose
+  // src slipped past mediaUrl and still points at the retired /assets/uploads path (a relative ref, an
+  // absolute riteshk.work URL baked into inline rich-text HTML, or any future code path) 404s on Pages.
+  // Media 'error' events don't bubble, so catch them in the CAPTURE phase and rewrite the src to the R2
+  // origin once, so it self-heals instead of staying broken.
+  if (typeof document !== "undefined") {
+    document.addEventListener("error", function (e) {
+      const el = e && e.target, t = el && el.tagName;
+      if (!t || (t !== "IMG" && t !== "VIDEO" && t !== "SOURCE" && t !== "AUDIO")) return;
+      if (el.__r2fix || !MEDIA_BASE) return;
+      const src = el.getAttribute("src") || "";
+      if (src.indexOf(MEDIA_BASE) === 0) return;                 // already on R2 -> a genuine 404, don't loop
+      const mm = /(?:^|\/)assets\/uploads\/(.+)$/.exec(src);
+      if (!mm) return;
+      el.__r2fix = 1;
+      el.setAttribute("src", MEDIA_BASE.replace(/\/+$/, "") + "/" + mm[1]);
+      if (t === "VIDEO" || t === "AUDIO") { try { el.load(); } catch (_e) { } }
+      else if (t === "SOURCE" && el.parentNode && el.parentNode.load) { try { el.parentNode.load(); } catch (_e) { } }
+    }, true);
+  }
 
   /* ---------- first-party analytics ----------
      Fire-and-forget intent events (case opens, deeper-cut unlocks, résumé, contact) to the Worker's
