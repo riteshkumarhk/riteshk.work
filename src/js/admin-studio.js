@@ -7252,7 +7252,47 @@ import { WORLD_LAND } from "./worldland.js";
   }
   // Write one data-URI image to the repo; returns its root-relative path. Identical
   // files collapse to the same path (content hash), so re-uploads never duplicate.
+  // Option B: lazily load a lossless WebP encoder (jSquash WASM) — only pulled when the owner actually
+  // uploads a raster image (same lazy-CDN pattern as depth-gen). The URL is a variable so esbuild keeps
+  // the dynamic import; esm.sh serves the module + its wasm, with unpkg as a fallback.
+  let _webpEnc = null, _webpEncP = null;
+  async function ensureWebpEnc() {
+    if (_webpEnc) return _webpEnc;
+    if (_webpEncP) return _webpEncP;
+    _webpEncP = (async function () {
+      const cdns = ["https://esm.sh/@jsquash/webp@1", "https://unpkg.com/@jsquash/webp@1?module"];
+      let mod = null, lastErr = null;
+      for (let i = 0; i < cdns.length; i++) { const u = cdns[i]; try { mod = await import(u); if (mod && mod.encode) break; } catch (e) { lastErr = e; } }
+      if (!mod || !mod.encode) throw (lastErr || new Error("webp encoder unavailable"));
+      _webpEnc = mod; return mod;
+    })();
+    return _webpEncP;
+  }
+
+  // Losslessly re-encode a raster upload as WebP; returns { uri, ext } when the WebP is genuinely
+  // smaller (so new case-study media stays lean automatically, no batch re-runs), else null (keep the
+  // original). Visually pixel-perfect: lossless encode; only invisible alpha=0 RGB is optimised away.
+  async function optimizeUpload(uri, extHint) {
+    const parts = parseDataUri(uri);
+    if (!parts) return null;
+    const mime = String(parts.mime || "").toLowerCase();
+    if (!/^image\/(png|jpe?g)$/.test(mime)) return null;          // only raster PNG/JPEG benefit; skip webp/svg/gif/video/pdf
+    const origLen = (parts.base64 ? b64ToBytes(parts.data) : b64ToBytes(b64(decodeURIComponent(parts.data)))).length;
+    const img = await new Promise(function (res, rej) { const im = new Image(); im.onload = function () { res(im); }; im.onerror = function () { rej(new Error("decode")); }; im.src = uri; });
+    if (!img.naturalWidth || !img.naturalHeight) return null;
+    const cv = document.createElement("canvas"); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+    cv.getContext("2d").drawImage(img, 0, 0);
+    let data; try { data = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height); } catch (e) { return null; }
+    const enc = await ensureWebpEnc();
+    const webpBytes = new Uint8Array(await enc.encode(data, { lossless: 1 }));
+    if (!webpBytes.length || webpBytes.length >= origLen) return null;   // not smaller -> keep the original
+    return { uri: "data:image/webp;base64," + bytesToB64(webpBytes), ext: "webp" };
+  }
+
   async function hostDataUri(uri, token, extHint) {
+    // Option B: losslessly convert raster uploads to WebP before hashing/upload (kept only if smaller),
+    // so new media stays lean automatically. Best-effort — any failure uploads the original untouched.
+    try { const opt = await optimizeUpload(uri, extHint); if (opt) { uri = opt.uri; extHint = opt.ext; } } catch (e) { /* optimiser unavailable/failed -> original */ }
     const parts = parseDataUri(uri);
     if (!parts) throw new Error("not a file");
     const rawB64 = parts.base64 ? parts.data : b64(decodeURIComponent(parts.data));
