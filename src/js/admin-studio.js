@@ -64,7 +64,23 @@ import { WORLD_LAND } from "./worldland.js";
   const LIVE_ORIGIN = (/(^|\.)riteshk\.work$/i.test(location.hostname) || /\.github\.io$/i.test(location.hostname)) ? location.origin : "https://riteshk.work";
   const PUBLISH_HARD_CAP = 40 * 1024 * 1024; // skip an obviously-doomed content.json commit (GitHub rejects very large blobs)
   const DRAFT_SIG_KEY = "rk:content:draft:sig";
-  const PREVIEW_SRC = "/index.html?preview=1&lite=1";
+  // Adaptive live preview: on a GPU-capable machine show the FULL site (gradients, motion, node-web,
+  // depth); on a weak machine / software renderer (DevBox, low-power laptop) keep the light preview so
+  // the studio stays responsive. Mirrors the site's own bgCapable() gate; a saved override wins.
+  function studioGpuCapable() {
+    try {
+      if ((navigator.hardwareConcurrency || 8) <= 2 || (navigator.deviceMemory || 8) <= 2) return false;
+      const gc = document.createElement("canvas");
+      const gl = gc.getContext("webgl") || gc.getContext("experimental-webgl");
+      if (!gl) return false;
+      const ext = gl.getExtension("WEBGL_debug_renderer_info");
+      const rr = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "").toLowerCase() : "";
+      if (rr && /swiftshader|llvmpipe|software|basic render|microsoft basic|paravirtual|mesa offscreen/.test(rr)) return false;
+      return true;
+    } catch (e) { return false; }
+  }
+  function previewMode() { try { const m = localStorage.getItem("rk:preview:mode"); if (m === "full" || m === "lite") return m; } catch (e) { } return studioGpuCapable() ? "full" : "lite"; }
+  function previewUrl() { return "/index.html?preview=1" + (previewMode() === "full" ? "" : "&lite=1"); }
   const ADMIN_MIN = 900; // below this the split editor can't fit — admin is disabled
   const AI_PROVIDERS = [
     ["openai", "OpenAI"],
@@ -4419,7 +4435,7 @@ import { WORLD_LAND } from "./worldland.js";
   function mediaTile(f, usage) {
     var flabels = usage[f.name] || [], isUnused = !flabels.length;
     var isImg = /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(f.name);
-    var thumb = isImg ? '<img loading="lazy" src="/assets/uploads/' + escAttr(f.name) + '" alt="" />' : '<div class="mlib__file">' + escHtml((f.name.split(".").pop() || "?").toUpperCase()) + "</div>";
+    var thumb = isImg ? '<img loading="lazy" src="' + escAttr(previewSrc("/assets/uploads/" + f.name)) + '" alt="" />' : '<div class="mlib__file">' + escHtml((f.name.split(".").pop() || "?").toUpperCase()) + "</div>";
     var extra = flabels.length > 1 ? '<span class="mlib__more" title="' + escAttr("Also in: " + flabels.slice(1).join(", ")) + '">+' + (flabels.length - 1) + "</span>" : "";
     return '<div class="mlib__card' + (isUnused ? " is-orphan" : "") + '">' +
       '<div class="mlib__thumb">' + thumb + '</div>' +
@@ -6149,6 +6165,14 @@ import { WORLD_LAND } from "./worldland.js";
     }
     if (act === "resume-upload") { pickResume(function (uri) { setPath(data, "contact.resume", uri); apply(true); renderBody(); status("R\u00e9sum\u00e9 embedded \u2014 the dock button is now visible.", true); }); return; }
     if (act === "resume-clear") { setPath(data, "contact.resume", ""); apply(true); renderBody(); status("R\u00e9sum\u00e9 removed."); return; }
+    if (act === "preview-mode") {
+      var _nm = previewMode() === "full" ? "lite" : "full";
+      try { localStorage.setItem("rk:preview:mode", _nm); } catch (e) { }
+      if (frame) frame.src = previewUrl();
+      b.textContent = _nm === "full" ? "\u26A1 Full" : "\u25CB Lite";
+      status(_nm === "full" ? "Preview: full fidelity \u2014 gradients + motion (this machine can handle it)." : "Preview: lite \u2014 lighter for low-power machines.", true);
+      return;
+    }
     if (act === "avatar-upload") { pickImage(function (uri) { setPath(data, "contact.avatar", uri); apply(true); renderBody(); status("Display picture updated.", true); }); return; }
     if (act === "avatar-clear") { setPath(data, "contact.avatar", ""); apply(true); renderBody(); status("Display picture removed."); return; }
     if (act === "siteicon-upload") { pickIcon(); return; }
@@ -10743,8 +10767,10 @@ import { WORLD_LAND } from "./worldland.js";
           "</div>" +
         "</div>" +
         '<section class="adm__preview" aria-label="Live preview">' +
-          '<div class="adm__preview-head"><span class="adm__preview-dot"></span>Live preview<small>riteshk.work</small></div>' +
-          '<iframe class="adm__frame" title="Live preview of your site" src="' + PREVIEW_SRC + '"></iframe>' +
+          '<div class="adm__preview-head"><span class="adm__preview-dot"></span>Live preview<small>riteshk.work</small>' +
+            '<button class="adm__preview-mode" data-act="preview-mode" type="button" title="Preview fidelity. Full = gradients, motion and background effects (needs a capable GPU); Lite is lighter for low-power machines. Auto-detected from this machine \u2014 click to override." style="margin-left:auto;font:inherit;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--text-dim);background:transparent;border:1px solid var(--line);border-radius:100px;padding:3px 11px;cursor:pointer">' + (previewMode() === "full" ? "\u26A1 Full" : "\u25CB Lite") + "</button>" +
+          "</div>" +
+          '<iframe class="adm__frame" title="Live preview of your site" src="' + previewUrl() + '"></iframe>' +
         "</section>" +
       "</div>" +
       '<div class="adm__settings" hidden><div class="adm__set-sheet">' +
