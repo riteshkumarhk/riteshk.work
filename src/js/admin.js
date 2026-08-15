@@ -28,6 +28,19 @@ import {
   // The live-preview iframe loads this very file — it must stay inert there.
   if (new URLSearchParams(location.search).has("preview")) return;
 
+  // DEV-ONLY UI harness — localhost + an explicit flag ONLY. Provably inert on any real origin
+  // (riteshk.work / *.github.io): the hostname check fails there, so no dev handle is ever exposed and
+  // the real studio UX is untouched. Enable on localhost with ?devstub (or localStorage rk:dev:stub=1),
+  // then call window.__rkDevStudio() to mount the editor without a passkey.
+  var RK_DEV = false;
+  try {
+    var _dh = location.hostname;
+    RK_DEV = (_dh === "localhost" || _dh === "127.0.0.1") &&
+      (localStorage.getItem("rk:dev:stub") === "1" || /(?:^|[?&])devstub(?:=1)?(?:&|$)/.test(location.search));
+  } catch (_e) {}
+  window.__RK_DEV = RK_DEV;
+  if (RK_DEV) { try { window.__rkDevStudio = function () { return openStudio(); }; } catch (_e) {} }
+
   const HASH_KEY = "rk:admin:hash";
   const GATE_KEY = "rk:admin:gate"; // salted PBKDF2 record embedded in content.json at publish
   const DRAFT_KEY = "rk:content:draft";

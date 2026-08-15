@@ -122,6 +122,33 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__hist-btn svg { display: block; }
 .adm__hist-btn:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .adm__hist-btn:disabled { opacity: .3; cursor: not-allowed; }
+/* full-width studio status bar: live-preview toggle + undo/redo + status line */
+.adm__statusbar { display: flex; align-items: center; gap: .6rem; padding: .38rem .9rem; border-bottom: 1px solid var(--line); background: var(--bg-2); min-height: 42px; position: relative; }
+.adm__statusbar .adm__status { max-width: none; min-width: 0; text-align: left; }
+.adm__statusbar .adm__status.ok { color: #6fbf92; }
+/* publish progress fill + severity tones (the status bar is the single publish narrator) */
+.adm__statusbar::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: var(--accent); opacity: 0; transition: width .3s ease, opacity .3s ease; pointer-events: none; }
+.adm__statusbar.is-publishing::after { width: var(--pub-pct, 0); opacity: .95; }
+.adm__statusbar.is-pub-done::after { background: #6fbf92; }
+.adm__statusbar.is-pub-caveat::after { background: var(--text-dim); }
+.adm__statusbar.is-pub-error::after { background: #ff7a7a; }
+.adm__statusbar.is-pub-done .adm__status { color: #6fbf92; }
+.adm__statusbar.is-pub-caveat .adm__status { color: var(--text); }
+.adm__statusbar.is-pub-error .adm__status { color: #ff7a7a; }
+.adm__publish:disabled { opacity: .6; cursor: progress; }
+.adm__pub-view { margin-left: .15rem; font-family: var(--mono); font-size: .58rem; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; white-space: nowrap; }
+.adm__pub-view:hover { border-bottom-color: var(--accent); }
+.adm__pub-view[hidden] { display: none; }
+.adm__bar-prev { margin-left: auto; display: inline-flex; align-items: center; gap: .42rem; font-family: var(--mono); font-size: .6rem; letter-spacing: .09em; text-transform: uppercase; color: var(--text-dim); background: transparent; border: 1px solid var(--line); border-radius: 100px; padding: .32rem .72rem; cursor: pointer; }
+.adm__bar-prev svg { display: block; }
+.adm__bar-prev:hover { color: var(--text); border-color: var(--accent); }
+.adm.is-prevoff .adm__bar-prev { color: var(--text-faint); border-style: dashed; }
+.adm.is-prevoff .adm__main { grid-template-columns: 1fr; }
+.adm.is-prevoff .adm__preview { display: none; }
+.adm.is-prevoff .adm__editor { border-right: 0; }
+.adm__newtab { padding: .3rem .55rem; display: inline-flex; align-items: center; border-radius: 100px; color: var(--text-dim); }
+.adm__newtab svg { display: block; }
+.adm__newtab:hover { color: var(--text); border-color: var(--accent); }
 @media (max-width: 1023px) {
   /* row 1 = brand + all actions (top-right); row 2 = tabs; row 3 = the publish bar (its own block below) */
   .adm__brand { order: 1; margin-right: auto; }

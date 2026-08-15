@@ -32,6 +32,7 @@ import { WORLD_LAND } from "./worldland.js";
   const MUSIC_ON_KEY = "rk:music:on";
   const MUSIC_TRACK_KEY = "rk:music:track";
   const L2PREV_KEY = "rk:adm:l2prev"; // remember the L2 live-preview on/off choice
+  const PREV_OFF_KEY = "rk:adm:prevoff"; // remember the main live-preview pane show/hide choice
   const DEFAULT_TRACKS = [
     { title: "Midnight", gen: "midnight" },
     { title: "Ember Glow", gen: "ember" },
@@ -79,7 +80,7 @@ import { WORLD_LAND } from "./worldland.js";
       return true;
     } catch (e) { return false; }
   }
-  function previewMode() { try { const m = localStorage.getItem("rk:preview:mode"); if (m === "full" || m === "lite") return m; } catch (e) { } return studioGpuCapable() ? "full" : "lite"; }
+  function previewMode() { return studioGpuCapable() ? "full" : "lite"; } // auto: full on a capable GPU, lite otherwise
   function previewUrl() { return "/index.html?preview=1" + (previewMode() === "full" ? "" : "&lite=1"); }
   const ADMIN_MIN = 900; // below this the split editor can't fit — admin is disabled
   const AI_PROVIDERS = [
@@ -207,7 +208,7 @@ import { WORLD_LAND } from "./worldland.js";
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
         localStorage.setItem(DRAFT_SIG_KEY, (window.RK && window.RK.publishedSig) || "");
-        status("Draft saved locally");
+        narrate();
       } catch (e) {
         status("\u26a0 Draft too big to auto-save locally \u2014 your images are safe at full quality here. Hit Publish to store them (large ones are hosted as files automatically).");
       }
@@ -273,6 +274,54 @@ import { WORLD_LAND } from "./worldland.js";
     root.classList.toggle("is-dirty", dirty);
     if (!dirty) closeExitPop();
     updateHistUI();
+    narrate();
+  }
+  // ---- narrator: the status bar's resting line (change summary when dirty, published state when clean) ----
+  var CHANGE_FIELDS = [
+    ["landing.statement", "statement"], ["landing.workTitle", "work heading"],
+    ["landing.eyebrow", "eyebrow"], ["landing.intro", "intro"], ["landing.domains", "domains"],
+    ["landing.presence", "presence line"], ["landing.availability", "availability"],
+    ["landing.siteIcon", "logo"], ["typography.active", "font system"],
+    ["contact.email", "email"], ["contact.serviceEmail", "service email"],
+    ["contact.phone", "phone"], ["contact.resume", "r\u00e9sum\u00e9"], ["contact.avatar", "photo"]
+  ];
+  var CHANGE_SECTIONS = [
+    ["landing", "Landing"], ["work", "Work"], ["about", "About"], ["contact", "Contact"],
+    ["capabilities", "Skills"], ["path", "Journey"], ["recognition", "Recognition"],
+    ["education", "Education"], ["highlights", "Highlights"], ["typography", "Fonts"],
+    ["appearance", "Appearance"], ["music", "Music"], ["aboutGallery", "Photos"]
+  ];
+  function narrGp(o, path) { try { return path.split(".").reduce(function (a, k) { return a == null ? undefined : a[k]; }, o); } catch (e) { return undefined; } }
+  function narrChanged(pub, path) { try { return JSON.stringify(narrGp(data, path)) !== JSON.stringify(narrGp(pub, path)); } catch (e) { return true; } }
+  function changeSummary() {
+    var pub = (window.RK && (window.RK.published || window.RK.data)) || null;
+    if (!pub) return { count: 0, labels: [] };
+    var labels = [], seen = {}, hitSection = {};
+    function add(l) { if (l && !seen[l]) { seen[l] = 1; labels.push(l); } }
+    CHANGE_FIELDS.forEach(function (f) { if (narrChanged(pub, f[0])) { add(f[1]); hitSection[f[0].split(".")[0]] = 1; } });
+    CHANGE_SECTIONS.forEach(function (s) { if (!hitSection[s[0]] && narrChanged(pub, s[0])) add(s[1]); });
+    return { count: labels.length, labels: labels.slice(0, 3) };
+  }
+  function narrRelTime(ts) {
+    if (!ts) return "";
+    var s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 45) return "just now";
+    var m = Math.round(s / 60); if (m < 60) return m + "m ago";
+    var h = Math.round(m / 60); if (h < 24) return h + "h ago";
+    return Math.round(h / 24) + "d ago";
+  }
+  function narrate() {
+    if (publishing) return;
+    var s = root && root.querySelector(".adm__status"); if (!s) return;
+    if (isDirty()) {
+      var sum = changeSummary();
+      s.textContent = sum.count ? (sum.count + " unpublished \u00b7 " + sum.labels.join(", ")) : "Unpublished changes";
+      s.classList.remove("ok");
+    } else {
+      var t = 0; try { t = +localStorage.getItem("rk:adm:pubtime") || 0; } catch (e) {}
+      s.textContent = t ? ("Published " + narrRelTime(t)) : "All changes published";
+      s.classList.add("ok");
+    }
   }
   function closeMorePop() {
     if (!root) return;
@@ -7358,59 +7407,80 @@ import { WORLD_LAND } from "./worldland.js";
     }
     return webPath;
   }
-  /* ---------- publish progress bar + live-site confirmation ---------- */
+  /* ---------- publish progress: driven into the status bar (the single narrator) ---------- */
   let pubCreep = null;
-  let pubDismiss = null;   // success-only auto-dismiss timer for the publish banner
-  function pubEl() { return root && root.querySelector(".adm__pub"); }
+  let pubDismiss = null;   // success-only auto-clear timer
+  function pubBar() { return root && root.querySelector(".adm__statusbar"); }
   function pubProgress(pct, label, opts) {
     opts = opts || {};
-    if (pubDismiss) { clearTimeout(pubDismiss); pubDismiss = null; }   // a fresh update cancels any pending auto-dismiss
-    const el = pubEl();
-    // The publish bar (row 3) is the single home for progress/status while publishing — don't
-    // also mirror the message into the top .adm__status (that was the duplicated text on screen).
-    if (!el) { status(label, !!opts.done); return; }
-    el.hidden = false;
-    el.style.opacity = ""; el.style.transition = "";   // undo any in-flight fade-out from a previous auto-dismiss
-    el.classList.toggle("is-done", !!opts.done);
-    el.classList.toggle("is-error", !!opts.error);
+    if (pubDismiss) { clearTimeout(pubDismiss); pubDismiss = null; }   // a fresh update cancels any pending auto-clear
+    const sb = pubBar(), s = root && root.querySelector(".adm__status");
+    if (!sb || !s) { status(label, !!opts.done); return; }
     const p = Math.max(0, Math.min(100, Math.round(pct)));
-    const fill = el.querySelector(".adm__pub-fill");
-    const labEl = el.querySelector(".adm__pub-label");
-    const pctEl = el.querySelector(".adm__pub-pct");
-    const view = el.querySelector(".adm__pub-view");
-    const close = el.querySelector(".adm__pub-close");
-    const hint = el.querySelector(".adm__pub-hint");
-    if (fill) fill.style.width = p + "%";
-    if (pctEl) pctEl.textContent = p + "%";
-    if (labEl) labEl.textContent = label;
+    sb.style.setProperty("--pub-pct", p + "%");
+    const done = !!opts.done && !opts.error, caveat = !!opts.caveat && !opts.error, error = !!opts.error;
+    sb.classList.add("is-publishing");
+    sb.classList.toggle("is-pub-done", done);
+    sb.classList.toggle("is-pub-caveat", caveat);
+    sb.classList.toggle("is-pub-error", error);
+    s.textContent = label;
+    s.classList.toggle("ok", done);
+    const view = sb.querySelector(".adm__pub-view");
     if (view) { if (opts.viewUrl) { view.href = opts.viewUrl; view.hidden = false; } else view.hidden = true; }
-    if (close) close.hidden = !(opts.done || opts.error);
-    if (hint) hint.hidden = !!(opts.done || opts.error);
-    // A successful publish auto-dismisses after a few seconds; an error stays put so the owner can read and retry.
-    if (opts.done && !opts.error) pubDismiss = setTimeout(pubFadeOut, 6000);
+    const pb = root.querySelector("[data-publish]");
+    if (pb) {
+      const settled = done || caveat || error;
+      pb.disabled = !settled;                                          // "working" state while publishing
+      pb.textContent = error ? "Retry" : (settled ? "Publish" : "Publishing\u2026");
+      if (error) pb.hidden = false;                                    // keep Retry reachable after a failure
+    }
+    // Success (and soft caveat) auto-clear back to the resting narrator; a hard error stays sticky.
+    if (done || caveat) pubDismiss = setTimeout(pubClear, caveat ? 9000 : 6000);
   }
   function pubStopCreep() { if (pubCreep) { clearInterval(pubCreep); pubCreep = null; } }
-  function pubHide() { pubStopCreep(); if (pubDismiss) { clearTimeout(pubDismiss); pubDismiss = null; } const el = pubEl(); if (el) { el.hidden = true; el.style.opacity = ""; el.style.transition = ""; } }
-  function pubFadeOut() {                                  // gentle fade, then hide (after a successful publish)
-    pubDismiss = null;
-    const el = pubEl(); if (!el) return;
-    el.style.transition = "opacity .4s ease"; el.style.opacity = "0";
-    pubDismiss = setTimeout(function () { pubDismiss = null; const e2 = pubEl(); if (e2) { e2.hidden = true; e2.style.opacity = ""; e2.style.transition = ""; } }, 440);
+  function pubClear() {                                                 // return the status bar to its resting narrator line
+    pubStopCreep();
+    if (pubDismiss) { clearTimeout(pubDismiss); pubDismiss = null; }
+    const sb = pubBar(); if (!sb) return;
+    sb.classList.remove("is-publishing", "is-pub-done", "is-pub-caveat", "is-pub-error");
+    sb.style.removeProperty("--pub-pct");
+    const view = sb.querySelector(".adm__pub-view"); if (view) view.hidden = true;
+    const pb = root.querySelector("[data-publish]"); if (pb) { pb.disabled = false; pb.textContent = "Publish"; }
+    narrate();
   }
-  // Ease the bar toward a target over N seconds while we wait on GitHub Pages.
+  function pubHide() { pubClear(); }
+  // Ease the fill toward a target over N seconds while we wait on the tail (git mirror / Pages).
   function pubCreepTo(target, seconds) {
     pubStopCreep();
-    const el = pubEl(); if (!el) return;
-    const fill = el.querySelector(".adm__pub-fill"), pctEl = el.querySelector(".adm__pub-pct");
-    const from = parseFloat(fill && fill.style.width) || 0, span = Math.max(0, target - from), start = Date.now(), ms = seconds * 1000;
+    const sb = pubBar(); if (!sb) return;
+    const from = parseFloat(sb.style.getPropertyValue("--pub-pct")) || 0, span = Math.max(0, target - from), start = Date.now(), ms = seconds * 1000;
     pubCreep = setInterval(function () {
       const t = Math.min(1, (Date.now() - start) / ms);
       const val = from + span * (1 - Math.pow(1 - t, 2)); // ease-out
-      if (fill) fill.style.width = val.toFixed(1) + "%";
-      if (pctEl) pctEl.textContent = Math.round(val) + "%";
+      sb.style.setProperty("--pub-pct", val.toFixed(1) + "%");
       if (t >= 1) pubStopCreep();
     }, 200);
   }
+  // ---------- DEV-ONLY publish harness (localhost + flag; window.__RK_DEV is set by admin.js) ----------
+  // Drives the publish/status UI on the DevBox with no real passkey or network write. devStubOn() is
+  // false on any real origin, so devPubSim is never exposed there and the live publish path is untouched.
+  function devStubOn() { try { return !!window.__RK_DEV; } catch (e) { return false; } }
+  function _devWait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  async function devPubSim(scenario) {
+    scenario = scenario || "success";
+    var vu = (typeof LIVE_ORIGIN !== "undefined" ? LIVE_ORIGIN : "") + "/?t=" + Date.now();
+    pubProgress(6, "Preparing your content\u2026"); await _devWait(500);
+    if (scenario === "stepup") { pubProgress(7, "Confirm it\u2019s you \u2014 tap your passkey\u2026"); await _devWait(1500); }
+    for (var n = 1; n <= 4; n++) { pubProgress(6 + Math.round((n / 4) * 40), "Uploading images at full quality \u2014 " + n + " of 4\u2026"); await _devWait(420); }
+    pubProgress(50, "Saving your content to GitHub\u2026"); await _devWait(500);
+    pubProgress(52, "Publishing your content\u2026"); await _devWait(650);
+    if (scenario === "blocking") { pubProgress(100, "GitHub couldn\u2019t save it \u2014 502 Bad Gateway. Hit Retry to publish again.", { error: true }); return; }
+    if (scenario === "recoverable") { pubProgress(100, "Passkey step-up was cancelled.", { error: true }); return; }
+    pubProgress(64, "Saved to GitHub. Building your live site\u2026"); await _devWait(1600);
+    if (scenario === "caveat") { pubProgress(100, "Published. It can take another minute to appear \u2014 open your site to check.", { done: true, viewUrl: vu }); return; }
+    pubProgress(100, "Your site is live and ready to view.", { done: true, viewUrl: vu });
+  }
+  if (devStubOn()) { try { window.__rkPubSim = devPubSim; window.__rkDevEdit = function (p, v) { try { setPath(data, p, v); saveDraft(true); } catch (e) {} }; } catch (e) {} }
   // Poll the live site until it serves exactly what we just published (true = confirmed live).
   async function waitForLive(mySig) {
     if (!mySig) return false;
@@ -7602,7 +7672,7 @@ import { WORLD_LAND } from "./worldland.js";
         pubStopCreep();
         const protN = protectedHostedCount(data);
         if (!tooLargeFails.length && fails.length && fails.every(function (f) { return f.network; })) {
-          pubProgress(100, "Couldn\u2019t reach " + (viaSession ? "the publishing service" : "GitHub (api.github.com)") + " to upload your media \u2014 a VPN, ad-blocker or firewall may be blocking it. Check your connection, then hit Publish again.", { error: true });
+          pubProgress(100, "Couldn\u2019t reach " + (viaSession ? "the publishing service" : "GitHub (api.github.com)") + " to upload your media \u2014 a VPN, ad-blocker or firewall may be blocking it. Check your connection, then hit Retry again.", { error: true });
         } else if (!tooLargeFails.length && protN >= 5 && jsonBytes > PUBLISH_HARD_CAP) {
           pubProgress(100, "Can\u2019t publish \u2014 hiding or locking a project bundles all of its images into the file so they can be encrypted (here that\u2019s ~" + protN + " images \u2192 " + Math.round(jsonBytes / 1048576) + " MB), which is too large for GitHub. Keep the project visible (it can still be Featured on the homepage), or use far fewer / smaller images inside the hidden or locked section.", { error: true });
         } else {
@@ -7617,32 +7687,47 @@ import { WORLD_LAND } from "./worldland.js";
       // is already live via R2), so a GitHub hiccup can't fail an otherwise-successful publish. In
       // direct-token mode (no session) there's no R2 write, so the git commit stays the live path.
       const viaR2 = !!adminSession();
-      if (viaR2) { pubProgress(52, "Publishing your content\u2026"); await putContentR2(json, token); }
+      const viewUrl = LIVE_ORIGIN + "/?t=" + Date.now();
+      // Finalise the published state: clear the draft, adopt it as the new baseline, reset history.
+      const finalisePublished = function () {
+        localStorage.removeItem(DRAFT_KEY);
+        localStorage.removeItem(DRAFT_SIG_KEY);
+        if (viaSession) localStorage.removeItem(GH_TOKEN_KEY); // published via the Worker session — the repo token no longer needs to live in this browser
+        if (window.RK) { window.RK.published = clone(data); if (window.RK.sig) window.RK.publishedSig = window.RK.sig(JSON.stringify(data)); }
+        try { localStorage.setItem("rk:adm:pubtime", String(Date.now())); } catch (e) {}
+        updateDirtyUI();
+        histReset();
+      };
+      if (viaR2) {
+        // R2 is the LIVE source the public site reads — writing content.json there makes the site
+        // live within seconds. So declare success the moment R2 has it, and mirror to git (version
+        // history + the Pages fallback) in the BACKGROUND, where a hiccup is non-fatal and simply
+        // re-commits on the next publish. This is what stops a slow/flaky tail from masquerading
+        // as a failure.
+        pubProgress(60, "Publishing your content\u2026");
+        await putContentR2(json, token);
+        pubStopCreep();
+        finalisePublished();
+        pubProgress(100, "Your site is live and ready to view.", { done: true, viewUrl: viewUrl });
+        ghCommitViaGitData(token, json, "Update content.json via admin").catch(function () {});
+        return;
+      }
+      // Direct-token mode (no admin session): the git commit IS the live path.
       try {
         await ghCommitViaGitData(token, json, "Update content.json via admin");
       } catch (e1) {
         if (e1 && (e1.http === 409 || e1.http === 422)) {
-          try { await ghCommitViaGitData(token, json, "Update content.json via admin"); } // ref/tree conflict: refresh + retry once
-          catch (e2) { if (!viaR2) throw e2; }
+          await ghCommitViaGitData(token, json, "Update content.json via admin"); // ref/tree conflict: refresh + retry once
         } else if (e1 && e1.tooLarge) {
-          if (!viaR2) { pubStopCreep(); pubProgress(100, mediaTooLargeMsg(fails, jsonBytes), { error: true }); return; }
-        } else if (!viaR2) {
+          pubStopCreep(); pubProgress(100, mediaTooLargeMsg(fails, jsonBytes), { error: true }); return;
+        } else {
           throw e1;
         }
-        // viaR2 && (network / other git error): the site is already live via R2 — the history mirror
-        // just lagged, which is non-fatal. It re-commits on the next publish.
       }
-      // Committed. This data is now the published content — clear the draft so it can't go stale.
-      localStorage.removeItem(DRAFT_KEY);
-      localStorage.removeItem(DRAFT_SIG_KEY);
-      if (viaSession) localStorage.removeItem(GH_TOKEN_KEY); // published via the Worker session — the repo token no longer needs to live in this browser
-      if (window.RK) { window.RK.published = clone(data); if (window.RK.sig) window.RK.publishedSig = window.RK.sig(JSON.stringify(data)); }
-      updateDirtyUI();
-      histReset();
+      finalisePublished();
       pubProgress(64, "Saved to GitHub. Building your live site\u2026");
       const live = await waitForLive(mySig);
       pubStopCreep();
-      const viewUrl = LIVE_ORIGIN + "/?t=" + Date.now();
       if (live) pubProgress(100, "Your site is live and ready to view.", { done: true, viewUrl: viewUrl });
       else pubProgress(100, "Published. It can take another minute to appear \u2014 open your site to check.", { done: true, viewUrl: viewUrl });
     } catch (e) {
@@ -7658,19 +7743,19 @@ import { WORLD_LAND } from "./worldland.js";
       }
       if (e && e.auth) {
         if (viaSession) { clearAdminSession(); pubProgress(100, "Your admin session ended \u2014 exit the studio and sign in again to publish.", { error: true }); }
-        else { authFailed(); pubProgress(100, "GitHub didn\u2019t accept that sign-in \u2014 hit Publish to reconnect.", { error: true }); }
+        else { authFailed(); pubProgress(100, "GitHub didn\u2019t accept that sign-in \u2014 hit Retry to reconnect.", { error: true }); }
         return;
       }
       var emsg = (e && e.message) ? String(e.message).slice(0, 160) : "";
       if (e && e.http) {
-        pubProgress(100, "GitHub couldn\u2019t save it \u2014 " + emsg + ". Hit Publish to retry.", { error: true });
+        pubProgress(100, "GitHub couldn\u2019t save it \u2014 " + emsg + ". Hit Retry to publish again.", { error: true });
       } else if (!emsg || /Failed to fetch|NetworkError|load failed|ERR_|network/i.test(emsg)) {
         var _svc = viaSession ? "the publishing service" : "GitHub (api.github.com)";
-        var _msg = "Couldn\u2019t reach " + _svc + " \u2014 a VPN, ad-blocker or firewall may be blocking it. Check your connection, then hit Publish again.";
+        var _msg = "Couldn\u2019t reach " + _svc + " \u2014 a VPN, ad-blocker or firewall may be blocking it. Check your connection, then hit Retry again.";
         if (protectedHostedCount(data)) _msg += " If it keeps failing, a large image or video in a locked / vaulted section may be timing out \u2014 compress it or host it externally.";
         pubProgress(100, _msg, { error: true });
       } else {
-        pubProgress(100, "Publish hit a snag: " + emsg + " \u2014 hit Publish to retry.", { error: true });
+        pubProgress(100, "Publish hit a snag: " + emsg + " \u2014 hit Retry to publish again.", { error: true });
       }
     } finally { publishing = false; publishStepup = null; }
   }
@@ -10726,15 +10811,7 @@ import { WORLD_LAND } from "./worldland.js";
           '<button class="adm__tabflip adm__tabflip--next" data-tabflip="1" type="button" aria-label="Scroll tabs right" hidden>\u203A</button>' +
         "</div>" +
         '<div class="adm__actions">' +
-          '<div class="adm__actions-l">' +
-            '<span class="adm__status">Editing local draft</span>' +
-            '<div class="adm__hist" data-hist hidden>' +
-              '<button class="adm__hist-btn" data-undo type="button" aria-label="Undo" title="Undo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg></button>' +
-              '<button class="adm__hist-btn" data-redo type="button" aria-label="Redo" title="Redo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg></button>' +
-            "</div>" +
-          "</div>" +
           '<div class="adm__actions-r">' +
-            '<button class="btn btn--ghost adm__viewtoggle" data-view>Preview</button>' +
             '<button class="btn btn--primary adm__publish" data-publish hidden>Publish</button>' +
           '<button class="btn btn--ghost adm__gear" data-opensettings type="button" aria-label="Settings" title="Settings"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>' +
           '<div class="adm__exitwrap" data-exit-wrap>' +
@@ -10748,12 +10825,15 @@ import { WORLD_LAND } from "./worldland.js";
           "</div>" +
         "</div>" +
       "</header>" +
-      '<div class="adm__pub" hidden aria-live="polite">' +
-        '<div class="adm__pub-head"><span class="adm__pub-label">Publishing\u2026</span><span class="adm__pub-pct">0%</span>' +
-          '<button class="adm__pub-close" data-pub-close type="button" aria-label="Dismiss" hidden>\u2715</button></div>' +
-        '<div class="adm__pub-track"><div class="adm__pub-fill"></div></div>' +
-        '<div class="adm__pub-foot"><span class="adm__pub-hint">Keep this tab open \u2014 confirming when your changes are live.</span>' +
-          '<a class="btn btn--primary adm__pub-view" target="_blank" rel="noopener" hidden>View site \u2197</a></div>' +
+      '<div class="adm__statusbar">' +
+        '<div class="adm__hist" data-hist hidden>' +
+          '<button class="adm__hist-btn" data-undo type="button" aria-label="Undo" title="Undo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg></button>' +
+          '<button class="adm__hist-btn" data-redo type="button" aria-label="Redo" title="Redo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg></button>' +
+        "</div>" +
+        '<span class="adm__status" aria-live="polite">Editing local draft</span>' +
+        '<a class="adm__pub-view" target="_blank" rel="noopener" hidden>View site \u2197</a>' +
+        '<button class="adm__bar-prev" data-prevtoggle type="button" aria-label="Show or hide the live preview" title="Hide the live preview" aria-pressed="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="14" y1="4" x2="14" y2="20"/></svg><span class="adm__bar-prev-tx">Live preview</span></button>' +
+        '<button class="btn btn--ghost adm__newtab" data-newtab type="button" aria-label="Open live preview in a new tab" title="Open live preview in a new tab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>' +
       "</div>" +
       '<div class="adm__main">' +
         '<div class="adm__editor"><div class="adm__body"></div>' +
@@ -10767,9 +10847,6 @@ import { WORLD_LAND } from "./worldland.js";
           "</div>" +
         "</div>" +
         '<section class="adm__preview" aria-label="Live preview">' +
-          '<div class="adm__preview-head"><span class="adm__preview-dot"></span>Live preview<small>riteshk.work</small>' +
-            '<button class="adm__preview-mode" data-act="preview-mode" type="button" title="Preview fidelity. Full = gradients, motion and background effects (needs a capable GPU); Lite is lighter for low-power machines. Auto-detected from this machine \u2014 click to override." style="margin-left:auto;font:inherit;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--text-dim);background:transparent;border:1px solid var(--line);border-radius:100px;padding:3px 11px;cursor:pointer">' + (previewMode() === "full" ? "\u26A1 Full" : "\u25CB Lite") + "</button>" +
-          "</div>" +
           '<iframe class="adm__frame" title="Live preview of your site" src="' + previewUrl() + '"></iframe>' +
         "</section>" +
       "</div>" +
@@ -10836,8 +10913,6 @@ import { WORLD_LAND } from "./worldland.js";
     var _redo = root.querySelector("[data-redo]"); if (_redo) _redo.addEventListener("click", histRedo);
     root.querySelector("[data-publish]").addEventListener("click", publish);
     var _sett = root.querySelector("[data-opensettings]"); if (_sett) _sett.addEventListener("click", () => { closeBarPops(); openSettings(); });
-    const pubCloseBtn = root.querySelector("[data-pub-close]");
-    if (pubCloseBtn) pubCloseBtn.addEventListener("click", pubHide);
     // "\u2715" close: when there are unsaved changes, offer Save / Discard; a clean studio just exits.
     root.querySelector("[data-exit]").addEventListener("click", (e) => {
       e.stopPropagation(); closeMorePop();
@@ -10858,11 +10933,16 @@ import { WORLD_LAND } from "./worldland.js";
       if (wasOff && journeyOpen) previewJourney();
       else if (wasOff && openStudy >= 0 && data.work[openStudy]) previewProject(data.work[openStudy].id, false);
     });
-    root.querySelector("[data-view]").addEventListener("click", (e) => {
-      const on = root.classList.toggle("is-preview");
-      e.currentTarget.textContent = on ? "Edit" : "Preview";
-      if (on) { if (journeyOpen) previewJourney(); else if (openStudy >= 0 && data.work[openStudy]) previewProject(data.work[openStudy].id, false); else previewLanding(); }
+    var _prevToggle = root.querySelector("[data-prevtoggle]");
+    if (_prevToggle) _prevToggle.addEventListener("click", function () {
+      var nowOff = root.classList.toggle("is-prevoff");
+      try { localStorage.setItem(PREV_OFF_KEY, nowOff ? "1" : "0"); } catch (e) {}
+      _prevToggle.setAttribute("aria-pressed", nowOff ? "false" : "true");
+      _prevToggle.title = nowOff ? "Show the live preview" : "Hide the live preview";
     });
+    var _newtab = root.querySelector("[data-newtab]");
+    if (_newtab) _newtab.addEventListener("click", function () { try { window.open(previewUrl(), "_blank", "noopener"); } catch (e) {} });
+    if (localStorage.getItem(PREV_OFF_KEY) === "1" && _prevToggle) { root.classList.add("is-prevoff"); _prevToggle.setAttribute("aria-pressed", "false"); _prevToggle.title = "Show the live preview"; }
     frame.addEventListener("load", previewApply);
     document.addEventListener("keydown", onKey);
     window.addEventListener("message", function (e) {
