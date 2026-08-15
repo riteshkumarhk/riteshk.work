@@ -7410,6 +7410,7 @@ import { WORLD_LAND } from "./worldland.js";
   /* ---------- publish progress: driven into the status bar (the single narrator) ---------- */
   let pubCreep = null;
   let pubDismiss = null;   // success-only auto-clear timer
+  let newtabVisitUrl = null, newtabVisitTimer = null;   // post-publish "Visit site" state for the last status-bar button
   function pubBar() { return root && root.querySelector(".adm__statusbar"); }
   function pubProgress(pct, label, opts) {
     opts = opts || {};
@@ -7425,8 +7426,8 @@ import { WORLD_LAND } from "./worldland.js";
     sb.classList.toggle("is-pub-error", error);
     s.textContent = label;
     s.classList.toggle("ok", done);
-    const view = sb.querySelector(".adm__pub-view");
-    if (view) { if (opts.viewUrl) { view.href = opts.viewUrl; view.hidden = false; } else view.hidden = true; }
+    if (done || caveat) { if (opts.viewUrl) setVisitSite(opts.viewUrl); }   // turn the new-tab button into a "Visit site" CTA
+    else if (!error) clearVisitSite();                                       // an in-progress (re)publish drops any prior label
     const pb = root.querySelector("[data-publish]");
     if (pb) {
       const settled = done || caveat || error;
@@ -7444,11 +7445,29 @@ import { WORLD_LAND } from "./worldland.js";
     const sb = pubBar(); if (!sb) return;
     sb.classList.remove("is-publishing", "is-pub-done", "is-pub-caveat", "is-pub-error");
     sb.style.removeProperty("--pub-pct");
-    const view = sb.querySelector(".adm__pub-view"); if (view) view.hidden = true;
     const pb = root.querySelector("[data-publish]"); if (pb) { pb.disabled = false; pb.textContent = "Publish"; }
     narrate();
   }
   function pubHide() { pubClear(); }
+  // The last status-bar button doubles as a post-publish "Visit site" CTA for ~10s, then reverts to the icon-only "open preview" control.
+  function setVisitSite(url) {
+    if (!url) { clearVisitSite(); return; }
+    const nt = root && root.querySelector("[data-newtab]"); if (!nt) return;
+    if (newtabVisitTimer) { clearTimeout(newtabVisitTimer); newtabVisitTimer = null; }
+    newtabVisitUrl = url;
+    const tx = nt.querySelector(".adm__newtab-tx"); if (tx) { tx.textContent = "Visit site"; tx.hidden = false; }
+    nt.classList.add("is-visit");
+    nt.title = "Visit your live site"; nt.setAttribute("aria-label", "Visit your live site");
+    newtabVisitTimer = setTimeout(clearVisitSite, 10000);
+  }
+  function clearVisitSite() {
+    if (newtabVisitTimer) { clearTimeout(newtabVisitTimer); newtabVisitTimer = null; }
+    newtabVisitUrl = null;
+    const nt = root && root.querySelector("[data-newtab]"); if (!nt) return;
+    nt.classList.remove("is-visit");
+    const tx = nt.querySelector(".adm__newtab-tx"); if (tx) { tx.hidden = true; tx.textContent = ""; }
+    nt.title = "Open live preview in a new tab"; nt.setAttribute("aria-label", "Open live preview in a new tab");
+  }
   // Ease the fill toward a target over N seconds while we wait on the tail (git mirror / Pages).
   function pubCreepTo(target, seconds) {
     pubStopCreep();
@@ -10831,9 +10850,8 @@ import { WORLD_LAND } from "./worldland.js";
           '<button class="adm__hist-btn" data-redo type="button" aria-label="Redo" title="Redo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg></button>' +
         "</div>" +
         '<span class="adm__status" aria-live="polite">Editing local draft</span>' +
-        '<a class="adm__pub-view" target="_blank" rel="noopener" hidden>View site \u2197</a>' +
         '<button class="adm__bar-prev" data-prevtoggle type="button" aria-label="Show or hide the live preview" title="Hide the live preview" aria-pressed="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="14" y1="4" x2="14" y2="20"/></svg><span class="adm__bar-prev-tx">Live preview</span></button>' +
-        '<button class="btn btn--ghost adm__newtab" data-newtab type="button" aria-label="Open live preview in a new tab" title="Open live preview in a new tab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>' +
+        '<button class="btn btn--ghost adm__newtab" data-newtab type="button" aria-label="Open live preview in a new tab" title="Open live preview in a new tab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg><span class="adm__newtab-tx" hidden></span></button>' +
       "</div>" +
       '<div class="adm__main">' +
         '<div class="adm__editor"><div class="adm__body"></div>' +
@@ -10941,7 +10959,7 @@ import { WORLD_LAND } from "./worldland.js";
       _prevToggle.title = nowOff ? "Show the live preview" : "Hide the live preview";
     });
     var _newtab = root.querySelector("[data-newtab]");
-    if (_newtab) _newtab.addEventListener("click", function () { try { window.open(previewUrl(), "_blank", "noopener"); } catch (e) {} });
+    if (_newtab) _newtab.addEventListener("click", function () { try { window.open(newtabVisitUrl || previewUrl(), "_blank", "noopener"); } catch (e) {} });
     if (localStorage.getItem(PREV_OFF_KEY) === "1" && _prevToggle) { root.classList.add("is-prevoff"); _prevToggle.setAttribute("aria-pressed", "false"); _prevToggle.title = "Show the live preview"; }
     frame.addEventListener("load", previewApply);
     document.addEventListener("keydown", onKey);
