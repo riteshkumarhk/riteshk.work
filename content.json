@@ -4516,19 +4516,22 @@
           "stack": "\"Newsreader\", Georgia, \"Times New Roman\", serif",
           "src": "google",
           "css": "Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500",
-          "weight": 400
+          "weight": 400,
+          "selfHosted": true
         },
         "text": {
           "family": "Switzer",
           "stack": "\"Switzer\", system-ui, -apple-system, sans-serif",
           "src": "fontshare",
-          "css": "switzer@400,500,600,700"
+          "css": "switzer@400,500,600,700",
+          "selfHosted": true
         },
         "mono": {
           "family": "IBM Plex Mono",
           "stack": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "IBM+Plex+Mono:wght@400;500;600"
+          "css": "IBM+Plex+Mono:wght@400;500;600",
+          "selfHosted": true
         }
       },
       {
@@ -4541,19 +4544,22 @@
           "stack": "\"Schibsted Grotesk\", system-ui, -apple-system, sans-serif",
           "src": "google",
           "css": "Schibsted+Grotesk:wght@400..900",
-          "weight": 400
+          "weight": 400,
+          "selfHosted": true
         },
         "text": {
           "family": "Hanken Grotesk",
           "stack": "\"Hanken Grotesk\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Hanken+Grotesk:wght@300..800"
+          "css": "Hanken+Grotesk:wght@300..800",
+          "selfHosted": true
         },
         "mono": {
           "family": "Martian Mono",
           "stack": "\"Martian Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "Martian+Mono:wght@300..700"
+          "css": "Martian+Mono:wght@300..700",
+          "selfHosted": true
         }
       },
       {
@@ -4566,19 +4572,22 @@
           "stack": "\"Baskervville\", Georgia, \"Times New Roman\", serif",
           "src": "google",
           "css": "Baskervville:ital@0;1",
-          "weight": 400
+          "weight": 400,
+          "selfHosted": true
         },
         "text": {
           "family": "Epilogue",
           "stack": "\"Epilogue\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Epilogue:wght@300..700"
+          "css": "Epilogue:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "JetBrains Mono",
           "stack": "\"JetBrains Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "JetBrains+Mono:wght@400..700"
+          "css": "JetBrains+Mono:wght@400..700",
+          "selfHosted": true
         }
       },
       {
@@ -4591,19 +4600,22 @@
           "stack": "\"EB Garamond\", Georgia, \"Times New Roman\", serif",
           "src": "google",
           "css": "EB+Garamond:ital,wght@0,400..800;1,400..700",
-          "weight": 500
+          "weight": 500,
+          "selfHosted": true
         },
         "text": {
           "family": "Mulish",
           "stack": "\"Mulish\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Mulish:wght@300..800"
+          "css": "Mulish:wght@300..800",
+          "selfHosted": true
         },
         "mono": {
           "family": "DM Mono",
           "stack": "\"DM Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "DM+Mono:wght@300;400;500"
+          "css": "DM+Mono:wght@300;400;500",
+          "selfHosted": true
         }
       },
       {
@@ -4616,19 +4628,22 @@
           "stack": "\"Spectral\", Georgia, \"Times New Roman\", serif",
           "src": "google",
           "css": "Spectral:wght@300;400;500;600",
-          "weight": 500
+          "weight": 500,
+          "selfHosted": true
         },
         "text": {
           "family": "Inter Tight",
           "stack": "\"Inter Tight\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Inter+Tight:wght@300..700"
+          "css": "Inter+Tight:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "IBM Plex Mono",
           "stack": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "IBM+Plex+Mono:wght@400;500;600"
+          "css": "IBM+Plex+Mono:wght@400;500;600",
+          "selfHosted": true
         }
       },
       {
@@ -4641,19 +4656,22 @@
           "stack": "\"Space Grotesk\", system-ui, -apple-system, sans-serif",
           "src": "google",
           "css": "Space+Grotesk:wght@400..700",
-          "weight": 500
+          "weight": 500,
+          "selfHosted": true
         },
         "text": {
           "family": "Inter",
           "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Inter:wght@300..700"
+          "css": "Inter:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "Space Mono",
           "stack": "\"Space Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "Space+Mono:wght@400;700"
+          "css": "Space+Mono:wght@400;700",
+          "selfHosted": true
         }
       },
       {
@@ -4666,19 +4684,22 @@
           "stack": "\"Archivo\", system-ui, -apple-system, sans-serif",
           "src": "google",
           "css": "Archivo:wght@400..800",
-          "weight": 400
+          "weight": 400,
+          "selfHosted": true
         },
         "text": {
           "family": "Libre Franklin",
           "stack": "\"Libre Franklin\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Libre+Franklin:wght@300..700"
+          "css": "Libre+Franklin:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "IBM Plex Mono",
           "stack": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "IBM+Plex+Mono:wght@400;500;600"
+          "css": "IBM+Plex+Mono:wght@400;500;600",
+          "selfHosted": true
         }
       },
       {
@@ -4691,19 +4712,22 @@
           "stack": "\"Sora\", system-ui, -apple-system, sans-serif",
           "src": "google",
           "css": "Sora:wght@300..800",
-          "weight": 600
+          "weight": 600,
+          "selfHosted": true
         },
         "text": {
           "family": "Figtree",
           "stack": "\"Figtree\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Figtree:wght@300..800"
+          "css": "Figtree:wght@300..800",
+          "selfHosted": true
         },
         "mono": {
           "family": "Geist Mono",
           "stack": "\"Geist Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "Geist+Mono:wght@400..700"
+          "css": "Geist+Mono:wght@400..700",
+          "selfHosted": true
         }
       },
       {
@@ -4716,19 +4740,22 @@
           "stack": "\"Unbounded\", system-ui, -apple-system, sans-serif",
           "src": "google",
           "css": "Unbounded:wght@400..800",
-          "weight": 600
+          "weight": 600,
+          "selfHosted": true
         },
         "text": {
           "family": "Albert Sans",
           "stack": "\"Albert Sans\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Albert+Sans:wght@300..700"
+          "css": "Albert+Sans:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "Space Mono",
           "stack": "\"Space Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "Space+Mono:wght@400;700"
+          "css": "Space+Mono:wght@400;700",
+          "selfHosted": true
         }
       },
       {
@@ -4741,19 +4768,22 @@
           "stack": "\"Syne\", system-ui, -apple-system, sans-serif",
           "src": "google",
           "css": "Syne:wght@400..800",
-          "weight": 600
+          "weight": 600,
+          "selfHosted": true
         },
         "text": {
           "family": "Inter",
           "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Inter:wght@300..700"
+          "css": "Inter:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "JetBrains Mono",
           "stack": "\"JetBrains Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "JetBrains+Mono:wght@400..700"
+          "css": "JetBrains+Mono:wght@400..700",
+          "selfHosted": true
         }
       },
       {
@@ -4766,19 +4796,22 @@
           "stack": "\"Bricolage Grotesque\", system-ui, -apple-system, sans-serif",
           "src": "google",
           "css": "Bricolage+Grotesque:opsz,wght@12..96,400..800",
-          "weight": 600
+          "weight": 600,
+          "selfHosted": true
         },
         "text": {
           "family": "Work Sans",
           "stack": "\"Work Sans\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Work+Sans:wght@300..700"
+          "css": "Work+Sans:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "DM Mono",
           "stack": "\"DM Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "DM+Mono:wght@300;400;500"
+          "css": "DM+Mono:wght@300;400;500",
+          "selfHosted": true
         }
       },
       {
@@ -4791,19 +4824,22 @@
           "stack": "\"Space Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
           "css": "Space+Mono:wght@400;700",
-          "weight": 700
+          "weight": 700,
+          "selfHosted": true
         },
         "text": {
           "family": "Inter",
           "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Inter:wght@300..700"
+          "css": "Inter:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "Space Mono",
           "stack": "\"Space Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "Space+Mono:wght@400;700"
+          "css": "Space+Mono:wght@400;700",
+          "selfHosted": true
         }
       },
       {
@@ -4816,19 +4852,22 @@
           "stack": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
           "css": "IBM+Plex+Mono:wght@400;500;600;700",
-          "weight": 600
+          "weight": 600,
+          "selfHosted": true
         },
         "text": {
           "family": "IBM Plex Sans",
           "stack": "\"IBM Plex Sans\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "IBM+Plex+Sans:wght@300;400;500;600"
+          "css": "IBM+Plex+Sans:wght@300;400;500;600",
+          "selfHosted": true
         },
         "mono": {
           "family": "IBM Plex Mono",
           "stack": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "IBM+Plex+Mono:wght@400;500;600"
+          "css": "IBM+Plex+Mono:wght@400;500;600",
+          "selfHosted": true
         }
       },
       {
@@ -4841,19 +4880,22 @@
           "stack": "\"Martian Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
           "css": "Martian+Mono:wght@300..700",
-          "weight": 600
+          "weight": 600,
+          "selfHosted": true
         },
         "text": {
           "family": "Hanken Grotesk",
           "stack": "\"Hanken Grotesk\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Hanken+Grotesk:wght@300..800"
+          "css": "Hanken+Grotesk:wght@300..800",
+          "selfHosted": true
         },
         "mono": {
           "family": "Martian Mono",
           "stack": "\"Martian Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "Martian+Mono:wght@300..700"
+          "css": "Martian+Mono:wght@300..700",
+          "selfHosted": true
         }
       },
       {
@@ -4866,19 +4908,22 @@
           "stack": "\"Caveat\", \"Segoe Script\", cursive",
           "src": "google",
           "css": "Caveat:wght@400..700",
-          "weight": 600
+          "weight": 600,
+          "selfHosted": true
         },
         "text": {
           "family": "Inter",
           "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Inter:wght@300..700"
+          "css": "Inter:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "JetBrains Mono",
           "stack": "\"JetBrains Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "JetBrains+Mono:wght@400..700"
+          "css": "JetBrains+Mono:wght@400..700",
+          "selfHosted": true
         }
       },
       {
@@ -4891,19 +4936,22 @@
           "stack": "\"Kalam\", \"Segoe Script\", cursive",
           "src": "google",
           "css": "Kalam:wght@300;400;700",
-          "weight": 400
+          "weight": 400,
+          "selfHosted": true
         },
         "text": {
           "family": "Mulish",
           "stack": "\"Mulish\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Mulish:wght@300..800"
+          "css": "Mulish:wght@300..800",
+          "selfHosted": true
         },
         "mono": {
           "family": "DM Mono",
           "stack": "\"DM Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "DM+Mono:wght@300;400;500"
+          "css": "DM+Mono:wght@300;400;500",
+          "selfHosted": true
         }
       },
       {
@@ -4916,19 +4964,22 @@
           "stack": "\"Patrick Hand\", \"Segoe Script\", cursive",
           "src": "google",
           "css": "Patrick+Hand",
-          "weight": 400
+          "weight": 400,
+          "selfHosted": true
         },
         "text": {
           "family": "Work Sans",
           "stack": "\"Work Sans\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Work+Sans:wght@300..700"
+          "css": "Work+Sans:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "IBM Plex Mono",
           "stack": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "IBM+Plex+Mono:wght@400;500;600"
+          "css": "IBM+Plex+Mono:wght@400;500;600",
+          "selfHosted": true
         }
       },
       {
@@ -4941,19 +4992,22 @@
           "stack": "\"Manrope\", system-ui, -apple-system, sans-serif",
           "src": "google",
           "css": "Manrope:wght@300..800",
-          "weight": 600
+          "weight": 600,
+          "selfHosted": true
         },
         "text": {
           "family": "Inter",
           "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Inter:wght@300..700"
+          "css": "Inter:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "Space Mono",
           "stack": "\"Space Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "Space+Mono:wght@400;700"
+          "css": "Space+Mono:wght@400;700",
+          "selfHosted": true
         }
       },
       {
@@ -4966,19 +5020,22 @@
           "stack": "\"Plus Jakarta Sans\", system-ui, -apple-system, sans-serif",
           "src": "google",
           "css": "Plus+Jakarta+Sans:wght@300..800",
-          "weight": 600
+          "weight": 600,
+          "selfHosted": true
         },
         "text": {
           "family": "Figtree",
           "stack": "\"Figtree\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Figtree:wght@300..800"
+          "css": "Figtree:wght@300..800",
+          "selfHosted": true
         },
         "mono": {
           "family": "JetBrains Mono",
           "stack": "\"JetBrains Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "JetBrains+Mono:wght@400..700"
+          "css": "JetBrains+Mono:wght@400..700",
+          "selfHosted": true
         }
       },
       {
@@ -4991,19 +5048,22 @@
           "stack": "\"Instrument Serif\", Georgia, \"Times New Roman\", serif",
           "src": "google",
           "css": "Instrument+Serif:ital@0;1",
-          "weight": 400
+          "weight": 400,
+          "selfHosted": true
         },
         "text": {
           "family": "Inter",
           "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Inter:wght@300..700"
+          "css": "Inter:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "IBM Plex Mono",
           "stack": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "IBM+Plex+Mono:wght@400;500;600"
+          "css": "IBM+Plex+Mono:wght@400;500;600",
+          "selfHosted": true
         }
       },
       {
@@ -5016,19 +5076,22 @@
           "stack": "\"DM Serif Display\", Georgia, \"Times New Roman\", serif",
           "src": "google",
           "css": "DM+Serif+Display:ital@0;1",
-          "weight": 400
+          "weight": 400,
+          "selfHosted": true
         },
         "text": {
           "family": "Mulish",
           "stack": "\"Mulish\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Mulish:wght@300..800"
+          "css": "Mulish:wght@300..800",
+          "selfHosted": true
         },
         "mono": {
           "family": "DM Mono",
           "stack": "\"DM Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "DM+Mono:wght@300;400;500"
+          "css": "DM+Mono:wght@300;400;500",
+          "selfHosted": true
         }
       },
       {
@@ -5041,19 +5104,22 @@
           "stack": "\"Anton\", system-ui, -apple-system, sans-serif",
           "src": "google",
           "css": "Anton",
-          "weight": 400
+          "weight": 400,
+          "selfHosted": true
         },
         "text": {
           "family": "Inter",
           "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Inter:wght@300..700"
+          "css": "Inter:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "Space Mono",
           "stack": "\"Space Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "Space+Mono:wght@400;700"
+          "css": "Space+Mono:wght@400;700",
+          "selfHosted": true
         }
       },
       {
@@ -5066,19 +5132,22 @@
           "stack": "\"JetBrains Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
           "css": "JetBrains+Mono:wght@400..700",
-          "weight": 600
+          "weight": 600,
+          "selfHosted": true
         },
         "text": {
           "family": "Inter",
           "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Inter:wght@300..700"
+          "css": "Inter:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "JetBrains Mono",
           "stack": "\"JetBrains Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "JetBrains+Mono:wght@400..700"
+          "css": "JetBrains+Mono:wght@400..700",
+          "selfHosted": true
         }
       },
       {
@@ -5091,19 +5160,22 @@
           "stack": "\"Fira Code\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
           "css": "Fira+Code:wght@400..700",
-          "weight": 500
+          "weight": 500,
+          "selfHosted": true
         },
         "text": {
           "family": "Inter",
           "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Inter:wght@300..700"
+          "css": "Inter:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "Fira Code",
           "stack": "\"Fira Code\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "Fira+Code:wght@400..700"
+          "css": "Fira+Code:wght@400..700",
+          "selfHosted": true
         }
       },
       {
@@ -5116,19 +5188,22 @@
           "stack": "\"Spline Sans Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
           "css": "Spline+Sans+Mono:wght@400..700",
-          "weight": 500
+          "weight": 500,
+          "selfHosted": true
         },
         "text": {
           "family": "Hanken Grotesk",
           "stack": "\"Hanken Grotesk\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Hanken+Grotesk:wght@300..800"
+          "css": "Hanken+Grotesk:wght@300..800",
+          "selfHosted": true
         },
         "mono": {
           "family": "Spline Sans Mono",
           "stack": "\"Spline Sans Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "Spline+Sans+Mono:wght@400..700"
+          "css": "Spline+Sans+Mono:wght@400..700",
+          "selfHosted": true
         }
       },
       {
@@ -5141,19 +5216,22 @@
           "stack": "\"Shantell Sans\", \"Segoe Script\", cursive",
           "src": "google",
           "css": "Shantell+Sans:wght@300..800",
-          "weight": 500
+          "weight": 500,
+          "selfHosted": true
         },
         "text": {
           "family": "Inter",
           "stack": "\"Inter\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Inter:wght@300..700"
+          "css": "Inter:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "JetBrains Mono",
           "stack": "\"JetBrains Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "JetBrains+Mono:wght@400..700"
+          "css": "JetBrains+Mono:wght@400..700",
+          "selfHosted": true
         }
       },
       {
@@ -5166,19 +5244,22 @@
           "stack": "\"Dancing Script\", \"Segoe Script\", cursive",
           "src": "google",
           "css": "Dancing+Script:wght@400..700",
-          "weight": 600
+          "weight": 600,
+          "selfHosted": true
         },
         "text": {
           "family": "Mulish",
           "stack": "\"Mulish\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Mulish:wght@300..800"
+          "css": "Mulish:wght@300..800",
+          "selfHosted": true
         },
         "mono": {
           "family": "DM Mono",
           "stack": "\"DM Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "DM+Mono:wght@300;400;500"
+          "css": "DM+Mono:wght@300;400;500",
+          "selfHosted": true
         }
       },
       {
@@ -5191,19 +5272,22 @@
           "stack": "\"Architects Daughter\", \"Segoe Script\", cursive",
           "src": "google",
           "css": "Architects+Daughter",
-          "weight": 400
+          "weight": 400,
+          "selfHosted": true
         },
         "text": {
           "family": "Work Sans",
           "stack": "\"Work Sans\", system-ui, -apple-system, sans-serif",
           "src": "google",
-          "css": "Work+Sans:wght@300..700"
+          "css": "Work+Sans:wght@300..700",
+          "selfHosted": true
         },
         "mono": {
           "family": "IBM Plex Mono",
           "stack": "\"IBM Plex Mono\", ui-monospace, \"SF Mono\", monospace",
           "src": "google",
-          "css": "IBM+Plex+Mono:wght@400;500;600"
+          "css": "IBM+Plex+Mono:wght@400;500;600",
+          "selfHosted": true
         }
       }
     ]
