@@ -80,7 +80,9 @@
     var vk = /^vault:(.+)$/i.exec(url); vk = vk ? vk[1] : "";
     if (kind === "video") {
       var poster = m.poster ? ' poster="' + attr(mediaUrl(m.poster)) + '"' : "";
-      var vsrc = vk ? ' data-vault="' + attr(vk) + '"' : ' src="' + attr(url) + '"';
+      // No poster -> append a media fragment so the browser paints the first frame instead of a black box.
+      var vurl = (!m.poster && !vk && url.indexOf("#") === -1) ? url + "#t=0.1" : url;
+      var vsrc = vk ? ' data-vault="' + attr(vk) + '"' : ' src="' + attr(vurl) + '"';
       if (m.controls) return '<video class="' + cls + '"' + vsrc + poster + ' controls controlsList="nodownload noplaybackrate" disablepictureinpicture playsinline preload="metadata"></video>';
       return '<video class="' + cls + '"' + vsrc + poster + ' autoplay muted loop playsinline preload="metadata"></video>';
     }
@@ -158,12 +160,19 @@
   }
   // Rich body fields authored in the editor are stored as HTML; legacy fields are markdown/plain.
   function isRichHtml(s) { return /<(p|ul|ol|li|strong|em|b|i|s|strike|br|div|h[1-6]|span|figure|img|blockquote)\b/i.test(s || ""); }
+  // Rich-text bodies are stored as raw HTML the media resolver never saw, so any inline media that
+  // still points at the legacy /assets/uploads path 404s post-migration. Rewrite those through mediaUrl.
+  function rewriteAssetUrls(html) {
+    return String(html)
+      .replace(/((?:src|href|poster)\s*=\s*)(["'])(\/?assets\/uploads\/[^"']+)\2/gi, function (m, pre, q, p) { return pre + q + mediaUrl(p) + q; })
+      .replace(/url\(\s*(["']?)(\/?assets\/uploads\/[^)"']+)\1\s*\)/gi, function (m, q, p) { return "url(" + q + mediaUrl(p) + q + ")"; });
+  }
   function safeHtml(s) {
-    return String(s == null ? "" : s)
+    return rewriteAssetUrls(String(s == null ? "" : s)
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/<style[\s\S]*?<\/style>/gi, "")
       .replace(/ on\w+="[^"]*"/gi, "").replace(/ on\w+='[^']*'/gi, "")
-      .replace(/javascript:/gi, "");
+      .replace(/javascript:/gi, ""));
   }
   function prose(body, cls) { if (!body) return ""; return '<div class="pjb__prose' + (cls ? " " + cls : "") + '">' + (isRichHtml(body) ? safeHtml(body) : paras(body)) + "</div>"; }
   function richInline(s) { s = s == null ? "" : String(s); return isRichHtml(s) ? safeHtml(s) : md(s); }
@@ -1070,8 +1079,10 @@
     if (mediaKind(m) === "video") {
       var url = mediaUrl(mediaSrc(m));
       var vk = /^vault:(.+)$/i.exec(url); vk = vk ? vk[1] : "";
-      var src = vk ? ' data-vault="' + attr(vk) + '"' : ' src="' + attr(url) + '"';
       var poster = m.poster ? ' poster="' + attr(mediaUrl(m.poster)) + '"' : "";
+      // No poster -> media fragment forces the first frame to paint (avoids a black stage before play).
+      var vurl = (!m.poster && !vk && url.indexOf("#") === -1) ? url + "#t=0.1" : url;
+      var src = vk ? ' data-vault="' + attr(vk) + '"' : ' src="' + attr(vurl) + '"';
       return '<video class="pj__stage-el" data-stage-video' + src + poster + ' muted playsinline preload="metadata"></video>';
     }
     return mediaEl(m, "pj__stage-el");
