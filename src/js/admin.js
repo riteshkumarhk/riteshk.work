@@ -164,7 +164,9 @@ import {
   function gate() {
     thDismiss(true);   // clear the landing “have a ticket?” nudge before the gate/editor (it sits above them)
     const publishedGate = (window.RK && window.RK.published && window.RK.published.adminGate) || null;
-    const avatarUrl = (window.RK && window.RK.published && window.RK.published.contact && window.RK.published.contact.avatar) || "";
+    const avatarRaw = (window.RK && window.RK.published && window.RK.published.contact && window.RK.published.contact.avatar) || "";
+    // Resolve through the media resolver so the avatar loads from R2, not the retired /assets/uploads Pages path.
+    const avatarUrl = (window.RK && window.RK.mediaUrl) ? window.RK.mediaUrl(avatarRaw) : avatarRaw;
     const stored = localStorage.getItem(HASH_KEY);
     // A server admin (the Cloudflare Worker) is the source of truth for the key, so any browser —
     // fresh device included — must ENTER the real key (verified server-side), never self-serve a
