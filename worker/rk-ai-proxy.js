@@ -851,6 +851,40 @@ export default {
       }
     }
 
+    // ---------- publish content.json to R2 (instant publishes, off the GitHub -> Pages path) ----------
+    // The site reads content.json from R2 first (the Pages copy is the fallback), so writing it here
+    // makes a publish live in seconds without waiting on a Pages rebuild. Gated with the SAME security
+    // as an /admin/gh repo WRITE: session + device-trust + (when enabled) the publish step-up
+    // (passkey token = possession, recovery proof = knowledge). A stolen session alone cannot deface.
+    if (url.pathname === "/admin/content") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.MEDIA) return json({ error: "Media storage is not configured" }, 500, cors);
+      // Device-trust: writing the live content requires this device to have passed a step-up once.
+      if (env.VAULT_GRANTS && !(await verifyTrust(request.headers.get("X-Device-Trust"), env))) {
+        return json({ error: "This device isn\u2019t verified to publish yet.", needStepup: true }, 403, cors);
+      }
+      // Publish step-up (when enabled): fresh passkey assertion + recovery-passphrase proof.
+      if (env.VAULT_GRANTS && (await env.VAULT_GRANTS.get("cfg:publish2fa")) === "1") {
+        if (!(await verifyPublishToken(request.headers.get("X-Publish-Token"), env))) return json({ error: "Publish needs a passkey step-up." }, 401, cors);
+        const stored = await env.VAULT_GRANTS.get("cfg:publishproof");
+        const proof = request.headers.get("X-Publish-Proof") || "";
+        const proofHash = proof ? bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(proof))) : "";
+        if (!stored || !timingSafeEqual(proofHash, stored)) return json({ error: "Publish needs your recovery passphrase." }, 401, cors);
+      }
+      try {
+        const buf = await request.arrayBuffer();
+        if (!buf || buf.byteLength === 0) return json({ error: "Empty content" }, 400, cors);
+        if (buf.byteLength > 40 * 1024 * 1024) return json({ error: "Content too large" }, 413, cors);
+        // Validate it parses as JSON so a corrupt/truncated publish can never blank the live site.
+        try { JSON.parse(new TextDecoder().decode(buf)); } catch (e) { return json({ error: "Not valid JSON \u2014 nothing written" }, 400, cors); }
+        await env.MEDIA.put("content.json", buf, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
+        return json({ ok: true, size: buf.byteLength }, 200, cors);
+      } catch (e) {
+        return json({ error: "Content publish failed", detail: String((e && e.message) || e) }, 500, cors);
+      }
+    }
+
     // Self-host fonts: proxy ONLY the Google Fonts css2 stylesheet (the host is hardcoded here, so
     // there is no SSRF surface — only the family= fragments come from the client, and they are
     // validated). The studio reads the returned @font-face list, then downloads the woff2 itself

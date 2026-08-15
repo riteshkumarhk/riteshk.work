@@ -1043,7 +1043,17 @@
     return h.toString(36);
   }
   async function fetchPublished() {
-    const res = await fetch("content.json?v=" + Date.now());
+    // Live content is served from R2 (the media origin) for instant publishes; the committed Pages
+    // copy is the fallback so the site can never go blank if R2 ever hiccups. Both are cache-busted so
+    // a fresh publish shows immediately. (?preview / ?draft use the local draft — handled in bootstrap.)
+    const bust = "?v=" + Date.now();
+    if (MEDIA_BASE) {
+      try {
+        const r2 = await fetch(MEDIA_BASE + "/content.json" + bust, { cache: "no-store" });
+        if (r2.ok) return await r2.json();
+      } catch (e) { /* R2 unreachable -> fall back to the committed Pages copy */ }
+    }
+    const res = await fetch("content.json" + bust);
     if (!res.ok) throw new Error("content.json " + res.status);
     return await res.json();
   }

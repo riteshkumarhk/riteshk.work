@@ -7359,9 +7359,12 @@ import { WORLD_LAND } from "./worldland.js";
       // "live" too early and a hard-refresh right after would still show the old page. On the Pages
       // origin, poll only it (same-origin, no CORS); cross-origin, keep raw as a fallback.
       const sameOrigin = (location.origin === LIVE_ORIGIN);
+      // Poll R2 FIRST: a session publish writes content.json to R2, so it matches mySig instantly (no
+      // ~1min Pages wait). A direct-token publish doesn't touch R2, so R2 keeps its old sig there and
+      // this falls through to the Pages / raw poll below (that path is unchanged).
       const urls = sameOrigin
-        ? [LIVE_ORIGIN + "/content.json?t=" + Date.now()]
-        : [LIVE_ORIGIN + "/content.json?t=" + Date.now(), GH_RAW + "content.json?t=" + Date.now()];
+        ? [MEDIA_ORIGIN + "/content.json?t=" + Date.now(), LIVE_ORIGIN + "/content.json?t=" + Date.now()]
+        : [MEDIA_ORIGIN + "/content.json?t=" + Date.now(), LIVE_ORIGIN + "/content.json?t=" + Date.now(), GH_RAW + "content.json?t=" + Date.now()];
       for (const u of urls) {
         try {
           const res = await fetch(u, { cache: "no-store" });
@@ -7434,6 +7437,28 @@ import { WORLD_LAND } from "./worldland.js";
     const commit = await api(repo + "/git/commits", { method: "POST", body: JSON.stringify({ message: message, tree: tree.sha, parents: [headSha] }) });
     await api(repo + "/git/refs/heads/" + GH_BRANCH, { method: "PATCH", body: JSON.stringify({ sha: commit.sha }) });
     return commit.sha;
+  }
+
+  // Phase 3: write the built content.json to R2 (via the Worker) so the public site — which reads
+  // content from R2 first, with the Pages copy as fallback — updates in seconds, without waiting on a
+  // GitHub -> Pages rebuild. The Worker gates this with the SAME security as a repo write (session +
+  // device-trust + publish step-up), so we reuse ghHeaders(token). Errors mirror hostDataUri's shapes
+  // (.auth / .http / .network / .tooLarge) so ghPublish's existing catch handles them.
+  async function putContentR2(json, token) {
+    let r;
+    try { r = await fetch(ADMIN_WORKER + "/admin/content", { method: "POST", headers: ghHeaders(token), body: json }); }
+    catch (netErr) { const e = new Error("network"); e.network = 1; throw e; }
+    if (r.status === 401 || r.status === 403) {
+      const j = await r.json().catch(function () { return {}; });
+      const e = new Error((j && j.error) || "auth"); e.auth = 1; if (j && j.needStepup) e.needStepup = 1; throw e;
+    }
+    if (!r.ok) {
+      const j = await r.json().catch(function () { return {}; });
+      const e = new Error((j && j.error) || ("HTTP " + r.status)); e.http = r.status;
+      if (r.status === 413) e.tooLarge = 1;
+      throw e;
+    }
+    return true;
   }
 
   function jsonByteLen(s) { try { return new TextEncoder().encode(s).length; } catch (e) { return (s || "").length; } }
@@ -7522,12 +7547,26 @@ import { WORLD_LAND } from "./worldland.js";
         return;
       }
       const mySig = (window.RK && window.RK.sig) ? window.RK.sig(JSON.stringify(JSON.parse(json))) : null;
+      // Phase 3: with an admin session, R2 is the LIVE path — write content.json there FIRST so the
+      // public site (which reads content from R2) updates in seconds. The git commit then mirrors it
+      // for version history + the Pages fallback; in session mode that mirror is best-effort (the site
+      // is already live via R2), so a GitHub hiccup can't fail an otherwise-successful publish. In
+      // direct-token mode (no session) there's no R2 write, so the git commit stays the live path.
+      const viaR2 = !!adminSession();
+      if (viaR2) { pubProgress(52, "Publishing your content\u2026"); await putContentR2(json, token); }
       try {
         await ghCommitViaGitData(token, json, "Update content.json via admin");
       } catch (e1) {
-        if (e1 && e1.tooLarge) { pubStopCreep(); pubProgress(100, mediaTooLargeMsg(fails, jsonBytes), { error: true }); return; }
-        else if (e1 && (e1.http === 409 || e1.http === 422)) await ghCommitViaGitData(token, json, "Update content.json via admin"); // ref/tree conflict: refresh + retry once
-        else throw e1;
+        if (e1 && (e1.http === 409 || e1.http === 422)) {
+          try { await ghCommitViaGitData(token, json, "Update content.json via admin"); } // ref/tree conflict: refresh + retry once
+          catch (e2) { if (!viaR2) throw e2; }
+        } else if (e1 && e1.tooLarge) {
+          if (!viaR2) { pubStopCreep(); pubProgress(100, mediaTooLargeMsg(fails, jsonBytes), { error: true }); return; }
+        } else if (!viaR2) {
+          throw e1;
+        }
+        // viaR2 && (network / other git error): the site is already live via R2 — the history mirror
+        // just lagged, which is non-fatal. It re-commits on the next publish.
       }
       // Committed. This data is now the published content — clear the draft so it can't go stale.
       localStorage.removeItem(DRAFT_KEY);
