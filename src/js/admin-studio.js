@@ -227,7 +227,18 @@ import { WORLD_LAND } from "./worldland.js";
   function previewApply() {
     const w = frame && frame.contentWindow;
     if (w && w.RK && w.RK.render) {
-      try { w.RK.render(resolvePreviewData(data)); forceRevealDoc(w.document); if (w.__rkInitDepth) w.__rkInitDepth(); if (w.__rkLivingType) w.__rkLivingType(); } catch (e) {}
+      try {
+        const pd = resolvePreviewData(data);
+        w.RK.render(pd);
+        // render() doesn't own window.RK.data (its callers set it explicitly). Keep the iframe's global
+        // data in sync so runtime modules that read it live every frame — living type (heroMotion:
+        // ambient/field/scope/nodes), the node-web, depth — reflect studio edits instead of the stale
+        // load-time defaults (e.g. switching Ambient work Aurora -> Off -> Media now previews).
+        try { w.RK.data = pd; } catch (e) {}
+        forceRevealDoc(w.document);
+        if (w.__rkInitDepth) w.__rkInitDepth();
+        if (w.__rkLivingType) w.__rkLivingType();
+      } catch (e) {}
     }
     syncPreviewPage();
   }
