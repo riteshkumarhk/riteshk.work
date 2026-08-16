@@ -10314,7 +10314,36 @@ import { WORLD_LAND } from "./worldland.js";
   if (!wbState.level) wbState.level = "staff";
   if (!wbState.challenge) wbState.challenge = "any";
   if (!wbState.industry) wbState.industry = "any";
-  function wbSave() { try { localStorage.setItem(WB_KEY, JSON.stringify({ mins: wbState.mins, mode: wbState.mode, level: wbState.level, challenge: wbState.challenge, industry: wbState.industry, brief: wbState.brief || "", company: wbState.company || "", jd: wbState.jd || "" })); } catch (e) {} }
+  if (!wbState.convo) wbState.convo = "text";
+  function wbSave() { try { localStorage.setItem(WB_KEY, JSON.stringify({ mins: wbState.mins, mode: wbState.mode, level: wbState.level, challenge: wbState.challenge, industry: wbState.industry, convo: wbState.convo, brief: wbState.brief || "", company: wbState.company || "", jd: wbState.jd || "" })); } catch (e) {} }
+  // Opt-in voice for the mock: the FREE browser Web Speech API \u2014 SpeechRecognition (speech\u2192text) +
+  // speechSynthesis (text\u2192speech; on Edge these are Microsoft neural voices). Feature-detected; a graceful
+  // no-op where unsupported so text mode always works.
+  var wbSpeech = (function () {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var synth = window.speechSynthesis || null;
+    var voices = [];
+    function loadVoices() { try { voices = synth ? (synth.getVoices() || []) : []; } catch (e) { voices = []; } }
+    if (synth) { loadVoices(); try { synth.addEventListener("voiceschanged", loadVoices); } catch (e) {} }
+    function pickVoice() {
+      if (!voices.length) loadVoices();
+      var en = voices.filter(function (v) { return /^en[-_]?/i.test(v.lang || ""); });
+      var pool = en.length ? en : voices;
+      var pref = pool.filter(function (v) { return /natural|online|aria|jenny|guy|libby|sonia|emma/i.test(v.name || ""); });
+      return pref[0] || pool[0] || null;
+    }
+    return {
+      sttOk: !!SR,
+      ttsOk: !!synth,
+      makeRec: function () { if (!SR) return null; try { var r = new SR(); r.lang = "en-US"; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1; return r; } catch (e) { return null; } },
+      speak: function (text, onend) {
+        if (!synth || !text) { if (onend) onend(); return; }
+        try { synth.cancel(); } catch (e) {}
+        try { var u = new SpeechSynthesisUtterance(String(text)); var v = pickVoice(); if (v) u.voice = v; u.rate = 1; u.pitch = 1; if (onend) u.onend = function () { onend(); }; synth.speak(u); } catch (e) { if (onend) onend(); }
+      },
+      stop: function () { try { if (synth) synth.cancel(); } catch (e) {} }
+    };
+  })();
   function wbMinsLabel(m) { for (var i = 0; i < WB_MINS.length; i++) if (WB_MINS[i][0] === m) return WB_MINS[i][1]; return m + " min"; }
   function wbCompany() { return String(wbState.company || "").trim(); }
   function wbJdText() { var t = String(wbState.jd || "").trim(); return t || storyJdText(); }
@@ -10474,6 +10503,10 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="af"><label class="af__label">Mode</label><div class="story__opts">' +
           WB_MODES.map(function (d) { return '<button type="button" class="story__opt' + (st.mode === d[0] ? " is-on" : "") + '" data-wb-mode="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
         "</div></div>" +
+        '<div class="af wb__convo"><label class="af__label">Conversation <span class="af__opt">(mock interview)</span></label><div class="story__opts">' +
+          '<button type="button" class="story__opt' + (st.convo === "text" ? " is-on" : "") + '" data-wb-convo="text"><span class="story__opt-name">\u2328 Type it out</span><span class="story__opt-desc">Type your moves like a chat</span></button>' +
+          '<button type="button" class="story__opt' + (st.convo === "voice" ? " is-on" : "") + '" data-wb-convo="voice"><span class="story__opt-name">\uD83C\uDF99\uFE0F Talk it out</span><span class="story__opt-desc">Speak your moves; the interviewer talks back</span></button>' +
+        '</div><div class="af__hint wb__convo-hint"></div></div>' +
         '<div class="af"><label class="af__label">The level you\u2019re whiteboarding for</label><div class="iprep__levels wb__levels">' +
           WB_LEVELS.map(function (d) { return '<button type="button" class="iprep__lvl' + (st.level === d[0] ? " is-on" : "") + '" data-wb-lvl="' + d[0] + '"><span class="iprep__lvl-name">' + d[1] + '</span><span class="iprep__lvl-desc">' + d[2] + "</span></button>"; }).join("") +
         '</div><div class="af__hint">Sets the altitude \u2014 the prompt, the probes and the scoring all shift to match.</div></div>' +
@@ -10515,7 +10548,7 @@ import { WORLD_LAND } from "./worldland.js";
     var ownEl = modal.querySelector(".wb__own");
     var companyEl = modal.querySelector(".wb__company");
     var jdEl = modal.querySelector(".wb__jd");
-    var close = function () { modal.remove(); };
+    var close = function () { try { wbSpeech.stop(); } catch (e) {} modal.remove(); };
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
     modal.querySelector("[data-cancel]").addEventListener("click", close);
@@ -10526,6 +10559,9 @@ import { WORLD_LAND } from "./worldland.js";
     modal.querySelectorAll("[data-wb-ind]").forEach(function (b) { b.addEventListener("click", function () { st.industry = b.dataset.wbInd; modal.querySelectorAll("[data-wb-ind]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     var deeperTog = modal.querySelector("[data-wb-deeper]");
     if (deeperTog) deeperTog.addEventListener("click", function () { var body = modal.querySelector(".wb__deeper-body"); var opening = body.hasAttribute("hidden"); if (opening) body.removeAttribute("hidden"); else body.setAttribute("hidden", ""); deeperTog.setAttribute("aria-expanded", opening ? "true" : "false"); deeperTog.classList.toggle("is-open", opening); });
+    modal.querySelectorAll("[data-wb-convo]").forEach(function (b) { b.addEventListener("click", function () { st.convo = b.dataset.wbConvo; modal.querySelectorAll("[data-wb-convo]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
+    var convoHint = modal.querySelector(".wb__convo-hint");
+    if (convoHint) convoHint.textContent = wbSpeech.sttOk ? "Talk mode uses your mic \u2014 speak your moves and the interviewer replies out loud. Works best in Chrome or Edge." : "Talk mode needs Chrome or Edge \u2014 typing works everywhere.";
     if (briefEl) briefEl.addEventListener("input", function () { st.brief = briefEl.value; wbSave(); });
     if (companyEl) companyEl.addEventListener("input", function () { st.company = companyEl.value; wbSave(); });
     if (jdEl) jdEl.addEventListener("input", function () { st.jd = jdEl.value; wbSave(); });
@@ -10555,25 +10591,45 @@ import { WORLD_LAND } from "./worldland.js";
       wireStage();
     }
     async function wbRunMock(opening) {
+      var voiceOn = (st.convo === "voice") && wbSpeech.sttOk;
+      var voiceBar = voiceOn ? '<div class="wb__voice"><button type="button" class="wb__mic" data-wb-mic><span class="wb__mic-dot"></span><span class="wb__mic-t">Tap to talk</span></button><span class="wb__voice-live" data-wb-live></span>' + (wbSpeech.ttsOk ? '<button type="button" class="wb__spk is-on" data-wb-spk title="Interviewer voice">\uD83D\uDD0A Voice</button>' : "") + "</div>" : "";
       stage.innerHTML = wbPromptCard(prompt) + '<div class="wb__chat" data-wb-log></div>' +
-        '<div class="wb__composer"><textarea class="wb__msg" rows="2" placeholder="Type your next move \u2014 think out loud like you would at the board (\u2318/Ctrl+Enter to send)\u2026"></textarea>' +
+        '<div class="wb__composer">' + voiceBar + '<textarea class="wb__msg" rows="2" placeholder="' + (voiceOn ? "Tap the mic and talk \u2014 or type here (\u2318/Ctrl+Enter to send)\u2026" : "Type your next move \u2014 think out loud like you would at the board (\u2318/Ctrl+Enter to send)\u2026") + '"></textarea>' +
         '<div class="wb__composer-act"><button class="btn btn--auto" data-wb-send>Send</button><button class="btn btn--ghost" data-wb-score>Wrap up &amp; score me</button></div></div>';
       wireStage();
       var log = stage.querySelector("[data-wb-log]");
       var msgEl = stage.querySelector(".wb__msg");
       var sendBtn = stage.querySelector("[data-wb-send]");
       var scoreBtn = stage.querySelector("[data-wb-score]");
+      var speakOn = wbSpeech.ttsOk;
       function addTurn(who, text) { var d = document.createElement("div"); d.className = "wb__turn wb__turn--" + who; var wl = document.createElement("span"); wl.className = "wb__who"; wl.textContent = who === "int" ? "Interviewer" : "You"; var bu = document.createElement("div"); bu.className = "wb__bubble"; bu.textContent = text; d.appendChild(wl); d.appendChild(bu); log.appendChild(d); log.scrollTop = log.scrollHeight; }
       async function interviewerTurn(userMsg) {
         btnBusy(sendBtn, "\u2026");
         try {
           var reply = (await aiText(aiCfg("txt"), wbMockSystem(st.mins), wbMockUser(prompt, transcript, userMsg || ""), { maxTokens: 500, temperature: 0.75 }) || "").trim();
-          if (reply) { addTurn("int", reply); transcript += (transcript ? "\n" : "") + "INTERVIEWER: " + reply; }
+          if (reply) { addTurn("int", reply); transcript += (transcript ? "\n" : "") + "INTERVIEWER: " + reply; if (voiceOn && speakOn) wbSpeech.speak(reply); }
         } catch (e) { err.textContent = (e && e.message) || "The interviewer went quiet \u2014 try again."; }
         btnIdle(sendBtn, "Send");
       }
       if (sendBtn) sendBtn.addEventListener("click", async function () { var m = (msgEl && msgEl.value.trim()) || ""; if (!m) return; addTurn("you", m); transcript += (transcript ? "\n" : "") + "CANDIDATE: " + m; msgEl.value = ""; await interviewerTurn(m); });
       if (msgEl) msgEl.addEventListener("keydown", function (e) { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); if (sendBtn) sendBtn.click(); } });
+      if (voiceOn) {
+        var micBtn = stage.querySelector("[data-wb-mic]"), liveEl = stage.querySelector("[data-wb-live]"), spkBtn = stage.querySelector("[data-wb-spk]");
+        var rec = null, listening = false;
+        var setMic = function (on) { listening = on; if (micBtn) { micBtn.classList.toggle("is-live", on); var t = micBtn.querySelector(".wb__mic-t"); if (t) t.textContent = on ? "Listening\u2026 tap to stop" : "Tap to talk"; } if (!on && liveEl) liveEl.textContent = ""; };
+        var startListening = function () {
+          if (listening) { if (rec) { try { rec.stop(); } catch (e) {} } return; }
+          wbSpeech.stop();
+          rec = wbSpeech.makeRec(); if (!rec) { err.textContent = "Talk mode needs Chrome or Edge."; return; }
+          var finalTxt = "";
+          rec.onresult = function (ev) { var interim = ""; finalTxt = ""; for (var i = 0; i < ev.results.length; i++) { var seg = ev.results[i][0].transcript; if (ev.results[i].isFinal) finalTxt += seg; else interim += seg; } if (liveEl) liveEl.textContent = (finalTxt + " " + interim).trim(); };
+          rec.onerror = function () { setMic(false); };
+          rec.onend = function () { setMic(false); var t = (finalTxt || (liveEl ? liveEl.textContent : "") || "").trim(); if (t && msgEl) { msgEl.value = t; if (liveEl) liveEl.textContent = ""; if (sendBtn) sendBtn.click(); } };
+          try { rec.start(); setMic(true); } catch (e) { setMic(false); }
+        };
+        if (micBtn) micBtn.addEventListener("click", startListening);
+        if (spkBtn) spkBtn.addEventListener("click", function () { speakOn = !speakOn; spkBtn.classList.toggle("is-on", speakOn); spkBtn.textContent = (speakOn ? "\uD83D\uDD0A" : "\uD83D\uDD07") + " Voice"; if (!speakOn) wbSpeech.stop(); });
+      }
       if (scoreBtn) scoreBtn.addEventListener("click", async function () {
         if (!transcript) { err.textContent = "Have a bit of the exercise first \u2014 then I\u2019ll score it."; return; }
         err.textContent = ""; btnBusy(scoreBtn, "Scoring\u2026");

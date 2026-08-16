@@ -1642,6 +1642,16 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .wb__ind { font-family: var(--mono); font-size: .68rem; letter-spacing: .02em; padding: .38rem .72rem; border: 1px solid var(--line); border-radius: 100px; background: var(--bg); color: var(--text-dim); cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
 .wb__ind:hover { color: var(--text); border-color: var(--text-faint); }
 .wb__ind.is-on { color: #1a1206; background: var(--accent); border-color: var(--accent); }
+.wb__voice { display: flex; align-items: center; gap: .55rem; margin-bottom: .5rem; flex-wrap: wrap; }
+.wb__mic { display: inline-flex; align-items: center; gap: .5rem; font-family: var(--mono); font-size: .74rem; letter-spacing: .02em; padding: .5rem .9rem; border: 1px solid var(--accent); border-radius: 100px; background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); cursor: pointer; transition: background .15s; }
+.wb__mic:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.wb__mic-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+.wb__mic.is-live { background: #e6795f; border-color: #e6795f; color: #fff; }
+.wb__mic.is-live .wb__mic-dot { animation: wb-pulse 1s infinite; }
+@keyframes wb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+.wb__voice-live { flex: 1 1 140px; min-width: 100px; font-size: .82rem; color: var(--text-dim); font-style: italic; }
+.wb__spk { font-family: var(--mono); font-size: .68rem; padding: .38rem .65rem; border: 1px solid var(--line); border-radius: 100px; background: none; color: var(--text-dim); cursor: pointer; flex: 0 0 auto; transition: color .15s, border-color .15s; }
+.wb__spk.is-on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .wb__brief { width: 100%; box-sizing: border-box; }
 .wb__own { width: 100%; resize: vertical; box-sizing: border-box; margin-top: .5rem; }
 .wb__stage { text-align: left; max-height: 62vh; overflow: auto; margin-top: .4rem; display: flex; flex-direction: column; gap: 1rem; }
