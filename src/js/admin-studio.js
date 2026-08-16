@@ -10662,7 +10662,8 @@ import { WORLD_LAND } from "./worldland.js";
       if (micCleanup) { try { micCleanup(); } catch (e) {} }
       var voiceOn = (st.convo === "voice") && wbSpeech.sttOk;
       var voiceBar = voiceOn ? '<div class="wb__voice"><button type="button" class="wb__mic" data-wb-mic><span class="wb__mic-dot"></span><span class="wb__mic-t">Tap to talk</span></button><span class="wb__voice-live" data-wb-live></span>' + (wbSpeech.ttsOk ? '<button type="button" class="wb__spk is-on" data-wb-spk title="Interviewer voice">\uD83D\uDD0A Voice</button>' : "") + "</div>" : "";
-      stage.innerHTML = wbPromptCard(prompt) + '<div class="wb__chat" data-wb-log></div>' +
+      var immHtml = voiceOn ? '<div class="wb__imm" data-wb-imm-bar><span class="wb__imm-note">Go immersive \u2014 turns on your mic, voice and a live screen or camera feed so it feels like a real interview.</span><button type="button" class="btn btn--primary wb__imm-go" data-wb-immersive>Start immersive interview</button></div>' : "";
+      stage.innerHTML = wbPromptCard(prompt) + immHtml + '<div class="wb__chat" data-wb-log></div>' +
         '<div class="wb__watch" data-wb-watch-bar></div>' +
         '<div class="wb__composer">' + voiceBar + '<textarea class="wb__msg" rows="2" placeholder="' + (voiceOn ? "Tap the mic and talk \u2014 or type here (\u2318/Ctrl+Enter to send)\u2026" : "Type your next move \u2014 think out loud like you would at the board (\u2318/Ctrl+Enter to send)\u2026") + '"></textarea>' +
         '<div class="wb__composer-act"><button class="btn btn--auto" data-wb-send>Send</button><button class="btn btn--ghost" data-wb-score>Wrap up &amp; score me</button></div></div>';
@@ -10812,6 +10813,11 @@ import { WORLD_LAND } from "./worldland.js";
         };
         if (micBtn) micBtn.addEventListener("click", startListening);
         if (spkBtn) spkBtn.addEventListener("click", function () { speakOn = !speakOn; spkBtn.classList.toggle("is-on", speakOn); spkBtn.textContent = (speakOn ? "\uD83D\uDD0A" : "\uD83D\uDD07") + " Voice"; if (!speakOn) wbSpeech.stop(); });
+        var immBar = stage.querySelector("[data-wb-imm-bar]");
+        function resetImmBar() { if (!immBar) return; immBar.innerHTML = '<span class="wb__imm-note">Go immersive \u2014 turns on your mic, voice and a live screen or camera feed so it feels like a real interview.</span><button type="button" class="btn btn--primary wb__imm-go" data-wb-immersive>Start immersive interview</button>'; var g = immBar.querySelector("[data-wb-immersive]"); if (g) g.addEventListener("click", openImmChooser); }
+        function openImmChooser() { if (!immBar) return; immBar.innerHTML = '<span class="wb__imm-note">Focus the interviewer on\u2026</span><button type="button" class="wb__watch-btn" data-imm-src="screen">\uD83D\uDDA5\uFE0F My screen</button><button type="button" class="wb__watch-btn" data-imm-src="camera">\uD83D\uDCF7 My camera</button><button type="button" class="wb__imm-x" data-imm-cancel>Cancel</button>'; immBar.querySelectorAll("[data-imm-src]").forEach(function (b) { b.addEventListener("click", function () { goImmersive(b.dataset.immSrc); }); }); var c = immBar.querySelector("[data-imm-cancel]"); if (c) c.addEventListener("click", resetImmBar); }
+        function goImmersive(src) { speakOn = true; if (spkBtn) { spkBtn.classList.add("is-on"); spkBtn.textContent = "\uD83D\uDD0A Voice"; } if (immBar) immBar.innerHTML = '<span class="wb__imm-live">\u25CF Immersive \u2014 mic + ' + (src === "screen" ? "screen" : "camera") + " live. The interviewer is listening and watching.</span>"; startWatch(src); startListening(); }
+        var immGo0 = stage.querySelector("[data-wb-immersive]"); if (immGo0) immGo0.addEventListener("click", openImmChooser);
       }
       if (scoreBtn) scoreBtn.addEventListener("click", async function () {
         if (!transcript) { err.textContent = "Have a bit of the exercise first \u2014 then I\u2019ll score it."; return; }

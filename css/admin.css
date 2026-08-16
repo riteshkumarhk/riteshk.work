@@ -1645,8 +1645,14 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .wb__ind:hover { color: var(--text); border-color: var(--text-faint); }
 .wb__ind.is-on { color: #1a1206; background: var(--accent); border-color: var(--accent); }
 .wb__voice { display: flex; align-items: center; gap: .55rem; margin-bottom: .5rem; flex-wrap: wrap; }
-.wb__mic { display: inline-flex; align-items: center; gap: .5rem; font-family: var(--mono); font-size: .74rem; letter-spacing: .02em; padding: .5rem .9rem; border: 1px solid var(--accent); border-radius: 100px; background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); cursor: pointer; transition: background .15s; }
-.wb__mic:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.wb__imm { display: flex; align-items: center; justify-content: space-between; gap: .6rem 1rem; flex-wrap: wrap; margin: .2rem 0 .8rem; padding: .75rem .95rem; border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.wb__imm-note { font-size: .8rem; color: var(--text-dim); flex: 1 1 240px; line-height: 1.35; }
+.wb__imm-go { flex-shrink: 0; }
+.wb__imm-live { font-family: var(--mono); font-size: .76rem; color: var(--accent); letter-spacing: .01em; }
+.wb__imm-x { font-family: var(--mono); font-size: .72rem; padding: .4rem .8rem; border: 1px solid var(--line); border-radius: 100px; background: none; color: var(--text-dim); cursor: pointer; }
+.wb__imm-x:hover { color: var(--text); }
+.wb__mic { display: inline-flex; align-items: center; gap: .5rem; font-family: var(--mono); font-size: .74rem; letter-spacing: .02em; padding: .5rem .9rem; border: 1px solid var(--line); border-radius: 100px; background: none; color: var(--text-dim); cursor: pointer; transition: color .15s, border-color .15s; }
+.wb__mic:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--accent); }
 .wb__mic-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
 .wb__mic.is-live { background: #e6795f; border-color: #e6795f; color: #fff; }
 .wb__mic.is-live .wb__mic-dot { animation: wb-pulse 1s infinite; }
