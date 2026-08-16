@@ -3784,15 +3784,18 @@ import { WORLD_LAND } from "./worldland.js";
     var sub = function (id, lab, n) { return '<button type="button" data-act="type-tab" data-tab="' + id + '"' + (tab === id ? ' class="is-on"' : "") + ">" + lab + ' <span class="adm__tsub-n">' + n + "</span></button>"; };
     var tabsHtml = catTabs.map(function (c) { return sub(c[0], c[1], builtins.filter(function (s) { return sysCat(s) === c[0]; }).length); }).join("") + sub("gen", "AI generated", gens.length);
     var genFull = gens.length >= 6;
+    var genMsg = genFull
+      ? '<p class="adm__tempty">You\u2019ve reached the limit of 6 \u2014 remove one to generate another.</p>'
+      : (gens.length ? "" : '<p class="adm__tempty">No AI systems yet \u2014 generate one from your AI key.</p>');
     var genPanel = tab === "gen"
-      ? '<div class="adm__tgen"><button class="btn btn--auto" type="button" data-act="type-gen"' + (genFull ? " disabled" : "") + '>\u2728 Generate a system</button>' +
-        '<input type="text" class="adm__tgen-brief" data-tbrief placeholder="Optional direction \u2014 e.g. \u201cwarmer &amp; literary\u201d or \u201cbold modern grotesque\u201d" /></div>' +
-        (genFull ? '<p class="adm__tempty">You\u2019ve reached the limit of 6 AI systems \u2014 remove one below, then generate another.</p>' : (gens.length ? "" : '<p class="adm__tempty">No AI systems yet. Generate one from your AI key \u2014 it\u2019s composed from real faces, saved to your library and previewed instantly; Publish makes it live.</p>'))
+      ? '<div class="adm__tgen">' + genMsg +
+        '<div class="adm__tgen-row"><input type="text" class="adm__tgen-brief" data-tbrief placeholder="Optional direction \u2014 e.g. \u201cwarmer &amp; literary\u201d" />' +
+        '<button class="btn btn--auto" type="button" data-act="type-gen"' + (genFull ? " disabled" : "") + ">\u2728 Generate a system</button></div></div>"
       : "";
     return secHead("Fonts", "One font system drives the whole site \u2014 display, body and mono. Click a system to preview it live on the right, then <em>Publish</em> to set it as your site\u2019s type.") +
       '<div class="adm__tsub">' + tabsHtml + "</div>" +
-      genPanel +
       '<div class="adm__tcards">' + cards + "</div>" +
+      genPanel +
       '<div class="adm__twt"><span class="adm__twt-label">Heading weight</span><div class="adm__twt-seg">' + wbtn(300, "Light") + wbtn(400, "Regular") + wbtn(500, "Medium") + wbtn(600, "Semibold") + "</div>" +
       '<span class="adm__twt-hint">Display weight for \u201c' + escHtml(active.name || "the active system") + '\u201d \u2014 each system keeps its own.</span></div>';
   }
