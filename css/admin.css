@@ -1659,7 +1659,22 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 @keyframes wb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 .wb__voice-live { flex: 1 1 140px; min-width: 100px; font-size: .82rem; color: var(--text-dim); font-style: italic; }
 .wb__spk { font-family: var(--mono); font-size: .68rem; padding: .38rem .65rem; border: 1px solid var(--line); border-radius: 100px; background: none; color: var(--text-dim); cursor: pointer; flex: 0 0 auto; transition: color .15s, border-color .15s; }
-.wb__spk.is-on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.wb__spk.is-on { color: var(--text); border-color: var(--line); }
+/* Immersive two-column stage */
+.wb-modal.wb-modal--stage .pass__box { width: min(1140px, 95vw); max-width: none; }
+.wb__cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 1.4rem; align-items: start; }
+.wb__main { display: flex; flex-direction: column; min-width: 0; }
+.wb__main .wb__chat { max-height: 46vh; overflow-y: auto; }
+.wb__rail { display: flex; flex-direction: column; gap: 1rem; }
+.wb__rail .wb__prompt { margin: 0; }
+.wb__rail-acts { display: flex; flex-direction: column; gap: .5rem; }
+.wb__rail-acts .btn { width: 100%; justify-content: center; }
+.wb__timer { text-align: center; padding: 1rem 1rem .85rem; border: 1px solid var(--line); border-radius: 14px; background: #0a0a0c; }
+.wb__timer-t { display: block; font-family: var(--mono); font-size: 2.6rem; font-weight: 700; letter-spacing: .06em; color: var(--text); line-height: 1; font-variant-numeric: tabular-nums; }
+.wb__timer-l { display: block; margin-top: .4rem; font-family: var(--mono); font-size: .6rem; text-transform: uppercase; letter-spacing: .18em; color: var(--text-faint); }
+.wb__timer.is-low .wb__timer-t { color: #e6a15c; }
+.wb__timer.is-done .wb__timer-t { color: #e6795f; }
+@media (max-width: 820px) { .wb__cols { grid-template-columns: 1fr; } .wb__rail { order: -1; } .wb__main .wb__chat { max-height: 38vh; } }
 .wb__watch { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem .6rem; margin: .1rem 0 .6rem; padding: .55rem 0; border-top: 1px dashed var(--line); }
 .wb__watch-lead { font-family: var(--mono); font-size: .74rem; color: var(--text-dim); }
 .wb__watch-btn { font-family: var(--mono); font-size: .72rem; padding: .4rem .8rem; border: 1px solid var(--line); border-radius: 100px; background: none; color: var(--text-dim); cursor: pointer; transition: color .15s, border-color .15s; }

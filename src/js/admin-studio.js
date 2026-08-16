@@ -10524,12 +10524,13 @@ import { WORLD_LAND } from "./worldland.js";
       (s.topfix ? '<div class="wb__topfix"><span>Fix this first</span> ' + escHtml(s.topfix) + "</div>" : "") + "</div>";
   }
   function wbRepeat(ch, n) { var s = ""; for (var i = 0; i < n; i++) s += ch; return s; }
+  function wbFmtClock(s) { s = Math.max(0, s | 0); var m = Math.floor(s / 60), ss = s % 60; return (m < 10 ? "0" : "") + m + ":" + (ss < 10 ? "0" : "") + ss; }
   function wbModal() {
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { wbModal(); }); return; }
     var st = wbState; if (!st.mins) st.mins = "60"; if (!st.mode) st.mode = "coach"; if (!st.level) st.level = "staff";
-    var prompt = null, transcript = "", sessTurns = [], sessDraft = "", sessPlan = null;
-    function saveSess() { if (!prompt || !prompt.prompt) return; try { localStorage.setItem(WB_SESS_KEY, JSON.stringify({ mode: st.mode, mins: st.mins, level: st.level, convo: st.convo, prompt: prompt, transcript: transcript, turns: sessTurns, draft: sessDraft, plan: sessPlan, savedAt: Date.now() })); } catch (e) {} }
-    function clearSess() { sessTurns = []; sessDraft = ""; sessPlan = null; wbSessClear(); }
+    var prompt = null, transcript = "", sessTurns = [], sessDraft = "", sessPlan = null, sessTimer = 0;
+    function saveSess() { if (!prompt || !prompt.prompt) return; try { localStorage.setItem(WB_SESS_KEY, JSON.stringify({ mode: st.mode, mins: st.mins, level: st.level, convo: st.convo, prompt: prompt, transcript: transcript, turns: sessTurns, draft: sessDraft, plan: sessPlan, timer: sessTimer, savedAt: Date.now() })); } catch (e) {} }
+    function clearSess() { sessTurns = []; sessDraft = ""; sessPlan = null; sessTimer = 0; wbSessClear(); }
     var modal = document.createElement("div");
     modal.className = "pass pass--wide wb-modal";
     modal.innerHTML =
@@ -10584,12 +10585,13 @@ import { WORLD_LAND } from "./worldland.js";
     var stage = modal.querySelector(".wb__stage");
     var startBtn = modal.querySelector("[data-wb-start]");
     var backBtn = modal.querySelector("[data-wb-back]");
+    var foot = modal.querySelector(".wb__foot");
     var briefEl = modal.querySelector(".wb__brief");
     var ownEl = modal.querySelector(".wb__own");
     var companyEl = modal.querySelector(".wb__company");
     var jdEl = modal.querySelector(".wb__jd");
-    var watchCleanup = null, micCleanup = null;
-    var close = function () { try { wbSpeech.stop(); } catch (e) {} if (watchCleanup) { try { watchCleanup(); } catch (e) {} } if (micCleanup) { try { micCleanup(); } catch (e) {} } modal.remove(); };
+    var watchCleanup = null, micCleanup = null, timerCleanup = null;
+    var close = function () { try { wbSpeech.stop(); } catch (e) {} if (watchCleanup) { try { watchCleanup(); } catch (e) {} } if (micCleanup) { try { micCleanup(); } catch (e) {} } if (timerCleanup) { try { timerCleanup(); } catch (e) {} } modal.remove(); };
     // Soft-dismiss (backdrop click + Escape) intentionally disabled \u2014 a mock can be a long recorded/voice session, so only the explicit Close button dismisses it.
     modal.querySelector("[data-cancel]").addEventListener("click", close);
     modal.querySelectorAll("[data-wb-mins]").forEach(function (b) { b.addEventListener("click", function () { st.mins = b.dataset.wbMins; modal.querySelectorAll("[data-wb-mins]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
@@ -10616,8 +10618,8 @@ import { WORLD_LAND } from "./worldland.js";
     if (briefEl) briefEl.addEventListener("input", function () { st.brief = briefEl.value; wbSave(); });
     if (companyEl) companyEl.addEventListener("input", function () { st.company = companyEl.value; wbSave(); });
     if (jdEl) jdEl.addEventListener("input", function () { st.jd = jdEl.value; wbSave(); });
-    function showSetup() { setup.hidden = false; stage.hidden = true; backBtn.hidden = true; startBtn.hidden = false; err.textContent = ""; }
-    function showStage() { setup.hidden = true; stage.hidden = false; backBtn.hidden = false; startBtn.hidden = true; err.textContent = ""; }
+    function showSetup() { setup.hidden = false; stage.hidden = true; backBtn.hidden = true; startBtn.hidden = false; if (foot) foot.hidden = false; modal.classList.remove("wb-modal--stage"); err.textContent = ""; }
+    function showStage() { setup.hidden = true; stage.hidden = false; backBtn.hidden = false; startBtn.hidden = true; modal.classList.add("wb-modal--stage"); err.textContent = ""; }
     backBtn.addEventListener("click", function () { if (watchCleanup) { try { watchCleanup(); } catch (e) {} } showSetup(); });
     startBtn.addEventListener("click", async function () {
       err.textContent = ""; btnBusy(startBtn, "Setting the prompt\u2026");
@@ -10626,7 +10628,7 @@ import { WORLD_LAND } from "./worldland.js";
         if (own) prompt = { prompt: own, context: "", watchfor: [] };
         else prompt = csgenParse(await aiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { json: true, maxTokens: 700, temperature: 0.9 }));
         if (!prompt || !prompt.prompt) throw new Error("Couldn\u2019t set a prompt \u2014 try again.");
-        transcript = ""; sessTurns = []; sessDraft = ""; sessPlan = null;
+        transcript = ""; sessTurns = []; sessDraft = ""; sessPlan = null; sessTimer = 0;
         showStage();
         if (st.mode === "coach") await wbRunCoach();
         else await wbRunMock(true);
@@ -10636,11 +10638,12 @@ import { WORLD_LAND } from "./worldland.js";
     async function wbResume(s) {
       if (!s) return;
       st.mode = s.mode || st.mode; st.mins = s.mins || st.mins; st.level = s.level || st.level; st.convo = s.convo || st.convo;
-      prompt = s.prompt; transcript = s.transcript || ""; sessTurns = (s.turns || []).slice(); sessDraft = s.draft || ""; sessPlan = s.plan || null;
+      prompt = s.prompt; transcript = s.transcript || ""; sessTurns = (s.turns || []).slice(); sessDraft = s.draft || ""; sessPlan = s.plan || null; sessTimer = +s.timer || 0;
       showStage();
       if (st.mode === "coach") wbRunCoach(true); else wbRunMock("resume");
     }
     async function wbRunCoach(resume) {
+      if (foot) foot.hidden = false;
       if (resume && sessPlan) {
         stage.innerHTML = wbPromptCard(prompt) + wbPlanCard(sessPlan, st.mins) + wbDraftCard();
         wireStage();
@@ -10660,19 +10663,33 @@ import { WORLD_LAND } from "./worldland.js";
     async function wbRunMock(opening) {
       if (watchCleanup) { try { watchCleanup(); } catch (e) {} }
       if (micCleanup) { try { micCleanup(); } catch (e) {} }
+      if (timerCleanup) { try { timerCleanup(); } catch (e) {} }
       var voiceOn = (st.convo === "voice") && wbSpeech.sttOk;
       var voiceBar = voiceOn ? '<div class="wb__voice"><button type="button" class="wb__mic" data-wb-mic><span class="wb__mic-dot"></span><span class="wb__mic-t">Tap to talk</span></button><span class="wb__voice-live" data-wb-live></span>' + (wbSpeech.ttsOk ? '<button type="button" class="wb__spk is-on" data-wb-spk title="Interviewer voice">\uD83D\uDD0A Voice</button>' : "") + "</div>" : "";
       var immHtml = voiceOn ? '<div class="wb__imm" data-wb-imm-bar><span class="wb__imm-note">Go immersive \u2014 turns on your mic, voice and a live screen or camera feed so it feels like a real interview.</span><button type="button" class="btn btn--primary wb__imm-go" data-wb-immersive>Start immersive interview</button></div>' : "";
-      stage.innerHTML = wbPromptCard(prompt) + immHtml + '<div class="wb__chat" data-wb-log></div>' +
+      if (foot) foot.hidden = true;
+      var totalSec = (parseInt(st.mins, 10) || 45) * 60;
+      var timerLeft = (opening === "resume" && sessTimer > 0) ? sessTimer : totalSec; sessTimer = timerLeft;
+      stage.innerHTML = '<div class="wb__cols"><div class="wb__main">' + immHtml + '<div class="wb__chat" data-wb-log></div>' +
         '<div class="wb__watch" data-wb-watch-bar></div>' +
         '<div class="wb__composer">' + voiceBar + '<textarea class="wb__msg" rows="2" placeholder="' + (voiceOn ? "Tap the mic and talk \u2014 or type here (\u2318/Ctrl+Enter to send)\u2026" : "Type your next move \u2014 think out loud like you would at the board (\u2318/Ctrl+Enter to send)\u2026") + '"></textarea>' +
-        '<div class="wb__composer-act"><button class="btn btn--auto" data-wb-send>Send</button><button class="btn btn--ghost" data-wb-score>Wrap up &amp; score me</button></div></div>';
+        '<div class="wb__composer-act"><button class="btn btn--auto" data-wb-send>Send</button></div></div></div>' +
+        '<aside class="wb__rail"><div class="wb__timer" data-wb-timer><span class="wb__timer-t" data-wb-timer-t>' + wbFmtClock(timerLeft) + '</span><span class="wb__timer-l">time remaining</span></div>' +
+        wbPromptCard(prompt) +
+        '<div class="wb__rail-acts"><button class="btn btn--auto" data-wb-score>Wrap up &amp; score me</button><button class="btn btn--ghost" data-wb-pause>Pause &amp; resume later</button><button class="btn btn--ghost" data-wb-rail-back>\u2190 Change setup</button></div></aside></div>';
       wireStage();
       var log = stage.querySelector("[data-wb-log]");
       var msgEl = stage.querySelector(".wb__msg");
       var sendBtn = stage.querySelector("[data-wb-send]");
       var scoreBtn = stage.querySelector("[data-wb-score]");
       var speakOn = wbSpeech.ttsOk;
+      var timerTEl = stage.querySelector("[data-wb-timer-t]"), timerEl = stage.querySelector("[data-wb-timer]"), timerInt = 0;
+      function paintTimer() { if (timerTEl) timerTEl.textContent = wbFmtClock(timerLeft); if (timerEl) { timerEl.classList.toggle("is-low", timerLeft > 0 && timerLeft <= 300); timerEl.classList.toggle("is-done", timerLeft <= 0); } }
+      function stopTimer() { if (timerInt) { clearInterval(timerInt); timerInt = 0; } }
+      function tickTimer() { if (timerLeft <= 0) { stopTimer(); paintTimer(); return; } timerLeft--; sessTimer = timerLeft; if (timerLeft % 5 === 0) saveSess(); paintTimer(); }
+      paintTimer(); timerInt = setInterval(tickTimer, 1000); timerCleanup = stopTimer;
+      var pauseBtn = stage.querySelector("[data-wb-pause]"); if (pauseBtn) pauseBtn.addEventListener("click", close);
+      var railBack = stage.querySelector("[data-wb-rail-back]"); if (railBack) railBack.addEventListener("click", function () { if (watchCleanup) { try { watchCleanup(); } catch (e) {} } showSetup(); });
       function renderTurn(who, text) { var d = document.createElement("div"); d.className = "wb__turn wb__turn--" + who; var wl = document.createElement("span"); wl.className = "wb__who"; wl.textContent = who === "int" ? "Interviewer" : "You"; var bu = document.createElement("div"); bu.className = "wb__bubble"; bu.textContent = text; d.appendChild(wl); d.appendChild(bu); log.appendChild(d); log.scrollTop = log.scrollHeight; }
       function addTurn(who, text) { renderTurn(who, text); sessTurns.push({ who: who, text: text }); saveSess(); }
       // ---- Let the interviewer WATCH: screen/camera capture + local recording + per-turn vision ----
@@ -10844,7 +10861,7 @@ import { WORLD_LAND } from "./worldland.js";
         btnBusy(np, "New prompt\u2026");
         try {
           prompt = csgenParse(await aiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { json: true, maxTokens: 700, temperature: 0.95 }));
-          transcript = ""; sessTurns = []; sessDraft = ""; sessPlan = null;
+          transcript = ""; sessTurns = []; sessDraft = ""; sessPlan = null; sessTimer = 0;
           if (st.mode === "coach") await wbRunCoach(); else await wbRunMock(true);
         } catch (e) { err.textContent = (e && e.message) || "Try again."; btnIdle(np, "\u21bb New prompt"); }
       });
