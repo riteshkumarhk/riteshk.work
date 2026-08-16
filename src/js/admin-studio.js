@@ -1124,10 +1124,11 @@ import { WORLD_LAND } from "./worldland.js";
       return '<button type="button" class="ats__lvl' + (atsLevel === l[0] ? " is-on" : "") + '" data-act="ats-level" data-lvl="' + l[0] + '"><b>' + l[1] + "</b><span>" + l[2] + "</span></button>";
     }).join("");
     return '<div class="ats">' +
-      '<div class="ats__head"><span class="ats__badge">ATS</span><div><b>ATS r\u00e9sum\u00e9 check</b><span>Is your r\u00e9sum\u00e9 parseable and tuned for the level you\u2019re targeting?</span></div></div>' +
+      '<div class="ats__head"><span class="ats__badge">ATS</span><div><b>ATS r\u00e9sum\u00e9 check</b><span>Is your r\u00e9sum\u00e9 ATS-ready \u2014 parseable, and tuned for the level or a specific job?</span></div></div>' +
       '<div class="ats__levels">' + lvls + "</div>" +
-      '<div class="ats__jd">' +
-        '<div class="af__hint" style="margin:.2rem 0 .5rem">Target a specific job <b>(optional)</b> \u2014 paste it to score the r\u00e9sum\u00e9\u2019s match for THAT role and surface the exact keywords it wants.</div>' +
+      '<div style="margin:.2rem 0 .6rem"><div class="cl__len"><button type="button" class="cl__lenbtn' + (atsState.mode === "job" ? "" : " is-on") + '" data-act="ats-mode" data-mode="general">General check</button><button type="button" class="cl__lenbtn' + (atsState.mode === "job" ? " is-on" : "") + '" data-act="ats-mode" data-mode="job">Against a specific job</button></div></div>' +
+      '<div class="ats__jd"' + (atsState.mode === "job" ? "" : " hidden") + '>' +
+        '<div class="af__hint" style="margin:.1rem 0 .5rem">Paste the job you\u2019re targeting \u2014 the score and fixes judge your r\u00e9sum\u00e9 as a MATCH for THIS role and surface the exact keywords it wants.</div>' +
         '<div class="cl__row"><input type="url" class="cl__url" placeholder="Paste the job posting URL\u2026" value="' + escAttr(atsState.url) + '" /><button class="btn btn--ghost" type="button" data-act="ats-fetch">Fetch</button></div>' +
         '<textarea class="cl__jd" rows="4" placeholder="\u2026or paste the job description here (best results \u2014 LinkedIn links often need pasting).">' + escHtml(atsState.jd) + '</textarea>' +
         '<div class="cl__row2"><input type="text" class="cl__company" placeholder="Company / role (optional, sharpens it)" value="' + escAttr(atsState.company) + '" /></div>' +
@@ -1769,7 +1770,7 @@ import { WORLD_LAND } from "./worldland.js";
 
   /* ---------- ATS résumé check (Contact tab, beside the résumé upload) ---------- */
   var atsLevel = "staff";
-  var atsState = { jd: "", url: "", company: "" };
+  var atsState = { mode: "general", jd: "", url: "", company: "" };
   function atsLevelName(l) { return ({ senior: "Senior", staff: "Principal / Staff", leader: "Design leadership" })[l] || l; }
   async function resumeToFile(url) {
     var p = parseDataUri(url);
@@ -1854,6 +1855,16 @@ import { WORLD_LAND } from "./worldland.js";
     html += '<div class="af__hint" style="margin-top:.7rem">An AI review of the extracted text \u2014 helpful guidance, not a guaranteed ATS pass. Re-run after edits.</div></div>';
     return html;
   }
+  function atsMiniHtml(res, level, company) {
+    var score = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
+    var band = res.band || (score >= 80 ? "Strong" : score >= 65 ? "Good" : score >= 45 ? "Needs work" : "At risk");
+    var tone = score >= 80 ? "good" : score >= 65 ? "ok" : score >= 45 ? "warn" : "bad";
+    return '<div class="ats__result">' +
+      '<div class="ats__score ats__score--' + tone + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div>' +
+      '<div class="ats__score-x"><b>' + escHtml(band) + '</b><span>ATS + ' + escHtml(company ? company + " fit" : atsLevelName(level) + " fit") + '</span>' + (res.summary ? '<p>' + escHtml(res.summary) + '</p>' : '') + '</div></div>' +
+      '<div class="ats__viewrow"><button class="btn btn--primary" type="button" data-act="ats-view">Open full review \u2014 fixes pinned on your r\u00e9sum\u00e9 \u2192</button></div>' +
+      '</div>';
+  }
   async function atsRun(panel, file) {
     if (!panel) return;
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { atsRun(panel, file); }); return; }
@@ -1867,19 +1878,23 @@ import { WORLD_LAND } from "./worldland.js";
       var f = file || await resumeToFile(url);
       var text = ((await fbExtractFile(f)) || "").replace(/\s+/g, " ").trim();
       if (text.length < 40) throw new Error("I couldn\u2019t read text from that r\u00e9sum\u00e9. If it\u2019s an image-only or scanned PDF, that\u2019s itself a major ATS red flag \u2014 export a text-based PDF from your design tool or Word.");
-      var jdUrlEl = panel.querySelector(".cl__url"), jdEl = panel.querySelector(".cl__jd"), coEl = panel.querySelector(".cl__company");
-      atsState.url = jdUrlEl ? jdUrlEl.value.trim() : atsState.url;
-      atsState.jd = jdEl ? jdEl.value.trim() : atsState.jd;
-      atsState.company = coEl ? coEl.value.trim() : atsState.company;
-      var jd = atsState.jd;
-      if (!jd && atsState.url) {
-        if (out) out.innerHTML = '<div class="ats__load"><span class="ats__spin"></span> Reading the job post, then scoring the match\u2026</div>';
-        try { jd = await clFetchJd(atsState.url); if (jdEl) jdEl.value = jd; atsState.jd = jd; } catch (e2) {}
+      var jd = "", company = "";
+      if (atsState.mode === "job") {
+        var jdUrlEl = panel.querySelector(".cl__url"), jdEl = panel.querySelector(".cl__jd"), coEl = panel.querySelector(".cl__company");
+        atsState.url = jdUrlEl ? jdUrlEl.value.trim() : atsState.url;
+        atsState.jd = jdEl ? jdEl.value.trim() : atsState.jd;
+        atsState.company = coEl ? coEl.value.trim() : atsState.company;
+        jd = atsState.jd; company = atsState.company;
+        if (!jd && atsState.url) {
+          if (out) out.innerHTML = '<div class="ats__load"><span class="ats__spin"></span> Reading the job post, then scoring the match\u2026</div>';
+          try { jd = await clFetchJd(atsState.url); if (jdEl) jdEl.value = jd; atsState.jd = jd; } catch (e2) {}
+        }
       }
-      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel, jd, atsState.company), { json: true, maxTokens: 6000, temperature: 0.3 }));
+      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel, jd, company), { json: true, maxTokens: 6000, temperature: 0.3 }));
       if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
-      atsLast = { file: f, res: res, level: atsLevel };
-      if (out) out.innerHTML = atsRenderHtml(res, atsLevel, text.length < 500);
+      atsLast = { file: f, res: res, level: atsLevel, company: company };
+      if (out) out.innerHTML = atsMiniHtml(res, atsLevel, company);
+      atsOpenViewer();
       status("ATS check done.", true);
     } catch (e) {
       if (out) out.innerHTML = '<div class="ats__err">' + escHtml(e && e.message || String(e)) + '</div>';
@@ -2087,7 +2102,8 @@ import { WORLD_LAND } from "./worldland.js";
     var score = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
     var band = res.band || (score >= 80 ? "Strong" : score >= 65 ? "Good" : score >= 45 ? "Needs work" : "At risk");
     var tone = score >= 80 ? "good" : score >= 65 ? "ok" : score >= 45 ? "warn" : "bad";
-    var html = '<div class="atsv__score atsv__score--' + tone + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div><div class="atsv__score-x"><b>' + escHtml(band) + '</b><span>ATS + ' + escHtml(atsLevelName(level)) + ' fit</span>' + (res.summary ? '<p>' + escHtml(res.summary) + '</p>' : '') + '</div></div>';
+    var fitT = (atsLast && atsLast.company) ? (escHtml(atsLast.company) + " fit") : (escHtml(atsLevelName(level)) + " fit");
+    var html = '<div class="atsv__score atsv__score--' + tone + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div><div class="atsv__score-x"><b>' + escHtml(band) + '</b><span>ATS + ' + fitT + '</span>' + (res.summary ? '<p>' + escHtml(res.summary) + '</p>' : '') + '</div></div>';
     html += '<div class="atsv__grp"><div class="atsv__grptitle">On the page <span>' + ctx.onPage.length + '</span></div>';
     html += ctx.onPage.length ? ctx.onPage.map(function (fi, n) { return atsvItemHtml(ctx, fi, n + 1, true); }).join("") : '<div class="atsv__empty">No fixes mapped to an exact spot on the page.</div>';
     html += '</div>';
@@ -2102,7 +2118,7 @@ import { WORLD_LAND } from "./worldland.js";
     }).join("") + '</div>';
     if (miss.length || pres.length) {
       html += '<div class="atsv__kw">';
-      if (miss.length) html += '<div class="atsv__kwrow"><span class="atsv__kwlbl">Add for ' + escHtml(atsLevelName(level)) + '</span>' + miss.map(function (k) { return '<span class="atsv__chip atsv__chip--miss">' + escHtml(k) + '</span>'; }).join("") + '</div>';
+      if (miss.length) html += '<div class="atsv__kwrow"><span class="atsv__kwlbl">Add for ' + escHtml((atsLast && atsLast.company) ? "this role" : atsLevelName(level)) + '</span>' + miss.map(function (k) { return '<span class="atsv__chip atsv__chip--miss">' + escHtml(k) + '</span>'; }).join("") + '</div>';
       if (pres.length) html += '<div class="atsv__kwrow"><span class="atsv__kwlbl">Covered</span>' + pres.map(function (k) { return '<span class="atsv__chip">' + escHtml(k) + '</span>'; }).join("") + '</div>';
       html += '</div>';
     }
@@ -6375,6 +6391,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "phone-qr") { phoneQr(b); return; }
     if (act === "ats-check") { atsRun(b.closest(".ats"), null); return; }
     if (act === "ats-fetch") { atsFetchToPanel(b.closest(".ats")); return; }
+    if (act === "ats-mode") { atsState.mode = b.dataset.mode; var amp = b.closest(".ats"); if (amp) { amp.querySelectorAll('[data-act="ats-mode"]').forEach(function (x) { x.classList.toggle("is-on", x === b); }); var ajd = amp.querySelector(".ats__jd"); if (ajd) ajd.hidden = (atsState.mode !== "job"); } return; }
     if (act === "ats-view") { atsOpenViewer(); return; }
     if (act === "ats-level") { atsLevel = b.dataset.lvl; var ap = b.closest(".ats"); if (ap) ap.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
     if (act === "cl-level") { clLevel = b.dataset.lvl; var clp = b.closest(".cl"); if (clp) clp.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
