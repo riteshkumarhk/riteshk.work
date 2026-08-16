@@ -304,13 +304,55 @@ import { WORLD_LAND } from "./worldland.js";
   ];
   function narrGp(o, path) { try { return path.split(".").reduce(function (a, k) { return a == null ? undefined : a[k]; }, o); } catch (e) { return undefined; } }
   function narrChanged(pub, path) { try { return JSON.stringify(narrGp(data, path)) !== JSON.stringify(narrGp(pub, path)); } catch (e) { return true; } }
+  // A short, recognisable handle for a case study (shortened title, else client) so the narrator can
+  // name which case(s) changed instead of a generic "Work".
+  function narrCaseName(w) {
+    if (!w) return "a case";
+    var t = String(w.title == null ? "" : w.title).replace(/\[\[|\]\]|\*\*|[*_`~]/g, "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    if (!t) t = String(w.client || "").trim() || "Untitled case";
+    // Lead with the subject: drop a generic opening verb ("Designing Growth Lifecycle..." -> "Growth Lifecycle...").
+    var m = t.match(/^(?:Designing|Reimagining|Reinventing|Rethinking|Redefining|Building|Creating|Crafting|Shaping|Introducing|Launching|Scaling|Exploring|Improving) (.+)/i);
+    if (m && m[1].split(" ").length >= 3) t = m[1];
+    if (t.length <= 24) return t;
+    var words = t.split(" "), out = "", i = 0;
+    while (i < words.length) {
+      var next = out ? out + " " + words[i] : words[i];
+      if (next.length > 22 && out) break;
+      out = next; i++;
+      if (out.length >= 22) break;
+    }
+    if (i >= words.length) return out;
+    var stop = /[\s,]+(?:for|a|an|the|of|and|to|in|on|with|&)$/i;   // no trailing preposition/article before the ellipsis
+    while (stop.test(out)) out = out.replace(stop, "");
+    return out + "\u2026";
+  }
+  // Names of the cases added / edited / removed vs published (empty => only a reorder, no per-item change).
+  function narrWorkChanges(pub) {
+    var dw = (data.work || []), pw = (pub.work || []);
+    var pById = {}; pw.forEach(function (w) { if (w && w.id) pById[w.id] = w; });
+    var dById = {}; dw.forEach(function (w) { if (w && w.id) dById[w.id] = w; });
+    var names = [], seen = {};
+    function push(n) { if (n && !seen[n]) { seen[n] = 1; names.push(n); } }
+    dw.forEach(function (w) {
+      if (!w || !w.id) return;
+      var p = pById[w.id];
+      if (!p) push(narrCaseName(w));
+      else { try { if (JSON.stringify(w) !== JSON.stringify(p)) push(narrCaseName(w)); } catch (e) { push(narrCaseName(w)); } }
+    });
+    pw.forEach(function (w) { if (w && w.id && !dById[w.id]) push(narrCaseName(w)); });
+    return names;
+  }
   function changeSummary() {
     var pub = (window.RK && (window.RK.published || window.RK.data)) || null;
     if (!pub) return { count: 0, labels: [] };
     var labels = [], seen = {}, hitSection = {};
     function add(l) { if (l && !seen[l]) { seen[l] = 1; labels.push(l); } }
     CHANGE_FIELDS.forEach(function (f) { if (narrChanged(pub, f[0])) { add(f[1]); hitSection[f[0].split(".")[0]] = 1; } });
-    CHANGE_SECTIONS.forEach(function (s) { if (!hitSection[s[0]] && narrChanged(pub, s[0])) add(s[1]); });
+    CHANGE_SECTIONS.forEach(function (s) {
+      if (hitSection[s[0]] || !narrChanged(pub, s[0])) return;
+      if (s[0] === "work") { var wc = narrWorkChanges(pub); if (wc.length) { wc.forEach(add); return; } }  // name the case(s), not a generic "Work"; a reorder-only change falls through
+      add(s[1]);
+    });
     return { count: labels.length, labels: labels.slice(0, 3) };
   }
   function narrRelTime(ts) {
