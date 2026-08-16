@@ -3759,7 +3759,7 @@ import { WORLD_LAND } from "./worldland.js";
       '<span class="adm__tcard-cap" style="' + fam(mo) + '">' + caption + "</span>" +
       "</button>";
     var acts = s.builtin ? "" : '<div class="adm__tcard-acts">' +
-      (s.faces && s.faces.length ? '<span class="adm__tcard-sh">\u2713 Self-hosted</span>' : "") +
+      (active ? "" : '<button type="button" class="adm__tcard-apply" data-act="type-pick" data-id="' + escAttr(s.id) + '">Apply</button>') +
       '<button type="button" class="adm__tcard-rm" data-act="type-remove" data-id="' + escAttr(s.id) + '">Remove</button></div>';
     return '<div class="adm__tcard-wrap">' + pick + acts + "</div>";
   }
@@ -3794,8 +3794,7 @@ import { WORLD_LAND } from "./worldland.js";
       genPanel +
       '<div class="adm__tcards">' + cards + "</div>" +
       '<div class="adm__twt"><span class="adm__twt-label">Heading weight</span><div class="adm__twt-seg">' + wbtn(300, "Light") + wbtn(400, "Regular") + wbtn(500, "Medium") + wbtn(600, "Semibold") + "</div>" +
-      '<span class="adm__twt-hint">Display weight for \u201c' + escHtml(active.name || "the active system") + '\u201d \u2014 each system keeps its own.</span></div>' +
-      '<p class="adm__tnote">Each card previews the pairing live \u2014 the heading in the display font, the paragraph in the text font, the caption in the mono font. Grouped by type: Serif, Sans, Display, Mono and Hand. <em>AI-generated</em> systems are built from real, existing fonts using your AI key, then saved and self-hosted here automatically \u2014 apply one, or remove it anytime.</p>';
+      '<span class="adm__twt-hint">Display weight for \u201c' + escHtml(active.name || "the active system") + '\u201d \u2014 each system keeps its own.</span></div>';
   }
   function typeSanRole(r, kind) {
     r = r || {};
@@ -3840,21 +3839,23 @@ import { WORLD_LAND } from "./worldland.js";
       if (d && !d.weight) d.weight = 400;
       var sysObj = { id: "gen-" + Date.now().toString(36), name: (String((j && j.name) || "Generated").trim() || "Generated").slice(0, 32), note: String((j && j.note) || "AI system").trim().slice(0, 44), builtin: false, display: d, text: t, mono: m };
       ensureTypography(data).systems.push(sysObj);
-      data.typography.active = sysObj.id;
-      saveDraft(true); apply(true); renderBody();
+      typeSubTab = "gen";
+      // NOTE: generating does NOT auto-apply. The new system is added + self-hosted but the current live
+      // font stays; the owner clicks Apply on the card to make it live (intentional, never auto-applied).
+      saveDraft(true); renderBody();
       // Auto self-host the generated faces (download from Google via the worker + commit to R2) so it loads
-      // locally like the built-ins \u2014 no live-Google dependency in the preview or on the published site.
+      // locally like the built-ins once applied \u2014 no live-Google dependency on the published site.
       if (adminSession()) {
         if (btn) btn.textContent = "Self-hosting\u2026";
         try {
           await typeHostSys(sysObj);
-          saveDraft(true); apply(true); renderBody();
-          status("Generated \u201c" + sysObj.name + "\u201d and self-hosted it \u2014 it previews on the right. Click the card to apply, or Remove it; Publish to keep.", true);
+          saveDraft(true); renderBody();
+          status("Generated \u201c" + sysObj.name + "\u201d and self-hosted it. Click Apply on its card to preview & use it; Publish to keep.", true);
         } catch (e2) {
-          status("Generated \u201c" + sysObj.name + "\u201d (couldn\u2019t self-host: " + ((e2 && e2.message) || "error") + " \u2014 it still previews via Google). Apply or Remove; Publish to keep.", true);
+          status("Generated \u201c" + sysObj.name + "\u201d (couldn\u2019t self-host: " + ((e2 && e2.message) || "error") + " \u2014 it\u2019ll use Google when applied). Click Apply to preview it; Publish to keep.", true);
         }
       } else {
-        status("Generated \u201c" + sysObj.name + "\u201d \u2014 previewing via Google. Sign in to self-host it. Apply or Remove; Publish to keep.", true);
+        status("Generated \u201c" + sysObj.name + "\u201d. Click Apply to preview it (via Google); sign in to self-host. Publish to keep.", true);
       }
     } catch (e) { status("Font generation failed: " + ((e && e.message) || "error")); }
     if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate a system"; }
