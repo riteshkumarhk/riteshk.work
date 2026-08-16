@@ -1670,6 +1670,9 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .wb__watch-see.is-on { color: var(--accent); }
 .wb__watch-acts { display: flex; gap: .5rem; flex-wrap: wrap; }
 .wb__watch-acts .btn { font-size: .72rem; padding: .4rem .8rem; }
+.wb__glance { font-family: var(--mono); font-size: .7rem; padding: .4rem .75rem; border: 1px solid var(--line); border-radius: 100px; background: none; color: var(--text-dim); cursor: pointer; transition: color .15s, border-color .15s; }
+.wb__glance:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.wb__glance.is-on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .wb__brief { width: 100%; box-sizing: border-box; }
 .wb__own { width: 100%; resize: vertical; box-sizing: border-box; margin-top: .5rem; }
 .wb__stage { text-align: left; max-height: 62vh; overflow: auto; margin-top: .4rem; display: flex; flex-direction: column; gap: 1rem; }

@@ -10436,6 +10436,7 @@ import { WORLD_LAND } from "./worldland.js";
   }
   function wbCritiqueUser(p, draft) { return "PROMPT:\n" + (p.prompt || "") + "\n\nCANDIDATE'S APPROACH:\n" + draft + wbRoleLine(); }
   var WB_SEE_SYS = "\n\nYou can SEE the candidate\u2019s whiteboard right now \u2014 an image is attached showing their screen (Figma / FigJam / a doc) or a camera pointed at their paper sketch. Study it and react to what they have ACTUALLY drawn or written: reference specific elements, praise or probe concrete choices, and gently catch any gap between what they say and what\u2019s on the board. If the image is blank, blurry or unreadable, just continue naturally without mentioning it.";
+  var WB_SEE_SCORE = "\n\nThe candidate\u2019s FINAL whiteboard is attached \u2014 factor what they ACTUALLY produced (the structure, coverage and clarity of the artifact itself) into the score, not only what they said.";
   function wbMockSystem(mins) {
     return [
       "You ARE the interviewer running a live " + wbMinsLabel(mins) + " whiteboard design exercise \u2014 stay fully in character, first person, one turn at a time.",
@@ -10642,6 +10643,7 @@ import { WORLD_LAND } from "./worldland.js";
       var watchBar = stage.querySelector("[data-wb-watch-bar]");
       var wStream = null, wMic = null, wRec = null, wRecStream = null, wChunks = [], wRecUrl = "";
       var wVideo = null, wSrc = "", wCanSee = null, wModel = null, wRecOn = false;
+      var wGlanceOn = false, wGlanceTimer = 0, wLastTurn = Date.now(), wTurnBusy = false;
       function wStopTracks(s) { if (s) { try { s.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} } }
       function grabFrame() {
         try {
@@ -10664,7 +10666,18 @@ import { WORLD_LAND } from "./worldland.js";
           wRec.start(1000); wRecOn = true;
         } catch (e) { wRec = null; wRecOn = false; }
       }
+      function glanceTick() {
+        if (!wStream || !wCanSee || wTurnBusy) return;
+        if (Date.now() - wLastTurn < 22000) return;
+        interviewerTurn("", "You\u2019ve been quietly working on the board \u2014 take a fresh look at the attached image and react to what\u2019s changed or where they\u2019re heading. Keep it to a sentence or two.");
+      }
+      function setGlance(on) {
+        wGlanceOn = on && !!wStream && !!wCanSee;
+        if (wGlanceTimer) { clearInterval(wGlanceTimer); wGlanceTimer = 0; }
+        if (wGlanceOn) wGlanceTimer = setInterval(glanceTick, 5000);
+      }
       function stopWatch() {
+        setGlance(false);
         if (wRec && wRecOn) { try { wRec.stop(); } catch (e) {} wRecOn = false; } // onstop builds wRecUrl + repaints
         wStopTracks(wStream); wStopTracks(wMic); wStopTracks(wRecStream);
         wStream = null; wMic = null; wRecStream = null;
@@ -10704,9 +10717,10 @@ import { WORLD_LAND } from "./worldland.js";
           watchBar.innerHTML =
             '<div class="wb__watch-prevwrap">' + (wRecOn ? '<span class="wb__watch-rec">\u25CF REC</span>' : "") + "</div>" +
             '<div class="wb__watch-meta"><div class="wb__watch-srcrow"><span class="wb__watch-src">' + (wSrc === "screen" ? "\uD83D\uDDA5\uFE0F Screen" : "\uD83D\uDCF7 Camera") + "</span>" + seeHtml + "</div>" +
-            '<div class="wb__watch-acts">' + (wCanSee ? '<button type="button" class="btn btn--auto" data-wb-shownow>Show interviewer now</button>' : "") + '<button type="button" class="btn btn--ghost" data-wb-watchstop>Stop</button></div></div>';
+            '<div class="wb__watch-acts">' + (wCanSee ? '<button type="button" class="btn btn--auto" data-wb-shownow>Show interviewer now</button><button type="button" class="wb__glance' + (wGlanceOn ? " is-on" : "") + '" data-wb-glance title="Let the interviewer look on its own every ~25s while you work quietly">' + (wGlanceOn ? "\u25C9 Auto-glance on" : "\u25CB Auto-glance") + "</button>" : "") + '<button type="button" class="btn btn--ghost" data-wb-watchstop>Stop</button></div></div>';
           var wrap = watchBar.querySelector(".wb__watch-prevwrap"); if (wrap && wVideo) wrap.insertBefore(wVideo, wrap.firstChild);
           var sn = watchBar.querySelector("[data-wb-shownow]"); if (sn) sn.addEventListener("click", function () { interviewerTurn("", "The candidate is now showing you their current whiteboard \u2014 look closely at the attached image and react specifically to what\u2019s on it right now."); });
+          var gl = watchBar.querySelector("[data-wb-glance]"); if (gl) gl.addEventListener("click", function () { setGlance(!wGlanceOn); paintWatch(); });
           var wsBtn = watchBar.querySelector("[data-wb-watchstop]"); if (wsBtn) wsBtn.addEventListener("click", stopWatch);
         } else {
           watchBar.classList.remove("is-live");
@@ -10721,6 +10735,8 @@ import { WORLD_LAND } from "./worldland.js";
       }
       paintWatch();
       async function interviewerTurn(userMsg, nudge) {
+        if (wTurnBusy) return;
+        wTurnBusy = true; wLastTurn = Date.now();
         btnBusy(sendBtn, "\u2026");
         try {
           var frame = (wStream && wCanSee) ? grabFrame() : null;
@@ -10734,6 +10750,7 @@ import { WORLD_LAND } from "./worldland.js";
           }
           if (reply) { addTurn("int", reply); transcript += (transcript ? "\n" : "") + "INTERVIEWER: " + reply; if (voiceOn && speakOn) wbSpeech.speak(reply); }
         } catch (e) { err.textContent = (e && e.message) || "The interviewer went quiet \u2014 try again."; }
+        wLastTurn = Date.now(); wTurnBusy = false;
         btnIdle(sendBtn, "Send");
       }
       if (sendBtn) sendBtn.addEventListener("click", async function () { var m = (msgEl && msgEl.value.trim()) || ""; if (!m) return; addTurn("you", m); transcript += (transcript ? "\n" : "") + "CANDIDATE: " + m; msgEl.value = ""; await interviewerTurn(m); });
@@ -10757,9 +10774,16 @@ import { WORLD_LAND } from "./worldland.js";
       }
       if (scoreBtn) scoreBtn.addEventListener("click", async function () {
         if (!transcript) { err.textContent = "Have a bit of the exercise first \u2014 then I\u2019ll score it."; return; }
-        err.textContent = ""; btnBusy(scoreBtn, "Scoring\u2026");
+        err.textContent = ""; setGlance(false); btnBusy(scoreBtn, "Scoring\u2026");
         try {
-          var s = csgenParse(await aiText(aiCfg("txt"), wbScoreSystem(), wbScoreUser(prompt, transcript), { json: true, maxTokens: 1400, temperature: 0.4 }));
+          var sFrame = (wStream && wCanSee) ? grabFrame() : null, raw;
+          if (sFrame && wModel) {
+            try { var vr = await aiVisionOnce(aiCfg("txt"), wModel, wbScoreSystem() + WB_SEE_SCORE, wbScoreUser(prompt, transcript), [sFrame]); if (!vr || !vr.ok) throw new Error((vr && vr.err) || "vision score failed"); raw = vr.text; }
+            catch (e) { raw = await aiText(aiCfg("txt"), wbScoreSystem(), wbScoreUser(prompt, transcript), { json: true, maxTokens: 1400, temperature: 0.4 }); }
+          } else {
+            raw = await aiText(aiCfg("txt"), wbScoreSystem(), wbScoreUser(prompt, transcript), { json: true, maxTokens: 1400, temperature: 0.4 });
+          }
+          var s = csgenParse(raw);
           var card = document.createElement("div"); card.className = "wb__scorewrap"; card.innerHTML = wbScoreHtml(s); stage.appendChild(card); card.scrollIntoView({ block: "nearest" });
         } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t score that \u2014 try again."; }
         btnIdle(scoreBtn, "Wrap up & score me");
