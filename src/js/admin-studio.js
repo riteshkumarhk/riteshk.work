@@ -10691,7 +10691,7 @@ import { WORLD_LAND } from "./worldland.js";
       var WB_IC_CAM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 8l-6 4 6 4V8z"/><rect x="1" y="6" width="16" height="12" rx="2"/></svg>';
       var WB_IC_SPK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>';
       var WB_IC_SPK_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>';
-      var micInline = voiceOn ? '<button type="button" class="wb__mic" data-wb-mic><span class="wb__ico">' + WB_IC_MIC + '</span><span class="wb__mic-t">Tap to talk</span></button>' : "";
+      var micInline = voiceOn ? '<button type="button" class="wb__mic" data-wb-mic title="Tap to talk \u2014 pause to think anytime; tap again when you\u2019re done"><span class="wb__ico">' + WB_IC_MIC + '</span><span class="wb__mic-t">Tap to talk</span></button>' : "";
       var spkInline = (voiceOn && wbSpeech.ttsOk) ? '<button type="button" class="wb__spk wb__spk--icon is-on" data-wb-spk title="AI narration \u2014 on (the interviewer reads its replies aloud)" aria-label="AI narration \u2014 on"><span class="wb__ico" data-wb-spk-ico>' + WB_IC_SPK + '</span></button>' : "";
       var capInline = '<button type="button" class="wb__cap" data-wb-watch="screen" title="Share your screen so the interviewer can see your board"><span class="wb__ico">' + WB_IC_SCREEN + '</span>Share screen</button><button type="button" class="wb__cap" data-wb-watch="camera" title="Turn on your camera so the interviewer can watch"><span class="wb__ico">' + WB_IC_CAM + '</span>Camera</button>';
       var immHtml = voiceOn ? '<div class="wb__imm" data-wb-imm-bar><span class="wb__imm-note">Go immersive \u2014 turns on your mic, AI narration and a live screen <em>and</em> camera feed so it feels like a real interview.</span><button type="button" class="btn btn--primary wb__imm-go" data-wb-immersive>Start immersive interview</button></div>' : "";
@@ -10868,11 +10868,13 @@ import { WORLD_LAND } from "./worldland.js";
       if (msgEl) msgEl.addEventListener("keydown", function (e) { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); if (sendBtn) sendBtn.click(); } });
       if (voiceOn) {
         var micBtn = stage.querySelector("[data-wb-mic]"), liveEl = stage.querySelector("[data-wb-live]"), spkBtn = stage.querySelector("[data-wb-spk]");
-        var rec = null, listening = false, micText = function () { return micBtn && micBtn.querySelector(".wb__mic-t"); };
-        var setMic = function (on) { listening = on; if (micBtn) { micBtn.classList.toggle("is-live", on); var t = micText(); if (t) t.textContent = on ? "Listening\u2026 tap to stop" : "Tap to talk"; } if (miniMic) miniMic.classList.toggle("is-live", on); if (!on && liveEl) liveEl.textContent = ""; };
-        micCleanup = function () { if (rec) { try { rec.abort(); } catch (e) {} } };
+        var rec = null, listening = false, stopping = false, killed = false, committed = "", accumulated = "";
+        var micText = function () { return micBtn && micBtn.querySelector(".wb__mic-t"); };
+        var setMic = function (on) { listening = on; if (micBtn) { micBtn.classList.toggle("is-live", on); var t = micText(); if (t) t.textContent = on ? "Listening\u2026 tap when done" : "Tap to talk"; } if (miniMic) miniMic.classList.toggle("is-live", on); if (!on && liveEl) liveEl.textContent = ""; };
+        micCleanup = function () { killed = true; if (rec) { try { rec.abort(); } catch (e) {} } };
         var startListening = async function () {
-          if (listening) { if (rec) { try { rec.stop(); } catch (e) {} } return; }
+          // Tapping while listening = "I'm done" \u2014 finalise + send. A think-pause alone never sends.
+          if (listening) { stopping = true; if (rec) { try { rec.stop(); } catch (e) {} } return; }
           wbSpeech.stop();
           var t0 = micText(); if (t0) t0.textContent = "Starting\u2026";
           // Route the FIRST mic request through getUserMedia: it gives a reliable, PERSISTENT permission that SpeechRecognition then inherits \u2014 sidesteps Edge auto-blocking the speech API's own request.
@@ -10880,10 +10882,31 @@ import { WORLD_LAND } from "./worldland.js";
           catch (e2) { setMic(false); err.textContent = "Microphone is blocked. Click the mic (or lock) icon in the address bar \u2192 Allow \u2192 then tap to talk. If it still won\u2019t start, reload the page after allowing."; return; }
           err.textContent = "";
           rec = wbSpeech.makeRec(); if (!rec) { setMic(false); err.textContent = "Talk mode needs Chrome or Edge."; return; }
-          var finalTxt = "";
-          rec.onresult = function (ev) { var interim = ""; finalTxt = ""; for (var i = 0; i < ev.results.length; i++) { var seg = ev.results[i][0].transcript; if (ev.results[i].isFinal) finalTxt += seg; else interim += seg; } if (liveEl) liveEl.textContent = (finalTxt + " " + interim).trim(); };
-          rec.onerror = function (ev) { var er = ev && ev.error; setMic(false); if (er === "not-allowed" || er === "service-not-allowed") err.textContent = "Microphone access was denied \u2014 allow it in the address bar, then tap again."; else if (er === "no-speech") err.textContent = "Didn\u2019t catch that \u2014 tap and speak again."; else if (er === "audio-capture") err.textContent = "No microphone found \u2014 check your input device."; };
-          rec.onend = function () { setMic(false); var t = (finalTxt || (liveEl ? liveEl.textContent : "") || "").trim(); if (t && msgEl) { msgEl.value = t; if (liveEl) liveEl.textContent = ""; if (sendBtn) sendBtn.click(); } };
+          try { rec.continuous = true; rec.interimResults = true; } catch (e) {}
+          committed = (msgEl && msgEl.value.trim()) || ""; accumulated = committed; stopping = false; killed = false;
+          rec.onresult = function (ev) {
+            var finalT = "", interim = "";
+            for (var i = 0; i < ev.results.length; i++) { if (ev.results[i].isFinal) finalT += ev.results[i][0].transcript; else interim += ev.results[i][0].transcript; }
+            accumulated = (committed + " " + finalT).replace(/\s+/g, " ").trim();
+            if (msgEl) msgEl.value = accumulated;
+            if (liveEl) liveEl.textContent = interim.trim();
+          };
+          rec.onerror = function (ev) {
+            var er = ev && ev.error;
+            if (er === "no-speech" || er === "aborted") return; // a think-pause / cleanup \u2014 let onend decide whether to keep listening
+            killed = true; setMic(false);
+            if (er === "not-allowed" || er === "service-not-allowed") err.textContent = "Microphone access was denied \u2014 allow it in the address bar, then tap again.";
+            else if (er === "audio-capture") err.textContent = "No microphone found \u2014 check your input device.";
+            else err.textContent = "Talk mode hit a snag \u2014 tap the mic to try again.";
+          };
+          rec.onend = function () {
+            if (killed) { setMic(false); return; }
+            // The recognizer stops on silence \u2014 if the user hasn't tapped "done", keep the answer so far and resume listening so a think-pause never sends.
+            if (!stopping) { committed = accumulated; try { rec.start(); return; } catch (e) { setMic(false); if (liveEl) liveEl.textContent = ""; return; } }
+            setMic(false);
+            var t = (accumulated + " " + (liveEl ? liveEl.textContent : "")).replace(/\s+/g, " ").trim();
+            if (t && msgEl) { msgEl.value = t; if (liveEl) liveEl.textContent = ""; if (sendBtn) sendBtn.click(); }
+          };
           try { rec.start(); setMic(true); } catch (e) { setMic(false); err.textContent = "Couldn\u2019t start listening \u2014 tap again."; }
         };
         doListen = startListening;
