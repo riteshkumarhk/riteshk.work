@@ -3710,14 +3710,55 @@ import { WORLD_LAND } from "./worldland.js";
     return d.typography;
   }
   function typeSystemById(id) { var t = data && data.typography; return t && (t.systems || []).filter(function (s) { return s && s.id === id; })[0]; }
+  // Live specimen preview: load every visible system's faces into the studio doc (its own <link>/<style>,
+  // distinct from the live site's active-system links) so each card can render in its real fonts.
+  function studioTypeLink(id, href) {
+    var el = document.getElementById(id);
+    if (!href) { if (el && el.parentNode) el.parentNode.removeChild(el); return; }
+    if (!el) { el = document.createElement("link"); el.id = id; el.rel = "stylesheet"; document.head.appendChild(el); }
+    if (el.getAttribute("href") !== href) el.setAttribute("href", href);
+  }
+  function typeFaceCss(faces) {
+    var fam = function (s) { return String(s == null ? "" : s).replace(/[^\w .\-]/g, ""); };
+    var ur = function (s) { return String(s == null ? "" : s).replace(/[^\w+,\s-]/g, ""); };
+    return (faces || []).map(function (f) {
+      var url = String((f && f.url) || ""); if (!/^[\w./:%-]+$/.test(url)) return "";
+      var w = String((f && f.weight) || "400").replace(/[^\d\s]/g, "").trim() || "400";
+      var st = f && f.style === "italic" ? "italic" : "normal";
+      return "@font-face{font-family:'" + fam(f.family) + "';font-style:" + st + ";font-weight:" + w + ";font-display:swap;src:url('" + url + "') format('woff2');" + (f.unicodeRange ? "unicode-range:" + ur(f.unicodeRange) + ";" : "") + "}";
+    }).filter(Boolean).join("");
+  }
+  function typePreviewFonts(systems) {
+    var g = [], gs = {}, f = [], fs = {}, faceCss = "";
+    (systems || []).forEach(function (s) {
+      if (!s) return;
+      [s.display, s.text, s.mono].forEach(function (r) {
+        if (!r || !r.css || r.selfHosted) return;   // self-hosted built-ins (Fraunces/Inter/Gambetta...) already live in css/fonts.css
+        if (r.src === "google") { if (!gs[r.css]) { gs[r.css] = 1; g.push(r.css); } }
+        else if (r.src === "fontshare") { if (!fs[r.css]) { fs[r.css] = 1; f.push(r.css); } }
+      });
+      if (s.faces && s.faces.length) faceCss += typeFaceCss(s.faces);   // generated, self-hosted on R2
+    });
+    studioTypeLink("rk-tprev-google", g.length ? "https://fonts.googleapis.com/css2?family=" + g.join("&family=") + "&display=swap" : "");
+    studioTypeLink("rk-tprev-fontshare", f.length ? "https://api.fontshare.com/v2/css?f[]=" + f.join("&f[]=") + "&display=swap" : "");
+    var st = document.getElementById("rk-tprev-faces");
+    if (!faceCss) { if (st && st.parentNode) st.parentNode.removeChild(st); }
+    else { if (!st) { st = document.createElement("style"); st.id = "rk-tprev-faces"; document.head.appendChild(st); } if (st.textContent !== faceCss) st.textContent = faceCss; }
+  }
+  var TYPE_SAMPLE = "Headlines that command attention, and body copy that reads with clarity and ease.";
   function typeCard(s, active) {
+    var d = s.display || {}, tx = s.text || {}, mo = s.mono || {};
+    var fam = function (r, w) { return escAttr("font-family:" + ((r && r.stack) || "inherit") + (w ? ";font-weight:" + w : "")); };
     var pick = '<button class="adm__tcard' + (active ? " is-active" : "") + '" type="button" data-act="type-pick" data-id="' + escAttr(s.id) + '">' +
       (active ? '<span class="adm__tcard-live">Live</span>' : (s.builtin ? "" : '<span class="adm__tcard-gen">Generated</span>')) +
-      '<span class="adm__tcard-name">' + escHtml(s.name || s.id) + "</span>" +
+      '<span class="adm__tcard-name" style="' + fam(d, (+d.weight) || 400) + '">' + escHtml(s.name || s.id) + "</span>" +
       (s.note ? '<span class="adm__tcard-note">' + escHtml(s.note) + "</span>" : "") +
-      '<span class="adm__tcard-f"><span>Display</span><b>' + escHtml((s.display || {}).family || "\u2014") + "</b></span>" +
-      '<span class="adm__tcard-f"><span>Text</span><b>' + escHtml((s.text || {}).family || "\u2014") + "</b></span>" +
-      '<span class="adm__tcard-f"><span>Mono</span><b>' + escHtml((s.mono || {}).family || "\u2014") + "</b></span>" +
+      '<span class="adm__tcard-sample" style="' + fam(tx) + '">' + escHtml(TYPE_SAMPLE) + "</span>" +
+      '<span class="adm__tcard-specs">' +
+        '<span class="adm__tcard-f"><span>Display</span><b style="' + fam(d) + '">' + escHtml(d.family || "\u2014") + "</b></span>" +
+        '<span class="adm__tcard-f"><span>Text</span><b style="' + fam(tx) + '">' + escHtml(tx.family || "\u2014") + "</b></span>" +
+        '<span class="adm__tcard-f"><span>Mono</span><b style="' + fam(mo) + '">' + escHtml(mo.family || "\u2014") + "</b></span>" +
+      "</span>" +
       "</button>";
     var acts = s.builtin ? "" : '<div class="adm__tcard-acts">' +
       (s.faces && s.faces.length
@@ -3740,6 +3781,7 @@ import { WORLD_LAND } from "./worldland.js";
     var tab = typeSubTab || (active.id ? (active.builtin ? sysCat(active) : "gen") : (valid[0] || "gen"));
     if (valid.indexOf(tab) === -1) tab = valid[0] || "gen";
     var list = tab === "gen" ? gens : builtins.filter(function (s) { return sysCat(s) === tab; });
+    try { typePreviewFonts(list); } catch (e) {}   // load the visible systems' faces so the cards render as live specimens
     var cards = list.map(function (s) { return typeCard(s, s.id === t.active); }).join("");
     var aw = (active.display && +active.display.weight) || 300;
     var wbtn = function (w, lab) { return '<button type="button" data-act="type-weight" data-w="' + w + '"' + (aw === w ? ' class="is-on"' : "") + ">" + lab + "</button>"; };
@@ -3757,7 +3799,7 @@ import { WORLD_LAND } from "./worldland.js";
       '<div class="adm__tcards">' + cards + "</div>" +
       '<div class="adm__twt"><span class="adm__twt-label">Heading weight</span><div class="adm__twt-seg">' + wbtn(300, "Light") + wbtn(400, "Regular") + wbtn(500, "Medium") + wbtn(600, "Semibold") + "</div>" +
       '<span class="adm__twt-hint">Display weight for \u201c' + escHtml(active.name || "the active system") + '\u201d \u2014 each system keeps its own.</span></div>' +
-      '<p class="adm__tnote">Fonts are grouped by category \u2014 Serif, Sans, Display, Mono and Hand \u2014 loaded via Google&nbsp;Fonts. <em>AI generated</em> systems are composed from real faces with your AI key and saved to your library (survive refresh, removable).</p>';
+      '<p class="adm__tnote">Each card is a live specimen \u2014 the name set in its display font, the line in its text font. Grouped by category \u2014 Serif, Sans, Display, Mono and Hand. <em>AI generated</em> systems are composed from real faces with your AI key and saved to your library (survive refresh, removable).</p>';
   }
   function typeSanRole(r, kind) {
     r = r || {};
