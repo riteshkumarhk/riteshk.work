@@ -1652,6 +1652,24 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .wb__voice-live { flex: 1 1 140px; min-width: 100px; font-size: .82rem; color: var(--text-dim); font-style: italic; }
 .wb__spk { font-family: var(--mono); font-size: .68rem; padding: .38rem .65rem; border: 1px solid var(--line); border-radius: 100px; background: none; color: var(--text-dim); cursor: pointer; flex: 0 0 auto; transition: color .15s, border-color .15s; }
 .wb__spk.is-on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.wb__watch { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem .6rem; margin: .1rem 0 .6rem; padding: .55rem 0; border-top: 1px dashed var(--line); }
+.wb__watch-lead { font-family: var(--mono); font-size: .74rem; color: var(--text-dim); }
+.wb__watch-btn { font-family: var(--mono); font-size: .72rem; padding: .4rem .8rem; border: 1px solid var(--line); border-radius: 100px; background: none; color: var(--text-dim); cursor: pointer; transition: color .15s, border-color .15s; }
+.wb__watch-btn:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.wb__watch-hint { flex: 1 1 100%; font-size: .68rem; color: var(--text-faint); }
+.wb__watch-dl { font-family: var(--mono); font-size: .72rem; color: var(--accent); text-decoration: none; padding: .4rem .7rem; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 100px; }
+.wb__watch-dl:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.wb__watch.is-live { align-items: flex-start; }
+.wb__watch-prevwrap { position: relative; flex: 0 0 auto; line-height: 0; }
+.wb__watch-prev { width: 168px; max-width: 40vw; border-radius: 10px; border: 1px solid var(--line); background: #000; display: block; }
+.wb__watch-rec { position: absolute; top: 6px; left: 6px; font-family: var(--mono); font-size: .58rem; letter-spacing: .06em; color: #fff; background: rgba(200, 40, 40, .92); padding: .12rem .4rem; border-radius: 4px; animation: wb-pulse 1.4s infinite; }
+.wb__watch-meta { flex: 1 1 200px; display: flex; flex-direction: column; gap: .5rem; }
+.wb__watch-srcrow { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.wb__watch-src { font-family: var(--mono); font-size: .72rem; color: var(--text); }
+.wb__watch-see { font-size: .74rem; color: var(--text-faint); }
+.wb__watch-see.is-on { color: var(--accent); }
+.wb__watch-acts { display: flex; gap: .5rem; flex-wrap: wrap; }
+.wb__watch-acts .btn { font-size: .72rem; padding: .4rem .8rem; }
 .wb__brief { width: 100%; box-sizing: border-box; }
 .wb__own { width: 100%; resize: vertical; box-sizing: border-box; margin-top: .5rem; }
 .wb__stage { text-align: left; max-height: 62vh; overflow: auto; margin-top: .4rem; display: flex; flex-direction: column; gap: 1rem; }

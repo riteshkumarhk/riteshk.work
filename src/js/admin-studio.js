@@ -9032,6 +9032,37 @@ import { WORLD_LAND } from "./worldland.js";
     if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
     return { ok: true, text: ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim() };
   }
+  // Conversational vision turn for the whiteboard mock: like aiVisionOnce but returns PLAIN TEXT
+  // (no JSON format) with ONE frame of the candidate's shared screen/camera attached.
+  async function wbVisionTurn(cfg, model, system, user, img, opts) {
+    opts = opts || {};
+    var p = cfg.provider, key = cfg.key, base = cfg.base, res, j;
+    var maxTok = opts.maxTokens || 500, temp = opts.temperature != null ? opts.temperature : 0.75;
+    if (p === "anthropic") {
+      var content = [{ type: "text", text: user }];
+      if (img) content.push({ type: "image", source: { type: "base64", media_type: img.mime, data: img.b64 } });
+      res = await fetch(base + "/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: model, max_tokens: maxTok, temperature: temp, system: system, messages: [{ role: "user", content: content }] }) });
+      j = await res.json().catch(function () { return null; });
+      if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
+      return (((j && j.content) || []).map(function (b) { return b.text || ""; }).join("")).trim();
+    }
+    if (p === "gemini") {
+      var parts = [{ text: user }];
+      if (img) parts.push({ inline_data: { mime_type: img.mime, data: img.b64 } });
+      var gurl = base + "/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key);
+      res = await fetch(gurl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: parts }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: maxTok, temperature: temp } }) });
+      j = await res.json().catch(function () { return null; });
+      if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
+      var cand = (j && j.candidates && j.candidates[0]) || {};
+      return (((cand.content && cand.content.parts) || []).map(function (x) { return x.text || ""; }).join("")).trim();
+    }
+    var uc = [{ type: "text", text: user }];
+    if (img) uc.push({ type: "image_url", image_url: { url: "data:" + img.mime + ";base64," + img.b64 } });
+    res = await fetch(base + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify({ model: model, messages: [{ role: "system", content: system }, { role: "user", content: uc }], max_tokens: maxTok, temperature: temp }) });
+    j = await res.json().catch(function () { return null; });
+    if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
+    return ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim();
+  }
   async function visionModels(cfg) {
     if (cfg.provider === "custom") return cfg.model ? [cfg.model] : [];
     var want = AI_VISION_MODEL[cfg.provider] || [];
@@ -10404,6 +10435,7 @@ import { WORLD_LAND } from "./worldland.js";
     ].join("\n");
   }
   function wbCritiqueUser(p, draft) { return "PROMPT:\n" + (p.prompt || "") + "\n\nCANDIDATE'S APPROACH:\n" + draft + wbRoleLine(); }
+  var WB_SEE_SYS = "\n\nYou can SEE the candidate\u2019s whiteboard right now \u2014 an image is attached showing their screen (Figma / FigJam / a doc) or a camera pointed at their paper sketch. Study it and react to what they have ACTUALLY drawn or written: reference specific elements, praise or probe concrete choices, and gently catch any gap between what they say and what\u2019s on the board. If the image is blank, blurry or unreadable, just continue naturally without mentioning it.";
   function wbMockSystem(mins) {
     return [
       "You ARE the interviewer running a live " + wbMinsLabel(mins) + " whiteboard design exercise \u2014 stay fully in character, first person, one turn at a time.",
@@ -10548,7 +10580,8 @@ import { WORLD_LAND } from "./worldland.js";
     var ownEl = modal.querySelector(".wb__own");
     var companyEl = modal.querySelector(".wb__company");
     var jdEl = modal.querySelector(".wb__jd");
-    var close = function () { try { wbSpeech.stop(); } catch (e) {} modal.remove(); };
+    var watchCleanup = null;
+    var close = function () { try { wbSpeech.stop(); } catch (e) {} if (watchCleanup) { try { watchCleanup(); } catch (e) {} } modal.remove(); };
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
     modal.querySelector("[data-cancel]").addEventListener("click", close);
@@ -10567,7 +10600,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (jdEl) jdEl.addEventListener("input", function () { st.jd = jdEl.value; wbSave(); });
     function showSetup() { setup.hidden = false; stage.hidden = true; backBtn.hidden = true; startBtn.hidden = false; err.textContent = ""; }
     function showStage() { setup.hidden = true; stage.hidden = false; backBtn.hidden = false; startBtn.hidden = true; err.textContent = ""; }
-    backBtn.addEventListener("click", showSetup);
+    backBtn.addEventListener("click", function () { if (watchCleanup) { try { watchCleanup(); } catch (e) {} } showSetup(); });
     startBtn.addEventListener("click", async function () {
       err.textContent = ""; btnBusy(startBtn, "Setting the prompt\u2026");
       try {
@@ -10591,9 +10624,11 @@ import { WORLD_LAND } from "./worldland.js";
       wireStage();
     }
     async function wbRunMock(opening) {
+      if (watchCleanup) { try { watchCleanup(); } catch (e) {} }
       var voiceOn = (st.convo === "voice") && wbSpeech.sttOk;
       var voiceBar = voiceOn ? '<div class="wb__voice"><button type="button" class="wb__mic" data-wb-mic><span class="wb__mic-dot"></span><span class="wb__mic-t">Tap to talk</span></button><span class="wb__voice-live" data-wb-live></span>' + (wbSpeech.ttsOk ? '<button type="button" class="wb__spk is-on" data-wb-spk title="Interviewer voice">\uD83D\uDD0A Voice</button>' : "") + "</div>" : "";
       stage.innerHTML = wbPromptCard(prompt) + '<div class="wb__chat" data-wb-log></div>' +
+        '<div class="wb__watch" data-wb-watch-bar></div>' +
         '<div class="wb__composer">' + voiceBar + '<textarea class="wb__msg" rows="2" placeholder="' + (voiceOn ? "Tap the mic and talk \u2014 or type here (\u2318/Ctrl+Enter to send)\u2026" : "Type your next move \u2014 think out loud like you would at the board (\u2318/Ctrl+Enter to send)\u2026") + '"></textarea>' +
         '<div class="wb__composer-act"><button class="btn btn--auto" data-wb-send>Send</button><button class="btn btn--ghost" data-wb-score>Wrap up &amp; score me</button></div></div>';
       wireStage();
@@ -10603,10 +10638,100 @@ import { WORLD_LAND } from "./worldland.js";
       var scoreBtn = stage.querySelector("[data-wb-score]");
       var speakOn = wbSpeech.ttsOk;
       function addTurn(who, text) { var d = document.createElement("div"); d.className = "wb__turn wb__turn--" + who; var wl = document.createElement("span"); wl.className = "wb__who"; wl.textContent = who === "int" ? "Interviewer" : "You"; var bu = document.createElement("div"); bu.className = "wb__bubble"; bu.textContent = text; d.appendChild(wl); d.appendChild(bu); log.appendChild(d); log.scrollTop = log.scrollHeight; }
-      async function interviewerTurn(userMsg) {
+      // ---- Let the interviewer WATCH: screen/camera capture + local recording + per-turn vision ----
+      var watchBar = stage.querySelector("[data-wb-watch-bar]");
+      var wStream = null, wMic = null, wRec = null, wRecStream = null, wChunks = [], wRecUrl = "";
+      var wVideo = null, wSrc = "", wCanSee = null, wModel = null, wRecOn = false;
+      function wStopTracks(s) { if (s) { try { s.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} } }
+      function grabFrame() {
+        try {
+          if (!wVideo || !wVideo.videoWidth) return null;
+          var vw = wVideo.videoWidth, vh = wVideo.videoHeight, scale = Math.min(1, 1280 / vw);
+          var c = document.createElement("canvas"); c.width = Math.round(vw * scale); c.height = Math.round(vh * scale);
+          c.getContext("2d").drawImage(wVideo, 0, 0, c.width, c.height);
+          var uri = c.toDataURL("image/jpeg", 0.7);
+          return { mime: "image/jpeg", b64: uri.slice(uri.indexOf(",") + 1) };
+        } catch (e) { return null; }
+      }
+      function startRec() {
+        wChunks = []; wRecUrl = ""; wRec = null; wRecOn = false;
+        try {
+          if (!window.MediaRecorder || !wRecStream || !wRecStream.getTracks().length) return;
+          var mt = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].filter(function (m) { try { return MediaRecorder.isTypeSupported(m); } catch (e) { return false; } })[0] || "";
+          wRec = mt ? new MediaRecorder(wRecStream, { mimeType: mt }) : new MediaRecorder(wRecStream);
+          wRec.ondataavailable = function (ev) { if (ev.data && ev.data.size) wChunks.push(ev.data); };
+          wRec.onstop = function () { try { wRecUrl = URL.createObjectURL(new Blob(wChunks, { type: (wRec && wRec.mimeType) || "video/webm" })); } catch (e) {} paintWatch(); };
+          wRec.start(1000); wRecOn = true;
+        } catch (e) { wRec = null; wRecOn = false; }
+      }
+      function stopWatch() {
+        if (wRec && wRecOn) { try { wRec.stop(); } catch (e) {} wRecOn = false; } // onstop builds wRecUrl + repaints
+        wStopTracks(wStream); wStopTracks(wMic); wStopTracks(wRecStream);
+        wStream = null; wMic = null; wRecStream = null;
+        if (wVideo) { try { wVideo.srcObject = null; } catch (e) {} wVideo = null; }
+        wSrc = ""; wCanSee = null; wModel = null;
+        watchCleanup = null;
+        paintWatch();
+      }
+      async function startWatch(src) {
+        if (wStream) return;
+        err.textContent = "";
+        try {
+          if (src === "screen") wStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false });
+          else wStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } }, audio: true });
+        } catch (e) { err.textContent = "Couldn\u2019t start " + (src === "screen" ? "screen sharing" : "the camera") + " \u2014 you may need to allow permission."; return; }
+        wSrc = src;
+        wVideo = document.createElement("video"); wVideo.className = "wb__watch-prev"; wVideo.muted = true; wVideo.autoplay = true; wVideo.playsInline = true; wVideo.srcObject = wStream;
+        try { await wVideo.play(); } catch (e) {}
+        var tracks = wStream.getVideoTracks().slice();
+        if (src === "screen") { try { wMic = await navigator.mediaDevices.getUserMedia({ audio: true }); wMic.getAudioTracks().forEach(function (t) { tracks.push(t); }); } catch (e) {} }
+        else { wStream.getAudioTracks().forEach(function (t) { tracks.push(t); }); }
+        try { wRecStream = new MediaStream(tracks); } catch (e) { wRecStream = wStream; }
+        startRec();
+        wStream.getVideoTracks().forEach(function (t) { t.addEventListener("ended", function () { stopWatch(); }); });
+        watchCleanup = stopWatch;
+        wCanSee = null; paintWatch();
+        try { var vm = await visionModels(aiCfg("txt")); wModel = (vm && vm[0]) || null; wCanSee = !!wModel; } catch (e) { wCanSee = false; }
+        paintWatch();
+      }
+      function paintWatch() {
+        if (!watchBar) return;
+        if (wStream) {
+          watchBar.classList.add("is-live");
+          var seeHtml = wCanSee === null ? '<span class="wb__watch-see">Checking if the interviewer can see\u2026</span>'
+            : wCanSee ? '<span class="wb__watch-see is-on">\uD83D\uDC41 Interviewer can see \u2014 it glances each turn</span>'
+            : '<span class="wb__watch-see">Recording only \u2014 your AI model can\u2019t read images</span>';
+          watchBar.innerHTML =
+            '<div class="wb__watch-prevwrap">' + (wRecOn ? '<span class="wb__watch-rec">\u25CF REC</span>' : "") + "</div>" +
+            '<div class="wb__watch-meta"><div class="wb__watch-srcrow"><span class="wb__watch-src">' + (wSrc === "screen" ? "\uD83D\uDDA5\uFE0F Screen" : "\uD83D\uDCF7 Camera") + "</span>" + seeHtml + "</div>" +
+            '<div class="wb__watch-acts">' + (wCanSee ? '<button type="button" class="btn btn--auto" data-wb-shownow>Show interviewer now</button>' : "") + '<button type="button" class="btn btn--ghost" data-wb-watchstop>Stop</button></div></div>';
+          var wrap = watchBar.querySelector(".wb__watch-prevwrap"); if (wrap && wVideo) wrap.insertBefore(wVideo, wrap.firstChild);
+          var sn = watchBar.querySelector("[data-wb-shownow]"); if (sn) sn.addEventListener("click", function () { interviewerTurn("", "The candidate is now showing you their current whiteboard \u2014 look closely at the attached image and react specifically to what\u2019s on it right now."); });
+          var wsBtn = watchBar.querySelector("[data-wb-watchstop]"); if (wsBtn) wsBtn.addEventListener("click", stopWatch);
+        } else {
+          watchBar.classList.remove("is-live");
+          watchBar.innerHTML =
+            '<span class="wb__watch-lead">\uD83D\uDC41 Let the interviewer watch you whiteboard</span>' +
+            '<button type="button" class="wb__watch-btn" data-wb-watch="screen">\uD83D\uDDA5\uFE0F Share screen</button>' +
+            '<button type="button" class="wb__watch-btn" data-wb-watch="camera">\uD83D\uDCF7 Camera</button>' +
+            (wRecUrl ? '<a class="wb__watch-dl" href="' + wRecUrl + '" download="whiteboard-mock.webm">\u2B07 Download recording</a>' : "") +
+            '<span class="wb__watch-hint">Optional \u2014 a frame goes to your AI each turn so it can react; the recording stays on your device.</span>';
+          watchBar.querySelectorAll("[data-wb-watch]").forEach(function (b) { b.addEventListener("click", function () { startWatch(b.dataset.wbWatch); }); });
+        }
+      }
+      paintWatch();
+      async function interviewerTurn(userMsg, nudge) {
         btnBusy(sendBtn, "\u2026");
         try {
-          var reply = (await aiText(aiCfg("txt"), wbMockSystem(st.mins), wbMockUser(prompt, transcript, userMsg || ""), { maxTokens: 500, temperature: 0.75 }) || "").trim();
+          var frame = (wStream && wCanSee) ? grabFrame() : null;
+          var usr = wbMockUser(prompt, transcript, userMsg || "") + (nudge ? "\n\n" + nudge : "");
+          var reply = "";
+          if (frame && wModel) {
+            try { reply = (await wbVisionTurn(aiCfg("txt"), wModel, wbMockSystem(st.mins) + WB_SEE_SYS, usr, frame, { maxTokens: 500, temperature: 0.75 }) || "").trim(); }
+            catch (e) { reply = (await aiText(aiCfg("txt"), wbMockSystem(st.mins), usr, { maxTokens: 500, temperature: 0.75 }) || "").trim(); }
+          } else {
+            reply = (await aiText(aiCfg("txt"), wbMockSystem(st.mins), usr, { maxTokens: 500, temperature: 0.75 }) || "").trim();
+          }
           if (reply) { addTurn("int", reply); transcript += (transcript ? "\n" : "") + "INTERVIEWER: " + reply; if (voiceOn && speakOn) wbSpeech.speak(reply); }
         } catch (e) { err.textContent = (e && e.message) || "The interviewer went quiet \u2014 try again."; }
         btnIdle(sendBtn, "Send");
