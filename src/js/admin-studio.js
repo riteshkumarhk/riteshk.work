@@ -10534,7 +10534,7 @@ import { WORLD_LAND } from "./worldland.js";
     var modal = document.createElement("div");
     modal.className = "pass pass--wide wb-modal";
     modal.innerHTML =
-      '<div class="pass__box"><div class="pass__title">\uD83E\uDDE9 Whiteboard coach</div>' +
+      '<div class="pass__box"><div class="wb__chrome" data-wb-chrome><button type="button" class="wb__chrome-btn" data-wb-min title="Minimise \u2014 keep it running in the corner" aria-label="Minimise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="18" x2="18" y2="18"/></svg></button><button type="button" class="wb__chrome-btn" data-wb-max title="Maximise" aria-label="Maximise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button></div><div class="pass__title">\uD83E\uDDE9 Whiteboard coach</div>' +
       '<div class="pass__sub">Rehearse a live design exercise. Pick the length and a mode \u2014 I\u2019ll set a realistic prompt' + (storyJdText() ? " tailored to your target role" : "") + ", give you a timed game-plan, then coach you or run a mock.</div>" +
       '<div class="wb__setup">' +
         '<div class="wb__resume" data-wb-resume-bar hidden></div>' +
@@ -10591,7 +10591,27 @@ import { WORLD_LAND } from "./worldland.js";
     var companyEl = modal.querySelector(".wb__company");
     var jdEl = modal.querySelector(".wb__jd");
     var watchCleanup = null, micCleanup = null, timerCleanup = null;
-    var close = function () { try { wbSpeech.stop(); } catch (e) {} if (watchCleanup) { try { watchCleanup(); } catch (e) {} } if (micCleanup) { try { micCleanup(); } catch (e) {} } if (timerCleanup) { try { timerCleanup(); } catch (e) {} } modal.remove(); };
+    var miniEl = null, miniMic = null, curTimerText = "", doListen = null;
+    var close = function () { try { wbSpeech.stop(); } catch (e) {} if (watchCleanup) { try { watchCleanup(); } catch (e) {} } if (micCleanup) { try { micCleanup(); } catch (e) {} } if (timerCleanup) { try { timerCleanup(); } catch (e) {} } if (miniEl) { try { miniEl.remove(); } catch (e) {} miniEl = null; } modal.remove(); };
+    function hideMini() { modal.style.display = ""; if (miniEl) miniEl.hidden = true; }
+    function showMini() {
+      modal.style.display = "none";
+      if (!miniEl) {
+        miniEl = document.createElement("div");
+        miniEl.className = "wb__mini";
+        miniEl.innerHTML = '<span class="wb__mini-dot" aria-hidden="true"></span><button type="button" class="wb__mini-mic" data-wb-mini-mic title="Tap to talk" aria-label="Tap to talk" hidden>\uD83C\uDF99\uFE0F</button><span class="wb__mini-t" data-wb-mini-t></span><button type="button" class="wb__mini-restore" data-wb-restore>Resume interview</button>';
+        document.body.appendChild(miniEl);
+        miniEl.querySelector("[data-wb-restore]").addEventListener("click", hideMini);
+        miniMic = miniEl.querySelector("[data-wb-mini-mic]");
+        miniMic.addEventListener("click", function () { if (doListen) doListen(); });
+      }
+      if (miniMic) miniMic.hidden = !doListen;
+      var mt = miniEl.querySelector("[data-wb-mini-t]"); if (mt) mt.textContent = curTimerText || "";
+      miniEl.hidden = false;
+    }
+    function toggleMax() { modal.classList.toggle("wb-modal--max"); }
+    var wbMinBtn = modal.querySelector("[data-wb-min]"); if (wbMinBtn) wbMinBtn.addEventListener("click", showMini);
+    var wbMaxBtn = modal.querySelector("[data-wb-max]"); if (wbMaxBtn) wbMaxBtn.addEventListener("click", toggleMax);
     // Soft-dismiss (backdrop click + Escape) intentionally disabled \u2014 a mock can be a long recorded/voice session, so only the explicit Close button dismisses it.
     modal.querySelector("[data-cancel]").addEventListener("click", close);
     modal.querySelectorAll("[data-wb-mins]").forEach(function (b) { b.addEventListener("click", function () { st.mins = b.dataset.wbMins; modal.querySelectorAll("[data-wb-mins]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
@@ -10618,7 +10638,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (briefEl) briefEl.addEventListener("input", function () { st.brief = briefEl.value; wbSave(); });
     if (companyEl) companyEl.addEventListener("input", function () { st.company = companyEl.value; wbSave(); });
     if (jdEl) jdEl.addEventListener("input", function () { st.jd = jdEl.value; wbSave(); });
-    function showSetup() { setup.hidden = false; stage.hidden = true; backBtn.hidden = true; startBtn.hidden = false; if (foot) foot.hidden = false; modal.classList.remove("wb-modal--stage"); err.textContent = ""; }
+    function showSetup() { setup.hidden = false; stage.hidden = true; backBtn.hidden = true; startBtn.hidden = false; if (foot) foot.hidden = false; modal.classList.remove("wb-modal--stage"); modal.classList.remove("wb-modal--max"); err.textContent = ""; }
     function showStage() { setup.hidden = true; stage.hidden = false; backBtn.hidden = false; startBtn.hidden = true; modal.classList.add("wb-modal--stage"); err.textContent = ""; }
     backBtn.addEventListener("click", function () { if (watchCleanup) { try { watchCleanup(); } catch (e) {} } showSetup(); });
     startBtn.addEventListener("click", async function () {
@@ -10665,15 +10685,16 @@ import { WORLD_LAND } from "./worldland.js";
       if (micCleanup) { try { micCleanup(); } catch (e) {} }
       if (timerCleanup) { try { timerCleanup(); } catch (e) {} }
       var voiceOn = (st.convo === "voice") && wbSpeech.sttOk;
-      var voiceBar = voiceOn ? '<div class="wb__voice"><button type="button" class="wb__mic" data-wb-mic><span class="wb__mic-dot"></span><span class="wb__mic-t">Tap to talk</span></button><span class="wb__voice-live" data-wb-live></span>' + (wbSpeech.ttsOk ? '<button type="button" class="wb__spk is-on" data-wb-spk title="Interviewer voice">\uD83D\uDD0A Voice</button>' : "") + "</div>" : "";
+      doListen = null;
+      var voiceInline = voiceOn ? '<button type="button" class="wb__mic" data-wb-mic><span class="wb__mic-dot"></span><span class="wb__mic-t">Tap to talk</span></button>' + (wbSpeech.ttsOk ? '<button type="button" class="wb__spk is-on" data-wb-spk title="Interviewer voice">\uD83D\uDD0A Voice</button>' : "") + '<span class="wb__voice-live" data-wb-live></span>' : "";
       var immHtml = voiceOn ? '<div class="wb__imm" data-wb-imm-bar><span class="wb__imm-note">Go immersive \u2014 turns on your mic, voice and a live screen or camera feed so it feels like a real interview.</span><button type="button" class="btn btn--primary wb__imm-go" data-wb-immersive>Start immersive interview</button></div>' : "";
       if (foot) foot.hidden = true;
       var totalSec = (parseInt(st.mins, 10) || 45) * 60;
       var timerLeft = (opening === "resume" && sessTimer > 0) ? sessTimer : totalSec; sessTimer = timerLeft;
       stage.innerHTML = '<div class="wb__cols"><div class="wb__main">' + immHtml + '<div class="wb__chat" data-wb-log></div>' +
-        '<div class="wb__watch" data-wb-watch-bar></div>' +
-        '<div class="wb__composer">' + voiceBar + '<textarea class="wb__msg" rows="2" placeholder="' + (voiceOn ? "Tap the mic and talk \u2014 or type here (\u2318/Ctrl+Enter to send)\u2026" : "Type your next move \u2014 think out loud like you would at the board (\u2318/Ctrl+Enter to send)\u2026") + '"></textarea>' +
-        '<div class="wb__composer-act"><button class="btn btn--auto" data-wb-send>Send</button></div></div></div>' +
+        '<div class="wb__composer"><textarea class="wb__msg" rows="2" placeholder="' + (voiceOn ? "Tap the mic and talk \u2014 or type here (\u2318/Ctrl+Enter to send)\u2026" : "Type your next move \u2014 think out loud like you would at the board (\u2318/Ctrl+Enter to send)\u2026") + '"></textarea>' +
+        '<div class="wb__composer-act">' + voiceInline + '<button class="btn btn--auto wb__send" data-wb-send>Send</button></div></div>' +
+        '<div class="wb__watch" data-wb-watch-bar></div></div>' +
         '<aside class="wb__rail"><div class="wb__timer" data-wb-timer><span class="wb__timer-t" data-wb-timer-t>' + wbFmtClock(timerLeft) + '</span><span class="wb__timer-l">time remaining</span></div>' +
         wbPromptCard(prompt) +
         '<div class="wb__rail-acts"><button class="btn btn--auto" data-wb-score>Wrap up &amp; score me</button><button class="btn btn--ghost" data-wb-pause>Pause &amp; resume later</button><button class="btn btn--ghost" data-wb-rail-back>\u2190 Change setup</button></div></aside></div>';
@@ -10683,10 +10704,10 @@ import { WORLD_LAND } from "./worldland.js";
       var sendBtn = stage.querySelector("[data-wb-send]");
       var scoreBtn = stage.querySelector("[data-wb-score]");
       var speakOn = wbSpeech.ttsOk;
-      var timerTEl = stage.querySelector("[data-wb-timer-t]"), timerEl = stage.querySelector("[data-wb-timer]"), timerInt = 0;
-      function paintTimer() { if (timerTEl) timerTEl.textContent = wbFmtClock(timerLeft); if (timerEl) { timerEl.classList.toggle("is-low", timerLeft > 0 && timerLeft <= 300); timerEl.classList.toggle("is-done", timerLeft <= 0); } }
+      var timerTEl = stage.querySelector("[data-wb-timer-t]"), timerEl = stage.querySelector("[data-wb-timer]"), timerInt = 0, cued5 = timerLeft <= 300;
+      function paintTimer() { curTimerText = wbFmtClock(timerLeft); if (timerTEl) timerTEl.textContent = curTimerText; if (timerEl) { timerEl.classList.toggle("is-low", timerLeft > 0 && timerLeft <= 300); timerEl.classList.toggle("is-done", timerLeft <= 0); } if (miniEl && !miniEl.hidden) { var mt = miniEl.querySelector("[data-wb-mini-t]"); if (mt) mt.textContent = curTimerText; } }
       function stopTimer() { if (timerInt) { clearInterval(timerInt); timerInt = 0; } }
-      function tickTimer() { if (timerLeft <= 0) { stopTimer(); paintTimer(); return; } timerLeft--; sessTimer = timerLeft; if (timerLeft % 5 === 0) saveSess(); paintTimer(); }
+      function tickTimer() { if (timerLeft <= 0) { stopTimer(); paintTimer(); return; } timerLeft--; sessTimer = timerLeft; if (timerLeft === 300 && !cued5) { cued5 = true; var cue = "\u23F1\uFE0F About five minutes left \u2014 start landing your recap and trade-offs."; transcript += (transcript ? "\n" : "") + "INTERVIEWER: " + cue; addTurn("int", cue); if (voiceOn && speakOn) wbSpeech.speak(cue); } if (timerLeft % 5 === 0) saveSess(); paintTimer(); }
       paintTimer(); timerInt = setInterval(tickTimer, 1000); timerCleanup = stopTimer;
       var pauseBtn = stage.querySelector("[data-wb-pause]"); if (pauseBtn) pauseBtn.addEventListener("click", close);
       var railBack = stage.querySelector("[data-wb-rail-back]"); if (railBack) railBack.addEventListener("click", function () { if (watchCleanup) { try { watchCleanup(); } catch (e) {} } showSetup(); });
@@ -10811,7 +10832,7 @@ import { WORLD_LAND } from "./worldland.js";
       if (voiceOn) {
         var micBtn = stage.querySelector("[data-wb-mic]"), liveEl = stage.querySelector("[data-wb-live]"), spkBtn = stage.querySelector("[data-wb-spk]");
         var rec = null, listening = false, micText = function () { return micBtn && micBtn.querySelector(".wb__mic-t"); };
-        var setMic = function (on) { listening = on; if (micBtn) { micBtn.classList.toggle("is-live", on); var t = micText(); if (t) t.textContent = on ? "Listening\u2026 tap to stop" : "Tap to talk"; } if (!on && liveEl) liveEl.textContent = ""; };
+        var setMic = function (on) { listening = on; if (micBtn) { micBtn.classList.toggle("is-live", on); var t = micText(); if (t) t.textContent = on ? "Listening\u2026 tap to stop" : "Tap to talk"; } if (miniMic) miniMic.classList.toggle("is-live", on); if (!on && liveEl) liveEl.textContent = ""; };
         micCleanup = function () { if (rec) { try { rec.abort(); } catch (e) {} } };
         var startListening = async function () {
           if (listening) { if (rec) { try { rec.stop(); } catch (e) {} } return; }
@@ -10828,6 +10849,7 @@ import { WORLD_LAND } from "./worldland.js";
           rec.onend = function () { setMic(false); var t = (finalTxt || (liveEl ? liveEl.textContent : "") || "").trim(); if (t && msgEl) { msgEl.value = t; if (liveEl) liveEl.textContent = ""; if (sendBtn) sendBtn.click(); } };
           try { rec.start(); setMic(true); } catch (e) { setMic(false); err.textContent = "Couldn\u2019t start listening \u2014 tap again."; }
         };
+        doListen = startListening;
         if (micBtn) micBtn.addEventListener("click", startListening);
         if (spkBtn) spkBtn.addEventListener("click", function () { speakOn = !speakOn; spkBtn.classList.toggle("is-on", speakOn); spkBtn.textContent = (speakOn ? "\uD83D\uDD0A" : "\uD83D\uDD07") + " Voice"; if (!speakOn) wbSpeech.stop(); });
         var immBar = stage.querySelector("[data-wb-imm-bar]");
