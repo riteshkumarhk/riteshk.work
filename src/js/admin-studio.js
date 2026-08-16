@@ -10581,10 +10581,9 @@ import { WORLD_LAND } from "./worldland.js";
     var ownEl = modal.querySelector(".wb__own");
     var companyEl = modal.querySelector(".wb__company");
     var jdEl = modal.querySelector(".wb__jd");
-    var watchCleanup = null;
-    var close = function () { try { wbSpeech.stop(); } catch (e) {} if (watchCleanup) { try { watchCleanup(); } catch (e) {} } modal.remove(); };
-    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
-    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+    var watchCleanup = null, micCleanup = null;
+    var close = function () { try { wbSpeech.stop(); } catch (e) {} if (watchCleanup) { try { watchCleanup(); } catch (e) {} } if (micCleanup) { try { micCleanup(); } catch (e) {} } modal.remove(); };
+    // Soft-dismiss (backdrop click + Escape) intentionally disabled \u2014 a mock can be a long recorded/voice session, so only the explicit Close button dismisses it.
     modal.querySelector("[data-cancel]").addEventListener("click", close);
     modal.querySelectorAll("[data-wb-mins]").forEach(function (b) { b.addEventListener("click", function () { st.mins = b.dataset.wbMins; modal.querySelectorAll("[data-wb-mins]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     modal.querySelectorAll("[data-wb-mode]").forEach(function (b) { b.addEventListener("click", function () { st.mode = b.dataset.wbMode; modal.querySelectorAll("[data-wb-mode]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
@@ -10626,6 +10625,7 @@ import { WORLD_LAND } from "./worldland.js";
     }
     async function wbRunMock(opening) {
       if (watchCleanup) { try { watchCleanup(); } catch (e) {} }
+      if (micCleanup) { try { micCleanup(); } catch (e) {} }
       var voiceOn = (st.convo === "voice") && wbSpeech.sttOk;
       var voiceBar = voiceOn ? '<div class="wb__voice"><button type="button" class="wb__mic" data-wb-mic><span class="wb__mic-dot"></span><span class="wb__mic-t">Tap to talk</span></button><span class="wb__voice-live" data-wb-live></span>' + (wbSpeech.ttsOk ? '<button type="button" class="wb__spk is-on" data-wb-spk title="Interviewer voice">\uD83D\uDD0A Voice</button>' : "") + "</div>" : "";
       stage.innerHTML = wbPromptCard(prompt) + '<div class="wb__chat" data-wb-log></div>' +
@@ -10757,17 +10757,23 @@ import { WORLD_LAND } from "./worldland.js";
       if (msgEl) msgEl.addEventListener("keydown", function (e) { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); if (sendBtn) sendBtn.click(); } });
       if (voiceOn) {
         var micBtn = stage.querySelector("[data-wb-mic]"), liveEl = stage.querySelector("[data-wb-live]"), spkBtn = stage.querySelector("[data-wb-spk]");
-        var rec = null, listening = false;
-        var setMic = function (on) { listening = on; if (micBtn) { micBtn.classList.toggle("is-live", on); var t = micBtn.querySelector(".wb__mic-t"); if (t) t.textContent = on ? "Listening\u2026 tap to stop" : "Tap to talk"; } if (!on && liveEl) liveEl.textContent = ""; };
-        var startListening = function () {
+        var rec = null, listening = false, micText = function () { return micBtn && micBtn.querySelector(".wb__mic-t"); };
+        var setMic = function (on) { listening = on; if (micBtn) { micBtn.classList.toggle("is-live", on); var t = micText(); if (t) t.textContent = on ? "Listening\u2026 tap to stop" : "Tap to talk"; } if (!on && liveEl) liveEl.textContent = ""; };
+        micCleanup = function () { if (rec) { try { rec.abort(); } catch (e) {} } };
+        var startListening = async function () {
           if (listening) { if (rec) { try { rec.stop(); } catch (e) {} } return; }
           wbSpeech.stop();
-          rec = wbSpeech.makeRec(); if (!rec) { err.textContent = "Talk mode needs Chrome or Edge."; return; }
+          var t0 = micText(); if (t0) t0.textContent = "Starting\u2026";
+          // Route the FIRST mic request through getUserMedia: it gives a reliable, PERSISTENT permission that SpeechRecognition then inherits \u2014 sidesteps Edge auto-blocking the speech API's own request.
+          try { var permS = await navigator.mediaDevices.getUserMedia({ audio: true }); permS.getTracks().forEach(function (tr) { try { tr.stop(); } catch (e) {} }); }
+          catch (e2) { setMic(false); err.textContent = "Microphone is blocked. Click the mic (or lock) icon in the address bar \u2192 Allow \u2192 then tap to talk. If it still won\u2019t start, reload the page after allowing."; return; }
+          err.textContent = "";
+          rec = wbSpeech.makeRec(); if (!rec) { setMic(false); err.textContent = "Talk mode needs Chrome or Edge."; return; }
           var finalTxt = "";
           rec.onresult = function (ev) { var interim = ""; finalTxt = ""; for (var i = 0; i < ev.results.length; i++) { var seg = ev.results[i][0].transcript; if (ev.results[i].isFinal) finalTxt += seg; else interim += seg; } if (liveEl) liveEl.textContent = (finalTxt + " " + interim).trim(); };
-          rec.onerror = function () { setMic(false); };
+          rec.onerror = function (ev) { var er = ev && ev.error; setMic(false); if (er === "not-allowed" || er === "service-not-allowed") err.textContent = "Microphone access was denied \u2014 allow it in the address bar, then tap again."; else if (er === "no-speech") err.textContent = "Didn\u2019t catch that \u2014 tap and speak again."; else if (er === "audio-capture") err.textContent = "No microphone found \u2014 check your input device."; };
           rec.onend = function () { setMic(false); var t = (finalTxt || (liveEl ? liveEl.textContent : "") || "").trim(); if (t && msgEl) { msgEl.value = t; if (liveEl) liveEl.textContent = ""; if (sendBtn) sendBtn.click(); } };
-          try { rec.start(); setMic(true); } catch (e) { setMic(false); }
+          try { rec.start(); setMic(true); } catch (e) { setMic(false); err.textContent = "Couldn\u2019t start listening \u2014 tap again."; }
         };
         if (micBtn) micBtn.addEventListener("click", startListening);
         if (spkBtn) spkBtn.addEventListener("click", function () { speakOn = !speakOn; spkBtn.classList.toggle("is-on", speakOn); spkBtn.textContent = (speakOn ? "\uD83D\uDD0A" : "\uD83D\uDD07") + " Voice"; if (!speakOn) wbSpeech.stop(); });
