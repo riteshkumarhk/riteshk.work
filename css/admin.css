@@ -1694,7 +1694,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .wb__mini-t { font-family: var(--mono); font-size: 1.02rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .04em; color: var(--text); }
 .wb__mini-mic { width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line); background: none; color: var(--text-dim); cursor: pointer; font-size: 1rem; transition: border-color .15s, background .15s; }
 .wb__mini-mic[hidden] { display: none; }
-.wb__mini-mic.is-live { border-color: #e6795f; background: color-mix(in srgb, #e6795f 18%, transparent); }
+.wb__mini-mic.is-live { border-color: #e6795f; background: color-mix(in srgb, #e6795f 18%, transparent); color: #e6795f; }
 .wb__mini-restore { font-family: var(--mono); font-size: .74rem; padding: .4rem .8rem; border: 1px solid var(--line); border-radius: 100px; background: none; color: var(--text-dim); cursor: pointer; transition: color .15s, border-color .15s; }
 .wb__mini-restore:hover { color: var(--text); border-color: var(--accent); }
 .wb__watch { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem .6rem; margin: .6rem 0 0; padding: .6rem 0 0; border-top: 1px solid var(--line-soft); }

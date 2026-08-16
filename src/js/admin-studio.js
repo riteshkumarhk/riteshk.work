@@ -10599,7 +10599,7 @@ import { WORLD_LAND } from "./worldland.js";
       if (!miniEl) {
         miniEl = document.createElement("div");
         miniEl.className = "wb__mini";
-        miniEl.innerHTML = '<span class="wb__mini-dot" aria-hidden="true"></span><button type="button" class="wb__mini-mic" data-wb-mini-mic title="Tap to talk" aria-label="Tap to talk" hidden>\uD83C\uDF99\uFE0F</button><span class="wb__mini-t" data-wb-mini-t></span><button type="button" class="wb__mini-restore" data-wb-restore>Resume interview</button>';
+        miniEl.innerHTML = '<span class="wb__mini-dot" aria-hidden="true"></span><button type="button" class="wb__mini-mic" data-wb-mini-mic title="Tap to talk" aria-label="Tap to talk" hidden><span class="wb__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 19v3"/></svg></span></button><span class="wb__mini-t" data-wb-mini-t></span><button type="button" class="wb__mini-restore" data-wb-restore>Resume interview</button>';
         document.body.appendChild(miniEl);
         miniEl.querySelector("[data-wb-restore]").addEventListener("click", hideMini);
         miniMic = miniEl.querySelector("[data-wb-mini-mic]");
