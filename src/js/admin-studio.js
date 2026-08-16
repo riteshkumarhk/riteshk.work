@@ -10293,16 +10293,40 @@ import { WORLD_LAND } from "./worldland.js";
     ["staff", "Staff / Principal", "Ambiguity, systems, cross-team leverage"],
     ["senior", "Senior", "Craft, decisions &amp; the how"]
   ];
+  // Deeper configuration \u2014 optional knobs that feed our existing generator MORE signal so the
+  // prompt lands more precisely. Defaults are "any" so out-of-the-box behaviour is unchanged.
+  var WB_CHALLENGES = [
+    ["greenfield", "Greenfield", "New product from scratch", "Frame it as a GREENFIELD 0\u21921 challenge \u2014 design a brand-new product or feature from nothing; reward problem-framing, vision and where they choose to start."],
+    ["improve", "Improve existing", "Fix or redesign a real flow", "Frame it as an IMPROVE-AN-EXISTING challenge \u2014 take a real, familiar product and redesign or fix a specific flow; reward diagnosis, focus and measurable iteration over reinvention."],
+    ["tradeoff", "Trade-off", "Scope: what to build vs cut", "Frame it as a TRADE-OFF / PRIORITISATION challenge \u2014 force explicit scoping under a constraint (time, tech, resourcing): what ships in V1 and what gets cut, and why; reward crisp prioritisation."],
+    ["ainative", "AI-native", "An AI-powered experience", "Frame it as an AI-NATIVE challenge \u2014 designing an AI-powered experience; the prompt should invite thinking about AI fluency, trust, transparency, failure/hallucination handling and keeping the human in control."],
+    ["any", "Surprise me", "Let the AI choose the angle", ""]
+  ];
+  var WB_INDUSTRIES = [
+    ["any", "Any"], ["productivity", "Productivity & Collab"], ["consumer", "Consumer social"],
+    ["fintech", "Fintech"], ["aidev", "AI / Devtools"], ["ecommerce", "E-commerce"],
+    ["marketplace", "Marketplace"], ["health", "Health & Wellness"], ["media", "Media & Streaming"]
+  ];
   var WB_KEY = "rk:wb";
   var wbState = (function () { try { var o = JSON.parse(localStorage.getItem(WB_KEY)); return (o && typeof o === "object") ? o : {}; } catch (e) { return {}; } })();
   if (!wbState.mins) wbState.mins = "60";
   if (!wbState.mode) wbState.mode = "coach";
   if (!wbState.level) wbState.level = "staff";
-  function wbSave() { try { localStorage.setItem(WB_KEY, JSON.stringify({ mins: wbState.mins, mode: wbState.mode, level: wbState.level, brief: wbState.brief || "", company: wbState.company || "", jd: wbState.jd || "" })); } catch (e) {} }
+  if (!wbState.challenge) wbState.challenge = "any";
+  if (!wbState.industry) wbState.industry = "any";
+  function wbSave() { try { localStorage.setItem(WB_KEY, JSON.stringify({ mins: wbState.mins, mode: wbState.mode, level: wbState.level, challenge: wbState.challenge, industry: wbState.industry, brief: wbState.brief || "", company: wbState.company || "", jd: wbState.jd || "" })); } catch (e) {} }
   function wbMinsLabel(m) { for (var i = 0; i < WB_MINS.length; i++) if (WB_MINS[i][0] === m) return WB_MINS[i][1]; return m + " min"; }
   function wbCompany() { return String(wbState.company || "").trim(); }
   function wbJdText() { var t = String(wbState.jd || "").trim(); return t || storyJdText(); }
   function wbLevelMeta(id) { for (var i = 0; i < WB_LEVELS.length; i++) if (WB_LEVELS[i][0] === id) return WB_LEVELS[i]; return null; }
+  function wbChallengeMeta(id) { for (var i = 0; i < WB_CHALLENGES.length; i++) if (WB_CHALLENGES[i][0] === id) return WB_CHALLENGES[i]; return null; }
+  function wbIndustryMeta(id) { for (var i = 0; i < WB_INDUSTRIES.length; i++) if (WB_INDUSTRIES[i][0] === id) return WB_INDUSTRIES[i]; return null; }
+  function wbConfigLine() {
+    var parts = [];
+    var ch = wbChallengeMeta(wbState.challenge); if (ch && ch[0] !== "any" && ch[3]) parts.push(ch[3]);
+    var ind = wbIndustryMeta(wbState.industry); if (ind && ind[0] !== "any") parts.push("Set the exercise in the " + ind[1] + " space.");
+    return parts.length ? "\n\n# SHAPE THE PROMPT (honour these)\n- " + parts.join("\n- ") : "";
+  }
   function wbLevelLine() {
     var l = wbLevelMeta(wbState.level); if (!l) return "";
     var guide = {
@@ -10333,7 +10357,7 @@ import { WORLD_LAND } from "./worldland.js";
     ].join("\n");
   }
   function wbPromptUser(mins, brief) {
-    return "Time: " + wbMinsLabel(mins) + ".\nDesired flavour / domain (optional): " + (brief || "(you choose \u2014 pick something juicy and current)") + "." + wbRoleLine() + wbPortfolioHint();
+    return "Time: " + wbMinsLabel(mins) + ".\nDesired flavour / domain (optional): " + (brief || "(you choose \u2014 pick something juicy and current)") + "." + wbConfigLine() + wbRoleLine() + wbPortfolioHint();
   }
   function wbPlanSystem(mins) {
     return [
@@ -10453,6 +10477,16 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="af"><label class="af__label">The level you\u2019re whiteboarding for</label><div class="iprep__levels wb__levels">' +
           WB_LEVELS.map(function (d) { return '<button type="button" class="iprep__lvl' + (st.level === d[0] ? " is-on" : "") + '" data-wb-lvl="' + d[0] + '"><span class="iprep__lvl-name">' + d[1] + '</span><span class="iprep__lvl-desc">' + d[2] + "</span></button>"; }).join("") +
         '</div><div class="af__hint">Sets the altitude \u2014 the prompt, the probes and the scoring all shift to match.</div></div>' +
+        '<div class="af wb__deeper"><button type="button" class="wb__deeper-tog" data-wb-deeper aria-expanded="false">Deeper configuration <span class="wb__deeper-caret" aria-hidden="true">\u25be</span></button>' +
+          '<div class="wb__deeper-body" hidden>' +
+            '<label class="af__label">What kind of challenge</label><div class="story__opts wb__opts-wrap">' +
+              WB_CHALLENGES.map(function (d) { return '<button type="button" class="story__opt wb__copt' + (st.challenge === d[0] ? " is-on" : "") + '" data-wb-chal="' + d[0] + '"><span class="story__opt-name">' + escHtml(d[1]) + '</span><span class="story__opt-desc">' + escHtml(d[2]) + "</span></button>"; }).join("") +
+            "</div>" +
+            '<label class="af__label" style="margin-top:1rem">Industry / domain</label><div class="wb__inds">' +
+              WB_INDUSTRIES.map(function (d) { return '<button type="button" class="wb__ind' + (st.industry === d[0] ? " is-on" : "") + '" data-wb-ind="' + d[0] + '">' + escHtml(d[1]) + "</button>"; }).join("") +
+            "</div>" +
+            '<div class="af__hint">Optional \u2014 these sharpen the generated prompt. Leave on defaults and I\u2019ll choose.</div>' +
+          "</div></div>" +
         '<div class="af"><label class="af__label">Company &amp; job description <span class="af__opt">(optional)</span></label>' +
           '<input type="text" class="wb__company" placeholder="Company you\u2019re interviewing at \u2014 e.g. Stripe, Google\u2026" value="' + escAttr(st.company || "") + '" />' +
           '<textarea class="cl__jd wb__jd" rows="4" placeholder="Paste the job description \u2014 I\u2019ll bias the prompt, the probes and the scoring toward what the role demands.">' + escHtml(st.jd || "") + '</textarea>' +
@@ -10488,6 +10522,10 @@ import { WORLD_LAND } from "./worldland.js";
     modal.querySelectorAll("[data-wb-mins]").forEach(function (b) { b.addEventListener("click", function () { st.mins = b.dataset.wbMins; modal.querySelectorAll("[data-wb-mins]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     modal.querySelectorAll("[data-wb-mode]").forEach(function (b) { b.addEventListener("click", function () { st.mode = b.dataset.wbMode; modal.querySelectorAll("[data-wb-mode]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     modal.querySelectorAll("[data-wb-lvl]").forEach(function (b) { b.addEventListener("click", function () { st.level = b.dataset.wbLvl; modal.querySelectorAll("[data-wb-lvl]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
+    modal.querySelectorAll("[data-wb-chal]").forEach(function (b) { b.addEventListener("click", function () { st.challenge = b.dataset.wbChal; modal.querySelectorAll("[data-wb-chal]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
+    modal.querySelectorAll("[data-wb-ind]").forEach(function (b) { b.addEventListener("click", function () { st.industry = b.dataset.wbInd; modal.querySelectorAll("[data-wb-ind]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
+    var deeperTog = modal.querySelector("[data-wb-deeper]");
+    if (deeperTog) deeperTog.addEventListener("click", function () { var body = modal.querySelector(".wb__deeper-body"); var opening = body.hasAttribute("hidden"); if (opening) body.removeAttribute("hidden"); else body.setAttribute("hidden", ""); deeperTog.setAttribute("aria-expanded", opening ? "true" : "false"); deeperTog.classList.toggle("is-open", opening); });
     if (briefEl) briefEl.addEventListener("input", function () { st.brief = briefEl.value; wbSave(); });
     if (companyEl) companyEl.addEventListener("input", function () { st.company = companyEl.value; wbSave(); });
     if (jdEl) jdEl.addEventListener("input", function () { st.jd = jdEl.value; wbSave(); });
