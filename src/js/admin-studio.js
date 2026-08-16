@@ -1892,7 +1892,7 @@ import { WORLD_LAND } from "./worldland.js";
       }
       var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel, jd, company), { json: true, maxTokens: 6000, temperature: 0.3 }));
       if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
-      atsLast = { file: f, res: res, level: atsLevel, company: company };
+      atsLast = { file: f, res: res, level: atsLevel, company: company, text: text };
       if (out) out.innerHTML = atsMiniHtml(res, atsLevel, company);
       atsOpenViewer();
       status("ATS check done.", true);
@@ -1918,6 +1918,262 @@ import { WORLD_LAND } from "./worldland.js";
       if (out) out.innerHTML = '<div class="ats__err">' + escHtml((e && e.message) || "Couldn\u2019t read that link.") + "</div>";
       status("Couldn\u2019t read that link.");
     }
+  }
+
+  /* ---------- Rebuild the résumé with the fixes applied (vector PDF, house styling, ≤ 2 pages) ----------
+     Takes the extracted text of the résumé that was just checked + the review's fixes and
+     missing keywords, asks the model to re-author it into a clean single-column structure with
+     every truthful fix applied, then typesets it via jsPDF in the SAME visual language as the
+     portfolio's one-page résumé (helvetica/times, ink/muted/accent palette, ruled sections). A
+     density loop shrinks type/spacing until it fits two A4 pages; the result previews in a modal
+     with Download + Regenerate. Real text throughout — so the rebuild is itself ATS-perfect. */
+  function atsRbSystem(level) {
+    var lvl = {
+      senior: "Target level: Senior Product Designer — foreground craft, shipped outcomes and clear ownership.",
+      staff: "Target level: Staff / Principal Product Designer — foreground scope, systems thinking, cross-team influence and strategy.",
+      leader: "Target level: VP / Head of Design — foreground org building, design strategy, business outcomes and executive scope."
+    }[level] || "";
+    return [
+      "You are an elite résumé writer and typesetter. You rebuild a résumé into a clean, single-column, ATS-perfect structure while preserving the candidate's REAL content and voice.",
+      "You are given (1) the EXTRACTED TEXT of the current résumé, (2) a list of specific FIXES from an ATS review, and (3) MISSING KEYWORDS. Produce a COMPLETE rebuilt résumé as structured JSON that APPLIES EVERY truthfully-applicable fix and reads as a strong, modern, results-first résumé.",
+      lvl,
+      "HARD RULES — never invent facts: no fabricated employers, titles, dates, degrees, metrics or tools. Keep EVERY real role, company, location, date and achievement from the source. Where a fix gives a REPLACEMENT, use it (or a truthful equivalent). Weave in the MISSING KEYWORDS only where the candidate's real experience genuinely supports them; otherwise surface them in the Skills section rather than inventing experience. Convert dense paragraphs into tight, quantified, action-verb bullets (outcome first). Use STANDARD section headings (Experience, Skills, Education, etc.). Remove first-person pronouns. Keep dates consistent (MM/YYYY or YYYY).",
+      "This rebuild also FIXES parsing: it is single-column plain text with real headings, so it must parse cleanly in any ATS.",
+      "LENGTH IS A HARD CONSTRAINT: the result MUST fit on TWO A4 pages when typeset. Be ruthless — keep the strongest, most relevant, most recent content; trim filler; roughly 3–6 crisp bullets for recent roles and 1–3 for older ones. Prefer verbs and numbers over adjectives. Do NOT pad.",
+      "Return ONLY valid JSON (no markdown, no prose) matching EXACTLY this shape:",
+      '{"name":"Full Name","title":"headline / target title","contact":{"email":"","phone":"","location":"City, Country","links":[{"label":"linkedin.com/in/handle","url":"https://..."}]},"summary":"2-3 line keyword-rich professional summary, no first person","sections":[{"heading":"Experience","kind":"experience","items":[{"role":"","org":"","location":"","dates":"MM/YYYY – MM/YYYY","bullets":["quantified, outcome-first bullet"]}]},{"heading":"Skills","kind":"skills","groups":[{"label":"e.g. Design","items":["skill","tool"]}]},{"heading":"Education","kind":"education","items":[{"school":"","credential":"","dates":"","note":""}]},{"heading":"Recognition","kind":"list","items":[{"title":"","meta":""}]}],"notes":"one honest line: what you changed and any fix you could not apply without fabricating"}',
+      "Include only sections the person actually has. Keep every string on a SINGLE line (no literal newlines inside any string). Output ONE compact JSON object and nothing else."
+    ].join("\n");
+  }
+  function atsRbUser(text, res, jd, company, level) {
+    var fixes = (Array.isArray(res && res.fixes) ? res.fixes : []).map(function (f, i) {
+      var a = (f && f.anchor) || {};
+      return (i + 1) + ". [" + (f.priority || "med") + "] " + String(f.point || "").trim() +
+        (f.how ? "  HOW: " + String(f.how).trim() : "") +
+        (a.quote ? "  QUOTE: \"" + String(a.quote).trim() + "\"" : "") +
+        (a.replacement ? "  REPLACEMENT: \"" + String(a.replacement).trim() + "\"" : "");
+    }).join("\n");
+    var kw = (res && res.keywords) || {}, miss = (kw.missing || []).filter(Boolean);
+    return "TARGET LEVEL: " + atsLevelName(level) +
+      (company ? "\nTARGET COMPANY / ROLE: " + String(company).trim() : "") +
+      (jd ? "\n\nTARGET JOB DESCRIPTION (tune wording + keywords toward this posting, truthfully):\n" + String(jd).trim().slice(0, 4000) : "") +
+      "\n\nFIXES TO APPLY (from the ATS review — apply every one that is truthfully applicable):\n" + (fixes || "(none listed)") +
+      "\n\nMISSING KEYWORDS to weave in where the real experience supports them:\n" + (miss.join(", ") || "(none)") +
+      "\n\nCURRENT RÉSUMÉ (extracted text — rebuild THIS person's real content; do not invent anything):\n\n" + String(text || "").slice(0, 12000);
+  }
+  function atsRbNorm(o) {
+    if (!o || typeof o !== "object") return null;
+    var str = function (v) { return String(v == null ? "" : v).trim(); };
+    var arr = function (v) { return Array.isArray(v) ? v : []; };
+    var list = function (v) { return arr(v).map(str).filter(Boolean); };
+    var rb = { name: str(o.name), title: str(o.title), summary: str(o.summary), notes: str(o.notes), contact: {}, sections: [] };
+    var c = o.contact || {};
+    rb.contact = {
+      email: str(c.email), phone: str(c.phone), location: str(c.location),
+      links: arr(c.links).map(function (l) { return { label: str(l && l.label), url: str(l && l.url) }; }).filter(function (l) { return l.label || l.url; })
+    };
+    arr(o.sections).forEach(function (s) {
+      if (!s || typeof s !== "object") return;
+      var heading = str(s.heading), kind = str(s.kind).toLowerCase();
+      if (kind === "experience") {
+        var items = arr(s.items).map(function (it) {
+          return { role: str(it && it.role), org: str(it && it.org), location: str(it && it.location), dates: str(it && it.dates), bullets: list(it && it.bullets) };
+        }).filter(function (it) { return it.role || it.org || it.bullets.length; });
+        if (items.length) rb.sections.push({ heading: heading || "Experience", kind: "experience", items: items });
+      } else if (kind === "skills") {
+        var groups = [];
+        if (Array.isArray(s.groups)) groups = s.groups.map(function (g) { return { label: str(g && g.label), items: list(g && g.items) }; }).filter(function (g) { return g.items.length; });
+        else if (Array.isArray(s.items)) { var fl = list(s.items); if (fl.length) groups = [{ label: "", items: fl }]; }
+        if (groups.length) rb.sections.push({ heading: heading || "Skills", kind: "skills", groups: groups });
+      } else if (kind === "education") {
+        var eitems = arr(s.items).map(function (it) { return { school: str(it && it.school), credential: str(it && it.credential), dates: str(it && it.dates), note: str(it && it.note) }; }).filter(function (it) { return it.school || it.credential; });
+        if (eitems.length) rb.sections.push({ heading: heading || "Education", kind: "education", items: eitems });
+      } else if (kind === "text") {
+        var t = str(s.text); if (t) rb.sections.push({ heading: heading, kind: "text", text: t });
+      } else {
+        var litems = arr(s.items).map(function (it) { return typeof it === "string" ? { title: str(it), meta: "" } : { title: str(it && it.title), meta: str(it && it.meta) }; }).filter(function (it) { return it.title; });
+        if (litems.length) rb.sections.push({ heading: heading, kind: "list", items: litems });
+      }
+    });
+    return rb;
+  }
+  // Typeset the structured résumé at a given density (k scales type + spacing; maxBul caps bullets/role).
+  function atsRbBuild(jsPDF, rb, dens) {
+    var k = dens.k, maxBul = dens.maxBul;
+    var doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
+    var PW = 210, PH = 297, M = 14, CW = PW - M * 2;
+    var INK = [28, 26, 23], MUT = [101, 92, 83], FAINT = [154, 147, 138], ACC = [154, 106, 36], LINE = [225, 216, 205];
+    var y = M;
+    var P = function (s) { return rpdfPlain(s); };
+    function ink() { doc.setTextColor(INK[0], INK[1], INK[2]); }
+    function mut() { doc.setTextColor(MUT[0], MUT[1], MUT[2]); }
+    function faint() { doc.setTextColor(FAINT[0], FAINT[1], FAINT[2]); }
+    function acc() { doc.setTextColor(ACC[0], ACC[1], ACC[2]); }
+    function rule(yy) { doc.setDrawColor(LINE[0], LINE[1], LINE[2]); doc.setLineWidth(0.2); doc.line(M, yy, PW - M, yy); }
+    function need(h) { if (y + h > PH - M - 8) { doc.addPage(); y = M; } }
+    function sec(t) { if (!t) return; need(12 * k); acc(); doc.setFont("helvetica", "bold"); doc.setFontSize(8 * k); doc.setCharSpace(0.5); doc.text(String(P(t)).toUpperCase(), M, y); doc.setCharSpace(0); y += 2 * k; rule(y); y += 4.2 * k; }
+
+    ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(21 * k); doc.text(P(rb.name || "Your Name"), M, y + 6 * k); y += 6 * k;
+    if (rb.title) { y += 5 * k; acc(); doc.setFont("helvetica", "bold"); doc.setFontSize(8 * k); doc.setCharSpace(0.4); doc.text(P(rb.title).toUpperCase(), M, y); doc.setCharSpace(0); }
+    var bits = [], c = rb.contact || {};
+    if (c.email) bits.push({ t: P(c.email), u: "mailto:" + c.email });
+    if (c.phone) bits.push({ t: P(c.phone), u: "tel:" + String(c.phone).replace(/[^0-9+]/g, "") });
+    if (c.location) bits.push({ t: P(c.location), u: "" });
+    (c.links || []).forEach(function (l) { bits.push({ t: P(l.label || rpdfNoProto(l.url)), u: l.url || "" }); });
+    if (bits.length) {
+      y += 5.5 * k; mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k);
+      var x = M, sep = "   \u00b7   ";
+      bits.forEach(function (b, i) {
+        var w = doc.getTextWidth(b.t);
+        if (x + w > PW - M) { y += 4.6 * k; x = M; }
+        if (b.u) { ink(); doc.textWithLink(b.t, x, y, { url: b.u }); mut(); } else { doc.text(b.t, x, y); }
+        x += w;
+        if (i < bits.length - 1) { var sw = doc.getTextWidth(sep); if (x + sw <= PW - M) { faint(); doc.text(sep, x, y); mut(); x += sw; } }
+      });
+    }
+    y += 3 * k; doc.setDrawColor(INK[0], INK[1], INK[2]); doc.setLineWidth(0.4); doc.line(M, y, PW - M, y); y += 6 * k;
+
+    if (rb.summary) { ink(); doc.setFont("times", "italic"); doc.setFontSize(11.5 * k); var sl = doc.splitTextToSize(P(rb.summary), CW); doc.text(sl, M, y); y += sl.length * 5.2 * k + 4 * k; }
+
+    rb.sections.forEach(function (s) {
+      if (s.kind === "experience") {
+        sec(s.heading);
+        s.items.forEach(function (it) {
+          need(11 * k);
+          if (it.dates || it.location) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7 * k); doc.setCharSpace(0.3); doc.text(P([it.dates, it.location].filter(Boolean).join("   \u00b7   ")).toUpperCase(), M, y); doc.setCharSpace(0); y += 3.6 * k; }
+          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(9.6 * k); doc.text(P(it.role || ""), M, y);
+          if (it.org) { acc(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); var ow = doc.getTextWidth(P(it.org)); doc.text(P(it.org), PW - M - ow, y); }
+          y += 4.6 * k;
+          it.bullets.slice(0, maxBul).forEach(function (bt) {
+            var lines = doc.splitTextToSize(P(bt), CW - 4.5);
+            need(lines.length * 4 * k + 1.4 * k);
+            acc(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); doc.text("\u2013", M, y);
+            mut(); doc.text(lines, M + 4.5, y);
+            y += lines.length * 4 * k + 1.4 * k;
+          });
+          y += 3 * k;
+        });
+      } else if (s.kind === "skills") {
+        sec(s.heading);
+        mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k);
+        s.groups.forEach(function (g) {
+          if (g.label) {
+            ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(8.6 * k); var lbl = P(g.label) + ":  "; var lw = doc.getTextWidth(lbl);
+            var rest = doc.splitTextToSize(g.items.map(P).join("   \u00b7   "), CW - lw);
+            need(Math.max(1, rest.length) * 4.2 * k + 1.6 * k);
+            doc.text(lbl, M, y); mut(); doc.setFont("helvetica", "normal"); doc.text(rest, M + lw, y); y += Math.max(1, rest.length) * 4.2 * k + 1.6 * k;
+          } else {
+            var ll = doc.splitTextToSize(g.items.map(P).join("   \u00b7   "), CW); need(ll.length * 4.2 * k + 1.6 * k);
+            mut(); doc.setFont("helvetica", "normal"); doc.text(ll, M, y); y += ll.length * 4.2 * k + 1.6 * k;
+          }
+        });
+        y += 2 * k;
+      } else if (s.kind === "education") {
+        sec(s.heading);
+        s.items.forEach(function (it) {
+          need(6 * k);
+          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(9 * k); doc.text(P(it.school || ""), M, y);
+          if (it.dates) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); var dw = doc.getTextWidth(P(it.dates)); doc.text(P(it.dates), PW - M - dw, y); }
+          y += 4 * k;
+          var line2 = P([it.credential, it.note].filter(Boolean).join("   \u00b7   "));
+          if (line2) { mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); var l2 = doc.splitTextToSize(line2, CW); doc.text(l2, M, y); y += l2.length * 4 * k; }
+          y += 2.6 * k;
+        });
+        y += 1 * k;
+      } else if (s.kind === "text") {
+        sec(s.heading);
+        mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); var tl = doc.splitTextToSize(P(s.text), CW); need(tl.length * 4.2 * k); doc.text(tl, M, y); y += tl.length * 4.2 * k + 3 * k;
+      } else {
+        sec(s.heading);
+        s.items.forEach(function (it) {
+          need(5.4 * k);
+          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(8.6 * k); doc.text(P(it.title || ""), M, y);
+          if (it.meta) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); var mw = doc.getTextWidth(P(it.meta)); doc.text(P(it.meta), PW - M - mw, y); }
+          y += 4.7 * k;
+        });
+        y += 2 * k;
+      }
+    });
+
+    var pages = doc.getNumberOfPages();
+    for (var pi = 1; pi <= pages; pi++) {
+      doc.setPage(pi);
+      faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7 * k);
+      if (rb.name) doc.text(P(rb.name), M, PH - 7);
+      var pg = "Page " + pi + " / " + pages, pw = doc.getTextWidth(pg); doc.text(pg, PW - M - pw, PH - 7);
+    }
+    return { doc: doc, pages: pages };
+  }
+  // Build at progressively tighter densities until it fits two pages; return the first that fits (else the tightest).
+  async function atsRbFit(rb) {
+    var jsPDF = await ensureJsPdf();
+    var DENS = [
+      { k: 1.00, maxBul: 8 }, { k: 0.96, maxBul: 6 }, { k: 0.92, maxBul: 5 },
+      { k: 0.88, maxBul: 5 }, { k: 0.84, maxBul: 4 }, { k: 0.80, maxBul: 3 }, { k: 0.76, maxBul: 3 }
+    ];
+    var built = null;
+    for (var i = 0; i < DENS.length; i++) {
+      built = atsRbBuild(jsPDF, rb, DENS[i]);
+      if (built.pages <= 2) return built;
+    }
+    return built;
+  }
+  var atsRbBusyCtx = null;
+  async function atsRebuildOpen(ctx) {
+    if (!atsLast || !atsLast.res) { status("Run an ATS check first."); return; }
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { atsRebuildOpen(ctx); }); return; }
+    atsRbBusyCtx = ctx || atsRbBusyCtx;
+    var btn = atsRbBusyCtx && atsRbBusyCtx.modal ? atsRbBusyCtx.modal.querySelector("[data-atsv-rebuild]") : null;
+    var was = btn ? btnBusy(btn, "Rebuilding\u2026") : null;
+    status("Rebuilding your résumé with the fixes\u2026");
+    try {
+      var text = atsLast.text || "";
+      if (!text) text = ((await fbExtractFile(atsLast.file)) || "").replace(/\s+/g, " ").trim();
+      if (text.length < 40) throw new Error("Couldn\u2019t read enough text from the résumé to rebuild it.");
+      var level = atsLast.level || atsLevel, company = (atsLast.company || atsState.company || ""), jd = atsState.jd || "";
+      var raw = await aiText(aiCfg("txt"), atsRbSystem(level), atsRbUser(text, atsLast.res, jd, company, level), { json: true, maxTokens: 8000, temperature: 0.4 });
+      var rb = atsRbNorm(csgenParse(raw));
+      if (!rb || !rb.sections.length) throw new Error("The rebuild came back unreadable \u2014 please try again.");
+      var built = await atsRbFit(rb);
+      atsRbShow(built, rb);
+      status("Résumé rebuilt \u2014 fixes applied.", true);
+    } catch (e) {
+      status("Rebuild failed: " + ((e && e.message) || e));
+    } finally {
+      if (btn) btnIdle(btn, was);
+    }
+  }
+  function atsRbShow(built, rb) {
+    var doc = built.doc, pages = built.pages, ok = pages <= 2;
+    var url = String(doc.output("bloburl"));
+    var fn = (String(rb.name || "Resume").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "Resume") + "-Resume.pdf";
+    var modal = atsvEl("div", "rbz");
+    modal.innerHTML =
+      '<div class="rbz__bar">' +
+        '<div class="rbz__ttl"><span class="ats__badge">NEW</span> Rebuilt résumé \u2014 fixes applied' +
+          '<span class="rbz__pg ' + (ok ? "is-ok" : "is-warn") + '">' + (ok ? "\u2713 " + pages + " page" + (pages > 1 ? "s" : "") : "\u26A0 " + pages + " pages") + "</span></div>" +
+        '<div class="rbz__tools">' +
+          '<button class="btn btn--ghost" type="button" data-rbz-regen>Regenerate</button>' +
+          '<button class="btn btn--primary" type="button" data-rbz-dl>Download PDF</button>' +
+          '<button class="atsv__tbtn atsv__x" type="button" data-rbz-close title="Close (Esc)">\u00d7</button>' +
+        "</div>" +
+      "</div>" +
+      '<div class="rbz__body">' +
+        '<iframe class="rbz__frame" title="Rebuilt résumé preview"></iframe>' +
+        '<div class="rbz__note"><b>What changed</b><p>' + escHtml(rb.notes || "Applied the ATS fixes, tightened the writing into quantified bullets, and rebuilt it as a clean single-column, fully parseable layout in the same styling.") + "</p>" +
+          (ok ? "" : '<p class="rbz__warn">Still ' + pages + " pages at the tightest clean density \u2014 trim a little content in your source, then Regenerate.</p>") +
+          '<p class="rbz__meta">Vector PDF \u00b7 real selectable text \u00b7 ATS-parseable.</p></div>' +
+      "</div>";
+    document.body.appendChild(modal);
+    modal.querySelector(".rbz__frame").src = url;
+    function close() { document.removeEventListener("keydown", onKey); try { URL.revokeObjectURL(url); } catch (e) {} modal.remove(); }
+    function onKey(e) { if (e.key === "Escape") close(); }
+    document.addEventListener("keydown", onKey);
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal || e.target.closest("[data-rbz-close]")) { close(); return; }
+      if (e.target.closest("[data-rbz-dl]")) { doc.save(fn); status("Rebuilt PDF downloaded.", true); return; }
+      if (e.target.closest("[data-rbz-regen]")) { close(); atsRebuildOpen(atsRbBusyCtx); return; }
+    });
   }
 
   /* ---------- ATS résumé viewer: pins the AI's fixes onto the rendered PDF ----------
@@ -2104,6 +2360,7 @@ import { WORLD_LAND } from "./worldland.js";
     var tone = score >= 80 ? "good" : score >= 65 ? "ok" : score >= 45 ? "warn" : "bad";
     var fitT = (atsLast && atsLast.company) ? (escHtml(atsLast.company) + " fit") : (escHtml(atsLevelName(level)) + " fit");
     var html = '<div class="atsv__score atsv__score--' + tone + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div><div class="atsv__score-x"><b>' + escHtml(band) + '</b><span>ATS + ' + fitT + '</span>' + (res.summary ? '<p>' + escHtml(res.summary) + '</p>' : '') + '</div></div>';
+    html += '<div class="atsv__rebuild"><button class="btn btn--primary" type="button" data-atsv-rebuild>Rebuild my r\u00e9sum\u00e9 with these fixes \u2192</button><span class="atsv__rebuild-note">Same styling \u00b7 vector PDF \u00b7 \u2264 2 pages</span></div>';
     html += '<div class="atsv__grp"><div class="atsv__grptitle">On the page <span>' + ctx.onPage.length + '</span></div>';
     html += ctx.onPage.length ? ctx.onPage.map(function (fi, n) { return atsvItemHtml(ctx, fi, n + 1, true); }).join("") : '<div class="atsv__empty">No fixes mapped to an exact spot on the page.</div>';
     html += '</div>';
@@ -2141,6 +2398,7 @@ import { WORLD_LAND } from "./worldland.js";
   function atsvWire(ctx) {
     var modal = ctx.modal, stage = modal.querySelector("[data-atsv-stage]"), rail = modal.querySelector("[data-atsv-rail]");
     rail.addEventListener("click", function (e) {
+      if (e.target.closest("[data-atsv-rebuild]")) { atsRebuildOpen(ctx); return; }
       var cp = e.target.closest("[data-atsv-copy]");
       if (cp) { var it = cp.closest(".atsv__item"), code = it && it.querySelector("code"); if (code) { try { navigator.clipboard.writeText(code.textContent); } catch (x) {} cp.textContent = "Copied"; setTimeout(function () { cp.textContent = "Copy"; }, 1200); } return; }
       var item = e.target.closest(".atsv__item"); if (item && item.dataset.fi) atsvFocusPin(ctx, item.dataset.fi);
