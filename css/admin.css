@@ -1675,6 +1675,13 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .wb__glance { font-family: var(--mono); font-size: .7rem; padding: .4rem .75rem; border: 1px solid var(--line); border-radius: 100px; background: none; color: var(--text-dim); cursor: pointer; transition: color .15s, border-color .15s; }
 .wb__glance:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .wb__glance.is-on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.wb__resume { margin-bottom: 1rem; border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent); background: color-mix(in srgb, var(--accent) 9%, transparent); border-radius: 12px; padding: .8rem 1rem; }
+.wb__resume-in { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; justify-content: space-between; }
+.wb__resume-txt { display: flex; flex-direction: column; gap: .18rem; min-width: 0; }
+.wb__resume-txt b { font-size: .9rem; color: var(--text); }
+.wb__resume-txt span { font-size: .74rem; color: var(--text-dim); font-family: var(--mono); max-width: 46ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb__resume-act { display: flex; gap: .5rem; flex-shrink: 0; }
+.wb__resume-act .btn { font-size: .74rem; padding: .45rem .9rem; }
 .wb__brief { width: 100%; box-sizing: border-box; }
 .wb__own { width: 100%; resize: vertical; box-sizing: border-box; margin-top: .5rem; }
 .wb__stage { text-align: left; max-height: 62vh; overflow: auto; margin-top: .4rem; display: flex; flex-direction: column; gap: 1rem; }

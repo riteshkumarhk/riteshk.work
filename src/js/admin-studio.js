@@ -10347,6 +10347,10 @@ import { WORLD_LAND } from "./worldland.js";
   if (!wbState.industry) wbState.industry = "any";
   if (!wbState.convo) wbState.convo = "text";
   function wbSave() { try { localStorage.setItem(WB_KEY, JSON.stringify({ mins: wbState.mins, mode: wbState.mode, level: wbState.level, challenge: wbState.challenge, industry: wbState.industry, convo: wbState.convo, brief: wbState.brief || "", company: wbState.company || "", jd: wbState.jd || "" })); } catch (e) {} }
+  // Pause/resume: the ACTIVE session (generated prompt + full conversation) is persisted separately so a reload/close resumes instead of regenerating.
+  var WB_SESS_KEY = "rk:wb:session";
+  function wbSessLoad() { try { var o = JSON.parse(localStorage.getItem(WB_SESS_KEY)); return (o && o.prompt && o.prompt.prompt) ? o : null; } catch (e) { return null; } }
+  function wbSessClear() { try { localStorage.removeItem(WB_SESS_KEY); } catch (e) {} }
   // Opt-in voice for the mock: the FREE browser Web Speech API \u2014 SpeechRecognition (speech\u2192text) +
   // speechSynthesis (text\u2192speech; on Edge these are Microsoft neural voices). Feature-detected; a graceful
   // no-op where unsupported so text mode always works.
@@ -10523,13 +10527,16 @@ import { WORLD_LAND } from "./worldland.js";
   function wbModal() {
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { wbModal(); }); return; }
     var st = wbState; if (!st.mins) st.mins = "60"; if (!st.mode) st.mode = "coach"; if (!st.level) st.level = "staff";
-    var prompt = null, transcript = "";
+    var prompt = null, transcript = "", sessTurns = [], sessDraft = "", sessPlan = null;
+    function saveSess() { if (!prompt || !prompt.prompt) return; try { localStorage.setItem(WB_SESS_KEY, JSON.stringify({ mode: st.mode, mins: st.mins, level: st.level, convo: st.convo, prompt: prompt, transcript: transcript, turns: sessTurns, draft: sessDraft, plan: sessPlan, savedAt: Date.now() })); } catch (e) {} }
+    function clearSess() { sessTurns = []; sessDraft = ""; sessPlan = null; wbSessClear(); }
     var modal = document.createElement("div");
     modal.className = "pass pass--wide wb-modal";
     modal.innerHTML =
       '<div class="pass__box"><div class="pass__title">\uD83E\uDDE9 Whiteboard coach</div>' +
       '<div class="pass__sub">Rehearse a live design exercise. Pick the length and a mode \u2014 I\u2019ll set a realistic prompt' + (storyJdText() ? " tailored to your target role" : "") + ", give you a timed game-plan, then coach you or run a mock.</div>" +
       '<div class="wb__setup">' +
+        '<div class="wb__resume" data-wb-resume-bar hidden></div>' +
         '<div class="af"><label class="af__label">How long is the exercise</label><div class="story__opts wb__opts3">' +
           WB_MINS.map(function (d) { return '<button type="button" class="story__opt' + (st.mins === d[0] ? " is-on" : "") + '" data-wb-mins="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
         "</div></div>" +
@@ -10595,6 +10602,17 @@ import { WORLD_LAND } from "./worldland.js";
     modal.querySelectorAll("[data-wb-convo]").forEach(function (b) { b.addEventListener("click", function () { st.convo = b.dataset.wbConvo; modal.querySelectorAll("[data-wb-convo]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     var convoHint = modal.querySelector(".wb__convo-hint");
     if (convoHint) convoHint.textContent = wbSpeech.sttOk ? "Talk mode uses your mic \u2014 speak your moves and the interviewer replies out loud. Works best in Chrome or Edge." : "Talk mode needs Chrome or Edge \u2014 typing works everywhere.";
+    var savedSess = wbSessLoad();
+    var resumeBar = modal.querySelector("[data-wb-resume-bar]");
+    if (savedSess && resumeBar) {
+      var nT = (savedSess.turns || []).length, snip = (savedSess.prompt.prompt || "").slice(0, 90);
+      resumeBar.innerHTML = '<div class="wb__resume-in"><div class="wb__resume-txt"><b>Resume your session?</b><span>' + escHtml((savedSess.mode === "coach" ? "Coaching" : "Mock interview") + " \u00b7 " + snip + (savedSess.prompt.prompt.length > 90 ? "\u2026" : "") + (nT ? " \u00b7 " + nT + " exchange" + (nT === 1 ? "" : "s") : "")) + "</span></div>" +
+        '<div class="wb__resume-act"><button type="button" class="btn btn--auto" data-wb-resume>Resume</button><button type="button" class="btn btn--ghost" data-wb-discard>Start over</button></div></div>';
+      resumeBar.hidden = false;
+      var rBtn = resumeBar.querySelector("[data-wb-resume]"), dBtn = resumeBar.querySelector("[data-wb-discard]");
+      if (rBtn) rBtn.addEventListener("click", function () { wbResume(savedSess); });
+      if (dBtn) dBtn.addEventListener("click", function () { clearSess(); resumeBar.hidden = true; });
+    }
     if (briefEl) briefEl.addEventListener("input", function () { st.brief = briefEl.value; wbSave(); });
     if (companyEl) companyEl.addEventListener("input", function () { st.company = companyEl.value; wbSave(); });
     if (jdEl) jdEl.addEventListener("input", function () { st.jd = jdEl.value; wbSave(); });
@@ -10608,20 +10626,36 @@ import { WORLD_LAND } from "./worldland.js";
         if (own) prompt = { prompt: own, context: "", watchfor: [] };
         else prompt = csgenParse(await aiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { json: true, maxTokens: 700, temperature: 0.9 }));
         if (!prompt || !prompt.prompt) throw new Error("Couldn\u2019t set a prompt \u2014 try again.");
-        transcript = "";
+        transcript = ""; sessTurns = []; sessDraft = ""; sessPlan = null;
         showStage();
         if (st.mode === "coach") await wbRunCoach();
         else await wbRunMock(true);
       } catch (e) { err.textContent = (e && e.message) || "Something went wrong \u2014 try again."; showSetup(); }
       btnIdle(startBtn, "Start");
     });
-    async function wbRunCoach() {
+    async function wbResume(s) {
+      if (!s) return;
+      st.mode = s.mode || st.mode; st.mins = s.mins || st.mins; st.level = s.level || st.level; st.convo = s.convo || st.convo;
+      prompt = s.prompt; transcript = s.transcript || ""; sessTurns = (s.turns || []).slice(); sessDraft = s.draft || ""; sessPlan = s.plan || null;
+      showStage();
+      if (st.mode === "coach") wbRunCoach(true); else wbRunMock("resume");
+    }
+    async function wbRunCoach(resume) {
+      if (resume && sessPlan) {
+        stage.innerHTML = wbPromptCard(prompt) + wbPlanCard(sessPlan, st.mins) + wbDraftCard();
+        wireStage();
+        var dR = stage.querySelector(".wb__draft"); if (dR && sessDraft) dR.value = sessDraft;
+        return;
+      }
       stage.innerHTML = wbPromptCard(prompt) + '<div class="wb__loading">Building your game-plan\u2026</div>';
+      saveSess();
       try {
         var plan = csgenParse(await aiText(aiCfg("txt"), wbPlanSystem(st.mins), wbPlanUser(prompt), { json: true, maxTokens: 2000, temperature: 0.6 }));
+        sessPlan = plan; saveSess();
         stage.innerHTML = wbPromptCard(prompt) + wbPlanCard(plan, st.mins) + wbDraftCard();
       } catch (e) { stage.innerHTML = wbPromptCard(prompt) + wbDraftCard(); err.textContent = (e && e.message) || "Couldn\u2019t build the plan \u2014 you can still rehearse below."; }
       wireStage();
+      var dEl0 = stage.querySelector(".wb__draft"); if (dEl0 && sessDraft) dEl0.value = sessDraft;
     }
     async function wbRunMock(opening) {
       if (watchCleanup) { try { watchCleanup(); } catch (e) {} }
@@ -10638,7 +10672,8 @@ import { WORLD_LAND } from "./worldland.js";
       var sendBtn = stage.querySelector("[data-wb-send]");
       var scoreBtn = stage.querySelector("[data-wb-score]");
       var speakOn = wbSpeech.ttsOk;
-      function addTurn(who, text) { var d = document.createElement("div"); d.className = "wb__turn wb__turn--" + who; var wl = document.createElement("span"); wl.className = "wb__who"; wl.textContent = who === "int" ? "Interviewer" : "You"; var bu = document.createElement("div"); bu.className = "wb__bubble"; bu.textContent = text; d.appendChild(wl); d.appendChild(bu); log.appendChild(d); log.scrollTop = log.scrollHeight; }
+      function renderTurn(who, text) { var d = document.createElement("div"); d.className = "wb__turn wb__turn--" + who; var wl = document.createElement("span"); wl.className = "wb__who"; wl.textContent = who === "int" ? "Interviewer" : "You"; var bu = document.createElement("div"); bu.className = "wb__bubble"; bu.textContent = text; d.appendChild(wl); d.appendChild(bu); log.appendChild(d); log.scrollTop = log.scrollHeight; }
+      function addTurn(who, text) { renderTurn(who, text); sessTurns.push({ who: who, text: text }); saveSess(); }
       // ---- Let the interviewer WATCH: screen/camera capture + local recording + per-turn vision ----
       var watchBar = stage.querySelector("[data-wb-watch-bar]");
       var wStream = null, wMic = null, wRec = null, wRecStream = null, wChunks = [], wRecUrl = "";
@@ -10748,12 +10783,12 @@ import { WORLD_LAND } from "./worldland.js";
           } else {
             reply = (await aiText(aiCfg("txt"), wbMockSystem(st.mins), usr, { maxTokens: 500, temperature: 0.75 }) || "").trim();
           }
-          if (reply) { addTurn("int", reply); transcript += (transcript ? "\n" : "") + "INTERVIEWER: " + reply; if (voiceOn && speakOn) wbSpeech.speak(reply); }
+          if (reply) { transcript += (transcript ? "\n" : "") + "INTERVIEWER: " + reply; addTurn("int", reply); if (voiceOn && speakOn) wbSpeech.speak(reply); }
         } catch (e) { err.textContent = (e && e.message) || "The interviewer went quiet \u2014 try again."; }
         wLastTurn = Date.now(); wTurnBusy = false;
         btnIdle(sendBtn, "Send");
       }
-      if (sendBtn) sendBtn.addEventListener("click", async function () { var m = (msgEl && msgEl.value.trim()) || ""; if (!m) return; addTurn("you", m); transcript += (transcript ? "\n" : "") + "CANDIDATE: " + m; msgEl.value = ""; await interviewerTurn(m); });
+      if (sendBtn) sendBtn.addEventListener("click", async function () { var m = (msgEl && msgEl.value.trim()) || ""; if (!m) return; transcript += (transcript ? "\n" : "") + "CANDIDATE: " + m; addTurn("you", m); msgEl.value = ""; await interviewerTurn(m); });
       if (msgEl) msgEl.addEventListener("keydown", function (e) { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); if (sendBtn) sendBtn.click(); } });
       if (voiceOn) {
         var micBtn = stage.querySelector("[data-wb-mic]"), liveEl = stage.querySelector("[data-wb-live]"), spkBtn = stage.querySelector("[data-wb-spk]");
@@ -10794,7 +10829,8 @@ import { WORLD_LAND } from "./worldland.js";
         } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t score that \u2014 try again."; }
         btnIdle(scoreBtn, "Wrap up & score me");
       });
-      if (opening) interviewerTurn("");
+      if (opening === "resume") { sessTurns.forEach(function (rt) { renderTurn(rt.who, rt.text); }); if (log) log.scrollTop = log.scrollHeight; }
+      else if (opening) { saveSess(); interviewerTurn(""); }
     }
     function wireStage() {
       var np = stage.querySelector("[data-wb-newprompt]");
@@ -10802,10 +10838,12 @@ import { WORLD_LAND } from "./worldland.js";
         btnBusy(np, "New prompt\u2026");
         try {
           prompt = csgenParse(await aiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { json: true, maxTokens: 700, temperature: 0.95 }));
-          transcript = "";
+          transcript = ""; sessTurns = []; sessDraft = ""; sessPlan = null;
           if (st.mode === "coach") await wbRunCoach(); else await wbRunMock(true);
         } catch (e) { err.textContent = (e && e.message) || "Try again."; btnIdle(np, "\u21bb New prompt"); }
       });
+      var draftSave = stage.querySelector(".wb__draft");
+      if (draftSave) draftSave.addEventListener("input", function () { sessDraft = draftSave.value; saveSess(); });
       var crit = stage.querySelector("[data-wb-critique]");
       if (crit) crit.addEventListener("click", async function () {
         var draftEl = stage.querySelector(".wb__draft");
