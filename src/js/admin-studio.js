@@ -10686,15 +10686,18 @@ import { WORLD_LAND } from "./worldland.js";
       if (timerCleanup) { try { timerCleanup(); } catch (e) {} }
       var voiceOn = (st.convo === "voice") && wbSpeech.sttOk;
       doListen = null;
-      var voiceInline = voiceOn ? '<button type="button" class="wb__mic" data-wb-mic><span class="wb__mic-dot"></span><span class="wb__mic-t">Tap to talk</span></button>' + (wbSpeech.ttsOk ? '<button type="button" class="wb__spk is-on" data-wb-spk title="Interviewer voice">\uD83D\uDD0A Voice</button>' : "") + '<span class="wb__voice-live" data-wb-live></span>' : "";
+      var micInline = voiceOn ? '<button type="button" class="wb__mic" data-wb-mic><span class="wb__mic-dot"></span><span class="wb__mic-t">Tap to talk</span></button>' : "";
+      var spkInline = (voiceOn && wbSpeech.ttsOk) ? '<button type="button" class="wb__spk is-on" data-wb-spk title="Toggle the interviewer\u2019s voice">\uD83D\uDD0A Voice</button>' : "";
+      var capInline = '<button type="button" class="wb__cap" data-wb-watch="screen" title="Share your screen so the interviewer can see your board">\uD83D\uDDA5\uFE0F Share screen</button><button type="button" class="wb__cap" data-wb-watch="camera" title="Turn on your camera so the interviewer can watch">\uD83D\uDCF7 Camera</button>';
       var immHtml = voiceOn ? '<div class="wb__imm" data-wb-imm-bar><span class="wb__imm-note">Go immersive \u2014 turns on your mic, voice and a live screen or camera feed so it feels like a real interview.</span><button type="button" class="btn btn--primary wb__imm-go" data-wb-immersive>Start immersive interview</button></div>' : "";
       if (foot) foot.hidden = true;
       var totalSec = (parseInt(st.mins, 10) || 45) * 60;
       var timerLeft = (opening === "resume" && sessTimer > 0) ? sessTimer : totalSec; sessTimer = timerLeft;
       stage.innerHTML = '<div class="wb__cols"><div class="wb__main">' + immHtml + '<div class="wb__chat" data-wb-log></div>' +
         '<div class="wb__composer"><textarea class="wb__msg" rows="2" placeholder="' + (voiceOn ? "Tap the mic and talk \u2014 or type here (\u2318/Ctrl+Enter to send)\u2026" : "Type your next move \u2014 think out loud like you would at the board (\u2318/Ctrl+Enter to send)\u2026") + '"></textarea>' +
-        '<div class="wb__composer-act">' + voiceInline + '<button class="btn btn--auto wb__send" data-wb-send>Send</button></div></div>' +
-        '<div class="wb__watch" data-wb-watch-bar></div></div>' +
+        (voiceOn ? '<span class="wb__voice-live" data-wb-live></span>' : "") +
+        '<div class="wb__composer-act">' + micInline + capInline + spkInline + '<button class="btn btn--auto wb__send" data-wb-send>Send</button></div></div>' +
+        '<div class="wb__watch" data-wb-watch-bar hidden></div></div>' +
         '<aside class="wb__rail"><div class="wb__timer" data-wb-timer><span class="wb__timer-t" data-wb-timer-t>' + wbFmtClock(timerLeft) + '</span><span class="wb__timer-l">time remaining</span></div>' +
         wbPromptCard(prompt) +
         '<div class="wb__rail-acts"><button class="btn btn--auto" data-wb-score>Wrap up &amp; score me</button><button class="btn btn--ghost" data-wb-pause>Pause &amp; resume later</button><button class="btn btn--ghost" data-wb-rail-back>\u2190 Change setup</button></div></aside></div>';
@@ -10784,6 +10787,7 @@ import { WORLD_LAND } from "./worldland.js";
       function paintWatch() {
         if (!watchBar) return;
         if (wStream) {
+          watchBar.hidden = false;
           watchBar.classList.add("is-live");
           var seeHtml = wCanSee === null ? '<span class="wb__watch-see">Checking if the interviewer can see\u2026</span>'
             : wCanSee ? '<span class="wb__watch-see is-on">\uD83D\uDC41 Interviewer can see \u2014 it glances each turn</span>'
@@ -10798,15 +10802,13 @@ import { WORLD_LAND } from "./worldland.js";
           var wsBtn = watchBar.querySelector("[data-wb-watchstop]"); if (wsBtn) wsBtn.addEventListener("click", stopWatch);
         } else {
           watchBar.classList.remove("is-live");
-          watchBar.innerHTML =
-            '<span class="wb__watch-lead">\uD83D\uDC41 Let the interviewer watch you whiteboard</span>' +
-            '<button type="button" class="wb__watch-btn" data-wb-watch="screen">\uD83D\uDDA5\uFE0F Share screen</button>' +
-            '<button type="button" class="wb__watch-btn" data-wb-watch="camera">\uD83D\uDCF7 Camera</button>' +
-            (wRecUrl ? '<a class="wb__watch-dl" href="' + wRecUrl + '" download="whiteboard-mock.webm">\u2B07 Download recording</a>' : "") +
-            '<span class="wb__watch-hint">Optional \u2014 a frame goes to your AI each turn so it can react; the recording stays on your device.</span>';
-          watchBar.querySelectorAll("[data-wb-watch]").forEach(function (b) { b.addEventListener("click", function () { startWatch(b.dataset.wbWatch); }); });
+          watchBar.innerHTML = wRecUrl ? '<span class="wb__watch-lead">\uD83C\uDFA5 Session recording</span><a class="wb__watch-dl" href="' + wRecUrl + '" download="whiteboard-mock.webm">\u2B07 Download</a>' : "";
+          watchBar.hidden = !wRecUrl;
         }
+        updateCaps();
       }
+      function updateCaps() { stage.querySelectorAll(".wb__cap").forEach(function (b) { b.classList.toggle("is-on", !!wStream && wSrc === b.dataset.wbWatch); }); }
+      stage.querySelectorAll(".wb__cap").forEach(function (b) { b.addEventListener("click", function () { var s = b.dataset.wbWatch; if (wStream) { var was = wSrc; stopWatch(); if (was !== s) startWatch(s); } else startWatch(s); }); });
       paintWatch();
       async function interviewerTurn(userMsg, nudge) {
         if (wTurnBusy) return;
