@@ -1126,6 +1126,12 @@ import { WORLD_LAND } from "./worldland.js";
     return '<div class="ats">' +
       '<div class="ats__head"><span class="ats__badge">ATS</span><div><b>ATS r\u00e9sum\u00e9 check</b><span>Is your r\u00e9sum\u00e9 parseable and tuned for the level you\u2019re targeting?</span></div></div>' +
       '<div class="ats__levels">' + lvls + "</div>" +
+      '<div class="ats__jd">' +
+        '<div class="af__hint" style="margin:.2rem 0 .5rem">Target a specific job <b>(optional)</b> \u2014 paste it to score the r\u00e9sum\u00e9\u2019s match for THAT role and surface the exact keywords it wants.</div>' +
+        '<div class="cl__row"><input type="url" class="cl__url" placeholder="Paste the job posting URL\u2026" value="' + escAttr(atsState.url) + '" /><button class="btn btn--ghost" type="button" data-act="ats-fetch">Fetch</button></div>' +
+        '<textarea class="cl__jd" rows="4" placeholder="\u2026or paste the job description here (best results \u2014 LinkedIn links often need pasting).">' + escHtml(atsState.jd) + '</textarea>' +
+        '<div class="cl__row2"><input type="text" class="cl__company" placeholder="Company / role (optional, sharpens it)" value="' + escAttr(atsState.company) + '" /></div>' +
+      '</div>' +
       '<div class="imgblk__row"><button class="btn btn--primary" data-act="ats-check"' + (has ? "" : " disabled") + ">Check ATS rating</button>" +
       '<label class="btn btn--ghost ats__file">Check a different file\u2026<input type="file" accept=".pdf,.docx,.txt,.md" data-ats-file hidden></label></div>' +
       (has ? "" : '<div class="af__hint">Add your r\u00e9sum\u00e9 above (or pick a file) to run the check.</div>') +
@@ -1763,6 +1769,7 @@ import { WORLD_LAND } from "./worldland.js";
 
   /* ---------- ATS résumé check (Contact tab, beside the résumé upload) ---------- */
   var atsLevel = "staff";
+  var atsState = { jd: "", url: "", company: "" };
   function atsLevelName(l) { return ({ senior: "Senior", staff: "Principal / Staff", leader: "Design leadership" })[l] || l; }
   async function resumeToFile(url) {
     var p = parseDataUri(url);
@@ -1795,20 +1802,28 @@ import { WORLD_LAND } from "./worldland.js";
       leader: "TARGET LEVEL: VP / Head of Design. Weight org building, team growth, design strategy, business outcomes, executive communication and vision \u2014 leadership scope over IC craft."
     }[level] || "";
     return [
-      "You are an expert technical recruiter and resume ATS (Applicant Tracking System) analyst for product-design roles.",
-      "You are given the EXTRACTED TEXT of a candidate's resume (already parsed from their file). Judge (a) how ATS-FRIENDLY / parseable it is and (b) how well it is optimised for the target level below.",
+      "You are a world-class resume ATS-optimisation expert and senior technical recruiter for product-design roles. You have reverse-engineered how real Applicant Tracking Systems ingest, parse and rank resumes \u2014 Workday, Greenhouse, Lever, Taleo (Oracle), iCIMS, SuccessFactors (SAP), Ashby, Jobvite, BambooHR \u2014 and you hold resumes to the HIGHEST modern bar.",
+      "You are given the EXTRACTED TEXT of a candidate's resume (already parsed from their file). Judge (a) how reliably it PARSES across ATS \u2014 from the strictest legacy engine to a cutting-edge semantic ranker \u2014 and (b) how well it is optimised for the target level below.",
       lvl,
-      "ATS signals to weigh: single-column reading order; standard section headings (Experience, Skills, Education); machine-readable text (garbled or near-empty text = image-based = fails); a clear contact block; reverse-chronological dated roles; quantified impact; relevant role & skill KEYWORDS for the level; standard fonts; sensible length; no reliance on tables/graphics/text-in-images/headers-footers; consistent date formats.",
+      "MANDATE: the resume must survive ANY checker \u2014 a columns-blind legacy keyword parser (e.g. Taleo) AND a modern semantic ranker AND a 7-second human skim. Assume the STRICTEST parser when in doubt. Be demanding: flag every real risk even if borderline, and make each suggestion BITE \u2014 concrete, specific and immediately actionable with a paste-ready rewrite. Do NOT be generous: reserve 90+ ONLY for a resume that would pass a strict legacy parse, rank well semantically, AND match the target/JD; most real resumes sit 55\u201380.",
+      "PARSE-KILLERS to detect from the text (these silently DROP content in real ATS): multi-column / sidebar layouts (parsers read straight across and jumble the order); tables or cells used for content; text inside images, charts, logos or icons (invisible \u2014 contact details shown as icons are LOST); text boxes or shapes (often skipped); contact info in a HEADER or FOOTER region (many parsers ignore those); decorative or non-standard fonts, ligatures or symbol glyphs; custom bullet characters; graphic skill-bars or rating dots (convey nothing); inconsistent or ambiguous dates; a photo. Garbled, run-together or near-empty text = an image-only/scanned or heavily-graphical file that real parsers also fail \u2014 call it out as a TOP red flag.",
+      "STRUCTURE & CONTENT to verify: a plain-text contact block in the BODY (name, email, phone as real text, city, a text LinkedIn/portfolio URL); STANDARD exact section headings (Experience / Work Experience, Skills, Education \u2014 not clever custom labels a parser won't map); reverse-chronological roles with company, title, location and consistent MM/YYYY dates; strong past-tense action verbs; quantified, outcome-first bullets (metrics, %, $, scale); a dedicated Skills section listing hard skills & tools verbatim; standard body fonts at readable size; sensible length (1\u20132 pages IC, 2\u20133 for leadership); no first-person pronouns; no dense paragraphs where bullets belong.",
+      "KEYWORDS: ATS matching is largely literal/stemmed. Verify the resume carries the role's real hard skills, tools and domain terms as EXACT phrases, and BOTH an acronym and its expansion where relevant (e.g. 'UX' and 'User Experience'). Mirror the target job TITLE where truthful. Never keyword-stuff.",
+      "FILE-FORMAT guidance (raise in fixes when relevant): a text-based PDF exported from the design tool or Word is safe for modern ATS; a .docx is safest for legacy engines like Taleo; NEVER an image/scanned PDF, a screenshot, or .pages.",
+      "If a TARGET JOB DESCRIPTION is provided below, ALSO score the resume as a MATCH for THAT specific posting: which required skills, tools, domain terms and responsibilities it names are evidenced in the resume vs missing; whether the title, seniority and years align; and draw keywords.present / keywords.missing from the JD\u2019s REAL requirements (not generic level keywords). The score and fixes must then reflect ATS parseability AND fit for that exact role. If NO job description is provided, score against the target level generically.",
       "Be honest, specific and actionable. Base everything ONLY on the provided text; never invent facts. If the text is sparse or garbled, say the file may not be ATS-parseable.",
       "Return ONLY valid JSON (no markdown) matching EXACTLY this shape:",
       '{"score":0,"band":"Strong|Good|Needs work|At risk","summary":"one honest sentence","checks":[{"label":"short label","status":"pass|warn|fail","note":"one line"}],"fixes":[{"priority":"high|med|low","point":"what to change","how":"a concrete rewrite or action","anchor":{"type":"quote|section|global","quote":"the EXACT text from the resume this refers to, copied verbatim (only when type=quote)","section":"the section heading it concerns, e.g. Experience (only when type=section)","replacement":"a ready-to-paste rewrite of the quoted text (optional)"}}],"keywords":{"present":["..."],"missing":["..."]}}',
-      "score is 0-100 reflecting BOTH ATS parseability AND fit for the target level. Give 5-8 checks, 4-8 fixes ordered by priority, and level-appropriate missing keywords.",
+      "Give 6\u20139 checks spanning BOTH parseability (layout, format, contact, headings, dates, fonts) AND content/fit (impact, keywords, level/JD match); the 0\u2013100 score reflects all of it. Give 5\u20139 fixes ordered high-to-low priority, each genuinely actionable with a paste-ready anchor.replacement wherever possible; LEAD with anything that would break parsing or lose content.",
       "For EACH fix, set anchor.type to one of: 'quote' when the fix is about a specific phrase or line — copy that phrase into anchor.quote EXACTLY as written above (verbatim, no paraphrase; a few words up to about one line) so it can be pinned on the page; 'section' when it concerns a whole section — put the section heading in anchor.section; 'global' for document-wide issues such as length, column/table layout, a missing section, overall tone, or keywords. Include anchor.replacement whenever you can give a concrete rewrite of the quoted text.",
       "Output ONE compact JSON object and nothing else. Do not wrap it in markdown fences, and do not put literal newlines inside any string value; keep every note and how on a single line."
     ].join("\n");
   }
-  function atsUser(text, level) {
-    return "TARGET LEVEL: " + atsLevelName(level) + "\n\nRESUME TEXT (extracted from the candidate's file):\n\n" + String(text).slice(0, 12000);
+  function atsUser(text, level, jd, company) {
+    return "TARGET LEVEL: " + atsLevelName(level) +
+      (company ? "\nCOMPANY / ROLE: " + String(company).trim() : "") +
+      (jd ? "\n\nTARGET JOB DESCRIPTION (score the resume as a match for THIS posting):\n\n" + String(jd).trim().slice(0, 8000) : "\n\n(No job description provided \u2014 score against the target level generically.)") +
+      "\n\nRESUME TEXT (extracted from the candidate's file):\n\n" + String(text).slice(0, 12000);
   }
   function atsRenderHtml(res, level, thin) {
     var score = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
@@ -1820,13 +1835,13 @@ import { WORLD_LAND } from "./worldland.js";
     var html = '<div class="ats__result">';
     if (thin) html += '<div class="ats__thin">\u26A0 Only a little text was extracted \u2014 if this PDF is image-based or heavily column/table-based, real ATS parsers may also struggle. A clean, text-based PDF scores best.</div>';
     html += '<div class="ats__score ats__score--' + tone + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div>' +
-      '<div class="ats__score-x"><b>' + escHtml(band) + '</b><span>ATS + ' + escHtml(atsLevelName(level)) + ' fit</span>' + (res.summary ? '<p>' + escHtml(res.summary) + '</p>' : '') + '</div></div>';
+      '<div class="ats__score-x"><b>' + escHtml(band) + '</b><span>ATS + ' + escHtml(atsState.company ? atsState.company + " fit" : atsLevelName(level) + " fit") + '</span>' + (res.summary ? '<p>' + escHtml(res.summary) + '</p>' : '') + '</div></div>';
     if (fixes.length) html += '<div class="ats__viewrow"><button class="btn btn--primary" type="button" data-act="ats-view">Show fixes on your résumé →</button></div>';
     if (checks.length) html += '<div class="ats__checks">' + checks.map(function (c) {
       var s = c.status === "pass" ? "pass" : c.status === "fail" ? "fail" : "warn", ic = s === "pass" ? "\u2713" : s === "fail" ? "\u2715" : "!";
       return '<div class="ats__chk ats__chk--' + s + '"><span class="ats__chk-i">' + ic + '</span><div><b>' + escHtml(c.label || "") + '</b>' + (c.note ? '<span>' + escHtml(c.note) + '</span>' : '') + '</div></div>';
     }).join("") + '</div>';
-    if (fixes.length) html += '<div class="ats__fixes"><div class="ats__sub">How to optimise for ' + escHtml(atsLevelName(level)) + '</div>' + fixes.map(function (f) {
+    if (fixes.length) html += '<div class="ats__fixes"><div class="ats__sub">How to optimise for ' + escHtml((atsState.jd || atsState.company) ? "this role" : atsLevelName(level)) + '</div>' + fixes.map(function (f) {
       var pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med";
       return '<div class="ats__fix ats__fix--' + pr + '"><span class="ats__pri">' + pr + '</span><div><b>' + escHtml(f.point || "") + '</b>' + (f.how ? '<span>' + escHtml(f.how) + '</span>' : '') + '</div></div>';
     }).join("") + '</div>';
@@ -1852,7 +1867,16 @@ import { WORLD_LAND } from "./worldland.js";
       var f = file || await resumeToFile(url);
       var text = ((await fbExtractFile(f)) || "").replace(/\s+/g, " ").trim();
       if (text.length < 40) throw new Error("I couldn\u2019t read text from that r\u00e9sum\u00e9. If it\u2019s an image-only or scanned PDF, that\u2019s itself a major ATS red flag \u2014 export a text-based PDF from your design tool or Word.");
-      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel), { json: true, maxTokens: 5000, temperature: 0.3 }));
+      var jdUrlEl = panel.querySelector(".cl__url"), jdEl = panel.querySelector(".cl__jd"), coEl = panel.querySelector(".cl__company");
+      atsState.url = jdUrlEl ? jdUrlEl.value.trim() : atsState.url;
+      atsState.jd = jdEl ? jdEl.value.trim() : atsState.jd;
+      atsState.company = coEl ? coEl.value.trim() : atsState.company;
+      var jd = atsState.jd;
+      if (!jd && atsState.url) {
+        if (out) out.innerHTML = '<div class="ats__load"><span class="ats__spin"></span> Reading the job post, then scoring the match\u2026</div>';
+        try { jd = await clFetchJd(atsState.url); if (jdEl) jdEl.value = jd; atsState.jd = jd; } catch (e2) {}
+      }
+      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel, jd, atsState.company), { json: true, maxTokens: 6000, temperature: 0.3 }));
       if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
       atsLast = { file: f, res: res, level: atsLevel };
       if (out) out.innerHTML = atsRenderHtml(res, atsLevel, text.length < 500);
@@ -1862,6 +1886,22 @@ import { WORLD_LAND } from "./worldland.js";
       status("ATS check failed.");
     } finally {
       btnIdle(btn, was);
+    }
+  }
+  async function atsFetchToPanel(panel) {
+    if (!panel) return;
+    var urlEl = panel.querySelector(".cl__url"), jdEl = panel.querySelector(".cl__jd"), out = panel.querySelector("[data-ats-out]");
+    var url = urlEl ? urlEl.value.trim() : "";
+    if (!url) { status("Paste a job URL first."); return; }
+    if (out) out.innerHTML = '<div class="ats__load"><span class="ats__spin"></span> Reading the job post\u2026</div>';
+    try {
+      var jd = await clFetchJd(url);
+      if (jdEl) jdEl.value = jd; atsState.jd = jd; atsState.url = url;
+      if (out) out.innerHTML = '<div class="cl__ok">\u2713 Pulled the job text \u2014 review it below, then run the check.</div>';
+      status("Job post read.", true);
+    } catch (e) {
+      if (out) out.innerHTML = '<div class="ats__err">' + escHtml((e && e.message) || "Couldn\u2019t read that link.") + "</div>";
+      status("Couldn\u2019t read that link.");
     }
   }
 
@@ -6334,6 +6374,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "resume-pdf") { resumePdfDownload(b); return; }
     if (act === "phone-qr") { phoneQr(b); return; }
     if (act === "ats-check") { atsRun(b.closest(".ats"), null); return; }
+    if (act === "ats-fetch") { atsFetchToPanel(b.closest(".ats")); return; }
     if (act === "ats-view") { atsOpenViewer(); return; }
     if (act === "ats-level") { atsLevel = b.dataset.lvl; var ap = b.closest(".ats"); if (ap) ap.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
     if (act === "cl-level") { clLevel = b.dataset.lvl; var clp = b.closest(".cl"); if (clp) clp.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
