@@ -10692,9 +10692,9 @@ import { WORLD_LAND } from "./worldland.js";
       var WB_IC_SPK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>';
       var WB_IC_SPK_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>';
       var micInline = voiceOn ? '<button type="button" class="wb__mic" data-wb-mic><span class="wb__ico">' + WB_IC_MIC + '</span><span class="wb__mic-t">Tap to talk</span></button>' : "";
-      var spkInline = (voiceOn && wbSpeech.ttsOk) ? '<button type="button" class="wb__spk is-on" data-wb-spk title="Toggle the interviewer\u2019s voice"><span class="wb__ico" data-wb-spk-ico>' + WB_IC_SPK + '</span><span class="wb__spk-t">Voice</span></button>' : "";
+      var spkInline = (voiceOn && wbSpeech.ttsOk) ? '<button type="button" class="wb__spk wb__spk--icon is-on" data-wb-spk title="AI narration \u2014 on (the interviewer reads its replies aloud)" aria-label="AI narration \u2014 on"><span class="wb__ico" data-wb-spk-ico>' + WB_IC_SPK + '</span></button>' : "";
       var capInline = '<button type="button" class="wb__cap" data-wb-watch="screen" title="Share your screen so the interviewer can see your board"><span class="wb__ico">' + WB_IC_SCREEN + '</span>Share screen</button><button type="button" class="wb__cap" data-wb-watch="camera" title="Turn on your camera so the interviewer can watch"><span class="wb__ico">' + WB_IC_CAM + '</span>Camera</button>';
-      var immHtml = voiceOn ? '<div class="wb__imm" data-wb-imm-bar><span class="wb__imm-note">Go immersive \u2014 turns on your mic, voice and a live screen or camera feed so it feels like a real interview.</span><button type="button" class="btn btn--primary wb__imm-go" data-wb-immersive>Start immersive interview</button></div>' : "";
+      var immHtml = voiceOn ? '<div class="wb__imm" data-wb-imm-bar><span class="wb__imm-note">Go immersive \u2014 turns on your mic, AI narration and a live screen <em>and</em> camera feed so it feels like a real interview.</span><button type="button" class="btn btn--primary wb__imm-go" data-wb-immersive>Start immersive interview</button></div>' : "";
       if (foot) foot.hidden = true;
       var totalSec = (parseInt(st.mins, 10) || 45) * 60;
       var timerLeft = (opening === "resume" && sessTimer > 0) ? sessTimer : totalSec; sessTimer = timerLeft;
@@ -10723,104 +10723,134 @@ import { WORLD_LAND } from "./worldland.js";
       function addTurn(who, text) { renderTurn(who, text); sessTurns.push({ who: who, text: text }); saveSess(); }
       // ---- Let the interviewer WATCH: screen/camera capture + local recording + per-turn vision ----
       var watchBar = stage.querySelector("[data-wb-watch-bar]");
-      var wStream = null, wMic = null, wRec = null, wRecStream = null, wChunks = [], wRecUrl = "";
-      var wVideo = null, wSrc = "", wCanSee = null, wModel = null, wRecOn = false;
+      var feeds = { screen: null, camera: null };   // each: { stream, video }
+      var wFocus = "";                               // which feed the AI analyses + records
+      var wRec = null, wRecUrl = "", wRecOn = false, wRecSrc = "";
+      var wCanSee = null, wModel = null, wModelTried = false;
       var wGlanceOn = false, wGlanceTimer = 0, wLastTurn = Date.now(), wTurnBusy = false;
       function wStopTracks(s) { if (s) { try { s.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} } }
+      function anyFeed() { return feeds.screen || feeds.camera; }
+      function focusFeed() { return (wFocus && feeds[wFocus]) || feeds.screen || feeds.camera || null; }
       function grabFrame() {
         try {
-          if (!wVideo || !wVideo.videoWidth) return null;
-          var vw = wVideo.videoWidth, vh = wVideo.videoHeight, scale = Math.min(1, 1280 / vw);
+          var f = focusFeed(), v = f && f.video;
+          if (!v || !v.videoWidth) return null;
+          var vw = v.videoWidth, vh = v.videoHeight, scale = Math.min(1, 1280 / vw);
           var c = document.createElement("canvas"); c.width = Math.round(vw * scale); c.height = Math.round(vh * scale);
-          c.getContext("2d").drawImage(wVideo, 0, 0, c.width, c.height);
+          c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
           var uri = c.toDataURL("image/jpeg", 0.7);
           return { mime: "image/jpeg", b64: uri.slice(uri.indexOf(",") + 1) };
         } catch (e) { return null; }
       }
-      function startRec() {
-        wChunks = []; wRecUrl = ""; wRec = null; wRecOn = false;
+      function startRec(src) {
+        if (wRec && wRecOn) { try { wRec.stop(); } catch (e) {} wRecOn = false; }
+        var f = feeds[src]; if (!f) { wRec = null; wRecSrc = ""; return; }
+        wRecSrc = src;
         try {
-          if (!window.MediaRecorder || !wRecStream || !wRecStream.getTracks().length) return;
+          var rs = f.stream;
+          if (!window.MediaRecorder || !rs || !rs.getVideoTracks().length) { wRec = null; return; }
           var mt = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].filter(function (m) { try { return MediaRecorder.isTypeSupported(m); } catch (e) { return false; } })[0] || "";
-          wRec = mt ? new MediaRecorder(wRecStream, { mimeType: mt }) : new MediaRecorder(wRecStream);
-          wRec.ondataavailable = function (ev) { if (ev.data && ev.data.size) wChunks.push(ev.data); };
-          wRec.onstop = function () { try { wRecUrl = URL.createObjectURL(new Blob(wChunks, { type: (wRec && wRec.mimeType) || "video/webm" })); } catch (e) {} paintWatch(); };
-          wRec.start(1000); wRecOn = true;
+          var rec = mt ? new MediaRecorder(rs, { mimeType: mt }) : new MediaRecorder(rs);
+          var chunks = [];
+          rec.ondataavailable = function (ev) { if (ev.data && ev.data.size) chunks.push(ev.data); };
+          rec.onstop = function () { try { wRecUrl = URL.createObjectURL(new Blob(chunks, { type: rec.mimeType || "video/webm" })); } catch (e) {} wRecOn = false; paintWatch(); };
+          rec.start(1000); wRec = rec; wRecOn = true;
         } catch (e) { wRec = null; wRecOn = false; }
       }
+      function stopRec() { if (wRec && wRecOn) { try { wRec.stop(); } catch (e) {} } }
+      function syncRec() { if (!anyFeed()) { stopRec(); return; } if (!wRecOn || wRecSrc !== wFocus) startRec(wFocus); }
       function glanceTick() {
-        if (!wStream || !wCanSee || wTurnBusy) return;
+        if (!anyFeed() || !wCanSee || wTurnBusy) return;
         if (Date.now() - wLastTurn < 22000) return;
-        interviewerTurn("", "You\u2019ve been quietly working on the board \u2014 take a fresh look at the attached image and react to what\u2019s changed or where they\u2019re heading. Keep it to a sentence or two.");
+        interviewerTurn("", "You\u2019ve been quietly working \u2014 take a fresh look at the attached image and react to what\u2019s changed or where they\u2019re heading. Keep it to a sentence or two.");
       }
       function setGlance(on) {
-        wGlanceOn = on && !!wStream && !!wCanSee;
+        wGlanceOn = on && !!anyFeed() && !!wCanSee;
         if (wGlanceTimer) { clearInterval(wGlanceTimer); wGlanceTimer = 0; }
         if (wGlanceOn) wGlanceTimer = setInterval(glanceTick, 5000);
       }
-      function stopWatch() {
-        setGlance(false);
-        if (wRec && wRecOn) { try { wRec.stop(); } catch (e) {} wRecOn = false; } // onstop builds wRecUrl + repaints
-        wStopTracks(wStream); wStopTracks(wMic); wStopTracks(wRecStream);
-        wStream = null; wMic = null; wRecStream = null;
-        if (wVideo) { try { wVideo.srcObject = null; } catch (e) {} wVideo = null; }
-        wSrc = ""; wCanSee = null; wModel = null;
-        watchCleanup = null;
-        paintWatch();
-      }
-      async function startWatch(src) {
-        if (wStream) return;
-        err.textContent = "";
-        try {
-          if (src === "screen") wStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false });
-          else wStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } }, audio: true });
-        } catch (e) { err.textContent = "Couldn\u2019t start " + (src === "screen" ? "screen sharing" : "the camera") + " \u2014 you may need to allow permission."; return; }
-        wSrc = src;
-        wVideo = document.createElement("video"); wVideo.className = "wb__watch-prev"; wVideo.muted = true; wVideo.autoplay = true; wVideo.playsInline = true; wVideo.srcObject = wStream;
-        try { await wVideo.play(); } catch (e) {}
-        var tracks = wStream.getVideoTracks().slice();
-        if (src === "screen") { try { wMic = await navigator.mediaDevices.getUserMedia({ audio: true }); wMic.getAudioTracks().forEach(function (t) { tracks.push(t); }); } catch (e) {} }
-        else { wStream.getAudioTracks().forEach(function (t) { tracks.push(t); }); }
-        try { wRecStream = new MediaStream(tracks); } catch (e) { wRecStream = wStream; }
-        startRec();
-        wStream.getVideoTracks().forEach(function (t) { t.addEventListener("ended", function () { stopWatch(); }); });
-        watchCleanup = stopWatch;
-        wCanSee = null; paintWatch();
+      async function ensureVisionModel() {
+        if (wModelTried) return;
+        wModelTried = true; wCanSee = null; paintWatch();
         try { var vm = await visionModels(aiCfg("txt")); wModel = (vm && vm[0]) || null; wCanSee = !!wModel; } catch (e) { wCanSee = false; }
         paintWatch();
       }
+      function setFocus(src) { if (!feeds[src]) return; wFocus = src; syncRec(); paintWatch(); }
+      function stopFeed(src) {
+        var f = feeds[src]; if (!f) return;
+        wStopTracks(f.stream);
+        try { f.video.srcObject = null; } catch (e) {}
+        feeds[src] = null;
+        if (wFocus === src) wFocus = feeds.screen ? "screen" : (feeds.camera ? "camera" : "");
+        if (!anyFeed()) { setGlance(false); stopRec(); watchCleanup = null; } else syncRec();
+        paintWatch();
+      }
+      function stopWatch() { setGlance(false); stopRec(); stopFeed("screen"); stopFeed("camera"); wFocus = ""; watchCleanup = null; paintWatch(); }
+      async function startFeed(src) {
+        if (feeds[src]) return;
+        err.textContent = "";
+        var stream;
+        try {
+          if (src === "screen") stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false });
+          else stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } }, audio: false });
+        } catch (e) { err.textContent = "Couldn\u2019t start " + (src === "screen" ? "screen sharing" : "the camera") + " \u2014 you may need to allow permission."; return; }
+        var video = document.createElement("video"); video.className = "wb__feed-vid"; video.muted = true; video.autoplay = true; video.playsInline = true; video.srcObject = stream;
+        try { await video.play(); } catch (e) {}
+        feeds[src] = { stream: stream, video: video };
+        stream.getVideoTracks().forEach(function (t) { t.addEventListener("ended", function () { stopFeed(src); }); });
+        if (!wFocus) wFocus = src;
+        watchCleanup = stopWatch;
+        syncRec();
+        paintWatch();
+        ensureVisionModel();
+      }
+      function feedTag(s) { return s === "screen" ? "Screen" : "Camera"; }
       function paintWatch() {
         if (!watchBar) return;
-        if (wStream) {
-          watchBar.hidden = false;
-          watchBar.classList.add("is-live");
-          var seeHtml = wCanSee === null ? '<span class="wb__watch-see">Checking if the interviewer can see\u2026</span>'
-            : wCanSee ? '<span class="wb__watch-see is-on">\uD83D\uDC41 Interviewer can see \u2014 it glances each turn</span>'
-            : '<span class="wb__watch-see">Recording only \u2014 your AI model can\u2019t read images</span>';
-          watchBar.innerHTML =
-            '<div class="wb__watch-prevwrap">' + (wRecOn ? '<span class="wb__watch-rec">\u25CF REC</span>' : "") + "</div>" +
-            '<div class="wb__watch-meta"><div class="wb__watch-srcrow"><span class="wb__watch-src">' + (wSrc === "screen" ? "\uD83D\uDDA5\uFE0F Screen" : "\uD83D\uDCF7 Camera") + "</span>" + seeHtml + "</div>" +
-            '<div class="wb__watch-acts">' + (wCanSee ? '<button type="button" class="btn btn--auto" data-wb-shownow>Show interviewer now</button><button type="button" class="wb__glance' + (wGlanceOn ? " is-on" : "") + '" data-wb-glance title="Let the interviewer look on its own every ~25s while you work quietly">' + (wGlanceOn ? "\u25C9 Auto-glance on" : "\u25CB Auto-glance") + "</button>" : "") + '<button type="button" class="btn btn--ghost" data-wb-watchstop>Stop</button></div></div>';
-          var wrap = watchBar.querySelector(".wb__watch-prevwrap"); if (wrap && wVideo) wrap.insertBefore(wVideo, wrap.firstChild);
-          var sn = watchBar.querySelector("[data-wb-shownow]"); if (sn) sn.addEventListener("click", function () { interviewerTurn("", "The candidate is now showing you their current whiteboard \u2014 look closely at the attached image and react specifically to what\u2019s on it right now."); });
-          var gl = watchBar.querySelector("[data-wb-glance]"); if (gl) gl.addEventListener("click", function () { setGlance(!wGlanceOn); paintWatch(); });
-          var wsBtn = watchBar.querySelector("[data-wb-watchstop]"); if (wsBtn) wsBtn.addEventListener("click", stopWatch);
-        } else {
+        if (!anyFeed()) {
           watchBar.classList.remove("is-live");
           watchBar.innerHTML = wRecUrl ? '<span class="wb__watch-lead">\uD83C\uDFA5 Session recording</span><a class="wb__watch-dl" href="' + wRecUrl + '" download="whiteboard-mock.webm">\u2B07 Download</a>' : "";
           watchBar.hidden = !wRecUrl;
+          updateCaps();
+          return;
         }
+        watchBar.hidden = false;
+        watchBar.classList.add("is-live");
+        var order = ["screen", "camera"].filter(function (s) { return feeds[s]; });
+        var both = order.length > 1;
+        var feedsHtml = order.map(function (s) {
+          var isF = wFocus === s;
+          return '<div class="wb__feed' + (isF ? " is-focus" : "") + '" data-feed="' + s + '">' +
+            '<div class="wb__feed-vidwrap" data-feed-vid="' + s + '">' + (wRecOn && wRecSrc === s ? '<span class="wb__watch-rec">\u25CF REC</span>' : "") + (isF && wCanSee ? '<span class="wb__feed-eye">\uD83D\uDC41 AI sees this</span>' : "") + "</div>" +
+            '<div class="wb__feed-bar"><span class="wb__feed-tag">' + feedTag(s) + "</span>" +
+            (both && !isF && wCanSee ? '<button type="button" class="wb__feed-focus" data-wb-focus="' + s + '">Make AI focus</button>' : "") +
+            '<button type="button" class="wb__feed-x" data-wb-feedstop="' + s + '" title="Turn off ' + feedTag(s).toLowerCase() + '" aria-label="Turn off ' + feedTag(s).toLowerCase() + '">\u2715</button></div>' +
+            "</div>";
+        }).join("");
+        var seeHtml = wCanSee === null ? '<span class="wb__watch-see">Checking if the interviewer can see\u2026</span>'
+          : wCanSee ? '<span class="wb__watch-see is-on">\uD83D\uDC41 Interviewer can see \u2014 it glances each turn</span>'
+          : '<span class="wb__watch-see">Recording only \u2014 your AI model can\u2019t read images</span>';
+        watchBar.innerHTML =
+          '<div class="wb__feeds">' + feedsHtml + "</div>" +
+          '<div class="wb__watch-meta"><div class="wb__watch-srcrow">' + seeHtml + "</div>" +
+          '<div class="wb__watch-acts">' + (wCanSee ? '<button type="button" class="btn btn--auto" data-wb-shownow>Show interviewer now</button><button type="button" class="wb__glance' + (wGlanceOn ? " is-on" : "") + '" data-wb-glance title="Let the interviewer look on its own every ~25s while you work quietly">' + (wGlanceOn ? "\u25C9 Auto-glance on" : "\u25CB Auto-glance") + "</button>" : "") + '<button type="button" class="btn btn--ghost" data-wb-watchstop>Stop all</button></div></div>';
+        order.forEach(function (s) { var w = watchBar.querySelector('[data-feed-vid="' + s + '"]'); if (w && feeds[s]) w.insertBefore(feeds[s].video, w.firstChild); });
+        watchBar.querySelectorAll("[data-wb-focus]").forEach(function (b) { b.addEventListener("click", function () { setFocus(b.dataset.wbFocus); }); });
+        watchBar.querySelectorAll("[data-wb-feedstop]").forEach(function (b) { b.addEventListener("click", function () { stopFeed(b.dataset.wbFeedstop); }); });
+        var sn = watchBar.querySelector("[data-wb-shownow]"); if (sn) sn.addEventListener("click", function () { interviewerTurn("", "The candidate is now showing you their current whiteboard \u2014 look closely at the attached image and react specifically to what\u2019s on it right now."); });
+        var gl = watchBar.querySelector("[data-wb-glance]"); if (gl) gl.addEventListener("click", function () { setGlance(!wGlanceOn); paintWatch(); });
+        var wsBtn = watchBar.querySelector("[data-wb-watchstop]"); if (wsBtn) wsBtn.addEventListener("click", stopWatch);
         updateCaps();
       }
-      function updateCaps() { stage.querySelectorAll(".wb__cap").forEach(function (b) { b.classList.toggle("is-on", !!wStream && wSrc === b.dataset.wbWatch); }); }
-      stage.querySelectorAll(".wb__cap").forEach(function (b) { b.addEventListener("click", function () { var s = b.dataset.wbWatch; if (wStream) { var was = wSrc; stopWatch(); if (was !== s) startWatch(s); } else startWatch(s); }); });
+      function updateCaps() { stage.querySelectorAll(".wb__cap").forEach(function (b) { b.classList.toggle("is-on", !!feeds[b.dataset.wbWatch]); }); }
+      stage.querySelectorAll(".wb__cap").forEach(function (b) { b.addEventListener("click", function () { var s = b.dataset.wbWatch; if (feeds[s]) stopFeed(s); else startFeed(s); }); });
       paintWatch();
       async function interviewerTurn(userMsg, nudge) {
         if (wTurnBusy) return;
         wTurnBusy = true; wLastTurn = Date.now();
         btnBusy(sendBtn, "\u2026");
         try {
-          var frame = (wStream && wCanSee) ? grabFrame() : null;
+          var frame = (anyFeed() && wCanSee) ? grabFrame() : null;
           var usr = wbMockUser(prompt, transcript, userMsg || "") + (nudge ? "\n\n" + nudge : "");
           var reply = "";
           if (frame && wModel) {
@@ -10858,18 +10888,27 @@ import { WORLD_LAND } from "./worldland.js";
         };
         doListen = startListening;
         if (micBtn) micBtn.addEventListener("click", startListening);
-        if (spkBtn) spkBtn.addEventListener("click", function () { speakOn = !speakOn; spkBtn.classList.toggle("is-on", speakOn); var si = spkBtn.querySelector("[data-wb-spk-ico]"); if (si) si.innerHTML = speakOn ? WB_IC_SPK : WB_IC_SPK_OFF; if (!speakOn) wbSpeech.stop(); });
+        var setSpk = function (on) { speakOn = on; if (spkBtn) { spkBtn.classList.toggle("is-on", on); var si = spkBtn.querySelector("[data-wb-spk-ico]"); if (si) si.innerHTML = on ? WB_IC_SPK : WB_IC_SPK_OFF; spkBtn.title = "AI narration \u2014 " + (on ? "on (the interviewer reads its replies aloud)" : "off"); spkBtn.setAttribute("aria-label", "AI narration \u2014 " + (on ? "on" : "off")); } if (!on) wbSpeech.stop(); };
+        if (spkBtn) spkBtn.addEventListener("click", function () { setSpk(!speakOn); });
         var immBar = stage.querySelector("[data-wb-imm-bar]");
-        function resetImmBar() { if (!immBar) return; immBar.innerHTML = '<span class="wb__imm-note">Go immersive \u2014 turns on your mic, voice and a live screen or camera feed so it feels like a real interview.</span><button type="button" class="btn btn--primary wb__imm-go" data-wb-immersive>Start immersive interview</button>'; var g = immBar.querySelector("[data-wb-immersive]"); if (g) g.addEventListener("click", openImmChooser); }
-        function openImmChooser() { if (!immBar) return; immBar.innerHTML = '<span class="wb__imm-note">Focus the interviewer on\u2026</span><button type="button" class="wb__watch-btn" data-imm-src="screen">\uD83D\uDDA5\uFE0F My screen</button><button type="button" class="wb__watch-btn" data-imm-src="camera">\uD83D\uDCF7 My camera</button><button type="button" class="wb__imm-x" data-imm-cancel>Cancel</button>'; immBar.querySelectorAll("[data-imm-src]").forEach(function (b) { b.addEventListener("click", function () { goImmersive(b.dataset.immSrc); }); }); var c = immBar.querySelector("[data-imm-cancel]"); if (c) c.addEventListener("click", resetImmBar); }
-        function goImmersive(src) { speakOn = true; if (spkBtn) { spkBtn.classList.add("is-on"); spkBtn.textContent = "\uD83D\uDD0A Voice"; } if (immBar) immBar.innerHTML = '<span class="wb__imm-live">\u25CF Immersive \u2014 mic + ' + (src === "screen" ? "screen" : "camera") + " live. The interviewer is listening and watching.</span>"; startWatch(src); startListening(); }
-        var immGo0 = stage.querySelector("[data-wb-immersive]"); if (immGo0) immGo0.addEventListener("click", openImmChooser);
+        function resetImmBar() { if (!immBar) return; immBar.innerHTML = '<span class="wb__imm-note">Go immersive \u2014 turns on your mic, AI narration and a live screen <em>and</em> camera feed so it feels like a real interview.</span><button type="button" class="btn btn--primary wb__imm-go" data-wb-immersive>Start immersive interview</button>'; var g = immBar.querySelector("[data-wb-immersive]"); if (g) g.addEventListener("click", goImmersive); }
+        async function goImmersive() {
+          if (immBar) immBar.innerHTML = '<span class="wb__imm-live">\u25CF Starting immersive\u2026 allow screen, then camera.</span>';
+          setSpk(true);
+          await startFeed("screen");
+          await startFeed("camera");
+          wFocus = feeds.screen ? "screen" : (feeds.camera ? "camera" : "");
+          syncRec(); paintWatch();
+          startListening();
+          if (immBar) { if (anyFeed()) { var w = feeds.screen && feeds.camera ? "screen & camera" : (feeds.screen ? "screen" : "camera"); immBar.innerHTML = '<span class="wb__imm-live">\u25CF Immersive \u2014 mic + ' + w + ' live \u2014 the interviewer is listening and watching.</span>'; } else resetImmBar(); }
+        }
+        var immGo0 = stage.querySelector("[data-wb-immersive]"); if (immGo0) immGo0.addEventListener("click", goImmersive);
       }
       if (scoreBtn) scoreBtn.addEventListener("click", async function () {
         if (!transcript) { err.textContent = "Have a bit of the exercise first \u2014 then I\u2019ll score it."; return; }
         err.textContent = ""; setGlance(false); btnBusy(scoreBtn, "Scoring\u2026");
         try {
-          var sFrame = (wStream && wCanSee) ? grabFrame() : null, raw;
+          var sFrame = (anyFeed() && wCanSee) ? grabFrame() : null, raw;
           if (sFrame && wModel) {
             try { var vr = await aiVisionOnce(aiCfg("txt"), wModel, wbScoreSystem() + WB_SEE_SCORE, wbScoreUser(prompt, transcript), [sFrame]); if (!vr || !vr.ok) throw new Error((vr && vr.err) || "vision score failed"); raw = vr.text; }
             catch (e) { raw = await aiText(aiCfg("txt"), wbScoreSystem(), wbScoreUser(prompt, transcript), { json: true, maxTokens: 1400, temperature: 0.4 }); }
