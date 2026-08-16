@@ -736,8 +736,10 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 }
 
 /* fix: the public site uses cursor:none for its custom cursor — restore a normal
-   pointer inside admin mode and modal dialogs, and hide the custom dot in admin. */
-.adm, .pass, .mlib { cursor: auto; }
+   pointer inside admin mode and modal dialogs, and hide the custom dot in admin.
+   .atsv is a body-level fixed overlay (z-index above the custom cursor), so it
+   needs the native cursor restored too or the pointer vanishes over the viewer. */
+.adm, .pass, .mlib, .atsv { cursor: auto; }
 body.adm-lock .cursor { display: none !important; }
 
 /* ---------- project imagery controls (Work tab) ---------- */
