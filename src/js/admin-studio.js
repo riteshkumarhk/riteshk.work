@@ -3745,20 +3745,17 @@ import { WORLD_LAND } from "./worldland.js";
     if (!faceCss) { if (st && st.parentNode) st.parentNode.removeChild(st); }
     else { if (!st) { st = document.createElement("style"); st.id = "rk-tprev-faces"; document.head.appendChild(st); } if (st.textContent !== faceCss) st.textContent = faceCss; }
   }
-  var TYPE_SAMPLE = "Headlines that command attention, and body copy that reads with clarity and ease.";
+  var TYPE_SAMPLE = "Perfect for headlines and body copy that need to communicate with clarity and style. This pairing brings balance and visual harmony to any design project.";
   function typeCard(s, active) {
     var d = s.display || {}, tx = s.text || {}, mo = s.mono || {};
     var fam = function (r, w) { return escAttr("font-family:" + ((r && r.stack) || "inherit") + (w ? ";font-weight:" + w : "")); };
+    var heading = escHtml((d.family || "Display") + " & " + (tx.family || "Text"));
+    var caption = escHtml((mo.family || "Mono") + " is the mono");
     var pick = '<button class="adm__tcard' + (active ? " is-active" : "") + '" type="button" data-act="type-pick" data-id="' + escAttr(s.id) + '">' +
       (active ? '<span class="adm__tcard-live">Live</span>' : (s.builtin ? "" : '<span class="adm__tcard-gen">Generated</span>')) +
-      '<span class="adm__tcard-name" style="' + fam(d, (+d.weight) || 400) + '">' + escHtml(s.name || s.id) + "</span>" +
-      (s.note ? '<span class="adm__tcard-note">' + escHtml(s.note) + "</span>" : "") +
+      '<span class="adm__tcard-name" style="' + fam(d, (+d.weight) || 600) + '">' + heading + "</span>" +
       '<span class="adm__tcard-sample" style="' + fam(tx) + '">' + escHtml(TYPE_SAMPLE) + "</span>" +
-      '<span class="adm__tcard-specs">' +
-        '<span class="adm__tcard-f"><span>Display</span><b style="' + fam(d) + '">' + escHtml(d.family || "\u2014") + "</b></span>" +
-        '<span class="adm__tcard-f"><span>Text</span><b style="' + fam(tx) + '">' + escHtml(tx.family || "\u2014") + "</b></span>" +
-        '<span class="adm__tcard-f"><span>Mono</span><b style="' + fam(mo) + '">' + escHtml(mo.family || "\u2014") + "</b></span>" +
-      "</span>" +
+      '<span class="adm__tcard-cap" style="' + fam(mo) + '">' + caption + "</span>" +
       "</button>";
     var acts = s.builtin ? "" : '<div class="adm__tcard-acts">' +
       (s.faces && s.faces.length

@@ -1827,16 +1827,12 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .adm__tcards::-webkit-scrollbar-thumb { background: var(--line); border-radius: 100px; }
 .adm__tcards::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
 .adm__tcard-wrap { display: flex; flex-direction: column; gap: .4rem; }
-.adm__tcard { flex: 1; position: relative; text-align: left; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 1.05rem 1.15rem; cursor: pointer; display: flex; flex-direction: column; gap: 0; color: inherit; transition: border-color .2s var(--ease), background .2s, transform .2s var(--ease); }
+.adm__tcard { flex: 1; position: relative; text-align: left; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 1.15rem 1.25rem; cursor: pointer; display: flex; flex-direction: column; gap: 0; color: inherit; transition: border-color .2s var(--ease), background .2s, transform .2s var(--ease); }
 .adm__tcard:hover { transform: translateY(-2px); border-color: var(--text-faint); }
 .adm__tcard.is-active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--bg-elev)); }
-.adm__tcard-name { font-size: 1.6rem; line-height: 1.1; letter-spacing: -.01em; color: var(--text); padding-right: 3.6rem; word-break: break-word; }
-.adm__tcard-note { font-size: .72rem; color: var(--text-faint); margin-top: .18rem; }
-.adm__tcard-sample { font-size: .95rem; line-height: 1.5; color: var(--text-dim); margin: .6rem 0 .2rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.adm__tcard-specs { margin-top: auto; padding-top: .65rem; border-top: 1px solid var(--line); }
-.adm__tcard-f { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; font-size: .74rem; color: var(--text-faint); line-height: 1.7; }
-.adm__tcard-f > span:first-child { font-family: var(--mono); font-size: .58rem; letter-spacing: .08em; text-transform: uppercase; flex: 0 0 auto; }
-.adm__tcard-f b { color: var(--text-dim); font-weight: 500; text-align: right; }
+.adm__tcard-name { font-size: 1.45rem; line-height: 1.16; letter-spacing: -.01em; color: var(--text); padding-right: 3.6rem; word-break: break-word; }
+.adm__tcard-sample { font-size: .92rem; line-height: 1.55; color: var(--text-dim); margin-top: .7rem; }
+.adm__tcard-cap { margin-top: auto; padding-top: .85rem; font-size: .74rem; color: var(--text-faint); word-break: break-word; }
 .adm__tcard-live, .adm__tcard-gen { position: absolute; top: .85rem; right: .95rem; font-family: var(--mono); font-size: .56rem; letter-spacing: .1em; text-transform: uppercase; padding: .16rem .48rem; border-radius: 100px; }
 .adm__tcard-live { color: #0a0a0a; background: var(--accent); }
 .adm__tcard-gen { color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
