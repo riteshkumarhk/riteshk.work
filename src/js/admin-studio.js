@@ -10534,7 +10534,7 @@ import { WORLD_LAND } from "./worldland.js";
     var modal = document.createElement("div");
     modal.className = "pass pass--wide wb-modal";
     modal.innerHTML =
-      '<div class="pass__box"><div class="wb__chrome" data-wb-chrome><button type="button" class="wb__chrome-btn" data-wb-min title="Minimise \u2014 keep it running in the corner" aria-label="Minimise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="18" x2="18" y2="18"/></svg></button><button type="button" class="wb__chrome-btn" data-wb-max title="Maximise" aria-label="Maximise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button></div><div class="pass__title">\uD83E\uDDE9 Whiteboard coach</div>' +
+      '<div class="pass__box"><div class="wb__chrome" data-wb-chrome><button type="button" class="wb__chrome-btn" data-wb-min title="Pop out \u2014 float the timer + mic on top while you whiteboard elsewhere" aria-label="Pop out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" stroke="none"/></svg></button><button type="button" class="wb__chrome-btn" data-wb-max title="Maximise" aria-label="Maximise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button></div><div class="pass__title">\uD83E\uDDE9 Whiteboard coach</div>' +
       '<div class="pass__sub">Rehearse a live design exercise. Pick the length and a mode \u2014 I\u2019ll set a realistic prompt' + (storyJdText() ? " tailored to your target role" : "") + ", give you a timed game-plan, then coach you or run a mock.</div>" +
       '<div class="wb__setup">' +
         '<div class="wb__resume" data-wb-resume-bar hidden></div>' +
@@ -10592,14 +10592,16 @@ import { WORLD_LAND } from "./worldland.js";
     var jdEl = modal.querySelector(".wb__jd");
     var watchCleanup = null, micCleanup = null, timerCleanup = null;
     var miniEl = null, miniMic = null, curTimerText = "", doListen = null;
-    var close = function () { try { wbSpeech.stop(); } catch (e) {} if (watchCleanup) { try { watchCleanup(); } catch (e) {} } if (micCleanup) { try { micCleanup(); } catch (e) {} } if (timerCleanup) { try { timerCleanup(); } catch (e) {} } if (miniEl) { try { miniEl.remove(); } catch (e) {} miniEl = null; } modal.remove(); };
+    var pipWin = null, pipTimeEl = null, pipMic = null;
+    var WB_MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 19v3"/></svg>';
+    var close = function () { try { wbSpeech.stop(); } catch (e) {} if (watchCleanup) { try { watchCleanup(); } catch (e) {} } if (micCleanup) { try { micCleanup(); } catch (e) {} } if (timerCleanup) { try { timerCleanup(); } catch (e) {} } if (pipWin) { try { pipWin.close(); } catch (e) {} pipWin = null; } if (miniEl) { try { miniEl.remove(); } catch (e) {} miniEl = null; } modal.remove(); };
     function hideMini() { modal.style.display = ""; if (miniEl) miniEl.hidden = true; }
     function showMini() {
       modal.style.display = "none";
       if (!miniEl) {
         miniEl = document.createElement("div");
         miniEl.className = "wb__mini";
-        miniEl.innerHTML = '<span class="wb__mini-dot" aria-hidden="true"></span><button type="button" class="wb__mini-mic" data-wb-mini-mic title="Tap to talk" aria-label="Tap to talk" hidden><span class="wb__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 19v3"/></svg></span></button><span class="wb__mini-t" data-wb-mini-t></span><button type="button" class="wb__mini-restore" data-wb-restore>Resume interview</button>';
+        miniEl.innerHTML = '<span class="wb__mini-dot" aria-hidden="true"></span><button type="button" class="wb__mini-mic" data-wb-mini-mic title="Tap to talk" aria-label="Tap to talk" hidden><span class="wb__ico">' + WB_MIC_SVG + '</span></button><span class="wb__mini-t" data-wb-mini-t></span><button type="button" class="wb__mini-restore" data-wb-restore>Resume interview</button>';
         document.body.appendChild(miniEl);
         miniEl.querySelector("[data-wb-restore]").addEventListener("click", hideMini);
         miniMic = miniEl.querySelector("[data-wb-mini-mic]");
@@ -10610,7 +10612,27 @@ import { WORLD_LAND } from "./worldland.js";
       miniEl.hidden = false;
     }
     function toggleMax() { modal.classList.toggle("wb-modal--max"); }
-    var wbMinBtn = modal.querySelector("[data-wb-min]"); if (wbMinBtn) wbMinBtn.addEventListener("click", showMini);
+    function pipTeardown() { pipWin = null; pipTimeEl = null; pipMic = null; modal.style.display = ""; }
+    async function popOut() {
+      if (!window.documentPictureInPicture) { showMini(); return; }
+      if (pipWin) { try { pipWin.focus(); } catch (e) {} return; }
+      try { pipWin = await documentPictureInPicture.requestWindow({ width: 320, height: 96 }); }
+      catch (e) { showMini(); return; }
+      var d = pipWin.document;
+      var st = d.createElement("style");
+      st.textContent = "html,body{margin:0;height:100%;background:#0a0a0c;overflow:hidden}*{box-sizing:border-box}.pw{display:flex;align-items:center;gap:11px;height:100%;padding:0 15px;font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:#e8e6e1}.pw-dot{width:9px;height:9px;border-radius:50%;background:#e6795f;flex:0 0 auto;animation:pwp 1.6s infinite}@keyframes pwp{0%,100%{opacity:1}50%{opacity:.25}}.pw-mic{width:40px;height:40px;flex:0 0 auto;display:grid;place-items:center;border-radius:50%;border:1px solid #3a3a3f;background:none;color:#b9b6ae;cursor:pointer;transition:.15s}.pw-mic:hover{color:#d8a657;border-color:#d8a657}.pw-mic.is-live{border-color:#e6795f;background:rgba(230,121,95,.18);color:#e6795f}.pw-mic svg{width:18px;height:18px}.pw-t{margin-right:auto;line-height:1}.pw-t b{display:block;font-size:22px;font-weight:700;letter-spacing:.04em;font-variant-numeric:tabular-nums}.pw-t small{display:block;font-size:8px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:#8a8780;margin-top:3px}.pw-back{font-size:11px;padding:7px 11px;border:1px solid #3a3a3f;border-radius:9px;background:none;color:#b9b6ae;cursor:pointer;white-space:nowrap}.pw-back:hover{color:#e8e6e1;border-color:#d8a657}";
+      d.head.appendChild(st);
+      var w = d.createElement("div"); w.className = "pw";
+      w.innerHTML = '<span class="pw-dot"></span>' + (doListen ? '<button type="button" class="pw-mic" title="Tap to talk \u2014 pause to think; tap again when done">' + WB_MIC_SVG + '</button>' : "") + '<span class="pw-t"><b data-pip-t>' + (curTimerText || "") + '</b><small>time left</small></span><button type="button" class="pw-back">Back to tab</button>';
+      d.body.appendChild(w);
+      pipTimeEl = w.querySelector("[data-pip-t]");
+      pipMic = w.querySelector(".pw-mic");
+      if (pipMic) pipMic.addEventListener("click", function () { if (doListen) doListen(); });
+      w.querySelector(".pw-back").addEventListener("click", function () { try { pipWin.close(); } catch (e) {} });
+      pipWin.addEventListener("pagehide", pipTeardown);
+      modal.style.display = "none";
+    }
+    var wbMinBtn = modal.querySelector("[data-wb-min]"); if (wbMinBtn) wbMinBtn.addEventListener("click", function () { if (window.documentPictureInPicture) popOut(); else showMini(); });
     var wbMaxBtn = modal.querySelector("[data-wb-max]"); if (wbMaxBtn) wbMaxBtn.addEventListener("click", toggleMax);
     // Soft-dismiss (backdrop click + Escape) intentionally disabled \u2014 a mock can be a long recorded/voice session, so only the explicit Close button dismisses it.
     modal.querySelector("[data-cancel]").addEventListener("click", close);
@@ -10713,7 +10735,7 @@ import { WORLD_LAND } from "./worldland.js";
       var scoreBtn = stage.querySelector("[data-wb-score]");
       var speakOn = wbSpeech.ttsOk;
       var timerTEl = stage.querySelector("[data-wb-timer-t]"), timerEl = stage.querySelector("[data-wb-timer]"), timerInt = 0, cued5 = timerLeft <= 300;
-      function paintTimer() { curTimerText = wbFmtClock(timerLeft); if (timerTEl) timerTEl.textContent = curTimerText; if (timerEl) { timerEl.classList.toggle("is-low", timerLeft > 0 && timerLeft <= 300); timerEl.classList.toggle("is-done", timerLeft <= 0); } if (miniEl && !miniEl.hidden) { var mt = miniEl.querySelector("[data-wb-mini-t]"); if (mt) mt.textContent = curTimerText; } }
+      function paintTimer() { curTimerText = wbFmtClock(timerLeft); if (timerTEl) timerTEl.textContent = curTimerText; if (timerEl) { timerEl.classList.toggle("is-low", timerLeft > 0 && timerLeft <= 300); timerEl.classList.toggle("is-done", timerLeft <= 0); } if (miniEl && !miniEl.hidden) { var mt = miniEl.querySelector("[data-wb-mini-t]"); if (mt) mt.textContent = curTimerText; } if (pipTimeEl) pipTimeEl.textContent = curTimerText; }
       function stopTimer() { if (timerInt) { clearInterval(timerInt); timerInt = 0; } }
       function tickTimer() { if (timerLeft <= 0) { stopTimer(); paintTimer(); return; } timerLeft--; sessTimer = timerLeft; if (timerLeft === 300 && !cued5) { cued5 = true; var cue = "\u23F1\uFE0F About five minutes left \u2014 start landing your recap and trade-offs."; transcript += (transcript ? "\n" : "") + "INTERVIEWER: " + cue; addTurn("int", cue); if (voiceOn && speakOn) wbSpeech.speak(cue); } if (timerLeft % 5 === 0) saveSess(); paintTimer(); }
       paintTimer(); timerInt = setInterval(tickTimer, 1000); timerCleanup = stopTimer;
@@ -10870,7 +10892,7 @@ import { WORLD_LAND } from "./worldland.js";
         var micBtn = stage.querySelector("[data-wb-mic]"), liveEl = stage.querySelector("[data-wb-live]"), spkBtn = stage.querySelector("[data-wb-spk]");
         var rec = null, listening = false, stopping = false, killed = false, committed = "", accumulated = "";
         var micText = function () { return micBtn && micBtn.querySelector(".wb__mic-t"); };
-        var setMic = function (on) { listening = on; if (micBtn) { micBtn.classList.toggle("is-live", on); var t = micText(); if (t) t.textContent = on ? "Listening\u2026 tap when done" : "Tap to talk"; } if (miniMic) miniMic.classList.toggle("is-live", on); if (!on && liveEl) liveEl.textContent = ""; };
+        var setMic = function (on) { listening = on; if (micBtn) { micBtn.classList.toggle("is-live", on); var t = micText(); if (t) t.textContent = on ? "Listening\u2026 tap when done" : "Tap to talk"; } if (miniMic) miniMic.classList.toggle("is-live", on); if (pipMic) pipMic.classList.toggle("is-live", on); if (!on && liveEl) liveEl.textContent = ""; };
         micCleanup = function () { killed = true; if (rec) { try { rec.abort(); } catch (e) {} } };
         var startListening = async function () {
           // Tapping while listening = "I'm done" \u2014 finalise + send. A think-pause alone never sends.
