@@ -10543,7 +10543,7 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="af"><label class="af__label">The level you\u2019re whiteboarding for</label><div class="iprep__levels wb__levels">' +
           WB_LEVELS.map(function (d) { return '<button type="button" class="iprep__lvl' + (st.level === d[0] ? " is-on" : "") + '" data-wb-lvl="' + d[0] + '"><span class="iprep__lvl-name">' + d[1] + '</span><span class="iprep__lvl-desc">' + d[2] + "</span></button>"; }).join("") +
         '</div><div class="af__hint">Sets the altitude \u2014 the prompt, the probes and the scoring all shift to match.</div></div>' +
-        '<div class="af wb__deeper"><button type="button" class="wb__deeper-tog" data-wb-deeper aria-expanded="false">Deeper configuration <span class="wb__deeper-caret" aria-hidden="true">\u25be</span></button>' +
+        '<div class="af wb__deeper"><button type="button" class="wb__deeper-tog" data-wb-deeper aria-expanded="false">Advanced <span class="wb__deeper-caret" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button>' +
           '<div class="wb__deeper-body" hidden>' +
             '<label class="af__label">What kind of challenge</label><div class="story__opts wb__opts-wrap">' +
               WB_CHALLENGES.map(function (d) { return '<button type="button" class="story__opt wb__copt' + (st.challenge === d[0] ? " is-on" : "") + '" data-wb-chal="' + d[0] + '"><span class="story__opt-name">' + escHtml(d[1]) + '</span><span class="story__opt-desc">' + escHtml(d[2]) + "</span></button>"; }).join("") +
