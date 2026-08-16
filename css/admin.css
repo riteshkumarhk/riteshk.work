@@ -1820,12 +1820,8 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .adm__tsub-n { font-size: .92em; opacity: .65; }
 .adm__tsub button.is-on .adm__tsub-n { opacity: .8; }
 .adm__tempty { font-size: .8rem; color: var(--text-faint); margin-top: .9rem; line-height: 1.6; }
-/* Cap the card grid to a scrollable height so a long font library doesn't push Hero motion off-screen */
-.adm__tcards { display: grid; grid-template-columns: repeat(2, 1fr); gap: .8rem; margin-top: 1rem; max-height: min(58vh, 40rem); overflow-y: auto; overflow-x: hidden; padding: .25rem .55rem .3rem .15rem; scrollbar-width: thin; scrollbar-color: var(--line) transparent; scroll-padding: .6rem; overscroll-behavior: contain; }
-.adm__tcards::-webkit-scrollbar { width: 8px; }
-.adm__tcards::-webkit-scrollbar-track { background: transparent; }
-.adm__tcards::-webkit-scrollbar-thumb { background: var(--line); border-radius: 100px; }
-.adm__tcards::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+/* Show the full card grid (no inner scroll) so the six pairing previews are never cut off */
+.adm__tcards { display: grid; grid-template-columns: repeat(2, 1fr); gap: .8rem; margin-top: 1rem; padding-top: .25rem; }
 .adm__tcard-wrap { display: flex; flex-direction: column; gap: .4rem; }
 .adm__tcard { flex: 1; position: relative; text-align: left; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 1.15rem 1.25rem; cursor: pointer; display: flex; flex-direction: column; gap: 0; color: inherit; transition: border-color .2s var(--ease), background .2s, transform .2s var(--ease); }
 .adm__tcard:hover { transform: translateY(-2px); border-color: var(--text-faint); }
