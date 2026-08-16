@@ -10686,9 +10686,14 @@ import { WORLD_LAND } from "./worldland.js";
       if (timerCleanup) { try { timerCleanup(); } catch (e) {} }
       var voiceOn = (st.convo === "voice") && wbSpeech.sttOk;
       doListen = null;
-      var micInline = voiceOn ? '<button type="button" class="wb__mic" data-wb-mic><span class="wb__mic-dot"></span><span class="wb__mic-t">Tap to talk</span></button>' : "";
-      var spkInline = (voiceOn && wbSpeech.ttsOk) ? '<button type="button" class="wb__spk is-on" data-wb-spk title="Toggle the interviewer\u2019s voice">\uD83D\uDD0A Voice</button>' : "";
-      var capInline = '<button type="button" class="wb__cap" data-wb-watch="screen" title="Share your screen so the interviewer can see your board">\uD83D\uDDA5\uFE0F Share screen</button><button type="button" class="wb__cap" data-wb-watch="camera" title="Turn on your camera so the interviewer can watch">\uD83D\uDCF7 Camera</button>';
+      var WB_IC_MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 19v3"/></svg>';
+      var WB_IC_SCREEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.5" width="20" height="13" rx="2"/><path d="M8 21h8M12 16.5V21"/></svg>';
+      var WB_IC_CAM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 8l-6 4 6 4V8z"/><rect x="1" y="6" width="16" height="12" rx="2"/></svg>';
+      var WB_IC_SPK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>';
+      var WB_IC_SPK_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>';
+      var micInline = voiceOn ? '<button type="button" class="wb__mic" data-wb-mic><span class="wb__ico">' + WB_IC_MIC + '</span><span class="wb__mic-t">Tap to talk</span></button>' : "";
+      var spkInline = (voiceOn && wbSpeech.ttsOk) ? '<button type="button" class="wb__spk is-on" data-wb-spk title="Toggle the interviewer\u2019s voice"><span class="wb__ico" data-wb-spk-ico>' + WB_IC_SPK + '</span><span class="wb__spk-t">Voice</span></button>' : "";
+      var capInline = '<button type="button" class="wb__cap" data-wb-watch="screen" title="Share your screen so the interviewer can see your board"><span class="wb__ico">' + WB_IC_SCREEN + '</span>Share screen</button><button type="button" class="wb__cap" data-wb-watch="camera" title="Turn on your camera so the interviewer can watch"><span class="wb__ico">' + WB_IC_CAM + '</span>Camera</button>';
       var immHtml = voiceOn ? '<div class="wb__imm" data-wb-imm-bar><span class="wb__imm-note">Go immersive \u2014 turns on your mic, voice and a live screen or camera feed so it feels like a real interview.</span><button type="button" class="btn btn--primary wb__imm-go" data-wb-immersive>Start immersive interview</button></div>' : "";
       if (foot) foot.hidden = true;
       var totalSec = (parseInt(st.mins, 10) || 45) * 60;
@@ -10853,7 +10858,7 @@ import { WORLD_LAND } from "./worldland.js";
         };
         doListen = startListening;
         if (micBtn) micBtn.addEventListener("click", startListening);
-        if (spkBtn) spkBtn.addEventListener("click", function () { speakOn = !speakOn; spkBtn.classList.toggle("is-on", speakOn); spkBtn.textContent = (speakOn ? "\uD83D\uDD0A" : "\uD83D\uDD07") + " Voice"; if (!speakOn) wbSpeech.stop(); });
+        if (spkBtn) spkBtn.addEventListener("click", function () { speakOn = !speakOn; spkBtn.classList.toggle("is-on", speakOn); var si = spkBtn.querySelector("[data-wb-spk-ico]"); if (si) si.innerHTML = speakOn ? WB_IC_SPK : WB_IC_SPK_OFF; if (!speakOn) wbSpeech.stop(); });
         var immBar = stage.querySelector("[data-wb-imm-bar]");
         function resetImmBar() { if (!immBar) return; immBar.innerHTML = '<span class="wb__imm-note">Go immersive \u2014 turns on your mic, voice and a live screen or camera feed so it feels like a real interview.</span><button type="button" class="btn btn--primary wb__imm-go" data-wb-immersive>Start immersive interview</button>'; var g = immBar.querySelector("[data-wb-immersive]"); if (g) g.addEventListener("click", openImmChooser); }
         function openImmChooser() { if (!immBar) return; immBar.innerHTML = '<span class="wb__imm-note">Focus the interviewer on\u2026</span><button type="button" class="wb__watch-btn" data-imm-src="screen">\uD83D\uDDA5\uFE0F My screen</button><button type="button" class="wb__watch-btn" data-imm-src="camera">\uD83D\uDCF7 My camera</button><button type="button" class="wb__imm-x" data-imm-cancel>Cancel</button>'; immBar.querySelectorAll("[data-imm-src]").forEach(function (b) { b.addEventListener("click", function () { goImmersive(b.dataset.immSrc); }); }); var c = immBar.querySelector("[data-imm-cancel]"); if (c) c.addEventListener("click", resetImmBar); }
