@@ -1141,7 +1141,7 @@ import { WORLD_LAND } from "./worldland.js";
       '<aside class="prep-hist"><div class="prep-hist__h">Resume from history</div><div class="prep-hist__list" data-ats-hist>' + atsHistHtml() + '</div></aside>' +
       '</div></div>';
   }
-  function atsOutRestore() { var d = prepDraftGet("ats"); return (d && d.res) ? atsMiniHtml(d.res, d.level || atsLevel, d.company || "") : ""; }
+  function atsOutRestore() { return ""; } // the last result now lives only in the history rail, not inline
   function atsHistCard(e) {
     var m = e.meta || {}, sc = Math.max(0, Math.min(100, Math.round(+m.score || 0))), tone = sc >= 80 ? "good" : sc >= 65 ? "ok" : sc >= 45 ? "warn" : "bad";
     var isWs = e.kind === "workspace";
@@ -2010,7 +2010,7 @@ import { WORLD_LAND } from "./worldland.js";
       prepDraftSet("ats", _snap);
       prepPut("ats", { tool: "ats", kind: "review", title: "R\u00e9sum\u00e9 reviewed", meta: { score: _sc, band: _bd, fit: (company ? company + " fit" : atsLevelName(atsLevel) + " fit") }, payload: _snap });
       var _hl = panel.querySelector("[data-ats-hist]"); if (_hl) _hl.innerHTML = atsHistHtml();
-      if (out) out.innerHTML = atsMiniHtml(res, atsLevel, company);
+      if (out) out.innerHTML = "";
       atsOpenViewer();
       status("ATS check done.", true);
     } catch (e) {
