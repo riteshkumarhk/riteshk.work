@@ -1123,7 +1123,7 @@ import { WORLD_LAND } from "./worldland.js";
     var lvls = IPREP_LEVELS.map(function (l) {
       return '<button type="button" class="ats__lvl' + (atsLevel === l[0] ? " is-on" : "") + '" data-act="ats-level" data-lvl="' + l[0] + '"><b>' + l[1] + "</b><span>" + l[2] + "</span></button>";
     }).join("");
-    return '<div class="ats">' +
+    return '<div class="ats"><div class="ats__cols"><div class="ats__main">' +
       '<div class="ats__head"><span class="ats__badge">ATS</span><div><b>ATS r\u00e9sum\u00e9 check</b><span>Is your r\u00e9sum\u00e9 ATS-ready \u2014 parseable, and tuned for the level or a specific job?</span></div></div>' +
       '<div class="ats__levels">' + lvls + "</div>" +
       '<div style="margin:.2rem 0 .6rem"><div class="cl__len"><button type="button" class="cl__lenbtn' + (atsState.mode === "job" ? "" : " is-on") + '" data-act="ats-mode" data-mode="general">General check</button><button type="button" class="cl__lenbtn' + (atsState.mode === "job" ? " is-on" : "") + '" data-act="ats-mode" data-mode="job">Against a specific job</button></div></div>' +
@@ -1136,8 +1136,24 @@ import { WORLD_LAND } from "./worldland.js";
       '<div class="imgblk__row"><button class="btn btn--primary" data-act="ats-check"' + (has ? "" : " disabled") + ">Check ATS rating</button>" +
       '<label class="btn btn--ghost ats__file">Check a different file\u2026<input type="file" accept=".pdf,.docx,.txt,.md" data-ats-file hidden></label></div>' +
       (has ? "" : '<div class="af__hint">Add your r\u00e9sum\u00e9 above (or pick a file) to run the check.</div>') +
-      '<div class="ats__out" data-ats-out></div>' +
-      "</div>";
+      '<div class="ats__out" data-ats-out>' + atsOutRestore() + '</div>' +
+      '</div>' +
+      '<aside class="prep-hist"><div class="prep-hist__h">Resume from history</div><div class="prep-hist__list" data-ats-hist>' + atsHistHtml() + '</div></aside>' +
+      '</div></div>';
+  }
+  function atsOutRestore() { var d = prepDraftGet("ats"); return (d && d.res) ? atsMiniHtml(d.res, d.level || atsLevel, d.company || "") : ""; }
+  function atsHistCard(e) {
+    var m = e.meta || {}, sc = Math.max(0, Math.min(100, Math.round(+m.score || 0))), tone = sc >= 80 ? "good" : sc >= 65 ? "ok" : sc >= 45 ? "warn" : "bad";
+    return '<div class="prep-h" role="button" tabindex="0" data-act="ats-hist-open" data-id="' + e.id + '">' +
+      '<span class="ats__ring ats__ring--sm ats__score--' + tone + '" style="--p:' + sc + '"><span>' + sc + '</span></span>' +
+      '<span class="prep-h__x"><b>' + escHtml(e.title || "R\u00e9sum\u00e9 reviewed") + '</b><i>' + escHtml(m.band || "") + (m.fit ? " \u00b7 " + escHtml(m.fit) : "") + '</i><em>' + escHtml(prepAgo(e.at)) + '</em></span>' +
+      '<span class="prep-h__del" data-act="ats-hist-del" data-id="' + e.id + '" title="Delete">\u00d7</span>' +
+      '</div>';
+  }
+  function atsHistHtml() {
+    var list = prepList("ats");
+    if (!list.length) return '<div class="prep-hist__empty">Your r\u00e9sum\u00e9 reviews save here automatically \u2014 close the studio and pick up right where you left off.</div>';
+    return list.map(atsHistCard).join("");
   }
 
   /* ---------- case study (L2) authoring ---------- */
@@ -1768,9 +1784,30 @@ import { WORLD_LAND } from "./worldland.js";
     }
   }
 
+  /* ---------- Prepare history: every run auto-saves (no button) so work survives closing
+     the studio / browser — resume exactly where you left off. localStorage now + a Cloudflare
+     (R2 VAULT) sync layer via prepCloud* later. No cap; entries are user-deletable. ---------- */
+  var PREP_HIST_KEY = "rk:prep:hist", PREP_DRAFT_KEY = "rk:prep:draft";
+  function prepRead(key) { try { var o = JSON.parse(localStorage.getItem(key)); return (o && typeof o === "object") ? o : {}; } catch (e) { return {}; } }
+  function prepWrite(key, o) { try { localStorage.setItem(key, JSON.stringify(o)); } catch (e) {} }
+  function prepId() { return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function prepList(tool) { var a = prepRead(PREP_HIST_KEY)[tool] || []; return a.slice().sort(function (x, y) { return (y.at || 0) - (x.at || 0); }); }
+  function prepGet(tool, id) { var a = prepRead(PREP_HIST_KEY)[tool] || []; for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
+  function prepPut(tool, entry) { var all = prepRead(PREP_HIST_KEY), a = all[tool] || []; if (!entry.id) entry.id = prepId(); entry.at = Date.now(); var i = -1; a.forEach(function (e, k) { if (e.id === entry.id) i = k; }); if (i >= 0) a[i] = entry; else a.unshift(entry); all[tool] = a; prepWrite(PREP_HIST_KEY, all); try { prepCloudPut(tool, entry); } catch (e) {} return entry; }
+  function prepDel(tool, id) { var all = prepRead(PREP_HIST_KEY); all[tool] = (all[tool] || []).filter(function (e) { return e.id !== id; }); prepWrite(PREP_HIST_KEY, all); try { prepCloudDel(tool, id); } catch (e) {} }
+  function prepDraftGet(tool) { return prepRead(PREP_DRAFT_KEY)[tool] || null; }
+  function prepDraftSet(tool, draft) { var all = prepRead(PREP_DRAFT_KEY); all[tool] = draft; prepWrite(PREP_DRAFT_KEY, all); }
+  var _prepSaveT = {};
+  function prepAutosave(tool, getDraft) { clearTimeout(_prepSaveT[tool]); _prepSaveT[tool] = setTimeout(function () { try { prepDraftSet(tool, getDraft()); } catch (e) {} }, 600); }
+  function prepAgo(ts) { var s = Math.max(0, (Date.now() - (ts || 0)) / 1000); if (s < 60) return "just now"; var m = s / 60; if (m < 60) return Math.round(m) + "m ago"; var h = m / 60; if (h < 24) return Math.round(h) + "h ago"; var d = h / 24; if (d < 7) return Math.round(d) + "d ago"; try { return new Date(ts).toLocaleDateString(); } catch (e) { return ""; } }
+  // Cloudflare sync (Phase 2) — no-ops until the Worker /admin/prep/* routes ship.
+  function prepCloudPut(tool, entry) {}
+  function prepCloudDel(tool, id) {}
+
   /* ---------- ATS résumé check (Contact tab, beside the résumé upload) ---------- */
-  var atsLevel = "staff";
-  var atsState = { mode: "general", jd: "", url: "", company: "" };
+  var _atsD0 = prepDraftGet("ats") || {};
+  var atsLevel = _atsD0.level || "staff";
+  var atsState = (_atsD0.state && typeof _atsD0.state === "object") ? { mode: _atsD0.state.mode || "general", jd: _atsD0.state.jd || "", url: _atsD0.state.url || "", company: _atsD0.state.company || "" } : { mode: "general", jd: "", url: "", company: "" };
   function atsLevelName(l) { return ({ senior: "Senior", staff: "Principal / Staff", leader: "Design leadership" })[l] || l; }
   async function resumeToFile(url) {
     var p = parseDataUri(url);
@@ -1893,6 +1930,12 @@ import { WORLD_LAND } from "./worldland.js";
       var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel, jd, company), { json: true, maxTokens: 6000, temperature: 0.3 }));
       if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
       atsLast = { file: f, res: res, level: atsLevel, company: company, text: text };
+      var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
+      var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
+      var _snap = { state: { mode: atsState.mode, jd: atsState.jd, url: atsState.url, company: atsState.company }, level: atsLevel, res: res, company: company, text: text };
+      prepDraftSet("ats", _snap);
+      prepPut("ats", { tool: "ats", kind: "review", title: "R\u00e9sum\u00e9 reviewed", meta: { score: _sc, band: _bd, fit: (company ? company + " fit" : atsLevelName(atsLevel) + " fit") }, payload: _snap });
+      var _hl = panel.querySelector("[data-ats-hist]"); if (_hl) _hl.innerHTML = atsHistHtml();
       if (out) out.innerHTML = atsMiniHtml(res, atsLevel, company);
       atsOpenViewer();
       status("ATS check done.", true);
@@ -1918,6 +1961,22 @@ import { WORLD_LAND } from "./worldland.js";
       if (out) out.innerHTML = '<div class="ats__err">' + escHtml((e && e.message) || "Couldn\u2019t read that link.") + "</div>";
       status("Couldn\u2019t read that link.");
     }
+  }
+  function atsSaveDraft() { var d = prepDraftGet("ats") || {}; prepDraftSet("ats", { state: { mode: atsState.mode, jd: atsState.jd, url: atsState.url, company: atsState.company }, level: atsLevel, res: d.res, company: d.company, text: d.text }); }
+  function onAtsInput(t) {
+    if (t.classList.contains("cl__url")) atsState.url = t.value;
+    else if (t.classList.contains("cl__jd")) atsState.jd = t.value;
+    else if (t.classList.contains("cl__company")) atsState.company = t.value;
+    prepAutosave("ats", function () { var d = prepDraftGet("ats") || {}; return { state: { mode: atsState.mode, jd: atsState.jd, url: atsState.url, company: atsState.company }, level: atsLevel, res: d.res, company: d.company, text: d.text }; });
+  }
+  function atsHistRestore(id) {
+    var e = prepGet("ats", id); if (!e) return; var p = e.payload || {}, st = p.state || {};
+    atsState = { mode: st.mode || "general", jd: st.jd || "", url: st.url || "", company: st.company || "" };
+    atsLevel = p.level || atsLevel;
+    atsLast = { file: null, res: p.res, level: atsLevel, company: p.company || "", text: p.text || "" };
+    prepDraftSet("ats", { state: atsState, level: atsLevel, res: p.res, company: p.company || "", text: p.text || "" });
+    renderBody();
+    if (p.res) atsOpenViewer();
   }
 
   /* ---------- Rebuild the résumé with the fixes applied (vector PDF, house styling, ≤ 2 pages) ----------
@@ -2565,7 +2624,7 @@ import { WORLD_LAND } from "./worldland.js";
      some at a section ("section"), some are document-wide ("global"). We render the
      PDF with pdf.js, locate quote/section anchors in the text layer and pin them; the
      qualitative rest lives in an "Overall" rail. Everything degrades gracefully. */
-  var atsLast = null; // { file, res, level } — set after a successful check
+  var atsLast = (function () { var d = prepDraftGet("ats"); return (d && d.res) ? { file: null, res: d.res, level: d.level || atsLevel, company: d.company || "", text: d.text || "" } : null; })(); // { file, res, level } — restored from the autosaved draft
   function atsIsPdf(f) { return !!f && (f.type === "application/pdf" || /\.pdf$/i.test(f.name || "")); }
   function atsAnchor(fx) {
     var a = (fx && fx.anchor) || {};
@@ -6523,6 +6582,7 @@ import { WORLD_LAND } from "./worldland.js";
   /* ---------- events ---------- */
   function onInput(e) {
     const t = e.target;
+    if (t.classList && (t.classList.contains("cl__url") || t.classList.contains("cl__jd") || t.classList.contains("cl__company")) && t.closest(".ats")) { onAtsInput(t); return; }
     if (t.dataset.heromotion !== undefined) { onHeroMotion(t); return; }
     if (t.dataset.gpath !== undefined || t.dataset.genName !== undefined) { onGenEdit(t); return; }
     if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined || t.dataset.rtcellfield !== undefined || t.dataset.rtjrn !== undefined) { rtSerialize(t); return; }
@@ -7033,9 +7093,11 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "phone-qr") { phoneQr(b); return; }
     if (act === "ats-check") { atsRun(b.closest(".ats"), null); return; }
     if (act === "ats-fetch") { atsFetchToPanel(b.closest(".ats")); return; }
-    if (act === "ats-mode") { atsState.mode = b.dataset.mode; var amp = b.closest(".ats"); if (amp) { amp.querySelectorAll('[data-act="ats-mode"]').forEach(function (x) { x.classList.toggle("is-on", x === b); }); var ajd = amp.querySelector(".ats__jd"); if (ajd) ajd.hidden = (atsState.mode !== "job"); } return; }
+    if (act === "ats-mode") { atsState.mode = b.dataset.mode; var amp = b.closest(".ats"); if (amp) { amp.querySelectorAll('[data-act="ats-mode"]').forEach(function (x) { x.classList.toggle("is-on", x === b); }); var ajd = amp.querySelector(".ats__jd"); if (ajd) ajd.hidden = (atsState.mode !== "job"); } atsSaveDraft(); return; }
     if (act === "ats-view") { atsOpenViewer(); return; }
-    if (act === "ats-level") { atsLevel = b.dataset.lvl; var ap = b.closest(".ats"); if (ap) ap.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
+    if (act === "ats-hist-open") { atsHistRestore(b.dataset.id); return; }
+    if (act === "ats-hist-del") { prepDel("ats", b.dataset.id); var _hw = b.closest("[data-ats-hist]"); if (_hw) _hw.innerHTML = atsHistHtml(); return; }
+    if (act === "ats-level") { atsLevel = b.dataset.lvl; var ap = b.closest(".ats"); if (ap) ap.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); atsSaveDraft(); return; }
     if (act === "cl-level") { clLevel = b.dataset.lvl; var clp = b.closest(".cl"); if (clp) clp.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
     if (act === "cl-length") { clState.length = b.dataset.len; var clp2 = b.closest(".cl"); if (clp2) clp2.querySelectorAll(".cl__lenbtn").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
     if (act === "cl-fetch") { clFetchToPanel(b.closest(".cl")); return; }
