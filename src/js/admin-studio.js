@@ -1938,10 +1938,11 @@ import { WORLD_LAND } from "./worldland.js";
       "You are given (1) the EXTRACTED TEXT of the current résumé, (2) a list of specific FIXES from an ATS review, and (3) MISSING KEYWORDS. Produce a COMPLETE rebuilt résumé as structured JSON that APPLIES EVERY truthfully-applicable fix and reads as a strong, modern, results-first résumé.",
       lvl,
       "HARD RULES — never invent facts: no fabricated employers, titles, dates, degrees, metrics or tools. Keep EVERY real role, company, location, date and achievement from the source. Where a fix gives a REPLACEMENT, use it (or a truthful equivalent). Weave in the MISSING KEYWORDS only where the candidate's real experience genuinely supports them; otherwise surface them in the Skills section rather than inventing experience. Convert dense paragraphs into tight, quantified, action-verb bullets (outcome first). Use STANDARD section headings (Experience, Skills, Education, etc.). Remove first-person pronouns. Keep dates consistent (MM/YYYY or YYYY).",
+      "PUNCTUATION: do NOT use em-dashes or en-dashes (\u2014 or \u2013) anywhere in the output; use commas or periods, hyphens only inside hyphenated words, and the word 'to' for ranges (write dates like '03/2019 - Present' or '2019 to 2024').",
       "This rebuild also FIXES parsing: it is single-column plain text with real headings, so it must parse cleanly in any ATS.",
       "LENGTH IS A HARD CONSTRAINT: the result MUST fit on TWO A4 pages when typeset. Be ruthless — keep the strongest, most relevant, most recent content; trim filler; roughly 3–6 crisp bullets for recent roles and 1–3 for older ones. Prefer verbs and numbers over adjectives. Do NOT pad.",
       "Return ONLY valid JSON (no markdown, no prose) matching EXACTLY this shape:",
-      '{"name":"Full Name","title":"headline / target title","contact":{"email":"","phone":"","location":"City, Country","links":[{"label":"linkedin.com/in/handle","url":"https://..."}]},"summary":"2-3 line keyword-rich professional summary, no first person","sections":[{"heading":"Experience","kind":"experience","items":[{"role":"","org":"","location":"","dates":"MM/YYYY – MM/YYYY","bullets":["quantified, outcome-first bullet"]}]},{"heading":"Skills","kind":"skills","groups":[{"label":"e.g. Design","items":["skill","tool"]}]},{"heading":"Education","kind":"education","items":[{"school":"","credential":"","dates":"","note":""}]},{"heading":"Recognition","kind":"list","items":[{"title":"","meta":""}]}],"notes":"one honest line: what you changed and any fix you could not apply without fabricating"}',
+      '{"name":"Full Name","title":"headline / target title","contact":{"email":"","phone":"","location":"City, Country","links":[{"label":"linkedin.com/in/handle","url":"https://..."}]},"summary":"2-3 line keyword-rich professional summary, no first person","sections":[{"heading":"Experience","kind":"experience","items":[{"role":"","org":"","location":"","dates":"MM/YYYY to Present","bullets":["quantified, outcome-first bullet"]}]},{"heading":"Skills","kind":"skills","groups":[{"label":"e.g. Design","items":["skill","tool"]}]},{"heading":"Education","kind":"education","items":[{"school":"","credential":"","dates":"","note":""}]},{"heading":"Recognition","kind":"list","items":[{"title":"","meta":""}]}],"notes":"one honest line: what you changed and any fix you could not apply without fabricating"}',
       "Include only sections the person actually has. Keep every string on a SINGLE line (no literal newlines inside any string). Output ONE compact JSON object and nothing else."
     ].join("\n");
   }
@@ -1963,7 +1964,7 @@ import { WORLD_LAND } from "./worldland.js";
   }
   function atsRbNorm(o) {
     if (!o || typeof o !== "object") return null;
-    var str = function (v) { return String(v == null ? "" : v).trim(); };
+    var str = function (v) { return String(v == null ? "" : v).replace(/\s*[\u2014\u2013]\s*/g, " - ").trim(); };
     var arr = function (v) { return Array.isArray(v) ? v : []; };
     var list = function (v) { return arr(v).map(str).filter(Boolean); };
     var rb = { name: str(o.name), title: str(o.title), summary: str(o.summary), notes: str(o.notes), contact: {}, sections: [] };
@@ -2168,13 +2169,13 @@ import { WORLD_LAND } from "./worldland.js";
     (rb.sections || []).forEach(function (s) {
       L.push("", String(s.heading || "").toUpperCase());
       if (s.kind === "experience") (s.items || []).forEach(function (it) {
-        L.push([it.role, it.org].filter(Boolean).join(" \u2014 ") + (it.dates ? "  (" + it.dates + ")" : "") + (it.location ? "  " + it.location : ""));
+        L.push([it.role, it.org].filter(Boolean).join(", ") + (it.dates ? "  (" + it.dates + ")" : "") + (it.location ? "  " + it.location : ""));
         (it.bullets || []).forEach(function (b) { if (b) L.push("- " + b); });
       });
       else if (s.kind === "skills") (s.groups || []).forEach(function (g) { L.push((g.label ? g.label + ": " : "") + (g.items || []).join(", ")); });
-      else if (s.kind === "education") (s.items || []).forEach(function (it) { L.push([it.school, it.credential].filter(Boolean).join(" \u2014 ") + (it.dates ? "  (" + it.dates + ")" : "") + (it.note ? "  " + it.note : "")); });
+      else if (s.kind === "education") (s.items || []).forEach(function (it) { L.push([it.school, it.credential].filter(Boolean).join(", ") + (it.dates ? "  (" + it.dates + ")" : "") + (it.note ? "  " + it.note : "")); });
       else if (s.kind === "text") L.push(s.text || "");
-      else (s.items || []).forEach(function (it) { L.push([it.title, it.meta].filter(Boolean).join(" \u2014 ")); });
+      else (s.items || []).forEach(function (it) { L.push([it.title, it.meta].filter(Boolean).join(", ")); });
     });
     return L.join("\n");
   }
@@ -2204,8 +2205,9 @@ import { WORLD_LAND } from "./worldland.js";
       if (s.kind === "experience") {
         (s.items || []).forEach(function (it, ii) {
           var base = "sections." + si + ".items." + ii;
-          h += '<div class="rbz__xp"><div class="rbz__xphd">' + ed("span", "rbz__role", base + ".role", it.role, "Role") + '<span class="rbz__at">\u2014</span>' + ed("span", "rbz__org", base + ".org", it.org, "Company") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove role">\u00d7</button></div>';
-          h += '<div class="rbz__meta">' + ed("span", "rbz__dates", base + ".dates", it.dates, "MM/YYYY \u2013 MM/YYYY") + ed("span", "rbz__loc", base + ".location", it.location, "Location") + "</div>";
+          h += '<div class="rbz__xp"><div class="rbz__xphd">' + ed("span", "rbz__role", base + ".role", it.role, "Role") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove role">\u00d7</button></div>';
+          h += ed("div", "rbz__org", base + ".org", it.org, "Company");
+          h += '<div class="rbz__meta">' + ed("span", "rbz__dates", base + ".dates", it.dates, "MM/YYYY to Present") + ed("span", "rbz__loc", base + ".location", it.location, "Location") + "</div>";
           h += '<ul class="rbz__bl">';
           (it.bullets || []).forEach(function (b, bi) { h += "<li>" + ed("span", "rbz__bltext", base + ".bullets." + bi, b, "Achievement, outcome-first with a metric\u2026") + '<button class="rbz__del rbz__del--b" type="button" data-del-bullet="' + si + "." + ii + "." + bi + '" title="Remove bullet">\u00d7</button></li>'; });
           h += '</ul><button class="rbz__add" type="button" data-add-bullet="' + si + "." + ii + '">+ bullet</button></div>';
@@ -2249,13 +2251,31 @@ import { WORLD_LAND } from "./worldland.js";
       "</div>" +
       '<div class="rbz__body">' +
         '<div class="rbz__main">' +
-          '<div class="rbz__doc" data-rbz-doc>' + atsRbEditorHtml(working) + "</div>" +
+          '<div class="rbz__pagewrap" data-rbz-wrap>' +
+            '<div class="rbz__doc" data-rbz-doc>' + atsRbEditorHtml(working) + "</div>" +
+            '<div class="rbz__breaks" data-rbz-breaks aria-hidden="true"></div>' +
+          "</div>" +
           '<iframe class="rbz__frame" data-rbz-frame title="PDF preview" hidden></iframe>' +
         "</div>" +
         '<aside class="rbz__side" data-rbz-side></aside>' +
       "</div>";
     document.body.appendChild(modal);
     var docEl = modal.querySelector("[data-rbz-doc]"), frameEl = modal.querySelector("[data-rbz-frame]"), sideEl = modal.querySelector("[data-rbz-side]"), pgEl = modal.querySelector("[data-rbz-pg]");
+    var wrapEl = modal.querySelector("[data-rbz-wrap]"), breaksEl = modal.querySelector("[data-rbz-breaks]"), paginateT = null;
+    // Paginate the editable page: draw A4 page-break guides so you can see how content flows across pages.
+    function paginate() {
+      if (!docEl || wrapEl.hidden) return;
+      var w = docEl.offsetWidth; if (!w) return;
+      var pageH = w * 297 / 210;
+      docEl.style.minHeight = pageH + "px";
+      var n = Math.max(1, Math.ceil((docEl.offsetHeight - 2) / pageH));
+      var html = "";
+      for (var kk = 1; kk < n; kk++) html += '<div class="rbz__break" style="top:' + (kk * pageH) + 'px"><span class="rbz__break-lbl">Page ' + (kk + 1) + "</span></div>";
+      breaksEl.innerHTML = html;
+    }
+    function schedulePaginate() { clearTimeout(paginateT); paginateT = setTimeout(paginate, 160); }
+    var onResize = schedulePaginate; window.addEventListener("resize", onResize);
+    requestAnimationFrame(paginate); setTimeout(paginate, 350);
 
     function setPg(p) { var ok = p <= 2; pgEl.className = "rbz__pg " + (ok ? "is-ok" : "is-warn"); pgEl.textContent = ok ? "\u2713 " + p + " page" + (p > 1 ? "s" : "") : "\u26A0 " + p + " pages"; }
     setPg(built.pages);
@@ -2274,17 +2294,17 @@ import { WORLD_LAND } from "./worldland.js";
     }
     paintSide();
     function markDirty() { if (!dirty) { dirty = true; paintSide(); } }
-    function reRender() { docEl.innerHTML = atsRbEditorHtml(working); }
+    function reRender() { docEl.innerHTML = atsRbEditorHtml(working); paginate(); }
     function focusPath(path) { var el = docEl.querySelector('[data-k="' + path + '"]'); if (el) { el.focus(); try { var r = document.createRange(); r.selectNodeContents(el); r.collapse(false); var sel = getShellSel(); if (sel) { sel.removeAllRanges(); sel.addRange(r); } } catch (e) {} } }
     function getShellSel() { try { return window.getSelection(); } catch (e) { return null; } }
 
-    docEl.addEventListener("input", markDirty);
+    docEl.addEventListener("input", function () { markDirty(); schedulePaginate(); });
     docEl.addEventListener("click", function (e) {
       var t;
       if (t = e.target.closest("[data-del-bullet]")) { working = rbReadEditor(docEl, working); var p = t.dataset.delBullet.split("."); working.sections[+p[0]].items[+p[1]].bullets.splice(+p[2], 1); reRender(); markDirty(); return; }
-      if (t = e.target.closest("[data-add-bullet]")) { working = rbReadEditor(docEl, working); var q = t.dataset.addBullet.split("."); working.sections[+q[0]].items[+q[1]].bullets.push(""); reRender(); markDirty(); focusPath("sec." + q[0] + ".items." + q[1] + ".bullets." + (working.sections[+q[0]].items[+q[1]].bullets.length - 1)); return; }
+      if (t = e.target.closest("[data-add-bullet]")) { working = rbReadEditor(docEl, working); var q = t.dataset.addBullet.split("."); working.sections[+q[0]].items[+q[1]].bullets.push(""); reRender(); markDirty(); focusPath("sections." + q[0] + ".items." + q[1] + ".bullets." + (working.sections[+q[0]].items[+q[1]].bullets.length - 1)); return; }
       if (t = e.target.closest("[data-del-item]")) { working = rbReadEditor(docEl, working); var r = t.dataset.delItem.split("."); working.sections[+r[0]].items.splice(+r[1], 1); reRender(); markDirty(); return; }
-      if (t = e.target.closest("[data-add-role]")) { working = rbReadEditor(docEl, working); var si = +t.dataset.addRole; working.sections[si].items.push({ role: "", org: "", location: "", dates: "", bullets: [""] }); reRender(); markDirty(); focusPath("sec." + si + ".items." + (working.sections[si].items.length - 1) + ".role"); return; }
+      if (t = e.target.closest("[data-add-role]")) { working = rbReadEditor(docEl, working); var si = +t.dataset.addRole; working.sections[si].items.push({ role: "", org: "", location: "", dates: "", bullets: [""] }); reRender(); markDirty(); focusPath("sections." + si + ".items." + (working.sections[si].items.length - 1) + ".role"); return; }
       if (t = e.target.closest("[data-del-sec]")) { working = rbReadEditor(docEl, working); working.sections.splice(+t.dataset.delSec, 1); reRender(); markDirty(); return; }
     });
 
@@ -2294,11 +2314,11 @@ import { WORLD_LAND } from "./worldland.js";
       var b0 = modal.querySelector("[data-rbz-preview]");
       if (on) {
         var was = btnBusy(b0, "Building\u2026");
-        try { var b = await buildFromEdits(); revoke(); curUrl = String(b.doc.output("bloburl")); frameEl.src = curUrl; docEl.hidden = true; frameEl.hidden = false; previewing = true; btnIdle(b0, "\u2190 Back to edit"); }
+        try { var b = await buildFromEdits(); revoke(); curUrl = String(b.doc.output("bloburl")); frameEl.src = curUrl; wrapEl.hidden = true; frameEl.hidden = false; previewing = true; btnIdle(b0, "\u2190 Back to edit"); }
         catch (e) { status("Preview failed: " + ((e && e.message) || e)); btnIdle(b0, was); }
-      } else { frameEl.hidden = true; docEl.hidden = false; previewing = false; b0.textContent = "Preview PDF"; }
+      } else { frameEl.hidden = true; wrapEl.hidden = false; previewing = false; b0.textContent = "Preview PDF"; paginate(); }
     }
-    function close() { document.removeEventListener("keydown", onKey); revoke(); modal.remove(); }
+    function close() { document.removeEventListener("keydown", onKey); window.removeEventListener("resize", onResize); revoke(); modal.remove(); }
     function onKey(e) { if (e.key !== "Escape") return; if (previewing) togglePreview(false); else if (!/rbz__doc|rbz__/.test((document.activeElement && document.activeElement.className) || "")) close(); }
     document.addEventListener("keydown", onKey);
     modal.addEventListener("click", async function (e) {
