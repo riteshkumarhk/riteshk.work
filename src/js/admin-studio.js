@@ -2009,7 +2009,7 @@ import { WORLD_LAND } from "./worldland.js";
   var RB_ACCENTS = ["#9a6a24", "#2f6d9a", "#585c52", "#7a3b3b", "#3f6b4b", "#454a8c", "#b0561f", "#1c1a17"];
   var RB_LAYOUTS = { single: { name: "Single column" }, sidebar: { name: "Two-column \u00b7 design" }, fullbleed: { name: "Full-bleed header" } };
   var RB_FONTS = { sans: { name: "Sans", css: "Helvetica, Arial, sans-serif", pdf: "helvetica" }, serif: { name: "Serif", css: "Georgia, 'Times New Roman', serif", pdf: "times" }, mono: { name: "Mono", css: "'Courier New', Courier, monospace", pdf: "courier" } };
-  var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single", atsRbFont = "sans";
+  var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single", atsRbFont = "sans", atsRbCanvas = "dark";
   function atsRbTpl() { return RB_TPL[atsRbTplId] || RB_TPL.classic; }
   function atsRbSize() { return RB_SIZE[atsRbSizeId] || RB_SIZE.a4; }
   function atsRbDens() { return RB_DENS[atsRbDensity] || RB_DENS.normal; }
@@ -2310,7 +2310,8 @@ import { WORLD_LAND } from "./worldland.js";
     var modal = atsvEl("div", "rbz rbz--editor");
     modal.innerHTML =
       '<div class="rbz__bar">' +
-        '<div class="rbz__ttl"><span class="ats__badge">EDIT</span> Résumé workspace<span class="rbz__pg" data-rbz-pg></span></div>' +
+        '<div class="rbz__ttl"><span class="ats__badge">EDIT</span> Résumé workspace<span class="rbz__pg" data-rbz-pg></span>' +
+          '<span class="rbz__canvas cl__len" role="group" aria-label="Canvas background" title="Canvas background — Light (Enhancv-style) or Dark"><button type="button" class="cl__lenbtn" data-canvas-set="light">Light</button><button type="button" class="cl__lenbtn" data-canvas-set="dark">Dark</button></span></div>' +
         '<div class="rbz__tools">' +
           '<button class="btn btn--ghost" type="button" data-rbz-design-toggle title="Show or hide the design panel">Design</button>' +
           '<button class="btn btn--ghost" type="button" data-rbz-preview>Preview PDF</button>' +
@@ -2331,7 +2332,9 @@ import { WORLD_LAND } from "./worldland.js";
       "</div>";
     document.body.appendChild(modal);
     var docEl = modal.querySelector("[data-rbz-doc]"), frameEl = modal.querySelector("[data-rbz-frame]"), sideEl = modal.querySelector("[data-rbz-side]"), pgEl = modal.querySelector("[data-rbz-pg]");
-    var wrapEl = modal.querySelector("[data-rbz-wrap]"), paginateT = null;
+    var wrapEl = modal.querySelector("[data-rbz-wrap]"), mainEl = modal.querySelector(".rbz__main"), paginateT = null;
+    function setCanvas(mode) { atsRbCanvas = (mode === "light") ? "light" : "dark"; if (mainEl) mainEl.setAttribute("data-canvas", atsRbCanvas); modal.querySelectorAll("[data-canvas-set]").forEach(function (b) { b.classList.toggle("is-on", b.dataset.canvasSet === atsRbCanvas); }); }
+    setCanvas(atsRbCanvas);
     // Reflow the content into real page cards: distribute the top-level blocks across A4/Letter
     // sheets so you see genuine page breaks. Single-flow layouts split at block boundaries; the
     // two-column layout stays on one sheet (columns don't paginate simply, and it's ATS-discouraged).
@@ -2470,6 +2473,7 @@ import { WORLD_LAND } from "./worldland.js";
     modal.addEventListener("click", async function (e) {
       if (e.target === modal || e.target.closest("[data-rbz-close]")) { close(); return; }
       if (e.target.closest("[data-rbz-design-toggle]")) { modal.querySelector(".rbz__body").classList.toggle("is-noleft"); schedulePaginate(); return; }
+      var _cv = e.target.closest("[data-canvas-set]"); if (_cv) { setCanvas(_cv.dataset.canvasSet); return; }
       var _to = e.target.closest("[data-tpl]"); if (_to) { atsRbTplId = _to.dataset.tpl; atsRbApplyTpl(docEl); renderDesign(); return; }
       var _so = e.target.closest("[data-size]"); if (_so) { atsRbSizeId = _so.dataset.size; renderDesign(); paginate(); return; }
       var _ao = e.target.closest("[data-accent]"); if (_ao) { atsRbAccent = _ao.dataset.accent || ""; atsRbApplyTpl(docEl); renderDesign(); return; }
