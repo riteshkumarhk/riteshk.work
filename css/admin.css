@@ -1570,7 +1570,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__break-lbl { position: absolute; left: 50%; top: -.66rem; transform: translateX(-50%); background: #fff; border: 1px solid #e1d8cd; border-radius: 999px; padding: .06rem .55rem; font-family: var(--mono, monospace); font-size: .56rem; letter-spacing: .09em; text-transform: uppercase; color: #9a938a; white-space: nowrap; }
 .rbz__frame { width: 820px; max-width: 100%; height: calc(100vh - 120px); border: 0; border-radius: 3px; background: #525659; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
 /* the editable A4 document — mirrors the exported PDF (white page, ink, helvetica) */
-.rbz__doc { --rbz-accent: #9a6a24; --rbz-sum-ff: Georgia, "Times New Roman", serif; --rbz-sum-style: italic; width: 100%; max-width: 100%; background: #fff; color: #1c1a17; border-radius: 3px; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); padding: 3.1rem 3.3rem 3.4rem; font-family: Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.5; }
+.rbz__doc { --rbz-accent: #9a6a24; --rbz-sum-ff: Georgia, "Times New Roman", serif; --rbz-sum-style: italic; width: 100%; max-width: 100%; background: #fff; color: #1c1a17; border-radius: 3px; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); padding: 3.1rem 3.3rem 3.4rem; font-family: Helvetica, Arial, sans-serif; font-size: calc(14px * var(--rbz-scale, 1)); line-height: 1.5; }
 .rbz__doc [contenteditable] { outline: none; border-radius: 3px; transition: box-shadow .12s, background .12s; }
 .rbz__doc [contenteditable]:hover { box-shadow: inset 0 0 0 1px rgba(154, 106, 36, .3); }
 .rbz__doc [contenteditable]:focus { box-shadow: inset 0 0 0 1.5px var(--accent, #9a6a24); background: rgba(216, 166, 87, .07); }
@@ -1600,6 +1600,14 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__tplopt:hover { border-color: var(--accent); }
 .rbz__tplopt.is-on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .rbz__tplsw { width: 15px; height: 15px; border-radius: 4px; flex: 0 0 auto; border: 1px solid rgba(0, 0, 0, .15); }
+.rbz__swatches { display: flex; flex-wrap: wrap; gap: .32rem; }
+.rbz__sw { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18); cursor: pointer; position: relative; }
+.rbz__sw:hover { transform: scale(1.08); }
+.rbz__sw.is-on { border-color: var(--text); }
+.rbz__sw--def { background: conic-gradient(#9a6a24, #2f6d9a, #3f6b4b, #7a3b3b, #9a6a24); }
+.rbz__sw--custom { overflow: hidden; display: inline-flex; align-items: center; justify-content: center; }
+.rbz__sw--custom:after { content: "+"; color: #fff; font-size: .8rem; font-weight: 700; mix-blend-mode: difference; }
+.rbz__sw--custom input { position: absolute; inset: -4px; width: 200%; height: 200%; opacity: 0; cursor: pointer; }
 .rbz__grip { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; padding: 0; border: 0; background: none; color: #c9c1b4; cursor: grab; border-radius: 4px; opacity: .5; transition: opacity .12s, color .12s, background .12s; }
 .rbz__sechd:hover .rbz__grip { opacity: 1; }
 .rbz__grip:hover { color: #9a6a24; background: rgba(216, 166, 87, .12); }

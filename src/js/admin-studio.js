@@ -2001,17 +2001,27 @@ import { WORLD_LAND } from "./worldland.js";
   // ---- resume workspace templates (look & feel) + page size; one model, restyled ----
   var RB_TPL = { classic: { name: "Classic", accent: "#9a6a24", rgb: [154, 106, 36], head: "ruled", sumFF: "Georgia, 'Times New Roman', serif", sumStyle: "italic", pdfSum: "times", pdfSumStyle: "italic" }, modern: { name: "Modern", accent: "#2f6d9a", rgb: [47, 109, 154], head: "bar", sumFF: "Helvetica, Arial, sans-serif", sumStyle: "normal", pdfSum: "helvetica", pdfSumStyle: "normal" }, compact: { name: "Compact", accent: "#585c52", rgb: [88, 92, 82], head: "plain", sumFF: "Helvetica, Arial, sans-serif", sumStyle: "normal", pdfSum: "helvetica", pdfSumStyle: "normal" } };
   var RB_SIZE = { a4: { name: "A4", fmt: "a4", w: 210, h: 297 }, letter: { name: "US Letter", fmt: "letter", w: 215.9, h: 279.4 } };
-  var atsRbTplId = "classic", atsRbSizeId = "a4";
+  var RB_DENS = {
+    airy: { name: "Airy", scale: 1.06, ladder: [{ k: 1.08, maxBul: 7 }, { k: 1.03, maxBul: 6 }, { k: 0.98, maxBul: 5 }, { k: 0.93, maxBul: 5 }, { k: 0.88, maxBul: 4 }, { k: 0.84, maxBul: 4 }, { k: 0.80, maxBul: 3 }] },
+    normal: { name: "Normal", scale: 1.00, ladder: [{ k: 1.00, maxBul: 8 }, { k: 0.96, maxBul: 6 }, { k: 0.92, maxBul: 5 }, { k: 0.88, maxBul: 5 }, { k: 0.84, maxBul: 4 }, { k: 0.80, maxBul: 3 }, { k: 0.76, maxBul: 3 }] },
+    compact: { name: "Compact", scale: 0.90, ladder: [{ k: 0.92, maxBul: 10 }, { k: 0.88, maxBul: 8 }, { k: 0.84, maxBul: 7 }, { k: 0.80, maxBul: 6 }, { k: 0.77, maxBul: 5 }, { k: 0.74, maxBul: 4 }, { k: 0.72, maxBul: 4 }] }
+  };
+  var RB_ACCENTS = ["#9a6a24", "#2f6d9a", "#585c52", "#7a3b3b", "#3f6b4b", "#454a8c", "#b0561f", "#1c1a17"];
+  var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal";
   function atsRbTpl() { return RB_TPL[atsRbTplId] || RB_TPL.classic; }
   function atsRbSize() { return RB_SIZE[atsRbSizeId] || RB_SIZE.a4; }
-  function atsRbApplyTpl(docEl) { var t = atsRbTpl(); docEl.style.setProperty("--rbz-accent", t.accent); docEl.style.setProperty("--rbz-sum-ff", t.sumFF); docEl.style.setProperty("--rbz-sum-style", t.sumStyle); docEl.setAttribute("data-head", t.head); }
+  function atsRbDens() { return RB_DENS[atsRbDensity] || RB_DENS.normal; }
+  function atsHexRgb(hex) { var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "")); if (!m) return null; var n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+  function atsRbAccentHex() { return atsRbAccent || atsRbTpl().accent; }
+  function atsRbAccentRgb() { return (atsRbAccent && atsHexRgb(atsRbAccent)) || atsRbTpl().rgb; }
+  function atsRbApplyTpl(docEl) { var t = atsRbTpl(); docEl.style.setProperty("--rbz-accent", atsRbAccentHex()); docEl.style.setProperty("--rbz-sum-ff", t.sumFF); docEl.style.setProperty("--rbz-sum-style", t.sumStyle); docEl.style.setProperty("--rbz-scale", atsRbDens().scale); docEl.setAttribute("data-head", t.head); }
   // Typeset the structured résumé at a given density (k scales type + spacing; maxBul caps bullets/role).
   function atsRbBuild(jsPDF, rb, dens) {
     var k = dens.k, maxBul = dens.maxBul;
     var SZ = atsRbSize(), TPL = atsRbTpl();
     var doc = new jsPDF({ unit: "mm", format: SZ.fmt, compress: true });
     var PW = SZ.w, PH = SZ.h, M = 14, CW = PW - M * 2;
-    var INK = [28, 26, 23], MUT = [101, 92, 83], FAINT = [154, 147, 138], ACC = TPL.rgb, LINE = [225, 216, 205];
+    var INK = [28, 26, 23], MUT = [101, 92, 83], FAINT = [154, 147, 138], ACC = atsRbAccentRgb(), LINE = [225, 216, 205];
     var y = M;
     var P = function (s) { return rpdfPlain(s); };
     function ink() { doc.setTextColor(INK[0], INK[1], INK[2]); }
@@ -2116,10 +2126,7 @@ import { WORLD_LAND } from "./worldland.js";
   // Build at progressively tighter densities until it fits two pages; return the first that fits (else the tightest).
   async function atsRbFit(rb) {
     var jsPDF = await ensureJsPdf();
-    var DENS = [
-      { k: 1.00, maxBul: 8 }, { k: 0.96, maxBul: 6 }, { k: 0.92, maxBul: 5 },
-      { k: 0.88, maxBul: 5 }, { k: 0.84, maxBul: 4 }, { k: 0.80, maxBul: 3 }, { k: 0.76, maxBul: 3 }
-    ];
+    var DENS = atsRbDens().ladder;
     var built = null;
     for (var i = 0; i < DENS.length; i++) {
       built = atsRbBuild(jsPDF, rb, DENS[i]);
@@ -2289,7 +2296,10 @@ import { WORLD_LAND } from "./worldland.js";
       var m = modal.querySelector("[data-rbz-tplmenu]"); if (!m) return;
       var opts = Object.keys(RB_TPL).map(function (id) { var t = RB_TPL[id]; return '<button class="rbz__tplopt' + (id === atsRbTplId ? " is-on" : "") + '" type="button" data-tpl="' + id + '"><span class="rbz__tplsw" style="background:' + t.accent + '"></span>' + t.name + "</button>"; }).join("");
       var sizes = Object.keys(RB_SIZE).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbSizeId ? " is-on" : "") + '" type="button" data-size="' + id + '">' + RB_SIZE[id].name + "</button>"; }).join("");
-      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + "</div>";
+      var eff = atsRbAccentHex().toLowerCase();
+      var swatches = '<button class="rbz__sw rbz__sw--def' + (atsRbAccent === "" ? " is-on" : "") + '" type="button" data-accent="" title="Template default"></button>' + RB_ACCENTS.map(function (h2) { return '<button class="rbz__sw' + (atsRbAccent.toLowerCase() === h2 ? " is-on" : "") + '" type="button" data-accent="' + h2 + '" style="background:' + h2 + '" title="' + h2 + '"></button>'; }).join("") + '<label class="rbz__sw rbz__sw--custom" title="Custom colour" style="background:' + eff + '"><input type="color" data-accent-input value="' + eff + '"></label>';
+      var dens = Object.keys(RB_DENS).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbDensity ? " is-on" : "") + '" type="button" data-density="' + id + '">' + RB_DENS[id].name + "</button>"; }).join("");
+      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Accent</div><div class="rbz__swatches">' + swatches + '</div><div class="rbz__tplmenu-h">Density</div><div class="cl__len">' + dens + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + "</div>";
     }
     var onResize = schedulePaginate; window.addEventListener("resize", onResize);
     atsRbApplyTpl(docEl); requestAnimationFrame(paginate); setTimeout(paginate, 350);
@@ -2372,6 +2382,7 @@ import { WORLD_LAND } from "./worldland.js";
     function close() { document.removeEventListener("keydown", onKey); window.removeEventListener("resize", onResize); revoke(); modal.remove(); }
     function onKey(e) { if (e.key !== "Escape") return; if (previewing) togglePreview(false); else if (!/rbz__doc|rbz__/.test((document.activeElement && document.activeElement.className) || "")) close(); }
     document.addEventListener("keydown", onKey);
+    modal.addEventListener("input", function (e) { if (e.target && e.target.matches && e.target.matches("[data-accent-input]")) { atsRbAccent = e.target.value; atsRbApplyTpl(docEl); var cs = modal.querySelector(".rbz__sw--custom"); if (cs) cs.style.background = e.target.value; } });
     modal.addEventListener("click", async function (e) {
       if (e.target === modal || e.target.closest("[data-rbz-close]")) { close(); return; }
       var _menu = modal.querySelector("[data-rbz-tplmenu]");
@@ -2379,6 +2390,8 @@ import { WORLD_LAND } from "./worldland.js";
       if (e.target.closest("[data-rbz-tpl]")) { if (_menu) { _menu.hidden = !_menu.hidden; if (!_menu.hidden) renderTplMenu(); } return; }
       var _to = e.target.closest("[data-tpl]"); if (_to) { atsRbTplId = _to.dataset.tpl; atsRbApplyTpl(docEl); renderTplMenu(); return; }
       var _so = e.target.closest("[data-size]"); if (_so) { atsRbSizeId = _so.dataset.size; renderTplMenu(); paginate(); return; }
+      var _ao = e.target.closest("[data-accent]"); if (_ao) { atsRbAccent = _ao.dataset.accent || ""; atsRbApplyTpl(docEl); renderTplMenu(); return; }
+      var _de = e.target.closest("[data-density]"); if (_de) { atsRbDensity = _de.dataset.density; atsRbApplyTpl(docEl); renderTplMenu(); schedulePaginate(); buildFromEdits(); return; }
       if (e.target.closest("[data-rbz-preview]")) { togglePreview(!previewing); return; }
       if (e.target.closest("[data-rbz-regen]")) { close(); atsRebuildOpen(atsRbBusyCtx); return; }
       var dl = e.target.closest("[data-rbz-dl]");
