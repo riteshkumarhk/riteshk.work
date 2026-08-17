@@ -2339,19 +2339,34 @@ import { WORLD_LAND } from "./worldland.js";
       if (!docEl || wrapEl.hidden) return;
       var w = docEl.clientWidth; if (!w) return;
       var _sz = atsRbSize(), pageOuterH = w * _sz.h / _sz.w;
-      var cards = docEl.querySelectorAll(".rbz__page"), blocks = [];
-      if (cards.length) cards.forEach(function (c) { while (c.firstChild) blocks.push(c.removeChild(c.firstChild)); });
-      else Array.prototype.slice.call(docEl.children).forEach(function (b) { blocks.push(docEl.removeChild(b)); });
-      cards.forEach(function (c) { c.remove(); });
+      var pgs = docEl.querySelectorAll(".rbz__page"), raw = [];
+      if (pgs.length) pgs.forEach(function (c) { while (c.firstChild) raw.push(c.removeChild(c.firstChild)); });
+      else Array.prototype.slice.call(docEl.children).forEach(function (b) { raw.push(docEl.removeChild(b)); });
+      pgs.forEach(function (c) { c.remove(); });
+      // Merge continuation fragments from a prior reflow back into their section, so we always
+      // re-split from a clean tree (the roles that spilled over are appended back in order).
+      var blocks = [];
+      raw.forEach(function (b) {
+        if (b.nodeType === 1 && b.classList.contains("rbz__sec--cont") && blocks.length) { var prev = blocks[blocks.length - 1]; while (b.firstChild) prev.appendChild(b.firstChild); }
+        else blocks.push(b);
+      });
       function newPage() { var p = document.createElement("div"); p.className = "rbz__page"; p.style.minHeight = pageOuterH + "px"; docEl.appendChild(p); return p; }
       var cur = newPage();
       if (atsRbLayout === "sidebar") { blocks.forEach(function (b) { cur.appendChild(b); }); return; }
       var cs = getComputedStyle(cur), avail = pageOuterH - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0), used = 0;
+      function measure(n) { var s = getComputedStyle(n); return n.offsetHeight + (parseFloat(s.marginTop) || 0) + (parseFloat(s.marginBottom) || 0); }
+      function place(n) { cur.appendChild(n); var h = measure(n); if (used > 0 && used + h > avail) { cur.removeChild(n); cur = newPage(); cur.appendChild(n); used = h; } else used += h; }
       blocks.forEach(function (b) {
-        cur.appendChild(b);
-        var bs = getComputedStyle(b), h = b.offsetHeight + (parseFloat(bs.marginTop) || 0) + (parseFloat(bs.marginBottom) || 0);
-        if (used > 0 && used + h > avail) { cur.removeChild(b); cur = newPage(); cur.appendChild(b); used = h; }
-        else used += h;
+        var splittable = b.nodeType === 1 && b.classList.contains("rbz__sec") && b.querySelectorAll(":scope > .rbz__xp").length > 1;
+        if (!splittable) { place(b); return; }
+        var siVal = b.dataset ? b.dataset.si : null, frag = b;
+        var movable = []; Array.prototype.slice.call(b.children).forEach(function (k) { if (k.classList.contains("rbz__xp") || k.classList.contains("rbz__add--role")) movable.push(b.removeChild(k)); });
+        place(frag); // section heading on its own, then flow the roles, splitting onto fresh sheets
+        movable.forEach(function (m) {
+          frag.appendChild(m); var h = measure(m);
+          if (used > 0 && used + h > avail) { frag.removeChild(m); cur = newPage(); frag = document.createElement("div"); frag.className = "rbz__sec rbz__sec--cont"; if (siVal != null) frag.dataset.si = siVal; cur.appendChild(frag); frag.appendChild(m); used = h; }
+          else used += h;
+        });
       });
     }
     function schedulePaginate() { clearTimeout(paginateT); paginateT = setTimeout(paginate, 180); }
