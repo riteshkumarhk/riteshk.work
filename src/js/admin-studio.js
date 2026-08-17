@@ -2047,7 +2047,7 @@ import { WORLD_LAND } from "./worldland.js";
     var e = prepGet("ats", id); if (!e) return; var p = e.payload || {}, st = p.state || {};
     if (e.kind === "workspace" && p.rb) {
       var d = p.design || {};
-      atsRbTplId = d.tpl || atsRbTplId; atsRbSizeId = d.size || atsRbSizeId; atsRbAccent = (d.accent != null ? d.accent : atsRbAccent); atsRbFont = d.font || atsRbFont; atsRbDensity = d.density || atsRbDensity; atsRbLayout = d.layout || atsRbLayout; atsRbCanvas = d.canvas || atsRbCanvas;
+      atsRbTplId = d.tpl || atsRbTplId; atsRbSizeId = d.size || atsRbSizeId; atsRbAccent = (d.accent != null ? d.accent : atsRbAccent); atsRbFont = d.font || atsRbFont; atsRbDensity = d.density || atsRbDensity; atsRbLayout = d.layout || atsRbLayout; atsRbCanvas = d.canvas || atsRbCanvas; atsRbKeepWhole = (d.keepWhole != null ? d.keepWhole : atsRbKeepWhole);
       atsLevel = p.level || atsLevel;
       atsLast = { file: null, res: p.res || null, level: atsLevel, company: p.company || "", text: p.text || "" };
       atsRbSessId = id;
@@ -2177,7 +2177,7 @@ import { WORLD_LAND } from "./worldland.js";
   async function rbEnsureIcons(hexes) {
     for (var ki in RB_ICON_SVG) { for (var i = 0; i < hexes.length; i++) { var key = ki + "|" + hexes[i]; if (!(key in RB_ICON_CACHE)) { try { RB_ICON_CACHE[key] = await rbRasterIcon(ki, hexes[i]); } catch (e) { RB_ICON_CACHE[key] = null; } } } }
   }
-  var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single", atsRbFont = "sans", atsRbCanvas = "dark";
+  var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single", atsRbFont = "sans", atsRbCanvas = "dark", atsRbKeepWhole = true;
   var atsRbSessId = null; // the in-progress workspace's history entry id (edits update it in place)
   function atsRbTpl() { return RB_TPL[atsRbTplId] || RB_TPL.classic; }
   function atsRbSize() { return RB_SIZE[atsRbSizeId] || RB_SIZE.a4; }
@@ -2250,11 +2250,48 @@ import { WORLD_LAND } from "./worldland.js";
 
     function drawSummary() { if (rb.summary) { ink(); doc.setFont(TPL.pdfSum, TPL.pdfSumStyle); doc.setFontSize(11.5 * k); var sl = doc.splitTextToSize(P(rb.summary), CW2); doc.text(sl, CX, y); y += sl.length * 5.2 * k + 4 * k; } }
 
+    // Height of one entry (role / education / list item) if drawn now — used to keep an entry whole
+    // on a page instead of orphaning its heading from its body across a page break.
+    function roleH(it) {
+      var h = (it.dates || it.location) ? 3.8 * k : 0, _org = it.org ? P(it.org) : "", _ow = 0;
+      if (_org) { doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); _ow = doc.getTextWidth(_org); }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(9.6 * k);
+      h += (doc.splitTextToSize(P(it.role || ""), CW2 - (_ow ? _ow + 5 : 0)).length - 1) * 4.4 * k + 4.6 * k;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k);
+      (it.bullets || []).slice(0, maxBul).forEach(function (bt) { h += doc.splitTextToSize(P(bt), CW2 - 4.5).length * 4 * k + 1.4 * k; });
+      return h + 3 * k;
+    }
+    function eduH(it) {
+      var _edd = it.dates ? P(it.dates) : "", _dw = 0;
+      if (_edd) { doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); _dw = doc.getTextWidth(_edd); }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(9 * k);
+      var h = (doc.splitTextToSize(P(it.school || ""), CW2 - (_dw ? _dw + 5 : 0)).length - 1) * 4 * k + 4 * k;
+      var line2 = P([it.credential, it.note].filter(Boolean).join("   \u00b7   "));
+      if (line2) { doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); h += doc.splitTextToSize(line2, CW2).length * 4 * k; }
+      return h + 2.6 * k;
+    }
+    function listH(it) {
+      var _mt = it.meta ? P(it.meta) : "", _mw = 0;
+      if (_mt) { doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); _mw = doc.getTextWidth(_mt); }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8.6 * k);
+      return (doc.splitTextToSize(P(it.title || ""), CW2 - (_mw ? _mw + 5 : 0)).length - 1) * 4.4 * k + 4.7 * k;
+    }
+    function firstItemH(s) {
+      if (s.kind === "experience" && s.items && s.items[0]) return roleH(s.items[0]);
+      if (s.kind === "education" && s.items && s.items[0]) return eduH(s.items[0]);
+      if (s.kind === "text") { doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); return Math.min(3, doc.splitTextToSize(P(s.text), CW2).length) * 4.2 * k; }
+      if (s.kind === "skills") return 5.8 * k;
+      return (s.items && s.items[0]) ? listH(s.items[0]) : 0;
+    }
+    // Keep a section heading with (at least) its first entry so the title isn't stranded at a page end.
+    function keepSec(s) { if (!atsRbKeepWhole || atsRbLayout === "sidebar") return; var fh = firstItemH(s), usable = PH - M - 8 - colTop; if (fh && fh + 9 * k <= usable) need(fh + 9 * k); }
     function drawSec(s) {
       if (s.kind === "experience") {
+        keepSec(s);
         sec(s.heading);
         s.items.forEach(function (it) {
-          need(11 * k);
+          var _rh = roleH(it), _whole = atsRbKeepWhole && atsRbLayout !== "sidebar" && _rh <= (PH - M - 8 - colTop);
+          if (_whole) need(_rh); else need(11 * k);
           if (it.dates || it.location) {
             doc.setFont("helvetica", "normal"); doc.setFontSize(7 * k);
             var _misz = 2.5 * k, _mig = 0.9 * k, _mgrp = 3.6 * k, _mx = CX, _mtop = y - _misz * 0.5 - 0.75 * k;
@@ -2271,7 +2308,7 @@ import { WORLD_LAND } from "./worldland.js";
           y += (_rl.length - 1) * 4.4 * k + 4.6 * k;
           it.bullets.slice(0, maxBul).forEach(function (bt) {
             var lines = doc.splitTextToSize(P(bt), CW2 - 4.5);
-            need(lines.length * 4 * k + 1.4 * k);
+            if (!_whole) need(lines.length * 4 * k + 1.4 * k);
             acc(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); doc.text("\u2013", CX, y);
             mut(); doc.text(lines, CX + 4.5, y);
             y += lines.length * 4 * k + 1.4 * k;
@@ -2279,6 +2316,7 @@ import { WORLD_LAND } from "./worldland.js";
           y += 3 * k;
         });
       } else if (s.kind === "skills") {
+        keepSec(s);
         sec(s.heading);
         doc.setFont("helvetica", "bold"); doc.setFontSize(8.6 * k);
         var _aligned = CW2 > 120, _colW = 0;
@@ -2298,9 +2336,10 @@ import { WORLD_LAND } from "./worldland.js";
         });
         y += 2 * k;
       } else if (s.kind === "education") {
+        keepSec(s);
         sec(s.heading);
         s.items.forEach(function (it) {
-          need(6 * k);
+          if (atsRbKeepWhole && atsRbLayout !== "sidebar") need(eduH(it)); else need(6 * k);
           var _edd = it.dates ? P(it.dates) : "", _dw = 0;
           if (_edd) { doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); _dw = doc.getTextWidth(_edd); }
           ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(9 * k);
@@ -2314,16 +2353,18 @@ import { WORLD_LAND } from "./worldland.js";
         });
         y += 1 * k;
       } else if (s.kind === "text") {
+        keepSec(s);
         sec(s.heading);
         mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); var tl = doc.splitTextToSize(P(s.text), CW2); need(tl.length * 4.2 * k); doc.text(tl, CX, y); y += tl.length * 4.2 * k + 3 * k;
       } else {
+        keepSec(s);
         sec(s.heading);
         s.items.forEach(function (it) {
           var _mt = it.meta ? P(it.meta) : "", _mw = 0;
           if (_mt) { doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); _mw = doc.getTextWidth(_mt); }
           ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(8.6 * k);
           var _tl = doc.splitTextToSize(P(it.title || ""), CW2 - (_mw ? _mw + 5 : 0));
-          need(_tl.length * 4.4 * k + 1.4 * k);
+          if (atsRbKeepWhole && atsRbLayout !== "sidebar") need(listH(it)); else need(_tl.length * 4.4 * k + 1.4 * k);
           doc.text(_tl, CX, y);
           if (_mt) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); doc.text(_mt, CX + CW2 - _mw, y); }
           y += (_tl.length - 1) * 4.4 * k + 4.7 * k;
@@ -2583,7 +2624,13 @@ import { WORLD_LAND } from "./worldland.js";
           if (!splittable) { place(b); return; }
           var siVal = b.dataset ? b.dataset.si : null, frag = b;
           var movable = []; Array.prototype.slice.call(b.children).forEach(function (k) { if (k.classList.contains("rbz__xp") || k.classList.contains("rbz__add--role")) movable.push(b.removeChild(k)); });
-          place(frag); // section heading on its own, then flow the roles, splitting onto fresh sheets
+          // keep the section heading with its first role so the title is never stranded at a page bottom
+          if (atsRbKeepWhole && movable.length) {
+            cur.appendChild(frag); frag.appendChild(movable[0]);
+            var _combo = measure(frag); frag.removeChild(movable[0]);
+            if (used > 0 && used + _combo > avail) { cur.removeChild(frag); cur = newPage(); used = 0; }
+            cur.appendChild(frag); used += measure(frag);
+          } else { place(frag); }
           movable.forEach(function (m) {
             frag.appendChild(m); var h = measure(m);
             if (used > 0 && used + h > avail) { frag.removeChild(m); cur = newPage(); frag = document.createElement("div"); frag.className = "rbz__sec rbz__sec--cont"; if (siVal != null) frag.dataset.si = siVal; cur.appendChild(frag); frag.appendChild(m); used = h; }
@@ -2632,7 +2679,7 @@ import { WORLD_LAND } from "./worldland.js";
       var lays = Object.keys(RB_LAYOUTS).map(function (id) { return '<button class="rbz__tplopt' + (id === atsRbLayout ? " is-on" : "") + '" type="button" data-lay="' + id + '">' + RB_LAYOUTS[id].name + "</button>"; }).join("");
       var warn = atsRbLayout === "sidebar" ? '<div class="rbz__laywarn">Two-column is a design / human-first layout. Most ATS parse a single column more reliably, so re-check the score after switching.</div>' : "";
       var fonts = Object.keys(RB_FONTS).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbFont ? " is-on" : "") + '" type="button" data-font="' + id + '">' + RB_FONTS[id].name + "</button>"; }).join("");
-      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Layout</div><div class="rbz__tplrow">' + lays + '</div>' + warn + '<div class="rbz__tplmenu-h">Accent</div><div class="rbz__swatches">' + swatches + '</div><div class="rbz__tplmenu-h">Font</div><div class="cl__len">' + fonts + '</div><div class="rbz__tplmenu-h">Density</div><div class="cl__len">' + dens + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + "</div>";
+      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Layout</div><div class="rbz__tplrow">' + lays + '</div>' + warn + '<div class="rbz__tplmenu-h">Accent</div><div class="rbz__swatches">' + swatches + '</div><div class="rbz__tplmenu-h">Font</div><div class="cl__len">' + fonts + '</div><div class="rbz__tplmenu-h">Density</div><div class="cl__len">' + dens + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + '</div><div class="rbz__tplmenu-h">Page breaks</div><div class="cl__len"><button class="cl__lenbtn' + (atsRbKeepWhole ? " is-on" : "") + '" type="button" data-break="whole">Keep entries whole</button><button class="cl__lenbtn' + (!atsRbKeepWhole ? " is-on" : "") + '" type="button" data-break="fill">Fill pages</button></div>';
     }
     var onResize = schedulePaginate; window.addEventListener("resize", onResize);
     atsRbApplyTpl(docEl); renderDesign(); requestAnimationFrame(paginate); setTimeout(paginate, 350);
@@ -2654,7 +2701,7 @@ import { WORLD_LAND } from "./worldland.js";
       sideEl.innerHTML = html;
     }
     paintSide();
-    function rbDesignSnap() { return { tpl: atsRbTplId, size: atsRbSizeId, accent: atsRbAccent, font: atsRbFont, density: atsRbDensity, layout: atsRbLayout, canvas: atsRbCanvas }; }
+    function rbDesignSnap() { return { tpl: atsRbTplId, size: atsRbSizeId, accent: atsRbAccent, font: atsRbFont, density: atsRbDensity, layout: atsRbLayout, canvas: atsRbCanvas, keepWhole: atsRbKeepWhole }; }
     function rbSaveWorkspace(readFirst) {
       if (readFirst) { try { working = rbReadEditor(docEl, working); } catch (e) {} }
       var r = (atsLast && atsLast.res) || {};
@@ -2762,6 +2809,7 @@ import { WORLD_LAND } from "./worldland.js";
       var _de = e.target.closest("[data-density]"); if (_de) { atsRbDensity = _de.dataset.density; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); buildFromEdits(); return; }
       var _ft = e.target.closest("[data-font]"); if (_ft) { atsRbFont = _ft.dataset.font; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); buildFromEdits(); return; }
       var _ly = e.target.closest("[data-lay]"); if (_ly) { atsRbLayout = _ly.dataset.lay; working = rbReadEditor(docEl, working); atsRbApplyTpl(docEl); reRender(); renderDesign(); paintSide(); buildFromEdits(); return; }
+      var _bk = e.target.closest("[data-break]"); if (_bk) { atsRbKeepWhole = _bk.dataset.break === "whole"; renderDesign(); buildFromEdits(); return; }
       if (e.target.closest("[data-rbz-preview]")) { togglePreview(!previewing); return; }
       if (e.target.closest("[data-rbz-regen]")) { close(); atsRebuildOpen(atsRbBusyCtx); return; }
       var dl = e.target.closest("[data-rbz-dl]");
