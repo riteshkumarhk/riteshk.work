@@ -10520,6 +10520,19 @@ import { WORLD_LAND } from "./worldland.js";
   ];
   var iprepState = {};
   function iprepSt(id) { return iprepState[id] || (iprepState[id] = { level: "staff", scope: "study", jd: "" }); }
+  function iprepLevelName(id) { for (var k = 0; k < IPREP_LEVELS.length; k++) { if (IPREP_LEVELS[k][0] === id) return IPREP_LEVELS[k][1]; } return id; }
+  function iprepHistHtml() {
+    var items = prepList("iprep");
+    var head = '<div class="prep-hist__h">Saved question sets</div>';
+    if (!items.length) return head + '<div class="prep-hist__empty">Your generated question sets save here automatically \u2014 come back and pick up any set, answers and all.</div>';
+    return head + '<div class="prep-hist__list">' + items.map(function (e) {
+      var m = e.meta || {};
+      return '<div class="prep-h prep-h--txt" role="button" tabindex="0" data-iprep-hist-open="' + e.id + '">' +
+        '<div class="prep-h__x"><b>' + escHtml(e.title || "Interview questions") + '</b><i>' + escHtml((m.count ? m.count + " question" + (m.count > 1 ? "s" : "") : "set") + (m.level ? " \u00b7 " + m.level : "")) + '</i><em>' + prepAgo(e.at) + '</em></div>' +
+        '<span class="prep-h__del" data-iprep-hist-del="' + e.id + '" title="Delete" aria-label="Delete">\u00d7</span>' +
+        '</div>';
+    }).join("") + '</div>';
+  }
   function iprepStrip(s) { return String(s == null ? "" : s).replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim(); }
   function iprepFlat(o) {
     if (o == null) return "";
@@ -11030,7 +11043,7 @@ import { WORLD_LAND } from "./worldland.js";
     prepRerenderDialog();
   }
 
-  function iprepModal(i) {
+  function iprepModal(i, restore) {
     var fromAi = (i == null);
     var w = fromAi ? null : data.work[i]; if (!fromAi && !w) return;
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { iprepModal(i); }); return; }
@@ -11038,11 +11051,13 @@ import { WORLD_LAND } from "./worldland.js";
     if (fromAi && !aiWorks.length) return;
     var g = iprepSt(fromAi ? "__ai__" : w.id);
     var questions = [];
+    var sessId = (restore && restore.id) || null;
     var modal = document.createElement("div");
     modal.className = "pass pass--wide iprep-modal";
     modal.innerHTML =
       '<div class="pass__box"><div class="pass__title">\uD83C\uDF99 Interview prep' + (fromAi ? "" : " \u2014 " + escHtml(w.title || "case study")) + '</div>' +
       '<div class="pass__sub">Generate the questions an interviewer is likely to ask' + (fromAi ? " \u2014 on a project, a few, or your whole portfolio" : " about this work") + ', framed for the level you\u2019re targeting. Ask for a suggested answer on any question.</div>' +
+      '<div class="ats__cols iprep__cols"><div class="ats__main">' +
       '<div class="iprep__setup">' +
         '<div class="af"><label class="af__label">Interviewing for</label><div class="iprep__levels">' +
           IPREP_LEVELS.map(function (l) { return '<button type="button" class="iprep__lvl' + (g.level === l[0] ? " is-on" : "") + '" data-iprep-lvl="' + l[0] + '"><span class="iprep__lvl-name">' + l[1] + '</span><span class="iprep__lvl-desc">' + l[2] + '</span></button>'; }).join("") +
@@ -11059,6 +11074,7 @@ import { WORLD_LAND } from "./worldland.js";
       '</div>' +
       '<div class="iprep__list" hidden></div>' +
       '<div class="pass__err"></div>' +
+      '</div><aside class="prep-hist" data-iprep-hist>' + iprepHistHtml() + '</aside></div>' +
       '<div class="pass__actions iprep__foot">' +
         '<button class="btn btn--ghost" data-cancel>Close</button>' +
         '<button class="btn btn--ghost" data-iprep-new hidden>\u2190 New set</button>' +
@@ -11095,8 +11111,8 @@ import { WORLD_LAND } from "./worldland.js";
           '<div class="iprep__q-top"><span class="iprep__cat">' + escHtml(q.category || "Question") + '</span><span class="iprep__n">' + (idx + 1) + "</span></div>" +
           '<div class="iprep__q">' + escHtml(q.q || "") + "</div>" +
           (q.why ? '<div class="iprep__why">' + escHtml(q.why) + "</div>" : "") +
-          '<div class="iprep__a" hidden></div>' +
-          '<div class="iprep__q-act"><button class="btn btn--ghost" data-iprep-ans="' + idx + '">\u2728 Suggest an answer</button></div>' +
+          '<div class="iprep__a"' + ((q.answer && String(q.answer).trim()) ? "" : " hidden") + ">" + ((q.answer && String(q.answer).trim()) ? iprepSafeHtml(q.answer) : "") + "</div>" +
+          '<div class="iprep__q-act">' + ((q.answer && String(q.answer).trim()) ? '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">\u21bb Regenerate</button><button class="btn btn--ghost" data-iprep-copy="' + idx + '">Copy</button>' : '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">\u2728 Suggest an answer</button>') + "</div>" +
           "</div>";
       }).join("");
       list.hidden = false; setup.hidden = true; runBtn.hidden = true; newBtn.hidden = false;
@@ -11121,7 +11137,9 @@ import { WORLD_LAND } from "./worldland.js";
         if (!raw || !raw.length) throw new Error("The AI didn\u2019t return questions \u2014 try again.");
         questions = raw.map(function (q) { return typeof q === "string" ? { q: q } : (q && typeof q.q === "string" ? { q: q.q, category: q.category, why: q.why } : null); }).filter(Boolean);
         g.__ctx = ctx; g.__jd = jd;
+        sessId = null;
         renderQuestions();
+        persistSession();
       } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t generate questions."; }
       btnIdle(runBtn, "Generate questions");
     });
@@ -11135,6 +11153,7 @@ import { WORLD_LAND } from "./worldland.js";
         var html = await aiText(aiCfg("txt"), iprepAnsSystem(g.level), iprepAnsUser(q.q, g.__ctx || (fromAi ? "" : iprepContext(w, g.scope)), g.__jd || ""), { maxTokens: 900, temperature: 0.6 });
         html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
         ansEl.innerHTML = iprepSafeHtml(html); ansEl.hidden = false;
+        q.answer = ansEl.innerHTML; persistSession();
         card.querySelector(".iprep__q-act").innerHTML = '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">\u21bb Regenerate</button><button class="btn btn--ghost" data-iprep-copy="' + idx + '">Copy</button>';
       } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t draft an answer."; btnIdle(btn, was); }
     });
@@ -11144,6 +11163,29 @@ import { WORLD_LAND } from "./worldland.js";
       var ansEl = card.querySelector(".iprep__a"); var txt = ansEl ? ansEl.innerText : ""; if (!txt) return;
       if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function () { cb.textContent = "Copied"; setTimeout(function () { cb.textContent = "Copy"; }, 1400); }).catch(function () {});
     });
+    function persistSession() {
+      if (!questions.length) return;
+      var saved = prepPut("iprep", { id: sessId, tool: "iprep", kind: "questions", title: fromAi ? "Interview questions" : ((w && w.title) || "Interview questions"), meta: { count: questions.length, level: iprepLevelName(g.level) }, payload: { level: g.level, jd: g.jd || "", scope: g.scope, fromAi: fromAi, questions: questions } });
+      sessId = saved.id; paintHist();
+    }
+    function paintHist() { var r = modal.querySelector("[data-iprep-hist]"); if (r) r.innerHTML = iprepHistHtml(); }
+    function iprepRestore(entry) {
+      if (!entry || !entry.payload) return;
+      var p = entry.payload;
+      g.level = p.level || g.level; g.jd = p.jd || ""; if (p.scope) g.scope = p.scope;
+      questions = (p.questions || []).map(function (q) { return { q: q.q, category: q.category, why: q.why, answer: q.answer }; });
+      sessId = entry.id;
+      modal.querySelectorAll("[data-iprep-lvl]").forEach(function (b2) { b2.classList.toggle("is-on", b2.dataset.iprepLvl === g.level); });
+      if (jdEl) jdEl.value = g.jd;
+      renderQuestions(); paintHist();
+    }
+    modal.querySelector("[data-iprep-hist]").addEventListener("click", function (e) {
+      var del = e.target.closest("[data-iprep-hist-del]");
+      if (del) { e.stopPropagation(); prepDel("iprep", del.dataset.iprepHistDel); if (sessId === del.dataset.iprepHistDel) sessId = null; paintHist(); return; }
+      var op = e.target.closest("[data-iprep-hist-open]");
+      if (op) iprepRestore(prepGet("iprep", op.dataset.iprepHistOpen));
+    });
+    if (restore) iprepRestore(restore);
   }
 
   /* ---------- Whiteboard coach (design-exercise trainer) ---------- */
