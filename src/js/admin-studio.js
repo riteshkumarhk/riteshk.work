@@ -2143,36 +2143,182 @@ import { WORLD_LAND } from "./worldland.js";
       if (btn) btnIdle(btn, was);
     }
   }
+  /* ---------- editable résumé workspace: edit the structured model in-place, re-check ATS
+     live, then generate the vector PDF from the edited model. One model, three consumers
+     (HTML editor + ATS check + jsPDF export) so edit → rescore → download stays consistent. */
+  function rbClone(rb) { try { return JSON.parse(JSON.stringify(rb)); } catch (e) { return rb; } }
+  function rbSet(obj, path, val) {
+    var ks = String(path).split("."), o = obj;
+    for (var i = 0; i < ks.length - 1; i++) {
+      var k = /^\d+$/.test(ks[i]) ? +ks[i] : ks[i];
+      if (o[k] == null || typeof o[k] !== "object") o[k] = /^\d+$/.test(ks[i + 1]) ? [] : {};
+      o = o[k];
+    }
+    var last = ks[ks.length - 1];
+    o[/^\d+$/.test(last) ? +last : last] = val;
+  }
+  function rbToPlainText(rb) {
+    var L = [];
+    if (rb.name) L.push(rb.name);
+    if (rb.title) L.push(rb.title);
+    var c = rb.contact || {}, cb = [c.email, c.phone, c.location].filter(Boolean);
+    (c.links || []).forEach(function (l) { if (l.label || l.url) cb.push(l.label || l.url); });
+    if (cb.length) L.push(cb.join(" | "));
+    if (rb.summary) L.push("", rb.summary);
+    (rb.sections || []).forEach(function (s) {
+      L.push("", String(s.heading || "").toUpperCase());
+      if (s.kind === "experience") (s.items || []).forEach(function (it) {
+        L.push([it.role, it.org].filter(Boolean).join(" \u2014 ") + (it.dates ? "  (" + it.dates + ")" : "") + (it.location ? "  " + it.location : ""));
+        (it.bullets || []).forEach(function (b) { if (b) L.push("- " + b); });
+      });
+      else if (s.kind === "skills") (s.groups || []).forEach(function (g) { L.push((g.label ? g.label + ": " : "") + (g.items || []).join(", ")); });
+      else if (s.kind === "education") (s.items || []).forEach(function (it) { L.push([it.school, it.credential].filter(Boolean).join(" \u2014 ") + (it.dates ? "  (" + it.dates + ")" : "") + (it.note ? "  " + it.note : "")); });
+      else if (s.kind === "text") L.push(s.text || "");
+      else (s.items || []).forEach(function (it) { L.push([it.title, it.meta].filter(Boolean).join(" \u2014 ")); });
+    });
+    return L.join("\n");
+  }
+  // Reconstruct the model from the editor DOM: overwrite text values on a clone of the working model.
+  function rbReadEditor(docEl, working) {
+    var rb = rbClone(working);
+    docEl.querySelectorAll("[data-k]").forEach(function (el) { rbSet(rb, el.dataset.k, (el.innerText || "").replace(/\s+/g, " ").trim()); });
+    docEl.querySelectorAll("[data-ksitems]").forEach(function (el) {
+      var p = el.dataset.ksitems.split("."), si = +p[0], gi = +p[1];
+      var items = (el.innerText || "").split(/[\u00b7,\n]/).map(function (x) { return x.trim(); }).filter(Boolean);
+      if (rb.sections[si] && rb.sections[si].groups && rb.sections[si].groups[gi]) rb.sections[si].groups[gi].items = items;
+    });
+    return rb;
+  }
+  function atsRbEditorHtml(rb) {
+    var e = escHtml;
+    function ed(tag, cls, path, val, ph) { return "<" + tag + ' class="' + cls + '" contenteditable="true" data-k="' + path + '"' + (ph ? ' data-ph="' + e(ph) + '"' : "") + ">" + e(val || "") + "</" + tag + ">"; }
+    var h = '<div class="rbz__page">';
+    h += '<div class="rbz__hd">' + ed("div", "rbz__name", "name", rb.name, "Your Name") + ed("div", "rbz__title", "title", rb.title, "Professional title");
+    var c = rb.contact || {};
+    h += '<div class="rbz__contact">' + ed("span", "rbz__cbit", "contact.email", c.email, "email") + ed("span", "rbz__cbit", "contact.phone", c.phone, "phone") + ed("span", "rbz__cbit", "contact.location", c.location, "location");
+    (c.links || []).forEach(function (l, i) { h += ed("span", "rbz__cbit", "contact.links." + i + ".label", l.label || l.url, "link"); });
+    h += "</div></div>";
+    if (rb.summary != null) h += '<div class="rbz__sec rbz__sec--sum">' + ed("div", "rbz__sum", "summary", rb.summary, "A 2\u20133 line professional summary\u2026") + "</div>";
+    (rb.sections || []).forEach(function (s, si) {
+      h += '<div class="rbz__sec" data-si="' + si + '"><div class="rbz__sechd">' + ed("span", "rbz__sectitle", "sections." + si + ".heading", s.heading, "Section") + '<button class="rbz__del" type="button" data-del-sec="' + si + '" title="Remove section">\u00d7</button></div>';
+      if (s.kind === "experience") {
+        (s.items || []).forEach(function (it, ii) {
+          var base = "sections." + si + ".items." + ii;
+          h += '<div class="rbz__xp"><div class="rbz__xphd">' + ed("span", "rbz__role", base + ".role", it.role, "Role") + '<span class="rbz__at">\u2014</span>' + ed("span", "rbz__org", base + ".org", it.org, "Company") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove role">\u00d7</button></div>';
+          h += '<div class="rbz__meta">' + ed("span", "rbz__dates", base + ".dates", it.dates, "MM/YYYY \u2013 MM/YYYY") + ed("span", "rbz__loc", base + ".location", it.location, "Location") + "</div>";
+          h += '<ul class="rbz__bl">';
+          (it.bullets || []).forEach(function (b, bi) { h += "<li>" + ed("span", "rbz__bltext", base + ".bullets." + bi, b, "Achievement, outcome-first with a metric\u2026") + '<button class="rbz__del rbz__del--b" type="button" data-del-bullet="' + si + "." + ii + "." + bi + '" title="Remove bullet">\u00d7</button></li>'; });
+          h += '</ul><button class="rbz__add" type="button" data-add-bullet="' + si + "." + ii + '">+ bullet</button></div>';
+        });
+        h += '<button class="rbz__add rbz__add--role" type="button" data-add-role="' + si + '">+ add role</button>';
+      } else if (s.kind === "skills") {
+        (s.groups || []).forEach(function (g, gi) {
+          h += '<div class="rbz__skg">' + ed("span", "rbz__sklabel", "sections." + si + ".groups." + gi + ".label", g.label, "Group") + '<span class="rbz__skitems" contenteditable="true" data-ksitems="' + si + "." + gi + '" data-ph="skill \u00b7 skill \u00b7 skill">' + e((g.items || []).join("  \u00b7  ")) + "</span></div>";
+        });
+      } else if (s.kind === "education") {
+        (s.items || []).forEach(function (it, ii) {
+          var eb = "sections." + si + ".items." + ii;
+          h += '<div class="rbz__edu"><div class="rbz__xphd">' + ed("span", "rbz__role", eb + ".school", it.school, "School") + ed("span", "rbz__dates", eb + ".dates", it.dates, "Year") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">\u00d7</button></div>';
+          h += '<div class="rbz__meta">' + ed("span", "rbz__cred", eb + ".credential", it.credential, "Degree / credential") + ed("span", "rbz__note", eb + ".note", it.note, "Note") + "</div></div>";
+        });
+      } else if (s.kind === "text") {
+        h += ed("div", "rbz__text", "sections." + si + ".text", s.text, "Text\u2026");
+      } else {
+        (s.items || []).forEach(function (it, ii) {
+          var lb = "sections." + si + ".items." + ii;
+          h += '<div class="rbz__li">' + ed("span", "rbz__lititle", lb + ".title", it.title, "Title") + ed("span", "rbz__limeta", lb + ".meta", it.meta, "Meta") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">\u00d7</button></div>';
+        });
+      }
+      h += "</div>";
+    });
+    return h + "</div>";
+  }
   function atsRbShow(built, rb) {
-    var doc = built.doc, pages = built.pages, ok = pages <= 2;
-    var url = String(doc.output("bloburl"));
-    var fn = (String(rb.name || "Resume").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "Resume") + "-Resume.pdf";
-    var modal = atsvEl("div", "rbz");
+    var working = rb;
+    var curUrl = null, previewing = false, dirty = false;
+    var modal = atsvEl("div", "rbz rbz--editor");
     modal.innerHTML =
       '<div class="rbz__bar">' +
-        '<div class="rbz__ttl"><span class="ats__badge">NEW</span> Rebuilt résumé \u2014 fixes applied' +
-          '<span class="rbz__pg ' + (ok ? "is-ok" : "is-warn") + '">' + (ok ? "\u2713 " + pages + " page" + (pages > 1 ? "s" : "") : "\u26A0 " + pages + " pages") + "</span></div>" +
+        '<div class="rbz__ttl"><span class="ats__badge">EDIT</span> Résumé workspace<span class="rbz__pg" data-rbz-pg></span></div>' +
         '<div class="rbz__tools">' +
-          '<button class="btn btn--ghost" type="button" data-rbz-regen>Regenerate</button>' +
-          '<button class="btn btn--primary" type="button" data-rbz-dl>Download PDF</button>' +
+          '<button class="btn btn--ghost" type="button" data-rbz-preview>Preview PDF</button>' +
+          '<button class="btn btn--ghost" type="button" data-rbz-regen title="Discard edits &amp; let AI rebuild from scratch">\u21bb Regenerate</button>' +
+          '<button class="btn btn--primary" type="button" data-rbz-dl>Download PDF \u2193</button>' +
           '<button class="atsv__tbtn atsv__x" type="button" data-rbz-close title="Close (Esc)">\u00d7</button>' +
         "</div>" +
       "</div>" +
       '<div class="rbz__body">' +
-        '<iframe class="rbz__frame" title="Rebuilt résumé preview"></iframe>' +
-        '<div class="rbz__note"><b>What changed</b><p>' + escHtml(rb.notes || "Applied the ATS fixes, tightened the writing into quantified bullets, and rebuilt it as a clean single-column, fully parseable layout in the same styling.") + "</p>" +
-          (ok ? "" : '<p class="rbz__warn">Still ' + pages + " pages at the tightest clean density \u2014 trim a little content in your source, then Regenerate.</p>") +
-          '<p class="rbz__meta">Vector PDF \u00b7 real selectable text \u00b7 ATS-parseable.</p></div>' +
+        '<div class="rbz__main">' +
+          '<div class="rbz__doc" data-rbz-doc>' + atsRbEditorHtml(working) + "</div>" +
+          '<iframe class="rbz__frame" data-rbz-frame title="PDF preview" hidden></iframe>' +
+        "</div>" +
+        '<aside class="rbz__side" data-rbz-side></aside>' +
       "</div>";
     document.body.appendChild(modal);
-    modal.querySelector(".rbz__frame").src = url;
-    function close() { document.removeEventListener("keydown", onKey); try { URL.revokeObjectURL(url); } catch (e) {} modal.remove(); }
-    function onKey(e) { if (e.key === "Escape") close(); }
+    var docEl = modal.querySelector("[data-rbz-doc]"), frameEl = modal.querySelector("[data-rbz-frame]"), sideEl = modal.querySelector("[data-rbz-side]"), pgEl = modal.querySelector("[data-rbz-pg]");
+
+    function setPg(p) { var ok = p <= 2; pgEl.className = "rbz__pg " + (ok ? "is-ok" : "is-warn"); pgEl.textContent = ok ? "\u2713 " + p + " page" + (p > 1 ? "s" : "") : "\u26A0 " + p + " pages"; }
+    setPg(built.pages);
+    function paintSide() {
+      var res = (atsLast && atsLast.res) || {};
+      var score = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
+      var band = res.band || "\u2014", tone = score >= 80 ? "good" : score >= 65 ? "ok" : score >= 45 ? "warn" : "bad";
+      var fixes = Array.isArray(res.fixes) ? res.fixes : [], kw = res.keywords || {}, miss = (kw.missing || []).filter(Boolean);
+      var html = '<div class="rbz__scorecard rbz__scorecard--' + tone + (dirty ? " is-stale" : "") + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div><div class="rbz__score-x"><b>' + escHtml(band) + '</b><span>ATS score' + (dirty ? " \u00b7 edited" : "") + "</span></div></div>";
+      html += '<button class="btn btn--primary rbz__recheck" type="button" data-rbz-recheck>Re-check ATS' + (dirty ? " \u21bb" : "") + "</button>";
+      if (dirty) html += '<div class="rbz__stale">You\u2019ve edited the résumé \u2014 re-check to update the score.</div>';
+      if (fixes.length) { html += '<div class="rbz__fixhd">Remaining suggestions <span>' + fixes.length + "</span></div>"; html += fixes.map(function (f) { var pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med"; return '<div class="rbz__fix rbz__fix--' + pr + '"><span class="rbz__pri">' + pr + "</span><div><b>" + escHtml(f.point || "") + "</b>" + (f.how ? "<span>" + escHtml(f.how) + "</span>" : "") + "</div></div>"; }).join(""); }
+      if (miss.length) html += '<div class="rbz__fixhd">Missing keywords</div><div class="rbz__kw">' + miss.map(function (k) { return '<span class="rbz__chip">' + escHtml(k) + "</span>"; }).join("") + "</div>";
+      html += '<div class="rbz__tip">Click any text to edit. Re-check to rescore, Preview to see the PDF, Download when you\u2019re happy.</div>';
+      sideEl.innerHTML = html;
+    }
+    paintSide();
+    function markDirty() { if (!dirty) { dirty = true; paintSide(); } }
+    function reRender() { docEl.innerHTML = atsRbEditorHtml(working); }
+    function focusPath(path) { var el = docEl.querySelector('[data-k="' + path + '"]'); if (el) { el.focus(); try { var r = document.createRange(); r.selectNodeContents(el); r.collapse(false); var sel = getShellSel(); if (sel) { sel.removeAllRanges(); sel.addRange(r); } } catch (e) {} } }
+    function getShellSel() { try { return window.getSelection(); } catch (e) { return null; } }
+
+    docEl.addEventListener("input", markDirty);
+    docEl.addEventListener("click", function (e) {
+      var t;
+      if (t = e.target.closest("[data-del-bullet]")) { working = rbReadEditor(docEl, working); var p = t.dataset.delBullet.split("."); working.sections[+p[0]].items[+p[1]].bullets.splice(+p[2], 1); reRender(); markDirty(); return; }
+      if (t = e.target.closest("[data-add-bullet]")) { working = rbReadEditor(docEl, working); var q = t.dataset.addBullet.split("."); working.sections[+q[0]].items[+q[1]].bullets.push(""); reRender(); markDirty(); focusPath("sec." + q[0] + ".items." + q[1] + ".bullets." + (working.sections[+q[0]].items[+q[1]].bullets.length - 1)); return; }
+      if (t = e.target.closest("[data-del-item]")) { working = rbReadEditor(docEl, working); var r = t.dataset.delItem.split("."); working.sections[+r[0]].items.splice(+r[1], 1); reRender(); markDirty(); return; }
+      if (t = e.target.closest("[data-add-role]")) { working = rbReadEditor(docEl, working); var si = +t.dataset.addRole; working.sections[si].items.push({ role: "", org: "", location: "", dates: "", bullets: [""] }); reRender(); markDirty(); focusPath("sec." + si + ".items." + (working.sections[si].items.length - 1) + ".role"); return; }
+      if (t = e.target.closest("[data-del-sec]")) { working = rbReadEditor(docEl, working); working.sections.splice(+t.dataset.delSec, 1); reRender(); markDirty(); return; }
+    });
+
+    async function buildFromEdits() { working = rbReadEditor(docEl, working); var b = await atsRbFit(working); setPg(b.pages); return b; }
+    function revoke() { if (curUrl) { try { URL.revokeObjectURL(curUrl); } catch (e) {} curUrl = null; } }
+    async function togglePreview(on) {
+      var b0 = modal.querySelector("[data-rbz-preview]");
+      if (on) {
+        var was = btnBusy(b0, "Building\u2026");
+        try { var b = await buildFromEdits(); revoke(); curUrl = String(b.doc.output("bloburl")); frameEl.src = curUrl; docEl.hidden = true; frameEl.hidden = false; previewing = true; btnIdle(b0, "\u2190 Back to edit"); }
+        catch (e) { status("Preview failed: " + ((e && e.message) || e)); btnIdle(b0, was); }
+      } else { frameEl.hidden = true; docEl.hidden = false; previewing = false; b0.textContent = "Preview PDF"; }
+    }
+    function close() { document.removeEventListener("keydown", onKey); revoke(); modal.remove(); }
+    function onKey(e) { if (e.key !== "Escape") return; if (previewing) togglePreview(false); else if (!/rbz__doc|rbz__/.test((document.activeElement && document.activeElement.className) || "")) close(); }
     document.addEventListener("keydown", onKey);
-    modal.addEventListener("click", function (e) {
+    modal.addEventListener("click", async function (e) {
       if (e.target === modal || e.target.closest("[data-rbz-close]")) { close(); return; }
-      if (e.target.closest("[data-rbz-dl]")) { doc.save(fn); status("Rebuilt PDF downloaded.", true); return; }
+      if (e.target.closest("[data-rbz-preview]")) { togglePreview(!previewing); return; }
       if (e.target.closest("[data-rbz-regen]")) { close(); atsRebuildOpen(atsRbBusyCtx); return; }
+      var dl = e.target.closest("[data-rbz-dl]");
+      if (dl) { var was = btnBusy(dl, "Building\u2026"); try { var b = await buildFromEdits(); var fn = (String(working.name || "Resume").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "Resume") + "-Resume.pdf"; b.doc.save(fn); status("Résumé PDF downloaded.", true); } catch (er) { status("Download failed: " + ((er && er.message) || er)); } finally { btnIdle(dl, was); } return; }
+      var rc = e.target.closest("[data-rbz-recheck]");
+      if (rc) {
+        working = rbReadEditor(docEl, working);
+        var text = rbToPlainText(working), was2 = btnBusy(rc, "Checking\u2026");
+        try {
+          var level = (atsLast && atsLast.level) || atsLevel, company = (atsLast && atsLast.company) || atsState.company || "", jd = atsState.jd || "";
+          var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company), { json: true, maxTokens: 6000, temperature: 0.3 }));
+          if (res) { atsLast.res = res; atsLast.text = text; dirty = false; paintSide(); status("Re-checked \u2014 score updated.", true); }
+          else { status("The re-check came back unreadable \u2014 try again."); btnIdle(rc, was2); }
+        } catch (er2) { status("Re-check failed: " + ((er2 && er2.message) || er2)); btnIdle(rc, was2); }
+        return;
+      }
     });
   }
 
