@@ -726,6 +726,66 @@ export default {
       if (request.method === "PUT") { try { const b = await request.json(); await env.VAULT_GRANTS.put("cfg:keyring", JSON.stringify(b || {})); return json({ ok: true }, 200, cors); } catch (e) { return json({ error: "Save failed" }, 400, cors); } }
       return json({ error: "Method not allowed" }, 405, cors);
     }
+    // ---------- admin: Prepare-tool history in R2 (cross-device durability for the job-hunt tools) ----------
+    // The Prepare tab tools (ATS / cover letter / interview prep / storyteller) auto-save each run to
+    // localStorage; this mirrors them to the private VAULT bucket at prep/<tool>/<id>.json so they
+    // survive across devices/browsers. Owner-session gated. Card metadata rides in R2 customMetadata so
+    // list is a single cheap call (no body reads).
+    if (url.pathname.startsWith("/admin/prep/")) {
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT) return json({ error: "Store not configured" }, 500, cors);
+      const pSafeTool = (t) => /^[a-z]{1,16}$/.test(String(t || "")) ? String(t) : "";
+      const pSafeId = (i) => /^[A-Za-z0-9_-]{1,64}$/.test(String(i || "")) ? String(i) : "";
+      const pSafeJson = (s) => { try { return JSON.parse(s); } catch (e) { return {}; } };
+      const pSub = url.pathname.slice("/admin/prep/".length);
+      if (pSub === "list" && request.method === "GET") {
+        const tool = pSafeTool(url.searchParams.get("tool")); if (!tool) return json({ error: "Bad tool" }, 400, cors);
+        const items = [];
+        try {
+          let cursor;
+          do {
+            const r = await env.VAULT.list({ prefix: "prep/" + tool + "/", include: ["customMetadata"], cursor });
+            for (const o of r.objects) {
+              const m = o.customMetadata || {};
+              items.push({ id: m.id || o.key.slice(o.key.lastIndexOf("/") + 1).replace(/\.json$/, ""), tool: tool, kind: m.kind || "", title: m.title || "", at: (+m.at) || 0, meta: m.meta ? pSafeJson(m.meta) : {} });
+            }
+            cursor = r.truncated ? r.cursor : null;
+          } while (cursor);
+        } catch (e) { return json({ error: "List failed" }, 500, cors); }
+        items.sort((a, b) => (b.at || 0) - (a.at || 0));
+        return json({ items: items }, 200, cors);
+      }
+      if (pSub === "get" && request.method === "GET") {
+        const tool = pSafeTool(url.searchParams.get("tool")), id = pSafeId(url.searchParams.get("id"));
+        if (!tool || !id) return json({ error: "Bad args" }, 400, cors);
+        try {
+          const o = await env.VAULT.get("prep/" + tool + "/" + id + ".json");
+          if (!o) return json({ error: "Not found" }, 404, cors);
+          return new Response(await o.text(), { status: 200, headers: Object.assign({}, cors, { "Content-Type": "application/json; charset=utf-8" }) });
+        } catch (e) { return json({ error: "Get failed" }, 500, cors); }
+      }
+      if (pSub === "put" && request.method === "POST") {
+        let b; try { b = await request.json(); } catch (e) { return json({ error: "Bad body" }, 400, cors); }
+        const tool = pSafeTool(b && b.tool), id = pSafeId(b && b.id);
+        if (!tool || !id) return json({ error: "Bad entry" }, 400, cors);
+        const at = String((+(b && b.at)) || Date.now());
+        try {
+          await env.VAULT.put("prep/" + tool + "/" + id + ".json", JSON.stringify(b), {
+            httpMetadata: { contentType: "application/json; charset=utf-8" },
+            customMetadata: { id: id, kind: String((b && b.kind) || "").slice(0, 24), title: String((b && b.title) || "").slice(0, 160), at: at, meta: JSON.stringify((b && b.meta) || {}).slice(0, 400) }
+          });
+        } catch (e) { return json({ error: "Save failed" }, 500, cors); }
+        return json({ ok: true, id: id }, 200, cors);
+      }
+      if (pSub === "del" && request.method === "POST") {
+        let b; try { b = await request.json(); } catch (e) { return json({ error: "Bad body" }, 400, cors); }
+        const tool = pSafeTool(b && b.tool), id = pSafeId(b && b.id);
+        if (!tool || !id) return json({ error: "Bad args" }, 400, cors);
+        try { await env.VAULT.delete("prep/" + tool + "/" + id + ".json"); } catch (e) { return json({ error: "Delete failed" }, 500, cors); }
+        return json({ ok: true }, 200, cors);
+      }
+      return json({ error: "Not found" }, 404, cors);
+    }
     // ---------- admin: the "Full access" quick-grant the notification's Allow button emails (session-gated) ----------
     // The ONE deliberate exception to zero-knowledge: the owner uploads a full-access code here so the
     // Worker can email it on one tap. Rotatable, timeboxable, revocable (POST {revoke:true}). Curated

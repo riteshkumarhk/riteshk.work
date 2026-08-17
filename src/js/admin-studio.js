@@ -1793,16 +1793,49 @@ import { WORLD_LAND } from "./worldland.js";
   function prepId() { return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
   function prepList(tool) { var a = prepRead(PREP_HIST_KEY)[tool] || []; return a.slice().sort(function (x, y) { return (y.at || 0) - (x.at || 0); }); }
   function prepGet(tool, id) { var a = prepRead(PREP_HIST_KEY)[tool] || []; for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
-  function prepPut(tool, entry) { var all = prepRead(PREP_HIST_KEY), a = all[tool] || []; if (!entry.id) entry.id = prepId(); entry.at = Date.now(); var i = -1; a.forEach(function (e, k) { if (e.id === entry.id) i = k; }); if (i >= 0) a[i] = entry; else a.unshift(entry); all[tool] = a; prepWrite(PREP_HIST_KEY, all); try { prepCloudPut(tool, entry); } catch (e) {} return entry; }
+  function prepPutLocal(tool, entry) { var all = prepRead(PREP_HIST_KEY), a = all[tool] || []; if (!entry.id) entry.id = prepId(); if (!entry.at) entry.at = Date.now(); var i = -1; a.forEach(function (e, k) { if (e.id === entry.id) i = k; }); if (i >= 0) a[i] = entry; else a.unshift(entry); all[tool] = a; prepWrite(PREP_HIST_KEY, all); return entry; }
+  function prepPut(tool, entry) { entry.at = Date.now(); prepPutLocal(tool, entry); try { prepCloudPut(tool, entry); } catch (e) {} return entry; }
   function prepDel(tool, id) { var all = prepRead(PREP_HIST_KEY); all[tool] = (all[tool] || []).filter(function (e) { return e.id !== id; }); prepWrite(PREP_HIST_KEY, all); try { prepCloudDel(tool, id); } catch (e) {} }
   function prepDraftGet(tool) { return prepRead(PREP_DRAFT_KEY)[tool] || null; }
   function prepDraftSet(tool, draft) { var all = prepRead(PREP_DRAFT_KEY); all[tool] = draft; prepWrite(PREP_DRAFT_KEY, all); }
   var _prepSaveT = {};
   function prepAutosave(tool, getDraft) { clearTimeout(_prepSaveT[tool]); _prepSaveT[tool] = setTimeout(function () { try { prepDraftSet(tool, getDraft()); } catch (e) {} }, 600); }
   function prepAgo(ts) { var s = Math.max(0, (Date.now() - (ts || 0)) / 1000); if (s < 60) return "just now"; var m = s / 60; if (m < 60) return Math.round(m) + "m ago"; var h = m / 60; if (h < 24) return Math.round(h) + "h ago"; var d = h / 24; if (d < 7) return Math.round(d) + "d ago"; try { return new Date(ts).toLocaleDateString(); } catch (e) { return ""; } }
-  // Cloudflare sync (Phase 2) — no-ops until the Worker /admin/prep/* routes ship.
-  function prepCloudPut(tool, entry) {}
-  function prepCloudDel(tool, id) {}
+  // Cloudflare durability (Phase 2): mirror each entry to the private R2 VAULT via the Worker's
+  // owner-gated /admin/prep/* routes so history survives across devices/browsers. localStorage stays the
+  // offline-first source of truth; every call is best-effort — no owner session or an undeployed Worker
+  // just no-ops, and the tools behave exactly as before.
+  function prepSess() { try { return (typeof adminSession === "function") ? (adminSession() || "") : ""; } catch (e) { return ""; } }
+  function prepCloudPut(tool, entry) {
+    var sess = prepSess(); if (!sess || !ADMIN_WORKER) return;
+    try { fetch(ADMIN_WORKER + "/admin/prep/put", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify(entry) }).catch(function () {}); } catch (e) {}
+  }
+  function prepCloudDel(tool, id) {
+    var sess = prepSess(); if (!sess || !ADMIN_WORKER) return;
+    try { fetch(ADMIN_WORKER + "/admin/prep/del", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ tool: tool, id: id }) }).catch(function () {}); } catch (e) {}
+  }
+  // Pull a tool's remote entries and merge any new/newer ones into localStorage, then repaint (best-effort).
+  function prepCloudPull(tool, done) {
+    var sess = prepSess(); if (!sess || !ADMIN_WORKER) return;
+    try {
+      fetch(ADMIN_WORKER + "/admin/prep/list?tool=" + encodeURIComponent(tool), { headers: { Authorization: "Bearer " + sess } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !Array.isArray(d.items)) return;
+          var have = {}; prepList(tool).forEach(function (e) { have[e.id] = e.at || 0; });
+          var need = d.items.filter(function (it) { return it && it.id && (!(it.id in have) || (it.at || 0) > have[it.id]); });
+          if (!need.length) return;
+          Promise.all(need.map(function (it) {
+            return fetch(ADMIN_WORKER + "/admin/prep/get?tool=" + encodeURIComponent(tool) + "&id=" + encodeURIComponent(it.id), { headers: { Authorization: "Bearer " + sess } })
+              .then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+          })).then(function (rows) {
+            var changed = false;
+            rows.forEach(function (entry) { if (entry && entry.id) { prepPutLocal(tool, entry); changed = true; } });
+            if (changed && typeof done === "function") { try { done(); } catch (e) {} }
+          });
+        }).catch(function () {});
+    } catch (e) {}
+  }
   // Prepare tab = compact launchers; each tool opens in a dialog (full controls + history rail),
   // so the tab stays short and each tool can grow inside its own dialog.
   var PREP_TOOLS = [
@@ -1835,6 +1868,7 @@ import { WORLD_LAND } from "./worldland.js";
     modal.innerHTML = '<div class="pass__box prep-dialog__box"><button type="button" class="prep-dialog__x" data-prep-close title="Close" aria-label="Close">\u00d7</button><div class="prep-dialog__body" data-prep-body>' + render() + '</div></div>';
     (root || document.body).appendChild(modal);
     modal.__prepRender = render;
+    prepCloudPull(tool, function () { var el = (root || document).querySelector(".prep-dialog [data-" + tool + "-hist]"); if (el) el.innerHTML = (tool === "ats") ? atsHistHtml() : clHistHtml(); });
     function onEsc(e) { if (e.key === "Escape") close(); }
     function close() { document.removeEventListener("keydown", onEsc); modal.remove(); }
     modal.addEventListener("click", function (e) { if (e.target === modal || e.target.closest("[data-prep-close]")) close(); });
@@ -11186,6 +11220,7 @@ import { WORLD_LAND } from "./worldland.js";
       if (op) iprepRestore(prepGet("iprep", op.dataset.iprepHistOpen));
     });
     if (restore) iprepRestore(restore);
+    prepCloudPull("iprep", paintHist);
   }
 
   /* ---------- Whiteboard coach (design-exercise trainer) ---------- */
@@ -12274,6 +12309,7 @@ import { WORLD_LAND } from "./worldland.js";
       if (op) storyRestore(prepGet("story", op.dataset.storyHistOpen));
     });
     if (restore) storyRestore(restore); else showSetup();
+    prepCloudPull("story", paintHist);
   }
 
   /* ---------- shell / open / exit ---------- */
