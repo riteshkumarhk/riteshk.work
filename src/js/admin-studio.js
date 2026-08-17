@@ -2008,19 +2008,22 @@ import { WORLD_LAND } from "./worldland.js";
   };
   var RB_ACCENTS = ["#9a6a24", "#2f6d9a", "#585c52", "#7a3b3b", "#3f6b4b", "#454a8c", "#b0561f", "#1c1a17"];
   var RB_LAYOUTS = { single: { name: "Single" }, sidebar: { name: "2-column" }, fullbleed: { name: "Full-bleed" } };
-  var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single";
+  var RB_FONTS = { sans: { name: "Sans", css: "Helvetica, Arial, sans-serif", pdf: "helvetica" }, serif: { name: "Serif", css: "Georgia, 'Times New Roman', serif", pdf: "times" }, mono: { name: "Mono", css: "'Courier New', Courier, monospace", pdf: "courier" } };
+  var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single", atsRbFont = "sans";
   function atsRbTpl() { return RB_TPL[atsRbTplId] || RB_TPL.classic; }
   function atsRbSize() { return RB_SIZE[atsRbSizeId] || RB_SIZE.a4; }
   function atsRbDens() { return RB_DENS[atsRbDensity] || RB_DENS.normal; }
   function atsHexRgb(hex) { var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "")); if (!m) return null; var n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
   function atsRbAccentHex() { return atsRbAccent || atsRbTpl().accent; }
   function atsRbAccentRgb() { return (atsRbAccent && atsHexRgb(atsRbAccent)) || atsRbTpl().rgb; }
-  function atsRbApplyTpl(docEl) { var t = atsRbTpl(); docEl.style.setProperty("--rbz-accent", atsRbAccentHex()); docEl.style.setProperty("--rbz-sum-ff", t.sumFF); docEl.style.setProperty("--rbz-sum-style", t.sumStyle); docEl.style.setProperty("--rbz-scale", atsRbDens().scale); docEl.setAttribute("data-head", t.head); docEl.setAttribute("data-layout", atsRbLayout); }
+  function atsRbApplyTpl(docEl) { var t = atsRbTpl(); docEl.style.setProperty("--rbz-accent", atsRbAccentHex()); docEl.style.setProperty("--rbz-sum-ff", t.sumFF); docEl.style.setProperty("--rbz-sum-style", t.sumStyle); docEl.style.setProperty("--rbz-scale", atsRbDens().scale); docEl.style.setProperty("--rbz-body-ff", (RB_FONTS[atsRbFont] || RB_FONTS.sans).css); docEl.setAttribute("data-head", t.head); docEl.setAttribute("data-layout", atsRbLayout); }
   // Typeset the structured résumé at a given density (k scales type + spacing; maxBul caps bullets/role).
   function atsRbBuild(jsPDF, rb, dens) {
     var k = dens.k, maxBul = dens.maxBul;
     var SZ = atsRbSize(), TPL = atsRbTpl();
     var doc = new jsPDF({ unit: "mm", format: SZ.fmt, compress: true });
+    var BODYF = (RB_FONTS[atsRbFont] || RB_FONTS.sans).pdf;
+    if (BODYF !== "helvetica") { var _setFont = doc.setFont.bind(doc); doc.setFont = function (f, s) { return _setFont(f === "helvetica" ? BODYF : f, s); }; }
     var PW = SZ.w, PH = SZ.h, M = 14, CW = PW - M * 2;
     var INK = [28, 26, 23], MUT = [101, 92, 83], FAINT = [154, 147, 138], ACC = atsRbAccentRgb(), LINE = [225, 216, 205];
     var y = M, CX = M, CW2 = CW, colTop = M;
@@ -2351,7 +2354,8 @@ import { WORLD_LAND } from "./worldland.js";
       var dens = Object.keys(RB_DENS).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbDensity ? " is-on" : "") + '" type="button" data-density="' + id + '">' + RB_DENS[id].name + "</button>"; }).join("");
       var lays = Object.keys(RB_LAYOUTS).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbLayout ? " is-on" : "") + '" type="button" data-lay="' + id + '">' + RB_LAYOUTS[id].name + "</button>"; }).join("");
       var warn = atsRbLayout === "sidebar" ? '<div class="rbz__laywarn">Two-column can lower ATS parse accuracy. Re-check the score after switching.</div>' : "";
-      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Layout</div><div class="cl__len">' + lays + '</div>' + warn + '<div class="rbz__tplmenu-h">Accent</div><div class="rbz__swatches">' + swatches + '</div><div class="rbz__tplmenu-h">Density</div><div class="cl__len">' + dens + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + "</div>";
+      var fonts = Object.keys(RB_FONTS).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbFont ? " is-on" : "") + '" type="button" data-font="' + id + '">' + RB_FONTS[id].name + "</button>"; }).join("");
+      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Layout</div><div class="cl__len">' + lays + '</div>' + warn + '<div class="rbz__tplmenu-h">Accent</div><div class="rbz__swatches">' + swatches + '</div><div class="rbz__tplmenu-h">Font</div><div class="cl__len">' + fonts + '</div><div class="rbz__tplmenu-h">Density</div><div class="cl__len">' + dens + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + "</div>";
     }
     var onResize = schedulePaginate; window.addEventListener("resize", onResize);
     atsRbApplyTpl(docEl); renderDesign(); requestAnimationFrame(paginate); setTimeout(paginate, 350);
@@ -2443,6 +2447,7 @@ import { WORLD_LAND } from "./worldland.js";
       var _so = e.target.closest("[data-size]"); if (_so) { atsRbSizeId = _so.dataset.size; renderDesign(); paginate(); return; }
       var _ao = e.target.closest("[data-accent]"); if (_ao) { atsRbAccent = _ao.dataset.accent || ""; atsRbApplyTpl(docEl); renderDesign(); return; }
       var _de = e.target.closest("[data-density]"); if (_de) { atsRbDensity = _de.dataset.density; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); buildFromEdits(); return; }
+      var _ft = e.target.closest("[data-font]"); if (_ft) { atsRbFont = _ft.dataset.font; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); buildFromEdits(); return; }
       var _ly = e.target.closest("[data-lay]"); if (_ly) { atsRbLayout = _ly.dataset.lay; working = rbReadEditor(docEl, working); atsRbApplyTpl(docEl); reRender(); renderDesign(); paintSide(); buildFromEdits(); return; }
       if (e.target.closest("[data-rbz-preview]")) { togglePreview(!previewing); return; }
       if (e.target.closest("[data-rbz-regen]")) { close(); atsRebuildOpen(atsRbBusyCtx); return; }
