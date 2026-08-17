@@ -2008,7 +2008,7 @@ import { WORLD_LAND } from "./worldland.js";
       var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
       var _snap = { state: { mode: atsState.mode, jd: atsState.jd, url: atsState.url, company: atsState.company }, level: atsLevel, res: res, company: company, text: text };
       prepDraftSet("ats", _snap);
-      prepPut("ats", { tool: "ats", kind: "review", title: "R\u00e9sum\u00e9 reviewed", meta: { score: _sc, band: _bd, fit: (company ? company + " fit" : atsLevelName(atsLevel) + " fit") }, payload: _snap });
+      atsvSessId = prepPut("ats", { tool: "ats", kind: "review", title: "R\u00e9sum\u00e9 reviewed", meta: { score: _sc, band: _bd, fit: (company ? company + " fit" : atsLevelName(atsLevel) + " fit") }, payload: _snap }).id;
       var _hl = panel.querySelector("[data-ats-hist]"); if (_hl) _hl.innerHTML = atsHistHtml();
       if (out) out.innerHTML = "";
       atsOpenViewer();
@@ -2058,6 +2058,7 @@ import { WORLD_LAND } from "./worldland.js";
     atsLevel = p.level || atsLevel;
     atsLast = { file: null, res: p.res, level: atsLevel, company: p.company || "", text: p.text || "" };
     prepDraftSet("ats", { state: atsState, level: atsLevel, res: p.res, company: p.company || "", text: p.text || "" });
+    atsvSessId = id;
     prepRerenderDialog();
     if (p.res) atsOpenViewer();
   }
@@ -2509,28 +2510,33 @@ import { WORLD_LAND } from "./worldland.js";
   function atsRbShow(built, rb) {
     var working = rb;
     var curUrl = null, previewing = false, dirty = false;
+    var rbUndo = [rbClone(working)], rbRedo = [], rbCommitT = null;
     var modal = atsvEl("div", "rbz rbz--editor");
     modal.innerHTML =
       '<div class="rbz__bar">' +
-        '<div class="rbz__ttl"><span class="ats__badge">EDIT</span> Résumé workspace<span class="rbz__pg" data-rbz-pg></span>' +
-          '<span class="rbz__canvas cl__len" role="group" aria-label="Canvas background" title="Canvas background — Light (Enhancv-style) or Dark"><button type="button" class="cl__lenbtn" data-canvas-set="light">Light</button><button type="button" class="cl__lenbtn" data-canvas-set="dark">Dark</button></span></div>' +
+        '<div class="rbz__bar-l">' +
+          '<span class="ats__badge" data-rbz-badge>EDIT</span> <span class="rbz__title" data-rbz-title>Résumé workspace</span>' +
+          '<span class="rbz__hist" data-rbz-hist><button type="button" class="rbz__hbtn" data-rbz-undo title="Undo" disabled><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg></button><button type="button" class="rbz__hbtn" data-rbz-redo title="Redo" disabled><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg></button></span>' +
+        '</div>' +
+        '<div class="rbz__bar-c" data-rbz-center>' +
+          '<span class="rbz__pg" data-rbz-pg></span>' +
+          '<span class="rbz__canvas cl__len" role="group" aria-label="Canvas background" title="Canvas background — Light (Enhancv-style) or Dark"><button type="button" class="cl__lenbtn" data-canvas-set="light">Light</button><button type="button" class="cl__lenbtn" data-canvas-set="dark">Dark</button></span>' +
+        '</div>' +
         '<div class="rbz__tools">' +
-          '<button class="btn btn--ghost" type="button" data-rbz-design-toggle title="Show or hide the design panel">Design</button>' +
           '<button class="btn btn--ghost" type="button" data-rbz-preview>Preview PDF</button>' +
-          '<button class="btn btn--ghost" type="button" data-rbz-regen title="Discard edits &amp; let AI rebuild from scratch">\u21bb Regenerate</button>' +
           '<button class="btn btn--primary" type="button" data-rbz-dl>Download PDF \u2193</button>' +
           '<button class="atsv__tbtn atsv__x" type="button" data-rbz-close title="Close (Esc)">\u00d7</button>' +
         "</div>" +
       "</div>" +
       '<div class="rbz__body">' +
-        '<aside class="rbz__left" data-rbz-left><div class="rbz__left-h">Design</div><div class="rbz__design" data-rbz-design></div></aside>' +
+        '<aside class="rbz__side" data-rbz-side></aside>' +
         '<div class="rbz__main">' +
           '<div class="rbz__pagewrap" data-rbz-wrap>' +
             '<div class="rbz__doc" data-rbz-doc>' + atsRbEditorHtml(working) + "</div>" +
           "</div>" +
           '<iframe class="rbz__frame" data-rbz-frame title="PDF preview" hidden></iframe>' +
         "</div>" +
-        '<aside class="rbz__side" data-rbz-side></aside>' +
+        '<aside class="rbz__left" data-rbz-left><div class="rbz__left-h">Design</div><div class="rbz__design" data-rbz-design></div></aside>' +
       "</div>";
     document.body.appendChild(modal);
     var docEl = modal.querySelector("[data-rbz-doc]"), frameEl = modal.querySelector("[data-rbz-frame]"), sideEl = modal.querySelector("[data-rbz-side]"), pgEl = modal.querySelector("[data-rbz-pg]");
@@ -2624,8 +2630,16 @@ import { WORLD_LAND } from "./worldland.js";
     }
     var _rbSaveT = null;
     function rbSaveSoon() { clearTimeout(_rbSaveT); _rbSaveT = setTimeout(function () { rbSaveWorkspace(true); }, 800); }
-    function markDirty() { rbSaveSoon(); if (!dirty) { dirty = true; paintSide(); } }
+    function markDirty() { rbSaveSoon(); rbCommit(false); if (!dirty) { dirty = true; paintSide(); } }
     function reRender() { docEl.innerHTML = atsRbEditorHtml(working); paginate(); }
+    function rbUpdateHist() { var u = modal.querySelector("[data-rbz-undo]"), r = modal.querySelector("[data-rbz-redo]"); if (u) u.disabled = rbUndo.length <= 1; if (r) r.disabled = !rbRedo.length; }
+    function rbCommit(now) {
+      function take() { var snap = rbClone(rbReadEditor(docEl, working)); if (JSON.stringify(rbUndo[rbUndo.length - 1]) !== JSON.stringify(snap)) { rbUndo.push(snap); if (rbUndo.length > 60) rbUndo.shift(); rbRedo = []; rbUpdateHist(); } }
+      if (now) take(); else { clearTimeout(rbCommitT); rbCommitT = setTimeout(take, 700); }
+    }
+    function rbRestore(s) { working = rbClone(s); reRender(); dirty = true; paintSide(); rbSaveSoon(); rbUpdateHist(); buildFromEdits(); }
+    function rbUndoDo() { if (rbUndo.length <= 1) return; rbRedo.push(rbUndo.pop()); rbRestore(rbUndo[rbUndo.length - 1]); }
+    function rbRedoDo() { if (!rbRedo.length) return; var s = rbRedo.pop(); rbUndo.push(s); rbRestore(s); }
     function focusPath(path) { var el = docEl.querySelector('[data-k="' + path + '"]'); if (el) { el.focus(); try { var r = document.createRange(); r.selectNodeContents(el); r.collapse(false); var sel = getShellSel(); if (sel) { sel.removeAllRanges(); sel.addRange(r); } } catch (e) {} } }
     function getShellSel() { try { return window.getSelection(); } catch (e) { return null; } }
 
@@ -2676,20 +2690,31 @@ import { WORLD_LAND } from "./worldland.js";
 
     async function buildFromEdits() { working = rbReadEditor(docEl, working); var b = await atsRbFit(working); setPg(b.pages); return b; }
     function revoke() { if (curUrl) { try { URL.revokeObjectURL(curUrl); } catch (e) {} curUrl = null; } }
+    function rbSetBadge(b, t) { var bd = modal.querySelector("[data-rbz-badge]"), tt = modal.querySelector("[data-rbz-title]"); if (bd) bd.textContent = b; if (tt) tt.textContent = t; }
     async function togglePreview(on) {
       var b0 = modal.querySelector("[data-rbz-preview]");
       if (on) {
         var was = btnBusy(b0, "Building\u2026");
-        try { var b = await buildFromEdits(); revoke(); curUrl = String(b.doc.output("bloburl")); frameEl.src = curUrl; wrapEl.hidden = true; frameEl.hidden = false; previewing = true; btnIdle(b0, "\u2190 Back to edit"); }
+        try { var b = await buildFromEdits(); revoke(); curUrl = String(b.doc.output("bloburl")); frameEl.src = curUrl; wrapEl.hidden = true; frameEl.hidden = false; previewing = true; modal.classList.add("rbz--preview"); rbSetBadge("PDF", "Résumé preview"); btnIdle(b0, "\u2190 Back to edit"); }
         catch (e) { status("Preview failed: " + ((e && e.message) || e)); btnIdle(b0, was); }
-      } else { frameEl.hidden = true; wrapEl.hidden = false; previewing = false; b0.textContent = "Preview PDF"; paginate(); }
+      } else { frameEl.hidden = true; wrapEl.hidden = false; previewing = false; modal.classList.remove("rbz--preview"); rbSetBadge("EDIT", "Résumé workspace"); b0.textContent = "Preview PDF"; paginate(); }
     }
     function close() { try { rbSaveWorkspace(true); } catch (e) {} document.removeEventListener("keydown", onKey); window.removeEventListener("resize", onResize); revoke(); modal.remove(); }
-    function onKey(e) { if (e.key !== "Escape") return; if (previewing) togglePreview(false); else if (!/rbz__doc|rbz__/.test((document.activeElement && document.activeElement.className) || "")) close(); }
+    function onKey(e) {
+      if (e.key === "Escape") { if (previewing) togglePreview(false); else if (!/rbz__doc|rbz__/.test((document.activeElement && document.activeElement.className) || "")) close(); return; }
+      if (e.ctrlKey || e.metaKey) {
+        var ae = document.activeElement; if (ae && ae.isContentEditable && docEl.contains(ae)) return;
+        var k = (e.key || "").toLowerCase();
+        if (k === "z" && !e.shiftKey) { e.preventDefault(); rbUndoDo(); }
+        else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); rbRedoDo(); }
+      }
+    }
     document.addEventListener("keydown", onKey);
     modal.addEventListener("input", function (e) { if (e.target && e.target.matches && e.target.matches("[data-accent-input]")) { atsRbAccent = e.target.value; atsRbApplyTpl(docEl); var cs = modal.querySelector(".rbz__sw--custom"); if (cs) cs.style.background = e.target.value; } });
     modal.addEventListener("click", async function (e) {
       if (e.target === modal || e.target.closest("[data-rbz-close]")) { close(); return; }
+      if (e.target.closest("[data-rbz-undo]")) { rbUndoDo(); return; }
+      if (e.target.closest("[data-rbz-redo]")) { rbRedoDo(); return; }
       if (e.target.closest("[data-rbz-design-toggle]")) { modal.querySelector(".rbz__body").classList.toggle("is-noleft"); schedulePaginate(); return; }
       var _cv = e.target.closest("[data-canvas-set]"); if (_cv) { setCanvas(_cv.dataset.canvasSet); return; }
       var _to = e.target.closest("[data-tpl]"); if (_to) { atsRbTplId = _to.dataset.tpl; atsRbApplyTpl(docEl); renderDesign(); return; }
@@ -2781,6 +2806,31 @@ import { WORLD_LAND } from "./worldland.js";
   }
   function atsvEl(t, c) { var e = document.createElement(t); if (c) e.className = c; return e; }
 
+  var atsvSessId = null; // the review history entry the viewer is showing, so Regenerate updates it in place
+  async function atsvRecheck(ctx) {
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { atsvRecheck(ctx); }); return; }
+    var btn = ctx.modal.querySelector("[data-atsv-regen]"); if (btn) { btn.disabled = true; btn.classList.add("is-busy"); }
+    status("Re-running the ATS check\u2026");
+    try {
+      var text = (atsLast && atsLast.text) || "";
+      if (!text && ctx.file) text = ((await fbExtractFile(ctx.file)) || "").replace(/\s+/g, " ").trim();
+      if (!text || text.length < 40) throw new Error("Couldn\u2019t read enough r\u00e9sum\u00e9 text to re-check.");
+      var level = ctx.level || atsLevel, company = (atsLast && atsLast.company) || atsState.company || "", jd = atsState.jd || "";
+      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company), { json: true, maxTokens: 6000, temperature: 0.3 }));
+      if (!res) throw new Error("The check came back unreadable \u2014 try again.");
+      ctx.res = res; if (atsLast) { atsLast.res = res; atsLast.text = text; }
+      var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
+      var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
+      var _snap = { state: { mode: atsState.mode, jd: atsState.jd, url: atsState.url, company: atsState.company }, level: level, res: res, company: company, text: text };
+      prepDraftSet("ats", _snap);
+      atsvSessId = prepPut("ats", { id: atsvSessId, tool: "ats", kind: "review", title: "R\u00e9sum\u00e9 reviewed", meta: { score: _sc, band: _bd, fit: (company ? company + " fit" : atsLevelName(level) + " fit") }, payload: _snap }).id;
+      var _hl = (root || document).querySelector("[data-ats-hist]"); if (_hl) _hl.innerHTML = atsHistHtml();
+      await atsvBuild(ctx, true);
+      status("Regenerated \u2014 fresh fixes.", true);
+    } catch (e) { status("Regenerate failed: " + ((e && e.message) || e)); }
+    if (btn) { btn.disabled = false; btn.classList.remove("is-busy"); }
+  }
+
   async function atsOpenViewer() {
     if (!atsLast || !atsLast.res) { status("Run an ATS check first."); return; }
     var res = atsLast.res, file = atsLast.file, level = atsLast.level || atsLevel;
@@ -2789,6 +2839,7 @@ import { WORLD_LAND } from "./worldland.js";
     modal.innerHTML =
       '<div class="atsv__bar">' +
         '<div class="atsv__ttl"><span class="ats__badge">ATS</span> Résumé review <span class="atsv__lvl">' + escHtml(atsLevelName(level)) + '</span></div>' +
+        '<div class="atsv__mid"><button class="atsv__regen" type="button" data-atsv-regen title="Re-run the ATS check for fresh fixes"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Regenerate</button></div>' +
         '<div class="atsv__tools">' +
           '<span class="atsv__pageno" data-atsv-pageno></span>' +
           '<button class="atsv__tbtn" data-atsv-zoom="out" title="Zoom out">−</button>' +
@@ -2798,8 +2849,8 @@ import { WORLD_LAND } from "./worldland.js";
         '</div>' +
       '</div>' +
       '<div class="atsv__body">' +
-        '<div class="atsv__stage" data-atsv-stage><div class="atsv__loading">Rendering your résumé…</div></div>' +
         '<div class="atsv__rail" data-atsv-rail></div>' +
+        '<div class="atsv__stage" data-atsv-stage><div class="atsv__loading">Rendering your résumé…</div></div>' +
       '</div>';
     document.body.appendChild(modal);
     function onKey(e) { if (e.key === "Escape") close(); }
@@ -2957,6 +3008,7 @@ import { WORLD_LAND } from "./worldland.js";
         atsvBuild(ctx, false);
       });
     });
+    var _rg = modal.querySelector("[data-atsv-regen]"); if (_rg) _rg.addEventListener("click", function () { atsvRecheck(ctx); });
   }
   function atsvUpdatePageNo(ctx) {
     var pn = ctx.modal.querySelector("[data-atsv-pageno]"); if (!pn) return;
