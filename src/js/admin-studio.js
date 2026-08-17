@@ -1803,6 +1803,44 @@ import { WORLD_LAND } from "./worldland.js";
   // Cloudflare sync (Phase 2) — no-ops until the Worker /admin/prep/* routes ship.
   function prepCloudPut(tool, entry) {}
   function prepCloudDel(tool, id) {}
+  // Prepare tab = compact launchers; each tool opens in a dialog (full controls + history rail),
+  // so the tab stays short and each tool can grow inside its own dialog.
+  var PREP_TOOLS = [
+    ["ats", "ATS", "ATS r\u00e9sum\u00e9 check", "Is your r\u00e9sum\u00e9 parseable, and tuned for the level or a specific job?"],
+    ["cl", "CL", "Cover letter builder", "A letter grounded in your real work \u2014 from a job link or the JD."],
+    ["iprep", "IQ", "Interview prep", "Likely questions \u2014 on a project or your whole portfolio \u2014 with suggested answers."],
+    ["story", "DS", "Design storyteller", "Turn a case study into a presentation \u2014 angles, a script, the questions it invites."],
+    ["wb", "WB", "Whiteboard coach", "Rehearse the live exercise \u2014 a prompt, a timed game-plan, then coaching or a mock."]
+  ];
+  function wbHasSession() { try { return !!localStorage.getItem(WB_SESS_KEY); } catch (e) { return false; } }
+  function prepLauncherHtml() {
+    return '<div class="prep-rows">' + PREP_TOOLS.map(function (r) {
+      var n = r[0] === "wb" ? (wbHasSession() ? 1 : 0) : prepList(r[0]).length;
+      return '<div class="prep-row" role="button" tabindex="0" data-act="prep-open" data-tool="' + r[0] + '">' +
+        '<span class="ats__badge prep-row__b">' + r[1] + '</span>' +
+        '<span class="prep-row__x"><b>' + escHtml(r[2]) + '</b><span>' + escHtml(r[3]) + '</span></span>' +
+        (n ? '<span class="prep-row__n">' + n + ' saved</span>' : '') +
+        '<span class="prep-row__go" aria-hidden="true">\u2192</span>' +
+        '</div>';
+    }).join("") + '</div>';
+  }
+  function prepOpen(tool) {
+    if (tool === "iprep") { iprepModal(); return; }
+    if (tool === "story") { storyModal(); return; }
+    if (tool === "wb") { wbModal(); return; }
+    var render = tool === "ats" ? function () { return atsPanelHtml(!!(data.contact && data.contact.resume)); } : tool === "cl" ? function () { return clPanelHtml(); } : null;
+    if (!render) return;
+    var modal = document.createElement("div");
+    modal.className = "pass pass--wide prep-dialog";
+    modal.innerHTML = '<div class="pass__box prep-dialog__box"><button type="button" class="prep-dialog__x" data-prep-close title="Close" aria-label="Close">\u00d7</button><div class="prep-dialog__body" data-prep-body>' + render() + '</div></div>';
+    (root || document.body).appendChild(modal);
+    modal.__prepRender = render;
+    function onEsc(e) { if (e.key === "Escape") close(); }
+    function close() { document.removeEventListener("keydown", onEsc); modal.remove(); }
+    modal.addEventListener("click", function (e) { if (e.target === modal || e.target.closest("[data-prep-close]")) close(); });
+    document.addEventListener("keydown", onEsc);
+  }
+  function prepRerenderDialog() { var m = (root || document).querySelector(".prep-dialog"); if (m && m.__prepRender) { var b = m.querySelector("[data-prep-body]"); if (b) b.innerHTML = m.__prepRender(); } }
 
   /* ---------- ATS résumé check (Contact tab, beside the résumé upload) ---------- */
   var _atsD0 = prepDraftGet("ats") || {};
@@ -1975,7 +2013,7 @@ import { WORLD_LAND } from "./worldland.js";
     atsLevel = p.level || atsLevel;
     atsLast = { file: null, res: p.res, level: atsLevel, company: p.company || "", text: p.text || "" };
     prepDraftSet("ats", { state: atsState, level: atsLevel, res: p.res, company: p.company || "", text: p.text || "" });
-    renderBody();
+    prepRerenderDialog();
     if (p.res) atsOpenViewer();
   }
 
@@ -4866,8 +4904,7 @@ import { WORLD_LAND } from "./worldland.js";
     ai() {
       let html = secHead("Prepare",
         "AI-assisted job-hunt tools \u2014 ATS r\u00e9sum\u00e9 check, cover letters, interview prep and more. Connect your AI provider once in <b>\u22EF \u2192 AI settings</b>; keys stay in this browser and never touch your published site.");
-      const resumeSet = !!(data.contact && data.contact.resume);
-      html += atsPanelHtml(resumeSet) + clPanelHtml() + iprepPanelHtml() + storyPanelHtml() + wbPanelHtml();
+      html += prepLauncherHtml();
       return html;
     },
     autofill() {
@@ -7199,6 +7236,7 @@ import { WORLD_LAND } from "./worldland.js";
       }, function () { saveDraft(true); renderL2(); });
       return;
     }
+    if (act === "prep-open") { prepOpen(b.dataset.tool); return; }
     if (act === "wb-open") { wbModal(); return; }
     if (act === "iprep-open-ai") { iprepModal(); return; }
     if (act === "story-open-ai") { storyModal(); return; }
@@ -10989,7 +11027,7 @@ import { WORLD_LAND } from "./worldland.js";
     clLevel = p.level || clLevel;
     clLast = p.letter || "";
     prepDraftSet("cl", { state: clState, level: clLevel, letter: clLast });
-    renderBody();
+    prepRerenderDialog();
   }
 
   function iprepModal(i) {
