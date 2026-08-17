@@ -1570,22 +1570,36 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__break-lbl { position: absolute; left: 50%; top: -.66rem; transform: translateX(-50%); background: #fff; border: 1px solid #e1d8cd; border-radius: 999px; padding: .06rem .55rem; font-family: var(--mono, monospace); font-size: .56rem; letter-spacing: .09em; text-transform: uppercase; color: #9a938a; white-space: nowrap; }
 .rbz__frame { width: 820px; max-width: 100%; height: calc(100vh - 120px); border: 0; border-radius: 3px; background: #525659; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
 /* the editable A4 document — mirrors the exported PDF (white page, ink, helvetica) */
-.rbz__doc { width: 100%; max-width: 100%; background: #fff; color: #1c1a17; border-radius: 3px; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); padding: 3.1rem 3.3rem 3.4rem; font-family: Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.5; }
+.rbz__doc { --rbz-accent: #9a6a24; --rbz-sum-ff: Georgia, "Times New Roman", serif; --rbz-sum-style: italic; width: 100%; max-width: 100%; background: #fff; color: #1c1a17; border-radius: 3px; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); padding: 3.1rem 3.3rem 3.4rem; font-family: Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.5; }
 .rbz__doc [contenteditable] { outline: none; border-radius: 3px; transition: box-shadow .12s, background .12s; }
 .rbz__doc [contenteditable]:hover { box-shadow: inset 0 0 0 1px rgba(154, 106, 36, .3); }
 .rbz__doc [contenteditable]:focus { box-shadow: inset 0 0 0 1.5px var(--accent, #9a6a24); background: rgba(216, 166, 87, .07); }
 .rbz__doc [contenteditable]:empty:before { content: attr(data-ph); color: #bcb5aa; pointer-events: none; }
 .rbz__hd { border-bottom: 1.5px solid #1c1a17; padding-bottom: .7rem; }
 .rbz__name { font-size: 1.95rem; font-weight: 700; letter-spacing: -.01em; }
-.rbz__title { font-size: .74rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #9a6a24; margin-top: .12rem; }
+.rbz__title { font-size: .74rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--rbz-accent, #9a6a24); margin-top: .12rem; }
 .rbz__contact { display: flex; flex-wrap: wrap; gap: .15rem .55rem; margin-top: .55rem; font-size: .78rem; color: #655c53; }
 .rbz__cbit { position: relative; }
 .rbz__cbit:not(:last-child):after { content: "\00b7"; margin-left: .55rem; color: #bcb5aa; }
 .rbz__sec { margin-top: 1.25rem; }
 .rbz__sec--sum { margin-top: 1rem; }
-.rbz__sum { font-family: Georgia, "Times New Roman", serif; font-style: italic; font-size: 1.02rem; line-height: 1.45; color: #1c1a17; }
+.rbz__sum { font-family: var(--rbz-sum-ff, Georgia, "Times New Roman", serif); font-style: var(--rbz-sum-style, italic); font-size: 1.02rem; line-height: 1.45; color: #1c1a17; }
 .rbz__sechd { display: flex; align-items: center; gap: .4rem; border-bottom: 1px solid #e1d8cd; padding-bottom: .22rem; margin-bottom: .55rem; }
-.rbz__sectitle { flex: 1; font-size: .7rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: #9a6a24; }
+.rbz__sectitle { flex: 1; font-size: .7rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--rbz-accent, #9a6a24); }
+/* template heading treatments + the Templates picker popover */
+.rbz__doc[data-head="bar"] .rbz__sechd { border-bottom: 2px solid var(--rbz-accent, #9a6a24); }
+.rbz__doc[data-head="plain"] .rbz__sechd { border-bottom: 0; padding-bottom: .05rem; }
+.rbz__doc[data-head="plain"] .rbz__sectitle { font-size: .8rem; color: #1c1a17; }
+.rbz__tplwrap { position: relative; display: inline-flex; }
+.rbz__tplmenu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 5; width: 232px; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 10px; padding: .7rem; box-shadow: 0 12px 30px rgba(0, 0, 0, .4); }
+.rbz__tplmenu[hidden] { display: none; }
+.rbz__tplmenu-h { font-family: var(--mono, monospace); font-size: .6rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text-faint); margin: 0 0 .4rem; }
+.rbz__tplrow + .rbz__tplmenu-h { margin-top: .75rem; }
+.rbz__tplrow { display: flex; flex-direction: column; gap: .3rem; }
+.rbz__tplopt { display: flex; align-items: center; gap: .55rem; padding: .42rem .5rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); cursor: pointer; font-size: .82rem; text-align: left; }
+.rbz__tplopt:hover { border-color: var(--accent); }
+.rbz__tplopt.is-on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.rbz__tplsw { width: 15px; height: 15px; border-radius: 4px; flex: 0 0 auto; border: 1px solid rgba(0, 0, 0, .15); }
 .rbz__grip { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; padding: 0; border: 0; background: none; color: #c9c1b4; cursor: grab; border-radius: 4px; opacity: .5; transition: opacity .12s, color .12s, background .12s; }
 .rbz__sechd:hover .rbz__grip { opacity: 1; }
 .rbz__grip:hover { color: #9a6a24; background: rgba(216, 166, 87, .12); }
@@ -1601,12 +1615,12 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__xphd { display: flex; align-items: baseline; gap: .1rem; flex-wrap: wrap; }
 .rbz__role { font-weight: 700; font-size: .96rem; }
 .rbz__at { color: #bcb5aa; margin: 0 .15rem; }
-.rbz__org { display: block; color: #9a6a24; font-size: .92rem; font-weight: 600; margin-top: .02rem; }
+.rbz__org { display: block; color: var(--rbz-accent, #9a6a24); font-size: .92rem; font-weight: 600; margin-top: .02rem; }
 .rbz__meta { display: flex; flex-wrap: wrap; gap: .1rem .7rem; margin: .12rem 0 .3rem; font-size: .66rem; letter-spacing: .05em; text-transform: uppercase; color: #9a938a; }
 .rbz__bl { margin: .15rem 0; padding-left: 1.05rem; list-style: none; }
 .rbz__bl li { position: relative; font-size: .855rem; line-height: 1.42; color: #3a352f; margin-bottom: .18rem; display: flex; align-items: flex-start; }
 .rbz__bltext { flex: 1; }
-.rbz__bl li:before { content: "\2013"; color: #9a6a24; position: absolute; left: -1.05rem; }
+.rbz__bl li:before { content: "\2013"; color: var(--rbz-accent, #9a6a24); position: absolute; left: -1.05rem; }
 .rbz__skg { display: flex; gap: .5rem; margin-bottom: .3rem; font-size: .86rem; }
 .rbz__sklabel { font-weight: 700; white-space: nowrap; }
 .rbz__skitems { flex: 1; color: #3a352f; }

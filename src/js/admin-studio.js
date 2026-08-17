@@ -1998,12 +1998,20 @@ import { WORLD_LAND } from "./worldland.js";
     });
     return rb;
   }
+  // ---- resume workspace templates (look & feel) + page size; one model, restyled ----
+  var RB_TPL = { classic: { name: "Classic", accent: "#9a6a24", rgb: [154, 106, 36], head: "ruled", sumFF: "Georgia, 'Times New Roman', serif", sumStyle: "italic", pdfSum: "times", pdfSumStyle: "italic" }, modern: { name: "Modern", accent: "#2f6d9a", rgb: [47, 109, 154], head: "bar", sumFF: "Helvetica, Arial, sans-serif", sumStyle: "normal", pdfSum: "helvetica", pdfSumStyle: "normal" }, compact: { name: "Compact", accent: "#585c52", rgb: [88, 92, 82], head: "plain", sumFF: "Helvetica, Arial, sans-serif", sumStyle: "normal", pdfSum: "helvetica", pdfSumStyle: "normal" } };
+  var RB_SIZE = { a4: { name: "A4", fmt: "a4", w: 210, h: 297 }, letter: { name: "US Letter", fmt: "letter", w: 215.9, h: 279.4 } };
+  var atsRbTplId = "classic", atsRbSizeId = "a4";
+  function atsRbTpl() { return RB_TPL[atsRbTplId] || RB_TPL.classic; }
+  function atsRbSize() { return RB_SIZE[atsRbSizeId] || RB_SIZE.a4; }
+  function atsRbApplyTpl(docEl) { var t = atsRbTpl(); docEl.style.setProperty("--rbz-accent", t.accent); docEl.style.setProperty("--rbz-sum-ff", t.sumFF); docEl.style.setProperty("--rbz-sum-style", t.sumStyle); docEl.setAttribute("data-head", t.head); }
   // Typeset the structured résumé at a given density (k scales type + spacing; maxBul caps bullets/role).
   function atsRbBuild(jsPDF, rb, dens) {
     var k = dens.k, maxBul = dens.maxBul;
-    var doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
-    var PW = 210, PH = 297, M = 14, CW = PW - M * 2;
-    var INK = [28, 26, 23], MUT = [101, 92, 83], FAINT = [154, 147, 138], ACC = [154, 106, 36], LINE = [225, 216, 205];
+    var SZ = atsRbSize(), TPL = atsRbTpl();
+    var doc = new jsPDF({ unit: "mm", format: SZ.fmt, compress: true });
+    var PW = SZ.w, PH = SZ.h, M = 14, CW = PW - M * 2;
+    var INK = [28, 26, 23], MUT = [101, 92, 83], FAINT = [154, 147, 138], ACC = TPL.rgb, LINE = [225, 216, 205];
     var y = M;
     var P = function (s) { return rpdfPlain(s); };
     function ink() { doc.setTextColor(INK[0], INK[1], INK[2]); }
@@ -2012,7 +2020,7 @@ import { WORLD_LAND } from "./worldland.js";
     function acc() { doc.setTextColor(ACC[0], ACC[1], ACC[2]); }
     function rule(yy) { doc.setDrawColor(LINE[0], LINE[1], LINE[2]); doc.setLineWidth(0.2); doc.line(M, yy, PW - M, yy); }
     function need(h) { if (y + h > PH - M - 8) { doc.addPage(); y = M; } }
-    function sec(t) { if (!t) return; need(12 * k); acc(); doc.setFont("helvetica", "bold"); doc.setFontSize(8 * k); doc.setCharSpace(0.5); doc.text(String(P(t)).toUpperCase(), M, y); doc.setCharSpace(0); y += 2 * k; rule(y); y += 4.2 * k; }
+    function sec(t) { if (!t) return; need(12 * k); acc(); doc.setFont("helvetica", "bold"); doc.setFontSize(8 * k); doc.setCharSpace(0.5); doc.text(String(P(t)).toUpperCase(), M, y); doc.setCharSpace(0); y += 2 * k; if (TPL.head === "bar") { doc.setDrawColor(ACC[0], ACC[1], ACC[2]); doc.setLineWidth(0.5); doc.line(M, y, PW - M, y); } else if (TPL.head !== "plain") { rule(y); } y += 4.2 * k; }
 
     ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(21 * k); doc.text(P(rb.name || "Your Name"), M, y + 6 * k); y += 6 * k;
     if (rb.title) { y += 5 * k; acc(); doc.setFont("helvetica", "bold"); doc.setFontSize(8 * k); doc.setCharSpace(0.4); doc.text(P(rb.title).toUpperCase(), M, y); doc.setCharSpace(0); }
@@ -2034,7 +2042,7 @@ import { WORLD_LAND } from "./worldland.js";
     }
     y += 3 * k; doc.setDrawColor(INK[0], INK[1], INK[2]); doc.setLineWidth(0.4); doc.line(M, y, PW - M, y); y += 6 * k;
 
-    if (rb.summary) { ink(); doc.setFont("times", "italic"); doc.setFontSize(11.5 * k); var sl = doc.splitTextToSize(P(rb.summary), CW); doc.text(sl, M, y); y += sl.length * 5.2 * k + 4 * k; }
+    if (rb.summary) { ink(); doc.setFont(TPL.pdfSum, TPL.pdfSumStyle); doc.setFontSize(11.5 * k); var sl = doc.splitTextToSize(P(rb.summary), CW); doc.text(sl, M, y); y += sl.length * 5.2 * k + 4 * k; }
 
     rb.sections.forEach(function (s) {
       if (s.kind === "experience") {
@@ -2245,6 +2253,7 @@ import { WORLD_LAND } from "./worldland.js";
       '<div class="rbz__bar">' +
         '<div class="rbz__ttl"><span class="ats__badge">EDIT</span> Résumé workspace<span class="rbz__pg" data-rbz-pg></span></div>' +
         '<div class="rbz__tools">' +
+          '<div class="rbz__tplwrap"><button class="btn btn--ghost" type="button" data-rbz-tpl>Templates</button><div class="rbz__tplmenu" data-rbz-tplmenu hidden></div></div>' +
           '<button class="btn btn--ghost" type="button" data-rbz-preview>Preview PDF</button>' +
           '<button class="btn btn--ghost" type="button" data-rbz-regen title="Discard edits &amp; let AI rebuild from scratch">\u21bb Regenerate</button>' +
           '<button class="btn btn--primary" type="button" data-rbz-dl>Download PDF \u2193</button>' +
@@ -2268,7 +2277,7 @@ import { WORLD_LAND } from "./worldland.js";
     function paginate() {
       if (!docEl || wrapEl.hidden) return;
       var w = docEl.offsetWidth; if (!w) return;
-      var pageH = w * 297 / 210;
+      var _sz = atsRbSize(), pageH = w * _sz.h / _sz.w;
       docEl.style.minHeight = pageH + "px";
       var n = Math.max(1, Math.ceil((docEl.offsetHeight - 2) / pageH));
       var html = "";
@@ -2276,8 +2285,14 @@ import { WORLD_LAND } from "./worldland.js";
       breaksEl.innerHTML = html;
     }
     function schedulePaginate() { clearTimeout(paginateT); paginateT = setTimeout(paginate, 160); }
+    function renderTplMenu() {
+      var m = modal.querySelector("[data-rbz-tplmenu]"); if (!m) return;
+      var opts = Object.keys(RB_TPL).map(function (id) { var t = RB_TPL[id]; return '<button class="rbz__tplopt' + (id === atsRbTplId ? " is-on" : "") + '" type="button" data-tpl="' + id + '"><span class="rbz__tplsw" style="background:' + t.accent + '"></span>' + t.name + "</button>"; }).join("");
+      var sizes = Object.keys(RB_SIZE).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbSizeId ? " is-on" : "") + '" type="button" data-size="' + id + '">' + RB_SIZE[id].name + "</button>"; }).join("");
+      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + "</div>";
+    }
     var onResize = schedulePaginate; window.addEventListener("resize", onResize);
-    requestAnimationFrame(paginate); setTimeout(paginate, 350);
+    atsRbApplyTpl(docEl); requestAnimationFrame(paginate); setTimeout(paginate, 350);
 
     function setPg(p) { var ok = p <= 2; pgEl.className = "rbz__pg " + (ok ? "is-ok" : "is-warn"); pgEl.textContent = ok ? "\u2713 " + p + " page" + (p > 1 ? "s" : "") : "\u26A0 " + p + " pages"; }
     setPg(built.pages);
@@ -2337,6 +2352,11 @@ import { WORLD_LAND } from "./worldland.js";
     document.addEventListener("keydown", onKey);
     modal.addEventListener("click", async function (e) {
       if (e.target === modal || e.target.closest("[data-rbz-close]")) { close(); return; }
+      var _menu = modal.querySelector("[data-rbz-tplmenu]");
+      if (_menu && !_menu.hidden && !e.target.closest("[data-rbz-tplmenu]") && !e.target.closest("[data-rbz-tpl]")) _menu.hidden = true;
+      if (e.target.closest("[data-rbz-tpl]")) { if (_menu) { _menu.hidden = !_menu.hidden; if (!_menu.hidden) renderTplMenu(); } return; }
+      var _to = e.target.closest("[data-tpl]"); if (_to) { atsRbTplId = _to.dataset.tpl; atsRbApplyTpl(docEl); renderTplMenu(); return; }
+      var _so = e.target.closest("[data-size]"); if (_so) { atsRbSizeId = _so.dataset.size; renderTplMenu(); paginate(); return; }
       if (e.target.closest("[data-rbz-preview]")) { togglePreview(!previewing); return; }
       if (e.target.closest("[data-rbz-regen]")) { close(); atsRebuildOpen(atsRbBusyCtx); return; }
       var dl = e.target.closest("[data-rbz-dl]");
