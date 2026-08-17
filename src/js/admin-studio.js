@@ -12044,16 +12044,29 @@ import { WORLD_LAND } from "./worldland.js";
   }
   function storyRenderQuestions(box, qs) {
     box.innerHTML = qs.map(function (q, idx) {
+      var hasA = q.answer && String(q.answer).trim();
       return '<div class="story__q" data-qi="' + idx + '">' +
         '<div class="story__q-top">' + (q.role ? '<span class="story__q-role">' + escHtml(q.role) + "</span>" : "<span></span>") + '<span class="story__q-n">' + (idx + 1) + "</span></div>" +
         '<div class="story__q-text">' + escHtml(q.q || "") + "</div>" +
         (q.why ? '<div class="story__q-why">' + escHtml(q.why) + "</div>" : "") +
-        '<div class="story__q-a" hidden></div>' +
-        '<div class="story__q-act"><button class="btn btn--ghost" data-story-qans="' + idx + '">\u2728 Answer</button></div>' +
+        '<div class="story__q-a"' + (hasA ? "" : " hidden") + ">" + (hasA ? iprepSafeHtml(q.answer) : "") + "</div>" +
+        '<div class="story__q-act">' + (hasA ? '<button class="btn btn--ghost" data-story-qans="' + idx + '">\u21bb Redo</button><button class="btn btn--ghost" data-story-qcopy="' + idx + '">Copy</button>' : '<button class="btn btn--ghost" data-story-qans="' + idx + '">\u2728 Answer</button>') + "</div>" +
         "</div>";
     }).join("");
   }
-  function storyModal(i) {
+  function storyHistHtml() {
+    var items = prepList("story");
+    var head = '<div class="prep-hist__h">Saved stories</div>';
+    if (!items.length) return head + '<div class="prep-hist__empty">Your story angles save here automatically \u2014 come back and pick up any set, script and answers included.</div>';
+    return head + '<div class="prep-hist__list">' + items.map(function (e) {
+      var m = e.meta || {};
+      return '<div class="prep-h prep-h--txt" role="button" tabindex="0" data-story-hist-open="' + e.id + '">' +
+        '<div class="prep-h__x"><b>' + escHtml(e.title || "Story angles") + '</b><i>' + escHtml((m.count ? m.count + " angle" + (m.count > 1 ? "s" : "") : "set") + (m.dur ? " \u00b7 " + m.dur : "")) + '</i><em>' + prepAgo(e.at) + '</em></div>' +
+        '<span class="prep-h__del" data-story-hist-del="' + e.id + '" title="Delete" aria-label="Delete">\u00d7</span>' +
+        '</div>';
+    }).join("") + '</div>';
+  }
+  function storyModal(i, restore) {
     var fromAi = (i == null);
     var stWorks = (data.work || []).filter(function (x) { return x && !x.encWork; });
     var w = fromAi ? (stWorks[0] || null) : data.work[i]; if (!w) return;
@@ -12061,11 +12074,13 @@ import { WORLD_LAND } from "./worldland.js";
     var g = storySt(fromAi ? "__ai__" : w.id);
     if (!g.qrole) g.qrole = "any";
     var themes = [], curTi = -1, questionsArr = [];
+    var sessId = (restore && restore.id) || null;
     var modal = document.createElement("div");
     modal.className = "pass pass--wide story-modal";
     modal.innerHTML =
       '<div class="pass__box"><div class="pass__title">\uD83D\uDCD6 Design storyteller' + (fromAi ? "" : " \u2014 " + escHtml(w.title || "case study")) + "</div>" +
       '<div class="pass__sub">Turn ' + (fromAi ? "a" : "this") + ' case study into a presentation. Pick how long you\u2019ll have and who\u2019s in the room \u2014 get a few story angles, then open one for a beat-by-beat script and the questions it invites.</div>' +
+      '<div class="ats__cols story__cols"><div class="ats__main">' +
       '<div class="story__setup">' +
         (fromAi ? '<div class="af"><label class="af__label">Case study</label><select class="story__pick">' + stWorks.map(function (pw, idx) { return '<option value="' + idx + '">' + escHtml(pw.title || ("Project " + (idx + 1))) + "</option>"; }).join("") + "</select></div>" : "") +
         '<div class="af"><label class="af__label">How long to present</label><div class="story__opts">' +
@@ -12097,6 +12112,7 @@ import { WORLD_LAND } from "./worldland.js";
         "</div>" +
       "</div>" +
       '<div class="pass__err"></div>' +
+      '</div><aside class="prep-hist" data-story-hist>' + storyHistHtml() + '</aside></div>' +
       '<div class="pass__actions story__foot">' +
         '<button class="btn btn--ghost" data-cancel>Close</button>' +
         '<button class="btn btn--ghost" data-story-back hidden>\u2190 Change setup</button>' +
@@ -12158,7 +12174,9 @@ import { WORLD_LAND } from "./worldland.js";
         if (!raw || !raw.length) throw new Error("No angles came back \u2014 try again.");
         themes = raw.filter(function (t) { return t && (t.title || t.hook); });
         storyRenderThemes(themesBox, themes);
+        sessId = null;
         showThemes();
+        persistSession();
       } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t find story angles."; }
       btnIdle(runBtn, "Find story angles");
     });
@@ -12176,6 +12194,7 @@ import { WORLD_LAND } from "./worldland.js";
         if (switching) { questionsArr = []; qlist.innerHTML = ""; qgenBtn.textContent = "Generate questions"; }
         l2Title.textContent = t.title || "Your story";
         showL2(); if (l2Body) l2Body.scrollTop = 0;
+        persistSession();
       } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t script that story."; }
       finally { btnIdle(srcBtn, was); }
     }
@@ -12197,6 +12216,7 @@ import { WORLD_LAND } from "./worldland.js";
         if (!raw || !raw.length) throw new Error("No questions came back \u2014 try again.");
         questionsArr = raw.map(function (q) { return typeof q === "string" ? { q: q } : (q && q.q ? { q: q.q, role: q.role, why: q.why } : null); }).filter(Boolean);
         storyRenderQuestions(qlist, questionsArr);
+        persistSession();
       } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t generate questions."; }
       btnIdle(qgenBtn, questionsArr.length ? "Regenerate" : "Generate questions");
     });
@@ -12211,6 +12231,7 @@ import { WORLD_LAND } from "./worldland.js";
           var html = await aiText(aiCfg("txt"), storyQAnsSystem(g.tone, q.role || storyRoleName(g.qrole)), storyQAnsUser(q.q, g.__ctx || storyContext(w), themes[curTi]), { maxTokens: 700, temperature: 0.6 });
           html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
           aEl.innerHTML = iprepSafeHtml(html); aEl.hidden = false;
+          q.answer = aEl.innerHTML; persistSession();
           card.querySelector(".story__q-act").innerHTML = '<button class="btn btn--ghost" data-story-qans="' + idx + '">\u21bb Redo</button><button class="btn btn--ghost" data-story-qcopy="' + idx + '">Copy</button>';
         } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t draft an answer."; btnIdle(ab, was); }
         return;
@@ -12218,7 +12239,41 @@ import { WORLD_LAND } from "./worldland.js";
       var cb = e.target.closest("[data-story-qcopy]");
       if (cb) { var i2 = +cb.dataset.storyQcopy; var c2 = qlist.querySelector('.story__q[data-qi="' + i2 + '"]'); var a2 = c2 && c2.querySelector(".story__q-a"); var t2 = a2 ? a2.innerText : ""; if (navigator.clipboard && t2) navigator.clipboard.writeText(t2).then(function () { cb.textContent = "Copied"; setTimeout(function () { cb.textContent = "Copy"; }, 1400); }).catch(function () {}); }
     });
-    showSetup();
+    function persistSession() {
+      if (!themes.length) return;
+      var cur = null;
+      if (curTi >= 0 && taleBox.__script) cur = { ti: curTi, title: taleBox.__title || "", script: taleBox.__script, questions: questionsArr };
+      var saved = prepPut("story", { id: sessId, tool: "story", kind: "story", title: (w && w.title) || "Story angles", meta: { count: themes.length, dur: storyDurLabel(g.dur) }, payload: { tone: g.tone, dur: g.dur, qrole: g.qrole, themes: themes, cur: cur } });
+      sessId = saved.id; paintHist();
+    }
+    function paintHist() { var r = modal.querySelector("[data-story-hist]"); if (r) r.innerHTML = storyHistHtml(); }
+    function storyRestore(entry) {
+      if (!entry || !entry.payload) return;
+      var p = entry.payload;
+      if (p.tone) g.tone = p.tone; if (p.dur) g.dur = p.dur; if (p.qrole) g.qrole = p.qrole;
+      themes = (p.themes || []).slice();
+      sessId = entry.id;
+      modal.querySelectorAll("[data-story-dur]").forEach(function (b) { b.classList.toggle("is-on", b.dataset.storyDur === g.dur); });
+      modal.querySelectorAll("[data-story-tone]").forEach(function (b) { b.classList.toggle("is-on", b.dataset.storyTone === g.tone); });
+      if (qroleSel) qroleSel.value = g.qrole;
+      storyRenderThemes(themesBox, themes);
+      if (p.cur && p.cur.script) {
+        curTi = p.cur.ti; taleBox.__script = p.cur.script; taleBox.__title = p.cur.title || "";
+        storyRenderTale(taleBox, p.cur.script);
+        questionsArr = (p.cur.questions || []).slice();
+        if (questionsArr.length) { storyRenderQuestions(qlist, questionsArr); qgenBtn.textContent = "Regenerate"; }
+        l2Title.textContent = p.cur.title || "Your story";
+        showL2();
+      } else { showThemes(); }
+      paintHist();
+    }
+    modal.querySelector("[data-story-hist]").addEventListener("click", function (e) {
+      var del = e.target.closest("[data-story-hist-del]");
+      if (del) { e.stopPropagation(); prepDel("story", del.dataset.storyHistDel); if (sessId === del.dataset.storyHistDel) sessId = null; paintHist(); return; }
+      var op = e.target.closest("[data-story-hist-open]");
+      if (op) storyRestore(prepGet("story", op.dataset.storyHistOpen));
+    });
+    if (restore) storyRestore(restore); else showSetup();
   }
 
   /* ---------- shell / open / exit ---------- */
