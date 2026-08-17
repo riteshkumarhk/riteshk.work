@@ -1812,7 +1812,7 @@ import { WORLD_LAND } from "./worldland.js";
     ["story", "DS", "Design storyteller", "Turn a case study into a presentation \u2014 angles, a script, the questions it invites."],
     ["wb", "WB", "Whiteboard coach", "Rehearse the live exercise \u2014 a prompt, a timed game-plan, then coaching or a mock."]
   ];
-  function wbHasSession() { try { return !!localStorage.getItem(WB_SESS_KEY); } catch (e) { return false; } }
+  function wbHasSession() { try { return !!wbSessLoad(); } catch (e) { return false; } }
   function prepLauncherHtml() {
     return '<div class="prep-rows">' + PREP_TOOLS.map(function (r) {
       var n = r[0] === "wb" ? (wbHasSession() ? 1 : 0) : prepList(r[0]).length;
