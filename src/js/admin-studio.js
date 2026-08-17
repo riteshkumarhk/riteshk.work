@@ -2007,14 +2007,15 @@ import { WORLD_LAND } from "./worldland.js";
     compact: { name: "Compact", scale: 0.90, ladder: [{ k: 0.92, maxBul: 10 }, { k: 0.88, maxBul: 8 }, { k: 0.84, maxBul: 7 }, { k: 0.80, maxBul: 6 }, { k: 0.77, maxBul: 5 }, { k: 0.74, maxBul: 4 }, { k: 0.72, maxBul: 4 }] }
   };
   var RB_ACCENTS = ["#9a6a24", "#2f6d9a", "#585c52", "#7a3b3b", "#3f6b4b", "#454a8c", "#b0561f", "#1c1a17"];
-  var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal";
+  var RB_LAYOUTS = { single: { name: "Single" }, fullbleed: { name: "Full-bleed" } };
+  var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single";
   function atsRbTpl() { return RB_TPL[atsRbTplId] || RB_TPL.classic; }
   function atsRbSize() { return RB_SIZE[atsRbSizeId] || RB_SIZE.a4; }
   function atsRbDens() { return RB_DENS[atsRbDensity] || RB_DENS.normal; }
   function atsHexRgb(hex) { var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "")); if (!m) return null; var n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
   function atsRbAccentHex() { return atsRbAccent || atsRbTpl().accent; }
   function atsRbAccentRgb() { return (atsRbAccent && atsHexRgb(atsRbAccent)) || atsRbTpl().rgb; }
-  function atsRbApplyTpl(docEl) { var t = atsRbTpl(); docEl.style.setProperty("--rbz-accent", atsRbAccentHex()); docEl.style.setProperty("--rbz-sum-ff", t.sumFF); docEl.style.setProperty("--rbz-sum-style", t.sumStyle); docEl.style.setProperty("--rbz-scale", atsRbDens().scale); docEl.setAttribute("data-head", t.head); }
+  function atsRbApplyTpl(docEl) { var t = atsRbTpl(); docEl.style.setProperty("--rbz-accent", atsRbAccentHex()); docEl.style.setProperty("--rbz-sum-ff", t.sumFF); docEl.style.setProperty("--rbz-sum-style", t.sumStyle); docEl.style.setProperty("--rbz-scale", atsRbDens().scale); docEl.setAttribute("data-head", t.head); docEl.setAttribute("data-layout", atsRbLayout); }
   // Typeset the structured résumé at a given density (k scales type + spacing; maxBul caps bullets/role).
   function atsRbBuild(jsPDF, rb, dens) {
     var k = dens.k, maxBul = dens.maxBul;
@@ -2032,25 +2033,38 @@ import { WORLD_LAND } from "./worldland.js";
     function need(h) { if (y + h > PH - M - 8) { doc.addPage(); y = M; } }
     function sec(t) { if (!t) return; need(12 * k); acc(); doc.setFont("helvetica", "bold"); doc.setFontSize(8 * k); doc.setCharSpace(0.5); doc.text(String(P(t)).toUpperCase(), M, y); doc.setCharSpace(0); y += 2 * k; if (TPL.head === "bar") { doc.setDrawColor(ACC[0], ACC[1], ACC[2]); doc.setLineWidth(0.5); doc.line(M, y, PW - M, y); } else if (TPL.head !== "plain") { rule(y); } y += 4.2 * k; }
 
-    ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(21 * k); doc.text(P(rb.name || "Your Name"), M, y + 6 * k); y += 6 * k;
-    if (rb.title) { y += 5 * k; acc(); doc.setFont("helvetica", "bold"); doc.setFontSize(8 * k); doc.setCharSpace(0.4); doc.text(P(rb.title).toUpperCase(), M, y); doc.setCharSpace(0); }
-    var bits = [], c = rb.contact || {};
-    if (c.email) bits.push({ t: P(c.email), u: "mailto:" + c.email });
-    if (c.phone) bits.push({ t: P(c.phone), u: "tel:" + String(c.phone).replace(/[^0-9+]/g, "") });
-    if (c.location) bits.push({ t: P(c.location), u: "" });
-    (c.links || []).forEach(function (l) { bits.push({ t: P(l.label || rpdfNoProto(l.url)), u: l.url || "" }); });
-    if (bits.length) {
-      y += 5.5 * k; mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k);
-      var x = M, sep = "   \u00b7   ";
-      bits.forEach(function (b, i) {
-        var w = doc.getTextWidth(b.t);
-        if (x + w > PW - M) { y += 4.6 * k; x = M; }
-        if (b.u) { ink(); doc.textWithLink(b.t, x, y, { url: b.u }); mut(); } else { doc.text(b.t, x, y); }
-        x += w;
-        if (i < bits.length - 1) { var sw = doc.getTextWidth(sep); if (x + sw <= PW - M) { faint(); doc.text(sep, x, y); mut(); x += sw; } }
-      });
+    function header(rev, measure) {
+      var hy = M, x, sep = "   \u00b7   ";
+      doc.setFont("helvetica", "bold"); doc.setFontSize(21 * k);
+      if (!measure) { if (rev) doc.setTextColor(255, 255, 255); else ink(); doc.text(P(rb.name || "Your Name"), M, hy + 6 * k); }
+      hy += 6 * k;
+      if (rb.title) { hy += 5 * k; doc.setFont("helvetica", "bold"); doc.setFontSize(8 * k); doc.setCharSpace(0.4); if (!measure) { if (rev) doc.setTextColor(255, 255, 255); else acc(); doc.text(P(rb.title).toUpperCase(), M, hy); } doc.setCharSpace(0); }
+      var bits = [], c = rb.contact || {};
+      if (c.email) bits.push({ t: P(c.email), u: "mailto:" + c.email });
+      if (c.phone) bits.push({ t: P(c.phone), u: "tel:" + String(c.phone).replace(/[^0-9+]/g, "") });
+      if (c.location) bits.push({ t: P(c.location), u: "" });
+      (c.links || []).forEach(function (l) { bits.push({ t: P(l.label || rpdfNoProto(l.url)), u: l.url || "" }); });
+      if (bits.length) {
+        hy += 5.5 * k; doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); x = M;
+        bits.forEach(function (b, i) {
+          var w = doc.getTextWidth(b.t);
+          if (x + w > PW - M) { hy += 4.6 * k; x = M; }
+          if (!measure) { if (b.u) { if (rev) doc.setTextColor(255, 255, 255); else ink(); doc.textWithLink(b.t, x, hy, { url: b.u }); if (!rev) mut(); } else { if (rev) doc.setTextColor(255, 255, 255); else mut(); doc.text(b.t, x, hy); } }
+          x += w;
+          if (i < bits.length - 1) { var sw = doc.getTextWidth(sep); if (x + sw <= PW - M) { if (!measure) { if (rev) doc.setTextColor(255, 255, 255); else faint(); doc.text(sep, x, hy); } x += sw; } }
+        });
+      }
+      return hy;
     }
-    y += 3 * k; doc.setDrawColor(INK[0], INK[1], INK[2]); doc.setLineWidth(0.4); doc.line(M, y, PW - M, y); y += 6 * k;
+    if (atsRbLayout === "fullbleed") {
+      var hH = header(true, true) + 5 * k;
+      doc.setFillColor(ACC[0], ACC[1], ACC[2]); doc.rect(0, 0, PW, hH, "F");
+      header(true, false);
+      y = hH + 6 * k;
+    } else {
+      header(false, false);
+      y += 3 * k; doc.setDrawColor(INK[0], INK[1], INK[2]); doc.setLineWidth(0.4); doc.line(M, y, PW - M, y); y += 6 * k;
+    }
 
     if (rb.summary) { ink(); doc.setFont(TPL.pdfSum, TPL.pdfSumStyle); doc.setFontSize(11.5 * k); var sl = doc.splitTextToSize(P(rb.summary), CW); doc.text(sl, M, y); y += sl.length * 5.2 * k + 4 * k; }
 
@@ -2300,7 +2314,9 @@ import { WORLD_LAND } from "./worldland.js";
       var eff = atsRbAccentHex().toLowerCase();
       var swatches = '<button class="rbz__sw rbz__sw--def' + (atsRbAccent === "" ? " is-on" : "") + '" type="button" data-accent="" title="Template default"></button>' + RB_ACCENTS.map(function (h2) { return '<button class="rbz__sw' + (atsRbAccent.toLowerCase() === h2 ? " is-on" : "") + '" type="button" data-accent="' + h2 + '" style="background:' + h2 + '" title="' + h2 + '"></button>'; }).join("") + '<label class="rbz__sw rbz__sw--custom" title="Custom colour" style="background:' + eff + '"><input type="color" data-accent-input value="' + eff + '"></label>';
       var dens = Object.keys(RB_DENS).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbDensity ? " is-on" : "") + '" type="button" data-density="' + id + '">' + RB_DENS[id].name + "</button>"; }).join("");
-      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Accent</div><div class="rbz__swatches">' + swatches + '</div><div class="rbz__tplmenu-h">Density</div><div class="cl__len">' + dens + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + "</div>";
+      var lays = Object.keys(RB_LAYOUTS).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbLayout ? " is-on" : "") + '" type="button" data-lay="' + id + '">' + RB_LAYOUTS[id].name + "</button>"; }).join("");
+      var warn = atsRbLayout === "sidebar" ? '<div class="rbz__laywarn">Two-column can lower ATS parse accuracy. Re-check the score after switching.</div>' : "";
+      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Layout</div><div class="cl__len">' + lays + '</div>' + warn + '<div class="rbz__tplmenu-h">Accent</div><div class="rbz__swatches">' + swatches + '</div><div class="rbz__tplmenu-h">Density</div><div class="cl__len">' + dens + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + "</div>";
     }
     var onResize = schedulePaginate; window.addEventListener("resize", onResize);
     atsRbApplyTpl(docEl); renderDesign(); requestAnimationFrame(paginate); setTimeout(paginate, 350);
@@ -2391,6 +2407,7 @@ import { WORLD_LAND } from "./worldland.js";
       var _so = e.target.closest("[data-size]"); if (_so) { atsRbSizeId = _so.dataset.size; renderDesign(); paginate(); return; }
       var _ao = e.target.closest("[data-accent]"); if (_ao) { atsRbAccent = _ao.dataset.accent || ""; atsRbApplyTpl(docEl); renderDesign(); return; }
       var _de = e.target.closest("[data-density]"); if (_de) { atsRbDensity = _de.dataset.density; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); buildFromEdits(); return; }
+      var _ly = e.target.closest("[data-lay]"); if (_ly) { atsRbLayout = _ly.dataset.lay; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); buildFromEdits(); return; }
       if (e.target.closest("[data-rbz-preview]")) { togglePreview(!previewing); return; }
       if (e.target.closest("[data-rbz-regen]")) { close(); atsRebuildOpen(atsRbBusyCtx); return; }
       var dl = e.target.closest("[data-rbz-dl]");

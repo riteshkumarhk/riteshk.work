@@ -1579,6 +1579,11 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__doc [contenteditable]:focus { box-shadow: inset 0 0 0 1.5px var(--accent, #9a6a24); background: rgba(216, 166, 87, .07); }
 .rbz__doc [contenteditable]:empty:before { content: attr(data-ph); color: #bcb5aa; pointer-events: none; }
 .rbz__hd { border-bottom: 1.5px solid #1c1a17; padding-bottom: .7rem; }
+.rbz__doc[data-layout="fullbleed"] .rbz__hd { margin: -3.1rem -3.3rem 1.5rem; padding: 2.4rem 3.3rem 1.5rem; background: var(--rbz-accent, #9a6a24); border-bottom: 0; }
+.rbz__doc[data-layout="fullbleed"] .rbz__name { color: #fff; }
+.rbz__doc[data-layout="fullbleed"] .rbz__title { color: rgba(255, 255, 255, .82); }
+.rbz__doc[data-layout="fullbleed"] .rbz__contact { color: rgba(255, 255, 255, .9); }
+.rbz__doc[data-layout="fullbleed"] .rbz__cbit:not(:last-child):after { color: rgba(255, 255, 255, .5); }
 .rbz__name { font-size: 1.95rem; font-weight: 700; letter-spacing: -.01em; }
 .rbz__title { font-size: .74rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--rbz-accent, #9a6a24); margin-top: .12rem; }
 .rbz__contact { display: flex; flex-wrap: wrap; gap: .15rem .55rem; margin-top: .55rem; font-size: .78rem; color: #655c53; }
@@ -1604,6 +1609,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__tplopt.is-on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .rbz__tplsw { width: 15px; height: 15px; border-radius: 4px; flex: 0 0 auto; border: 1px solid rgba(0, 0, 0, .15); }
 .rbz__swatches { display: flex; flex-wrap: wrap; gap: .32rem; }
+.rbz__laywarn { margin: .4rem 0 0; padding: .4rem .5rem; border-radius: 7px; background: rgba(216, 166, 87, .12); border: 1px solid rgba(216, 166, 87, .4); color: #d8a657; font-size: .68rem; line-height: 1.35; }
 .rbz__sw { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18); cursor: pointer; position: relative; }
 .rbz__sw:hover { transform: scale(1.08); }
 .rbz__sw.is-on { border-color: var(--text); }
