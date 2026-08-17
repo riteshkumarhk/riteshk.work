@@ -2192,6 +2192,7 @@ import { WORLD_LAND } from "./worldland.js";
   }
   function atsRbEditorHtml(rb) {
     var e = escHtml;
+    var GRIP = '<svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><circle cx="5" cy="4" r="1.3"/><circle cx="11" cy="4" r="1.3"/><circle cx="5" cy="8" r="1.3"/><circle cx="11" cy="8" r="1.3"/><circle cx="5" cy="12" r="1.3"/><circle cx="11" cy="12" r="1.3"/></svg>';
     function ed(tag, cls, path, val, ph) { return "<" + tag + ' class="' + cls + '" contenteditable="true" data-k="' + path + '"' + (ph ? ' data-ph="' + e(ph) + '"' : "") + ">" + e(val || "") + "</" + tag + ">"; }
     var h = '<div class="rbz__page">';
     h += '<div class="rbz__hd">' + ed("div", "rbz__name", "name", rb.name, "Your Name") + ed("div", "rbz__title", "title", rb.title, "Professional title");
@@ -2200,8 +2201,9 @@ import { WORLD_LAND } from "./worldland.js";
     (c.links || []).forEach(function (l, i) { h += ed("span", "rbz__cbit", "contact.links." + i + ".label", l.label || l.url, "link"); });
     h += "</div></div>";
     if (rb.summary != null) h += '<div class="rbz__sec rbz__sec--sum">' + ed("div", "rbz__sum", "summary", rb.summary, "A 2\u20133 line professional summary\u2026") + "</div>";
+    var lastSi = (rb.sections || []).length - 1;
     (rb.sections || []).forEach(function (s, si) {
-      h += '<div class="rbz__sec" data-si="' + si + '"><div class="rbz__sechd">' + ed("span", "rbz__sectitle", "sections." + si + ".heading", s.heading, "Section") + '<button class="rbz__del" type="button" data-del-sec="' + si + '" title="Remove section">\u00d7</button></div>';
+      h += '<div class="rbz__sec" data-si="' + si + '"><div class="rbz__sechd">' + '<button class="rbz__grip" type="button" draggable="true" data-drag-sec="' + si + '" title="Drag to reorder" aria-label="Drag to reorder section">' + GRIP + "</button>" + ed("span", "rbz__sectitle", "sections." + si + ".heading", s.heading, "Section") + '<button class="rbz__mv" type="button" data-mvup="' + si + '"' + (si === 0 ? " disabled" : "") + ' title="Move up" aria-label="Move section up">\u2191</button>' + '<button class="rbz__mv" type="button" data-mvdn="' + si + '"' + (si === lastSi ? " disabled" : "") + ' title="Move down" aria-label="Move section down">\u2193</button>' + '<button class="rbz__del" type="button" data-del-sec="' + si + '" title="Remove section">\u00d7</button></div>';
       if (s.kind === "experience") {
         (s.items || []).forEach(function (it, ii) {
           var base = "sections." + si + ".items." + ii;
@@ -2306,7 +2308,19 @@ import { WORLD_LAND } from "./worldland.js";
       if (t = e.target.closest("[data-del-item]")) { working = rbReadEditor(docEl, working); var r = t.dataset.delItem.split("."); working.sections[+r[0]].items.splice(+r[1], 1); reRender(); markDirty(); return; }
       if (t = e.target.closest("[data-add-role]")) { working = rbReadEditor(docEl, working); var si = +t.dataset.addRole; working.sections[si].items.push({ role: "", org: "", location: "", dates: "", bullets: [""] }); reRender(); markDirty(); focusPath("sections." + si + ".items." + (working.sections[si].items.length - 1) + ".role"); return; }
       if (t = e.target.closest("[data-del-sec]")) { working = rbReadEditor(docEl, working); working.sections.splice(+t.dataset.delSec, 1); reRender(); markDirty(); return; }
+      if (t = e.target.closest("[data-mvup]")) { working = rbReadEditor(docEl, working); moveSection(+t.dataset.mvup, +t.dataset.mvup - 1); return; }
+      if (t = e.target.closest("[data-mvdn]")) { working = rbReadEditor(docEl, working); moveSection(+t.dataset.mvdn, +t.dataset.mvdn + 1); return; }
     });
+    // Rearrange sections: a drag grip on each section header + move up/down buttons. Reordering the
+    // model's sections array flows straight through the editor, the ATS re-check and the PDF export.
+    var dragFrom = -1;
+    function clearDrop() { docEl.querySelectorAll(".is-drop-before,.is-drop-after").forEach(function (x) { x.classList.remove("is-drop-before", "is-drop-after"); }); }
+    function endDrag() { clearDrop(); docEl.querySelectorAll(".is-dragging").forEach(function (x) { x.classList.remove("is-dragging"); }); dragFrom = -1; }
+    function moveSection(from, to) { var s = working.sections; if (from < 0 || from >= s.length) return; to = Math.max(0, Math.min(s.length - 1, to)); if (to === from) return; var it = s.splice(from, 1)[0]; s.splice(to, 0, it); reRender(); markDirty(); }
+    docEl.addEventListener("dragstart", function (e) { var g = e.target.closest("[data-drag-sec]"); if (!g) return; dragFrom = +g.dataset.dragSec; try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(dragFrom)); } catch (x) {} var sec = g.closest(".rbz__sec"); if (sec) sec.classList.add("is-dragging"); });
+    docEl.addEventListener("dragover", function (e) { if (dragFrom < 0) return; var sec = e.target.closest(".rbz__sec[data-si]"); if (!sec) return; e.preventDefault(); try { e.dataTransfer.dropEffect = "move"; } catch (x) {} clearDrop(); var r = sec.getBoundingClientRect(); sec.classList.add((e.clientY - r.top) > r.height / 2 ? "is-drop-after" : "is-drop-before"); });
+    docEl.addEventListener("drop", function (e) { if (dragFrom < 0) return; var sec = e.target.closest(".rbz__sec[data-si]"); if (!sec) { endDrag(); return; } e.preventDefault(); var to = +sec.dataset.si, r = sec.getBoundingClientRect(), after = (e.clientY - r.top) > r.height / 2, from = dragFrom; working = rbReadEditor(docEl, working); var insert = after ? to + 1 : to; if (from < insert) insert--; var arr = working.sections, moving = arr.splice(from, 1)[0]; arr.splice(Math.max(0, Math.min(arr.length, insert)), 0, moving); dragFrom = -1; reRender(); markDirty(); });
+    docEl.addEventListener("dragend", endDrag);
 
     async function buildFromEdits() { working = rbReadEditor(docEl, working); var b = await atsRbFit(working); setPg(b.pages); return b; }
     function revoke() { if (curUrl) { try { URL.revokeObjectURL(curUrl); } catch (e) {} curUrl = null; } }
