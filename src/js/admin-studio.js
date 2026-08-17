@@ -2252,7 +2252,7 @@ import { WORLD_LAND } from "./worldland.js";
     var e = escHtml;
     var GRIP = '<svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><circle cx="5" cy="4" r="1.3"/><circle cx="11" cy="4" r="1.3"/><circle cx="5" cy="8" r="1.3"/><circle cx="11" cy="8" r="1.3"/><circle cx="5" cy="12" r="1.3"/><circle cx="11" cy="12" r="1.3"/></svg>';
     function ed(tag, cls, path, val, ph) { return "<" + tag + ' class="' + cls + '" contenteditable="true" data-k="' + path + '"' + (ph ? ' data-ph="' + e(ph) + '"' : "") + ">" + e(val || "") + "</" + tag + ">"; }
-    var h = '<div class="rbz__page">';
+    var h = "";
     h += '<div class="rbz__hd">' + ed("div", "rbz__name", "name", rb.name, "Your Name") + ed("div", "rbz__title", "title", rb.title, "Professional title");
     var c = rb.contact || {};
     h += '<div class="rbz__contact">' + ed("span", "rbz__cbit", "contact.email", c.email, "email") + ed("span", "rbz__cbit", "contact.phone", c.phone, "phone") + ed("span", "rbz__cbit", "contact.location", c.location, "location");
@@ -2302,7 +2302,7 @@ import { WORLD_LAND } from "./worldland.js";
       h += sumBlock;
       (rb.sections || []).forEach(function (s, si) { h += secHtml(s, si); });
     }
-    return h + "</div>";
+    return h;
   }
   function atsRbShow(built, rb) {
     var working = rb;
@@ -2324,7 +2324,6 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="rbz__main">' +
           '<div class="rbz__pagewrap" data-rbz-wrap>' +
             '<div class="rbz__doc" data-rbz-doc>' + atsRbEditorHtml(working) + "</div>" +
-            '<div class="rbz__breaks" data-rbz-breaks aria-hidden="true"></div>' +
           "</div>" +
           '<iframe class="rbz__frame" data-rbz-frame title="PDF preview" hidden></iframe>' +
         "</div>" +
@@ -2332,19 +2331,30 @@ import { WORLD_LAND } from "./worldland.js";
       "</div>";
     document.body.appendChild(modal);
     var docEl = modal.querySelector("[data-rbz-doc]"), frameEl = modal.querySelector("[data-rbz-frame]"), sideEl = modal.querySelector("[data-rbz-side]"), pgEl = modal.querySelector("[data-rbz-pg]");
-    var wrapEl = modal.querySelector("[data-rbz-wrap]"), breaksEl = modal.querySelector("[data-rbz-breaks]"), paginateT = null;
-    // Paginate the editable page: draw A4 page-break guides so you can see how content flows across pages.
+    var wrapEl = modal.querySelector("[data-rbz-wrap]"), paginateT = null;
+    // Reflow the content into real page cards: distribute the top-level blocks across A4/Letter
+    // sheets so you see genuine page breaks. Single-flow layouts split at block boundaries; the
+    // two-column layout stays on one sheet (columns don't paginate simply, and it's ATS-discouraged).
     function paginate() {
       if (!docEl || wrapEl.hidden) return;
-      var w = docEl.offsetWidth; if (!w) return;
-      var _sz = atsRbSize(), pageH = w * _sz.h / _sz.w;
-      docEl.style.minHeight = pageH + "px";
-      var n = Math.max(1, Math.ceil((docEl.offsetHeight - 2) / pageH));
-      var html = "";
-      for (var kk = 1; kk < n; kk++) html += '<div class="rbz__break" style="top:' + (kk * pageH) + 'px"><span class="rbz__break-lbl">Page ' + (kk + 1) + "</span></div>";
-      breaksEl.innerHTML = html;
+      var w = docEl.clientWidth; if (!w) return;
+      var _sz = atsRbSize(), pageOuterH = w * _sz.h / _sz.w;
+      var cards = docEl.querySelectorAll(".rbz__page"), blocks = [];
+      if (cards.length) cards.forEach(function (c) { while (c.firstChild) blocks.push(c.removeChild(c.firstChild)); });
+      else Array.prototype.slice.call(docEl.children).forEach(function (b) { blocks.push(docEl.removeChild(b)); });
+      cards.forEach(function (c) { c.remove(); });
+      function newPage() { var p = document.createElement("div"); p.className = "rbz__page"; p.style.minHeight = pageOuterH + "px"; docEl.appendChild(p); return p; }
+      var cur = newPage();
+      if (atsRbLayout === "sidebar") { blocks.forEach(function (b) { cur.appendChild(b); }); return; }
+      var cs = getComputedStyle(cur), avail = pageOuterH - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0), used = 0;
+      blocks.forEach(function (b) {
+        cur.appendChild(b);
+        var bs = getComputedStyle(b), h = b.offsetHeight + (parseFloat(bs.marginTop) || 0) + (parseFloat(bs.marginBottom) || 0);
+        if (used > 0 && used + h > avail) { cur.removeChild(b); cur = newPage(); cur.appendChild(b); used = h; }
+        else used += h;
+      });
     }
-    function schedulePaginate() { clearTimeout(paginateT); paginateT = setTimeout(paginate, 160); }
+    function schedulePaginate() { clearTimeout(paginateT); paginateT = setTimeout(paginate, 180); }
     function renderDesign() {
       var m = modal.querySelector("[data-rbz-design]"); if (!m) return;
       var opts = Object.keys(RB_TPL).map(function (id) { var t = RB_TPL[id]; return '<button class="rbz__tplopt' + (id === atsRbTplId ? " is-on" : "") + '" type="button" data-tpl="' + id + '"><span class="rbz__tplsw" style="background:' + t.accent + '"></span>' + t.name + "</button>"; }).join("");
