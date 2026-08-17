@@ -1565,16 +1565,16 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__left { width: 232px; flex-shrink: 0; overflow: auto; border-right: 1px solid var(--line); padding: 1rem .9rem 1.5rem; background: var(--bg-elev); }
 .rbz__left-h { font-family: var(--mono, monospace); font-size: .7rem; text-transform: uppercase; letter-spacing: .12em; color: var(--text); font-weight: 600; margin: 0 0 .8rem; }
 .rbz__body.is-noleft .rbz__left { display: none; }
-.rbz__main { flex: 1; min-width: 0; overflow: auto; display: flex; justify-content: center; align-items: flex-start; padding: 1.6rem; background: #eef0f3; }
+.rbz__main { flex: 1; min-width: 0; overflow: auto; display: flex; justify-content: center; align-items: flex-start; padding: 1.6rem; background: radial-gradient(85% 55% at 50% 4%, rgba(216, 166, 87, .06), transparent 55%), radial-gradient(135% 110% at 50% 116%, var(--bg-elev), var(--bg-2) 46%, var(--bg) 100%); }
 .rbz__main > [hidden] { display: none; }
 .rbz__pagewrap { position: relative; width: 820px; max-width: 100%; }
 .rbz__pagesep { display: flex; align-items: center; gap: .7rem; margin: .1rem .2rem; user-select: none; }
-.rbz__pagesep::before, .rbz__pagesep::after { content: ""; flex: 1; height: 1px; background: rgba(17, 24, 39, .1); }
-.rbz__pagesep span { font-family: var(--mono, monospace); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; color: #9aa0ab; white-space: nowrap; }
+.rbz__pagesep::before, .rbz__pagesep::after { content: ""; flex: 1; height: 1px; background: var(--line-soft, rgba(255, 255, 255, .12)); }
+.rbz__pagesep span { font-family: var(--mono, monospace); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-faint, #9aa0ab); white-space: nowrap; }
 .rbz__frame { width: 820px; max-width: 100%; height: calc(100vh - 120px); border: 0; border-radius: 3px; background: #525659; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
 /* the editable A4 document — mirrors the exported PDF (white page, ink, helvetica) */
 .rbz__doc { --rbz-accent: #9a6a24; --rbz-sum-ff: Georgia, "Times New Roman", serif; --rbz-sum-style: italic; width: 100%; max-width: 100%; color: #1c1a17; font-family: var(--rbz-body-ff, Helvetica, Arial, sans-serif); font-size: calc(14px * var(--rbz-scale, 1)); line-height: 1.5; display: flex; flex-direction: column; gap: 1.4rem; }
-.rbz__page { background: #fff; color: #1c1a17; border-radius: 3px; box-shadow: 0 0 0 1px rgba(17, 24, 39, .04), 0 1px 3px rgba(17, 24, 39, .05), 0 18px 30px -18px rgba(17, 24, 39, .3); padding: 3.1rem 3.3rem 3.4rem; width: 100%; }
+.rbz__page { background: #fff; color: #1c1a17; border-radius: 3px; box-shadow: 0 1px 2px rgba(0, 0, 0, .2), 0 24px 44px -20px rgba(0, 0, 0, .55); padding: 3.1rem 3.3rem 3.4rem; width: 100%; }
 .rbz__page > *:first-child { margin-top: 0; }
 .rbz__doc [contenteditable] { outline: none; border-radius: 3px; transition: box-shadow .12s, background .12s; }
 .rbz__doc [contenteditable]:hover { box-shadow: inset 0 0 0 1px rgba(154, 106, 36, .3); }
