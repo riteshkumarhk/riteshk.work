@@ -2007,7 +2007,7 @@ import { WORLD_LAND } from "./worldland.js";
     compact: { name: "Compact", scale: 0.90, ladder: [{ k: 0.92, maxBul: 10 }, { k: 0.88, maxBul: 8 }, { k: 0.84, maxBul: 7 }, { k: 0.80, maxBul: 6 }, { k: 0.77, maxBul: 5 }, { k: 0.74, maxBul: 4 }, { k: 0.72, maxBul: 4 }] }
   };
   var RB_ACCENTS = ["#9a6a24", "#2f6d9a", "#585c52", "#7a3b3b", "#3f6b4b", "#454a8c", "#b0561f", "#1c1a17"];
-  var RB_LAYOUTS = { single: { name: "Single" }, sidebar: { name: "2-column" }, fullbleed: { name: "Full-bleed" } };
+  var RB_LAYOUTS = { single: { name: "Single column" }, sidebar: { name: "Two-column \u00b7 design" }, fullbleed: { name: "Full-bleed header" } };
   var RB_FONTS = { sans: { name: "Sans", css: "Helvetica, Arial, sans-serif", pdf: "helvetica" }, serif: { name: "Serif", css: "Georgia, 'Times New Roman', serif", pdf: "times" }, mono: { name: "Mono", css: "'Courier New', Courier, monospace", pdf: "courier" } };
   var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single", atsRbFont = "sans";
   function atsRbTpl() { return RB_TPL[atsRbTplId] || RB_TPL.classic; }
@@ -2377,10 +2377,10 @@ import { WORLD_LAND } from "./worldland.js";
       var eff = atsRbAccentHex().toLowerCase();
       var swatches = '<button class="rbz__sw rbz__sw--def' + (atsRbAccent === "" ? " is-on" : "") + '" type="button" data-accent="" title="Template default"></button>' + RB_ACCENTS.map(function (h2) { return '<button class="rbz__sw' + (atsRbAccent.toLowerCase() === h2 ? " is-on" : "") + '" type="button" data-accent="' + h2 + '" style="background:' + h2 + '" title="' + h2 + '"></button>'; }).join("") + '<label class="rbz__sw rbz__sw--custom" title="Custom colour" style="background:' + eff + '"><input type="color" data-accent-input value="' + eff + '"></label>';
       var dens = Object.keys(RB_DENS).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbDensity ? " is-on" : "") + '" type="button" data-density="' + id + '">' + RB_DENS[id].name + "</button>"; }).join("");
-      var lays = Object.keys(RB_LAYOUTS).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbLayout ? " is-on" : "") + '" type="button" data-lay="' + id + '">' + RB_LAYOUTS[id].name + "</button>"; }).join("");
-      var warn = atsRbLayout === "sidebar" ? '<div class="rbz__laywarn">Two-column can lower ATS parse accuracy. Re-check the score after switching.</div>' : "";
+      var lays = Object.keys(RB_LAYOUTS).map(function (id) { return '<button class="rbz__tplopt' + (id === atsRbLayout ? " is-on" : "") + '" type="button" data-lay="' + id + '">' + RB_LAYOUTS[id].name + "</button>"; }).join("");
+      var warn = atsRbLayout === "sidebar" ? '<div class="rbz__laywarn">Two-column is a design / human-first layout. Most ATS parse a single column more reliably, so re-check the score after switching.</div>' : "";
       var fonts = Object.keys(RB_FONTS).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbFont ? " is-on" : "") + '" type="button" data-font="' + id + '">' + RB_FONTS[id].name + "</button>"; }).join("");
-      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Layout</div><div class="cl__len">' + lays + '</div>' + warn + '<div class="rbz__tplmenu-h">Accent</div><div class="rbz__swatches">' + swatches + '</div><div class="rbz__tplmenu-h">Font</div><div class="cl__len">' + fonts + '</div><div class="rbz__tplmenu-h">Density</div><div class="cl__len">' + dens + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + "</div>";
+      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Layout</div><div class="rbz__tplrow">' + lays + '</div>' + warn + '<div class="rbz__tplmenu-h">Accent</div><div class="rbz__swatches">' + swatches + '</div><div class="rbz__tplmenu-h">Font</div><div class="cl__len">' + fonts + '</div><div class="rbz__tplmenu-h">Density</div><div class="cl__len">' + dens + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + "</div>";
     }
     var onResize = schedulePaginate; window.addEventListener("resize", onResize);
     atsRbApplyTpl(docEl); renderDesign(); requestAnimationFrame(paginate); setTimeout(paginate, 350);
@@ -2397,7 +2397,7 @@ import { WORLD_LAND } from "./worldland.js";
       if (dirty) html += '<div class="rbz__stale">You\u2019ve edited the résumé \u2014 re-check to update the score.</div>';
       if (fixes.length) { html += '<div class="rbz__fixhd">Remaining suggestions <span>' + fixes.length + "</span></div>"; html += fixes.map(function (f) { var pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med"; return '<div class="rbz__fix rbz__fix--' + pr + '"><span class="rbz__pri">' + pr + "</span><div><b>" + escHtml(f.point || "") + "</b>" + (f.how ? "<span>" + escHtml(f.how) + "</span>" : "") + "</div></div>"; }).join(""); }
       if (miss.length) html += '<div class="rbz__fixhd">Missing keywords</div><div class="rbz__kw">' + miss.map(function (k) { return '<span class="rbz__chip">' + escHtml(k) + "</span>"; }).join("") + "</div>";
-      if (atsRbLayout === "sidebar") html += '<div class="rbz__stale">Two-column can read out of order in some ATS parsers. If the score drops after re-checking, switch back to single-column.</div>';
+      if (atsRbLayout === "sidebar") html += '<div class="rbz__stale">Two-column is a design / human-first layout; some ATS read the columns out of order. If the score drops on re-check, switch back to single column.</div>';
       html += '<div class="rbz__tip">Click any text to edit. Re-check to rescore, Preview to see the PDF, Download when you\u2019re happy.</div>';
       sideEl.innerHTML = html;
     }
