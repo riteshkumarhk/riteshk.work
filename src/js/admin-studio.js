@@ -2339,6 +2339,7 @@ import { WORLD_LAND } from "./worldland.js";
       if (!docEl || wrapEl.hidden) return;
       var w = docEl.clientWidth; if (!w) return;
       var _sz = atsRbSize(), pageOuterH = w * _sz.h / _sz.w;
+      docEl.querySelectorAll(".rbz__pagesep").forEach(function (s) { s.remove(); });
       var pgs = docEl.querySelectorAll(".rbz__page"), raw = [];
       if (pgs.length) pgs.forEach(function (c) { while (c.firstChild) raw.push(c.removeChild(c.firstChild)); });
       else Array.prototype.slice.call(docEl.children).forEach(function (b) { raw.push(docEl.removeChild(b)); });
@@ -2350,7 +2351,8 @@ import { WORLD_LAND } from "./worldland.js";
         if (b.nodeType === 1 && b.classList.contains("rbz__sec--cont") && blocks.length) { var prev = blocks[blocks.length - 1]; while (b.firstChild) prev.appendChild(b.firstChild); }
         else blocks.push(b);
       });
-      function newPage() { var p = document.createElement("div"); p.className = "rbz__page"; p.style.minHeight = pageOuterH + "px"; docEl.appendChild(p); return p; }
+      var pn = 0;
+      function newPage() { pn++; if (pn > 1) { var sep = document.createElement("div"); sep.className = "rbz__pagesep"; sep.setAttribute("aria-hidden", "true"); sep.innerHTML = "<span>Page " + pn + "</span>"; docEl.appendChild(sep); } var p = document.createElement("div"); p.className = "rbz__page"; p.style.minHeight = pageOuterH + "px"; docEl.appendChild(p); return p; }
       var cur = newPage();
       if (atsRbLayout === "sidebar") { blocks.forEach(function (b) { cur.appendChild(b); }); return; }
       var cs = getComputedStyle(cur), avail = pageOuterH - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0), used = 0;
