@@ -1625,11 +1625,11 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__grip--sm, .rbz__grip--b { position: absolute; width: 16px; height: 16px; opacity: 0; }
 .rbz__grip--sm { left: -1.5rem; top: .02rem; }
 .rbz__grip--b { left: -1.75rem; top: .02rem; }
-.rbz__xp:hover > .rbz__grip--sm, .rbz__bl li:hover > .rbz__grip--b { opacity: .55; }
+.rbz__xp:hover > .rbz__grip--sm, .rbz__edu:hover > .rbz__grip--sm, .rbz__li:hover > .rbz__grip--sm, .rbz__bl li:hover > .rbz__grip--b { opacity: .55; }
 .rbz__grip--sm:hover, .rbz__grip--b:hover { opacity: 1; }
-.rbz__xp.is-dragging, .rbz__bl li.is-dragging { opacity: .45; }
-.rbz__xp.is-drop-before, .rbz__bl li.is-drop-before { box-shadow: inset 0 2px 0 -.5px var(--rbz-accent, #9a6a24); }
-.rbz__xp.is-drop-after, .rbz__bl li.is-drop-after { box-shadow: inset 0 -2px 0 -.5px var(--rbz-accent, #9a6a24); }
+.rbz__xp.is-dragging, .rbz__edu.is-dragging, .rbz__li.is-dragging, .rbz__bl li.is-dragging { opacity: .45; }
+.rbz__xp.is-drop-before, .rbz__edu.is-drop-before, .rbz__li.is-drop-before, .rbz__bl li.is-drop-before { box-shadow: inset 0 2px 0 -.5px var(--rbz-accent, #9a6a24); }
+.rbz__xp.is-drop-after, .rbz__edu.is-drop-after, .rbz__li.is-drop-after, .rbz__bl li.is-drop-after { box-shadow: inset 0 -2px 0 -.5px var(--rbz-accent, #9a6a24); }
 .rbz__xp, .rbz__edu { position: relative; margin-bottom: .75rem; }
 .rbz__xphd { display: flex; align-items: baseline; gap: .1rem; flex-wrap: wrap; }
 .rbz__role { font-weight: 700; font-size: .96rem; }
@@ -1644,7 +1644,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__sklabel { font-weight: 700; white-space: nowrap; }
 .rbz__skitems { flex: 1; color: #3a352f; }
 .rbz__cred { font-size: .85rem; }
-.rbz__li { display: flex; gap: .5rem; align-items: baseline; margin-bottom: .25rem; font-size: .86rem; }
+.rbz__li { position: relative; display: flex; gap: .5rem; align-items: baseline; margin-bottom: .25rem; font-size: .86rem; }
 .rbz__lititle { font-weight: 700; }
 .rbz__limeta { margin-left: auto; color: #9a938a; font-size: .78rem; }
 .rbz__text { font-size: .86rem; line-height: 1.45; color: #3a352f; }

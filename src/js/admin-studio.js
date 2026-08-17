@@ -2237,7 +2237,7 @@ import { WORLD_LAND } from "./worldland.js";
       } else if (s.kind === "education") {
         (s.items || []).forEach(function (it, ii) {
           var eb = "sections." + si + ".items." + ii;
-          h += '<div class="rbz__edu"><div class="rbz__xphd">' + ed("span", "rbz__role", eb + ".school", it.school, "School") + ed("span", "rbz__dates", eb + ".dates", it.dates, "Year") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">\u00d7</button></div>';
+          h += '<div class="rbz__edu" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder" aria-label="Drag to reorder entry">' + GRIP + '</button><div class="rbz__xphd">' + ed("span", "rbz__role", eb + ".school", it.school, "School") + ed("span", "rbz__dates", eb + ".dates", it.dates, "Year") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">\u00d7</button></div>';
           h += '<div class="rbz__meta">' + ed("span", "rbz__cred", eb + ".credential", it.credential, "Degree / credential") + ed("span", "rbz__note", eb + ".note", it.note, "Note") + "</div></div>";
         });
       } else if (s.kind === "text") {
@@ -2245,7 +2245,7 @@ import { WORLD_LAND } from "./worldland.js";
       } else {
         (s.items || []).forEach(function (it, ii) {
           var lb = "sections." + si + ".items." + ii;
-          h += '<div class="rbz__li">' + ed("span", "rbz__lititle", lb + ".title", it.title, "Title") + ed("span", "rbz__limeta", lb + ".meta", it.meta, "Meta") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">\u00d7</button></div>';
+          h += '<div class="rbz__li" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder" aria-label="Drag to reorder entry">' + GRIP + '</button>' + ed("span", "rbz__lititle", lb + ".title", it.title, "Title") + ed("span", "rbz__limeta", lb + ".meta", it.meta, "Meta") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">\u00d7</button></div>';
         });
       }
       h += "</div>";
@@ -2345,7 +2345,7 @@ import { WORLD_LAND } from "./worldland.js";
     function moveSection(from, to) { var s = working.sections; if (from < 0 || from >= s.length) return; to = Math.max(0, Math.min(s.length - 1, to)); if (to === from) return; var it = s.splice(from, 1)[0]; s.splice(to, 0, it); reRender(); markDirty(); }
     function dropTarget(e) {
       if (dragKind === "sec") { var el = e.target.closest(".rbz__sec[data-si]"); return el ? { el: el, to: +el.dataset.si } : null; }
-      if (dragKind === "role") { var er = e.target.closest(".rbz__xp[data-ii]"); return er && +er.dataset.si === dragFrom[0] ? { el: er, to: +er.dataset.ii } : null; }
+      if (dragKind === "role") { var er = e.target.closest(".rbz__xp[data-ii], .rbz__edu[data-ii], .rbz__li[data-ii]"); return er && +er.dataset.si === dragFrom[0] ? { el: er, to: +er.dataset.ii } : null; }
       if (dragKind === "bullet") { var eb = e.target.closest(".rbz__bl li[data-bi]"); return eb && +eb.dataset.si === dragFrom[0] && +eb.dataset.ii === dragFrom[1] ? { el: eb, to: +eb.dataset.bi } : null; }
       return null;
     }
@@ -2355,7 +2355,7 @@ import { WORLD_LAND } from "./worldland.js";
       else if (g.dataset.dragRole !== undefined) { dragKind = "role"; dragFrom = g.dataset.dragRole.split(".").map(Number); }
       else { dragKind = "bullet"; dragFrom = g.dataset.dragBullet.split(".").map(Number); }
       try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", ""); } catch (x) {}
-      var host = g.closest(dragKind === "sec" ? ".rbz__sec" : dragKind === "role" ? ".rbz__xp" : "li"); if (host) host.classList.add("is-dragging");
+      var host = g.closest(dragKind === "sec" ? ".rbz__sec" : dragKind === "role" ? ".rbz__xp, .rbz__edu, .rbz__li" : "li"); if (host) host.classList.add("is-dragging");
     });
     docEl.addEventListener("dragover", function (e) { if (!dragKind) return; var t = dropTarget(e); if (!t) return; e.preventDefault(); try { e.dataTransfer.dropEffect = "move"; } catch (x) {} clearDrop(); var r = t.el.getBoundingClientRect(); t.el.classList.add((e.clientY - r.top) > r.height / 2 ? "is-drop-after" : "is-drop-before"); });
     docEl.addEventListener("drop", function (e) {
