@@ -6583,6 +6583,7 @@ import { WORLD_LAND } from "./worldland.js";
   function onInput(e) {
     const t = e.target;
     if (t.classList && (t.classList.contains("cl__url") || t.classList.contains("cl__jd") || t.classList.contains("cl__company")) && t.closest(".ats")) { onAtsInput(t); return; }
+    if (t.classList && (t.classList.contains("cl__url") || t.classList.contains("cl__jd") || t.classList.contains("cl__company")) && t.closest(".cl")) { onClInput(t); return; }
     if (t.dataset.heromotion !== undefined) { onHeroMotion(t); return; }
     if (t.dataset.gpath !== undefined || t.dataset.genName !== undefined) { onGenEdit(t); return; }
     if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined || t.dataset.rtcellfield !== undefined || t.dataset.rtjrn !== undefined) { rtSerialize(t); return; }
@@ -7098,8 +7099,10 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "ats-hist-open") { atsHistRestore(b.dataset.id); return; }
     if (act === "ats-hist-del") { prepDel("ats", b.dataset.id); var _hw = b.closest("[data-ats-hist]"); if (_hw) _hw.innerHTML = atsHistHtml(); return; }
     if (act === "ats-level") { atsLevel = b.dataset.lvl; var ap = b.closest(".ats"); if (ap) ap.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); atsSaveDraft(); return; }
-    if (act === "cl-level") { clLevel = b.dataset.lvl; var clp = b.closest(".cl"); if (clp) clp.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
-    if (act === "cl-length") { clState.length = b.dataset.len; var clp2 = b.closest(".cl"); if (clp2) clp2.querySelectorAll(".cl__lenbtn").forEach(function (x) { x.classList.toggle("is-on", x === b); }); return; }
+    if (act === "cl-level") { clLevel = b.dataset.lvl; var clp = b.closest(".cl"); if (clp) clp.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); clSaveDraft(); return; }
+    if (act === "cl-length") { clState.length = b.dataset.len; var clp2 = b.closest(".cl"); if (clp2) clp2.querySelectorAll(".cl__lenbtn").forEach(function (x) { x.classList.toggle("is-on", x === b); }); clSaveDraft(); return; }
+    if (act === "cl-hist-open") { clHistRestore(b.dataset.id); return; }
+    if (act === "cl-hist-del") { prepDel("cl", b.dataset.id); var _clhw = b.closest("[data-cl-hist]"); if (_clhw) _clhw.innerHTML = clHistHtml(); return; }
     if (act === "cl-fetch") { clFetchToPanel(b.closest(".cl")); return; }
     if (act === "cl-generate") { clRun(b.closest(".cl"), false); return; }
     if (act === "cl-regen") { clRun(b.closest(".cl"), true); return; }
@@ -10830,15 +10833,16 @@ import { WORLD_LAND } from "./worldland.js";
      + roleKitResume() to GROUND the letter in REAL material, IPREP_LEVELS for altitude.
      A job URL is read via a reader service (r.jina.ai) with a paste fallback. All inputs
      and the letter are EPHEMERAL — never written to content.json or published. */
-  var clLevel = "staff";
-  var clState = { jd: "", url: "", company: "", length: "full" };
-  var clLast = "";
+  var _clD0 = prepDraftGet("cl") || {};
+  var clLevel = _clD0.level || "staff";
+  var clState = (_clD0.state && typeof _clD0.state === "object") ? { jd: _clD0.state.jd || "", url: _clD0.state.url || "", company: _clD0.state.company || "", length: _clD0.state.length || "full" } : { jd: "", url: "", company: "", length: "full" };
+  var clLast = _clD0.letter || "";
   var CL_NL = String.fromCharCode(10);
   function clPanelHtml() {
     var lvls = IPREP_LEVELS.map(function (l) {
       return '<button type="button" class="ats__lvl' + (clLevel === l[0] ? " is-on" : "") + '" data-act="cl-level" data-lvl="' + l[0] + '"><b>' + l[1] + "</b><span>" + l[2] + "</span></button>";
     }).join("");
-    return '<div class="cl">' +
+    return '<div class="cl"><div class="ats__cols"><div class="ats__main">' +
       '<div class="ats__head"><span class="ats__badge">CL</span><div><b>Cover letter builder</b><span>Paste a job link (or the description) \u2014 I\u2019ll write a letter grounded in your real work.</span></div></div>' +
       '<div class="ats__levels">' + lvls + "</div>" +
       '<div class="cl__row"><input type="url" class="cl__url" placeholder="Paste the job posting URL\u2026" value="' + escAttr(clState.url) + '" /><button class="btn btn--ghost" type="button" data-act="cl-fetch">Fetch</button></div>' +
@@ -10847,8 +10851,23 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="cl__len"><button type="button" class="cl__lenbtn' + (clState.length === "short" ? " is-on" : "") + '" data-act="cl-length" data-len="short">Short</button><button type="button" class="cl__lenbtn' + (clState.length === "full" ? " is-on" : "") + '" data-act="cl-length" data-len="full">Full</button></div></div>' +
       '<div class="imgblk__row"><button class="btn btn--primary" type="button" data-act="cl-generate">Write my cover letter</button></div>' +
       '<div class="cl__note">A link is read via a reader service (r.jina.ai) to pull the page text \u2014 it\u2019s only your public job post. Nothing here is saved or published; the letter is grounded only in your own content + r\u00e9sum\u00e9.</div>' +
-      '<div class="cl__out" data-cl-out></div>' +
-      "</div>";
+      '<div class="cl__out" data-cl-out>' + clOutRestore() + '</div>' +
+      '</div>' +
+      '<aside class="prep-hist"><div class="prep-hist__h">Saved letters</div><div class="prep-hist__list" data-cl-hist>' + clHistHtml() + '</div></aside>' +
+      '</div></div>';
+  }
+  function clOutRestore() { var d = prepDraftGet("cl"); return (d && d.letter) ? clRenderHtml(d.letter) : ""; }
+  function clHistCard(e) {
+    var m = e.meta || {};
+    return '<div class="prep-h prep-h--txt" role="button" tabindex="0" data-act="cl-hist-open" data-id="' + e.id + '">' +
+      '<span class="prep-h__x"><b>' + escHtml(e.title || "Cover letter") + '</b><i>' + escHtml(m.snippet || "") + '</i><em>' + escHtml(prepAgo(e.at)) + '</em></span>' +
+      '<span class="prep-h__del" data-act="cl-hist-del" data-id="' + e.id + '" title="Delete">\u00d7</span>' +
+      '</div>';
+  }
+  function clHistHtml() {
+    var list = prepList("cl");
+    if (!list.length) return '<div class="prep-hist__empty">Your cover letters save here automatically \u2014 come back and pick up any draft.</div>';
+    return list.map(clHistCard).join("");
   }
   async function clFetchJd(url) {
     url = String(url || "").trim();
@@ -10937,6 +10956,12 @@ import { WORLD_LAND } from "./worldland.js";
       text = String(text || "").replace(/^```[a-z]*/i, "").replace(/```$/, "").trim();
       if (!text) throw new Error("The letter came back empty \u2014 try again.");
       clLast = text;
+      var _clTitle = clState.company ? clState.company : "Cover letter";
+      var _clSnip = text.replace(/\s+/g, " ").trim().slice(0, 90);
+      var _clSnap = { state: { jd: clState.jd, url: clState.url, company: clState.company, length: clState.length }, level: clLevel, letter: text };
+      prepDraftSet("cl", _clSnap);
+      prepPut("cl", { tool: "cl", kind: "letter", title: _clTitle, meta: { snippet: _clSnip, length: clState.length }, payload: _clSnap });
+      var _clh = panel.querySelector("[data-cl-hist]"); if (_clh) _clh.innerHTML = clHistHtml();
       if (out) out.innerHTML = clRenderHtml(text);
       status("Cover letter ready.", true);
     } catch (e) {
@@ -10950,6 +10975,21 @@ import { WORLD_LAND } from "./worldland.js";
     var a = document.createElement("a"), url = URL.createObjectURL(blob);
     a.href = url; a.download = "cover-letter.txt"; document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 500);
+  }
+  function clSaveDraft() { var d = prepDraftGet("cl") || {}; prepDraftSet("cl", { state: { jd: clState.jd, url: clState.url, company: clState.company, length: clState.length }, level: clLevel, letter: d.letter }); }
+  function onClInput(t) {
+    if (t.classList.contains("cl__url")) clState.url = t.value;
+    else if (t.classList.contains("cl__jd")) clState.jd = t.value;
+    else if (t.classList.contains("cl__company")) clState.company = t.value;
+    prepAutosave("cl", function () { var d = prepDraftGet("cl") || {}; return { state: { jd: clState.jd, url: clState.url, company: clState.company, length: clState.length }, level: clLevel, letter: d.letter }; });
+  }
+  function clHistRestore(id) {
+    var e = prepGet("cl", id); if (!e) return; var p = e.payload || {}, st = p.state || {};
+    clState = { jd: st.jd || "", url: st.url || "", company: st.company || "", length: st.length || "full" };
+    clLevel = p.level || clLevel;
+    clLast = p.letter || "";
+    prepDraftSet("cl", { state: clState, level: clLevel, letter: clLast });
+    renderBody();
   }
 
   function iprepModal(i) {
