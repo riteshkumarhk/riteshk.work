@@ -1611,7 +1611,15 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__sec.is-dragging { opacity: .45; }
 .rbz__sec.is-drop-before { box-shadow: inset 0 3px 0 -1px #9a6a24; }
 .rbz__sec.is-drop-after { box-shadow: inset 0 -3px 0 -1px #9a6a24; }
-.rbz__xp, .rbz__edu { margin-bottom: .75rem; }
+.rbz__grip--sm, .rbz__grip--b { position: absolute; width: 16px; height: 16px; opacity: 0; }
+.rbz__grip--sm { left: -1.5rem; top: .02rem; }
+.rbz__grip--b { left: -1.75rem; top: .02rem; }
+.rbz__xp:hover > .rbz__grip--sm, .rbz__bl li:hover > .rbz__grip--b { opacity: .55; }
+.rbz__grip--sm:hover, .rbz__grip--b:hover { opacity: 1; }
+.rbz__xp.is-dragging, .rbz__bl li.is-dragging { opacity: .45; }
+.rbz__xp.is-drop-before, .rbz__bl li.is-drop-before { box-shadow: inset 0 2px 0 -.5px var(--rbz-accent, #9a6a24); }
+.rbz__xp.is-drop-after, .rbz__bl li.is-drop-after { box-shadow: inset 0 -2px 0 -.5px var(--rbz-accent, #9a6a24); }
+.rbz__xp, .rbz__edu { position: relative; margin-bottom: .75rem; }
 .rbz__xphd { display: flex; align-items: baseline; gap: .1rem; flex-wrap: wrap; }
 .rbz__role { font-weight: 700; font-size: .96rem; }
 .rbz__at { color: #bcb5aa; margin: 0 .15rem; }

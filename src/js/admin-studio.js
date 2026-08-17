@@ -2215,11 +2215,11 @@ import { WORLD_LAND } from "./worldland.js";
       if (s.kind === "experience") {
         (s.items || []).forEach(function (it, ii) {
           var base = "sections." + si + ".items." + ii;
-          h += '<div class="rbz__xp"><div class="rbz__xphd">' + ed("span", "rbz__role", base + ".role", it.role, "Role") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove role">\u00d7</button></div>';
+          h += '<div class="rbz__xp" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder role" aria-label="Drag to reorder role">' + GRIP + '</button><div class="rbz__xphd">' + ed("span", "rbz__role", base + ".role", it.role, "Role") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove role">\u00d7</button></div>';
           h += ed("div", "rbz__org", base + ".org", it.org, "Company");
           h += '<div class="rbz__meta">' + ed("span", "rbz__dates", base + ".dates", it.dates, "MM/YYYY to Present") + ed("span", "rbz__loc", base + ".location", it.location, "Location") + "</div>";
           h += '<ul class="rbz__bl">';
-          (it.bullets || []).forEach(function (b, bi) { h += "<li>" + ed("span", "rbz__bltext", base + ".bullets." + bi, b, "Achievement, outcome-first with a metric\u2026") + '<button class="rbz__del rbz__del--b" type="button" data-del-bullet="' + si + "." + ii + "." + bi + '" title="Remove bullet">\u00d7</button></li>'; });
+          (it.bullets || []).forEach(function (b, bi) { h += '<li data-si="' + si + '" data-ii="' + ii + '" data-bi="' + bi + '"><button class="rbz__grip rbz__grip--b" type="button" draggable="true" data-drag-bullet="' + si + "." + ii + "." + bi + '" title="Drag to reorder" aria-label="Drag to reorder bullet">' + GRIP + '</button>' + ed("span", "rbz__bltext", base + ".bullets." + bi, b, "Achievement, outcome-first with a metric\u2026") + '<button class="rbz__del rbz__del--b" type="button" data-del-bullet="' + si + "." + ii + "." + bi + '" title="Remove bullet">\u00d7</button></li>'; });
           h += '</ul><button class="rbz__add" type="button" data-add-bullet="' + si + "." + ii + '">+ bullet</button></div>';
         });
         h += '<button class="rbz__add rbz__add--role" type="button" data-add-role="' + si + '">+ add role</button>';
@@ -2328,13 +2328,35 @@ import { WORLD_LAND } from "./worldland.js";
     });
     // Rearrange sections: a drag grip on each section header + move up/down buttons. Reordering the
     // model's sections array flows straight through the editor, the ATS re-check and the PDF export.
-    var dragFrom = -1;
+    var dragKind = null, dragFrom = null;
     function clearDrop() { docEl.querySelectorAll(".is-drop-before,.is-drop-after").forEach(function (x) { x.classList.remove("is-drop-before", "is-drop-after"); }); }
-    function endDrag() { clearDrop(); docEl.querySelectorAll(".is-dragging").forEach(function (x) { x.classList.remove("is-dragging"); }); dragFrom = -1; }
+    function endDrag() { clearDrop(); docEl.querySelectorAll(".is-dragging").forEach(function (x) { x.classList.remove("is-dragging"); }); dragKind = null; dragFrom = null; }
     function moveSection(from, to) { var s = working.sections; if (from < 0 || from >= s.length) return; to = Math.max(0, Math.min(s.length - 1, to)); if (to === from) return; var it = s.splice(from, 1)[0]; s.splice(to, 0, it); reRender(); markDirty(); }
-    docEl.addEventListener("dragstart", function (e) { var g = e.target.closest("[data-drag-sec]"); if (!g) return; dragFrom = +g.dataset.dragSec; try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(dragFrom)); } catch (x) {} var sec = g.closest(".rbz__sec"); if (sec) sec.classList.add("is-dragging"); });
-    docEl.addEventListener("dragover", function (e) { if (dragFrom < 0) return; var sec = e.target.closest(".rbz__sec[data-si]"); if (!sec) return; e.preventDefault(); try { e.dataTransfer.dropEffect = "move"; } catch (x) {} clearDrop(); var r = sec.getBoundingClientRect(); sec.classList.add((e.clientY - r.top) > r.height / 2 ? "is-drop-after" : "is-drop-before"); });
-    docEl.addEventListener("drop", function (e) { if (dragFrom < 0) return; var sec = e.target.closest(".rbz__sec[data-si]"); if (!sec) { endDrag(); return; } e.preventDefault(); var to = +sec.dataset.si, r = sec.getBoundingClientRect(), after = (e.clientY - r.top) > r.height / 2, from = dragFrom; working = rbReadEditor(docEl, working); var insert = after ? to + 1 : to; if (from < insert) insert--; var arr = working.sections, moving = arr.splice(from, 1)[0]; arr.splice(Math.max(0, Math.min(arr.length, insert)), 0, moving); dragFrom = -1; reRender(); markDirty(); });
+    function dropTarget(e) {
+      if (dragKind === "sec") { var el = e.target.closest(".rbz__sec[data-si]"); return el ? { el: el, to: +el.dataset.si } : null; }
+      if (dragKind === "role") { var er = e.target.closest(".rbz__xp[data-ii]"); return er && +er.dataset.si === dragFrom[0] ? { el: er, to: +er.dataset.ii } : null; }
+      if (dragKind === "bullet") { var eb = e.target.closest(".rbz__bl li[data-bi]"); return eb && +eb.dataset.si === dragFrom[0] && +eb.dataset.ii === dragFrom[1] ? { el: eb, to: +eb.dataset.bi } : null; }
+      return null;
+    }
+    docEl.addEventListener("dragstart", function (e) {
+      var g = e.target.closest("[data-drag-sec],[data-drag-role],[data-drag-bullet]"); if (!g) return;
+      if (g.dataset.dragSec !== undefined) { dragKind = "sec"; dragFrom = +g.dataset.dragSec; }
+      else if (g.dataset.dragRole !== undefined) { dragKind = "role"; dragFrom = g.dataset.dragRole.split(".").map(Number); }
+      else { dragKind = "bullet"; dragFrom = g.dataset.dragBullet.split(".").map(Number); }
+      try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", ""); } catch (x) {}
+      var host = g.closest(dragKind === "sec" ? ".rbz__sec" : dragKind === "role" ? ".rbz__xp" : "li"); if (host) host.classList.add("is-dragging");
+    });
+    docEl.addEventListener("dragover", function (e) { if (!dragKind) return; var t = dropTarget(e); if (!t) return; e.preventDefault(); try { e.dataTransfer.dropEffect = "move"; } catch (x) {} clearDrop(); var r = t.el.getBoundingClientRect(); t.el.classList.add((e.clientY - r.top) > r.height / 2 ? "is-drop-after" : "is-drop-before"); });
+    docEl.addEventListener("drop", function (e) {
+      if (!dragKind) return; var t = dropTarget(e); if (!t) { endDrag(); return; } e.preventDefault();
+      var r = t.el.getBoundingClientRect(), after = (e.clientY - r.top) > r.height / 2;
+      var from = dragKind === "sec" ? dragFrom : dragKind === "role" ? dragFrom[1] : dragFrom[2];
+      working = rbReadEditor(docEl, working);
+      var arr = dragKind === "sec" ? working.sections : dragKind === "role" ? working.sections[dragFrom[0]].items : working.sections[dragFrom[0]].items[dragFrom[1]].bullets;
+      var insert = after ? t.to + 1 : t.to; if (from < insert) insert--;
+      var moving = arr.splice(from, 1)[0]; arr.splice(Math.max(0, Math.min(arr.length, insert)), 0, moving);
+      endDrag(); reRender(); markDirty();
+    });
     docEl.addEventListener("dragend", endDrag);
 
     async function buildFromEdits() { working = rbReadEditor(docEl, working); var b = await atsRbFit(working); setPg(b.pages); return b; }
