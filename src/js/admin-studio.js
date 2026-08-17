@@ -2340,6 +2340,8 @@ import { WORLD_LAND } from "./worldland.js";
     // two-column layout stays on one sheet (columns don't paginate simply, and it's ATS-discouraged).
     function paginate() {
       if (!docEl || wrapEl.hidden) return;
+      var _ae = document.activeElement;
+      if (_ae && _ae.isContentEditable && docEl.contains(_ae)) return; // don't restructure while a field is focused: moving its node would blur the caret (one char at a time) and wipe the browser's native undo stack. focusout re-triggers the reflow.
       var w = docEl.clientWidth; if (!w) return;
       var _sz = atsRbSize(), pageOuterH = w * _sz.h / _sz.w;
       docEl.querySelectorAll(".rbz__pagesep").forEach(function (s) { s.remove(); });
@@ -2412,7 +2414,8 @@ import { WORLD_LAND } from "./worldland.js";
     function focusPath(path) { var el = docEl.querySelector('[data-k="' + path + '"]'); if (el) { el.focus(); try { var r = document.createRange(); r.selectNodeContents(el); r.collapse(false); var sel = getShellSel(); if (sel) { sel.removeAllRanges(); sel.addRange(r); } } catch (e) {} } }
     function getShellSel() { try { return window.getSelection(); } catch (e) { return null; } }
 
-    docEl.addEventListener("input", function () { markDirty(); schedulePaginate(); });
+    docEl.addEventListener("input", function () { markDirty(); });
+    docEl.addEventListener("focusout", function () { schedulePaginate(); });
     docEl.addEventListener("click", function (e) {
       var t;
       if (t = e.target.closest("[data-del-bullet]")) { working = rbReadEditor(docEl, working); var p = t.dataset.delBullet.split("."); working.sections[+p[0]].items[+p[1]].bullets.splice(+p[2], 1); reRender(); markDirty(); return; }
