@@ -2007,7 +2007,7 @@ import { WORLD_LAND } from "./worldland.js";
     compact: { name: "Compact", scale: 0.90, ladder: [{ k: 0.92, maxBul: 10 }, { k: 0.88, maxBul: 8 }, { k: 0.84, maxBul: 7 }, { k: 0.80, maxBul: 6 }, { k: 0.77, maxBul: 5 }, { k: 0.74, maxBul: 4 }, { k: 0.72, maxBul: 4 }] }
   };
   var RB_ACCENTS = ["#9a6a24", "#2f6d9a", "#585c52", "#7a3b3b", "#3f6b4b", "#454a8c", "#b0561f", "#1c1a17"];
-  var RB_LAYOUTS = { single: { name: "Single" }, fullbleed: { name: "Full-bleed" } };
+  var RB_LAYOUTS = { single: { name: "Single" }, sidebar: { name: "2-column" }, fullbleed: { name: "Full-bleed" } };
   var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single";
   function atsRbTpl() { return RB_TPL[atsRbTplId] || RB_TPL.classic; }
   function atsRbSize() { return RB_SIZE[atsRbSizeId] || RB_SIZE.a4; }
@@ -2023,15 +2023,15 @@ import { WORLD_LAND } from "./worldland.js";
     var doc = new jsPDF({ unit: "mm", format: SZ.fmt, compress: true });
     var PW = SZ.w, PH = SZ.h, M = 14, CW = PW - M * 2;
     var INK = [28, 26, 23], MUT = [101, 92, 83], FAINT = [154, 147, 138], ACC = atsRbAccentRgb(), LINE = [225, 216, 205];
-    var y = M;
+    var y = M, CX = M, CW2 = CW, colTop = M;
     var P = function (s) { return rpdfPlain(s); };
     function ink() { doc.setTextColor(INK[0], INK[1], INK[2]); }
     function mut() { doc.setTextColor(MUT[0], MUT[1], MUT[2]); }
     function faint() { doc.setTextColor(FAINT[0], FAINT[1], FAINT[2]); }
     function acc() { doc.setTextColor(ACC[0], ACC[1], ACC[2]); }
-    function rule(yy) { doc.setDrawColor(LINE[0], LINE[1], LINE[2]); doc.setLineWidth(0.2); doc.line(M, yy, PW - M, yy); }
-    function need(h) { if (y + h > PH - M - 8) { doc.addPage(); y = M; } }
-    function sec(t) { if (!t) return; need(12 * k); acc(); doc.setFont("helvetica", "bold"); doc.setFontSize(8 * k); doc.setCharSpace(0.5); doc.text(String(P(t)).toUpperCase(), M, y); doc.setCharSpace(0); y += 2 * k; if (TPL.head === "bar") { doc.setDrawColor(ACC[0], ACC[1], ACC[2]); doc.setLineWidth(0.5); doc.line(M, y, PW - M, y); } else if (TPL.head !== "plain") { rule(y); } y += 4.2 * k; }
+    function rule(yy) { doc.setDrawColor(LINE[0], LINE[1], LINE[2]); doc.setLineWidth(0.2); doc.line(CX, yy, CX + CW2, yy); }
+    function need(h) { if (y + h > PH - M - 8) { doc.addPage(); y = colTop; } }
+    function sec(t) { if (!t) return; need(12 * k); acc(); doc.setFont("helvetica", "bold"); doc.setFontSize(8 * k); doc.setCharSpace(0.5); doc.text(String(P(t)).toUpperCase(), CX, y); doc.setCharSpace(0); y += 2 * k; if (TPL.head === "bar") { doc.setDrawColor(ACC[0], ACC[1], ACC[2]); doc.setLineWidth(0.5); doc.line(CX, y, CX + CW2, y); } else if (TPL.head !== "plain") { rule(y); } y += 4.2 * k; }
 
     function header(rev, measure) {
       var hy = M, x, sep = "   \u00b7   ";
@@ -2066,22 +2066,22 @@ import { WORLD_LAND } from "./worldland.js";
       y += 3 * k; doc.setDrawColor(INK[0], INK[1], INK[2]); doc.setLineWidth(0.4); doc.line(M, y, PW - M, y); y += 6 * k;
     }
 
-    if (rb.summary) { ink(); doc.setFont(TPL.pdfSum, TPL.pdfSumStyle); doc.setFontSize(11.5 * k); var sl = doc.splitTextToSize(P(rb.summary), CW); doc.text(sl, M, y); y += sl.length * 5.2 * k + 4 * k; }
+    function drawSummary() { if (rb.summary) { ink(); doc.setFont(TPL.pdfSum, TPL.pdfSumStyle); doc.setFontSize(11.5 * k); var sl = doc.splitTextToSize(P(rb.summary), CW2); doc.text(sl, CX, y); y += sl.length * 5.2 * k + 4 * k; } }
 
-    rb.sections.forEach(function (s) {
+    function drawSec(s) {
       if (s.kind === "experience") {
         sec(s.heading);
         s.items.forEach(function (it) {
           need(11 * k);
-          if (it.dates || it.location) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7 * k); doc.setCharSpace(0.3); doc.text(P([it.dates, it.location].filter(Boolean).join("   \u00b7   ")).toUpperCase(), M, y); doc.setCharSpace(0); y += 3.6 * k; }
-          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(9.6 * k); doc.text(P(it.role || ""), M, y);
-          if (it.org) { acc(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); var ow = doc.getTextWidth(P(it.org)); doc.text(P(it.org), PW - M - ow, y); }
+          if (it.dates || it.location) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7 * k); doc.setCharSpace(0.3); doc.text(P([it.dates, it.location].filter(Boolean).join("   \u00b7   ")).toUpperCase(), CX, y); doc.setCharSpace(0); y += 3.6 * k; }
+          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(9.6 * k); doc.text(P(it.role || ""), CX, y);
+          if (it.org) { acc(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); var ow = doc.getTextWidth(P(it.org)); doc.text(P(it.org), CX + CW2 - ow, y); }
           y += 4.6 * k;
           it.bullets.slice(0, maxBul).forEach(function (bt) {
-            var lines = doc.splitTextToSize(P(bt), CW - 4.5);
+            var lines = doc.splitTextToSize(P(bt), CW2 - 4.5);
             need(lines.length * 4 * k + 1.4 * k);
-            acc(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); doc.text("\u2013", M, y);
-            mut(); doc.text(lines, M + 4.5, y);
+            acc(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); doc.text("\u2013", CX, y);
+            mut(); doc.text(lines, CX + 4.5, y);
             y += lines.length * 4 * k + 1.4 * k;
           });
           y += 3 * k;
@@ -2092,12 +2092,12 @@ import { WORLD_LAND } from "./worldland.js";
         s.groups.forEach(function (g) {
           if (g.label) {
             ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(8.6 * k); var lbl = P(g.label) + ":  "; var lw = doc.getTextWidth(lbl);
-            var rest = doc.splitTextToSize(g.items.map(P).join("   \u00b7   "), CW - lw);
+            var rest = doc.splitTextToSize(g.items.map(P).join("   \u00b7   "), CW2 - lw);
             need(Math.max(1, rest.length) * 4.2 * k + 1.6 * k);
-            doc.text(lbl, M, y); mut(); doc.setFont("helvetica", "normal"); doc.text(rest, M + lw, y); y += Math.max(1, rest.length) * 4.2 * k + 1.6 * k;
+            doc.text(lbl, CX, y); mut(); doc.setFont("helvetica", "normal"); doc.text(rest, CX + lw, y); y += Math.max(1, rest.length) * 4.2 * k + 1.6 * k;
           } else {
-            var ll = doc.splitTextToSize(g.items.map(P).join("   \u00b7   "), CW); need(ll.length * 4.2 * k + 1.6 * k);
-            mut(); doc.setFont("helvetica", "normal"); doc.text(ll, M, y); y += ll.length * 4.2 * k + 1.6 * k;
+            var ll = doc.splitTextToSize(g.items.map(P).join("   \u00b7   "), CW2); need(ll.length * 4.2 * k + 1.6 * k);
+            mut(); doc.setFont("helvetica", "normal"); doc.text(ll, CX, y); y += ll.length * 4.2 * k + 1.6 * k;
           }
         });
         y += 2 * k;
@@ -2105,28 +2105,40 @@ import { WORLD_LAND } from "./worldland.js";
         sec(s.heading);
         s.items.forEach(function (it) {
           need(6 * k);
-          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(9 * k); doc.text(P(it.school || ""), M, y);
-          if (it.dates) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); var dw = doc.getTextWidth(P(it.dates)); doc.text(P(it.dates), PW - M - dw, y); }
+          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(9 * k); doc.text(P(it.school || ""), CX, y);
+          if (it.dates) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); var dw = doc.getTextWidth(P(it.dates)); doc.text(P(it.dates), CX + CW2 - dw, y); }
           y += 4 * k;
           var line2 = P([it.credential, it.note].filter(Boolean).join("   \u00b7   "));
-          if (line2) { mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); var l2 = doc.splitTextToSize(line2, CW); doc.text(l2, M, y); y += l2.length * 4 * k; }
+          if (line2) { mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); var l2 = doc.splitTextToSize(line2, CW2); doc.text(l2, CX, y); y += l2.length * 4 * k; }
           y += 2.6 * k;
         });
         y += 1 * k;
       } else if (s.kind === "text") {
         sec(s.heading);
-        mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); var tl = doc.splitTextToSize(P(s.text), CW); need(tl.length * 4.2 * k); doc.text(tl, M, y); y += tl.length * 4.2 * k + 3 * k;
+        mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); var tl = doc.splitTextToSize(P(s.text), CW2); need(tl.length * 4.2 * k); doc.text(tl, CX, y); y += tl.length * 4.2 * k + 3 * k;
       } else {
         sec(s.heading);
         s.items.forEach(function (it) {
           need(5.4 * k);
-          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(8.6 * k); doc.text(P(it.title || ""), M, y);
-          if (it.meta) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); var mw = doc.getTextWidth(P(it.meta)); doc.text(P(it.meta), PW - M - mw, y); }
+          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(8.6 * k); doc.text(P(it.title || ""), CX, y);
+          if (it.meta) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); var mw = doc.getTextWidth(P(it.meta)); doc.text(P(it.meta), CX + CW2 - mw, y); }
           y += 4.7 * k;
         });
         y += 2 * k;
       }
-    });
+    }
+
+    if (atsRbLayout === "sidebar") {
+      colTop = y;
+      var gap = 7, sideW = (CW - gap) * 0.36, mainW = (CW - gap) * 0.64;
+      var sideSecs = [], mainSecs = [];
+      rb.sections.forEach(function (s) { if (s.kind !== "experience" && s.kind !== "text") sideSecs.push(s); else mainSecs.push(s); });
+      CX = M; CW2 = sideW; y = colTop; sideSecs.forEach(drawSec);
+      doc.setPage(1); doc.setDrawColor(LINE[0], LINE[1], LINE[2]); doc.setLineWidth(0.2); doc.line(M + sideW + gap / 2, colTop, M + sideW + gap / 2, PH - M - 8);
+      CX = M + sideW + gap; CW2 = mainW; y = colTop; drawSummary(); mainSecs.forEach(drawSec);
+    } else {
+      colTop = y; drawSummary(); rb.sections.forEach(drawSec);
+    }
 
     var pages = doc.getNumberOfPages();
     for (var pi = 1; pi <= pages; pi++) {
@@ -2229,41 +2241,50 @@ import { WORLD_LAND } from "./worldland.js";
     h += '<div class="rbz__contact">' + ed("span", "rbz__cbit", "contact.email", c.email, "email") + ed("span", "rbz__cbit", "contact.phone", c.phone, "phone") + ed("span", "rbz__cbit", "contact.location", c.location, "location");
     (c.links || []).forEach(function (l, i) { h += ed("span", "rbz__cbit", "contact.links." + i + ".label", l.label || l.url, "link"); });
     h += "</div></div>";
-    if (rb.summary != null) h += '<div class="rbz__sec rbz__sec--sum">' + ed("div", "rbz__sum", "summary", rb.summary, "A 2\u20133 line professional summary\u2026") + "</div>";
+    var sumBlock = (rb.summary != null) ? '<div class="rbz__sec rbz__sec--sum">' + ed("div", "rbz__sum", "summary", rb.summary, "A 2\u20133 line professional summary\u2026") + "</div>" : "";
     var lastSi = (rb.sections || []).length - 1;
-    (rb.sections || []).forEach(function (s, si) {
-      h += '<div class="rbz__sec" data-si="' + si + '"><div class="rbz__sechd">' + '<button class="rbz__grip" type="button" draggable="true" data-drag-sec="' + si + '" title="Drag to reorder" aria-label="Drag to reorder section">' + GRIP + "</button>" + ed("span", "rbz__sectitle", "sections." + si + ".heading", s.heading, "Section") + '<button class="rbz__mv" type="button" data-mvup="' + si + '"' + (si === 0 ? " disabled" : "") + ' title="Move up" aria-label="Move section up">\u2191</button>' + '<button class="rbz__mv" type="button" data-mvdn="' + si + '"' + (si === lastSi ? " disabled" : "") + ' title="Move down" aria-label="Move section down">\u2193</button>' + '<button class="rbz__del" type="button" data-del-sec="' + si + '" title="Remove section">\u00d7</button></div>';
+    function secHtml(s, si) {
+      var sh = '<div class="rbz__sec" data-si="' + si + '"><div class="rbz__sechd">' + '<button class="rbz__grip" type="button" draggable="true" data-drag-sec="' + si + '" title="Drag to reorder" aria-label="Drag to reorder section">' + GRIP + "</button>" + ed("span", "rbz__sectitle", "sections." + si + ".heading", s.heading, "Section") + '<button class="rbz__mv" type="button" data-mvup="' + si + '"' + (si === 0 ? " disabled" : "") + ' title="Move up" aria-label="Move section up">\u2191</button>' + '<button class="rbz__mv" type="button" data-mvdn="' + si + '"' + (si === lastSi ? " disabled" : "") + ' title="Move down" aria-label="Move section down">\u2193</button>' + '<button class="rbz__del" type="button" data-del-sec="' + si + '" title="Remove section">\u00d7</button></div>';
       if (s.kind === "experience") {
         (s.items || []).forEach(function (it, ii) {
           var base = "sections." + si + ".items." + ii;
-          h += '<div class="rbz__xp" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder role" aria-label="Drag to reorder role">' + GRIP + '</button><div class="rbz__xphd">' + ed("span", "rbz__role", base + ".role", it.role, "Role") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove role">\u00d7</button></div>';
-          h += ed("div", "rbz__org", base + ".org", it.org, "Company");
-          h += '<div class="rbz__meta">' + ed("span", "rbz__dates", base + ".dates", it.dates, "MM/YYYY to Present") + ed("span", "rbz__loc", base + ".location", it.location, "Location") + "</div>";
-          h += '<ul class="rbz__bl">';
-          (it.bullets || []).forEach(function (b, bi) { h += '<li data-si="' + si + '" data-ii="' + ii + '" data-bi="' + bi + '"><button class="rbz__grip rbz__grip--b" type="button" draggable="true" data-drag-bullet="' + si + "." + ii + "." + bi + '" title="Drag to reorder" aria-label="Drag to reorder bullet">' + GRIP + '</button>' + ed("span", "rbz__bltext", base + ".bullets." + bi, b, "Achievement, outcome-first with a metric\u2026") + '<button class="rbz__del rbz__del--b" type="button" data-del-bullet="' + si + "." + ii + "." + bi + '" title="Remove bullet">\u00d7</button></li>'; });
-          h += '</ul><button class="rbz__add" type="button" data-add-bullet="' + si + "." + ii + '">+ bullet</button></div>';
+          sh += '<div class="rbz__xp" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder role" aria-label="Drag to reorder role">' + GRIP + '</button><div class="rbz__xphd">' + ed("span", "rbz__role", base + ".role", it.role, "Role") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove role">\u00d7</button></div>';
+          sh += ed("div", "rbz__org", base + ".org", it.org, "Company");
+          sh += '<div class="rbz__meta">' + ed("span", "rbz__dates", base + ".dates", it.dates, "MM/YYYY to Present") + ed("span", "rbz__loc", base + ".location", it.location, "Location") + "</div>";
+          sh += '<ul class="rbz__bl">';
+          (it.bullets || []).forEach(function (b, bi) { sh += '<li data-si="' + si + '" data-ii="' + ii + '" data-bi="' + bi + '"><button class="rbz__grip rbz__grip--b" type="button" draggable="true" data-drag-bullet="' + si + "." + ii + "." + bi + '" title="Drag to reorder" aria-label="Drag to reorder bullet">' + GRIP + '</button>' + ed("span", "rbz__bltext", base + ".bullets." + bi, b, "Achievement, outcome-first with a metric\u2026") + '<button class="rbz__del rbz__del--b" type="button" data-del-bullet="' + si + "." + ii + "." + bi + '" title="Remove bullet">\u00d7</button></li>'; });
+          sh += '</ul><button class="rbz__add" type="button" data-add-bullet="' + si + "." + ii + '">+ bullet</button></div>';
         });
-        h += '<button class="rbz__add rbz__add--role" type="button" data-add-role="' + si + '">+ add role</button>';
+        sh += '<button class="rbz__add rbz__add--role" type="button" data-add-role="' + si + '">+ add role</button>';
       } else if (s.kind === "skills") {
         (s.groups || []).forEach(function (g, gi) {
-          h += '<div class="rbz__skg">' + ed("span", "rbz__sklabel", "sections." + si + ".groups." + gi + ".label", g.label, "Group") + '<span class="rbz__skitems" contenteditable="true" data-ksitems="' + si + "." + gi + '" data-ph="skill \u00b7 skill \u00b7 skill">' + e((g.items || []).join("  \u00b7  ")) + "</span></div>";
+          sh += '<div class="rbz__skg">' + ed("span", "rbz__sklabel", "sections." + si + ".groups." + gi + ".label", g.label, "Group") + '<span class="rbz__skitems" contenteditable="true" data-ksitems="' + si + "." + gi + '" data-ph="skill \u00b7 skill \u00b7 skill">' + e((g.items || []).join("  \u00b7  ")) + "</span></div>";
         });
       } else if (s.kind === "education") {
         (s.items || []).forEach(function (it, ii) {
           var eb = "sections." + si + ".items." + ii;
-          h += '<div class="rbz__edu" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder" aria-label="Drag to reorder entry">' + GRIP + '</button><div class="rbz__xphd">' + ed("span", "rbz__role", eb + ".school", it.school, "School") + ed("span", "rbz__dates", eb + ".dates", it.dates, "Year") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">\u00d7</button></div>';
-          h += '<div class="rbz__meta">' + ed("span", "rbz__cred", eb + ".credential", it.credential, "Degree / credential") + ed("span", "rbz__note", eb + ".note", it.note, "Note") + "</div></div>";
+          sh += '<div class="rbz__edu" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder" aria-label="Drag to reorder entry">' + GRIP + '</button><div class="rbz__xphd">' + ed("span", "rbz__role", eb + ".school", it.school, "School") + ed("span", "rbz__dates", eb + ".dates", it.dates, "Year") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">\u00d7</button></div>';
+          sh += '<div class="rbz__meta">' + ed("span", "rbz__cred", eb + ".credential", it.credential, "Degree / credential") + ed("span", "rbz__note", eb + ".note", it.note, "Note") + "</div></div>";
         });
       } else if (s.kind === "text") {
-        h += ed("div", "rbz__text", "sections." + si + ".text", s.text, "Text\u2026");
+        sh += ed("div", "rbz__text", "sections." + si + ".text", s.text, "Text\u2026");
       } else {
         (s.items || []).forEach(function (it, ii) {
           var lb = "sections." + si + ".items." + ii;
-          h += '<div class="rbz__li" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder" aria-label="Drag to reorder entry">' + GRIP + '</button>' + ed("span", "rbz__lititle", lb + ".title", it.title, "Title") + ed("span", "rbz__limeta", lb + ".meta", it.meta, "Meta") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">\u00d7</button></div>';
+          sh += '<div class="rbz__li" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder" aria-label="Drag to reorder entry">' + GRIP + '</button>' + ed("span", "rbz__lititle", lb + ".title", it.title, "Title") + ed("span", "rbz__limeta", lb + ".meta", it.meta, "Meta") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">\u00d7</button></div>';
         });
       }
-      h += "</div>";
-    });
+      sh += "</div>";
+      return sh;
+    }
+    if (atsRbLayout === "sidebar") {
+      var mainH = sumBlock, sideH = "";
+      (rb.sections || []).forEach(function (s, si) { if (s.kind !== "experience" && s.kind !== "text") sideH += secHtml(s, si); else mainH += secHtml(s, si); });
+      h += '<div class="rbz__cols"><div class="rbz__col rbz__col--side">' + sideH + '</div><div class="rbz__col rbz__col--main">' + mainH + "</div></div>";
+    } else {
+      h += sumBlock;
+      (rb.sections || []).forEach(function (s, si) { h += secHtml(s, si); });
+    }
     return h + "</div>";
   }
   function atsRbShow(built, rb) {
@@ -2333,6 +2354,7 @@ import { WORLD_LAND } from "./worldland.js";
       if (dirty) html += '<div class="rbz__stale">You\u2019ve edited the résumé \u2014 re-check to update the score.</div>';
       if (fixes.length) { html += '<div class="rbz__fixhd">Remaining suggestions <span>' + fixes.length + "</span></div>"; html += fixes.map(function (f) { var pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med"; return '<div class="rbz__fix rbz__fix--' + pr + '"><span class="rbz__pri">' + pr + "</span><div><b>" + escHtml(f.point || "") + "</b>" + (f.how ? "<span>" + escHtml(f.how) + "</span>" : "") + "</div></div>"; }).join(""); }
       if (miss.length) html += '<div class="rbz__fixhd">Missing keywords</div><div class="rbz__kw">' + miss.map(function (k) { return '<span class="rbz__chip">' + escHtml(k) + "</span>"; }).join("") + "</div>";
+      if (atsRbLayout === "sidebar") html += '<div class="rbz__stale">Two-column can read out of order in some ATS parsers. If the score drops after re-checking, switch back to single-column.</div>';
       html += '<div class="rbz__tip">Click any text to edit. Re-check to rescore, Preview to see the PDF, Download when you\u2019re happy.</div>';
       sideEl.innerHTML = html;
     }
@@ -2407,7 +2429,7 @@ import { WORLD_LAND } from "./worldland.js";
       var _so = e.target.closest("[data-size]"); if (_so) { atsRbSizeId = _so.dataset.size; renderDesign(); paginate(); return; }
       var _ao = e.target.closest("[data-accent]"); if (_ao) { atsRbAccent = _ao.dataset.accent || ""; atsRbApplyTpl(docEl); renderDesign(); return; }
       var _de = e.target.closest("[data-density]"); if (_de) { atsRbDensity = _de.dataset.density; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); buildFromEdits(); return; }
-      var _ly = e.target.closest("[data-lay]"); if (_ly) { atsRbLayout = _ly.dataset.lay; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); buildFromEdits(); return; }
+      var _ly = e.target.closest("[data-lay]"); if (_ly) { atsRbLayout = _ly.dataset.lay; working = rbReadEditor(docEl, working); atsRbApplyTpl(docEl); reRender(); renderDesign(); paintSide(); buildFromEdits(); return; }
       if (e.target.closest("[data-rbz-preview]")) { togglePreview(!previewing); return; }
       if (e.target.closest("[data-rbz-regen]")) { close(); atsRebuildOpen(atsRbBusyCtx); return; }
       var dl = e.target.closest("[data-rbz-dl]");
