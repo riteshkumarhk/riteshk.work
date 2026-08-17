@@ -2260,7 +2260,7 @@ import { WORLD_LAND } from "./worldland.js";
       '<div class="rbz__bar">' +
         '<div class="rbz__ttl"><span class="ats__badge">EDIT</span> Résumé workspace<span class="rbz__pg" data-rbz-pg></span></div>' +
         '<div class="rbz__tools">' +
-          '<div class="rbz__tplwrap"><button class="btn btn--ghost" type="button" data-rbz-tpl>Templates</button><div class="rbz__tplmenu" data-rbz-tplmenu hidden></div></div>' +
+          '<button class="btn btn--ghost" type="button" data-rbz-design-toggle title="Show or hide the design panel">Design</button>' +
           '<button class="btn btn--ghost" type="button" data-rbz-preview>Preview PDF</button>' +
           '<button class="btn btn--ghost" type="button" data-rbz-regen title="Discard edits &amp; let AI rebuild from scratch">\u21bb Regenerate</button>' +
           '<button class="btn btn--primary" type="button" data-rbz-dl>Download PDF \u2193</button>' +
@@ -2268,6 +2268,7 @@ import { WORLD_LAND } from "./worldland.js";
         "</div>" +
       "</div>" +
       '<div class="rbz__body">' +
+        '<aside class="rbz__left" data-rbz-left><div class="rbz__left-h">Design</div><div class="rbz__design" data-rbz-design></div></aside>' +
         '<div class="rbz__main">' +
           '<div class="rbz__pagewrap" data-rbz-wrap>' +
             '<div class="rbz__doc" data-rbz-doc>' + atsRbEditorHtml(working) + "</div>" +
@@ -2292,8 +2293,8 @@ import { WORLD_LAND } from "./worldland.js";
       breaksEl.innerHTML = html;
     }
     function schedulePaginate() { clearTimeout(paginateT); paginateT = setTimeout(paginate, 160); }
-    function renderTplMenu() {
-      var m = modal.querySelector("[data-rbz-tplmenu]"); if (!m) return;
+    function renderDesign() {
+      var m = modal.querySelector("[data-rbz-design]"); if (!m) return;
       var opts = Object.keys(RB_TPL).map(function (id) { var t = RB_TPL[id]; return '<button class="rbz__tplopt' + (id === atsRbTplId ? " is-on" : "") + '" type="button" data-tpl="' + id + '"><span class="rbz__tplsw" style="background:' + t.accent + '"></span>' + t.name + "</button>"; }).join("");
       var sizes = Object.keys(RB_SIZE).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbSizeId ? " is-on" : "") + '" type="button" data-size="' + id + '">' + RB_SIZE[id].name + "</button>"; }).join("");
       var eff = atsRbAccentHex().toLowerCase();
@@ -2302,7 +2303,7 @@ import { WORLD_LAND } from "./worldland.js";
       m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Accent</div><div class="rbz__swatches">' + swatches + '</div><div class="rbz__tplmenu-h">Density</div><div class="cl__len">' + dens + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + "</div>";
     }
     var onResize = schedulePaginate; window.addEventListener("resize", onResize);
-    atsRbApplyTpl(docEl); requestAnimationFrame(paginate); setTimeout(paginate, 350);
+    atsRbApplyTpl(docEl); renderDesign(); requestAnimationFrame(paginate); setTimeout(paginate, 350);
 
     function setPg(p) { var ok = p <= 2; pgEl.className = "rbz__pg " + (ok ? "is-ok" : "is-warn"); pgEl.textContent = ok ? "\u2713 " + p + " page" + (p > 1 ? "s" : "") : "\u26A0 " + p + " pages"; }
     setPg(built.pages);
@@ -2385,13 +2386,11 @@ import { WORLD_LAND } from "./worldland.js";
     modal.addEventListener("input", function (e) { if (e.target && e.target.matches && e.target.matches("[data-accent-input]")) { atsRbAccent = e.target.value; atsRbApplyTpl(docEl); var cs = modal.querySelector(".rbz__sw--custom"); if (cs) cs.style.background = e.target.value; } });
     modal.addEventListener("click", async function (e) {
       if (e.target === modal || e.target.closest("[data-rbz-close]")) { close(); return; }
-      var _menu = modal.querySelector("[data-rbz-tplmenu]");
-      if (_menu && !_menu.hidden && !e.target.closest("[data-rbz-tplmenu]") && !e.target.closest("[data-rbz-tpl]")) _menu.hidden = true;
-      if (e.target.closest("[data-rbz-tpl]")) { if (_menu) { _menu.hidden = !_menu.hidden; if (!_menu.hidden) renderTplMenu(); } return; }
-      var _to = e.target.closest("[data-tpl]"); if (_to) { atsRbTplId = _to.dataset.tpl; atsRbApplyTpl(docEl); renderTplMenu(); return; }
-      var _so = e.target.closest("[data-size]"); if (_so) { atsRbSizeId = _so.dataset.size; renderTplMenu(); paginate(); return; }
-      var _ao = e.target.closest("[data-accent]"); if (_ao) { atsRbAccent = _ao.dataset.accent || ""; atsRbApplyTpl(docEl); renderTplMenu(); return; }
-      var _de = e.target.closest("[data-density]"); if (_de) { atsRbDensity = _de.dataset.density; atsRbApplyTpl(docEl); renderTplMenu(); schedulePaginate(); buildFromEdits(); return; }
+      if (e.target.closest("[data-rbz-design-toggle]")) { modal.querySelector(".rbz__body").classList.toggle("is-noleft"); schedulePaginate(); return; }
+      var _to = e.target.closest("[data-tpl]"); if (_to) { atsRbTplId = _to.dataset.tpl; atsRbApplyTpl(docEl); renderDesign(); return; }
+      var _so = e.target.closest("[data-size]"); if (_so) { atsRbSizeId = _so.dataset.size; renderDesign(); paginate(); return; }
+      var _ao = e.target.closest("[data-accent]"); if (_ao) { atsRbAccent = _ao.dataset.accent || ""; atsRbApplyTpl(docEl); renderDesign(); return; }
+      var _de = e.target.closest("[data-density]"); if (_de) { atsRbDensity = _de.dataset.density; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); buildFromEdits(); return; }
       if (e.target.closest("[data-rbz-preview]")) { togglePreview(!previewing); return; }
       if (e.target.closest("[data-rbz-regen]")) { close(); atsRebuildOpen(atsRbBusyCtx); return; }
       var dl = e.target.closest("[data-rbz-dl]");
