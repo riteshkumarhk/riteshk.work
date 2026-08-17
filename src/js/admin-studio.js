@@ -1144,9 +1144,11 @@ import { WORLD_LAND } from "./worldland.js";
   function atsOutRestore() { var d = prepDraftGet("ats"); return (d && d.res) ? atsMiniHtml(d.res, d.level || atsLevel, d.company || "") : ""; }
   function atsHistCard(e) {
     var m = e.meta || {}, sc = Math.max(0, Math.min(100, Math.round(+m.score || 0))), tone = sc >= 80 ? "good" : sc >= 65 ? "ok" : sc >= 45 ? "warn" : "bad";
-    return '<div class="prep-h" role="button" tabindex="0" data-act="ats-hist-open" data-id="' + e.id + '">' +
+    var isWs = e.kind === "workspace";
+    var sub = isWs ? ((m.edited ? "Edited" : "Rebuilt") + (m.fit ? " \u00b7 " + escHtml(m.fit) : "")) : (escHtml(m.band || "") + (m.fit ? " \u00b7 " + escHtml(m.fit) : ""));
+    return '<div class="prep-h' + (isWs ? " prep-h--ws" : "") + '" role="button" tabindex="0" data-act="ats-hist-open" data-id="' + e.id + '">' +
       '<span class="ats__ring ats__ring--sm ats__score--' + tone + '" style="--p:' + sc + '"><span>' + sc + '</span></span>' +
-      '<span class="prep-h__x"><b>' + escHtml(e.title || "R\u00e9sum\u00e9 reviewed") + '</b><i>' + escHtml(m.band || "") + (m.fit ? " \u00b7 " + escHtml(m.fit) : "") + '</i><em>' + escHtml(prepAgo(e.at)) + '</em></span>' +
+      '<span class="prep-h__x"><b>' + escHtml(e.title || (isWs ? "R\u00e9sum\u00e9 workspace" : "R\u00e9sum\u00e9 reviewed")) + '</b><i>' + sub + '</i><em>' + escHtml(prepAgo(e.at)) + '</em></span>' +
       '<span class="prep-h__del" data-act="ats-hist-del" data-id="' + e.id + '" title="Delete">\u00d7</span>' +
       '</div>';
   }
@@ -2041,8 +2043,17 @@ import { WORLD_LAND } from "./worldland.js";
     else if (t.classList.contains("cl__company")) atsState.company = t.value;
     prepAutosave("ats", function () { var d = prepDraftGet("ats") || {}; return { state: { mode: atsState.mode, jd: atsState.jd, url: atsState.url, company: atsState.company }, level: atsLevel, res: d.res, company: d.company, text: d.text }; });
   }
-  function atsHistRestore(id) {
+  async function atsHistRestore(id) {
     var e = prepGet("ats", id); if (!e) return; var p = e.payload || {}, st = p.state || {};
+    if (e.kind === "workspace" && p.rb) {
+      var d = p.design || {};
+      atsRbTplId = d.tpl || atsRbTplId; atsRbSizeId = d.size || atsRbSizeId; atsRbAccent = (d.accent != null ? d.accent : atsRbAccent); atsRbFont = d.font || atsRbFont; atsRbDensity = d.density || atsRbDensity; atsRbLayout = d.layout || atsRbLayout; atsRbCanvas = d.canvas || atsRbCanvas;
+      atsLevel = p.level || atsLevel;
+      atsLast = { file: null, res: p.res || null, level: atsLevel, company: p.company || "", text: p.text || "" };
+      atsRbSessId = id;
+      try { var built = await atsRbFit(p.rb); atsRbShow(built, p.rb); } catch (er) { status("Couldn\u2019t reopen the workspace: " + ((er && er.message) || er)); }
+      return;
+    }
     atsState = { mode: st.mode || "general", jd: st.jd || "", url: st.url || "", company: st.company || "" };
     atsLevel = p.level || atsLevel;
     atsLast = { file: null, res: p.res, level: atsLevel, company: p.company || "", text: p.text || "" };
@@ -2166,6 +2177,7 @@ import { WORLD_LAND } from "./worldland.js";
     for (var ki in RB_ICON_SVG) { for (var i = 0; i < hexes.length; i++) { var key = ki + "|" + hexes[i]; if (!(key in RB_ICON_CACHE)) { try { RB_ICON_CACHE[key] = await rbRasterIcon(ki, hexes[i]); } catch (e) { RB_ICON_CACHE[key] = null; } } } }
   }
   var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single", atsRbFont = "sans", atsRbCanvas = "dark";
+  var atsRbSessId = null; // the in-progress workspace's history entry id (edits update it in place)
   function atsRbTpl() { return RB_TPL[atsRbTplId] || RB_TPL.classic; }
   function atsRbSize() { return RB_SIZE[atsRbSizeId] || RB_SIZE.a4; }
   function atsRbDens() { return RB_DENS[atsRbDensity] || RB_DENS.normal; }
@@ -2369,6 +2381,7 @@ import { WORLD_LAND } from "./worldland.js";
       var rb = atsRbNorm(csgenParse(raw));
       if (!rb || !rb.sections.length) throw new Error("The rebuild came back unreadable \u2014 please try again.");
       var built = await atsRbFit(rb);
+      atsRbSessId = null;
       atsRbShow(built, rb);
       status("Résumé rebuilt \u2014 fixes applied.", true);
     } catch (e) {
@@ -2598,7 +2611,20 @@ import { WORLD_LAND } from "./worldland.js";
       sideEl.innerHTML = html;
     }
     paintSide();
-    function markDirty() { if (!dirty) { dirty = true; paintSide(); } }
+    function rbDesignSnap() { return { tpl: atsRbTplId, size: atsRbSizeId, accent: atsRbAccent, font: atsRbFont, density: atsRbDensity, layout: atsRbLayout, canvas: atsRbCanvas }; }
+    function rbSaveWorkspace(readFirst) {
+      if (readFirst) { try { working = rbReadEditor(docEl, working); } catch (e) {} }
+      var r = (atsLast && atsLast.res) || {};
+      var sc = Math.max(0, Math.min(100, Math.round(+r.score || 0)));
+      var bd = r.band || (sc >= 80 ? "Strong" : sc >= 65 ? "Good" : sc >= 45 ? "Needs work" : "At risk");
+      var fit = (atsLast && atsLast.company) ? atsLast.company + " fit" : atsLevelName((atsLast && atsLast.level) || atsLevel) + " fit";
+      var saved = prepPut("ats", { id: atsRbSessId, tool: "ats", kind: "workspace", title: "R\u00e9sum\u00e9 workspace", meta: { score: sc, band: bd, fit: fit, edited: !!dirty }, payload: { rb: working, design: rbDesignSnap(), level: (atsLast && atsLast.level) || atsLevel, company: (atsLast && atsLast.company) || "", text: (atsLast && atsLast.text) || "", res: (atsLast && atsLast.res) || null } });
+      atsRbSessId = saved.id;
+      var hl = (root || document).querySelector("[data-ats-hist]"); if (hl) hl.innerHTML = atsHistHtml();
+    }
+    var _rbSaveT = null;
+    function rbSaveSoon() { clearTimeout(_rbSaveT); _rbSaveT = setTimeout(function () { rbSaveWorkspace(true); }, 800); }
+    function markDirty() { rbSaveSoon(); if (!dirty) { dirty = true; paintSide(); } }
     function reRender() { docEl.innerHTML = atsRbEditorHtml(working); paginate(); }
     function focusPath(path) { var el = docEl.querySelector('[data-k="' + path + '"]'); if (el) { el.focus(); try { var r = document.createRange(); r.selectNodeContents(el); r.collapse(false); var sel = getShellSel(); if (sel) { sel.removeAllRanges(); sel.addRange(r); } } catch (e) {} } }
     function getShellSel() { try { return window.getSelection(); } catch (e) { return null; } }
@@ -2658,7 +2684,7 @@ import { WORLD_LAND } from "./worldland.js";
         catch (e) { status("Preview failed: " + ((e && e.message) || e)); btnIdle(b0, was); }
       } else { frameEl.hidden = true; wrapEl.hidden = false; previewing = false; b0.textContent = "Preview PDF"; paginate(); }
     }
-    function close() { document.removeEventListener("keydown", onKey); window.removeEventListener("resize", onResize); revoke(); modal.remove(); }
+    function close() { try { rbSaveWorkspace(true); } catch (e) {} document.removeEventListener("keydown", onKey); window.removeEventListener("resize", onResize); revoke(); modal.remove(); }
     function onKey(e) { if (e.key !== "Escape") return; if (previewing) togglePreview(false); else if (!/rbz__doc|rbz__/.test((document.activeElement && document.activeElement.className) || "")) close(); }
     document.addEventListener("keydown", onKey);
     modal.addEventListener("input", function (e) { if (e.target && e.target.matches && e.target.matches("[data-accent-input]")) { atsRbAccent = e.target.value; atsRbApplyTpl(docEl); var cs = modal.querySelector(".rbz__sw--custom"); if (cs) cs.style.background = e.target.value; } });
@@ -2683,12 +2709,13 @@ import { WORLD_LAND } from "./worldland.js";
         try {
           var level = (atsLast && atsLast.level) || atsLevel, company = (atsLast && atsLast.company) || atsState.company || "", jd = atsState.jd || "";
           var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company), { json: true, maxTokens: 6000, temperature: 0.3 }));
-          if (res) { atsLast.res = res; atsLast.text = text; dirty = false; paintSide(); status("Re-checked \u2014 score updated.", true); }
+          if (res) { atsLast.res = res; atsLast.text = text; dirty = false; paintSide(); rbSaveWorkspace(false); status("Re-checked \u2014 score updated.", true); }
           else { status("The re-check came back unreadable \u2014 try again."); btnIdle(rc, was2); }
         } catch (er2) { status("Re-check failed: " + ((er2 && er2.message) || er2)); btnIdle(rc, was2); }
         return;
       }
     });
+    rbSaveWorkspace(false);
   }
 
   /* ---------- ATS résumé viewer: pins the AI's fixes onto the rendered PDF ----------
@@ -2757,6 +2784,7 @@ import { WORLD_LAND } from "./worldland.js";
   async function atsOpenViewer() {
     if (!atsLast || !atsLast.res) { status("Run an ATS check first."); return; }
     var res = atsLast.res, file = atsLast.file, level = atsLast.level || atsLevel;
+    if (!file) { var _ru = (data.contact && data.contact.resume) || ""; if (_ru) { try { file = await resumeToFile(_ru); atsLast.file = file; } catch (e) {} } }
     var modal = atsvEl("div", "atsv");
     modal.innerHTML =
       '<div class="atsv__bar">' +
