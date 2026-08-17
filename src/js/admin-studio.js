@@ -2065,7 +2065,7 @@ import { WORLD_LAND } from "./worldland.js";
       header(true, false);
       y = hH + 6 * k;
     } else {
-      header(false, false);
+      y = header(false, false);
       y += 3 * k; doc.setDrawColor(INK[0], INK[1], INK[2]); doc.setLineWidth(0.4); doc.line(M, y, PW - M, y); y += 6 * k;
     }
 
@@ -2077,9 +2077,13 @@ import { WORLD_LAND } from "./worldland.js";
         s.items.forEach(function (it) {
           need(11 * k);
           if (it.dates || it.location) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7 * k); doc.setCharSpace(0.3); doc.text(P([it.dates, it.location].filter(Boolean).join("   \u00b7   ")).toUpperCase(), CX, y); doc.setCharSpace(0); y += 3.6 * k; }
-          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(9.6 * k); doc.text(P(it.role || ""), CX, y);
-          if (it.org) { acc(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); var ow = doc.getTextWidth(P(it.org)); doc.text(P(it.org), CX + CW2 - ow, y); }
-          y += 4.6 * k;
+          var _org = it.org ? P(it.org) : "", _ow = 0;
+          if (_org) { doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); _ow = doc.getTextWidth(_org); }
+          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(9.6 * k);
+          var _rl = doc.splitTextToSize(P(it.role || ""), CW2 - (_ow ? _ow + 5 : 0));
+          doc.text(_rl, CX, y);
+          if (_org) { acc(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); doc.text(_org, CX + CW2 - _ow, y); }
+          y += (_rl.length - 1) * 4.4 * k + 4.6 * k;
           it.bullets.slice(0, maxBul).forEach(function (bt) {
             var lines = doc.splitTextToSize(P(bt), CW2 - 4.5);
             need(lines.length * 4 * k + 1.4 * k);
@@ -2091,16 +2095,20 @@ import { WORLD_LAND } from "./worldland.js";
         });
       } else if (s.kind === "skills") {
         sec(s.heading);
-        mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(8.6 * k);
+        var _aligned = CW2 > 120, _colW = 0;
+        if (_aligned) { s.groups.forEach(function (g) { if (g.label) { var w = doc.getTextWidth(P(g.label) + ":   "); if (w > _colW) _colW = w; } }); }
         s.groups.forEach(function (g) {
+          var _it = g.items.map(P).join("   \u00b7   ");
           if (g.label) {
-            ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(8.6 * k); var lbl = P(g.label) + ":  "; var lw = doc.getTextWidth(lbl);
-            var rest = doc.splitTextToSize(g.items.map(P).join("   \u00b7   "), CW2 - lw);
+            var _lbl = P(g.label) + ":", _lw = _aligned ? _colW : doc.getTextWidth(_lbl + "  ");
+            var rest = doc.splitTextToSize(_it, CW2 - _lw);
             need(Math.max(1, rest.length) * 4.2 * k + 1.6 * k);
-            doc.text(lbl, CX, y); mut(); doc.setFont("helvetica", "normal"); doc.text(rest, CX + lw, y); y += Math.max(1, rest.length) * 4.2 * k + 1.6 * k;
+            ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(8.6 * k); doc.text(_lbl, CX, y);
+            mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); doc.text(rest, CX + _lw, y); y += Math.max(1, rest.length) * 4.2 * k + 1.6 * k;
           } else {
-            var ll = doc.splitTextToSize(g.items.map(P).join("   \u00b7   "), CW2); need(ll.length * 4.2 * k + 1.6 * k);
-            mut(); doc.setFont("helvetica", "normal"); doc.text(ll, CX, y); y += ll.length * 4.2 * k + 1.6 * k;
+            var ll = doc.splitTextToSize(_it, CW2); need(ll.length * 4.2 * k + 1.6 * k);
+            mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); doc.text(ll, CX, y); y += ll.length * 4.2 * k + 1.6 * k;
           }
         });
         y += 2 * k;
@@ -2108,9 +2116,13 @@ import { WORLD_LAND } from "./worldland.js";
         sec(s.heading);
         s.items.forEach(function (it) {
           need(6 * k);
-          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(9 * k); doc.text(P(it.school || ""), CX, y);
-          if (it.dates) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); var dw = doc.getTextWidth(P(it.dates)); doc.text(P(it.dates), CX + CW2 - dw, y); }
-          y += 4 * k;
+          var _edd = it.dates ? P(it.dates) : "", _dw = 0;
+          if (_edd) { doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); _dw = doc.getTextWidth(_edd); }
+          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(9 * k);
+          var _sc = doc.splitTextToSize(P(it.school || ""), CW2 - (_dw ? _dw + 5 : 0));
+          doc.text(_sc, CX, y);
+          if (_edd) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); doc.text(_edd, CX + CW2 - _dw, y); }
+          y += (_sc.length - 1) * 4 * k + 4 * k;
           var line2 = P([it.credential, it.note].filter(Boolean).join("   \u00b7   "));
           if (line2) { mut(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); var l2 = doc.splitTextToSize(line2, CW2); doc.text(l2, CX, y); y += l2.length * 4 * k; }
           y += 2.6 * k;
@@ -2122,10 +2134,14 @@ import { WORLD_LAND } from "./worldland.js";
       } else {
         sec(s.heading);
         s.items.forEach(function (it) {
-          need(5.4 * k);
-          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(8.6 * k); doc.text(P(it.title || ""), CX, y);
-          if (it.meta) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); var mw = doc.getTextWidth(P(it.meta)); doc.text(P(it.meta), CX + CW2 - mw, y); }
-          y += 4.7 * k;
+          var _mt = it.meta ? P(it.meta) : "", _mw = 0;
+          if (_mt) { doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); _mw = doc.getTextWidth(_mt); }
+          ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(8.6 * k);
+          var _tl = doc.splitTextToSize(P(it.title || ""), CW2 - (_mw ? _mw + 5 : 0));
+          need(_tl.length * 4.4 * k + 1.4 * k);
+          doc.text(_tl, CX, y);
+          if (_mt) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7.4 * k); doc.text(_mt, CX + CW2 - _mw, y); }
+          y += (_tl.length - 1) * 4.4 * k + 4.7 * k;
         });
         y += 2 * k;
       }
