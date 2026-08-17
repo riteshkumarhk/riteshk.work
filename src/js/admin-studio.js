@@ -2009,6 +2009,31 @@ import { WORLD_LAND } from "./worldland.js";
   var RB_ACCENTS = ["#9a6a24", "#2f6d9a", "#585c52", "#7a3b3b", "#3f6b4b", "#454a8c", "#b0561f", "#1c1a17"];
   var RB_LAYOUTS = { single: { name: "Single column" }, sidebar: { name: "Two-column \u00b7 design" }, fullbleed: { name: "Full-bleed header" } };
   var RB_FONTS = { sans: { name: "Sans", css: "Helvetica, Arial, sans-serif", pdf: "helvetica" }, serif: { name: "Serif", css: "Georgia, 'Times New Roman', serif", pdf: "times" }, mono: { name: "Mono", css: "'Courier New', Courier, monospace", pdf: "courier" } };
+  // Minimal line icons (Lucide geometry) for the PDF contact line + experience meta. Rasterized once
+  // at high DPI into crisp PNGs (per colour) so they look crafted + perfectly aligned; drawn decoratively
+  // beside the REAL text (ATS still reads the email/phone/dates text — the icon is just a picture).
+  var RB_ICON_SVG = {
+    email: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+    phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
+    loc: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+    linkedin: '<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/>',
+    site: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+    cal: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>'
+  };
+  var RB_ICON_CACHE = {};
+  function rbHex(a) { function h(n) { n = Math.max(0, Math.min(255, n | 0)).toString(16); return n.length < 2 ? "0" + n : n; } return "#" + h(a[0]) + h(a[1]) + h(a[2]); }
+  function rbRasterIcon(kind, hex) {
+    return new Promise(function (res) {
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 24 24" fill="none" stroke="' + hex + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (RB_ICON_SVG[kind] || "") + "</svg>";
+      var img = new Image();
+      img.onload = function () { try { var c = document.createElement("canvas"); c.width = 96; c.height = 96; c.getContext("2d").drawImage(img, 0, 0, 96, 96); res(c.toDataURL("image/png")); } catch (e) { res(null); } };
+      img.onerror = function () { res(null); };
+      img.src = "data:image/svg+xml;base64," + btoa(svg);
+    });
+  }
+  async function rbEnsureIcons(hexes) {
+    for (var ki in RB_ICON_SVG) { for (var i = 0; i < hexes.length; i++) { var key = ki + "|" + hexes[i]; if (!(key in RB_ICON_CACHE)) { try { RB_ICON_CACHE[key] = await rbRasterIcon(ki, hexes[i]); } catch (e) { RB_ICON_CACHE[key] = null; } } } }
+  }
   var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single", atsRbFont = "sans", atsRbCanvas = "dark";
   function atsRbTpl() { return RB_TPL[atsRbTplId] || RB_TPL.classic; }
   function atsRbSize() { return RB_SIZE[atsRbSizeId] || RB_SIZE.a4; }
@@ -2032,6 +2057,10 @@ import { WORLD_LAND } from "./worldland.js";
     function mut() { doc.setTextColor(MUT[0], MUT[1], MUT[2]); }
     function faint() { doc.setTextColor(FAINT[0], FAINT[1], FAINT[2]); }
     function acc() { doc.setTextColor(ACC[0], ACC[1], ACC[2]); }
+    function drawIcon(kind, x, y, s, col) {
+      var hx = rbHex(col || MUT), u = RB_ICON_CACHE[kind + "|" + hx];
+      if (u) { try { doc.addImage(u, "PNG", x, y, s, s, "ic" + kind + hx.slice(1), "NONE"); } catch (e) {} }
+    }
     function rule(yy) { doc.setDrawColor(LINE[0], LINE[1], LINE[2]); doc.setLineWidth(0.2); doc.line(CX, yy, CX + CW2, yy); }
     function need(h) { if (y + h > PH - M - 8) { doc.addPage(); y = colTop; } }
     function sec(t) { if (!t) return; need(12 * k); acc(); doc.setFont("helvetica", "bold"); doc.setFontSize(8 * k); doc.setCharSpace(0.5); doc.text(String(P(t)).toUpperCase(), CX, y); doc.setCharSpace(0); y += 2 * k; if (TPL.head === "bar") { doc.setDrawColor(ACC[0], ACC[1], ACC[2]); doc.setLineWidth(0.5); doc.line(CX, y, CX + CW2, y); } else if (TPL.head !== "plain") { rule(y); } y += 4.2 * k; }
@@ -2043,18 +2072,24 @@ import { WORLD_LAND } from "./worldland.js";
       hy += 6 * k;
       if (rb.title) { hy += 5 * k; doc.setFont("helvetica", "bold"); doc.setFontSize(8 * k); doc.setCharSpace(0.4); if (!measure) { if (rev) doc.setTextColor(255, 255, 255); else acc(); doc.text(P(rb.title).toUpperCase(), M, hy); } doc.setCharSpace(0); }
       var bits = [], c = rb.contact || {};
-      if (c.email) bits.push({ t: P(c.email), u: "mailto:" + c.email });
-      if (c.phone) bits.push({ t: P(c.phone), u: "tel:" + String(c.phone).replace(/[^0-9+]/g, "") });
-      if (c.location) bits.push({ t: P(c.location), u: "" });
-      (c.links || []).forEach(function (l) { bits.push({ t: P(l.label || rpdfNoProto(l.url)), u: l.url || "" }); });
+      if (c.email) bits.push({ t: P(c.email), u: "mailto:" + c.email, ic: "email" });
+      if (c.phone) bits.push({ t: P(c.phone), u: "tel:" + String(c.phone).replace(/[^0-9+]/g, ""), ic: "phone" });
+      if (c.location) bits.push({ t: P(c.location), u: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(c.location), ic: "loc" });
+      (c.links || []).forEach(function (l) { var _lab = P(l.label || rpdfNoProto(l.url)); bits.push({ t: _lab, u: l.url || "", ic: /linkedin/i.test((l.url || "") + " " + (l.label || "")) ? "linkedin" : "site" }); });
       if (bits.length) {
-        hy += 5.5 * k; doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); x = M;
-        bits.forEach(function (b, i) {
-          var w = doc.getTextWidth(b.t);
-          if (x + w > PW - M) { hy += 4.6 * k; x = M; }
-          if (!measure) { if (b.u) { if (rev) doc.setTextColor(255, 255, 255); else ink(); doc.textWithLink(b.t, x, hy, { url: b.u }); if (!rev) mut(); } else { if (rev) doc.setTextColor(255, 255, 255); else mut(); doc.text(b.t, x, hy); } }
-          x += w;
-          if (i < bits.length - 1) { var sw = doc.getTextWidth(sep); if (x + sw <= PW - M) { if (!measure) { if (rev) doc.setTextColor(255, 255, 255); else faint(); doc.text(sep, x, hy); } x += sw; } }
+        hy += 5.8 * k; doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); x = M;
+        var _isz = 2.7 * k, _ig = 1.1 * k, _iitem = 4.6 * k;
+        bits.forEach(function (b) {
+          var w = _isz + _ig + doc.getTextWidth(b.t);
+          if (x + w > PW - M) { hy += 5.1 * k; x = M; }
+          if (!measure) {
+            var _it = hy - _isz * 0.5 - 1.0 * k;
+            drawIcon(b.ic, x, _it, _isz, rev ? [255, 255, 255] : MUT);
+            if (rev) doc.setTextColor(255, 255, 255); else if (b.u) ink(); else mut();
+            doc.text(b.t, x + _isz + _ig, hy);
+            if (b.u) doc.link(x, _it - 0.3 * k, w, _isz + 2.2 * k, { url: b.u });
+          }
+          x += w + _iitem;
         });
       }
       return hy;
@@ -2076,7 +2111,13 @@ import { WORLD_LAND } from "./worldland.js";
         sec(s.heading);
         s.items.forEach(function (it) {
           need(11 * k);
-          if (it.dates || it.location) { faint(); doc.setFont("helvetica", "normal"); doc.setFontSize(7 * k); doc.setCharSpace(0.3); doc.text(P([it.dates, it.location].filter(Boolean).join("   \u00b7   ")).toUpperCase(), CX, y); doc.setCharSpace(0); y += 3.6 * k; }
+          if (it.dates || it.location) {
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7 * k);
+            var _misz = 2.5 * k, _mig = 0.9 * k, _mgrp = 3.6 * k, _mx = CX, _mtop = y - _misz * 0.5 - 0.75 * k;
+            if (it.dates) { drawIcon("cal", _mx, _mtop, _misz, MUT); _mx += _misz + _mig; faint(); doc.setCharSpace(0.3); var _dt = P(it.dates).toUpperCase(); doc.text(_dt, _mx, y); doc.setCharSpace(0); _mx += doc.getTextWidth(_dt) + (_dt.length - 1) * 0.3 + _mgrp; }
+            if (it.location) { drawIcon("loc", _mx, _mtop, _misz, MUT); _mx += _misz + _mig; faint(); doc.setCharSpace(0.3); var _lc = P(it.location).toUpperCase(); doc.text(_lc, _mx, y); doc.setCharSpace(0); }
+            y += 3.8 * k;
+          }
           var _org = it.org ? P(it.org) : "", _ow = 0;
           if (_org) { doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); _ow = doc.getTextWidth(_org); }
           ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(9.6 * k);
@@ -2171,6 +2212,7 @@ import { WORLD_LAND } from "./worldland.js";
   // Build at progressively tighter densities until it fits two pages; return the first that fits (else the tightest).
   async function atsRbFit(rb) {
     var jsPDF = await ensureJsPdf();
+    await rbEnsureIcons([rbHex([101, 92, 83]), rbHex([154, 147, 138]), rbHex([255, 255, 255])]);
     var DENS = atsRbDens().ladder;
     var built = null;
     for (var i = 0; i < DENS.length; i++) {
