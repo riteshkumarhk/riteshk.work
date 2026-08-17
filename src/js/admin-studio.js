@@ -2185,7 +2185,7 @@ import { WORLD_LAND } from "./worldland.js";
   function atsHexRgb(hex) { var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "")); if (!m) return null; var n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
   function atsRbAccentHex() { return atsRbAccent || atsRbTpl().accent; }
   function atsRbAccentRgb() { return (atsRbAccent && atsHexRgb(atsRbAccent)) || atsRbTpl().rgb; }
-  function atsRbApplyTpl(docEl) { var t = atsRbTpl(); docEl.style.setProperty("--rbz-accent", atsRbAccentHex()); docEl.style.setProperty("--rbz-sum-ff", t.sumFF); docEl.style.setProperty("--rbz-sum-style", t.sumStyle); docEl.style.setProperty("--rbz-scale", atsRbDens().scale); docEl.style.setProperty("--rbz-body-ff", (RB_FONTS[atsRbFont] || RB_FONTS.sans).css); docEl.setAttribute("data-head", t.head); docEl.setAttribute("data-layout", atsRbLayout); }
+  function atsRbApplyTpl(docEl) { var t = atsRbTpl(); docEl.style.setProperty("--rbz-accent", atsRbAccentHex()); docEl.style.setProperty("--rbz-sum-ff", t.sumFF); docEl.style.setProperty("--rbz-sum-style", t.sumStyle); docEl.style.setProperty("--rbz-body-ff", (RB_FONTS[atsRbFont] || RB_FONTS.sans).css); docEl.setAttribute("data-head", t.head); docEl.setAttribute("data-layout", atsRbLayout); }
   // Typeset the structured résumé at a given density (k scales type + spacing; maxBul caps bullets/role).
   function atsRbBuild(jsPDF, rb, dens) {
     var k = dens.k, maxBul = dens.maxBul;
@@ -2511,6 +2511,7 @@ import { WORLD_LAND } from "./worldland.js";
     var working = rb;
     var curUrl = null, previewing = false, dirty = false;
     var rbUndo = [rbClone(working)], rbRedo = [], rbCommitT = null;
+    var atsRbPages = (built && built.pages) || 1; // the vector-PDF page count the badge shows; the editor compresses to match it
     var modal = atsvEl("div", "rbz rbz--editor");
     modal.innerHTML =
       '<div class="rbz__bar">' +
@@ -2552,37 +2553,73 @@ import { WORLD_LAND } from "./worldland.js";
       if (_ae && _ae.isContentEditable && docEl.contains(_ae)) return; // don't restructure while a field is focused: moving its node would blur the caret (one char at a time) and wipe the browser's native undo stack. focusout re-triggers the reflow.
       var w = docEl.clientWidth; if (!w) return;
       var _sz = atsRbSize(), pageOuterH = w * _sz.h / _sz.w;
-      docEl.querySelectorAll(".rbz__pagesep").forEach(function (s) { s.remove(); });
-      var pgs = docEl.querySelectorAll(".rbz__page"), raw = [];
-      if (pgs.length) pgs.forEach(function (c) { while (c.firstChild) raw.push(c.removeChild(c.firstChild)); });
-      else Array.prototype.slice.call(docEl.children).forEach(function (b) { raw.push(docEl.removeChild(b)); });
-      pgs.forEach(function (c) { c.remove(); });
-      // Merge continuation fragments from a prior reflow back into their section, so we always
-      // re-split from a clean tree (the roles that spilled over are appended back in order).
-      var blocks = [];
-      raw.forEach(function (b) {
-        if (b.nodeType === 1 && b.classList.contains("rbz__sec--cont") && blocks.length) { var prev = blocks[blocks.length - 1]; while (b.firstChild) prev.appendChild(b.firstChild); }
-        else blocks.push(b);
-      });
-      var pn = 0;
-      function newPage() { pn++; if (pn > 1) { var sep = document.createElement("div"); sep.className = "rbz__pagesep"; sep.setAttribute("aria-hidden", "true"); sep.innerHTML = "<span>Page " + pn + "</span>"; docEl.appendChild(sep); } var p = document.createElement("div"); p.className = "rbz__page"; p.style.minHeight = pageOuterH + "px"; docEl.appendChild(p); return p; }
-      var cur = newPage();
-      if (atsRbLayout === "sidebar") { blocks.forEach(function (b) { cur.appendChild(b); }); return; }
-      var cs = getComputedStyle(cur), avail = pageOuterH - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0), used = 0;
-      function measure(n) { var s = getComputedStyle(n); return n.offsetHeight + (parseFloat(s.marginTop) || 0) + (parseFloat(s.marginBottom) || 0); }
-      function place(n) { cur.appendChild(n); var h = measure(n); if (used > 0 && used + h > avail) { cur.removeChild(n); cur = newPage(); cur.appendChild(n); used = h; } else used += h; }
-      blocks.forEach(function (b) {
-        var splittable = b.nodeType === 1 && b.classList.contains("rbz__sec") && b.querySelectorAll(":scope > .rbz__xp").length > 1;
-        if (!splittable) { place(b); return; }
-        var siVal = b.dataset ? b.dataset.si : null, frag = b;
-        var movable = []; Array.prototype.slice.call(b.children).forEach(function (k) { if (k.classList.contains("rbz__xp") || k.classList.contains("rbz__add--role")) movable.push(b.removeChild(k)); });
-        place(frag); // section heading on its own, then flow the roles, splitting onto fresh sheets
-        movable.forEach(function (m) {
-          frag.appendChild(m); var h = measure(m);
-          if (used > 0 && used + h > avail) { frag.removeChild(m); cur = newPage(); frag = document.createElement("div"); frag.className = "rbz__sec rbz__sec--cont"; if (siVal != null) frag.dataset.si = siVal; cur.appendChild(frag); frag.appendChild(m); used = h; }
-          else used += h;
+      // Pull everything out of the page cards into a clean block list, merging any continuation
+      // fragments from a prior reflow back into their section so we always re-split from a clean tree.
+      function harvest() {
+        docEl.querySelectorAll(".rbz__pagesep").forEach(function (s) { s.remove(); });
+        var pgs = docEl.querySelectorAll(".rbz__page"), raw = [];
+        if (pgs.length) pgs.forEach(function (c) { while (c.firstChild) raw.push(c.removeChild(c.firstChild)); });
+        else Array.prototype.slice.call(docEl.children).forEach(function (b) { raw.push(docEl.removeChild(b)); });
+        pgs.forEach(function (c) { c.remove(); });
+        var out = [];
+        raw.forEach(function (b) {
+          if (b.nodeType === 1 && b.classList.contains("rbz__sec--cont") && out.length) { var prev = out[out.length - 1]; while (b.firstChild) prev.appendChild(b.firstChild); }
+          else out.push(b);
         });
-      });
+        return out;
+      }
+      // Distribute blocks across real A4/Letter cards; single-flow layouts split at block (and role)
+      // boundaries, the two-column layout stays on one sheet. Returns the sheet count.
+      function placeInto(blocks) {
+        var pn = 0;
+        function newPage() { pn++; if (pn > 1) { var sep = document.createElement("div"); sep.className = "rbz__pagesep"; sep.setAttribute("aria-hidden", "true"); sep.innerHTML = "<span>Page " + pn + "</span>"; docEl.appendChild(sep); } var p = document.createElement("div"); p.className = "rbz__page"; p.style.minHeight = pageOuterH + "px"; docEl.appendChild(p); return p; }
+        var cur = newPage();
+        if (atsRbLayout === "sidebar") { blocks.forEach(function (b) { cur.appendChild(b); }); return 1; }
+        var cs = getComputedStyle(cur), avail = pageOuterH - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0), used = 0;
+        function measure(n) { var s = getComputedStyle(n); return n.offsetHeight + (parseFloat(s.marginTop) || 0) + (parseFloat(s.marginBottom) || 0); }
+        function place(n) { cur.appendChild(n); var h = measure(n); if (used > 0 && used + h > avail) { cur.removeChild(n); cur = newPage(); cur.appendChild(n); used = h; } else used += h; }
+        blocks.forEach(function (b) {
+          var splittable = b.nodeType === 1 && b.classList.contains("rbz__sec") && b.querySelectorAll(":scope > .rbz__xp").length > 1;
+          if (!splittable) { place(b); return; }
+          var siVal = b.dataset ? b.dataset.si : null, frag = b;
+          var movable = []; Array.prototype.slice.call(b.children).forEach(function (k) { if (k.classList.contains("rbz__xp") || k.classList.contains("rbz__add--role")) movable.push(b.removeChild(k)); });
+          place(frag); // section heading on its own, then flow the roles, splitting onto fresh sheets
+          movable.forEach(function (m) {
+            frag.appendChild(m); var h = measure(m);
+            if (used > 0 && used + h > avail) { frag.removeChild(m); cur = newPage(); frag = document.createElement("div"); frag.className = "rbz__sec rbz__sec--cont"; if (siVal != null) frag.dataset.si = siVal; cur.appendChild(frag); frag.appendChild(m); used = h; }
+            else used += h;
+          });
+        });
+        return docEl.querySelectorAll(".rbz__page").length;
+      }
+      var blocks = harvest();
+      // Compress the résumé just enough that the editor's page cards match the vector PDF
+      // (atsRbPages) — the count the badge shows. Editor type is deliberately more readable
+      // (less dense) than the PDF, so left alone it spills onto an extra sheet. Page-size aware:
+      // the sheet height + usable area come from atsRbSize(), so it holds for A4 and US Letter.
+      var target = Math.max(1, atsRbPages), fitScale = 1;
+      if (atsRbLayout !== "sidebar" && blocks.length) {
+        var probe = document.createElement("div"); probe.className = "rbz__page"; probe.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;width:" + w + "px"; docEl.appendChild(probe);
+        var ppcs = getComputedStyle(probe), ppT = parseFloat(ppcs.paddingTop) || 0, ppB = parseFloat(ppcs.paddingBottom) || 0, fitAvail = pageOuterH - ppT - ppB;
+        blocks.forEach(function (b) { probe.appendChild(b); });
+        var flowH = function (sc) { docEl.style.setProperty("--rbz-scale", sc); return probe.scrollHeight - ppT - ppB; };
+        var hHi = flowH(1), hLo = flowH(0.7), slope = (hHi - hLo) / 0.3, baseH = hHi - slope; // linear model H(s) ≈ slope*s + baseH (baseH = the fixed rem margins that don't scale)
+        var want = target * fitAvail * 0.955; // headroom so a whole block near the edge doesn't tip onto the next sheet
+        if (slope > 0 && hHi > want) fitScale = (want - baseH) / slope;
+        fitScale = Math.max(0.6, Math.min(1, fitScale));
+        blocks.forEach(function (b) { if (b.parentNode === probe) probe.removeChild(b); });
+        probe.remove();
+      }
+      // Place, then nudge the scale down and re-place if block quantisation still tipped us onto an
+      // extra sheet — this is what guarantees the editor lands on the PDF's page count.
+      docEl.style.setProperty("--rbz-scale", fitScale);
+      var made = placeInto(blocks), guard = 0;
+      while (made > target && fitScale > 0.6 && guard++ < 6) {
+        fitScale = Math.max(0.6, fitScale - 0.04);
+        docEl.style.setProperty("--rbz-scale", fitScale);
+        blocks = harvest();
+        made = placeInto(blocks);
+      }
     }
     function schedulePaginate() { clearTimeout(paginateT); paginateT = setTimeout(paginate, 180); }
     function renderDesign() {
@@ -2630,7 +2667,9 @@ import { WORLD_LAND } from "./worldland.js";
     }
     var _rbSaveT = null;
     function rbSaveSoon() { clearTimeout(_rbSaveT); _rbSaveT = setTimeout(function () { rbSaveWorkspace(true); }, 800); }
-    function markDirty() { rbSaveSoon(); rbCommit(false); if (!dirty) { dirty = true; paintSide(); } }
+    var _rbCountT = null;
+    function rbCountSoon() { clearTimeout(_rbCountT); _rbCountT = setTimeout(function () { if (!previewing) buildFromEdits(); }, 900); } // keep the page count + editor fit fresh as you edit
+    function markDirty() { rbSaveSoon(); rbCountSoon(); rbCommit(false); if (!dirty) { dirty = true; paintSide(); } }
     function reRender() { docEl.innerHTML = atsRbEditorHtml(working); paginate(); }
     function rbUpdateHist() { var u = modal.querySelector("[data-rbz-undo]"), r = modal.querySelector("[data-rbz-redo]"); if (u) u.disabled = rbUndo.length <= 1; if (r) r.disabled = !rbRedo.length; }
     function rbCommit(now) {
@@ -2688,7 +2727,7 @@ import { WORLD_LAND } from "./worldland.js";
     });
     docEl.addEventListener("dragend", endDrag);
 
-    async function buildFromEdits() { working = rbReadEditor(docEl, working); var b = await atsRbFit(working); setPg(b.pages); return b; }
+    async function buildFromEdits() { working = rbReadEditor(docEl, working); var b = await atsRbFit(working); atsRbPages = b.pages; setPg(b.pages); schedulePaginate(); return b; }
     function revoke() { if (curUrl) { try { URL.revokeObjectURL(curUrl); } catch (e) {} curUrl = null; } }
     function rbSetBadge(b, t) { var bd = modal.querySelector("[data-rbz-badge]"), tt = modal.querySelector("[data-rbz-title]"); if (bd) bd.textContent = b; if (tt) tt.textContent = t; }
     async function togglePreview(on) {
@@ -2717,9 +2756,9 @@ import { WORLD_LAND } from "./worldland.js";
       if (e.target.closest("[data-rbz-redo]")) { rbRedoDo(); return; }
       if (e.target.closest("[data-rbz-design-toggle]")) { modal.querySelector(".rbz__body").classList.toggle("is-noleft"); schedulePaginate(); return; }
       var _cv = e.target.closest("[data-canvas-set]"); if (_cv) { setCanvas(_cv.dataset.canvasSet); return; }
-      var _to = e.target.closest("[data-tpl]"); if (_to) { atsRbTplId = _to.dataset.tpl; atsRbApplyTpl(docEl); renderDesign(); return; }
-      var _so = e.target.closest("[data-size]"); if (_so) { atsRbSizeId = _so.dataset.size; renderDesign(); paginate(); return; }
-      var _ao = e.target.closest("[data-accent]"); if (_ao) { atsRbAccent = _ao.dataset.accent || ""; atsRbApplyTpl(docEl); renderDesign(); return; }
+      var _to = e.target.closest("[data-tpl]"); if (_to) { atsRbTplId = _to.dataset.tpl; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); return; }
+      var _so = e.target.closest("[data-size]"); if (_so) { atsRbSizeId = _so.dataset.size; renderDesign(); buildFromEdits(); return; }
+      var _ao = e.target.closest("[data-accent]"); if (_ao) { atsRbAccent = _ao.dataset.accent || ""; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); return; }
       var _de = e.target.closest("[data-density]"); if (_de) { atsRbDensity = _de.dataset.density; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); buildFromEdits(); return; }
       var _ft = e.target.closest("[data-font]"); if (_ft) { atsRbFont = _ft.dataset.font; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); buildFromEdits(); return; }
       var _ly = e.target.closest("[data-lay]"); if (_ly) { atsRbLayout = _ly.dataset.lay; working = rbReadEditor(docEl, working); atsRbApplyTpl(docEl); reRender(); renderDesign(); paintSide(); buildFromEdits(); return; }
