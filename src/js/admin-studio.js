@@ -2199,25 +2199,39 @@ import { WORLD_LAND } from "./worldland.js";
     var last = ks[ks.length - 1];
     o[/^\d+$/.test(last) ? +last : last] = val;
   }
-  function rbToPlainText(rb) {
+  function rbToPlainText(rb, layout) {
     var L = [];
     if (rb.name) L.push(rb.name);
     if (rb.title) L.push(rb.title);
     var c = rb.contact || {}, cb = [c.email, c.phone, c.location].filter(Boolean);
     (c.links || []).forEach(function (l) { if (l.label || l.url) cb.push(l.label || l.url); });
     if (cb.length) L.push(cb.join(" | "));
-    if (rb.summary) L.push("", rb.summary);
-    (rb.sections || []).forEach(function (s) {
-      L.push("", String(s.heading || "").toUpperCase());
+    function secLines(s) {
+      var o = ["", String(s.heading || "").toUpperCase()];
       if (s.kind === "experience") (s.items || []).forEach(function (it) {
-        L.push([it.role, it.org].filter(Boolean).join(", ") + (it.dates ? "  (" + it.dates + ")" : "") + (it.location ? "  " + it.location : ""));
-        (it.bullets || []).forEach(function (b) { if (b) L.push("- " + b); });
+        o.push([it.role, it.org].filter(Boolean).join(", ") + (it.dates ? "  (" + it.dates + ")" : "") + (it.location ? "  " + it.location : ""));
+        (it.bullets || []).forEach(function (b) { if (b) o.push("- " + b); });
       });
-      else if (s.kind === "skills") (s.groups || []).forEach(function (g) { L.push((g.label ? g.label + ": " : "") + (g.items || []).join(", ")); });
-      else if (s.kind === "education") (s.items || []).forEach(function (it) { L.push([it.school, it.credential].filter(Boolean).join(", ") + (it.dates ? "  (" + it.dates + ")" : "") + (it.note ? "  " + it.note : "")); });
-      else if (s.kind === "text") L.push(s.text || "");
-      else (s.items || []).forEach(function (it) { L.push([it.title, it.meta].filter(Boolean).join(", ")); });
-    });
+      else if (s.kind === "skills") (s.groups || []).forEach(function (g) { o.push((g.label ? g.label + ": " : "") + (g.items || []).join(", ")); });
+      else if (s.kind === "education") (s.items || []).forEach(function (it) { o.push([it.school, it.credential].filter(Boolean).join(", ") + (it.dates ? "  (" + it.dates + ")" : "") + (it.note ? "  " + it.note : "")); });
+      else if (s.kind === "text") o.push(s.text || "");
+      else (s.items || []).forEach(function (it) { o.push([it.title, it.meta].filter(Boolean).join(", ")); });
+      return o;
+    }
+    var secs = rb.sections || [];
+    if (layout === "sidebar") {
+      // A two-column PDF is read in draw order: the sidebar column (skills/education/lists) is
+      // extracted before the main column, so the natural reading order breaks. Serialise in that
+      // same jumbled order so the ATS re-check genuinely scores the multi-column parse.
+      var side = [], main = [];
+      secs.forEach(function (s) { if (s.kind !== "experience" && s.kind !== "text") side.push(s); else main.push(s); });
+      side.forEach(function (s) { L = L.concat(secLines(s)); });
+      if (rb.summary) L.push("", rb.summary);
+      main.forEach(function (s) { L = L.concat(secLines(s)); });
+    } else {
+      if (rb.summary) L.push("", rb.summary);
+      secs.forEach(function (s) { L = L.concat(secLines(s)); });
+    }
     return L.join("\n");
   }
   // Reconstruct the model from the editor DOM: overwrite text values on a clone of the working model.
@@ -2437,7 +2451,7 @@ import { WORLD_LAND } from "./worldland.js";
       var rc = e.target.closest("[data-rbz-recheck]");
       if (rc) {
         working = rbReadEditor(docEl, working);
-        var text = rbToPlainText(working), was2 = btnBusy(rc, "Checking\u2026");
+        var text = rbToPlainText(working, atsRbLayout), was2 = btnBusy(rc, "Checking\u2026");
         try {
           var level = (atsLast && atsLast.level) || atsLevel, company = (atsLast && atsLast.company) || atsState.company || "", jd = atsState.jd || "";
           var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company), { json: true, maxTokens: 6000, temperature: 0.3 }));
