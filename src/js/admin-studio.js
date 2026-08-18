@@ -2523,7 +2523,7 @@ import { WORLD_LAND } from "./worldland.js";
   function atsRbEditorHtml(rb) {
     var e = escHtml;
     var GRIP = '<svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><circle cx="5" cy="4" r="1.3"/><circle cx="11" cy="4" r="1.3"/><circle cx="5" cy="8" r="1.3"/><circle cx="11" cy="8" r="1.3"/><circle cx="5" cy="12" r="1.3"/><circle cx="11" cy="12" r="1.3"/></svg>';
-    function ed(tag, cls, path, val, ph) { return "<" + tag + ' class="' + cls + '" contenteditable="true" data-k="' + path + '"' + (ph ? ' data-ph="' + e(ph) + '"' : "") + ">" + e(val || "") + "</" + tag + ">"; }
+    function ed(tag, cls, path, val, ph) { return "<" + tag + ' class="' + cls + '" data-k="' + path + '"' + (ph ? ' data-ph="' + e(ph) + '"' : "") + ">" + e(val || "") + "</" + tag + ">"; }
     var h = "";
     h += '<div class="rbz__hd">' + ed("div", "rbz__name", "name", rb.name, "Your Name") + ed("div", "rbz__title", "title", rb.title, "Professional title");
     var c = rb.contact || {};
@@ -2548,7 +2548,7 @@ import { WORLD_LAND } from "./worldland.js";
         sh += '<button class="rbz__add rbz__add--role" type="button" data-add-role="' + si + '">+ add role</button>';
       } else if (s.kind === "skills") {
         (s.groups || []).forEach(function (g, gi) {
-          sh += '<div class="rbz__skg">' + ed("span", "rbz__sklabel", "sections." + si + ".groups." + gi + ".label", g.label, "Group") + '<span class="rbz__skitems" contenteditable="true" data-ksitems="' + si + "." + gi + '" data-ph="skill \u00b7 skill \u00b7 skill">' + e((g.items || []).join("  \u00b7  ")) + '</span><button class="rbz__del" type="button" data-del-group="' + si + "." + gi + '" title="Remove group">\u00d7</button></div>';
+          sh += '<div class="rbz__skg">' + ed("span", "rbz__sklabel", "sections." + si + ".groups." + gi + ".label", g.label, "Group") + '<span class="rbz__skitems" data-ksitems="' + si + "." + gi + '" data-ph="skill \u00b7 skill \u00b7 skill">' + e((g.items || []).join("  \u00b7  ")) + '</span><button class="rbz__del" type="button" data-del-group="' + si + "." + gi + '" title="Remove group">\u00d7</button></div>';
         });
         sh += '<button class="rbz__add rbz__add--role" type="button" data-add-group="' + si + '">+ add group</button>';
       } else if (s.kind === "education") {
@@ -2700,7 +2700,7 @@ import { WORLD_LAND } from "./worldland.js";
         '<aside class="rbz__side" data-rbz-side></aside>' +
         '<div class="rbz__main">' +
           '<div class="rbz__pagewrap" data-rbz-wrap>' +
-            '<div class="rbz__doc" data-rbz-doc>' + atsRbEditorHtml(working) + "</div>" +
+            '<div class="rbz__doc" data-rbz-doc contenteditable="true">' + atsRbEditorHtml(working) + "</div>" +
           "</div>" +
           '<iframe class="rbz__frame" data-rbz-frame title="PDF preview" hidden></iframe>' +
         "</div>" +
@@ -2754,7 +2754,7 @@ import { WORLD_LAND } from "./worldland.js";
       // boundaries, the two-column layout stays on one sheet. Returns the sheet count.
       function placeInto(blocks) {
         var pn = 0;
-        function newPage() { pn++; if (pn > 1) { var sep = document.createElement("div"); sep.className = "rbz__pagesep"; sep.setAttribute("aria-hidden", "true"); sep.innerHTML = "<span>Page " + pn + "</span>"; docEl.appendChild(sep); } var p = document.createElement("div"); p.className = "rbz__page"; p.style.minHeight = pageOuterH + "px"; docEl.appendChild(p); return p; }
+        function newPage() { pn++; if (pn > 1) { var sep = document.createElement("div"); sep.className = "rbz__pagesep"; sep.setAttribute("aria-hidden", "true"); sep.contentEditable = "false"; sep.innerHTML = "<span>Page " + pn + "</span>"; docEl.appendChild(sep); } var p = document.createElement("div"); p.className = "rbz__page"; p.style.minHeight = pageOuterH + "px"; docEl.appendChild(p); return p; }
         var cur = newPage();
         if (atsRbLayout === "sidebar") { blocks.forEach(function (b) { cur.appendChild(b); }); return 1; }
         var cs = getComputedStyle(cur), avail = pageOuterH - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0), used = 0;
@@ -2840,7 +2840,7 @@ import { WORLD_LAND } from "./worldland.js";
     var _rbCountT = null;
     function rbCountSoon() { clearTimeout(_rbCountT); _rbCountT = setTimeout(function () { if (!previewing) buildFromEdits(); }, 900); } // keep the page count + editor fit fresh as you edit
     function markDirty() { rbSaveSoon(); rbCountSoon(); rbCommit(false); if (!dirty) { dirty = true; paintSide(); } }
-    function reRender() { var _st = mainEl ? mainEl.scrollTop : 0; docEl.innerHTML = atsRbEditorHtml(working); paginate(); if (mainEl) mainEl.scrollTop = _st; }
+    function reRender() { var _st = mainEl ? mainEl.scrollTop : 0; docEl.innerHTML = atsRbEditorHtml(working); rbLockChrome(); paginate(); if (mainEl) mainEl.scrollTop = _st; }
     function rbUpdateHist() { var u = modal.querySelector("[data-rbz-undo]"), r = modal.querySelector("[data-rbz-redo]"); if (u) u.disabled = rbUndo.length <= 1; if (r) r.disabled = !rbRedo.length; }
     function rbCommit(now) {
       function take() { var snap = rbClone(rbReadEditor(docEl, working)); if (JSON.stringify(rbUndo[rbUndo.length - 1]) !== JSON.stringify(snap)) { rbUndo.push(snap); if (rbUndo.length > 60) rbUndo.shift(); rbRedo = []; rbUpdateHist(); } }
@@ -2849,11 +2849,20 @@ import { WORLD_LAND } from "./worldland.js";
     function rbRestore(s) { working = rbClone(s); reRender(); dirty = true; paintSide(); rbSaveSoon(); rbUpdateHist(); buildFromEdits(); }
     function rbUndoDo() { if (rbUndo.length <= 1) return; rbRedo.push(rbUndo.pop()); rbRestore(rbUndo[rbUndo.length - 1]); }
     function rbRedoDo() { if (!rbRedo.length) return; var s = rbRedo.pop(); rbUndo.push(s); rbRestore(s); }
-    function focusPath(path) { var el = docEl.querySelector('[data-k="' + path + '"]'); if (el) { el.focus(); try { var r = document.createRange(); r.selectNodeContents(el); r.collapse(false); var sel = getShellSel(); if (sel) { sel.removeAllRanges(); sel.addRange(r); } } catch (e) {} } }
+    function focusPath(path) { var el = docEl.querySelector('[data-k="' + path + '"]'); if (el) { docEl.focus(); try { var r = document.createRange(); r.selectNodeContents(el); r.collapse(false); var sel = getShellSel(); if (sel) { sel.removeAllRanges(); sel.addRange(r); } } catch (e) {} } }
     function getShellSel() { try { return window.getSelection(); } catch (e) { return null; } }
 
     docEl.addEventListener("input", function (e) { if (e.target && e.target.closest && e.target.closest(".rbz__addsec")) return; markDirty(); });
     docEl.addEventListener("focusout", function () { schedulePaginate(); });
+    // One editing host: the whole doc is contenteditable so a drag-selection flows across fields cleanly.
+    // Fields are plain [data-k] spans; toolbar chrome is locked; Enter/paste stay inside a field.
+    docEl.addEventListener("keydown", function (e) { if (e.key === "Enter" && !(e.target.closest && e.target.closest(".rbz__addsec"))) e.preventDefault(); });
+    docEl.addEventListener("paste", function (e) { if (e.target.closest && e.target.closest(".rbz__addsec")) return; e.preventDefault(); var cd = e.clipboardData || window.clipboardData; var t = (cd && cd.getData ? cd.getData("text/plain") : "") || ""; document.execCommand("insertText", false, t.replace(/\s+/g, " ")); });
+    function rbLockChrome() { docEl.querySelectorAll(".rbz__grip, .rbz__del, .rbz__mv, .rbz__add, .rbz__addsec, .rbz__ico, .rbz__pagesep").forEach(function (n) { n.contentEditable = "false"; }); }
+    var _rbHi = null;
+    function rbHiField() { var s = window.getSelection(), f = null; if (s && s.focusNode && docEl.contains(s.focusNode)) { var n = s.focusNode.nodeType === 3 ? s.focusNode.parentNode : s.focusNode; f = n && n.closest ? n.closest("[data-k],[data-ksitems]") : null; } if (f === _rbHi) return; if (_rbHi) _rbHi.classList.remove("is-editing"); _rbHi = f; if (f) f.classList.add("is-editing"); }
+    document.addEventListener("selectionchange", rbHiField);
+    rbLockChrome();
     docEl.addEventListener("click", function (e) {
       var t;
       if (t = e.target.closest("[data-del-bullet]")) { working = rbReadEditor(docEl, working); var p = t.dataset.delBullet.split("."); working.sections[+p[0]].items[+p[1]].bullets.splice(+p[2], 1); reRender(); markDirty(); return; }
@@ -2945,7 +2954,7 @@ import { WORLD_LAND } from "./worldland.js";
         frameEl.src = src; wrapEl.hidden = true; frameEl.hidden = false; previewing = true; modal.classList.add("rbz--preview"); rbSetBadge("PDF", "Résumé preview"); btnIdle(b0, "\u2190 Back to edit");
       } else { frameEl.hidden = true; wrapEl.hidden = false; previewing = false; modal.classList.remove("rbz--preview"); rbSetBadge("EDIT", "Résumé workspace"); b0.textContent = "Preview PDF"; paginate(); }
     }
-    function close() { try { rbSaveWorkspace(true); } catch (e) {} document.removeEventListener("keydown", onKey); window.removeEventListener("resize", onResize); revoke(); if (pdfBlobUrl) { try { URL.revokeObjectURL(pdfBlobUrl); } catch (e) {} pdfBlobUrl = null; } modal.remove(); }
+    function close() { try { rbSaveWorkspace(true); } catch (e) {} document.removeEventListener("keydown", onKey); window.removeEventListener("resize", onResize); document.removeEventListener("selectionchange", rbHiField); revoke(); if (pdfBlobUrl) { try { URL.revokeObjectURL(pdfBlobUrl); } catch (e) {} pdfBlobUrl = null; } modal.remove(); }
     function backToReview() { if (!atsRbReviewId) { close(); return; } atsvSessId = atsRbReviewId; close(); atsOpenViewer(); } // save + leave the workspace, reopen the review it came from
     function onKey(e) {
       if (e.key === "Escape") { if (previewing) togglePreview(false); else if (!/rbz__doc|rbz__/.test((document.activeElement && document.activeElement.className) || "")) close(); return; }
