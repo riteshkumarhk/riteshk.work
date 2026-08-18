@@ -1597,6 +1597,8 @@ import { WORLD_LAND } from "./worldland.js";
     return s.trim();
   }
   function rpdfNoProto(u) { return String(u || "").split("https://").join("").split("http://").join(""); }
+  // The contact link is self-describing: turn whatever the user typed into a real href (bare domain -> https, email -> mailto).
+  function rbLinkHref(s) { s = String(s || "").trim(); if (!s) return ""; if (/^(https?:|mailto:|tel:)/i.test(s)) return s; if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return "mailto:" + s; return "https://" + s.replace(/^\/+/, ""); }
   function ensureJsPdf() {
     if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
     if (ensureJsPdf._p) return ensureJsPdf._p;
@@ -2234,7 +2236,7 @@ import { WORLD_LAND } from "./worldland.js";
       if (c.email) bits.push({ t: P(c.email), u: "mailto:" + c.email, ic: "email" });
       if (c.phone) bits.push({ t: P(c.phone), u: "tel:" + String(c.phone).replace(/[^0-9+]/g, ""), ic: "phone" });
       if (c.location) bits.push({ t: P(c.location), u: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(c.location), ic: "loc" });
-      (c.links || []).forEach(function (l) { var _lab = P(l.label || rpdfNoProto(l.url)); bits.push({ t: _lab, u: l.url || "", ic: /linkedin/i.test((l.url || "") + " " + (l.label || "")) ? "linkedin" : "site" }); });
+      (c.links || []).forEach(function (l) { var _lab = P(l.label || rpdfNoProto(l.url)); bits.push({ t: _lab, u: rbLinkHref(l.label || l.url), ic: /linkedin/i.test((l.url || "") + " " + (l.label || "")) ? "linkedin" : "site" }); });
       if (bits.length) {
         hy += 5.8 * k; doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); x = M;
         var _isz = 2.7 * k, _ig = 1.1 * k, _iitem = 4.6 * k;
@@ -2507,6 +2509,7 @@ import { WORLD_LAND } from "./worldland.js";
       var items = (el.innerText || "").split(/[\u00b7,\n]/).map(function (x) { return x.trim(); }).filter(Boolean);
       if (rb.sections[si] && rb.sections[si].groups && rb.sections[si].groups[gi]) rb.sections[si].groups[gi].items = items;
     });
+    if (rb.contact && rb.contact.links) rb.contact.links.forEach(function (l) { if (l) l.url = rbLinkHref(l.label || l.url); }); // the visible text IS the link — keep its href synced to what you typed
     return rb;
   }
   function rbNewSection(token) {
@@ -2590,8 +2593,8 @@ import { WORLD_LAND } from "./worldland.js";
     function pcb(ico, href, val) { return val ? '<a class="rbz__cbit" href="' + e(href) + '">' + rbIco(ico) + '<span class="rbz__cbtx">' + e(val) + "</span></a>" : ""; }
     if (c.email) cbits.push(pcb("email", "mailto:" + c.email, c.email));
     if (c.phone) cbits.push(pcb("phone", "tel:" + String(c.phone).replace(/[^0-9+]/g, ""), c.phone));
-    if (c.location) cbits.push('<span class="rbz__cbit">' + rbIco("loc") + '<span class="rbz__cbtx">' + e(c.location) + "</span></span>");
-    (c.links || []).forEach(function (l) { var lab = l.label || l.url; if (lab) cbits.push(pcb(/linkedin/i.test((l.label || "") + " " + (l.url || "")) ? "linkedin" : "site", l.url || "#", lab)); });
+    if (c.location) cbits.push(pcb("loc", "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(c.location), c.location));
+    (c.links || []).forEach(function (l) { var lab = l.label || l.url; if (lab) cbits.push(pcb(/linkedin/i.test((l.label || "") + " " + (l.url || "")) ? "linkedin" : "site", rbLinkHref(lab), lab)); });
     var h = '<div class="rbz__hd">' + div("rbz__name", rb.name) + div("rbz__title", rb.title) + (cbits.length ? '<div class="rbz__contact">' + cbits.join("") + "</div>" : "") + "</div>";
     var sumBlock = rb.summary ? '<div class="rbz__sec rbz__sec--sum">' + div("rbz__sum", rb.summary) + "</div>" : "";
     function secHtml(s) {
