@@ -2051,6 +2051,8 @@ import { WORLD_LAND } from "./worldland.js";
       atsLevel = p.level || atsLevel;
       atsLast = { file: null, res: p.res || null, level: atsLevel, company: p.company || "", text: p.text || "" };
       atsRbSessId = id;
+      atsRbReviewId = p.reviewId || null;
+      atsvCloseActive();
       try { var built = await atsRbFit(p.rb); atsRbShow(built, p.rb); } catch (er) { status("Couldn\u2019t reopen the workspace: " + ((er && er.message) || er)); }
       return;
     }
@@ -2179,6 +2181,7 @@ import { WORLD_LAND } from "./worldland.js";
   }
   var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single", atsRbFont = "sans", atsRbCanvas = "dark", atsRbKeepWhole = true;
   var atsRbSessId = null; // the in-progress workspace's history entry id (edits update it in place)
+  var atsRbReviewId = null; // the review entry this workspace was rebuilt from, so it can navigate back to it
   function atsRbTpl() { return RB_TPL[atsRbTplId] || RB_TPL.classic; }
   function atsRbSize() { return RB_SIZE[atsRbSizeId] || RB_SIZE.a4; }
   function atsRbDens() { return RB_DENS[atsRbDensity] || RB_DENS.normal; }
@@ -2424,7 +2427,9 @@ import { WORLD_LAND } from "./worldland.js";
       if (!rb || !rb.sections.length) throw new Error("The rebuild came back unreadable \u2014 please try again.");
       var built = await atsRbFit(rb);
       atsRbSessId = null;
+      atsRbReviewId = atsvSessId; // link the new workspace back to the review it was built from
       atsRbShow(built, rb);
+      atsvCloseActive(); // one screen at a time — the workspace replaces the review overlay
       status("Résumé rebuilt \u2014 fixes applied.", true);
     } catch (e) {
       status("Rebuild failed: " + ((e && e.message) || e));
@@ -2557,6 +2562,7 @@ import { WORLD_LAND } from "./worldland.js";
     modal.innerHTML =
       '<div class="rbz__bar">' +
         '<div class="rbz__bar-l">' +
+          (atsRbReviewId ? '<button class="rbz__back" type="button" data-rbz-back title="Back to the review">\u2190 Review</button>' : '') +
           '<span class="ats__badge" data-rbz-badge>EDIT</span> <span class="rbz__title" data-rbz-title>Résumé workspace</span>' +
           '<span class="rbz__hist" data-rbz-hist><button type="button" class="rbz__hbtn" data-rbz-undo title="Undo" disabled><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg></button><button type="button" class="rbz__hbtn" data-rbz-redo title="Redo" disabled><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg></button></span>' +
         '</div>' +
@@ -2708,7 +2714,7 @@ import { WORLD_LAND } from "./worldland.js";
       var sc = Math.max(0, Math.min(100, Math.round(+r.score || 0)));
       var bd = r.band || (sc >= 80 ? "Strong" : sc >= 65 ? "Good" : sc >= 45 ? "Needs work" : "At risk");
       var fit = (atsLast && atsLast.company) ? atsLast.company + " fit" : atsLevelName((atsLast && atsLast.level) || atsLevel) + " fit";
-      var saved = prepPut("ats", { id: atsRbSessId, tool: "ats", kind: "workspace", title: "R\u00e9sum\u00e9 workspace", meta: { score: sc, band: bd, fit: fit, edited: !!dirty }, payload: { rb: working, design: rbDesignSnap(), level: (atsLast && atsLast.level) || atsLevel, company: (atsLast && atsLast.company) || "", text: (atsLast && atsLast.text) || "", res: (atsLast && atsLast.res) || null } });
+      var saved = prepPut("ats", { id: atsRbSessId, tool: "ats", kind: "workspace", title: "R\u00e9sum\u00e9 workspace", meta: { score: sc, band: bd, fit: fit, edited: !!dirty }, payload: { rb: working, design: rbDesignSnap(), level: (atsLast && atsLast.level) || atsLevel, company: (atsLast && atsLast.company) || "", text: (atsLast && atsLast.text) || "", res: (atsLast && atsLast.res) || null, reviewId: atsRbReviewId } });
       atsRbSessId = saved.id;
       var hl = (root || document).querySelector("[data-ats-hist]"); if (hl) hl.innerHTML = atsHistHtml();
     }
@@ -2786,6 +2792,7 @@ import { WORLD_LAND } from "./worldland.js";
       } else { frameEl.hidden = true; wrapEl.hidden = false; previewing = false; modal.classList.remove("rbz--preview"); rbSetBadge("EDIT", "Résumé workspace"); b0.textContent = "Preview PDF"; paginate(); }
     }
     function close() { try { rbSaveWorkspace(true); } catch (e) {} document.removeEventListener("keydown", onKey); window.removeEventListener("resize", onResize); revoke(); modal.remove(); }
+    function backToReview() { if (!atsRbReviewId) { close(); return; } atsvSessId = atsRbReviewId; close(); atsOpenViewer(); } // save + leave the workspace, reopen the review it came from
     function onKey(e) {
       if (e.key === "Escape") { if (previewing) togglePreview(false); else if (!/rbz__doc|rbz__/.test((document.activeElement && document.activeElement.className) || "")) close(); return; }
       if (e.ctrlKey || e.metaKey) {
@@ -2799,6 +2806,7 @@ import { WORLD_LAND } from "./worldland.js";
     modal.addEventListener("input", function (e) { if (e.target && e.target.matches && e.target.matches("[data-accent-input]")) { atsRbAccent = e.target.value; atsRbApplyTpl(docEl); var cs = modal.querySelector(".rbz__sw--custom"); if (cs) cs.style.background = e.target.value; } });
     modal.addEventListener("click", async function (e) {
       if (e.target === modal || e.target.closest("[data-rbz-close]")) { close(); return; }
+      if (e.target.closest("[data-rbz-back]")) { backToReview(); return; }
       if (e.target.closest("[data-rbz-undo]")) { rbUndoDo(); return; }
       if (e.target.closest("[data-rbz-redo]")) { rbRedoDo(); return; }
       if (e.target.closest("[data-rbz-design-toggle]")) { modal.querySelector(".rbz__body").classList.toggle("is-noleft"); schedulePaginate(); return; }
@@ -2894,6 +2902,8 @@ import { WORLD_LAND } from "./worldland.js";
   function atsvEl(t, c) { var e = document.createElement(t); if (c) e.className = c; return e; }
 
   var atsvSessId = null; // the review history entry the viewer is showing, so Regenerate updates it in place
+  var atsvActive = null; // { close } of the open review viewer, so the workspace flow can dismiss it (one overlay at a time)
+  function atsvCloseActive() { if (atsvActive && atsvActive.close) { try { atsvActive.close(); } catch (e) {} } }
   async function atsvRecheck(ctx) {
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { atsvRecheck(ctx); }); return; }
     var btn = ctx.modal.querySelector("[data-atsv-regen]"); if (btn) { btn.disabled = true; btn.classList.add("is-busy"); }
@@ -2941,8 +2951,9 @@ import { WORLD_LAND } from "./worldland.js";
       '</div>';
     document.body.appendChild(modal);
     function onKey(e) { if (e.key === "Escape") close(); }
-    function close() { document.removeEventListener("keydown", onKey); modal.remove(); }
+    function close() { document.removeEventListener("keydown", onKey); atsvActive = null; modal.remove(); }
     document.addEventListener("keydown", onKey);
+    atsvActive = { close: close };
     modal.addEventListener("click", function (e) { if (e.target === modal || e.target.closest("[data-atsv-close]")) close(); });
 
     var ctx = { modal: modal, res: res, file: file, level: level, scale: 1, pdf: null, pages: [], located: {}, onPage: [], overall: [] };
@@ -3041,7 +3052,10 @@ import { WORLD_LAND } from "./worldland.js";
     var tone = score >= 80 ? "good" : score >= 65 ? "ok" : score >= 45 ? "warn" : "bad";
     var fitT = (atsLast && atsLast.company) ? (escHtml(atsLast.company) + " fit") : (escHtml(atsLevelName(level)) + " fit");
     var html = '<div class="atsv__score atsv__score--' + tone + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div><div class="atsv__score-x"><b>' + escHtml(band) + '</b><span>ATS + ' + fitT + '</span>' + (res.summary ? '<p>' + escHtml(res.summary) + '</p>' : '') + '</div></div>';
-    html += '<div class="atsv__rebuild"><button class="btn btn--primary" type="button" data-atsv-rebuild>Rebuild my r\u00e9sum\u00e9 with these fixes \u2192</button><span class="atsv__rebuild-note">Same styling \u00b7 vector PDF \u00b7 \u2264 2 pages</span></div>';
+    var _ws = atsvSessId ? prepList("ats").filter(function (e2) { return e2.kind === "workspace" && e2.payload && e2.payload.reviewId === atsvSessId; })[0] : null;
+    ctx.wsId = _ws ? _ws.id : null;
+    if (_ws) html += '<div class="atsv__rebuild"><button class="btn btn--primary" type="button" data-atsv-continue>Continue editing your rebuilt r\u00e9sum\u00e9 \u2192</button><button class="atsv__again" type="button" data-atsv-rebuild>Rebuild again from scratch</button></div>';
+    else html += '<div class="atsv__rebuild"><button class="btn btn--primary" type="button" data-atsv-rebuild>Rebuild my r\u00e9sum\u00e9 with these fixes \u2192</button><span class="atsv__rebuild-note">Same styling \u00b7 vector PDF \u00b7 \u2264 2 pages</span></div>';
     html += '<div class="atsv__grp"><div class="atsv__grptitle">On the page <span>' + ctx.onPage.length + '</span></div>';
     html += ctx.onPage.length ? ctx.onPage.map(function (fi, n) { return atsvItemHtml(ctx, fi, n + 1, true); }).join("") : '<div class="atsv__empty">No fixes mapped to an exact spot on the page.</div>';
     html += '</div>';
@@ -3079,6 +3093,7 @@ import { WORLD_LAND } from "./worldland.js";
   function atsvWire(ctx) {
     var modal = ctx.modal, stage = modal.querySelector("[data-atsv-stage]"), rail = modal.querySelector("[data-atsv-rail]");
     rail.addEventListener("click", function (e) {
+      if (e.target.closest("[data-atsv-continue]")) { if (ctx.wsId) atsHistRestore(ctx.wsId); return; }
       if (e.target.closest("[data-atsv-rebuild]")) { atsRebuildOpen(ctx); return; }
       var cp = e.target.closest("[data-atsv-copy]");
       if (cp) { var it = cp.closest(".atsv__item"), code = it && it.querySelector("code"); if (code) { try { navigator.clipboard.writeText(code.textContent); } catch (x) {} cp.textContent = "Copied"; setTimeout(function () { cp.textContent = "Copy"; }, 1200); } return; }
