@@ -2685,6 +2685,7 @@ import { WORLD_LAND } from "./worldland.js";
         '<div class="rbz__bar-c" data-rbz-center>' +
           '<span class="rbz__pg" data-rbz-pg></span>' +
           '<span class="rbz__canvas cl__len" role="group" aria-label="Canvas background" title="Canvas background — Light (Enhancv-style) or Dark"><button type="button" class="cl__lenbtn" data-canvas-set="light">Light</button><button type="button" class="cl__lenbtn" data-canvas-set="dark">Dark</button></span>' +
+          '<span class="rbz__zoom cl__len" role="group" aria-label="Editor zoom" title="Editor zoom - fit the A4 canvas to your screen (the PDF is unchanged)"><button type="button" class="cl__lenbtn rbz__zbtn" data-zoom="out" aria-label="Zoom out">\u2212</button><button type="button" class="cl__lenbtn rbz__zval" data-zoom="reset" title="Reset to 100%">100%</button><button type="button" class="cl__lenbtn rbz__zbtn" data-zoom="in" aria-label="Zoom in">+</button></span>' +
         '</div>' +
         '<div class="rbz__tools">' +
           '<button class="btn btn--ghost" type="button" data-rbz-preview>Preview PDF</button>' +
@@ -2707,6 +2708,21 @@ import { WORLD_LAND } from "./worldland.js";
     var wrapEl = modal.querySelector("[data-rbz-wrap]"), mainEl = modal.querySelector(".rbz__main"), paginateT = null;
     function setCanvas(mode) { atsRbCanvas = (mode === "light") ? "light" : "dark"; if (mainEl) mainEl.setAttribute("data-canvas", atsRbCanvas); modal.querySelectorAll("[data-canvas-set]").forEach(function (b) { b.classList.toggle("is-on", b.dataset.canvasSet === atsRbCanvas); }); }
     setCanvas(atsRbCanvas);
+    // Editor zoom: the canvas is a FIXED 794px A4 (so wrapping/pagination == the PDF); this scales the VIEW
+    // only (transform, no reflow) and reclaims the layout footprint so it fits any screen. Never touches the PDF.
+    var RB_ZOOM_KEY = "rk:rbzoom", rbZoom = 1;
+    function rbFitZoom() { var avail = (mainEl ? mainEl.clientWidth : 794) - 52; return Math.max(0.4, Math.min(1, avail / 794)); }
+    function rbSyncZoomBox() { if (wrapEl) wrapEl.style.marginBottom = ((rbZoom - 1) * wrapEl.offsetHeight) + "px"; }
+    function setZoom(z, save) {
+      rbZoom = Math.max(0.4, Math.min(1.5, Math.round(z * 100) / 100));
+      if (wrapEl) wrapEl.style.setProperty("--rbz-zoom", rbZoom);
+      rbSyncZoomBox();
+      var v = modal.querySelector("[data-zoom='reset']"); if (v) v.textContent = Math.round(rbZoom * 100) + "%";
+      var o = modal.querySelector("[data-zoom='out']"), i = modal.querySelector("[data-zoom='in']");
+      if (o) o.disabled = rbZoom <= 0.4; if (i) i.disabled = rbZoom >= 1.5;
+      if (save !== false) { try { localStorage.setItem(RB_ZOOM_KEY, String(rbZoom)); } catch (e) {} }
+    }
+    (function () { var s = 0; try { s = parseFloat(localStorage.getItem(RB_ZOOM_KEY)) || 0; } catch (e) {} setZoom(s || rbFitZoom(), false); })();
     // Reflow the content into real page cards: distribute the top-level blocks across A4/Letter
     // sheets so you see genuine page breaks. Single-flow layouts split at block boundaries; the
     // two-column layout stays on one sheet (columns don't paginate simply, and it's ATS-discouraged).
@@ -2791,6 +2807,7 @@ import { WORLD_LAND } from "./worldland.js";
         made = placeInto(blocks);
       }
       if (addBar) docEl.appendChild(addBar);
+      rbSyncZoomBox();
     }
     function schedulePaginate() { clearTimeout(paginateT); paginateT = setTimeout(paginate, 180); }
     function renderDesign() {
@@ -2966,6 +2983,7 @@ import { WORLD_LAND } from "./worldland.js";
       if (e.target.closest("[data-rbz-redo]")) { rbRedoDo(); return; }
       if (e.target.closest("[data-rbz-design-toggle]")) { modal.querySelector(".rbz__body").classList.toggle("is-noleft"); schedulePaginate(); return; }
       var _cv = e.target.closest("[data-canvas-set]"); if (_cv) { setCanvas(_cv.dataset.canvasSet); return; }
+      var _zm = e.target.closest("[data-zoom]"); if (_zm) { var zd = _zm.dataset.zoom; setZoom(zd === "in" ? rbZoom + 0.1 : zd === "out" ? rbZoom - 0.1 : 1); return; }
       var _to = e.target.closest("[data-tpl]"); if (_to) { atsRbTplId = _to.dataset.tpl; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); return; }
       var _so = e.target.closest("[data-size]"); if (_so) { atsRbSizeId = _so.dataset.size; renderDesign(); buildFromEdits(); return; }
       var _ao = e.target.closest("[data-accent]"); if (_ao) { atsRbAccent = _ao.dataset.accent || ""; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); return; }
