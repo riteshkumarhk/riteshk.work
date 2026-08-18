@@ -1123,9 +1123,13 @@ import { WORLD_LAND } from "./worldland.js";
     var lvls = IPREP_LEVELS.map(function (l) {
       return '<button type="button" class="ats__lvl' + (atsLevel === l[0] ? " is-on" : "") + '" data-act="ats-level" data-lvl="' + l[0] + '"><b>' + l[1] + "</b><span>" + l[2] + "</span></button>";
     }).join("");
+    var srcFile = (atsState.source === "file") || !has;
+    var canCheck = srcFile ? !!atsPickedFile : has;
     return '<div class="ats"><div class="ats__cols"><div class="ats__main">' +
       '<div class="ats__head"><span class="ats__badge">ATS</span><div><b>ATS r\u00e9sum\u00e9 check</b><span>Is your r\u00e9sum\u00e9 ATS-ready \u2014 parseable, and tuned for the level or a specific job?</span></div></div>' +
       '<div class="ats__levels">' + lvls + "</div>" +
+      '<div class="ats__src"><div class="cl__len"><button type="button" class="cl__lenbtn' + (srcFile ? "" : " is-on") + '" data-act="ats-source" data-source="site"' + (has ? "" : " disabled") + '>Currently added to site</button><button type="button" class="cl__lenbtn' + (srcFile ? " is-on" : "") + '" data-act="ats-source" data-source="file">Check a different file</button></div></div>' +
+      '<div class="ats__filerow"' + (srcFile ? "" : " hidden") + '><input type="text" class="ats__filename" readonly placeholder="No file chosen \u2014 browse to pick a r\u00e9sum\u00e9" value="' + escAttr(atsPickedFile ? atsPickedFile.name : "") + '" /><label class="btn btn--ghost ats__browse">Browse<input type="file" accept=".pdf,.docx,.txt,.md" data-ats-file hidden></label></div>' +
       '<div style="margin:.2rem 0 .6rem"><div class="cl__len"><button type="button" class="cl__lenbtn' + (atsState.mode === "job" ? "" : " is-on") + '" data-act="ats-mode" data-mode="general">General check</button><button type="button" class="cl__lenbtn' + (atsState.mode === "job" ? " is-on" : "") + '" data-act="ats-mode" data-mode="job">Against a specific job</button></div></div>' +
       '<div class="ats__jd"' + (atsState.mode === "job" ? "" : " hidden") + '>' +
         '<div class="af__hint" style="margin:.1rem 0 .5rem">Paste the job you\u2019re targeting \u2014 the score and fixes judge your r\u00e9sum\u00e9 as a MATCH for THIS role and surface the exact keywords it wants.</div>' +
@@ -1133,9 +1137,8 @@ import { WORLD_LAND } from "./worldland.js";
         '<textarea class="cl__jd" rows="4" placeholder="\u2026or paste the job description here (best results \u2014 LinkedIn links often need pasting).">' + escHtml(atsState.jd) + '</textarea>' +
         '<div class="cl__row2"><input type="text" class="cl__company" placeholder="Company / role (optional, sharpens it)" value="' + escAttr(atsState.company) + '" /></div>' +
       '</div>' +
-      '<div class="imgblk__row"><button class="btn btn--primary" data-act="ats-check"' + (has ? "" : " disabled") + ">Check ATS rating</button>" +
-      '<label class="btn btn--ghost ats__file">Check a different file\u2026<input type="file" accept=".pdf,.docx,.txt,.md" data-ats-file hidden></label></div>' +
-      (has ? "" : '<div class="af__hint">Add your r\u00e9sum\u00e9 above (or pick a file) to run the check.</div>') +
+      '<div class="imgblk__row"><button class="btn btn--primary" data-act="ats-check"' + (canCheck ? "" : " disabled") + ">Check ATS rating</button></div>" +
+      (canCheck ? "" : '<div class="af__hint">' + (srcFile ? "Browse to a text-based PDF / DOCX r\u00e9sum\u00e9 to run the check." : "Add your r\u00e9sum\u00e9 to the site first, or switch to \u201cCheck a different file\u201d.") + '</div>') +
       '<div class="ats__out" data-ats-out>' + atsOutRestore() + '</div>' +
       '</div>' +
       '<aside class="prep-hist"><div class="prep-hist__h">Resume from history</div><div class="prep-hist__list" data-ats-hist>' + atsHistHtml() + '</div></aside>' +
@@ -1881,7 +1884,9 @@ import { WORLD_LAND } from "./worldland.js";
   /* ---------- ATS résumé check (Contact tab, beside the résumé upload) ---------- */
   var _atsD0 = prepDraftGet("ats") || {};
   var atsLevel = _atsD0.level || "staff";
-  var atsState = (_atsD0.state && typeof _atsD0.state === "object") ? { mode: _atsD0.state.mode || "general", jd: _atsD0.state.jd || "", url: _atsD0.state.url || "", company: _atsD0.state.company || "" } : { mode: "general", jd: "", url: "", company: "" };
+  var atsState = (_atsD0.state && typeof _atsD0.state === "object") ? { mode: _atsD0.state.mode || "general", source: _atsD0.state.source || "site", jd: _atsD0.state.jd || "", url: _atsD0.state.url || "", company: _atsD0.state.company || "" } : { mode: "general", source: "site", jd: "", url: "", company: "" };
+  var atsPickedFile = null; // a résumé File chosen via Browse (session-only; a File can't be persisted to the draft)
+  function atsUpdateCheckBtn(panel) { if (!panel) return; var has = !!(data.contact && data.contact.resume), srcFile = (atsState.source === "file") || !has, can = srcFile ? !!atsPickedFile : has; var b = panel.querySelector('[data-act="ats-check"]'); if (b) b.disabled = !can; }
   function atsLevelName(l) { return ({ senior: "Senior", staff: "Principal / Staff", leader: "Design leadership" })[l] || l; }
   async function resumeToFile(url) {
     var p = parseDataUri(url);
@@ -2056,7 +2061,7 @@ import { WORLD_LAND } from "./worldland.js";
       try { var built = await atsRbFit(p.rb); atsRbShow(built, p.rb); } catch (er) { status("Couldn\u2019t reopen the workspace: " + ((er && er.message) || er)); }
       return;
     }
-    atsState = { mode: st.mode || "general", jd: st.jd || "", url: st.url || "", company: st.company || "" };
+    atsState = { mode: st.mode || "general", source: (atsState && atsState.source) || "site", jd: st.jd || "", url: st.url || "", company: st.company || "" };
     atsLevel = p.level || atsLevel;
     atsLast = { file: null, res: p.res, level: atsLevel, company: p.company || "", text: p.text || "" };
     prepDraftSet("ats", { state: atsState, level: atsLevel, res: p.res, company: p.company || "", text: p.text || "" });
@@ -6941,7 +6946,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (t.dataset.gpath !== undefined) { onGenEdit(t); return; }
     if (t.dataset.jsel !== undefined) { onJourneyEdit(t); return; }
     if (t.dataset.act === "journey-toggle") { journeyData().enabled = t.checked; saveDraft(true); apply(true); renderBody(); return; }
-    if (t.dataset.atsFile !== undefined) { if (t.files && t.files[0]) atsRun(t.closest(".ats"), t.files[0]); t.value = ""; return; }
+    if (t.dataset.atsFile !== undefined) { if (t.files && t.files[0]) { atsPickedFile = t.files[0]; atsState.source = "file"; var _afp = t.closest(".ats"); if (_afp) { var _fn = _afp.querySelector(".ats__filename"); if (_fn) _fn.value = atsPickedFile.name; atsUpdateCheckBtn(_afp); } } t.value = ""; return; }
     if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
     if (t.dataset.sitem !== undefined && t.dataset.ifield) { onItemInput(t); return; }
@@ -7345,9 +7350,10 @@ import { WORLD_LAND } from "./worldland.js";
     if (act === "ext-download") { extDownload(b); return; }
     if (act === "resume-pdf") { resumePdfDownload(b); return; }
     if (act === "phone-qr") { phoneQr(b); return; }
-    if (act === "ats-check") { atsRun(b.closest(".ats"), null); return; }
+    if (act === "ats-check") { var _srcFile = (atsState.source === "file") || !(data.contact && data.contact.resume); atsRun(b.closest(".ats"), _srcFile ? atsPickedFile : null); return; }
     if (act === "ats-fetch") { atsFetchToPanel(b.closest(".ats")); return; }
     if (act === "ats-mode") { atsState.mode = b.dataset.mode; var amp = b.closest(".ats"); if (amp) { amp.querySelectorAll('[data-act="ats-mode"]').forEach(function (x) { x.classList.toggle("is-on", x === b); }); var ajd = amp.querySelector(".ats__jd"); if (ajd) ajd.hidden = (atsState.mode !== "job"); } atsSaveDraft(); return; }
+    if (act === "ats-source") { atsState.source = b.dataset.source; var asp = b.closest(".ats"); if (asp) { asp.querySelectorAll('[data-act="ats-source"]').forEach(function (x) { x.classList.toggle("is-on", x === b); }); var afr = asp.querySelector(".ats__filerow"); if (afr) afr.hidden = (atsState.source !== "file"); atsUpdateCheckBtn(asp); } return; }
     if (act === "ats-view") { atsOpenViewer(); return; }
     if (act === "ats-hist-open") { atsHistRestore(b.dataset.id); return; }
     if (act === "ats-hist-del") { prepDel("ats", b.dataset.id); var _hw = b.closest("[data-ats-hist]"); if (_hw) _hw.innerHTML = atsHistHtml(); return; }
