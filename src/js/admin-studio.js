@@ -2158,7 +2158,7 @@ import { WORLD_LAND } from "./worldland.js";
   };
   var RB_ACCENTS = ["#9a6a24", "#2f6d9a", "#585c52", "#7a3b3b", "#3f6b4b", "#454a8c", "#b0561f", "#1c1a17"];
   var RB_LAYOUTS = { single: { name: "Single column" }, sidebar: { name: "Two-column \u00b7 design" }, fullbleed: { name: "Full-bleed header" } };
-  var RB_FONTS = { sans: { name: "Sans", css: "Helvetica, Arial, sans-serif", pdf: "helvetica" }, serif: { name: "Serif", css: "Georgia, 'Times New Roman', serif", pdf: "times" }, mono: { name: "Mono", css: "'Courier New', Courier, monospace", pdf: "courier" } };
+  var RB_FONTS = { sans: { name: "Helvetica", css: "Helvetica, Arial, sans-serif", pdf: "helvetica" }, inter: { name: "Inter", css: "'Inter', Helvetica, Arial, sans-serif", pdf: "helvetica" }, serif: { name: "Times", css: "Georgia, 'Times New Roman', serif", pdf: "times" }, newsreader: { name: "Newsreader", css: "'Newsreader', Georgia, 'Times New Roman', serif", pdf: "times" }, garamond: { name: "Garamond", css: "'EB Garamond', Georgia, serif", pdf: "times" }, mono: { name: "Mono", css: "'JetBrains Mono', 'Courier New', monospace", pdf: "courier" } };
   // Minimal line icons (Lucide geometry) for the PDF contact line + experience meta. Rasterized once
   // at high DPI into crisp PNGs (per colour) so they look crafted + perfectly aligned; drawn decoratively
   // beside the REAL text (ATS still reads the email/phone/dates text — the icon is just a picture).
@@ -2166,15 +2166,18 @@ import { WORLD_LAND } from "./worldland.js";
     email: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
     phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
     loc: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
-    linkedin: '<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/>',
+    linkedin: '<path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>',
     site: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
     cal: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>'
   };
+  var RB_ICON_FILL = { linkedin: true }; // brand glyphs are rendered as a filled silhouette, not a stroked line
   var RB_ICON_CACHE = {};
   function rbHex(a) { function h(n) { n = Math.max(0, Math.min(255, n | 0)).toString(16); return n.length < 2 ? "0" + n : n; } return "#" + h(a[0]) + h(a[1]) + h(a[2]); }
   function rbRasterIcon(kind, hex) {
     return new Promise(function (res) {
-      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 24 24" fill="none" stroke="' + hex + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (RB_ICON_SVG[kind] || "") + "</svg>";
+      var svg = RB_ICON_FILL[kind]
+        ? '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 24 24" fill="' + hex + '">' + (RB_ICON_SVG[kind] || "") + "</svg>"
+        : '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 24 24" fill="none" stroke="' + hex + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (RB_ICON_SVG[kind] || "") + "</svg>";
       var img = new Image();
       img.onload = function () { try { var c = document.createElement("canvas"); c.width = 96; c.height = 96; c.getContext("2d").drawImage(img, 0, 0, 96, 96); res(c.toDataURL("image/png")); } catch (e) { res(null); } };
       img.onerror = function () { res(null); };
@@ -2193,7 +2196,7 @@ import { WORLD_LAND } from "./worldland.js";
   function atsHexRgb(hex) { var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "")); if (!m) return null; var n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
   function atsRbAccentHex() { return atsRbAccent || atsRbTpl().accent; }
   function atsRbAccentRgb() { return (atsRbAccent && atsHexRgb(atsRbAccent)) || atsRbTpl().rgb; }
-  function atsRbApplyTpl(docEl) { var t = atsRbTpl(); docEl.style.setProperty("--rbz-accent", atsRbAccentHex()); docEl.style.setProperty("--rbz-sum-ff", t.sumFF); docEl.style.setProperty("--rbz-sum-style", t.sumStyle); docEl.style.setProperty("--rbz-body-ff", (RB_FONTS[atsRbFont] || RB_FONTS.sans).css); docEl.setAttribute("data-head", t.head); docEl.setAttribute("data-layout", atsRbLayout); }
+  function atsRbApplyTpl(docEl) { var t = atsRbTpl(), _bodyCss = (RB_FONTS[atsRbFont] || RB_FONTS.sans).css; docEl.style.setProperty("--rbz-accent", atsRbAccentHex()); docEl.style.setProperty("--rbz-sum-ff", _bodyCss); docEl.style.setProperty("--rbz-sum-style", "normal"); docEl.style.setProperty("--rbz-body-ff", _bodyCss); docEl.setAttribute("data-head", t.head); docEl.setAttribute("data-layout", atsRbLayout); }
   // Typeset the structured résumé at a given density (k scales type + spacing; maxBul caps bullets/role).
   function atsRbBuild(jsPDF, rb, dens) {
     var k = dens.k, maxBul = dens.maxBul;
@@ -2256,7 +2259,7 @@ import { WORLD_LAND } from "./worldland.js";
       y += 3 * k; doc.setDrawColor(INK[0], INK[1], INK[2]); doc.setLineWidth(0.4); doc.line(M, y, PW - M, y); y += 6 * k;
     }
 
-    function drawSummary() { if (rb.summary) { ink(); doc.setFont(TPL.pdfSum, TPL.pdfSumStyle); doc.setFontSize(11.5 * k); var sl = doc.splitTextToSize(P(rb.summary), CW2); doc.text(sl, CX, y); y += sl.length * 5.2 * k + 4 * k; } }
+    function drawSummary() { if (rb.summary) { ink(); doc.setFont(BODYF, "normal"); doc.setFontSize(11.5 * k); var sl = doc.splitTextToSize(P(rb.summary), CW2); doc.text(sl, CX, y); y += sl.length * 5.2 * k + 4 * k; } }
 
     // Height of one entry (role / education / list item) if drawn now — used to keep an entry whole
     // on a page instead of orphaning its heading from its body across a page break.
@@ -2704,8 +2707,8 @@ import { WORLD_LAND } from "./worldland.js";
       var dens = Object.keys(RB_DENS).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbDensity ? " is-on" : "") + '" type="button" data-density="' + id + '">' + RB_DENS[id].name + "</button>"; }).join("");
       var lays = Object.keys(RB_LAYOUTS).map(function (id) { return '<button class="rbz__tplopt' + (id === atsRbLayout ? " is-on" : "") + '" type="button" data-lay="' + id + '">' + RB_LAYOUTS[id].name + "</button>"; }).join("");
       var warn = atsRbLayout === "sidebar" ? '<div class="rbz__laywarn">Two-column is a design / human-first layout. Most ATS parse a single column more reliably, so re-check the score after switching.</div>' : "";
-      var fonts = Object.keys(RB_FONTS).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbFont ? " is-on" : "") + '" type="button" data-font="' + id + '">' + RB_FONTS[id].name + "</button>"; }).join("");
-      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Layout</div><div class="rbz__tplrow">' + lays + '</div>' + warn + '<div class="rbz__tplmenu-h">Accent</div><div class="rbz__swatches">' + swatches + '</div><div class="rbz__tplmenu-h">Font</div><div class="cl__len">' + fonts + '</div><div class="rbz__tplmenu-h">Density</div><div class="cl__len">' + dens + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + '</div><div class="rbz__tplmenu-h">Page breaks</div><div class="cl__len"><button class="cl__lenbtn' + (atsRbKeepWhole ? " is-on" : "") + '" type="button" data-break="whole">Keep entries whole</button><button class="cl__lenbtn' + (!atsRbKeepWhole ? " is-on" : "") + '" type="button" data-break="fill">Fill pages</button></div>';
+      var fonts = Object.keys(RB_FONTS).map(function (id) { var _f = RB_FONTS[id]; return '<button class="rbz__fontbtn' + (id === atsRbFont ? " is-on" : "") + '" type="button" data-font="' + id + '" style="font-family:' + _f.css + '">' + _f.name + "</button>"; }).join("");
+      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Layout</div><div class="rbz__tplrow">' + lays + '</div>' + warn + '<div class="rbz__tplmenu-h">Accent</div><div class="rbz__swatches">' + swatches + '</div><div class="rbz__tplmenu-h">Font</div><div class="rbz__fonts">' + fonts + '</div><div class="rbz__tplmenu-h">Density</div><div class="cl__len">' + dens + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + '</div><div class="rbz__tplmenu-h">Page breaks</div><div class="cl__len"><button class="cl__lenbtn' + (atsRbKeepWhole ? " is-on" : "") + '" type="button" data-break="whole">Keep entries whole</button><button class="cl__lenbtn' + (!atsRbKeepWhole ? " is-on" : "") + '" type="button" data-break="fill">Fill pages</button></div>';
     }
     var onResize = schedulePaginate; window.addEventListener("resize", onResize);
     atsRbApplyTpl(docEl); renderDesign(); requestAnimationFrame(paginate); setTimeout(paginate, 350);
@@ -2743,7 +2746,7 @@ import { WORLD_LAND } from "./worldland.js";
     var _rbCountT = null;
     function rbCountSoon() { clearTimeout(_rbCountT); _rbCountT = setTimeout(function () { if (!previewing) buildFromEdits(); }, 900); } // keep the page count + editor fit fresh as you edit
     function markDirty() { rbSaveSoon(); rbCountSoon(); rbCommit(false); if (!dirty) { dirty = true; paintSide(); } }
-    function reRender() { docEl.innerHTML = atsRbEditorHtml(working); paginate(); }
+    function reRender() { var _st = mainEl ? mainEl.scrollTop : 0; docEl.innerHTML = atsRbEditorHtml(working); paginate(); if (mainEl) mainEl.scrollTop = _st; }
     function rbUpdateHist() { var u = modal.querySelector("[data-rbz-undo]"), r = modal.querySelector("[data-rbz-redo]"); if (u) u.disabled = rbUndo.length <= 1; if (r) r.disabled = !rbRedo.length; }
     function rbCommit(now) {
       function take() { var snap = rbClone(rbReadEditor(docEl, working)); if (JSON.stringify(rbUndo[rbUndo.length - 1]) !== JSON.stringify(snap)) { rbUndo.push(snap); if (rbUndo.length > 60) rbUndo.shift(); rbRedo = []; rbUpdateHist(); } }
@@ -2774,9 +2777,12 @@ import { WORLD_LAND } from "./worldland.js";
     });
     // Rearrange sections: a drag grip on each section header + move up/down buttons. Reordering the
     // model's sections array flows straight through the editor, the ATS re-check and the PDF export.
-    var dragKind = null, dragFrom = null;
+    var dragKind = null, dragFrom = null, dragY = 0, dragRAF = null;
     function clearDrop() { docEl.querySelectorAll(".is-drop-before,.is-drop-after").forEach(function (x) { x.classList.remove("is-drop-before", "is-drop-after"); }); }
-    function endDrag() { clearDrop(); docEl.querySelectorAll(".is-dragging").forEach(function (x) { x.classList.remove("is-dragging"); }); dragKind = null; dragFrom = null; }
+    // Native HTML5 drag doesn't scroll the container, so drive an rAF loop that scrolls when the pointer nears the top/bottom edge.
+    function dragAutoScroll() { dragRAF = null; if (!dragKind || !mainEl) return; var r = mainEl.getBoundingClientRect(), edge = 72, sp = 0; if (dragY < r.top + edge) sp = -Math.max(6, Math.round((r.top + edge - dragY) / 3)); else if (dragY > r.bottom - edge) sp = Math.max(6, Math.round((dragY - (r.bottom - edge)) / 3)); if (sp) mainEl.scrollTop += sp; dragRAF = requestAnimationFrame(dragAutoScroll); }
+    function dragScrollKick(y) { dragY = y; if (!dragRAF) dragRAF = requestAnimationFrame(dragAutoScroll); }
+    function endDrag() { clearDrop(); docEl.querySelectorAll(".is-dragging").forEach(function (x) { x.classList.remove("is-dragging"); }); dragKind = null; dragFrom = null; if (dragRAF) { cancelAnimationFrame(dragRAF); dragRAF = null; } }
     function moveSection(from, to) { var s = working.sections; if (from < 0 || from >= s.length) return; to = Math.max(0, Math.min(s.length - 1, to)); if (to === from) return; var it = s.splice(from, 1)[0]; s.splice(to, 0, it); reRender(); markDirty(); }
     function dropTarget(e) {
       if (dragKind === "sec") { var el = e.target.closest(".rbz__sec[data-si]"); return el ? { el: el, to: +el.dataset.si } : null; }
@@ -2791,8 +2797,10 @@ import { WORLD_LAND } from "./worldland.js";
       else { dragKind = "bullet"; dragFrom = g.dataset.dragBullet.split(".").map(Number); }
       try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", ""); } catch (x) {}
       var host = g.closest(dragKind === "sec" ? ".rbz__sec" : dragKind === "role" ? ".rbz__xp, .rbz__edu, .rbz__li" : "li"); if (host) host.classList.add("is-dragging");
+      dragScrollKick(e.clientY);
     });
-    docEl.addEventListener("dragover", function (e) { if (!dragKind) return; var t = dropTarget(e); if (!t) return; e.preventDefault(); try { e.dataTransfer.dropEffect = "move"; } catch (x) {} clearDrop(); var r = t.el.getBoundingClientRect(); t.el.classList.add((e.clientY - r.top) > r.height / 2 ? "is-drop-after" : "is-drop-before"); });
+    docEl.addEventListener("dragover", function (e) { if (!dragKind) return; dragScrollKick(e.clientY); var t = dropTarget(e); if (!t) return; e.preventDefault(); try { e.dataTransfer.dropEffect = "move"; } catch (x) {} clearDrop(); var r = t.el.getBoundingClientRect(); t.el.classList.add((e.clientY - r.top) > r.height / 2 ? "is-drop-after" : "is-drop-before"); });
+    if (mainEl) mainEl.addEventListener("dragover", function (e) { if (dragKind) dragScrollKick(e.clientY); });
     docEl.addEventListener("drop", function (e) {
       if (!dragKind) return; var t = dropTarget(e); if (!t) { endDrag(); return; } e.preventDefault();
       var r = t.el.getBoundingClientRect(), after = (e.clientY - r.top) > r.height / 2;
