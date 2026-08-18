@@ -2200,7 +2200,7 @@ import { WORLD_LAND } from "./worldland.js";
   function atsHexRgb(hex) { var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "")); if (!m) return null; var n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
   function atsRbAccentHex() { return atsRbAccent || atsRbTpl().accent; }
   function atsRbAccentRgb() { return (atsRbAccent && atsHexRgb(atsRbAccent)) || atsRbTpl().rgb; }
-  function atsRbApplyTpl(docEl) { var t = atsRbTpl(), _bodyCss = (RB_FONTS[atsRbFont] || RB_FONTS.sans).css; docEl.style.setProperty("--rbz-accent", atsRbAccentHex()); docEl.style.setProperty("--rbz-sum-ff", _bodyCss); docEl.style.setProperty("--rbz-sum-style", "normal"); docEl.style.setProperty("--rbz-body-ff", _bodyCss); docEl.setAttribute("data-head", t.head); docEl.setAttribute("data-layout", atsRbLayout); }
+  function atsRbApplyTpl(docEl) { var t = atsRbTpl(), _bodyCss = (RB_FONTS[atsRbFont] || RB_FONTS.sans).css; docEl.style.setProperty("--rbz-accent", atsRbAccentHex()); docEl.style.setProperty("--rbz-sum-ff", _bodyCss); docEl.style.setProperty("--rbz-sum-style", "normal"); docEl.style.setProperty("--rbz-body-ff", _bodyCss); docEl.style.setProperty("--rbz-scale", atsRbDens().scale || 1); docEl.setAttribute("data-head", t.head); docEl.setAttribute("data-layout", atsRbLayout); }
   // Typeset the structured résumé at a given density (k scales type + spacing; maxBul caps bullets/role).
   function atsRbBuild(jsPDF, rb, dens) {
     var k = dens.k, maxBul = dens.maxBul;
@@ -2535,9 +2535,9 @@ import { WORLD_LAND } from "./worldland.js";
       if (s.kind === "experience") {
         (s.items || []).forEach(function (it, ii) {
           var base = "sections." + si + ".items." + ii;
-          sh += '<div class="rbz__xp" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder role" aria-label="Drag to reorder role">' + GRIP + '</button><div class="rbz__xphd">' + ed("span", "rbz__role", base + ".role", it.role, "Role") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove role">\u00d7</button></div>';
-          sh += ed("div", "rbz__org", base + ".org", it.org, "Company");
+          sh += '<div class="rbz__xp" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder role" aria-label="Drag to reorder role">' + GRIP + '</button>';
           sh += '<div class="rbz__meta"><span class="rbz__mi">' + rbIco("cal") + ed("span", "rbz__dates", base + ".dates", it.dates, "MM/YYYY to Present") + '</span><span class="rbz__mi">' + rbIco("loc") + ed("span", "rbz__loc", base + ".location", it.location, "Location") + "</span></div>";
+          sh += '<div class="rbz__xphd">' + ed("span", "rbz__role", base + ".role", it.role, "Role") + ed("span", "rbz__org", base + ".org", it.org, "Company") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove role">\u00d7</button></div>';
           sh += '<ul class="rbz__bl">';
           (it.bullets || []).forEach(function (b, bi) { sh += '<li data-si="' + si + '" data-ii="' + ii + '" data-bi="' + bi + '"><button class="rbz__grip rbz__grip--b" type="button" draggable="true" data-drag-bullet="' + si + "." + ii + "." + bi + '" title="Drag to reorder" aria-label="Drag to reorder bullet">' + GRIP + '</button>' + ed("span", "rbz__bltext", base + ".bullets." + bi, b, "Achievement, outcome-first with a metric\u2026") + '<button class="rbz__del rbz__del--b" type="button" data-del-bullet="' + si + "." + ii + "." + bi + '" title="Remove bullet">\u00d7</button></li>'; });
           sh += '</ul><button class="rbz__add" type="button" data-add-bullet="' + si + "." + ii + '">+ bullet</button></div>';
@@ -2598,8 +2598,9 @@ import { WORLD_LAND } from "./worldland.js";
       var sh = '<div class="rbz__sec">' + (s.heading ? '<div class="rbz__sechd">' + span("rbz__sectitle", s.heading) + "</div>" : "");
       if (s.kind === "experience") {
         (s.items || []).forEach(function (it) {
-          sh += '<div class="rbz__xp"><div class="rbz__xphd">' + span("rbz__role", it.role) + "</div>" + div("rbz__org", it.org);
+          sh += '<div class="rbz__xp">';
           if (it.dates || it.location) sh += '<div class="rbz__meta">' + (it.dates ? '<span class="rbz__mi">' + rbIco("cal") + span("rbz__dates", it.dates) + "</span>" : "") + (it.location ? '<span class="rbz__mi">' + rbIco("loc") + span("rbz__loc", it.location) + "</span>" : "") + "</div>";
+          sh += '<div class="rbz__xphd">' + span("rbz__role", it.role) + span("rbz__org", it.org) + "</div>";
           var bl = (it.bullets || []).filter(Boolean);
           if (bl.length) sh += '<ul class="rbz__bl">' + bl.map(function (b) { return "<li>" + span("rbz__bltext", b) + "</li>"; }).join("") + "</ul>";
           sh += "</div>";
@@ -2645,13 +2646,13 @@ import { WORLD_LAND } from "./worldland.js";
     + ".rbz__doc[data-head=plain] .rbz__sechd{border-bottom:0;padding-bottom:.05rem}.rbz__doc[data-head=plain] .rbz__sectitle{font-size:calc(.8rem*var(--rbz-scale,1));color:#1c1a17}"
     + ".rbz__xp,.rbz__edu{margin-bottom:.75rem}.rbz__xphd{display:flex;align-items:baseline;gap:.1rem;flex-wrap:wrap}"
     + ".rbz__role{font-weight:700;font-size:calc(.96rem*var(--rbz-scale,1))}"
-    + ".rbz__org{display:block;color:var(--rbz-accent,#9a6a24);font-size:calc(.92rem*var(--rbz-scale,1));font-weight:600;margin-top:.02rem}"
-    + ".rbz__meta{display:flex;flex-wrap:wrap;gap:.1rem .7rem;margin:.12rem 0 .3rem;font-size:calc(.66rem*var(--rbz-scale,1));letter-spacing:.05em;text-transform:uppercase;color:#9a938a}"
+    + ".rbz__org{margin-left:auto;color:var(--rbz-accent,#9a6a24);font-size:calc(.92rem*var(--rbz-scale,1));font-weight:600}"
+    + ".rbz__meta{display:flex;flex-wrap:wrap;gap:.1rem .7rem;margin:.12rem 0 .3rem;font-size:calc(.66rem*var(--rbz-scale,1));letter-spacing:.05em;text-transform:uppercase;color:#655c53}"
     + ".rbz__bl{margin:.15rem 0;padding-left:1.05rem;list-style:none}"
     + ".rbz__bl li{position:relative;font-size:calc(.855rem*var(--rbz-scale,1));line-height:1.42;color:#3a352f;margin-bottom:.18rem}"
     + ".rbz__bltext{flex:1}.rbz__bl li:before{content:'\\2013';color:var(--rbz-accent,#9a6a24);position:absolute;left:-1.05rem}"
-    + ".rbz__skg{display:flex;gap:.5rem;margin-bottom:.3rem;font-size:calc(.86rem*var(--rbz-scale,1))}.rbz__sklabel{font-weight:700;white-space:nowrap}.rbz__skitems{flex:1;color:#3a352f}"
-    + ".rbz__cred{font-size:calc(.85rem*var(--rbz-scale,1))}"
+    + ".rbz__skg{display:flex;gap:.5rem;margin-bottom:.3rem;font-size:calc(.86rem*var(--rbz-scale,1))}.rbz__sklabel{font-weight:700;flex:0 0 34%}.rbz__skitems{flex:1;color:#3a352f}"
+    + ".rbz__cred{font-size:calc(.88rem*var(--rbz-scale,1));text-transform:none;letter-spacing:0;color:#3a352f}.rbz__note{text-transform:none;letter-spacing:0}"
     + ".rbz__li{display:flex;gap:.5rem;align-items:baseline;margin-bottom:.25rem;font-size:calc(.86rem*var(--rbz-scale,1))}.rbz__lititle{font-weight:700}.rbz__limeta{margin-left:auto;color:#9a938a;font-size:calc(.78rem*var(--rbz-scale,1))}"
     + ".rbz__text{font-size:calc(.86rem*var(--rbz-scale,1));line-height:1.45;color:#3a352f}"
     // keep entries + headings whole across page breaks
