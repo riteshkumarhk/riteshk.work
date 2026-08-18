@@ -1679,7 +1679,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__doc[data-layout="sidebar"] .rbz__col--main { border-left: 1px solid #e1d8cd; padding-left: 1.5rem; }
 .rbz__doc[data-layout="sidebar"] .rbz__col--main > .rbz__sec:first-child, .rbz__doc[data-layout="sidebar"] .rbz__col--side > .rbz__sec:first-child { margin-top: 0; }
 .rbz__name { font-size: calc(1.95rem * var(--rbz-scale, 1)); font-weight: 700; letter-spacing: -.01em; }
-.rbz__title { font-size: calc(.74rem * var(--rbz-scale, 1)); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--rbz-accent, #9a6a24); margin-top: .12rem; }
+.rbz__title { font-size: calc(.74rem * var(--rbz-scale, 1)); font-weight: 700; letter-spacing: normal; text-transform: uppercase; color: var(--rbz-accent, #9a6a24); margin-top: .12rem; }
 .rbz__contact { display: flex; flex-wrap: wrap; gap: .28em .95em; margin-top: .55rem; font-size: calc(.78rem * var(--rbz-scale, 1)); color: #655c53; }
 .rbz__cbit { display: inline-flex; align-items: center; gap: .34em; color: inherit; text-decoration: none; }
 .rbz__cbtx { white-space: nowrap; }
@@ -1689,7 +1689,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__sec--sum { margin-top: 1rem; }
 .rbz__sum { font-family: var(--rbz-sum-ff, var(--rbz-body-ff, Helvetica, Arial, sans-serif)); font-style: var(--rbz-sum-style, normal); font-size: calc(1.02rem * var(--rbz-scale, 1)); line-height: 1.45; color: #1c1a17; }
 .rbz__sechd { display: flex; align-items: center; gap: .4rem; border-bottom: 1px solid #e1d8cd; padding-bottom: .22rem; margin-bottom: .55rem; }
-.rbz__sectitle { flex: 1; font-size: calc(.7rem * var(--rbz-scale, 1)); font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--rbz-accent, #9a6a24); }
+.rbz__sectitle { flex: 1; font-size: calc(.7rem * var(--rbz-scale, 1)); font-weight: 700; letter-spacing: normal; text-transform: uppercase; color: var(--rbz-accent, #9a6a24); }
 /* template heading treatments + the Templates picker popover */
 .rbz__doc[data-head="bar"] .rbz__sechd { border-bottom: 2px solid var(--rbz-accent, #9a6a24); }
 .rbz__doc[data-head="plain"] .rbz__sechd { border-bottom: 0; padding-bottom: .05rem; }
@@ -1743,7 +1743,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__at { color: #bcb5aa; margin: 0 .15rem; }
 .rbz__org { margin-left: auto; color: var(--rbz-accent, #9a6a24); font-size: calc(.92rem * var(--rbz-scale, 1)); font-weight: 600; }
 .rbz__xphd > .rbz__dates { margin-left: auto; color: #655c53; font-size: calc(.82rem * var(--rbz-scale, 1)); }
-.rbz__meta { display: flex; flex-wrap: wrap; gap: .1rem .7rem; margin: .12rem 0 .3rem; font-size: calc(.66rem * var(--rbz-scale, 1)); letter-spacing: .05em; text-transform: uppercase; color: #655c53; }
+.rbz__meta { display: flex; flex-wrap: wrap; gap: .1rem .7rem; margin: .12rem 0 .3rem; font-size: calc(.66rem * var(--rbz-scale, 1)); letter-spacing: normal; text-transform: uppercase; color: #655c53; }
 .rbz__bl { margin: .15rem 0; padding-left: 1.05rem; list-style: none; }
 .rbz__bl li { position: relative; font-size: calc(.855rem * var(--rbz-scale, 1)); line-height: 1.42; color: #3a352f; margin-bottom: .18rem; display: flex; align-items: flex-start; }
 .rbz__bltext { flex: 1; }
