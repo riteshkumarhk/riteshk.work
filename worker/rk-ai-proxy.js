@@ -726,6 +726,44 @@ export default {
       if (request.method === "PUT") { try { const b = await request.json(); await env.VAULT_GRANTS.put("cfg:keyring", JSON.stringify(b || {})); return json({ ok: true }, 200, cors); } catch (e) { return json({ error: "Save failed" }, 400, cors); } }
       return json({ error: "Method not allowed" }, 405, cors);
     }
+    // ---------- admin: render the résumé HTML to a real PDF via Browser Rendering (Quick Action) ----------
+    // One atomic call: CF spins up headless Chrome, renders our print HTML (with the chosen font embedded
+    // as base64 so it matches the editor exactly), returns the PDF, and closes the browser itself. The
+    // output is real selectable text + embedded fonts — ATS-safe and pixel-identical to the editor.
+    if (url.pathname === "/admin/render-pdf") {
+      if (request.method !== "POST") return new Response("Method not allowed", { status: 405, headers: cors });
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.BROWSER) return json({ error: "Browser rendering not configured" }, 501, cors);
+      let b; try { b = await request.json(); } catch (e) { return json({ error: "Bad body" }, 400, cors); }
+      let html = String((b && b.html) || "");
+      if (!html || html.length > 6 * 1024 * 1024) return json({ error: "Bad html" }, 400, cors);
+      const fmt = /^(a4|letter)$/i.test(String((b && b.format) || "")) ? String(b.format).toLowerCase() : "a4";
+      // Embed the chosen fonts (fetched server-side from our own hosts → no CORS) as base64 @font-face,
+      // injected into <head> so they are render-blocking and the PDF text uses the exact face.
+      let fontCss = "";
+      const fonts = Array.isArray(b && b.fonts) ? b.fonts.slice(0, 4) : [];
+      for (const f of fonts) {
+        try {
+          const u = String((f && f.url) || "");
+          if (!/^https:\/\/(riteshk\.work|media\.riteshk\.work)\/[\w./-]+\.woff2$/i.test(u)) continue; // only our own hosts (no SSRF)
+          const fr = await fetch(u, { cf: { cacheTtl: 86400, cacheEverything: true } });
+          if (!fr.ok) continue;
+          const bytes = new Uint8Array(await fr.arrayBuffer());
+          let bin = ""; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+          const fam = String((f && f.family) || "").replace(/["\\<>]/g, "");
+          const wt = /^[\d ]{1,9}$/.test(String((f && f.weight) || "")) ? String(f.weight) : "400";
+          const st = f && f.style === "italic" ? "italic" : "normal";
+          if (fam) fontCss += "@font-face{font-family:'" + fam + "';font-style:" + st + ";font-weight:" + wt + ";font-display:block;src:url(data:font/woff2;base64," + btoa(bin) + ") format('woff2')}";
+        } catch (e) { /* skip a bad font; render still succeeds with the CSS fallback */ }
+      }
+      if (fontCss) html = html.replace("</head>", "<style>" + fontCss + "</style></head>");
+      try {
+        const rres = await env.BROWSER.quickAction("pdf", { html: html, gotoOptions: { waitUntil: "networkidle0", timeout: 30000 }, pdfOptions: { format: fmt, printBackground: true, preferCSSPageSize: true } });
+        return new Response(await rres.arrayBuffer(), { status: 200, headers: Object.assign({}, cors, { "Content-Type": "application/pdf", "Cache-Control": "no-store" }) });
+      } catch (e) {
+        return json({ error: "Render failed", detail: String((e && e.message) || e).slice(0, 300) }, 502, cors);
+      }
+    }
     // ---------- admin: Prepare-tool history in R2 (cross-device durability for the job-hunt tools) ----------
     // The Prepare tab tools (ATS / cover letter / interview prep / storyteller) auto-save each run to
     // localStorage; this mirrors them to the private VAULT bucket at prep/<tool>/<id>.json so they

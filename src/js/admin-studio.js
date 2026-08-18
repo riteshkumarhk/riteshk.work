@@ -2158,7 +2158,9 @@ import { WORLD_LAND } from "./worldland.js";
   };
   var RB_ACCENTS = ["#9a6a24", "#2f6d9a", "#585c52", "#7a3b3b", "#3f6b4b", "#454a8c", "#b0561f", "#1c1a17"];
   var RB_LAYOUTS = { single: { name: "Single column" }, sidebar: { name: "Two-column \u00b7 design" }, fullbleed: { name: "Full-bleed header" } };
-  var RB_FONTS = { sans: { name: "Helvetica", css: "Helvetica, Arial, sans-serif", pdf: "helvetica" }, inter: { name: "Inter", css: "'Inter', Helvetica, Arial, sans-serif", pdf: "helvetica" }, serif: { name: "Times", css: "Georgia, 'Times New Roman', serif", pdf: "times" }, newsreader: { name: "Newsreader", css: "'Newsreader', Georgia, 'Times New Roman', serif", pdf: "times" }, garamond: { name: "Garamond", css: "'EB Garamond', Georgia, serif", pdf: "times" }, mono: { name: "Mono", css: "'JetBrains Mono', 'Courier New', monospace", pdf: "courier" } };
+  var RB_FONT_BASE = "https://riteshk.work/fonts/"; // the worker fetches these woff2 + base64-embeds them so the PDF font matches the editor exactly
+  var RB_FONTS = { sans: { name: "Helvetica", css: "Helvetica, Arial, sans-serif", pdf: "helvetica" }, inter: { name: "Inter", css: "'Inter', Helvetica, Arial, sans-serif", pdf: "helvetica", fam: "Inter", faces: [{ f: "inter-normal-400-latin.woff2", w: "400" }, { f: "inter-normal-600-latin.woff2", w: "600" }] }, serif: { name: "Times", css: "Georgia, 'Times New Roman', serif", pdf: "times" }, fraunces: { name: "Fraunces", css: "'Fraunces', Georgia, serif", pdf: "times", fam: "Fraunces", faces: [{ f: "fraunces-normal-300600-latin.woff2", w: "300 600" }] }, gambetta: { name: "Gambetta", css: "'Gambetta', Georgia, serif", pdf: "times", fam: "Gambetta", faces: [{ f: "gambetta-normal-300700-latin.woff2", w: "300 700" }] }, mono: { name: "Mono", css: "'JetBrains Mono', 'Courier New', monospace", pdf: "courier", fam: "JetBrains Mono", faces: [{ f: "jetbrainsmono-normal-400-latin.woff2", w: "400" }, { f: "jetbrainsmono-normal-500-latin.woff2", w: "500" }] } };
+  function rbWorkerFonts() { var f = RB_FONTS[atsRbFont]; if (!f || !f.faces) return []; return f.faces.map(function (c) { return { family: f.fam, url: RB_FONT_BASE + c.f, weight: c.w, style: "normal" }; }); }
   // Minimal line icons (Lucide geometry) for the PDF contact line + experience meta. Rasterized once
   // at high DPI into crisp PNGs (per colour) so they look crafted + perfectly aligned; drawn decoratively
   // beside the REAL text (ATS still reads the email/phone/dates text — the icon is just a picture).
@@ -2172,6 +2174,8 @@ import { WORLD_LAND } from "./worldland.js";
   };
   var RB_ICON_FILL = { linkedin: true }; // brand glyphs are rendered as a filled silhouette, not a stroked line
   var RB_ICON_CACHE = {};
+  // Inline SVG icon (currentColor) for the résumé contact line + experience meta — crisp in the editor AND the print/PDF.
+  function rbIco(kind) { var p = RB_ICON_SVG[kind]; if (!p) return ""; return '<svg class="rbz__ico" viewBox="0 0 24 24" aria-hidden="true"' + (RB_ICON_FILL[kind] ? ' fill="currentColor"' : ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"') + ">" + p + "</svg>"; }
   function rbHex(a) { function h(n) { n = Math.max(0, Math.min(255, n | 0)).toString(16); return n.length < 2 ? "0" + n : n; } return "#" + h(a[0]) + h(a[1]) + h(a[2]); }
   function rbRasterIcon(kind, hex) {
     return new Promise(function (res) {
@@ -2187,7 +2191,7 @@ import { WORLD_LAND } from "./worldland.js";
   async function rbEnsureIcons(hexes) {
     for (var ki in RB_ICON_SVG) { for (var i = 0; i < hexes.length; i++) { var key = ki + "|" + hexes[i]; if (!(key in RB_ICON_CACHE)) { try { RB_ICON_CACHE[key] = await rbRasterIcon(ki, hexes[i]); } catch (e) { RB_ICON_CACHE[key] = null; } } } }
   }
-  var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single", atsRbFont = "sans", atsRbCanvas = "dark", atsRbKeepWhole = true;
+  var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single", atsRbFont = "inter", atsRbCanvas = "dark", atsRbKeepWhole = true;
   var atsRbSessId = null; // the in-progress workspace's history entry id (edits update it in place)
   var atsRbReviewId = null; // the review entry this workspace was rebuilt from, so it can navigate back to it
   function atsRbTpl() { return RB_TPL[atsRbTplId] || RB_TPL.classic; }
@@ -2520,8 +2524,9 @@ import { WORLD_LAND } from "./worldland.js";
     var h = "";
     h += '<div class="rbz__hd">' + ed("div", "rbz__name", "name", rb.name, "Your Name") + ed("div", "rbz__title", "title", rb.title, "Professional title");
     var c = rb.contact || {};
-    h += '<div class="rbz__contact">' + ed("span", "rbz__cbit", "contact.email", c.email, "email") + ed("span", "rbz__cbit", "contact.phone", c.phone, "phone") + ed("span", "rbz__cbit", "contact.location", c.location, "location");
-    (c.links || []).forEach(function (l, i) { h += ed("span", "rbz__cbit", "contact.links." + i + ".label", l.label || l.url, "link"); });
+    function ecb(ico, path, val, ph) { return '<span class="rbz__cbit">' + rbIco(ico) + ed("span", "rbz__cbtx", path, val, ph) + "</span>"; }
+    h += '<div class="rbz__contact">' + ecb("email", "contact.email", c.email, "email") + ecb("phone", "contact.phone", c.phone, "phone") + ecb("loc", "contact.location", c.location, "location");
+    (c.links || []).forEach(function (l, i) { h += ecb(/linkedin/i.test((l.label || "") + " " + (l.url || "")) ? "linkedin" : "site", "contact.links." + i + ".label", l.label || l.url, "link"); });
     h += "</div></div>";
     var sumBlock = (rb.summary != null) ? '<div class="rbz__sec rbz__sec--sum">' + ed("div", "rbz__sum", "summary", rb.summary, "A 2\u20133 line professional summary\u2026") + "</div>" : "";
     var lastSi = (rb.sections || []).length - 1;
@@ -2532,7 +2537,7 @@ import { WORLD_LAND } from "./worldland.js";
           var base = "sections." + si + ".items." + ii;
           sh += '<div class="rbz__xp" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder role" aria-label="Drag to reorder role">' + GRIP + '</button><div class="rbz__xphd">' + ed("span", "rbz__role", base + ".role", it.role, "Role") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove role">\u00d7</button></div>';
           sh += ed("div", "rbz__org", base + ".org", it.org, "Company");
-          sh += '<div class="rbz__meta">' + ed("span", "rbz__dates", base + ".dates", it.dates, "MM/YYYY to Present") + ed("span", "rbz__loc", base + ".location", it.location, "Location") + "</div>";
+          sh += '<div class="rbz__meta"><span class="rbz__mi">' + rbIco("cal") + ed("span", "rbz__dates", base + ".dates", it.dates, "MM/YYYY to Present") + '</span><span class="rbz__mi">' + rbIco("loc") + ed("span", "rbz__loc", base + ".location", it.location, "Location") + "</span></div>";
           sh += '<ul class="rbz__bl">';
           (it.bullets || []).forEach(function (b, bi) { sh += '<li data-si="' + si + '" data-ii="' + ii + '" data-bi="' + bi + '"><button class="rbz__grip rbz__grip--b" type="button" draggable="true" data-drag-bullet="' + si + "." + ii + "." + bi + '" title="Drag to reorder" aria-label="Drag to reorder bullet">' + GRIP + '</button>' + ed("span", "rbz__bltext", base + ".bullets." + bi, b, "Achievement, outcome-first with a metric\u2026") + '<button class="rbz__del rbz__del--b" type="button" data-del-bullet="' + si + "." + ii + "." + bi + '" title="Remove bullet">\u00d7</button></li>'; });
           sh += '</ul><button class="rbz__add" type="button" data-add-bullet="' + si + "." + ii + '">+ bullet</button></div>';
@@ -2574,9 +2579,97 @@ import { WORLD_LAND } from "./worldland.js";
     h += '<div class="rbz__addsec" contenteditable="false"><span class="rbz__addsec-lbl">Add section</span><select class="rbz__addsel" data-add-sec-kind aria-label="New section type">' + _addk.map(function (k) { return '<option value="' + k[0] + '">' + e(k[1]) + "</option>"; }).join("") + '</select><button class="rbz__add rbz__add--sec" type="button" data-add-sec>+ Add section</button></div>';
     return h;
   }
+  // ---- Print / PDF: ONE source of truth. rbCleanHtml renders the résumé with NO editing chrome;
+  // RB_PRINT_CSS reuses the SAME class rules the editor draws, at real page geometry — so a browser
+  // (Cloudflare) render of rbPrintDoc() is pixel-identical to the editor. ----
+  function rbCleanHtml(rb) {
+    var e = escHtml;
+    function span(cls, val) { return val ? '<span class="' + cls + '">' + e(val) + "</span>" : ""; }
+    function div(cls, val) { return val ? '<div class="' + cls + '">' + e(val) + "</div>" : ""; }
+    var c = rb.contact || {}, cbits = [];
+    function pcb(ico, href, val) { return val ? '<a class="rbz__cbit" href="' + e(href) + '">' + rbIco(ico) + '<span class="rbz__cbtx">' + e(val) + "</span></a>" : ""; }
+    if (c.email) cbits.push(pcb("email", "mailto:" + c.email, c.email));
+    if (c.phone) cbits.push(pcb("phone", "tel:" + String(c.phone).replace(/[^0-9+]/g, ""), c.phone));
+    if (c.location) cbits.push('<span class="rbz__cbit">' + rbIco("loc") + '<span class="rbz__cbtx">' + e(c.location) + "</span></span>");
+    (c.links || []).forEach(function (l) { var lab = l.label || l.url; if (lab) cbits.push(pcb(/linkedin/i.test((l.label || "") + " " + (l.url || "")) ? "linkedin" : "site", l.url || "#", lab)); });
+    var h = '<div class="rbz__hd">' + div("rbz__name", rb.name) + div("rbz__title", rb.title) + (cbits.length ? '<div class="rbz__contact">' + cbits.join("") + "</div>" : "") + "</div>";
+    var sumBlock = rb.summary ? '<div class="rbz__sec rbz__sec--sum">' + div("rbz__sum", rb.summary) + "</div>" : "";
+    function secHtml(s) {
+      var sh = '<div class="rbz__sec">' + (s.heading ? '<div class="rbz__sechd">' + span("rbz__sectitle", s.heading) + "</div>" : "");
+      if (s.kind === "experience") {
+        (s.items || []).forEach(function (it) {
+          sh += '<div class="rbz__xp"><div class="rbz__xphd">' + span("rbz__role", it.role) + "</div>" + div("rbz__org", it.org);
+          if (it.dates || it.location) sh += '<div class="rbz__meta">' + (it.dates ? '<span class="rbz__mi">' + rbIco("cal") + span("rbz__dates", it.dates) + "</span>" : "") + (it.location ? '<span class="rbz__mi">' + rbIco("loc") + span("rbz__loc", it.location) + "</span>" : "") + "</div>";
+          var bl = (it.bullets || []).filter(Boolean);
+          if (bl.length) sh += '<ul class="rbz__bl">' + bl.map(function (b) { return "<li>" + span("rbz__bltext", b) + "</li>"; }).join("") + "</ul>";
+          sh += "</div>";
+        });
+      } else if (s.kind === "skills") {
+        (s.groups || []).forEach(function (g) { var items = (g.items || []).filter(Boolean).join("  \u00b7  "); if (g.label || items) sh += '<div class="rbz__skg">' + span("rbz__sklabel", g.label) + (items ? '<span class="rbz__skitems">' + e(items) + "</span>" : "") + "</div>"; });
+      } else if (s.kind === "education") {
+        (s.items || []).forEach(function (it) { sh += '<div class="rbz__edu"><div class="rbz__xphd">' + span("rbz__role", it.school) + span("rbz__dates", it.dates) + "</div>"; if (it.credential || it.note) sh += '<div class="rbz__meta">' + span("rbz__cred", it.credential) + span("rbz__note", it.note) + "</div>"; sh += "</div>"; });
+      } else if (s.kind === "text") {
+        sh += div("rbz__text", s.text);
+      } else {
+        (s.items || []).forEach(function (it) { if (it.title || it.meta) sh += '<div class="rbz__li">' + span("rbz__lititle", it.title) + span("rbz__limeta", it.meta) + "</div>"; });
+      }
+      return sh + "</div>";
+    }
+    if (atsRbLayout === "sidebar") {
+      var mainH = sumBlock, sideH = "";
+      (rb.sections || []).forEach(function (s) { if (s.kind !== "experience" && s.kind !== "text") sideH += secHtml(s); else mainH += secHtml(s); });
+      h += '<div class="rbz__cols"><div class="rbz__col rbz__col--side">' + sideH + '</div><div class="rbz__col rbz__col--main">' + mainH + "</div></div>";
+    } else {
+      h += sumBlock;
+      (rb.sections || []).forEach(function (s) { h += secHtml(s); });
+    }
+    return h;
+  }
+  var RB_PRINT_CSS = "*{box-sizing:border-box}html{font-size:16px;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0}"
+    + ".rbz__doc{--rbz-accent:#9a6a24;--rbz-scale:1;color:#1c1a17;font-family:var(--rbz-body-ff,Helvetica,Arial,sans-serif);font-size:calc(14px*var(--rbz-scale,1));line-height:1.5}"
+    + ".rbz__hd{border-bottom:1.5px solid #1c1a17;padding-bottom:.7rem}"
+    + ".rbz__doc[data-layout=fullbleed] .rbz__hd{margin:-13mm -14mm 1.5rem;padding:12mm 14mm 1.5rem;background:var(--rbz-accent,#9a6a24);border-bottom:0}"
+    + ".rbz__doc[data-layout=fullbleed] .rbz__name{color:#fff}.rbz__doc[data-layout=fullbleed] .rbz__title{color:rgba(255,255,255,.82)}.rbz__doc[data-layout=fullbleed] .rbz__contact{color:rgba(255,255,255,.9)}.rbz__doc[data-layout=fullbleed] .rbz__cbit:not(:last-child):after{color:rgba(255,255,255,.5)}"
+    + ".rbz__cols{display:grid;grid-template-columns:1fr 1.7fr;gap:1.6rem;align-items:start;margin-top:1.1rem}"
+    + ".rbz__doc[data-layout=sidebar] .rbz__col--main{border-left:1px solid #e1d8cd;padding-left:1.5rem}"
+    + ".rbz__doc[data-layout=sidebar] .rbz__col--main>.rbz__sec:first-child,.rbz__doc[data-layout=sidebar] .rbz__col--side>.rbz__sec:first-child{margin-top:0}"
+    + ".rbz__name{font-size:calc(1.95rem*var(--rbz-scale,1));font-weight:700;letter-spacing:-.01em}"
+    + ".rbz__title{font-size:calc(.74rem*var(--rbz-scale,1));font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--rbz-accent,#9a6a24);margin-top:.12rem}"
+    + ".rbz__contact{display:flex;flex-wrap:wrap;gap:.28em .95em;margin-top:.55rem;font-size:calc(.78rem*var(--rbz-scale,1));color:#655c53}"
+    + ".rbz__cbit{display:inline-flex;align-items:center;gap:.34em;color:inherit;text-decoration:none}.rbz__cbtx{white-space:nowrap}.rbz__ico{width:.86em;height:.86em;flex:0 0 auto;opacity:.72}.rbz__mi{display:inline-flex;align-items:center;gap:.32em}"
+    + ".rbz__sec{margin-top:1.25rem}.rbz__sec--sum{margin-top:1rem}"
+    + ".rbz__sum{font-family:var(--rbz-sum-ff,var(--rbz-body-ff,Helvetica,Arial,sans-serif));font-style:var(--rbz-sum-style,normal);font-size:calc(1.02rem*var(--rbz-scale,1));line-height:1.45;color:#1c1a17}"
+    + ".rbz__sechd{display:flex;align-items:center;gap:.4rem;border-bottom:1px solid #e1d8cd;padding-bottom:.22rem;margin-bottom:.55rem}"
+    + ".rbz__sectitle{flex:1;font-size:calc(.7rem*var(--rbz-scale,1));font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--rbz-accent,#9a6a24)}"
+    + ".rbz__doc[data-head=bar] .rbz__sechd{border-bottom:2px solid var(--rbz-accent,#9a6a24)}"
+    + ".rbz__doc[data-head=plain] .rbz__sechd{border-bottom:0;padding-bottom:.05rem}.rbz__doc[data-head=plain] .rbz__sectitle{font-size:calc(.8rem*var(--rbz-scale,1));color:#1c1a17}"
+    + ".rbz__xp,.rbz__edu{margin-bottom:.75rem}.rbz__xphd{display:flex;align-items:baseline;gap:.1rem;flex-wrap:wrap}"
+    + ".rbz__role{font-weight:700;font-size:calc(.96rem*var(--rbz-scale,1))}"
+    + ".rbz__org{display:block;color:var(--rbz-accent,#9a6a24);font-size:calc(.92rem*var(--rbz-scale,1));font-weight:600;margin-top:.02rem}"
+    + ".rbz__meta{display:flex;flex-wrap:wrap;gap:.1rem .7rem;margin:.12rem 0 .3rem;font-size:calc(.66rem*var(--rbz-scale,1));letter-spacing:.05em;text-transform:uppercase;color:#9a938a}"
+    + ".rbz__bl{margin:.15rem 0;padding-left:1.05rem;list-style:none}"
+    + ".rbz__bl li{position:relative;font-size:calc(.855rem*var(--rbz-scale,1));line-height:1.42;color:#3a352f;margin-bottom:.18rem}"
+    + ".rbz__bltext{flex:1}.rbz__bl li:before{content:'\\2013';color:var(--rbz-accent,#9a6a24);position:absolute;left:-1.05rem}"
+    + ".rbz__skg{display:flex;gap:.5rem;margin-bottom:.3rem;font-size:calc(.86rem*var(--rbz-scale,1))}.rbz__sklabel{font-weight:700;white-space:nowrap}.rbz__skitems{flex:1;color:#3a352f}"
+    + ".rbz__cred{font-size:calc(.85rem*var(--rbz-scale,1))}"
+    + ".rbz__li{display:flex;gap:.5rem;align-items:baseline;margin-bottom:.25rem;font-size:calc(.86rem*var(--rbz-scale,1))}.rbz__lititle{font-weight:700}.rbz__limeta{margin-left:auto;color:#9a938a;font-size:calc(.78rem*var(--rbz-scale,1))}"
+    + ".rbz__text{font-size:calc(.86rem*var(--rbz-scale,1));line-height:1.45;color:#3a352f}"
+    // keep entries + headings whole across page breaks
+    + ".rbz__hd,.rbz__sec--sum,.rbz__xp,.rbz__edu,.rbz__li,.rbz__skg{break-inside:avoid}.rbz__sechd{break-after:avoid}";
+  // Build a standalone print document for the résumé. fontFaces = @font-face CSS the worker inlines
+  // (base64) so the exact chosen font embeds; scale<1 squeezes to fit fewer pages.
+  function rbPrintDoc(rb, opts) {
+    opts = opts || {};
+    var SZ = atsRbSize(), tpl = atsRbTpl();
+    var bodyCss = (RB_FONTS[atsRbFont] || RB_FONTS.sans).css;
+    var scale = opts.scale != null ? opts.scale : (atsRbDens().scale || 1); // Density drives print density: Airy = flow (roomier, more pages), Compact = squeeze (tighter, fewer)
+    var pageCss = "@page{size:" + SZ.w + "mm " + SZ.h + "mm;margin:13mm 14mm 14mm}";
+    var docStyle = "--rbz-accent:" + atsRbAccentHex() + ";--rbz-body-ff:" + bodyCss + ";--rbz-sum-ff:" + bodyCss + ";--rbz-sum-style:normal;--rbz-scale:" + scale + ";";
+    return "<!doctype html><html><head><meta charset=\"utf-8\"><style>" + pageCss + (opts.fontFaces || "") + RB_PRINT_CSS + "</style></head><body><div class=\"rbz__doc\" data-layout=\"" + atsRbLayout + "\" data-head=\"" + tpl.head + "\" style=\"" + docStyle + "\">" + rbCleanHtml(rb) + "</div></body></html>";
+  }
   function atsRbShow(built, rb) {
     var working = rb;
-    var curUrl = null, previewing = false, dirty = false;
+    var curUrl = null, previewing = false, dirty = false, pdfBlobUrl = null, pdfSig = null;
     var rbUndo = [rbClone(working)], rbRedo = [], rbCommitT = null;
     var atsRbPages = (built && built.pages) || 1; // the vector-PDF page count the badge shows; the editor compresses to match it
     var modal = atsvEl("div", "rbz rbz--editor");
@@ -2815,16 +2908,35 @@ import { WORLD_LAND } from "./worldland.js";
 
     async function buildFromEdits() { working = rbReadEditor(docEl, working); var b = await atsRbFit(working); atsRbPages = b.pages; setPg(b.pages); schedulePaginate(); return b; }
     function revoke() { if (curUrl) { try { URL.revokeObjectURL(curUrl); } catch (e) {} curUrl = null; } }
+    function rbPdfSig() { return JSON.stringify([working, atsRbTplId, atsRbSizeId, atsRbAccent, atsRbFont, atsRbDensity, atsRbLayout, atsRbKeepWhole]); }
+    // Render the exact print HTML to a real PDF via the Cloudflare worker (headless Chrome), cached until
+    // the résumé/design changes. Throws on no-session/failure so callers fall back to the jsPDF export.
+    async function rbRenderPdf() {
+      working = rbReadEditor(docEl, working);
+      var sig = rbPdfSig();
+      if (pdfBlobUrl && pdfSig === sig) return { url: pdfBlobUrl, cached: true };
+      var sess = (typeof adminSession === "function") ? adminSession() : "";
+      if (!sess) throw new Error("no-session");
+      var r = await fetch(ADMIN_WORKER + "/admin/render-pdf", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ html: rbPrintDoc(working, {}), format: atsRbSize().fmt, fonts: rbWorkerFonts() }) });
+      if (!r.ok) throw new Error("render-http-" + r.status);
+      var blob = await r.blob();
+      if (!blob || blob.type.indexOf("pdf") < 0) throw new Error("render-bad-type");
+      if (pdfBlobUrl) { try { URL.revokeObjectURL(pdfBlobUrl); } catch (e) {} }
+      pdfBlobUrl = URL.createObjectURL(blob); pdfSig = sig;
+      return { url: pdfBlobUrl, blob: blob };
+    }
     function rbSetBadge(b, t) { var bd = modal.querySelector("[data-rbz-badge]"), tt = modal.querySelector("[data-rbz-title]"); if (bd) bd.textContent = b; if (tt) tt.textContent = t; }
     async function togglePreview(on) {
       var b0 = modal.querySelector("[data-rbz-preview]");
       if (on) {
-        var was = btnBusy(b0, "Building\u2026");
-        try { var b = await buildFromEdits(); revoke(); curUrl = String(b.doc.output("bloburl")); frameEl.src = curUrl; wrapEl.hidden = true; frameEl.hidden = false; previewing = true; modal.classList.add("rbz--preview"); rbSetBadge("PDF", "Résumé preview"); btnIdle(b0, "\u2190 Back to edit"); }
-        catch (e) { status("Preview failed: " + ((e && e.message) || e)); btnIdle(b0, was); }
+        var was = btnBusy(b0, "Rendering\u2026");
+        var src = null;
+        try { src = (await rbRenderPdf()).url; }
+        catch (e) { try { var b = await buildFromEdits(); revoke(); curUrl = String(b.doc.output("bloburl")); src = curUrl; status("Preview \u2014 offline fallback (deploy the worker for the exact PDF).", true); } catch (er) { status("Preview failed: " + ((er && er.message) || er)); btnIdle(b0, was); return; } }
+        frameEl.src = src; wrapEl.hidden = true; frameEl.hidden = false; previewing = true; modal.classList.add("rbz--preview"); rbSetBadge("PDF", "Résumé preview"); btnIdle(b0, "\u2190 Back to edit");
       } else { frameEl.hidden = true; wrapEl.hidden = false; previewing = false; modal.classList.remove("rbz--preview"); rbSetBadge("EDIT", "Résumé workspace"); b0.textContent = "Preview PDF"; paginate(); }
     }
-    function close() { try { rbSaveWorkspace(true); } catch (e) {} document.removeEventListener("keydown", onKey); window.removeEventListener("resize", onResize); revoke(); modal.remove(); }
+    function close() { try { rbSaveWorkspace(true); } catch (e) {} document.removeEventListener("keydown", onKey); window.removeEventListener("resize", onResize); revoke(); if (pdfBlobUrl) { try { URL.revokeObjectURL(pdfBlobUrl); } catch (e) {} pdfBlobUrl = null; } modal.remove(); }
     function backToReview() { if (!atsRbReviewId) { close(); return; } atsvSessId = atsRbReviewId; close(); atsOpenViewer(); } // save + leave the workspace, reopen the review it came from
     function onKey(e) {
       if (e.key === "Escape") { if (previewing) togglePreview(false); else if (!/rbz__doc|rbz__/.test((document.activeElement && document.activeElement.className) || "")) close(); return; }
@@ -2854,7 +2966,19 @@ import { WORLD_LAND } from "./worldland.js";
       if (e.target.closest("[data-rbz-preview]")) { togglePreview(!previewing); return; }
       if (e.target.closest("[data-rbz-regen]")) { close(); atsRebuildOpen(atsRbBusyCtx); return; }
       var dl = e.target.closest("[data-rbz-dl]");
-      if (dl) { var was = btnBusy(dl, "Building\u2026"); try { var b = await buildFromEdits(); var fn = (String(working.name || "Resume").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "Resume") + "-Resume.pdf"; b.doc.save(fn); status("Résumé PDF downloaded.", true); } catch (er) { status("Download failed: " + ((er && er.message) || er)); } finally { btnIdle(dl, was); } return; }
+      if (dl) {
+        var was = btnBusy(dl, "Rendering\u2026");
+        var fn = (String(working.name || "Resume").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "Resume") + "-Resume.pdf";
+        try {
+          var out = await rbRenderPdf();
+          var a = document.createElement("a"); a.href = out.url; a.download = fn; document.body.appendChild(a); a.click(); a.remove();
+          status("Résumé PDF downloaded.", true);
+        } catch (er) {
+          try { var b = await buildFromEdits(); b.doc.save(fn); status("Downloaded \u2014 offline fallback (deploy the worker for the exact PDF).", true); }
+          catch (er2) { status("Download failed: " + ((er2 && er2.message) || er2)); }
+        } finally { btnIdle(dl, was); }
+        return;
+      }
       var rc = e.target.closest("[data-rbz-recheck]");
       if (rc) {
         working = rbReadEditor(docEl, working);
@@ -8652,7 +8776,7 @@ import { WORLD_LAND } from "./worldland.js";
     if (scenario === "caveat") { pubProgress(100, "Published. It can take another minute to appear \u2014 open your site to check.", { done: true, viewUrl: vu }); return; }
     pubProgress(100, "Your site is live and ready to view.", { done: true, viewUrl: vu });
   }
-  if (devStubOn()) { try { window.__rkPubSim = devPubSim; window.__rkDevEdit = function (p, v) { try { setPath(data, p, v); saveDraft(true); } catch (e) {} }; } catch (e) {} }
+  if (devStubOn()) { try { window.__rkPubSim = devPubSim; window.__rkDevEdit = function (p, v) { try { setPath(data, p, v); saveDraft(true); } catch (e) {} }; window.__rkDevPrintDoc = function (rb) { try { return rbPrintDoc(rb); } catch (e) { return String(e); } }; } catch (e) {} }
   // Poll the live site until it serves exactly what we just published (true = confirmed live).
   async function waitForLive(mySig) {
     if (!mySig) return false;

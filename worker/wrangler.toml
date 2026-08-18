@@ -19,6 +19,12 @@ bucket_name = "rk-media"
 binding = "VAULT_GRANTS"
 id = "ec6ed36fa1fd4dbfb9483a147d003aef"
 
+# Headless-Chrome Browser Rendering (Workers Free tier: 10 min/day). Powers /admin/render-pdf, which
+# turns the résumé print-HTML into a real, ATS-safe, WYSIWYG PDF. quickAction("pdf") is one-shot —
+# CF opens Chrome, renders, returns the PDF and closes the browser itself (no session to leak).
+[browser]
+binding = "BROWSER"
+
 # Plain-text var (kept in sync with the dashboard). Secrets (ACCESS_TOKEN,
 # ANTHROPIC_KEY, ADMIN_HASH, ADMIN_SALT, SESSION_SECRET, GH_TOKEN, ...) are set
 # via the dashboard / `wrangler secret put` and are NOT stored in this file.
