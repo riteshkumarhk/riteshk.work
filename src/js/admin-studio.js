@@ -2779,34 +2779,13 @@ import { WORLD_LAND } from "./worldland.js";
       }
       var addBar = docEl.querySelector(".rbz__addsec"); if (addBar) addBar.remove(); // the add-section toolbar is editor chrome — keep it out of the paginated page cards
       var blocks = harvest();
-      // Compress the résumé just enough that the editor's page cards match the vector PDF
-      // (atsRbPages) — the count the badge shows. Editor type is deliberately more readable
-      // (less dense) than the PDF, so left alone it spills onto an extra sheet. Page-size aware:
-      // the sheet height + usable area come from atsRbSize(), so it holds for A4 and US Letter.
-      var target = Math.max(1, atsRbPages), fitScale = 1;
-      if (atsRbLayout !== "sidebar" && blocks.length) {
-        var probe = document.createElement("div"); probe.className = "rbz__page"; probe.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;width:" + w + "px"; docEl.appendChild(probe);
-        var ppcs = getComputedStyle(probe), ppT = parseFloat(ppcs.paddingTop) || 0, ppB = parseFloat(ppcs.paddingBottom) || 0, fitAvail = pageOuterH - ppT - ppB;
-        blocks.forEach(function (b) { probe.appendChild(b); });
-        var flowH = function (sc) { docEl.style.setProperty("--rbz-scale", sc); return probe.scrollHeight - ppT - ppB; };
-        var hHi = flowH(1), hLo = flowH(0.7), slope = (hHi - hLo) / 0.3, baseH = hHi - slope; // linear model H(s) ≈ slope*s + baseH (baseH = the fixed rem margins that don't scale)
-        var want = target * fitAvail * 0.955; // headroom so a whole block near the edge doesn't tip onto the next sheet
-        if (slope > 0 && hHi > want) fitScale = (want - baseH) / slope;
-        fitScale = Math.max(0.6, Math.min(1, fitScale));
-        blocks.forEach(function (b) { if (b.parentNode === probe) probe.removeChild(b); });
-        probe.remove();
-      }
-      // Place, then nudge the scale down and re-place if block quantisation still tipped us onto an
-      // extra sheet — this is what guarantees the editor lands on the PDF's page count.
-      docEl.style.setProperty("--rbz-scale", fitScale);
-      var made = placeInto(blocks), guard = 0;
-      while (made > target && fitScale > 0.6 && guard++ < 6) {
-        fitScale = Math.max(0.6, fitScale - 0.04);
-        docEl.style.setProperty("--rbz-scale", fitScale);
-        blocks = harvest();
-        made = placeInto(blocks);
-      }
+      // The editor renders at the SAME density scale as the exported PDF (rbPrintDoc): density
+      // (Airy/Normal/Compact) visibly changes the layout and the pages fall naturally at the true
+      // A4/Letter page height. Editing readability is the separate --rbz-zoom view magnifier.
+      docEl.style.setProperty("--rbz-scale", atsRbDens().scale || 1);
+      var made = placeInto(blocks);
       if (addBar) docEl.appendChild(addBar);
+      setPg(made);
       rbSyncZoomBox();
     }
     function schedulePaginate() { clearTimeout(paginateT); paginateT = setTimeout(paginate, 180); }
@@ -2925,7 +2904,7 @@ import { WORLD_LAND } from "./worldland.js";
     });
     docEl.addEventListener("dragend", endDrag);
 
-    async function buildFromEdits() { working = rbReadEditor(docEl, working); var b = await atsRbFit(working); atsRbPages = b.pages; setPg(b.pages); schedulePaginate(); return b; }
+    async function buildFromEdits() { working = rbReadEditor(docEl, working); var b = await atsRbFit(working); atsRbPages = b.pages; schedulePaginate(); return b; }
     function revoke() { if (curUrl) { try { URL.revokeObjectURL(curUrl); } catch (e) {} curUrl = null; } }
     function rbPdfSig() { return JSON.stringify([working, atsRbTplId, atsRbSizeId, atsRbAccent, atsRbFont, atsRbDensity, atsRbLayout, atsRbKeepWhole]); }
     // Render the exact print HTML to a real PDF via the Cloudflare worker (headless Chrome), cached until
