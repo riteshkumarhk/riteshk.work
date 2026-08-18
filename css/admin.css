@@ -1759,7 +1759,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
    breaks line up with the rendered PDF. measure() returns 0 for absolute nodes, so they add no height. */
 .rbz__add { position: absolute; left: 0; opacity: 0; z-index: 3; border: 1px dashed #d8cfc2; background: #fff; color: #9a6a24; font-family: var(--mono, monospace); font-size: .6rem; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; padding: .16rem .5rem; border-radius: 6px; margin: 0; transition: opacity .12s, border-color .12s, background .12s; }
 .rbz__xp > .rbz__add { bottom: -1.05rem; }
-.rbz__sec > .rbz__add--role, .rbz__edu > .rbz__add { bottom: -1.5rem; }
+.rbz__sec > .rbz__add--role, .rbz__edu > .rbz__add { right: 0; left: auto; bottom: -1.1rem; }
 .rbz__xp:hover > .rbz__add, .rbz__edu:hover > .rbz__add, .rbz__sec:hover > .rbz__add--role, .rbz__add:focus { opacity: 1; }
 .rbz__add:hover { border-color: #9a6a24; background: rgba(216, 166, 87, .14); }
 .rbz__add--sec { position: static; opacity: 1; margin-top: 0; background: none; }

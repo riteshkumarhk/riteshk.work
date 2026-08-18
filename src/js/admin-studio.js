@@ -2917,13 +2917,21 @@ import { WORLD_LAND } from "./worldland.js";
       if (pdfBlobUrl && pdfSig === sig) return { url: pdfBlobUrl, cached: true };
       var sess = (typeof adminSession === "function") ? adminSession() : "";
       if (!sess) throw new Error("no-session");
-      var r = await fetch(ADMIN_WORKER + "/admin/render-pdf", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ html: rbPrintDoc(working, {}), format: atsRbSize().fmt, fonts: rbWorkerFonts() }) });
-      if (!r.ok) throw new Error("render-http-" + r.status);
-      var blob = await r.blob();
-      if (!blob || blob.type.indexOf("pdf") < 0) throw new Error("render-bad-type");
-      if (pdfBlobUrl) { try { URL.revokeObjectURL(pdfBlobUrl); } catch (e) {} }
-      pdfBlobUrl = URL.createObjectURL(blob); pdfSig = sig;
-      return { url: pdfBlobUrl, blob: blob };
+      status("Rendering the exact PDF on the server\u2026");
+      // Hard-cap the server render so a slow/hung Cloudflare render can't leave the button spinning -> jsPDF fallback.
+      var ac = ("AbortController" in window) ? new AbortController() : null;
+      var to = ac ? setTimeout(function () { ac.abort(); }, 20000) : 0;
+      try {
+        var r = await fetch(ADMIN_WORKER + "/admin/render-pdf", { method: "POST", signal: ac ? ac.signal : undefined, headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ html: rbPrintDoc(working, {}), format: atsRbSize().fmt, fonts: rbWorkerFonts() }) });
+        if (!r.ok) throw new Error("render-http-" + r.status);
+        var blob = await r.blob();
+        if (!blob || blob.type.indexOf("pdf") < 0) throw new Error("render-bad-type");
+        if (pdfBlobUrl) { try { URL.revokeObjectURL(pdfBlobUrl); } catch (e) {} }
+        pdfBlobUrl = URL.createObjectURL(blob); pdfSig = sig;
+        return { url: pdfBlobUrl, blob: blob };
+      } catch (e) {
+        throw (ac && ac.signal.aborted) ? new Error("render-timeout") : e;
+      } finally { if (to) clearTimeout(to); }
     }
     function rbSetBadge(b, t) { var bd = modal.querySelector("[data-rbz-badge]"), tt = modal.querySelector("[data-rbz-title]"); if (bd) bd.textContent = b; if (tt) tt.textContent = t; }
     async function togglePreview(on) {
@@ -2932,7 +2940,7 @@ import { WORLD_LAND } from "./worldland.js";
         var was = btnBusy(b0, "Rendering\u2026");
         var src = null;
         try { src = (await rbRenderPdf()).url; }
-        catch (e) { try { var b = await buildFromEdits(); revoke(); curUrl = String(b.doc.output("bloburl")); src = curUrl; status("Preview \u2014 offline fallback (deploy the worker for the exact PDF).", true); } catch (er) { status("Preview failed: " + ((er && er.message) || er)); btnIdle(b0, was); return; } }
+        catch (e) { try { var b = await buildFromEdits(); revoke(); curUrl = String(b.doc.output("bloburl")); src = curUrl; status("Preview \u2014 built-in exporter (the exact server render wasn't reachable).", true); } catch (er) { status("Preview failed: " + ((er && er.message) || er)); btnIdle(b0, was); return; } }
         frameEl.src = src; wrapEl.hidden = true; frameEl.hidden = false; previewing = true; modal.classList.add("rbz--preview"); rbSetBadge("PDF", "Résumé preview"); btnIdle(b0, "\u2190 Back to edit");
       } else { frameEl.hidden = true; wrapEl.hidden = false; previewing = false; modal.classList.remove("rbz--preview"); rbSetBadge("EDIT", "Résumé workspace"); b0.textContent = "Preview PDF"; paginate(); }
     }
@@ -2974,7 +2982,7 @@ import { WORLD_LAND } from "./worldland.js";
           var a = document.createElement("a"); a.href = out.url; a.download = fn; document.body.appendChild(a); a.click(); a.remove();
           status("Résumé PDF downloaded.", true);
         } catch (er) {
-          try { var b = await buildFromEdits(); b.doc.save(fn); status("Downloaded \u2014 offline fallback (deploy the worker for the exact PDF).", true); }
+          try { var b = await buildFromEdits(); b.doc.save(fn); status("Downloaded \u2014 built-in exporter (the exact server render wasn't reachable).", true); }
           catch (er2) { status("Download failed: " + ((er2 && er2.message) || er2)); }
         } finally { btnIdle(dl, was); }
         return;
