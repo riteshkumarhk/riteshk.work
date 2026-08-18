@@ -2502,6 +2502,14 @@ import { WORLD_LAND } from "./worldland.js";
     });
     return rb;
   }
+  function rbNewSection(token) {
+    if (token === "experience") return { heading: "Experience", kind: "experience", items: [{ role: "", org: "", location: "", dates: "", bullets: [""] }] };
+    if (token === "skills") return { heading: "Skills", kind: "skills", groups: [{ label: "", items: [] }] };
+    if (token === "education") return { heading: "Education", kind: "education", items: [{ school: "", credential: "", dates: "", note: "" }] };
+    if (token === "certifications") return { heading: "Certifications", kind: "list", items: [{ title: "", meta: "" }] };
+    if (token === "text") return { heading: "Summary", kind: "text", text: "" };
+    return { heading: "Recognition", kind: "list", items: [{ title: "", meta: "" }] };
+  }
   function atsRbEditorHtml(rb) {
     var e = escHtml;
     var GRIP = '<svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><circle cx="5" cy="4" r="1.3"/><circle cx="11" cy="4" r="1.3"/><circle cx="5" cy="8" r="1.3"/><circle cx="11" cy="8" r="1.3"/><circle cx="5" cy="12" r="1.3"/><circle cx="11" cy="12" r="1.3"/></svg>';
@@ -2529,14 +2537,16 @@ import { WORLD_LAND } from "./worldland.js";
         sh += '<button class="rbz__add rbz__add--role" type="button" data-add-role="' + si + '">+ add role</button>';
       } else if (s.kind === "skills") {
         (s.groups || []).forEach(function (g, gi) {
-          sh += '<div class="rbz__skg">' + ed("span", "rbz__sklabel", "sections." + si + ".groups." + gi + ".label", g.label, "Group") + '<span class="rbz__skitems" contenteditable="true" data-ksitems="' + si + "." + gi + '" data-ph="skill \u00b7 skill \u00b7 skill">' + e((g.items || []).join("  \u00b7  ")) + "</span></div>";
+          sh += '<div class="rbz__skg">' + ed("span", "rbz__sklabel", "sections." + si + ".groups." + gi + ".label", g.label, "Group") + '<span class="rbz__skitems" contenteditable="true" data-ksitems="' + si + "." + gi + '" data-ph="skill \u00b7 skill \u00b7 skill">' + e((g.items || []).join("  \u00b7  ")) + '</span><button class="rbz__del" type="button" data-del-group="' + si + "." + gi + '" title="Remove group">\u00d7</button></div>';
         });
+        sh += '<button class="rbz__add rbz__add--role" type="button" data-add-group="' + si + '">+ add group</button>';
       } else if (s.kind === "education") {
         (s.items || []).forEach(function (it, ii) {
           var eb = "sections." + si + ".items." + ii;
           sh += '<div class="rbz__edu" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder" aria-label="Drag to reorder entry">' + GRIP + '</button><div class="rbz__xphd">' + ed("span", "rbz__role", eb + ".school", it.school, "School") + ed("span", "rbz__dates", eb + ".dates", it.dates, "Year") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">\u00d7</button></div>';
           sh += '<div class="rbz__meta">' + ed("span", "rbz__cred", eb + ".credential", it.credential, "Degree / credential") + ed("span", "rbz__note", eb + ".note", it.note, "Note") + "</div></div>";
         });
+        sh += '<button class="rbz__add rbz__add--role" type="button" data-add-edu="' + si + '">+ add entry</button>';
       } else if (s.kind === "text") {
         sh += ed("div", "rbz__text", "sections." + si + ".text", s.text, "Text\u2026");
       } else {
@@ -2544,6 +2554,7 @@ import { WORLD_LAND } from "./worldland.js";
           var lb = "sections." + si + ".items." + ii;
           sh += '<div class="rbz__li" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder" aria-label="Drag to reorder entry">' + GRIP + '</button>' + ed("span", "rbz__lititle", lb + ".title", it.title, "Title") + ed("span", "rbz__limeta", lb + ".meta", it.meta, "Meta") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">\u00d7</button></div>';
         });
+        sh += '<button class="rbz__add rbz__add--role" type="button" data-add-li="' + si + '">+ add entry</button>';
       }
       sh += "</div>";
       return sh;
@@ -2556,6 +2567,8 @@ import { WORLD_LAND } from "./worldland.js";
       h += sumBlock;
       (rb.sections || []).forEach(function (s, si) { h += secHtml(s, si); });
     }
+    var _addk = [["skills", "Skills"], ["education", "Education"], ["recognition", "Recognition / Awards"], ["certifications", "Certifications"], ["experience", "Experience"], ["text", "Summary text"]];
+    h += '<div class="rbz__addsec" contenteditable="false"><span class="rbz__addsec-lbl">Add section</span><select class="rbz__addsel" data-add-sec-kind aria-label="New section type">' + _addk.map(function (k) { return '<option value="' + k[0] + '">' + e(k[1]) + "</option>"; }).join("") + '</select><button class="rbz__add rbz__add--sec" type="button" data-add-sec>+ Add section</button></div>';
     return h;
   }
   function atsRbShow(built, rb) {
@@ -2650,6 +2663,7 @@ import { WORLD_LAND } from "./worldland.js";
         });
         return docEl.querySelectorAll(".rbz__page").length;
       }
+      var addBar = docEl.querySelector(".rbz__addsec"); if (addBar) addBar.remove(); // the add-section toolbar is editor chrome — keep it out of the paginated page cards
       var blocks = harvest();
       // Compress the résumé just enough that the editor's page cards match the vector PDF
       // (atsRbPages) — the count the badge shows. Editor type is deliberately more readable
@@ -2678,6 +2692,7 @@ import { WORLD_LAND } from "./worldland.js";
         blocks = harvest();
         made = placeInto(blocks);
       }
+      if (addBar) docEl.appendChild(addBar);
     }
     function schedulePaginate() { clearTimeout(paginateT); paginateT = setTimeout(paginate, 180); }
     function renderDesign() {
@@ -2740,7 +2755,7 @@ import { WORLD_LAND } from "./worldland.js";
     function focusPath(path) { var el = docEl.querySelector('[data-k="' + path + '"]'); if (el) { el.focus(); try { var r = document.createRange(); r.selectNodeContents(el); r.collapse(false); var sel = getShellSel(); if (sel) { sel.removeAllRanges(); sel.addRange(r); } } catch (e) {} } }
     function getShellSel() { try { return window.getSelection(); } catch (e) { return null; } }
 
-    docEl.addEventListener("input", function () { markDirty(); });
+    docEl.addEventListener("input", function (e) { if (e.target && e.target.closest && e.target.closest(".rbz__addsec")) return; markDirty(); });
     docEl.addEventListener("focusout", function () { schedulePaginate(); });
     docEl.addEventListener("click", function (e) {
       var t;
@@ -2748,6 +2763,11 @@ import { WORLD_LAND } from "./worldland.js";
       if (t = e.target.closest("[data-add-bullet]")) { working = rbReadEditor(docEl, working); var q = t.dataset.addBullet.split("."); working.sections[+q[0]].items[+q[1]].bullets.push(""); reRender(); markDirty(); focusPath("sections." + q[0] + ".items." + q[1] + ".bullets." + (working.sections[+q[0]].items[+q[1]].bullets.length - 1)); return; }
       if (t = e.target.closest("[data-del-item]")) { working = rbReadEditor(docEl, working); var r = t.dataset.delItem.split("."); working.sections[+r[0]].items.splice(+r[1], 1); reRender(); markDirty(); return; }
       if (t = e.target.closest("[data-add-role]")) { working = rbReadEditor(docEl, working); var si = +t.dataset.addRole; working.sections[si].items.push({ role: "", org: "", location: "", dates: "", bullets: [""] }); reRender(); markDirty(); focusPath("sections." + si + ".items." + (working.sections[si].items.length - 1) + ".role"); return; }
+      if (t = e.target.closest("[data-del-group]")) { working = rbReadEditor(docEl, working); var dg = t.dataset.delGroup.split("."); if (working.sections[+dg[0]] && working.sections[+dg[0]].groups) working.sections[+dg[0]].groups.splice(+dg[1], 1); reRender(); markDirty(); return; }
+      if (t = e.target.closest("[data-add-group]")) { working = rbReadEditor(docEl, working); var ag = +t.dataset.addGroup; (working.sections[ag].groups = working.sections[ag].groups || []).push({ label: "", items: [] }); reRender(); markDirty(); focusPath("sections." + ag + ".groups." + (working.sections[ag].groups.length - 1) + ".label"); return; }
+      if (t = e.target.closest("[data-add-edu]")) { working = rbReadEditor(docEl, working); var ae = +t.dataset.addEdu; (working.sections[ae].items = working.sections[ae].items || []).push({ school: "", credential: "", dates: "", note: "" }); reRender(); markDirty(); focusPath("sections." + ae + ".items." + (working.sections[ae].items.length - 1) + ".school"); return; }
+      if (t = e.target.closest("[data-add-li]")) { working = rbReadEditor(docEl, working); var al = +t.dataset.addLi; (working.sections[al].items = working.sections[al].items || []).push({ title: "", meta: "" }); reRender(); markDirty(); focusPath("sections." + al + ".items." + (working.sections[al].items.length - 1) + ".title"); return; }
+      if (t = e.target.closest("[data-add-sec]")) { working = rbReadEditor(docEl, working); var _sel = docEl.querySelector("[data-add-sec-kind]"); working.sections = working.sections || []; working.sections.push(rbNewSection(_sel ? _sel.value : "recognition")); reRender(); markDirty(); focusPath("sections." + (working.sections.length - 1) + ".heading"); return; }
       if (t = e.target.closest("[data-del-sec]")) { working = rbReadEditor(docEl, working); working.sections.splice(+t.dataset.delSec, 1); reRender(); markDirty(); return; }
       if (t = e.target.closest("[data-mvup]")) { working = rbReadEditor(docEl, working); moveSection(+t.dataset.mvup, +t.dataset.mvup - 1); return; }
       if (t = e.target.closest("[data-mvdn]")) { working = rbReadEditor(docEl, working); moveSection(+t.dataset.mvdn, +t.dataset.mvdn + 1); return; }
