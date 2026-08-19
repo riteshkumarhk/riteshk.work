@@ -1658,7 +1658,11 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz--preview .rbz__main { padding: 0; display: block; }
 .rbz--preview .rbz__frame { width: 100%; max-width: 100%; height: 100%; border-radius: 0; box-shadow: none; }
 /* the editable A4 document — mirrors the exported PDF (white page, ink, helvetica) */
-.rbz__doc { --rbz-accent: #9a6a24; --rbz-sum-ff: Georgia, "Times New Roman", serif; --rbz-sum-style: italic; width: 100%; max-width: 100%; color: #1c1a17; font-family: var(--rbz-body-ff, Helvetica, Arial, sans-serif); font-size: calc(14px * var(--rbz-scale, 1)); line-height: 1.5; display: flex; flex-direction: column; gap: 1.4rem; }
+.rbz__doc { --rbz-accent: #9a6a24; --rbz-sum-ff: Georgia, "Times New Roman", serif; --rbz-sum-style: italic; width: 100%; max-width: 100%; color: #1c1a17; font-family: var(--rbz-body-ff, Helvetica, Arial, sans-serif); font-size: calc(14px * var(--rbz-scale, 1)); line-height: 1.5; display: block; }
+/* Editing host + its text rows are plain blocks (NOT flex): a contenteditable made of display:flex
+   items makes Chrome snap drag-selection to whole items instead of flowing line-by-line. The PDF
+   (RB_PRINT_CSS) keeps flex — it's never selected. Right-aligned meta uses float; chrome is absolute. */
+.rbz__doc > * + * { margin-top: 1.4rem; }
 .rbz__page { background: #fff; color: #1c1a17; border-radius: 3px; box-shadow: 0 1px 2px rgba(0, 0, 0, .2), 0 24px 44px -20px rgba(0, 0, 0, .55); padding: 3.1rem 3.3rem 3.4rem; width: 100%; }
 .rbz__page > *:first-child { margin-top: 0; }
 .rbz__main[data-canvas="light"] { background: #eef0f3; }
@@ -1740,28 +1744,29 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__xp.is-drop-before, .rbz__edu.is-drop-before, .rbz__li.is-drop-before, .rbz__bl li.is-drop-before { box-shadow: inset 0 2px 0 -.5px var(--rbz-accent, #9a6a24); }
 .rbz__xp.is-drop-after, .rbz__edu.is-drop-after, .rbz__li.is-drop-after, .rbz__bl li.is-drop-after { box-shadow: inset 0 -2px 0 -.5px var(--rbz-accent, #9a6a24); }
 .rbz__xp, .rbz__edu { position: relative; margin-bottom: .75rem; }
-.rbz__xphd { display: flex; align-items: baseline; gap: .1rem; flex-wrap: wrap; }
+.rbz__xphd { display: flow-root; position: relative; }
 .rbz__role { font-weight: 700; font-size: calc(.96rem * var(--rbz-scale, 1)); }
 .rbz__at { color: #bcb5aa; margin: 0 .15rem; }
-.rbz__org { margin-left: auto; color: var(--rbz-accent, #9a6a24); font-size: calc(.92rem * var(--rbz-scale, 1)); font-weight: 600; }
-.rbz__xphd > .rbz__dates { margin-left: auto; color: #655c53; font-size: calc(.82rem * var(--rbz-scale, 1)); }
+.rbz__org { float: right; margin-left: 0; color: var(--rbz-accent, #9a6a24); font-size: calc(.92rem * var(--rbz-scale, 1)); font-weight: 600; }
+.rbz__xphd > .rbz__dates { float: right; margin-left: 0; color: #655c53; font-size: calc(.82rem * var(--rbz-scale, 1)); }
 .rbz__meta { display: flex; flex-wrap: wrap; gap: .1rem .7rem; margin: .12rem 0 .3rem; font-size: calc(.66rem * var(--rbz-scale, 1)); letter-spacing: normal; text-transform: uppercase; color: #655c53; }
 .rbz__bl { margin: .15rem 0; padding-left: 1.05rem; list-style: none; }
-.rbz__bl li { position: relative; font-size: calc(.855rem * var(--rbz-scale, 1)); line-height: 1.42; color: #3a352f; margin-bottom: .18rem; display: flex; align-items: flex-start; }
-.rbz__bltext { flex: 1; }
+.rbz__bl li { position: relative; font-size: calc(.855rem * var(--rbz-scale, 1)); line-height: 1.42; color: #3a352f; margin-bottom: .18rem; display: block; }
+.rbz__bltext { display: inline; }
 .rbz__bl li:before { content: "\2013"; color: var(--rbz-accent, #9a6a24); position: absolute; left: -1.05rem; }
-.rbz__skg { display: flex; gap: .5rem; margin-bottom: .3rem; font-size: calc(.86rem * var(--rbz-scale, 1)); }
-.rbz__sklabel { font-weight: 700; flex: 0 0 34%; }
-.rbz__skitems { flex: 1; color: #3a352f; }
+.rbz__skg { display: flow-root; position: relative; margin-bottom: .3rem; font-size: calc(.86rem * var(--rbz-scale, 1)); }
+.rbz__sklabel { font-weight: 700; float: left; width: 34%; }
+.rbz__skitems { display: block; margin-left: 34%; color: #3a352f; }
 .rbz__cred { font-size: calc(.88rem * var(--rbz-scale, 1)); text-transform: none; letter-spacing: 0; color: #3a352f; }
 .rbz__note { text-transform: none; letter-spacing: 0; }
-.rbz__li { position: relative; display: flex; gap: .5rem; align-items: baseline; margin-bottom: .25rem; font-size: calc(.86rem * var(--rbz-scale, 1)); }
+.rbz__li { position: relative; display: flow-root; margin-bottom: .25rem; font-size: calc(.86rem * var(--rbz-scale, 1)); }
 .rbz__lititle { font-weight: 700; }
-.rbz__limeta { margin-left: auto; color: #9a938a; font-size: calc(.78rem * var(--rbz-scale, 1)); }
+.rbz__limeta { float: right; margin-left: 0; color: #9a938a; font-size: calc(.78rem * var(--rbz-scale, 1)); }
 .rbz__text { font-size: calc(.86rem * var(--rbz-scale, 1)); line-height: 1.45; color: #3a352f; }
 /* inline edit controls — subtle, appear on hover of their row */
 .rbz__del { border: 0; background: none; color: #c9776a; font-size: .82rem; line-height: 1; cursor: pointer; padding: .1rem .28rem; border-radius: 5px; opacity: 0; transition: opacity .12s, background .12s; }
 .rbz__del--b { margin-left: .35rem; }
+.rbz__xphd > .rbz__del, .rbz__skg > .rbz__del, .rbz__li > .rbz__del { position: absolute; right: -1.35rem; top: 0; }
 .rbz__xp:hover .rbz__del, .rbz__edu:hover .rbz__del, .rbz__li:hover .rbz__del, .rbz__skg:hover .rbz__del, .rbz__bl li:hover .rbz__del, .rbz__sechd:hover .rbz__del, .rbz__del:focus { opacity: 1; }
 .rbz__del:hover { background: rgba(201, 119, 106, .14); }
 /* add-controls float out of the content flow (they don't exist in the PDF), so the editor's page
