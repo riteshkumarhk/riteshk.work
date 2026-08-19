@@ -2706,6 +2706,15 @@ import { WORLD_LAND } from "./worldland.js";
         "</div>" +
         '<aside class="rbz__left" data-rbz-left><div class="rbz__left-h">Design</div><div class="rbz__design" data-rbz-design></div></aside>' +
       "</div>";
+    // Cache-proof the selection fix: css/admin.css can be stale in the browser HTTP cache, but this
+    // module always loads ?v=Date.now(). These de-flex rules make the editing host + text rows plain
+    // blocks — a contenteditable built from display:flex items makes Chrome snap drag-selection to the
+    // whole item. MIRRORS the css/admin.css v98 `.rbz__*` de-flex; keep in sync (PDF RB_PRINT_CSS stays flex).
+    if (!document.getElementById("rbz-deflex-css")) {
+      var _dfs = document.createElement("style"); _dfs.id = "rbz-deflex-css";
+      _dfs.textContent = ".rbz__doc{display:block}.rbz__doc>*+*{margin-top:1.4rem}.rbz__xphd{display:flow-root;position:relative}.rbz__org{float:right;margin-left:0}.rbz__xphd>.rbz__dates{float:right;margin-left:0}.rbz__bl li{display:block}.rbz__bltext{display:inline}.rbz__skg{display:flow-root;position:relative}.rbz__sklabel{float:left;width:34%}.rbz__skitems{display:block;margin-left:34%}.rbz__li{display:flow-root}.rbz__limeta{float:right;margin-left:0}.rbz__xphd>.rbz__del,.rbz__skg>.rbz__del,.rbz__li>.rbz__del{position:absolute;right:-1.35rem;top:0}";
+      document.head.appendChild(_dfs);
+    }
     document.body.appendChild(modal);
     var docEl = modal.querySelector("[data-rbz-doc]"), frameEl = modal.querySelector("[data-rbz-frame]"), sideEl = modal.querySelector("[data-rbz-side]"), pgEl = modal.querySelector("[data-rbz-pg]");
     var wrapEl = modal.querySelector("[data-rbz-wrap]"), mainEl = modal.querySelector(".rbz__main"), paginateT = null;
