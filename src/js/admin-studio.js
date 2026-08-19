@@ -2711,6 +2711,29 @@ import { WORLD_LAND } from "./worldland.js";
     var wrapEl = modal.querySelector("[data-rbz-wrap]"), mainEl = modal.querySelector(".rbz__main"), paginateT = null;
     function setCanvas(mode) { atsRbCanvas = (mode === "light") ? "light" : "dark"; if (mainEl) mainEl.setAttribute("data-canvas", atsRbCanvas); modal.querySelectorAll("[data-canvas-set]").forEach(function (b) { b.classList.toggle("is-on", b.dataset.canvasSet === atsRbCanvas); }); }
     setCanvas(atsRbCanvas);
+    // Guaranteed wheel scrolling inside the résumé workspace. This modal is appended at <body> level
+    // (a sibling of the studio root), so the studio's own wheel shim and data-lenis-prevent never reach
+    // it — the site's Lenis smooth-scroll would otherwise capture the wheel and only the scrollbar would
+    // move. Mirror the editor-pane shim here: scroll the workspace's own container and stop the event
+    // before Lenis sees it. The preview iframe scrolls itself (its wheel never bubbles out to us). The
+    // listener lives on the modal, so it's freed when close() removes the modal.
+    modal.setAttribute("data-lenis-prevent", "");
+    modal.addEventListener("wheel", function (e) {
+      var factor = e.deltaMode === 1 ? 32 : (e.deltaMode === 2 ? Math.round((mainEl ? mainEl.clientHeight : 600) * 0.9) : 1);
+      var dy = e.deltaY * factor;
+      // Let a nested scrollable (a design panel, the capped font grid) consume it first if it can still
+      // move this way; otherwise scroll the workspace's own scroll container (.rbz__main).
+      for (var n = e.target; n && n !== modal; n = n.parentNode) {
+        if (n.nodeType !== 1) continue;
+        var oy = getComputedStyle(n).overflowY;
+        if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight + 1) {
+          var atTop = n.scrollTop <= 0, atBot = n.scrollTop + n.clientHeight >= n.scrollHeight - 1;
+          if (!((dy < 0 && atTop) || (dy > 0 && atBot))) n.scrollTop += dy;
+          e.preventDefault(); e.stopPropagation(); return;
+        }
+      }
+      e.preventDefault(); e.stopPropagation();
+    }, { passive: false, capture: true });
     // Editor zoom: the canvas is a FIXED 794px A4 (so wrapping/pagination == the PDF); this scales the VIEW
     // only (transform, no reflow) and reclaims the layout footprint so it fits any screen. Never touches the PDF.
     var RB_ZOOM_KEY = "rk:rbzoom", rbZoom = 1;
