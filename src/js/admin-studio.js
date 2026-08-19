@@ -2503,10 +2503,10 @@ import { WORLD_LAND } from "./worldland.js";
   // Reconstruct the model from the editor DOM: overwrite text values on a clone of the working model.
   function rbReadEditor(docEl, working) {
     var rb = rbClone(working);
-    docEl.querySelectorAll("[data-k]").forEach(function (el) { rbSet(rb, el.dataset.k, (el.innerText || "").replace(/\s+/g, " ").trim()); });
+    docEl.querySelectorAll("[data-k]").forEach(function (el) { rbSet(rb, el.dataset.k, (el.innerText || "").normalize("NFKC").replace(/\s+/g, " ").trim()); });
     docEl.querySelectorAll("[data-ksitems]").forEach(function (el) {
       var p = el.dataset.ksitems.split("."), si = +p[0], gi = +p[1];
-      var items = (el.innerText || "").split(/[\u00b7,\n]/).map(function (x) { return x.trim(); }).filter(Boolean);
+      var items = (el.innerText || "").normalize("NFKC").split(/[\u00b7,\n]/).map(function (x) { return x.trim(); }).filter(Boolean);
       if (rb.sections[si] && rb.sections[si].groups && rb.sections[si].groups[gi]) rb.sections[si].groups[gi].items = items;
     });
     if (rb.contact && rb.contact.links) rb.contact.links.forEach(function (l) { if (l) l.url = rbLinkHref(l.label || l.url); }); // the visible text IS the link — keep its href synced to what you typed
@@ -2672,8 +2672,16 @@ import { WORLD_LAND } from "./worldland.js";
     var docStyle = "--rbz-accent:" + atsRbAccentHex() + ";--rbz-body-ff:" + bodyCss + ";--rbz-sum-ff:" + bodyCss + ";--rbz-sum-style:normal;--rbz-scale:" + scale + ";";
     return "<!doctype html><html><head><meta charset=\"utf-8\"><style>" + pageCss + (opts.fontFaces || "") + RB_PRINT_CSS + "</style></head><body><div class=\"rbz__doc\" data-layout=\"" + atsRbLayout + "\" data-head=\"" + tpl.head + "\" style=\"" + docStyle + "\">" + rbCleanHtml(rb) + "</div></body></html>";
   }
+  // Résumé text uploaded from a PDF often carries Unicode ligature glyphs (ﬁ ﬂ ﬀ …) that render fine but
+  // copy/paste as broken characters and can trip ATS parsers. NFKC decomposes them to plain letters.
+  function rbNfkc(v) {
+    if (typeof v === "string") return v && v.normalize ? v.normalize("NFKC") : v;
+    if (Array.isArray(v)) return v.map(rbNfkc);
+    if (v && typeof v === "object") { var o = {}; for (var k in v) if (Object.prototype.hasOwnProperty.call(v, k)) o[k] = rbNfkc(v[k]); return o; }
+    return v;
+  }
   function atsRbShow(built, rb) {
-    var working = rb;
+    var working = rbNfkc(rb);
     var curUrl = null, previewing = false, dirty = false, pdfBlobUrl = null, pdfSig = null;
     var rbUndo = [rbClone(working)], rbRedo = [], rbCommitT = null;
     var atsRbPages = (built && built.pages) || 1; // the vector-PDF page count the badge shows; the editor compresses to match it
