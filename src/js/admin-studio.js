@@ -2652,9 +2652,10 @@ import { WORLD_LAND } from "./worldland.js";
     + ".rbz__org{margin-left:auto;color:var(--rbz-accent,#9a6a24);font-size:calc(.92rem*var(--rbz-scale,1));font-weight:600}"
     + ".rbz__xphd>.rbz__dates{margin-left:auto;color:#655c53;font-size:calc(.82rem*var(--rbz-scale,1))}"
     + ".rbz__meta{display:flex;flex-wrap:wrap;gap:.1rem .7rem;margin:.12rem 0 .3rem;font-size:calc(.66rem*var(--rbz-scale,1));letter-spacing:normal;text-transform:uppercase;color:#655c53}"
-    + ".rbz__bl{margin:.15rem 0;padding-left:1.05rem;list-style:none}"
-    + ".rbz__bl li{position:relative;font-size:calc(.855rem*var(--rbz-scale,1));line-height:1.42;color:#3a352f;margin-bottom:.18rem}"
-    + ".rbz__bltext{flex:1}.rbz__bl li:before{content:'\\2013';color:var(--rbz-accent,#9a6a24);position:absolute;left:-1.05rem}"
+    + ".rbz__bl{margin:.15rem 0;padding-left:0;list-style:none}"
+    + ".rbz__bl li{font-size:calc(.855rem*var(--rbz-scale,1));line-height:1.42;color:#3a352f;margin-bottom:.18rem;padding-left:1.05rem}"
+    // dash is an IN-FLOW inline-block marker (not position:absolute) so the PDF text layer keeps reading order — an absolute dash becomes a separate left-margin run and breaks selection into a column
+    + ".rbz__bl li:before{content:'\\2013';display:inline-block;width:1.05rem;margin-left:-1.05rem;color:var(--rbz-accent,#9a6a24)}"
     + ".rbz__skg{display:flex;gap:.5rem;margin-bottom:.3rem;font-size:calc(.86rem*var(--rbz-scale,1))}.rbz__sklabel{font-weight:700;flex:0 0 34%}.rbz__skitems{flex:1;color:#3a352f}"
     + ".rbz__cred{font-size:calc(.88rem*var(--rbz-scale,1));text-transform:none;letter-spacing:0;color:#3a352f}.rbz__note{text-transform:none;letter-spacing:0}"
     + ".rbz__li{display:flex;gap:.5rem;align-items:baseline;margin-bottom:.25rem;font-size:calc(.86rem*var(--rbz-scale,1))}.rbz__lititle{font-weight:700}.rbz__limeta{margin-left:auto;color:#9a938a;font-size:calc(.78rem*var(--rbz-scale,1))}"
