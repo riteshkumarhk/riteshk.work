@@ -2010,7 +2010,7 @@ import { WORLD_LAND } from "./worldland.js";
       }
       var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel, jd, company), { json: true, maxTokens: 6000, temperature: 0.3 }));
       if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
-      atsLast = { file: f, res: res, level: atsLevel, company: company, text: text };
+      atsLast = { file: f, res: res, level: atsLevel, company: company, text: text, jd: jd };
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
       var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
       var _snap = { state: { mode: atsState.mode, jd: atsState.jd, url: atsState.url, company: atsState.company }, level: atsLevel, res: res, company: company, text: text };
@@ -2056,7 +2056,10 @@ import { WORLD_LAND } from "./worldland.js";
       var d = p.design || {};
       atsRbTplId = d.tpl || atsRbTplId; atsRbSizeId = d.size || atsRbSizeId; atsRbAccent = (d.accent != null ? d.accent : atsRbAccent); atsRbFont = d.font || atsRbFont; atsRbDensity = d.density || atsRbDensity; atsRbLayout = d.layout || atsRbLayout; atsRbCanvas = d.canvas || atsRbCanvas; atsRbKeepWhole = (d.keepWhole != null ? d.keepWhole : atsRbKeepWhole);
       atsLevel = p.level || atsLevel;
-      atsLast = { file: null, res: p.res || null, level: atsLevel, company: p.company || "", text: p.text || "" };
+      // recover the journey's JD: prefer the workspace payload, else the linked review it was built from (legacy workspaces)
+      var _jd = p.jd;
+      if (_jd == null && p.reviewId) { var _rv = prepGet("ats", p.reviewId); _jd = _rv && _rv.payload && _rv.payload.state && _rv.payload.state.jd; }
+      atsLast = { file: null, res: p.res || null, level: atsLevel, company: p.company || "", text: p.text || "", jd: _jd || "" };
       atsRbSessId = id;
       atsRbReviewId = p.reviewId || null;
       atsvCloseActive();
@@ -2065,7 +2068,7 @@ import { WORLD_LAND } from "./worldland.js";
     }
     atsState = { mode: st.mode || "general", source: (atsState && atsState.source) || "site", jd: st.jd || "", url: st.url || "", company: st.company || "" };
     atsLevel = p.level || atsLevel;
-    atsLast = { file: null, res: p.res, level: atsLevel, company: p.company || "", text: p.text || "" };
+    atsLast = { file: null, res: p.res, level: atsLevel, company: p.company || "", text: p.text || "", jd: st.jd || "" };
     prepDraftSet("ats", { state: atsState, level: atsLevel, res: p.res, company: p.company || "", text: p.text || "" });
     atsvSessId = id;
     prepRerenderDialog();
@@ -2435,7 +2438,7 @@ import { WORLD_LAND } from "./worldland.js";
       var text = atsLast.text || "";
       if (!text) text = ((await fbExtractFile(atsLast.file)) || "").replace(/\s+/g, " ").trim();
       if (text.length < 40) throw new Error("Couldn\u2019t read enough text from the résumé to rebuild it.");
-      var level = atsLast.level || atsLevel, company = (atsLast.company || atsState.company || ""), jd = atsState.jd || "";
+      var level = atsLast.level || atsLevel, company = (atsLast.company || atsState.company || ""), jd = (atsLast.jd != null ? atsLast.jd : atsState.jd) || "";
       var raw = await aiText(aiCfg("txt"), atsRbSystem(level), atsRbUser(text, atsLast.res, jd, company, level), { json: true, maxTokens: 8000, temperature: 0.4 });
       var rb = atsRbNorm(csgenParse(raw));
       if (!rb || !rb.sections.length) throw new Error("The rebuild came back unreadable \u2014 please try again.");
@@ -2874,7 +2877,7 @@ import { WORLD_LAND } from "./worldland.js";
       var sc = Math.max(0, Math.min(100, Math.round(+r.score || 0)));
       var bd = r.band || (sc >= 80 ? "Strong" : sc >= 65 ? "Good" : sc >= 45 ? "Needs work" : "At risk");
       var fit = (atsLast && atsLast.company) ? atsLast.company + " fit" : atsLevelName((atsLast && atsLast.level) || atsLevel) + " fit";
-      var saved = prepPut("ats", { id: atsRbSessId, tool: "ats", kind: "workspace", title: "R\u00e9sum\u00e9 workspace", meta: { score: sc, band: bd, fit: fit, edited: !!dirty }, payload: { rb: working, design: rbDesignSnap(), level: (atsLast && atsLast.level) || atsLevel, company: (atsLast && atsLast.company) || "", text: (atsLast && atsLast.text) || "", res: (atsLast && atsLast.res) || null, reviewId: atsRbReviewId } });
+      var saved = prepPut("ats", { id: atsRbSessId, tool: "ats", kind: "workspace", title: "R\u00e9sum\u00e9 workspace", meta: { score: sc, band: bd, fit: fit, edited: !!dirty }, payload: { rb: working, design: rbDesignSnap(), level: (atsLast && atsLast.level) || atsLevel, company: (atsLast && atsLast.company) || "", text: (atsLast && atsLast.text) || "", res: (atsLast && atsLast.res) || null, jd: (atsLast && atsLast.jd) || "", reviewId: atsRbReviewId } });
       atsRbSessId = saved.id;
       var hl = (root || document).querySelector("[data-ats-hist]"); if (hl) hl.innerHTML = atsHistHtml();
     }
@@ -3075,7 +3078,7 @@ import { WORLD_LAND } from "./worldland.js";
         working = rbReadEditor(docEl, working);
         var text = rbToPlainText(working, atsRbLayout), was2 = btnBusy(rc, "Checking\u2026");
         try {
-          var level = (atsLast && atsLast.level) || atsLevel, company = (atsLast && atsLast.company) || atsState.company || "", jd = atsState.jd || "";
+          var level = (atsLast && atsLast.level) || atsLevel, company = (atsLast && atsLast.company) || atsState.company || "", jd = (atsLast && atsLast.jd) || "";
           var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company), { json: true, maxTokens: 6000, temperature: 0.3 }));
           if (res) { atsLast.res = res; atsLast.text = text; dirty = false; paintSide(); rbSaveWorkspace(false); status("Re-checked \u2014 score updated.", true); }
           else { status("The re-check came back unreadable \u2014 try again."); btnIdle(rc, was2); }
@@ -3091,7 +3094,7 @@ import { WORLD_LAND } from "./worldland.js";
      some at a section ("section"), some are document-wide ("global"). We render the
      PDF with pdf.js, locate quote/section anchors in the text layer and pin them; the
      qualitative rest lives in an "Overall" rail. Everything degrades gracefully. */
-  var atsLast = (function () { var d = prepDraftGet("ats"); return (d && d.res) ? { file: null, res: d.res, level: d.level || atsLevel, company: d.company || "", text: d.text || "" } : null; })(); // { file, res, level } — restored from the autosaved draft
+  var atsLast = (function () { var d = prepDraftGet("ats"); return (d && d.res) ? { file: null, res: d.res, level: d.level || atsLevel, company: d.company || "", text: d.text || "", jd: (d.state && d.state.jd) || "" } : null; })(); // { file, res, level } — restored from the autosaved draft
   function atsIsPdf(f) { return !!f && (f.type === "application/pdf" || /\.pdf$/i.test(f.name || "")); }
   function atsAnchor(fx) {
     var a = (fx && fx.anchor) || {};
@@ -3193,13 +3196,13 @@ import { WORLD_LAND } from "./worldland.js";
       var text = (atsLast && atsLast.text) || "";
       if (!text && ctx.file) text = ((await fbExtractFile(ctx.file)) || "").replace(/\s+/g, " ").trim();
       if (!text || text.length < 40) throw new Error("Couldn\u2019t read enough r\u00e9sum\u00e9 text to re-check.");
-      var level = ctx.level || atsLevel, company = (atsLast && atsLast.company) || atsState.company || "", jd = atsState.jd || "";
+      var level = ctx.level || atsLevel, company = (atsLast && atsLast.company) || atsState.company || "", jd = (atsLast && atsLast.jd != null ? atsLast.jd : atsState.jd) || "";
       var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company), { json: true, maxTokens: 6000, temperature: 0.3 }));
       if (!res) throw new Error("The check came back unreadable \u2014 try again.");
       ctx.res = res; if (atsLast) { atsLast.res = res; atsLast.text = text; }
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
       var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
-      var _snap = { state: { mode: atsState.mode, jd: atsState.jd, url: atsState.url, company: atsState.company }, level: level, res: res, company: company, text: text };
+      var _snap = { state: { mode: atsState.mode, jd: jd, url: atsState.url, company: company }, level: level, res: res, company: company, text: text };
       prepDraftSet("ats", _snap);
       atsvSessId = prepPut("ats", { id: atsvSessId, tool: "ats", kind: "review", title: "R\u00e9sum\u00e9 reviewed", meta: { score: _sc, band: _bd, fit: (company ? company + " fit" : atsLevelName(level) + " fit") }, payload: _snap }).id;
       var _hl = (root || document).querySelector("[data-ats-hist]"); if (_hl) _hl.innerHTML = atsHistHtml();
