@@ -1782,11 +1782,13 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__addsel { font-family: var(--mono, monospace); font-size: .68rem; padding: .3rem .5rem; border: 1px solid #b9b0a3; border-radius: 6px; background: #fff; color: #3a352f; cursor: pointer; }
 /* studio-themed rail with the live ATS score */
 .rbz__side { width: 328px; flex-shrink: 0; overflow: auto; border-right: 1px solid var(--line); padding: 1rem 1rem 1.5rem; background: var(--bg); }
-.rbz__scorecard { display: flex; align-items: center; gap: .8rem; padding-bottom: .9rem; margin-bottom: .8rem; border-bottom: 1px solid var(--line); transition: opacity .15s; }
+.rbz__scorecard { display: flex; align-items: center; gap: .8rem; padding: .85rem .9rem; margin-bottom: .8rem; border: 1px solid var(--line); border-radius: 12px; transition: opacity .15s; }
 .rbz__scorecard.is-stale { opacity: .5; }
 .rbz__score-x b { font-family: var(--serif, serif); font-size: 1.2rem; }
 .rbz__score-x span { display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); }
 .rbz__recheck { width: 100%; }
+.rbz__railsep { height: 1px; background: var(--line); margin: 1rem 0; }
+.rbz__railsep + .rbz__fixhd { margin-top: 0; }
 .rbz__stale { margin-top: .5rem; font-size: .76rem; line-height: 1.4; color: #d8a657; }
 .rbz__fixhd { margin: 1.1rem 0 .5rem; font-family: var(--mono, monospace); font-size: .66rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text-faint); display: flex; align-items: center; gap: .4rem; }
 .rbz__fixhd span { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 .3rem; border-radius: 999px; background: var(--bg-elev); font-size: .62rem; color: var(--text-dim); }
