@@ -1748,7 +1748,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__role { font-weight: 700; font-size: calc(.96rem * var(--rbz-scale, 1)); }
 .rbz__at { color: #bcb5aa; margin: 0 .15rem; }
 .rbz__org { float: right; margin-left: 0; color: var(--rbz-accent, #9a6a24); font-size: calc(.92rem * var(--rbz-scale, 1)); font-weight: 600; }
-.rbz__xphd > .rbz__dates { margin-left: .5rem; color: #655c53; font-size: calc(.82rem * var(--rbz-scale, 1)); }
+.rbz__xphd > .rbz__dates { float: right; margin-left: 0; color: #655c53; font-size: calc(.82rem * var(--rbz-scale, 1)); }
 .rbz__meta { display: flex; flex-wrap: wrap; gap: .1rem .7rem; margin: .12rem 0 .3rem; font-size: calc(.66rem * var(--rbz-scale, 1)); letter-spacing: normal; text-transform: uppercase; color: #655c53; }
 .rbz__bl { margin: .15rem 0; padding-left: 1.05rem; list-style: none; }
 .rbz__bl li { position: relative; font-size: calc(.855rem * var(--rbz-scale, 1)); line-height: 1.42; color: #3a352f; margin-bottom: .18rem; display: block; }
@@ -1761,7 +1761,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__note { text-transform: none; letter-spacing: 0; }
 .rbz__li { position: relative; display: flow-root; margin-bottom: .25rem; font-size: calc(.86rem * var(--rbz-scale, 1)); }
 .rbz__lititle { font-weight: 700; }
-.rbz__limeta { margin-left: .5rem; color: #9a938a; font-size: calc(.78rem * var(--rbz-scale, 1)); }
+.rbz__limeta { float: right; margin-left: 0; color: #9a938a; font-size: calc(.78rem * var(--rbz-scale, 1)); }
 .rbz__text { font-size: calc(.86rem * var(--rbz-scale, 1)); line-height: 1.45; color: #3a352f; }
 /* inline edit controls — subtle, appear on hover of their row */
 .rbz__del { border: 0; background: none; color: #c9776a; font-size: .82rem; line-height: 1; cursor: pointer; padding: .1rem .28rem; border-radius: 5px; opacity: 0; transition: opacity .12s, background .12s; }
