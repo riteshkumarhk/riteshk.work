@@ -285,3 +285,75 @@ export function atsKeywordMatch(resumeText, jd) {
   matched.sort(function (a, b) { return b.weight - a.weight; });
   return { rate: rate, hardRate: hardRate, matched: matched, missing: missing, jdTermCount: jdTerms.length };
 }
+
+// ---- deterministic structure/format checks from the STRUCTURED editor model ----
+// The editor already holds the résumé as fields, so these are exact (not inferred from
+// flattened text): contact completeness, standard headings, date consistency, section
+// presence, quantified bullets, first-person voice, length. Reproducible → stable score.
+export function atsModelChecks(model, opts) {
+  opts = opts || {}; model = model || {};
+  const checks = [];
+  const c = model.contact || {};
+  const sections = model.sections || [];
+  const kinds = sections.map(function (s) { return s.kind; });
+  function add(label, ok, note) { checks.push({ label: label, status: ok === true ? "pass" : ok === false ? "fail" : "warn", note: note || "" }); }
+
+  const hasEmail = !!(c.email && /@/.test(c.email));
+  const hasPhone = !!(c.phone && (String(c.phone).match(/\d/g) || []).length >= 7);
+  const hasLoc = !!(c.location && String(c.location).trim());
+  const hasLink = !!((c.links || []).some(function (l) { return l && (l.url || l.label); }));
+  add("Contact block parses", hasEmail && hasPhone ? true : (hasEmail || hasPhone ? "warn" : false),
+    [hasEmail ? "" : "no email", hasPhone ? "" : "no phone", hasLoc ? "" : "no location", hasLink ? "" : "no portfolio/LinkedIn"].filter(Boolean).join(", "));
+  add("Target title present", !!(model.title && String(model.title).trim()), model.title ? "" : "add a headline / target title");
+
+  const STD = /(experience|work|employment|skills|education|summary|profile|projects?|certification|awards?|recognition|publication|volunteer|leadership)/i;
+  const nonStd = sections.filter(function (s) { return s.heading && !STD.test(s.heading); }).map(function (s) { return s.heading; });
+  add("Standard section headings", nonStd.length === 0 ? true : "warn", nonStd.length ? "non-standard: " + nonStd.slice(0, 3).join(", ") : "");
+  add("Has Experience section", kinds.indexOf("experience") >= 0, kinds.indexOf("experience") >= 0 ? "" : "no Experience section a parser can map");
+  add("Dedicated Skills list", kinds.indexOf("skills") >= 0, kinds.indexOf("skills") >= 0 ? "" : "add a Skills section — the ATS keyword anchor");
+  add("Has Education section", kinds.indexOf("education") >= 0, kinds.indexOf("education") >= 0 ? "" : "no Education section");
+  add("Professional summary", model.summary != null && String(model.summary).trim() ? true : "warn", model.summary ? "" : "a 2\u20133 line summary sharpens keyword + title match");
+
+  const expItems = [];
+  sections.forEach(function (s) { if (s.kind === "experience") (s.items || []).forEach(function (it) { expItems.push(it); }); });
+  const dated = expItems.filter(function (it) { return it.dates && String(it.dates).trim(); });
+  const wellDated = dated.filter(function (it) { return /\b(0?[1-9]|1[0-2])\/\d{4}\b|\b\d{4}\s*[-\u2013]\s*(\d{4}|present)\b|\bpresent\b/i.test(it.dates); });
+  add("Consistent MM/YYYY dates", expItems.length === 0 ? "warn" : (dated.length === expItems.length && wellDated.length === dated.length ? true : "warn"),
+    dated.length < expItems.length ? (expItems.length - dated.length) + " role(s) missing dates" : (wellDated.length < dated.length ? "use MM/YYYY (or YYYY–Present)" : ""));
+
+  let bullets = 0, quant = 0;
+  expItems.forEach(function (it) { (it.bullets || []).forEach(function (b) { if (b && String(b).trim()) { bullets++; if (/\d|%|\$/.test(b)) quant++; } }); });
+  const quantRate = bullets ? Math.round(quant / bullets * 100) : 0;
+  add("Quantified achievements", bullets === 0 ? false : (quantRate >= 40 ? true : "warn"), bullets ? quantRate + "% of bullets carry a metric" : "no achievement bullets");
+
+  const fp = expItems.some(function (it) { return (it.bullets || []).some(function (b) { return /^\s*(i|my|we|our)\b/i.test(b || ""); }); }) || /^\s*(i|my|we|our)\b/i.test(model.summary || "");
+  add("No first-person voice", !fp, fp ? "found 'I/my/we' \u2014 lead with implied-subject action verbs" : "");
+
+  if (opts.pages != null) {
+    const maxP = opts.level === "leader" ? 3 : 2;
+    add("Length \u2264 " + maxP + " pages", opts.pages <= maxP, opts.pages > maxP ? opts.pages + " pages \u2014 trim to " + maxP : "");
+  }
+
+  let sc = 0, tot = 0;
+  checks.forEach(function (ch) { tot += 2; sc += ch.status === "pass" ? 2 : ch.status === "warn" ? 1 : 0; });
+  return { checks: checks, structureScore: tot ? Math.round(sc / tot * 100) : 100, quantRate: quantRate };
+}
+
+/** Compact, deterministic "measured signals" block to inject into the LLM prompt so its
+ *  keyword judgment + fixes stay consistent with what we actually measured. */
+export function atsFactsBlock(kw, checks) {
+  const L = [];
+  if (kw && kw.rate != null) {
+    L.push("KEYWORD MATCH vs the JD requirements (deterministic): " + kw.rate + "% overall" + (kw.hardRate != null ? ", " + kw.hardRate + "% of hard skills" : "") + ".");
+    if (kw.missing && kw.missing.length)
+      L.push("MISSING JD KEYWORDS, highest-value first (weave in ONLY where the real experience supports them; never fabricate): " + kw.missing.slice(0, 14).map(function (m) { return m.term; }).join(", ") + ".");
+    if (kw.matched && kw.matched.length)
+      L.push("ALREADY COVERED (do NOT list these as missing): " + kw.matched.slice(0, 16).map(function (m) { return m.term; }).join(", ") + ".");
+  }
+  if (checks && checks.length) {
+    const flags = checks.filter(function (c) { return c.status !== "pass"; }).map(function (c) { return c.label + (c.note ? " (" + c.note + ")" : ""); });
+    if (flags.length) L.push("STRUCTURE FLAGS measured from the résumé (address precisely; don't invent issues that aren't here): " + flags.join("; ") + ".");
+  }
+  if (!L.length) return "";
+  return "\n\nMEASURED SIGNALS \u2014 computed deterministically from the résumé + JD. TRUST THESE over your own estimate; make your keyword call and your fixes CONSISTENT with them, and target the missing keywords:\n" + L.map(function (x) { return "- " + x; }).join("\n");
+}

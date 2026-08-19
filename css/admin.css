@@ -1818,6 +1818,9 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__jdbody { padding: 1rem 1.15rem; overflow: auto; white-space: pre-wrap; font-size: .82rem; line-height: 1.55; color: var(--text); }
 .rbz__jdnote { padding: .7rem 1.15rem; border-top: 1px solid var(--line); font-size: .72rem; color: var(--text-faint); }
 .rbz__kw { display: flex; flex-wrap: wrap; gap: .3rem; }
+.rbz__kwbar { height: 6px; border-radius: 999px; background: var(--bg-elev); overflow: hidden; margin: 0 0 .5rem; }
+.rbz__kwbar i { display: block; height: 100%; background: var(--accent); }
+.rbz__kwsub { font-size: .68rem; color: var(--text-dim); margin: .1rem 0 .35rem; }
 .rbz__chip { font-size: .72rem; padding: .16rem .5rem; border-radius: 999px; border: 1px dashed rgba(216, 166, 87, .6); color: #d8a657; }
 .rbz__tip { margin-top: 1.1rem; padding-top: .8rem; border-top: 1px solid var(--line); font-size: .76rem; line-height: 1.5; color: var(--text-faint); }
 @media (max-width: 1100px) { .rbz__left { display: none; } }
