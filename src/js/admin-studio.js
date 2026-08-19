@@ -2861,6 +2861,8 @@ import { WORLD_LAND } from "./worldland.js";
       var band = res.band || "\u2014", tone = score >= 80 ? "good" : score >= 65 ? "ok" : score >= 45 ? "warn" : "bad";
       var fixes = Array.isArray(res.fixes) ? res.fixes : [], kw = res.keywords || {}, miss = (kw.missing || []).filter(Boolean);
       var html = '<div class="rbz__scorecard rbz__scorecard--' + tone + (dirty ? " is-stale" : "") + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div><div class="rbz__score-x"><b>' + escHtml(band) + '</b><span>ATS score' + (dirty ? " \u00b7 edited" : "") + "</span></div></div>";
+      var _jd = (atsLast && atsLast.jd) || "";
+      if (_jd) html += '<button class="rbz__jdview" type="button" data-rbz-jd title="View the job description this r\u00e9sum\u00e9 is scored against"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span>Comparing against ' + (atsLast.company ? escHtml(atsLast.company) : "a job description") + "</span></button>";
       html += '<button class="btn btn--primary rbz__recheck" type="button" data-rbz-recheck>Re-check ATS' + (dirty ? " \u21bb" : "") + "</button>";
       if (dirty) html += '<div class="rbz__stale">You\u2019ve edited the résumé \u2014 re-check to update the score.</div>';
       if (fixes.length) { var _napp = 0; var _cards = fixes.map(function (f, i) { var pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med"; var a = atsAnchor(f), cta = ""; if (a.type === "quote" && a.quote && a.replacement) { var re = rbAnchorRe(a.quote), here = re ? rbWalkModel(working, re, null) : false; if (here) { f._seen = 1; _napp++; cta = '<button class="rbz__applybtn" type="button" data-rbz-apply="' + i + '" title="Apply this rewrite in the editor">Apply \u2192</button>'; } else if (f._seen) cta = '<span class="rbz__applied">\u2713 Applied</span>'; } return '<div class="rbz__fix rbz__fix--' + pr + '"><span class="rbz__pri">' + pr + '</span><div class="rbz__fixbd"><b>' + escHtml(f.point || "") + "</b>" + (f.how ? "<span>" + escHtml(f.how) + "</span>" : "") + cta + "</div></div>"; }).join(""); html += '<div class="rbz__fixhd">Remaining suggestions <span>' + fixes.length + "</span>" + (_napp >= 2 ? '<button class="rbz__applyall" type="button" data-rbz-apply-all title="Apply every recommended rewrite in one step">Apply all ' + _napp + "</button>" : "") + "</div>" + _cards; }
@@ -2921,6 +2923,18 @@ import { WORLD_LAND } from "./worldland.js";
       rbCommit(true);
       dirty = true; rbSaveSoon(); rbCountSoon(); paintSide();
       status("Applied " + n + " suggestion" + (n > 1 ? "s" : "") + " \u2014 re-check to update your score.", true);
+    }
+    // Read-only viewer for the job description this journey is scored against (edit = start a new check).
+    function rbShowJd() {
+      var jd = (atsLast && atsLast.jd) || ""; if (!jd) return;
+      var co = (atsLast && atsLast.company) || "";
+      var ov = document.createElement("div"); ov.className = "rbz__jdmodal";
+      ov.innerHTML = '<div class="rbz__jdcard"><div class="rbz__jdhd"><b>Job description' + (co ? " \u00b7 " + escHtml(co) : "") + '</b><button class="rbz__jdx" type="button" data-rbz-jd-close title="Close (Esc)">\u00d7</button></div><div class="rbz__jdbody">' + escHtml(jd) + '</div><div class="rbz__jdnote">This is the posting your r\u00e9sum\u00e9 is scored against \u2014 view only. To compare against a different role, start a new ATS check.</div></div>';
+      function onKey(e) { if (e.key === "Escape") close(); }
+      function close() { document.removeEventListener("keydown", onKey); ov.remove(); }
+      ov.addEventListener("click", function (e) { if (e.target === ov || e.target.closest("[data-rbz-jd-close]")) close(); });
+      document.addEventListener("keydown", onKey);
+      document.body.appendChild(ov);
     }
     function focusPath(path) { var el = docEl.querySelector('[data-k="' + path + '"]'); if (el) { docEl.focus(); try { var r = document.createRange(); r.selectNodeContents(el); r.collapse(false); var sel = getShellSel(); if (sel) { sel.removeAllRanges(); sel.addRange(r); } } catch (e) {} } }
     function getShellSel() { try { return window.getSelection(); } catch (e) { return null; } }
@@ -3047,6 +3061,7 @@ import { WORLD_LAND } from "./worldland.js";
       if (e.target.closest("[data-rbz-redo]")) { rbRedoDo(); return; }
       var _ap = e.target.closest("[data-rbz-apply]"); if (_ap) { var _fx = (atsLast && atsLast.res && atsLast.res.fixes) || []; rbApplyFix(_fx[+_ap.dataset.rbzApply]); return; }
       if (e.target.closest("[data-rbz-apply-all]")) { rbApplyAllFixes(); return; }
+      if (e.target.closest("[data-rbz-jd]")) { rbShowJd(); return; }
       if (e.target.closest("[data-rbz-design-toggle]")) { modal.querySelector(".rbz__body").classList.toggle("is-noleft"); schedulePaginate(); return; }
       var _cv = e.target.closest("[data-canvas-set]"); if (_cv) { setCanvas(_cv.dataset.canvasSet); return; }
       var _zm = e.target.closest("[data-zoom]"); if (_zm) { var zd = _zm.dataset.zoom; setZoom(zd === "in" ? rbZoom + 0.1 : zd === "out" ? rbZoom - 0.1 : 1); return; }
