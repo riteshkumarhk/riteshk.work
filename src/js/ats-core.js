@@ -1,0 +1,287 @@
+/* =================================================================
+   ats-core.js — deterministic ATS analysis engine (pure, no DOM/network).
+   Phase 1: keyword match-rate. Real ATS keyword screening is literal +
+   stemmed + synonym-aware; this reproduces that deterministically so the
+   "missing keywords" list and the match-% are precise and REPRODUCIBLE
+   (same résumé + JD → same numbers), instead of an LLM guess.
+
+   Pipeline: normalize → tokenize → longest-match against a curated skill
+   ontology (canonical form + variants/acronyms) → light-stem fallback for
+   generic domain terms → weighted match against the JD's real requirements.
+
+   Bundled into admin-studio.js by esbuild (import); unit-tested directly in
+   Node so the shipped code is what's verified (no copy drift).
+   ================================================================= */
+
+// Words that never count as keywords (matching intent, not exhaustive English).
+export const ATS_STOP = new Set((
+  "a an and are as at be been being by for from had has have he her his i in into is it its of on or " +
+  "our so than that the their them then there these they this those to us was we were what when which " +
+  "who will with you your they'll you'll about above after again all also am any because before below " +
+  "between both but can cannot could did do does doing done down during each else etc few more most " +
+  "must my no nor not now off once only other over own per same should some such via up using use used " +
+  "very while within without would across able ability including include includes work working works " +
+  "role team teams year years experience strong excellent good great new like across help helping build"
+).split(/\s+/));
+
+// Curated skill ontology: [canonical, weight, ...variants]. weight 3 = hard skill/tool,
+// 2 = method/practice/domain, 1 = soft/generic. The canonical is matched too. Variants are
+// exact phrases (already lowercased); acronyms and expansions both map to one canonical, so
+// "UX" and "user experience" (or "React" and "React.js") count as the SAME requirement.
+export const ATS_LEXICON = [
+  // ---- tools (design) ----
+  ["figma", 3, "figjam"], ["sketch", 3], ["adobe xd", 3, "xd"], ["framer", 3], ["principle", 3],
+  ["invision", 3], ["protopie", 3], ["axure", 3], ["zeplin", 3], ["abstract", 3], ["miro", 3, "mural"],
+  ["photoshop", 3], ["illustrator", 3], ["after effects", 3], ["adobe creative suite", 3, "creative cloud", "adobe cc"],
+  ["maze", 3], ["dovetail", 3], ["usertesting", 3, "user testing platform"], ["lookback", 3], ["hotjar", 3],
+  ["fullstory", 3], ["amplitude", 3], ["mixpanel", 3], ["google analytics", 3, "ga4"], ["storybook", 3],
+  // ---- tools (eng/pm) ----
+  ["jira", 3], ["confluence", 3], ["notion", 3], ["asana", 3], ["airtable", 3], ["linear", 3],
+  ["html", 3, "html5"], ["css", 3, "css3", "scss", "sass"], ["javascript", 3, "js", "es6"],
+  ["typescript", 3, "ts"], ["react", 3, "react.js", "reactjs"], ["vue", 3, "vue.js", "vuejs"],
+  ["node", 3, "node.js", "nodejs"], ["sql", 3], ["python", 3], ["rest api", 3, "rest", "restful", "apis", "api"],
+  ["graphql", 3], ["git", 3, "github", "gitlab"],
+  // ---- design methods / practice ----
+  ["user experience", 3, "ux", "ux design", "experience design"],
+  ["user interface", 3, "ui", "ui design"],
+  ["product design", 3, "product designer"],
+  ["design system", 3, "design systems", "design language", "component library", "design tokens", "design token"],
+  ["user research", 2, "ux research", "design research", "user studies"],
+  ["usability testing", 2, "usability test", "usability study", "moderated testing", "unmoderated testing"],
+  ["a/b testing", 2, "ab testing", "a b testing", "split testing", "multivariate testing"],
+  ["wireframing", 2, "wireframe", "wireframes", "wireframed"],
+  ["prototyping", 2, "prototype", "prototypes", "prototyped", "rapid prototyping", "interactive prototype"],
+  ["information architecture", 2, "ia"],
+  ["interaction design", 2, "ixd"],
+  ["visual design", 2, "ui visual design"],
+  ["accessibility", 3, "a11y", "wcag", "inclusive design", "ada compliance"],
+  ["design thinking", 2],
+  ["journey mapping", 2, "journey map", "customer journey", "user journey", "experience map"],
+  ["personas", 2, "persona"],
+  ["heuristic evaluation", 2, "heuristics"],
+  ["service design", 2],
+  ["design ops", 2, "designops"],
+  ["motion design", 2, "motion", "micro-interactions", "microinteractions", "animation"],
+  ["responsive design", 2, "responsive", "adaptive design"],
+  ["design critique", 1, "critique", "design review"],
+  ["storytelling", 1, "narrative"],
+  ["data visualization", 2, "data viz", "dataviz", "information design"],
+  ["end to end", 1, "end-to-end", "0 to 1", "0-to-1", "zero to one"],
+  // ---- product / process ----
+  ["agile", 2, "scrum", "kanban", "sprints", "sprint"],
+  ["roadmap", 2, "roadmapping", "product roadmap"],
+  ["stakeholder management", 2, "stakeholders", "stakeholder"],
+  ["cross-functional", 2, "cross functional", "crossfunctional", "cross-functionally", "cross-functional collaboration"],
+  ["product strategy", 2, "design strategy"],
+  ["okrs", 2, "okr", "kpis", "kpi", "key results"],
+  ["mvp", 1, "minimum viable product"],
+  ["go to market", 1, "go-to-market", "gtm"],
+  ["user-centered design", 2, "user centered design", "user centred design", "human-centered design", "human centered design", "hcd", "ucd"],
+  // ---- domains ----
+  ["fintech", 2, "financial services", "payments", "banking"],
+  ["healthcare", 2, "health tech", "healthtech", "medical"],
+  ["e-commerce", 2, "ecommerce", "e commerce", "retail"],
+  ["enterprise", 2, "b2b", "saas", "b2b saas"],
+  ["consumer", 2, "b2c"],
+  ["mobile", 2, "ios", "android", "mobile app", "native app"],
+  ["identity", 2, "authentication", "auth", "passkeys", "sign-in", "login"],
+  ["ai", 2, "artificial intelligence", "machine learning", "ml", "generative ai", "genai", "llm", "llms"],
+  // ---- leadership / soft (level-relevant) ----
+  ["leadership", 2, "leading", "led", "lead"],
+  ["mentorship", 1, "mentoring", "mentored", "coaching", "coached"],
+  ["communication", 1, "presentation", "presenting"],
+  ["collaboration", 1, "collaborative", "collaborating", "partnering", "partnered"]
+];
+
+// Build a phrase→canonical index (each variant + the canonical map to the canonical).
+const _VAR = new Map();     // "user experience" -> "user experience", "ux" -> "user experience"
+const _WEIGHT = new Map();  // canonical -> weight
+const _MAXN = { n: 1 };     // longest phrase length in tokens
+for (const row of ATS_LEXICON) {
+  const canon = row[0], weight = row[1];
+  _WEIGHT.set(canon, weight);
+  for (const variant of [canon].concat(row.slice(2))) {
+    const toks = atsTokens(variant);   // SAME normalization the résumé/JD scan uses, so react.js/adobe xd/a-b align
+    if (!toks.length) continue;
+    const key = toks.join(" ");
+    _VAR.set(key, canon);
+    if (toks.length > _MAXN.n) _MAXN.n = toks.length;
+  }
+}
+
+/** Canonical lexicon weight for a canon term (default 2). */
+export function atsWeight(canon) { return _WEIGHT.get(canon) || 2; }
+
+/** Normalize free text: lowercase, unify separators so "a/b", "react.js", "cross-functional" survive. */
+export function atsNormalize(text) {
+  return String(text || "")
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[’'`]/g, "")           // don't split contractions/possessives into tokens
+    .replace(/a\/b/g, "ab")           // a/b testing → ab testing (slash would otherwise split)
+    .replace(/[\u2010-\u2015]/g, "-") // normalize dashes
+    .replace(/[^a-z0-9+#.\-\s]/gi, " ");
+}
+
+/** Tokenize normalized text into keyword tokens (keeps +, #, . inside tokens for c++, react.js). */
+export function atsTokens(text) {
+  return (atsNormalize(text).match(/[a-z0-9][a-z0-9+#.\-]*/g) || [])
+    .map(function (t) { return t.replace(/^[-.]+|[-.]+$/g, ""); })
+    .filter(Boolean);
+}
+
+/** Light stemmer for GENERIC (non-lexicon) domain words. Lexicon skills use curated variants,
+ *  so this only needs to collapse common inflections (plurals, -ing/-ed) well enough to match. */
+export function atsStem(w) {
+  w = String(w || "");
+  if (w.length <= 3) return w;
+  w = w.replace(/(ization|isation)$/, "ize")
+       .replace(/(ational)$/, "ate")
+       .replace(/(iveness|fulness|ousness)$/, "")
+       .replace(/(ments?)$/, "")
+       .replace(/(ingly|edly)$/, "")
+       .replace(/(ing)$/, "")
+       .replace(/(ed)$/, "")
+       .replace(/(ies)$/, "y")
+       .replace(/(sses)$/, "ss")
+       .replace(/([^s])s$/, "$1");
+  return w.length >= 3 ? w : String(w || "");
+}
+
+function _ngrams(tokens, n) {
+  const out = [];
+  for (let i = 0; i + n <= tokens.length; i++) out.push(tokens.slice(i, i + n).join(" "));
+  return out;
+}
+
+/**
+ * Index a résumé's text into what it demonstrably contains:
+ *  - canon: Map(canonicalSkill → count)   (ontology hits, longest-match)
+ *  - stems: Map(stemmedUnigram → count)   (generic term fallback)
+ *  - stemBg: Set(stemmedBigram)           (generic 2-word term fallback)
+ */
+export function atsResumeIndex(text) {
+  const tokens = atsTokens(text);
+  const canon = new Map(), stems = new Map(), stemBg = new Set();
+  const used = new Array(tokens.length).fill(false);
+  // longest-match ontology scan
+  for (let i = 0; i < tokens.length; i++) {
+    for (let n = Math.min(_MAXN.n, tokens.length - i); n >= 1; n--) {
+      const gram = tokens.slice(i, i + n).join(" ");
+      const c = _VAR.get(gram);
+      if (c) { canon.set(c, (canon.get(c) || 0) + 1); for (let k = i; k < i + n; k++) used[k] = true; i += n - 1; break; }
+    }
+  }
+  // generic stem fallback for anything not consumed by the ontology
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (ATS_STOP.has(t) || t.length < 3) continue;
+    const s = atsStem(t);
+    if (s.length >= 3) stems.set(s, (stems.get(s) || 0) + 1);
+    if (i + 1 < tokens.length && !ATS_STOP.has(tokens[i + 1]) && tokens[i + 1].length >= 3) {
+      stemBg.add(s + " " + atsStem(tokens[i + 1]));
+    }
+  }
+  return { canon: canon, stems: stems, stemBg: stemBg, tokenCount: tokens.length };
+}
+
+/** Cue phrases that mark the JD's requirements/qualifications region → terms there weigh more. */
+const _REQ_CUE = /(requirement|qualification|must have|you have|you.ll have|what you|we.re looking|responsibilit|skills|proficien|experience (?:with|in)|expertise)/i;
+
+/**
+ * Extract the JD's real requirement keywords, weighted:
+ *  - ontology skills (canonical) with their ontology weight (+1 if in a requirements region)
+ *  - salient generic terms (stemmed uni/bi-grams) that recur or sit in requirements
+ * Returns a de-duplicated, importance-sorted list capped to keep the match-% meaningful.
+ */
+export function atsExtractJdTerms(jd, cap) {
+  cap = cap || 28;
+  const raw = String(jd || "");
+  if (!raw.trim()) return [];
+  // weight-by-region: split into lines, flag lines in a requirements-ish region
+  const lines = raw.split(/\n+/);
+  let reqOn = false;
+  const inReq = new Array(lines.length).fill(false);
+  for (let i = 0; i < lines.length; i++) {
+    if (_REQ_CUE.test(lines[i])) reqOn = true;
+    else if (/^\s*(about|who we are|benefits|perks|our team|company)\b/i.test(lines[i])) reqOn = false;
+    inReq[i] = reqOn;
+  }
+
+  const skillHits = new Map();  // canon -> {weight, freq}
+  const termHits = new Map();   // stem -> {display, weight, freq, n}
+  for (let li = 0; li < lines.length; li++) {
+    const boost = inReq[li] ? 1 : 0;
+    const tokens = atsTokens(lines[li]);
+    const used = new Array(tokens.length).fill(false);
+    for (let i = 0; i < tokens.length; i++) {
+      let matched = false;
+      for (let n = Math.min(_MAXN.n, tokens.length - i); n >= 1; n--) {
+        const gram = tokens.slice(i, i + n).join(" ");
+        const c = _VAR.get(gram);
+        if (c) {
+          const cur = skillHits.get(c) || { weight: atsWeight(c), freq: 0 };
+          cur.freq += 1; cur.weight = Math.max(cur.weight, atsWeight(c) + boost);
+          skillHits.set(c, cur);
+          for (let k = i; k < i + n; k++) used[k] = true;
+          i += n - 1; matched = true; break;
+        }
+      }
+      if (matched) continue;
+    }
+    // generic salient terms (unigrams + bigrams) not consumed by the ontology
+    for (let i = 0; i < tokens.length; i++) {
+      if (used[i] || ATS_STOP.has(tokens[i]) || tokens[i].length < 4) continue;
+      const s = atsStem(tokens[i]);
+      if (s.length < 4) continue;
+      const cur = termHits.get(s) || { display: tokens[i], weight: 1 + boost, freq: 0, n: 1 };
+      cur.freq += 1; cur.weight = Math.max(cur.weight, 1 + boost);
+      termHits.set(s, cur);
+    }
+  }
+
+  const out = [];
+  skillHits.forEach(function (v, canon) { out.push({ term: canon, key: canon, kind: "skill", weight: v.weight, freq: v.freq }); });
+  // generic terms: keep only those that recur (freq>=2) or sit in requirements (weight>1); dedupe vs skills
+  const skillWords = new Set();
+  skillHits.forEach(function (_v, canon) { canon.split(" ").forEach(function (w) { skillWords.add(atsStem(w)); }); });
+  termHits.forEach(function (v, stem) {
+    if (skillWords.has(stem)) return;
+    if (v.freq >= 2 || v.weight > 1) out.push({ term: v.display, key: stem, kind: "term", weight: v.weight, freq: v.freq });
+  });
+
+  out.sort(function (a, b) { return (b.weight - a.weight) || (b.freq - a.freq) || (a.term < b.term ? -1 : 1); });
+  return out.slice(0, cap);
+}
+
+/**
+ * Deterministic keyword match of a résumé against a JD.
+ * Returns { rate, hardRate, matched:[{term,count,weight,kind}], missing:[{term,weight,kind}], jdTerms }.
+ *  - rate: weighted % of JD requirement weight the résumé covers (the headline "match rate")
+ */
+export function atsKeywordMatch(resumeText, jd) {
+  const jdTerms = atsExtractJdTerms(jd);
+  const idx = atsResumeIndex(resumeText);
+  const matched = [], missing = [];
+  let haveW = 0, totalW = 0, haveHardW = 0, totalHardW = 0;
+  for (const t of jdTerms) {
+    totalW += t.weight;
+    const isHard = t.kind === "skill" && t.weight >= 3;
+    if (isHard) totalHardW += t.weight;
+    let count = 0;
+    if (t.kind === "skill") count = idx.canon.get(t.key) || 0;
+    else count = idx.stems.get(t.key) || (idx.stemBg.has(t.key) ? 1 : 0);
+    if (count > 0) {
+      matched.push({ term: t.term, count: count, weight: t.weight, kind: t.kind });
+      haveW += t.weight; if (isHard) haveHardW += t.weight;
+    } else {
+      missing.push({ term: t.term, weight: t.weight, kind: t.kind });
+    }
+  }
+  const rate = totalW ? Math.round((haveW / totalW) * 100) : null;
+  const hardRate = totalHardW ? Math.round((haveHardW / totalHardW) * 100) : null;
+  // rank missing high-value first so suggestions can target the biggest lifts
+  missing.sort(function (a, b) { return b.weight - a.weight; });
+  matched.sort(function (a, b) { return b.weight - a.weight; });
+  return { rate: rate, hardRate: hardRate, matched: matched, missing: missing, jdTermCount: jdTerms.length };
+}
