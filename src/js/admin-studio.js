@@ -2860,7 +2860,7 @@ import { WORLD_LAND } from "./worldland.js";
       var html = '<div class="rbz__scorecard rbz__scorecard--' + tone + (dirty ? " is-stale" : "") + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div><div class="rbz__score-x"><b>' + escHtml(band) + '</b><span>ATS score' + (dirty ? " \u00b7 edited" : "") + "</span></div></div>";
       html += '<button class="btn btn--primary rbz__recheck" type="button" data-rbz-recheck>Re-check ATS' + (dirty ? " \u21bb" : "") + "</button>";
       if (dirty) html += '<div class="rbz__stale">You\u2019ve edited the résumé \u2014 re-check to update the score.</div>';
-      if (fixes.length) { html += '<div class="rbz__fixhd">Remaining suggestions <span>' + fixes.length + "</span></div>"; html += fixes.map(function (f, i) { var pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med"; var a = atsAnchor(f), cta = ""; if (a.type === "quote" && a.quote && a.replacement) { var re = rbAnchorRe(a.quote), here = re ? rbWalkModel(working, re, null) : false; if (here) { f._seen = 1; cta = '<button class="rbz__applybtn" type="button" data-rbz-apply="' + i + '" title="Apply this rewrite in the editor">Apply \u2192</button>'; } else if (f._seen) cta = '<span class="rbz__applied">\u2713 Applied</span>'; } return '<div class="rbz__fix rbz__fix--' + pr + '"><span class="rbz__pri">' + pr + '</span><div class="rbz__fixbd"><b>' + escHtml(f.point || "") + "</b>" + (f.how ? "<span>" + escHtml(f.how) + "</span>" : "") + cta + "</div></div>"; }).join(""); }
+      if (fixes.length) { var _napp = 0; var _cards = fixes.map(function (f, i) { var pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med"; var a = atsAnchor(f), cta = ""; if (a.type === "quote" && a.quote && a.replacement) { var re = rbAnchorRe(a.quote), here = re ? rbWalkModel(working, re, null) : false; if (here) { f._seen = 1; _napp++; cta = '<button class="rbz__applybtn" type="button" data-rbz-apply="' + i + '" title="Apply this rewrite in the editor">Apply \u2192</button>'; } else if (f._seen) cta = '<span class="rbz__applied">\u2713 Applied</span>'; } return '<div class="rbz__fix rbz__fix--' + pr + '"><span class="rbz__pri">' + pr + '</span><div class="rbz__fixbd"><b>' + escHtml(f.point || "") + "</b>" + (f.how ? "<span>" + escHtml(f.how) + "</span>" : "") + cta + "</div></div>"; }).join(""); html += '<div class="rbz__fixhd">Remaining suggestions <span>' + fixes.length + "</span>" + (_napp >= 2 ? '<button class="rbz__applyall" type="button" data-rbz-apply-all title="Apply every recommended rewrite in one step">Apply all ' + _napp + "</button>" : "") + "</div>" + _cards; }
       if (miss.length) html += '<div class="rbz__fixhd">Missing keywords</div><div class="rbz__kw">' + miss.map(function (k) { return '<span class="rbz__chip">' + escHtml(k) + "</span>"; }).join("") + "</div>";
       if (atsRbLayout === "sidebar") html += '<div class="rbz__stale">Two-column is a design / human-first layout; some ATS read the columns out of order. If the score drops on re-check, switch back to single column.</div>';
       html += '<div class="rbz__tip">Click any text to edit. Re-check to rescore, Preview to see the PDF, Download when you\u2019re happy.</div>';
@@ -2905,6 +2905,19 @@ import { WORLD_LAND } from "./worldland.js";
       rbCommit(true);
       dirty = true; rbSaveSoon(); rbCountSoon(); paintSide();
       status("Applied \u2014 re-check to update your score.", true);
+    }
+    // Apply every quote+replacement fix at once, as ONE undo step (pre+post snapshot).
+    function rbApplyAllFixes() {
+      var fx = (atsLast && atsLast.res && atsLast.res.fixes) || [];
+      working = rbReadEditor(docEl, working);
+      rbCommit(true);
+      var n = 0;
+      fx.forEach(function (f) { var a = atsAnchor(f); if (!(a.type === "quote" && a.quote && a.replacement)) return; var re = rbAnchorRe(a.quote); if (re && rbWalkModel(working, re, String(a.replacement))) n++; });
+      if (!n) { status("Nothing to apply \u2014 no matching rewrites found."); return; }
+      reRender();
+      rbCommit(true);
+      dirty = true; rbSaveSoon(); rbCountSoon(); paintSide();
+      status("Applied " + n + " suggestion" + (n > 1 ? "s" : "") + " \u2014 re-check to update your score.", true);
     }
     function focusPath(path) { var el = docEl.querySelector('[data-k="' + path + '"]'); if (el) { docEl.focus(); try { var r = document.createRange(); r.selectNodeContents(el); r.collapse(false); var sel = getShellSel(); if (sel) { sel.removeAllRanges(); sel.addRange(r); } } catch (e) {} } }
     function getShellSel() { try { return window.getSelection(); } catch (e) { return null; } }
@@ -3030,6 +3043,7 @@ import { WORLD_LAND } from "./worldland.js";
       if (e.target.closest("[data-rbz-undo]")) { rbUndoDo(); return; }
       if (e.target.closest("[data-rbz-redo]")) { rbRedoDo(); return; }
       var _ap = e.target.closest("[data-rbz-apply]"); if (_ap) { var _fx = (atsLast && atsLast.res && atsLast.res.fixes) || []; rbApplyFix(_fx[+_ap.dataset.rbzApply]); return; }
+      if (e.target.closest("[data-rbz-apply-all]")) { rbApplyAllFixes(); return; }
       if (e.target.closest("[data-rbz-design-toggle]")) { modal.querySelector(".rbz__body").classList.toggle("is-noleft"); schedulePaginate(); return; }
       var _cv = e.target.closest("[data-canvas-set]"); if (_cv) { setCanvas(_cv.dataset.canvasSet); return; }
       var _zm = e.target.closest("[data-zoom]"); if (_zm) { var zd = _zm.dataset.zoom; setZoom(zd === "in" ? rbZoom + 0.1 : zd === "out" ? rbZoom - 0.1 : 1); return; }
