@@ -1755,7 +1755,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__bltext { display: inline; }
 .rbz__bl li:before { content: "\2013"; color: var(--rbz-accent, #9a6a24); position: absolute; left: -1.05rem; }
 .rbz__skg { display: flow-root; position: relative; margin-bottom: .3rem; font-size: calc(.86rem * var(--rbz-scale, 1)); }
-.rbz__sklabel { font-weight: 700; float: left; width: 34%; }
+.rbz__sklabel { font-weight: 700; float: left; width: 34%; box-sizing: border-box; text-align: right; padding-right: .5rem; }
 .rbz__skitems { display: block; margin-left: 34%; color: #3a352f; }
 .rbz__cred { font-size: calc(.88rem * var(--rbz-scale, 1)); text-transform: none; letter-spacing: 0; color: #3a352f; }
 .rbz__note { text-transform: none; letter-spacing: 0; }

@@ -2656,7 +2656,9 @@ import { WORLD_LAND } from "./worldland.js";
     + ".rbz__bl li{font-size:calc(.855rem*var(--rbz-scale,1));line-height:1.42;color:#3a352f;margin-bottom:.18rem;padding-left:1.05rem}"
     // dash is an IN-FLOW inline-block marker (not position:absolute) so the PDF text layer keeps reading order — an absolute dash becomes a separate left-margin run and breaks selection into a column
     + ".rbz__bl li:before{content:'\\2013';display:inline-block;width:1.05rem;margin-left:-1.05rem;color:var(--rbz-accent,#9a6a24)}"
-    + ".rbz__skg{display:flex;gap:.5rem;margin-bottom:.3rem;font-size:calc(.86rem*var(--rbz-scale,1))}.rbz__sklabel{font-weight:700;flex:0 0 34%}.rbz__skitems{flex:1;color:#3a352f}"
+    // skills labels are RIGHT-aligned so they butt against the items (no whitespace channel between the
+    // two columns) → the PDF viewer reads each row as one line and selects row-by-row, not column-wise.
+    + ".rbz__skg{display:flex;margin-bottom:.3rem;font-size:calc(.86rem*var(--rbz-scale,1))}.rbz__sklabel{font-weight:700;flex:0 0 34%;text-align:right;padding-right:.5rem}.rbz__skitems{flex:1;color:#3a352f}"
     + ".rbz__cred{font-size:calc(.88rem*var(--rbz-scale,1));text-transform:none;letter-spacing:0;color:#3a352f}.rbz__note{text-transform:none;letter-spacing:0}"
     + ".rbz__li{display:flex;gap:.5rem;align-items:baseline;margin-bottom:.25rem;font-size:calc(.86rem*var(--rbz-scale,1))}.rbz__lititle{font-weight:700}.rbz__limeta{margin-left:auto;color:#9a938a;font-size:calc(.78rem*var(--rbz-scale,1))}"
     + ".rbz__text{font-size:calc(.86rem*var(--rbz-scale,1));line-height:1.45;color:#3a352f}"
