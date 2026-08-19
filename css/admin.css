@@ -739,7 +739,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
    pointer inside admin mode and modal dialogs, and hide the custom dot in admin.
    .atsv / .rbz are body-level fixed overlays (z-index above the custom cursor), so they
    need the native cursor restored too or the pointer vanishes over the viewer. */
-.adm, .pass, .mlib, .atsv, .rbz { cursor: auto; }
+.adm, .pass, .mlib, .atsv, .rbz, .rbz__jdmodal { cursor: auto; }
 body.adm-lock .cursor { display: none !important; }
 
 /* ---------- project imagery controls (Work tab) ---------- */
@@ -1801,7 +1801,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__applybtn { margin-top: .5rem; font-family: var(--mono, monospace); font-size: .66rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; padding: .34rem .62rem; border: 0; border-radius: 6px; background: var(--accent); color: #0a0a0a; cursor: pointer; }
 .rbz__applybtn:hover { background: var(--accent-2); }
 .rbz__applied { display: inline-block; margin-top: .5rem; font-size: .72rem; font-weight: 600; color: #5cb98a; }
-.rbz__applyall { margin-left: auto; font-family: var(--mono, monospace); font-size: .58rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; padding: .26rem .5rem; border: 1px solid var(--accent); border-radius: 5px; background: transparent; color: var(--accent); cursor: pointer; }
+.rbz__applyall { margin-left: auto; font-family: var(--mono, monospace); font-size: .58rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; white-space: nowrap; padding: .26rem .5rem; border: 1px solid var(--accent); border-radius: 5px; background: transparent; color: var(--accent); cursor: pointer; }
 .rbz__applyall:hover { background: var(--accent); color: #0a0a0a; }
 .rbz__jdview { display: flex; align-items: center; gap: .45rem; width: 100%; margin-top: .5rem; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-elev); color: var(--text-dim); font-size: .74rem; text-align: left; cursor: pointer; }
 .rbz__jdview:hover { border-color: var(--accent); color: var(--text); }

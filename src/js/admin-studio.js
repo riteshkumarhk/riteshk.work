@@ -2695,8 +2695,8 @@ import { WORLD_LAND } from "./worldland.js";
     modal.innerHTML =
       '<div class="rbz__bar">' +
         '<div class="rbz__bar-l">' +
-          (atsRbReviewId ? '<button class="rbz__back" type="button" data-rbz-back title="Back to the review">\u2190 Review</button>' : '') +
           '<span class="ats__badge" data-rbz-badge>EDIT</span> <span class="rbz__title" data-rbz-title>Résumé workspace</span>' +
+          (atsRbReviewId ? '<button class="rbz__back" type="button" data-rbz-back title="Back to the review">\u2190 Review</button>' : '') +
           '<span class="rbz__hist" data-rbz-hist><button type="button" class="rbz__hbtn" data-rbz-undo title="Undo" disabled><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg></button><button type="button" class="rbz__hbtn" data-rbz-redo title="Redo" disabled><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg></button></span>' +
         '</div>' +
         '<div class="rbz__bar-c" data-rbz-center>' +
