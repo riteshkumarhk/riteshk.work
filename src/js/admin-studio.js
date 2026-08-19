@@ -2860,7 +2860,7 @@ import { WORLD_LAND } from "./worldland.js";
       var html = '<div class="rbz__scorecard rbz__scorecard--' + tone + (dirty ? " is-stale" : "") + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div><div class="rbz__score-x"><b>' + escHtml(band) + '</b><span>ATS score' + (dirty ? " \u00b7 edited" : "") + "</span></div></div>";
       html += '<button class="btn btn--primary rbz__recheck" type="button" data-rbz-recheck>Re-check ATS' + (dirty ? " \u21bb" : "") + "</button>";
       if (dirty) html += '<div class="rbz__stale">You\u2019ve edited the résumé \u2014 re-check to update the score.</div>';
-      if (fixes.length) { html += '<div class="rbz__fixhd">Remaining suggestions <span>' + fixes.length + "</span></div>"; html += fixes.map(function (f) { var pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med"; return '<div class="rbz__fix rbz__fix--' + pr + '"><span class="rbz__pri">' + pr + "</span><div><b>" + escHtml(f.point || "") + "</b>" + (f.how ? "<span>" + escHtml(f.how) + "</span>" : "") + "</div></div>"; }).join(""); }
+      if (fixes.length) { html += '<div class="rbz__fixhd">Remaining suggestions <span>' + fixes.length + "</span></div>"; html += fixes.map(function (f, i) { var pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med"; var a = atsAnchor(f), cta = ""; if (a.type === "quote" && a.quote && a.replacement) { var re = rbAnchorRe(a.quote), here = re ? rbWalkModel(working, re, null) : false; if (here) { f._seen = 1; cta = '<button class="rbz__applybtn" type="button" data-rbz-apply="' + i + '" title="Apply this rewrite in the editor">Apply \u2192</button>'; } else if (f._seen) cta = '<span class="rbz__applied">\u2713 Applied</span>'; } return '<div class="rbz__fix rbz__fix--' + pr + '"><span class="rbz__pri">' + pr + '</span><div class="rbz__fixbd"><b>' + escHtml(f.point || "") + "</b>" + (f.how ? "<span>" + escHtml(f.how) + "</span>" : "") + cta + "</div></div>"; }).join(""); }
       if (miss.length) html += '<div class="rbz__fixhd">Missing keywords</div><div class="rbz__kw">' + miss.map(function (k) { return '<span class="rbz__chip">' + escHtml(k) + "</span>"; }).join("") + "</div>";
       if (atsRbLayout === "sidebar") html += '<div class="rbz__stale">Two-column is a design / human-first layout; some ATS read the columns out of order. If the score drops on re-check, switch back to single column.</div>';
       html += '<div class="rbz__tip">Click any text to edit. Re-check to rescore, Preview to see the PDF, Download when you\u2019re happy.</div>';
@@ -2892,6 +2892,20 @@ import { WORLD_LAND } from "./worldland.js";
     function rbRestore(s) { working = rbClone(s); reRender(); dirty = true; paintSide(); rbSaveSoon(); rbUpdateHist(); buildFromEdits(); }
     function rbUndoDo() { if (rbUndo.length <= 1) return; rbRedo.push(rbUndo.pop()); rbRestore(rbUndo[rbUndo.length - 1]); }
     function rbRedoDo() { if (!rbRedo.length) return; var s = rbRedo.pop(); rbUndo.push(s); rbRestore(s); }
+    // One-click apply of a quote+replacement fix. Snapshots before AND after so a single Undo reverts it.
+    function rbApplyFix(fx) {
+      var a = atsAnchor(fx);
+      if (!(a.type === "quote" && a.quote && a.replacement)) return;
+      var re = rbAnchorRe(a.quote); if (!re) return;
+      working = rbReadEditor(docEl, working);
+      if (!rbWalkModel(working, re, null)) { status("Couldn\u2019t find that line to apply \u2014 it may have changed since the last check. Edit it directly."); return; }
+      rbCommit(true);
+      rbWalkModel(working, re, String(a.replacement));
+      reRender();
+      rbCommit(true);
+      dirty = true; rbSaveSoon(); rbCountSoon(); paintSide();
+      status("Applied \u2014 re-check to update your score.", true);
+    }
     function focusPath(path) { var el = docEl.querySelector('[data-k="' + path + '"]'); if (el) { docEl.focus(); try { var r = document.createRange(); r.selectNodeContents(el); r.collapse(false); var sel = getShellSel(); if (sel) { sel.removeAllRanges(); sel.addRange(r); } } catch (e) {} } }
     function getShellSel() { try { return window.getSelection(); } catch (e) { return null; } }
 
@@ -3015,6 +3029,7 @@ import { WORLD_LAND } from "./worldland.js";
       if (e.target.closest("[data-rbz-back]")) { backToReview(); return; }
       if (e.target.closest("[data-rbz-undo]")) { rbUndoDo(); return; }
       if (e.target.closest("[data-rbz-redo]")) { rbRedoDo(); return; }
+      var _ap = e.target.closest("[data-rbz-apply]"); if (_ap) { var _fx = (atsLast && atsLast.res && atsLast.res.fixes) || []; rbApplyFix(_fx[+_ap.dataset.rbzApply]); return; }
       if (e.target.closest("[data-rbz-design-toggle]")) { modal.querySelector(".rbz__body").classList.toggle("is-noleft"); schedulePaginate(); return; }
       var _cv = e.target.closest("[data-canvas-set]"); if (_cv) { setCanvas(_cv.dataset.canvasSet); return; }
       var _zm = e.target.closest("[data-zoom]"); if (_zm) { var zd = _zm.dataset.zoom; setZoom(zd === "in" ? rbZoom + 0.1 : zd === "out" ? rbZoom - 0.1 : 1); return; }
@@ -3076,6 +3091,39 @@ import { WORLD_LAND } from "./worldland.js";
     if (!toks || !toks.length) return null;
     if (toks.length > 16) toks = toks.slice(0, 16);
     try { return new RegExp(toks.join("[^a-z0-9]+")); } catch (e) { return null; }
+  }
+  // ---- Apply a review fix straight into the résumé model (deterministic find-&-replace) ----
+  // Same tolerant token matcher the PDF pins use, but uncapped so a whole quoted line is
+  // replaced (not just its first words), matched case-insensitively against the model text.
+  function rbAnchorRe(quote) {
+    var toks = String(quote || "").normalize("NFKC").toLowerCase().match(/[a-z0-9]+/g);
+    if (!toks || !toks.length) return null;
+    if (toks.length > 40) toks = toks.slice(0, 40);
+    try { return new RegExp(toks.join("[^a-z0-9]+")); } catch (e) { return null; }
+  }
+  function rbSpliceMatch(v, re, replacement) {
+    var s = String(v).normalize("NFKC"), m = re.exec(s.toLowerCase());
+    if (!m) return null;
+    var before = s.slice(0, m.index), after = s.slice(m.index + m[0].length);
+    // If only punctuation/space surrounds the match, the quote IS the whole field — replace it wholesale
+    // (otherwise a trailing '.' etc. would be left dangling after the rewrite).
+    if (!/[a-z0-9]/i.test(before) && !/[a-z0-9]/i.test(after)) return String(replacement).replace(/\s+/g, " ").trim();
+    return (before + replacement + after).replace(/\s+/g, " ").trim();
+  }
+  // depth-first walk of every string field; replacement===null is a dry-run presence check.
+  function rbWalkModel(node, re, replacement) {
+    var keys = Array.isArray(node) ? node.map(function (_, i) { return i; }) : Object.keys(node || {});
+    for (var j = 0; j < keys.length; j++) {
+      var k = keys[j]; if (k === "kind") continue;
+      var v = node[k];
+      if (typeof v === "string") {
+        if (replacement === null) { if (re.test(v.normalize("NFKC").toLowerCase())) return true; }
+        else { var nv = rbSpliceMatch(v, re, replacement); if (nv !== null) { node[k] = nv; return true; } }
+      } else if (v && typeof v === "object") {
+        if (rbWalkModel(v, re, replacement)) return true;
+      }
+    }
+    return false;
   }
   function atsUnionByLine(itemSet, rects) {
     var idxs = Object.keys(itemSet).map(Number).sort(function (a, b) { return a - b; });
