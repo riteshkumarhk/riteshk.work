@@ -1889,6 +1889,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   var atsLevel = _atsD0.level || "staff";
   var atsState = (_atsD0.state && typeof _atsD0.state === "object") ? { mode: _atsD0.state.mode || "general", source: _atsD0.state.source || "site", jd: _atsD0.state.jd || "", url: _atsD0.state.url || "", company: _atsD0.state.company || "" } : { mode: "general", source: "site", jd: "", url: "", company: "" };
   var atsPickedFile = null; // a résumé File chosen via Browse (session-only; a File can't be persisted to the draft)
+  var atsNeuralFallbackOk = false; // user OK'd running on the lexical estimate when neural is unreachable (this session)
   function atsUpdateCheckBtn(panel) { if (!panel) return; var has = !!(data.contact && data.contact.resume), srcFile = (atsState.source === "file") || !has, can = srcFile ? !!atsPickedFile : has; var b = panel.querySelector('[data-act="ats-check"]'); if (b) b.disabled = !can; }
   function atsLevelName(l) { return ({ senior: "Senior", staff: "Principal / Staff", leader: "Design leadership" })[l] || l; }
   async function resumeToFile(url) {
@@ -1986,29 +1987,31 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '</div>';
   }
   // ---- neural semantic fit: real embeddings via the Worker's /embed route (token-gated) ----
-  // Returns vectors, or null on any failure (proxy off, route not deployed, CORS, error) so callers
-  // transparently fall back to the lexical atsSemanticFit — nothing breaks before the Worker ships /embed.
+  // Returns a tagged result so the caller can tell three cases apart: { off } = the AI proxy isn't
+  // configured (stay lexical, silently); { embeddings }/{ ok, score } = success; { failed, reason } =
+  // the proxy IS on but /embed was unreachable → the caller surfaces it and lets the user choose.
   async function atsEmbed(texts) {
+    var px = aiProxy();
+    if (!px || !px.on || !px.url || !px.token) return { off: true };   // neural only when the AI proxy is configured
+    var arr = (Array.isArray(texts) ? texts : [texts]).map(function (t) { return String(t == null ? "" : t); }).filter(function (s) { return s.trim(); });
+    if (!arr.length) return { off: true };
     try {
-      var px = aiProxy();
-      if (!px || !px.on || !px.url || !px.token) return null;      // neural path only when the AI proxy is configured
-      var arr = (Array.isArray(texts) ? texts : [texts]).map(function (t) { return String(t == null ? "" : t); }).filter(function (s) { return s.trim(); });
-      if (!arr.length) return null;
       var r = await fetch(px.url + "/embed", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + px.token },
         body: JSON.stringify({ input: arr }),
       });
-      if (!r.ok) return null;
+      if (!r.ok) return { failed: true, reason: r.status === 404 ? "the /embed route isn\u2019t deployed on your proxy yet" : r.status === 401 ? "the access token was rejected" : "the server returned error " + r.status };
       var j = await r.json().catch(function () { return null; });
-      return (j && Array.isArray(j.embeddings) && j.embeddings.length) ? j.embeddings : null;
-    } catch (e) { return null; }
+      if (j && Array.isArray(j.embeddings) && j.embeddings.length) return { embeddings: j.embeddings };
+      return { failed: true, reason: "no embeddings were returned" };
+    } catch (e) { return { failed: true, reason: "the proxy couldn\u2019t be reached (offline, or CORS isn\u2019t allowing this origin)" }; }
   }
   async function atsSemNeural(resumeText, jd) {
-    if (!String(jd || "").trim() || !String(resumeText || "").trim()) return null;
-    var emb = await atsEmbed([resumeText, jd]);
-    if (!emb || emb.length < 2) return null;
-    return atsEmbedScore(emb[0], emb[1]);
+    if (!String(jd || "").trim() || !String(resumeText || "").trim()) return { off: true };
+    var e = await atsEmbed([resumeText, jd]);
+    if (e.embeddings && e.embeddings.length >= 2) { var s = atsEmbedScore(e.embeddings[0], e.embeddings[1]); return s == null ? { failed: true, reason: "the embeddings were malformed" } : { ok: true, score: s }; }
+    return e.off ? { off: true } : { failed: true, reason: e.reason || "the neural model was unavailable" };
   }
   async function atsRun(panel, file) {
     if (!panel) return;
@@ -2037,7 +2040,18 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       }
       var _kw = jd ? atsKeywordMatch(text, jd) : null;
       var _sem = jd ? atsSemanticFit(text, jd) : null, _semMode = "lexical";
-      if (jd) { try { var _semN = await atsSemNeural(text, jd); if (_semN != null) { _sem = _semN; _semMode = "neural"; } } catch (e) {} }   // real embeddings when the proxy has /embed; else lexical
+      if (jd) {
+        var _neu = await atsSemNeural(text, jd);
+        if (_neu.ok) { _sem = _neu.score; _semMode = "neural"; }
+        else if (_neu.failed) {   // neural was turned on but unreachable — tell the user + hand them the choice
+          if (!atsNeuralFallbackOk) {
+            var _go = await confirmModal({ title: "Neural model unavailable", sub: "Couldn\u2019t reach the neural semantic model \u2014 " + _neu.reason + ". Continue with the offline lexical estimate, or cancel to fix your AI proxy first?", cta: "Continue with lexical", okClass: "btn--primary", cancel: "Cancel check" });
+            if (!_go) { if (out) out.innerHTML = '<div class="ats__err">Check cancelled \u2014 the neural model wasn\u2019t reachable (' + escHtml(_neu.reason) + '). Fix the proxy in AI settings, or run the check again to continue with the offline estimate.</div>'; status("Check cancelled."); return; }
+            atsNeuralFallbackOk = true;   // remembered for this session so we don’t ask on every run
+          } else { status("Neural model still unavailable \u2014 using the offline lexical estimate.", false); }
+          _semMode = "lexical-fallback";
+        }
+      }
       var _pages = await atsPdfPages(f);
       var _layout = _pages ? atsParseLayout(_pages) : null;
       var _lflags = _layout ? _layout.flags.map(function (x) { return { label: x.label, note: x.note, status: "fail" }; }) : [];
@@ -2906,9 +2920,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (fixes.length) { var _pctx = atsProjCtx(), _pbase = _pctx ? atsScoreModel(rbToPlainText(working, atsRbLayout), working, _pctx) : null; var _ann = fixes.map(function (f, i) { var a = atsAnchor(f), q = (a.type === "quote" && a.quote && a.replacement), present = false, imp = null; if (q) { var re = rbAnchorRe(a.quote); present = re ? rbWalkModel(working, re, null) : false; if (present && _pctx) imp = atsProjectFix(f, _pctx, _pbase); } return { f: f, i: i, q: q, present: present, imp: imp, pr: f.priority === "high" ? 0 : f.priority === "low" ? 2 : 1 }; }); _ann.sort(function (x, y) { if (x.present !== y.present) return x.present ? -1 : 1; if (x.present && y.present) { var ix = x.imp == null ? -1 : x.imp, iy = y.imp == null ? -1 : y.imp; if (iy !== ix) return iy - ix; } return x.pr - y.pr; }); var _napp = 0, _benef = []; var _cards = _ann.map(function (o) { var f = o.f, i = o.i, pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med", cta = ""; if (o.q) { if (o.present) { f._seen = 1; if (o.imp == null || o.imp >= 0) { _napp++; _benef.push(f); } var _impB = (o.imp != null && o.imp !== 0) ? '<span class="rbz__imp ' + (o.imp > 0 ? "is-up" : "is-down") + '" title="Projected score change if you apply this">' + (o.imp > 0 ? "+" : "") + o.imp + '</span>' : ""; cta = '<button class="rbz__applybtn" type="button" data-rbz-apply="' + i + '" title="Apply this rewrite in the editor">Apply \u2192</button>' + _impB; } else if (f._seen) cta = '<span class="rbz__applied">\u2713 Applied</span>'; } return '<div class="rbz__fix rbz__fix--' + pr + '"><span class="rbz__pri">' + pr + '</span><div class="rbz__fixbd"><b>' + escHtml(f.point || "") + "</b>" + (f.how ? "<span>" + escHtml(f.how) + "</span>" : "") + cta + "</div></div>"; }).join(""); var _ptot = (_pctx && _benef.length >= 2) ? atsProjectAll(_benef, _pctx, _pbase) : null; html += '<div class="rbz__fixhd">Remaining suggestions <span>' + fixes.length + "</span>" + (_napp >= 2 ? '<button class="rbz__applyall" type="button" data-rbz-apply-all title="Apply every beneficial rewrite in one step \u2014 skips any that would lower your score">Apply all ' + _napp + (_ptot != null && _ptot > 0 ? ' <span class="rbz__tot">+' + _ptot + "</span>" : "") + "</button>" : "") + "</div>" + _cards; }
       var dkw = (atsLast && atsLast.kw) || (atsLast && atsLast.jd && atsLast.text ? atsKeywordMatch(atsLast.text, atsLast.jd) : null);
       var dsem = (atsLast && atsLast.sem != null) ? atsLast.sem : (atsLast && atsLast.jd && atsLast.text ? atsSemanticFit(atsLast.text, atsLast.jd) : null);
-      var dsemN = !!(atsLast && atsLast.semMode === "neural" && atsLast.sem != null);
+      var _dsm = (atsLast && atsLast.semMode) || "lexical";
+      var _dsemTip = _dsm === "neural" ? "Neural embeddings \u2014 semantic model" : _dsm === "lexical-fallback" ? "Neural model was unavailable \u2014 showing the offline lexical estimate" : "Lexical similarity \u2014 offline proxy";
+      var _dsemMark = _dsm === "neural" ? " \u2726" : _dsm === "lexical-fallback" ? " \u26a0" : "";
       if (dkw && dkw.rate != null) {
-        html += '<div class="rbz__fixhd">Keyword match <span>' + dkw.rate + '%</span>' + (dsem != null ? ' \u00b7 context <span title="' + (dsemN ? "Neural embeddings \u2014 semantic model" : "Lexical similarity \u2014 offline proxy") + '">' + dsem + '%' + (dsemN ? " \u2726" : "") + '</span>' : '') + '</div>';
+        html += '<div class="rbz__fixhd">Keyword match <span>' + dkw.rate + '%</span>' + (dsem != null ? ' \u00b7 context <span title="' + _dsemTip + '">' + dsem + '%' + _dsemMark + '</span>' : '') + '</div>';
         html += '<div class="rbz__kwbar" title="' + dkw.matched.length + ' of ' + (dkw.matched.length + dkw.missing.length) + ' requirements matched (deterministic)"><i style="width:' + Math.max(3, dkw.rate) + '%"></i></div>';
         if (dkw.missing.length) html += '<div class="rbz__kwsub">Missing \u2014 add where truthful:</div><div class="rbz__kw">' + dkw.missing.slice(0, 14).map(function (m) { return '<span class="rbz__chip">' + escHtml(m.term) + "</span>"; }).join("") + "</div>";
       } else if (miss.length) {
@@ -8534,7 +8550,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="pass__box"><div class="pass__title">' + escHtml(opts.title || "Are you sure?") + "</div>" +
         (opts.sub ? '<div class="pass__sub">' + escHtml(opts.sub) + "</div>" : "") +
         '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>' + escHtml(opts.cancel || "Cancel") + "</button>" +
-        '<button class="btn btn--danger" data-ok>' + escHtml(opts.cta || "Delete") + "</button></div></div>";
+        '<button class="btn ' + (opts.okClass || "btn--danger") + '" data-ok>' + escHtml(opts.cta || "Delete") + "</button></div></div>";
       document.body.appendChild(modal);
       var done = function (v) { modal.remove(); document.removeEventListener("keydown", onKey); resolve(v); };
       var onKey = function (e) { if (e.key === "Escape") { e.preventDefault(); done(false); } };
