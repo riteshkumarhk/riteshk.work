@@ -1,4 +1,4 @@
-import { atsKeywordMatch, atsExtractJdTerms, atsResumeIndex, atsTokens, atsStem, atsNormalize, atsModelChecks, atsFactsBlock } from "./src/js/ats-core.js";
+import { atsKeywordMatch, atsExtractJdTerms, atsResumeIndex, atsTokens, atsStem, atsNormalize, atsModelChecks, atsFactsBlock, atsParseLayout } from "./src/js/ats-core.js";
 
 let pass = 0, fail = 0;
 function check(name, cond, extra) { if (cond) { pass++; console.log("  ok  " + name); } else { fail++; console.log("FAIL  " + name + (extra ? "  -> " + JSON.stringify(extra) : "")); } }
@@ -129,6 +129,46 @@ const RESUME_WEAK = `Ritesh Kumar — Graphic Designer
   check("facts block mentions keyword match %", /KEYWORD MATCH/.test(fb) && /%/.test(fb));
   check("facts block lists missing keywords", /MISSING JD KEYWORDS/.test(fb));
   check("facts block empty when no signals", atsFactsBlock({ rate: null }, []) === "");
+})();
+
+// 10) Positional layout parse (P2)
+(() => {
+  // Two-column page: left col x=50, right col x=350, contact email in the header band
+  const twoCol = [{ width: 600, height: 800, items: [
+    { str: "me@x.com", x: 50, y: 20, w: 90, h: 10 },   // header contact (risk)
+    { str: "Skills", x: 50, y: 120, w: 60, h: 12 },
+    { str: "Figma", x: 50, y: 140, w: 50, h: 12 },
+    { str: "Sketch", x: 50, y: 160, w: 55, h: 12 },
+    { str: "Research", x: 50, y: 180, w: 70, h: 12 },
+    { str: "Experience", x: 350, y: 120, w: 90, h: 12 },
+    { str: "Designer at Microsoft", x: 350, y: 140, w: 180, h: 12 },
+    { str: "Led identity design", x: 350, y: 160, w: 160, h: 12 },
+    { str: "Shipped passkeys", x: 350, y: 180, w: 150, h: 12 },
+    { str: "Scaled design system", x: 350, y: 200, w: 170, h: 12 }
+  ] }];
+  const r = atsParseLayout(twoCol);
+  check("2-column detected", r.columns === 2, { cols: r.columns, ch: r.channelX });
+  check("header/footer contact flagged", r.headerFooterRisk === true);
+  check("columns-blind linearization interleaves", /Skills\s+Experience/.test(r.linearized), { lin: r.linearized.slice(0, 60) });
+  check("layout flags include multi-column", r.flags.some(f => /Multi-column/.test(f.label)));
+
+  // Single-column page: all items on the left, contact in body
+  const oneCol = [{ width: 600, height: 800, items: [
+    { str: "Ritesh Kumar", x: 50, y: 60, w: 140, h: 14 },
+    { str: "me@x.com | +1 555 123 4567", x: 50, y: 80, w: 260, h: 12 },
+    { str: "Experience", x: 50, y: 140, w: 90, h: 12 },
+    { str: "Senior Product Designer", x: 50, y: 160, w: 200, h: 12 },
+    { str: "Led identity and design systems", x: 50, y: 180, w: 240, h: 12 },
+    { str: "Shipped accessible sign-in", x: 50, y: 200, w: 210, h: 12 },
+    { str: "Education", x: 50, y: 240, w: 90, h: 12 },
+    { str: "NIFT Bangalore", x: 50, y: 260, w: 130, h: 12 },
+    { str: "Skills: Figma, Sketch", x: 50, y: 300, w: 180, h: 12 },
+    { str: "Prototyping and research", x: 50, y: 320, w: 190, h: 12 }
+  ] }];
+  const s = atsParseLayout(oneCol);
+  check("single-column detected", s.columns === 1, { cols: s.columns });
+  check("single-column: no header/footer contact risk (contact in body)", s.headerFooterRisk === false);
+  check("single-column: no layout flags", s.flags.length === 0);
 })();
 
 console.log("\n" + pass + " passed, " + fail + " failed");

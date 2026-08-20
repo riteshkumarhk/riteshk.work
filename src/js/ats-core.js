@@ -357,3 +357,79 @@ export function atsFactsBlock(kw, checks) {
   if (!L.length) return "";
   return "\n\nMEASURED SIGNALS \u2014 computed deterministically from the résumé + JD. TRUST THESE over your own estimate; make your keyword call and your fixes CONSISTENT with them, and target the missing keywords:\n" + L.map(function (x) { return "- " + x; }).join("\n");
 }
+
+// ---- P2: positional parse-fidelity from pdf.js coordinates ----
+// Real parse-killers (columns, header/footer contact) are invisible once the PDF is
+// flattened to a string. These use each text item's geometry (x,y,w top-down per page)
+// to detect what a strict/legacy ATS would actually do to the résumé.
+const _EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
+const _PHONE_RE = /\+?\d[\d\s().\-]{7,}\d/;
+
+function _detectColumns(items, pageW) {
+  if (!items.length || !pageW || items.length < 10) return { columns: 1, channelX: null };
+  let best = null;
+  for (let f = 0.30; f <= 0.70; f += 0.02) {
+    const cx = pageW * f;
+    let straddle = 0, left = 0, right = 0;
+    for (const it of items) {
+      const x0 = it.x, x1 = it.x + (it.w || 0);
+      if (x0 < cx && x1 > cx) straddle++;
+      else if (x1 <= cx) left++; else right++;
+    }
+    // a true column gutter: almost nothing straddles cx, and both sides are well populated
+    if (straddle <= Math.max(1, items.length * 0.02) && left >= items.length * 0.22 && right >= items.length * 0.22) {
+      if (!best || Math.abs(f - 0.5) < Math.abs(best.f - 0.5)) best = { f: f, cx: cx };
+    }
+  }
+  return best ? { columns: 2, channelX: Math.round(best.cx) } : { columns: 1, channelX: null };
+}
+
+function _headerFooterContact(pages) {
+  for (const pg of pages) {
+    const H = pg.height || 792;
+    for (const it of (pg.items || [])) {
+      if (!it.str) continue;
+      if ((it.y < H * 0.08 || it.y > H * 0.92) && (_EMAIL_RE.test(it.str) || _PHONE_RE.test(it.str))) return true;
+    }
+  }
+  return false;
+}
+
+// Reconstruct the columns-BLIND reading order a strict parser produces: sort every item
+// top→bottom then left→right, grouping into visual rows. For a 2-column résumé this
+// interleaves the columns row-by-row — i.e. the jumble the ATS actually ingests.
+function _linearize(pages) {
+  const out = [];
+  for (const pg of pages) {
+    const items = (pg.items || []).filter(function (it) { return it.str && it.str.trim(); }).slice();
+    if (!items.length) continue;
+    items.sort(function (a, b) { return (a.y - b.y) || (a.x - b.x); });
+    const tol = 5;
+    let lines = [], cur = [], prevY = null;
+    for (const it of items) {
+      if (prevY !== null && it.y - prevY > tol) { lines.push(cur); cur = []; }
+      cur.push(it); prevY = it.y;
+    }
+    if (cur.length) lines.push(cur);
+    lines.forEach(function (ln) { ln.sort(function (a, b) { return a.x - b.x; }); out.push(ln.map(function (i) { return i.str; }).join(" ").replace(/\s+/g, " ").trim()); });
+  }
+  return out.join("\n");
+}
+
+/**
+ * Analyze a PDF's positional layout.
+ * pages: [{ width, height, items:[{ str, x, y, w, h }] }]  (y top-down).
+ * Returns { columns, channelX, headerFooterRisk, linearized, flags:[{label,note}], itemCount }.
+ */
+export function atsParseLayout(pages) {
+  pages = pages || [];
+  const all = [];
+  let pageW = 0;
+  pages.forEach(function (pg) { pageW = Math.max(pageW, pg.width || 0); (pg.items || []).forEach(function (it) { if (it.str && it.str.trim()) all.push(it); }); });
+  const col = _detectColumns(all, pageW || 612);
+  const hf = _headerFooterContact(pages);
+  const flags = [];
+  if (col.columns === 2) flags.push({ label: "Multi-column layout", note: "a strict/legacy parser reads across the columns and scrambles the order \u2014 single-column is safest" });
+  if (hf) flags.push({ label: "Contact in header/footer", note: "many parsers skip header/footer regions \u2014 move name, email, phone into the body" });
+  return { columns: col.columns, channelX: col.channelX, headerFooterRisk: hf, linearized: _linearize(pages), flags: flags, itemCount: all.length };
+}
