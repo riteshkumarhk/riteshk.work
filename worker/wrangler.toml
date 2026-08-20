@@ -29,7 +29,10 @@ binding = "BROWSER"
 # ANTHROPIC_KEY, ADMIN_HASH, ADMIN_SALT, SESSION_SECRET, GH_TOKEN, ...) are set
 # via the dashboard / `wrangler secret put` and are NOT stored in this file.
 [vars]
-ALLOW_ORIGIN = "https://riteshk.work"
+# Comma-separate to add origins. localhost entries let the studio be driven locally
+# (e.g. via ?devstub) against the deployed Worker for live testing; every route still
+# requires the ACCESS_TOKEN / admin session, so the extra origins grant no access on their own.
+ALLOW_ORIGIN = "https://riteshk.work,http://localhost:5510,http://127.0.0.1:5510"
 OWNER = "riteshkumarhk"
 REPO = "riteshk.work"
 # Public Cloudflare identifiers for the studio Insights readout (NOT secrets). The paired

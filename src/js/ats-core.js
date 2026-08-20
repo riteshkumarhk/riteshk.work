@@ -389,6 +389,27 @@ export function atsSemanticFit(resumeText, jd) {
   return Math.round(cos * 100);
 }
 
+// ---- Neural semantic fit: cosine of two embedding vectors → a calibrated 0-100 ----
+// The real-embedding upgrade to the lexical proxy above. The vectors come from the Worker's
+// /embed route (résumé + JD → text-embedding-3-small); this pure math turns their cosine into
+// a score on the SAME 0-100 scale as the lexical fit so the blend stays calibrated. The fetch
+// lives in the studio (network); the math lives here so it stays reproducible + unit-tested.
+export function atsEmbedCosine(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || !a.length || a.length !== b.length) return null;
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) { const x = +a[i] || 0, y = +b[i] || 0; dot += x * y; na += x * x; nb += y * y; }
+  if (!na || !nb) return null;
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
+export function atsEmbedScore(a, b) {
+  const cos = atsEmbedCosine(a, b);
+  if (cos == null) return null;
+  // Calibrated for text-embedding-3-small résumé↔JD cosines: ~0.30 (weakly related) → 0,
+  // ~0.82 (strong match) → 100. Adjust the band if you switch embedding models.
+  const lo = 0.30, hi = 0.82;
+  return Math.round(Math.max(0, Math.min(1, (cos - lo) / (hi - lo))) * 100);
+}
+
 // ---- P2: positional parse-fidelity from pdf.js coordinates ----
 // Real parse-killers (columns, header/footer contact) are invisible once the PDF is
 // flattened to a string. These use each text item's geometry (x,y,w top-down per page)

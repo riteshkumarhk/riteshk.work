@@ -1,4 +1,4 @@
-import { atsKeywordMatch, atsExtractJdTerms, atsResumeIndex, atsTokens, atsStem, atsNormalize, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand, atsScoreModel } from "./src/js/ats-core.js";
+import { atsKeywordMatch, atsExtractJdTerms, atsResumeIndex, atsTokens, atsStem, atsNormalize, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsEmbedCosine, atsEmbedScore, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand, atsScoreModel } from "./src/js/ats-core.js";
 
 let pass = 0, fail = 0;
 function check(name, cond, extra) { if (cond) { pass++; console.log("  ok  " + name); } else { fail++; console.log("FAIL  " + name + (extra ? "  -> " + JSON.stringify(extra) : "")); } }
@@ -243,6 +243,22 @@ const RESUME_WEAK = `Ritesh Kumar — Graphic Designer
   const badText = baseText + " " + badModel.sections[0].items[0].bullets[0];
   const bad = atsScoreModel(badText, badModel, ctx);
   check("projection: a STUFFED/bloated suggestion scores below the clean good one", bad < good, { bad, good });
+})();
+
+// 15) Neural semantic fit — pure cosine + calibrated 0-100 (the /embed upgrade)
+(() => {
+  check("embed cosine: identical vectors = 1", Math.abs(atsEmbedCosine([1, 2, 3], [1, 2, 3]) - 1) < 1e-9);
+  check("embed cosine: parallel vectors = 1", Math.abs(atsEmbedCosine([1, 2, 3], [2, 4, 6]) - 1) < 1e-9);
+  check("embed cosine: orthogonal vectors = 0", Math.abs(atsEmbedCosine([1, 0], [0, 1])) < 1e-9);
+  check("embed cosine: null on length mismatch", atsEmbedCosine([1, 2, 3], [1, 2]) === null);
+  check("embed cosine: null on empty", atsEmbedCosine([], []) === null);
+  check("embed score: strong match (identical) = 100", atsEmbedScore([1, 2, 3], [1, 2, 3]) === 100);
+  check("embed score: unrelated (orthogonal) = 0", atsEmbedScore([1, 0], [0, 1]) === 0);
+  check("embed score: null when a vector is missing", atsEmbedScore([1, 2, 3], null) === null);
+  const near = atsEmbedScore([1, 1, 0], [1, 0.9, 0.1]);
+  const far = atsEmbedScore([1, 1, 0], [0.2, 0.1, 1]);
+  check("embed score: closer pair scores higher than divergent pair", near > far, { near, far });
+  check("embed score: result stays within 0-100", near >= 0 && near <= 100 && far >= 0 && far <= 100);
 })();
 
 console.log("\n" + pass + " passed, " + fail + " failed");

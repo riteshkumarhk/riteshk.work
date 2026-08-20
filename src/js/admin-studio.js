@@ -18,7 +18,7 @@ import {
   webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig, authStatus, authConfig, deviceTrust, deviceTrusted, stepUp, keyringGet, keyringPut
 } from "./admin-core.js";
 import { WORLD_LAND } from "./worldland.js";
-import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand, atsScoreModel } from "./ats-core.js";
+import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsEmbedScore, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand, atsScoreModel } from "./ats-core.js";
 
 (function () {
   "use strict";
@@ -1985,6 +1985,31 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="ats__viewrow"><button class="btn btn--primary" type="button" data-act="ats-view">Open full review \u2014 fixes pinned on your r\u00e9sum\u00e9 \u2192</button></div>' +
       '</div>';
   }
+  // ---- neural semantic fit: real embeddings via the Worker's /embed route (token-gated) ----
+  // Returns vectors, or null on any failure (proxy off, route not deployed, CORS, error) so callers
+  // transparently fall back to the lexical atsSemanticFit — nothing breaks before the Worker ships /embed.
+  async function atsEmbed(texts) {
+    try {
+      var px = aiProxy();
+      if (!px || !px.on || !px.url || !px.token) return null;      // neural path only when the AI proxy is configured
+      var arr = (Array.isArray(texts) ? texts : [texts]).map(function (t) { return String(t == null ? "" : t); }).filter(function (s) { return s.trim(); });
+      if (!arr.length) return null;
+      var r = await fetch(px.url + "/embed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + px.token },
+        body: JSON.stringify({ input: arr }),
+      });
+      if (!r.ok) return null;
+      var j = await r.json().catch(function () { return null; });
+      return (j && Array.isArray(j.embeddings) && j.embeddings.length) ? j.embeddings : null;
+    } catch (e) { return null; }
+  }
+  async function atsSemNeural(resumeText, jd) {
+    if (!String(jd || "").trim() || !String(resumeText || "").trim()) return null;
+    var emb = await atsEmbed([resumeText, jd]);
+    if (!emb || emb.length < 2) return null;
+    return atsEmbedScore(emb[0], emb[1]);
+  }
   async function atsRun(panel, file) {
     if (!panel) return;
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { atsRun(panel, file); }); return; }
@@ -2011,7 +2036,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         }
       }
       var _kw = jd ? atsKeywordMatch(text, jd) : null;
-      var _sem = jd ? atsSemanticFit(text, jd) : null;
+      var _sem = jd ? atsSemanticFit(text, jd) : null, _semMode = "lexical";
+      if (jd) { try { var _semN = await atsSemNeural(text, jd); if (_semN != null) { _sem = _semN; _semMode = "neural"; } } catch (e) {} }   // real embeddings when the proxy has /embed; else lexical
       var _pages = await atsPdfPages(f);
       var _layout = _pages ? atsParseLayout(_pages) : null;
       var _lflags = _layout ? _layout.flags.map(function (x) { return { label: x.label, note: x.note, status: "fail" }; }) : [];
@@ -2019,7 +2045,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
       var _blend = atsBlendScore({ keyword: _kw ? _kw.rate : null, semantic: _sem, structure: atsStructFromChecks(res), parse: atsParseScore(_layout), content: +res.score || 0 });
       if (_blend.score != null) { res.score = _blend.score; res.band = _blend.band; res._breakdown = _blend.breakdown; }
-      atsLast = { file: f, res: res, level: atsLevel, company: company, text: text, jd: jd, kw: _kw, sem: _sem, layout: _layout };
+      atsLast = { file: f, res: res, level: atsLevel, company: company, text: text, jd: jd, kw: _kw, sem: _sem, semMode: _semMode, layout: _layout };
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
       var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
       var _snap = { state: { mode: atsState.mode, jd: atsState.jd, url: atsState.url, company: atsState.company }, level: atsLevel, res: res, company: company, text: text };
@@ -2880,8 +2906,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (fixes.length) { var _pctx = atsProjCtx(), _pbase = _pctx ? atsScoreModel(rbToPlainText(working, atsRbLayout), working, _pctx) : null; var _ann = fixes.map(function (f, i) { var a = atsAnchor(f), q = (a.type === "quote" && a.quote && a.replacement), present = false, imp = null; if (q) { var re = rbAnchorRe(a.quote); present = re ? rbWalkModel(working, re, null) : false; if (present && _pctx) imp = atsProjectFix(f, _pctx, _pbase); } return { f: f, i: i, q: q, present: present, imp: imp, pr: f.priority === "high" ? 0 : f.priority === "low" ? 2 : 1 }; }); _ann.sort(function (x, y) { if (x.present !== y.present) return x.present ? -1 : 1; if (x.present && y.present) { var ix = x.imp == null ? -1 : x.imp, iy = y.imp == null ? -1 : y.imp; if (iy !== ix) return iy - ix; } return x.pr - y.pr; }); var _napp = 0, _benef = []; var _cards = _ann.map(function (o) { var f = o.f, i = o.i, pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med", cta = ""; if (o.q) { if (o.present) { f._seen = 1; if (o.imp == null || o.imp >= 0) { _napp++; _benef.push(f); } var _impB = (o.imp != null && o.imp !== 0) ? '<span class="rbz__imp ' + (o.imp > 0 ? "is-up" : "is-down") + '" title="Projected score change if you apply this">' + (o.imp > 0 ? "+" : "") + o.imp + '</span>' : ""; cta = '<button class="rbz__applybtn" type="button" data-rbz-apply="' + i + '" title="Apply this rewrite in the editor">Apply \u2192</button>' + _impB; } else if (f._seen) cta = '<span class="rbz__applied">\u2713 Applied</span>'; } return '<div class="rbz__fix rbz__fix--' + pr + '"><span class="rbz__pri">' + pr + '</span><div class="rbz__fixbd"><b>' + escHtml(f.point || "") + "</b>" + (f.how ? "<span>" + escHtml(f.how) + "</span>" : "") + cta + "</div></div>"; }).join(""); var _ptot = (_pctx && _benef.length >= 2) ? atsProjectAll(_benef, _pctx, _pbase) : null; html += '<div class="rbz__fixhd">Remaining suggestions <span>' + fixes.length + "</span>" + (_napp >= 2 ? '<button class="rbz__applyall" type="button" data-rbz-apply-all title="Apply every beneficial rewrite in one step \u2014 skips any that would lower your score">Apply all ' + _napp + (_ptot != null && _ptot > 0 ? ' <span class="rbz__tot">+' + _ptot + "</span>" : "") + "</button>" : "") + "</div>" + _cards; }
       var dkw = (atsLast && atsLast.kw) || (atsLast && atsLast.jd && atsLast.text ? atsKeywordMatch(atsLast.text, atsLast.jd) : null);
       var dsem = (atsLast && atsLast.sem != null) ? atsLast.sem : (atsLast && atsLast.jd && atsLast.text ? atsSemanticFit(atsLast.text, atsLast.jd) : null);
+      var dsemN = !!(atsLast && atsLast.semMode === "neural" && atsLast.sem != null);
       if (dkw && dkw.rate != null) {
-        html += '<div class="rbz__fixhd">Keyword match <span>' + dkw.rate + '%</span>' + (dsem != null ? ' \u00b7 context <span>' + dsem + '%</span>' : '') + '</div>';
+        html += '<div class="rbz__fixhd">Keyword match <span>' + dkw.rate + '%</span>' + (dsem != null ? ' \u00b7 context <span title="' + (dsemN ? "Neural embeddings \u2014 semantic model" : "Lexical similarity \u2014 offline proxy") + '">' + dsem + '%' + (dsemN ? " \u2726" : "") + '</span>' : '') + '</div>';
         html += '<div class="rbz__kwbar" title="' + dkw.matched.length + ' of ' + (dkw.matched.length + dkw.missing.length) + ' requirements matched (deterministic)"><i style="width:' + Math.max(3, dkw.rate) + '%"></i></div>';
         if (dkw.missing.length) html += '<div class="rbz__kwsub">Missing \u2014 add where truthful:</div><div class="rbz__kw">' + dkw.missing.slice(0, 14).map(function (m) { return '<span class="rbz__chip">' + escHtml(m.term) + "</span>"; }).join("") + "</div>";
       } else if (miss.length) {
