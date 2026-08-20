@@ -1,4 +1,4 @@
-import { atsKeywordMatch, atsExtractJdTerms, atsResumeIndex, atsTokens, atsStem, atsNormalize, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand } from "./src/js/ats-core.js";
+import { atsKeywordMatch, atsExtractJdTerms, atsResumeIndex, atsTokens, atsStem, atsNormalize, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand, atsScoreModel } from "./src/js/ats-core.js";
 
 let pass = 0, fail = 0;
 function check(name, cond, extra) { if (cond) { pass++; console.log("  ok  " + name); } else { fail++; console.log("FAIL  " + name + (extra ? "  -> " + JSON.stringify(extra) : "")); } }
@@ -218,6 +218,31 @@ const RESUME_WEAK = `Ritesh Kumar — Graphic Designer
   const cs = atsModelChecks(concise, { level: "senior" }).structureScore;
   const bs = atsModelChecks(bloated, { level: "senior" }).structureScore;
   check("verbose/stuffed bullets LOWER structure than concise", bs < cs, { concise: cs, bloated: bs });
+})();
+
+// 14) Projected impact — atsScoreModel simulates applying a suggestion (the intelligent layer)
+(() => {
+  const ctx = { jd: JD, level: "senior", content: 70 };
+  const baseModel = {
+    title: "Product Designer", contact: { email: "a@b.com", phone: "+1 555 123 4567", location: "X" },
+    sections: [
+      { heading: "Experience", kind: "experience", items: [{ role: "Designer", org: "M", dates: "03/2020 - Present", bullets: ["Ran user research and testing", "Improved onboarding"] }] },
+      { heading: "Skills", kind: "skills", groups: [{ label: "Design", items: ["Sketch"] }] },
+      { heading: "Education", kind: "education", items: [{ school: "NIFT", credential: "B.Des", dates: "2010 - 2014" }] }
+    ]
+  };
+  const baseText = "Product Designer. Ran user research and testing. Improved onboarding. Skills: Sketch.";
+  const base = atsScoreModel(baseText, baseModel, ctx);
+  const goodModel = JSON.parse(JSON.stringify(baseModel));
+  goodModel.sections[0].items[0].bullets.push("Built a design system and shipped accessible WCAG flows in Figma; ran A/B testing");
+  const goodText = baseText + " Built a design system; shipped accessible WCAG flows in Figma; ran A/B testing.";
+  const good = atsScoreModel(goodText, goodModel, ctx);
+  check("projection: a GOOD suggestion RAISES the projected score", good > base, { base, good });
+  const badModel = JSON.parse(JSON.stringify(baseModel));
+  badModel.sections[0].items[0].bullets = ["Spearheaded synergistic cross-functional user-centered design systems initiatives leveraging agile methodologies and figma accessibility to holistically drive scalable best-in-class experiences across the entire product ecosystem end to end at massive scale"];
+  const badText = baseText + " " + badModel.sections[0].items[0].bullets[0];
+  const bad = atsScoreModel(badText, badModel, ctx);
+  check("projection: a STUFFED/bloated suggestion scores below the clean good one", bad < good, { bad, good });
 })();
 
 console.log("\n" + pass + " passed, " + fail + " failed");

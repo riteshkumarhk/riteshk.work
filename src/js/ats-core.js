@@ -506,3 +506,20 @@ export function atsBlendScore(parts) {
   const score = den ? Math.round(num / den) : (parts.content != null ? Math.round(parts.content) : null);
   return { score: score, band: score != null ? atsBand(score) : null, breakdown: breakdown };
 }
+
+// ---- Score a candidate résumé state (text + structured model) → one hybrid number ----
+// Same math as a live check but with `content` (the LLM judgment) held fixed. Used to SIMULATE
+// "what happens to the score if I apply this suggestion" — the deterministic, LLM-free projection.
+export function atsScoreModel(text, model, ctx) {
+  ctx = ctx || {};
+  const kw = ctx.jd ? atsKeywordMatch(text, ctx.jd) : null;
+  const sem = ctx.jd ? atsSemanticFit(text, ctx.jd) : null;
+  const chk = atsModelChecks(model, { level: ctx.level, pages: ctx.pages });
+  return atsBlendScore({
+    keyword: kw ? kw.rate : null,
+    semantic: sem,
+    structure: chk.structureScore,
+    parse: ctx.parse != null ? ctx.parse : 100,
+    content: ctx.content
+  }).score;
+}
