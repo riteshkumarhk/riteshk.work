@@ -2106,7 +2106,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var e = prepGet("ats", id); if (!e) return; var p = e.payload || {}, st = p.state || {};
     if (e.kind === "workspace" && p.rb) {
       var d = p.design || {};
-      atsRbTplId = d.tpl || atsRbTplId; atsRbSizeId = d.size || atsRbSizeId; atsRbAccent = (d.accent != null ? d.accent : atsRbAccent); atsRbFont = d.font || atsRbFont; atsRbDensity = d.density || atsRbDensity; atsRbLayout = d.layout || atsRbLayout; atsRbCanvas = d.canvas || atsRbCanvas; atsRbKeepWhole = (d.keepWhole != null ? d.keepWhole : atsRbKeepWhole);
+      atsRbTplId = d.tpl || atsRbTplId; atsRbSizeId = d.size || atsRbSizeId; atsRbAccent = (d.accent != null ? d.accent : atsRbAccent); atsRbFont = d.font || atsRbFont; atsRbDensity = d.density || atsRbDensity; atsRbLayout = d.layout || atsRbLayout; atsRbCanvas = d.canvas || atsRbCanvas; atsRbKeepWhole = (d.keepWhole != null ? d.keepWhole : atsRbKeepWhole); atsRbMargin = d.margin || atsRbMargin;
       atsLevel = p.level || atsLevel;
       // recover the journey's JD: prefer the workspace payload, else the linked review it was built from (legacy workspaces)
       var _jd = p.jd;
@@ -2215,6 +2215,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   };
   var RB_ACCENTS = ["#9a6a24", "#2f6d9a", "#585c52", "#7a3b3b", "#3f6b4b", "#454a8c", "#b0561f", "#1c1a17"];
   var RB_LAYOUTS = { single: { name: "Single column" }, sidebar: { name: "Two-column \u00b7 design" }, fullbleed: { name: "Full-bleed header" } };
+  var RB_MARGIN = { normal: { name: "Normal", pageMm: "13mm 14mm 14mm", mm: 14, et: "3.1rem", ex: "3.3rem", eb: "3.4rem", pt: "13mm", px: "14mm" }, narrow: { name: "Narrow", pageMm: "9mm 10mm 10mm", mm: 10, et: "2.1rem", ex: "2.4rem", eb: "2.4rem", pt: "9mm", px: "10mm" } };
   var RB_FONT_BASE = "https://riteshk.work/fonts/"; // the worker fetches these woff2 + base64-embeds them so the PDF font matches the editor exactly
   var RB_FONTS = { sans: { name: "Helvetica", css: "Helvetica, Arial, sans-serif", pdf: "helvetica" }, inter: { name: "Inter", css: "'Inter', Helvetica, Arial, sans-serif", pdf: "helvetica", fam: "Inter", faces: [{ f: "inter-normal-400-latin.woff2", w: "400" }, { f: "inter-normal-600-latin.woff2", w: "600" }] }, serif: { name: "Georgia", css: "'Gelasio', Georgia, 'Times New Roman', serif", pdf: "times", fam: "Gelasio", faces: [{ f: "gelasio-normal-400-latin.woff2", w: "400" }, { f: "gelasio-normal-600-latin.woff2", w: "600" }, { f: "gelasio-normal-700-latin.woff2", w: "700" }] }, fraunces: { name: "Fraunces", css: "'Fraunces', Georgia, serif", pdf: "times", fam: "Fraunces", faces: [{ f: "fraunces-normal-300600-latin.woff2", w: "300 600" }] }, gambetta: { name: "Gambetta", css: "'Gambetta', Georgia, serif", pdf: "times", fam: "Gambetta", faces: [{ f: "gambetta-normal-300700-latin.woff2", w: "300 700" }] }, mono: { name: "Mono", css: "'JetBrains Mono', 'Courier New', monospace", pdf: "courier", fam: "JetBrains Mono", faces: [{ f: "jetbrainsmono-normal-400-latin.woff2", w: "400" }, { f: "jetbrainsmono-normal-500-latin.woff2", w: "500" }] } };
   function rbWorkerFonts() { var f = RB_FONTS[atsRbFont]; if (!f || !f.faces) return []; return f.faces.map(function (c) { return { family: f.fam, url: RB_FONT_BASE + c.f, weight: c.w, style: "normal" }; }); }
@@ -2248,16 +2249,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   async function rbEnsureIcons(hexes) {
     for (var ki in RB_ICON_SVG) { for (var i = 0; i < hexes.length; i++) { var key = ki + "|" + hexes[i]; if (!(key in RB_ICON_CACHE)) { try { RB_ICON_CACHE[key] = await rbRasterIcon(ki, hexes[i]); } catch (e) { RB_ICON_CACHE[key] = null; } } } }
   }
-  var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single", atsRbFont = "inter", atsRbCanvas = "dark", atsRbKeepWhole = true;
+  var atsRbTplId = "classic", atsRbSizeId = "a4", atsRbAccent = "", atsRbDensity = "normal", atsRbLayout = "single", atsRbFont = "inter", atsRbCanvas = "dark", atsRbKeepWhole = true, atsRbMargin = "normal";
   var atsRbSessId = null; // the in-progress workspace's history entry id (edits update it in place)
   var atsRbReviewId = null; // the review entry this workspace was rebuilt from, so it can navigate back to it
   function atsRbTpl() { return RB_TPL[atsRbTplId] || RB_TPL.classic; }
   function atsRbSize() { return RB_SIZE[atsRbSizeId] || RB_SIZE.a4; }
   function atsRbDens() { return RB_DENS[atsRbDensity] || RB_DENS.normal; }
+  function atsRbMarginCfg() { return RB_MARGIN[atsRbMargin] || RB_MARGIN.normal; }
   function atsHexRgb(hex) { var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "")); if (!m) return null; var n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
   function atsRbAccentHex() { return atsRbAccent || atsRbTpl().accent; }
   function atsRbAccentRgb() { return (atsRbAccent && atsHexRgb(atsRbAccent)) || atsRbTpl().rgb; }
-  function atsRbApplyTpl(docEl) { var t = atsRbTpl(), _bodyCss = (RB_FONTS[atsRbFont] || RB_FONTS.sans).css; docEl.style.setProperty("--rbz-accent", atsRbAccentHex()); docEl.style.setProperty("--rbz-sum-ff", _bodyCss); docEl.style.setProperty("--rbz-sum-style", "normal"); docEl.style.setProperty("--rbz-body-ff", _bodyCss); docEl.style.setProperty("--rbz-scale", atsRbDens().scale || 1); docEl.setAttribute("data-head", t.head); docEl.setAttribute("data-layout", atsRbLayout); }
+  function atsRbApplyTpl(docEl) { var t = atsRbTpl(), _bodyCss = (RB_FONTS[atsRbFont] || RB_FONTS.sans).css, _mg = atsRbMarginCfg(); docEl.style.setProperty("--rbz-accent", atsRbAccentHex()); docEl.style.setProperty("--rbz-sum-ff", _bodyCss); docEl.style.setProperty("--rbz-sum-style", "normal"); docEl.style.setProperty("--rbz-body-ff", _bodyCss); docEl.style.setProperty("--rbz-scale", atsRbDens().scale || 1); docEl.style.setProperty("--rbz-mt", _mg.et); docEl.style.setProperty("--rbz-mx", _mg.ex); docEl.style.setProperty("--rbz-mb", _mg.eb); docEl.setAttribute("data-head", t.head); docEl.setAttribute("data-layout", atsRbLayout); }
   // Typeset the structured résumé at a given density (k scales type + spacing; maxBul caps bullets/role).
   function atsRbBuild(jsPDF, rb, dens) {
     var k = dens.k, maxBul = dens.maxBul;
@@ -2265,7 +2267,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var doc = new jsPDF({ unit: "mm", format: SZ.fmt, compress: true });
     var BODYF = (RB_FONTS[atsRbFont] || RB_FONTS.sans).pdf;
     if (BODYF !== "helvetica") { var _setFont = doc.setFont.bind(doc); doc.setFont = function (f, s) { return _setFont(f === "helvetica" ? BODYF : f, s); }; }
-    var PW = SZ.w, PH = SZ.h, M = 14, CW = PW - M * 2;
+    var PW = SZ.w, PH = SZ.h, M = atsRbMarginCfg().mm, CW = PW - M * 2;
     var INK = [28, 26, 23], MUT = [101, 92, 83], FAINT = [154, 147, 138], ACC = atsRbAccentRgb(), LINE = [225, 216, 205];
     var y = M, CX = M, CW2 = CW, colTop = M;
     var P = function (s) { return rpdfPlain(s); };
@@ -2301,8 +2303,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           if (!measure) {
             var _it = hy - _isz * 0.5 - 1.0 * k;
             drawIcon(b.ic, x, _it, _isz, rev ? [255, 255, 255] : MUT);
-            if (rev) doc.setTextColor(255, 255, 255); else if (b.u) ink(); else mut();
+            if (rev) doc.setTextColor(255, 255, 255); else ink();
             doc.text(b.t, x + _isz + _ig, hy);
+            if (b.u) doc.link(x, _it - 0.3 * k, w, _isz + 2.2 * k, { url: b.u });
           }
           x += w + _iitem;
         });
@@ -2642,13 +2645,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     function span(cls, val) { return val ? '<span class="' + cls + '">' + e(val) + "</span>" : ""; }
     function div(cls, val) { return val ? '<div class="' + cls + '">' + e(val) + "</div>" : ""; }
     var c = rb.contact || {}, cbits = [];
-    // Contact bits are plain <span>s, NOT <a href>: a résumé parser (Workday) pulls link-annotation
-    // URIs (mailto:/tel:/the maps URL) out separately and dumps them mid-résumé. Spans keep the text clean.
-    function pcb(ico, val) { return val ? '<span class="rbz__cbit">' + rbIco(ico) + '<span class="rbz__cbtx">' + e(val) + "</span></span>" : ""; }
-    if (c.email) cbits.push(pcb("email", c.email));
-    if (c.phone) cbits.push(pcb("phone", c.phone));
-    if (c.location) cbits.push(pcb("loc", c.location));
-    (c.links || []).forEach(function (l) { var lab = l.label || l.url; if (lab) cbits.push(pcb(/linkedin/i.test((l.label || "") + " " + (l.url || "")) ? "linkedin" : "site", lab)); });
+    // All contact bits are clickable: a PDF stores mailto:/tel:/maps + profile links equally, and the
+    // ATS mis-parse was the broken layout (merged title/company, unlabelled summary), not the links.
+    function pcb(ico, val, href) { if (!val) return ""; var inner = rbIco(ico) + '<span class="rbz__cbtx">' + e(val) + "</span>"; return href ? '<a class="rbz__cbit" href="' + e(href) + '">' + inner + "</a>" : '<span class="rbz__cbit">' + inner + "</span>"; }
+    if (c.email) cbits.push(pcb("email", c.email, "mailto:" + c.email));
+    if (c.phone) cbits.push(pcb("phone", c.phone, "tel:" + String(c.phone).replace(/[^0-9+]/g, "")));
+    if (c.location) cbits.push(pcb("loc", c.location, "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(c.location)));
+    (c.links || []).forEach(function (l) { var lab = l.label || l.url; if (lab) cbits.push(pcb(/linkedin/i.test((l.label || "") + " " + (l.url || "")) ? "linkedin" : "site", lab, rbLinkHref(l.label || l.url))); });
     var h = '<div class="rbz__hd">' + div("rbz__name", rb.name) + div("rbz__title", rb.title) + (cbits.length ? '<div class="rbz__contact">' + cbits.join("") + "</div>" : "") + "</div>";
     // A labelled Summary heading: an unlabelled lead paragraph gets swallowed into the first job's description by ATS parsers.
     var sumBlock = rb.summary ? '<div class="rbz__sec rbz__sec--sum"><div class="rbz__sechd"><span class="rbz__sectitle">Summary</span></div>' + div("rbz__sum", rb.summary) + "</div>" : "";
@@ -2687,7 +2690,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   var RB_PRINT_CSS = "*{box-sizing:border-box}html{font-size:16px;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0}"
     + ".rbz__doc{--rbz-accent:#9a6a24;--rbz-scale:1;color:#1c1a17;font-family:var(--rbz-body-ff,Helvetica,Arial,sans-serif);font-size:calc(14px*var(--rbz-scale,1));line-height:1.5}"
     + ".rbz__hd{border-bottom:1.5px solid #1c1a17;padding-bottom:.7rem}"
-    + ".rbz__doc[data-layout=fullbleed] .rbz__hd{margin:-13mm -14mm 1.5rem;padding:12mm 14mm 1.5rem;background:var(--rbz-accent,#9a6a24);border-bottom:0}"
+    + ".rbz__doc[data-layout=fullbleed] .rbz__hd{margin:calc(-1*var(--rbz-mt,13mm)) calc(-1*var(--rbz-mx,14mm)) 1.5rem;padding:var(--rbz-mt,13mm) var(--rbz-mx,14mm) 1.5rem;background:var(--rbz-accent,#9a6a24);border-bottom:0}"
     + ".rbz__doc[data-layout=fullbleed] .rbz__name{color:#fff}.rbz__doc[data-layout=fullbleed] .rbz__title{color:rgba(255,255,255,.82)}.rbz__doc[data-layout=fullbleed] .rbz__contact{color:rgba(255,255,255,.9)}.rbz__doc[data-layout=fullbleed] .rbz__cbit:not(:last-child):after{color:rgba(255,255,255,.5)}"
     + ".rbz__cols{display:grid;grid-template-columns:1fr 1.7fr;gap:1.6rem;align-items:start;margin-top:1.1rem}"
     + ".rbz__doc[data-layout=sidebar] .rbz__col--main{border-left:1px solid #e1d8cd;padding-left:1.5rem}"
@@ -2726,8 +2729,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var SZ = atsRbSize(), tpl = atsRbTpl();
     var bodyCss = (RB_FONTS[atsRbFont] || RB_FONTS.sans).css;
     var scale = opts.scale != null ? opts.scale : (atsRbDens().scale || 1); // Density drives print density: Airy = flow (roomier, more pages), Compact = squeeze (tighter, fewer)
-    var pageCss = "@page{size:" + SZ.w + "mm " + SZ.h + "mm;margin:13mm 14mm 14mm}";
-    var docStyle = "--rbz-accent:" + atsRbAccentHex() + ";--rbz-body-ff:" + bodyCss + ";--rbz-sum-ff:" + bodyCss + ";--rbz-sum-style:normal;--rbz-scale:" + scale + ";";
+    var mg = atsRbMarginCfg();
+    var pageCss = "@page{size:" + SZ.w + "mm " + SZ.h + "mm;margin:" + mg.pageMm + "}";
+    var docStyle = "--rbz-accent:" + atsRbAccentHex() + ";--rbz-body-ff:" + bodyCss + ";--rbz-sum-ff:" + bodyCss + ";--rbz-sum-style:normal;--rbz-scale:" + scale + ";--rbz-mt:" + mg.pt + ";--rbz-mx:" + mg.px + ";";
     return "<!doctype html><html><head><meta charset=\"utf-8\"><style>" + pageCss + (opts.fontFaces || "") + RB_PRINT_CSS + "</style></head><body><div class=\"rbz__doc\" data-layout=\"" + atsRbLayout + "\" data-head=\"" + tpl.head + "\" style=\"" + docStyle + "\">" + rbCleanHtml(rb) + "</div></body></html>";
   }
   // Résumé text uploaded from a PDF often carries Unicode ligature glyphs (ﬁ ﬂ ﬀ …) that render fine but
@@ -2900,7 +2904,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var lays = Object.keys(RB_LAYOUTS).map(function (id) { return '<button class="rbz__tplopt' + (id === atsRbLayout ? " is-on" : "") + '" type="button" data-lay="' + id + '">' + RB_LAYOUTS[id].name + "</button>"; }).join("");
       var warn = atsRbLayout === "sidebar" ? '<div class="rbz__laywarn">Two-column is a design / human-first layout. Most ATS parse a single column more reliably, so re-check the score after switching.</div>' : "";
       var fonts = Object.keys(RB_FONTS).map(function (id) { var _f = RB_FONTS[id]; return '<button class="rbz__fontbtn' + (id === atsRbFont ? " is-on" : "") + '" type="button" data-font="' + id + '" style="font-family:' + _f.css + '">' + _f.name + "</button>"; }).join("");
-      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Layout</div><div class="rbz__tplrow">' + lays + '</div>' + warn + '<div class="rbz__tplmenu-h">Accent</div><div class="rbz__swatches">' + swatches + '</div><div class="rbz__tplmenu-h">Font</div><div class="rbz__fonts">' + fonts + '</div><div class="rbz__tplmenu-h">Density</div><div class="cl__len">' + dens + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + '</div><div class="rbz__tplmenu-h">Page breaks</div><div class="cl__len"><button class="cl__lenbtn' + (atsRbKeepWhole ? " is-on" : "") + '" type="button" data-break="whole">Keep entries whole</button><button class="cl__lenbtn' + (!atsRbKeepWhole ? " is-on" : "") + '" type="button" data-break="fill">Fill pages</button></div>';
+      var margins = Object.keys(RB_MARGIN).map(function (id) { return '<button class="cl__lenbtn' + (id === atsRbMargin ? " is-on" : "") + '" type="button" data-margin="' + id + '">' + RB_MARGIN[id].name + "</button>"; }).join("");
+      m.innerHTML = '<div class="rbz__tplmenu-h">Template</div><div class="rbz__tplrow">' + opts + '</div><div class="rbz__tplmenu-h">Layout</div><div class="rbz__tplrow">' + lays + '</div>' + warn + '<div class="rbz__tplmenu-h">Accent</div><div class="rbz__swatches">' + swatches + '</div><div class="rbz__tplmenu-h">Font</div><div class="rbz__fonts">' + fonts + '</div><div class="rbz__tplmenu-h">Density</div><div class="cl__len">' + dens + '</div><div class="rbz__tplmenu-h">Page size</div><div class="cl__len">' + sizes + '</div><div class="rbz__tplmenu-h">Margins</div><div class="cl__len">' + margins + '</div><div class="rbz__tplmenu-h">Page breaks</div><div class="cl__len"><button class="cl__lenbtn' + (atsRbKeepWhole ? " is-on" : "") + '" type="button" data-break="whole">Keep entries whole</button><button class="cl__lenbtn' + (!atsRbKeepWhole ? " is-on" : "") + '" type="button" data-break="fill">Fill pages</button></div>';
     }
     var onResize = schedulePaginate; window.addEventListener("resize", onResize);
     atsRbApplyTpl(docEl); renderDesign(); requestAnimationFrame(paginate); setTimeout(paginate, 350);
@@ -2944,7 +2949,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       sideEl.innerHTML = html;
     }
     paintSide();
-    function rbDesignSnap() { return { tpl: atsRbTplId, size: atsRbSizeId, accent: atsRbAccent, font: atsRbFont, density: atsRbDensity, layout: atsRbLayout, canvas: atsRbCanvas, keepWhole: atsRbKeepWhole }; }
+    function rbDesignSnap() { return { tpl: atsRbTplId, size: atsRbSizeId, accent: atsRbAccent, font: atsRbFont, density: atsRbDensity, layout: atsRbLayout, canvas: atsRbCanvas, keepWhole: atsRbKeepWhole, margin: atsRbMargin }; }
     function rbSaveWorkspace(readFirst) {
       if (readFirst) { try { working = rbReadEditor(docEl, working); } catch (e) {} }
       var r = (atsLast && atsLast.res) || {};
@@ -3188,6 +3193,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var _ft = e.target.closest("[data-font]"); if (_ft) { atsRbFont = _ft.dataset.font; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); buildFromEdits(); return; }
       var _ly = e.target.closest("[data-lay]"); if (_ly) { atsRbLayout = _ly.dataset.lay; working = rbReadEditor(docEl, working); atsRbApplyTpl(docEl); reRender(); renderDesign(); paintSide(); buildFromEdits(); return; }
       var _bk = e.target.closest("[data-break]"); if (_bk) { atsRbKeepWhole = _bk.dataset.break === "whole"; renderDesign(); buildFromEdits(); return; }
+      var _mg = e.target.closest("[data-margin]"); if (_mg) { atsRbMargin = _mg.dataset.margin; atsRbApplyTpl(docEl); renderDesign(); schedulePaginate(); buildFromEdits(); return; }
       if (e.target.closest("[data-rbz-preview]")) { togglePreview(!previewing); return; }
       if (e.target.closest("[data-rbz-regen]")) { close(); atsRebuildOpen(atsRbBusyCtx); return; }
       var dl = e.target.closest("[data-rbz-dl]");
