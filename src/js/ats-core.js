@@ -341,7 +341,7 @@ export function atsModelChecks(model, opts) {
 
 /** Compact, deterministic "measured signals" block to inject into the LLM prompt so its
  *  keyword judgment + fixes stay consistent with what we actually measured. */
-export function atsFactsBlock(kw, checks) {
+export function atsFactsBlock(kw, checks, sem) {
   const L = [];
   if (kw && kw.rate != null) {
     L.push("KEYWORD MATCH vs the JD requirements (deterministic): " + kw.rate + "% overall" + (kw.hardRate != null ? ", " + kw.hardRate + "% of hard skills" : "") + ".");
@@ -350,12 +350,35 @@ export function atsFactsBlock(kw, checks) {
     if (kw.matched && kw.matched.length)
       L.push("ALREADY COVERED (do NOT list these as missing): " + kw.matched.slice(0, 16).map(function (m) { return m.term; }).join(", ") + ".");
   }
+  if (sem != null) L.push("SEMANTIC / CONTEXT FIT (résumé vs JD, lexical cosine): " + sem + "% — higher = the résumé echoes the JD's domain language; lift it by mirroring the JD's real responsibilities + terms truthfully.");
   if (checks && checks.length) {
     const flags = checks.filter(function (c) { return c.status !== "pass"; }).map(function (c) { return c.label + (c.note ? " (" + c.note + ")" : ""); });
     if (flags.length) L.push("STRUCTURE FLAGS measured from the résumé (address precisely; don't invent issues that aren't here): " + flags.join("; ") + ".");
   }
   if (!L.length) return "";
   return "\n\nMEASURED SIGNALS \u2014 computed deterministically from the résumé + JD. TRUST THESE over your own estimate; make your keyword call and your fixes CONSISTENT with them, and target the missing keywords:\n" + L.map(function (x) { return "- " + x; }).join("\n");
+}
+
+// ---- P3: semantic-fit (lexical). Ontology-weighted TF-cosine between résumé and JD ----
+// A reproducible, no-infra proxy for the embedding-similarity that enterprise rankers use:
+// skills are canonicalized + weighted (so react.js≡react and hard skills dominate), generic
+// terms count too. Neural embeddings would be a drop-in upgrade behind a proxy /embed route.
+export function atsSemanticFit(resumeText, jd) {
+  if (!String(jd || "").trim() || !String(resumeText || "").trim()) return null;
+  function vec(text) {
+    const idx = atsResumeIndex(text);
+    const v = new Map();
+    idx.canon.forEach(function (cnt, canon) { v.set("s:" + canon, (1 + Math.log(cnt)) * (atsWeight(canon) || 2)); });
+    idx.stems.forEach(function (cnt, stem) { if (stem.length >= 3) v.set("t:" + stem, 1 + Math.log(cnt)); });
+    return v;
+  }
+  const a = vec(resumeText), b = vec(jd);
+  if (!a.size || !b.size) return null;
+  let dot = 0, na = 0, nb = 0;
+  a.forEach(function (wa, k) { na += wa * wa; if (b.has(k)) dot += wa * b.get(k); });
+  b.forEach(function (wb) { nb += wb * wb; });
+  const cos = (na && nb) ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
+  return Math.round(cos * 100);
 }
 
 // ---- P2: positional parse-fidelity from pdf.js coordinates ----

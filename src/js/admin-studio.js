@@ -18,7 +18,7 @@ import {
   webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig, authStatus, authConfig, deviceTrust, deviceTrusted, stepUp, keyringGet, keyringPut
 } from "./admin-core.js";
 import { WORLD_LAND } from "./worldland.js";
-import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout } from "./ats-core.js";
+import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit } from "./ats-core.js";
 
 (function () {
   "use strict";
@@ -2011,12 +2011,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout } from "
         }
       }
       var _kw = jd ? atsKeywordMatch(text, jd) : null;
+      var _sem = jd ? atsSemanticFit(text, jd) : null;
       var _pages = await atsPdfPages(f);
       var _layout = _pages ? atsParseLayout(_pages) : null;
       var _lflags = _layout ? _layout.flags.map(function (x) { return { label: x.label, note: x.note, status: "fail" }; }) : [];
-      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel, jd, company, atsFactsBlock(_kw, _lflags)), { json: true, maxTokens: 6000, temperature: 0 }));
+      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel, jd, company, atsFactsBlock(_kw, _lflags, _sem)), { json: true, maxTokens: 6000, temperature: 0 }));
       if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
-      atsLast = { file: f, res: res, level: atsLevel, company: company, text: text, jd: jd, kw: _kw, layout: _layout };
+      atsLast = { file: f, res: res, level: atsLevel, company: company, text: text, jd: jd, kw: _kw, sem: _sem, layout: _layout };
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
       var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
       var _snap = { state: { mode: atsState.mode, jd: atsState.jd, url: atsState.url, company: atsState.company }, level: atsLevel, res: res, company: company, text: text };
@@ -2874,8 +2875,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout } from "
       if (fixes.length || miss.length) html += '<div class="rbz__railsep"></div>';
       if (fixes.length) { var _napp = 0; var _cards = fixes.map(function (f, i) { var pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med"; var a = atsAnchor(f), cta = ""; if (a.type === "quote" && a.quote && a.replacement) { var re = rbAnchorRe(a.quote), here = re ? rbWalkModel(working, re, null) : false; if (here) { f._seen = 1; _napp++; cta = '<button class="rbz__applybtn" type="button" data-rbz-apply="' + i + '" title="Apply this rewrite in the editor">Apply \u2192</button>'; } else if (f._seen) cta = '<span class="rbz__applied">\u2713 Applied</span>'; } return '<div class="rbz__fix rbz__fix--' + pr + '"><span class="rbz__pri">' + pr + '</span><div class="rbz__fixbd"><b>' + escHtml(f.point || "") + "</b>" + (f.how ? "<span>" + escHtml(f.how) + "</span>" : "") + cta + "</div></div>"; }).join(""); html += '<div class="rbz__fixhd">Remaining suggestions <span>' + fixes.length + "</span>" + (_napp >= 2 ? '<button class="rbz__applyall" type="button" data-rbz-apply-all title="Apply every recommended rewrite in one step">Apply all ' + _napp + "</button>" : "") + "</div>" + _cards; }
       var dkw = (atsLast && atsLast.kw) || (atsLast && atsLast.jd && atsLast.text ? atsKeywordMatch(atsLast.text, atsLast.jd) : null);
+      var dsem = (atsLast && atsLast.sem != null) ? atsLast.sem : (atsLast && atsLast.jd && atsLast.text ? atsSemanticFit(atsLast.text, atsLast.jd) : null);
       if (dkw && dkw.rate != null) {
-        html += '<div class="rbz__fixhd">JD keyword match <span>' + dkw.rate + '%</span></div>';
+        html += '<div class="rbz__fixhd">Keyword match <span>' + dkw.rate + '%</span>' + (dsem != null ? ' \u00b7 context <span>' + dsem + '%</span>' : '') + '</div>';
         html += '<div class="rbz__kwbar" title="' + dkw.matched.length + ' of ' + (dkw.matched.length + dkw.missing.length) + ' requirements matched (deterministic)"><i style="width:' + Math.max(3, dkw.rate) + '%"></i></div>';
         if (dkw.missing.length) html += '<div class="rbz__kwsub">Missing \u2014 add where truthful:</div><div class="rbz__kw">' + dkw.missing.slice(0, 14).map(function (m) { return '<span class="rbz__chip">' + escHtml(m.term) + "</span>"; }).join("") + "</div>";
       } else if (miss.length) {
@@ -3127,9 +3129,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout } from "
         var text = rbToPlainText(working, atsRbLayout), was2 = btnBusy(rc, "Checking\u2026");
         try {
           var level = (atsLast && atsLast.level) || atsLevel, company = (atsLast && atsLast.company) || atsState.company || "", jd = (atsLast && atsLast.jd) || "";
-          var _kw = jd ? atsKeywordMatch(text, jd) : null, _chk = atsModelChecks(working, { level: level, pages: atsRbPages });
-          var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(_kw, _chk.checks)), { json: true, maxTokens: 6000, temperature: 0 }));
-          if (res) { atsLast.res = res; atsLast.text = text; atsLast.kw = _kw; dirty = false; paintSide(); rbSaveWorkspace(false); status("Re-checked \u2014 score updated.", true); }
+          var _kw = jd ? atsKeywordMatch(text, jd) : null, _sem = jd ? atsSemanticFit(text, jd) : null, _chk = atsModelChecks(working, { level: level, pages: atsRbPages });
+          var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(_kw, _chk.checks, _sem)), { json: true, maxTokens: 6000, temperature: 0 }));
+          if (res) { atsLast.res = res; atsLast.text = text; atsLast.kw = _kw; atsLast.sem = _sem; dirty = false; paintSide(); rbSaveWorkspace(false); status("Re-checked \u2014 score updated.", true); }
           else { status("The re-check came back unreadable \u2014 try again."); btnIdle(rc, was2); }
         } catch (er2) { status("Re-check failed: " + ((er2 && er2.message) || er2)); btnIdle(rc, was2); }
         return;
@@ -3246,10 +3248,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout } from "
       if (!text && ctx.file) text = ((await fbExtractFile(ctx.file)) || "").replace(/\s+/g, " ").trim();
       if (!text || text.length < 40) throw new Error("Couldn\u2019t read enough r\u00e9sum\u00e9 text to re-check.");
       var level = ctx.level || atsLevel, company = (atsLast && atsLast.company) || atsState.company || "", jd = (atsLast && atsLast.jd != null ? atsLast.jd : atsState.jd) || "";
-      var _kw = jd ? atsKeywordMatch(text, jd) : null;
-      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(_kw, [])), { json: true, maxTokens: 6000, temperature: 0 }));
+      var _kw = jd ? atsKeywordMatch(text, jd) : null, _sem = jd ? atsSemanticFit(text, jd) : null;
+      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(_kw, [], _sem)), { json: true, maxTokens: 6000, temperature: 0 }));
       if (!res) throw new Error("The check came back unreadable \u2014 try again.");
-      ctx.res = res; if (atsLast) { atsLast.res = res; atsLast.text = text; atsLast.kw = _kw; }
+      ctx.res = res; if (atsLast) { atsLast.res = res; atsLast.text = text; atsLast.kw = _kw; atsLast.sem = _sem; }
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
       var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
       var _snap = { state: { mode: atsState.mode, jd: jd, url: atsState.url, company: company }, level: level, res: res, company: company, text: text };

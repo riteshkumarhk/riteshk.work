@@ -1,4 +1,4 @@
-import { atsKeywordMatch, atsExtractJdTerms, atsResumeIndex, atsTokens, atsStem, atsNormalize, atsModelChecks, atsFactsBlock, atsParseLayout } from "./src/js/ats-core.js";
+import { atsKeywordMatch, atsExtractJdTerms, atsResumeIndex, atsTokens, atsStem, atsNormalize, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit } from "./src/js/ats-core.js";
 
 let pass = 0, fail = 0;
 function check(name, cond, extra) { if (cond) { pass++; console.log("  ok  " + name); } else { fail++; console.log("FAIL  " + name + (extra ? "  -> " + JSON.stringify(extra) : "")); } }
@@ -129,6 +129,17 @@ const RESUME_WEAK = `Ritesh Kumar — Graphic Designer
   check("facts block mentions keyword match %", /KEYWORD MATCH/.test(fb) && /%/.test(fb));
   check("facts block lists missing keywords", /MISSING JD KEYWORDS/.test(fb));
   check("facts block empty when no signals", atsFactsBlock({ rate: null }, []) === "");
+  check("facts block includes semantic fit when passed", /SEMANTIC \/ CONTEXT FIT/.test(atsFactsBlock(kw, [], 42)));
+})();
+
+// 10) Semantic fit (lexical cosine) — strong > weak, reproducible, guarded
+(() => {
+  const strong = atsSemanticFit(RESUME_STRONG, JD);
+  const weak = atsSemanticFit(RESUME_WEAK, JD);
+  check("semantic fit strong in range", strong > 0 && strong <= 100, { strong });
+  check("semantic fit strong > weak", strong > weak, { strong, weak });
+  check("semantic fit reproducible", atsSemanticFit(RESUME_STRONG, JD) === strong);
+  check("semantic fit null on empty JD", atsSemanticFit(RESUME_STRONG, "") === null);
 })();
 
 // 10) Positional layout parse (P2)
