@@ -1,4 +1,4 @@
-import { atsKeywordMatch, atsExtractJdTerms, atsResumeIndex, atsTokens, atsStem, atsNormalize, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit } from "./src/js/ats-core.js";
+import { atsKeywordMatch, atsExtractJdTerms, atsResumeIndex, atsTokens, atsStem, atsNormalize, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand } from "./src/js/ats-core.js";
 
 let pass = 0, fail = 0;
 function check(name, cond, extra) { if (cond) { pass++; console.log("  ok  " + name); } else { fail++; console.log("FAIL  " + name + (extra ? "  -> " + JSON.stringify(extra) : "")); } }
@@ -180,6 +180,27 @@ const RESUME_WEAK = `Ritesh Kumar — Graphic Designer
   check("single-column detected", s.columns === 1, { cols: s.columns });
   check("single-column: no header/footer contact risk (contact in body)", s.headerFooterRisk === false);
   check("single-column: no layout flags", s.flags.length === 0);
+})();
+
+// 12) Hybrid score — blends measured sub-scores + content; MUST move when keyword rises
+(() => {
+  const before = atsBlendScore({ keyword: 55, semantic: 40, structure: 80, parse: 100, content: 70 });
+  const after = atsBlendScore({ keyword: 85, semantic: 55, structure: 88, parse: 100, content: 72 });
+  check("blend in range", before.score > 0 && before.score <= 100, { s: before.score });
+  check("blend RISES when keyword+structure improve", after.score > before.score + 3, { before: before.score, after: after.score });
+  check("blend breakdown lists components", before.breakdown.length === 5);
+  check("band Strong at 82", atsBand(82) === "Strong");
+  check("band Good at 70", atsBand(70) === "Good");
+  check("band Needs work at 50", atsBand(50) === "Needs work");
+  // renormalize when no JD (keyword/semantic absent)
+  const noJd = atsBlendScore({ structure: 90, content: 80 });
+  check("blend renormalizes with missing components", noJd.score >= 80 && noJd.score <= 90, { s: noJd.score });
+  // parse penalty from layout flags
+  check("parse score penalizes multi-column", atsParseScore({ flags: [{ label: "Multi-column layout" }] }) === 75);
+  check("parse score 100 when no layout flags", atsParseScore({ flags: [] }) === 100);
+  // structure from LLM checks
+  check("struct from checks: all pass = 100", atsStructFromChecks({ checks: [{ status: "pass" }, { status: "pass" }] }) === 100);
+  check("struct from checks: half warn < 100", atsStructFromChecks({ checks: [{ status: "warn" }, { status: "fail" }] }) < 60);
 })();
 
 console.log("\n" + pass + " passed, " + fail + " failed");

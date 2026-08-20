@@ -456,3 +456,45 @@ export function atsParseLayout(pages) {
   if (hf) flags.push({ label: "Contact in header/footer", note: "many parsers skip header/footer regions \u2014 move name, email, phone into the body" });
   return { columns: col.columns, channelX: col.channelX, headerFooterRisk: hf, linearized: _linearize(pages), flags: flags, itemCount: all.length };
 }
+
+// ---- Hybrid score: blend the MEASURED sub-scores with the LLM's content judgment ----
+// The headline number must MOVE when the résumé genuinely improves — applying keyword
+// suggestions raises `keyword`, a cleaner structure raises `structure`, so the ring climbs.
+export function atsBand(score) {
+  return score >= 80 ? "Strong" : score >= 65 ? "Good" : score >= 45 ? "Needs work" : "At risk";
+}
+export function atsParseScore(layout) {
+  if (!layout) return null;
+  var p = 100;
+  (layout.flags || []).forEach(function (f) {
+    if (/multi-column/i.test(f.label)) p -= 25;
+    else if (/header|footer/i.test(f.label)) p -= 20;
+    else p -= 10;
+  });
+  return Math.max(0, p);
+}
+export function atsStructFromChecks(res) {
+  var checks = (res && res.checks) || [];
+  if (!checks.length) return null;
+  var s = 0, t = 0;
+  checks.forEach(function (c) { t += 2; s += c.status === "pass" ? 2 : c.status === "warn" ? 1 : 0; });
+  return t ? Math.round(s / t * 100) : null;
+}
+export function atsBlendScore(parts) {
+  parts = parts || {};
+  const W = { keyword: 0.30, structure: 0.24, content: 0.28, semantic: 0.10, parse: 0.08 };
+  let num = 0, den = 0; const breakdown = [];
+  function add(key, label, val) {
+    if (val == null || isNaN(+val)) return;
+    const w = W[key], v = Math.max(0, Math.min(100, +val));
+    num += w * v; den += w;
+    breakdown.push({ key: key, label: label, value: Math.round(v), weight: w });
+  }
+  add("keyword", "Keyword match", parts.keyword);
+  add("semantic", "Context fit", parts.semantic);
+  add("structure", "Structure", parts.structure);
+  add("parse", "Parse safety", parts.parse);
+  add("content", "Content & impact", parts.content);
+  const score = den ? Math.round(num / den) : (parts.content != null ? Math.round(parts.content) : null);
+  return { score: score, band: score != null ? atsBand(score) : null, breakdown: breakdown };
+}

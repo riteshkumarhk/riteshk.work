@@ -18,7 +18,7 @@ import {
   webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig, authStatus, authConfig, deviceTrust, deviceTrusted, stepUp, keyringGet, keyringPut
 } from "./admin-core.js";
 import { WORLD_LAND } from "./worldland.js";
-import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit } from "./ats-core.js";
+import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand } from "./ats-core.js";
 
 (function () {
   "use strict";
@@ -1925,7 +1925,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       "You are a world-class resume ATS-optimisation expert and senior technical recruiter for product-design roles. You have reverse-engineered how real Applicant Tracking Systems ingest, parse and rank resumes \u2014 Workday, Greenhouse, Lever, Taleo (Oracle), iCIMS, SuccessFactors (SAP), Ashby, Jobvite, BambooHR \u2014 and you hold resumes to the HIGHEST modern bar.",
       "You are given the EXTRACTED TEXT of a candidate's resume (already parsed from their file). Judge (a) how reliably it PARSES across ATS \u2014 from the strictest legacy engine to a cutting-edge semantic ranker \u2014 and (b) how well it is optimised for the target level below.",
       lvl,
-      "MANDATE: the resume must survive ANY checker \u2014 a columns-blind legacy keyword parser (e.g. Taleo) AND a modern semantic ranker AND a 7-second human skim. Assume the STRICTEST parser when in doubt. Be demanding: flag every real risk even if borderline, and make each suggestion BITE \u2014 concrete, specific and immediately actionable with a paste-ready rewrite. Do NOT be generous: reserve 90+ ONLY for a resume that would pass a strict legacy parse, rank well semantically, AND match the target/JD; most real resumes sit 55\u201380.",
+      "MANDATE: the resume must survive ANY checker \u2014 a columns-blind legacy keyword parser (e.g. Taleo) AND a modern semantic ranker AND a 7-second human skim. Assume the STRICTEST parser when in doubt. Be demanding: flag every real risk even if borderline, and make each suggestion BITE \u2014 concrete, specific and immediately actionable with a paste-ready rewrite. Be a FAIR, CALIBRATED judge and REWARD genuine improvement: a weak resume scores 40\u201355, a solid one 60\u201375, and a genuinely strong \u2014 cleanly parseable, well-quantified, closely JD-matched \u2014 resume earns 85\u201395 (reserve 96+ for exceptional, perfectly-targeted resumes). If the resume gains missing keywords, quantified outcomes or a cleaner structure, its score MUST rise \u2014 do not compress every resume into one narrow band.",
       "PARSE-KILLERS to detect from the text (these silently DROP content in real ATS): multi-column / sidebar layouts (parsers read straight across and jumble the order); tables or cells used for content; text inside images, charts, logos or icons (invisible \u2014 contact details shown as icons are LOST); text boxes or shapes (often skipped); contact info in a HEADER or FOOTER region (many parsers ignore those); decorative or non-standard fonts, ligatures or symbol glyphs; custom bullet characters; graphic skill-bars or rating dots (convey nothing); inconsistent or ambiguous dates; a photo. Garbled, run-together or near-empty text = an image-only/scanned or heavily-graphical file that real parsers also fail \u2014 call it out as a TOP red flag.",
       "STRUCTURE & CONTENT to verify: a plain-text contact block in the BODY (name, email, phone as real text, city, a text LinkedIn/portfolio URL); STANDARD exact section headings (Experience / Work Experience, Skills, Education \u2014 not clever custom labels a parser won't map); reverse-chronological roles with company, title, location and consistent MM/YYYY dates; strong past-tense action verbs; quantified, outcome-first bullets (metrics, %, $, scale); a dedicated Skills section listing hard skills & tools verbatim; standard body fonts at readable size; sensible length (1\u20132 pages IC, 2\u20133 for leadership); no first-person pronouns; no dense paragraphs where bullets belong.",
       "KEYWORDS: ATS matching is largely literal/stemmed. Verify the resume carries the role's real hard skills, tools and domain terms as EXACT phrases, and BOTH an acronym and its expansion where relevant (e.g. 'UX' and 'User Experience'). Mirror the target job TITLE where truthful. Never keyword-stuff.",
@@ -2017,6 +2017,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var _lflags = _layout ? _layout.flags.map(function (x) { return { label: x.label, note: x.note, status: "fail" }; }) : [];
       var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel, jd, company, atsFactsBlock(_kw, _lflags, _sem)), { json: true, maxTokens: 6000, temperature: 0 }));
       if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
+      var _blend = atsBlendScore({ keyword: _kw ? _kw.rate : null, semantic: _sem, structure: atsStructFromChecks(res), parse: atsParseScore(_layout), content: +res.score || 0 });
+      if (_blend.score != null) { res.score = _blend.score; res.band = _blend.band; res._breakdown = _blend.breakdown; }
       atsLast = { file: f, res: res, level: atsLevel, company: company, text: text, jd: jd, kw: _kw, sem: _sem, layout: _layout };
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
       var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
@@ -2868,6 +2870,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var band = res.band || "\u2014", tone = score >= 80 ? "good" : score >= 65 ? "ok" : score >= 45 ? "warn" : "bad";
       var fixes = Array.isArray(res.fixes) ? res.fixes : [], kw = res.keywords || {}, miss = (kw.missing || []).filter(Boolean);
       var html = '<div class="rbz__scorecard rbz__scorecard--' + tone + (dirty ? " is-stale" : "") + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div><div class="rbz__score-x"><b>' + escHtml(band) + '</b><span>ATS score' + (dirty ? " \u00b7 edited" : "") + "</span></div></div>";
+      var _bd = res._breakdown;
+      if (_bd && _bd.length) html += '<div class="rbz__break">' + _bd.map(function (b) { return '<div class="rbz__breakrow"><span class="rbz__breakl">' + escHtml(b.label) + '</span><span class="rbz__breakbar"><i style="width:' + Math.max(3, b.value) + '%"></i></span><span class="rbz__breakv">' + b.value + "</span></div>"; }).join("") + "</div>";
       var _jd = (atsLast && atsLast.jd) || "";
       if (_jd) html += '<button class="rbz__jdview" type="button" data-rbz-jd title="View the job description this r\u00e9sum\u00e9 is scored against"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span>Comparing against ' + (atsLast.company ? escHtml(atsLast.company) : "a job description") + "</span></button>";
       html += '<button class="btn btn--primary rbz__recheck" type="button" data-rbz-recheck>Re-check ATS' + (dirty ? " \u21bb" : "") + "</button>";
@@ -3131,7 +3135,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           var level = (atsLast && atsLast.level) || atsLevel, company = (atsLast && atsLast.company) || atsState.company || "", jd = (atsLast && atsLast.jd) || "";
           var _kw = jd ? atsKeywordMatch(text, jd) : null, _sem = jd ? atsSemanticFit(text, jd) : null, _chk = atsModelChecks(working, { level: level, pages: atsRbPages });
           var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(_kw, _chk.checks, _sem)), { json: true, maxTokens: 6000, temperature: 0 }));
-          if (res) { atsLast.res = res; atsLast.text = text; atsLast.kw = _kw; atsLast.sem = _sem; dirty = false; paintSide(); rbSaveWorkspace(false); status("Re-checked \u2014 score updated.", true); }
+          if (res) { var _bl = atsBlendScore({ keyword: _kw ? _kw.rate : null, semantic: _sem, structure: _chk.structureScore, parse: 100, content: +res.score || 0 }); if (_bl.score != null) { res.score = _bl.score; res.band = _bl.band; res._breakdown = _bl.breakdown; } atsLast.res = res; atsLast.text = text; atsLast.kw = _kw; atsLast.sem = _sem; dirty = false; paintSide(); rbSaveWorkspace(false); status("Re-checked \u2014 score updated.", true); }
           else { status("The re-check came back unreadable \u2014 try again."); btnIdle(rc, was2); }
         } catch (er2) { status("Re-check failed: " + ((er2 && er2.message) || er2)); btnIdle(rc, was2); }
         return;
@@ -3251,6 +3255,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var _kw = jd ? atsKeywordMatch(text, jd) : null, _sem = jd ? atsSemanticFit(text, jd) : null;
       var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(_kw, [], _sem)), { json: true, maxTokens: 6000, temperature: 0 }));
       if (!res) throw new Error("The check came back unreadable \u2014 try again.");
+      var _blv = atsBlendScore({ keyword: _kw ? _kw.rate : null, semantic: _sem, structure: atsStructFromChecks(res), content: +res.score || 0 });
+      if (_blv.score != null) { res.score = _blv.score; res.band = _blv.band; res._breakdown = _blv.breakdown; }
       ctx.res = res; if (atsLast) { atsLast.res = res; atsLast.text = text; atsLast.kw = _kw; atsLast.sem = _sem; }
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
       var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
