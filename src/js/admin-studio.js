@@ -2303,7 +2303,6 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
             drawIcon(b.ic, x, _it, _isz, rev ? [255, 255, 255] : MUT);
             if (rev) doc.setTextColor(255, 255, 255); else if (b.u) ink(); else mut();
             doc.text(b.t, x + _isz + _ig, hy);
-            if (b.u) doc.link(x, _it - 0.3 * k, w, _isz + 2.2 * k, { url: b.u });
           }
           x += w + _iitem;
         });
@@ -2320,15 +2319,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       y += 3 * k; doc.setDrawColor(INK[0], INK[1], INK[2]); doc.setLineWidth(0.4); doc.line(M, y, PW - M, y); y += 6 * k;
     }
 
-    function drawSummary() { if (rb.summary) { ink(); doc.setFont(BODYF, "normal"); doc.setFontSize(11.5 * k); var sl = doc.splitTextToSize(P(rb.summary), CW2); doc.text(sl, CX, y); y += sl.length * 5.2 * k + 4 * k; } }
+    function drawSummary() { if (rb.summary) { sec("Summary"); ink(); doc.setFont(BODYF, "normal"); doc.setFontSize(11.5 * k); var sl = doc.splitTextToSize(P(rb.summary), CW2); doc.text(sl, CX, y); y += sl.length * 5.2 * k + 4 * k; } }
 
     // Height of one entry (role / education / list item) if drawn now — used to keep an entry whole
     // on a page instead of orphaning its heading from its body across a page break.
     function roleH(it) {
-      var h = (it.dates || it.location) ? 3.8 * k : 0, _org = it.org ? P(it.org) : "", _ow = 0;
-      if (_org) { doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); _ow = doc.getTextWidth(_org); }
+      var h = (it.dates || it.location) ? 3.8 * k : 0;
       doc.setFont("helvetica", "bold"); doc.setFontSize(9.6 * k);
-      h += (doc.splitTextToSize(P(it.role || ""), CW2 - (_ow ? _ow + 5 : 0)).length - 1) * 4.4 * k + 4.6 * k;
+      h += (doc.splitTextToSize(P(it.role || ""), CW2).length - 1) * 4.4 * k + 4.6 * k;
+      if (it.org) h += 4.4 * k;
       doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k);
       (it.bullets || []).slice(0, maxBul).forEach(function (bt) { h += doc.splitTextToSize(P(bt), CW2 - 4.5).length * 4 * k + 1.4 * k; });
       return h + 3 * k;
@@ -2371,13 +2370,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
             if (it.location) { drawIcon("loc", _mx, _mtop, _misz, MUT); _mx += _misz + _mig; faint(); doc.setCharSpace(0.3); var _lc = P(it.location).toUpperCase(); doc.text(_lc, _mx, y); doc.setCharSpace(0); }
             y += 3.8 * k;
           }
-          var _org = it.org ? P(it.org) : "", _ow = 0;
-          if (_org) { doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); _ow = doc.getTextWidth(_org); }
           ink(); doc.setFont("helvetica", "bold"); doc.setFontSize(9.6 * k);
-          var _rl = doc.splitTextToSize(P(it.role || ""), CW2 - (_ow ? _ow + 5 : 0));
+          var _rl = doc.splitTextToSize(P(it.role || ""), CW2);
           doc.text(_rl, CX, y);
-          if (_org) { acc(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); doc.text(_org, CX + CW2 - _ow, y); }
           y += (_rl.length - 1) * 4.4 * k + 4.6 * k;
+          if (it.org) { acc(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); doc.text(P(it.org), CX, y); y += 4.4 * k; }
           it.bullets.slice(0, maxBul).forEach(function (bt) {
             var lines = doc.splitTextToSize(P(bt), CW2 - 4.5);
             if (!_whole) need(lines.length * 4 * k + 1.4 * k);
@@ -2586,7 +2583,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     h += '<div class="rbz__contact">' + ecb("email", "contact.email", c.email, "email") + ecb("phone", "contact.phone", c.phone, "phone") + ecb("loc", "contact.location", c.location, "location");
     (c.links || []).forEach(function (l, i) { h += ecb(/linkedin/i.test((l.label || "") + " " + (l.url || "")) ? "linkedin" : "site", "contact.links." + i + ".label", l.label || l.url, "link"); });
     h += "</div></div>";
-    var sumBlock = (rb.summary != null) ? '<div class="rbz__sec rbz__sec--sum">' + ed("div", "rbz__sum", "summary", rb.summary, "A 2\u20133 line professional summary\u2026") + "</div>" : "";
+    var sumBlock = (rb.summary != null) ? '<div class="rbz__sec rbz__sec--sum"><div class="rbz__sechd" contenteditable="false"><span class="rbz__sectitle">Summary</span></div>' + ed("div", "rbz__sum", "summary", rb.summary, "A 2\u20133 line professional summary\u2026") + "</div>" : "";
     var lastSi = (rb.sections || []).length - 1;
     function secHtml(s, si) {
       var sh = '<div class="rbz__sec" data-si="' + si + '"><div class="rbz__sechd">' + '<button class="rbz__grip" type="button" draggable="true" data-drag-sec="' + si + '" title="Drag to reorder" aria-label="Drag to reorder section">' + GRIP + "</button>" + ed("span", "rbz__sectitle", "sections." + si + ".heading", s.heading, "Section") + '<button class="rbz__mv" type="button" data-mvup="' + si + '"' + (si === 0 ? " disabled" : "") + ' title="Move up" aria-label="Move section up">\u2191</button>' + '<button class="rbz__mv" type="button" data-mvdn="' + si + '"' + (si === lastSi ? " disabled" : "") + ' title="Move down" aria-label="Move section down">\u2193</button>' + '<button class="rbz__del" type="button" data-del-sec="' + si + '" title="Remove section">\u00d7</button></div>';
@@ -2645,13 +2642,16 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     function span(cls, val) { return val ? '<span class="' + cls + '">' + e(val) + "</span>" : ""; }
     function div(cls, val) { return val ? '<div class="' + cls + '">' + e(val) + "</div>" : ""; }
     var c = rb.contact || {}, cbits = [];
-    function pcb(ico, href, val) { return val ? '<a class="rbz__cbit" href="' + e(href) + '">' + rbIco(ico) + '<span class="rbz__cbtx">' + e(val) + "</span></a>" : ""; }
-    if (c.email) cbits.push(pcb("email", "mailto:" + c.email, c.email));
-    if (c.phone) cbits.push(pcb("phone", "tel:" + String(c.phone).replace(/[^0-9+]/g, ""), c.phone));
-    if (c.location) cbits.push(pcb("loc", "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(c.location), c.location));
-    (c.links || []).forEach(function (l) { var lab = l.label || l.url; if (lab) cbits.push(pcb(/linkedin/i.test((l.label || "") + " " + (l.url || "")) ? "linkedin" : "site", rbLinkHref(lab), lab)); });
+    // Contact bits are plain <span>s, NOT <a href>: a résumé parser (Workday) pulls link-annotation
+    // URIs (mailto:/tel:/the maps URL) out separately and dumps them mid-résumé. Spans keep the text clean.
+    function pcb(ico, val) { return val ? '<span class="rbz__cbit">' + rbIco(ico) + '<span class="rbz__cbtx">' + e(val) + "</span></span>" : ""; }
+    if (c.email) cbits.push(pcb("email", c.email));
+    if (c.phone) cbits.push(pcb("phone", c.phone));
+    if (c.location) cbits.push(pcb("loc", c.location));
+    (c.links || []).forEach(function (l) { var lab = l.label || l.url; if (lab) cbits.push(pcb(/linkedin/i.test((l.label || "") + " " + (l.url || "")) ? "linkedin" : "site", lab)); });
     var h = '<div class="rbz__hd">' + div("rbz__name", rb.name) + div("rbz__title", rb.title) + (cbits.length ? '<div class="rbz__contact">' + cbits.join("") + "</div>" : "") + "</div>";
-    var sumBlock = rb.summary ? '<div class="rbz__sec rbz__sec--sum">' + div("rbz__sum", rb.summary) + "</div>" : "";
+    // A labelled Summary heading: an unlabelled lead paragraph gets swallowed into the first job's description by ATS parsers.
+    var sumBlock = rb.summary ? '<div class="rbz__sec rbz__sec--sum"><div class="rbz__sechd"><span class="rbz__sectitle">Summary</span></div>' + div("rbz__sum", rb.summary) + "</div>" : "";
     function secHtml(s) {
       var sh = '<div class="rbz__sec">' + (s.heading ? '<div class="rbz__sechd">' + span("rbz__sectitle", s.heading) + "</div>" : "");
       if (s.kind === "experience") {
@@ -2704,7 +2704,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     + ".rbz__doc[data-head=plain] .rbz__sechd{border-bottom:0;padding-bottom:.05rem}.rbz__doc[data-head=plain] .rbz__sectitle{font-size:calc(.8rem*var(--rbz-scale,1));color:#1c1a17}"
     + ".rbz__xp,.rbz__edu{margin-bottom:.75rem}.rbz__xphd{display:flex;align-items:baseline;gap:.1rem;flex-wrap:wrap}"
     + ".rbz__role{font-weight:700;font-size:calc(.96rem*var(--rbz-scale,1))}"
-    + ".rbz__org{margin-left:auto;color:var(--rbz-accent,#9a6a24);font-size:calc(.92rem*var(--rbz-scale,1));font-weight:600}"
+    + ".rbz__org{flex:0 0 100%;margin-left:0;margin-top:.1rem;color:var(--rbz-accent,#9a6a24);font-size:calc(.92rem*var(--rbz-scale,1));font-weight:600}"
     + ".rbz__xphd>.rbz__dates{margin-left:auto;color:#655c53;font-size:calc(.82rem*var(--rbz-scale,1))}"
     + ".rbz__meta{display:flex;flex-wrap:wrap;gap:.1rem .7rem;margin:.12rem 0 .3rem;font-size:calc(.66rem*var(--rbz-scale,1));letter-spacing:normal;text-transform:uppercase;color:#655c53}"
     + ".rbz__bl{margin:.15rem 0;padding-left:0;list-style:none}"
@@ -2778,7 +2778,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     // whole item. MIRRORS the css/admin.css v98 `.rbz__*` de-flex; keep in sync (PDF RB_PRINT_CSS stays flex).
     if (!document.getElementById("rbz-deflex-css")) {
       var _dfs = document.createElement("style"); _dfs.id = "rbz-deflex-css";
-      _dfs.textContent = ".rbz__doc{display:block}.rbz__doc>*+*{margin-top:1.4rem}.rbz__xphd{display:flow-root;position:relative}.rbz__org{float:right;margin-left:0}.rbz__xphd>.rbz__dates{float:right;margin-left:0}.rbz__bl li{display:block}.rbz__bltext{display:inline}.rbz__skg{display:flow-root;position:relative}.rbz__sklabel{float:left;width:34%}.rbz__skitems{display:block;margin-left:34%}.rbz__li{display:flow-root}.rbz__limeta{float:right;margin-left:0}.rbz__xphd>.rbz__del,.rbz__skg>.rbz__del,.rbz__li>.rbz__del{position:absolute;right:-1.35rem;top:0}";
+      _dfs.textContent = ".rbz__doc{display:block}.rbz__doc>*+*{margin-top:1.4rem}.rbz__xphd{display:flow-root;position:relative}.rbz__org{display:block;float:none;margin-left:0;margin-top:.1rem}.rbz__xphd>.rbz__dates{float:right;margin-left:0}.rbz__bl li{display:block}.rbz__bltext{display:inline}.rbz__skg{display:flow-root;position:relative}.rbz__sklabel{float:left;width:34%}.rbz__skitems{display:block;margin-left:34%}.rbz__li{display:flow-root}.rbz__limeta{float:right;margin-left:0}.rbz__xphd>.rbz__del,.rbz__skg>.rbz__del,.rbz__li>.rbz__del{position:absolute;right:-1.35rem;top:0}";
       document.head.appendChild(_dfs);
     }
     document.body.appendChild(modal);

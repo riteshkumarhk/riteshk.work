@@ -1747,7 +1747,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__xphd { display: flow-root; position: relative; }
 .rbz__role { font-weight: 700; font-size: calc(.96rem * var(--rbz-scale, 1)); }
 .rbz__at { color: #bcb5aa; margin: 0 .15rem; }
-.rbz__org { float: right; margin-left: 0; color: var(--rbz-accent, #9a6a24); font-size: calc(.92rem * var(--rbz-scale, 1)); font-weight: 600; }
+.rbz__org { display: block; float: none; margin-top: .1rem; color: var(--rbz-accent, #9a6a24); font-size: calc(.92rem * var(--rbz-scale, 1)); font-weight: 600; }
 .rbz__xphd > .rbz__dates { float: right; margin-left: 0; color: #655c53; font-size: calc(.82rem * var(--rbz-scale, 1)); }
 .rbz__meta { display: flex; flex-wrap: wrap; gap: .1rem .7rem; margin: .12rem 0 .3rem; font-size: calc(.66rem * var(--rbz-scale, 1)); letter-spacing: normal; text-transform: uppercase; color: #655c53; }
 .rbz__bl { margin: .15rem 0; padding-left: 1.05rem; list-style: none; }
