@@ -2877,7 +2877,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       html += '<button class="btn btn--primary rbz__recheck" type="button" data-rbz-recheck>Re-check ATS' + (dirty ? " \u21bb" : "") + "</button>";
       if (dirty) html += '<div class="rbz__stale">You\u2019ve edited the résumé \u2014 re-check to update the score.</div>';
       if (fixes.length || miss.length) html += '<div class="rbz__railsep"></div>';
-      if (fixes.length) { var _napp = 0; var _pcv = (res._breakdown ? (res._breakdown.filter(function (b) { return b.key === "content"; })[0] || {}).value : null); var _pctx = (_pcv != null && atsLast && atsLast.jd) ? { jd: atsLast.jd, level: (atsLast && atsLast.level) || atsLevel, pages: atsRbPages, content: _pcv } : null; var _pbase = _pctx ? atsScoreModel(rbToPlainText(working, atsRbLayout), working, _pctx) : null; var _cards = fixes.map(function (f, i) { var pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med"; var a = atsAnchor(f), cta = ""; if (a.type === "quote" && a.quote && a.replacement) { var re = rbAnchorRe(a.quote), here = re ? rbWalkModel(working, re, null) : false; if (here) { f._seen = 1; _napp++; var _imp = _pctx ? atsProjectFix(f, _pctx, _pbase) : null; var _impB = (_imp != null && _imp !== 0) ? '<span class="rbz__imp ' + (_imp > 0 ? "is-up" : "is-down") + '" title="Projected score change if you apply this">' + (_imp > 0 ? "+" : "") + _imp + '</span>' : ""; cta = '<button class="rbz__applybtn" type="button" data-rbz-apply="' + i + '" title="Apply this rewrite in the editor">Apply \u2192</button>' + _impB; } else if (f._seen) cta = '<span class="rbz__applied">\u2713 Applied</span>'; } return '<div class="rbz__fix rbz__fix--' + pr + '"><span class="rbz__pri">' + pr + '</span><div class="rbz__fixbd"><b>' + escHtml(f.point || "") + "</b>" + (f.how ? "<span>" + escHtml(f.how) + "</span>" : "") + cta + "</div></div>"; }).join(""); html += '<div class="rbz__fixhd">Remaining suggestions <span>' + fixes.length + "</span>" + (_napp >= 2 ? '<button class="rbz__applyall" type="button" data-rbz-apply-all title="Apply every recommended rewrite in one step">Apply all ' + _napp + "</button>" : "") + "</div>" + _cards; }
+      if (fixes.length) { var _pctx = atsProjCtx(), _pbase = _pctx ? atsScoreModel(rbToPlainText(working, atsRbLayout), working, _pctx) : null; var _ann = fixes.map(function (f, i) { var a = atsAnchor(f), q = (a.type === "quote" && a.quote && a.replacement), present = false, imp = null; if (q) { var re = rbAnchorRe(a.quote); present = re ? rbWalkModel(working, re, null) : false; if (present && _pctx) imp = atsProjectFix(f, _pctx, _pbase); } return { f: f, i: i, q: q, present: present, imp: imp, pr: f.priority === "high" ? 0 : f.priority === "low" ? 2 : 1 }; }); _ann.sort(function (x, y) { if (x.present !== y.present) return x.present ? -1 : 1; if (x.present && y.present) { var ix = x.imp == null ? -1 : x.imp, iy = y.imp == null ? -1 : y.imp; if (iy !== ix) return iy - ix; } return x.pr - y.pr; }); var _napp = 0, _benef = []; var _cards = _ann.map(function (o) { var f = o.f, i = o.i, pr = f.priority === "high" ? "high" : f.priority === "low" ? "low" : "med", cta = ""; if (o.q) { if (o.present) { f._seen = 1; if (o.imp == null || o.imp >= 0) { _napp++; _benef.push(f); } var _impB = (o.imp != null && o.imp !== 0) ? '<span class="rbz__imp ' + (o.imp > 0 ? "is-up" : "is-down") + '" title="Projected score change if you apply this">' + (o.imp > 0 ? "+" : "") + o.imp + '</span>' : ""; cta = '<button class="rbz__applybtn" type="button" data-rbz-apply="' + i + '" title="Apply this rewrite in the editor">Apply \u2192</button>' + _impB; } else if (f._seen) cta = '<span class="rbz__applied">\u2713 Applied</span>'; } return '<div class="rbz__fix rbz__fix--' + pr + '"><span class="rbz__pri">' + pr + '</span><div class="rbz__fixbd"><b>' + escHtml(f.point || "") + "</b>" + (f.how ? "<span>" + escHtml(f.how) + "</span>" : "") + cta + "</div></div>"; }).join(""); var _ptot = (_pctx && _benef.length >= 2) ? atsProjectAll(_benef, _pctx, _pbase) : null; html += '<div class="rbz__fixhd">Remaining suggestions <span>' + fixes.length + "</span>" + (_napp >= 2 ? '<button class="rbz__applyall" type="button" data-rbz-apply-all title="Apply every beneficial rewrite in one step \u2014 skips any that would lower your score">Apply all ' + _napp + (_ptot != null && _ptot > 0 ? ' <span class="rbz__tot">+' + _ptot + "</span>" : "") + "</button>" : "") + "</div>" + _cards; }
       var dkw = (atsLast && atsLast.kw) || (atsLast && atsLast.jd && atsLast.text ? atsKeywordMatch(atsLast.text, atsLast.jd) : null);
       var dsem = (atsLast && atsLast.sem != null) ? atsLast.sem : (atsLast && atsLast.jd && atsLast.text ? atsSemanticFit(atsLast.text, atsLast.jd) : null);
       if (dkw && dkw.rate != null) {
@@ -2949,17 +2949,37 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return (proj != null && base != null) ? (proj - base) : null;
     }
     // Apply every quote+replacement fix at once, as ONE undo step (pre+post snapshot).
+    // Projection context from the last check (LLM content judgment held fixed).
+    function atsProjCtx() {
+      var r = atsLast && atsLast.res, cv = (r && r._breakdown) ? ((r._breakdown.filter(function (b) { return b.key === "content"; })[0] || {}).value) : null;
+      if (cv == null || !(atsLast && atsLast.jd)) return null;
+      return { jd: atsLast.jd, level: (atsLast && atsLast.level) || atsLevel, pages: atsRbPages, content: cv };
+    }
+    // Combined projected delta of applying a set of fixes (accounts for their interaction).
+    function atsProjectAll(fixList, ctx, base) {
+      var copy = rbClone(working), n = 0;
+      fixList.forEach(function (fix) { var a = atsAnchor(fix); if (!(a.type === "quote" && a.quote && a.replacement)) return; var re = rbAnchorRe(a.quote); if (re && rbWalkModel(copy, re, String(a.replacement))) n++; });
+      if (!n) return null;
+      var proj = atsScoreModel(rbToPlainText(copy, atsRbLayout), copy, ctx);
+      return (proj != null && base != null) ? (proj - base) : null;
+    }
     function rbApplyAllFixes() {
       var fx = (atsLast && atsLast.res && atsLast.res.fixes) || [];
       working = rbReadEditor(docEl, working);
+      var ctx = atsProjCtx();
       rbCommit(true);
-      var n = 0;
-      fx.forEach(function (f) { var a = atsAnchor(f); if (!(a.type === "quote" && a.quote && a.replacement)) return; var re = rbAnchorRe(a.quote); if (re && rbWalkModel(working, re, String(a.replacement))) n++; });
-      if (!n) { status("Nothing to apply \u2014 no matching rewrites found."); return; }
+      var n = 0, skipped = 0;
+      fx.forEach(function (f) {
+        var a = atsAnchor(f); if (!(a.type === "quote" && a.quote && a.replacement)) return;
+        var re = rbAnchorRe(a.quote); if (!re || !rbWalkModel(working, re, null)) return;
+        if (ctx) { var cur = atsScoreModel(rbToPlainText(working, atsRbLayout), working, ctx); var imp = atsProjectFix(f, ctx, cur); if (imp != null && imp < 0) { skipped++; return; } }   // skip a rewrite that would HURT
+        if (rbWalkModel(working, re, String(a.replacement))) n++;
+      });
+      if (!n) { status(skipped ? "Skipped " + skipped + " suggestion" + (skipped > 1 ? "s" : "") + " that would lower your score \u2014 nothing beneficial to apply." : "Nothing to apply \u2014 no matching rewrites found."); return; }
       reRender();
       rbCommit(true);
       dirty = true; rbSaveSoon(); rbCountSoon(); paintSide();
-      status("Applied " + n + " suggestion" + (n > 1 ? "s" : "") + " \u2014 re-check to update your score.", true);
+      status("Applied " + n + " suggestion" + (n > 1 ? "s" : "") + (skipped ? " \u00b7 skipped " + skipped + " that would hurt" : "") + " \u2014 re-check to update your score.", true);
     }
     // Read-only viewer for the job description this journey is scored against (edit = start a new check).
     function rbShowJd() {
