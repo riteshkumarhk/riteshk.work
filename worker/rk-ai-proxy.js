@@ -1274,7 +1274,7 @@ export default {
       const haveOpenai = !!env.OPENAI_KEY, haveGemini = !!env.GEMINI_KEY;
       const want = (b && b.provider === "gemini") ? "gemini" : "openai";
       const use = (want === "gemini" && haveGemini) ? "gemini" : haveOpenai ? "openai" : haveGemini ? "gemini" : null;
-      if (!use) return json({ error: "Embeddings are not configured on the server (set OPENAI_KEY or GEMINI_KEY)" }, 500, cors);
+      if (!use) return json({ error: "No embeddings provider is configured on the server (set OPENAI_KEY or GEMINI_KEY \u2014 Claude has no embeddings API)", code: "no_embeddings_provider" }, 501, cors);
 
       let embeddings = [], model = "";
       try {

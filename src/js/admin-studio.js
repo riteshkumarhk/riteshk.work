@@ -2003,6 +2003,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + px.token },
         body: JSON.stringify({ input: arr, provider: prov }),
       });
+      if (r.status === 501) return { unavailable: true, reason: "no embeddings provider is set up \u2014 Claude has none, so add an OpenAI or Gemini key to your proxy" };   // stable config state, not a transient failure
       if (!r.ok) return { failed: true, reason: r.status === 404 ? "the /embed route isn\u2019t deployed on your proxy yet" : r.status === 401 ? "the access token was rejected" : "the server returned error " + r.status };
       var j = await r.json().catch(function () { return null; });
       if (j && Array.isArray(j.embeddings) && j.embeddings.length) return { embeddings: j.embeddings };
@@ -2013,7 +2014,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!String(jd || "").trim() || !String(resumeText || "").trim()) return { off: true };
     var e = await atsEmbed([resumeText, jd]);
     if (e.embeddings && e.embeddings.length >= 2) { var s = atsEmbedScore(e.embeddings[0], e.embeddings[1]); return s == null ? { failed: true, reason: "the embeddings were malformed" } : { ok: true, score: s }; }
-    return e.off ? { off: true } : { failed: true, reason: e.reason || "the neural model was unavailable" };
+    return e.off ? { off: true } : e.unavailable ? { unavailable: true, reason: e.reason } : { failed: true, reason: e.reason || "the neural model was unavailable" };
   }
   async function atsRun(panel, file) {
     if (!panel) return;
