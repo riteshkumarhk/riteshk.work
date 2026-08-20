@@ -1809,6 +1809,10 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__jdview:hover { border-color: var(--accent); color: var(--text); }
 .rbz__jdview svg { flex: 0 0 auto; opacity: .85; }
 .rbz__jdview span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rbz__jdview.is-warn { border-color: rgba(226, 103, 76, .5); color: #e2674c; }
+.rbz__pflags { padding: .9rem 1.1rem 0; }
+.rbz__pflag { font-size: .78rem; line-height: 1.45; color: #e2a15a; margin-bottom: .4rem; }
+.rbz__pflag b { color: #e2674c; }
 .rbz__jdmodal { position: fixed; inset: 0; z-index: 100000; background: rgba(0, 0, 0, .6); display: grid; place-items: center; padding: 5vh 4vw; }
 .rbz__jdcard { display: flex; flex-direction: column; width: 100%; max-width: 680px; max-height: 82vh; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 64px rgba(0, 0, 0, .55); }
 .rbz__jdhd { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem 1.1rem; border-bottom: 1px solid var(--line); }

@@ -18,7 +18,7 @@ import {
   webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig, authStatus, authConfig, deviceTrust, deviceTrusted, stepUp, keyringGet, keyringPut
 } from "./admin-core.js";
 import { WORLD_LAND } from "./worldland.js";
-import { atsKeywordMatch, atsModelChecks, atsFactsBlock } from "./ats-core.js";
+import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout } from "./ats-core.js";
 
 (function () {
   "use strict";
@@ -2011,9 +2011,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock } from "./ats-core.js";
         }
       }
       var _kw = jd ? atsKeywordMatch(text, jd) : null;
-      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel, jd, company, atsFactsBlock(_kw, [])), { json: true, maxTokens: 6000, temperature: 0 }));
+      var _pages = await atsPdfPages(f);
+      var _layout = _pages ? atsParseLayout(_pages) : null;
+      var _lflags = _layout ? _layout.flags.map(function (x) { return { label: x.label, note: x.note, status: "fail" }; }) : [];
+      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel, jd, company, atsFactsBlock(_kw, _lflags)), { json: true, maxTokens: 6000, temperature: 0 }));
       if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
-      atsLast = { file: f, res: res, level: atsLevel, company: company, text: text, jd: jd, kw: _kw };
+      atsLast = { file: f, res: res, level: atsLevel, company: company, text: text, jd: jd, kw: _kw, layout: _layout };
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
       var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
       var _snap = { state: { mode: atsState.mode, jd: atsState.jd, url: atsState.url, company: atsState.company }, level: atsLevel, res: res, company: company, text: text };
@@ -2878,6 +2881,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock } from "./ats-core.js";
       } else if (miss.length) {
         html += '<div class="rbz__fixhd">Consider adding</div><div class="rbz__kw">' + miss.map(function (k) { return '<span class="rbz__chip">' + escHtml(k) + "</span>"; }).join("") + "</div>";
       }
+      var lay = atsLast && atsLast.layout;
+      if (lay && lay.itemCount) {
+        var pf = lay.flags || [];
+        html += '<div class="rbz__fixhd">Parse fidelity' + (pf.length ? ' <span>' + pf.length + '</span>' : '') + '</div>';
+        html += '<button class="rbz__jdview' + (pf.length ? ' is-warn' : '') + '" type="button" data-rbz-parse title="See the columns-blind text a strict ATS extracts from your original file"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg><span>' + (pf.length ? escHtml(pf.map(function (f) { return f.label; }).join(" \u00b7 ")) : "What the ATS actually reads") + "</span></button>";
+      }
       if (atsRbLayout === "sidebar") html += '<div class="rbz__stale">Two-column is a design / human-first layout; some ATS read the columns out of order. If the score drops on re-check, switch back to single column.</div>';
       html += '<div class="rbz__tip">Click any text to edit. Re-check to rescore, Preview to see the PDF, Download when you\u2019re happy.</div>';
       sideEl.innerHTML = html;
@@ -2944,6 +2953,18 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock } from "./ats-core.js";
       function onKey(e) { if (e.key === "Escape") close(); }
       function close() { document.removeEventListener("keydown", onKey); ov.remove(); }
       ov.addEventListener("click", function (e) { if (e.target === ov || e.target.closest("[data-rbz-jd-close]")) close(); });
+      document.addEventListener("keydown", onKey);
+      document.body.appendChild(ov);
+    }
+    // Read-only "what a strict ATS extracts" — the columns-blind linearization of the uploaded file.
+    function rbShowParse() {
+      var lay = atsLast && atsLast.layout; if (!lay) return;
+      var flags = (lay.flags || []).map(function (f) { return '<div class="rbz__pflag">\u26A0 <b>' + escHtml(f.label) + "</b> \u2014 " + escHtml(f.note) + "</div>"; }).join("");
+      var ov = document.createElement("div"); ov.className = "rbz__jdmodal";
+      ov.innerHTML = '<div class="rbz__jdcard"><div class="rbz__jdhd"><b>What the ATS reads</b><button class="rbz__jdx" type="button" data-rbz-parse-close title="Close (Esc)">\u00d7</button></div>' + (flags ? '<div class="rbz__pflags">' + flags + "</div>" : "") + '<div class="rbz__jdbody">' + escHtml(lay.linearized || "(no text extracted)") + '</div><div class="rbz__jdnote">This is the columns-blind reading order a strict / legacy parser produces from your uploaded file. If it reads jumbled, that content is at risk \u2014 a single-column layout fixes it (the r\u00e9sum\u00e9 this tool builds is single-column).</div></div>';
+      function onKey(e) { if (e.key === "Escape") close(); }
+      function close() { document.removeEventListener("keydown", onKey); ov.remove(); }
+      ov.addEventListener("click", function (e) { if (e.target === ov || e.target.closest("[data-rbz-parse-close]")) close(); });
       document.addEventListener("keydown", onKey);
       document.body.appendChild(ov);
     }
@@ -3073,6 +3094,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock } from "./ats-core.js";
       var _ap = e.target.closest("[data-rbz-apply]"); if (_ap) { var _fx = (atsLast && atsLast.res && atsLast.res.fixes) || []; rbApplyFix(_fx[+_ap.dataset.rbzApply]); return; }
       if (e.target.closest("[data-rbz-apply-all]")) { rbApplyAllFixes(); return; }
       if (e.target.closest("[data-rbz-jd]")) { rbShowJd(); return; }
+      if (e.target.closest("[data-rbz-parse]")) { rbShowParse(); return; }
       if (e.target.closest("[data-rbz-design-toggle]")) { modal.querySelector(".rbz__body").classList.toggle("is-noleft"); schedulePaginate(); return; }
       var _cv = e.target.closest("[data-canvas-set]"); if (_cv) { setCanvas(_cv.dataset.canvasSet); return; }
       var _zm = e.target.closest("[data-zoom]"); if (_zm) { var zd = _zm.dataset.zoom; setZoom(zd === "in" ? rbZoom + 0.1 : zd === "out" ? rbZoom - 0.1 : 1); return; }
@@ -10902,6 +10924,24 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock } from "./ats-core.js";
     }
     if (/\.doc$/i.test(f.name)) throw new Error("Old .doc isn\u2019t supported \u2014 save as .docx or PDF, or paste the text.");
     return await f.text();
+  }
+  // Positional PDF extraction: keep each item's x/y (top-down) so the layout parser can
+  // detect columns / header-footer contact — the parse-fidelity signal lost once flattened.
+  async function atsPdfPages(f) {
+    if (!(/\.pdf$/i.test(f.name) || f.type === "application/pdf")) return null;
+    try {
+      var pdfjs = await ensurePdfJs();
+      var pdf = await pdfjs.getDocument({ data: await f.arrayBuffer() }).promise;
+      var pages = [];
+      for (var p = 1; p <= pdf.numPages; p++) {
+        var page = await pdf.getPage(p);
+        var vp = page.getViewport({ scale: 1 });
+        var content = await page.getTextContent();
+        var items = content.items.map(function (it) { var tr = it.transform; return { str: it.str, x: tr[4], y: vp.height - tr[5], w: it.width || 0, h: it.height || Math.abs(tr[3]) || 10 }; });
+        pages.push({ width: vp.width, height: vp.height, items: items });
+      }
+      return pages;
+    } catch (e) { return null; }
   }
   function fbSystem() {
     return [
