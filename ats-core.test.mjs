@@ -203,5 +203,22 @@ const RESUME_WEAK = `Ritesh Kumar — Graphic Designer
   check("struct from checks: half warn < 100", atsStructFromChecks({ checks: [{ status: "warn" }, { status: "fail" }] }) < 60);
 })();
 
+// 13) Bad/verbose rewrites LOWER structure (score can FALL — realism)
+(() => {
+  const concise = { title: "Designer", contact: { email: "a@b.com", phone: "+1 555 123 4567", location: "X" }, sections: [
+    { heading: "Experience", kind: "experience", items: [{ role: "D", org: "M", dates: "03/2020 - Present", bullets: ["Lifted conversion 12% across 3M users", "Shipped design system to 6 teams"] }] },
+    { heading: "Skills", kind: "skills", groups: [{ label: "D", items: ["Figma"] }] },
+    { heading: "Education", kind: "education", items: [{ school: "NIFT", credential: "B.Des", dates: "2010 - 2014" }] }
+  ] };
+  const bloated = JSON.parse(JSON.stringify(concise));
+  bloated.sections[0].items[0].bullets = [
+    "Spearheaded and orchestrated a synergistic cross-functional user-centered design systems initiative leveraging agile methodologies and stakeholder alignment to holistically drive scalable best-in-class experiences across the entire product ecosystem from end to end at massive scale",
+    "Utilized a plethora of cutting-edge tools and frameworks to ideate conceptualize and operationalize innovative paradigm-shifting solutions that truly moved the needle"
+  ];
+  const cs = atsModelChecks(concise, { level: "senior" }).structureScore;
+  const bs = atsModelChecks(bloated, { level: "senior" }).structureScore;
+  check("verbose/stuffed bullets LOWER structure than concise", bs < cs, { concise: cs, bloated: bs });
+})();
+
 console.log("\n" + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

@@ -326,6 +326,14 @@ export function atsModelChecks(model, opts) {
   const quantRate = bullets ? Math.round(quant / bullets * 100) : 0;
   add("Quantified achievements", bullets === 0 ? false : (quantRate >= 40 ? true : "warn"), bullets ? quantRate + "% of bullets carry a metric" : "no achievement bullets");
 
+  // Concise & natural — catches verbose / keyword-stuffed rewrites, so a BAD suggestion LOWERS the score.
+  const bwc = [];
+  expItems.forEach(function (it) { (it.bullets || []).forEach(function (b) { if (b && String(b).trim()) bwc.push(String(b).trim().split(/\s+/).length); }); });
+  const avgB = bwc.length ? Math.round(bwc.reduce(function (a, n) { return a + n; }, 0) / bwc.length) : 0;
+  const longB = bwc.filter(function (n) { return n > 45; }).length;
+  add("Concise, natural bullets", bwc.length === 0 ? "warn" : ((avgB > 40 || longB > 1) ? false : ((avgB > 32 || longB) ? "warn" : true)),
+    (avgB > 32 || longB) ? "bullets run long (~" + avgB + " words avg) \u2014 one idea per line; padding / keyword-stuffing hurts, not helps" : "");
+
   const fp = expItems.some(function (it) { return (it.bullets || []).some(function (b) { return /^\s*(i|my|we|our)\b/i.test(b || ""); }); }) || /^\s*(i|my|we|our)\b/i.test(model.summary || "");
   add("No first-person voice", !fp, fp ? "found 'I/my/we' \u2014 lead with implied-subject action verbs" : "");
 
