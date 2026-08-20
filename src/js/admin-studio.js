@@ -1995,11 +1995,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!px || !px.on || !px.url || !px.token) return { off: true };   // neural only when the AI proxy is configured
     var arr = (Array.isArray(texts) ? texts : [texts]).map(function (t) { return String(t == null ? "" : t); }).filter(function (s) { return s.trim(); });
     if (!arr.length) return { off: true };
+    var prov = "openai";
+    try { if (aiGet(aiScope("txt"), "provider") === "gemini") prov = "gemini"; } catch (e) {}   // embeddings follow the text provider (Claude has none → openai)
     try {
       var r = await fetch(px.url + "/embed", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + px.token },
-        body: JSON.stringify({ input: arr }),
+        body: JSON.stringify({ input: arr, provider: prov }),
       });
       if (!r.ok) return { failed: true, reason: r.status === 404 ? "the /embed route isn\u2019t deployed on your proxy yet" : r.status === 401 ? "the access token was rejected" : "the server returned error " + r.status };
       var j = await r.json().catch(function () { return null; });

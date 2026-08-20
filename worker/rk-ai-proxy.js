@@ -1254,36 +1254,51 @@ export default {
     }
 
     // ---------- neural embeddings for the studio's ATS semantic-fit (token-gated) ----------
-    // The studio sends the shared ACCESS_TOKEN (never a provider key) and a batch of texts;
-    // the Worker swaps in OPENAI_KEY, calls the embeddings API, and returns a normalized
-    // { embeddings:[[...]], model, dims }. This is the enterprise-grade upgrade to the
-    // client's lexical cosine proxy — the résumé + JD get real semantic vectors.
+    // The studio sends the shared ACCESS_TOKEN (never a provider key) + a batch of texts and an
+    // optional provider ("openai" | "gemini"); the Worker swaps in the real key and returns a
+    // normalized { embeddings:[[...]], model, dims, provider }. Claude is intentionally absent —
+    // Anthropic ships no embeddings API. If the requested provider's key is missing it falls back
+    // to whichever embeddings key IS configured. The enterprise-grade upgrade to the lexical cosine.
     if (url.pathname === "/embed") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
       const presented = bearer(request.headers.get("Authorization")) || request.headers.get("x-api-key") || "";
       if (!env.ACCESS_TOKEN || !timingSafeEqual(presented, env.ACCESS_TOKEN)) return json({ error: "Unauthorized" }, 401, cors);
-      const key = env.OPENAI_KEY;
-      if (!key) return json({ error: "Embeddings are not configured on the server" }, 500, cors);
       let b; try { b = await request.json(); } catch (e) { return json({ error: "Bad JSON" }, 400, cors); }
       let input = b && b.input;
       if (typeof input === "string") input = [input];
       if (!Array.isArray(input)) return json({ error: "input (string or string[]) required" }, 400, cors);
       input = input.slice(0, 16).map((s) => String(s == null ? "" : s).replace(/\s+/g, " ").trim().slice(0, 8000)).filter(Boolean);
       if (!input.length) return json({ error: "input is empty" }, 400, cors);
-      const model = (b && typeof b.model === "string" && b.model.trim()) || "text-embedding-3-small";
-      let up;
+
+      // pick the embeddings provider: the requested one if its key is set, else whichever key exists.
+      const haveOpenai = !!env.OPENAI_KEY, haveGemini = !!env.GEMINI_KEY;
+      const want = (b && b.provider === "gemini") ? "gemini" : "openai";
+      const use = (want === "gemini" && haveGemini) ? "gemini" : haveOpenai ? "openai" : haveGemini ? "gemini" : null;
+      if (!use) return json({ error: "Embeddings are not configured on the server (set OPENAI_KEY or GEMINI_KEY)" }, 500, cors);
+
+      let embeddings = [], model = "";
       try {
-        up = await fetch("https://api.openai.com/v1/embeddings", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
-          body: JSON.stringify({ model, input }),
-        });
+        if (use === "gemini") {
+          model = (b && typeof b.model === "string" && b.model.trim()) || "text-embedding-004";
+          const greq = { requests: input.map((t) => ({ model: "models/" + model, content: { parts: [{ text: t }] }, taskType: "SEMANTIC_SIMILARITY" })) };
+          const up = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":batchEmbedContents?key=" + env.GEMINI_KEY, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(greq),
+          });
+          if (!up.ok) { const t = await up.text().catch(() => ""); return json({ error: "Embeddings error", detail: String(t).slice(0, 200) }, up.status, cors); }
+          const j = await up.json().catch(() => null);
+          embeddings = (j && Array.isArray(j.embeddings)) ? j.embeddings.map((e) => e && e.values).filter(Array.isArray) : [];
+        } else {
+          model = (b && typeof b.model === "string" && b.model.trim()) || "text-embedding-3-small";
+          const up = await fetch("https://api.openai.com/v1/embeddings", {
+            method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.OPENAI_KEY }, body: JSON.stringify({ model, input }),
+          });
+          if (!up.ok) { const t = await up.text().catch(() => ""); return json({ error: "Embeddings error", detail: String(t).slice(0, 200) }, up.status, cors); }
+          const j = await up.json().catch(() => null);
+          embeddings = (j && Array.isArray(j.data)) ? j.data.map((d) => d && d.embedding).filter(Array.isArray) : [];
+        }
       } catch (e) { return json({ error: "Upstream embeddings request failed" }, 502, cors); }
-      if (!up.ok) { const t = await up.text().catch(() => ""); return json({ error: "Embeddings error", detail: String(t).slice(0, 200) }, up.status, cors); }
-      const j = await up.json().catch(() => null);
-      const embeddings = (j && Array.isArray(j.data)) ? j.data.map((d) => d && d.embedding).filter(Array.isArray) : [];
       if (!embeddings.length) return json({ error: "No embeddings returned" }, 502, cors);
-      return json({ embeddings, model, dims: embeddings[0].length }, 200, cors);
+      return json({ embeddings, model, dims: embeddings[0].length, provider: use }, 200, cors);
     }
 
     const segments = url.pathname.replace(/^\/+/, "").split("/");
