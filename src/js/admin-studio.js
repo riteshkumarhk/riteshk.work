@@ -802,6 +802,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="depthp__props depthp__props--map">' +
           '<button type="button" class="depthp__prop" data-act="depth-download" data-index="' + i + '"' + (depthMapUrl(w) ? '' : ' disabled') + ' title="Download the current depth map as an image"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg> Download map</button>' +
           '<button type="button" class="depthp__prop" data-act="depth-upload" data-index="' + i + '" title="Upload an edited depth map"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/></svg> Upload map</button>' +
+          '<button type="button" class="depthp__prop" data-act="depth-invert" data-index="' + i + '"' + (depthMapUrl(w) ? '' : ' disabled') + ' title="Swap near and far values in the current depth map"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg> Invert map</button>' +
         '</div>' +
         '<div class="depthp__gen"><button class="btn btn--auto" data-act="depth-gen" data-index="' + i + '" title="Generate a depth map on your GPU (WebGPU)">Generate depth map</button>' +
         '<button class="btn btn--ghost" data-act="depth-suggest" data-index="' + i + '" title="Let AI look at the cover and suggest strength, focus &amp; pull-back">Suggest settings</button>' +
@@ -887,6 +888,39 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       }).catch(function (e) { status("Couldn\u2019t read that depth map: " + ((e && e.message) || e)); });
     };
     inp.click();
+  }
+  async function depthInvertMap(i, btn) {
+    var w = data.work[i], src = w && depthMapUrl(w);
+    if (!src) { status("Generate or upload a depth map first."); return; }
+    var label = btn ? btn.innerHTML : "";
+    if (btn) { btn.disabled = true; btn.textContent = "Inverting\u2026"; }
+    status("Inverting depth map\u2026");
+    try {
+      var res = await fetch(src);
+      if (!res.ok) throw new Error("map returned " + res.status);
+      var bitmap = await createImageBitmap(await res.blob());
+      var canvas = document.createElement("canvas"); canvas.width = bitmap.width; canvas.height = bitmap.height;
+      var ctx = canvas.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(bitmap, 0, 0); if (bitmap.close) bitmap.close();
+      var pixels = ctx.getImageData(0, 0, canvas.width, canvas.height), px = pixels.data;
+      for (var p = 0; p < px.length; p += 4) { px[p] = 255 - px[p]; px[p + 1] = 255 - px[p + 1]; px[p + 2] = 255 - px[p + 2]; }
+      ctx.putImageData(pixels, 0, 0);
+      var uri = canvas.toDataURL("image/png");
+      ensureDepth(w).map = uri; saveDraft(true); apply(true);
+      var panel = root && root.querySelector('[data-depth-panel="' + i + '"]');
+      if (panel) {
+        var mapDiv = panel.querySelector(".depthp__map");
+        if (mapDiv) { mapDiv.dataset.depthSrc = uri; mapDiv.dataset.loaded = ""; mapDiv.style.backgroundImage = ""; }
+        depthPreviewLoad(panel);
+      }
+      hostUploaded(uri, { name: (w.id || "cover") + ".depth.png" }, function (path) {
+        ensureDepth(w).map = path; saveDraft(true); apply(true);
+      }, function () { status("Depth map inverted. Open Preview to test near and far.", true); });
+    } catch (e) {
+      status("Couldn\u2019t invert the depth map: " + ((e && e.message) || e));
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = label; }
+    }
   }
   // Probe the cover's depth map (naming convention) and show it in the panel preview, else the placeholder.
   function depthPreviewLoad(panel) {
@@ -7591,6 +7625,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "depth-paste") { depthPasteProps(i, b); return; }
     if (act === "depth-download") { depthDownloadMap(i, b); return; }
     if (act === "depth-upload") { depthUploadMap(i); return; }
+    if (act === "depth-invert") { depthInvertMap(i, b); return; }
     if (act === "aboutsec-up" || act === "aboutsec-down") {
       const arr = aboutLayoutArr(), idx = +b.dataset.i, j = act === "aboutsec-up" ? idx - 1 : idx + 1;
       if (idx < 0 || j < 0 || j >= arr.length) return;
