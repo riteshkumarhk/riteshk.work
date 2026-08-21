@@ -745,6 +745,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     };
   }
   function ensureDepth(w) { if (!w.depth) w.depth = {}; return w.depth; }
+  var depthMapOps = Object.create(null);
+  function depthMapOpKey(w, i) { return String((w && w.id) || ("index:" + i)); }
+  function depthMapNextOp(w, i) { var k = depthMapOpKey(w, i); depthMapOps[k] = (depthMapOps[k] || 0) + 1; return depthMapOps[k]; }
+  function depthMapOpIsCurrent(w, i, op) { return depthMapOps[depthMapOpKey(w, i)] === op; }
+  var coverImageOps = Object.create(null);
+  function coverImageNextOp(w, i) { var k = depthMapOpKey(w, i); coverImageOps[k] = (coverImageOps[k] || 0) + 1; return coverImageOps[k]; }
+  function coverImageOpIsCurrent(w, i, op) { return coverImageOps[depthMapOpKey(w, i)] === op; }
   function openDepthCardPreview(i) {
     var w = data.work[i];
     if (!w || !w.image) { status("Add a cover image first."); return; }
@@ -878,14 +885,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     inp.type = "file"; inp.accept = "image/png,image/jpeg,image/webp";
     inp.onchange = function () {
       var file = inp.files && inp.files[0]; if (!file) return;
+      var op = depthMapNextOp(w, i);
       fileToDataUri(file).then(function (uri) {
+        if (!depthMapOpIsCurrent(w, i, op)) return;
         var d = ensureDepth(w); if (d.on == null) d.on = true;
         delete d.noMap; d.map = uri; saveDraft(true); apply(true); renderBody();
         status("Custom depth map added. Hosting the original file\u2026");
         hostUploaded(uri, file, function (path) {
+          if (!depthMapOpIsCurrent(w, i, op)) return;
           ensureDepth(w).map = path; saveDraft(true); apply(true); renderBody();
         }, function () {
-          status("Custom depth map ready. Open Preview to test it.", true);
+          if (depthMapOpIsCurrent(w, i, op)) status("Custom depth map ready. Open Preview to test it.", true);
         });
       }).catch(function (e) { status("Couldn\u2019t read that depth map: " + ((e && e.message) || e)); });
     };
@@ -894,6 +904,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   async function depthInvertMap(i, btn) {
     var w = data.work[i], src = w && depthMapUrl(w);
     if (!src) { status("Generate or upload a depth map first."); return; }
+    var op = depthMapNextOp(w, i);
     var label = btn ? btn.innerHTML : "";
     if (btn) { btn.disabled = true; btn.textContent = "Inverting\u2026"; }
     status("Inverting depth map\u2026");
@@ -908,6 +919,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       for (var p = 0; p < px.length; p += 4) { px[p] = 255 - px[p]; px[p + 1] = 255 - px[p + 1]; px[p + 2] = 255 - px[p + 2]; }
       ctx.putImageData(pixels, 0, 0);
       var uri = canvas.toDataURL("image/png");
+      if (!depthMapOpIsCurrent(w, i, op)) return;
       delete ensureDepth(w).noMap; ensureDepth(w).map = uri; saveDraft(true); apply(true);
       var panel = root && root.querySelector('[data-depth-panel="' + i + '"]');
       if (panel) {
@@ -916,8 +928,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         depthPreviewLoad(panel);
       }
       hostUploaded(uri, { name: (w.id || "cover") + ".depth.png" }, function (path) {
+        if (!depthMapOpIsCurrent(w, i, op)) return;
         ensureDepth(w).map = path; saveDraft(true); apply(true);
-      }, function () { status("Depth map inverted. Open Preview to test near and far.", true); });
+      }, function () { if (depthMapOpIsCurrent(w, i, op)) status("Depth map inverted. Open Preview to test near and far.", true); });
     } catch (e) {
       status("Couldn\u2019t invert the depth map: " + ((e && e.message) || e));
     } finally {
@@ -932,7 +945,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       cta: "Remove map"
     });
     if (!ok) return;
+    depthMapNextOp(w, i);
     var d = ensureDepth(w); delete d.map; d.noMap = true;
+    var panel = root && root.querySelector('[data-depth-panel="' + i + '"]');
+    if (panel) {
+      var mapDiv = panel.querySelector(".depthp__map"), box = panel.querySelector("[data-depth-preview]");
+      if (mapDiv) { mapDiv.dataset.depthSrc = ""; mapDiv.dataset.loaded = ""; mapDiv.style.backgroundImage = ""; }
+      if (box) box.classList.add("is-empty");
+      panel.querySelectorAll('[data-act="depth-download"],[data-act="depth-invert"],[data-act="depth-remove"]').forEach(function (b) { b.disabled = true; });
+    }
     saveDraft(true); apply(true); renderBody();
     status("Depth map removed. The cover now uses standard scroll parallax only.", true);
   }
@@ -1000,6 +1021,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   async function depthGenerate(idx, btn, opts) {
     opts = opts || {};
     var w = data.work[idx]; if (!w || !w.image) { status("Add a cover image first."); return; }
+    var op = depthMapNextOp(w, idx);
     var enabledBefore = w.depth && w.depth.on;
     var enableAfter = (!opts.preserveEnabled || enabledBefore == null) ? true : enabledBefore;
     if (typeof navigator === "undefined" || !navigator.gpu) status("No WebGPU here - use Chrome or Edge for GPU speed; falling back to CPU (slower).");
@@ -1012,6 +1034,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (btn) btn.textContent = "Generating...";
       status("Generating depth on your GPU...");
       var out = await pipe(previewSrc(w.image));
+      if (!depthMapOpIsCurrent(w, idx, op)) return false;
       var raw = out && (out.depth || out);
       if (!raw || !raw.data) throw new Error("no depth output");
       var uri = rawDepthToPng(raw, 900);
@@ -1023,7 +1046,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       }
       ensureDepth(w).on = enableAfter;
       delete ensureDepth(w).noMap; ensureDepth(w).map = uri; saveDraft(true);
-      hostUploaded(uri, { name: (w.id || "cover") + ".depth.png" }, function (path) { ensureDepth(w).map = path; saveDraft(true); apply(true); });
+      hostUploaded(uri, { name: (w.id || "cover") + ".depth.png" }, function (path) {
+        if (!depthMapOpIsCurrent(w, idx, op)) return;
+        ensureDepth(w).map = path; saveDraft(true); apply(true);
+      });
       status((opts.auto ? "Depth map generated automatically. " : "Depth map generated. ") + "Hover the cover on the live site to see it.", true);
       return true;
     } catch (e) {
@@ -7857,12 +7883,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "img-upload") {
       var uploadWork = data.work[i];
       if (!uploadWork) return;
+      var coverOp = coverImageNextOp(uploadWork, i), coverDepthOp = depthMapNextOp(uploadWork, i);
       pickImage(function (uri) {
+        if (!coverImageOpIsCurrent(uploadWork, i, coverOp)) return;
         uploadWork.image = uri;
-        var uploadDepth = ensureDepth(uploadWork); delete uploadDepth.map; uploadDepth.noMap = true;
+        if (depthMapOpIsCurrent(uploadWork, i, coverDepthOp)) {
+          var uploadDepth = ensureDepth(uploadWork); delete uploadDepth.map; uploadDepth.noMap = true;
+        }
         apply(true);
         if (openStudy >= 0) renderL2(); else renderBody();
       }, function () {
+        if (!coverImageOpIsCurrent(uploadWork, i, coverOp) || !depthMapOpIsCurrent(uploadWork, i, coverDepthOp)) return;
         depthGenerate(i, null, { auto: true, preserveEnabled: true });
       });
       return;
