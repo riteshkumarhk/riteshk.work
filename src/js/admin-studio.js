@@ -1018,6 +1018,23 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     d.getContext("2d").drawImage(s, 0, 0, dw, dh);
     return d.toDataURL("image/png");
   }
+  // Resolve the cover to a fetchable, CORS-clean data URI for depth work. Prefers this session's
+  // in-memory bytes; otherwise fetches the hosted URL and reports a clear reason when it isn't reachable
+  // (e.g. an unpublished draft whose cover isn't on the media host yet).
+  async function depthCoverSrc(w) {
+    var src = (w && previewSrc(w.image)) || (w && w.image) || "";
+    if (!src) return { ok: false, reason: "there\u2019s no cover image" };
+    if (/^data:image\/svg/i.test(src)) return { ok: false, svg: true };
+    if (/^data:/.test(src)) return { ok: true, src: src };
+    try {
+      var r = await fetch(src);
+      if (!r.ok) return { ok: false, reason: "the cover image isn\u2019t available (HTTP " + r.status + ")" };
+      var blob = await r.blob();
+      if (/svg/i.test(blob.type)) return { ok: false, svg: true };
+      if (!/^image\//i.test(blob.type)) return { ok: false, reason: "the cover file isn\u2019t a readable image" };
+      return { ok: true, src: await fileToDataUri(blob) };
+    } catch (e) { return { ok: false, reason: "couldn\u2019t reach the cover image" }; }
+  }
   async function depthGenerate(idx, btn, opts) {
     opts = opts || {};
     var w = data.work[idx]; if (!w || !w.image) { status("Add a cover image first."); return; }
@@ -1026,14 +1043,24 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var enableAfter = (!opts.preserveEnabled || enabledBefore == null) ? true : enabledBefore;
     if (typeof navigator === "undefined" || !navigator.gpu) status("No WebGPU here - use Chrome or Edge for GPU speed; falling back to CPU (slower).");
     var lbl = btn ? btn.textContent : "";
-    if (btn) { btn.disabled = true; btn.textContent = "Loading model..."; }
-    status((opts.auto ? "Cover uploaded. " : "") + "Loading the depth model (one-time ~40MB, then cached)...");
+    if (btn) { btn.disabled = true; btn.textContent = "Checking cover..."; }
+    status((opts.auto ? "Cover uploaded. " : "") + "Preparing the cover image...");
     try {
+      var cov = await depthCoverSrc(w);
+      if (!cov.ok) {
+        status(cov.svg
+          ? "This cover is a vector/SVG \u2014 depth needs a photo or raster image."
+          : "Can\u2019t generate depth \u2014 " + cov.reason + ". If the project isn\u2019t published yet, re-upload the cover or Publish, then try again.");
+        return false;
+      }
+      if (!depthMapOpIsCurrent(w, idx, op)) return false;
+      if (btn) btn.textContent = "Loading model...";
+      status("Loading the depth model (one-time ~40MB, then cached)...");
       var t = await ensureDepthLib();
       var pipe = await getDepthPipe(t);
       if (btn) btn.textContent = "Generating...";
       status("Generating depth on your GPU...");
-      var out = await pipe(previewSrc(w.image));
+      var out = await pipe(cov.src);
       if (!depthMapOpIsCurrent(w, idx, op)) return false;
       var raw = out && (out.depth || out);
       if (!raw || !raw.data) throw new Error("no depth output");
@@ -1083,8 +1110,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (btn) { btn.disabled = true; btn.textContent = "Looking..."; }
     status("Looking at the cover to suggest depth settings...");
     try {
-      var part = await imgToVisionPart(previewSrc(w.image));
-      if (!part) throw new Error("couldn't read the cover image (vector/SVG isn't supported)");
+      var cov = await depthCoverSrc(w);
+      if (!cov.ok) throw new Error(cov.svg
+        ? "this cover is a vector/SVG \u2014 vision needs a photo or raster image"
+        : cov.reason + " (publish the project or re-upload the cover, then try again)");
+      var part = await imgToVisionPart(cov.src);
+      if (!part) throw new Error("couldn\u2019t read the cover image");
       var models = await visionModels(cfg); if (!models.length) models = [cfg.model].filter(Boolean);
       if (!models.length) throw new Error("no vision-capable model available for this provider");
       var sys = "You tune a subtle cursor/tilt 'depth parallax' effect on a portfolio case-study COVER image. The effect displaces pixels by a depth map toward the pointer; too much warps the image. Judge the image and answer with STRICT JSON only.";
