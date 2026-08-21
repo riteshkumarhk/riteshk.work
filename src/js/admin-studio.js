@@ -799,6 +799,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<button type="button" class="depthp__prop" data-act="depth-copy" data-index="' + i + '" title="Copy these four slider values">' + PARX_COPY_SVG + ' Copy properties</button>' +
           '<button type="button" class="depthp__prop" data-act="depth-paste" data-index="' + i + '" title="Paste slider values you copied from another cover"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg> Paste properties</button>' +
         '</div>' +
+        '<div class="depthp__props depthp__props--map">' +
+          '<button type="button" class="depthp__prop" data-act="depth-download" data-index="' + i + '"' + (depthMapUrl(w) ? '' : ' disabled') + ' title="Download the current depth map as an image"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg> Download map</button>' +
+          '<button type="button" class="depthp__prop" data-act="depth-upload" data-index="' + i + '" title="Upload an edited depth map"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/></svg> Upload map</button>' +
+        '</div>' +
         '<div class="depthp__gen"><button class="btn btn--auto" data-act="depth-gen" data-index="' + i + '" title="Generate a depth map on your GPU (WebGPU)">Generate depth map</button>' +
         '<button class="btn btn--ghost" data-act="depth-suggest" data-index="' + i + '" title="Let AI look at the cover and suggest strength, focus &amp; pull-back">Suggest settings</button>' +
         '<span class="depthp__note">Generate builds the depth map on your GPU. Suggest uses your AI key to tune strength / focus / pull-back for this cover.</span></div>' +
@@ -843,6 +847,46 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (panel) syncDepthPanel(panel, depthOf(w));
     if (btn) { var h2 = btn.innerHTML; btn.classList.add("is-copied"); btn.innerHTML = PARX_CHECK_SVG + " Pasted"; setTimeout(function () { btn.innerHTML = h2; btn.classList.remove("is-copied"); }, 1300); }
     status("Depth properties pasted.", true);
+  }
+  async function depthDownloadMap(i, btn) {
+    var w = data.work[i], src = w && depthMapUrl(w);
+    if (!src) { status("Generate or upload a depth map first."); return; }
+    if (btn) btn.disabled = true;
+    try {
+      var res = await fetch(src);
+      if (!res.ok) throw new Error("download returned " + res.status);
+      var blob = await res.blob();
+      var ext = /jpe?g/i.test(blob.type) ? "jpg" : /webp/i.test(blob.type) ? "webp" : "png";
+      var url = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = url;
+      a.download = String((w && w.id) || "cover").replace(/[^a-z0-9_-]+/gi, "-") + ".depth." + ext;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      status("Depth map downloaded.", true);
+    } catch (e) {
+      status("Couldn\u2019t download the depth map: " + ((e && e.message) || e));
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+  function depthUploadMap(i) {
+    var w = data.work[i]; if (!w) return;
+    var inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "image/png,image/jpeg,image/webp";
+    inp.onchange = function () {
+      var file = inp.files && inp.files[0]; if (!file) return;
+      fileToDataUri(file).then(function (uri) {
+        var d = ensureDepth(w); if (d.on == null) d.on = true;
+        d.map = uri; saveDraft(true); apply(true); renderBody();
+        status("Custom depth map added. Hosting the original file\u2026");
+        hostUploaded(uri, file, function (path) {
+          ensureDepth(w).map = path; saveDraft(true); apply(true); renderBody();
+        }, function () {
+          status("Custom depth map ready. Open Preview to test it.", true);
+        });
+      }).catch(function (e) { status("Couldn\u2019t read that depth map: " + ((e && e.message) || e)); });
+    };
+    inp.click();
   }
   // Probe the cover's depth map (naming convention) and show it in the panel preview, else the placeholder.
   function depthPreviewLoad(panel) {
@@ -7545,6 +7589,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "depth-suggest") { depthSuggest(i, b); return; }
     if (act === "depth-copy") { depthCopyProps(i, b); return; }
     if (act === "depth-paste") { depthPasteProps(i, b); return; }
+    if (act === "depth-download") { depthDownloadMap(i, b); return; }
+    if (act === "depth-upload") { depthUploadMap(i); return; }
     if (act === "aboutsec-up" || act === "aboutsec-down") {
       const arr = aboutLayoutArr(), idx = +b.dataset.i, j = act === "aboutsec-up" ? idx - 1 : idx + 1;
       if (idx < 0 || j < 0 || j >= arr.length) return;

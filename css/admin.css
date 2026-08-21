@@ -812,8 +812,10 @@ body.adm-lock .cursor { display: none !important; }
 .depthp__valwrap { display: inline-flex; align-items: center; justify-content: center; min-width: 3.6em; height: 22px; padding: 0 .45rem; background: rgba(0,0,0,.42); border: 1px solid rgba(255,255,255,.2); border-radius: 7px; }
 .depthp__val { font-family: var(--mono); font-size: .64rem; color: #F3EEE7; text-align: center; }
 .depthp__props { display: flex; gap: .5rem; margin: .7rem 0 .1rem; }
+.depthp__props--map { margin-top: .45rem; }
 .depthp__prop { display: inline-flex; align-items: center; gap: .35rem; padding: .34rem .6rem; font-family: var(--mono); font-size: .6rem; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 7px; cursor: pointer; transition: color .16s var(--ease), border-color .16s var(--ease), background .16s var(--ease); }
 .depthp__prop:hover { color: var(--accent); border-color: var(--accent); background: rgba(216,166,87,.06); }
+.depthp__prop:disabled { opacity: .35; cursor: not-allowed; }
 .depthp__prop.is-copied { color: var(--accent); border-color: var(--accent); }
 .depthp__prop svg { display: block; flex: none; }
 .depthp__hint { font-size: .66rem; color: var(--text-faint); margin: .03rem 0 .32rem; }
