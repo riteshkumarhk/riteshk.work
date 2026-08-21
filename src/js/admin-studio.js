@@ -902,12 +902,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     d.getContext("2d").drawImage(s, 0, 0, dw, dh);
     return d.toDataURL("image/png");
   }
-  async function depthGenerate(idx, btn) {
+  async function depthGenerate(idx, btn, opts) {
+    opts = opts || {};
     var w = data.work[idx]; if (!w || !w.image) { status("Add a cover image first."); return; }
+    var enabledBefore = w.depth && w.depth.on;
+    var enableAfter = (!opts.preserveEnabled || enabledBefore == null) ? true : enabledBefore;
     if (typeof navigator === "undefined" || !navigator.gpu) status("No WebGPU here - use Chrome or Edge for GPU speed; falling back to CPU (slower).");
     var lbl = btn ? btn.textContent : "";
     if (btn) { btn.disabled = true; btn.textContent = "Loading model..."; }
-    status("Loading the depth model (one-time ~40MB, then cached)...");
+    status((opts.auto ? "Cover uploaded. " : "") + "Loading the depth model (one-time ~40MB, then cached)...");
     try {
       var t = await ensureDepthLib();
       var pipe = await getDepthPipe(t);
@@ -920,14 +923,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var panel = root.querySelector('[data-depth-panel="' + idx + '"]');
       if (panel) {
         var md = panel.querySelector(".depthp__map"); if (md) { md.dataset.depthSrc = uri; md.dataset.loaded = ""; }
-        var cbx = panel.querySelector("[data-depth-on]"); if (cbx) cbx.checked = true;
+        var cbx = panel.querySelector("[data-depth-on]"); if (cbx) cbx.checked = enableAfter;
         depthPreviewLoad(panel);
       }
-      ensureDepth(w).on = true; ensureDepth(w).map = uri; saveDraft(true);
+      ensureDepth(w).on = enableAfter;
+      ensureDepth(w).map = uri; saveDraft(true);
       hostUploaded(uri, { name: (w.id || "cover") + ".depth.png" }, function (path) { ensureDepth(w).map = path; saveDraft(true); apply(true); });
-      status("Depth map generated. Hover the cover on the live site to see it.", true);
+      status((opts.auto ? "Depth map generated automatically. " : "Depth map generated. ") + "Hover the cover on the live site to see it.", true);
+      return true;
     } catch (e) {
       status("Depth generation failed: " + ((e && e.message) || e));
+      return false;
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = lbl; }
     }
@@ -7749,7 +7755,19 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }
     if (act === "plate-sample") { data.work[i].theme = b.dataset.theme; data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Motion placeholder applied.", true); return; }
     if (act === "img-clear") { data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Image removed."); return; }
-    if (act === "img-upload") { pickImage(function (uri) { data.work[i].image = uri; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); }); return; }
+    if (act === "img-upload") {
+      var uploadWork = data.work[i];
+      if (!uploadWork) return;
+      pickImage(function (uri) {
+        uploadWork.image = uri;
+        if (uploadWork.depth) delete uploadWork.depth.map;
+        apply(true);
+        if (openStudy >= 0) renderL2(); else renderBody();
+      }, function () {
+        depthGenerate(i, null, { auto: true, preserveEnabled: true });
+      });
+      return;
+    }
     if (act === "img-generate") { imgGenerate(i); return; }
     if (act === "img-modify") { imgModify(i); return; }
     if (act === "par-dir") {
@@ -9440,7 +9458,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
 
   /* ---------- imagery + AI ---------- */
-  function pickImage(cb) {
+  function pickImage(cb, settled) {
     const inp = document.createElement("input");
     inp.type = "file"; inp.accept = "image/*";
     inp.onchange = function () {
@@ -9448,7 +9466,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       // Read the ORIGINAL bytes untouched — no downscaling, no re-encoding, no format change.
       fileToDataUri(f).then(function (uri) {
         cb(uri);                  // instant, full-quality preview + safe fallback value
-        hostUploaded(uri, f, cb); // then host it as a real file and swap in the lean path
+        hostUploaded(uri, f, cb, function (path) {
+          if (settled) settled(path || uri);
+        }); // then host it as a real file and swap in the lean path
       });
     };
     inp.click();
@@ -9641,20 +9661,22 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     inp.click();
   }
   // Host the freshly-read file and, on success, swap the embedded data URI for its lean path.
-  function hostUploaded(uri, file, cb) {
+  function hostUploaded(uri, file, cb, done) {
     const nm = (file && file.name) || "File";
     const ext = extFromName(nm);
     const isImg = /^data:image\//i.test(uri);
     const finish = function (low, note) {
       const token = adminSession() ? "session" : localStorage.getItem(GH_TOKEN_KEY);
-      if (!token) { status("\u201c" + nm + "\u201d added" + note + " \u2014 embedded for now; connect GitHub on Publish and it becomes a hosted file automatically."); return; }
+      if (!token) { status("\u201c" + nm + "\u201d added" + note + " \u2014 embedded for now; connect GitHub on Publish and it becomes a hosted file automatically."); if (done) done(null); return; }
       status("Hosting \u201c" + nm + "\u201d\u2026");
       hostDataUri(uri, token, ext).then(function (path) {
         cb(path); // content.json + draft now carry just a lean path; the preview is the real file
         status("\u201c" + nm + "\u201d hosted" + (isImg ? " at full, original quality" : "") + note, !low);
+        if (done) done(path);
       }).catch(function (e) {
         if (e && e.auth) status("GitHub didn\u2019t accept your sign-in \u2014 \u201c" + nm + "\u201d stays embedded and will be hosted when you Publish.");
         else status("Couldn\u2019t host \u201c" + nm + "\u201d just now \u2014 it\u2019s embedded and will be hosted on Publish.");
+        if (done) done(null);
       });
     };
     if (isImg) {

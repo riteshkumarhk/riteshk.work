@@ -857,7 +857,7 @@ body:has(.pass) .lt-amb, body:has(.pass) .lt-scrim { opacity: 0 !important; }
 
 /* Studio cover-motion preview: render one authentic homepage card in a tall stage so normal
   window scrolling drives its parallax while pointer movement drives the depth canvas. */
-html.card-preview body { min-height: 280vh; overflow-x: hidden; }
+html.card-preview body { min-height: 280vh; overflow-x: hidden; cursor: auto; }
 html.card-preview .nav,
 html.card-preview .menu,
 html.card-preview .page--about,
