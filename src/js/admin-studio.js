@@ -889,13 +889,20 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       fileToDataUri(file).then(function (uri) {
         if (!depthMapOpIsCurrent(w, i, op)) return;
         var d = ensureDepth(w); if (d.on == null) d.on = true;
-        delete d.noMap; d.map = uri; saveDraft(true); apply(true); renderBody();
-        status("Custom depth map added. Hosting the original file\u2026");
+        delete d.noMap; d.map = uri; saveDraft(true); apply(true);
+        var panel = root && root.querySelector('[data-depth-panel="' + i + '"]');
+        if (panel) {
+          var mapDiv = panel.querySelector(".depthp__map");
+          if (mapDiv) { mapDiv.dataset.depthSrc = uri; mapDiv.dataset.loaded = ""; mapDiv.style.backgroundImage = ""; }
+          var cbx = panel.querySelector("[data-depth-on]"); if (cbx) cbx.checked = d.on !== false;
+          depthPreviewLoad(panel);
+        }
+        status("Custom depth map added \u2014 preview updated. Hosting the original file\u2026");
         hostUploaded(uri, file, function (path) {
           if (!depthMapOpIsCurrent(w, i, op)) return;
-          ensureDepth(w).map = path; saveDraft(true); apply(true); renderBody();
+          ensureDepth(w).map = path; saveDraft(true); apply(true);
         }, function () {
-          if (depthMapOpIsCurrent(w, i, op)) status("Custom depth map ready. Open Preview to test it.", true);
+          if (depthMapOpIsCurrent(w, i, op)) status("Custom depth map ready \u2014 open Preview to test it.", true);
         });
       }).catch(function (e) { status("Couldn\u2019t read that depth map: " + ((e && e.message) || e)); });
     };
