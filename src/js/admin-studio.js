@@ -728,6 +728,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<button type="button" class="parx__copy" data-act="par-copy" data-index="' + i + '" title="Copy intensity value" aria-label="Copy intensity value">' + PARX_COPY_SVG + '</button>' +
       '</span>' +
       '<button type="button" class="parx__more" data-act="depth-open" data-index="' + i + '" title="3D depth settings" aria-label="3D depth settings">' + DEPTH_DOTS_SVG + '</button>' +
+      '<button type="button" class="parx__preview" data-act="depth-preview-card" data-index="' + i + '">Preview</button>' +
       '</div>';
   }
 
@@ -744,6 +745,32 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     };
   }
   function ensureDepth(w) { if (!w.depth) w.depth = {}; return w.depth; }
+  function openDepthCardPreview(i) {
+    var w = data.work[i];
+    if (!w || !w.image) { status("Add a cover image first."); return; }
+    saveDraft(true);
+    var old = document.querySelector(".depthdemo");
+    if (old) old.remove();
+    var modal = document.createElement("div");
+    modal.className = "depthdemo";
+    modal.setAttribute("data-lenis-prevent", "");
+    modal.innerHTML = '<div class="depthdemo__shell" role="dialog" aria-modal="true" aria-label="Cover preview">' +
+      '<div class="depthdemo__head"><span>Cover preview</span><button type="button" class="depthdemo__close" data-depthdemo-close aria-label="Close preview">\u2715</button></div>' +
+      '<iframe class="depthdemo__frame" title="Interactive project card preview" src="/index.html?preview=1&amp;card=' + encodeURIComponent(w.id) + '"></iframe>' +
+      '</div>';
+    function close() {
+      document.removeEventListener("keydown", onKey);
+      modal.remove();
+    }
+    function onKey(e) { if (e.key === "Escape") close(); }
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal || e.target.closest("[data-depthdemo-close]")) close();
+    });
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(modal);
+    var closeBtn = modal.querySelector("[data-depthdemo-close]");
+    if (closeBtn) closeBtn.focus();
+  }
   function depthMapUrl(w) {
     if (w.depth && w.depth.map) return previewSrc(w.depth.map);
     var m = String(w.image || "").match(/(\/?assets\/uploads\/[^./?#]+)\.[a-z0-9]+$/i);
@@ -5455,7 +5482,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       const featured = list.filter((w) => w.featured).length;
       const wl = data.workLayout || "grid-2";
       const wlOpt = (v, lbl) => '<option value="' + v + '"' + (wl === v ? " selected" : "") + ">" + lbl + "</option>";
-      let html = secHead("Selected Work", "Your projects. Tick up to 4 to feature on the homepage (currently " + featured + "/4). Title, story, images, tags &amp; theme all live inside each project\u2019s case-study editor.") +
+      let html = secHead("Selected Work", "Your projects. Choose any projects to feature on the homepage (currently " + featured + "). Title, story, images, tags &amp; theme all live inside each project\u2019s case-study editor.") +
         '<div class="af"><label class="af__label">Homepage layout</label><select data-worklayout>' +
           wlOpt("grid-2", "Grid \u2014 2 columns") + wlOpt("grid-3", "Grid \u2014 3 columns") + wlOpt("list", "Linear list") +
         '</select><div class="af__hint">How projects are arranged on the homepage. A grid surfaces more case studies at once, so visitors explore beyond the first one.</div></div>' +
@@ -7388,11 +7415,6 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       const w = data.work[i];
       if (!w) return;
       if (t.checked) {
-        if (data.work.filter((x) => x.featured).length >= 4) {
-          status("Only 4 projects can be featured \u2014 remove one first");
-          renderBody();
-          return;
-        }
         w.featured = true;
         w.hidden = false;   // Public can't be Private: clears + re-locks the Make-private checkbox
       } else {
@@ -7512,6 +7534,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (b.dataset.act === "md-fmt") { mdFmt(b); return; }
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
     if (act === "depth-open") { var _dp = root.querySelector('[data-depth-panel="' + i + '"]'); if (_dp) { _dp.hidden = !_dp.hidden; b.classList.toggle("is-on", !_dp.hidden); if (!_dp.hidden) depthPreviewLoad(_dp); } return; }
+    if (act === "depth-preview-card") { openDepthCardPreview(i); return; }
     if (act === "depth-gen") { depthGenerate(i, b); return; }
     if (act === "depth-suggest") { depthSuggest(i, b); return; }
     if (act === "depth-copy") { depthCopyProps(i, b); return; }
@@ -8008,7 +8031,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       const copy = JSON.parse(JSON.stringify(src));
       copy.id = "w" + Date.now();   // new unique id so routing/keying doesn't clash with the original
       copy.hidden = true;           // the copy stays off the live site until the owner is ready
-      copy.featured = false;        // a copy shouldn't take one of the 4 homepage feature slots
+      copy.featured = false;        // copies stay opt-in for the homepage
       if (copy.title && copy.title !== "Project title") copy.title += " (copy)";
       data.work.splice(i + 1, 0, copy);
       apply(true); renderBody();

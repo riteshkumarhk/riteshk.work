@@ -855,6 +855,25 @@ body:has(.pass) .lt-amb, body:has(.pass) .lt-scrim { opacity: 0 !important; }
 @media (max-width: 900px) { .cases--g3 { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 600px) { .cases--g2, .cases--g3 { grid-template-columns: 1fr; gap: 2rem; } }
 
+/* Studio cover-motion preview: render one authentic homepage card in a tall stage so normal
+  window scrolling drives its parallax while pointer movement drives the depth canvas. */
+html.card-preview body { min-height: 280vh; overflow-x: hidden; }
+html.card-preview .nav,
+html.card-preview .menu,
+html.card-preview .page--about,
+html.card-preview #contact,
+html.card-preview .footer,
+html.card-preview .dock,
+html.card-preview .workcue,
+html.card-preview .scroll-progress,
+html.card-preview .cursor { display: none !important; }
+html.card-preview #workSections > .wsec:not(#wsec-work),
+html.card-preview #wsec-work .section-head { display: none !important; }
+html.card-preview .page--work { display: block !important; }
+html.card-preview .work { min-height: 280vh; padding: 90vh 0; }
+html.card-preview .cases { display: block !important; width: 100%; max-width: 760px; margin: 0 auto; padding: 0 clamp(18px, 4vw, 40px); }
+html.card-preview .case__link { cursor: default; }
+
 /* =================================================================
    ABOUT PAGE — independently ordered / toggled sections
    (order + visibility are controlled from the studio → About tab;

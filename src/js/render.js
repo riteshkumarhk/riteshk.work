@@ -646,13 +646,26 @@
       ord.forEach((k) => { const el = marqMap[k]; if (el) hiWrap.appendChild(el); });
     }
 
+    const renderParams = new URLSearchParams(location.search);
+    const cardPreviewId = renderParams.get("card");
+    const cardPreview = cardPreviewId ? (data.work || []).find((w) => !w.encWork && String(w.id) === cardPreviewId) : null;
+    document.documentElement.classList.toggle("card-preview", !!cardPreview);
+
     // Present mode shows the SAME curated set as the home page (featured), PLUS any
     // project that's hidden-from-default (ticket-only) — now decrypted — so the owner can
     // present the confidential work too. Non-featured, non-hidden work stays hidden.
-    set("cases", (data.work || []).filter((w) => presentActive ? (!w.encWork && (w.featured || w.hidden)) : (w.featured && !w.encWork && !w.hidden)).slice(0, presentActive ? 999 : 6).map(caseEl).join(""));
+    const visibleWork = cardPreview ? [cardPreview] : (data.work || []).filter((w) => presentActive ? (!w.encWork && (w.featured || w.hidden)) : (w.featured && !w.encWork && !w.hidden));
+    set("cases", visibleWork.map((w) => caseEl(w, cardPreview ? Math.max(0, (data.work || []).indexOf(w)) : visibleWork.indexOf(w))).join(""));
     // Work list layout is configurable from the studio: list | grid-2 | grid-3 (default grid-2).
     const casesEl = byId("cases");
-    if (casesEl) { const wl = data.workLayout || "grid-2"; casesEl.className = "cases" + (wl === "grid-3" ? " cases--g3" : wl === "list" ? "" : " cases--g2"); }
+    if (casesEl) {
+      const wl = data.workLayout || "grid-2";
+      casesEl.className = "cases" + (wl === "grid-3" ? " cases--g3" : wl === "list" ? "" : " cases--g2");
+      if (cardPreview) {
+        const link = casesEl.querySelector(".case__link");
+        if (link) link.addEventListener("click", (e) => e.preventDefault());
+      }
+    }
     // Work heading: authored one line per row (like the statement) so each line is wrapped in a
     // .section-head__line overflow box and its descenders crop to match the statement's treatment.
     set("workHeading", String(L.workTitle || "A few things I've *designed* and the thinking behind them.").split("\n").filter((x) => x.length).map((ln) => '<span class="section-head__line">' + md(ln) + "</span>").join(""));
