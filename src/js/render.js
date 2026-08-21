@@ -208,7 +208,7 @@
   function depthAttrs(w) {
     const d = w && w.depth;
     if (!d) return "";
-    if (d.on === false) return ' data-depth-off="1"';
+    if (d.on === false || d.noMap) return ' data-depth-off="1"';
     let s = "";
     if (d.strength != null && d.strength !== "") s += ' data-depth-strength="' + (+d.strength) + '"';
     if (d.softness != null && d.softness !== "") s += ' data-depth-softness="' + (+d.softness) + '"';

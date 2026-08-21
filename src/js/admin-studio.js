@@ -772,6 +772,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (closeBtn) closeBtn.focus();
   }
   function depthMapUrl(w) {
+    if (w.depth && w.depth.noMap) return "";
     if (w.depth && w.depth.map) return previewSrc(w.depth.map);
     var m = String(w.image || "").match(/(\/?assets\/uploads\/[^./?#]+)\.[a-z0-9]+$/i);
     if (!m) return "";
@@ -803,6 +804,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<button type="button" class="depthp__prop" data-act="depth-download" data-index="' + i + '"' + (depthMapUrl(w) ? '' : ' disabled') + ' title="Download the current depth map as an image"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg> Download map</button>' +
           '<button type="button" class="depthp__prop" data-act="depth-upload" data-index="' + i + '" title="Upload an edited depth map"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/></svg> Upload map</button>' +
           '<button type="button" class="depthp__prop" data-act="depth-invert" data-index="' + i + '"' + (depthMapUrl(w) ? '' : ' disabled') + ' title="Swap near and far values in the current depth map"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg> Invert map</button>' +
+          '<button type="button" class="depthp__prop depthp__prop--danger" data-act="depth-remove" data-index="' + i + '"' + (depthMapUrl(w) ? '' : ' disabled') + ' title="Remove the depth map from this project"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 15H6L5 6"/><path d="M10 11v5M14 11v5"/></svg> Remove map</button>' +
         '</div>' +
         '<div class="depthp__gen"><button class="btn btn--auto" data-act="depth-gen" data-index="' + i + '" title="Generate a depth map on your GPU (WebGPU)">Generate depth map</button>' +
         '<button class="btn btn--ghost" data-act="depth-suggest" data-index="' + i + '" title="Let AI look at the cover and suggest strength, focus &amp; pull-back">Suggest settings</button>' +
@@ -878,7 +880,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var file = inp.files && inp.files[0]; if (!file) return;
       fileToDataUri(file).then(function (uri) {
         var d = ensureDepth(w); if (d.on == null) d.on = true;
-        d.map = uri; saveDraft(true); apply(true); renderBody();
+        delete d.noMap; d.map = uri; saveDraft(true); apply(true); renderBody();
         status("Custom depth map added. Hosting the original file\u2026");
         hostUploaded(uri, file, function (path) {
           ensureDepth(w).map = path; saveDraft(true); apply(true); renderBody();
@@ -906,7 +908,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       for (var p = 0; p < px.length; p += 4) { px[p] = 255 - px[p]; px[p + 1] = 255 - px[p + 1]; px[p + 2] = 255 - px[p + 2]; }
       ctx.putImageData(pixels, 0, 0);
       var uri = canvas.toDataURL("image/png");
-      ensureDepth(w).map = uri; saveDraft(true); apply(true);
+      delete ensureDepth(w).noMap; ensureDepth(w).map = uri; saveDraft(true); apply(true);
       var panel = root && root.querySelector('[data-depth-panel="' + i + '"]');
       if (panel) {
         var mapDiv = panel.querySelector(".depthp__map");
@@ -922,15 +924,30 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (btn) { btn.disabled = false; btn.innerHTML = label; }
     }
   }
+  async function depthRemoveMap(i) {
+    var w = data.work[i]; if (!w || !depthMapUrl(w)) { status("There is no depth map to remove."); return; }
+    var ok = await confirmModal({
+      title: "Remove this depth map?",
+      sub: "The cover, depth settings, and Enabled preference stay unchanged. You can generate or upload another map later.",
+      cta: "Remove map"
+    });
+    if (!ok) return;
+    var d = ensureDepth(w); delete d.map; d.noMap = true;
+    saveDraft(true); apply(true); renderBody();
+    status("Depth map removed. The cover now uses standard scroll parallax only.", true);
+  }
   // Probe the cover's depth map (naming convention) and show it in the panel preview, else the placeholder.
   function depthPreviewLoad(panel) {
     var box = panel.querySelector("[data-depth-preview]"), mapDiv = panel.querySelector(".depthp__map");
     if (!box || !mapDiv || mapDiv.dataset.loaded) return;
     var src = mapDiv.dataset.depthSrc || "";
-    if (!src) { box.classList.add("is-empty"); return; }
+    var setMapActions = function (on) {
+      panel.querySelectorAll('[data-act="depth-download"],[data-act="depth-invert"],[data-act="depth-remove"]').forEach(function (b) { b.disabled = !on; });
+    };
+    if (!src) { box.classList.add("is-empty"); setMapActions(false); return; }
     var probe = new Image();
-    probe.onload = function () { mapDiv.style.backgroundImage = "url('" + src + "')"; mapDiv.dataset.loaded = "1"; box.classList.remove("is-empty"); };
-    probe.onerror = function () { box.classList.add("is-empty"); };
+    probe.onload = function () { mapDiv.style.backgroundImage = "url('" + src + "')"; mapDiv.dataset.loaded = "1"; box.classList.remove("is-empty"); setMapActions(true); };
+    probe.onerror = function () { box.classList.add("is-empty"); setMapActions(false); };
     probe.src = src;
   }
 
@@ -1005,7 +1022,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         depthPreviewLoad(panel);
       }
       ensureDepth(w).on = enableAfter;
-      ensureDepth(w).map = uri; saveDraft(true);
+      delete ensureDepth(w).noMap; ensureDepth(w).map = uri; saveDraft(true);
       hostUploaded(uri, { name: (w.id || "cover") + ".depth.png" }, function (path) { ensureDepth(w).map = path; saveDraft(true); apply(true); });
       status((opts.auto ? "Depth map generated automatically. " : "Depth map generated. ") + "Hover the cover on the live site to see it.", true);
       return true;
@@ -7626,6 +7643,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "depth-download") { depthDownloadMap(i, b); return; }
     if (act === "depth-upload") { depthUploadMap(i); return; }
     if (act === "depth-invert") { depthInvertMap(i, b); return; }
+    if (act === "depth-remove") { depthRemoveMap(i); return; }
     if (act === "aboutsec-up" || act === "aboutsec-down") {
       const arr = aboutLayoutArr(), idx = +b.dataset.i, j = act === "aboutsec-up" ? idx - 1 : idx + 1;
       if (idx < 0 || j < 0 || j >= arr.length) return;
@@ -7841,7 +7859,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (!uploadWork) return;
       pickImage(function (uri) {
         uploadWork.image = uri;
-        if (uploadWork.depth) delete uploadWork.depth.map;
+        var uploadDepth = ensureDepth(uploadWork); delete uploadDepth.map; uploadDepth.noMap = true;
         apply(true);
         if (openStudy >= 0) renderL2(); else renderBody();
       }, function () {

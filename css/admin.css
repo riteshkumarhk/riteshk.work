@@ -815,6 +815,7 @@ body.adm-lock .cursor { display: none !important; }
 .depthp__props--map { margin-top: .45rem; flex-wrap: wrap; }
 .depthp__prop { display: inline-flex; align-items: center; gap: .35rem; padding: .34rem .6rem; font-family: var(--mono); font-size: .6rem; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 7px; cursor: pointer; transition: color .16s var(--ease), border-color .16s var(--ease), background .16s var(--ease); }
 .depthp__prop:hover { color: var(--accent); border-color: var(--accent); background: rgba(216,166,87,.06); }
+.depthp__prop--danger:hover { color: #ff7b72; border-color: rgba(255,123,114,.72); background: rgba(255,123,114,.08); }
 .depthp__prop:disabled { opacity: .35; cursor: not-allowed; }
 .depthp__prop.is-copied { color: var(--accent); border-color: var(--accent); }
 .depthp__prop svg { display: block; flex: none; }
