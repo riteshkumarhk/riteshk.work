@@ -10662,12 +10662,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return { src: src, mime: parts.mime || "image/jpeg", b64: parts.b64 };
     } catch (e) { return null; }
   }
-  async function aiVisionOnce(cfg, model, system, prompt, imgs) {
+  async function aiVisionOnce(cfg, model, system, prompt, imgs, opts) {
+    opts = opts || {};
     var p = cfg.provider, key = cfg.key, base = cfg.base, res, j;
     if (p === "anthropic") {
       var content = [{ type: "text", text: prompt }];
       imgs.forEach(function (im) { content.push({ type: "image", source: { type: "base64", media_type: im.mime, data: im.b64 } }); });
-      res = await fetch(base + "/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: model, max_tokens: 2000, system: system, messages: [{ role: "user", content: content }] }) });
+      res = await fetch(base + "/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: model, max_tokens: opts.maxTokens || 2000, temperature: opts.temperature != null ? opts.temperature : 1, system: system, messages: [{ role: "user", content: content }] }) });
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
       return { ok: true, text: (((j && j.content) || []).map(function (b) { return b.text || ""; }).join("")).trim() };
@@ -10676,7 +10677,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var parts = [{ text: prompt }];
       imgs.forEach(function (im) { parts.push({ inline_data: { mime_type: im.mime, data: im.b64 } }); });
       var gurl = base + "/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key);
-      var gb = { contents: [{ role: "user", parts: parts }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { responseMimeType: "application/json", maxOutputTokens: 2200 } };
+      var gb = { contents: [{ role: "user", parts: parts }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { responseMimeType: "application/json", maxOutputTokens: opts.maxTokens || 2200, temperature: opts.temperature != null ? opts.temperature : undefined } };
       res = await fetch(gurl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(gb) });
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
@@ -10684,7 +10685,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return { ok: true, text: (((cand.content && cand.content.parts) || []).map(function (x) { return x.text || ""; }).join("")).trim() };
     }
     var msgs = [{ role: "system", content: system }, { role: "user", content: [{ type: "text", text: prompt }].concat(imgs.map(function (im) { return { type: "image_url", image_url: { url: "data:" + im.mime + ";base64," + im.b64 } }; })) }];
-    var ob = { model: model, messages: msgs, max_tokens: 2200, temperature: 0, response_format: { type: "json_object" } };
+    var ob = { model: model, messages: msgs, max_tokens: opts.maxTokens || 2200, temperature: opts.temperature != null ? opts.temperature : 0, response_format: { type: "json_object" } };
     res = await fetch(base + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify(ob) });
     j = await res.json().catch(function () { return null; });
     if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
@@ -10837,7 +10838,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
 
   /* ---------- AI case-study generator (per project, into the editable blocks) ---------- */
   const csgen = {}; // per work-id draft inputs
-  function csgenState(id) { return csgen[id] || (csgen[id] = { material: "", links: "", tone: "senior", reference: "", refShow: false }); }
+  function csgenState(id) { return csgen[id] || (csgen[id] = { material: "", links: "", tone: "senior", reference: "", refShow: false, deckImages: [] }); }
   function csgenStatus(i, msg, kind) {
     var el = root && root.querySelector('[data-csgen-status="' + i + '"]');
     if (el) { el.textContent = msg || ""; el.className = "csgen__status" + (kind ? " is-" + kind : ""); }
@@ -10858,7 +10859,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="af__hint">Sent as text context only \u2014 the AI can\u2019t open them, so summarise anything important in the notes above.</div></div>' +
       '<div class="af__row">' +
       '<div class="af"><label class="af__label">Tone</label><select data-csgen="tone" data-csid="' + escAttr(w.id) + '">' + toneOpts + '</select><div class="af__hint">Altitude of the storytelling voice.</div></div>' +
-      '<div class="af"><label class="af__label">Deck / PDF</label><button class="btn btn--ghost csgen__pdf" data-act="csgen-pdf" data-index="' + i + '">Add PDF / deck\u2026</button><div class="af__hint">Extracts the text from a PDF or PowerPoint (.pptx) and appends it above.</div></div>' +
+      '<div class="af"><label class="af__label">Deck / PDF</label><button class="btn btn--ghost csgen__pdf" data-act="csgen-pdf" data-index="' + i + '">Add PDF / deck\u2026</button><div class="af__hint">Reads the text, speaker notes AND the visuals of a PDF or PowerPoint (.pptx) so the AI can study the deck \u2014 not just skim its text.</div></div>' +
       "</div>" +
       '<div class="csgen__ref' + (g.refShow ? " is-open" : "") + '">' +
       '<button class="csgen__reftoggle" data-act="csgen-ref-toggle" data-index="' + i + '">' + (g.refShow ? "\u2212" : "+") + ' Paste a reference case study to echo (optional)</button>' +
@@ -10933,6 +10934,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       "Follow this proven narrative arc (adapt it, don\u2019t label it mechanically): Overview \u2192 Impact snapshot \u2192 Quick context for outsiders \u2192 The problem (a sharp, surprising truth) \u2192 What we got wrong at first \u2192 Approach / research \u2192 The reframe \u2192 Design goal (a How-might-we) \u2192 Key decisions \u2192 Before / after \u2192 Outcome & impact \u2192 Reflection (with an \u2018if I had more time\u2019).",
       "Rules:",
       "- Ground everything in the material provided. NEVER invent specific numbers. If impact isn\u2019t given, use honest qualitative or clearly-directional phrasing (\u2018directional lift\u2019, \u2018double-digit\u2019, \u2018millions of sessions\u2019).",
+      "- Speaker notes / presenter narration (labelled SPEAKER NOTES) usually carry the deepest reasoning, tradeoffs and story beyond the slides \u2014 mine them heavily for the problem, the decisions and the reflection, not just the slide headlines.",
+      "- If deck images are attached, study them like a designer (real screens, flows, before/after states, data-viz, annotations) and ground the narrative in what you actually see \u2014 never invent UI or numbers you can\u2019t see.",
       "- Short, declarative sentences. Vary the rhythm. Write like a person, not a deck.",
       "- nav labels are 1\u20132 words; kickers are tiny (\u2018Overview\u2019, \u2018The problem\u2019).",
       "- Leave imagery to the author: media blocks carry captions only, never URLs.",
@@ -10997,7 +11000,26 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     root.querySelectorAll(sel).forEach(function (b) { b.disabled = true; b.classList.add("is-busy"); });
     csgenStatus(i, variant ? "Writing a fresh variant\u2026" : "Writing the case study\u2026 this can take a moment.", "run");
     try {
-      var raw = await aiText(aiCfg("txt"), csgenSystem(g.tone), csgenUser(w, g, variant), { json: true, maxTokens: 4096, temperature: variant ? 0.95 : 0.65 });
+      var cfg = aiCfg("txt"), sys = csgenSystem(g.tone), usr = csgenUser(w, g, variant);
+      var deckImgs = (g.deckImages || []), raw = "";
+      if (deckImgs.length) {
+        csgenStatus(i, "Studying the deck\u2019s visuals & speaker notes\u2026 this can take a moment.", "run");
+        var vmodels = [];
+        try { vmodels = await visionModels(cfg); } catch (e) {}
+        if (vmodels.length) {
+          var vsys = sys + "\nYou ALSO receive the deck\u2019s slide images (in order). Read them like a designer \u2014 the actual screens, flows, before/after states and data-viz \u2014 and weave what you SEE together with the notes and speaker notes above.";
+          var vusr = usr + "\n\nThe " + deckImgs.length + " attached image(s) are the deck\u2019s slides/visuals in order \u2014 study them alongside the material above.";
+          var r = null;
+          for (var vm = 0; vm < vmodels.length; vm++) {
+            r = await aiVisionOnce(cfg, vmodels[vm], vsys, vusr, deckImgs, { maxTokens: 4096, temperature: variant ? 0.9 : 0.6 });
+            if (r && r.ok) break;
+            if (!aiIsModelErr(r)) break;
+          }
+          if (r && r.ok) raw = r.text;
+          else csgenStatus(i, "Couldn\u2019t read the visuals (" + ((r && r.err) || "no vision model") + ") \u2014 writing from the text & notes\u2026", "run");
+        }
+      }
+      if (!raw) raw = await aiText(cfg, sys, usr, { json: true, maxTokens: 4096, temperature: variant ? 0.95 : 0.65 });
       var obj = csgenParse(raw);
       if (!obj || !Array.isArray(obj.blocks) || !obj.blocks.length) throw new Error("The AI didn\u2019t return usable sections \u2014 try again or add more detail.");
       data.work[i].study = csgenNormalize(obj, w.study);
@@ -11036,7 +11058,31 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     })().catch(function (e) { ensureUnzip._p = null; throw e; });
     return ensureUnzip._p;
   }
-  async function pptxToText(buf) {
+  var DECK_IMG_MAX = 16;
+  function bytesToDataUri(bytes, mime) {
+    var bin = "", CH = 0x8000;
+    for (var i = 0; i < bytes.length; i += CH) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+    return "data:" + mime + ";base64," + btoa(bin);
+  }
+  function deckPart(dataUri) {
+    if (!dataUri || dataUri.indexOf(",") < 0) return null;
+    var m = /^data:([^;,]+)/.exec(dataUri);
+    return { src: dataUri, mime: m ? m[1] : "image/jpeg", b64: dataUri.slice(dataUri.indexOf(",") + 1) };
+  }
+  async function pdfToImages(pdf, maxPages, maxDim) {
+    var imgs = [], n = Math.min(pdf.numPages, maxPages);
+    for (var p = 1; p <= n; p++) {
+      var page = await pdf.getPage(p);
+      var v0 = page.getViewport({ scale: 1 });
+      var scale = Math.min(maxDim / Math.max(v0.width, v0.height), 2); if (!isFinite(scale) || scale <= 0) scale = 1;
+      var vp = page.getViewport({ scale: scale });
+      var c = document.createElement("canvas"); c.width = Math.max(1, Math.round(vp.width)); c.height = Math.max(1, Math.round(vp.height));
+      await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+      var part = deckPart(c.toDataURL("image/jpeg", 0.72)); if (part) imgs.push(part);
+    }
+    return imgs;
+  }
+  async function pptxExtract(buf) {
     var fz = await ensureUnzip();
     var unzipSync = fz.unzipSync || (fz.default && fz.default.unzipSync);
     if (!unzipSync) throw new Error("the deck reader failed to load");
@@ -11053,9 +11099,18 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     };
     var slides = pull(/^ppt\/slides\/slide\d+\.xml$/);
     var notes = pull(/^ppt\/notesSlides\/notesSlide\d+\.xml$/).filter(Boolean);
-    var out = slides.map(function (s, idx) { return s ? "Slide " + (idx + 1) + ": " + s : ""; }).filter(Boolean).join("\n\n");
-    if (notes.length) out += "\n\nSpeaker notes:\n" + notes.join("\n");
-    return out;
+    var text = slides.map(function (s, idx) { return s ? "Slide " + (idx + 1) + ": " + s : ""; }).filter(Boolean).join("\n\n");
+    if (notes.length) text += "\n\nSPEAKER NOTES (presenter narration \u2014 the deeper story behind the slides):\n" + notes.map(function (nt, idx) { return "Note " + (idx + 1) + ": " + nt; }).join("\n");
+    var mediaNames = Object.keys(files).filter(function (n) { return /^ppt\/media\/.+\.(png|jpe?g|gif)$/i.test(n); }).sort(function (a, b) { return num(a) - num(b); });
+    var images = [];
+    for (var mi = 0; mi < mediaNames.length && images.length < DECK_IMG_MAX; mi++) {
+      var nm = mediaNames[mi], bytes = files[nm];
+      if (!bytes || bytes.length < 3000) continue;
+      var ext = String((/(png|jpe?g|gif)$/i.exec(nm) || [""])[0]).toLowerCase();
+      var mime = /png/.test(ext) ? "image/png" : /gif/.test(ext) ? "image/gif" : "image/jpeg";
+      try { var part = deckPart(await compressDataUri(bytesToDataUri(bytes, mime), 1280, 0.72)); if (part) images.push(part); } catch (e) {}
+    }
+    return { text: text, images: images };
   }
   function csgenAddPdf(i) {
     var w = data.work[i]; if (!w) return;
@@ -11066,7 +11121,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var g = csgenState(w.id);
       csgenStatus(i, "Reading " + f.name + "\u2026", "run");
       try {
-        var text = "";
+        var text = "", images = [];
         if (/\.pdf$/i.test(f.name) || f.type === "application/pdf") {
           var pdfjs = await ensurePdfJs();
           var pdf = await pdfjs.getDocument({ data: await f.arrayBuffer() }).promise;
@@ -11077,18 +11132,26 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
             parts.push(content.items.map(function (it) { return it.str; }).join(" "));
           }
           text = parts.join("\n\n");
+          csgenStatus(i, "Rendering pages for the AI to see\u2026", "run");
+          images = await pdfToImages(pdf, DECK_IMG_MAX, 1280);
         } else if (/\.pptx$/i.test(f.name) || f.type === "application/vnd.openxmlformats-officedocument.presentationml.presentation") {
-          text = await pptxToText(await f.arrayBuffer());
+          csgenStatus(i, "Reading slides, speaker notes & visuals\u2026", "run");
+          var ex = await pptxExtract(await f.arrayBuffer());
+          text = ex.text; images = ex.images;
         } else if (/\.ppt$/i.test(f.name)) {
           throw new Error("Old .ppt isn\u2019t supported \u2014 save it as .pptx (or export to PDF), then add that.");
         } else if (/\.key$/i.test(f.name)) {
           throw new Error("Keynote (.key) can\u2019t be read here \u2014 export to PDF or PowerPoint, then add that.");
         } else { text = await f.text(); }
         text = (text || "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
-        if (!text) throw new Error("No selectable text found \u2014 a scanned PDF or an image-only deck has no text layer.");
-        g.material = (g.material.trim() ? g.material.trim() + "\n\n" : "") + "\u2014 From " + f.name + " \u2014\n" + text;
+        if (!text && !images.length) throw new Error("No text or visuals found \u2014 add the notes manually.");
+        if (text) g.material = (g.material.trim() ? g.material.trim() + "\n\n" : "") + "\u2014 From " + f.name + " \u2014\n" + text;
+        if (images.length) g.deckImages = (g.deckImages || []).concat(images).slice(0, DECK_IMG_MAX);
         renderL2();
-        csgenStatus(i, "Added text from " + f.name + ".", "ok");
+        var bits = [];
+        if (text) bits.push("text" + (/SPEAKER NOTES/.test(text) ? " + speaker notes" : ""));
+        if (images.length) bits.push(images.length + " visual" + (images.length > 1 ? "s" : ""));
+        csgenStatus(i, "Added " + (bits.join(" + ") || "content") + " from " + f.name + (images.length ? " \u2014 the AI will study the design." : "."), "ok");
       } catch (e) { csgenStatus(i, (e && e.message) || "Couldn\u2019t read that file.", "err"); }
     };
     inp.click();
