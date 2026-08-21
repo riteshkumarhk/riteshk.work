@@ -10858,7 +10858,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="af__hint">Sent as text context only \u2014 the AI can\u2019t open them, so summarise anything important in the notes above.</div></div>' +
       '<div class="af__row">' +
       '<div class="af"><label class="af__label">Tone</label><select data-csgen="tone" data-csid="' + escAttr(w.id) + '">' + toneOpts + '</select><div class="af__hint">Altitude of the storytelling voice.</div></div>' +
-      '<div class="af"><label class="af__label">Deck / PDF</label><button class="btn btn--ghost csgen__pdf" data-act="csgen-pdf" data-index="' + i + '">Add PDF / deck\u2026</button><div class="af__hint">Extracts the text and appends it above.</div></div>' +
+      '<div class="af"><label class="af__label">Deck / PDF</label><button class="btn btn--ghost csgen__pdf" data-act="csgen-pdf" data-index="' + i + '">Add PDF / deck\u2026</button><div class="af__hint">Extracts the text from a PDF or PowerPoint (.pptx) and appends it above.</div></div>' +
       "</div>" +
       '<div class="csgen__ref' + (g.refShow ? " is-open" : "") + '">' +
       '<button class="csgen__reftoggle" data-act="csgen-ref-toggle" data-index="' + i + '">' + (g.refShow ? "\u2212" : "+") + ' Paste a reference case study to echo (optional)</button>' +
@@ -11022,10 +11022,45 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     });
     return ensurePdfJs._p;
   }
+  // .pptx = an Office Open XML zip; pull slide (and notes) text so a deck can seed the AI.
+  function deentXml(s) {
+    return String(s).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+  }
+  function ensureUnzip() {
+    if (ensureUnzip._p) return ensureUnzip._p;
+    var urls = ["https://esm.sh/fflate@0.8.2", "https://cdn.jsdelivr.net/npm/fflate@0.8.2/+esm"];
+    ensureUnzip._p = (async function () {
+      var lastErr;
+      for (var k = 0; k < urls.length; k++) { try { return await import(urls[k]); } catch (e) { lastErr = e; } }
+      throw lastErr || new Error("couldn\u2019t load the deck reader");
+    })().catch(function (e) { ensureUnzip._p = null; throw e; });
+    return ensureUnzip._p;
+  }
+  async function pptxToText(buf) {
+    var fz = await ensureUnzip();
+    var unzipSync = fz.unzipSync || (fz.default && fz.default.unzipSync);
+    if (!unzipSync) throw new Error("the deck reader failed to load");
+    var files = unzipSync(new Uint8Array(buf));
+    var dec = new TextDecoder("utf-8");
+    var num = function (n) { var m = /(\d+)\.xml$/.exec(n); return m ? +m[1] : 0; };
+    var pull = function (rx) {
+      return Object.keys(files).filter(function (n) { return rx.test(n); }).sort(function (a, b) { return num(a) - num(b); })
+        .map(function (n) {
+          var xml = dec.decode(files[n]);
+          var runs = xml.match(/<a:t[^>]*>[\s\S]*?<\/a:t>/g) || [];
+          return runs.map(function (r) { return deentXml(r.replace(/^<a:t[^>]*>/, "").replace(/<\/a:t>$/, "")); }).join(" ").replace(/\s+/g, " ").trim();
+        });
+    };
+    var slides = pull(/^ppt\/slides\/slide\d+\.xml$/);
+    var notes = pull(/^ppt\/notesSlides\/notesSlide\d+\.xml$/).filter(Boolean);
+    var out = slides.map(function (s, idx) { return s ? "Slide " + (idx + 1) + ": " + s : ""; }).filter(Boolean).join("\n\n");
+    if (notes.length) out += "\n\nSpeaker notes:\n" + notes.join("\n");
+    return out;
+  }
   function csgenAddPdf(i) {
     var w = data.work[i]; if (!w) return;
     var inp = document.createElement("input");
-    inp.type = "file"; inp.accept = "application/pdf,.pdf,.txt,.md,.markdown";
+    inp.type = "file"; inp.accept = "application/pdf,.pdf,.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation,.txt,.md,.markdown";
     inp.onchange = async function () {
       var f = inp.files && inp.files[0]; if (!f) return;
       var g = csgenState(w.id);
@@ -11042,9 +11077,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
             parts.push(content.items.map(function (it) { return it.str; }).join(" "));
           }
           text = parts.join("\n\n");
+        } else if (/\.pptx$/i.test(f.name) || f.type === "application/vnd.openxmlformats-officedocument.presentationml.presentation") {
+          text = await pptxToText(await f.arrayBuffer());
+        } else if (/\.ppt$/i.test(f.name)) {
+          throw new Error("Old .ppt isn\u2019t supported \u2014 save it as .pptx (or export to PDF), then add that.");
+        } else if (/\.key$/i.test(f.name)) {
+          throw new Error("Keynote (.key) can\u2019t be read here \u2014 export to PDF or PowerPoint, then add that.");
         } else { text = await f.text(); }
         text = (text || "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
-        if (!text) throw new Error("No selectable text found (a scanned PDF has no text layer).");
+        if (!text) throw new Error("No selectable text found \u2014 a scanned PDF or an image-only deck has no text layer.");
         g.material = (g.material.trim() ? g.material.trim() + "\n\n" : "") + "\u2014 From " + f.name + " \u2014\n" + text;
         renderL2();
         csgenStatus(i, "Added text from " + f.name + ".", "ok");
