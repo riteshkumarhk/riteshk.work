@@ -90,6 +90,8 @@ img[data-zoom] { cursor: zoom-in; }
 .pj__viewseg-btn { font-family: var(--mono); font-size: .64rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-dim); background: none; border: 0; cursor: pointer; padding: .42rem .95rem; border-radius: 999px; transition: color .25s, background .25s; }
 .pj__viewseg-btn:hover { color: var(--text); }
 .pj__viewseg-btn.is-active { color: #0a0a0a; background: var(--accent); }
+/* Light mode's accent is a dark bronze — flip the active label to white for legible contrast. */
+html[data-appearance="light"] .pj__viewseg-btn.is-active { color: #fff; }
 
 .pj__toc { display: flex; flex-direction: column; border-left: 1px solid var(--line); }
 .pj__toc:empty { display: none; }
