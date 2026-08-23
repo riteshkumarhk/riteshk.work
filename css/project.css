@@ -782,6 +782,8 @@ html.pj-lock, html.pj-lock body { overflow: hidden; }
   .pjb__metrics { grid-template-columns: 1fr; }
   .pjb__split { grid-template-columns: 1fr; }
   .pj__foot-cards { grid-template-columns: 1fr; }
+  /* Phones: drop the redundant "Project info" chip — the Overview toggle already scrolls back to the top. */
+  .pj__toc-chip--intro { display: none; }
 }
 @media (max-width: 420px) { .pj__meta { grid-template-columns: 1fr; } }
 
