@@ -1779,9 +1779,13 @@
     }
     function playCurrent() {
       if (paused || !visible || noAuto) return;
-      var s = slides[idx];
-      if (s.getAttribute("data-kind") === "video" && curVid) {
+      var s = slides[idx], kind = s.getAttribute("data-kind");
+      if (kind === "video" && curVid) {
         try { if (curVid.ended) curVid.currentTime = 0; curVid.play().catch(function () { startTimer(4000); }); } catch (e) { startTimer(4000); }
+      } else if (kind === "frame") {
+        // An embedded player (YouTube/Vimeo/etc.) is a cross-origin iframe — we can't tell when it's
+        // playing or ended, so auto-advancing would cut it off. Hold this slide; the viewer moves on manually.
+        clearTimer(); setFill(0);
       } else { startTimer(+s.getAttribute("data-dur") || 5000); }
     }
     function pause() { paused = true; clearTimer(); if (curVid) { try { curVid.pause(); } catch (e) {} } if (fill) { try { var w = getComputedStyle(fill).width; fill.style.transition = "none"; fill.style.width = w; } catch (e) {} } }
@@ -1797,7 +1801,7 @@
     // actually opens a slide fullscreen / in the lightbox, and STAYS paused (sticky) after they close it.
     main.addEventListener("click", function (e) {
       if (e.target.closest("[data-stage-fs], video[data-stage-video], img[data-zoom]")) { stickyPause(); pause(); }
-      if (e.target.closest("[data-stage-fs]")) { e.preventDefault(); var s = slides[idx]; if (s.getAttribute("data-kind") === "video" && curVid) reqFs(curVid); else { var im = s.querySelector("img[data-zoom]"); if (im) im.click(); } return; }
+      if (e.target.closest("[data-stage-fs]")) { e.preventDefault(); var s = slides[idx], k = s.getAttribute("data-kind"); if (k === "video" && curVid) reqFs(curVid); else if (k === "frame") { var fr = s.querySelector(".pjb__frame-el"); if (fr) reqFs(fr); } else { var im = s.querySelector("img[data-zoom]"); if (im) im.click(); } return; }
       var vid = e.target.closest("video[data-stage-video]"); if (vid) { e.preventDefault(); reqFs(vid); }
     });
     if (window.IntersectionObserver) {
