@@ -73,6 +73,7 @@
       var frag = url.indexOf("#") !== -1 ? url.slice(url.indexOf("#") + 1) : "";
       if (frag && out.start == null) eachPair(frag);
       if (out.loop === "1" && !out.playlist) out.playlist = id; // single-video loop needs the id as the playlist
+      out.enablejsapi = "1"; // lets the stage/slideshow controller autoplay + detect end via the IFrame API
       var q = Object.keys(out).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(out[k]); }).join("&");
       return "https://www.youtube.com/embed/" + id + (q ? "?" + q : "");
     }
@@ -1738,6 +1739,18 @@
     else if (a.top != null) scroller.scrollTop = a.top;
   }
   /* ---------- overview stage controller (autoplay + progress + thumbs + fullscreen) ---------- */
+  // Lazily load the YouTube IFrame API once (resolves with window.YT). The stage uses it to autoplay a
+  // video slide and advance when it ends — a cross-origin iframe exposes no other play/ended signal.
+  var ytApiP = null, ytSeq = 0;
+  function loadYT() {
+    if (window.YT && window.YT.Player) return Promise.resolve(window.YT);
+    if (!ytApiP) ytApiP = new Promise(function (resolve) {
+      var prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = function () { if (prev) { try { prev(); } catch (e) {} } resolve(window.YT); };
+      if (!document.querySelector("script[data-ytapi]")) { var sc = document.createElement("script"); sc.src = "https://www.youtube.com/iframe_api"; sc.setAttribute("data-ytapi", "1"); document.head.appendChild(sc); }
+    });
+    return ytApiP;
+  }
   var stageCtl = null;
   function destroyStage() { if (stageCtl) { try { stageCtl.destroy(); } catch (e) {} stageCtl = null; } }
   function initStage(scope) {
@@ -1761,7 +1774,7 @@
     function startTimer(dur) { resetBar("width " + dur + "ms linear"); setFill(100); timer = setTimeout(next, dur); }
     function next() { show(idx + 1); }
     function show(i) {
-      detachVid(); clearTimer(); stopVideos();
+      detachVid(); clearTimer(); stopVideos(); ytPauseAll();
       idx = ((i % count) + count) % count;
       slides.forEach(function (s, k) { s.classList.toggle("is-active", k === idx); });
       thumbs.forEach(function (t, k) { t.classList.toggle("is-active", k === idx); });
@@ -1783,12 +1796,32 @@
       if (kind === "video" && curVid) {
         try { if (curVid.ended) curVid.currentTime = 0; curVid.play().catch(function () { startTimer(4000); }); } catch (e) { startTimer(4000); }
       } else if (kind === "frame") {
-        // An embedded player (YouTube/Vimeo/etc.) is a cross-origin iframe — we can't tell when it's
-        // playing or ended, so auto-advancing would cut it off. Hold this slide; the viewer moves on manually.
-        clearTimer(); setFill(0);
+        var ifr = s.querySelector(".pjb__frame-el");
+        var isYT = ifr && /(youtube\.com|youtu\.be)/.test(ifr.getAttribute("src") || "");
+        // Baseline: auto-switch after the set duration — same as any slide, and the fallback if the video
+        // can't autoplay. If a YouTube embed does play, ytPlay() cancels this timer and advances on ENDED.
+        startTimer(isYT ? Math.max(+s.getAttribute("data-dur") || 5000, 4000) : (+s.getAttribute("data-dur") || 5000));
+        if (isYT) ytPlay(s, ifr);
       } else { startTimer(+s.getAttribute("data-dur") || 5000); }
     }
-    function pause() { paused = true; clearTimer(); if (curVid) { try { curVid.pause(); } catch (e) {} } if (fill) { try { var w = getComputedStyle(fill).width; fill.style.transition = "none"; fill.style.width = w; } catch (e) {} } }
+    function ytPauseAll() { slides.forEach(function (s) { var f = s.querySelector(".pjb__frame-el"); if (f && f.__yt) { try { f.__yt.pauseVideo(); } catch (e) {} } }); }
+    // Attach the IFrame API to a YouTube slide, try muted autoplay (the only kind browsers allow), and
+    // advance when it ends. onReady/onStateChange re-check the slide is still active (the API is async).
+    function ytPlay(s, ifr) {
+      loadYT().then(function (YT) {
+        if (slides[idx] !== s || paused || !visible || noAuto) return;
+        var onState = function (e) {
+          if (slides[idx] !== s) return;
+          if (e.data === YT.PlayerState.PLAYING) { clearTimer(); setFill(0); }   // playing -> advance on ENDED, not by timer
+          else if (e.data === YT.PlayerState.ENDED) { next(); }
+        };
+        if (!ifr.__yt) {
+          if (!ifr.id) ifr.id = "ytf" + (++ytSeq);
+          ifr.__yt = new YT.Player(ifr.id, { events: { onReady: function (ev) { if (slides[idx] === s && !paused && visible && !noAuto) { try { ev.target.mute(); ev.target.playVideo(); } catch (e) {} } }, onStateChange: onState } });
+        } else { try { ifr.__yt.mute(); ifr.__yt.playVideo(); } catch (e) {} }
+      });
+    }
+    function pause() { paused = true; clearTimer(); ytPauseAll(); if (curVid) { try { curVid.pause(); } catch (e) {} } if (fill) { try { var w = getComputedStyle(fill).width; fill.style.transition = "none"; fill.style.width = w; } catch (e) {} } }
     function resume() { if (userPaused || !paused) return; paused = false; playCurrent(); }
     // A manual interaction (opening a slide fullscreen or picking a thumbnail) pauses autoplay, but only
     // for a while: after 2 minutes with no further interaction, auto-switching resumes on its own.
@@ -1806,11 +1839,11 @@
     });
     if (window.IntersectionObserver) {
       io = new IntersectionObserver(function (entries) {
-        entries.forEach(function (en) { var vis = en.isIntersecting && en.intersectionRatio > 0.3; if (vis === visible) return; visible = vis; if (visible) playCurrent(); else { clearTimer(); if (curVid) { try { curVid.pause(); } catch (e) {} } } });
+        entries.forEach(function (en) { var vis = en.isIntersecting && en.intersectionRatio > 0.3; if (vis === visible) return; visible = vis; if (visible) playCurrent(); else { clearTimer(); ytPauseAll(); if (curVid) { try { curVid.pause(); } catch (e) {} } } });
       }, { threshold: [0, 0.3, 0.6] });
       io.observe(main);
     }
-    stageCtl = { destroy: function () { clearTimer(); if (resumeTimer) clearTimeout(resumeTimer); detachVid(); if (io) { try { io.disconnect(); } catch (e) {} } } };
+    stageCtl = { destroy: function () { clearTimer(); if (resumeTimer) clearTimeout(resumeTimer); detachVid(); slides.forEach(function (s) { var f = s.querySelector(".pjb__frame-el"); if (f && f.__yt) { try { f.__yt.destroy(); } catch (e) {} f.__yt = null; } }); if (io) { try { io.disconnect(); } catch (e) {} } } };
     show(0);
   }
 
