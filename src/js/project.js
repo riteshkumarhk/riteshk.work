@@ -40,9 +40,42 @@
   function figmaEmbed(url) { return /embed/i.test(url) && /figma\.com/i.test(url) ? url : ("https://www.figma.com/embed?embed_host=ritesh&url=" + encodeURIComponent(url)); }
   function absUrl(u) { try { return new URL(u, location.href).href; } catch (e) { return u; } }
   function officeEmbed(url) { return "https://view.officeapps.live.com/op/embed.aspx?src=" + encodeURIComponent(absUrl(url)); }
+  // A YouTube time value ("659", "659s", "10m59s", "1h2m3s") -> whole seconds.
+  function ytSeconds(v) {
+    if (v == null || v === "") return null;
+    v = String(v).trim();
+    if (/^\d+$/.test(v)) return +v;
+    var m = v.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/i);
+    if (m && (m[1] || m[2] || m[3])) return (+(m[1] || 0)) * 3600 + (+(m[2] || 0)) * 60 + (+(m[3] || 0));
+    var n = parseInt(v, 10);
+    return isNaN(n) ? null : n;
+  }
+  var YT_PARAMS = { start: 1, end: 1, controls: 1, autoplay: 1, mute: 1, loop: 1, playsinline: 1, rel: 1, fs: 1, disablekb: 1, playlist: 1, modestbranding: 1, cc_load_policy: 1, iv_load_policy: 1, hl: 1, color: 1 };
+  // Build the embed URL from the video id but PRESERVE the author's player params (start/end/
+  // controls/etc.) instead of discarding everything after the id. t=659s is normalised to start=659.
   function ytEmbed(url) {
-    var y = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
-    if (y) return "https://www.youtube.com/embed/" + y[1];
+    var y = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/|v\/))([\w-]{11})/);
+    if (y) {
+      var id = y[1], out = {};
+      var dec = function (s) { try { return decodeURIComponent(String(s).replace(/\+/g, " ")); } catch (e) { return String(s); } };
+      var set = function (k, v) {
+        if (v === "" || v == null) return;
+        if (k === "t" || k === "start") { var s = ytSeconds(v); if (s != null) out.start = String(s); return; }
+        if (k === "end") { var e = ytSeconds(v); if (e != null) out.end = String(e); return; }
+        if (YT_PARAMS[k]) out[k] = v;
+      };
+      var eachPair = function (str) {
+        str.split("&").forEach(function (p) { if (!p) return; var eq = p.indexOf("="); set(dec(eq === -1 ? p : p.slice(0, eq)), eq === -1 ? "" : dec(p.slice(eq + 1))); });
+      };
+      var qi = url.indexOf("?"), qs = qi === -1 ? "" : url.slice(qi + 1);
+      var hi = qs.indexOf("#"); if (hi !== -1) qs = qs.slice(0, hi);
+      qs.split("&").forEach(function (p) { if (!p) return; var eq = p.indexOf("="), k = dec(eq === -1 ? p : p.slice(0, eq)); if (k !== "v") set(k, eq === -1 ? "" : dec(p.slice(eq + 1))); });
+      var frag = url.indexOf("#") !== -1 ? url.slice(url.indexOf("#") + 1) : "";
+      if (frag && out.start == null) eachPair(frag);
+      if (out.loop === "1" && !out.playlist) out.playlist = id; // single-video loop needs the id as the playlist
+      var q = Object.keys(out).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(out[k]); }).join("&");
+      return "https://www.youtube.com/embed/" + id + (q ? "?" + q : "");
+    }
     var v = url.match(/vimeo\.com\/(\d+)/);
     if (v) return "https://player.vimeo.com/video/" + v[1];
     return url;
