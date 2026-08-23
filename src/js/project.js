@@ -95,7 +95,8 @@
     return "image";
   }
   function frameEl(src, cls, label) {
-    return '<div class="pjb__frame ' + cls + '">' +
+    var vid = label === "video" ? " pjb__frame--video" : "";
+    return '<div class="pjb__frame ' + cls + vid + '">' +
       '<iframe class="pjb__frame-el" src="' + attr(src) + '" loading="lazy" allow="fullscreen; autoplay; clipboard-read; clipboard-write" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>' +
       '<button class="pjb__fs" type="button" data-fs aria-label="Toggle fullscreen \u2014 ' + attr(label) + '" title="Fullscreen">' + FS_SVG + '<span>Fullscreen</span></button></div>';
   }
