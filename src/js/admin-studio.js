@@ -4539,14 +4539,59 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "gen-up" && pr.idx > 0) { var a = pr.parent.children, x = a[pr.idx - 1]; a[pr.idx - 1] = a[pr.idx]; a[pr.idx] = x; saveDraft(true); renderL2(); return; }
     if (act === "gen-down" && pr.idx < pr.parent.children.length - 1) { var a2 = pr.parent.children, y = a2[pr.idx + 1]; a2[pr.idx + 1] = a2[pr.idx]; a2[pr.idx] = y; saveDraft(true); renderL2(); return; }
   }
-  function genSystem() {
+  // Compact grounding: real material from the open case study so generations use true content.
+  function genContext(i) {
+    var w = data.work[i]; if (!w) return "";
+    var st = w.study || {}, bits = [];
+    if (w.title) bits.push("Project: " + w.title);
+    if (w.client) bits.push("At: " + w.client);
+    if (w.tagline) bits.push("In a line: " + w.tagline);
+    var mets = [];
+    (st.blocks || []).forEach(function (b) { if (b && b.type === "metrics") (b.items || []).forEach(function (m) { if (m && m.value) mets.push((m.value + " " + (m.label || "")).trim()); }); });
+    if (mets.length) bits.push("Real metrics available: " + mets.slice(0, 8).join(" \u00b7 "));
+    if (st.skim && Array.isArray(st.skim.beats) && st.skim.beats.length) bits.push("Key moves: " + st.skim.beats.map(function (bt) { return bt && (bt.move || bt.problem); }).filter(Boolean).slice(0, 4).join(" \u00b7 "));
+    var heads = (st.blocks || []).map(function (b) { return b && (b.heading || b.nav); }).filter(Boolean).slice(0, 10);
+    if (heads.length) bits.push("Existing section headings: " + heads.join(" \u00b7 "));
+    return bits.join("\n");
+  }
+  // Normalize the AI reply into a proposal envelope (tolerate a bare spec from a stubborn model).
+  function genEnv(parsed) {
+    if (!parsed || typeof parsed !== "object") return null;
+    if (parsed.root || parsed.type) return { understood: "", confidence: "high", plan: null, questions: [], suggestions: [], spec: parsed };
+    return {
+      understood: String(parsed.understood || ""),
+      confidence: /^(high|medium|low)$/.test(parsed.confidence) ? parsed.confidence : "medium",
+      plan: (parsed.plan && typeof parsed.plan === "object") ? parsed.plan : null,
+      questions: Array.isArray(parsed.questions) ? parsed.questions.slice(0, 3) : [],
+      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions.filter(function (s) { return typeof s === "string" && s.trim(); }).slice(0, 3) : [],
+      spec: (parsed.spec && typeof parsed.spec === "object") ? parsed.spec : null
+    };
+  }
+  // Guardrail readout for the plan card (depth / node count / showpiece count).
+  function genStats(spec) {
+    var maxD = 0, n = 0, show = 0;
+    (function walk(nd, d) { if (!nd) return; n++; if (d > maxD) maxD = d; if (nd.type === "showpiece") show++; (nd.children || []).forEach(function (c) { walk(c, d + 1); }); })(spec && spec.root, 0);
+    return { depth: maxD, nodes: n, showpieces: show };
+  }
+  function genSystem(ctx) {
     return [
       "You are a senior product designer composing ONE section for a dark, editorial, restrained portfolio case-study page. You can build ANY kind of UI - a device mockup, a sticky-note wall, a glass panel, a stat band, a testimonial row - but it MUST feel native to THIS site.",
       "SITE LOOK & FEEL - obey it. Use these CSS variables in style values, do NOT hardcode brand colours: --bg (#08080a), --bg-2, --bg-elev (near-black surfaces); --text (warm ivory), --text-dim, --text-faint (muted); --accent (ONE bronze ~#D8A657, used sparingly); --line / --line-soft (hairline borders); --serif (Fraunces display serif, for headings), --mono (JetBrains Mono, for tiny labels). Body copy is a clean sans. Generous whitespace, soft radii, quiet high craft. Never garish, never bright/primary colours.",
       "So: text colours = var(--text)/var(--text-dim)/var(--accent); surfaces = var(--bg-elev) or subtle gradients between the bg vars; borders = 1px solid var(--line); clay/soft shadows use rgba(0,0,0,...) plus faint white or accent highlights. A generated component should look like it always belonged on the site.",
       window.RKGen.describe(),
-      "Match the user's prompt and any reference image in STRUCTURE and INTENT. Write tight, believable placeholder copy the author edits. Leave media src EMPTY (the author adds visuals). One focused, on-brand section. Return the JSON object only."
-    ].join("\n\n");
+      ctx ? ("CASE STUDY CONTEXT — ground the copy in this REAL material (prefer real metrics/story over generic filler):\n" + ctx) : "",
+      "RESPOND WITH ONE JSON OBJECT — a design PROPOSAL, not just a layout:",
+      "{",
+      "  \"understood\": \"one sentence restating what they want, so they can catch a misread\",",
+      "  \"confidence\": \"high | medium | low\",",
+      "  \"plan\": { \"blocks\": [\"plain-language pieces you'll build, e.g. 'a 3-up cards row', 'a stat band'\"], \"rationale\": \"1-2 sentences on the approach\", \"onBrand\": \"one line on how it stays in the site's system\" },",
+      "  \"questions\": [ { \"q\": \"a short clarifying question\", \"chips\": [\"quick\", \"answer\", \"options\"] } ],",
+      "  \"suggestions\": [\"0-3 one-line ideas to make it stronger\"],",
+      "  \"spec\": <the layout spec { \"version\":2, \"root\": Node } > OR null",
+      "}",
+      "HOW TO DECIDE: If you are confident, INCLUDE the spec and leave questions empty — just build it. If the brief is vague, or it's an image with little text, or a real decision forks the outcome, you MAY set spec=null and ASK up to 3 clarifying questions instead — but ALWAYS fill understood + plan so your thinking is visible. Prefer building; ask ONLY when it truly changes the result; NEVER more than 3 questions.",
+      "Match the prompt and any reference image in STRUCTURE and INTENT. Tight, believable placeholder copy the author edits; leave media src EMPTY. Return the JSON object only."
+    ].filter(Boolean).join("\n\n");
   }
   function genPickerCards() {
     var presets = ((data && data.genSections) || []).map(function (p) {
@@ -4569,7 +4614,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     modal.className = "pass pass--wide gen-modal";
     modal.innerHTML =
       '<div class="pass__box"><div class="pass__title">' + (editJ != null ? "Refine this section" : "Generate a section") + "</div>" +
-      '<div class="pass__sub">Describe the section and optionally add reference images \u2014 drag &amp; drop or paste (Ctrl/\u2318+V). AI proposes a layout from safe building blocks \u2014 preview it, then ' + (editJ != null ? "apply" : "add") + " it. No code is generated or run.</div>" +
+      '<div class="pass__sub">Describe it, or drop / paste (Ctrl/\u2318+V) a reference image \u2014 even a rough idea works. The AI reads it back, asks only if it\u2019s genuinely unsure, then builds it on-brand from your design system. Preview and ' + (editJ != null ? "apply" : "add") + ". No code is generated or run.</div>" +
       '<textarea class="gen__prompt" id="genPrompt" rows="3" placeholder="e.g. A testimonial wall \u2014 three quote cards in a row, each with a name and role, on a subtle panel."></textarea>' +
       '<div class="gen__imgs"><label class="btn btn--ghost">Add reference image\u2026<input type="file" accept="image/*" multiple hidden class="gen__file" /></label><div class="gen__thumbs"></div></div>' +
       '<div class="gen__err pass__err"></div>' +
@@ -4600,58 +4645,96 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       [].forEach.call(e.target.files, addImgFile);
       e.target.value = "";
     });
-    function renderStage() {
-      if (!curSpec) { stage.innerHTML = ""; return; }
-      stage.innerHTML =
-        '<div class="gen__result"><div class="gen__prevhead">Preview</div>' +
-        '<div class="gen__preview">' + window.RKGen.renderHtml(curSpec) + "</div>" +
-        '<div class="gen__save"><input type="text" class="gen__name" id="genName" placeholder="Name this section" value="' + escAttr(opts.seedName || "") + '" />' +
-        (editJ != null
-          ? '<button class="btn btn--primary" data-gen-apply>Apply to this section</button>'
-          : '<button class="btn btn--primary" data-gen-insert>Add to this study</button><button class="btn btn--ghost" data-gen-savepreset>Save as reusable section</button>') +
-        "</div></div>";
+    var lastEnv = null, answers = {};
+    function genPreviewName() { var el = modal.querySelector("#genName"); return ((el && el.value) || "").trim(); }
+    function renderConv() {
+      if (!lastEnv && !curSpec) { stage.innerHTML = ""; return; }
+      var env = lastEnv || {}, html = "";
+      if (env.understood || env.plan) {
+        html += '<div class="gen__plan"><div class="gen__plan-h"><span class="gen__plan-ic">\u25c9</span><span class="gen__plan-u">' + escHtml(env.understood || "Here\u2019s my plan") + "</span>" +
+          (env.confidence ? '<span class="gen__conf gen__conf--' + env.confidence + '">' + env.confidence + "</span>" : "") + "</div>";
+        if (env.plan) {
+          if (Array.isArray(env.plan.blocks) && env.plan.blocks.length) html += '<div class="gen__plan-blocks">' + env.plan.blocks.map(function (b) { return '<span class="gen__plan-block">' + escHtml(String(b)) + "</span>"; }).join("") + "</div>";
+          if (env.plan.rationale) html += '<p class="gen__plan-why">' + escHtml(env.plan.rationale) + "</p>";
+        }
+        if (curSpec) {
+          var s = genStats(curSpec);
+          html += '<div class="gen__check"><span class="gen__ck gen__ck--on">On-brand \u2014 tokens only</span><span class="gen__ck gen__ck--on">Shallow \u2014 depth ' + s.depth + "/6</span>" +
+            (s.showpieces ? '<span class="gen__ck gen__ck--show">' + s.showpieces + " showpiece" + (s.showpieces > 1 ? "s" : "") + "</span>" : '<span class="gen__ck gen__ck--on">No bespoke overrides</span>') + "</div>";
+          if (env.plan && env.plan.onBrand) html += '<p class="gen__plan-onbrand">' + escHtml(env.plan.onBrand) + "</p>";
+        }
+        html += "</div>";
+      }
+      if (env.questions && env.questions.length) {
+        html += '<div class="gen__qs"><div class="gen__qs-h">A couple of quick checks \u2014 answer, or just build it:</div>';
+        env.questions.forEach(function (q, qi) {
+          var chips = Array.isArray(q.chips) ? q.chips : (Array.isArray(q.options) ? q.options : []);
+          html += '<div class="gen__q"><div class="gen__q-t">' + escHtml(q.q || q.question || "") + "</div>" +
+            (chips.length ? '<div class="gen__chips">' + chips.map(function (c) { return '<button type="button" class="gen__chip' + (answers[qi] === c ? " is-on" : "") + '" data-genq="' + qi + '" data-genv="' + escAttr(String(c)) + '">' + escHtml(String(c)) + "</button>"; }).join("") + "</div>" : "") +
+            '<input type="text" class="gen__qfree" data-genqf="' + qi + '" placeholder="\u2026or type your own" value="' + escAttr((answers[qi] && chips.indexOf(answers[qi]) < 0) ? answers[qi] : "") + '" /></div>';
+        });
+        html += '<div class="gen__qs-act"><button class="btn btn--primary" data-gen-build>Build with these</button><button class="btn btn--ghost" data-gen-just>Just build your best guess</button></div></div>';
+      }
+      if (curSpec) {
+        html += '<div class="gen__result"><div class="gen__prevhead">Preview</div><div class="gen__preview">' + window.RKGen.renderHtml(curSpec) + "</div>" +
+          ((env.suggestions && env.suggestions.length) ? '<div class="gen__suggests"><span class="gen__suggests-h">Ideas</span>' + env.suggestions.map(function (sg) { return '<button type="button" class="gen__suggest" data-gen-sugg="' + escAttr(sg) + '">' + escHtml(sg) + " \u2192</button>"; }).join("") + "</div>" : "") +
+          '<div class="gen__save"><input type="text" class="gen__name" id="genName" placeholder="Name this section" value="' + escAttr(opts.seedName || "") + '" />' +
+          (editJ != null ? '<button class="btn btn--primary" data-gen-apply>Apply to this section</button>' : '<button class="btn btn--primary" data-gen-insert>Add to this study</button><button class="btn btn--ghost" data-gen-savepreset>Save as reusable section</button>') +
+          "</div></div>";
+      }
+      stage.innerHTML = html;
       if (window.RKGen && RKGen.hydrate) RKGen.hydrate(stage); // let the author test drag/zoom right in the preview
+      wireConv();
+    }
+    function wireConv() {
+      [].forEach.call(stage.querySelectorAll(".gen__chip"), function (ch) { ch.addEventListener("click", function () { answers[ch.getAttribute("data-genq")] = ch.getAttribute("data-genv"); renderConv(); }); });
+      [].forEach.call(stage.querySelectorAll(".gen__qfree"), function (inp) { inp.addEventListener("input", function () { answers[inp.getAttribute("data-genqf")] = inp.value; }); });
+      var bb = stage.querySelector("[data-gen-build]"); if (bb) bb.addEventListener("click", function () { runGen(true); });
+      var bj = stage.querySelector("[data-gen-just]"); if (bj) bj.addEventListener("click", function () { answers = {}; runGen(true); });
+      [].forEach.call(stage.querySelectorAll(".gen__suggest"), function (sg) { sg.addEventListener("click", function () { var pe = modal.querySelector("#genPrompt"); pe.value = (pe.value ? pe.value + "\n" : "") + sg.getAttribute("data-gen-sugg"); runGen(true); }); });
       var ap = stage.querySelector("[data-gen-apply]");
-      if (ap) ap.addEventListener("click", function () {
-        var b = data.work[i].study.blocks[editJ]; if (b) { b.spec = curSpec; var nm = (modal.querySelector("#genName").value || "").trim(); if (nm) b.name = nm; saveDraft(true); renderL2(); status("Section updated.", true); } close();
-      });
+      if (ap) ap.addEventListener("click", function () { var b = data.work[i].study.blocks[editJ]; if (b) { b.spec = curSpec; var nm = genPreviewName(); if (nm) b.name = nm; saveDraft(true); renderL2(); status("Section updated.", true); } close(); });
       var ins = stage.querySelector("[data-gen-insert]");
       if (ins) ins.addEventListener("click", function () {
-        var nm = ((modal.querySelector("#genName").value || "").trim()) || "Section";
+        var nm = genPreviewName() || "Section";
         var st = data.work[i].study || (data.work[i].study = blankStudy()); st.blocks = st.blocks || [];
         var block = blankBlock("gen"); block.spec = curSpec; block.name = nm; block.nav = nm;
         var pos; if (opts.above) { pos = Math.max(0, Math.min(opts.at, st.blocks.length)); st.blocks.splice(pos, 0, block); } else { st.blocks.push(block); pos = st.blocks.length - 1; }
         openBlock = pos; close(); saveDraft(true); renderL2(); status("Added your generated section \u2014 edit it below.", true);
       });
       var sv = stage.querySelector("[data-gen-savepreset]");
-      if (sv) sv.addEventListener("click", function () {
-        var nm = ((modal.querySelector("#genName").value || "").trim()) || "Section";
-        data.genSections = data.genSections || []; data.genSections.push({ id: "g" + Date.now(), name: nm, spec: curSpec, createdAt: Date.now() });
-        saveDraft(true); sv.textContent = "Saved \u2713"; sv.disabled = true; status("Saved \u2014 it\u2019s now in your Add-section dialog.", true);
-      });
+      if (sv) sv.addEventListener("click", function () { var nm = genPreviewName() || "Section"; data.genSections = data.genSections || []; data.genSections.push({ id: "g" + Date.now(), name: nm, spec: curSpec, createdAt: Date.now() }); saveDraft(true); sv.textContent = "Saved \u2713"; sv.disabled = true; status("Saved \u2014 it\u2019s now in your Add-section dialog.", true); });
     }
-    modal.querySelector("[data-gen-run]").addEventListener("click", async function (e) {
+    async function runGen(force) {
       var prompt = (modal.querySelector("#genPrompt").value || "").trim();
       if (!prompt && !imgs.length && !curSpec) { errEl.textContent = "Describe the section, or add a reference image."; return; }
       if (!aiHasKey("txt")) { aiKeyModal("txt", function () {}); return; }
-      var btn = e.currentTarget, was = btnBusy(btn, "Generating\u2026"); errEl.textContent = "";
+      var runBtn = modal.querySelector("[data-gen-run]"), was = runBtn ? btnBusy(runBtn, "Thinking\u2026") : null; errEl.textContent = "";
       try {
         var cfg = aiCfg("txt");
-        var userText = "Section brief:\n" + (prompt || "(see reference image)") + (curSpec ? "\n\nRefine this existing layout (JSON):\n" + JSON.stringify(curSpec.root) : "");
-        var user;
+        var ansTxt = "";
+        if (lastEnv && lastEnv.questions) Object.keys(answers).forEach(function (qi) { var q = lastEnv.questions[qi]; if (answers[qi] && q) ansTxt += "\n- " + (q.q || q.question || ("Q" + qi)) + " -> " + answers[qi]; });
+        var userText = "Section brief:\n" + (prompt || "(see reference image)") +
+          (curSpec ? "\n\nRefine this existing layout (JSON):\n" + JSON.stringify(curSpec.root) : "") +
+          (ansTxt ? "\n\nClarifications from the author:" + ansTxt : "") +
+          (force ? "\n\nThe author is ready \u2014 INCLUDE the spec now and leave questions empty." : "");
+        var ctx = genContext(i), user;
         if (imgs.length && /^(openai|custom)$/.test(cfg.provider)) user = [{ type: "text", text: userText }].concat(imgs.map(function (u) { return { type: "image_url", image_url: { url: u } }; }));
         else if (imgs.length && cfg.provider === "anthropic") user = [{ type: "text", text: userText }].concat(imgs.map(function (u) { var c = u.indexOf(","); var mt = u.slice(5, c).split(";")[0]; return c > 0 ? { type: "image", source: { type: "base64", media_type: mt || "image/png", data: u.slice(c + 1) } } : null; }).filter(Boolean));
         else user = userText + (imgs.length ? "\n\n(Reference image supplied; this provider reads text only, using the brief.)" : "");
-        var parsed = csgenParse(await aiText(cfg, genSystem(), user, { json: true, maxTokens: 2200, temperature: 0.55 }));
-        if (!parsed) throw new Error("The AI didn\u2019t return a valid layout \u2014 try rephrasing.");
-        if (parsed && typeof parsed === "object") parsed.version = 2; // enforce the guardrailed (fenced, token-only) spec
-        curSpec = window.RKGen.clean(parsed);
-        if (window.RKGen.isEmpty(curSpec)) throw new Error("Came back empty \u2014 add detail and retry.");
-        renderStage();
+        var parsed = csgenParse(await aiText(cfg, genSystem(ctx), user, { json: true, maxTokens: 2600, temperature: 0.5 }));
+        if (!parsed) throw new Error("The AI didn\u2019t return a valid proposal \u2014 try rephrasing.");
+        var env = genEnv(parsed);
+        if (env && env.spec) { env.spec.version = 2; var cl = window.RKGen.clean(env.spec); if (!window.RKGen.isEmpty(cl)) curSpec = cl; }
+        if (!env || (!env.spec && !env.questions.length && !env.plan)) throw new Error("Came back empty \u2014 add detail and retry.");
+        if (force && env && !env.spec && !curSpec) errEl.textContent = "I need a touch more detail to build that \u2014 add a line and try again.";
+        lastEnv = env;
+        renderConv();
       } catch (err) { errEl.textContent = err.message || String(err); }
-      finally { btnIdle(btn, was); }
-    });
-    if (curSpec) renderStage();
+      finally { if (runBtn && was) btnIdle(runBtn, was); }
+    }
+    modal.querySelector("[data-gen-run]").addEventListener("click", function () { runGen(false); });
+    if (curSpec) renderConv();
   }
 
   // ---- AI icon generator: draw a new line-icon in the house style, sanitize it, add it to the set ----

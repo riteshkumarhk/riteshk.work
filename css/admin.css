@@ -1572,6 +1572,39 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .gen__save { display: flex; gap: .5rem; align-items: center; padding: .7rem .8rem; border-top: 1px solid var(--line-soft); background: var(--bg-2); }
 .gen__name { flex: 1 1 auto; }
 
+/* conversation surface: plan read-back, guardrail checklist, clarifying questions, suggestions */
+.gen__plan { border: 1px solid var(--line); border-radius: 12px; padding: .8rem .9rem; margin: .4rem 0; background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent); }
+.gen__plan-h { display: flex; align-items: center; gap: .5rem; font-size: .95rem; color: var(--text); }
+.gen__plan-ic { color: var(--accent); flex: 0 0 auto; }
+.gen__plan-u { flex: 1 1 auto; }
+.gen__conf { flex: 0 0 auto; font: 700 .56rem/1 var(--mono, monospace); letter-spacing: .1em; text-transform: uppercase; padding: .25rem .45rem; border-radius: 100px; border: 1px solid var(--line); color: var(--text-dim); }
+.gen__conf--high { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.gen__conf--low { color: var(--text-faint); }
+.gen__plan-blocks { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .55rem; }
+.gen__plan-block { font-size: .78rem; color: var(--text-dim); padding: .28rem .6rem; border: 1px solid var(--line-soft); border-radius: 100px; background: var(--bg-2); }
+.gen__plan-why { margin: .55rem 0 0; font-size: .85rem; line-height: 1.5; color: var(--text-dim); }
+.gen__check { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .6rem; }
+.gen__ck { font: 600 .63rem/1.3 var(--mono, monospace); padding: .28rem .5rem; border-radius: 7px; border: 1px solid var(--line-soft); color: var(--text-faint); }
+.gen__ck--on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 32%, var(--line-soft)); }
+.gen__ck--on::before { content: "\2713 "; }
+.gen__ck--show { color: var(--text-dim); }
+.gen__ck--show::before { content: "\25c6 "; color: var(--accent); }
+.gen__plan-onbrand { margin: .5rem 0 0; font-size: .8rem; font-style: italic; color: var(--text-faint); }
+.gen__qs { border: 1px solid var(--line); border-radius: 12px; padding: .8rem .9rem; margin: .4rem 0; }
+.gen__qs-h { font-size: .82rem; color: var(--text-dim); margin-bottom: .6rem; }
+.gen__q { margin-bottom: .7rem; }
+.gen__q-t { font-size: .9rem; color: var(--text); margin-bottom: .4rem; }
+.gen__chips { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .35rem; }
+.gen__chip { font-size: .8rem; color: var(--text-dim); padding: .34rem .7rem; border: 1px solid var(--line); border-radius: 100px; background: var(--bg-2); cursor: pointer; transition: border-color .2s, color .2s, background .2s; }
+.gen__chip:hover { color: var(--text); }
+.gen__chip.is-on { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.gen__qfree { width: 100%; }
+.gen__qs-act { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .5rem; }
+.gen__suggests { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; padding: .7rem .8rem; border-top: 1px solid var(--line-soft); background: var(--bg-2); }
+.gen__suggests-h { font: 700 .6rem/1 var(--mono, monospace); letter-spacing: .12em; text-transform: uppercase; color: var(--text-faint); }
+.gen__suggest { font-size: .8rem; color: var(--text-dim); padding: .3rem .6rem; border: 1px dashed color-mix(in srgb, var(--accent) 40%, var(--line)); border-radius: 100px; background: transparent; cursor: pointer; }
+.gen__suggest:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+
 /* ===== "Generate a section" entry in the Add-section picker ===== */
 .secpick__gen { margin-bottom: 1rem; }
 .secpick__gencard { display: flex; align-items: center; gap: .8rem; width: 100%; text-align: left; border: 1px dashed var(--accent); border-radius: 12px; padding: .9rem 1rem; background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--text); cursor: pointer; }
