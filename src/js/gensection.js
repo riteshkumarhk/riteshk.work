@@ -13,7 +13,7 @@
 (function (root) {
   "use strict";
 
-  var CONTAINERS = { stack: 1, row: 1, grid: 1, split: 1, card: 1, section: 1 };
+  var CONTAINERS = { stack: 1, row: 1, grid: 1, split: 1, card: 1, section: 1, showpiece: 1 };
   var LEAVES = { heading: 1, text: 1, quote: 1, stat: 1, pill: 1, icon: 1, media: 1, button: 1, divider: 1, spacer: 1 };
   var SIZES = { sm: 1, md: 1, lg: 1, xl: 1 };
   var TONES = { default: 1, dim: 1, faint: 1, accent: 1 };
@@ -112,28 +112,38 @@
     }
     return null;
   }
-  function cleanNode(n, depth) {
-    if (depth > 10 || !n || typeof n !== "object") return null;
+  // Guardrails: shallow by default, and freeform style/fx are fenced to a `showpiece`
+  // subtree in strict specs (version >= 2) so ordinary sections stay 100% token-driven.
+  var MAX_DEPTH = 6, MAX_CHILDREN = 24;
+  function isDefaultProps(p) {
+    return p.gap === "md" && p.align === "left" && p.valign === "top" && p.pad === "none" && p.radius === "none" && p.bg === "none";
+  }
+  function cleanNode(n, depth, strict, inShow) {
+    if (depth > MAX_DEPTH || !n || typeof n !== "object") return null;
     var t = String(n.type || "").toLowerCase();
     if (CONTAINERS[t]) {
+      var show = inShow || t === "showpiece";
       var out = { type: t, props: cleanProps(n.props), children: [] };
       var kids = Array.isArray(n.children) ? n.children : [];
-      for (var i = 0; i < kids.length && out.children.length < 40; i++) {
-        var c = cleanNode(kids[i], depth + 1);
+      for (var i = 0; i < kids.length && out.children.length < MAX_CHILDREN; i++) {
+        var c = cleanNode(kids[i], depth + 1, strict, show);
         if (c) out.children.push(c);
       }
-      if (n.style) out.style = sanitizeStyle(n.style);
-      if (n.fx && FX[n.fx]) out.fx = n.fx;
+      if (n.style && (!strict || show)) out.style = sanitizeStyle(n.style);
+      if (n.fx && FX[n.fx] && (!strict || show)) out.fx = n.fx;
+      // drop a pointless single-child stack/row wrapper (never at the root)
+      if (strict && depth > 0 && (t === "stack" || t === "row") && out.children.length === 1 && !out.style && !out.fx && isDefaultProps(out.props)) return out.children[0];
       return out;
     }
-    if (LEAVES[t]) { var lf = cleanLeaf(t, n); if (lf) { if (n.style) lf.style = sanitizeStyle(n.style); if (n.fx && FX[n.fx]) lf.fx = n.fx; } return lf; }
+    if (LEAVES[t]) { var lf = cleanLeaf(t, n); if (lf) { if (n.style && (!strict || inShow)) lf.style = sanitizeStyle(n.style); if (n.fx && FX[n.fx] && (!strict || inShow)) lf.fx = n.fx; } return lf; }
     return null;
   }
   function clean(spec) {
     spec = spec || {};
+    var strict = Number(spec.version) >= 2; // v2 = guardrailed; v1 = legacy permissive (don't break existing sections)
     var r = spec.root || (spec.type ? spec : null);
-    var rn = cleanNode(r, 0) || { type: "stack", props: cleanProps({}), children: [] };
-    return { version: 1, root: rn };
+    var rn = cleanNode(r, 0, strict, false) || { type: "stack", props: cleanProps({}), children: [] };
+    return { version: strict ? 2 : 1, root: rn };
   }
 
   /* ---------- render (cleaned spec -> safe HTML string) ---------- */
@@ -193,7 +203,7 @@
 
   function blankSpec() {
     return {
-      version: 1,
+      version: 2,
       root: {
         type: "stack", props: { gap: "md", align: "left" }, children: [
           { type: "heading", text: "New section", size: "lg" },
@@ -206,9 +216,10 @@
   // Compact contract handed to the AI so it only ever emits valid, safe specs.
   function describe() {
     return [
-      "You output ONLY a JSON layout spec: { \"version\":1, \"root\": Node }. Output JSON only — never HTML, <script>, event handlers or code.",
+      "You output ONLY a JSON layout spec: { \"version\":2, \"root\": Node }. Output JSON only — never HTML, <script>, event handlers or code.",
       "A Node is a container or a leaf. Containers have \"children\":[Node] + \"props\".",
-      "Containers: stack | row | grid | split | card | section.",
+      "Containers: stack | row | grid | split | card | section | showpiece.",
+      "  showpiece = a FENCED zone for bespoke visuals — ONLY inside a showpiece may a node carry custom \"style\" or \"fx\"; everywhere else style is dropped, so build ordinary sections from the token props below (that is what keeps them on-brand). Reach for a showpiece ONLY for a genuine hero moment (a device mockup, a 3D material), never for plain content — prefer the plain primitives.",
       "  props: gap(none|sm|md|lg|xl) align(left|center|right) valign(top|center|bottom) cols(1-6, grid only) pad(none|sm|md|lg) radius(none|sm|md|lg) bg(none|elev|accent|line).",
       "Leaves:",
       "  heading {text, size(sm|md|lg|xl)}",
@@ -217,11 +228,11 @@
       "  icon {name, size}   (users, chart, target, spark, bolt, shield, star, rocket, globe, check, heart, layers…)",
       "  media {src, kind(image|video|embed), ratio(16x9|4x3|1x1|3x2|3x4|9x16|auto), fit(cover|contain), alt, caption} — leave src EMPTY for a placeholder the author fills with their own image.",
       "  button {label, href}   divider {}   spacer {size}",
-      "RICH VISUALS — ANY node may ALSO carry a \"style\" string of SAFE CSS to build custom materials: claymorphism, neumorphism, glassmorphism, gradients, glows, rounded device frames, 3D tilt, etc.",
+      "RICH VISUALS — INSIDE a \"showpiece\" container, any node may carry a \"style\" string of SAFE CSS to build custom materials: claymorphism, neumorphism, glassmorphism, gradients, glows, rounded device frames, 3D tilt, etc. OUTSIDE a showpiece, style is ignored — compose with the token props instead.",
       "  Allowed style properties ONLY: background, background-color, background-image (gradients only), background-blend-mode, color, border, border-radius, box-shadow, text-shadow, filter, backdrop-filter, transform, transform-origin, transform-style, perspective, perspective-origin, opacity, padding, margin, width, height, min/max-width, min/max-height, aspect-ratio, gap, overflow, background-clip, -webkit-background-clip, -webkit-text-fill-color, font-weight, font-size, font-style, letter-spacing, line-height, text-align, mix-blend-mode, transition, rotate, scale, translate, outline.",
       "  In values use colors, rgba()/hsl(), linear-gradient()/radial-gradient(), box-shadow (incl. inset for clay/neumorphism), blur()/brightness()/saturate() filters, transform funcs (perspective/rotateX/rotateY/translateZ/scale), calc(), and var(--accent) to stay on-brand. NEVER use url(), @import, expression, position:fixed or any script.",
-      "  To build a device mockup (e.g. a phone), NEST styled containers: an outer 'card' styled as the body (large border-radius, a clay dual box-shadow like '18px 18px 40px rgba(0,0,0,.55), -10px -10px 30px rgba(255,255,255,.05), inset 0 1px 2px rgba(255,255,255,.15)', a subtle gradient background, and transform:perspective(900px) rotateY(-14deg) for 3D), containing a 'media' node (kind:image, src empty) styled as the inset screen (border-radius, overflow:hidden), plus small styled containers for the notch/buttons.",
-      "INTERACTIVITY — any node may also carry \"fx\": \"orbit\" | \"tilt\" | \"spin\" to make it user-interactive. orbit = click-hold-drag to rotate the element in 3D + scroll wheel to zoom in/out + double-click to reset. tilt = subtle parallax that follows the cursor on hover. spin = slow idle auto-rotation that pauses on hover (also drag/zoom-able). Put fx on the OUTER device/frame node (e.g. the phone body) so grabbing anywhere moves the whole thing, and keep a transform:perspective(...) rotateY(...) as the resting pose. The interaction code is provided by the site — you ONLY set the flag; never write scripts.",
+      "  To build a device mockup (e.g. a phone), put it inside a \"showpiece\" and NEST styled containers: an outer 'card' styled as the body (large border-radius, a clay dual box-shadow like '18px 18px 40px rgba(0,0,0,.55), -10px -10px 30px rgba(255,255,255,.05), inset 0 1px 2px rgba(255,255,255,.15)', a subtle gradient background, and transform:perspective(900px) rotateY(-14deg) for 3D), containing a 'media' node (kind:image, src empty) styled as the inset screen (border-radius, overflow:hidden), plus small styled containers for the notch/buttons.",
+      "INTERACTIVITY — INSIDE a showpiece, any node may also carry \"fx\": \"orbit\" | \"tilt\" | \"spin\" to make it user-interactive. orbit = click-hold-drag to rotate the element in 3D + scroll wheel to zoom in/out + double-click to reset. tilt = subtle parallax that follows the cursor on hover. spin = slow idle auto-rotation that pauses on hover (also drag/zoom-able). Put fx on the OUTER device/frame node (e.g. the phone body) so grabbing anywhere moves the whole thing, and keep a transform:perspective(...) rotateY(...) as the resting pose. The interaction code is provided by the site — you ONLY set the flag; never write scripts.",
       "Design language: dark, editorial, restrained; ONE bronze accent (var(--accent)) used sparingly; generous whitespace; high craft. Match the user's prompt and any reference image. Return the JSON object only."
     ].join("\n");
   }

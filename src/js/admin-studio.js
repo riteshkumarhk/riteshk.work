@@ -4644,6 +4644,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         else user = userText + (imgs.length ? "\n\n(Reference image supplied; this provider reads text only, using the brief.)" : "");
         var parsed = csgenParse(await aiText(cfg, genSystem(), user, { json: true, maxTokens: 2200, temperature: 0.55 }));
         if (!parsed) throw new Error("The AI didn\u2019t return a valid layout \u2014 try rephrasing.");
+        if (parsed && typeof parsed === "object") parsed.version = 2; // enforce the guardrailed (fenced, token-only) spec
         curSpec = window.RKGen.clean(parsed);
         if (window.RKGen.isEmpty(curSpec)) throw new Error("Came back empty \u2014 add detail and retry.");
         renderStage();

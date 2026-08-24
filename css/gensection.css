@@ -15,6 +15,7 @@
 .gs-split { display: grid; grid-template-columns: 1fr 1fr; gap: var(--g); }
 .gs-card { display: flex; flex-direction: column; gap: var(--g); border: 1px solid var(--line); border-radius: 14px; }
 .gs-section { display: flex; flex-direction: column; gap: var(--g); }
+.gs-showpiece { display: flex; flex-direction: column; gap: var(--g); }
 
 /* gap tokens */
 .gs-gap-none { --g: 0; }
