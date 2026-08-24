@@ -3831,7 +3831,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var grid = cell("", "\u2205", "No icon", " iconpick__b--none") + admIconNames().map(function (n) { return cell(n, admIcon(n), n); }).join("");
       return '<div class="af"><label class="af__label">' + label + '</label>' +
         '<details class="icondd"><summary class="icondd__trigger"><span class="icondd__cur">' + (cur ? admIcon(cur) : "\u2205") + '</span><span class="icondd__name">' + (cur || "No icon") + '</span><span class="icondd__chev" aria-hidden="true">\u25be</span></summary>' +
-        '<div class="icondd__panel"><div class="iconpick">' + grid + "</div></div></details></div>";
+        '<div class="icondd__panel"><div class="iconpick">' + grid + '</div>' +
+        '<button type="button" class="iconpick__gen" data-act="icon-gen" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">\u2728 Generate an icon\u2026</button>' +
+        "</div></details></div>";
     }
     if (kind === "select") {
       var cur0 = it[key] || "";
@@ -4562,7 +4564,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     modal.className = "pass pass--wide gen-modal";
     modal.innerHTML =
       '<div class="pass__box"><div class="pass__title">' + (editJ != null ? "Refine this section" : "Generate a section") + "</div>" +
-      '<div class="pass__sub">Describe the section and optionally drop reference images. AI proposes a layout from safe building blocks \u2014 preview it, then ' + (editJ != null ? "apply" : "add") + " it. No code is generated or run.</div>" +
+      '<div class="pass__sub">Describe the section and optionally add reference images \u2014 drag &amp; drop or paste (Ctrl/\u2318+V). AI proposes a layout from safe building blocks \u2014 preview it, then ' + (editJ != null ? "apply" : "add") + " it. No code is generated or run.</div>" +
       '<textarea class="gen__prompt" id="genPrompt" rows="3" placeholder="e.g. A testimonial wall \u2014 three quote cards in a row, each with a name and role, on a subtle panel."></textarea>' +
       '<div class="gen__imgs"><label class="btn btn--ghost">Add reference image\u2026<input type="file" accept="image/*" multiple hidden class="gen__file" /></label><div class="gen__thumbs"></div></div>' +
       '<div class="gen__err pass__err"></div>' +
@@ -4570,9 +4572,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Close</button><button class="btn btn--primary" data-gen-run>\u2728 Generate</button></div></div>';
     document.body.appendChild(modal);
     var stage = modal.querySelector(".gen__stage"), errEl = modal.querySelector(".gen__err"), thumbs = modal.querySelector(".gen__thumbs");
+    var addImgFile = function (f) { if (!f || !/^image\//.test(f.type)) return; var r = new FileReader(); r.onload = function (ev) { imgs.push(ev.target.result); renderThumbs(); }; r.readAsDataURL(f); };
     var onKey = function (e) { if (e.key === "Escape") close(); };
-    var close = function () { modal.remove(); document.removeEventListener("keydown", onKey); };
+    // Paste an image straight from the clipboard (Ctrl/Cmd+V) — same as picking or dropping a file.
+    var onPaste = function (e) { var items = e.clipboardData && e.clipboardData.items; if (!items) return; var got = 0; for (var p = 0; p < items.length; p++) { if (items[p].kind === "file" && /^image\//.test(items[p].type)) { addImgFile(items[p].getAsFile()); got++; } } if (got) { e.preventDefault(); if (errEl) errEl.textContent = ""; } };
+    var close = function () { modal.remove(); document.removeEventListener("keydown", onKey); document.removeEventListener("paste", onPaste); };
     document.addEventListener("keydown", onKey);
+    document.addEventListener("paste", onPaste);
+    modal.addEventListener("dragover", function (e) { if (e.dataTransfer && [].some.call(e.dataTransfer.items || [], function (it) { return it.kind === "file"; })) e.preventDefault(); });
+    modal.addEventListener("drop", function (e) { if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) { e.preventDefault(); [].forEach.call(e.dataTransfer.files, addImgFile); } });
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     modal.querySelector("[data-cancel]").addEventListener("click", close);
     function renderThumbs() {
@@ -4585,7 +4593,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       });
     }
     modal.querySelector(".gen__file").addEventListener("change", function (e) {
-      [].forEach.call(e.target.files, function (f) { var r = new FileReader(); r.onload = function () { imgs.push(r.result); renderThumbs(); }; r.readAsDataURL(f); });
+      [].forEach.call(e.target.files, addImgFile);
       e.target.value = "";
     });
     function renderStage() {
@@ -4639,6 +4647,102 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       finally { btnIdle(btn, was); }
     });
     if (curSpec) renderStage();
+  }
+
+  // ---- AI icon generator: draw a new line-icon in the house style, sanitize it, add it to the set ----
+  function iconSlug(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24) || "icon"; }
+  function iconWrapDisp(inner) { return '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + "</svg>"; }
+  // Allow-list SVG shapes/attrs only (no script, style, image, href, events) before injecting an
+  // author-generated icon; drops fill/stroke so it inherits the set's currentColor line style.
+  function sanitizeIconSvg(raw) {
+    var s = String(raw || "").trim();
+    if (!s) return "";
+    var wrapped = /<svg/i.test(s) ? s : '<svg xmlns="http://www.w3.org/2000/svg">' + s + "</svg>";
+    var doc; try { doc = new DOMParser().parseFromString(wrapped, "image/svg+xml"); } catch (e) { return ""; }
+    var root = doc && doc.documentElement;
+    if (!root || doc.querySelector("parsererror") || root.tagName.toLowerCase() !== "svg") return "";
+    var okTag = { path: 1, circle: 1, rect: 1, line: 1, polyline: 1, polygon: 1, ellipse: 1, g: 1 };
+    var okAttr = { d: 1, cx: 1, cy: 1, r: 1, rx: 1, ry: 1, x: 1, y: 1, width: 1, height: 1, x1: 1, y1: 1, x2: 1, y2: 1, points: 1, transform: 1 };
+    function ser(node) {
+      var out = "", ch = node.children || [];
+      for (var i = 0; i < ch.length; i++) {
+        var el = ch[i], tag = (el.tagName || "").toLowerCase();
+        if (!okTag[tag]) continue;
+        var attrs = "", A = el.attributes || [];
+        for (var a = 0; a < A.length; a++) {
+          var nm = A[a].name.toLowerCase(), val = A[a].value || "";
+          if (!okAttr[nm] || /[<>]/.test(val) || val.indexOf("url(") >= 0 || /javascript:|expression|data:/i.test(val)) continue;
+          attrs += " " + nm + "=" + JSON.stringify(val);
+        }
+        out += tag === "g" ? "<g" + attrs + ">" + ser(el) + "</g>" : "<" + tag + attrs + "/>";
+      }
+      return out;
+    }
+    var res = ser(root);
+    return /<(path|circle|rect|line|polyline|polygon|ellipse)[ />]/.test(res) ? res : "";
+  }
+  function iconGenSystem() {
+    return [
+      "You design ONE monochrome line-icon in the exact house style of a fixed set (like Lucide or Feather).",
+      "- Canvas: a 24x24 viewBox. Draw ONLY geometry: path, circle, rect, line, polyline, polygon, ellipse.",
+      "- NO svg wrapper, NO fill / stroke / color / style attributes, no gradients, no text, no image, no scripts. The host applies fill:none, stroke:currentColor, ~1.6px stroke, round caps and joins - so draw clean OUTLINES, never solid filled shapes.",
+      "- Balanced and centred with breathing room inside 24x24; legible near 20px; consistent ~2px visual rhythm.",
+      "House-style references (inner markup only):",
+      "shield -> <path d='M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z'/>",
+      "rocket -> <path d='M5 13c-1.5 1.5-2 5-2 5s3.5-.5 5-2M9 11a10 10 0 0 1 9-6c1 5-1 8-6 9l-3-3z'/><circle cx='14.5' cy='9.5' r='1.4'/>",
+      "compass -> <circle cx='12' cy='12' r='9'/><path d='M15.5 8.5l-2.2 5.3-5.3 2.2 2.2-5.3z'/>",
+      "Return STRICT JSON only, no prose: an object with two string keys, name (one short lowercase word) and svg (inner markup only)."
+    ].join(String.fromCharCode(10));
+  }
+  function iconGenModal(wi, bj, ik, key) {
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { iconGenModal(wi, bj, ik, key); }); return; }
+    var svg = "", nm = "";
+    var modal = document.createElement("div");
+    modal.className = "pass icongen";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">Generate an icon</div>' +
+      '<div class="pass__sub">Describe an icon. AI draws it in your line style and adds it to the icon list, available everywhere.</div>' +
+      '<input type="text" class="gen__prompt" placeholder="e.g. a word cloud, a compass rose, a layered stack" />' +
+      '<div class="gen__err pass__err"></div>' +
+      '<div class="icongen__preview" hidden></div>' +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Close</button><button class="btn btn--auto" data-regen hidden>Regenerate</button><button class="btn btn--primary" data-go>\u2728 Generate</button></div></div>';
+    document.body.appendChild(modal);
+    var errEl = modal.querySelector(".gen__err"), prev = modal.querySelector(".icongen__preview"), input = modal.querySelector(".gen__prompt"), goBtn = modal.querySelector("[data-go]"), regen = modal.querySelector("[data-regen]");
+    var onKey = function (e) { if (e.key === "Escape") close(); };
+    function close() { modal.remove(); document.removeEventListener("keydown", onKey); }
+    document.addEventListener("keydown", onKey);
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    try { input.focus(); } catch (e) {}
+    async function gen(btn) {
+      var desc = (input.value || "").trim();
+      if (!desc) { errEl.textContent = "Describe the icon first."; return; }
+      var was = btnBusy(btn, "Drawing..."); errEl.textContent = "";
+      try {
+        var parsed = csgenParse(await aiText(aiCfg("txt"), iconGenSystem(), desc, { json: true, maxTokens: 700, temperature: 0.5 }));
+        var clean = sanitizeIconSvg(parsed && parsed.svg);
+        if (!clean) throw new Error("That did not come back as a clean line-icon - try rephrasing.");
+        svg = clean; nm = iconSlug((parsed && parsed.name) || desc);
+        prev.hidden = false;
+        prev.innerHTML = '<span class="icongen__ico">' + iconWrapDisp(clean) + '</span><span class="icongen__nm">' + escHtml(nm) + "</span>";
+        regen.hidden = false; goBtn.textContent = "Add to icons"; goBtn.setAttribute("data-add", "1");
+      } catch (err) { errEl.textContent = err.message || String(err); }
+      finally { btnIdle(btn, was); }
+    }
+    goBtn.addEventListener("click", function (e) {
+      var btn = e.currentTarget;
+      if (btn.getAttribute("data-add") === "1" && svg) {
+        var have = {}; (admIconNames() || []).forEach(function (n) { have[n] = 1; });
+        var base = nm || "icon", name = base, c = 2; while (have[name]) name = base + "-" + (c++);
+        data.customIcons = data.customIcons || {}; data.customIcons[name] = svg;
+        var reg = {}; reg[name] = svg; if (window.RK && window.RK.registerIcons) window.RK.registerIcons(reg);
+        var it = data.work[wi] && data.work[wi].study && data.work[wi].study.blocks[bj] && data.work[wi].study.blocks[bj].items && data.work[wi].study.blocks[bj].items[ik];
+        if (it) it[key] = name;
+        saveDraft(true); renderL2(); status("Added your icon - it is in the icon list now.", true); close();
+      } else { gen(btn); }
+    });
+    regen.addEventListener("click", function (e) { goBtn.removeAttribute("data-add"); goBtn.textContent = "\u2728 Generate"; gen(e.currentTarget); });
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); if (goBtn.getAttribute("data-add") !== "1") gen(goBtn); } });
   }
 
   function sectionPicker(i, at) {
@@ -8197,6 +8301,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; if (isVideoVal(uri)) bl.items[k].controls = true; saveDraft(true); renderL2(); } }, { vault: !!(data.work[i].study.blocks[bj] && data.work[i].study.blocks[bj].locked) }); return; }
     if (act === "item-upload-multi") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (!bl) return; bl.items = bl.items || []; pickMediaMulti(function () { const it = blankItem(bl.type); bl.items.push(it); return it; }, function () { saveDraft(true); renderL2(); }, { vault: !!bl.locked }); return; }
     if (act === "item-icon") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield, name = b.dataset.icon; const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = name; saveDraft(true); refreshL2Preview(); const grid = b.closest(".iconpick"); if (grid) grid.querySelectorAll(".iconpick__b").forEach(function (x) { x.classList.toggle("is-on", x === b); }); const dd = b.closest(".icondd"); if (dd) { const cur = dd.querySelector(".icondd__cur"); if (cur) cur.innerHTML = name ? admIcon(name) : "\u2205"; const nm = dd.querySelector(".icondd__name"); if (nm) nm.textContent = name || "No icon"; if (dd.tagName === "DETAILS") dd.open = false; } } return; }
+    if (act === "icon-gen") { iconGenModal(+b.dataset.index, +b.dataset.bindex, +b.dataset.iindex, b.dataset.ifield); return; }
     if (act === "item-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (bl && bl.items && bl.items[k]) { bl.items[k][b.dataset.ifield] = ""; saveDraft(true); renderL2(); } return; }
     if (act === "cell-add") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex]; it.cells = it.cells || []; if (it.cells.length < 5) { it.cells.push(blankCell()); saveDraft(true); renderL2(); } return; }
     if (act === "cell-remove") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex]; if (it.cells) { it.cells.splice(+b.dataset.cindex, 1); if (!it.cells.length) it.cells.push(blankCell()); saveDraft(true); renderL2(); } return; }

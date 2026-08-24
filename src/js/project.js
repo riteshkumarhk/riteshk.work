@@ -384,9 +384,27 @@
     grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
     link: '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>'
   };
-  function iconSvg(name) {
-    return '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || ICONS.spark) + "</svg>";
+  // Author-generated icons live in data.customIcons (persisted in content.json) and/or an in-session
+  // registry — both merge on top of the built-in set so a generated icon is available everywhere.
+  var CUSTOM_ICONS = {};
+  function customIconSvg(name) {
+    if (CUSTOM_ICONS[name]) return CUSTOM_ICONS[name];
+    var d = (window.RK && window.RK.data) || null;
+    return (d && d.customIcons && d.customIcons[name]) || "";
   }
+  function iconSvg(name) {
+    var inner = ICONS[name] || customIconSvg(name) || ICONS.spark;
+    return '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + "</svg>";
+  }
+  function iconNamesAll() {
+    var out = Object.keys(ICONS), seen = {}, i, k;
+    for (i = 0; i < out.length; i++) seen[out[i]] = 1;
+    var merge = function (obj) { if (obj) for (k in obj) { if (obj[k] && !seen[k]) { seen[k] = 1; out.push(k); } } };
+    var d = (window.RK && window.RK.data) || null;
+    merge(d && d.customIcons); merge(CUSTOM_ICONS);
+    return out;
+  }
+  function registerIcons(obj) { if (obj && typeof obj === "object") { for (var k in obj) { if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k]) CUSTOM_ICONS[k] = obj[k]; } } }
 
   function textBlock(b) {
     var list = (b.list && b.list.length)
@@ -2169,7 +2187,7 @@
 
   /* ---------- bootstrap ---------- */
   function init() {
-    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = function () { return Object.keys(ICONS); }; window.RK.setStudyUnlocked = setUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; }
+    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; }
     // A fresh vault grant just arrived (Present mode's owner grant, or a recruiter link). If a case
     // study is open, drop its "already tried" latch and re-resolve its vault-hosted deeper cuts so
     // they swap in immediately — no reopen needed.
