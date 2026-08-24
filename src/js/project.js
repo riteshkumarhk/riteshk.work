@@ -491,6 +491,27 @@
     }).join("");
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__cards">' + items + "</div>";
   }
+  // stable per-text pseudo-random for "randomise importance"; approx chip width for smart-fill ordering.
+  function cloudHash(s) { var h = 0, i, str = String(s == null ? "" : s); for (i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0; return Math.abs(h); }
+  function cloudW(c) { return (c.text || "").length + (c.icon ? 3 : 0); }
+  // Concept cloud: flex-packed chips with low/mid/high importance shades (weight + contrast, not size),
+  // an optional per-chip icon, a global icon position + alignment, and a card-style hover. In tight mode
+  // "smart fill" reorders the widest chips first so the wrap packs with the least ragged space.
+  function cloudBlock(b) {
+    var items = (b.items || []).filter(function (c) { return c && c.text; });
+    var pos = /^(left|right|top|bottom)$/.test(b.iconPos) ? b.iconPos : "left";
+    var align = /^(left|center|right|tight)$/.test(b.align) ? b.align : "left";
+    var rnd = !!b.randomImp;
+    if (align === "tight" && b.fill) items = items.slice().sort(function (a, c) { return cloudW(c) - cloudW(a); });
+    var chips = items.map(function (c) {
+      var imp = rnd ? ["low", "mid", "high"][cloudHash(c.text) % 3] : (/^(low|high)$/.test(c.imp) ? c.imp : "mid");
+      var ico = c.icon ? '<span class="pjb__chip-ico">' + iconSvg(c.icon) + "</span>" : "";
+      return '<span class="pjb__chip pjb__chip--' + imp + '">' + ico + '<span class="pjb__chip-t">' + esc(c.text) + "</span></span>";
+    }).join("");
+    var desc = b.desc ? '<p class="pjb__cloud-desc">' + esc(b.desc) + "</p>" : "";
+    return kicker(b.kicker) + heading(b.heading) +
+      '<div class="pjb__cloud pjb__cloud--' + align + " pjb__cloud--ic" + pos + '"><div class="pjb__cloud-field">' + chips + "</div>" + desc + "</div>";
+  }
   function galleryBlock(b) {
     var items = b.items || [], n = items.length;
     var slides = items.map(function (m, i) {
@@ -930,7 +951,7 @@
   var RENDERERS = {
     text: textBlock, statement: stmtBlock, metrics: metricsBlock,
     steps: stepsBlock, media: mediaBlock, split: splitBlock, faq: faqBlock,
-    cards: cardsBlock, gallery: galleryBlock, figure: figureBlock,
+    cards: cardsBlock, cloud: cloudBlock, gallery: galleryBlock, figure: figureBlock,
     columns: columnsBlock, rows: rowsBlock, compare: compareBlock, stickies: stickiesBlock, voices: voicesBlock,
     workflow: workflowBlock, mediagrid: mediagridBlock, device: deviceBlock, isolayers: isolayersBlock, focus: focusBlock,
     gen: genBlock,

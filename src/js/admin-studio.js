@@ -115,6 +115,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     { type: "split", name: "Before / after", tag: "Compare", desc: "Two labelled columns placed side by side.", best: "Before vs after \u00b7 problem vs solution" },
     { type: "faq", name: "FAQ", tag: "Q & A", desc: "A list of question-and-answer pairs.", best: "Objections \u00b7 context \u00b7 scope \u00b7 details" },
     { type: "cards", name: "Cards", tag: "Columns", desc: "A row of titled cards, each with a short line \u2014 no step numbers.", best: "Feature sets \u00b7 principles \u00b7 pillars" },
+    { type: "cloud", name: "Concept cloud", tag: "Chips", desc: "A flex-packed field of labelled chips — optional icons, three weight tiers and a global icon position + alignment. Lifts on hover like cards.", best: "Skills · tools · tags · concept fields" },
     { type: "gallery", name: "Gallery", tag: "Carousel", desc: "A swipeable strip of visuals with captions and a 1/N counter.", best: "Key features \u00b7 screen tours \u00b7 shots" },
     { type: "mediagrid", name: "Media grid", tag: "Grid", desc: "Several images in a compact grid \u2014 uniform tiles or a staggered cluster. Multi-select to add many at once.", best: "Moodboards \u00b7 screen sets \u00b7 explorations" },
     { type: "device", name: "Devices", tag: "Mockup", desc: "Wrap screens in an abstract phone, tablet, laptop or watch — pick a preset ratio or let the frame fit your media. Narrow devices pack side by side.", best: "App screens · responsive · device showcases" },
@@ -1368,6 +1369,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       case "split": return { type: "split", nav: "", kicker: "", heading: "", leftLabel: "Before", left: [], leftImg: "", rightLabel: "After", right: [], rightImg: "" };
       case "faq": return { type: "faq", nav: "", kicker: "", items: [] };
       case "cards": return { type: "cards", nav: "", kicker: "", heading: "", items: [] };
+      case "cloud": return { type: "cloud", nav: "", kicker: "", heading: "", iconPos: "left", align: "left", desc: "", randomImp: false, fill: false, items: [] };
       case "gallery": return { type: "gallery", nav: "", kicker: "", heading: "", items: [] };
       case "mediagrid": return { type: "mediagrid", nav: "", kicker: "", heading: "", gridLayout: "uniform", items: [] };
       case "device": return { type: "device", nav: "", kicker: "", heading: "", device: "phone", preset: "iphone", fill: "", items: [] };
@@ -3769,6 +3771,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     columns: { title: "Columns", one: "Column", add: "Add column", fields: [["label", "Label (optional)", "input"], ["cells", "Cells", "cells"]] },
     rows: { title: "Rows", one: "Row", add: "Add row", fields: [["label", "Row label (optional)", "input"], ["cells", "Cells", "cells"]] },
     stickies: { title: "Notes", one: "Note", add: "Add note", fields: [["label", "Label (e.g. 01)", "input"], ["heading", "Heading", "input"], ["body", "Body", "rich"], ["src", "Image (optional)", "media"]] },
+    cloud: { title: "Concept cloud", one: "Chip", add: "Add chip", fields: [["text", "Text", "input"], ["icon", "Icon (optional)", "icon"], ["imp", "Importance", "select", [["high", "High — darkest"], ["mid", "Mid"], ["low", "Low — lightest"]]]] },
     voices: { title: "Voices", one: "Voice", add: "Add voice", fields: [["side", "Side (Left / Right)", "select", [["left", "Left"], ["right", "Right"]]], ["heading", "Heading (verbatim, optional)", "input"], ["body", "Text / quote", "rich"], ["cite", "Attribution / label", "input"]] }
   };
   var ICON_NAMES = ["users", "idea", "coins", "chart", "target", "lock", "spark", "clock", "shield", "check", "bolt", "layers"];
@@ -3812,6 +3815,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       case "isolayers": return { src: "", heightColor: "", depth: "" };
       case "media": case "gallery": case "mediagrid": case "device": return { src: "", caption: "" };
       case "cards": return { title: "", body: "", icon: "", src: "" };
+      case "cloud": return { text: "", icon: "", imp: "mid" };
       case "columns": return { label: "", cells: [{ heading: "", body: "", src: "" }] };
       case "rows": return { label: "", cells: [{ heading: "", body: "", src: "" }] };
       case "stickies": return { label: "", heading: "", body: "", src: "" };
@@ -4320,6 +4324,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }
     else if (b.type === "faq") body = itemRepeater(i, j, b);
     else if (b.type === "cards") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
+    else if (b.type === "cloud") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + sfSelect(i, j, "iconPos", "Icon position", [["left", "Left of text"], ["right", "Right of text"], ["top", "Above text"], ["bottom", "Below text"]], "Where the icon sits on every chip.") + sfSelect(i, j, "align", "Chip alignment", [["left", "Left"], ["center", "Centre"], ["right", "Right"], ["tight", "Tight cluster"]], "How the chips pack across each row.") + "</div>" + (b.align === "tight" ? '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="fill"' + (b.fill ? " checked" : "") + " /> Smart fill — reorder chips for the tightest cluster</label>" : "") + '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="randomImp"' + (b.randomImp ? " checked" : "") + " /> Randomise importance — vary the shade automatically (per-chip importance is ignored)</label>" + '<div class="repcloud">' + itemRepeater(i, j, b) + "</div>" + sfInput(i, j, "desc", "Description (optional)", "A line below the cloud.") + '<div class="af__hint">Flex-packed chips that lift on hover like cards. Give each a short label, an optional icon and an importance (High reads darkest, Low lightest). Icon position and alignment are global.</div>';
     else if (b.type === "gallery") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b) + '<div class="af__hint">Same URLs as Media \u2014 shown as a swipeable carousel with 1/N counters.</div>';
     else if (b.type === "mediagrid") body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "gridLayout", "Layout", [["uniform", "Uniform \u2014 equal tiles in a grid"], ["cluster", "Cluster \u2014 staggered, like sticky notes"]], "Uniform lines images up in equal tiles (no cropping \u2014 the extra space shows a mat); cluster staggers them like pinned notes.") + itemRepeater(i, j, b) + '<div class="af__hint">Smaller previews than the slideshow. Use \u201cAdd images\u201d to pick several at once.</div>';
     else if (b.type === "device") {
@@ -4352,7 +4357,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     else if (b.type === "compare") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + mediaInputBlock(i, j, "beforeSrc", "Before image") + mediaInputBlock(i, j, "afterSrc", "After image") + "</div>" + '<div class="af__row">' + sfInput(i, j, "beforeLabel", "Before label") + sfInput(i, j, "afterLabel", "After label") + "</div>" + richBlock(i, j, "body", "Description below \u2014 what changed", "Both images should be the same size. Visitors drag the divider to compare.");
     else if (b.type === "focus") body = sfInput(i, j, "heading", "Heading") + mediaInputBlock(i, j, "src", "Image to annotate") + focusAnnEditor(i, j, b) + '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="sticky"' + (b.sticky ? " checked" : "") + ' /> Show annotations as a pill list below the image (number + title, or the description if there\u2019s no title) \u2014 clicking a pill or marker opens its flyout and highlights the matching pill. Full-screen keeps its own list.</label>' + sfInput(i, j, "caption", "Caption");
     else if (b.type === "gen") body = genEditor(i, j, b);
-    var hasHeading = /^(text|metrics|steps|media|split|cards|gallery|mediagrid|device|isolayers|figure|columns|rows|compare|stickies|voices|workflow|focus)$/.test(b.type);
+    var hasHeading = /^(text|metrics|steps|media|split|cards|cloud|gallery|mediagrid|device|isolayers|figure|columns|rows|compare|stickies|voices|workflow|focus)$/.test(b.type);
     var sizeCtl = (b.type === "statement") ? sfSelect(i, j, "hsize", "Statement size", [["", "Standard"], ["sm", "Compact \u2014 easier to read"], ["lg", "Large \u2014 display"]], "Shrink it if the standard size feels too big for the copy.") : "";
     var sepCtl = '<label class="chk block-sep"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="sep"' + (b.sep !== false ? " checked" : "") + " /> Separator line above \u2014 uncheck to flow into the previous section</label>";
     return '<div class="card study__block' + (open ? " is-open" : "") + (b.locked ? " is-locked" : "") + '">' + head +
@@ -5110,6 +5115,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (b.type === "device" && f === "device") { b.preset = ({ phone: "iphone", tablet: "portrait", laptop: "wide", watch: "circle" })[b.device] || ""; if (b.device !== "laptop" && b.device !== "tablet") b.fill = ""; saveDraft(); renderL2(); return; }
     if (b.type === "isolayers" && f === "mode") { if (b.mode !== "interface") b.transparency = ""; saveDraft(); renderL2(); return; }
     if (b.type === "workflow" && f === "flow") { if (b.flow === "cycle") { if (!b.loopFrom) b.loopFrom = "1"; if (!b.loopTo) b.loopTo = String((b.items || []).length || 1); } saveDraft(); renderL2(); return; }
+    if (b.type === "cloud" && f === "align") { saveDraft(); renderL2(); return; }
     saveDraft();
     refreshL2Preview();
   }

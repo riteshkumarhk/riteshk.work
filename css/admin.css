@@ -1089,6 +1089,9 @@ body.adm-lock .cursor { display: none !important; }
 .rt__fig { margin: .5rem 0; }
 
 /* ---------- structured item repeater ---------- */
+/* when a concept cloud randomises importance, lock the per-chip importance control */
+.repcloud { display: block; }
+label.chk:has(input[data-bfield="randomImp"]:checked) + .repcloud .af:has(select[data-ifield="imp"]) { opacity: .4; pointer-events: none; }
 .rep { margin-bottom: 1rem; }
 .rep__head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: .5rem; }
 .rep__head .af__label { margin: 0; }
