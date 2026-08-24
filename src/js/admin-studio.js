@@ -4573,6 +4573,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     (function walk(nd, d) { if (!nd) return; n++; if (d > maxD) maxD = d; if (nd.type === "showpiece") show++; (nd.children || []).forEach(function (c) { walk(c, d + 1); }); })(spec && spec.root, 0);
     return { depth: maxD, nodes: n, showpieces: show };
   }
+  // Live-extract the human-readable bits from a partial streaming JSON buffer (for "watch it think").
+  function streamPeek(buf) {
+    var clean = function (s) { return s ? s.replace(/\\"/g, '"').replace(/\\[nrt]/g, " ").replace(/\s+/g, " ").trim() : ""; };
+    var u = buf.match(/"understood"\s*:\s*"((?:[^"\\]|\\.)*)/);
+    var r = buf.match(/"rationale"\s*:\s*"((?:[^"\\]|\\.)*)/);
+    var c = buf.match(/"confidence"\s*:\s*"(high|medium|low)"/);
+    return { understood: clean(u && u[1]), rationale: clean(r && r[1]), confidence: (c && c[1]) || "", building: /"(?:spec|root|children|blocks)"\s*:/.test(buf) };
+  }
   function genBlockName(t) { return ({ cloud: "Concept cloud", metrics: "Metrics", cards: "Cards", voices: "Voices" })[t] || "block"; }
   // If a generated tree cleanly maps to a first-class block (chips->cloud, stats->metrics,
   // titled cards->cards, quotes->voices), return that editable block so the author can promote
@@ -4678,8 +4686,18 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       [].forEach.call(e.target.files, addImgFile);
       e.target.value = "";
     });
-    var lastEnv = null, answers = {};
+    var lastEnv = null, answers = {}, thinkEls = null;
     function genPreviewName() { var el = modal.querySelector("#genName"); return ((el && el.value) || "").trim(); }
+    function renderThinking(t) {
+      if (!thinkEls) {
+        stage.innerHTML = '<div class="gen__plan gen__plan--think"><div class="gen__plan-h"><span class="gen__plan-ic gen__plan-ic--live">\u25c9</span><span class="gen__plan-u" data-tk="u">Thinking\u2026</span><span class="gen__conf" data-tk="c" hidden></span></div><p class="gen__plan-why" data-tk="r" hidden></p><div class="gen__building" data-tk="b" hidden><span class="gen__buildbar"></span>Composing the section\u2026</div></div>';
+        thinkEls = { u: stage.querySelector('[data-tk="u"]'), c: stage.querySelector('[data-tk="c"]'), r: stage.querySelector('[data-tk="r"]'), b: stage.querySelector('[data-tk="b"]') };
+      }
+      if (thinkEls.u) thinkEls.u.textContent = t.understood || "Thinking\u2026";
+      if (thinkEls.c && t.confidence) { thinkEls.c.hidden = false; thinkEls.c.textContent = t.confidence; thinkEls.c.className = "gen__conf gen__conf--" + t.confidence; }
+      if (thinkEls.r && t.rationale) { thinkEls.r.hidden = false; thinkEls.r.textContent = t.rationale; }
+      if (thinkEls.b) thinkEls.b.hidden = !t.building;
+    }
     function renderConv() {
       if (!lastEnv && !curSpec) { stage.innerHTML = ""; return; }
       var env = lastEnv || {}, html = "";
@@ -4769,7 +4787,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         if (imgs.length && /^(openai|custom)$/.test(cfg.provider)) user = [{ type: "text", text: userText }].concat(imgs.map(function (u) { return { type: "image_url", image_url: { url: u } }; }));
         else if (imgs.length && cfg.provider === "anthropic") user = [{ type: "text", text: userText }].concat(imgs.map(function (u) { var c = u.indexOf(","); var mt = u.slice(5, c).split(";")[0]; return c > 0 ? { type: "image", source: { type: "base64", media_type: mt || "image/png", data: u.slice(c + 1) } } : null; }).filter(Boolean));
         else user = userText + (imgs.length ? "\n\n(Reference image supplied; this provider reads text only, using the brief.)" : "");
-        var parsed = csgenParse(await aiText(cfg, genSystem(ctx, imgs.length > 0), user, { json: true, maxTokens: 2600, temperature: 0.5 }));
+        var sys = genSystem(ctx, imgs.length > 0), sopts = { json: true, maxTokens: 2600, temperature: 0.5 };
+        thinkEls = null; var think = { understood: "", rationale: "", confidence: "", building: false };
+        renderThinking(think);
+        var raw = null;
+        try { raw = await aiTextStream(cfg, sys, user, sopts, function (fullSoFar) { var pk = streamPeek(fullSoFar); think.understood = pk.understood; think.rationale = pk.rationale; think.confidence = pk.confidence; think.building = pk.building; renderThinking(think); }); }
+        catch (e1) { if (/(auth|unauthor|forbidden|invalid|api key|rate|quota|HTTP 4)/i.test(e1.message || "")) throw e1; raw = null; } // stream failed for a non-auth reason -> fall back below
+        var parsed = raw ? csgenParse(raw) : null;
+        if (!parsed) parsed = csgenParse(await aiText(cfg, sys, user, sopts)); // provider/proxy didn't stream cleanly -> one-shot
         if (!parsed) throw new Error("The AI didn\u2019t return a valid proposal \u2014 try rephrasing.");
         var env = genEnv(parsed);
         if (env && env.spec) { env.spec.version = 2; var cl = window.RKGen.clean(env.spec); if (!window.RKGen.isEmpty(cl)) curSpec = cl; }
@@ -4777,7 +4802,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         if (force && env && !env.spec && !curSpec) errEl.textContent = "I need a touch more detail to build that \u2014 add a line and try again.";
         lastEnv = env;
         renderConv();
-      } catch (err) { errEl.textContent = err.message || String(err); }
+      } catch (err) { errEl.textContent = err.message || String(err); if (!lastEnv && !curSpec) { thinkEls = null; stage.innerHTML = ""; } }
       finally { if (runBtn && was) btnIdle(runBtn, was); }
     }
     modal.querySelector("[data-gen-run]").addEventListener("click", function () { runGen(false); });
@@ -10888,6 +10913,65 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     j = await res.json().catch(function () { return null; });
     if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
     return { ok: true, text: ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim() };
+  }
+  // Streaming variant of aiChatOnce: reads the SSE body and calls onDelta(fullSoFar, chunk)
+  // as tokens arrive. Same per-provider shapes as aiChatOnce, plus stream:true / :streamGenerateContent.
+  async function aiStream(cfg, model, system, user, opts, onDelta) {
+    var p = cfg.provider, key = cfg.key, base = cfg.base;
+    var maxTokens = opts.maxTokens || 4096, temp = opts.temperature != null ? opts.temperature : 0.7;
+    var url, headers, body;
+    if (p === "anthropic") {
+      url = base + "/messages";
+      headers = { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" };
+      body = { model: model, max_tokens: maxTokens, temperature: temp, system: system, messages: [{ role: "user", content: user }], stream: true };
+    } else if (p === "gemini") {
+      url = base + "/models/" + encodeURIComponent(model) + ":streamGenerateContent?alt=sse&key=" + encodeURIComponent(key);
+      headers = { "Content-Type": "application/json" };
+      body = { contents: [{ role: "user", parts: [{ text: user }] }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: maxTokens, temperature: temp } };
+      if (opts.json) body.generationConfig.responseMimeType = "application/json";
+    } else {
+      url = base + "/chat/completions";
+      headers = { "Content-Type": "application/json", Authorization: "Bearer " + key };
+      body = { model: model, messages: [{ role: "system", content: system }, { role: "user", content: user }], temperature: temp, max_tokens: maxTokens, stream: true };
+      if (opts.json) body.response_format = { type: "json_object" };
+    }
+    var full = "";
+    try {
+      var res = await fetch(url, { method: "POST", headers: headers, body: JSON.stringify(body) });
+      if (!res.ok || !res.body) { var je = await res.json().catch(function () { return null; }); return { ok: false, status: res.status, err: (je && je.error && je.error.message) || ("HTTP " + res.status) }; }
+      var reader = res.body.getReader(), dec = new TextDecoder(), buf = "";
+      function push(t) { if (t) { full += t; try { onDelta && onDelta(full, t); } catch (e) {} } }
+      for (; ;) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        buf += dec.decode(chunk.value, { stream: true });
+        var lines = buf.split("\n"); buf = lines.pop();
+        for (var li = 0; li < lines.length; li++) {
+          var line = lines[li].trim();
+          if (!line || line.indexOf("data:") !== 0) continue;
+          var payload = line.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          var ev; try { ev = JSON.parse(payload); } catch (e) { continue; }
+          if (p === "anthropic") { if (ev.type === "content_block_delta" && ev.delta && typeof ev.delta.text === "string") push(ev.delta.text); }
+          else if (p === "gemini") { var gp = ev.candidates && ev.candidates[0] && ev.candidates[0].content && ev.candidates[0].content.parts; if (gp) for (var gi = 0; gi < gp.length; gi++) if (gp[gi] && typeof gp[gi].text === "string") push(gp[gi].text); }
+          else { var d = ev.choices && ev.choices[0] && ev.choices[0].delta; if (d && typeof d.content === "string") push(d.content); }
+        }
+      }
+      return { ok: true, text: full.trim() };
+    } catch (e) { return { ok: false, err: e.message || String(e), emitted: full.length > 0 }; }
+  }
+  // Pick the first working model and stream it (no fallback once tokens have started flowing).
+  async function aiTextStream(cfg, system, user, opts, onDelta) {
+    var candidates = await aiModelCandidates(cfg, "txt");
+    if (!candidates.length) throw new Error("No model available \u2014 check your API key.");
+    var lastErr = "";
+    for (var i = 0; i < candidates.length; i++) {
+      var r = await aiStream(cfg, candidates[i], system, user, opts, onDelta);
+      if (r.ok) return r.text;
+      lastErr = r.err;
+      if (r.emitted || !aiIsModelErr(r)) throw new Error(r.err); // real problem, or tokens already shown \u2014 don't retry
+    }
+    throw new Error(lastErr || "No usable model for this key.");
   }
   // ---- Vision: actually LOOK at case images so the reel features real UI/design, not press screenshots ----
   async function imgToVisionPart(src) {
