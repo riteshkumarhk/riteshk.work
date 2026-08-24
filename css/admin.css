@@ -1604,6 +1604,8 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .gen__suggests-h { font: 700 .6rem/1 var(--mono, monospace); letter-spacing: .12em; text-transform: uppercase; color: var(--text-faint); }
 .gen__suggest { font-size: .8rem; color: var(--text-dim); padding: .3rem .6rem; border: 1px dashed color-mix(in srgb, var(--accent) 40%, var(--line)); border-radius: 100px; background: transparent; cursor: pointer; }
 .gen__suggest:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.gen__asnote { font-size: .8rem; line-height: 1.5; color: var(--text-dim); padding: .55rem .7rem; border-top: 1px solid var(--line-soft); background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.gen__asnote b { color: var(--accent); font-weight: 600; }
 
 /* ===== "Generate a section" entry in the Add-section picker ===== */
 .secpick__gen { margin-bottom: 1rem; }

@@ -4573,7 +4573,39 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     (function walk(nd, d) { if (!nd) return; n++; if (d > maxD) maxD = d; if (nd.type === "showpiece") show++; (nd.children || []).forEach(function (c) { walk(c, d + 1); }); })(spec && spec.root, 0);
     return { depth: maxD, nodes: n, showpieces: show };
   }
-  function genSystem(ctx) {
+  function genBlockName(t) { return ({ cloud: "Concept cloud", metrics: "Metrics", cards: "Cards", voices: "Voices" })[t] || "block"; }
+  // If a generated tree cleanly maps to a first-class block (chips->cloud, stats->metrics,
+  // titled cards->cards, quotes->voices), return that editable block so the author can promote
+  // it out of the generic node tree. Returns null when there's no clean equivalent.
+  function genToBlock(spec) {
+    if (!spec || !spec.root) return null;
+    var kids = (spec.root.children || []).slice(), heading = "";
+    if (kids[0] && kids[0].type === "heading") { heading = kids[0].text || ""; kids = kids.slice(1); }
+    // unwrap a SINGLE wrapping container so we inspect the real items — a composite section
+    // (leaves mixed with containers) fails the checks below and stays a generated section.
+    var guard = 0;
+    while (kids.length === 1 && /^(row|grid|stack|section)$/.test(kids[0].type) && Array.isArray(kids[0].children) && kids[0].children.length && guard++ < 4) kids = kids[0].children.slice();
+    var items = kids;
+    if (!items.length) return null;
+    var types = items.map(function (n) { return n && n.type; });
+    var count = function (t) { return types.filter(function (x) { return x === t; }).length; };
+    var maj = function (t) { return count(t) >= Math.ceil(items.length * 0.6); };
+    var only = function (t) { return items.filter(function (n) { return n && n.type === t; }); };
+    if (maj("pill")) return { type: "cloud", nav: heading, kicker: "", heading: heading, iconPos: "left", align: "left", desc: "", randomImp: false, fill: false, items: only("pill").map(function (n) { return { text: n.text || "", icon: "", imp: n.tone === "accent" ? "high" : "mid" }; }) };
+    if (maj("stat")) return { type: "metrics", nav: heading, kicker: "", heading: heading, items: only("stat").map(function (n) { return { value: n.value || "", label: n.label || "" }; }) };
+    if (maj("quote")) return { type: "voices", nav: heading, kicker: "", heading: heading, items: only("quote").map(function (n, k) { return { side: k % 2 ? "right" : "left", heading: "", body: n.text || "", cite: n.cite || "" }; }) };
+    var cardish = items.filter(function (n) { return n && /^(card|stack)$/.test(n.type) && Array.isArray(n.children) && n.children.length; });
+    if (cardish.length >= 2 && cardish.length >= Math.ceil(items.length * 0.6)) {
+      var cardItems = cardish.map(function (n) {
+        var h = "", body = "", icon = "";
+        (n.children || []).forEach(function (c) { if (c.type === "heading" && !h) h = c.text || ""; else if (c.type === "text" && !body) body = c.text || ""; else if (c.type === "icon" && !icon) icon = c.name || ""; });
+        return { title: h, body: body, icon: icon, src: "" };
+      }).filter(function (c) { return c.title || c.body; });
+      if (cardItems.length >= 2) return { type: "cards", nav: heading, kicker: "", heading: heading, items: cardItems };
+    }
+    return null;
+  }
+  function genSystem(ctx, hasImg) {
     return [
       "You are a senior product designer composing ONE section for a dark, editorial, restrained portfolio case-study page. You can build ANY kind of UI - a device mockup, a sticky-note wall, a glass panel, a stat band, a testimonial row - but it MUST feel native to THIS site.",
       "SITE LOOK & FEEL - obey it. Use these CSS variables in style values, do NOT hardcode brand colours: --bg (#08080a), --bg-2, --bg-elev (near-black surfaces); --text (warm ivory), --text-dim, --text-faint (muted); --accent (ONE bronze ~#D8A657, used sparingly); --line / --line-soft (hairline borders); --serif (Fraunces display serif, for headings), --mono (JetBrains Mono, for tiny labels). Body copy is a clean sans. Generous whitespace, soft radii, quiet high craft. Never garish, never bright/primary colours.",
@@ -4590,6 +4622,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       "  \"spec\": <the layout spec { \"version\":2, \"root\": Node } > OR null",
       "}",
       "HOW TO DECIDE: If you are confident, INCLUDE the spec and leave questions empty — just build it. If the brief is vague, or it's an image with little text, or a real decision forks the outcome, you MAY set spec=null and ASK up to 3 clarifying questions instead — but ALWAYS fill understood + plan so your thinking is visible. Prefer building; ask ONLY when it truly changes the result; NEVER more than 3 questions.",
+      hasImg ? "A REFERENCE IMAGE is attached. In \"understood\", first say what you SEE in it. Adopt its STRUCTURE and intent, but TRANSLATE the look to the site's tokens — never copy the screenshot's raw colours, fonts or spacing; map them to --accent / --text / --bg-elev / --line. Only wrap it in a showpiece if it is genuinely a hero visual (a device mockup, a 3D material)." : "",
       "Match the prompt and any reference image in STRUCTURE and INTENT. Tight, believable placeholder copy the author edits; leave media src EMPTY. Return the JSON object only."
     ].filter(Boolean).join("\n\n");
   }
@@ -4676,10 +4709,16 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         html += '<div class="gen__qs-act"><button class="btn btn--primary" data-gen-build>Build with these</button><button class="btn btn--ghost" data-gen-just>Just build your best guess</button></div></div>';
       }
       if (curSpec) {
+        var asBlock = (editJ == null) ? genToBlock(curSpec) : null;
         html += '<div class="gen__result"><div class="gen__prevhead">Preview</div><div class="gen__preview">' + window.RKGen.renderHtml(curSpec) + "</div>" +
           ((env.suggestions && env.suggestions.length) ? '<div class="gen__suggests"><span class="gen__suggests-h">Ideas</span>' + env.suggestions.map(function (sg) { return '<button type="button" class="gen__suggest" data-gen-sugg="' + escAttr(sg) + '">' + escHtml(sg) + " \u2192</button>"; }).join("") + "</div>" : "") +
+          (asBlock ? '<div class="gen__asnote">Recognised as a <b>' + escHtml(genBlockName(asBlock.type)) + '</b> \u2014 add it as an editable block for the normal inline controls, or keep the generated version.</div>' : "") +
           '<div class="gen__save"><input type="text" class="gen__name" id="genName" placeholder="Name this section" value="' + escAttr(opts.seedName || "") + '" />' +
-          (editJ != null ? '<button class="btn btn--primary" data-gen-apply>Apply to this section</button>' : '<button class="btn btn--primary" data-gen-insert>Add to this study</button><button class="btn btn--ghost" data-gen-savepreset>Save as reusable section</button>') +
+          (editJ != null
+            ? '<button class="btn btn--primary" data-gen-apply>Apply to this section</button>'
+            : (asBlock
+              ? '<button class="btn btn--primary" data-gen-asblock>Add as editable ' + escHtml(genBlockName(asBlock.type)) + '</button><button class="btn btn--ghost" data-gen-insert>Keep as generated</button>'
+              : '<button class="btn btn--primary" data-gen-insert>Add to this study</button><button class="btn btn--ghost" data-gen-savepreset>Save as reusable section</button>')) +
           "</div></div>";
       }
       stage.innerHTML = html;
@@ -4702,6 +4741,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         var pos; if (opts.above) { pos = Math.max(0, Math.min(opts.at, st.blocks.length)); st.blocks.splice(pos, 0, block); } else { st.blocks.push(block); pos = st.blocks.length - 1; }
         openBlock = pos; close(); saveDraft(true); renderL2(); status("Added your generated section \u2014 edit it below.", true);
       });
+      var asb = stage.querySelector("[data-gen-asblock]");
+      if (asb) asb.addEventListener("click", function () {
+        var block = genToBlock(curSpec); if (!block) return;
+        var nm = genPreviewName(); if (nm) { block.nav = nm; block.heading = block.heading || nm; }
+        var st = data.work[i].study || (data.work[i].study = blankStudy()); st.blocks = st.blocks || [];
+        var pos; if (opts.above) { pos = Math.max(0, Math.min(opts.at, st.blocks.length)); st.blocks.splice(pos, 0, block); } else { st.blocks.push(block); pos = st.blocks.length - 1; }
+        openBlock = pos; close(); saveDraft(true); renderL2(); status("Added as an editable " + genBlockName(block.type) + " \u2014 edit it below.", true);
+      });
       var sv = stage.querySelector("[data-gen-savepreset]");
       if (sv) sv.addEventListener("click", function () { var nm = genPreviewName() || "Section"; data.genSections = data.genSections || []; data.genSections.push({ id: "g" + Date.now(), name: nm, spec: curSpec, createdAt: Date.now() }); saveDraft(true); sv.textContent = "Saved \u2713"; sv.disabled = true; status("Saved \u2014 it\u2019s now in your Add-section dialog.", true); });
     }
@@ -4722,7 +4769,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         if (imgs.length && /^(openai|custom)$/.test(cfg.provider)) user = [{ type: "text", text: userText }].concat(imgs.map(function (u) { return { type: "image_url", image_url: { url: u } }; }));
         else if (imgs.length && cfg.provider === "anthropic") user = [{ type: "text", text: userText }].concat(imgs.map(function (u) { var c = u.indexOf(","); var mt = u.slice(5, c).split(";")[0]; return c > 0 ? { type: "image", source: { type: "base64", media_type: mt || "image/png", data: u.slice(c + 1) } } : null; }).filter(Boolean));
         else user = userText + (imgs.length ? "\n\n(Reference image supplied; this provider reads text only, using the brief.)" : "");
-        var parsed = csgenParse(await aiText(cfg, genSystem(ctx), user, { json: true, maxTokens: 2600, temperature: 0.5 }));
+        var parsed = csgenParse(await aiText(cfg, genSystem(ctx, imgs.length > 0), user, { json: true, maxTokens: 2600, temperature: 0.5 }));
         if (!parsed) throw new Error("The AI didn\u2019t return a valid proposal \u2014 try rephrasing.");
         var env = genEnv(parsed);
         if (env && env.spec) { env.spec.version = 2; var cl = window.RKGen.clean(env.spec); if (!window.RKGen.isEmpty(cl)) curSpec = cl; }
