@@ -4581,7 +4581,6 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     document.addEventListener("paste", onPaste);
     modal.addEventListener("dragover", function (e) { if (e.dataTransfer && [].some.call(e.dataTransfer.items || [], function (it) { return it.kind === "file"; })) e.preventDefault(); });
     modal.addEventListener("drop", function (e) { if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) { e.preventDefault(); [].forEach.call(e.dataTransfer.files, addImgFile); } });
-    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     modal.querySelector("[data-cancel]").addEventListener("click", close);
     function renderThumbs() {
       thumbs.innerHTML = "";
