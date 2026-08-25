@@ -3771,7 +3771,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     columns: { title: "Columns", one: "Column", add: "Add column", fields: [["label", "Label (optional)", "input"], ["cells", "Cells", "cells"]] },
     rows: { title: "Rows", one: "Row", add: "Add row", fields: [["label", "Row label (optional)", "input"], ["cells", "Cells", "cells"]] },
     stickies: { title: "Notes", one: "Note", add: "Add note", fields: [["label", "Label (e.g. 01)", "input"], ["heading", "Heading", "input"], ["body", "Body", "rich"], ["src", "Image (optional)", "media"]] },
-    cloud: { title: "Concept cloud", one: "Chip", add: "Add chip", fields: [["text", "Text", "input"], ["icon", "Icon (optional)", "icon"], ["imp", "Importance", "select", [["high", "High — darkest"], ["mid", "Mid"], ["low", "Low — lightest"]]]] },
+    cloud: { title: "Concept cloud", one: "Chip", add: "Add chip", fields: [["text", "Text", "input"], ["_r", "", "row", [["icon", "Icon", "icon"], ["imp", "Importance", "select", [["high", "High — darkest"], ["mid", "Mid"], ["low", "Low — lightest"]]]]]] },
     voices: { title: "Voices", one: "Voice", add: "Add voice", fields: [["side", "Side (Left / Right)", "select", [["left", "Left"], ["right", "Right"]]], ["heading", "Heading (verbatim, optional)", "input"], ["body", "Text / quote", "rich"], ["cite", "Attribution / label", "input"]] }
   };
   var ICON_NAMES = ["users", "idea", "coins", "chart", "target", "lock", "spark", "clock", "shield", "check", "bolt", "layers"];
@@ -3827,6 +3827,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var key = f[0], label = f[1], kind = f[2];
     var da = 'data-sitem="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '"';
     if (kind === "rich") return richItem(i, j, k, key, label);
+    if (kind === "row") return '<div class="af__row af__row--items">' + (f[3] || []).map(function (sf) { return itemFieldEl(i, j, k, it, sf); }).join("") + "</div>";
     if (kind === "icon") {
       var cur = it[key] || "";
       var cell = function (n, inner, title, extra) {
@@ -3834,7 +3835,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       };
       var grid = cell("", "\u2205", "No icon", " iconpick__b--none") + admIconNames().map(function (n) { return cell(n, admIcon(n), n); }).join("");
       return '<div class="af"><label class="af__label">' + label + '</label>' +
-        '<details class="icondd"><summary class="icondd__trigger"><span class="icondd__cur">' + (cur ? admIcon(cur) : "\u2205") + '</span><span class="icondd__name">' + (cur || "No icon") + '</span><span class="icondd__chev" aria-hidden="true">\u25be</span></summary>' +
+        '<details class="icondd"><summary class="icondd__trigger"><span class="icondd__cur">' + (cur ? admIcon(cur) : "\u2205") + '</span><span class="icondd__name">' + (cur || "No icon") + '</span><span class="icondd__chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></summary>' +
         '<div class="icondd__panel"><div class="iconpick">' + grid + '</div>' +
         '<button type="button" class="iconpick__gen" data-act="icon-gen" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">\u2728 Generate an icon\u2026</button>' +
         "</div></details></div>";

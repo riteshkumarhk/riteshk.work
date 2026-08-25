@@ -338,7 +338,10 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .mdbar__b--acc { color: var(--accent); font-style: italic; }
 .mdbar__b--acc:hover { background: var(--accent); border-color: var(--accent); color: #0a0a0a; }
 .af__row { display: flex; gap: .6rem; }
-.af__row .af { flex: 1; }
+.af__row .af { flex: 1; min-width: 0; }
+.af__row--items { gap: .5rem; }
+.af select { appearance: none; -webkit-appearance: none; width: 100%; padding: .5rem 1.7rem .5rem .6rem; border: 1px solid var(--line); border-radius: 8px; background-color: var(--bg); color: var(--text); font-size: .82rem; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238f8a84' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .6rem center; background-size: 11px; }
+.af select:hover { border-color: var(--accent); }
 
 .adm input[type="text"], .adm input[type="email"], .adm input[type="password"], .adm input[type="url"], .adm input[type="tel"], .adm input[type="search"], .adm textarea, .adm select {
   width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line);
@@ -1132,9 +1135,10 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .icondd__cur { display: grid; place-items: center; width: 24px; height: 24px; color: var(--accent); font-size: 1rem; }
 .icondd__cur svg { width: 20px; height: 20px; }
 .icondd__name { flex: 1; font-size: .82rem; color: var(--text-dim); text-transform: capitalize; }
-.icondd__chev { color: var(--text-faint); font-size: .8rem; transition: transform .2s; }
+.icondd__chev { display: inline-flex; color: var(--text-dim); transition: transform .2s; }
+.icondd__chev svg { width: 11px; height: 11px; display: block; }
 .icondd[open] .icondd__chev { transform: rotate(180deg); }
-.icondd__panel { margin-top: .35rem; border: 1px solid var(--line); border-radius: 10px; padding: .5rem; background: var(--bg-elev); max-height: 224px; overflow-y: auto; }
+.icondd__panel { position: absolute; left: 0; top: calc(100% + .35rem); z-index: 8; min-width: 220px; border: 1px solid var(--line); border-radius: 10px; padding: .5rem; background: var(--bg-elev); max-height: 260px; overflow-y: auto; box-shadow: 0 14px 34px -14px rgba(0, 0, 0, .75); }
 .iconpick { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: .35rem; }
 .iconpick__b { display: grid; place-items: center; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text-dim); cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
 .iconpick__b:hover { color: var(--text); border-color: var(--accent); }
