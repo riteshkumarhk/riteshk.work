@@ -137,8 +137,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   let previewDevice = "desktop"; // live-preview size: desktop | phone
   try { previewDevice = localStorage.getItem("rk:preview:device") === "phone" ? "phone" : "desktop"; } catch (e) {}
   var DEV_ICON = {
-    desktop: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
-    phone: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>'
+    desktop: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
+    phone: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>'
   };
   let openBlock = -1; // which section (block) is expanded in the L2 sections accordion
   let journeyOpen = false; // is the Design Journey editor open in the L2 panel?
@@ -568,10 +568,25 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   // Eye show/hide toggle: a functional but visually-hidden checkbox with an inline SVG eye on
   // top - eye OPEN = shown (bronze), eye-OFF (slashed) = hidden (faint). Rendered entirely in
   // JS with inline styles/colours so it never depends on the admin.css cache version.
-  const EYE_ON = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
-  const EYE_OFF = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
-  const LOCK_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
-  const DUP_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  // ---- Unified studio UI icon family: ONE house style (24-grid · 1.75 stroke · round caps/joins · currentColor) ----
+  // Every chrome icon renders through svgIco so the whole studio reads as one coherent set.
+  function svgIco(paths, w) { w = w || 14; return '<svg viewBox="0 0 24 24" width="' + w + '" height="' + w + '" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none">' + paths + '</svg>'; }
+  const IC = {
+    up: svgIco('<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>'),
+    down: svgIco('<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>'),
+    close: svgIco('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+    dup: svgIco('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', 13),
+    edit: svgIco('<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
+    refresh: svgIco('<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v5h-5"/>'),
+    back: svgIco('<path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>'),
+    ext: svgIco('<path d="M7 17 17 7"/><path d="M7 7h10v10"/>'),
+    check: svgIco('<path d="M20 6 9 17l-5-5"/>'),
+    add: svgIco('<path d="M5 12h14"/><path d="M12 5v14"/>')
+  };
+  const EYE_ON = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const EYE_OFF = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+  const LOCK_SVG = svgIco('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', 12);
+  const DUP_SVG = IC.dup;
   // eye = a show/hide (or feature) toggle. opts.disabled locks it (dimmed, not clickable); opts.title overrides the tooltip.
   function eyeToggle(attrs, on, cls, opts) {
     opts = opts || {};
@@ -669,10 +684,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function ops(list, i, len, dupAct) {
     return (
       '<div class="card__ops">' +
-      '<button class="iconbtn" data-act="up" data-list="' + list + '" data-index="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">↑</button>' +
-      '<button class="iconbtn" data-act="down" data-list="' + list + '" data-index="' + i + '"' + (i === len - 1 ? " disabled" : "") + ' title="Move down">↓</button>' +
-      (dupAct ? '<button class="iconbtn" data-act="' + dupAct + '" data-list="' + list + '" data-index="' + i + '" title="Duplicate — creates a hidden copy"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' : "") +
-      '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="' + list + '" data-index="' + i + '" title="Remove">✕</button>' +
+      '<button class="iconbtn" data-act="up" data-list="' + list + '" data-index="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
+      '<button class="iconbtn" data-act="down" data-list="' + list + '" data-index="' + i + '"' + (i === len - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
+      (dupAct ? '<button class="iconbtn" data-act="' + dupAct + '" data-list="' + list + '" data-index="' + i + '" title="Duplicate — creates a hidden copy">' + IC.dup + '</button>' : "") +
+      '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="' + list + '" data-index="' + i + '" title="Remove">' + IC.close + '</button>' +
       "</div>"
     );
   }
@@ -716,8 +731,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="imgblk__hint">Uploads are embedded at full, original quality \u2014 no compression or resizing. For very large images, host them and paste a URL to keep the published file lean.</div></div></div>';
   }
 
-  var PARX_COPY_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-  var PARX_CHECK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  var PARX_COPY_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  var PARX_CHECK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
   var DEPTH_DOTS_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>';
   // Compact parallax control overlaid on the cover-image preview (keeps the header card tidy).
   // Direction (up/down) + intensity (0..100, 0 = off). Persists to w.parDir / w.parAmt.
@@ -728,8 +743,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="parx" title="Scroll parallax for this thumbnail \u2014 scroll the editor to preview it">' +
       '<span class="parx__lead">Parallax</span>' +
       '<div class="parx__dir" role="group" aria-label="Parallax direction">' +
-        '<button type="button" class="parx__dirbtn' + (dir === "up" ? " is-on" : "") + '" data-act="par-dir" data-index="' + i + '" data-dir="up" title="Drift up as you scroll">\u2191</button>' +
-        '<button type="button" class="parx__dirbtn' + (dir === "down" ? " is-on" : "") + '" data-act="par-dir" data-index="' + i + '" data-dir="down" title="Drift down as you scroll">\u2193</button>' +
+        '<button type="button" class="parx__dirbtn' + (dir === "up" ? " is-on" : "") + '" data-act="par-dir" data-index="' + i + '" data-dir="up" title="Drift up as you scroll">' + IC.up + '</button>' +
+        '<button type="button" class="parx__dirbtn' + (dir === "down" ? " is-on" : "") + '" data-act="par-dir" data-index="' + i + '" data-dir="down" title="Drift down as you scroll">' + IC.down + '</button>' +
       '</div>' +
       '<input type="range" class="parx__range" min="0" max="100" step="1" value="' + amt + '" style="--fill:' + amt + '%" data-parx="' + i + '" aria-label="Parallax intensity" />' +
       '<span class="parx__valwrap">' +
@@ -771,7 +786,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     modal.className = "depthdemo";
     modal.setAttribute("data-lenis-prevent", "");
     modal.innerHTML = '<div class="depthdemo__shell" role="dialog" aria-modal="true" aria-label="Cover preview">' +
-      '<div class="depthdemo__head"><span>Cover preview</span><button type="button" class="depthdemo__close" data-depthdemo-close aria-label="Close preview">\u2715</button></div>' +
+      '<div class="depthdemo__head"><span>Cover preview</span><button type="button" class="depthdemo__close" data-depthdemo-close aria-label="Close preview">' + IC.close + '</button></div>' +
       '<iframe class="depthdemo__frame" title="Interactive project card preview" src="/index.html?preview=1&amp;card=' + encodeURIComponent(w.id) + '"></iframe>' +
       '</div>';
     function close() {
@@ -3983,9 +3998,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<span class="rep__n">' + escHtml(spec.one) + " " + (k + 1) + '</span>' +
         '<span class="rep__itemlabel">' + escHtml(itemLabel(it)) + '</span>' +
         '<span class="rep__ops">' +
-        '<button class="iconbtn" data-act="item-up" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '"' + (k === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
-        '<button class="iconbtn" data-act="item-down" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '"' + (k === items.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
-        '<button class="iconbtn iconbtn--danger" data-act="item-remove" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" title="Remove">\u2715</button>' +
+        '<button class="iconbtn" data-act="item-up" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '"' + (k === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
+        '<button class="iconbtn" data-act="item-down" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '"' + (k === items.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
+        '<button class="iconbtn iconbtn--danger" data-act="item-remove" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" title="Remove">' + IC.close + '</button>' +
         "</span></div>" + flds + "</div>";
     }).join("") || '<div class="rep__empty">No ' + escHtml(spec.title.toLowerCase()) + " yet.</div>";
     var bulk = /^(gallery|media|mediagrid|device|isolayers)$/.test(b.type) ? '<button class="btn btn--add rep__add" data-act="item-upload-multi" data-index="' + i + '" data-bindex="' + j + '" title="Pick several images at once">+ Add images\u2026</button>' : "";
@@ -4126,9 +4141,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return '<div class="cellrow"><div class="cellrow__bar">' +
         '<span class="sortgrip" data-grip data-sortkey="cell:' + i + ':' + j + ':' + k + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
         '<span class="cellrow__n">Cell ' + (c + 1) + '</span><span class="rep__ops">' +
-        '<button class="iconbtn" data-act="cell-up" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '"' + (c === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
-        '<button class="iconbtn" data-act="cell-down" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '"' + (c === it.cells.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
-        '<button class="iconbtn iconbtn--danger" data-act="cell-remove" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '" title="Remove">\u2715</button>' +
+        '<button class="iconbtn" data-act="cell-up" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '"' + (c === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
+        '<button class="iconbtn" data-act="cell-down" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '"' + (c === it.cells.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
+        '<button class="iconbtn iconbtn--danger" data-act="cell-remove" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '" title="Remove">' + IC.close + '</button>' +
         "</span></div>" +
         '<div class="af"><label class="af__label">Heading</label><input type="text" data-cell="' + i + '" data-cbindex="' + j + '" data-citem="' + k + '" data-ccell="' + c + '" data-cfield="heading" value="' + escAttr(cell.heading || "") + '" /></div>' +
         richCell(i, j, k, c, "body", "Body") +
@@ -4237,7 +4252,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return '<div class="faed__row' + (sel ? " is-sel" : "") + '">' +
         '<div class="faed__row-head"><button type="button" class="faed__row-n" data-act="fa-select" ' + da + ' title="Select">' + (k + 1) + "</button>" +
           '<input type="text" placeholder="Title (optional)" data-fann ' + da + ' data-afield="title" value="' + escAttr(a.title || "") + '" />' +
-          '<button class="iconbtn iconbtn--danger" data-act="fa-remove" ' + da + ' title="Remove">\u2715</button></div>' +
+          '<button class="iconbtn iconbtn--danger" data-act="fa-remove" ' + da + ' title="Remove">' + IC.close + '</button></div>' +
         '<textarea rows="2" placeholder="Body (optional \u2014 **bold** and *italic* welcome)" data-fann ' + da + ' data-afield="body">' + escHtml(a.body || "") + "</textarea>" +
         '<label class="chk"><input type="checkbox" data-act="fa-focustoggle" ' + da + (hasFocus ? " checked" : "") + " /> Focus area \u2014 spotlight this region (blur the rest)</label>" +
         shapeSel + "</div>";
@@ -4353,9 +4368,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (b.encStub) {
       return '<div class="card study__block study__block--enc">' +
         '<div class="study__block-head study__block-head--enc">' +
-          '<span class="study__block-badge">\uD83D\uDD12 Protected</span>' +
+          '<span class="study__block-badge">' + LOCK_SVG + ' Protected</span>' +
           '<span class="study__block-label">' + escHtml(typeName) + ' \u2014 encrypted at rest</span>' +
-          '<span class="study__block-ops"><button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">\u2715</button></span>' +
+          '<span class="study__block-ops"><button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.close + '</button></span>' +
         '</div>' +
         '<div class="study__enc-note">Its content isn\u2019t in your published file. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
       '</div>';
@@ -4363,9 +4378,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (b.vaultBlock) {
       return '<div class="card study__block study__block--enc">' +
         '<div class="study__block-head study__block-head--enc">' +
-          '<span class="study__block-badge">\uD83D\uDD12 Vaulted</span>' +
+          '<span class="study__block-badge">' + LOCK_SVG + ' Vaulted</span>' +
           '<span class="study__block-label">' + escHtml(typeName) + ' \u2014 stored in your private vault</span>' +
-          '<span class="study__block-ops"><button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">\u2715</button></span>' +
+          '<span class="study__block-ops"><button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.close + '</button></span>' +
         '</div>' +
         '<div class="study__enc-note">Your content is safe in your private vault \u2014 it just isn\u2019t in the published file, so it looks empty here. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
       '</div>';
@@ -4379,11 +4394,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<span class="study__block-badge">' + escHtml(typeName) + "</span>" +
       '<span class="study__block-label' + (custom ? " is-custom" : "") + '" title="Double-click to rename">' + escHtml(label) + "</span>" +
       '<span class="study__block-ops">' +
-      '<button class="iconbtn" data-act="study-blockadd" data-index="' + i + '" data-bindex="' + j + '" title="Add a section above" aria-label="Add a section above"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>' +
-      '<button class="iconbtn" data-act="study-blockup" data-index="' + i + '" data-bindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
-      '<button class="iconbtn" data-act="study-blockdown" data-index="' + i + '" data-bindex="' + j + '"' + (j === len - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
-      '<button class="iconbtn" data-act="study-blockdup" data-index="' + i + '" data-bindex="' + j + '" title="Duplicate section" aria-label="Duplicate section"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
-      '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">\u2715</button>' +
+      '<button class="iconbtn" data-act="study-blockadd" data-index="' + i + '" data-bindex="' + j + '" title="Add a section above" aria-label="Add a section above">' + IC.add + '</button>' +
+      '<button class="iconbtn" data-act="study-blockup" data-index="' + i + '" data-bindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
+      '<button class="iconbtn" data-act="study-blockdown" data-index="' + i + '" data-bindex="' + j + '"' + (j === len - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
+      '<button class="iconbtn" data-act="study-blockdup" data-index="' + i + '" data-bindex="' + j + '" title="Duplicate section" aria-label="Duplicate section">' + IC.dup + '</button>' +
+      '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.close + '</button>' +
       "</span>" +
       '<button class="iconbtn study__block-lock' + (b.locked ? " is-locked" : "") + '" data-act="study-blocklock" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.locked ? "Locked \u2014 click to unlock" : "Lock this section \u2014 deeper-cut only") + '" aria-label="' + (b.locked ? "Unlock section" : "Lock section") + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' + (b.locked ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<path d="M8 10.5V6.8a4 4 0 0 1 7.5-1.6"/>') + "</svg></button>" +
       '<span class="study__block-chev" aria-hidden="true">\u203a</span>' +
@@ -4548,9 +4563,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var isRoot = path.length === 0;
     var isCont = GEN_CONTAINERS.indexOf(node.type) !== -1;
     var ops = isRoot ? "" : '<span class="gsx__ops">' +
-      '<button class="iconbtn" data-act="gen-up" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '" title="Move up">\u2191</button>' +
-      '<button class="iconbtn" data-act="gen-down" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '" title="Move down">\u2193</button>' +
-      '<button class="iconbtn iconbtn--danger" data-act="gen-del" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '" title="Remove">\u2715</button></span>';
+      '<button class="iconbtn" data-act="gen-up" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '" title="Move up">' + IC.up + '</button>' +
+      '<button class="iconbtn" data-act="gen-down" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '" title="Move down">' + IC.down + '</button>' +
+      '<button class="iconbtn iconbtn--danger" data-act="gen-del" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.close + '</button></span>';
     var body;
     if (isCont) {
       var p = node.props || {};
@@ -4719,7 +4734,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return '<button type="button" class="secpick__preset" data-gen-preset="' + escAttr(p.id) + '">' +
         '<span class="secpick__preset-prev">' + (window.RKGen ? window.RKGen.renderHtml(p.spec) : "") + "</span>" +
         '<span class="secpick__preset-name">' + escHtml(p.name || "Section") + "</span>" +
-        '<button type="button" class="secpick__preset-del" data-gen-preset-del="' + escAttr(p.id) + '" title="Delete">\u2715</button></button>';
+        '<button type="button" class="secpick__preset-del" data-gen-preset-del="' + escAttr(p.id) + '" title="Delete">' + IC.close + '</button></button>';
     }).join("");
     return '<div class="secpick__gen">' +
       '<button type="button" class="secpick__gencard" data-gen-new><span class="secpick__genic">\u2728</span><span class="secpick__gentx"><b>Generate a section</b><span>Describe it or drop a reference image \u2014 AI builds it, you preview &amp; approve. Added as its own block; your other sections are untouched.</span></span></button>' +
@@ -4758,7 +4773,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       imgs.forEach(function (u, k) {
         var s = document.createElement("span"); s.className = "gen__thumb";
         var im = document.createElement("img"); im.src = u; s.appendChild(im);
-        var x = document.createElement("button"); x.textContent = "\u2715"; x.addEventListener("click", function () { imgs.splice(k, 1); renderThumbs(); });
+        var x = document.createElement("button"); x.innerHTML = IC.close; x.addEventListener("click", function () { imgs.splice(k, 1); renderThumbs(); });
         s.appendChild(x); thumbs.appendChild(s);
       });
     }
@@ -5260,7 +5275,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     function commit() { data.iconKeywords = data.iconKeywords || {}; data.iconKeywords[name] = list.slice(0, 10); saveDraft(true); }
     function chips() {
       return list.length
-        ? list.map(function (k, idx) { return '<span class="kwed__chip">' + escHtml(k) + '<button type="button" class="kwed__x" data-i="' + idx + '" aria-label="Remove">\u00d7</button></span>'; }).join("")
+        ? list.map(function (k, idx) { return '<span class="kwed__chip">' + escHtml(k) + '<button type="button" class="kwed__x" data-i="' + idx + '" aria-label="Remove">' + IC.close + '</button></span>'; }).join("")
         : '<span class="kwed__none">No keywords yet.</span>';
     }
     function render() {
@@ -5589,7 +5604,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     } catch (e) { status("Card line generation failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate short card line"; } }
   }
   function beatEditor(i, b, j) {
-    return '<div class="adm__beat"><div class="adm__beat-h"><span class="adm__beat-n">' + (j + 1) + '</span> Key move ' + (j + 1) + '<button type="button" class="adm__beat-x" data-act="beat-remove" data-index="' + i + '" data-bindex="' + j + '" title="Remove this key move" aria-label="Remove key move ' + (j + 1) + '">\u2715</button></div>' +
+    return '<div class="adm__beat"><div class="adm__beat-h"><span class="adm__beat-n">' + (j + 1) + '</span> Key move ' + (j + 1) + '<button type="button" class="adm__beat-x" data-act="beat-remove" data-index="' + i + '" data-bindex="' + j + '" title="Remove this key move" aria-label="Remove key move ' + (j + 1) + '">' + IC.close + '</button></div>' +
       '<input type="text" class="adm__beat-f" data-beat="' + i + '" data-bindex="' + j + '" data-bkey="problem" value="' + escAttr(b.problem || "") + '" placeholder="Problem \u2014 the tension, in a few words" />' +
       '<textarea class="adm__beat-f" rows="2" data-beat="' + i + '" data-bindex="' + j + '" data-bkey="move" placeholder="Move \u2014 the decision you made">' + escHtml(b.move || "") + '</textarea>' +
       '<input type="text" class="adm__beat-f" data-beat="' + i + '" data-bindex="' + j + '" data-bkey="outcome" value="' + escAttr(b.outcome || "") + '" placeholder="Outcome \u2014 the concrete result" />' +
@@ -5602,9 +5617,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="adm__ovm">' +
       '<div class="adm__ovm-h"><span class="adm__ovm-n">' + (j + 1) + '</span>' +
         '<div class="adm__ovm-ops">' +
-          '<button type="button" data-act="ovm-up" data-index="' + i + '" data-ovmindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
-          '<button type="button" data-act="ovm-down" data-index="' + i + '" data-ovmindex="' + j + '"' + (j === n - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
-          '<button type="button" data-act="ovm-remove" data-index="' + i + '" data-ovmindex="' + j + '" title="Remove">\u2715</button>' +
+          '<button type="button" data-act="ovm-up" data-index="' + i + '" data-ovmindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
+          '<button type="button" data-act="ovm-down" data-index="' + i + '" data-ovmindex="' + j + '"' + (j === n - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
+          '<button type="button" data-act="ovm-remove" data-index="' + i + '" data-ovmindex="' + j + '" title="Remove">' + IC.close + '</button>' +
         '</div></div>' +
       '<div class="adm__ovm-body">' +
         '<div class="adm__ovm-thumb' + (src ? " has" : "") + '">' + thumb + '</div>' +
@@ -5726,7 +5741,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
 
     return '<div class="study__panel" data-l2tab-panel="' + tab + '">' +
       panel +
-      '<div class="study__foot"><a class="btn btn--ghost" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '">Preview case study \u2197</a><button class="btn btn--primary" data-act="study-close" data-index="' + i + '">Done</button></div>' +
+      '<div class="study__foot"><a class="btn btn--ghost" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '">Preview case study ' + IC.ext + '</a><button class="btn btn--primary" data-act="study-close" data-index="' + i + '">Done</button></div>' +
       "</div>";
   }
   function studyToggle(w, i) {
@@ -5734,9 +5749,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (openStudy === i) {
       return '<div class="study__toggle is-open"><button class="btn study__editbtn is-open" data-act="study-toggle" data-index="' + i + '">\u25be Close case-study editor</button></div>';
     }
-    var preview = n ? '<a class="btn btn--ghost study__previewbtn" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '" title="Open this project page in a new tab">Preview \u2197</a>' : "";
+    var preview = n ? '<a class="btn btn--ghost study__previewbtn" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '" title="Open this project page in a new tab">Preview ' + IC.ext + '</a>' : "";
     return '<div class="study__toggle">' +
-      '<button class="btn study__editbtn" data-act="study-toggle" data-index="' + i + '">\u270e Edit case-study page</button>' +
+      '<button class="btn study__editbtn" data-act="study-toggle" data-index="' + i + '">' + IC.edit + ' Edit case-study page</button>' +
       preview +
       "</div>";
   }
@@ -5944,7 +5959,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var muted = localStorage.getItem("rk:owner") === "1";
     var head = secHead("Insights", "How your portfolio is doing \u2014 page views, geography, devices and the intent signals only your site can see (case opens, unlocks, r\u00e9sum\u00e9, contact). Your own visits are excluded.");
     var dayBtns = [1, 7, 30, 90].map(function (d) { return '<button class="ins__dbtn' + (insDays === d ? " is-on" : "") + '" data-act="ins-days" data-days="' + d + '">' + (d === 1 ? "24h" : d + "d") + "</button>"; }).join("");
-    var controls = '<div class="ins__ctrls"><div class="ins__days">' + dayBtns + '</div><button class="btn btn--ghost" data-act="ins-refresh">\u21bb Refresh</button><button class="ins__mute' + (muted ? " is-on" : "") + '" data-act="ins-mute" title="When on, this device\u2019s visits don\u2019t count">' + (muted ? "\u25cf This device muted" : "\u25cb Count this device") + "</button></div>";
+    var controls = '<div class="ins__ctrls"><div class="ins__days">' + dayBtns + '</div><button class="btn btn--ghost" data-act="ins-refresh">' + IC.refresh + ' Refresh</button><button class="ins__mute' + (muted ? " is-on" : "") + '" data-act="ins-mute" title="When on, this device\u2019s visits don\u2019t count">' + (muted ? "\u25cf This device muted" : "\u25cb Count this device") + "</button></div>";
     if (insErr) return head + controls + '<div class="ins__err">' + escHtml(insErr) + "</div>";
     if (!insData) return head + controls + '<div class="ins__loading">Loading your numbers\u2026</div>';
     var ev = insData.events || {}, tr = insData.traffic || {};
@@ -6458,9 +6473,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
               '<div class="adm__lsec-titles"><span class="adm__lsec-title">' + escHtml((w.title && w.title !== "Project title") ? w.title : (w.client || "Encrypted project")) + '</span>' +
                 '<span class="adm__lsec-sub">' + LOCK_SVG + ' Private \u00b7 encrypted</span></div>' +
               '<div class="adm__lsec-ops">' +
-                '<button class="iconbtn" data-act="up" data-list="work" data-index="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
-                '<button class="iconbtn" data-act="down" data-list="work" data-index="' + i + '"' + (i === list.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
-                '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="work" data-index="' + i + '" title="Remove">\u2715</button>' +
+                '<button class="iconbtn" data-act="up" data-list="work" data-index="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
+                '<button class="iconbtn" data-act="down" data-list="work" data-index="' + i + '"' + (i === list.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
+                '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="work" data-index="' + i + '" title="Remove">' + IC.close + '</button>' +
               '</div>' +
             '</div>' +
             '<div class="study__enc-note workcard__enc-note">This project is encrypted in your published file \u2014 unlock it with your recovery pass to edit. <button class="btn btn--ghost" data-act="work-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
@@ -6484,10 +6499,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
             '</div>' +
             '<div class="adm__lsec-ops">' +
               eyeToggle('data-act="feature" data-index="' + i + '"', featd, "adm__lsec-tog", { disabled: priv, title: eyeTitle }) +
-              '<button class="iconbtn" data-act="up" data-list="work" data-index="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
-              '<button class="iconbtn" data-act="down" data-list="work" data-index="' + i + '"' + (i === list.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+              '<button class="iconbtn" data-act="up" data-list="work" data-index="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
+              '<button class="iconbtn" data-act="down" data-list="work" data-index="' + i + '"' + (i === list.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
               '<button class="iconbtn" data-act="work-dup" data-list="work" data-index="' + i + '" title="Duplicate - creates a hidden copy">' + DUP_SVG + '</button>' +
-              '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="work" data-index="' + i + '" title="Remove">\u2715</button>' +
+              '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="work" data-index="' + i + '" title="Remove">' + IC.close + '</button>' +
             '</div>' +
           '</div>' +
           '<div class="adm__lsec-body">' +
@@ -6857,8 +6872,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var acts = b.pending
       ? '<button class="btn btn--primary" data-act="book-accept" data-uid="' + escAttr(b.uid) + '">Accept</button>' +
         '<button class="btn btn--ghost" data-act="book-decline" data-uid="' + escAttr(b.uid) + '">Decline</button>' +
-        (b.manage ? '<a class="btn btn--ghost" href="' + escAttr(b.manage) + '" target="_blank" rel="noopener">Reschedule \u2197</a>' : "")
-      : (b.manage ? '<a class="btn btn--ghost" href="' + escAttr(b.manage) + '" target="_blank" rel="noopener">Open \u2197</a>' : "") +
+        (b.manage ? '<a class="btn btn--ghost" href="' + escAttr(b.manage) + '" target="_blank" rel="noopener">Reschedule ' + IC.ext + '</a>' : "")
+      : (b.manage ? '<a class="btn btn--ghost" href="' + escAttr(b.manage) + '" target="_blank" rel="noopener">Open ' + IC.ext + '</a>' : "") +
         '<button class="btn btn--ghost" data-act="book-dismiss" data-uid="' + escAttr(b.uid) + '">Dismiss</button>';
     var isNew = (b.at || 0) > bookSeen();
     return '<div class="rkinbox__row">' +
@@ -6896,7 +6911,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     else inner = '<div class="rkinbox">' + bookCache.map(bookingCard).join("") + "</div>";
     return '<div class="adm__ext">' +
       '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("cal") + '</span><div><b>Bookings</b><span>Call requests \u2014 accept, decline or reschedule</span></div></div>' +
-      '<div class="imgblk__row"><button class="btn btn--ghost" data-act="book-refresh">\u21bb Refresh</button></div>' +
+      '<div class="imgblk__row"><button class="btn btn--ghost" data-act="book-refresh">' + IC.refresh + ' Refresh</button></div>' +
       inner +
     "</div>";
   }
@@ -6948,7 +6963,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function mediaShell() {
     return '<div class="mlib__sheet">' +
       '<div class="mlib__bar"><div class="mlib__h"><b>Media library</b><span data-mlib-sum>Loading\u2026</span></div>' +
-        '<div class="mlib__acts"><button class="btn btn--ghost" data-act="media-refresh" title="Refresh">\u21bb</button><button class="btn adm__exit" data-act="media-close" aria-label="Close">\u2715</button></div></div>' +
+        '<div class="mlib__acts"><button class="btn btn--ghost" data-act="media-refresh" title="Refresh">' + IC.refresh + '</button><button class="btn adm__exit" data-act="media-close" aria-label="Close">' + IC.close + '</button></div></div>' +
       '<div class="mlib__controls">' +
         '<input class="mlib__search" data-mlib-search type="search" placeholder="Search by name or where it\u2019s used\u2026" autocomplete="off" />' +
         '<div class="mlib__segs" data-mlib-segs><button class="mlib__seg is-on" data-act="media-seg" data-seg="all">All</button><button class="mlib__seg" data-act="media-seg" data-seg="inuse">In use</button><button class="mlib__seg" data-act="media-seg" data-seg="unused">Unused</button></div>' +
@@ -7015,7 +7030,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="mlib__card' + (isUnused ? " is-orphan" : "") + '">' +
       '<div class="mlib__thumb">' + thumb + '</div>' +
       '<div class="mlib__meta"><span class="mlib__size">' + mediaFmt(f.size) + '</span>' + (isUnused ? '<span class="mlib__tag">Unused</span>' : extra) + '</div>' +
-      '<button class="mlib__del" data-act="media-del" data-name="' + escAttr(f.name) + '" data-sha="' + escAttr(f.sha) + '" title="Delete">\u2715</button>' +
+      '<button class="mlib__del" data-act="media-del" data-name="' + escAttr(f.name) + '" data-sha="' + escAttr(f.sha) + '" title="Delete">' + IC.close + '</button>' +
     '</div>';
   }
   function mediaClick(e) {
@@ -7039,7 +7054,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (j && j.needStepup) status("This device isn\u2019t verified to delete \u2014 run a Publish once to set it up.");
       else status((j && j.error) || "Delete failed.");
     } catch (e) { status("Delete failed \u2014 check your connection."); }
-    if (btn) { btn.disabled = false; btn.textContent = "\u2715"; }
+    if (btn) { btn.disabled = false; btn.innerHTML = IC.close; }
     return false;
   }
   async function mediaDelOrphans() {
@@ -7301,7 +7316,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<span class="adm__iconf-prev' + (cur ? " has" : "") + '">' + preview + "</span>" +
         '<select data-iconpick="' + list + '" data-index="' + i + '">' + opts + "</select>" +
         '<button class="iconbtn" data-act="icon-regen" data-list="' + list + '" data-index="' + i + '" title="Regenerate with AI" aria-label="Regenerate icon with AI">\u2728</button>' +
-        '<button class="iconbtn iconbtn--danger" data-act="icon-remove" data-list="' + list + '" data-index="' + i + '" title="Remove icon" aria-label="Remove icon"' + (cur ? "" : " disabled") + ">\u2715</button>" +
+        '<button class="iconbtn iconbtn--danger" data-act="icon-remove" data-list="' + list + '" data-index="' + i + '" title="Remove icon" aria-label="Remove icon"' + (cur ? "" : " disabled") + ">" + IC.close + "</button>" +
       "</div></div>";
   }
 
@@ -7365,9 +7380,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="adm__gal-item">' +
       '<div class="adm__gal-h"><span class="adm__ovm-n">' + (j + 1) + "</span>" +
         '<div class="adm__ovm-ops">' +
-          '<button type="button" data-act="gal-up" data-gindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
-          '<button type="button" data-act="gal-down" data-gindex="' + j + '"' + (j === n - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
-          '<button type="button" data-act="gal-remove" data-gindex="' + j + '" title="Remove">\u2715</button>' +
+          '<button type="button" data-act="gal-up" data-gindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
+          '<button type="button" data-act="gal-down" data-gindex="' + j + '"' + (j === n - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
+          '<button type="button" data-act="gal-remove" data-gindex="' + j + '" title="Remove">' + IC.close + '</button>' +
         "</div></div>" +
       '<div class="adm__gal-thumb' + (src ? " has" : "") + '">' + thumb + "</div>" +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="gal-upload" data-gindex="' + j + '">' + (src ? "Replace\u2026" : "Upload\u2026") + "</button>" + (src ? '<button class="btn btn--ghost" data-act="gal-clear" data-gindex="' + j + '">Clear</button>' : "") + mediaSizeTag(src) + "</div>" +
@@ -7399,9 +7414,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="adm__gal-item">' +
       '<div class="adm__gal-h"><span class="adm__ovm-n">' + (j + 1) + "</span>" +
         '<div class="adm__ovm-ops">' +
-          '<button type="button" data-act="logo-up" data-lindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
-          '<button type="button" data-act="logo-down" data-lindex="' + j + '"' + (j === n - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
-          '<button type="button" data-act="logo-remove" data-lindex="' + j + '" title="Remove">\u2715</button>' +
+          '<button type="button" data-act="logo-up" data-lindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
+          '<button type="button" data-act="logo-down" data-lindex="' + j + '"' + (j === n - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
+          '<button type="button" data-act="logo-remove" data-lindex="' + j + '" title="Remove">' + IC.close + '</button>' +
         "</div></div>" +
       '<div class="adm__gal-thumb' + (src ? " has" : "") + '">' + thumb + "</div>" +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="logo-upload" data-lindex="' + j + '">' + (src ? "Replace\u2026" : "Upload\u2026") + "</button>" + (src ? '<button class="btn btn--ghost" data-act="logo-clear" data-lindex="' + j + '">Clear</button>' : "") + mediaSizeTag(src) + "</div>" +
@@ -7497,8 +7512,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<div class="adm__lsec-titles"><span class="adm__lsec-title">' + escHtml(labels[s.key] || s.key) + "</span>" +
             (where[s.key] ? '<span class="adm__lsec-sub">' + escHtml(where[s.key]) + "</span>" : "") + "</div>" +
           '<div class="adm__lsec-ops">' +
-            '<button class="iconbtn" data-act="aboutsec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
-            '<button class="iconbtn" data-act="aboutsec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+            '<button class="iconbtn" data-act="aboutsec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
+            '<button class="iconbtn" data-act="aboutsec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
             eyeToggle('data-act="aboutsec-toggle" data-key="' + s.key + '"', s.on, "adm__lsec-tog") +
           "</div>" +
         "</div>" +
@@ -7522,7 +7537,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function aboutSecShell() {
     return '<div class="mlib__sheet">' +
       '<div class="mlib__bar"><div class="mlib__h"><b>About content</b><span>Recognition, skills, journey &amp; education</span></div>' +
-        '<div class="mlib__acts"><button class="btn adm__exit" data-act="asec-close" aria-label="Close">\u2715</button></div></div>' +
+        '<div class="mlib__acts"><button class="btn adm__exit" data-act="asec-close" aria-label="Close">' + IC.close + '</button></div></div>' +
       '<div class="mlib__main" data-asec-main>' + aboutSecNav() + '<div class="mlib__panel" data-asec-panel>' + aboutSecPanelBody(asecPage) + "</div></div>" +
       "</div>";
   }
@@ -7592,7 +7607,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function hlShell() {
     return '<div class="mlib__sheet">' +
       '<div class="mlib__bar"><div class="mlib__h"><b>Landing highlights</b><span>Stats &amp; brand logos shown under the hero</span></div>' +
-        '<div class="mlib__acts"><button class="btn adm__exit" data-act="hl-close" aria-label="Close">\u2715</button></div></div>' +
+        '<div class="mlib__acts"><button class="btn adm__exit" data-act="hl-close" aria-label="Close">' + IC.close + '</button></div></div>' +
       '<div class="mlib__main" data-hl-main>' + hlNav() + '<div class="mlib__panel" data-hl-panel>' + hlPanelBody(hlPage) + "</div></div>" +
       "</div>";
   }
@@ -7642,8 +7657,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     layout.forEach((s, i) => {
       html += '<li class="adm__secrow' + (s.on ? "" : " is-off") + '">' +
         '<span class="adm__secrow-ops">' +
-        '<button class="iconbtn" data-act="worksec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
-        '<button class="iconbtn" data-act="worksec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+        '<button class="iconbtn" data-act="worksec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
+        '<button class="iconbtn" data-act="worksec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
         "</span>" +
         '<span class="adm__secrow-main"><span class="adm__secrow-name">' + escHtml(labels[s.key] || s.key) + '</span><span class="adm__secrow-where">' + escHtml(where[s.key] || "") + "</span></span>" +
         '<label class="adm__secrow-tog"><input type="checkbox" data-act="worksec-toggle" data-key="' + s.key + '"' + (s.on ? " checked" : "") + ' /><span class="adm__secrow-state">' + (s.on ? "Shown" : "Hidden") + "</span></label>" +
@@ -7693,8 +7708,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<div class="adm__lsec-titles"><span class="adm__lsec-title">' + escHtml(labels[s.key] || s.key) + "</span>" +
             (where[s.key] ? '<span class="adm__lsec-sub">' + escHtml(where[s.key]) + "</span>" : "") + "</div>" +
           '<div class="adm__lsec-ops">' +
-            '<button class="iconbtn" data-act="worksec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
-            '<button class="iconbtn" data-act="worksec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+            '<button class="iconbtn" data-act="worksec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
+            '<button class="iconbtn" data-act="worksec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
             eyeToggle('data-act="worksec-toggle" data-key="' + s.key + '"', s.on, "adm__lsec-tog") +
           "</div>" +
         "</div>" +
@@ -7739,8 +7754,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       order.forEach((k, oi) => {
         rows += '<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.4rem .55rem;border:1px solid var(--line);border-radius:7px;margin-top:.4rem">' +
           '<span style="font-size:.85rem">' + hlab[k] + '</span><span style="display:flex;gap:.25rem">' +
-          '<button type="button" class="iconbtn" data-act="hi-order-up" data-oi="' + oi + '"' + (oi === 0 ? " disabled" : "") + ' title="Move up">\u2191</button>' +
-          '<button type="button" class="iconbtn" data-act="hi-order-down" data-oi="' + oi + '"' + (oi === order.length - 1 ? " disabled" : "") + ' title="Move down">\u2193</button>' +
+          '<button type="button" class="iconbtn" data-act="hi-order-up" data-oi="' + oi + '"' + (oi === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
+          '<button type="button" class="iconbtn" data-act="hi-order-down" data-oi="' + oi + '"' + (oi === order.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
           "</span></div>";
       });
       return '<div class="af"><div class="af__hint" style="margin:0 0 .55rem">At-a-glance numbers and the brand / product logo marquee under the hero.</div>' +
@@ -7796,7 +7811,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   function setL2BackLabel(txt) {
     var bk = root && root.querySelector(".adm__l2-back");
-    if (bk) bk.innerHTML = '<span aria-hidden="true">\u2039</span> ' + txt;
+    if (bk) bk.innerHTML = IC.back + ' ' + txt;
   }
   function openJourneyEditor() {
     journeyData();
@@ -7858,7 +7873,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="rep__item jimg">' +
       '<div class="rep__bar"><span class="sortgrip" data-grip data-sortkey="jimg:' + c + ':' + e + '" title="Drag to reorder">' + GRIP_SVG + '</span>' +
       '<span class="rep__n">Image ' + (k + 1) + '</span><span class="rep__ops">' +
-      '<button class="iconbtn iconbtn--danger" data-act="jimg-del" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" title="Remove">\u2715</button></span></div>' +
+      '<button class="iconbtn iconbtn--danger" data-act="jimg-del" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" title="Remove">' + IC.close + '</button></span></div>' +
       '<div class="jimg__preview' + (src ? " has" : "") + '">' + (src ? '<img src="' + escAttr(previewSrc(src)) + '" alt="" />' : "<span>No image</span>") + "</div>" +
       '<input type="text" data-jimg="src" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" value="' + escAttr(src) + '" placeholder="Paste an image URL\u2026" />' +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="jimg-upload" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '">Replace\u2026</button>' + mediaSizeTag(src) + "</div>" +
@@ -7869,7 +7884,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="card jentry">' +
       '<div class="card__bar"><span class="sortgrip" data-grip data-sortkey="jentry:' + c + '" title="Drag to reorder">' + GRIP_SVG + '</span>' +
       '<span class="card__idx">' + escHtml(entry.title || entry.period || "Entry " + (e + 1)) + '</span>' +
-      '<div class="card__ops"><button class="iconbtn iconbtn--danger" data-act="jentry-del" data-jc="' + c + '" data-je="' + e + '" title="Remove entry">\u2715</button></div></div>' +
+      '<div class="card__ops"><button class="iconbtn iconbtn--danger" data-act="jentry-del" data-jc="' + c + '" data-je="' + e + '" title="Remove entry">' + IC.close + '</button></div></div>' +
       '<div class="af__row">' +
       '<div class="af"><label class="af__label">Period</label><input type="text" data-jfield="period" data-jc="' + c + '" data-je="' + e + '" value="' + escAttr(entry.period || "") + '" placeholder="e.g. 2022 \u2014 2023" /></div>' +
       '<div class="af"><label class="af__label">Title</label><input type="text" data-jfield="title" data-jc="' + c + '" data-je="' + e + '" value="' + escAttr(entry.title || "") + '" placeholder="What you worked on" /></div>' +
@@ -7891,7 +7906,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<span class="sortgrip" data-grip data-sortkey="jchap" title="Drag to reorder">' + GRIP_SVG + '</span>' +
       '<input type="text" class="jchap__name" data-jname data-jc="' + c + '" value="' + escAttr(chap.name || "") + '" placeholder="Chapter name (e.g. Microsoft)" />' +
       '<span class="jchap__count" title="entries">' + entries.length + '</span>' +
-      '<span class="card__ops"><button class="iconbtn iconbtn--danger" data-act="jchap-del" data-jc="' + c + '" title="Remove chapter">\u2715</button></span>' +
+      '<span class="card__ops"><button class="iconbtn iconbtn--danger" data-act="jchap-del" data-jc="' + c + '" title="Remove chapter">' + IC.close + '</button></span>' +
       '<span class="study__block-chev">\u203a</span></div>' +
       '<div class="jchap__body">' +
       '<div class="af"><label class="af__label">Company logo (optional)</label>' +
@@ -8061,7 +8076,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   // panel, keeping the rail visible, with a back arrow to the category's main view.
   function renderSetSub() {
     if (!setPanel) return;
-    setPanel.innerHTML = '<button class="adm__set-back" data-act="set-back" type="button"><span aria-hidden="true">\u2190</span> Back</button>' +
+    setPanel.innerHTML = '<button class="adm__set-back" data-act="set-back" type="button">' + IC.back + ' Back</button>' +
       '<div class="adm__set-sub" data-set-sub></div>';
     var host = setPanel.querySelector("[data-set-sub]");
     var back = function () { setSub = null; renderSetPanel(); };
@@ -8123,7 +8138,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="rkqg"><div class="rkqg__head">Version history <span class="rkqg__sub">every published version of your content</span></div>' +
       '<div class="af__hint" style="margin:.2rem 0 .9rem">Every time you Publish, a snapshot is kept. Load an older one into the editor, review it in the preview, then <b>Publish</b> to roll back \u2014 or <b>Revert</b> to discard.</div>' +
       '<div class="rkver" data-versions>Loading history\u2026</div>' +
-      '<div class="rkqg__row" style="margin-top:.7rem"><button class="btn btn--ghost" data-act="ver-refresh" type="button">\u21BB Refresh</button></div></div>';
+      '<div class="rkqg__row" style="margin-top:.7rem"><button class="btn btn--ghost" data-act="ver-refresh" type="button">' + IC.refresh + ' Refresh</button></div></div>';
   }
   function verHost() { return setPanel && setPanel.querySelector("[data-versions]"); }
   async function loadVersions() {
@@ -10406,7 +10421,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<input type="password" placeholder="' + (saved ? "Saved \u2014 paste to replace" : "Paste your token (ghp_\u2026)") + '" autocomplete="off" />' +
       '<div class="pass__err"></div>' +
       '<div class="pass__actions">' +
-        '<a class="btn btn--ghost" href="' + GH_NEW_TOKEN_URL + '" target="_blank" rel="noopener">Create token \u2197</a>' +
+        '<a class="btn btn--ghost" href="' + GH_NEW_TOKEN_URL + '" target="_blank" rel="noopener">Create token ' + IC.ext + '</a>' +
         '<button class="btn btn--primary" data-go>Connect &amp; publish</button></div>' +
       '<button class="pass__link" data-manual>Publish manually instead</button>' +
       (saved ? '<button class="pass__link" data-forget>Forget saved token</button>' : "") +
@@ -12662,7 +12677,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="pass__err"></div>' +
       '<div class="pass__actions rolekit__foot">' +
         '<button class="btn btn--ghost" data-cancel>Close</button>' +
-        '<button class="btn btn--ghost" data-rk-back hidden><span aria-hidden="true">\u2190</span> Role setup</button>' +
+        '<button class="btn btn--ghost" data-rk-back hidden>' + IC.back + ' Role setup</button>' +
         '<button class="btn btn--auto" data-rk-run="tailor">Tailor my work</button>' +
         '<button class="btn btn--auto" data-rk-run="cover">Cover note</button>' +
         '<button class="btn btn--auto" data-rk-run="gap">Gap analysis</button>' +
@@ -12928,7 +12943,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '</div><aside class="prep-hist" data-iprep-hist>' + iprepHistHtml() + '</aside></div>' +
       '<div class="pass__actions iprep__foot">' +
         '<button class="btn btn--ghost" data-cancel>Close</button>' +
-        '<button class="btn btn--ghost" data-iprep-new hidden>\u2190 New set</button>' +
+        '<button class="btn btn--ghost" data-iprep-new hidden>' + IC.back + ' New set</button>' +
         '<button class="btn btn--auto" data-iprep-run>Generate questions</button>' +
       '</div>' +
       '<div class="pass__note">A prep tool only \u2014 nothing here is saved to or published on your site. Answers use only your own content.</div></div>';
@@ -12963,7 +12978,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<div class="iprep__q">' + escHtml(q.q || "") + "</div>" +
           (q.why ? '<div class="iprep__why">' + escHtml(q.why) + "</div>" : "") +
           '<div class="iprep__a"' + ((q.answer && String(q.answer).trim()) ? "" : " hidden") + ">" + ((q.answer && String(q.answer).trim()) ? iprepSafeHtml(q.answer) : "") + "</div>" +
-          '<div class="iprep__q-act">' + ((q.answer && String(q.answer).trim()) ? '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">\u21bb Regenerate</button><button class="btn btn--ghost" data-iprep-copy="' + idx + '">Copy</button>' : '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">\u2728 Suggest an answer</button>') + "</div>" +
+          '<div class="iprep__q-act">' + ((q.answer && String(q.answer).trim()) ? '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">' + IC.refresh + ' Regenerate</button><button class="btn btn--ghost" data-iprep-copy="' + idx + '">Copy</button>' : '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">\u2728 Suggest an answer</button>') + "</div>" +
           "</div>";
       }).join("");
       list.hidden = false; setup.hidden = true; runBtn.hidden = true; newBtn.hidden = false;
@@ -13005,7 +13020,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
         ansEl.innerHTML = iprepSafeHtml(html); ansEl.hidden = false;
         q.answer = ansEl.innerHTML; persistSession();
-        card.querySelector(".iprep__q-act").innerHTML = '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">\u21bb Regenerate</button><button class="btn btn--ghost" data-iprep-copy="' + idx + '">Copy</button>';
+        card.querySelector(".iprep__q-act").innerHTML = '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">' + IC.refresh + ' Regenerate</button><button class="btn btn--ghost" data-iprep-copy="' + idx + '">Copy</button>';
       } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t draft an answer."; btnIdle(btn, was); }
     });
     list.addEventListener("click", function (e) {
@@ -13213,7 +13228,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="wb__prompt"><span class="wb__prompt-k">Your prompt</span><div class="wb__prompt-t">' + escHtml(p.prompt || "") + "</div>" +
       (p.context ? '<div class="wb__prompt-c">' + escHtml(p.context) + "</div>" : "") +
       ((p.watchfor && p.watchfor.length) ? '<div class="wb__watch"><span>Panel is grading</span> ' + p.watchfor.map(function (x) { return escHtml(x); }).join(" \u00b7 ") + "</div>" : "") +
-      '<button class="btn btn--ghost btn--auto wb__newp" type="button" data-wb-newprompt>\u21bb New prompt</button></div>';
+      '<button class="btn btn--ghost btn--auto wb__newp" type="button" data-wb-newprompt>' + IC.refresh + ' New prompt</button></div>';
   }
   function wbPlanCard(pl, mins) {
     pl = pl || {};
@@ -13309,7 +13324,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="pass__err"></div>' +
       '<div class="pass__actions wb__foot">' +
         '<button class="btn btn--ghost" data-cancel>Close</button>' +
-        '<button class="btn btn--ghost" data-wb-back hidden>\u2190 Change setup</button>' +
+        '<button class="btn btn--ghost" data-wb-back hidden>' + IC.back + ' Change setup</button>' +
         '<button class="btn btn--auto" data-wb-start>Start</button>' +
       "</div>" +
       '<div class="pass__note">A prep tool only \u2014 nothing here is saved to or published on your site.</div></div>';
@@ -13327,7 +13342,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var watchCleanup = null, micCleanup = null, timerCleanup = null;
     var miniEl = null, miniMic = null, curTimerText = "", doListen = null;
     var pipWin = null, pipTimeEl = null, pipMic = null;
-    var WB_MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 19v3"/></svg>';
+    var WB_MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 19v3"/></svg>';
     var close = function () { try { wbSpeech.stop(); } catch (e) {} if (watchCleanup) { try { watchCleanup(); } catch (e) {} } if (micCleanup) { try { micCleanup(); } catch (e) {} } if (timerCleanup) { try { timerCleanup(); } catch (e) {} } if (pipWin) { try { pipWin.close(); } catch (e) {} pipWin = null; } if (miniEl) { try { miniEl.remove(); } catch (e) {} miniEl = null; } modal.remove(); };
     function hideMini() { modal.style.display = ""; if (miniEl) miniEl.hidden = true; }
     function showMini() {
@@ -13580,7 +13595,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
             '<div class="wb__feed-vidwrap" data-feed-vid="' + s + '">' + (wRecOn && wRecSrc === s ? '<span class="wb__watch-rec">\u25CF REC</span>' : "") + (isF && wCanSee ? '<span class="wb__feed-eye">\uD83D\uDC41 AI sees this</span>' : "") + "</div>" +
             '<div class="wb__feed-bar"><span class="wb__feed-tag">' + feedTag(s) + "</span>" +
             (both && !isF && wCanSee ? '<button type="button" class="wb__feed-focus" data-wb-focus="' + s + '">Make AI focus</button>' : "") +
-            '<button type="button" class="wb__feed-x" data-wb-feedstop="' + s + '" title="Turn off ' + feedTag(s).toLowerCase() + '" aria-label="Turn off ' + feedTag(s).toLowerCase() + '">\u2715</button></div>' +
+            '<button type="button" class="wb__feed-x" data-wb-feedstop="' + s + '" title="Turn off ' + feedTag(s).toLowerCase() + '" aria-label="Turn off ' + feedTag(s).toLowerCase() + '">' + IC.close + '</button></div>' +
             "</div>";
         }).join("");
         var seeHtml = wCanSee === null ? '<span class="wb__watch-see">Checking if the interviewer can see\u2026</span>'
@@ -13710,7 +13725,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           prompt = csgenParse(await aiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { json: true, maxTokens: 700, temperature: 0.95 }));
           transcript = ""; sessTurns = []; sessDraft = ""; sessPlan = null; sessTimer = 0;
           if (st.mode === "coach") await wbRunCoach(); else await wbRunMock(true);
-        } catch (e) { err.textContent = (e && e.message) || "Try again."; btnIdle(np, "\u21bb New prompt"); }
+        } catch (e) { err.textContent = (e && e.message) || "Try again."; btnIdle(np, IC.refresh + " New prompt"); }
       });
       var draftSave = stage.querySelector(".wb__draft");
       if (draftSave) draftSave.addEventListener("input", function () { sessDraft = draftSave.value; saveSess(); });
@@ -13902,7 +13917,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="story__q-text">' + escHtml(q.q || "") + "</div>" +
         (q.why ? '<div class="story__q-why">' + escHtml(q.why) + "</div>" : "") +
         '<div class="story__q-a"' + (hasA ? "" : " hidden") + ">" + (hasA ? iprepSafeHtml(q.answer) : "") + "</div>" +
-        '<div class="story__q-act">' + (hasA ? '<button class="btn btn--ghost" data-story-qans="' + idx + '">\u21bb Redo</button><button class="btn btn--ghost" data-story-qcopy="' + idx + '">Copy</button>' : '<button class="btn btn--ghost" data-story-qans="' + idx + '">\u2728 Answer</button>') + "</div>" +
+        '<div class="story__q-act">' + (hasA ? '<button class="btn btn--ghost" data-story-qans="' + idx + '">' + IC.refresh + ' Redo</button><button class="btn btn--ghost" data-story-qcopy="' + idx + '">Copy</button>' : '<button class="btn btn--ghost" data-story-qans="' + idx + '">\u2728 Answer</button>') + "</div>" +
         "</div>";
     }).join("");
   }
@@ -13951,7 +13966,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       "</div>" +
       '<div class="story__themes" hidden></div>' +
       '<div class="story__l2" hidden>' +
-        '<div class="story__l2-bar"><button class="btn btn--ghost story__l2-back" data-story-l2back><span aria-hidden="true">\u2039</span> Other angles</button><span class="story__l2-title"></span></div>' +
+        '<div class="story__l2-bar"><button class="btn btn--ghost story__l2-back" data-story-l2back>' + IC.back + ' Other angles</button><span class="story__l2-title"></span></div>' +
         '<div class="story__l2-body">' +
           '<div class="story__tale"></div>' +
           '<div class="story__qa">' +
@@ -13967,7 +13982,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '</div><aside class="prep-hist" data-story-hist>' + storyHistHtml() + '</aside></div>' +
       '<div class="pass__actions story__foot">' +
         '<button class="btn btn--ghost" data-cancel>Close</button>' +
-        '<button class="btn btn--ghost" data-story-back hidden>\u2190 Change setup</button>' +
+        '<button class="btn btn--ghost" data-story-back hidden>' + IC.back + ' Change setup</button>' +
         '<button class="btn btn--auto" data-story-run>Find story angles</button>' +
       "</div>" +
       '<div class="pass__note">A prep tool only \u2014 nothing here is saved to or published on your site. It uses only your own content.</div></div>';
@@ -14084,7 +14099,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
           aEl.innerHTML = iprepSafeHtml(html); aEl.hidden = false;
           q.answer = aEl.innerHTML; persistSession();
-          card.querySelector(".story__q-act").innerHTML = '<button class="btn btn--ghost" data-story-qans="' + idx + '">\u21bb Redo</button><button class="btn btn--ghost" data-story-qcopy="' + idx + '">Copy</button>';
+          card.querySelector(".story__q-act").innerHTML = '<button class="btn btn--ghost" data-story-qans="' + idx + '">' + IC.refresh + ' Redo</button><button class="btn btn--ghost" data-story-qcopy="' + idx + '">Copy</button>';
         } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t draft an answer."; btnIdle(ab, was); }
         return;
       }
@@ -14147,7 +14162,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
             '<button class="btn btn--primary adm__publish" data-publish hidden>Publish</button>' +
           '<button class="btn btn--ghost adm__gear" data-opensettings type="button" aria-label="Settings" title="Settings"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>' +
           '<div class="adm__exitwrap" data-exit-wrap>' +
-            '<button class="btn adm__exit" data-exit type="button" aria-label="Exit studio" title="Exit">\u2715</button>' +
+            '<button class="btn adm__exit" data-exit type="button" aria-label="Exit studio" title="Exit">' + IC.close + '</button>' +
             '<div class="adm__exit-pop" hidden>' +
               '<div class="adm__exit-pop-h">You have unsaved changes</div>' +
               '<button class="adm__exit-opt adm__exit-opt--save" data-exit-save type="button"><span class="adm__more-tx"><b>Save &amp; leave</b><small>Keep your changes as a local draft \u2014 publish them anytime</small></span></button>' +
@@ -14178,7 +14193,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<div class="adm__l2" hidden>' +
             '<div class="adm__l2-bar">' +
               '<div class="adm__l2-barrow">' +
-                '<button class="btn btn--ghost adm__l2-back" data-l2-back><span aria-hidden="true">\u2039</span> Back to projects</button>' +
+                '<button class="btn btn--ghost adm__l2-back" data-l2-back>' + IC.back + ' Back to projects</button>' +
                 '<span class="adm__l2-title"></span>' +
               "</div>" +
               '<div class="l2tabs" data-l2tabs></div>' +
@@ -14191,7 +14206,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         "</section>" +
       "</div>" +
       '<div class="adm__settings" hidden><div class="adm__set-sheet">' +
-        '<div class="adm__set-head"><h2>Settings</h2><button class="btn btn--ghost adm__set-x" data-act="settings-close" type="button" aria-label="Close settings">\u2715</button></div>' +
+        '<div class="adm__set-head"><h2>Settings</h2><button class="btn btn--ghost adm__set-x" data-act="settings-close" type="button" aria-label="Close settings">' + IC.close + '</button></div>' +
         '<div class="adm__set-body"><nav class="adm__set-nav" data-set-nav></nav><div class="adm__set-panel" data-set-panel></div></div>' +
       "</div></div>";
     document.body.appendChild(root);

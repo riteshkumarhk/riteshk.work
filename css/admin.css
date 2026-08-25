@@ -418,6 +418,12 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .iconbtn:hover { color: var(--text); border-color: var(--accent); }
 .iconbtn:disabled { opacity: .3; cursor: not-allowed; }
 .iconbtn--danger:hover { color: #ff7a7a; border-color: #ff7a7a; }
+/* Unified UI icon family: one consistent size in the square action buttons + tidy inline alignment
+   for icons that sit beside a label (back / edit / refresh / preview). */
+.iconbtn svg { width: 15px; height: 15px; }
+.adm__secrow-ops .iconbtn svg { width: 13px; height: 13px; }
+.btn svg { vertical-align: -.22em; }
+.adm__l2-back, .story__l2-back { display: inline-flex; align-items: center; gap: .32rem; }
 
 /* ---------- About-page section list (reorder + show/hide) ---------- */
 .adm__seclist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .55rem; }
