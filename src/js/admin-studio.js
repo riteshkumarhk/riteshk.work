@@ -604,6 +604,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   const EYE_OFF = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
   const LOCK_SVG = svgIco('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', 12);
   const DUP_SVG = IC.dup;
+  // Wrap a <input type=number> with a design-system stepper (replaces the native OS spin buttons).
+  function numField(inputHtml) {
+    return '<span class="numfield">' + inputHtml +
+      '<span class="numfield__step">' +
+      '<button type="button" class="numfield__btn numfield__btn--up" data-numstep="up" tabindex="-1" aria-label="Increase">' + IC.chevD + '</button>' +
+      '<button type="button" class="numfield__btn" data-numstep="down" tabindex="-1" aria-label="Decrease">' + IC.chevD + '</button>' +
+      '</span></span>';
+  }
   // eye = a show/hide (or feature) toggle. opts.disabled locks it (dimmed, not clickable); opts.title overrides the tooltip.
   function eyeToggle(attrs, on, cls, opts) {
     opts = opts || {};
@@ -3988,7 +3996,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="imgsz__row">' +
         '<select data-msz="size" ' + da + '>' + sizeOpts + '</select>' +
         '<span class="imgsz__ratio"><select data-msz="fitRatio" ' + da + '>' + ratioOpts + '</select></span>' +
-        '<span class="imgsz__shrink"><input type="number" min="0" max="90" step="5" data-msz="shrink" ' + da + ' value="' + shrink + '" /><span class="imgsz__pctlbl">% smaller</span></span>' +
+        '<span class="imgsz__shrink">' + numField('<input type="number" min="0" max="90" step="5" data-msz="shrink" ' + da + ' value="' + shrink + '" />') + '<span class="imgsz__pctlbl">% smaller</span></span>' +
       '</div>' +
       '<div class="imgsz__bg"><span class="imgsz__bglbl">Background</span>' +
         '<span class="imgsz__sw"' + (bg ? ' style="background:' + escAttr(bg) + '"' : "") + '></span>' +
@@ -7195,7 +7203,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<details open class="rkcur__grp"><summary>Work shown <span>(none ticked = all work)</span></summary><div class="svchk__grid">' + wOpts + "</div></details>" +
       '<details class="rkcur__grp"><summary>Numbers shown <span>(all by default)</span></summary><div class="svchk__grid">' + hOpts + "</div></details>" +
       '<details class="rkcur__grp"><summary>Skills shown <span>(all by default)</span></summary><div class="svchk__grid">' + cOpts + "</div></details>" +
-      '<div class="rkcur__days"><label>Link lasts <input type="number" min="0" step="1" value="15" data-cur-days /> days <span>(0 = no expiry)</span></label></div>' +
+      '<div class="rkcur__days"><label>Link lasts ' + numField('<input type="number" min="0" step="1" value="15" data-cur-days />') + ' days <span>(0 = no expiry)</span></label></div>' +
       '<div class="pass__err"></div>' +
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
       '<button class="btn btn--primary" data-go>Approve &amp; email link</button></div></div>';
@@ -7264,7 +7272,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="af"><label class="af__label">Name (only you see this)</label><input type="text" data-e="name" value="' + escAttr(sv.name) + '" /></div>' +
       '<div class="af"><label class="af__label">Audience line (replaces the hero eyebrow)</label><input type="text" data-e="audience" value="' + escAttr(sv.audience) + '" placeholder="e.g. Prepared for Jaguar Land Rover" /></div>' +
       '<div class="af__row"><div class="af"><label class="af__label">Ticket phrase</label><input type="text" data-e="ticket" value="' + escAttr(tv) + '" placeholder="' + (sv.ticketHash && !tv ? "Set \u2014 type to change" : "e.g. jaguar-2026") + '" /><div class="af__hint">' + (sv.ticketHash ? "Ticket set \u2713" : "Not set") + " \u00b7 case-insensitive</div></div>" +
-        '<div class="af"><label class="af__label">Auto-hide after (days)</label><input type="number" min="0" step="1" data-e="days" value="' + (sv.days || 0) + '" /><div class="af__hint">0 = never</div></div></div>' +
+        '<div class="af"><label class="af__label">Auto-hide after (days)</label>' + numField('<input type="number" min="0" step="1" data-e="days" value="' + (sv.days || 0) + '" />') + '<div class="af__hint">0 = never</div></div></div>' +
       '<details open class="rkcur__grp"><summary>Work shown <span>(none ticked = all work)</span></summary><div class="svchk__grid">' + wOpts + "</div></details>" +
       '<details class="rkcur__grp"><summary>Numbers shown <span>(all by default)</span></summary><div class="svchk__grid">' + hOpts + "</div></details>" +
       '<details class="rkcur__grp"><summary>Skills shown <span>(all by default)</span></summary><div class="svchk__grid">' + cOpts + "</div></details>" +
@@ -14302,6 +14310,20 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       const ew = root.querySelector("[data-exit-wrap]");
       if (ew && !ew.contains(e.target)) closeExitPop();
     });
+    if (!window.__rkNumStep) {
+      window.__rkNumStep = 1;
+      // Custom number-stepper buttons: step the paired input natively, then fire input/change so existing handlers run.
+      document.addEventListener("click", function (e) {
+        var b = e.target.closest && e.target.closest("[data-numstep]");
+        if (!b) return;
+        var wrap = b.closest(".numfield"), inp = wrap && wrap.querySelector('input[type="number"]');
+        if (!inp) return;
+        try { if (b.getAttribute("data-numstep") === "up") inp.stepUp(); else inp.stepDown(); } catch (err) {}
+        inp.dispatchEvent(new Event("input", { bubbles: true }));
+        inp.dispatchEvent(new Event("change", { bubbles: true }));
+        try { inp.focus(); } catch (err) {}
+      });
+    }
     root.querySelector("[data-l2-back]").addEventListener("click", () => { if (journeyOpen) closeJourneyEditor(); else closeL2(); });
     var _prevToggle = root.querySelector("[data-prevtoggle]");
     if (_prevToggle) _prevToggle.addEventListener("click", function () {
