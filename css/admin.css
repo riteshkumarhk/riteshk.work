@@ -1158,11 +1158,13 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .icongen__fam-ico svg { width: 18px; height: 18px; }
 .iconpick__more .iconpick__count { opacity: .55; }
 /* icon library dialog (More icons) */
+.iconlib .pass__box { width: min(760px, 94vw); max-height: 90vh; }
 .iconlib__search { position: relative; margin: 0 0 .9rem; }
 .iconlib__search svg { position: absolute; left: .85rem; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-dim); pointer-events: none; }
 .iconlib__search .iconlib__q { width: 100%; box-sizing: border-box; margin: 0; text-align: left; padding: .7rem .9rem .7rem 2.5rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; outline: none; }
 .iconlib__search .iconlib__q:focus { border-color: var(--accent); }
-.iconlib__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: .5rem; max-height: 46vh; overflow-y: auto; padding: .1rem; scrollbar-width: thin; scrollbar-color: var(--text-faint) transparent; }
+/* grow to use the available height, capped at ~12 rows (860px); the ~270px is the dialog chrome so the box itself never double-scrolls */
+.iconlib__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: .5rem; max-height: min(calc(90vh - 270px), 860px); overflow-y: auto; padding: .1rem; scrollbar-width: thin; scrollbar-color: var(--text-faint) transparent; }
 .iconlib__grid::-webkit-scrollbar { width: 10px; }
 .iconlib__grid::-webkit-scrollbar-track { background: transparent; }
 .iconlib__grid::-webkit-scrollbar-thumb { background: var(--text-faint); border: 3px solid transparent; background-clip: padding-box; border-radius: 100px; }
