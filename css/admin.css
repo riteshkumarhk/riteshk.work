@@ -710,16 +710,18 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .rkcur__grp > summary span { text-transform: none; letter-spacing: 0; color: var(--text-faint); font-family: var(--sans); }
 .rkcur__grp .svchk__grid { padding: .3rem .8rem .7rem; max-height: 190px; overflow: auto; }
 .rkcur__days { margin: .8rem 0 .2rem; font-size: .82rem; color: var(--text-dim); }
-.rkcur__days input { width: 66px; margin: 0 .3rem; }
+.rkcur__days input { width: 78px; margin: 0 .3rem; }
 .rkcur__days span { color: var(--text-faint); }
 .adm__empty { color: var(--text-dim); font-size: .82rem; padding: 1rem; border: 1px dashed var(--line); border-radius: 10px; margin-bottom: 1rem; text-align: center; }
 .sv-card--exp { opacity: .72; }
 .sv-badge { font-family: var(--mono); font-size: .52rem; text-transform: uppercase; letter-spacing: .06em; color: #ff9a7a; border: 1px solid rgba(255, 154, 122, .35); border-radius: 100px; padding: .05rem .4rem; font-weight: 400; }
 .adm input[type="number"] { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: .55rem .65rem; font-family: var(--sans); font-size: .85rem; }
 .adm input[type="number"]:focus { outline: none; border-color: var(--accent); }
-/* Number field: a design-system stepper replaces the native OS spin buttons */
-.adm input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
-.adm input[type="number"]::-webkit-outer-spin-button, .adm input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+/* Number field: a design-system stepper replaces the native OS spin buttons (works in .adm AND body-level .pass modals) */
+.adm input[type="number"], .numfield input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.numfield input[type="number"] { text-align: left; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: .55rem .65rem; font-family: var(--sans); font-size: .85rem; }
+.numfield input[type="number"]:focus { outline: none; border-color: var(--accent); }
+.adm input[type="number"]::-webkit-outer-spin-button, .adm input[type="number"]::-webkit-inner-spin-button, .numfield input[type="number"]::-webkit-outer-spin-button, .numfield input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .numfield { position: relative; display: inline-flex; vertical-align: middle; max-width: 100%; }
 .numfield > input[type="number"] { padding-right: 1.75rem; }
 .af > .numfield { display: flex; }
