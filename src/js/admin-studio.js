@@ -598,7 +598,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     pipette: svgIco('<path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.12 2.12 0 1 1 3 3L18 9l.4.4a2.12 2.12 0 1 1-3 3L15 12l-9 9"/>'),
     video: svgIco('<path d="m22 8-6 4 6 4V8z"/><rect x="2" y="6" width="14" height="12" rx="2"/>'),
     keyboard: svgIco('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/>'),
-    board: svgIco('<path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/>')
+    board: svgIco('<path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/>'),
+    trash: svgIco('<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>')
   };
   const EYE_ON = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   const EYE_OFF = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
@@ -712,7 +713,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<button class="iconbtn" data-act="up" data-list="' + list + '" data-index="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
       '<button class="iconbtn" data-act="down" data-list="' + list + '" data-index="' + i + '"' + (i === len - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
       (dupAct ? '<button class="iconbtn" data-act="' + dupAct + '" data-list="' + list + '" data-index="' + i + '" title="Duplicate — creates a hidden copy">' + IC.dup + '</button>' : "") +
-      '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="' + list + '" data-index="' + i + '" title="Remove">' + IC.close + '</button>' +
+      '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="' + list + '" data-index="' + i + '" title="Remove">' + IC.trash + '</button>' +
       "</div>"
     );
   }
@@ -4025,7 +4026,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<span class="rep__ops">' +
         '<button class="iconbtn" data-act="item-up" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '"' + (k === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
         '<button class="iconbtn" data-act="item-down" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '"' + (k === items.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
-        '<button class="iconbtn iconbtn--danger" data-act="item-remove" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" title="Remove">' + IC.close + '</button>' +
+        '<button class="iconbtn iconbtn--danger" data-act="item-remove" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" title="Remove">' + IC.trash + '</button>' +
         "</span></div>" + flds + "</div>";
     }).join("") || '<div class="rep__empty">No ' + escHtml(spec.title.toLowerCase()) + " yet.</div>";
     var bulk = /^(gallery|media|mediagrid|device|isolayers)$/.test(b.type) ? '<button class="btn btn--add rep__add" data-act="item-upload-multi" data-index="' + i + '" data-bindex="' + j + '" title="Pick several images at once">+ Add images\u2026</button>' : "";
@@ -4168,7 +4169,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<span class="cellrow__n">Cell ' + (c + 1) + '</span><span class="rep__ops">' +
         '<button class="iconbtn" data-act="cell-up" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '"' + (c === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
         '<button class="iconbtn" data-act="cell-down" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '"' + (c === it.cells.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
-        '<button class="iconbtn iconbtn--danger" data-act="cell-remove" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '" title="Remove">' + IC.close + '</button>' +
+        '<button class="iconbtn iconbtn--danger" data-act="cell-remove" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '" title="Remove">' + IC.trash + '</button>' +
         "</span></div>" +
         '<div class="af"><label class="af__label">Heading</label><input type="text" data-cell="' + i + '" data-cbindex="' + j + '" data-citem="' + k + '" data-ccell="' + c + '" data-cfield="heading" value="' + escAttr(cell.heading || "") + '" /></div>' +
         richCell(i, j, k, c, "body", "Body") +
@@ -4277,7 +4278,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return '<div class="faed__row' + (sel ? " is-sel" : "") + '">' +
         '<div class="faed__row-head"><button type="button" class="faed__row-n" data-act="fa-select" ' + da + ' title="Select">' + (k + 1) + "</button>" +
           '<input type="text" placeholder="Title (optional)" data-fann ' + da + ' data-afield="title" value="' + escAttr(a.title || "") + '" />' +
-          '<button class="iconbtn iconbtn--danger" data-act="fa-remove" ' + da + ' title="Remove">' + IC.close + '</button></div>' +
+          '<button class="iconbtn iconbtn--danger" data-act="fa-remove" ' + da + ' title="Remove">' + IC.trash + '</button></div>' +
         '<textarea rows="2" placeholder="Body (optional \u2014 **bold** and *italic* welcome)" data-fann ' + da + ' data-afield="body">' + escHtml(a.body || "") + "</textarea>" +
         '<label class="chk"><input type="checkbox" data-act="fa-focustoggle" ' + da + (hasFocus ? " checked" : "") + " /> Focus area \u2014 spotlight this region (blur the rest)</label>" +
         shapeSel + "</div>";
@@ -4395,7 +4396,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="study__block-head study__block-head--enc">' +
           '<span class="study__block-badge">' + LOCK_SVG + ' Protected</span>' +
           '<span class="study__block-label">' + escHtml(typeName) + ' \u2014 encrypted at rest</span>' +
-          '<span class="study__block-ops"><button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.close + '</button></span>' +
+          '<span class="study__block-ops"><button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + '</button></span>' +
         '</div>' +
         '<div class="study__enc-note">Its content isn\u2019t in your published file. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
       '</div>';
@@ -4405,7 +4406,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="study__block-head study__block-head--enc">' +
           '<span class="study__block-badge">' + LOCK_SVG + ' Vaulted</span>' +
           '<span class="study__block-label">' + escHtml(typeName) + ' \u2014 stored in your private vault</span>' +
-          '<span class="study__block-ops"><button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.close + '</button></span>' +
+          '<span class="study__block-ops"><button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + '</button></span>' +
         '</div>' +
         '<div class="study__enc-note">Your content is safe in your private vault \u2014 it just isn\u2019t in the published file, so it looks empty here. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
       '</div>';
@@ -4423,7 +4424,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<button class="iconbtn" data-act="study-blockup" data-index="' + i + '" data-bindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
       '<button class="iconbtn" data-act="study-blockdown" data-index="' + i + '" data-bindex="' + j + '"' + (j === len - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
       '<button class="iconbtn" data-act="study-blockdup" data-index="' + i + '" data-bindex="' + j + '" title="Duplicate section" aria-label="Duplicate section">' + IC.dup + '</button>' +
-      '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.close + '</button>' +
+      '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + '</button>' +
       "</span>" +
       '<button class="iconbtn study__block-lock' + (b.locked ? " is-locked" : "") + '" data-act="study-blocklock" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.locked ? "Locked \u2014 click to unlock" : "Lock this section \u2014 deeper-cut only") + '" aria-label="' + (b.locked ? "Unlock section" : "Lock section") + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' + (b.locked ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<path d="M8 10.5V6.8a4 4 0 0 1 7.5-1.6"/>') + "</svg></button>" +
       '<span class="study__block-chev" aria-hidden="true">' + IC.chev + '</span>' +
@@ -4590,7 +4591,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var ops = isRoot ? "" : '<span class="gsx__ops">' +
       '<button class="iconbtn" data-act="gen-up" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '" title="Move up">' + IC.up + '</button>' +
       '<button class="iconbtn" data-act="gen-down" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '" title="Move down">' + IC.down + '</button>' +
-      '<button class="iconbtn iconbtn--danger" data-act="gen-del" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.close + '</button></span>';
+      '<button class="iconbtn iconbtn--danger" data-act="gen-del" data-gpath="' + ps + '" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + '</button></span>';
     var body;
     if (isCont) {
       var p = node.props || {};
@@ -4759,7 +4760,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return '<button type="button" class="secpick__preset" data-gen-preset="' + escAttr(p.id) + '">' +
         '<span class="secpick__preset-prev">' + (window.RKGen ? window.RKGen.renderHtml(p.spec) : "") + "</span>" +
         '<span class="secpick__preset-name">' + escHtml(p.name || "Section") + "</span>" +
-        '<button type="button" class="secpick__preset-del" data-gen-preset-del="' + escAttr(p.id) + '" title="Delete">' + IC.close + '</button></button>';
+        '<button type="button" class="secpick__preset-del" data-gen-preset-del="' + escAttr(p.id) + '" title="Delete">' + IC.trash + '</button></button>';
     }).join("");
     return '<div class="secpick__gen">' +
       '<button type="button" class="secpick__gencard" data-gen-new><span class="secpick__genic">' + IC.spark + '</span><span class="secpick__gentx"><b>Generate a section</b><span>Describe it or drop a reference image \u2014 AI builds it, you preview &amp; approve. Added as its own block; your other sections are untouched.</span></span></button>' +
@@ -4798,7 +4799,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       imgs.forEach(function (u, k) {
         var s = document.createElement("span"); s.className = "gen__thumb";
         var im = document.createElement("img"); im.src = u; s.appendChild(im);
-        var x = document.createElement("button"); x.innerHTML = IC.close; x.addEventListener("click", function () { imgs.splice(k, 1); renderThumbs(); });
+        var x = document.createElement("button"); x.className = "gen__thumb-x"; x.innerHTML = IC.trash; x.addEventListener("click", function () { imgs.splice(k, 1); renderThumbs(); });
         s.appendChild(x); thumbs.appendChild(s);
       });
     }
@@ -5300,7 +5301,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     function commit() { data.iconKeywords = data.iconKeywords || {}; data.iconKeywords[name] = list.slice(0, 10); saveDraft(true); }
     function chips() {
       return list.length
-        ? list.map(function (k, idx) { return '<span class="kwed__chip">' + escHtml(k) + '<button type="button" class="kwed__x" data-i="' + idx + '" aria-label="Remove">' + IC.close + '</button></span>'; }).join("")
+        ? list.map(function (k, idx) { return '<span class="kwed__chip">' + escHtml(k) + '<button type="button" class="kwed__x" data-i="' + idx + '" aria-label="Remove">' + IC.trash + '</button></span>'; }).join("")
         : '<span class="kwed__none">No keywords yet.</span>';
     }
     function render() {
@@ -5629,7 +5630,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     } catch (e) { status("Card line generation failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Generate short card line"; } }
   }
   function beatEditor(i, b, j) {
-    return '<div class="adm__beat"><div class="adm__beat-h"><span class="adm__beat-n">' + (j + 1) + '</span> Key move ' + (j + 1) + '<button type="button" class="adm__beat-x" data-act="beat-remove" data-index="' + i + '" data-bindex="' + j + '" title="Remove this key move" aria-label="Remove key move ' + (j + 1) + '">' + IC.close + '</button></div>' +
+    return '<div class="adm__beat"><div class="adm__beat-h"><span class="adm__beat-n">' + (j + 1) + '</span> Key move ' + (j + 1) + '<button type="button" class="adm__beat-x" data-act="beat-remove" data-index="' + i + '" data-bindex="' + j + '" title="Remove this key move" aria-label="Remove key move ' + (j + 1) + '">' + IC.trash + '</button></div>' +
       '<input type="text" class="adm__beat-f" data-beat="' + i + '" data-bindex="' + j + '" data-bkey="problem" value="' + escAttr(b.problem || "") + '" placeholder="Problem \u2014 the tension, in a few words" />' +
       '<textarea class="adm__beat-f" rows="2" data-beat="' + i + '" data-bindex="' + j + '" data-bkey="move" placeholder="Move \u2014 the decision you made">' + escHtml(b.move || "") + '</textarea>' +
       '<input type="text" class="adm__beat-f" data-beat="' + i + '" data-bindex="' + j + '" data-bkey="outcome" value="' + escAttr(b.outcome || "") + '" placeholder="Outcome \u2014 the concrete result" />' +
@@ -5644,7 +5645,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="adm__ovm-ops">' +
           '<button type="button" data-act="ovm-up" data-index="' + i + '" data-ovmindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
           '<button type="button" data-act="ovm-down" data-index="' + i + '" data-ovmindex="' + j + '"' + (j === n - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
-          '<button type="button" data-act="ovm-remove" data-index="' + i + '" data-ovmindex="' + j + '" title="Remove">' + IC.close + '</button>' +
+          '<button type="button" data-act="ovm-remove" data-index="' + i + '" data-ovmindex="' + j + '" title="Remove">' + IC.trash + '</button>' +
         '</div></div>' +
       '<div class="adm__ovm-body">' +
         '<div class="adm__ovm-thumb' + (src ? " has" : "") + '">' + thumb + '</div>' +
@@ -6500,7 +6501,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
               '<div class="adm__lsec-ops">' +
                 '<button class="iconbtn" data-act="up" data-list="work" data-index="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
                 '<button class="iconbtn" data-act="down" data-list="work" data-index="' + i + '"' + (i === list.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
-                '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="work" data-index="' + i + '" title="Remove">' + IC.close + '</button>' +
+                '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="work" data-index="' + i + '" title="Remove">' + IC.trash + '</button>' +
               '</div>' +
             '</div>' +
             '<div class="study__enc-note workcard__enc-note">This project is encrypted in your published file \u2014 unlock it with your recovery pass to edit. <button class="btn btn--ghost" data-act="work-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
@@ -6527,7 +6528,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
               '<button class="iconbtn" data-act="up" data-list="work" data-index="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
               '<button class="iconbtn" data-act="down" data-list="work" data-index="' + i + '"' + (i === list.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
               '<button class="iconbtn" data-act="work-dup" data-list="work" data-index="' + i + '" title="Duplicate - creates a hidden copy">' + DUP_SVG + '</button>' +
-              '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="work" data-index="' + i + '" title="Remove">' + IC.close + '</button>' +
+              '<button class="iconbtn iconbtn--danger" data-act="remove" data-list="work" data-index="' + i + '" title="Remove">' + IC.trash + '</button>' +
             '</div>' +
           '</div>' +
           '<div class="adm__lsec-body">' +
@@ -7055,7 +7056,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="mlib__card' + (isUnused ? " is-orphan" : "") + '">' +
       '<div class="mlib__thumb">' + thumb + '</div>' +
       '<div class="mlib__meta"><span class="mlib__size">' + mediaFmt(f.size) + '</span>' + (isUnused ? '<span class="mlib__tag">Unused</span>' : extra) + '</div>' +
-      '<button class="mlib__del" data-act="media-del" data-name="' + escAttr(f.name) + '" data-sha="' + escAttr(f.sha) + '" title="Delete">' + IC.close + '</button>' +
+      '<button class="mlib__del" data-act="media-del" data-name="' + escAttr(f.name) + '" data-sha="' + escAttr(f.sha) + '" title="Delete">' + IC.trash + '</button>' +
     '</div>';
   }
   function mediaClick(e) {
@@ -7079,7 +7080,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (j && j.needStepup) status("This device isn\u2019t verified to delete \u2014 run a Publish once to set it up.");
       else status((j && j.error) || "Delete failed.");
     } catch (e) { status("Delete failed \u2014 check your connection."); }
-    if (btn) { btn.disabled = false; btn.innerHTML = IC.close; }
+    if (btn) { btn.disabled = false; btn.innerHTML = IC.trash; }
     return false;
   }
   async function mediaDelOrphans() {
@@ -7102,7 +7103,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function accReqRow(q) {
     var declined = q.status === "declined";
     var acts = declined
-      ? '<button class="btn btn--ghost" data-act="acc-req-delete" data-id="' + escAttr(q.id) + '">Delete</button>'
+      ? '<button class="btn btn--danger" data-act="acc-req-delete" data-id="' + escAttr(q.id) + '">Delete</button>'
       : '<button class="btn btn--primary" data-act="acc-req-approve" data-id="' + escAttr(q.id) + '">Approve</button>' +
         '<button class="btn btn--ghost" data-act="acc-req-curate" data-id="' + escAttr(q.id) + '">Curate\u2026</button>' +
         '<button class="btn btn--ghost" data-act="acc-req-decline" data-id="' + escAttr(q.id) + '">Decline</button>';
@@ -7341,7 +7342,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<span class="adm__iconf-prev' + (cur ? " has" : "") + '">' + preview + "</span>" +
         '<select data-iconpick="' + list + '" data-index="' + i + '">' + opts + "</select>" +
         '<button class="iconbtn" data-act="icon-regen" data-list="' + list + '" data-index="' + i + '" title="Regenerate with AI" aria-label="Regenerate icon with AI">' + IC.spark + '</button>' +
-        '<button class="iconbtn iconbtn--danger" data-act="icon-remove" data-list="' + list + '" data-index="' + i + '" title="Remove icon" aria-label="Remove icon"' + (cur ? "" : " disabled") + ">" + IC.close + "</button>" +
+        '<button class="iconbtn iconbtn--danger" data-act="icon-remove" data-list="' + list + '" data-index="' + i + '" title="Remove icon" aria-label="Remove icon"' + (cur ? "" : " disabled") + ">" + IC.trash + "</button>" +
       "</div></div>";
   }
 
@@ -7407,7 +7408,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="adm__ovm-ops">' +
           '<button type="button" data-act="gal-up" data-gindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
           '<button type="button" data-act="gal-down" data-gindex="' + j + '"' + (j === n - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
-          '<button type="button" data-act="gal-remove" data-gindex="' + j + '" title="Remove">' + IC.close + '</button>' +
+          '<button type="button" data-act="gal-remove" data-gindex="' + j + '" title="Remove">' + IC.trash + '</button>' +
         "</div></div>" +
       '<div class="adm__gal-thumb' + (src ? " has" : "") + '">' + thumb + "</div>" +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="gal-upload" data-gindex="' + j + '">' + (src ? "Replace\u2026" : "Upload\u2026") + "</button>" + (src ? '<button class="btn btn--ghost" data-act="gal-clear" data-gindex="' + j + '">Clear</button>' : "") + mediaSizeTag(src) + "</div>" +
@@ -7441,7 +7442,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="adm__ovm-ops">' +
           '<button type="button" data-act="logo-up" data-lindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
           '<button type="button" data-act="logo-down" data-lindex="' + j + '"' + (j === n - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
-          '<button type="button" data-act="logo-remove" data-lindex="' + j + '" title="Remove">' + IC.close + '</button>' +
+          '<button type="button" data-act="logo-remove" data-lindex="' + j + '" title="Remove">' + IC.trash + '</button>' +
         "</div></div>" +
       '<div class="adm__gal-thumb' + (src ? " has" : "") + '">' + thumb + "</div>" +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="logo-upload" data-lindex="' + j + '">' + (src ? "Replace\u2026" : "Upload\u2026") + "</button>" + (src ? '<button class="btn btn--ghost" data-act="logo-clear" data-lindex="' + j + '">Clear</button>' : "") + mediaSizeTag(src) + "</div>" +
@@ -7898,7 +7899,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="rep__item jimg">' +
       '<div class="rep__bar"><span class="sortgrip" data-grip data-sortkey="jimg:' + c + ':' + e + '" title="Drag to reorder">' + GRIP_SVG + '</span>' +
       '<span class="rep__n">Image ' + (k + 1) + '</span><span class="rep__ops">' +
-      '<button class="iconbtn iconbtn--danger" data-act="jimg-del" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" title="Remove">' + IC.close + '</button></span></div>' +
+      '<button class="iconbtn iconbtn--danger" data-act="jimg-del" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" title="Remove">' + IC.trash + '</button></span></div>' +
       '<div class="jimg__preview' + (src ? " has" : "") + '">' + (src ? '<img src="' + escAttr(previewSrc(src)) + '" alt="" />' : "<span>No image</span>") + "</div>" +
       '<input type="text" data-jimg="src" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" value="' + escAttr(src) + '" placeholder="Paste an image URL\u2026" />' +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="jimg-upload" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '">Replace\u2026</button>' + mediaSizeTag(src) + "</div>" +
@@ -7909,7 +7910,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="card jentry">' +
       '<div class="card__bar"><span class="sortgrip" data-grip data-sortkey="jentry:' + c + '" title="Drag to reorder">' + GRIP_SVG + '</span>' +
       '<span class="card__idx">' + escHtml(entry.title || entry.period || "Entry " + (e + 1)) + '</span>' +
-      '<div class="card__ops"><button class="iconbtn iconbtn--danger" data-act="jentry-del" data-jc="' + c + '" data-je="' + e + '" title="Remove entry">' + IC.close + '</button></div></div>' +
+      '<div class="card__ops"><button class="iconbtn iconbtn--danger" data-act="jentry-del" data-jc="' + c + '" data-je="' + e + '" title="Remove entry">' + IC.trash + '</button></div></div>' +
       '<div class="af__row">' +
       '<div class="af"><label class="af__label">Period</label><input type="text" data-jfield="period" data-jc="' + c + '" data-je="' + e + '" value="' + escAttr(entry.period || "") + '" placeholder="e.g. 2022 \u2014 2023" /></div>' +
       '<div class="af"><label class="af__label">Title</label><input type="text" data-jfield="title" data-jc="' + c + '" data-je="' + e + '" value="' + escAttr(entry.title || "") + '" placeholder="What you worked on" /></div>' +
@@ -7931,7 +7932,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<span class="sortgrip" data-grip data-sortkey="jchap" title="Drag to reorder">' + GRIP_SVG + '</span>' +
       '<input type="text" class="jchap__name" data-jname data-jc="' + c + '" value="' + escAttr(chap.name || "") + '" placeholder="Chapter name (e.g. Microsoft)" />' +
       '<span class="jchap__count" title="entries">' + entries.length + '</span>' +
-      '<span class="card__ops"><button class="iconbtn iconbtn--danger" data-act="jchap-del" data-jc="' + c + '" title="Remove chapter">' + IC.close + '</button></span>' +
+      '<span class="card__ops"><button class="iconbtn iconbtn--danger" data-act="jchap-del" data-jc="' + c + '" title="Remove chapter">' + IC.trash + '</button></span>' +
       '<span class="study__block-chev">' + IC.chev + '</span></div>' +
       '<div class="jchap__body">' +
       '<div class="af"><label class="af__label">Company logo (optional)</label>' +
