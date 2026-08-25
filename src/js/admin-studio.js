@@ -3833,11 +3833,19 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var cell = function (n, inner, title, extra) {
         return '<button type="button" class="iconpick__b' + (extra || "") + (cur === n ? " is-on" : "") + '" data-act="item-icon" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '" data-icon="' + n + '" title="' + (title || n) + '">' + inner + "</button>";
       };
-      var grid = cell("", "\u2205", "No icon", " iconpick__b--none") + admIconNames().map(function (n) { return cell(n, admIcon(n), n); }).join("");
+      // Quick flyout shows an 8x4 grid: cell 1 = No icon, then the top 31 ranked (frequent then recent).
+      // Keep the current icon visible even if it ranks lower. Beyond that, the full library opens via "More icons".
+      var allNames = admIconNames();
+      var shown = rankIconNames(allNames).slice(0, 31);
+      if (cur && shown.indexOf(cur) < 0) shown = [cur].concat(shown.slice(0, 30));
+      var grid = cell("", "\u2205", "No icon", " iconpick__b--none") + shown.map(function (n) { return cell(n, admIcon(n), n); }).join("");
+      var dd = "data-index=\"" + i + "\" data-bindex=\"" + j + "\" data-iindex=\"" + k + "\" data-ifield=\"" + key + "\"";
+      var moreOrGen = allNames.length > 31
+        ? '<button type="button" class="iconpick__gen iconpick__more" data-act="icon-more" ' + dd + ">More icons\u2026 <span class=\"iconpick__count\">" + allNames.length + "</span></button>"
+        : '<button type="button" class="iconpick__gen" data-act="icon-gen" ' + dd + ">\u2728 Generate an icon\u2026</button>";
       return '<div class="af"><label class="af__label">' + label + '</label>' +
         '<details class="icondd"><summary class="icondd__trigger"><span class="icondd__cur">' + (cur ? admIcon(cur) : "\u2205") + '</span><span class="icondd__name">' + (cur || "No icon") + '</span><span class="icondd__chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></summary>' +
-        '<div class="icondd__panel"><div class="iconpick">' + grid + '</div>' +
-        '<button type="button" class="iconpick__gen" data-act="icon-gen" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">\u2728 Generate an icon\u2026</button>' +
+        '<div class="icondd__panel"><div class="iconpick">' + grid + '</div>' + moreOrGen +
         "</div></details></div>";
     }
     if (kind === "select") {
@@ -4867,6 +4875,111 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     } catch (e) {}
     return out;
   }
+  // Built-in icons get concise default search keywords; generated icons carry AI keywords in data.iconKeywords.
+  var BUILTIN_ICON_KEYWORDS = {
+    users: "people team group community members audience",
+    idea: "idea lightbulb insight concept innovation think",
+    coins: "money coins cash finance revenue payment cost",
+    chart: "chart graph bars analytics data metrics growth",
+    target: "target goal aim focus objective bullseye",
+    lock: "lock secure security privacy private locked",
+    spark: "spark sparkle star ai magic highlight shine",
+    clock: "clock time schedule duration timer history",
+    shield: "shield protect security safety defense guard trust",
+    check: "check done complete success tick verified approved",
+    bolt: "bolt lightning power fast energy speed electric",
+    layers: "layers stack levels tiers structure depth",
+    heart: "heart love like favourite care wellbeing",
+    leaf: "leaf nature eco sustainable green growth organic",
+    star: "star favourite rating quality featured best",
+    rocket: "rocket launch startup growth fast ship boost",
+    globe: "globe world web internet global international",
+    eye: "eye view visibility watch preview see observe",
+    flag: "flag milestone goal country mark report",
+    gift: "gift present reward perk bonus surprise",
+    edit: "edit write pencil compose author change",
+    search: "search find magnify look discover explore query",
+    gear: "gear settings config options cog controls system",
+    chat: "chat message talk conversation comment support",
+    mail: "mail email message envelope contact inbox",
+    phone: "phone call contact mobile telephone support",
+    calendar: "calendar date schedule event plan time",
+    pin: "pin location map place marker address",
+    award: "award medal prize achievement recognition winner",
+    like: "like thumbs up approve vote endorse positive",
+    compass: "compass direction navigate explore guide discovery",
+    book: "book read learn docs guide knowledge story",
+    code: "code develop programming engineering build tech",
+    cloud: "cloud weather storage sky saas concept",
+    sun: "sun light day bright weather warm energy",
+    flame: "flame fire hot trending passion energy heat",
+    key: "key access unlock password secret entry auth",
+    tag: "tag label category price keyword badge",
+    trophy: "trophy win award champion prize success",
+    cart: "cart shop buy ecommerce purchase basket order",
+    hand: "hand raise wave help touch gesture care",
+    puzzle: "puzzle piece solve fit integration problem",
+    filter: "filter sort funnel refine narrow segment",
+    grid: "grid layout tiles gallery dashboard cells",
+    link: "link chain connect url reference attach"
+  };
+  function iconKeywords(name) {
+    var d = data.iconKeywords && data.iconKeywords[name];
+    if (d && d.length) return d;
+    var b = BUILTIN_ICON_KEYWORDS[name];
+    return b ? b.split(" ") : [name];
+  }
+  function iconMatchesQuery(name, q) {
+    if (!q) return true;
+    q = String(q).toLowerCase();
+    if (String(name).toLowerCase().indexOf(q) >= 0) return true;
+    var kw = iconKeywords(name);
+    for (var i = 0; i < kw.length; i++) if (String(kw[i]).toLowerCase().indexOf(q) >= 0) return true;
+    return false;
+  }
+  // Icon usage (frequency + recency) is per-device UI state, kept in localStorage - not content.json.
+  var ICON_USAGE_KEY = "rk.studio.iconUsage";
+  function iconUsageGet() {
+    try { return JSON.parse(localStorage.getItem(ICON_USAGE_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function bumpIconUsage(name) {
+    if (!name) return;
+    try {
+      var u = iconUsageGet(), e = u[name] || { c: 0, t: 0 };
+      e.c = (e.c || 0) + 1; e.t = Date.now(); u[name] = e;
+      localStorage.setItem(ICON_USAGE_KEY, JSON.stringify(u));
+    } catch (e2) {}
+  }
+  // Order icons: row 1 (first 8) = most FREQUENTLY used; the rest = most RECENTLY used, then unused in
+  // default order. So a freshly picked icon lands at the start of row 2 (recent), not above the favourites.
+  function rankIconNames(names) {
+    var u = iconUsageGet();
+    var used = names.filter(function (n) { return u[n] && u[n].c > 0; });
+    var byFreq = used.slice().sort(function (a, b) { return (u[b].c - u[a].c) || (u[b].t - u[a].t); });
+    var row1 = byFreq.slice(0, 8), inRow1 = {};
+    row1.forEach(function (n) { inRow1[n] = 1; });
+    var restUsed = used.filter(function (n) { return !inRow1[n]; }).sort(function (a, b) { return u[b].t - u[a].t; });
+    var unused = names.filter(function (n) { return !(u[n] && u[n].c > 0); });
+    return row1.concat(restUsed, unused);
+  }
+  // Generate one icon (svg + name + up to 10 keywords) in the group's family. Throws on a bad reply.
+  async function runIconGen(desc, fam) {
+    var parsed = csgenParse(await aiText(aiCfg("txt"), iconGenSystem(fam), desc, { json: true, maxTokens: 700, temperature: 0.5 }));
+    var svg = sanitizeIconSvg(parsed && parsed.svg);
+    if (!svg) throw new Error("That did not come back as a clean line-icon - try rephrasing.");
+    var name = iconSlug((parsed && parsed.name) || desc);
+    var kw = (parsed && Array.isArray(parsed.keywords)) ? parsed.keywords.map(function (s) { return String(s || "").toLowerCase().trim(); }).filter(Boolean).slice(0, 10) : [];
+    return { svg: svg, name: name, keywords: kw };
+  }
+  // Add a generated icon to the library (unique name, register live, persist svg + keywords). Returns final name.
+  function addGeneratedIcon(name, svg, keywords) {
+    var have = {}; (admIconNames() || []).forEach(function (n) { have[n] = 1; });
+    var base = name || "icon", nm = base, c = 2; while (have[nm]) nm = base + "-" + (c++);
+    data.customIcons = data.customIcons || {}; data.customIcons[nm] = svg;
+    if (keywords && keywords.length) { data.iconKeywords = data.iconKeywords || {}; data.iconKeywords[nm] = keywords.slice(0, 10); }
+    var reg = {}; reg[nm] = svg; if (window.RK && window.RK.registerIcons) window.RK.registerIcons(reg);
+    return nm;
+  }
   function iconGenSystem(refs) {
     var lines = [
       "You design ONE monochrome line-icon that must look like it was drawn by the SAME hand as a fixed set (Lucide / Feather).",
@@ -4883,12 +4996,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       lines.push("This icon JOINS AN EXISTING GROUP shown below. Match their exact visual weight, level of detail, stroke rhythm and metaphor style so it is unmistakably part of the SAME set - do NOT copy their shapes, draw the requested subject at the same simplicity and optical weight (not busier, not lighter):");
       refs.forEach(function (r) { lines.push(r.name + " -> " + r.svg); });
     }
-    lines.push("Return STRICT JSON only, no prose: an object with two string keys, name (one short lowercase word) and svg (inner markup only).");
+    lines.push("Return STRICT JSON only, no prose: an object with keys name (one short lowercase word), svg (inner markup only) and keywords (an array of up to 10 short lowercase search terms - synonyms, category and use-cases that would help find this icon later).");
     return lines.join(String.fromCharCode(10));
   }
   function iconGenModal(wi, bj, ik, key) {
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { iconGenModal(wi, bj, ik, key); }); return; }
-    var svg = "", nm = "";
+    var svg = "", nm = "", kws = [];
     var fam = iconFamilyRefs(wi, bj, ik, key);
     var famHtml = fam.length
       ? '<div class="icongen__fam"><span class="icongen__fam-lbl">Matching the ' + fam.length + ' icon' + (fam.length > 1 ? "s" : "") + ' already in this group</span>' +
@@ -4917,12 +5030,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (!desc) { errEl.textContent = "Describe the icon first."; return; }
       var was = btnBusy(btn, "Drawing..."); errEl.textContent = "";
       try {
-        var parsed = csgenParse(await aiText(aiCfg("txt"), iconGenSystem(fam), desc, { json: true, maxTokens: 700, temperature: 0.5 }));
-        var clean = sanitizeIconSvg(parsed && parsed.svg);
-        if (!clean) throw new Error("That did not come back as a clean line-icon - try rephrasing.");
-        svg = clean; nm = iconSlug((parsed && parsed.name) || desc);
+        var out = await runIconGen(desc, fam);
+        svg = out.svg; nm = out.name; kws = out.keywords;
         prev.hidden = false;
-        prev.innerHTML = '<span class="icongen__ico">' + iconWrapDisp(clean) + '</span><span class="icongen__nm">' + escHtml(nm) + "</span>";
+        prev.innerHTML = '<span class="icongen__ico">' + iconWrapDisp(svg) + '</span><span class="icongen__nm">' + escHtml(nm) + "</span>";
         regen.hidden = false; goBtn.textContent = "Add to icons"; goBtn.setAttribute("data-add", "1");
       } catch (err) { errEl.textContent = err.message || String(err); }
       finally { btnIdle(btn, was); }
@@ -4930,17 +5041,83 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     goBtn.addEventListener("click", function (e) {
       var btn = e.currentTarget;
       if (btn.getAttribute("data-add") === "1" && svg) {
-        var have = {}; (admIconNames() || []).forEach(function (n) { have[n] = 1; });
-        var base = nm || "icon", name = base, c = 2; while (have[name]) name = base + "-" + (c++);
-        data.customIcons = data.customIcons || {}; data.customIcons[name] = svg;
-        var reg = {}; reg[name] = svg; if (window.RK && window.RK.registerIcons) window.RK.registerIcons(reg);
+        var name = addGeneratedIcon(nm, svg, kws);
         var it = data.work[wi] && data.work[wi].study && data.work[wi].study.blocks[bj] && data.work[wi].study.blocks[bj].items && data.work[wi].study.blocks[bj].items[ik];
         if (it) it[key] = name;
+        bumpIconUsage(name);
         saveDraft(true); renderL2(); status("Added your icon - it is in the icon list now.", true); close();
       } else { gen(btn); }
     });
     regen.addEventListener("click", function (e) { goBtn.removeAttribute("data-add"); goBtn.textContent = "\u2728 Generate"; gen(e.currentTarget); });
     input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); if (goBtn.getAttribute("data-add") !== "1") gen(goBtn); } });
+  }
+
+  // Full searchable icon library (opened by "More icons" once the flyout can't show them all).
+  // Search matches name + keywords; Generate seeds from the search text; Continue applies the pick.
+  function iconLibModal(wi, bj, ik, key) {
+    var it = data.work[wi] && data.work[wi].study && data.work[wi].study.blocks[bj] && data.work[wi].study.blocks[bj].items && data.work[wi].study.blocks[bj].items[ik];
+    if (!it) return;
+    var fam = iconFamilyRefs(wi, bj, ik, key);
+    var sel = it[key] || "";
+    var query = "";
+    var modal = document.createElement("div");
+    modal.className = "pass pass--wide iconlib";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">Icon library</div>' +
+      '<div class="pass__sub">Search by name or keyword, pick one and press Continue \u2014 or type what you want and Generate a new icon in your line style.</div>' +
+      '<div class="iconlib__search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' +
+      '<input type="text" class="iconlib__q" placeholder="Search icons\u2026 e.g. security, growth, cloud" /></div>' +
+      '<div class="iconlib__grid"></div>' +
+      '<div class="iconlib__empty" hidden>No icons match. Type a description above and press \u2728 Generate to create one.</div>' +
+      '<div class="gen__err pass__err" hidden></div>' +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button><button class="btn btn--auto" data-gen>\u2728 Generate</button><button class="btn btn--primary" data-continue>Continue</button></div></div>';
+    document.body.appendChild(modal);
+    var gridEl = modal.querySelector(".iconlib__grid"), qEl = modal.querySelector(".iconlib__q"), emptyEl = modal.querySelector(".iconlib__empty"), errEl = modal.querySelector(".gen__err"), genBtn = modal.querySelector("[data-gen]"), contBtn = modal.querySelector("[data-continue]");
+    function cellHtml(n, inner, title, extra) {
+      return '<button type="button" class="iconlib__b' + (extra || "") + (n === sel ? " is-on" : "") + '" data-icon="' + escAttr(n) + '" title="' + escAttr(title || n) + '">' + inner + '<span class="iconlib__nm">' + escHtml(title || n) + "</span></button>";
+    }
+    function matches() { return rankIconNames(admIconNames()).filter(function (n) { return iconMatchesQuery(n, query); }); }
+    function renderGrid() {
+      var names = matches();
+      emptyEl.hidden = names.length > 0;
+      gridEl.innerHTML = (query ? "" : cellHtml("", "\u2205", "No icon", " iconlib__b--none")) + names.map(function (n) { return cellHtml(n, admIcon(n), n); }).join("");
+    }
+    renderGrid();
+    var onKey = function (e) { if (e.key === "Escape") close(); };
+    function close() { modal.remove(); document.removeEventListener("keydown", onKey); }
+    document.addEventListener("keydown", onKey);
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    qEl.addEventListener("input", function () { query = (qEl.value || "").trim(); renderGrid(); });
+    try { qEl.focus(); } catch (e) {}
+    gridEl.addEventListener("click", function (e) {
+      var b = e.target.closest(".iconlib__b"); if (!b) return;
+      sel = b.getAttribute("data-icon") || "";
+      gridEl.querySelectorAll(".iconlib__b").forEach(function (x) { x.classList.toggle("is-on", x === b); });
+    });
+    contBtn.addEventListener("click", function () {
+      it[key] = sel; if (sel) bumpIconUsage(sel);
+      saveDraft(true); renderL2(); status(sel ? "Icon applied." : "Icon cleared.", true); close();
+    });
+    genBtn.addEventListener("click", async function (e) {
+      if (!aiHasKey("txt")) { aiKeyModal("txt", function () {}); return; }
+      var btn = e.currentTarget, desc = (qEl.value || "").trim();
+      errEl.hidden = true;
+      if (!desc) { errEl.hidden = false; errEl.textContent = "Type what to draw in the search box, then Generate."; try { qEl.focus(); } catch (e2) {} return; }
+      var was = btnBusy(btn, "Drawing...");
+      try {
+        var out = await runIconGen(desc, fam);
+        var nm = addGeneratedIcon(out.name, out.svg, out.keywords);
+        sel = nm; query = ""; qEl.value = "";
+        renderGrid();
+        var nb = gridEl.querySelector('.iconlib__b[data-icon="' + nm + '"]');
+        if (nb) { nb.classList.add("is-new"); try { nb.scrollIntoView({ block: "center" }); } catch (e3) {} }
+        saveDraft(true);
+        status("Generated \u201c" + nm + "\u201d \u2014 press Continue to apply.", true);
+      } catch (err) { errEl.hidden = false; errEl.textContent = err.message || String(err); }
+      finally { btnIdle(btn, was); }
+    });
+    qEl.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); var names = matches(); if (names.length) { sel = names[0]; renderGrid(); } } });
   }
 
   function sectionPicker(i, at) {
@@ -8511,8 +8688,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "media-bgclear") { const bj = +b.dataset.bindex, k = +b.dataset.iindex; const bl = data.work[i].study.blocks[bj]; const it = bl && bl.items && bl.items[k]; if (it) { it.bg = ""; saveDraft(true); renderL2(); refreshL2Preview(); } return; }
     if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; if (isVideoVal(uri)) bl.items[k].controls = true; saveDraft(true); renderL2(); } }, { vault: !!(data.work[i].study.blocks[bj] && data.work[i].study.blocks[bj].locked) }); return; }
     if (act === "item-upload-multi") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (!bl) return; bl.items = bl.items || []; pickMediaMulti(function () { const it = blankItem(bl.type); bl.items.push(it); return it; }, function () { saveDraft(true); renderL2(); }, { vault: !!bl.locked }); return; }
-    if (act === "item-icon") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield, name = b.dataset.icon; const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = name; saveDraft(true); refreshL2Preview(); const grid = b.closest(".iconpick"); if (grid) grid.querySelectorAll(".iconpick__b").forEach(function (x) { x.classList.toggle("is-on", x === b); }); const dd = b.closest(".icondd"); if (dd) { const cur = dd.querySelector(".icondd__cur"); if (cur) cur.innerHTML = name ? admIcon(name) : "\u2205"; const nm = dd.querySelector(".icondd__name"); if (nm) nm.textContent = name || "No icon"; if (dd.tagName === "DETAILS") dd.open = false; } } return; }
+    if (act === "item-icon") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield, name = b.dataset.icon; const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = name; bumpIconUsage(name); saveDraft(true); refreshL2Preview(); const grid = b.closest(".iconpick"); if (grid) grid.querySelectorAll(".iconpick__b").forEach(function (x) { x.classList.toggle("is-on", x === b); }); const dd = b.closest(".icondd"); if (dd) { const cur = dd.querySelector(".icondd__cur"); if (cur) cur.innerHTML = name ? admIcon(name) : "\u2205"; const nm = dd.querySelector(".icondd__name"); if (nm) nm.textContent = name || "No icon"; if (dd.tagName === "DETAILS") dd.open = false; } } return; }
     if (act === "icon-gen") { iconGenModal(+b.dataset.index, +b.dataset.bindex, +b.dataset.iindex, b.dataset.ifield); return; }
+    if (act === "icon-more") { iconLibModal(+b.dataset.index, +b.dataset.bindex, +b.dataset.iindex, b.dataset.ifield); return; }
     if (act === "item-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (bl && bl.items && bl.items[k]) { bl.items[k][b.dataset.ifield] = ""; saveDraft(true); renderL2(); } return; }
     if (act === "cell-add") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex]; it.cells = it.cells || []; if (it.cells.length < 5) { it.cells.push(blankCell()); saveDraft(true); renderL2(); } return; }
     if (act === "cell-remove") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex]; if (it.cells) { it.cells.splice(+b.dataset.cindex, 1); if (!it.cells.length) it.cells.push(blankCell()); saveDraft(true); renderL2(); } return; }
