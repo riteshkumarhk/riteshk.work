@@ -139,6 +139,9 @@ main, .footer { transition: opacity .45s ease; }
   padding: 1.4rem var(--pad);
   transition: transform .5s var(--ease), background .5s, padding .5s, border-color .5s;
   border-bottom: 1px solid transparent;
+  /* own compositor layer so the scrolled backdrop-filter blur doesn't shimmer as content scrolls under it */
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 /* Legibility scrim: a soft dark gradient just behind the header so nav text stays readable over
    busy MEDIA covers. Gated to media mode only — the aurora / plain hero is soft enough that the nav
@@ -160,7 +163,7 @@ html[data-appearance="light"] .nav::before {
   border-color: var(--line-soft);
 }
 .nav.is-scrolled::before { opacity: 0; }
-.nav.is-hidden { transform: translateY(-110%); }
+.nav.is-hidden { transform: translateY(-110%) translateZ(0); }
 
 .nav__brand { display: flex; align-items: center; gap: .7rem; }
 .nav__mark {
