@@ -581,7 +581,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     back: svgIco('<path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>'),
     ext: svgIco('<path d="M7 17 17 7"/><path d="M7 7h10v10"/>'),
     check: svgIco('<path d="M20 6 9 17l-5-5"/>'),
-    add: svgIco('<path d="M5 12h14"/><path d="M12 5v14"/>')
+    add: svgIco('<path d="M5 12h14"/><path d="M12 5v14"/>'),
+    chev: svgIco('<path d="m9 18 6-6-6-6"/>', 16),
+    chevD: svgIco('<path d="m6 9 6 6 6-6"/>', 13)
   };
   const EYE_ON = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   const EYE_OFF = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
@@ -4401,7 +4403,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.close + '</button>' +
       "</span>" +
       '<button class="iconbtn study__block-lock' + (b.locked ? " is-locked" : "") + '" data-act="study-blocklock" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.locked ? "Locked \u2014 click to unlock" : "Lock this section \u2014 deeper-cut only") + '" aria-label="' + (b.locked ? "Unlock section" : "Lock section") + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' + (b.locked ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<path d="M8 10.5V6.8a4 4 0 0 1 7.5-1.6"/>') + "</svg></button>" +
-      '<span class="study__block-chev" aria-hidden="true">\u203a</span>' +
+      '<span class="study__block-chev" aria-hidden="true">' + IC.chev + '</span>' +
       "</div>";
     var common = sfInput(i, j, "nav", "Section label", "Shows in the left nav \u2014 leave blank to hide it there") + sfInput(i, j, "kicker", "Kicker", "small label above the block");
     var body = "";
@@ -5747,7 +5749,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function studyToggle(w, i) {
     var n = (w.study && w.study.blocks && w.study.blocks.length) || 0;
     if (openStudy === i) {
-      return '<div class="study__toggle is-open"><button class="btn study__editbtn is-open" data-act="study-toggle" data-index="' + i + '">\u25be Close case-study editor</button></div>';
+      return '<div class="study__toggle is-open"><button class="btn study__editbtn is-open" data-act="study-toggle" data-index="' + i + '">' + IC.chevD + ' Close case-study editor</button></div>';
     }
     var preview = n ? '<a class="btn btn--ghost study__previewbtn" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '" title="Open this project page in a new tab">Preview ' + IC.ext + '</a>' : "";
     return '<div class="study__toggle">' +
@@ -7217,7 +7219,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     const acts = revoked
       ? '<button class="btn btn--primary" data-act="sv-restore" data-index="' + i + '">Restore</button>' +
         '<button class="btn btn--danger" data-act="sv-delete" data-index="' + i + '">Delete</button>'
-      : '<div class="svshare"><button class="btn btn--ghost svshare__btn" data-act="sv-share" data-index="' + i + '">Share \u25be</button>' +
+      : '<div class="svshare"><button class="btn btn--ghost svshare__btn" data-act="sv-share" data-index="' + i + '">Share ' + IC.chevD + '</button>' +
           '<div class="svshare__menu" hidden><button class="svshare__item" data-act="sv-copylink" data-index="' + i + '">Copy link</button><button class="svshare__item" data-act="sv-copycode" data-index="' + i + '">Copy code</button></div></div>' +
         '<button class="btn btn--ghost" data-act="sv-edit" data-index="' + i + '">Edit</button>' +
         '<button class="btn btn--warn" data-act="sv-revoke" data-index="' + i + '">Revoke</button>';
@@ -7907,7 +7909,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<input type="text" class="jchap__name" data-jname data-jc="' + c + '" value="' + escAttr(chap.name || "") + '" placeholder="Chapter name (e.g. Microsoft)" />' +
       '<span class="jchap__count" title="entries">' + entries.length + '</span>' +
       '<span class="card__ops"><button class="iconbtn iconbtn--danger" data-act="jchap-del" data-jc="' + c + '" title="Remove chapter">' + IC.close + '</button></span>' +
-      '<span class="study__block-chev">\u203a</span></div>' +
+      '<span class="study__block-chev">' + IC.chev + '</span></div>' +
       '<div class="jchap__body">' +
       '<div class="af"><label class="af__label">Company logo (optional)</label>' +
       '<div class="jimg__preview jlogo__preview' + (chap.logo ? " has" : "") + '">' + (chap.logo ? '<img src="' + escAttr(previewSrc(chap.logo)) + '" alt="" />' : "<span>No logo</span>") + "</div>" +

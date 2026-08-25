@@ -1102,6 +1102,7 @@ body.adm-lock .cursor { display: none !important; }
 .study__block-ops { display: flex; gap: .2rem; flex: 0 0 auto; opacity: 0; transition: opacity .2s; }
 .study__block-head:hover .study__block-ops, .study__block.is-open .study__block-ops { opacity: 1; }
 .study__block-chev { flex: 0 0 auto; display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid var(--line); border-radius: 6px; color: var(--text-faint); font-size: 1rem; line-height: 1; transition: transform .25s var(--ease), color .25s, border-color .25s; }
+.study__block-chev svg { width: 17px; height: 17px; stroke-width: 2; }
 .study__block-head:hover .study__block-chev { color: var(--text-dim); }
 .study__block.is-open .study__block-chev { transform: rotate(90deg); color: var(--accent); border-color: var(--accent); }
 .study__block.is-flash { animation: blockFlash 1.1s ease; }
