@@ -5168,10 +5168,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     lines.push("Return STRICT JSON only, no prose: an object with keys name (one short lowercase word), svg (inner markup only) and keywords (an array of up to 10 short lowercase search terms - synonyms, category and use-cases that would help find this icon later).");
     return lines.join(String.fromCharCode(10));
   }
-  function iconGenModal(wi, bj, ik, key, seed) {
-    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { iconGenModal(wi, bj, ik, key, seed); }); return; }
+  function iconGenModal(wi, bj, ik, key, seed, onAdded) {
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { iconGenModal(wi, bj, ik, key, seed, onAdded); }); return; }
     var svg = "", nm = "", kws = [];
-    var fam = iconFamilyRefs(wi, bj, ik, key);
+    var fam = (wi != null) ? iconFamilyRefs(wi, bj, ik, key) : [];
     var famHtml = fam.length
       ? '<div class="icongen__fam"><span class="icongen__fam-lbl">Matching the ' + fam.length + ' icon' + (fam.length > 1 ? "s" : "") + ' already in this group</span>' +
         '<span class="icongen__fam-row">' + fam.map(function (r) { return '<span class="icongen__fam-ico" title="' + escAttr(r.name) + '">' + iconWrapDisp(r.svg) + "</span>"; }).join("") + "</span></div>"
@@ -5217,10 +5217,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var btn = e.currentTarget;
       if (btn.getAttribute("data-add") === "1" && svg) {
         var name = addGeneratedIcon(nm, svg, kws);
-        var it = data.work[wi] && data.work[wi].study && data.work[wi].study.blocks[bj] && data.work[wi].study.blocks[bj].items && data.work[wi].study.blocks[bj].items[ik];
-        if (it) it[key] = name;
-        bumpIconUsage(name);
-        saveDraft(true); renderL2(); status("Added your icon - it is in the icon list now.", true); close();
+        if (wi != null) {
+          var it = data.work[wi] && data.work[wi].study && data.work[wi].study.blocks[bj] && data.work[wi].study.blocks[bj].items && data.work[wi].study.blocks[bj].items[ik];
+          if (it) it[key] = name;
+          bumpIconUsage(name);
+          renderL2();
+        }
+        saveDraft(true); if (onAdded) try { onAdded(name); } catch (er) {} status("Added your icon - it is in the icon library now.", true); close();
       } else { gen(btn); }
     });
     regen.addEventListener("click", function (e) { gen(e.currentTarget); });
@@ -5286,6 +5289,87 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     qEl.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); var names = matches(); if (names.length) { sel = names[0]; renderGrid(); } } });
   }
 
+  // Shared safe-delete for a custom icon: reassigns every in-use site to the closest AI-picked
+  // replacement, then removes it. Used by the keyword popover and the Icon library manager.
+  async function deleteCustomIconFlow(name, onDone) {
+    if (!(data.customIcons && data.customIcons[name])) { status("Only your generated icons can be deleted."); return false; }
+    var sites = iconUsageSites(name), works = [];
+    sites.forEach(function (s) { if (works.indexOf(s.work) < 0) works.push(s.work); });
+    var where = works.length ? " (" + works.slice(0, 4).join(", ") + (works.length > 4 ? ", and more" : "") + ")" : "";
+    var sub = sites.length
+      ? '"' + name + '" is used in ' + sites.length + " place" + (sites.length === 1 ? "" : "s") + where + ". Deleting it replaces every use with the closest-matching icon (picked by AI). This cannot be undone."
+      : '"' + name + '" is not used anywhere. Remove it from your icon library? This cannot be undone.';
+    var ok = await confirmModal({ title: "Delete this icon?", sub: sub, cta: "Delete icon", okClass: "btn--danger" });
+    if (!ok) return false;
+    var replacement = "";
+    if (sites.length) {
+      status("Finding the best replacement icon...");
+      replacement = await aiPickReplacementIcon(name, sites.map(function (s) { return s.ctx; }).filter(Boolean));
+      sites.forEach(function (s) { var bl = data.work[s.wi] && data.work[s.wi].study && data.work[s.wi].study.blocks[s.bj]; var it = bl && bl.items && bl.items[s.k]; if (it) it.icon = replacement; });
+    }
+    if (data.customIcons) delete data.customIcons[name];
+    if (data.iconKeywords) delete data.iconKeywords[name];
+    if (window.RK && window.RK.unregisterIcons) window.RK.unregisterIcons(name);
+    saveDraft(true); renderL2();
+    status(sites.length ? ("Deleted - " + sites.length + " use" + (sites.length === 1 ? "" : "s") + ' now show "' + replacement + '".') : "Icon deleted.", true);
+    if (onDone) try { onDone(replacement); } catch (e) {}
+    return true;
+  }
+
+  // Standalone Icon library manager (opened from More - parallels the Media library). Browse & search
+  // every line icon, see where each is used, tune keywords, generate new ones, and delete custom ones.
+  function iconManageModal() {
+    var query = "", usage = {};
+    var modal = document.createElement("div");
+    modal.className = "pass pass--wide iconlib iconlib--manage";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">Icon library</div>' +
+      '<div class="pass__sub">Every line icon - built-in and the ones you have generated - in one place. Search, tune keywords (the chevron on each), generate new, or remove a custom one. Changes apply everywhere it is used.</div>' +
+      '<div class="iconlib__search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' +
+      '<input type="text" class="iconlib__q" placeholder="Search icons... e.g. security, growth, cloud" /></div>' +
+      '<div class="iconlib__sum" data-iconsum></div>' +
+      '<div class="iconlib__grid"></div>' +
+      '<div class="iconlib__empty" hidden>No icons match. Type a description above and press Generate to create one.</div>' +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Close</button><button class="btn btn--auto" data-gen>' + IC.spark + ' Generate new icon</button></div></div>';
+    document.body.appendChild(modal);
+    var gridEl = modal.querySelector(".iconlib__grid"), qEl = modal.querySelector(".iconlib__q"), emptyEl = modal.querySelector(".iconlib__empty"), sumEl = modal.querySelector("[data-iconsum]"), genBtn = modal.querySelector("[data-gen]");
+    function cellHtml(n) {
+      var isCustom = !!(data.customIcons && data.customIcons[n]);
+      var uses = usage[n] || 0;
+      var kw = '<span class="iconlib__kw" data-kw="' + escAttr(n) + '" title="Edit keywords" aria-label="Edit keywords"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>';
+      var del = isCustom ? '<button type="button" class="iconlib__del" data-del="' + escAttr(n) + '" title="Delete this custom icon" aria-label="Delete icon">' + IC.trash + "</button>" : "";
+      return '<div class="iconlib__cell' + (isCustom ? " is-custom" : "") + '">' +
+        '<button type="button" class="iconlib__b" data-icon="' + escAttr(n) + '" title="' + escAttr(n) + '">' + kw + admIcon(n) + '<span class="iconlib__nm">' + escHtml(n) + "</span></button>" +
+        '<span class="iconlib__meta">' + (isCustom ? '<span class="iconlib__tag">Custom</span>' : "") + '<span class="iconlib__uses">' + (uses ? ("Used " + uses + "x") : "Unused") + "</span>" + del + "</span>" +
+        "</div>";
+    }
+    function matches() { return rankIconNames(admIconNames()).filter(function (n) { return iconMatchesQuery(n, query); }); }
+    function renderGrid() {
+      usage = iconUsageGet() || {};
+      var names = matches();
+      emptyEl.hidden = names.length > 0;
+      var total = admIconNames().length, custom = Object.keys(data.customIcons || {}).length;
+      if (sumEl) sumEl.textContent = total + " icons, " + custom + " custom" + (query ? (", " + names.length + " match" + (names.length === 1 ? "" : "es")) : "");
+      gridEl.innerHTML = names.map(cellHtml).join("");
+    }
+    renderGrid();
+    var onKey = function (e) { if (e.key === "Escape") close(); };
+    function close() { modal.remove(); document.removeEventListener("keydown", onKey); }
+    document.addEventListener("keydown", onKey);
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    qEl.addEventListener("input", function () { query = (qEl.value || "").trim(); renderGrid(); });
+    try { qEl.focus(); } catch (e) {}
+    gridEl.addEventListener("click", function (e) {
+      var delBtn = e.target.closest(".iconlib__del");
+      if (delBtn) { e.preventDefault(); e.stopPropagation(); deleteCustomIconFlow(delBtn.getAttribute("data-del"), renderGrid); return; }
+      var cell = e.target.closest(".iconlib__cell"); if (!cell) return;
+      var nameEl = cell.querySelector(".iconlib__b"); if (!nameEl) return;
+      iconKeywordEditor(nameEl.getAttribute("data-icon"), cell.querySelector(".iconlib__kw"), renderGrid);
+    });
+    genBtn.addEventListener("click", function () { iconGenModal(null, null, null, null, (qEl.value || "").trim(), renderGrid); });
+  }
+
   // Small popover (anchored to an icon's corner chevron) to view + add/remove that icon's search
   // keywords. Edits (incl. to a built-in's defaults) persist as an override in data.iconKeywords.
   function iconKeywordEditor(name, anchor, onChange) {
@@ -5334,28 +5418,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       else { inp.value = ""; focusIn(); }
     }
     async function doDelete() {
-      var sites = iconUsageSites(name), works = [];
-      sites.forEach(function (s) { if (works.indexOf(s.work) < 0) works.push(s.work); });
-      var where = works.length ? " (" + works.slice(0, 4).join(", ") + (works.length > 4 ? ", \u2026" : "") + ")" : "";
-      var sub = sites.length
-        ? "\u201c" + name + "\u201d is used in " + sites.length + " place" + (sites.length === 1 ? "" : "s") + where + ". Deleting it replaces every use with the closest-matching icon (picked by AI). This can't be undone."
-        : "\u201c" + name + "\u201d isn't used anywhere. Remove it from your icon library? This can't be undone.";
       busy = true;
-      var ok = await confirmModal({ title: "Delete this icon?", sub: sub, cta: "Delete icon", okClass: "btn--danger" });
+      var ok = await deleteCustomIconFlow(name, onChange);
       if (!ok) { busy = false; focusIn(); return; }
-      var replacement = "";
-      if (sites.length) {
-        status("Finding the best replacement icon\u2026");
-        replacement = await aiPickReplacementIcon(name, sites.map(function (s) { return s.ctx; }).filter(Boolean));
-        sites.forEach(function (s) { var bl = data.work[s.wi] && data.work[s.wi].study && data.work[s.wi].study.blocks[s.bj]; var it = bl && bl.items && bl.items[s.k]; if (it) it.icon = replacement; });
-      }
-      if (data.customIcons) delete data.customIcons[name];
-      if (data.iconKeywords) delete data.iconKeywords[name];
-      if (window.RK && window.RK.unregisterIcons) window.RK.unregisterIcons(name);
-      saveDraft(true); renderL2();
-      if (onChange) try { onChange(); } catch (e) {}
       close();
-      status(sites.length ? ("Deleted \u2014 " + sites.length + " use" + (sites.length === 1 ? "" : "s") + " now show \u201c" + replacement + "\u201d.") : "Icon deleted.", true);
     }
     function commitRename(raw) {
       var inp = pop.querySelector(".kwed__nm-edit");
@@ -6601,6 +6667,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<div class="imgblk__row"><button class="btn btn--primary" data-act="media-open">' + extIcon("media", 15) + ' Manage media</button></div>' +
         "</div>" +
         '<div class="adm__ext">' +
+          '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("shapes") + '</span><div><b>Icon library</b><span>Every line icon - built-in and AI-generated - in one place</span></div></div>' +
+          '<p class="adm__ext-lead">Browse and search every icon in your line style, see where each one is used, fine-tune the search keywords, generate new icons, and remove custom ones you no longer need. The same set powers case-study section icons, highlights and more.</p>' +
+          '<div class="imgblk__row"><button class="btn btn--primary" data-act="icon-open">' + extIcon("shapes", 15) + ' Manage icons</button></div>' +
+        "</div>" +
+        '<div class="adm__ext">' +
           '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("zap") + '</span><div><b>R\u00e9sum\u00e9 Autofill</b><span>Edge / Chrome extension</span></div></div>' +
           '<p class="adm__ext-lead">On any job site: open the floating \u26A1 button, right-click a field, or use the inline chip \u2014 pick <b>Full</b> or <b>Snippet</b> and it drops your experience straight into the form.</p>' +
           '<div class="imgblk__row"><button class="btn btn--primary" data-act="ext-download">' + extIcon("dl", 15) + ' Download the extension (.zip)</button></div>' +
@@ -6925,7 +6996,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
       cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
       qr: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="17.5" y1="14" x2="17.5" y2="21"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="17.5" x2="17.5" y2="17.5"/>',
-      dl: '<path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><line x1="5" y1="21" x2="19" y2="21"/>'
+      dl: '<path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><line x1="5" y1="21" x2="19" y2="21"/>',
+      shapes: '<rect x="3" y="3" width="7" height="7" rx="1"/><circle cx="17.5" cy="6.5" r="3.5"/><path d="M6.5 14 3 21h7z"/><rect x="14" y="14" width="7" height="7" rx="1"/>'
     };
     return '<svg viewBox="0 0 24 24" width="' + s + '" height="' + s + '" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[k] || "") + "</svg>";
   }
@@ -8602,6 +8674,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "book-dismiss") { bookDo(b.dataset.uid, "dismiss", b); return; }
     if (act === "book-refresh") { loadBookings(); return; }
     if (act === "media-open") { mediaOpen(); return; }
+    if (act === "icon-open") { iconManageModal(); return; }
     if (act === "ver-refresh") { loadVersions(); return; }
     if (act === "ver-load") { if (confirm("Load this version into the editor? Your current unsaved edits will be replaced \u2014 Publishing is still required to make it live.")) applyVersion(b.dataset.sha, b.dataset.when); return; }
     if (act === "settings-close") { closeSettings(); return; }

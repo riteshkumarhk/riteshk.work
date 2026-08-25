@@ -1334,6 +1334,20 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .iconlib__b:hover .iconlib__kw, .iconlib__kw.is-open { opacity: 1; }
 .iconlib__kw:hover { color: var(--accent); background: rgba(216, 166, 87, .16); }
 .iconlib__kw svg { width: 12px; height: 12px; }
+/* ---- Icon library MANAGER (opened from More) — a browse/manage grid parallel to the media library ---- */
+.iconlib--manage .pass__box { width: min(880px, 94vw); }
+.iconlib__sum { margin: -.35rem 0 .85rem; font-family: var(--mono); font-size: .66rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-faint); }
+.iconlib--manage .iconlib__grid { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); }
+.iconlib__cell { position: relative; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.02); overflow: hidden; transition: border-color .15s var(--ease); }
+.iconlib__cell:hover { border-color: var(--accent); }
+.iconlib--manage .iconlib__b { border: 0; border-radius: 0; background: none; padding: .85rem .4rem .55rem; }
+.iconlib--manage .iconlib__b:hover { color: var(--text); background: rgba(216,166,87,.05); }
+.iconlib__cell:hover .iconlib__kw { opacity: 1; }
+.iconlib__meta { display: flex; align-items: center; gap: .4rem; padding: .3rem .3rem .3rem .5rem; border-top: 1px solid var(--line); font-family: var(--mono); font-size: .56rem; letter-spacing: .04em; text-transform: uppercase; color: var(--text-faint); }
+.iconlib__tag { color: var(--accent); border: 1px solid rgba(216,166,87,.4); border-radius: 100px; padding: .06rem .32rem; }
+.iconlib__del { margin-left: auto; display: grid; place-items: center; width: 21px; height: 21px; flex: none; border: 0; background: none; color: var(--text-faint); border-radius: 5px; cursor: pointer; transition: color .15s, background .15s; }
+.iconlib__del:hover { color: #ff7a7a; background: rgba(255,122,122,.12); }
+.iconlib__del svg { width: 12px; height: 12px; }
 /* keyword editor popover — z-index MATCHES .pass so it stacks above the icon library dialog it opens from (later in DOM), while the delete confirm (later still) stacks above this */
 .kwed { position: fixed; z-index: 10001; width: 260px; max-width: calc(100vw - 16px); padding: .8rem; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-elev); box-shadow: 0 18px 44px -16px rgba(0, 0, 0, .8); }
 .kwed__head { display: flex; align-items: center; gap: .5rem; margin-bottom: .6rem; }
