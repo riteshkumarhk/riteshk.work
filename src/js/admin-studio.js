@@ -14170,6 +14170,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (draft) { localStorage.removeItem(DRAFT_KEY); localStorage.removeItem(DRAFT_SIG_KEY); staleDiscarded = true; }
       data = clone(pub);
     }
+    // Re-register persisted generated icons into the in-session registry so they resolve in the editor
+    // (field/flyout/library) after a reload — the in-memory CUSTOM_ICONS is empty on a fresh load.
+    try { if (window.RK && window.RK.registerIcons && data && data.customIcons) window.RK.registerIcons(data.customIcons); } catch (e) {}
     if (!root) buildShell();
     activeTab = "insights";
     openStudy = -1;
