@@ -794,9 +794,12 @@ body:has(.pass) .lt-amb, body:has(.pass) .lt-scrim { opacity: 0 !important; }
 }
 
 /* ---- work grid layouts (list | 2-col | 3-col, chosen in the studio -> data.workLayout) ---- */
-.cases--g2, .cases--g3 { display: grid; gap: clamp(1.8rem, 3.2vw, 3rem) clamp(1.5rem, 3vw, 2.5rem); }
-.cases--g2 { grid-template-columns: repeat(2, 1fr); }
-.cases--g3 { grid-template-columns: repeat(3, 1fr); }
+.cases--g2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: clamp(1.8rem, 3.2vw, 3rem) clamp(1.5rem, 3vw, 2.5rem); }
+/* Odd card counts stagger the right column down half a card for a brick-laid feel. Uses the `translate` property (not `transform`) so it survives the reveal animation's transform reset. */
+.cases--stagger > .case:nth-child(even) { translate: 0 50%; }
+/* Three-up is flex, not grid, so an incomplete last row centres (1 extra -> middle, 2 extra -> centred pair). */
+.cases--g3 { --cg: clamp(1.5rem, 3vw, 2.5rem); display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch; gap: clamp(1.8rem, 3.2vw, 3rem) var(--cg); }
+.cases--g3 > .case { flex: 0 0 calc((100% - 2 * var(--cg)) / 3); }
 .cases--g2 > .case, .cases--g3 > .case { border: 0; }
 /* Grid layouts render each project as a contained CARD. The cover is INSET so the card
    surface frames it on every side, and both the card and the cover use squircle corners
@@ -852,8 +855,8 @@ body:has(.pass) .lt-amb, body:has(.pass) .lt-scrim { opacity: 0 !important; }
   display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .cases--g2 .case__tags, .cases--g3 .case__tags { display: none; }
-@media (max-width: 900px) { .cases--g3 { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 600px) { .cases--g2, .cases--g3 { grid-template-columns: 1fr; gap: 2rem; } }
+@media (max-width: 900px) { .cases--g3 > .case { flex-basis: calc((100% - var(--cg)) / 2); } }
+@media (max-width: 600px) { .cases--g2 { grid-template-columns: 1fr; } .cases--g2, .cases--g3 { gap: 2rem; } .cases--g3 > .case { flex-basis: 100%; } .cases--stagger > .case:nth-child(even) { translate: none; } }
 
 /* Studio cover-motion preview: render one authentic homepage card in a tall stage so normal
   window scrolling drives its parallax while pointer movement drives the depth canvas. */

@@ -660,7 +660,7 @@
     const casesEl = byId("cases");
     if (casesEl) {
       const wl = data.workLayout || "grid-2";
-      casesEl.className = "cases" + (wl === "grid-3" ? " cases--g3" : wl === "list" ? "" : " cases--g2");
+      casesEl.className = "cases" + (wl === "grid-3" ? " cases--g3" : wl === "list" ? "" : " cases--g2") + (wl === "grid-2" && visibleWork.length % 2 === 1 ? " cases--stagger" : "");
       if (cardPreview) {
         const link = casesEl.querySelector(".case__link");
         if (link) link.addEventListener("click", (e) => e.preventDefault());
