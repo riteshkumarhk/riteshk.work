@@ -1999,6 +1999,17 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__addsec { display: flex; align-items: center; justify-content: center; gap: .5rem; flex-wrap: wrap; margin: 0; padding: .2rem 0 .5rem; }
 .rbz__addsec-lbl { font-family: var(--mono, monospace); font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; color: #8a8378; }
 .rbz__addsel { font-family: var(--mono, monospace); font-size: .68rem; padding: .3rem .5rem; border: 1px solid #b9b0a3; border-radius: 6px; background: #fff; color: #3a352f; cursor: pointer; }
+/* this select lives on the white résumé paper, so its popup is themed LIGHT (not the dark studio palette) */
+@supports (appearance: base-select) {
+  .rbz__addsel, .rbz__addsel::picker(select) { appearance: base-select; }
+  .rbz__addsel::picker-icon { color: #8a8378; width: 10px; height: 10px; margin-left: .35rem; transition: transform .25s ease; }
+  .rbz__addsel:open::picker-icon { transform: rotate(180deg); }
+  .rbz__addsel::picker(select) { background: #fff; border: 1px solid #cabfae; border-radius: 8px; padding: .25rem; box-shadow: 0 14px 34px -14px rgba(58, 53, 47, .35); --anchor-gap: 5px; }
+  .rbz__addsel option { display: flex; align-items: center; gap: .45rem; padding: .4rem .55rem; border-radius: 6px; color: #3a352f; font-family: var(--mono, monospace); font-size: .68rem; }
+  .rbz__addsel option:hover, .rbz__addsel option:focus { background: #f1ece2; }
+  .rbz__addsel option:checked { background: rgba(216, 166, 87, .16); color: #3a352f; }
+  .rbz__addsel option::checkmark { order: -1; color: var(--accent); width: 10px; }
+}
 /* studio-themed rail with the live ATS score */
 .rbz__side { width: 328px; flex-shrink: 0; overflow: auto; border-right: 1px solid var(--line); padding: 1rem 1rem 1.5rem; background: var(--bg); }
 .rbz__scorecard { display: flex; align-items: center; gap: .8rem; padding: .85rem .9rem; margin-bottom: .8rem; border: 1px solid var(--line); border-radius: 12px; transition: opacity .15s; }
