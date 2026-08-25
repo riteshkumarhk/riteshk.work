@@ -797,9 +797,11 @@ body:has(.pass) .lt-amb, body:has(.pass) .lt-scrim { opacity: 0 !important; }
 .cases--g2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: clamp(1.8rem, 3.2vw, 3rem) clamp(1.5rem, 3vw, 2.5rem); }
 /* Odd card counts stagger the right column down half a card for a brick-laid feel. Uses the `translate` property (not `transform`) so it survives the reveal animation's transform reset. */
 .cases--stagger > .case:nth-child(even) { translate: 0 50%; }
-/* Three-up is flex, not grid, so an incomplete last row centres (1 extra -> middle, 2 extra -> centred pair). */
+/* Three-up is flex, not grid, so an incomplete last row centres (2 extra -> centred pair). */
 .cases--g3 { --cg: clamp(1.5rem, 3vw, 2.5rem); display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch; gap: clamp(1.8rem, 3.2vw, 3rem) var(--cg); }
 .cases--g3 > .case { flex: 0 0 calc((100% - 2 * var(--cg)) / 3); }
+/* A lone extra card sits at the LEFT slot of where a centred pair would be (1/3 across) — not dead-centre — by reserving one column-slot of margin to its right. 3-col only. */
+@media (min-width: 901px) { .cases--g3 > .case:last-child:nth-child(3n + 1) { margin-right: calc((100% - 2 * var(--cg)) / 3 + var(--cg)); } }
 .cases--g2 > .case, .cases--g3 > .case { border: 0; }
 /* Grid layouts render each project as a contained CARD. The cover is INSET so the card
    surface frames it on every side, and both the card and the cover use squircle corners
