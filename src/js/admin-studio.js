@@ -5034,6 +5034,25 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     });
     return sites;
   }
+  // Rename a generated icon: move its svg + keywords + registry entry + every usage + usage-stats to the
+  // new (slugged, de-duped) name. Returns the final name (or the old name if invalid/unchanged/not generated).
+  function renameGeneratedIcon(oldName, raw) {
+    if (!(data.customIcons && data.customIcons[oldName])) return oldName;
+    if (!String(raw || "").trim()) return oldName;
+    var newName = iconSlug(raw);
+    if (!newName || newName === oldName) return oldName;
+    var have = {}; (admIconNames() || []).forEach(function (n) { have[n] = 1; });
+    if (have[newName]) { var base = newName, c = 2; while (have[newName]) newName = base + "-" + (c++); }
+    var svg = data.customIcons[oldName];
+    data.customIcons[newName] = svg; delete data.customIcons[oldName];
+    if (data.iconKeywords && data.iconKeywords[oldName]) { data.iconKeywords[newName] = data.iconKeywords[oldName]; delete data.iconKeywords[oldName]; }
+    var reg = {}; reg[newName] = svg;
+    if (window.RK) { if (window.RK.registerIcons) window.RK.registerIcons(reg); if (window.RK.unregisterIcons) window.RK.unregisterIcons(oldName); }
+    iconUsageSites(oldName).forEach(function (s) { var bl = data.work[s.wi] && data.work[s.wi].study && data.work[s.wi].study.blocks[s.bj]; var it = bl && bl.items && bl.items[s.k]; if (it) it.icon = newName; });
+    try { var u = iconUsageGet(); if (u[oldName]) { u[newName] = u[oldName]; delete u[oldName]; localStorage.setItem(ICON_USAGE_KEY, JSON.stringify(u)); } } catch (e) {}
+    saveDraft(true);
+    return newName;
+  }
   // Non-AI fallback: the library icon whose keywords overlap the deleted icon's most (else a generic).
   function bestKeywordMatch(name, avail) {
     var mine = iconKeywords(name).map(function (s) { return String(s).toLowerCase(); });
@@ -5229,8 +5248,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }
     function render() {
       var uses = isGen ? iconUsageSites(name).length : 0;
+      var nameEl = isGen
+        ? '<input type="text" class="kwed__nm-edit" value="' + escAttr(name) + '" spellcheck="false" aria-label="Icon name" title="Rename this icon" />'
+        : '<span class="kwed__nm">' + escHtml(name) + '</span>';
       pop.innerHTML =
-        '<div class="kwed__head"><span class="kwed__ico">' + admIcon(name) + '</span><span class="kwed__nm">' + escHtml(name) + '</span><button type="button" class="kwed__done" data-done>Done</button></div>' +
+        '<div class="kwed__head"><span class="kwed__ico">' + admIcon(name) + '</span>' + nameEl + '<button type="button" class="kwed__done" data-done>Done</button></div>' +
         '<div class="kwed__lbl"><span>Keywords</span><span class="kwed__count">' + list.length + '/10</span></div>' +
         '<div class="kwed__chips">' + chips() + "</div>" +
         (list.length < 10 ? '<div class="kwed__add"><input type="text" class="kwed__in" placeholder="Add a keyword\u2026" /><button type="button" class="kwed__plus" data-add aria-label="Add">+</button></div>' : "") +
@@ -5238,6 +5260,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       place();
     }
     function place() {
+      if (anchor && !anchor.isConnected) return;
       var r = anchor ? anchor.getBoundingClientRect() : { right: 200, bottom: 200, top: 180 };
       var w = pop.offsetWidth || 260, h = pop.offsetHeight || 160;
       var left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
@@ -5276,6 +5299,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       close();
       status(sites.length ? ("Deleted \u2014 " + sites.length + " use" + (sites.length === 1 ? "" : "s") + " now show \u201c" + replacement + "\u201d.") : "Icon deleted.", true);
     }
+    function commitRename(raw) {
+      var nn = renameGeneratedIcon(name, raw);
+      var inp = pop.querySelector(".kwed__nm-edit");
+      if (nn && nn !== name) {
+        name = nn;
+        if (inp) inp.value = name;
+        renderL2();
+        if (onChange) try { onChange(); } catch (e) {}
+        status("Renamed to \u201c" + name + "\u201d.", true);
+      } else if (inp) { inp.value = name; }
+    }
     function close() {
       pop.remove();
       if (anchor) anchor.classList.remove("is-open");
@@ -5293,7 +5327,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (e.target.closest("[data-del]")) { doDelete(); return; }
       if (e.target.closest("[data-done]")) { close(); return; }
     });
-    pop.addEventListener("keydown", function (e) { if (e.target.classList.contains("kwed__in") && e.key === "Enter") { e.preventDefault(); addKw(); } });
+    pop.addEventListener("keydown", function (e) {
+      if (e.target.classList.contains("kwed__nm-edit") && e.key === "Enter") { e.preventDefault(); e.target.blur(); return; }
+      if (e.target.classList.contains("kwed__in") && e.key === "Enter") { e.preventDefault(); addKw(); }
+    });
+    pop.addEventListener("change", function (e) { if (e.target.classList.contains("kwed__nm-edit")) commitRename(e.target.value); });
     render();
     document.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onOut, true);
