@@ -1160,6 +1160,13 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 
 /* ---------- section picker — a Wix-style gallery so you can SEE each layout before picking ---------- */
 .secpick .pass__box { width: min(980px, 96vw); }
+.secpick__tabs { display: flex; gap: 1.2rem; margin: .1rem 0 1rem; border-bottom: 1px solid var(--line); }
+.secpick__tab { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: .5rem 0; font-size: .95rem; color: var(--text-faint); cursor: pointer; display: inline-flex; align-items: center; gap: .45rem; }
+.secpick__tab:hover { color: var(--text-dim); }
+.secpick__tab.is-on { color: var(--text); border-bottom-color: var(--accent); }
+.secpick__tabn { font: 700 .58rem/1 var(--mono, monospace); color: var(--text-faint); background: var(--bg-2); border: 1px solid var(--line-soft); border-radius: 100px; padding: .16rem .42rem; }
+.secpick__tab.is-on .secpick__tabn { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, var(--line-soft)); }
+.secpick__panel[hidden] { display: none; }
 .secpick__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(212px, 1fr)); gap: .7rem; margin: .2rem 0 1.1rem; }
 .secpick__card { display: flex; flex-direction: column; text-align: left; gap: .5rem; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: .6rem .6rem .8rem; cursor: pointer; transition: border-color .2s, transform .2s, background .2s; color: var(--text); }
 .secpick__card:hover { border-color: var(--accent); transform: translateY(-2px); background: var(--bg-elev); }
@@ -1256,6 +1263,10 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .secprev--voices .sp__vc { font-size: .54rem; line-height: 1.3; color: var(--text-dim); border: 1px solid var(--line); border-radius: 8px; padding: .26rem .4rem; max-width: 78%; }
 .secprev--voices .sp__vc--l { align-self: flex-start; border-bottom-left-radius: 2px; background: rgba(216,166,87,.12); border-color: rgba(216,166,87,.26); }
 .secprev--voices .sp__vc--r { align-self: flex-end; border-bottom-right-radius: 2px; background: var(--bg-2); }
+.secprev--cloud { flex-direction: row; flex-wrap: wrap; align-content: center; justify-content: center; gap: .22rem; }
+.secprev--cloud .sp__chip { font-size: .5rem; line-height: 1; padding: .2rem .42rem; border: 1px solid var(--line); border-radius: 100px; color: var(--text-dim); background: var(--bg-2); }
+.secprev--cloud .sp__chip--hi { color: var(--accent); border-color: rgba(216, 166, 87, .42); }
+.secprev--cloud .sp__chip--lo { color: var(--text-faint); }
 .secprev--focus { justify-content: center; align-items: stretch; }
 .secprev--focus .sp__fa { position: relative; flex: 1; border-radius: 5px; overflow: hidden; border: 1px solid var(--line); background: linear-gradient(135deg, rgba(216, 166, 87, .18), transparent 46%), linear-gradient(315deg, rgba(58, 110, 165, .16), transparent 46%), var(--bg-2); }
 .secprev--focus .sp__fa-box { position: absolute; left: 11%; top: 20%; width: 35%; height: 50%; border-radius: 4px; box-shadow: 0 0 0 1.5px var(--accent), 0 0 0 60px rgba(8, 8, 10, .46); }

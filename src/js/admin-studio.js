@@ -4383,6 +4383,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         return '<span class="secprev secprev--faq"><span class="sp__qa"><b>Q</b> Why this approach?</span><span class="sp__qa"><b>A</b> Because it earns trust fast.</span><span class="sp__qa"><b>Q</b> What changed?</span></span>';
       case "cards":
         return '<span class="secprev secprev--cards"><span class="sp__card"><b>Discover</b><i>a short line</i></span><span class="sp__card"><b>Design</b><i>a short line</i></span><span class="sp__card"><b>Ship</b><i>a short line</i></span></span>';
+      case "cloud":
+        return '<span class="secprev secprev--cloud"><span class="sp__chip">Design systems</span><span class="sp__chip sp__chip--hi">Strategy</span><span class="sp__chip">Prototyping</span><span class="sp__chip sp__chip--lo">Research</span><span class="sp__chip">Motion</span><span class="sp__chip sp__chip--hi">AI</span><span class="sp__chip sp__chip--lo">Ops</span></span>';
       case "gallery":
         return '<span class="secprev secprev--gallery"><span class="sp__gframe">\u25a4<span class="sp__gn">1 / 3</span></span><span class="sp__gdots"><i class="on"></i><i></i><i></i></span></span>';
       case "mediagrid":
@@ -4911,8 +4913,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     modal.className = "pass pass--wide secpick";
     modal.innerHTML =
       '<div class="pass__box"><div class="pass__title">' + (above ? "Add a section above" : "Add a section") + "</div>" +
-      '<div class="pass__sub">Pick the layout that fits your content \u2014 this is how each one looks on your live page.</div>' +
-      genPickerCards() +
+      '<div class="pass__sub">Pick a <b>Handwritten</b> layout from the library, or switch to <b>Generated</b> to build one with AI \u2014 this is how each looks on your live page.</div>' +
+      '<div class="secpick__tabs" role="tablist">' +
+        '<button type="button" class="secpick__tab is-on" data-sptab="hand">Handwritten <span class="secpick__tabn">' + SECTION_GALLERY.length + "</span></button>" +
+        '<button type="button" class="secpick__tab" data-sptab="gen">Generated' + (((data && data.genSections) || []).length ? ' <span class="secpick__tabn">' + data.genSections.length + "</span>" : "") + "</button>" +
+      "</div>" +
+      '<div class="secpick__panel" data-sppanel="hand">' +
       '<div class="secpick__grid">' +
       SECTION_GALLERY.map(function (s) {
         return '<button type="button" class="secpick__card" data-pick="' + s.type + '">' +
@@ -4921,7 +4927,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<span class="secpick__desc">' + escHtml(s.desc) + "</span>" +
           '<span class="secpick__best">' + escHtml(s.best) + "</span></button>";
       }).join("") +
-      "</div>" +
+      "</div></div>" +
+      '<div class="secpick__panel" data-sppanel="gen" hidden>' + genPickerCards() + "</div>" +
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button></div></div>';
     document.body.appendChild(modal);
     var onKey = function (e) { if (e.key === "Escape") close(); };
@@ -4966,6 +4973,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         saveDraft(true);
         var card = x.closest(".secpick__preset"); if (card) card.remove();
         status("Removed from your sections.");
+      });
+    });
+    modal.querySelectorAll("[data-sptab]").forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        var which = tab.getAttribute("data-sptab");
+        modal.querySelectorAll("[data-sptab]").forEach(function (t) { t.classList.toggle("is-on", t === tab); });
+        modal.querySelectorAll("[data-sppanel]").forEach(function (p) { p.hidden = p.getAttribute("data-sppanel") !== which; });
       });
     });
   }
