@@ -26,6 +26,7 @@
 .pass input:focus { outline: none; border-color: var(--accent); }
 /* Checkboxes must not inherit the full-width password-field styling above. */
 .pass input[type="checkbox"] { width: auto; flex: 0 0 auto; margin: 2px 0 0; padding: 0; text-align: left; accent-color: var(--accent); cursor: pointer; }
+.pass.rkreq input { text-align: left; } /* contact fields (name/email/company) read left-to-right, unlike the centered passcode entry */
 .rkreq__ts { margin: .2rem 0 .55rem; min-height: 65px; } /* Turnstile human-check widget slot */
 .pass__err { color: #ff7a7a; font-size: .74rem; min-height: 1.1em; margin-bottom: .6rem; }
 .pass__actions { display: flex; gap: .6rem; }
@@ -374,7 +375,7 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 
 .adm input[type="text"], .adm input[type="email"], .adm input[type="password"], .adm input[type="url"], .adm input[type="tel"], .adm input[type="search"], .adm textarea, .adm select {
   width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line);
-  border-radius: 6px; padding: .55rem .65rem; font-family: var(--sans); font-size: .85rem;
+  border-radius: 6px; padding: .55rem .65rem; font-family: var(--sans); font-size: .85rem; text-align: left;
 }
 .adm textarea { resize: vertical; min-height: 60px; line-height: 1.55; }
 .adm input:focus, .adm textarea:focus, .adm select:focus { outline: none; border-color: var(--accent); }
@@ -810,7 +811,7 @@ body.adm-lock .cursor { display: none !important; }
 .parx__range:focus::-webkit-slider-thumb { box-shadow: 0 0 0 2px rgba(22,19,13,.9), 0 0 0 5px rgba(216,166,87,.28); }
 .parx__valwrap { flex: 0 0 auto; display: inline-flex; align-items: center; height: 22px; background: rgba(0,0,0,.42); border: 1px solid rgba(255,255,255,.2); border-radius: 7px; overflow: hidden; transition: border-color .16s var(--ease); }
 .parx__valwrap:focus-within { border-color: var(--accent); }
-.parx .parx__val { width: 2.4em; height: 20px; line-height: 20px; font-family: var(--mono); font-size: .64rem; color: #F3EEE7; text-align: center; background: transparent; border: 0; padding: 0 0 0 .15rem; -webkit-appearance: none; appearance: none; text-shadow: 0 1px 2px rgba(0,0,0,.55); }
+.parx input.parx__val { width: 2.4em; height: 20px; line-height: 20px; font-family: var(--mono); font-size: .64rem; color: #F3EEE7; text-align: center; background: transparent; border: 0; padding: 0 0 0 .15rem; -webkit-appearance: none; appearance: none; text-shadow: 0 1px 2px rgba(0,0,0,.55); }
 .parx .parx__val:focus { outline: none; color: #fff; }
 .parx__copy { display: grid; place-items: center; width: 22px; height: 20px; border: 0; border-left: 1px solid rgba(255,255,255,.14); background: transparent; color: #ECE7E1; opacity: .62; cursor: pointer; transition: opacity .16s var(--ease), color .16s var(--ease), background .16s var(--ease); }
 .parx__copy:hover { opacity: 1; color: var(--accent); background: rgba(255,255,255,.07); }
