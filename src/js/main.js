@@ -317,14 +317,14 @@ import { initNodeWeb } from "./particles.js";
   const onScroll = () => {
     const y = window.scrollY;
 
-    nav.classList.toggle("is-scrolled", y > 40);
+    // Scrolled bg with a small dead-band so a scroll settling near the threshold can't flip-flop the padding.
+    if (y > 48) nav.classList.add("is-scrolled");
+    else if (y < 32) nav.classList.remove("is-scrolled");
 
-    if (y > lastY && y > 400 && !nav.classList.contains("is-open")) {
-      nav.classList.add("is-hidden");
-    } else {
-      nav.classList.remove("is-hidden");
-    }
-    lastY = y;
+    // Hide on scroll-down / show on scroll-up, with an 8px dead-zone so Lenis momentum micro-wobble
+    // can't rapid-toggle the transform (that oscillation read as a "shiver" of the whole nav).
+    if (y > lastY + 8) { lastY = y; if (y > 400 && !nav.classList.contains("is-open")) nav.classList.add("is-hidden"); }
+    else if (y < lastY - 8) { lastY = y; nav.classList.remove("is-hidden"); }
 
     if (progress) {
       const h = document.documentElement.scrollHeight - window.innerHeight;
@@ -335,8 +335,12 @@ import { initNodeWeb } from "./particles.js";
     updateMarqueeChrome();
     updateWorkCue();
   };
-  window.addEventListener("scroll", onScroll, { passive: true });
-  if (lenis) lenis.on("scroll", onScroll);
+  // Drive from ONE frame-throttled path: binding both window scroll AND lenis fired onScroll twice per
+  // frame with slightly different y reads, flip-flopping the hide/show direction → the shiver.
+  let navRaf = 0;
+  const scheduleScroll = () => { if (navRaf) return; navRaf = requestAnimationFrame(() => { navRaf = 0; onScroll(); }); };
+  window.addEventListener("scroll", scheduleScroll, { passive: true });
+  if (lenis) lenis.on("scroll", scheduleScroll);
   onScroll();
   window.addEventListener("resize", () => { updateParallax(); updateMarqueeChrome(); updateWorkCue(); }, { passive: true });
 
