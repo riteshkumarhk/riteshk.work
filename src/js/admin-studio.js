@@ -861,7 +861,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<button type="button" class="depthp__prop" data-act="depth-download" data-index="' + i + '"' + (depthMapUrl(w) ? '' : ' disabled') + ' title="Download the current depth map as an image"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg> Download map</button>' +
           '<button type="button" class="depthp__prop" data-act="depth-upload" data-index="' + i + '" title="Upload an edited depth map"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/></svg> Upload map</button>' +
           '<button type="button" class="depthp__prop" data-act="depth-invert" data-index="' + i + '"' + (depthMapUrl(w) ? '' : ' disabled') + ' title="Swap near and far values in the current depth map"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg> Invert map</button>' +
-          '<button type="button" class="depthp__prop depthp__prop--danger" data-act="depth-remove" data-index="' + i + '"' + (depthMapUrl(w) ? '' : ' disabled') + ' title="Remove the depth map from this project"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 15H6L5 6"/><path d="M10 11v5M14 11v5"/></svg> Remove map</button>' +
+          '<button type="button" class="depthp__prop depthp__prop--danger" data-act="depth-remove" data-index="' + i + '"' + (depthMapUrl(w) ? '' : ' disabled') + ' title="Remove the depth map from this project"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg> Remove map</button>' +
         '</div>' +
         '<div class="depthp__gen"><button class="btn btn--auto" data-act="depth-gen" data-index="' + i + '" title="Generate a depth map on your GPU (WebGPU)">Generate depth map</button>' +
         '<button class="btn btn--ghost" data-act="depth-suggest" data-index="' + i + '" title="Let AI look at the cover and suggest strength, focus &amp; pull-back">Suggest settings</button>' +
@@ -1395,7 +1395,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="prep-h' + (isWs ? " prep-h--ws" : "") + '" role="button" tabindex="0" data-act="ats-hist-open" data-id="' + e.id + '">' +
       '<span class="ats__ring ats__ring--sm ats__score--' + tone + '" style="--p:' + sc + '"><span>' + sc + '</span></span>' +
       '<span class="prep-h__x"><b>' + escHtml(e.title || (isWs ? "R\u00e9sum\u00e9 workspace" : "R\u00e9sum\u00e9 reviewed")) + '</b><i>' + sub + '</i><em>' + escHtml(prepAgo(e.at)) + '</em></span>' +
-      '<span class="prep-h__del" data-act="ats-hist-del" data-id="' + e.id + '" title="Delete">\u00d7</span>' +
+      '<span class="prep-h__del" data-act="ats-hist-del" data-id="' + e.id + '" title="Delete" aria-label="Delete">' + IC.trash + '</span>' +
       '</div>';
   }
   function atsHistHtml() {
@@ -2832,27 +2832,27 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var sumBlock = (rb.summary != null) ? '<div class="rbz__sec rbz__sec--sum"><div class="rbz__sechd" contenteditable="false"><span class="rbz__sectitle">Summary</span></div>' + ed("div", "rbz__sum", "summary", rb.summary, "A 2\u20133 line professional summary\u2026") + "</div>" : "";
     var lastSi = (rb.sections || []).length - 1;
     function secHtml(s, si) {
-      var sh = '<div class="rbz__sec" data-si="' + si + '"><div class="rbz__sechd">' + '<button class="rbz__grip" type="button" draggable="true" data-drag-sec="' + si + '" title="Drag to reorder" aria-label="Drag to reorder section">' + GRIP + "</button>" + ed("span", "rbz__sectitle", "sections." + si + ".heading", s.heading, "Section") + '<button class="rbz__mv" type="button" data-mvup="' + si + '"' + (si === 0 ? " disabled" : "") + ' title="Move up" aria-label="Move section up">\u2191</button>' + '<button class="rbz__mv" type="button" data-mvdn="' + si + '"' + (si === lastSi ? " disabled" : "") + ' title="Move down" aria-label="Move section down">\u2193</button>' + '<button class="rbz__del" type="button" data-del-sec="' + si + '" title="Remove section">\u00d7</button></div>';
+      var sh = '<div class="rbz__sec" data-si="' + si + '"><div class="rbz__sechd">' + '<button class="rbz__grip" type="button" draggable="true" data-drag-sec="' + si + '" title="Drag to reorder" aria-label="Drag to reorder section">' + GRIP + "</button>" + ed("span", "rbz__sectitle", "sections." + si + ".heading", s.heading, "Section") + '<button class="rbz__mv" type="button" data-mvup="' + si + '"' + (si === 0 ? " disabled" : "") + ' title="Move up" aria-label="Move section up">\u2191</button>' + '<button class="rbz__mv" type="button" data-mvdn="' + si + '"' + (si === lastSi ? " disabled" : "") + ' title="Move down" aria-label="Move section down">\u2193</button>' + '<button class="rbz__del" type="button" data-del-sec="' + si + '" title="Remove section">' + IC.trash + '</button></div>';
       if (s.kind === "experience") {
         (s.items || []).forEach(function (it, ii) {
           var base = "sections." + si + ".items." + ii;
           sh += '<div class="rbz__xp" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder role" aria-label="Drag to reorder role">' + GRIP + '</button>';
           sh += '<div class="rbz__meta"><span class="rbz__mi">' + rbIco("cal") + ed("span", "rbz__dates", base + ".dates", it.dates, "MM/YYYY to Present") + '</span><span class="rbz__mi">' + rbIco("loc") + ed("span", "rbz__loc", base + ".location", it.location, "Location") + "</span></div>";
-          sh += '<div class="rbz__xphd">' + ed("span", "rbz__role", base + ".role", it.role, "Role") + ed("span", "rbz__org", base + ".org", it.org, "Company") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove role">\u00d7</button></div>';
+          sh += '<div class="rbz__xphd">' + ed("span", "rbz__role", base + ".role", it.role, "Role") + ed("span", "rbz__org", base + ".org", it.org, "Company") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove role">' + IC.trash + '</button></div>';
           sh += '<ul class="rbz__bl">';
-          (it.bullets || []).forEach(function (b, bi) { sh += '<li data-si="' + si + '" data-ii="' + ii + '" data-bi="' + bi + '"><button class="rbz__grip rbz__grip--b" type="button" draggable="true" data-drag-bullet="' + si + "." + ii + "." + bi + '" title="Drag to reorder" aria-label="Drag to reorder bullet">' + GRIP + '</button>' + ed("span", "rbz__bltext", base + ".bullets." + bi, b, "Achievement, outcome-first with a metric\u2026") + '<button class="rbz__del rbz__del--b" type="button" data-del-bullet="' + si + "." + ii + "." + bi + '" title="Remove bullet">\u00d7</button></li>'; });
+          (it.bullets || []).forEach(function (b, bi) { sh += '<li data-si="' + si + '" data-ii="' + ii + '" data-bi="' + bi + '"><button class="rbz__grip rbz__grip--b" type="button" draggable="true" data-drag-bullet="' + si + "." + ii + "." + bi + '" title="Drag to reorder" aria-label="Drag to reorder bullet">' + GRIP + '</button>' + ed("span", "rbz__bltext", base + ".bullets." + bi, b, "Achievement, outcome-first with a metric\u2026") + '<button class="rbz__del rbz__del--b" type="button" data-del-bullet="' + si + "." + ii + "." + bi + '" title="Remove bullet">' + IC.trash + '</button></li>'; });
           sh += '</ul><button class="rbz__add" type="button" data-add-bullet="' + si + "." + ii + '">+ bullet</button></div>';
         });
         sh += '<button class="rbz__add rbz__add--role" type="button" data-add-role="' + si + '">+ add role</button>';
       } else if (s.kind === "skills") {
         (s.groups || []).forEach(function (g, gi) {
-          sh += '<div class="rbz__skg">' + ed("span", "rbz__sklabel", "sections." + si + ".groups." + gi + ".label", g.label, "Group") + '<span class="rbz__skitems" data-ksitems="' + si + "." + gi + '" data-ph="skill \u00b7 skill \u00b7 skill">' + e((g.items || []).join("  \u00b7  ")) + '</span><button class="rbz__del" type="button" data-del-group="' + si + "." + gi + '" title="Remove group">\u00d7</button></div>';
+          sh += '<div class="rbz__skg">' + ed("span", "rbz__sklabel", "sections." + si + ".groups." + gi + ".label", g.label, "Group") + '<span class="rbz__skitems" data-ksitems="' + si + "." + gi + '" data-ph="skill \u00b7 skill \u00b7 skill">' + e((g.items || []).join("  \u00b7  ")) + '</span><button class="rbz__del" type="button" data-del-group="' + si + "." + gi + '" title="Remove group">' + IC.trash + '</button></div>';
         });
         sh += '<button class="rbz__add rbz__add--role" type="button" data-add-group="' + si + '">+ add group</button>';
       } else if (s.kind === "education") {
         (s.items || []).forEach(function (it, ii) {
           var eb = "sections." + si + ".items." + ii;
-          sh += '<div class="rbz__edu" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder" aria-label="Drag to reorder entry">' + GRIP + '</button><div class="rbz__xphd">' + ed("span", "rbz__role", eb + ".school", it.school, "School") + ed("span", "rbz__dates", eb + ".dates", it.dates, "Year") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">\u00d7</button></div>';
+          sh += '<div class="rbz__edu" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder" aria-label="Drag to reorder entry">' + GRIP + '</button><div class="rbz__xphd">' + ed("span", "rbz__role", eb + ".school", it.school, "School") + ed("span", "rbz__dates", eb + ".dates", it.dates, "Year") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">' + IC.trash + '</button></div>';
           sh += '<div class="rbz__meta">' + ed("span", "rbz__cred", eb + ".credential", it.credential, "Degree / credential") + ed("span", "rbz__note", eb + ".note", it.note, "Note") + "</div></div>";
         });
         sh += '<button class="rbz__add rbz__add--role" type="button" data-add-edu="' + si + '">+ add entry</button>';
@@ -2861,7 +2861,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       } else {
         (s.items || []).forEach(function (it, ii) {
           var lb = "sections." + si + ".items." + ii;
-          sh += '<div class="rbz__li" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder" aria-label="Drag to reorder entry">' + GRIP + '</button>' + ed("span", "rbz__lititle", lb + ".title", it.title, "Title") + ed("span", "rbz__limeta", lb + ".meta", it.meta, "Meta") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">\u00d7</button></div>';
+          sh += '<div class="rbz__li" data-si="' + si + '" data-ii="' + ii + '"><button class="rbz__grip rbz__grip--sm" type="button" draggable="true" data-drag-role="' + si + "." + ii + '" title="Drag to reorder" aria-label="Drag to reorder entry">' + GRIP + '</button>' + ed("span", "rbz__lititle", lb + ".title", it.title, "Title") + ed("span", "rbz__limeta", lb + ".meta", it.meta, "Meta") + '<button class="rbz__del" type="button" data-del-item="' + si + "." + ii + '" title="Remove">' + IC.trash + '</button></div>';
         });
         sh += '<button class="rbz__add rbz__add--role" type="button" data-add-li="' + si + '">+ add entry</button>';
       }
@@ -12421,7 +12421,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var m = e.meta || {};
       return '<div class="prep-h prep-h--txt" role="button" tabindex="0" data-iprep-hist-open="' + e.id + '">' +
         '<div class="prep-h__x"><b>' + escHtml(e.title || "Interview questions") + '</b><i>' + escHtml((m.count ? m.count + " question" + (m.count > 1 ? "s" : "") : "set") + (m.level ? " \u00b7 " + m.level : "")) + '</i><em>' + prepAgo(e.at) + '</em></div>' +
-        '<span class="prep-h__del" data-iprep-hist-del="' + e.id + '" title="Delete" aria-label="Delete">\u00d7</span>' +
+        '<span class="prep-h__del" data-iprep-hist-del="' + e.id + '" title="Delete" aria-label="Delete">' + IC.trash + '</span>' +
         '</div>';
     }).join("") + '</div>';
   }
@@ -12804,7 +12804,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var m = e.meta || {};
     return '<div class="prep-h prep-h--txt" role="button" tabindex="0" data-act="cl-hist-open" data-id="' + e.id + '">' +
       '<span class="prep-h__x"><b>' + escHtml(e.title || "Cover letter") + '</b><i>' + escHtml(m.snippet || "") + '</i><em>' + escHtml(prepAgo(e.at)) + '</em></span>' +
-      '<span class="prep-h__del" data-act="cl-hist-del" data-id="' + e.id + '" title="Delete">\u00d7</span>' +
+      '<span class="prep-h__del" data-act="cl-hist-del" data-id="' + e.id + '" title="Delete" aria-label="Delete">' + IC.trash + '</span>' +
       '</div>';
   }
   function clHistHtml() {
@@ -13955,7 +13955,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var m = e.meta || {};
       return '<div class="prep-h prep-h--txt" role="button" tabindex="0" data-story-hist-open="' + e.id + '">' +
         '<div class="prep-h__x"><b>' + escHtml(e.title || "Story angles") + '</b><i>' + escHtml((m.count ? m.count + " angle" + (m.count > 1 ? "s" : "") : "set") + (m.dur ? " \u00b7 " + m.dur : "")) + '</i><em>' + prepAgo(e.at) + '</em></div>' +
-        '<span class="prep-h__del" data-story-hist-del="' + e.id + '" title="Delete" aria-label="Delete">\u00d7</span>' +
+        '<span class="prep-h__del" data-story-hist-del="' + e.id + '" title="Delete" aria-label="Delete">' + IC.trash + '</span>' +
         '</div>';
     }).join("") + '</div>';
   }
@@ -14495,7 +14495,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     async function refresh() {
       const list = await webauthnList().catch(() => []);
       if (!list.length) { listEl.innerHTML = '<span style="opacity:.55">No passkeys yet \u2014 add one below.</span>'; return; }
-      listEl.innerHTML = list.map((p) => '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.07)"><span style="display:inline-flex;align-items:center;gap:.4rem">' + IC.key + escHtml(p.label || "passkey") + '</span><button class="btn btn--ghost" data-rm="' + escAttr(p.id) + '" style="padding:3px 10px;font-size:12px">Remove</button></div>').join("");
+      listEl.innerHTML = list.map((p) => '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.07)"><span style="display:inline-flex;align-items:center;gap:.4rem">' + IC.key + escHtml(p.label || "passkey") + '</span><button class="btn btn--danger" data-rm="' + escAttr(p.id) + '" style="padding:3px 10px;font-size:12px">Remove</button></div>').join("");
       listEl.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", async () => {
         b.disabled = true; err.textContent = "";
         try { await webauthnRemove(b.getAttribute("data-rm")); await refresh(); } catch (e) { b.disabled = false; err.textContent = (e && e.message) || "Couldn\u2019t remove that passkey."; }

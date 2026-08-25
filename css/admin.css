@@ -1670,7 +1670,8 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .prep-h__x em { font-style: normal; font-size: .62rem; color: var(--text-faint); }
 .prep-h__del { position: absolute; top: .25rem; right: .3rem; opacity: 0; font-size: .85rem; line-height: 1; color: var(--text-faint); cursor: pointer; padding: .15rem .3rem; border-radius: 6px; }
 .prep-h:hover .prep-h__del { opacity: .65; }
-.prep-h__del:hover { opacity: 1; background: rgba(255, 255, 255, .07); color: var(--text); }
+.prep-h__del:hover { opacity: 1; background: rgba(255, 122, 122, .12); color: #ff7a7a; }
+.prep-h__del svg { width: 12px; height: 12px; display: block; }
 .prep-h--ws { border-left: 2px solid var(--accent); } /* editable workspace entries vs read-only reviews */
 @media (max-width: 980px) { .ats__cols { grid-template-columns: 1fr; } .prep-hist { border-left: 0; border-top: 1px solid var(--line); padding-left: 0; padding-top: 1rem; } }
 .ats__score-x b { font-size: 1rem; }
@@ -2039,7 +2040,8 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .rbz__del--b { margin-left: .35rem; }
 .rbz__xphd > .rbz__del, .rbz__skg > .rbz__del, .rbz__li > .rbz__del { position: absolute; right: -1.35rem; top: 0; }
 .rbz__xp:hover .rbz__del, .rbz__edu:hover .rbz__del, .rbz__li:hover .rbz__del, .rbz__skg:hover .rbz__del, .rbz__bl li:hover .rbz__del, .rbz__sechd:hover .rbz__del, .rbz__del:focus { opacity: 1; }
-.rbz__del:hover { background: rgba(201, 119, 106, .14); }
+.rbz__del:hover { background: rgba(192, 57, 43, .14); color: #c0392b; }
+.rbz__del svg { width: 13px; height: 13px; display: block; }
 /* add-controls float out of the content flow (they don't exist in the PDF), so the editor's page
    breaks line up with the rendered PDF. measure() returns 0 for absolute nodes, so they add no height. */
 .rbz__add { position: absolute; left: 0; opacity: 0; z-index: 3; border: 1px dashed #d8cfc2; background: #fff; color: #9a6a24; font-family: var(--mono, monospace); font-size: .6rem; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; padding: .16rem .5rem; border-radius: 6px; margin: 0; transition: opacity .12s, border-color .12s, background .12s; }
@@ -2418,6 +2420,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .mlib__seg.is-on { color: #0a0a0a; background: var(--accent); }
 .mlib__clean { margin-left: auto; }
 .mlib__cleanbtn { color: var(--accent); border-color: rgba(216,166,71,.4); }
+.mlib__cleanbtn:hover { color: #ff7a7a; border-color: rgba(255,122,122,.5); }
 .mlib__main { flex: 1; display: flex; min-height: 0; }
 .mlib__panel { flex: 1; min-width: 0; overflow: auto; }
 .mlib__panelhd { position: sticky; top: 0; z-index: 2; display: flex; align-items: baseline; gap: .6rem; padding: .8rem 1.2rem .55rem; background: var(--bg-elev, #111116); }
