@@ -583,7 +583,22 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     check: svgIco('<path d="M20 6 9 17l-5-5"/>'),
     add: svgIco('<path d="M5 12h14"/><path d="M12 5v14"/>'),
     chev: svgIco('<path d="m9 18 6-6-6-6"/>', 16),
-    chevD: svgIco('<path d="m6 9 6 6 6-6"/>', 13)
+    chevD: svgIco('<path d="m6 9 6 6 6-6"/>', 13),
+    zap: svgIco('<path d="M13 2 3 14h9l-1 8 10-12h-9z"/>'),
+    ticket: svgIco('<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v2"/><path d="M13 11v2"/><path d="M13 17v2"/>'),
+    shield: svgIco('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>'),
+    publish: svgIco('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>'),
+    spark: svgIco('<path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>'),
+    history: svgIco('<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>'),
+    save: svgIco('<path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>'),
+    key: svgIco('<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/>'),
+    target: svgIco('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'),
+    mic: svgIco('<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>'),
+    book: svgIco('<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>'),
+    pipette: svgIco('<path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.12 2.12 0 1 1 3 3L18 9l.4.4a2.12 2.12 0 1 1-3 3L15 12l-9 9"/>'),
+    video: svgIco('<path d="m22 8-6 4 6 4V8z"/><rect x="2" y="6" width="14" height="12" rx="2"/>'),
+    keyboard: svgIco('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/>'),
+    board: svgIco('<path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/>')
   };
   const EYE_ON = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   const EYE_OFF = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
@@ -1500,7 +1515,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<span class="rt__sep"></span>' +
       t("clear", RT_CLEAR, "Clear formatting \u2014 reset to plain text") +
       t("image", RT_IMG, "Insert an image") +
-      '<button type="button" class="rt__b rt__ai" data-rt="ai" title="Improve with AI \u2014 fix grammar, tighten, sharpen the value" tabindex="-1">\u2728 Improve</button>' +
+      '<button type="button" class="rt__b rt__ai" data-rt="ai" title="Improve with AI \u2014 fix grammar, tighten, sharpen the value" tabindex="-1">' + IC.spark + ' Improve</button>' +
       "</div>";
   }
   function escForRt(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
@@ -1737,7 +1752,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!btn) return "";
     var prev = btn.innerHTML;
     btn.disabled = true; btn.classList.add("is-busy");
-    if (label != null) btn.textContent = label;
+    if (label != null) { if (String(label).indexOf("<") !== -1) btn.innerHTML = label; else btn.textContent = label; }
     return prev;
   }
   function btnIdle(btn, label) {
@@ -3768,7 +3783,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { rtImprove(area, btn); }); return; }
     var text = (area.innerText || "").trim();
     if (!text) { status("Write something first, then Improve."); return; }
-    var lbl = btnBusy(btn, "\u2728");
+    var lbl = btnBusy(btn, IC.spark);
     status("Improving with AI\u2026");
     try {
       var out = await aiText(aiCfg("txt"),
@@ -3778,7 +3793,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (html) { rtSetHtml(area, html); rtSerialize(area); status("Improved \u2014 not right? Press Ctrl+Z or the Undo button to revert.", true); }
       else status("The AI didn\u2019t return usable copy \u2014 try again.");
     } catch (e) { status("Improve failed: " + ((e && e.message) || "error")); }
-    btnIdle(btn, lbl || "\u2728 Improve");
+    btnIdle(btn, lbl || (IC.spark + " Improve"));
   }
 
   /* ---------- structured item repeaters ---------- */
@@ -3868,13 +3883,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function iconFlyoutFoot(i, j, k, key, query) {
     var dd = 'data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '"';
     if ((query || "").trim()) {
-      return '<button type="button" class="iconpick__gen" data-act="icon-gen" ' + dd + ">\u2728 Generate</button>" +
+      return '<button type="button" class="iconpick__gen" data-act="icon-gen" ' + dd + ">" + IC.spark + " Generate</button>" +
         '<button type="button" class="iconpick__gen iconpick__more" data-act="icon-more" ' + dd + ">More\u2026</button>";
     }
     var total = admIconNames().length;
     return total > 31
       ? '<button type="button" class="iconpick__gen iconpick__more" data-act="icon-more" ' + dd + ">More icons\u2026 <span class=\"iconpick__count\">" + total + "</span></button>"
-      : '<button type="button" class="iconpick__gen" data-act="icon-gen" ' + dd + ">\u2728 Generate an icon\u2026</button>";
+      : '<button type="button" class="iconpick__gen" data-act="icon-gen" ' + dd + ">" + IC.spark + " Generate an icon\u2026</button>";
   }
   // The flyout panel is position:fixed (so the block's overflow:hidden can't crop it) — pin it under its
   // trigger, flip up when there's no room below, and clamp to the viewport.
@@ -3953,7 +3968,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="imgsz__bg"><span class="imgsz__bglbl">Height side</span>' +
         '<span class="imgsz__sw"' + (hcv ? ' style="background:' + escAttr(hcv) + '"' : "") + '></span>' +
         '<input type="color" class="imgsz__color" ' + da + ' value="' + escAttr(hcv || "#333333") + '" />' +
-        '<button type="button" class="imgsz__eye" data-act="iso-eyedrop" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '" title="Pick a colour from the screen / an image">\uD83D\uDD0D</button>' +
+        '<button type="button" class="imgsz__eye" data-act="iso-eyedrop" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '" title="Pick a colour from the screen / an image">' + IC.pipette + '</button>' +
         (hcv ? '<button type="button" class="imgsz__clear" data-act="item-clear" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">Auto</button>' : '<span class="imgsz__note">auto from image</span>') +
         '</div></div>';
     }
@@ -3978,7 +3993,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="imgsz__bg"><span class="imgsz__bglbl">Background</span>' +
         '<span class="imgsz__sw"' + (bg ? ' style="background:' + escAttr(bg) + '"' : "") + '></span>' +
         '<input type="color" class="imgsz__color" data-msz="bg" ' + da + ' value="' + escAttr(bg || "#0e0e12") + '" />' +
-        '<button type="button" class="imgsz__eye" data-act="media-eyedrop" ' + da + ' title="Pick a colour from the screen / an image">\uD83D\uDD0D</button>' +
+        '<button type="button" class="imgsz__eye" data-act="media-eyedrop" ' + da + ' title="Pick a colour from the screen / an image">' + IC.pipette + '</button>' +
         (bg ? '<button type="button" class="imgsz__clear" data-act="media-bgclear" ' + da + '>Clear</button>' : '<span class="imgsz__note">transparent</span>') +
       '</div>' +
       '<div class="af__hint">Fill grows the box to the image (edge to edge). Fit centres the image in a framed mat of the chosen ratio \u2014 the surrounding space always shows the background. Custom shrinks the image and shows the background around it.</div></div>';
@@ -4595,7 +4610,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var sp = gspec(b);
     return '<div class="gsx">' +
       '<div class="gsx__bar"><input class="gsx__name" type="text" data-gen-name data-index="' + i + '" data-bindex="' + j + '" value="' + escAttr(b.name || "") + '" placeholder="Section name (only you see this)" />' +
-      '<button class="btn btn--auto" data-act="gen-refine" data-index="' + i + '" data-bindex="' + j + '">\u2728 Refine with AI</button></div>' +
+      '<button class="btn btn--auto" data-act="gen-refine" data-index="' + i + '" data-bindex="' + j + '">' + IC.spark + ' Refine with AI</button></div>' +
       sfInput(i, j, "heading", "Heading (optional \u2014 shown above the section)") +
       '<div class="gsx__tree">' + genNode(sp.root, [], i, j) + "</div>" +
       '<div class="af__hint">Built from safe layout blocks \u2014 edit any field live, add / reorder / remove blocks, or hit \u2728 Refine to change it with AI. Nothing here runs code.</div>' +
@@ -4739,7 +4754,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<button type="button" class="secpick__preset-del" data-gen-preset-del="' + escAttr(p.id) + '" title="Delete">' + IC.close + '</button></button>';
     }).join("");
     return '<div class="secpick__gen">' +
-      '<button type="button" class="secpick__gencard" data-gen-new><span class="secpick__genic">\u2728</span><span class="secpick__gentx"><b>Generate a section</b><span>Describe it or drop a reference image \u2014 AI builds it, you preview &amp; approve. Added as its own block; your other sections are untouched.</span></span></button>' +
+      '<button type="button" class="secpick__gencard" data-gen-new><span class="secpick__genic">' + IC.spark + '</span><span class="secpick__gentx"><b>Generate a section</b><span>Describe it or drop a reference image \u2014 AI builds it, you preview &amp; approve. Added as its own block; your other sections are untouched.</span></span></button>' +
       (presets ? '<div class="secpick__presets"><div class="secpick__presets-h">Your generated sections</div><div class="secpick__presets-grid">' + presets + "</div></div>" : "") +
       "</div>";
   }
@@ -4757,7 +4772,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="gen__imgs"><label class="btn btn--ghost">Add reference image\u2026<input type="file" accept="image/*" multiple hidden class="gen__file" /></label><div class="gen__thumbs"></div></div>' +
       '<div class="gen__err pass__err"></div>' +
       '<div class="gen__stage"></div>' +
-      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Close</button><button class="btn btn--primary" data-gen-run>\u2728 Generate</button></div></div>';
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Close</button><button class="btn btn--primary" data-gen-run>' + IC.spark + ' Generate</button></div></div>';
     document.body.appendChild(modal);
     var stage = modal.querySelector(".gen__stage"), errEl = modal.querySelector(".gen__err"), thumbs = modal.querySelector(".gen__thumbs");
     var addImgFile = function (f) { if (!f || !/^image\//.test(f.type)) return; var r = new FileReader(); r.onload = function (ev) { imgs.push(ev.target.result); renderThumbs(); }; r.readAsDataURL(f); };
@@ -5161,7 +5176,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<input type="text" class="gen__prompt" placeholder="e.g. a word cloud, a compass rose, a layered stack" />' +
       '<div class="gen__err pass__err"></div>' +
       '<div class="icongen__preview" hidden></div>' +
-      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Close</button><button class="btn btn--auto" data-regen hidden>Regenerate</button><button class="btn btn--primary" data-go>\u2728 Generate</button></div></div>';
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Close</button><button class="btn btn--auto" data-regen hidden>Regenerate</button><button class="btn btn--primary" data-go>' + IC.spark + ' Generate</button></div></div>';
     document.body.appendChild(modal);
     var errEl = modal.querySelector(".gen__err"), prev = modal.querySelector(".icongen__preview"), input = modal.querySelector(".gen__prompt"), goBtn = modal.querySelector("[data-go]"), regen = modal.querySelector("[data-regen]");
     var onKey = function (e) { if (e.key === "Escape") close(); };
@@ -5221,7 +5236,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="iconlib__grid"></div>' +
       '<div class="iconlib__empty" hidden>No icons match. Type a description above and press \u2728 Generate to create one.</div>' +
       '<div class="gen__err pass__err" hidden></div>' +
-      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button><button class="btn btn--auto" data-gen>\u2728 Generate</button><button class="btn btn--primary" data-continue>Continue</button></div></div>';
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button><button class="btn btn--auto" data-gen>' + IC.spark + ' Generate</button><button class="btn btn--primary" data-continue>Continue</button></div></div>';
     document.body.appendChild(modal);
     var gridEl = modal.querySelector(".iconlib__grid"), qEl = modal.querySelector(".iconlib__q"), emptyEl = modal.querySelector(".iconlib__empty"), errEl = modal.querySelector(".gen__err"), genBtn = modal.querySelector("[data-gen]"), contBtn = modal.querySelector("[data-continue]");
     function cellHtml(n, inner, title, extra) {
@@ -5574,15 +5589,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 1500, temperature: 0.4, json: true });
       var j = csgenParse(out);
       var beats = (j && Array.isArray(j.beats) ? j.beats : []).filter(function (b) { return b && (b.problem || b.move || b.outcome); }).slice(0, 3).map(function (b) { return { problem: String(b.problem || "").trim(), move: String(b.move || "").trim(), outcome: String(b.outcome || "").trim() }; });
-      if (!beats.length) { status("The AI didn\u2019t return usable key moves \u2014 try again."); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate Key Moves"; } return; }
+      if (!beats.length) { status("The AI didn\u2019t return usable key moves \u2014 try again."); if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Generate Key Moves"; } return; }
       w.study.skim = w.study.skim || {};
       w.study.skim.beats = beats;
       w.study.skim.generatedAt = Date.now();
       saveDraft(true);
-      if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate Key Moves"; }
+      if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Generate Key Moves"; }
       status("Key moves generated \u2014 " + beats.length + " card" + (beats.length > 1 ? "s" : "") + (groundedN ? " \u00b7 grounded in " + groundedN + " screen" + (groundedN > 1 ? "s" : "") : " \u00b7 from text only \u2014 add screens or a vision-capable text model for sharper, screen-grounded moves") + ". They show at the top of the case.", true);
       if (openStudy === i) renderL2();
-    } catch (e) { status("Key moves generation failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate Key Moves"; } }
+    } catch (e) { status("Key moves generation failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Generate Key Moves"; } }
   }
   async function cardDescGenerate(i, btn) {
     var w = data.work[i];
@@ -5597,13 +5612,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     try {
       var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 120, temperature: 0.5 });
       var line = String(out || "").trim().replace(/\s+/g, " ").replace(/^["'\u201c\u2018\u00ab]+|["'\u201d\u2019\u00bb]+$/g, "").trim();
-      if (!line) { status("The AI didn\u2019t return a line \u2014 try again."); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate short card line"; } return; }
+      if (!line) { status("The AI didn\u2019t return a line \u2014 try again."); if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Generate short card line"; } return; }
       w.cardDesc = line;
       saveDraft(true);
       if (openStudy === i) renderL2();
       status("Card line generated \u2014 edit it below, then Publish.", true);
-      if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate short card line"; }
-    } catch (e) { status("Card line generation failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate short card line"; } }
+      if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Generate short card line"; }
+    } catch (e) { status("Card line generation failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Generate short card line"; } }
   }
   function beatEditor(i, b, j) {
     return '<div class="adm__beat"><div class="adm__beat-h"><span class="adm__beat-n">' + (j + 1) + '</span> Key move ' + (j + 1) + '<button type="button" class="adm__beat-x" data-act="beat-remove" data-index="' + i + '" data-bindex="' + j + '" title="Remove this key move" aria-label="Remove key move ' + (j + 1) + '">' + IC.close + '</button></div>' +
@@ -5703,7 +5718,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       itemField("work", i, "title", "Title") +
       itemField("work", i, "desc", "Description", { type: "textarea", rows: 3, hint: "The heavier summary \u2014 the case-study intro fallback, and the source the AI shortens into the card line below." }) +
       itemField("work", i, "cardDesc", "Card line", { type: "textarea", rows: 2, hint: "The short, punchy line shown on the homepage card. Leave blank to fall back to the Description above." }) +
-      '<div class="adm__autobar"><button class="btn btn--auto" data-act="carddesc-gen" data-index="' + i + '">\u2728 Generate short card line</button>' +
+      '<div class="adm__autobar"><button class="btn btn--auto" data-act="carddesc-gen" data-index="' + i + '">' + IC.spark + ' Generate short card line</button>' +
       '<span class="adm__auto-note">Reads your Description above and writes one punchy line for the homepage card \u2014 it drops into the box so you can edit it, then Publish.</span></div>' +
       itemField("work", i, "tags", "Tags", { hint: "comma-separated" }) +
       "</section>";
@@ -5718,7 +5733,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       "</section>";
     var kbeats = (st.skim && st.skim.beats && st.skim.beats.length) ? st.skim.beats : null;
     var keyMoves = '<section class="l2grp"><div class="l2grp__head">Key moves <span>\u2014 AI-generated</span></div>' +
-      '<div class="adm__autobar"><button class="btn btn--auto" data-act="skim-gen" data-index="' + i + '">\u2728 Generate Key Moves</button>' +
+      '<div class="adm__autobar"><button class="btn btn--auto" data-act="skim-gen" data-index="' + i + '">' + IC.spark + ' Generate Key Moves</button>' +
       '<span class="adm__auto-note">Reads the whole case and writes the 2\u20133 decisions that show senior judgement (problem \u2192 move \u2192 outcome). They appear as cards at the top of the case study, above <b>Read the full case</b>.</span></div>' +
       (kbeats ? '<div class="af__hint">' + kbeats.length + ' move' + (kbeats.length > 1 ? "s" : "") + (st.skim.generatedAt ? ' \u00b7 generated ' + new Date(st.skim.generatedAt).toLocaleDateString() : "") + ' \u00b7 edit or remove to refine</div>' : "") +
       (kbeats ? kbeats.map(function (b, j) { return beatEditor(i, b, j); }).join("") : "") +
@@ -5728,7 +5743,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     // ---- Story: sections + deeper-cut ----
     var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
     var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
-    var sections = '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span>' + (blocks.length ? '<span class="l2grp__actions"><button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">\u2728 Review feedback</button><button class="btn btn--auto l2grp__ai" data-act="iprep-open" data-index="' + i + '" title="Generate likely interview questions from this case study">\uD83C\uDF99 Interview prep</button><button class="btn btn--auto l2grp__ai" data-act="story-open" data-index="' + i + '" title="Build a presentation narrative \u2014 pick a length &amp; audience, get story angles + a beat-by-beat script">\uD83D\uDCD6 Design storyteller</button></span>' : "") + "</div>" +
+    var sections = '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span>' + (blocks.length ? '<span class="l2grp__actions"><button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">' + IC.spark + ' Review feedback</button><button class="btn btn--auto l2grp__ai" data-act="iprep-open" data-index="' + i + '" title="Generate likely interview questions from this case study">' + IC.mic + ' Interview prep</button><button class="btn btn--auto l2grp__ai" data-act="story-open" data-index="' + i + '" title="Build a presentation narrative \u2014 pick a length &amp; audience, get story angles + a beat-by-beat script">' + IC.book + ' Design storyteller</button></span>' : "") + "</div>" +
       '<div class="study__blocks">' + list + "</div>" + add + "</section>";
     var unlockBlock = '<section class="l2grp"><div class="l2grp__head">Deeper-cut pass <span>\u2014 optional gate for \u201cLocked\u201d sections</span></div>' +
       '<div class="af"><input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
@@ -6226,7 +6241,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var genPanel = tab === "gen"
       ? '<div class="adm__tgen">' + genMsg +
         '<div class="adm__tgen-row"><input type="text" class="adm__tgen-brief" data-tbrief placeholder="Optional direction \u2014 e.g. \u201cwarmer &amp; literary\u201d" />' +
-        '<button class="btn btn--auto" type="button" data-act="type-gen"' + (genFull ? " disabled" : "") + ">\u2728 Generate a system</button></div></div>"
+        '<button class="btn btn--auto" type="button" data-act="type-gen"' + (genFull ? " disabled" : "") + ">" + IC.spark + " Generate a system</button></div></div>"
       : "";
     return secHead("Fonts", "One font system drives the whole site \u2014 display, body and mono. Click a system to preview it live on the right, then <em>Publish</em> to set it as your site\u2019s type.") +
       '<div class="adm__tsub">' + tabsHtml + "</div>" +
@@ -6273,7 +6288,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 700, temperature: 0.95, json: true });
       var j = csgenParse(out);
       var d = typeSanRole(j && j.display, "display"), t = typeSanRole(j && j.text, "text"), m = typeSanRole(j && j.mono, "mono");
-      if (!d || !t || !m) { status("The AI didn\u2019t return a usable system \u2014 try again."); if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate a system"; } return; }
+      if (!d || !t || !m) { status("The AI didn\u2019t return a usable system \u2014 try again."); if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Generate a system"; } return; }
       [d, t, m].forEach(function (r) { r.src = "google"; if (!r.css) r.css = r.family.replace(/\s+/g, "+"); });
       if (d && !d.weight) d.weight = 400;
       var sysObj = { id: "gen-" + Date.now().toString(36), name: (String((j && j.name) || "Generated").trim() || "Generated").slice(0, 32), note: String((j && j.note) || "AI system").trim().slice(0, 44), builtin: false, display: d, text: t, mono: m };
@@ -6297,7 +6312,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         status("Generated \u201c" + sysObj.name + "\u201d. Click Apply to preview it (via Google); sign in to self-host. Publish to keep.", true);
       }
     } catch (e) { status("Font generation failed: " + ((e && e.message) || "error")); }
-    if (btn) { btn.disabled = false; btn.textContent = "\u2728 Generate a system"; }
+    if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Generate a system"; }
   }
   function bytesToB64(buf) {
     var u8 = new Uint8Array(buf), s = "", CH = 0x8000;
@@ -6407,7 +6422,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     landing() {
       return (
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
-        '<div class="adm__autobar"><button class="btn btn--auto" data-act="autostyle">Auto-style landing</button><button class="btn btn--auto" data-act="landing-ai" style="margin-left:.5rem">\u2728 Draft with AI</button><span class="adm__auto-note">Auto-style paints the accents; <em>Draft with AI</em> writes the hero, highlights, skills &amp; about from a brief \u2014 preview before applying.</span></div>' +
+        '<div class="adm__autobar"><button class="btn btn--auto" data-act="autostyle">Auto-style landing</button><button class="btn btn--auto" data-act="landing-ai" style="margin-left:.5rem">' + IC.spark + ' Draft with AI</button><span class="adm__auto-note">Auto-style paints the accents; <em>Draft with AI</em> writes the hero, highlights, skills &amp; about from a brief \u2014 preview before applying.</span></div>' +
         landingSectionCards() +
         group(siteIconBlock())
       );
@@ -7124,7 +7139,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     let html = '<label class="rkacc__switch"><input type="checkbox" data-act="acc-revoked"' + (showRevoked ? " checked" : "") + " /> Show revoked</label>";
     if (!showRevoked) {
       html += '<div class="adm__addbar rolekit__bar"><button class="btn btn--add" data-act="sv-add"' + (userCount >= 6 ? " disabled" : "") + '>+ New special view</button>' +
-        '<button class="btn btn--auto rolekit__cta" data-act="sv-tailor">\u2728 Tailor to a role</button></div>';
+        '<button class="btn btn--auto rolekit__cta" data-act="sv-tailor">' + IC.spark + ' Tailor to a role</button></div>';
       html += '<p class="af__hint" style="margin:.1rem 0 1rem">Curated, ticketed versions of the site for one audience (say an automotive company). Choose the work, numbers and skills they see, set a ticket phrase and an optional expiry. Up to 6. <em>Tickets are a soft gate \u2014 the curated content still ships in your published file, so don\u2019t put anything confidential here.</em></p>';
       if (userCount >= 6) html += '<div class="af__hint">Maximum of 6 special views reached.</div>';
     }
@@ -7293,7 +7308,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function titleMetaList(list, name, note) {
     const items = data[list] || [];
     let html = secHead(name, note) +
-      '<div class="adm__autobar"><button class="btn btn--auto" data-act="icon-gen-all" data-list="' + list + '"' + (items.length ? "" : " disabled") + '>\u2728 Auto-icons</button>' +
+      '<div class="adm__autobar"><button class="btn btn--auto" data-act="icon-gen-all" data-list="' + list + '"' + (items.length ? "" : " disabled") + '>' + IC.spark + ' Auto-icons</button>' +
       '<span class="adm__auto-note">AI reads each entry and matches a crisp line icon. Pick, regenerate (\u2728) or remove (\u2715) any icon below.</span></div>' +
       addBar(list, "Add " + name.toLowerCase());
     items.forEach((a, i) => {
@@ -7317,7 +7332,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="adm__iconf-row">' +
         '<span class="adm__iconf-prev' + (cur ? " has" : "") + '">' + preview + "</span>" +
         '<select data-iconpick="' + list + '" data-index="' + i + '">' + opts + "</select>" +
-        '<button class="iconbtn" data-act="icon-regen" data-list="' + list + '" data-index="' + i + '" title="Regenerate with AI" aria-label="Regenerate icon with AI">\u2728</button>' +
+        '<button class="iconbtn" data-act="icon-regen" data-list="' + list + '" data-index="' + i + '" title="Regenerate with AI" aria-label="Regenerate icon with AI">' + IC.spark + '</button>' +
         '<button class="iconbtn iconbtn--danger" data-act="icon-remove" data-list="' + list + '" data-index="' + i + '" title="Remove icon" aria-label="Remove icon"' + (cur ? "" : " disabled") + ">" + IC.close + "</button>" +
       "</div></div>";
   }
@@ -7351,7 +7366,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (activeTab === list) renderBody();
       status("Matched " + items.length + " icon" + (items.length > 1 ? "s" : "") + " \u2014 pick, regenerate or remove any below.", true);
     } catch (e) { status("Icon matching failed: " + ((e && e.message) || "error")); }
-    if (btn) { btn.disabled = false; btn.textContent = "\u2728 Auto-icons"; }
+    if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Auto-icons"; }
   }
   async function iconRegen(list, i) {
     const a = (data[list] || [])[i];
@@ -8042,7 +8057,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   // ---------- Settings side-pane (right drawer): declutters the "\u22EF" menu; each setting is a panel
   // instead of a stacked dialog. Simple ones inline (One-tap Allow / Recruiter / Backup); Passkeys /
   // Publishing / AI launch their existing proven dialogs from here.
-  var SET_CATS = [["allow", "\u26A1 One-tap Allow"], ["recruiter", "\uD83C\uDFAB Recruiter mode"], ["autopub", "\u21BB Auto-publish"], ["security", "\uD83D\uDD10 Security"], ["publish", "\u2699 Publishing"], ["ai", "\u2728 AI"], ["history", "\uD83D\uDD52 Version history"], ["backup", "\uD83D\uDCBE Backup"]];
+  var SET_CATS = [["allow", IC.zap, "One-tap Allow"], ["recruiter", IC.ticket, "Recruiter mode"], ["autopub", IC.refresh, "Auto-publish"], ["security", IC.shield, "Security"], ["publish", IC.publish, "Publishing"], ["ai", IC.spark, "AI"], ["history", IC.history, "Version history"], ["backup", IC.save, "Backup"]];
   var setPane, setNav, setPanel, activeSetCat = "allow", setSub = null;
   function openSettings() {
     if (!setPane) return;
@@ -8062,7 +8077,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   function renderSettings() {
     if (!setNav) return;
-    setNav.innerHTML = SET_CATS.map(function (c) { return '<button class="adm__set-tab' + (activeSetCat === c[0] ? " is-on" : "") + '" data-act="settings-cat" data-cat="' + c[0] + '" type="button">' + escHtml(c[1]) + "</button>"; }).join("");
+    setNav.innerHTML = SET_CATS.map(function (c) { return '<button class="adm__set-tab' + (activeSetCat === c[0] ? " is-on" : "") + '" data-act="settings-cat" data-cat="' + c[0] + '" type="button"><span class="adm__set-ic">' + c[1] + '</span><span class="adm__set-lbl">' + escHtml(c[2]) + '</span></button>'; }).join("");
     renderSetPanel();
   }
   function renderSetPanel() {
@@ -8103,14 +8118,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }
     if (cat === "backup") {
       return '<div class="rkqg"><div class="rkqg__head">Content backup <span class="rkqg__sub">a local copy of your content</span></div>' +
-        '<div class="rkqg__row"><button class="btn btn--primary" data-act="backup-dl">\uD83D\uDCBE Download content backup</button></div>' +
+        '<div class="rkqg__row"><button class="btn btn--primary" data-act="backup-dl">' + IC.save + ' Download content backup</button></div>' +
         '<div class="af__hint">Saves an unencrypted <code>content.json</code> to this device \u2014 keep it private. Handy before big edits.</div></div>';
     }
     if (cat === "security") {
       return '<div class="rkqg"><div class="rkqg__head">Security <span class="rkqg__sub">how you sign in to the studio</span></div>' +
         '<div class="af__hint" style="margin:.2rem 0 1rem">Sign in with a passkey \u2014 Windows Hello, Face ID or a security key \u2014 or change the admin key you type on this device. Both keep working.</div>' +
-        '<div class="rkqg__row"><button class="btn btn--primary" data-act="open-passkeys">\uD83D\uDD11 Manage passkeys</button></div>' +
-        '<div class="rkqg__row" style="margin-top:.6rem"><button class="btn btn--ghost" data-act="open-adminkey">\uD83D\uDD12 Change admin key</button></div></div>';
+        '<div class="rkqg__row"><button class="btn btn--primary" data-act="open-passkeys">' + IC.key + ' Manage passkeys</button></div>' +
+        '<div class="rkqg__row" style="margin-top:.6rem"><button class="btn btn--ghost" data-act="open-adminkey">' + LOCK_SVG + ' Change admin key</button></div></div>';
     }
     if (cat === "publish") return launchPanelHtml("Publishing", "Connect GitHub, replace the token, or publish manually.", "open-publish", "Open publishing settings");
     if (cat === "ai") return launchPanelHtml("AI", "Connect OpenAI, Gemini or Claude for the Prepare tools.", "open-ai", "Open AI settings");
@@ -11740,7 +11755,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return '<option value="' + t[0] + '"' + (g.tone === t[0] ? " selected" : "") + ">" + t[1] + "</option>";
     }).join("");
     var hasStudy = !!(w.study && w.study.blocks && w.study.blocks.length);
-    return '<div class="csgen"><div class="csgen__head"><span class="csgen__spark">\u2728</span> Generate case study with AI<span class="csgen__note">Turn notes, a deck &amp; links into a full, editable case study.</span></div>' +
+    return '<div class="csgen"><div class="csgen__head"><span class="csgen__spark">' + IC.spark + '</span> Generate case study with AI<span class="csgen__note">Turn notes, a deck &amp; links into a full, editable case study.</span></div>' +
       '<div class="csgen__body">' +
       '<div class="af"><label class="af__label">Source material</label>' +
       '<textarea data-csgen="material" data-csid="' + escAttr(w.id) + '" rows="5" placeholder="Paste context, notes, a deck\u2019s text, research findings, metrics, the decisions you made\u2026 the more the better.">' + escHtml(g.material) + "</textarea>" +
@@ -12660,7 +12675,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var modal = document.createElement("div");
     modal.className = "pass pass--wide rolekit-modal";
     modal.innerHTML =
-      '<div class="pass__box"><div class="pass__title">\uD83C\uDFAF Tailor to a role</div>' +
+      '<div class="pass__box"><div class="pass__title">' + IC.target + ' Tailor to a role</div>' +
       '<div class="pass__sub">Paste a job description \u2014 I\u2019ll read your r\u00e9sum\u00e9 and portfolio, then give you a tailored view of your work, a cover note, and an honest gap analysis.</div>' +
       '<div class="rolekit__setup">' +
         '<div class="af"><label class="af__label">Targeting</label><div class="iprep__levels">' +
@@ -12923,7 +12938,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var modal = document.createElement("div");
     modal.className = "pass pass--wide iprep-modal";
     modal.innerHTML =
-      '<div class="pass__box"><div class="pass__title">\uD83C\uDF99 Interview prep' + (fromAi ? "" : " \u2014 " + escHtml(w.title || "case study")) + '</div>' +
+      '<div class="pass__box"><div class="pass__title">' + IC.mic + ' Interview prep' + (fromAi ? "" : " \u2014 " + escHtml(w.title || "case study")) + '</div>' +
       '<div class="pass__sub">Generate the questions an interviewer is likely to ask' + (fromAi ? " \u2014 on a project, a few, or your whole portfolio" : " about this work") + ', framed for the level you\u2019re targeting. Ask for a suggested answer on any question.</div>' +
       '<div class="ats__cols iprep__cols"><div class="ats__main">' +
       '<div class="iprep__setup">' +
@@ -12980,7 +12995,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<div class="iprep__q">' + escHtml(q.q || "") + "</div>" +
           (q.why ? '<div class="iprep__why">' + escHtml(q.why) + "</div>" : "") +
           '<div class="iprep__a"' + ((q.answer && String(q.answer).trim()) ? "" : " hidden") + ">" + ((q.answer && String(q.answer).trim()) ? iprepSafeHtml(q.answer) : "") + "</div>" +
-          '<div class="iprep__q-act">' + ((q.answer && String(q.answer).trim()) ? '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">' + IC.refresh + ' Regenerate</button><button class="btn btn--ghost" data-iprep-copy="' + idx + '">Copy</button>' : '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">\u2728 Suggest an answer</button>') + "</div>" +
+          '<div class="iprep__q-act">' + ((q.answer && String(q.answer).trim()) ? '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">' + IC.refresh + ' Regenerate</button><button class="btn btn--ghost" data-iprep-copy="' + idx + '">Copy</button>' : '<button class="btn btn--ghost" data-iprep-ans="' + idx + '">' + IC.spark + ' Suggest an answer</button>') + "</div>" +
           "</div>";
       }).join("");
       list.hidden = false; setup.hidden = true; runBtn.hidden = true; newBtn.hidden = false;
@@ -13285,7 +13300,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var modal = document.createElement("div");
     modal.className = "pass pass--wide wb-modal";
     modal.innerHTML =
-      '<div class="pass__box"><div class="wb__chrome" data-wb-chrome><button type="button" class="wb__chrome-btn" data-wb-min title="Pop out \u2014 float the timer + mic on top while you whiteboard elsewhere" aria-label="Pop out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" stroke="none"/></svg></button><button type="button" class="wb__chrome-btn" data-wb-max title="Maximise" aria-label="Maximise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button></div><div class="pass__title">\uD83E\uDDE9 Whiteboard coach</div>' +
+      '<div class="pass__box"><div class="wb__chrome" data-wb-chrome><button type="button" class="wb__chrome-btn" data-wb-min title="Pop out \u2014 float the timer + mic on top while you whiteboard elsewhere" aria-label="Pop out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" stroke="none"/></svg></button><button type="button" class="wb__chrome-btn" data-wb-max title="Maximise" aria-label="Maximise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button></div><div class="pass__title">' + IC.board + ' Whiteboard coach</div>' +
       '<div class="pass__sub">Rehearse a live design exercise. Pick the length and a mode \u2014 I\u2019ll set a realistic prompt' + (storyJdText() ? " tailored to your target role" : "") + ", give you a timed game-plan, then coach you or run a mock.</div>" +
       '<div class="wb__setup">' +
         '<div class="wb__resume" data-wb-resume-bar hidden></div>' +
@@ -13296,8 +13311,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           WB_MODES.map(function (d) { return '<button type="button" class="story__opt' + (st.mode === d[0] ? " is-on" : "") + '" data-wb-mode="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
         "</div></div>" +
         '<div class="af wb__convo"><label class="af__label">Conversation <span class="af__opt">(mock interview)</span></label><div class="story__opts">' +
-          '<button type="button" class="story__opt' + (st.convo === "text" ? " is-on" : "") + '" data-wb-convo="text"><span class="story__opt-name">\u2328 Type it out</span><span class="story__opt-desc">Type your moves like a chat</span></button>' +
-          '<button type="button" class="story__opt' + (st.convo === "voice" ? " is-on" : "") + '" data-wb-convo="voice"><span class="story__opt-name">\uD83C\uDF99\uFE0F Talk it out</span><span class="story__opt-desc">Speak your moves; the interviewer talks back</span></button>' +
+          '<button type="button" class="story__opt' + (st.convo === "text" ? " is-on" : "") + '" data-wb-convo="text"><span class="story__opt-name">' + IC.keyboard + ' Type it out</span><span class="story__opt-desc">Type your moves like a chat</span></button>' +
+          '<button type="button" class="story__opt' + (st.convo === "voice" ? " is-on" : "") + '" data-wb-convo="voice"><span class="story__opt-name">' + IC.mic + ' Talk it out</span><span class="story__opt-desc">Speak your moves; the interviewer talks back</span></button>' +
         '</div><div class="af__hint wb__convo-hint"></div></div>' +
         '<div class="af"><label class="af__label">The level you\u2019re whiteboarding for</label><div class="iprep__levels wb__levels">' +
           WB_LEVELS.map(function (d) { return '<button type="button" class="iprep__lvl' + (st.level === d[0] ? " is-on" : "") + '" data-wb-lvl="' + d[0] + '"><span class="iprep__lvl-name">' + d[1] + '</span><span class="iprep__lvl-desc">' + d[2] + "</span></button>"; }).join("") +
@@ -13582,7 +13597,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         if (!watchBar) return;
         if (!anyFeed()) {
           watchBar.classList.remove("is-live");
-          watchBar.innerHTML = wRecUrl ? '<span class="wb__watch-lead">\uD83C\uDFA5 Session recording</span><a class="wb__watch-dl" href="' + wRecUrl + '" download="whiteboard-mock.webm">\u2B07 Download</a>' : "";
+          watchBar.innerHTML = wRecUrl ? '<span class="wb__watch-lead">' + IC.video + ' Session recording</span><a class="wb__watch-dl" href="' + wRecUrl + '" download="whiteboard-mock.webm">\u2B07 Download</a>' : "";
           watchBar.hidden = !wRecUrl;
           updateCaps();
           return;
@@ -13601,7 +13616,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
             "</div>";
         }).join("");
         var seeHtml = wCanSee === null ? '<span class="wb__watch-see">Checking if the interviewer can see\u2026</span>'
-          : wCanSee ? '<span class="wb__watch-see is-on">\uD83D\uDC41 Interviewer can see \u2014 it glances each turn</span>'
+          : wCanSee ? '<span class="wb__watch-see is-on">' + EYE_ON + ' Interviewer can see \u2014 it glances each turn</span>'
           : '<span class="wb__watch-see">Recording only \u2014 your AI model can\u2019t read images</span>';
         watchBar.innerHTML =
           '<div class="wb__feeds">' + feedsHtml + "</div>" +
@@ -13919,7 +13934,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="story__q-text">' + escHtml(q.q || "") + "</div>" +
         (q.why ? '<div class="story__q-why">' + escHtml(q.why) + "</div>" : "") +
         '<div class="story__q-a"' + (hasA ? "" : " hidden") + ">" + (hasA ? iprepSafeHtml(q.answer) : "") + "</div>" +
-        '<div class="story__q-act">' + (hasA ? '<button class="btn btn--ghost" data-story-qans="' + idx + '">' + IC.refresh + ' Redo</button><button class="btn btn--ghost" data-story-qcopy="' + idx + '">Copy</button>' : '<button class="btn btn--ghost" data-story-qans="' + idx + '">\u2728 Answer</button>') + "</div>" +
+        '<div class="story__q-act">' + (hasA ? '<button class="btn btn--ghost" data-story-qans="' + idx + '">' + IC.refresh + ' Redo</button><button class="btn btn--ghost" data-story-qcopy="' + idx + '">Copy</button>' : '<button class="btn btn--ghost" data-story-qans="' + idx + '">' + IC.spark + ' Answer</button>') + "</div>" +
         "</div>";
     }).join("");
   }
@@ -13947,7 +13962,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var modal = document.createElement("div");
     modal.className = "pass pass--wide story-modal";
     modal.innerHTML =
-      '<div class="pass__box"><div class="pass__title">\uD83D\uDCD6 Design storyteller' + (fromAi ? "" : " \u2014 " + escHtml(w.title || "case study")) + "</div>" +
+      '<div class="pass__box"><div class="pass__title">' + IC.book + ' Design storyteller' + (fromAi ? "" : " \u2014 " + escHtml(w.title || "case study")) + "</div>" +
       '<div class="pass__sub">Turn ' + (fromAi ? "a" : "this") + ' case study into a presentation. Pick how long you\u2019ll have and who\u2019s in the room \u2014 get a few story angles, then open one for a beat-by-beat script and the questions it invites.</div>' +
       '<div class="ats__cols story__cols"><div class="ats__main">' +
       '<div class="story__setup">' +
@@ -14457,7 +14472,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     async function refresh() {
       const list = await webauthnList().catch(() => []);
       if (!list.length) { listEl.innerHTML = '<span style="opacity:.55">No passkeys yet \u2014 add one below.</span>'; return; }
-      listEl.innerHTML = list.map((p) => '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.07)"><span>\uD83D\uDD11 ' + escHtml(p.label || "passkey") + '</span><button class="btn btn--ghost" data-rm="' + escAttr(p.id) + '" style="padding:3px 10px;font-size:12px">Remove</button></div>').join("");
+      listEl.innerHTML = list.map((p) => '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.07)"><span style="display:inline-flex;align-items:center;gap:.4rem">' + IC.key + escHtml(p.label || "passkey") + '</span><button class="btn btn--ghost" data-rm="' + escAttr(p.id) + '" style="padding:3px 10px;font-size:12px">Remove</button></div>').join("");
       listEl.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", async () => {
         b.disabled = true; err.textContent = "";
         try { await webauthnRemove(b.getAttribute("data-rm")); await refresh(); } catch (e) { b.disabled = false; err.textContent = (e && e.message) || "Couldn\u2019t remove that passkey."; }

@@ -192,7 +192,7 @@ import {
       '<div class="pass__sub">' + (creating
         ? "Create a key for this browser. (It guards this editor only — publishing still requires your repo.)"
         : "Enter your key to open the studio. Required every time.") + "</div>" +
-      (creating ? "" : '<button class="btn btn--primary" data-passkey hidden style="width:100%;justify-content:center;margin-bottom:14px">\uD83D\uDD11 Sign in with a passkey</button><div class="pass__or" data-or hidden style="text-align:center;font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.4;margin:0 0 12px">or use your admin key</div>') +
+      (creating ? "" : '<button class="btn btn--primary" data-passkey hidden style="width:100%;justify-content:center;gap:.4rem;margin-bottom:14px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></svg>Sign in with a passkey</button><div class="pass__or" data-or hidden style="text-align:center;font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.4;margin:0 0 12px">or use your admin key</div>') +
       '<input type="password" placeholder="Key" autofocus />' +
       (creating ? '<input type="password" placeholder="Confirm key" data-confirm />' : "") +
       '<div class="pass__err"></div>' +
