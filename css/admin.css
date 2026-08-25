@@ -275,7 +275,7 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__exit { color: var(--text-dim); }
 .adm__exit:hover { border-color: #ff7a7a; color: #ff7a7a; }
 
-.adm__main { flex: 1; display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); min-height: 0; }
+.adm__main { flex: 1; display: grid; grid-template-columns: min(48%, 850px) minmax(0, 1fr); min-height: 0; }
 .adm__editor { overflow-y: auto; border-right: 1px solid var(--line); }
 .adm__body { padding: 1.4rem 1.7rem 4rem; max-width: 780px; margin: 0 auto; }
 .adm__body[hidden] { display: none; }
