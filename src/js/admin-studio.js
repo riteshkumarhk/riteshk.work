@@ -5074,7 +5074,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     document.body.appendChild(modal);
     var gridEl = modal.querySelector(".iconlib__grid"), qEl = modal.querySelector(".iconlib__q"), emptyEl = modal.querySelector(".iconlib__empty"), errEl = modal.querySelector(".gen__err"), genBtn = modal.querySelector("[data-gen]"), contBtn = modal.querySelector("[data-continue]");
     function cellHtml(n, inner, title, extra) {
-      return '<button type="button" class="iconlib__b' + (extra || "") + (n === sel ? " is-on" : "") + '" data-icon="' + escAttr(n) + '" title="' + escAttr(title || n) + '">' + inner + '<span class="iconlib__nm">' + escHtml(title || n) + "</span></button>";
+      var kw = n ? '<span class="iconlib__kw" data-kw="' + escAttr(n) + '" title="Edit keywords" aria-label="Edit keywords"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>' : "";
+      return '<button type="button" class="iconlib__b' + (extra || "") + (n === sel ? " is-on" : "") + '" data-icon="' + escAttr(n) + '" title="' + escAttr(title || n) + '">' + kw + inner + '<span class="iconlib__nm">' + escHtml(title || n) + "</span></button>";
     }
     function matches() { return rankIconNames(admIconNames()).filter(function (n) { return iconMatchesQuery(n, query); }); }
     function renderGrid() {
@@ -5091,6 +5092,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     qEl.addEventListener("input", function () { query = (qEl.value || "").trim(); renderGrid(); });
     try { qEl.focus(); } catch (e) {}
     gridEl.addEventListener("click", function (e) {
+      var kwBtn = e.target.closest(".iconlib__kw");
+      if (kwBtn) { e.preventDefault(); e.stopPropagation(); iconKeywordEditor(kwBtn.getAttribute("data-kw"), kwBtn); return; }
       var b = e.target.closest(".iconlib__b"); if (!b) return;
       sel = b.getAttribute("data-icon") || "";
       gridEl.querySelectorAll(".iconlib__b").forEach(function (x) { x.classList.toggle("is-on", x === b); });
@@ -5118,6 +5121,69 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       finally { btnIdle(btn, was); }
     });
     qEl.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); var names = matches(); if (names.length) { sel = names[0]; renderGrid(); } } });
+  }
+
+  // Small popover (anchored to an icon's corner chevron) to view + add/remove that icon's search
+  // keywords. Edits (incl. to a built-in's defaults) persist as an override in data.iconKeywords.
+  function iconKeywordEditor(name, anchor) {
+    if (!name) return;
+    var existing = document.querySelector(".kwed"); if (existing) existing.remove();
+    if (anchor) anchor.classList.add("is-open");
+    var list = iconKeywords(name).slice(0, 10);
+    var pop = document.createElement("div");
+    pop.className = "kwed";
+    document.body.appendChild(pop);
+    function commit() { data.iconKeywords = data.iconKeywords || {}; data.iconKeywords[name] = list.slice(0, 10); saveDraft(true); }
+    function chips() {
+      return list.length
+        ? list.map(function (k, idx) { return '<span class="kwed__chip">' + escHtml(k) + '<button type="button" class="kwed__x" data-i="' + idx + '" aria-label="Remove">\u00d7</button></span>'; }).join("")
+        : '<span class="kwed__none">No keywords yet.</span>';
+    }
+    function render() {
+      pop.innerHTML =
+        '<div class="kwed__head"><span class="kwed__ico">' + admIcon(name) + '</span><span class="kwed__nm">' + escHtml(name) + '</span><button type="button" class="kwed__done" data-done>Done</button></div>' +
+        '<div class="kwed__lbl"><span>Keywords</span><span class="kwed__count">' + list.length + '/10</span></div>' +
+        '<div class="kwed__chips">' + chips() + "</div>" +
+        (list.length < 10 ? '<div class="kwed__add"><input type="text" class="kwed__in" placeholder="Add a keyword\u2026" /><button type="button" class="kwed__plus" data-add aria-label="Add">+</button></div>' : "");
+      place();
+    }
+    function place() {
+      var r = anchor ? anchor.getBoundingClientRect() : { right: 200, bottom: 200, top: 180 };
+      var w = pop.offsetWidth || 260, h = pop.offsetHeight || 160;
+      var left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
+      var top = r.bottom + 6;
+      if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+      pop.style.left = left + "px"; pop.style.top = top + "px";
+    }
+    function focusIn() { var inp = pop.querySelector(".kwed__in"); if (inp) try { inp.focus(); } catch (e) {} }
+    function addKw() {
+      var inp = pop.querySelector(".kwed__in"); if (!inp) return;
+      var v = (inp.value || "").toLowerCase().trim().replace(/\s+/g, " ");
+      if (v && list.indexOf(v) < 0 && list.length < 10) { list.push(v); commit(); render(); focusIn(); }
+      else { inp.value = ""; focusIn(); }
+    }
+    function close() {
+      pop.remove();
+      if (anchor) anchor.classList.remove("is-open");
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onOut, true);
+      window.removeEventListener("scroll", onScroll, true);
+    }
+    var onKey = function (e) { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+    var onOut = function (e) { if (!pop.contains(e.target) && !(anchor && anchor.contains(e.target))) close(); };
+    var onScroll = function () { place(); };
+    pop.addEventListener("click", function (e) {
+      var x = e.target.closest(".kwed__x");
+      if (x) { list.splice(+x.getAttribute("data-i"), 1); commit(); render(); focusIn(); return; }
+      if (e.target.closest("[data-add]")) { addKw(); return; }
+      if (e.target.closest("[data-done]")) { close(); return; }
+    });
+    pop.addEventListener("keydown", function (e) { if (e.target.classList.contains("kwed__in") && e.key === "Enter") { e.preventDefault(); addKw(); } });
+    render();
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onOut, true);
+    window.addEventListener("scroll", onScroll, true);
+    focusIn();
   }
 
   function sectionPicker(i, at) {
