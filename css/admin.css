@@ -1138,7 +1138,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .icondd__chev { display: inline-flex; color: var(--text-dim); transition: transform .2s; }
 .icondd__chev svg { width: 11px; height: 11px; display: block; }
 .icondd[open] .icondd__chev { transform: rotate(180deg); }
-.icondd__panel { position: absolute; left: 0; top: calc(100% + .35rem); z-index: 8; width: 320px; max-width: calc(100vw - 1.5rem); border: 1px solid var(--line); border-radius: 10px; padding: .5rem; background: var(--bg-elev); box-shadow: 0 14px 34px -14px rgba(0, 0, 0, .75); }
+.icondd__panel { position: fixed; z-index: 9000; width: 320px; max-width: calc(100vw - 1.5rem); border: 1px solid var(--line); border-radius: 10px; padding: .5rem; background: var(--bg-elev); box-shadow: 0 14px 34px -14px rgba(0, 0, 0, .75); }
 .icondd__search { position: relative; margin-bottom: .45rem; }
 .icondd__search svg { position: absolute; left: .55rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-dim); pointer-events: none; }
 /* [type=text] bumps specificity to beat the global `.adm input[type="text"]` (else its padding hides the inset icon) */

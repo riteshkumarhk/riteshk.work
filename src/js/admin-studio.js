@@ -3851,6 +3851,26 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       ? '<button type="button" class="iconpick__gen iconpick__more" data-act="icon-more" ' + dd + ">More icons\u2026 <span class=\"iconpick__count\">" + total + "</span></button>"
       : '<button type="button" class="iconpick__gen" data-act="icon-gen" ' + dd + ">\u2728 Generate an icon\u2026</button>";
   }
+  // The flyout panel is position:fixed (so the block's overflow:hidden can't crop it) — pin it under its
+  // trigger, flip up when there's no room below, and clamp to the viewport.
+  function positionIconFlyout(dd) {
+    if (!dd || !dd.open) return;
+    var panel = dd.querySelector(".icondd__panel"), trig = dd.querySelector(".icondd__trigger");
+    if (!panel || !trig) return;
+    var r = trig.getBoundingClientRect();
+    var pw = panel.offsetWidth || 320, ph = panel.offsetHeight || 320, gap = 6, pad = 8;
+    var left = Math.max(pad, Math.min(r.left, window.innerWidth - pw - pad));
+    var top = r.bottom + gap;
+    if (top + ph > window.innerHeight - pad) {
+      var up = r.top - gap - ph;
+      top = up >= pad ? up : Math.max(pad, window.innerHeight - ph - pad);
+    }
+    panel.style.left = left + "px";
+    panel.style.top = top + "px";
+  }
+  function repositionOpenIconFlyouts() {
+    document.querySelectorAll("details.icondd[open]").forEach(positionIconFlyout);
+  }
   // Live-filter the open flyout as the user types: re-render just the grid + footer (keeps input focus).
   function onIconSearch(t) {
     var panel = t.closest(".icondd__panel"); if (!panel) return;
@@ -5041,8 +5061,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!String(raw || "").trim()) return oldName;
     var newName = iconSlug(raw);
     if (!newName || newName === oldName) return oldName;
-    var have = {}; (admIconNames() || []).forEach(function (n) { have[n] = 1; });
-    if (have[newName]) { var base = newName, c = 2; while (have[newName]) newName = base + "-" + (c++); }
+    // names must be UNIQUE — never clobber a different existing icon (the caller gives feedback)
+    if (admIconNames().some(function (n) { return n !== oldName && n === newName; })) return oldName;
     var svg = data.customIcons[oldName];
     data.customIcons[newName] = svg; delete data.customIcons[oldName];
     if (data.iconKeywords && data.iconKeywords[oldName]) { data.iconKeywords[newName] = data.iconKeywords[oldName]; delete data.iconKeywords[oldName]; }
@@ -5130,6 +5150,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var desc = (input.value || "").trim();
       if (!desc) { errEl.textContent = "Describe the icon first."; return; }
       var was = btnBusy(btn, "Drawing..."); errEl.textContent = "";
+      var other = (btn === goBtn) ? regen : goBtn; if (other) other.disabled = true;
       var ok = false;
       try {
         var out = await runIconGen(desc, fam);
@@ -5138,8 +5159,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         prev.innerHTML = '<span class="icongen__ico">' + iconWrapDisp(svg) + '</span><span class="icongen__nm">' + escHtml(nm) + "</span>";
         ok = true;
       } catch (err) { errEl.textContent = err.message || String(err); }
-      // set the post-gen state AFTER btnIdle, else btnIdle would restore the label to "Generate"
+      // restore the clicked button, re-enable its sibling, THEN set the success state (so btnIdle can't undo it)
       btnIdle(btn, was);
+      if (other) other.disabled = false;
       if (ok) { regen.hidden = false; goBtn.textContent = "Continue"; goBtn.setAttribute("data-add", "1"); }
     }
     goBtn.addEventListener("click", function (e) {
@@ -5152,7 +5174,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         saveDraft(true); renderL2(); status("Added your icon - it is in the icon list now.", true); close();
       } else { gen(btn); }
     });
-    regen.addEventListener("click", function (e) { goBtn.removeAttribute("data-add"); goBtn.textContent = "\u2728 Generate"; gen(e.currentTarget); });
+    regen.addEventListener("click", function (e) { gen(e.currentTarget); });
     input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); if (goBtn.getAttribute("data-add") !== "1") gen(goBtn); } });
   }
 
@@ -5207,23 +5229,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       it[key] = sel; if (sel) bumpIconUsage(sel);
       saveDraft(true); renderL2(); status(sel ? "Icon applied." : "Icon cleared.", true); close();
     });
-    genBtn.addEventListener("click", async function (e) {
-      if (!aiHasKey("txt")) { aiKeyModal("txt", function () {}); return; }
-      var btn = e.currentTarget, desc = (qEl.value || "").trim();
-      errEl.hidden = true;
-      if (!desc) { errEl.hidden = false; errEl.textContent = "Type what to draw in the search box, then Generate."; try { qEl.focus(); } catch (e2) {} return; }
-      var was = btnBusy(btn, "Drawing...");
-      try {
-        var out = await runIconGen(desc, fam);
-        var nm = addGeneratedIcon(out.name, out.svg, out.keywords);
-        sel = nm; query = ""; qEl.value = "";
-        renderGrid();
-        var nb = gridEl.querySelector('.iconlib__b[data-icon="' + nm + '"]');
-        if (nb) { nb.classList.add("is-new"); try { nb.scrollIntoView({ block: "center" }); } catch (e3) {} }
-        saveDraft(true);
-        status("Generated \u201c" + nm + "\u201d \u2014 press Continue to apply.", true);
-      } catch (err) { errEl.hidden = false; errEl.textContent = err.message || String(err); }
-      finally { btnIdle(btn, was); }
+    genBtn.addEventListener("click", function () {
+      var seed = (qEl.value || "").trim();
+      close();
+      iconGenModal(wi, bj, ik, key, seed);
     });
     qEl.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); var names = matches(); if (names.length) { sel = names[0]; renderGrid(); } } });
   }
@@ -5300,8 +5309,16 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       status(sites.length ? ("Deleted \u2014 " + sites.length + " use" + (sites.length === 1 ? "" : "s") + " now show \u201c" + replacement + "\u201d.") : "Icon deleted.", true);
     }
     function commitRename(raw) {
-      var nn = renameGeneratedIcon(name, raw);
       var inp = pop.querySelector(".kwed__nm-edit");
+      var trimmed = String(raw || "").trim();
+      var wanted = trimmed ? iconSlug(trimmed) : "";
+      if (!wanted || wanted === name) { if (inp) inp.value = name; return; }
+      if (admIconNames().some(function (n) { return n !== name && n === wanted; })) {
+        if (inp) inp.value = name;
+        status("\u201c" + wanted + "\u201d is already an icon name \u2014 names must be unique (keywords can repeat).");
+        return;
+      }
+      var nn = renameGeneratedIcon(name, wanted);
       if (nn && nn !== name) {
         name = nn;
         if (inp) inp.value = name;
@@ -14126,6 +14143,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     root.addEventListener("dblclick", onDblClick);
     // Live thumbnail-parallax demo: reflect the effect on the cover preview as the editor scrolls.
     root.addEventListener("scroll", parxScheduleDemo, true);
+    // Icon flyout is position:fixed — place it under its trigger on open, and keep it pinned while scrolling/resizing.
+    root.addEventListener("toggle", function (e) { var d = e.target; if (d && d.classList && d.classList.contains("icondd") && d.open) positionIconFlyout(d); }, true);
+    root.addEventListener("scroll", repositionOpenIconFlyouts, true);
+    window.addEventListener("resize", repositionOpenIconFlyouts);
     // Drag-to-reorder any list with a grip handle (arrows still work).
     root.addEventListener("pointerdown", sortStart);
     // Keep the caret inside the rich-text area when a toolbar button is pressed.
