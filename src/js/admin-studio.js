@@ -3862,6 +3862,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var grid = panel.querySelector(".iconpick"); if (grid) grid.innerHTML = iconFlyoutCells(i, j, k, key, cur, q);
     var foot = panel.querySelector(".icondd__foot"); if (foot) foot.innerHTML = iconFlyoutFoot(i, j, k, key, q);
   }
+  // Enter in the flyout search applies the first matching icon (quick keyboard pick).
+  function onIconKey(e) {
+    if (e.key !== "Enter") return;
+    var t = e.target;
+    if (!(t.classList && t.classList.contains("icondd__q"))) return;
+    e.preventDefault();
+    if (!(t.value || "").trim()) return;
+    var panel = t.closest(".icondd__panel"); if (!panel) return;
+    var first = panel.querySelector('.iconpick .iconpick__b[data-icon]:not([data-icon=""])');
+    if (first) first.click();
+  }
   function itemFieldEl(i, j, k, it, f) {
     var key = f[0], label = f[1], kind = f[2];
     var da = 'data-sitem="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '"';
@@ -13998,6 +14009,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }, { passive: false, capture: true });
 
     root.addEventListener("input", onInput);
+    root.addEventListener("keydown", onIconKey);
     root.addEventListener("change", onChange);
     root.addEventListener("pointerdown", faPointerDown);
     root.addEventListener("click", onClick);
