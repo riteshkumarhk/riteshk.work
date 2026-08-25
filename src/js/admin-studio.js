@@ -4844,27 +4844,62 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var res = ser(root);
     return /<(path|circle|rect|line|polyline|polygon|ellipse)[ />]/.test(res) ? res : "";
   }
-  function iconGenSystem() {
-    return [
-      "You design ONE monochrome line-icon in the exact house style of a fixed set (like Lucide or Feather).",
+  // Inner markup of an icon (strip the <svg> wrapper) - used as a style reference for generation.
+  function iconInner(svg) {
+    var s = String(svg || ""), m = s.match(/<svg[^>]*>([\s\S]*?)<\/svg>/i);
+    return (m ? m[1] : s).replace(/\s+/g, " ").trim();
+  }
+  // The icons already used by sibling items in the SAME block, as {name, inner-svg} refs, so a
+  // generated icon can be drawn to match the group's family (weight, detail, metaphor style).
+  function iconFamilyRefs(wi, bj, ik, key) {
+    var out = [], seen = {};
+    try {
+      var bl = data.work[wi] && data.work[wi].study && data.work[wi].study.blocks[bj];
+      var items = (bl && bl.items) || [];
+      for (var n = 0; n < items.length && out.length < 8; n++) {
+        if (n === ik) continue;
+        var nm = items[n] && items[n][key];
+        if (!nm || seen[nm]) continue;
+        seen[nm] = 1;
+        var inner = iconInner(admIcon(nm));
+        if (inner) out.push({ name: nm, svg: inner });
+      }
+    } catch (e) {}
+    return out;
+  }
+  function iconGenSystem(refs) {
+    var lines = [
+      "You design ONE monochrome line-icon that must look like it was drawn by the SAME hand as a fixed set (Lucide / Feather).",
       "- Canvas: a 24x24 viewBox. Draw ONLY geometry: path, circle, rect, line, polyline, polygon, ellipse.",
       "- NO svg wrapper, NO fill / stroke / color / style attributes, no gradients, no text, no image, no scripts. The host applies fill:none, stroke:currentColor, ~1.6px stroke, round caps and joins - so draw clean OUTLINES, never solid filled shapes.",
-      "- Balanced and centred with breathing room inside 24x24; legible near 20px; consistent ~2px visual rhythm.",
-      "House-style references (inner markup only):",
+      "- ONE clear metaphor from a FEW simple strokes (Lucide icons are minimal, typically 1-4 shapes). No intricate detail, clustered marks, hatching, textures or tiny features that read heavier than the set.",
+      "- Match Lucide geometry: tidy grid alignment, consistent corner rounding, even ~2px visual rhythm, no free-hand wobble. Centre the mass with ~2px breathing room inside 24x24; legible near 20px.",
+      "Canonical house style (inner markup only):",
       "shield -> <path d='M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z'/>",
       "rocket -> <path d='M5 13c-1.5 1.5-2 5-2 5s3.5-.5 5-2M9 11a10 10 0 0 1 9-6c1 5-1 8-6 9l-3-3z'/><circle cx='14.5' cy='9.5' r='1.4'/>",
-      "compass -> <circle cx='12' cy='12' r='9'/><path d='M15.5 8.5l-2.2 5.3-5.3 2.2 2.2-5.3z'/>",
-      "Return STRICT JSON only, no prose: an object with two string keys, name (one short lowercase word) and svg (inner markup only)."
-    ].join(String.fromCharCode(10));
+      "compass -> <circle cx='12' cy='12' r='9'/><path d='M15.5 8.5l-2.2 5.3-5.3 2.2 2.2-5.3z'/>"
+    ];
+    if (refs && refs.length) {
+      lines.push("This icon JOINS AN EXISTING GROUP shown below. Match their exact visual weight, level of detail, stroke rhythm and metaphor style so it is unmistakably part of the SAME set - do NOT copy their shapes, draw the requested subject at the same simplicity and optical weight (not busier, not lighter):");
+      refs.forEach(function (r) { lines.push(r.name + " -> " + r.svg); });
+    }
+    lines.push("Return STRICT JSON only, no prose: an object with two string keys, name (one short lowercase word) and svg (inner markup only).");
+    return lines.join(String.fromCharCode(10));
   }
   function iconGenModal(wi, bj, ik, key) {
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { iconGenModal(wi, bj, ik, key); }); return; }
     var svg = "", nm = "";
+    var fam = iconFamilyRefs(wi, bj, ik, key);
+    var famHtml = fam.length
+      ? '<div class="icongen__fam"><span class="icongen__fam-lbl">Matching the ' + fam.length + ' icon' + (fam.length > 1 ? "s" : "") + ' already in this group</span>' +
+        '<span class="icongen__fam-row">' + fam.map(function (r) { return '<span class="icongen__fam-ico" title="' + escAttr(r.name) + '">' + iconWrapDisp(r.svg) + "</span>"; }).join("") + "</span></div>"
+      : "";
     var modal = document.createElement("div");
     modal.className = "pass icongen";
     modal.innerHTML =
       '<div class="pass__box"><div class="pass__title">Generate an icon</div>' +
-      '<div class="pass__sub">Describe an icon. AI draws it in your line style and adds it to the icon list, available everywhere.</div>' +
+      '<div class="pass__sub">Describe an icon. AI draws it in your line style' + (fam.length ? " to match the others in this group" : "") + ", and adds it to the icon list, available everywhere.</div>" +
+      famHtml +
       '<input type="text" class="gen__prompt" placeholder="e.g. a word cloud, a compass rose, a layered stack" />' +
       '<div class="gen__err pass__err"></div>' +
       '<div class="icongen__preview" hidden></div>' +
@@ -4882,7 +4917,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (!desc) { errEl.textContent = "Describe the icon first."; return; }
       var was = btnBusy(btn, "Drawing..."); errEl.textContent = "";
       try {
-        var parsed = csgenParse(await aiText(aiCfg("txt"), iconGenSystem(), desc, { json: true, maxTokens: 700, temperature: 0.5 }));
+        var parsed = csgenParse(await aiText(aiCfg("txt"), iconGenSystem(fam), desc, { json: true, maxTokens: 700, temperature: 0.5 }));
         var clean = sanitizeIconSvg(parsed && parsed.svg);
         if (!clean) throw new Error("That did not come back as a clean line-icon - try rephrasing.");
         svg = clean; nm = iconSlug((parsed && parsed.name) || desc);

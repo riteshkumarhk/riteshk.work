@@ -1138,18 +1138,24 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .icondd__chev { display: inline-flex; color: var(--text-dim); transition: transform .2s; }
 .icondd__chev svg { width: 11px; height: 11px; display: block; }
 .icondd[open] .icondd__chev { transform: rotate(180deg); }
-.icondd__panel { position: absolute; left: 0; top: calc(100% + .35rem); z-index: 8; min-width: 220px; border: 1px solid var(--line); border-radius: 10px; padding: .5rem; background: var(--bg-elev); max-height: 260px; overflow-y: auto; box-shadow: 0 14px 34px -14px rgba(0, 0, 0, .75); }
-.iconpick { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: .35rem; }
+.icondd__panel { position: absolute; left: 0; top: calc(100% + .35rem); z-index: 8; width: 320px; max-width: calc(100vw - 1.5rem); border: 1px solid var(--line); border-radius: 10px; padding: .5rem; background: var(--bg-elev); max-height: 260px; overflow-y: auto; box-shadow: 0 14px 34px -14px rgba(0, 0, 0, .75); }
+.iconpick { display: grid; grid-template-columns: repeat(8, 1fr); gap: .3rem; }
 .iconpick__b { display: grid; place-items: center; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text-dim); cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
 .iconpick__b:hover { color: var(--text); border-color: var(--accent); }
 .iconpick__b.is-on { color: var(--accent); border-color: var(--accent); background: rgba(216, 166, 87, .12); }
-.iconpick__b svg { width: 20px; height: 20px; }
+.iconpick__b svg { width: 18px; height: 18px; }
 .iconpick__b--none { font-size: 1.05rem; color: var(--text-faint); }
 .iconpick__gen { display: flex; align-items: center; justify-content: center; gap: .4rem; margin-top: .5rem; width: 100%; padding: .5rem .7rem; border: 1px dashed var(--line); border-radius: 8px; background: var(--bg); color: var(--text-dim); font: inherit; font-size: .78rem; cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
 .iconpick__gen:hover { color: var(--accent); border-color: var(--accent); background: rgba(216, 166, 87, .1); }
 .icongen__preview { display: flex; align-items: center; gap: .7rem; margin: 0 0 .8rem; padding: .7rem .9rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-elev); }
 .icongen__ico { display: grid; place-items: center; width: 46px; height: 46px; border: 1px solid var(--line); border-radius: 10px; color: var(--accent); flex: 0 0 auto; }
 .icongen__nm { font-family: var(--mono, monospace); font-size: .82rem; color: var(--text); }
+/* family strip - the sibling icons a generated one is being matched to */
+.icongen__fam { margin: 0 0 .8rem; padding: .55rem .7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-elev); }
+.icongen__fam-lbl { display: block; font-size: .72rem; color: var(--text-dim); margin-bottom: .45rem; }
+.icongen__fam-row { display: flex; flex-wrap: wrap; gap: .4rem; }
+.icongen__fam-ico { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 8px; color: var(--text-dim); }
+.icongen__fam-ico svg { width: 18px; height: 18px; }
 
 /* compact work card (L1) */
 .workcard__name { font-family: var(--serif); font-weight: 300; font-size: 1.05rem; color: var(--text); margin: .5rem 0 .2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
