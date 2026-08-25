@@ -132,6 +132,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   let data = null;
   let activeTab = "insights";
   let openStudy = -1; // index of the work item whose case-study editor is expanded
+  let l2Tab = "details"; // active tab in the case-study editor: gen | details | highlights | story
+  let _l2ScrollY = 0; // last editor scrollTop, for auto-hiding the L2 bar on scroll
+  let previewDevice = "desktop"; // live-preview size: desktop | phone
+  try { previewDevice = localStorage.getItem("rk:preview:device") === "phone" ? "phone" : "desktop"; } catch (e) {}
+  var DEV_ICON = {
+    desktop: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
+    phone: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>'
+  };
   let openBlock = -1; // which section (block) is expanded in the L2 sections accordion
   let journeyOpen = false; // is the Design Journey editor open in the L2 panel?
   let openJC = -1; // which journey chapter is expanded in the accordion
@@ -692,8 +700,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       const on = (!w.image && (w.theme || "edge") === th) ? " is-on" : "";
       return '<button class="imgblk__plate' + on + '" data-act="plate-sample" data-index="' + i + '" data-theme="' + th + '" title="' + escAttr(t[1]) + ' \u2014 animated placeholder"><span class="imgblk__plate-media case__media case__media--' + th + '"><span class="plate">' + platePreview(th) + "</span></span><span class=\"imgblk__plate-name\">" + escHtml(t[1]) + "</span></button>";
     }).join("");
-    return '<div class="imgblk"><div class="af__label">Cover image</div>' +
-      '<div class="af__hint" style="margin:-.15rem 0 .5rem">Used as the case-study cover AND the homepage card thumbnail. Leave empty to show an animated plate below.</div>' +
+    return '<div class="imgblk">' +
+      '<div class="af__hint" style="margin:0 0 .5rem">Used as the case-study cover AND the homepage card thumbnail. Leave empty to show an animated plate below.</div>' +
       '<div class="imgblk__preview' + (has ? " has imgblk__preview--parx" : "") + '"' + (has ? ' data-parx-prev="' + i + '"' : "") + '>' + (has ? '<img src="' + escAttr(previewSrc(w.image)) + '" alt="" />' + parxOverlay(w, i) : "<span>No image \u2014 the animated placeholder is shown</span>") + "</div>" +
       (has ? depthPanel(w, i) : "") +
       '<input type="text" data-list="work" data-index="' + i + '" data-field="image" value="' + escAttr(w.image || "") + '" placeholder="Paste an image URL\u2026" />' +
@@ -5626,10 +5634,54 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       addBtn +
       "</section>";
   }
+  // Which tab a case study opens on = how far along it is (new -> Generate; details -> Details;
+  // highlights -> Highlights; sections started -> Story).
+  function studyLandingTab(w) {
+    var st = (w && w.study) || {};
+    if ((st.blocks || []).length) return "story";
+    var sk = st.skim || {};
+    var hasHi = ["tagline", "role", "team", "timeline", "scope"].some(function (k) { return st[k] && String(st[k]).trim(); }) ||
+      (sk.beats && sk.beats.length) || (sk.media && sk.media.length);
+    if (hasHi) return "highlights";
+    if ((w.desc && String(w.desc).trim()) || (w.cardDesc && String(w.cardDesc).trim()) || (w.tags && String(w.tags).trim()) || w.image) return "details";
+    return "gen";
+  }
+  var L2_TABS = [["gen", "Generate using AI"], ["details", "Details"], ["highlights", "Highlights"], ["story", "Story"]];
+  function l2TabsHtml() {
+    return L2_TABS.map(function (t) {
+      return '<button type="button" class="l2tab' + (l2Tab === t[0] ? " is-on" : "") + '" data-act="l2tab" data-l2tab="' + t[0] + '">' + t[1] + "</button>";
+    }).join("");
+  }
+  function paintL2Tabs() {
+    var tb = root && root.querySelector("[data-l2tabs]");
+    if (tb) tb.innerHTML = (openStudy >= 0 && !journeyOpen) ? l2TabsHtml() : "";
+  }
+  // Auto-hide the sticky L2 bar (title + tabs) on scroll down, reveal on scroll up.
+  function l2BarScroll() {
+    if (openStudy < 0) return;
+    var ed = root && root.querySelector(".adm__editor");
+    var bar = root && root.querySelector(".adm__l2-bar");
+    if (!ed || !bar) return;
+    var y = ed.scrollTop;
+    if (y < 56) bar.classList.remove("is-hidden");
+    else if (y > _l2ScrollY + 4) bar.classList.add("is-hidden");
+    else if (y < _l2ScrollY - 4) bar.classList.remove("is-hidden");
+    _l2ScrollY = y;
+  }
+  // Scale the live-preview area to a phone width (desktop = full width).
+  function applyPreviewDevice() {
+    if (root) root.classList.toggle("is-phoneprev", previewDevice === "phone");
+    var ic = root && root.querySelector("[data-dev-ic]");
+    if (ic) ic.innerHTML = previewDevice === "phone" ? DEV_ICON.phone : DEV_ICON.desktop;
+    if (root) root.querySelectorAll(".adm__dev-opt").forEach(function (o) { o.classList.toggle("is-on", o.dataset.dev === previewDevice); });
+  }
   function studyEditor(w, i) {
     var st = w.study;
     var blocks = st.blocks || (st.blocks = []);
     var unlockVal = studyUnlockPlain[w.id] || "";
+    var tab = l2Tab;
+
+    // ---- Details: project header + cover ----
     var header = '<section class="l2grp"><div class="l2grp__head">Project header <span>\u2014 the homepage card &amp; case-study hero</span></div>' +
       itemField("work", i, "title", "Title") +
       itemField("work", i, "desc", "Description", { type: "textarea", rows: 3, hint: "The heavier summary \u2014 the case-study intro fallback, and the source the AI shortens into the card line below." }) +
@@ -5637,32 +5689,43 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="adm__autobar"><button class="btn btn--auto" data-act="carddesc-gen" data-index="' + i + '">\u2728 Generate short card line</button>' +
       '<span class="adm__auto-note">Reads your Description above and writes one punchy line for the homepage card \u2014 it drops into the box so you can edit it, then Publish.</span></div>' +
       itemField("work", i, "tags", "Tags", { hint: "comma-separated" }) +
-      imageryBlock(w, i) +
       "</section>";
-    var meta = '<section class="l2grp"><div class="l2grp__head">Story header</div>' +
+    var cover = '<section class="l2grp"><div class="l2grp__head">Cover image <span>\u2014 the homepage thumbnail &amp; case hero</span></div>' +
+      imageryBlock(w, i) + "</section>";
+
+    // ---- Highlights: story header + key moves + slides ----
+    var storyHeader = '<section class="l2grp"><div class="l2grp__head">Story header</div>' +
       smeta(i, "tagline", "Tagline", "one line under the title") +
       '<div class="af__row">' + smeta(i, "role", "Role") + smeta(i, "timeline", "Timeline", "Optional \u2014 leave blank to reuse the Period shown on the home card.", w.period || "") + "</div>" +
       '<div class="af__row">' + smeta(i, "team", "Team") + smeta(i, "scope", "Scope") + "</div>" +
-      '<div class="af"><label class="af__label">Key moves \u2014 AI-generated</label>' +
+      "</section>";
+    var kbeats = (st.skim && st.skim.beats && st.skim.beats.length) ? st.skim.beats : null;
+    var keyMoves = '<section class="l2grp"><div class="l2grp__head">Key moves <span>\u2014 AI-generated</span></div>' +
       '<div class="adm__autobar"><button class="btn btn--auto" data-act="skim-gen" data-index="' + i + '">\u2728 Generate Key Moves</button>' +
       '<span class="adm__auto-note">Reads the whole case and writes the 2\u20133 decisions that show senior judgement (problem \u2192 move \u2192 outcome). They appear as cards at the top of the case study, above <b>Read the full case</b>.</span></div>' +
-      (st.skim && st.skim.beats && st.skim.beats.length ? '<div class="af__hint">' + st.skim.beats.length + ' move' + (st.skim.beats.length > 1 ? "s" : "") + (st.skim.generatedAt ? ' \u00b7 generated ' + new Date(st.skim.generatedAt).toLocaleDateString() : "") + ' \u00b7 edit or remove to refine</div>' : "") +
-      "</div>" +
-      (st.skim && st.skim.beats && st.skim.beats.length ? st.skim.beats.map(function (b, j) { return beatEditor(i, b, j); }).join("") : "") +
+      (kbeats ? '<div class="af__hint">' + kbeats.length + ' move' + (kbeats.length > 1 ? "s" : "") + (st.skim.generatedAt ? ' \u00b7 generated ' + new Date(st.skim.generatedAt).toLocaleDateString() : "") + ' \u00b7 edit or remove to refine</div>' : "") +
+      (kbeats ? kbeats.map(function (b, j) { return beatEditor(i, b, j); }).join("") : "") +
       '<button type="button" class="btn btn--add adm__beat-add" data-act="beat-add" data-index="' + i + '">+ Add a key move</button>' +
       "</section>";
+
+    // ---- Story: sections + deeper-cut ----
     var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
     var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
+    var sections = '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span>' + (blocks.length ? '<span class="l2grp__actions"><button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">\u2728 Review feedback</button><button class="btn btn--auto l2grp__ai" data-act="iprep-open" data-index="' + i + '" title="Generate likely interview questions from this case study">\uD83C\uDF99 Interview prep</button><button class="btn btn--auto l2grp__ai" data-act="story-open" data-index="' + i + '" title="Build a presentation narrative \u2014 pick a length &amp; audience, get story angles + a beat-by-beat script">\uD83D\uDCD6 Design storyteller</button></span>' : "") + "</div>" +
+      '<div class="study__blocks">' + list + "</div>" + add + "</section>";
     var unlockBlock = '<section class="l2grp"><div class="l2grp__head">Deeper-cut pass <span>\u2014 optional gate for \u201cLocked\u201d sections</span></div>' +
       '<div class="af"><input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
       '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks for pass-holders \u00b7 case-insensitive \u00b7 Locked sections are moved to your private vault on Publish (zero content in your file)</div></div>" +
       "</section>";
-    return '<div class="study__panel">' +
-      csgenPanel(w, i) +
-      header + meta + overviewMediaBlock(w, i) +
-      '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span>' + (blocks.length ? '<span class="l2grp__actions"><button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">\u2728 Review feedback</button><button class="btn btn--auto l2grp__ai" data-act="iprep-open" data-index="' + i + '" title="Generate likely interview questions from this case study">\uD83C\uDF99 Interview prep</button><button class="btn btn--auto l2grp__ai" data-act="story-open" data-index="' + i + '" title="Build a presentation narrative \u2014 pick a length &amp; audience, get story angles + a beat-by-beat script">\uD83D\uDCD6 Design storyteller</button></span>' : "") + "</div>" +
-      '<div class="study__blocks">' + list + "</div>" + add + "</section>" +
-      unlockBlock +
+
+    var panel;
+    if (tab === "gen") panel = csgenPanel(w, i);
+    else if (tab === "highlights") panel = storyHeader + keyMoves + overviewMediaBlock(w, i);
+    else if (tab === "story") panel = sections + unlockBlock;
+    else panel = header + cover; // details (default)
+
+    return '<div class="study__panel" data-l2tab-panel="' + tab + '">' +
+      panel +
       '<div class="study__foot"><a class="btn btn--ghost" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '">Preview case study \u2197</a><button class="btn btn--primary" data-act="study-close" data-index="' + i + '">Done</button></div>' +
       "</div>";
   }
@@ -7735,6 +7798,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (l2title) l2title.textContent = "Design Journey";
     setL2BackLabel("Back to Path");
     l2body.innerHTML = journeyEditor();
+    paintL2Tabs();
     resolveMediaSizes(l2body);
     body.hidden = true;
     l2.hidden = false;
@@ -7748,6 +7812,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function renderJourneyEditor() {
     if (!journeyOpen) return;
     l2body.innerHTML = journeyEditor();
+    paintL2Tabs();
     resolveMediaSizes(l2body);
     refreshJourneyPreview();
   }
@@ -7910,10 +7975,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!data.work[i]) return;
     if (!data.work[i].study) data.work[i].study = blankStudy();
     openStudy = i;
+    l2Tab = studyLandingTab(data.work[i]);
+    _l2ScrollY = 0;
     openBlock = -1;
     const w = data.work[i];
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
     l2body.innerHTML = studyEditor(w, i);
+    paintL2Tabs();
+    var _bar0 = root && root.querySelector(".adm__l2-bar"); if (_bar0) _bar0.classList.remove("is-hidden");
     resolveMediaSizes(l2body);
     body.hidden = true;
     l2.hidden = false;
@@ -7928,6 +7997,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (openStudy < 0 || !data.work[openStudy]) return;
     const w = data.work[openStudy];
     l2body.innerHTML = studyEditor(w, openStudy);
+    paintL2Tabs();
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
     resolveMediaSizes(l2body);
     parxScheduleDemo();
@@ -8118,13 +8188,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return true;
   }
   function l2PreviewApply() {
-    var off = localStorage.getItem(L2PREV_KEY) === "0";
-    if (root) root.classList.toggle("is-noprev", off && (openStudy >= 0 || journeyOpen));
-    var btn = root && root.querySelector("[data-l2-prev]");
-    if (btn) {
-      btn.classList.toggle("is-off", off);
-      btn.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>' + (off ? '<line x1="3" y1="3" x2="21" y2="21"/>' : "") + "</svg>" + (off ? " Show preview" : " Hide preview");
-    }
+    // Preview visibility is owned by the single statusbar "Live preview" toggle (is-prevoff).
+    // The old per-L2 "Hide preview" button was removed as redundant.
   }
   // Clicking a non-interactive part of a section in the live preview (it postMessages the
   // block index) jumps the editor straight to that block — expand it, scroll to it, flash it.
@@ -8821,6 +8886,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "iprep-open-ai") { iprepModal(); return; }
     if (act === "story-open-ai") { storyModal(); return; }
     if (act === "csgen-ref-toggle") { const wrap = b.closest(".csgen__ref"); if (wrap) { const open = wrap.classList.toggle("is-open"); b.textContent = (open ? "\u2212" : "+") + " Paste a reference case study to echo (optional)"; const cw = data.work[i]; if (cw) csgenState(cw.id).refShow = open; } return; }
+    if (act === "l2tab") {
+      var _nt = b.dataset.l2tab;
+      if (_nt && _nt !== l2Tab) {
+        l2Tab = _nt;
+        var _lb = root.querySelector(".adm__l2-bar"); if (_lb) _lb.classList.remove("is-hidden");
+        _l2ScrollY = 0;
+        renderL2();
+        var _le = root.querySelector(".adm__editor"); if (_le) _le.scrollTop = 0;
+      }
+      return;
+    }
     if (act === "study-toggle") { openL2(i); return; }
     if (act === "study-close") { closeL2(); return; }
     if (act === "journey-edit") { openJourneyEditor(); return; }
@@ -14080,15 +14156,24 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         "</div>" +
         '<span class="adm__status" aria-live="polite">Editing local draft</span>' +
         '<button class="adm__bar-prev" data-prevtoggle type="button" aria-label="Show or hide the live preview" title="Hide the live preview" aria-pressed="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="14" y1="4" x2="14" y2="20"/></svg><span class="adm__bar-prev-tx">Live preview</span></button>' +
+        '<div class="adm__dev" data-dev-wrap>' +
+          '<button class="adm__dev-btn" data-dev-toggle type="button" aria-haspopup="true" aria-expanded="false" title="Preview size"><span class="adm__dev-ic" data-dev-ic>' + DEV_ICON.desktop + '</span><svg class="adm__dev-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
+          '<div class="adm__dev-pop" hidden>' +
+            '<button class="adm__dev-opt" data-dev="desktop" type="button">' + DEV_ICON.desktop + '<span>Desktop</span></button>' +
+            '<button class="adm__dev-opt" data-dev="phone" type="button">' + DEV_ICON.phone + '<span>Phone</span></button>' +
+          "</div>" +
+        "</div>" +
         '<button class="btn btn--ghost adm__newtab" data-newtab type="button" aria-label="Open live preview in a new tab" title="Open live preview in a new tab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg><span class="adm__newtab-tx" hidden></span></button>' +
       "</div>" +
       '<div class="adm__main">' +
         '<div class="adm__editor"><div class="adm__body"></div>' +
           '<div class="adm__l2" hidden>' +
             '<div class="adm__l2-bar">' +
-              '<button class="btn btn--ghost adm__l2-back" data-l2-back><span aria-hidden="true">\u2039</span> Back to projects</button>' +
-              '<span class="adm__l2-title"></span>' +
-              '<button class="btn btn--ghost adm__l2-prev" data-l2-prev aria-label="Toggle live preview"></button>' +
+              '<div class="adm__l2-barrow">' +
+                '<button class="btn btn--ghost adm__l2-back" data-l2-back><span aria-hidden="true">\u2039</span> Back to projects</button>' +
+                '<span class="adm__l2-title"></span>' +
+              "</div>" +
+              '<div class="l2tabs" data-l2tabs></div>' +
             "</div>" +
             '<div class="adm__l2-body"></div>' +
           "</div>" +
@@ -14178,13 +14263,6 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (ew && !ew.contains(e.target)) closeExitPop();
     });
     root.querySelector("[data-l2-back]").addEventListener("click", () => { if (journeyOpen) closeJourneyEditor(); else closeL2(); });
-    root.querySelector("[data-l2-prev]").addEventListener("click", () => {
-      const wasOff = localStorage.getItem(L2PREV_KEY) === "0";
-      try { localStorage.setItem(L2PREV_KEY, wasOff ? "1" : "0"); } catch (e) {}
-      l2PreviewApply();
-      if (wasOff && journeyOpen) previewJourney();
-      else if (wasOff && openStudy >= 0 && data.work[openStudy]) previewProject(data.work[openStudy].id, false);
-    });
     var _prevToggle = root.querySelector("[data-prevtoggle]");
     if (_prevToggle) _prevToggle.addEventListener("click", function () {
       var nowOff = root.classList.toggle("is-prevoff");
@@ -14195,6 +14273,26 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var _newtab = root.querySelector("[data-newtab]");
     if (_newtab) _newtab.addEventListener("click", function () { try { window.open(newtabVisitUrl || previewUrl(), "_blank", "noopener"); } catch (e) {} });
     if (localStorage.getItem(PREV_OFF_KEY) === "1" && _prevToggle) { root.classList.add("is-prevoff"); _prevToggle.setAttribute("aria-pressed", "false"); _prevToggle.title = "Show the live preview"; }
+    // Device preview toggle (Desktop / Phone): scales the live-preview area only, never opens a tab.
+    var _devWrap = root.querySelector("[data-dev-wrap]");
+    if (_devWrap) {
+      var _devBtn = _devWrap.querySelector("[data-dev-toggle]");
+      var _devPop = _devWrap.querySelector(".adm__dev-pop");
+      var _devClose = function () { _devPop.hidden = true; _devWrap.classList.remove("is-open"); if (_devBtn) _devBtn.setAttribute("aria-expanded", "false"); };
+      if (_devBtn) _devBtn.addEventListener("click", function (e) { e.stopPropagation(); var open = _devPop.hidden; _devPop.hidden = !open; _devWrap.classList.toggle("is-open", open); _devBtn.setAttribute("aria-expanded", open ? "true" : "false"); });
+      _devWrap.querySelectorAll(".adm__dev-opt").forEach(function (o) {
+        o.addEventListener("click", function () {
+          previewDevice = o.dataset.dev === "phone" ? "phone" : "desktop";
+          try { localStorage.setItem("rk:preview:device", previewDevice); } catch (e) {}
+          applyPreviewDevice();
+          _devClose();
+        });
+      });
+      document.addEventListener("click", function (e) { if (!_devWrap.contains(e.target)) _devClose(); });
+      applyPreviewDevice();
+    }
+    // Auto-hide the L2 bar (title + tabs) on scroll down, reveal on scroll up.
+    root.addEventListener("scroll", l2BarScroll, true);
     frame.addEventListener("load", previewApply);
     document.addEventListener("keydown", onKey);
     window.addEventListener("message", function (e) {
