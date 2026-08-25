@@ -5021,6 +5021,46 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var reg = {}; reg[nm] = svg; if (window.RK && window.RK.registerIcons) window.RK.registerIcons(reg);
     return nm;
   }
+  // Every place a given icon name is used across the case studies, with its context text (for AI matching).
+  function iconUsageSites(name) {
+    var sites = [];
+    (data.work || []).forEach(function (w, wi) {
+      var blocks = (w.study && w.study.blocks) || [];
+      blocks.forEach(function (bl, bj) {
+        (bl.items || []).forEach(function (it, k) {
+          if (it && it.icon === name) sites.push({ wi: wi, bj: bj, k: k, work: (w.title || w.client || "Untitled case"), ctx: String(it.text || it.title || it.label || it.heading || "").slice(0, 80) });
+        });
+      });
+    });
+    return sites;
+  }
+  // Non-AI fallback: the library icon whose keywords overlap the deleted icon's most (else a generic).
+  function bestKeywordMatch(name, avail) {
+    var mine = iconKeywords(name).map(function (s) { return String(s).toLowerCase(); });
+    var best = "", score = -1;
+    avail.forEach(function (n) {
+      var kw = iconKeywords(n).map(function (s) { return String(s).toLowerCase(); }), s = 0;
+      mine.forEach(function (m) { if (kw.indexOf(m) >= 0) s++; });
+      if (s > score) { score = s; best = n; }
+    });
+    return score > 0 ? best : "star";
+  }
+  // Pick the closest existing library icon to stand in for a deleted one (AI, with a keyword fallback).
+  async function aiPickReplacementIcon(deletedName, contexts) {
+    var avail = admIconNames().filter(function (n) { return n && n !== deletedName; });
+    var fallback = bestKeywordMatch(deletedName, avail);
+    if (!aiHasKey("txt")) return fallback;
+    try {
+      var listDesc = avail.map(function (n) { return "- " + n + ": " + iconKeywords(n).join(" "); }).join(String.fromCharCode(10));
+      var meaning = deletedName + " (" + iconKeywords(deletedName).join(" ") + ")";
+      var ctx = (contexts && contexts.length) ? "\nIt was used for: " + contexts.slice(0, 6).join("; ") : "";
+      var system = "Pick the SINGLE best replacement icon from the available set for a deleted icon, matching its MEANING and how it was used. Return STRICT JSON only: {\"icon\":\"name\"} using exactly one name from the set.";
+      var user = "DELETED ICON: " + meaning + ctx + "\n\nAVAILABLE ICONS (name: keywords):\n" + listDesc + "\n\nReturn {\"icon\":\"<best name>\"}.";
+      var j = csgenParse(await aiText(aiCfg("txt"), system, user, { json: true, maxTokens: 60, temperature: 0.2 }));
+      var pick = (j && j.icon) ? String(j.icon).trim().toLowerCase() : "";
+      return avail.indexOf(pick) >= 0 ? pick : fallback;
+    } catch (e) { return fallback; }
+  }
   function iconGenSystem(refs) {
     var lines = [
       "You design ONE monochrome line-icon that must look like it was drawn by the SAME hand as a fixed set (Lucide / Feather).",
@@ -5071,14 +5111,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var desc = (input.value || "").trim();
       if (!desc) { errEl.textContent = "Describe the icon first."; return; }
       var was = btnBusy(btn, "Drawing..."); errEl.textContent = "";
+      var ok = false;
       try {
         var out = await runIconGen(desc, fam);
         svg = out.svg; nm = out.name; kws = out.keywords;
         prev.hidden = false;
         prev.innerHTML = '<span class="icongen__ico">' + iconWrapDisp(svg) + '</span><span class="icongen__nm">' + escHtml(nm) + "</span>";
-        regen.hidden = false; goBtn.textContent = "Add to icons"; goBtn.setAttribute("data-add", "1");
+        ok = true;
       } catch (err) { errEl.textContent = err.message || String(err); }
-      finally { btnIdle(btn, was); }
+      // set the post-gen state AFTER btnIdle, else btnIdle would restore the label to "Generate"
+      btnIdle(btn, was);
+      if (ok) { regen.hidden = false; goBtn.textContent = "Continue"; goBtn.setAttribute("data-add", "1"); }
     }
     goBtn.addEventListener("click", function (e) {
       var btn = e.currentTarget;
@@ -5136,7 +5179,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     try { qEl.focus(); } catch (e) {}
     gridEl.addEventListener("click", function (e) {
       var kwBtn = e.target.closest(".iconlib__kw");
-      if (kwBtn) { e.preventDefault(); e.stopPropagation(); iconKeywordEditor(kwBtn.getAttribute("data-kw"), kwBtn); return; }
+      if (kwBtn) { e.preventDefault(); e.stopPropagation(); iconKeywordEditor(kwBtn.getAttribute("data-kw"), kwBtn, renderGrid); return; }
       var b = e.target.closest(".iconlib__b"); if (!b) return;
       sel = b.getAttribute("data-icon") || "";
       gridEl.querySelectorAll(".iconlib__b").forEach(function (x) { x.classList.toggle("is-on", x === b); });
@@ -5168,10 +5211,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
 
   // Small popover (anchored to an icon's corner chevron) to view + add/remove that icon's search
   // keywords. Edits (incl. to a built-in's defaults) persist as an override in data.iconKeywords.
-  function iconKeywordEditor(name, anchor) {
+  function iconKeywordEditor(name, anchor, onChange) {
     if (!name) return;
     var existing = document.querySelector(".kwed"); if (existing) existing.remove();
     if (anchor) anchor.classList.add("is-open");
+    var isGen = !!(data.customIcons && data.customIcons[name]);
+    var busy = false;
     var list = iconKeywords(name).slice(0, 10);
     var pop = document.createElement("div");
     pop.className = "kwed";
@@ -5183,11 +5228,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         : '<span class="kwed__none">No keywords yet.</span>';
     }
     function render() {
+      var uses = isGen ? iconUsageSites(name).length : 0;
       pop.innerHTML =
         '<div class="kwed__head"><span class="kwed__ico">' + admIcon(name) + '</span><span class="kwed__nm">' + escHtml(name) + '</span><button type="button" class="kwed__done" data-done>Done</button></div>' +
         '<div class="kwed__lbl"><span>Keywords</span><span class="kwed__count">' + list.length + '/10</span></div>' +
         '<div class="kwed__chips">' + chips() + "</div>" +
-        (list.length < 10 ? '<div class="kwed__add"><input type="text" class="kwed__in" placeholder="Add a keyword\u2026" /><button type="button" class="kwed__plus" data-add aria-label="Add">+</button></div>' : "");
+        (list.length < 10 ? '<div class="kwed__add"><input type="text" class="kwed__in" placeholder="Add a keyword\u2026" /><button type="button" class="kwed__plus" data-add aria-label="Add">+</button></div>' : "") +
+        (isGen ? '<div class="kwed__gen"><span class="kwed__uses">Used in <b>' + uses + "</b> place" + (uses === 1 ? "" : "s") + '</span><button type="button" class="kwed__del" data-del>Delete icon</button></div>' : "");
       place();
     }
     function place() {
@@ -5205,6 +5252,30 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (v && list.indexOf(v) < 0 && list.length < 10) { list.push(v); commit(); render(); focusIn(); }
       else { inp.value = ""; focusIn(); }
     }
+    async function doDelete() {
+      var sites = iconUsageSites(name), works = [];
+      sites.forEach(function (s) { if (works.indexOf(s.work) < 0) works.push(s.work); });
+      var where = works.length ? " (" + works.slice(0, 4).join(", ") + (works.length > 4 ? ", \u2026" : "") + ")" : "";
+      var sub = sites.length
+        ? "\u201c" + name + "\u201d is used in " + sites.length + " place" + (sites.length === 1 ? "" : "s") + where + ". Deleting it replaces every use with the closest-matching icon (picked by AI). This can't be undone."
+        : "\u201c" + name + "\u201d isn't used anywhere. Remove it from your icon library? This can't be undone.";
+      busy = true;
+      var ok = await confirmModal({ title: "Delete this icon?", sub: sub, cta: "Delete icon", okClass: "btn--danger" });
+      if (!ok) { busy = false; focusIn(); return; }
+      var replacement = "";
+      if (sites.length) {
+        status("Finding the best replacement icon\u2026");
+        replacement = await aiPickReplacementIcon(name, sites.map(function (s) { return s.ctx; }).filter(Boolean));
+        sites.forEach(function (s) { var bl = data.work[s.wi] && data.work[s.wi].study && data.work[s.wi].study.blocks[s.bj]; var it = bl && bl.items && bl.items[s.k]; if (it) it.icon = replacement; });
+      }
+      if (data.customIcons) delete data.customIcons[name];
+      if (data.iconKeywords) delete data.iconKeywords[name];
+      if (window.RK && window.RK.unregisterIcons) window.RK.unregisterIcons(name);
+      saveDraft(true); renderL2();
+      if (onChange) try { onChange(); } catch (e) {}
+      close();
+      status(sites.length ? ("Deleted \u2014 " + sites.length + " use" + (sites.length === 1 ? "" : "s") + " now show \u201c" + replacement + "\u201d.") : "Icon deleted.", true);
+    }
     function close() {
       pop.remove();
       if (anchor) anchor.classList.remove("is-open");
@@ -5212,13 +5283,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       document.removeEventListener("mousedown", onOut, true);
       window.removeEventListener("scroll", onScroll, true);
     }
-    var onKey = function (e) { if (e.key === "Escape") { e.stopPropagation(); close(); } };
-    var onOut = function (e) { if (!pop.contains(e.target) && !(anchor && anchor.contains(e.target))) close(); };
+    var onKey = function (e) { if (busy) return; if (e.key === "Escape") { e.stopPropagation(); close(); } };
+    var onOut = function (e) { if (busy) return; if (!pop.contains(e.target) && !(anchor && anchor.contains(e.target))) close(); };
     var onScroll = function () { place(); };
     pop.addEventListener("click", function (e) {
       var x = e.target.closest(".kwed__x");
       if (x) { list.splice(+x.getAttribute("data-i"), 1); commit(); render(); focusIn(); return; }
       if (e.target.closest("[data-add]")) { addKw(); return; }
+      if (e.target.closest("[data-del]")) { doDelete(); return; }
       if (e.target.closest("[data-done]")) { close(); return; }
     });
     pop.addEventListener("keydown", function (e) { if (e.target.classList.contains("kwed__in") && e.key === "Enter") { e.preventDefault(); addKw(); } });

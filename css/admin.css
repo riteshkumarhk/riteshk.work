@@ -1213,6 +1213,12 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .kwed__in:focus { border-color: var(--accent); }
 .kwed__plus { flex: 0 0 auto; width: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 1.1rem; line-height: 1; cursor: pointer; transition: color .12s, border-color .12s; }
 .kwed__plus:hover { border-color: var(--accent); color: var(--accent); }
+/* generated-icon footer: usage count + delete */
+.kwed__gen { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-top: .7rem; padding-top: .6rem; border-top: 1px solid var(--line); }
+.kwed__uses { font-size: .72rem; color: var(--text-dim); }
+.kwed__uses b { color: var(--text); font-weight: 600; }
+.kwed__del { border: 1px solid transparent; background: transparent; color: #ff9b9b; font: inherit; font-size: .74rem; cursor: pointer; padding: .25rem .5rem; border-radius: 7px; transition: color .12s, background .12s, border-color .12s; }
+.kwed__del:hover { color: #fff; background: rgba(255, 90, 90, .15); border-color: rgba(255, 122, 122, .38); }
 
 /* compact work card (L1) */
 .workcard__name { font-family: var(--serif); font-weight: 300; font-size: 1.05rem; color: var(--text); margin: .5rem 0 .2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

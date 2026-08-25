@@ -405,6 +405,7 @@
     return out;
   }
   function registerIcons(obj) { if (obj && typeof obj === "object") { for (var k in obj) { if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k]) CUSTOM_ICONS[k] = obj[k]; } } }
+  function unregisterIcons(names) { if (!names) return; var a = [].concat(names); for (var i = 0; i < a.length; i++) delete CUSTOM_ICONS[a[i]]; }
 
   function textBlock(b) {
     var list = (b.list && b.list.length)
@@ -2208,7 +2209,7 @@
 
   /* ---------- bootstrap ---------- */
   function init() {
-    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; }
+    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.unregisterIcons = unregisterIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; }
     // A fresh vault grant just arrived (Present mode's owner grant, or a recruiter link). If a case
     // study is open, drop its "already tried" latch and re-resolve its vault-hosted deeper cuts so
     // they swap in immediately — no reopen needed.
