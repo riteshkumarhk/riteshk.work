@@ -1138,14 +1138,23 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .icondd__chev { display: inline-flex; color: var(--text-dim); transition: transform .2s; }
 .icondd__chev svg { width: 11px; height: 11px; display: block; }
 .icondd[open] .icondd__chev { transform: rotate(180deg); }
-.icondd__panel { position: absolute; left: 0; top: calc(100% + .35rem); z-index: 8; width: 320px; max-width: calc(100vw - 1.5rem); border: 1px solid var(--line); border-radius: 10px; padding: .5rem; background: var(--bg-elev); max-height: 260px; overflow-y: auto; box-shadow: 0 14px 34px -14px rgba(0, 0, 0, .75); }
-.iconpick { display: grid; grid-template-columns: repeat(8, 1fr); gap: .3rem; }
+.icondd__panel { position: absolute; left: 0; top: calc(100% + .35rem); z-index: 8; width: 320px; max-width: calc(100vw - 1.5rem); border: 1px solid var(--line); border-radius: 10px; padding: .5rem; background: var(--bg-elev); box-shadow: 0 14px 34px -14px rgba(0, 0, 0, .75); }
+.icondd__search { position: relative; margin-bottom: .45rem; }
+.icondd__search svg { position: absolute; left: .55rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-dim); pointer-events: none; }
+.icondd__search .icondd__q { width: 100%; box-sizing: border-box; margin: 0; padding: .45rem .6rem .45rem 1.9rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-size: .8rem; outline: none; }
+.icondd__search .icondd__q:focus { border-color: var(--accent); }
+.iconpick { display: grid; grid-template-columns: repeat(8, 1fr); gap: .3rem; max-height: 216px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--text-faint) transparent; }
+.iconpick::-webkit-scrollbar { width: 9px; }
+.iconpick::-webkit-scrollbar-track { background: transparent; }
+.iconpick::-webkit-scrollbar-thumb { background: var(--text-faint); border: 3px solid transparent; background-clip: padding-box; border-radius: 100px; }
 .iconpick__b { display: grid; place-items: center; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text-dim); cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
 .iconpick__b:hover { color: var(--text); border-color: var(--accent); }
 .iconpick__b.is-on { color: var(--accent); border-color: var(--accent); background: rgba(216, 166, 87, .12); }
 .iconpick__b svg { width: 18px; height: 18px; }
 .iconpick__b--none { font-size: 1.05rem; color: var(--text-faint); }
-.iconpick__gen { display: flex; align-items: center; justify-content: center; gap: .4rem; margin-top: .5rem; width: 100%; padding: .5rem .7rem; border: 1px dashed var(--line); border-radius: 8px; background: var(--bg); color: var(--text-dim); font: inherit; font-size: .78rem; cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
+.iconpick__empty { grid-column: 1 / -1; padding: 1rem .4rem; text-align: center; color: var(--text-dim); font-size: .76rem; }
+.icondd__foot { display: flex; gap: .4rem; margin-top: .5rem; }
+.iconpick__gen { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: .4rem; padding: .5rem .7rem; border: 1px dashed var(--line); border-radius: 8px; background: var(--bg); color: var(--text-dim); font: inherit; font-size: .78rem; cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
 .iconpick__gen:hover { color: var(--accent); border-color: var(--accent); background: rgba(216, 166, 87, .1); }
 .icongen__preview { display: flex; align-items: center; gap: .7rem; margin: 0 0 .8rem; padding: .7rem .9rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-elev); }
 .icongen__ico { display: grid; place-items: center; width: 46px; height: 46px; border: 1px solid var(--line); border-radius: 10px; color: var(--accent); flex: 0 0 auto; }

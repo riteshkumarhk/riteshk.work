@@ -3823,6 +3823,45 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       default: return {};
     }
   }
+  // Flyout grid cells: with a query -> ranked matches (name+keywords); empty -> No-icon + top-31 ranked
+  // (current icon force-shown). i/j/k/key thread the item so a click applies via the item-icon handler.
+  function iconFlyoutCells(i, j, k, key, cur, query) {
+    var cell = function (n, inner, title, extra) {
+      return '<button type="button" class="iconpick__b' + (extra || "") + (cur === n ? " is-on" : "") + '" data-act="item-icon" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '" data-icon="' + n + '" title="' + escAttr(title || n) + '">' + inner + "</button>";
+    };
+    var q = (query || "").trim();
+    if (q) {
+      var hits = rankIconNames(admIconNames()).filter(function (n) { return iconMatchesQuery(n, q); }).slice(0, 40);
+      return hits.length ? hits.map(function (n) { return cell(n, admIcon(n), n); }).join("") : '<div class="iconpick__empty">No matches \u2014 Generate one below.</div>';
+    }
+    var shown = rankIconNames(admIconNames()).slice(0, 31);
+    if (cur && shown.indexOf(cur) < 0) shown = [cur].concat(shown.slice(0, 30));
+    return cell("", "\u2205", "No icon", " iconpick__b--none") + shown.map(function (n) { return cell(n, admIcon(n), n); }).join("");
+  }
+  // Flyout footer: empty query -> one CTA (More if the list overflows the grid, else Generate);
+  // while typing -> split into Generate + More (both pick up the search text at click time).
+  function iconFlyoutFoot(i, j, k, key, query) {
+    var dd = 'data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '"';
+    if ((query || "").trim()) {
+      return '<button type="button" class="iconpick__gen" data-act="icon-gen" ' + dd + ">\u2728 Generate</button>" +
+        '<button type="button" class="iconpick__gen iconpick__more" data-act="icon-more" ' + dd + ">More\u2026</button>";
+    }
+    var total = admIconNames().length;
+    return total > 31
+      ? '<button type="button" class="iconpick__gen iconpick__more" data-act="icon-more" ' + dd + ">More icons\u2026 <span class=\"iconpick__count\">" + total + "</span></button>"
+      : '<button type="button" class="iconpick__gen" data-act="icon-gen" ' + dd + ">\u2728 Generate an icon\u2026</button>";
+  }
+  // Live-filter the open flyout as the user types: re-render just the grid + footer (keeps input focus).
+  function onIconSearch(t) {
+    var panel = t.closest(".icondd__panel"); if (!panel) return;
+    var i = +t.dataset.index, j = +t.dataset.bindex, k = +t.dataset.iindex, key = t.dataset.ifield;
+    var bl = data.work[i] && data.work[i].study && data.work[i].study.blocks[j];
+    var it = bl && bl.items && bl.items[k];
+    var cur = (it && it[key]) || "";
+    var q = t.value || "";
+    var grid = panel.querySelector(".iconpick"); if (grid) grid.innerHTML = iconFlyoutCells(i, j, k, key, cur, q);
+    var foot = panel.querySelector(".icondd__foot"); if (foot) foot.innerHTML = iconFlyoutFoot(i, j, k, key, q);
+  }
   function itemFieldEl(i, j, k, it, f) {
     var key = f[0], label = f[1], kind = f[2];
     var da = 'data-sitem="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '"';
@@ -3830,22 +3869,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (kind === "row") return '<div class="af__row af__row--items">' + (f[3] || []).map(function (sf) { return itemFieldEl(i, j, k, it, sf); }).join("") + "</div>";
     if (kind === "icon") {
       var cur = it[key] || "";
-      var cell = function (n, inner, title, extra) {
-        return '<button type="button" class="iconpick__b' + (extra || "") + (cur === n ? " is-on" : "") + '" data-act="item-icon" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '" data-icon="' + n + '" title="' + (title || n) + '">' + inner + "</button>";
-      };
-      // Quick flyout shows an 8x4 grid: cell 1 = No icon, then the top 31 ranked (frequent then recent).
-      // Keep the current icon visible even if it ranks lower. Beyond that, the full library opens via "More icons".
-      var allNames = admIconNames();
-      var shown = rankIconNames(allNames).slice(0, 31);
-      if (cur && shown.indexOf(cur) < 0) shown = [cur].concat(shown.slice(0, 30));
-      var grid = cell("", "\u2205", "No icon", " iconpick__b--none") + shown.map(function (n) { return cell(n, admIcon(n), n); }).join("");
-      var dd = "data-index=\"" + i + "\" data-bindex=\"" + j + "\" data-iindex=\"" + k + "\" data-ifield=\"" + key + "\"";
-      var moreOrGen = allNames.length > 31
-        ? '<button type="button" class="iconpick__gen iconpick__more" data-act="icon-more" ' + dd + ">More icons\u2026 <span class=\"iconpick__count\">" + allNames.length + "</span></button>"
-        : '<button type="button" class="iconpick__gen" data-act="icon-gen" ' + dd + ">\u2728 Generate an icon\u2026</button>";
+      var ddAttr = 'data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '"';
       return '<div class="af"><label class="af__label">' + label + '</label>' +
         '<details class="icondd"><summary class="icondd__trigger"><span class="icondd__cur">' + (cur ? admIcon(cur) : "\u2205") + '</span><span class="icondd__name">' + (cur || "No icon") + '</span><span class="icondd__chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></summary>' +
-        '<div class="icondd__panel"><div class="iconpick">' + grid + '</div>' + moreOrGen +
+        '<div class="icondd__panel">' +
+          '<div class="icondd__search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input type="text" class="icondd__q" placeholder="Search icons\u2026" ' + ddAttr + ' /></div>' +
+          '<div class="iconpick">' + iconFlyoutCells(i, j, k, key, cur, "") + '</div>' +
+          '<div class="icondd__foot">' + iconFlyoutFoot(i, j, k, key, "") + '</div>' +
         "</div></details></div>";
     }
     if (kind === "select") {
@@ -4999,8 +5029,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     lines.push("Return STRICT JSON only, no prose: an object with keys name (one short lowercase word), svg (inner markup only) and keywords (an array of up to 10 short lowercase search terms - synonyms, category and use-cases that would help find this icon later).");
     return lines.join(String.fromCharCode(10));
   }
-  function iconGenModal(wi, bj, ik, key) {
-    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { iconGenModal(wi, bj, ik, key); }); return; }
+  function iconGenModal(wi, bj, ik, key, seed) {
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { iconGenModal(wi, bj, ik, key, seed); }); return; }
     var svg = "", nm = "", kws = [];
     var fam = iconFamilyRefs(wi, bj, ik, key);
     var famHtml = fam.length
@@ -5024,6 +5054,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     document.addEventListener("keydown", onKey);
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     modal.querySelector("[data-cancel]").addEventListener("click", close);
+    if (seed) input.value = seed;
     try { input.focus(); } catch (e) {}
     async function gen(btn) {
       var desc = (input.value || "").trim();
@@ -5054,12 +5085,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
 
   // Full searchable icon library (opened by "More icons" once the flyout can't show them all).
   // Search matches name + keywords; Generate seeds from the search text; Continue applies the pick.
-  function iconLibModal(wi, bj, ik, key) {
+  function iconLibModal(wi, bj, ik, key, seed) {
     var it = data.work[wi] && data.work[wi].study && data.work[wi].study.blocks[bj] && data.work[wi].study.blocks[bj].items && data.work[wi].study.blocks[bj].items[ik];
     if (!it) return;
     var fam = iconFamilyRefs(wi, bj, ik, key);
     var sel = it[key] || "";
-    var query = "";
+    var query = seed ? String(seed).trim() : "";
     var modal = document.createElement("div");
     modal.className = "pass pass--wide iconlib";
     modal.innerHTML =
@@ -5083,6 +5114,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       emptyEl.hidden = names.length > 0;
       gridEl.innerHTML = (query ? "" : cellHtml("", "\u2205", "No icon", " iconlib__b--none")) + names.map(function (n) { return cellHtml(n, admIcon(n), n); }).join("");
     }
+    if (query) qEl.value = query;
     renderGrid();
     var onKey = function (e) { if (e.key === "Escape") close(); };
     function close() { modal.remove(); document.removeEventListener("keydown", onKey); }
@@ -8010,6 +8042,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   /* ---------- events ---------- */
   function onInput(e) {
     const t = e.target;
+    if (t.classList && t.classList.contains("icondd__q")) { onIconSearch(t); return; }
     if (t.classList && (t.classList.contains("cl__url") || t.classList.contains("cl__jd") || t.classList.contains("cl__company")) && t.closest(".ats")) { onAtsInput(t); return; }
     if (t.classList && (t.classList.contains("cl__url") || t.classList.contains("cl__jd") || t.classList.contains("cl__company")) && t.closest(".cl")) { onClInput(t); return; }
     if (t.dataset.heromotion !== undefined) { onHeroMotion(t); return; }
@@ -8755,8 +8788,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; if (isVideoVal(uri)) bl.items[k].controls = true; saveDraft(true); renderL2(); } }, { vault: !!(data.work[i].study.blocks[bj] && data.work[i].study.blocks[bj].locked) }); return; }
     if (act === "item-upload-multi") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (!bl) return; bl.items = bl.items || []; pickMediaMulti(function () { const it = blankItem(bl.type); bl.items.push(it); return it; }, function () { saveDraft(true); renderL2(); }, { vault: !!bl.locked }); return; }
     if (act === "item-icon") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield, name = b.dataset.icon; const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = name; bumpIconUsage(name); saveDraft(true); refreshL2Preview(); const grid = b.closest(".iconpick"); if (grid) grid.querySelectorAll(".iconpick__b").forEach(function (x) { x.classList.toggle("is-on", x === b); }); const dd = b.closest(".icondd"); if (dd) { const cur = dd.querySelector(".icondd__cur"); if (cur) cur.innerHTML = name ? admIcon(name) : "\u2205"; const nm = dd.querySelector(".icondd__name"); if (nm) nm.textContent = name || "No icon"; if (dd.tagName === "DETAILS") dd.open = false; } } return; }
-    if (act === "icon-gen") { iconGenModal(+b.dataset.index, +b.dataset.bindex, +b.dataset.iindex, b.dataset.ifield); return; }
-    if (act === "icon-more") { iconLibModal(+b.dataset.index, +b.dataset.bindex, +b.dataset.iindex, b.dataset.ifield); return; }
+    if (act === "icon-gen") { var gq = b.closest(".icondd__panel"); gq = gq && gq.querySelector(".icondd__q"); iconGenModal(+b.dataset.index, +b.dataset.bindex, +b.dataset.iindex, b.dataset.ifield, gq ? gq.value : ""); return; }
+    if (act === "icon-more") { var mq = b.closest(".icondd__panel"); mq = mq && mq.querySelector(".icondd__q"); iconLibModal(+b.dataset.index, +b.dataset.bindex, +b.dataset.iindex, b.dataset.ifield, mq ? mq.value : ""); return; }
     if (act === "item-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (bl && bl.items && bl.items[k]) { bl.items[k][b.dataset.ifield] = ""; saveDraft(true); renderL2(); } return; }
     if (act === "cell-add") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex]; it.cells = it.cells || []; if (it.cells.length < 5) { it.cells.push(blankCell()); saveDraft(true); renderL2(); } return; }
     if (act === "cell-remove") { const it = data.work[i].study.blocks[+b.dataset.bindex].items[+b.dataset.iindex]; if (it.cells) { it.cells.splice(+b.dataset.cindex, 1); if (!it.cells.length) it.cells.push(blankCell()); saveDraft(true); renderL2(); } return; }
