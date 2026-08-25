@@ -386,6 +386,34 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 
 .chk { display: inline-flex; align-items: center; gap: .45rem; font-size: .8rem; color: var(--text-dim); cursor: pointer; }
 .chk input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+/* ---- One design-system checkbox + radio for the whole studio (replaces native accent-color tinting). Scopes: .adm (studio) + .pass (every modal) + the one out-of-scope depth toggle. ---- */
+.adm input[type="checkbox"], .pass input[type="checkbox"], .depthp__toggle input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none; box-sizing: border-box;
+  width: 16px; height: 16px; flex: 0 0 auto; margin: 0; padding: 0;
+  border: 1.5px solid var(--line); border-radius: 5px;
+  background-color: rgba(255,255,255,.03); background-repeat: no-repeat; background-position: center; background-size: 11px 11px;
+  cursor: pointer; vertical-align: -3px;
+  transition: background-color .15s var(--ease), border-color .15s var(--ease), box-shadow .15s var(--ease);
+}
+.adm input[type="checkbox"]:hover:not(:disabled), .pass input[type="checkbox"]:hover:not(:disabled), .depthp__toggle input[type="checkbox"]:hover:not(:disabled) { border-color: var(--accent); }
+.adm input[type="checkbox"]:checked, .pass input[type="checkbox"]:checked, .depthp__toggle input[type="checkbox"]:checked {
+  background-color: var(--accent); border-color: var(--accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23140f09' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+}
+.adm input[type="checkbox"]:focus-visible, .pass input[type="checkbox"]:focus-visible, .depthp__toggle input[type="checkbox"]:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(216,166,71,.28); }
+.adm input[type="checkbox"]:disabled, .pass input[type="checkbox"]:disabled, .depthp__toggle input[type="checkbox"]:disabled { opacity: .4; cursor: not-allowed; }
+.adm input[type="radio"], .pass input[type="radio"] {
+  -webkit-appearance: none; appearance: none; box-sizing: border-box;
+  width: 16px; height: 16px; flex: 0 0 auto; margin: 0; padding: 0;
+  border: 1.5px solid var(--line); border-radius: 50%;
+  background: transparent center no-repeat; cursor: pointer; vertical-align: -3px;
+  transition: border-color .15s var(--ease), box-shadow .15s var(--ease);
+}
+.adm input[type="radio"]:hover:not(:disabled), .pass input[type="radio"]:hover:not(:disabled) { border-color: var(--accent); }
+.adm input[type="radio"]:checked, .pass input[type="radio"]:checked { border-color: var(--accent); background-image: radial-gradient(circle at center, var(--accent) 0 3.4px, transparent 4px); }
+.adm input[type="radio"]:focus-visible, .pass input[type="radio"]:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(216,166,71,.28); }
+/* The eye show/hide toggle overlays an invisible checkbox on an icon — keep it fully transparent, not a DS box. */
+.af__tog input[type="checkbox"], .adm__secrow input[type="checkbox"].adm__eye, .adm input[type="checkbox"].is-overlay { -webkit-appearance: none; appearance: none; border: 0; background: none; border-radius: 0; box-shadow: none; }
 .block-flags { display: flex; flex-direction: column; gap: .5rem; margin-top: .55rem; align-items: flex-start; }
 .study__block--enc { border-style: dashed; opacity: .92; }
 .study__block-head--enc { display: flex; align-items: center; gap: .5rem; padding: .6rem .7rem; }

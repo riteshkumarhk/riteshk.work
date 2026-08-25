@@ -7795,12 +7795,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   function availBadgeBlock() {
     return '<div class="af"><label class="af__label">Availability badge</label>' +
-      '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="avail-toggle"' + ((((data.landing || {}).available) || {}).on ? " checked" : "") + ' /><span>Show an \u201copen to work\u201d pill in the hero</span></label>' +
+      '<label class="chk"><input type="checkbox" data-act="avail-toggle"' + ((((data.landing || {}).available) || {}).on ? " checked" : "") + ' /><span>Show an \u201copen to work\u201d pill in the hero</span></label>' +
       '<div class="af__hint">Off by default. A quiet pill with a live green dot appears under the hero when on.</div></div>';
   }
   function cueBlock() {
     return '<div class="af"><label class="af__label">Selected-work cue</label>' +
-      '<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" data-act="cue-toggle"' + (((((data.landing || {}).show) || {}).cue !== false) ? " checked" : "") + ' /><span>Show the \u201cSelected work\u201d jump bait</span></label>' +
+      '<label class="chk"><input type="checkbox" data-act="cue-toggle"' + (((((data.landing || {}).show) || {}).cue !== false) ? " checked" : "") + ' /><span>Show the \u201cSelected work\u201d jump bait</span></label>' +
       '<div class="af__hint">A floating bait, bottom-right (opposite your contact dock). Shows only while the work tiles are still below the fold, then hides once they scroll into view \u2014 so it never appears on tall or mobile screens where the grid is already visible.</div></div>';
   }
 
