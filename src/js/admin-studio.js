@@ -3862,7 +3862,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var grid = panel.querySelector(".iconpick"); if (grid) grid.innerHTML = iconFlyoutCells(i, j, k, key, cur, q);
     var foot = panel.querySelector(".icondd__foot"); if (foot) foot.innerHTML = iconFlyoutFoot(i, j, k, key, q);
   }
-  // Enter in the flyout search applies the first matching icon (quick keyboard pick).
+  // Enter in the flyout search opens the full icon library (mimics the More button, carrying the query).
   function onIconKey(e) {
     if (e.key !== "Enter") return;
     var t = e.target;
@@ -3870,8 +3870,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     e.preventDefault();
     if (!(t.value || "").trim()) return;
     var panel = t.closest(".icondd__panel"); if (!panel) return;
-    var first = panel.querySelector('.iconpick .iconpick__b[data-icon]:not([data-icon=""])');
-    if (first) first.click();
+    var more = panel.querySelector('.icondd__foot [data-act="icon-more"]');
+    if (more) more.click();
   }
   function itemFieldEl(i, j, k, it, f) {
     var key = f[0], label = f[1], kind = f[2];
