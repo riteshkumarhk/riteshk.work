@@ -862,6 +862,11 @@ body:has(.pass) .lt-amb, body:has(.pass) .lt-scrim { opacity: 0 !important; }
 .cases--g2 .case__tags, .cases--g3 .case__tags { display: none; }
 @media (max-width: 900px) { .cases--g3 > .case { flex-basis: calc((100% - var(--cg)) / 2); } }
 @media (max-width: 600px) { .cases--g2 { grid-template-columns: 1fr; } .cases--g2, .cases--g3 { gap: 2rem; } .cases--g3 > .case { flex-basis: 100%; } .cases--stagger > .case:nth-child(even) { translate: none; } }
+/* Inorganic arrangement: plain aligned grids (no stagger, no centred last row) — 3-up flows L->R / T->B. Grid-2 is already a plain grid, so it just drops the stagger. */
+.cases--inorganic.cases--g3 { display: grid; grid-template-columns: repeat(3, 1fr); justify-content: initial; }
+.cases--inorganic.cases--g3 > .case:last-child:nth-child(3n + 1) { margin-right: 0; }
+@media (max-width: 900px) { .cases--inorganic.cases--g3 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .cases--inorganic.cases--g3 { grid-template-columns: 1fr; } }
 
 /* Studio cover-motion preview: render one authentic homepage card in a tall stage so normal
   window scrolling drives its parallax while pointer movement drives the depth canvas. */

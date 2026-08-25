@@ -660,7 +660,11 @@
     const casesEl = byId("cases");
     if (casesEl) {
       const wl = data.workLayout || "grid-2";
-      casesEl.className = "cases" + (wl === "grid-3" ? " cases--g3" : wl === "list" ? "" : " cases--g2") + (wl === "grid-2" && visibleWork.length % 2 === 1 ? " cases--stagger" : "");
+      // Card arrangement (grids only): organic = staggered/centred; inorganic = plain aligned grid.
+      const organic = (data.cardArrange || "organic") !== "inorganic";
+      casesEl.className = "cases" + (wl === "grid-3" ? " cases--g3" : wl === "list" ? "" : " cases--g2")
+        + (organic && wl === "grid-2" && visibleWork.length % 2 === 1 ? " cases--stagger" : "")
+        + (!organic && wl !== "list" ? " cases--inorganic" : "");
       if (cardPreview) {
         const link = casesEl.querySelector(".case__link");
         if (link) link.addEventListener("click", (e) => e.preventDefault());

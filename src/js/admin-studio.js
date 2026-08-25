@@ -6438,10 +6438,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       const featured = list.filter((w) => w.featured).length;
       const wl = data.workLayout || "grid-2";
       const wlOpt = (v, lbl) => '<option value="' + v + '"' + (wl === v ? " selected" : "") + ">" + lbl + "</option>";
+      const ca = data.cardArrange || "organic";
+      const caOpt = (v, lbl) => '<option value="' + v + '"' + (ca === v ? " selected" : "") + ">" + lbl + "</option>";
       let html = secHead("Selected Work", "Your projects. Choose any projects to feature on the homepage (currently " + featured + "). Title, story, images, tags &amp; theme all live inside each project\u2019s case-study editor.") +
-        '<div class="af"><label class="af__label">Homepage layout</label><select data-worklayout>' +
-          wlOpt("grid-2", "Grid \u2014 2 columns") + wlOpt("grid-3", "Grid \u2014 3 columns") + wlOpt("list", "Linear list") +
-        '</select><div class="af__hint">How projects are arranged on the homepage. A grid surfaces more case studies at once, so visitors explore beyond the first one.</div></div>' +
+        '<div class="af__row">' +
+          '<div class="af"><label class="af__label">Card arrangement</label><select data-cardarrange>' +
+            caOpt("organic", "Organic \u2014 staggered") + caOpt("inorganic", "Inorganic \u2014 aligned grid") +
+          '</select><div class="af__hint">Applies to the 2- &amp; 3-column grids only. Organic staggers / centres the cards; inorganic lines them up in a plain grid.</div></div>' +
+          '<div class="af"><label class="af__label">Homepage layout</label><select data-worklayout>' +
+            wlOpt("grid-2", "Grid \u2014 2 columns") + wlOpt("grid-3", "Grid \u2014 3 columns") + wlOpt("list", "Linear list") +
+          '</select><div class="af__hint">How projects are arranged on the homepage. A grid surfaces more case studies at once, so visitors explore beyond the first one.</div></div>' +
+        '</div>' +
         addBar("work", "Add work");
       list.forEach((w, i) => {
         if (w.encWork) {
@@ -8303,6 +8310,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function onChange(e) {
     const t = e.target;
     if (t.dataset.worklayout !== undefined) { data.workLayout = t.value; saveDraft(true); apply(true); return; }
+    if (t.dataset.cardarrange !== undefined) { data.cardArrange = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.statementsize !== undefined) { data.landing = data.landing || {}; data.landing.statementSize = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.worktitlesize !== undefined) { data.landing = data.landing || {}; data.landing.workTitleSize = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.worktitlealign !== undefined) { data.landing = data.landing || {}; data.landing.workTitleAlign = t.value; saveDraft(true); apply(true); return; }
