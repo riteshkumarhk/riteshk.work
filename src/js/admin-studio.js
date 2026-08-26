@@ -3988,16 +3988,20 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!dd || !dd.open) return;
     var panel = dd.querySelector(".icondd__panel"), trig = dd.querySelector(".icondd__trigger");
     if (!panel || !trig) return;
+    panel.style.maxHeight = "";                              // measure natural height unclamped first
     var r = trig.getBoundingClientRect();
-    var pw = panel.offsetWidth || 320, ph = panel.offsetHeight || 320, gap = 6, pad = 8;
+    var gap = 6, pad = 8;
+    var pw = panel.offsetWidth || 320, ph = panel.offsetHeight || 320;
     var left = Math.max(pad, Math.min(r.left, window.innerWidth - pw - pad));
-    var top = r.bottom + gap;
-    if (top + ph > window.innerHeight - pad) {
-      var up = r.top - gap - ph;
-      top = up >= pad ? up : Math.max(pad, window.innerHeight - ph - pad);
-    }
+    var below = window.innerHeight - pad - (r.bottom + gap);
+    var above = (r.top - gap) - pad;
+    // Prefer opening DOWN; flip UP only when it can't fit below AND there's genuinely more room above.
+    var up = ph > below && above > below;
+    var avail = Math.max(140, up ? above : below);
+    if (ph > avail) panel.style.maxHeight = avail + "px";    // clamp + let the grid scroll so the panel always fits (no premature flip-up)
+    var fh = Math.min(ph, avail);
     panel.style.left = left + "px";
-    panel.style.top = top + "px";
+    panel.style.top = (up ? Math.max(pad, r.top - gap - fh) : (r.bottom + gap)) + "px";
   }
   function repositionOpenIconFlyouts() {
     document.querySelectorAll("details.icondd[open]").forEach(positionIconFlyout);

@@ -164,9 +164,9 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__dev-ic { display: inline-flex; }
 .adm__dev-lbl { font-size: .72rem; letter-spacing: .01em; max-width: 132px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .adm__dev-ic svg, .adm__dev-btn svg { display: block; }
-.adm__dev-chev { transition: transform .2s ease; }
-.adm__dev.is-open .adm__dev-chev { transform: rotate(180deg); }
-.adm__dev-pop { position: absolute; right: 0; top: calc(100% + .4rem); z-index: 40; min-width: 246px; max-height: min(66vh, 520px); overflow-y: auto; padding: .3rem; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 14px 34px -14px rgba(0, 0, 0, .75); }
+.adm__dev-chev { transition: transform .25s var(--ease), color .2s var(--ease); }
+.adm__dev.is-open .adm__dev-chev { transform: rotate(180deg); color: var(--accent); }
+.adm__dev-pop { position: absolute; right: 0; top: calc(100% + .4rem); z-index: 40; min-width: 246px; max-height: min(66vh, 520px); overflow-y: auto; padding: .3rem; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 44px -18px rgba(0, 0, 0, .85); }
 .adm__dev-pop[hidden] { display: none; }
 .adm__dev-grp { padding: .5rem .55rem .25rem; font-family: var(--mono); font-size: .58rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); }
 .adm__dev-opt { display: flex; align-items: center; gap: .55rem; width: 100%; padding: .45rem .55rem; border: 0; border-radius: 7px; background: transparent; color: var(--text-dim); font-size: .82rem; text-align: left; cursor: pointer; position: relative; }
@@ -1028,19 +1028,22 @@ body.adm-lock .cursor { display: none !important; }
   .af select, .adm select, .pass select,
   .af select::picker(select), .adm select::picker(select), .pass select::picker(select) { appearance: base-select; }
 
-  /* closed button — drop the SVG chevron (now drawn by ::picker-icon) */
+  /* closed button — replace the native picker triangle with the SAME masked SVG chevron the icon picker uses (mask lets --accent colour it), right-aligned, rotating + turning accent on open */
   .af select, .adm select, .pass select { background-image: none; padding-right: .7rem; }
   .af select::picker-icon, .adm select::picker-icon, .pass select::picker-icon {
-    color: var(--text-faint); width: 11px; height: 11px; margin-left: auto;
-    transition: transform .25s var(--ease), color .2s var(--ease);
+    content: ""; width: 11px; height: 11px; margin-left: auto; background-color: var(--text-dim);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center / 11px no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center / 11px no-repeat;
+    transition: transform .25s var(--ease), background-color .2s var(--ease);
   }
-  .af select:hover::picker-icon, .adm select:hover::picker-icon, .pass select:hover::picker-icon { color: var(--text-dim); }
-  .af select:open::picker-icon, .adm select:open::picker-icon, .pass select:open::picker-icon { transform: rotate(180deg); color: var(--accent); }
+  .af select:hover::picker-icon, .adm select:hover::picker-icon, .pass select:hover::picker-icon { background-color: var(--text); }
+  .af select:open::picker-icon, .adm select:open::picker-icon, .pass select:open::picker-icon { transform: rotate(180deg); background-color: var(--accent); }
 
   /* the flyout */
   .af select::picker(select), .adm select::picker(select), .pass select::picker(select) {
     background: var(--bg-elev); border: 1px solid var(--line); border-radius: 10px;
     padding: .3rem; box-shadow: 0 18px 44px -18px rgba(0, 0, 0, .85); --anchor-gap: 6px;
+    position-try-fallbacks: flip-block;
   }
   .af option, .adm option, .pass option {
     display: flex; align-items: center; gap: .5rem; padding: .5rem .7rem;
@@ -1226,12 +1229,14 @@ body.adm-lock .cursor { display: none !important; }
 .hsize { position: relative; flex: 0 0 auto; display: flex; }
 .hsize__cur { display: inline-flex; align-items: center; gap: .35rem; padding: 0 .55rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-elev); color: var(--text); cursor: pointer; }
 .hsize__cur:hover { border-color: var(--accent); }
-.hsize__chev { color: var(--text-dim); flex: 0 0 auto; }
+.hsize__chev { color: var(--text-dim); flex: 0 0 auto; transition: transform .25s var(--ease), color .2s var(--ease); }
+.hsize__cur:hover .hsize__chev { color: var(--text); }
+.hsize.is-open .hsize__chev { transform: rotate(180deg); color: var(--accent); }
 .hsize__h { font-weight: 700; line-height: 1; color: var(--text); font-family: var(--sans); }
 .hsize__h--sm { font-size: .8rem; }
 .hsize__h--std { font-size: 1rem; }
 .hsize__h--lg { font-size: 1.28rem; }
-.hsize__pop { position: absolute; top: calc(100% + 5px); right: 0; z-index: 40; display: none; flex-direction: column; min-width: 152px; padding: 4px; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 14px 32px -14px rgba(0, 0, 0, .8); }
+.hsize__pop { position: absolute; top: calc(100% + 5px); right: 0; z-index: 40; display: none; flex-direction: column; min-width: 152px; padding: 4px; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 44px -18px rgba(0, 0, 0, .85); }
 .hsize.is-open .hsize__pop { display: flex; }
 .hsize__opt { display: flex; align-items: center; gap: .6rem; width: 100%; padding: .4rem .55rem; border: 0; border-radius: 6px; background: none; color: var(--text-dim); cursor: pointer; text-align: left; }
 .hsize__opt:hover { background: rgba(255, 255, 255, .05); color: var(--text); }
@@ -1312,16 +1317,17 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .icondd__cur { display: grid; place-items: center; width: 24px; height: 24px; color: var(--accent); font-size: 1rem; }
 .icondd__cur svg { width: 20px; height: 20px; }
 .icondd__name { flex: 1; font-size: .82rem; color: var(--text-dim); text-transform: capitalize; }
-.icondd__chev { display: inline-flex; color: var(--text-dim); transition: transform .2s; }
+.icondd__chev { display: inline-flex; color: var(--text-dim); transition: transform .25s var(--ease), color .2s var(--ease); }
 .icondd__chev svg { width: 11px; height: 11px; display: block; }
-.icondd[open] .icondd__chev { transform: rotate(180deg); }
-.icondd__panel { position: fixed; z-index: 9000; width: 320px; max-width: calc(100vw - 1.5rem); border: 1px solid var(--line); border-radius: 10px; padding: .5rem; background: var(--bg-elev); box-shadow: 0 14px 34px -14px rgba(0, 0, 0, .75); }
+.icondd__trigger:hover .icondd__chev { color: var(--text); }
+.icondd[open] .icondd__chev { transform: rotate(180deg); color: var(--accent); }
+.icondd__panel { position: fixed; z-index: 9000; width: 320px; max-width: calc(100vw - 1.5rem); display: flex; flex-direction: column; box-sizing: border-box; border: 1px solid var(--line); border-radius: 10px; padding: .5rem; background: var(--bg-elev); box-shadow: 0 18px 44px -18px rgba(0, 0, 0, .85); }
 .icondd__search { position: relative; margin-bottom: .45rem; }
 .icondd__search svg { position: absolute; left: .55rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-dim); pointer-events: none; }
 /* [type=text] bumps specificity to beat the global `.adm input[type="text"]` (else its padding hides the inset icon) */
 .icondd__search .icondd__q[type="text"] { width: 100%; box-sizing: border-box; margin: 0; padding: .45rem .6rem .45rem 1.9rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-size: .8rem; outline: none; }
 .icondd__search .icondd__q[type="text"]:focus { border-color: var(--accent); }
-.iconpick { display: grid; grid-template-columns: repeat(8, 1fr); gap: .3rem; max-height: 216px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--text-faint) transparent; }
+.iconpick { display: grid; grid-template-columns: repeat(8, 1fr); gap: .3rem; flex: 1 1 auto; min-height: 0; max-height: 216px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--text-faint) transparent; }
 .iconpick::-webkit-scrollbar { width: 9px; }
 .iconpick::-webkit-scrollbar-track { background: transparent; }
 .iconpick::-webkit-scrollbar-thumb { background: var(--text-faint); border: 3px solid transparent; background-clip: padding-box; border-radius: 100px; }
@@ -2136,8 +2142,11 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 /* this select lives on the white résumé paper, so its popup is themed LIGHT (not the dark studio palette) */
 @supports (appearance: base-select) {
   .rbz__addsel, .rbz__addsel::picker(select) { appearance: base-select; }
-  .rbz__addsel::picker-icon { color: #8a8378; width: 10px; height: 10px; margin-left: .35rem; transition: transform .25s ease; }
-  .rbz__addsel:open::picker-icon { transform: rotate(180deg); }
+  .rbz__addsel::picker-icon { content: ""; width: 10px; height: 10px; margin-left: .35rem; background-color: #8a8378;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center / 10px no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center / 10px no-repeat;
+    transition: transform .25s ease, background-color .2s ease; }
+  .rbz__addsel:open::picker-icon { transform: rotate(180deg); background-color: var(--accent); }
   .rbz__addsel::picker(select) { background: #fff; border: 1px solid #cabfae; border-radius: 8px; padding: .25rem; box-shadow: 0 14px 34px -14px rgba(58, 53, 47, .35); --anchor-gap: 5px; }
   .rbz__addsel option { display: flex; align-items: center; gap: .45rem; padding: .4rem .55rem; border-radius: 6px; color: #3a352f; font-family: var(--mono, monospace); font-size: .68rem; }
   .rbz__addsel option:hover, .rbz__addsel option:focus { background: #f1ece2; }
