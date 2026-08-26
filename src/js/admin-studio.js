@@ -134,12 +134,46 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   let openStudy = -1; // index of the work item whose case-study editor is expanded
   let l2Tab = "details"; // active tab in the case-study editor: gen | details | highlights | story
   let _l2ScrollY = 0; // last editor scrollTop, for auto-hiding the L2 bar on scroll
-  let previewDevice = "desktop"; // live-preview size: desktop | phone
-  try { previewDevice = localStorage.getItem("rk:preview:device") === "phone" ? "phone" : "desktop"; } catch (e) {}
+  let previewDevice = "responsive"; // live-preview: "responsive" (fill + draggable) or a DEVICES id
+  try { var _pd = localStorage.getItem("rk:preview:device"); if (_pd === "phone") previewDevice = "iphone14max"; else if (_pd && _pd !== "desktop") previewDevice = _pd; } catch (e) {}
+  // Device presets for the preview toolbar. w/h = CSS viewport px; the frame renders at true px and is
+  // scaled to fit the available preview canvas, so the fit % adapts to the screen + editor width.
+  var DEVICES = [
+    { id: "responsive", name: "Responsive", cat: "flex" },
+    { id: "iphonese", name: "iPhone SE", cat: "phone", w: 375, h: 667 },
+    { id: "iphone12", name: "iPhone 12 / 13", cat: "phone", w: 390, h: 844 },
+    { id: "iphone14max", name: "iPhone 14 Pro Max", cat: "phone", w: 430, h: 932 },
+    { id: "pixel7", name: "Pixel 7", cat: "phone", w: 412, h: 915 },
+    { id: "ipadmini", name: "iPad Mini", cat: "tablet", w: 768, h: 1024 },
+    { id: "ipadair", name: "iPad Air", cat: "tablet", w: 820, h: 1180 },
+    { id: "ipadpro11", name: 'iPad Pro 11"', cat: "tablet", w: 834, h: 1194 },
+    { id: "ipadpro13", name: 'iPad Pro 12.9"', cat: "tablet", w: 1024, h: 1366 },
+    { id: "surfacepro", name: "Surface Pro", cat: "tablet", w: 912, h: 1368 },
+    { id: "laptop", name: "Laptop", cat: "desktop", w: 1280, h: 800 },
+    { id: "desktop", name: "Desktop", cat: "desktop", w: 1440, h: 900 },
+    { id: "fullhd", name: "Full HD", cat: "desktop", w: 1920, h: 1080 }
+  ];
+  function deviceById(id) { for (var i = 0; i < DEVICES.length; i++) if (DEVICES[i].id === id) return DEVICES[i]; return DEVICES[0]; }
   var DEV_ICON = {
-    desktop: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
-    phone: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>'
+    responsive: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>',
+    phone: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>',
+    tablet: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2.5"/><path d="M10.5 18h3"/></svg>',
+    desktop: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
   };
+  function deviceOptsHtml() {
+    var groups = [["flex", ""], ["phone", "Phones"], ["tablet", "Tablets"], ["desktop", "Desktops"]];
+    var html = "";
+    groups.forEach(function (g) {
+      var items = DEVICES.filter(function (d) { return d.cat === g[0]; });
+      if (!items.length) return;
+      if (g[1]) html += '<div class="adm__dev-grp">' + g[1] + "</div>";
+      items.forEach(function (d) {
+        var dim = d.cat === "flex" ? "Drag to resize" : (d.w + "\u00d7" + d.h);
+        html += '<button class="adm__dev-opt" data-dev="' + d.id + '" type="button">' + (DEV_ICON[d.cat === "flex" ? "responsive" : d.cat] || "") + '<span class="adm__dev-nm">' + escHtml(d.name) + '</span><span class="adm__dev-dim" data-fit>' + dim + "</span></button>";
+      });
+    });
+    return html;
+  }
   let openBlock = -1; // which section (block) is expanded in the L2 sections accordion
   let journeyOpen = false; // is the Design Journey editor open in the L2 panel?
   let openJC = -1; // which journey chapter is expanded in the accordion
@@ -5775,12 +5809,39 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     else if (y < _l2ScrollY - 4) bar.classList.remove("is-hidden");
     _l2ScrollY = y;
   }
-  // Scale the live-preview area to a phone width (desktop = full width).
+  // Largest scale (<=1) at which a device's width fits the current preview canvas. Height overflows scroll.
+  function deviceFit(d) {
+    var prev = root && root.querySelector(".adm__preview");
+    if (!prev || !d || d.cat === "flex") return 1;
+    var availW = Math.max(120, prev.clientWidth - 44);
+    return Math.min(availW / d.w, 1);
+  }
+  // Size + scale the device frame to fit; called on device change, divider drag and window resize.
+  function refitDevice() {
+    if (!root) return;
+    var d = deviceById(previewDevice), dev = root.querySelector("[data-device]"), lbl = root.querySelector("[data-devlabel]");
+    if (!frame) frame = root.querySelector(".adm__frame");
+    if (d.cat === "flex") {
+      if (dev) { dev.style.width = ""; dev.style.height = ""; }
+      if (frame) { frame.style.width = ""; frame.style.height = ""; frame.style.transform = ""; }
+      if (lbl) lbl.textContent = "";
+      return;
+    }
+    var s = deviceFit(d);
+    if (frame) { frame.style.width = d.w + "px"; frame.style.height = d.h + "px"; frame.style.transform = "scale(" + s + ")"; }
+    if (dev) { dev.style.width = Math.round(d.w * s) + "px"; dev.style.height = Math.round(d.h * s) + "px"; }
+    if (lbl) lbl.textContent = d.name + "  \u00b7  " + d.w + " \u00d7 " + d.h + "  \u00b7  " + Math.round(s * 100) + "%";
+  }
   function applyPreviewDevice() {
-    if (root) root.classList.toggle("is-phoneprev", previewDevice === "phone");
-    var ic = root && root.querySelector("[data-dev-ic]");
-    if (ic) ic.innerHTML = previewDevice === "phone" ? DEV_ICON.phone : DEV_ICON.desktop;
-    if (root) root.querySelectorAll(".adm__dev-opt").forEach(function (o) { o.classList.toggle("is-on", o.dataset.dev === previewDevice); });
+    if (!root) return;
+    var d = deviceById(previewDevice), isDev = d.cat !== "flex";
+    root.classList.toggle("is-deviceprev", isDev);
+    var ic = root.querySelector("[data-dev-ic]");
+    if (ic) ic.innerHTML = DEV_ICON[isDev ? d.cat : "responsive"] || DEV_ICON.responsive;
+    var nm = root.querySelector("[data-dev-lbl]");
+    if (nm) nm.textContent = isDev ? d.name : "Responsive";
+    root.querySelectorAll(".adm__dev-opt").forEach(function (o) { o.classList.toggle("is-on", o.dataset.dev === previewDevice); });
+    refitDevice();
   }
   function studyEditor(w, i) {
     var st = w.study;
@@ -14279,11 +14340,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<span class="adm__status" aria-live="polite">Editing local draft</span>' +
         '<button class="adm__bar-prev" data-prevtoggle type="button" aria-label="Show or hide the live preview" title="Hide the live preview" aria-pressed="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="14" y1="4" x2="14" y2="20"/></svg><span class="adm__bar-prev-tx">Live preview</span></button>' +
         '<div class="adm__dev" data-dev-wrap>' +
-          '<button class="adm__dev-btn" data-dev-toggle type="button" aria-haspopup="true" aria-expanded="false" title="Preview size"><span class="adm__dev-ic" data-dev-ic>' + DEV_ICON.desktop + '</span><svg class="adm__dev-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
-          '<div class="adm__dev-pop" hidden>' +
-            '<button class="adm__dev-opt" data-dev="desktop" type="button">' + DEV_ICON.desktop + '<span>Desktop</span></button>' +
-            '<button class="adm__dev-opt" data-dev="phone" type="button">' + DEV_ICON.phone + '<span>Phone</span></button>' +
-          "</div>" +
+          '<button class="adm__dev-btn" data-dev-toggle type="button" aria-haspopup="true" aria-expanded="false" title="Preview size"><span class="adm__dev-ic" data-dev-ic>' + DEV_ICON.responsive + '</span><span class="adm__dev-lbl" data-dev-lbl>Responsive</span><svg class="adm__dev-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
+          '<div class="adm__dev-pop" hidden>' + deviceOptsHtml() + "</div>" +
         "</div>" +
         '<button class="btn btn--ghost adm__newtab" data-newtab type="button" aria-label="Open live preview in a new tab" title="Open live preview in a new tab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg><span class="adm__newtab-tx" hidden></span></button>' +
       "</div>" +
@@ -14303,7 +14361,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="adm__resizer" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Drag to resize the editor and preview" title="Drag to resize \u00b7 double-click to reset"><span class="adm__resizer-grip"></span></div>' +
         '<section class="adm__preview" aria-label="Live preview">' +
           '<div class="adm__prevw" data-prevw aria-hidden="true"></div>' +
-          '<iframe class="adm__frame" title="Live preview of your site" src="' + previewUrl() + '"></iframe>' +
+          '<div class="adm__devlabel" data-devlabel aria-hidden="true"></div>' +
+          '<div class="adm__device" data-device><iframe class="adm__frame" title="Live preview of your site" src="' + previewUrl() + '"></iframe></div>' +
         "</section>" +
       "</div>" +
       '<div class="adm__settings" hidden><div class="adm__set-sheet">' +
@@ -14430,7 +14489,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         var lab = pw < 500 ? "Mobile" : pw < 900 ? "Tablet" : "Desktop";
         badge.textContent = pw + "px \u00b7 " + lab;
       }
-      function setPx(px) { px = clampPx(px); main.style.setProperty("--adm-ecol", px + "px"); updateBadge(px); try { localStorage.setItem(SPLIT_KEY, px + "px"); } catch (e) {} }
+      function setPx(px) { px = clampPx(px); main.style.setProperty("--adm-ecol", px + "px"); updateBadge(px); refitDevice(); try { localStorage.setItem(SPLIT_KEY, px + "px"); } catch (e) {} }
       rz.addEventListener("pointerdown", function (e) {
         if (root.classList.contains("is-prevoff") || root.classList.contains("is-noprev")) return;
         dragging = true; try { rz.setPointerCapture(e.pointerId); } catch (x) {}
@@ -14456,15 +14515,25 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var _devBtn = _devWrap.querySelector("[data-dev-toggle]");
       var _devPop = _devWrap.querySelector(".adm__dev-pop");
       var _devClose = function () { _devPop.hidden = true; _devWrap.classList.remove("is-open"); if (_devBtn) _devBtn.setAttribute("aria-expanded", "false"); };
-      if (_devBtn) _devBtn.addEventListener("click", function (e) { e.stopPropagation(); var open = _devPop.hidden; _devPop.hidden = !open; _devWrap.classList.toggle("is-open", open); _devBtn.setAttribute("aria-expanded", open ? "true" : "false"); });
+      function annotateFits() {
+        _devWrap.querySelectorAll(".adm__dev-opt").forEach(function (o) {
+          var d = deviceById(o.dataset.dev), fitEl = o.querySelector("[data-fit]");
+          if (d.cat === "flex") { if (fitEl) fitEl.textContent = "Drag to resize"; o.classList.remove("is-tight"); return; }
+          var s = deviceFit(d);
+          if (fitEl) fitEl.textContent = d.w + "\u00d7" + d.h + (s < 0.999 ? "  \u00b7  " + Math.round(s * 100) + "%" : "");
+          o.classList.toggle("is-tight", s < 0.999);
+        });
+      }
+      if (_devBtn) _devBtn.addEventListener("click", function (e) { e.stopPropagation(); var open = _devPop.hidden; if (open) annotateFits(); _devPop.hidden = !open; _devWrap.classList.toggle("is-open", open); _devBtn.setAttribute("aria-expanded", open ? "true" : "false"); });
       _devWrap.querySelectorAll(".adm__dev-opt").forEach(function (o) {
         o.addEventListener("click", function () {
-          previewDevice = o.dataset.dev === "phone" ? "phone" : "desktop";
+          previewDevice = o.dataset.dev || "responsive";
           try { localStorage.setItem("rk:preview:device", previewDevice); } catch (e) {}
           applyPreviewDevice();
           _devClose();
         });
       });
+      window.addEventListener("resize", refitDevice);
       document.addEventListener("click", function (e) { if (!_devWrap.contains(e.target)) _devClose(); });
       applyPreviewDevice();
     }
