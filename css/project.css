@@ -78,7 +78,8 @@ img[data-zoom] { cursor: zoom-in; }
 .pj__side {
   position: sticky; top: 0; align-self: start; height: 100vh;
   display: flex; flex-direction: column;
-  padding: clamp(2.4rem, 5vw, 4rem) 1.8rem clamp(2rem, 4vw, 3rem) var(--pad);
+  /* left pad is capped (not the full global --pad) so the 168px view toggle never overflows the 264px rail onto the border */
+  padding: clamp(2.4rem, 5vw, 4rem) 1.8rem clamp(2rem, 4vw, 3rem) min(var(--pad), 3.25rem);
   border-right: 1px solid var(--line-soft);
 }
 .pj__side-head { font-family: var(--mono); font-size: .74rem; letter-spacing: .04em; line-height: 1.5; margin-bottom: 1.8rem; }
