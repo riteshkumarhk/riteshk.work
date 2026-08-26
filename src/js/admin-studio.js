@@ -2199,10 +2199,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     ["story", "DS", "Design storyteller", "Turn a case study into a presentation \u2014 angles, a script, the questions it invites."],
     ["wb", "WB", "Whiteboard coach", "Rehearse the live exercise \u2014 a prompt, a timed game-plan, then coaching or a mock."]
   ];
-  function wbHasSession() { try { return !!wbSessLoad(); } catch (e) { return false; } }
   function prepLauncherHtml() {
     return '<div class="prep-rows">' + PREP_TOOLS.map(function (r) {
-      var n = r[0] === "wb" ? (wbHasSession() ? 1 : 0) : prepList(r[0]).length;
+      var n = prepList(r[0]).length;
       return '<div class="prep-row" role="button" tabindex="0" data-act="prep-open" data-tool="' + r[0] + '">' +
         '<span class="ats__badge prep-row__b">' + r[1] + '</span>' +
         '<span class="prep-row__x"><b>' + escHtml(r[2]) + '</b><span>' + escHtml(r[3]) + '</span></span>' +
@@ -13507,16 +13506,30 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function wbModal() {
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { wbModal(); }); return; }
     var st = wbState; if (!st.mins) st.mins = "60"; if (!st.mode) st.mode = "coach"; if (!st.level) st.level = "staff";
-    var prompt = null, transcript = "", sessTurns = [], sessDraft = "", sessPlan = null, sessTimer = 0;
-    function saveSess() { if (!prompt || !prompt.prompt) return; try { localStorage.setItem(WB_SESS_KEY, JSON.stringify({ mode: st.mode, mins: st.mins, level: st.level, convo: st.convo, prompt: prompt, transcript: transcript, turns: sessTurns, draft: sessDraft, plan: sessPlan, timer: sessTimer, savedAt: Date.now() })); } catch (e) {} }
-    function clearSess() { sessTurns = []; sessDraft = ""; sessPlan = null; sessTimer = 0; wbSessClear(); }
+    var prompt = null, transcript = "", sessTurns = [], sessDraft = "", sessPlan = null, sessTimer = 0, sessId = null, _wbCloudT = 0;
+    // Each run is a Prepare-history entry (tool "wb") so past coaching/mock sessions list in the pane and resume intact.
+    function wbMakeEntry(o) {
+      var snip = ((o.prompt && o.prompt.prompt) || "").replace(/\s+/g, " ").trim().slice(0, 80);
+      var e = { tool: "wb", title: (o.mode === "coach" ? "Coaching" : "Mock interview"), meta: { mode: o.mode, mins: o.mins, level: o.level, turns: (o.turns || []).length, snippet: snip }, mode: o.mode, mins: o.mins, level: o.level, convo: o.convo, prompt: o.prompt, transcript: o.transcript || "", turns: o.turns || [], draft: o.draft || "", plan: o.plan || null, timer: o.timer || 0, savedAt: Date.now() };
+      if (o.id) e.id = o.id; if (o.at) e.at = o.at;
+      return e;
+    }
+    function saveSess() {
+      if (!prompt || !prompt.prompt) return;
+      var e = prepPutLocal("wb", wbMakeEntry({ id: sessId, mode: st.mode, mins: st.mins, level: st.level, convo: st.convo, prompt: prompt, transcript: transcript, turns: sessTurns, draft: sessDraft, plan: sessPlan, timer: sessTimer }));
+      sessId = e.id;
+      clearTimeout(_wbCloudT); _wbCloudT = setTimeout(function () { try { prepCloudPut("wb", e); } catch (x) {} }, 900);   // coalesce cloud sync so typing doesn't spam the Worker
+    }
+    function clearSess() { if (sessId) { try { prepDel("wb", sessId); } catch (e) {} sessId = null; } sessTurns = []; sessDraft = ""; sessPlan = null; sessTimer = 0; }
+    // One-time migration: fold any legacy single-slot session into the history list.
+    (function () { var lg = wbSessLoad(); if (!lg) return; try { var e = wbMakeEntry({ mode: lg.mode, mins: lg.mins, level: lg.level, convo: lg.convo, prompt: lg.prompt, transcript: lg.transcript, turns: lg.turns, draft: lg.draft, plan: lg.plan, timer: lg.timer, at: lg.savedAt }); prepPutLocal("wb", e); prepCloudPut("wb", e); } catch (x) {} wbSessClear(); })();
     var modal = document.createElement("div");
     modal.className = "pass pass--wide wb-modal";
     modal.innerHTML =
       '<div class="pass__box"><div class="wb__chrome" data-wb-chrome><button type="button" class="wb__chrome-btn" data-wb-min title="Pop out \u2014 float the timer + mic on top while you whiteboard elsewhere" aria-label="Pop out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" stroke="none"/></svg></button><button type="button" class="wb__chrome-btn" data-wb-max title="Maximise" aria-label="Maximise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button></div><div class="pass__title">' + IC.board + ' Whiteboard coach</div>' +
       '<div class="pass__sub">Rehearse a live design exercise. Pick the length and a mode \u2014 I\u2019ll set a realistic prompt' + (storyJdText() ? " tailored to your target role" : "") + ", give you a timed game-plan, then coach you or run a mock.</div>" +
       '<div class="wb__setup">' +
-        '<div class="wb__resume" data-wb-resume-bar hidden></div>' +
+        '<div data-wb-hist style="margin-bottom:1.1rem" hidden></div>' +
         '<div class="af"><label class="af__label">How long is the exercise</label><div class="story__opts wb__opts3">' +
           WB_MINS.map(function (d) { return '<button type="button" class="story__opt' + (st.mins === d[0] ? " is-on" : "") + '" data-wb-mins="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
         "</div></div>" +
@@ -13625,21 +13638,31 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     modal.querySelectorAll("[data-wb-convo]").forEach(function (b) { b.addEventListener("click", function () { st.convo = b.dataset.wbConvo; modal.querySelectorAll("[data-wb-convo]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     var convoHint = modal.querySelector(".wb__convo-hint");
     if (convoHint) convoHint.textContent = wbSpeech.sttOk ? "Talk mode uses your mic \u2014 speak your moves and the interviewer replies out loud. Works best in Chrome or Edge." : "Talk mode needs Chrome or Edge \u2014 typing works everywhere.";
-    var savedSess = wbSessLoad();
-    var resumeBar = modal.querySelector("[data-wb-resume-bar]");
-    if (savedSess && resumeBar) {
-      var nT = (savedSess.turns || []).length, snip = (savedSess.prompt.prompt || "").slice(0, 90);
-      resumeBar.innerHTML = '<div class="wb__resume-in"><div class="wb__resume-txt"><b>Resume your session?</b><span>' + escHtml((savedSess.mode === "coach" ? "Coaching" : "Mock interview") + " \u00b7 " + snip + (savedSess.prompt.prompt.length > 90 ? "\u2026" : "") + (nT ? " \u00b7 " + nT + " exchange" + (nT === 1 ? "" : "s") : "")) + "</span></div>" +
-        '<div class="wb__resume-act"><button type="button" class="btn btn--auto" data-wb-resume>Resume</button><button type="button" class="btn btn--ghost" data-wb-discard>Start over</button></div></div>';
-      resumeBar.hidden = false;
-      var rBtn = resumeBar.querySelector("[data-wb-resume]"), dBtn = resumeBar.querySelector("[data-wb-discard]");
-      if (rBtn) rBtn.addEventListener("click", function () { wbResume(savedSess); });
-      if (dBtn) dBtn.addEventListener("click", function () { clearSess(); resumeBar.hidden = true; });
+    var histBar = modal.querySelector("[data-wb-hist]");
+    function wbHistHtml() {
+      var LV = { exec: "VP / Exec", staff: "Staff / Principal", senior: "Senior" };
+      return '<div class="prep-hist__h">Resume a session</div><div class="prep-hist__list">' + prepList("wb").map(function (e) {
+        var m = e.meta || {};
+        var sub = (m.mode === "coach" ? "Coaching" : "Mock interview") + (m.mins ? " \u00b7 " + m.mins + " min" : "") + (m.level ? " \u00b7 " + (LV[m.level] || m.level) : "") + (m.turns ? " \u00b7 " + m.turns + " exchange" + (m.turns === 1 ? "" : "s") : "");
+        return '<div class="prep-h prep-h--txt" role="button" tabindex="0" data-wb-hist-open="' + e.id + '">' +
+          '<div class="prep-h__x"><b>' + escHtml(m.snippet || e.title || "Session") + '</b><i>' + escHtml(sub) + '</i><em>' + prepAgo(e.at) + '</em></div>' +
+          '<span class="prep-h__del" data-wb-hist-del="' + e.id + '" title="Delete" aria-label="Delete">' + IC.trash + '</span>' +
+          "</div>";
+      }).join("") + "</div>";
     }
+    function paintHist() { if (!histBar) return; var has = prepList("wb").length > 0; histBar.hidden = !has; histBar.innerHTML = has ? wbHistHtml() : ""; }
+    if (histBar) histBar.addEventListener("click", function (e) {
+      var del = e.target.closest("[data-wb-hist-del]");
+      if (del) { e.stopPropagation(); prepDel("wb", del.dataset.wbHistDel); if (sessId === del.dataset.wbHistDel) sessId = null; paintHist(); return; }
+      var op = e.target.closest("[data-wb-hist-open]");
+      if (op) { var entry = prepGet("wb", op.dataset.wbHistOpen); if (entry) wbResume(entry); }
+    });
+    paintHist();
+    prepCloudPull("wb", paintHist);
     if (briefEl) briefEl.addEventListener("input", function () { st.brief = briefEl.value; wbSave(); });
     if (companyEl) companyEl.addEventListener("input", function () { st.company = companyEl.value; wbSave(); });
     if (jdEl) jdEl.addEventListener("input", function () { st.jd = jdEl.value; wbSave(); });
-    function showSetup() { setup.hidden = false; stage.hidden = true; backBtn.hidden = true; startBtn.hidden = false; if (foot) foot.hidden = false; modal.classList.remove("wb-modal--stage"); modal.classList.remove("wb-modal--max"); err.textContent = ""; }
+    function showSetup() { setup.hidden = false; stage.hidden = true; backBtn.hidden = true; startBtn.hidden = false; if (foot) foot.hidden = false; modal.classList.remove("wb-modal--stage"); modal.classList.remove("wb-modal--max"); err.textContent = ""; paintHist(); }
     function showStage() { setup.hidden = true; stage.hidden = false; backBtn.hidden = false; startBtn.hidden = true; modal.classList.add("wb-modal--stage"); err.textContent = ""; }
     backBtn.addEventListener("click", function () { if (watchCleanup) { try { watchCleanup(); } catch (e) {} } showSetup(); });
     startBtn.addEventListener("click", async function () {
@@ -13649,7 +13672,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         if (own) prompt = { prompt: own, context: "", watchfor: [] };
         else prompt = csgenParse(await aiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { json: true, maxTokens: 700, temperature: 0.9 }));
         if (!prompt || !prompt.prompt) throw new Error("Couldn\u2019t set a prompt \u2014 try again.");
-        transcript = ""; sessTurns = []; sessDraft = ""; sessPlan = null; sessTimer = 0;
+        sessId = null; transcript = ""; sessTurns = []; sessDraft = ""; sessPlan = null; sessTimer = 0;
         showStage();
         if (st.mode === "coach") await wbRunCoach();
         else await wbRunMock(true);
@@ -13658,6 +13681,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     });
     async function wbResume(s) {
       if (!s) return;
+      sessId = s.id || sessId;
       st.mode = s.mode || st.mode; st.mins = s.mins || st.mins; st.level = s.level || st.level; st.convo = s.convo || st.convo;
       prompt = s.prompt; transcript = s.transcript || ""; sessTurns = (s.turns || []).slice(); sessDraft = s.draft || ""; sessPlan = s.plan || null; sessTimer = +s.timer || 0;
       showStage();
