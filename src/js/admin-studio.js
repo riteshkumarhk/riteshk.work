@@ -173,7 +173,26 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (w < 200 || h < 200) return null;
     return { id: "thisdevice", name: "This screen", cat: "detected", w: w, h: h };
   }
-  function allDevices() { var td = thisDevice(); return (td ? [td] : []).concat(DEVICES, customDevices); }
+  function allDevices() { var td = thisDevice(); return (td ? [td] : []).concat(DEVICES, customDevices, visitorDevices()); }
+  // "Your visitors' screens": the top real screen sizes from your own first-party analytics (owner-gated),
+  // cached locally so a brand-new device standard shows up here automatically as real people arrive on it.
+  var VSIZE_KEY = "rk:preview:visitorSizes", visitorSizes = [], visitorSizesAt = 0;
+  try { var _vo = JSON.parse(localStorage.getItem(VSIZE_KEY) || "null"); if (_vo && Array.isArray(_vo.sizes)) { visitorSizes = _vo.sizes; visitorSizesAt = +_vo.at || 0; } } catch (e) {}
+  function cacheVisitorSizes(arr) {
+    if (!Array.isArray(arr)) return;
+    visitorSizes = arr.filter(function (d) { return d && +d.w >= 200 && +d.h >= 200; }).slice(0, 8);
+    visitorSizesAt = Date.now();
+    try { localStorage.setItem(VSIZE_KEY, JSON.stringify({ at: visitorSizesAt, sizes: visitorSizes })); } catch (e) {}
+  }
+  function visitorDevices() {
+    return visitorSizes.slice(0, 5).map(function (d) { var w = Math.round(d.w), h = Math.round(d.h); return { id: "vis-" + w + "x" + h, name: w + "\u00d7" + h, cat: "visitor", w: w, h: h, share: +d.share || 0 }; });
+  }
+  async function refreshVisitorSizes(onDone) {
+    if (visitorSizes.length && Date.now() - visitorSizesAt < 12 * 3600 * 1000) return; // cache is fresh enough
+    if (insData && insData.events && Array.isArray(insData.events.sizes)) { cacheVisitorSizes(insData.events.sizes); if (onDone) onDone(); return; }
+    var sess = adminSession(); if (!sess) return;
+    try { var r = await fetch(ADMIN_WORKER + "/admin/insights?days=90", { headers: { Authorization: "Bearer " + sess } }); if (r.ok) { var j = await r.json(); if (j && j.events && Array.isArray(j.events.sizes)) { cacheVisitorSizes(j.events.sizes); if (onDone) onDone(); } } } catch (e) {}
+  }
   function deviceById(id) { var all = allDevices(); for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i]; return DEVICES[0]; }
   function devIconFor(d) {
     if (!d || d.cat === "flex") return DEV_ICON.responsive;
@@ -187,7 +206,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     desktop: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
   };
   function deviceOptsHtml() {
-    var groups = [["flex", ""], ["detected", "Detected"], ["phone", "Phones"], ["tablet", "Tablets"], ["desktop", "Desktops"], ["custom", "Yours"]];
+    var groups = [["flex", ""], ["detected", "Detected"], ["visitor", "Your visitors\u2019 screens"], ["phone", "Phones"], ["tablet", "Tablets"], ["desktop", "Desktops"], ["custom", "Yours"]];
     var pool = allDevices();
     var html = "";
     groups.forEach(function (g) {

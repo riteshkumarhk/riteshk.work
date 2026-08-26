@@ -60,10 +60,11 @@
         || /^\/studio(\/|$)/.test(location.pathname);
     } catch (e) { return false; }
   }
+  function rkScreenSize() { try { var s = window.screen || {}; var w = Math.round(s.width || 0), h = Math.round(s.height || 0); return (w >= 200 && h >= 200) ? (w + "x" + h) : ""; } catch (e) { return ""; } }
   function track(t, id) {
     try {
       if (!t || rkIsOwner()) return;
-      const body = JSON.stringify({ t: t, id: id || "" });
+      const body = JSON.stringify(t === "pageview" ? { t: t, id: id || "", s: rkScreenSize() } : { t: t, id: id || "" });
       // text/plain keeps it a "simple" request (no CORS preflight); the Worker parses the body as JSON.
       if (navigator.sendBeacon) { navigator.sendBeacon(RK_EVENT_URL, new Blob([body], { type: "text/plain;charset=UTF-8" })); return; }
       fetch(RK_EVENT_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: body, keepalive: true, credentials: "omit" }).catch(function () {});

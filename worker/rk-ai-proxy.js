@@ -876,8 +876,9 @@ export default {
         const id = String((b && b.id) || "").replace(/[^\w:.\-\/ ]+/g, "").trim().slice(0, 48);
         const country = (request.cf && request.cf.country) || "";
         const uaInfo = parseUA(request.headers.get("User-Agent"));
+        const size = normSize(b && b.s);
         await env.VAULT_GRANTS.put(evRl, String(evN + 1), { expirationTtl: 3600 });
-        await recordEvent(env, t, id, country, uaInfo);
+        await recordEvent(env, t, id, country, uaInfo, size);
         return json({ ok: true }, 200, cors);
       } catch (e) { return json({ ok: true }, 200, cors); }
     }
@@ -1372,7 +1373,16 @@ function parseUA(ua) {
   else if (/Safari\//.test(ua)) browser = "Safari";
   return { os: os, browser: browser, device: device };
 }
-async function recordEvent(env, t, id, country, ua) {
+// A visitor's screen size, validated + range-clamped to a "WxH" bucket (blank if junk / out of range).
+function normSize(s) {
+  s = String(s || "");
+  var m = /^(\d{2,4})x(\d{2,4})$/.exec(s);
+  if (!m) return "";
+  var w = +m[1], h = +m[2];
+  if (w < 200 || w > 8000 || h < 200 || h > 8000) return "";
+  return w + "x" + h;
+}
+async function recordEvent(env, t, id, country, ua, size) {
   let agg = null;
   try { agg = await env.VAULT_GRANTS.get("ev:agg", "json"); } catch (e) {}
   if (!agg || typeof agg !== "object") agg = { v: 1, days: {}, targets: {}, recent: [] };
@@ -1386,6 +1396,12 @@ async function recordEvent(env, t, id, country, ua) {
     d.pv = (d.pv || 0) + 1;                                          // page views = all visitors (owner excluded upstream)
     if (country) d.geo[country] = (d.geo[country] || 0) + 1;
     if (ua) { d.dev[ua.device] = (d.dev[ua.device] || 0) + 1; d.brow[ua.browser] = (d.brow[ua.browser] || 0) + 1; d.os[ua.os] = (d.os[ua.os] || 0) + 1; }
+    if (size) {                                                      // real screen sizes → the studio's "visitors' screens" presets
+      if (!d.sz) d.sz = {};
+      d.sz[size] = (d.sz[size] || 0) + 1;
+      const szk = Object.keys(d.sz);
+      if (szk.length > 80) { szk.sort((a, b) => d.sz[a] - d.sz[b]); for (let i = 0; i < szk.length - 80; i++) delete d.sz[szk[i]]; }
+    }
   } else {
     d.types[t] = (d.types[t] || 0) + 1;                             // intent events only
     if (id) { const tg = agg.targets[t] || (agg.targets[t] = {}); tg[id] = (tg[id] || 0) + 1; }
@@ -1401,7 +1417,7 @@ async function readInsights(env, days) {
   try { agg = await env.VAULT_GRANTS.get("ev:agg", "json"); } catch (e) {}
   if (!agg) return { total: 0, pageviews: 0, types: {}, targets: {}, geo: {}, devices: {}, browsers: {}, os: {}, series: [], recent: [] };
   const since = Date.now() - days * 864e5;
-  const series = [], types = {}, geo = {}, devices = {}, browsers = {}, osv = {};
+  const series = [], types = {}, geo = {}, devices = {}, browsers = {}, osv = {}, sizes = {};
   let total = 0, pageviews = 0;
   const dayKeys = Object.keys(agg.days || {}).sort();
   for (const k of dayKeys) {
@@ -1417,8 +1433,11 @@ async function readInsights(env, days) {
     for (const e of Object.entries(d.dev || {})) devices[e[0]] = (devices[e[0]] || 0) + e[1];
     for (const e of Object.entries(d.brow || {})) browsers[e[0]] = (browsers[e[0]] || 0) + e[1];
     for (const e of Object.entries(d.os || {})) osv[e[0]] = (osv[e[0]] || 0) + e[1];
+    for (const e of Object.entries(d.sz || {})) sizes[e[0]] = (sizes[e[0]] || 0) + e[1];
   }
-  return { total: total, pageviews: pageviews, types: types, targets: agg.targets || {}, geo: geo, devices: devices, browsers: browsers, os: osv, series: series, recent: (agg.recent || []).slice(0, 50) };
+  const szTotal = Object.values(sizes).reduce((a, b) => a + b, 0) || 0;
+  const sizesArr = Object.keys(sizes).map((k) => { const p = k.split("x"); return { w: +p[0], h: +p[1], n: sizes[k], share: szTotal ? Math.round((sizes[k] / szTotal) * 100) : 0 }; }).sort((a, b) => b.n - a.n).slice(0, 12);
+  return { total: total, pageviews: pageviews, types: types, targets: agg.targets || {}, geo: geo, devices: devices, browsers: browsers, os: osv, sizes: sizesArr, series: series, recent: (agg.recent || []).slice(0, 50) };
 }
 // Cloudflare Web Analytics (RUM) via the GraphQL Analytics API. Lights up once CF_ANALYTICS_TOKEN
 // (Account Analytics: Read) is set; CF_ACCOUNT_ID + CF_SITE_TAG are public and live in wrangler vars.
