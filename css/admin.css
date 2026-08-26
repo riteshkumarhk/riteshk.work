@@ -285,6 +285,8 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__resizer:focus-visible { outline: none; }
 .adm.is-resizing { cursor: col-resize; user-select: none; }
 .adm.is-resizing .adm__frame { pointer-events: none; }
+.adm__prevw { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 7; padding: .32rem .62rem; border-radius: 100px; background: rgba(8,8,10,.85); border: 1px solid var(--line); color: var(--text); font-family: var(--mono); font-size: .66rem; letter-spacing: .04em; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s var(--ease); }
+.adm.is-resizing .adm__prevw { opacity: 1; }
 .adm__editor { overflow-y: auto; border-right: 1px solid var(--line); }
 .adm__body { padding: 1.4rem 1.7rem 4rem; max-width: 780px; margin: 0 auto; }
 .adm__body[hidden] { display: none; }

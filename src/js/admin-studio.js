@@ -14302,6 +14302,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         "</div>" +
         '<div class="adm__resizer" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Drag to resize the editor and preview" title="Drag to resize \u00b7 double-click to reset"><span class="adm__resizer-grip"></span></div>' +
         '<section class="adm__preview" aria-label="Live preview">' +
+          '<div class="adm__prevw" data-prevw aria-hidden="true"></div>' +
           '<iframe class="adm__frame" title="Live preview of your site" src="' + previewUrl() + '"></iframe>' +
         "</section>" +
       "</div>" +
@@ -14410,22 +14411,30 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var _newtab = root.querySelector("[data-newtab]");
     if (_newtab) _newtab.addEventListener("click", function () { try { window.open(newtabVisitUrl || previewUrl(), "_blank", "noopener"); } catch (e) {} });
     if (localStorage.getItem(PREV_OFF_KEY) === "1" && _prevToggle) { root.classList.add("is-prevoff"); _prevToggle.setAttribute("aria-pressed", "false"); _prevToggle.title = "Show the live preview"; }
-    // Resizable editor/preview divider - drag the handle to set the editor width; it persists per browser.
+    // Resizable editor/preview divider - drag to set the editor width (persists). Drag it right to shrink
+    // the preview down to a tablet/phone width and watch the site reflow - a live responsive view.
     (function () {
       var SPLIT_KEY = "rk:adm:split";
-      var main = root.querySelector(".adm__main"), rz = root.querySelector(".adm__resizer");
+      var main = root.querySelector(".adm__main"), rz = root.querySelector(".adm__resizer"), badge = root.querySelector("[data-prevw]");
       if (!main || !rz) return;
       try { var saved = localStorage.getItem(SPLIT_KEY); if (saved) main.style.setProperty("--adm-ecol", saved); } catch (e) {}
       var dragging = false;
       function clampPx(px) {
         var w = main.getBoundingClientRect().width || window.innerWidth;
-        var min = 420, max = Math.max(min, Math.min(w - 380, 1040));
-        return Math.round(Math.max(min, Math.min(max, px)));
+        var minEditor = 400, minPreview = 300, max = Math.max(minEditor, w - minPreview);
+        return Math.round(Math.max(minEditor, Math.min(max, px)));
       }
-      function setPx(px) { px = clampPx(px); main.style.setProperty("--adm-ecol", px + "px"); try { localStorage.setItem(SPLIT_KEY, px + "px"); } catch (e) {} }
+      function updateBadge(px) {
+        if (!badge) return;
+        var pw = Math.max(0, Math.round((main.getBoundingClientRect().width || 0) - px));
+        var lab = pw < 500 ? "Mobile" : pw < 900 ? "Tablet" : "Desktop";
+        badge.textContent = pw + "px \u00b7 " + lab;
+      }
+      function setPx(px) { px = clampPx(px); main.style.setProperty("--adm-ecol", px + "px"); updateBadge(px); try { localStorage.setItem(SPLIT_KEY, px + "px"); } catch (e) {} }
       rz.addEventListener("pointerdown", function (e) {
         if (root.classList.contains("is-prevoff") || root.classList.contains("is-noprev")) return;
         dragging = true; try { rz.setPointerCapture(e.pointerId); } catch (x) {}
+        var ed0 = root.querySelector(".adm__editor"); updateBadge(ed0 ? ed0.getBoundingClientRect().width : 0);
         root.classList.add("is-resizing"); e.preventDefault();
       });
       rz.addEventListener("pointermove", function (e) { if (dragging) setPx(e.clientX - main.getBoundingClientRect().left); });
