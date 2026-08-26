@@ -1427,12 +1427,14 @@
   // their intent to the parent editor, which mutates the draft and re-renders the preview.
   function pvToolbarHtml(idx, total, locked) {
     var up = idx <= 0, down = idx >= total - 1;
-    return '<button type="button" class="pjtb__b" data-pjtb="add" title="Add a section above" aria-label="Add a section above"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>' +
-      '<button type="button" class="pjtb__b" data-pjtb="up"' + (up ? " disabled" : "") + ' title="Move up" aria-label="Move up">\u2191</button>' +
-      '<button type="button" class="pjtb__b" data-pjtb="down"' + (down ? " disabled" : "") + ' title="Move down" aria-label="Move down">\u2193</button>' +
-      '<button type="button" class="pjtb__b" data-pjtb="dup" title="Duplicate section" aria-label="Duplicate section"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
-      '<button type="button" class="pjtb__b pjtb__b--lock' + (locked ? " is-locked" : "") + '" data-pjtb="lock" title="' + (locked ? "Locked \u2014 click to unlock" : "Lock \u2014 deeper-cut only") + '" aria-label="Toggle lock"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' + (locked ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<path d="M8 10.5V6.8a4 4 0 0 1 7.5-1.6"/>') + '</svg></button>' +
-      '<button type="button" class="pjtb__b pjtb__b--danger" data-pjtb="del" title="Remove section" aria-label="Remove section">\u2715</button>';
+    // same house-style icon family as the editor's per-row controls (24-grid, 1.75 stroke, currentColor)
+    var ic = function (p) { return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none">' + p + '</svg>'; };
+    return '<button type="button" class="pjtb__b" data-pjtb="add" title="Add a section above" aria-label="Add a section above">' + ic('<path d="M5 12h14"/><path d="M12 5v14"/>') + '</button>' +
+      '<button type="button" class="pjtb__b" data-pjtb="up"' + (up ? " disabled" : "") + ' title="Move up" aria-label="Move up">' + ic('<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>') + '</button>' +
+      '<button type="button" class="pjtb__b" data-pjtb="down"' + (down ? " disabled" : "") + ' title="Move down" aria-label="Move down">' + ic('<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>') + '</button>' +
+      '<button type="button" class="pjtb__b" data-pjtb="dup" title="Duplicate section" aria-label="Duplicate section">' + ic('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>') + '</button>' +
+      '<button type="button" class="pjtb__b pjtb__b--lock' + (locked ? " is-locked" : "") + '" data-pjtb="lock" title="' + (locked ? "Locked \u2014 click to unlock" : "Lock \u2014 deeper-cut only") + '" aria-label="Toggle lock">' + ic(locked ? '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>' : '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>') + '</button>' +
+      '<button type="button" class="pjtb__b pjtb__b--danger" data-pjtb="del" title="Remove section" aria-label="Remove section">' + ic('<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>') + '</button>';
   }
   function applyPreviewToolbar() {
     if (!PREVIEW || !overlay) return;
