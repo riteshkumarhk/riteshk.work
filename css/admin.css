@@ -173,6 +173,17 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__dev-nm { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .adm__dev-dim { flex: 0 0 auto; font-family: var(--mono); font-size: .62rem; letter-spacing: .02em; color: var(--text-faint); }
 .adm__dev-opt.is-tight .adm__dev-dim { color: var(--accent); }
+.adm__dev-del { margin-left: .1rem; display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none; border-radius: 5px; color: var(--text-faint); opacity: 0; }
+.adm__dev-opt:hover .adm__dev-del, .adm__dev-opt:focus-within .adm__dev-del { opacity: 1; }
+.adm__dev-del:hover { color: #ff7a7a; background: rgba(255,122,122,.14); }
+.adm__dev-del svg { width: 12px; height: 12px; }
+.adm__dev-add { display: flex; align-items: center; gap: .35rem; margin-top: .35rem; padding: .5rem .3rem .3rem; border-top: 1px solid var(--line); }
+.adm__dev-add input { width: 3.6em; box-sizing: border-box; padding: .34rem .4rem; margin: 0; border: 1px solid var(--line); border-radius: 7px; background: rgba(255,255,255,.03); color: var(--text); font-family: var(--mono); font-size: .72rem; text-align: center; -moz-appearance: textfield; appearance: textfield; }
+.adm__dev-add input:focus { outline: none; border-color: var(--accent); }
+.adm__dev-add input::-webkit-outer-spin-button, .adm__dev-add input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.adm__dev-x { color: var(--text-faint); font-family: var(--mono); font-size: .7rem; }
+.adm__dev-addbtn { margin-left: auto; padding: .34rem .75rem; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--text-dim); font-size: .74rem; cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
+.adm__dev-addbtn:hover { color: var(--text); border-color: var(--accent); background: rgba(216,166,87,.08); }
 @media (max-width: 1023px) {
   /* row 1 = brand + all actions (top-right); row 2 = tabs; row 3 = the publish bar (its own block below) */
   .adm__brand { order: 1; margin-right: auto; }

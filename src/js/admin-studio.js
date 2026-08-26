@@ -153,7 +153,33 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     { id: "desktop", name: "Desktop", cat: "desktop", w: 1440, h: 900 },
     { id: "fullhd", name: "Full HD", cat: "desktop", w: 1920, h: 1080 }
   ];
-  function deviceById(id) { for (var i = 0; i < DEVICES.length; i++) if (DEVICES[i].id === id) return DEVICES[i]; return DEVICES[0]; }
+  // Custom sizes the user adds (persisted) + the actual screen the studio is open on - so a brand-new
+  // device auto-appears the moment you view the studio on it, with no edit to the list above.
+  var CUSTOM_DEV_KEY = "rk:preview:customDevices";
+  function loadCustomDevices() {
+    try {
+      var a = JSON.parse(localStorage.getItem(CUSTOM_DEV_KEY) || "[]");
+      return (Array.isArray(a) ? a : []).filter(function (d) { return d && +d.w >= 200 && +d.h >= 200; }).map(function (d) {
+        var w = Math.round(+d.w), h = Math.round(+d.h);
+        return { id: d.id || ("custom-" + w + "x" + h), name: d.name || (w + "\u00d7" + h), cat: "custom", w: w, h: h };
+      });
+    } catch (e) { return []; }
+  }
+  var customDevices = loadCustomDevices();
+  function saveCustomDevices() { try { localStorage.setItem(CUSTOM_DEV_KEY, JSON.stringify(customDevices)); } catch (e) {} }
+  function thisDevice() {
+    var s = window.screen || {};
+    var w = Math.round(s.width || window.innerWidth || 0), h = Math.round(s.height || window.innerHeight || 0);
+    if (w < 200 || h < 200) return null;
+    return { id: "thisdevice", name: "This screen", cat: "detected", w: w, h: h };
+  }
+  function allDevices() { var td = thisDevice(); return (td ? [td] : []).concat(DEVICES, customDevices); }
+  function deviceById(id) { var all = allDevices(); for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i]; return DEVICES[0]; }
+  function devIconFor(d) {
+    if (!d || d.cat === "flex") return DEV_ICON.responsive;
+    if (DEV_ICON[d.cat]) return DEV_ICON[d.cat];
+    var w = d.w || 0; return w < 600 ? DEV_ICON.phone : w < 1100 ? DEV_ICON.tablet : DEV_ICON.desktop;
+  }
   var DEV_ICON = {
     responsive: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>',
     phone: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>',
@@ -161,17 +187,20 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     desktop: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
   };
   function deviceOptsHtml() {
-    var groups = [["flex", ""], ["phone", "Phones"], ["tablet", "Tablets"], ["desktop", "Desktops"]];
+    var groups = [["flex", ""], ["detected", "Detected"], ["phone", "Phones"], ["tablet", "Tablets"], ["desktop", "Desktops"], ["custom", "Yours"]];
+    var pool = allDevices();
     var html = "";
     groups.forEach(function (g) {
-      var items = DEVICES.filter(function (d) { return d.cat === g[0]; });
+      var items = pool.filter(function (d) { return d.cat === g[0]; });
       if (!items.length) return;
       if (g[1]) html += '<div class="adm__dev-grp">' + g[1] + "</div>";
       items.forEach(function (d) {
         var dim = d.cat === "flex" ? "Drag to resize" : (d.w + "\u00d7" + d.h);
-        html += '<button class="adm__dev-opt" data-dev="' + d.id + '" type="button">' + (DEV_ICON[d.cat === "flex" ? "responsive" : d.cat] || "") + '<span class="adm__dev-nm">' + escHtml(d.name) + '</span><span class="adm__dev-dim" data-fit>' + dim + "</span></button>";
+        var del = d.cat === "custom" ? '<span class="adm__dev-del" data-devdel="' + escAttr(d.id) + '" title="Remove" aria-label="Remove">' + IC.trash + "</span>" : "";
+        html += '<button class="adm__dev-opt' + (d.cat === "custom" ? " has-del" : "") + '" data-dev="' + escAttr(d.id) + '" type="button">' + devIconFor(d) + '<span class="adm__dev-nm">' + escHtml(d.name) + '</span><span class="adm__dev-dim" data-fit>' + dim + "</span>" + del + "</button>";
       });
     });
+    html += '<div class="adm__dev-add"><input type="number" class="adm__dev-w" placeholder="W" min="200" max="4000" aria-label="Custom width" /><span class="adm__dev-x">\u00d7</span><input type="number" class="adm__dev-h" placeholder="H" min="200" max="4000" aria-label="Custom height" /><button class="adm__dev-addbtn" type="button" data-devadd>Add</button></div>';
     return html;
   }
   let openBlock = -1; // which section (block) is expanded in the L2 sections accordion
@@ -5837,7 +5866,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var d = deviceById(previewDevice), isDev = d.cat !== "flex";
     root.classList.toggle("is-deviceprev", isDev);
     var ic = root.querySelector("[data-dev-ic]");
-    if (ic) ic.innerHTML = DEV_ICON[isDev ? d.cat : "responsive"] || DEV_ICON.responsive;
+    if (ic) ic.innerHTML = devIconFor(d);
     var nm = root.querySelector("[data-dev-lbl]");
     if (nm) nm.textContent = isDev ? d.name : "Responsive";
     root.querySelectorAll(".adm__dev-opt").forEach(function (o) { o.classList.toggle("is-on", o.dataset.dev === previewDevice); });
@@ -14524,15 +14553,24 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           o.classList.toggle("is-tight", s < 0.999);
         });
       }
-      if (_devBtn) _devBtn.addEventListener("click", function (e) { e.stopPropagation(); var open = _devPop.hidden; if (open) annotateFits(); _devPop.hidden = !open; _devWrap.classList.toggle("is-open", open); _devBtn.setAttribute("aria-expanded", open ? "true" : "false"); });
-      _devWrap.querySelectorAll(".adm__dev-opt").forEach(function (o) {
-        o.addEventListener("click", function () {
-          previewDevice = o.dataset.dev || "responsive";
-          try { localStorage.setItem("rk:preview:device", previewDevice); } catch (e) {}
-          applyPreviewDevice();
-          _devClose();
-        });
+      function pickDevice(id) { previewDevice = id || "responsive"; try { localStorage.setItem("rk:preview:device", previewDevice); } catch (e) {} applyPreviewDevice(); }
+      function addCustom() {
+        var wEl = _devPop.querySelector(".adm__dev-w"), hEl = _devPop.querySelector(".adm__dev-h");
+        var w = Math.round(+((wEl && wEl.value) || 0)), h = Math.round(+((hEl && hEl.value) || 0));
+        if (!(w >= 200 && w <= 4000 && h >= 200 && h <= 4000)) { if (wEl) try { wEl.focus(); } catch (e) {} status("Enter a width and height between 200 and 4000."); return; }
+        var id = "custom-" + w + "x" + h;
+        if (!customDevices.some(function (d) { return d.id === id; })) { customDevices.push({ id: id, name: w + "\u00d7" + h, cat: "custom", w: w, h: h }); saveCustomDevices(); }
+        _devPop.innerHTML = deviceOptsHtml(); pickDevice(id); annotateFits(); _devClose();
+      }
+      if (_devBtn) _devBtn.addEventListener("click", function (e) { e.stopPropagation(); var open = _devPop.hidden; if (open) { _devPop.innerHTML = deviceOptsHtml(); applyPreviewDevice(); annotateFits(); } _devPop.hidden = !open; _devWrap.classList.toggle("is-open", open); _devBtn.setAttribute("aria-expanded", open ? "true" : "false"); });
+      _devPop.addEventListener("click", function (e) {
+        var del = e.target.closest("[data-devdel]");
+        if (del) { e.preventDefault(); e.stopPropagation(); var id = del.getAttribute("data-devdel"); customDevices = customDevices.filter(function (d) { return d.id !== id; }); saveCustomDevices(); if (previewDevice === id) pickDevice("responsive"); _devPop.innerHTML = deviceOptsHtml(); applyPreviewDevice(); annotateFits(); return; }
+        if (e.target.closest("[data-devadd]")) { e.preventDefault(); addCustom(); return; }
+        var opt = e.target.closest(".adm__dev-opt");
+        if (opt) { pickDevice(opt.dataset.dev); _devClose(); }
       });
+      _devPop.addEventListener("keydown", function (e) { if (e.key === "Enter" && (e.target.classList.contains("adm__dev-w") || e.target.classList.contains("adm__dev-h"))) { e.preventDefault(); addCustom(); } });
       window.addEventListener("resize", refitDevice);
       document.addEventListener("click", function (e) { if (!_devWrap.contains(e.target)) _devClose(); });
       applyPreviewDevice();
