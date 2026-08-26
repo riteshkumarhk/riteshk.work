@@ -13529,7 +13529,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="pass__box"><div class="wb__chrome" data-wb-chrome><button type="button" class="wb__chrome-btn" data-wb-min title="Pop out \u2014 float the timer + mic on top while you whiteboard elsewhere" aria-label="Pop out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" stroke="none"/></svg></button><button type="button" class="wb__chrome-btn" data-wb-max title="Maximise" aria-label="Maximise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button></div><div class="pass__title">' + IC.board + ' Whiteboard coach</div>' +
       '<div class="pass__sub">Rehearse a live design exercise. Pick the length and a mode \u2014 I\u2019ll set a realistic prompt' + (storyJdText() ? " tailored to your target role" : "") + ", give you a timed game-plan, then coach you or run a mock.</div>" +
       '<div class="wb__setup">' +
-        '<div data-wb-hist style="margin-bottom:1.1rem" hidden></div>' +
+        '<div class="ats__cols"><div class="ats__main">' +
         '<div class="af"><label class="af__label">How long is the exercise</label><div class="story__opts wb__opts3">' +
           WB_MINS.map(function (d) { return '<button type="button" class="story__opt' + (st.mins === d[0] ? " is-on" : "") + '" data-wb-mins="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
         "</div></div>" +
@@ -13562,6 +13562,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<input type="text" class="wb__brief" placeholder="Domain or product to riff on \u2014 e.g. fintech onboarding, transit app\u2026" value="' + escAttr(st.brief || "") + '" />' +
           '<textarea class="cl__jd wb__own" rows="3" placeholder="\u2026or paste a specific prompt to use verbatim (leave blank and I\u2019ll invent one)."></textarea>' +
         "</div>" +
+        '</div><aside class="prep-hist" data-wb-hist></aside></div>' +
       "</div>" +
       '<div class="wb__stage" hidden></div>' +
       '<div class="pass__err"></div>' +
@@ -13640,8 +13641,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (convoHint) convoHint.textContent = wbSpeech.sttOk ? "Talk mode uses your mic \u2014 speak your moves and the interviewer replies out loud. Works best in Chrome or Edge." : "Talk mode needs Chrome or Edge \u2014 typing works everywhere.";
     var histBar = modal.querySelector("[data-wb-hist]");
     function wbHistHtml() {
+      var items = prepList("wb");
+      var head = '<div class="prep-hist__h">Saved sessions</div>';
+      if (!items.length) return head + '<div class="prep-hist__empty">Your coaching and mock sessions save here automatically \u2014 resume any one with its prompt, plan and exchanges intact.</div>';
       var LV = { exec: "VP / Exec", staff: "Staff / Principal", senior: "Senior" };
-      return '<div class="prep-hist__h">Resume a session</div><div class="prep-hist__list">' + prepList("wb").map(function (e) {
+      return head + '<div class="prep-hist__list">' + items.map(function (e) {
         var m = e.meta || {};
         var sub = (m.mode === "coach" ? "Coaching" : "Mock interview") + (m.mins ? " \u00b7 " + m.mins + " min" : "") + (m.level ? " \u00b7 " + (LV[m.level] || m.level) : "") + (m.turns ? " \u00b7 " + m.turns + " exchange" + (m.turns === 1 ? "" : "s") : "");
         return '<div class="prep-h prep-h--txt" role="button" tabindex="0" data-wb-hist-open="' + e.id + '">' +
@@ -13650,7 +13654,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           "</div>";
       }).join("") + "</div>";
     }
-    function paintHist() { if (!histBar) return; var has = prepList("wb").length > 0; histBar.hidden = !has; histBar.innerHTML = has ? wbHistHtml() : ""; }
+    function paintHist() { if (histBar) histBar.innerHTML = wbHistHtml(); }
     if (histBar) histBar.addEventListener("click", function (e) {
       var del = e.target.closest("[data-wb-hist-del]");
       if (del) { e.stopPropagation(); prepDel("wb", del.dataset.wbHistDel); if (sessId === del.dataset.wbHistDel) sessId = null; paintHist(); return; }
