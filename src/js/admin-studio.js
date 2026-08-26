@@ -13845,6 +13845,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           try { rec.continuous = true; rec.interimResults = true; } catch (e) {}
           committed = (msgEl && msgEl.value.trim()) || ""; accumulated = committed; stopping = false; killed = false;
           rec.onresult = function (ev) {
+            if (killed) return; // ignore any trailing result once the turn has been finalised + sent
             var finalT = "", interim = "";
             for (var i = 0; i < ev.results.length; i++) { if (ev.results[i].isFinal) finalT += ev.results[i][0].transcript; else interim += ev.results[i][0].transcript; }
             accumulated = (committed + " " + finalT).replace(/\s+/g, " ").trim();
@@ -13863,9 +13864,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
             if (killed) { setMic(false); return; }
             // The recognizer stops on silence \u2014 if the user hasn't tapped "done", keep the answer so far and resume listening so a think-pause never sends.
             if (!stopping) { committed = accumulated; try { rec.start(); return; } catch (e) { setMic(false); if (liveEl) liveEl.textContent = ""; return; } }
-            setMic(false);
+            // Finalising: capture the answer, then FULLY tear the recognizer down so no trailing result can
+            // repopulate the composer or double-send, and clear the buffers so the next turn starts empty.
             var t = (accumulated + " " + (liveEl ? liveEl.textContent : "")).replace(/\s+/g, " ").trim();
-            if (t && msgEl) { msgEl.value = t; if (liveEl) liveEl.textContent = ""; if (sendBtn) sendBtn.click(); }
+            killed = true; committed = ""; accumulated = "";
+            try { rec.onresult = rec.onerror = null; rec.abort(); } catch (e) {}
+            setMic(false);
+            if (liveEl) liveEl.textContent = "";
+            if (t && msgEl) { msgEl.value = t; if (sendBtn) sendBtn.click(); }
           };
           try { rec.start(); setMic(true); } catch (e) { setMic(false); err.textContent = "Couldn\u2019t start listening \u2014 tap again."; }
         };
