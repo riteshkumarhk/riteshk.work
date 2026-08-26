@@ -661,6 +661,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     edit: svgIco('<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
     refresh: svgIco('<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v5h-5"/>'),
     back: svgIco('<path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>'),
+    fwd: svgIco('<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>', 18),
     ext: svgIco('<path d="M7 17 17 7"/><path d="M7 7h10v10"/>'),
     check: svgIco('<path d="M20 6 9 17l-5-5"/>'),
     add: svgIco('<path d="M5 12h14"/><path d="M12 5v14"/>'),
@@ -2186,7 +2187,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<span class="ats__badge prep-row__b">' + r[1] + '</span>' +
         '<span class="prep-row__x"><b>' + escHtml(r[2]) + '</b><span>' + escHtml(r[3]) + '</span></span>' +
         (n ? '<span class="prep-row__n">' + n + ' saved</span>' : '') +
-        '<span class="prep-row__go" aria-hidden="true">\u2192</span>' +
+        '<span class="prep-row__go" aria-hidden="true">' + IC.fwd + '</span>' +
         '</div>';
     }).join("") + '</div>';
   }

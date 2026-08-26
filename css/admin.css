@@ -1772,8 +1772,8 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .prep-row__x b { font-size: .92rem; font-weight: 600; }
 .prep-row__x span { font-size: .76rem; color: var(--text-dim); line-height: 1.4; }
 .prep-row__n { flex: 0 0 auto; font-family: var(--mono, monospace); font-size: .6rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); border: 1px solid var(--line); border-radius: 999px; padding: .18rem .55rem; white-space: nowrap; }
-.prep-row__go { flex: 0 0 auto; color: var(--text-faint); font-size: 1.15rem; transition: color .12s, transform .12s; }
-.prep-row:hover .prep-row__go { color: var(--accent); transform: translateX(2px); }
+.prep-row__go { flex: 0 0 auto; display: flex; align-items: center; color: var(--text-faint); transition: color .12s, transform .12s; }
+.prep-row:hover .prep-row__go { color: var(--accent); transform: translateX(3px); }
 
 /* Prepare tool dialog: reuse the .pass overlay, widen the box, strip the inner panel frame */
 .prep-dialog .pass__box { position: relative; width: min(780px, 94vw); padding: 1.6rem 1.5rem; }
