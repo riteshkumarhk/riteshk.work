@@ -8719,6 +8719,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function onClick(e) {
     if (e.target && e.target.classList && e.target.classList.contains("adm__settings")) { closeSettings(); return; }
     if (root && !e.target.closest(".hsize")) { var _oh = root.querySelectorAll(".hsize.is-open"); if (_oh.length) _oh.forEach(function (x) { x.classList.remove("is-open"); }); }
+    // soft-dismiss the icon-picker flyout (a <details>) on any click outside it — matches the other flyouts
+    if (root) { var _cdd = e.target.closest("details.icondd"); root.querySelectorAll("details.icondd[open]").forEach(function (x) { if (x !== _cdd) x.open = false; }); }
     const rtb = e.target.closest("[data-rt]");
     if (rtb) { rtAction(rtb); return; }
     if (e.target.closest("[data-grip]")) return; // grip is a drag handle, not a click target

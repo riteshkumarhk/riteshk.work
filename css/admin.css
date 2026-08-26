@@ -1028,8 +1028,8 @@ body.adm-lock .cursor { display: none !important; }
   .af select, .adm select, .pass select,
   .af select::picker(select), .adm select::picker(select), .pass select::picker(select) { appearance: base-select; }
 
-  /* closed button — replace the native picker triangle with the SAME masked SVG chevron the icon picker uses (mask lets --accent colour it), right-aligned, rotating + turning accent on open */
-  .af select, .adm select, .pass select { background-image: none; padding-right: .7rem; }
+  /* closed button — replace the native picker triangle with the SAME masked SVG chevron the icon picker uses (mask lets --accent colour it), right-aligned, rotating + turning accent on open. align-items:center vertically centres the fixed-height picker-icon (default stretch pins it to the top). */
+  .af select, .adm select, .pass select { background-image: none; padding-right: .7rem; align-items: center; }
   .af select::picker-icon, .adm select::picker-icon, .pass select::picker-icon {
     content: ""; width: 11px; height: 11px; margin-left: auto; background-color: var(--text-dim);
     -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center / 11px no-repeat;
@@ -2142,6 +2142,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 /* this select lives on the white résumé paper, so its popup is themed LIGHT (not the dark studio palette) */
 @supports (appearance: base-select) {
   .rbz__addsel, .rbz__addsel::picker(select) { appearance: base-select; }
+  .rbz__addsel { align-items: center; }
   .rbz__addsel::picker-icon { content: ""; width: 10px; height: 10px; margin-left: .35rem; background-color: #8a8378;
     -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center / 10px no-repeat;
     mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center / 10px no-repeat;
