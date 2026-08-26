@@ -319,7 +319,8 @@
     }
   }
   var _favBound = false, _favDefault = null, _lastIcon = null;
-  function favColor() { try { return (window.__theme && window.__theme.isLight()) ? "#141417" : "#ECE7E1"; } catch (e) { return "#ECE7E1"; } }
+  // Favicon ink follows the SYSTEM (OS/browser) light-dark setting, not the site's own theme, so it stays legible against the browser tab bar.
+  function favColor() { try { return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "#ECE7E1" : "#141417"; } catch (e) { return "#ECE7E1"; } }
   function svgRecolor(svg, color) {
     var s = svgSan(svg);
     s = s.replace(/(fill|stroke)\s*=\s*(["'])(?!\s*(?:none|transparent|url\())[^"']*\2/gi, '$1="' + color + '"');
@@ -340,10 +341,8 @@
     link.setAttribute("href", _lastIcon ? favHref(_lastIcon) : _favDefault);
     if (!_favBound) {
       _favBound = true;
-      window.addEventListener("theme:change", function () {
-        var l = document.querySelector('link[rel="icon"]');
-        if (l && _lastIcon) l.setAttribute("href", favHref(_lastIcon));
-      });
+      var _reFav = function () { var l = document.querySelector('link[rel="icon"]'); if (l && _lastIcon) l.setAttribute("href", favHref(_lastIcon)); };
+      try { var _mq = window.matchMedia("(prefers-color-scheme: dark)"); if (_mq.addEventListener) _mq.addEventListener("change", _reFav); else if (_mq.addListener) _mq.addListener(_reFav); } catch (e) {}
     }
   }
 
