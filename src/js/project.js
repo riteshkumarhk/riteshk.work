@@ -1805,7 +1805,7 @@
     var thumbs = [].slice.call(stage.querySelectorAll(".pj__stage-thumb"));
     var fill = stage.querySelector("[data-stage-fill]");
     var noAuto = document.documentElement.classList.contains("lite") || PREVIEW;
-    var idx = 0, timer = 0, paused = false, userPaused = false, visible = true, curVid = null, onEnd = null, onTime = null, io = null;
+    var idx = 0, timer = 0, paused = false, userPaused = false, visible = true, curVid = null, onEnd = null, onTime = null, io = null, ytDone = {};
     function clearTimer() { if (timer) { clearTimeout(timer); timer = 0; } }
     function detachVid() { if (curVid) { if (onEnd) curVid.removeEventListener("ended", onEnd); if (onTime) curVid.removeEventListener("timeupdate", onTime); } curVid = null; onEnd = null; onTime = null; }
     function stopVideos() { slides.forEach(function (s) { var v = s.querySelector("video"); if (v) { try { v.pause(); v.currentTime = 0; } catch (e) {} } }); }
@@ -1841,24 +1841,29 @@
         // Baseline: auto-switch after the set duration — same as any slide, and the fallback if the video
         // can't autoplay. If a YouTube embed does play, ytPlay() cancels this timer and advances on ENDED.
         startTimer(isYT ? Math.max(+s.getAttribute("data-dur") || 5000, 4000) : (+s.getAttribute("data-dur") || 5000));
-        if (isYT) ytPlay(s, ifr);
+        // Autoplay a YouTube slide only the FIRST time it appears. On later loops just let the baseline
+        // timer advance (no forced replay from the start); a manual Play is still honoured — it cancels
+        // the timer and the slide advances when the clip ends.
+        if (isYT) { var firstYT = !ytDone[idx]; ytDone[idx] = true; ytPlay(s, ifr, firstYT); }
       } else { startTimer(+s.getAttribute("data-dur") || 5000); }
     }
     function ytPauseAll() { slides.forEach(function (s) { var f = s.querySelector(".pjb__frame-el"); if (f && f.__yt) { try { f.__yt.pauseVideo(); } catch (e) {} } }); }
     // Attach the IFrame API to a YouTube slide, try muted autoplay (the only kind browsers allow), and
     // advance when it ends. onReady/onStateChange re-check the slide is still active (the API is async).
-    function ytPlay(s, ifr) {
+    function ytPlay(s, ifr, autoplay) {
       loadYT().then(function (YT) {
         if (slides[idx] !== s || paused || !visible || noAuto) return;
         var onState = function (e) {
           if (slides[idx] !== s) return;
-          if (e.data === YT.PlayerState.PLAYING) { clearTimer(); setFill(0); }   // playing -> advance on ENDED, not by timer
+          if (e.data === YT.PlayerState.PLAYING) { clearTimer(); setFill(0); }   // playing (auto OR manual) -> advance on ENDED, not by timer
           else if (e.data === YT.PlayerState.ENDED) { next(); }
         };
         if (!ifr.__yt) {
           if (!ifr.id) ifr.id = "ytf" + (++ytSeq);
-          ifr.__yt = new YT.Player(ifr.id, { events: { onReady: function (ev) { if (slides[idx] === s && !paused && visible && !noAuto) { try { ev.target.mute(); ev.target.playVideo(); } catch (e) {} } }, onStateChange: onState } });
-        } else { try { ifr.__yt.mute(); ifr.__yt.playVideo(); } catch (e) {} }
+          ifr.__yt = new YT.Player(ifr.id, { events: { onReady: function (ev) { if (autoplay && slides[idx] === s && !paused && visible && !noAuto) { try { ev.target.mute(); ev.target.playVideo(); } catch (e) {} } }, onStateChange: onState } });
+        } else if (autoplay) { try { ifr.__yt.mute(); ifr.__yt.playVideo(); } catch (e) {} }
+        // autoplay=false with an existing player: do nothing — onStateChange still catches a manual Play
+        // (which cancels the baseline timer) and advances on ENDED.
       });
     }
     function pause() { paused = true; clearTimer(); ytPauseAll(); if (curVid) { try { curVid.pause(); } catch (e) {} } if (fill) { try { var w = getComputedStyle(fill).width; fill.style.transition = "none"; fill.style.width = w; } catch (e) {} } }
