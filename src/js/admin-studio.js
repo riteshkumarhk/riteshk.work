@@ -5422,12 +5422,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var gridEl = modal.querySelector(".iconlib__grid"), qEl = modal.querySelector(".iconlib__q"), emptyEl = modal.querySelector(".iconlib__empty"), sumEl = modal.querySelector("[data-iconsum]"), genBtn = modal.querySelector("[data-gen]");
     function cellHtml(n) {
       var isCustom = !!(data.customIcons && data.customIcons[n]);
-      var uses = usage[n] || 0;
       var kw = '<span class="iconlib__kw" data-kw="' + escAttr(n) + '" title="Edit keywords" aria-label="Edit keywords"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>';
-      var del = isCustom ? '<button type="button" class="iconlib__del" data-del="' + escAttr(n) + '" title="Delete this custom icon" aria-label="Delete icon">' + IC.trash + "</button>" : "";
       return '<div class="iconlib__cell' + (isCustom ? " is-custom" : "") + '">' +
         '<button type="button" class="iconlib__b" data-icon="' + escAttr(n) + '" title="' + escAttr(n) + '">' + kw + admIcon(n) + '<span class="iconlib__nm">' + escHtml(n) + "</span></button>" +
-        '<span class="iconlib__meta">' + (isCustom ? '<span class="iconlib__tag">Custom</span>' : "") + '<span class="iconlib__uses">' + (uses ? ("Used " + uses + "x") : "Unused") + "</span>" + del + "</span>" +
         "</div>";
     }
     function matches() { return rankIconNames(admIconNames()).filter(function (n) { return iconMatchesQuery(n, query); }); }
@@ -5448,8 +5445,6 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     qEl.addEventListener("input", function () { query = (qEl.value || "").trim(); renderGrid(); });
     try { qEl.focus(); } catch (e) {}
     gridEl.addEventListener("click", function (e) {
-      var delBtn = e.target.closest(".iconlib__del");
-      if (delBtn) { e.preventDefault(); e.stopPropagation(); deleteCustomIconFlow(delBtn.getAttribute("data-del"), renderGrid); return; }
       var cell = e.target.closest(".iconlib__cell"); if (!cell) return;
       var nameEl = cell.querySelector(".iconlib__b"); if (!nameEl) return;
       iconKeywordEditor(nameEl.getAttribute("data-icon"), cell.querySelector(".iconlib__kw"), renderGrid);
@@ -5476,7 +5471,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         : '<span class="kwed__none">No keywords yet.</span>';
     }
     function render() {
-      var uses = isGen ? iconUsageSites(name).length : 0;
+      var uses = iconUsageSites(name).length;
       var nameEl = isGen
         ? '<input type="text" class="kwed__nm-edit" value="' + escAttr(name) + '" spellcheck="false" aria-label="Icon name" title="Rename this icon" />'
         : '<span class="kwed__nm">' + escHtml(name) + '</span>';
@@ -5485,7 +5480,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="kwed__lbl"><span>Keywords</span><span class="kwed__count">' + list.length + '/10</span></div>' +
         '<div class="kwed__chips">' + chips() + "</div>" +
         (list.length < 10 ? '<div class="kwed__add"><input type="text" class="kwed__in" placeholder="Add a keyword\u2026" /><button type="button" class="kwed__plus" data-add aria-label="Add">+</button></div>' : "") +
-        (isGen ? '<div class="kwed__gen"><span class="kwed__uses">Used in <b>' + uses + "</b> place" + (uses === 1 ? "" : "s") + '</span><button type="button" class="kwed__del" data-del>Delete icon</button></div>' : "");
+        '<div class="kwed__gen"><span class="kwed__uses">Used in <b>' + uses + "</b> place" + (uses === 1 ? "" : "s") + "</span>" + (isGen ? '<button type="button" class="kwed__del" data-del>Delete icon</button>' : "") + "</div>";
       place();
     }
     function place() {
