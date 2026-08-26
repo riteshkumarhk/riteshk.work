@@ -27,7 +27,11 @@
 .pass input:focus { outline: none; border-color: var(--accent); }
 /* Checkboxes must not inherit the full-width password-field styling above. */
 .pass input[type="checkbox"] { width: auto; flex: 0 0 auto; margin: 2px 0 0; padding: 0; text-align: left; accent-color: var(--accent); cursor: pointer; }
-.pass.rkreq input { text-align: left; } /* contact fields (name/email/company) read left-to-right, unlike the centered passcode entry */
+/* Text entry reads left-to-right. The centered `.pass input` default above was only meant for the short
+   passcode card, but it leaked into every modal's real fields (company, prompt, URL, filename…). Force
+   left everywhere — number/checkbox keep their own alignment. */
+.pass input:not([type="checkbox"]):not([type="number"]), .pass textarea { text-align: left; }
+.pass.rkreq input { text-align: left; } /* contact fields (name/email/company) read left-to-right */
 .rkreq__ts { margin: .2rem 0 .55rem; min-height: 65px; } /* Turnstile human-check widget slot */
 .pass__err { color: #ff7a7a; font-size: .74rem; min-height: 1.1em; margin-bottom: .6rem; }
 .pass__actions { display: flex; gap: .6rem; }
