@@ -519,6 +519,26 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   function histUndo() { if (histIndex > 0) histRestore(histIndex - 1); }
   function histRedo() { if (histIndex < histStack.length - 1) histRestore(histIndex + 1); }
+  // Keyboard undo/redo for the whole studio. Inside a text field / rich-text body the browser's own
+  // fine-grained undo wins; anywhere else (block moves, toggles, deletes\u2026) we step the data snapshots.
+  function histNativeTarget(el) {
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    var tag = el.tagName;
+    if (tag === "TEXTAREA") return true;
+    if (tag === "INPUT") return /^(|text|search|url|email|tel|password|number)$/.test((el.type || "text").toLowerCase());
+    return false;
+  }
+  function onUndoKey(e) {
+    if (e.altKey || !(e.ctrlKey || e.metaKey)) return;
+    var k = (e.key || "").toLowerCase();
+    if (k !== "z" && k !== "y") return;
+    if (!document.documentElement.classList.contains("adm-lock")) return;   // studio isn't the active surface
+    if (document.querySelector(".pass, .rbz")) return;                      // a dialog / r\u00e9sum\u00e9 builder owns undo
+    if (histNativeTarget(e.target)) return;                                 // let the focused field's native undo win
+    e.preventDefault();
+    if (k === "y" || e.shiftKey) histRedo(); else histUndo();
+  }
   function updateHistUI() {
     if (!root) return;
     var dirty = isDirty();
@@ -14461,6 +14481,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
 
     root.addEventListener("input", onInput);
     root.addEventListener("keydown", onIconKey);
+    // Ctrl/\u2318+Z undo, Ctrl+Shift+Z / Ctrl+Y redo \u2014 on document so it fires even when focus fell to <body> after a re-render.
+    document.addEventListener("keydown", onUndoKey);
     root.addEventListener("change", onChange);
     root.addEventListener("pointerdown", faPointerDown);
     root.addEventListener("click", onClick);
