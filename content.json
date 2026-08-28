@@ -170,6 +170,1132 @@
   ],
   "work": [
     {
+      "id": "w1787311876385",
+      "featured": true,
+      "theme": "grid",
+      "plateTag": "AI Recommendations",
+      "client": "Windows Copilot",
+      "period": "2024 — 2025",
+      "title": "Designing a Proactive AI Layer for Windows",
+      "desc": "While exploring Windows Skills and Copilot experiences, our team identified a larger opportunity beyond individual skills. Most computing systems are reactive, waiting for users to explicitly ask for help.\n\nI led the effort to define a recommendations framework that enables Windows and Copilot to proactively assist users based on context, behaviour, preferences, and system understanding. The framework introduced models for triggers, learning milestones, recommendation types, interaction surfaces, and trust principles that could scale across future Windows AI experiences.",
+      "tags": [
+        "Proactive Computing",
+        "AI Strategy",
+        "Systems Thinking",
+        "Platform Design",
+        "Recommendation Systems",
+        "Design Frameworks"
+      ],
+      "image": "/assets/uploads/ddf8c2eda7209e27d2170d18f48a3a6cae77f90d80e9be04b285cf60149301e4.webp",
+      "study": {
+        "tagline": "Defining how Windows and Copilot can move beyond responding to requests and begin proactively helping users based on context, behavior, and intent.",
+        "role": "Lead designer defining the foundational framework for Copilot recommendations by understanding implicit user needs",
+        "team": "1 Lead designer, 2 junior designers to work on high fidelity mocks, 1 Product Manager, 1 Engineer, 1 System Architect",
+        "timeline": "",
+        "scope": "Recommendation framework including user learning models, recommendation taxonomy, trigger systems, trust principles, and multi-surface delivery strategies for proactive AI experiences.",
+        "cover": "",
+        "unlockHash": "",
+        "blocks": [
+          {
+            "type": "text",
+            "nav": "User Segments",
+            "kicker": "Windows user segments",
+            "heading": "One Platform. Many Different Needs",
+            "body": "<div><p>Over a billion users, Windows serves people with very different goals, behaviours, and levels of engagement. Windows user segments are not mutually exclusive. The same user could move across multiple contexts depending on the task.</p></div>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "cards",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "title": "Gaming",
+                "body": "21%",
+                "icon": "",
+                "src": "/assets/uploads/18e2b859f576f672794ab0c4caca17d94eb9c5068ab1fea0cbeac14da7733596.webp"
+              },
+              {
+                "title": "Entertainment",
+                "body": "85%",
+                "icon": "",
+                "src": "/assets/uploads/666c6929017a9ef51eb00e4d315dfce881f3a1cf48a95e4e7f6be8a1fbccd6f1.webp"
+              },
+              {
+                "title": "Creative",
+                "body": "35%",
+                "icon": "",
+                "src": "/assets/uploads/a3dadfd8a2744b8cdf5f6fb1556e05f127707500cb7dd929ff8f3d4d8321c405.webp"
+              },
+              {
+                "title": "Business",
+                "body": "39%",
+                "icon": "",
+                "src": "/assets/uploads/7577cea7e6ed3707a68e5626a7d87487e8a45707ccffcab57f954d0da6486a91.webp"
+              },
+              {
+                "title": "Family",
+                "body": "1%",
+                "icon": "",
+                "src": "/assets/uploads/9d78e6a7c0fefdbff4ebc5e8d6d1c2aa8e2e1f4685e1fe1af2c3032f503e8273.jpg"
+              },
+              {
+                "title": "School",
+                "body": "44%",
+                "icon": "",
+                "src": "/assets/uploads/71fc48d855f9a69ec9ade2ce3f0616aa56b5c51e3a9dcd95f8257a2bfa2b826b.jpg"
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "statement",
+            "nav": "Problem Area",
+            "kicker": "Problem area",
+            "body": "Copilot promised <i>intelligence</i>. But intelligence remained <b>reactive.</b>",
+            "sub": "Users remain responsible for identifying problems, forming intent, and asking for help.",
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/12b0f0a8af87b9a7fb5dfda02802316ad3e252a8ade70f8e726f8c09aed4518d.webp",
+                "caption": ""
+              }
+            ],
+            "sep": false,
+            "editorName": "Copilot banner image"
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/416746332ce3c25c15d4b390da57b247386641cde4722dc9e1c7431753f27636.webp",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/bd663f67e59c328a3665e4d1d7f99499a89a866053cf955f072fb453ec34a0dc.avif",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/d78460e84ff59a8cffafaf32538017e918840154e7c5aea1d5441d2ed35476a3.webp",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/05ac744a89ae4c933f6ca5bd7aed690784a04cfbbfe1154a5d01bc528664a431.jpg",
+                "caption": ""
+              }
+            ],
+            "hsize": "sm",
+            "sep": false,
+            "editorName": "Copilot experiences"
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "<p>Copilot may be intelligent, but it only becomes useful once a user prompts it. Users understand computers. Computers don't yet understand users and requires intent drivers to serve.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "sm",
+            "sep": false,
+            "editorName": "Copilot may be intelligent, but it only becom…"
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Personal Computing Has Always Been Reactive",
+            "body": "<p>Whether it's search, settings, productivity software, or AI assistants, most experiences are still fundamentally reactive.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false,
+            "hsize": "sm"
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/1ace1ace834bfc07fd562fcc594e6082082d81174f402ba7bb7cbfda8bc04542.webp",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/476e3bef5a15b178d5a1e8d0dd8d0a7e611851f8633c5efc923d966e9f3f1b7a.webp",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/67f8e99f18c6adb1b6d5865753d8eb25883d30266783a8eb4695cfb76f824c96.webp",
+                "caption": ""
+              }
+            ],
+            "editorName": "User interaction with system images",
+            "sep": false,
+            "hsize": "sm"
+          },
+          {
+            "type": "text",
+            "nav": "The Opportunity",
+            "kicker": "The Opportunity",
+            "heading": "The intelligence had changed/ the interaction model had not.",
+            "body": "<p>Most valuable user needs never become prompts. Recognizing implicit needs is significantly harder than responding to explicit prompts.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true,
+            "hsize": ""
+          },
+          {
+            "type": "stickies",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "stickySize": "natural",
+            "items": [
+              {
+                "label": "USER SCENARIO",
+                "heading": "User expression/ prompt",
+                "body": "“ Can you switch to a more comfortable reading mode.”<div><br></div><div>“Make the screen easier on my eyes at night”</div>",
+                "src": ""
+              },
+              {
+                "label": "Reactive system response",
+                "heading": "Looks for explicit intents",
+                "body": "“Turn on dark mode.”<div><br></div><div>“Adjust screen brightness.”</div>",
+                "src": ""
+              },
+              {
+                "label": "Proactive system response",
+                "heading": "Understands implict user needs",
+                "body": "“As you’re working in low light condition turn on Dark mode. It will be easier to read and reduce strain associated with high brightness.”",
+                "src": ""
+              }
+            ],
+            "hsize": "sm",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Why Windows is uniquely positioned",
+            "body": "<p>Most AI assistants see only the moment of interaction.</p>\n\n<p>As an operating system, Windows sits in a uniquely powerful position with rich, continuous insight into how people actually work and use technology. That creates a real opportunity: to evolve Windows from a destination users turn to for help into a <strong>proactive guide and companion</strong> that supports people throughout their entire computing journey.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true,
+            "hsize": ""
+          },
+          {
+            "type": "cloud",
+            "nav": "",
+            "kicker": "",
+            "heading": "What Windows Sees",
+            "iconPos": "left",
+            "align": "left",
+            "desc": "",
+            "randomImp": false,
+            "fill": false,
+            "items": [
+              {
+                "text": "Devices",
+                "icon": "",
+                "imp": "low"
+              },
+              {
+                "text": "Accounts",
+                "icon": "",
+                "imp": "low"
+              },
+              {
+                "text": "Apps",
+                "icon": "",
+                "imp": "low"
+              },
+              {
+                "text": "Services",
+                "icon": "",
+                "imp": "low"
+              },
+              {
+                "text": "Workflows",
+                "icon": "",
+                "imp": "low"
+              },
+              {
+                "text": "Habits",
+                "icon": "",
+                "imp": "low"
+              },
+              {
+                "text": "System Health",
+                "icon": "",
+                "imp": "low"
+              }
+            ],
+            "hsize": "sm",
+            "sep": false
+          },
+          {
+            "type": "cloud",
+            "nav": "",
+            "kicker": "",
+            "heading": "Known Friction/ Pain",
+            "iconPos": "left",
+            "align": "left",
+            "desc": "",
+            "randomImp": false,
+            "fill": false,
+            "items": [
+              {
+                "text": "Authentication & Logins",
+                "icon": "",
+                "imp": "mid"
+              },
+              {
+                "text": "File Finding and Organizing",
+                "icon": "",
+                "imp": "mid"
+              },
+              {
+                "text": "Help & Troubleshooting",
+                "icon": "",
+                "imp": "mid"
+              },
+              {
+                "text": "Doing Repetitive Tasks",
+                "icon": "",
+                "imp": "mid"
+              },
+              {
+                "text": "Working Across Apps & Service",
+                "icon": "",
+                "imp": "mid"
+              },
+              {
+                "text": "Cross Device Integration",
+                "icon": "",
+                "imp": "mid"
+              },
+              {
+                "text": "Discovery, Learning, & Interacting with AI",
+                "icon": "",
+                "imp": "mid"
+              }
+            ],
+            "hsize": "sm",
+            "sep": false
+          },
+          {
+            "type": "cloud",
+            "nav": "",
+            "kicker": "",
+            "heading": "What if Windows is your guide companion?",
+            "iconPos": "left",
+            "align": "left",
+            "desc": "Windows has a unique opportunity to evolve into a guide and companion",
+            "randomImp": false,
+            "fill": false,
+            "items": [
+              {
+                "text": "Build on existing habits",
+                "icon": "",
+                "imp": "high"
+              },
+              {
+                "text": "Remove known friction/pains",
+                "icon": "",
+                "imp": "high"
+              },
+              {
+                "text": "Orchestrate across apps, services and devices",
+                "icon": "",
+                "imp": "high"
+              },
+              {
+                "text": "Be proactive",
+                "icon": "",
+                "imp": "high"
+              }
+            ],
+            "hsize": "sm",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Where should Windows Help?",
+            "body": "<p>Before defining a proactive assistance model, I wanted to understand where users were experiencing the most friction today.</p><p>Research pointed toward a consistent pattern.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "editorName": "Where should Windows Help"
+          },
+          {
+            "type": "media",
+            "locked": true,
+            "encStub": true,
+            "iv": "ylX4C9lSqdFGzW0i",
+            "ct": "BQCFzTwRbHJRSYiMn8ExoTwnJTX1Q8EJnovUcqX1TTGXpfaL32WcveKbcVObiAmSuRD9Qhkm4b3caIBVh2ch4mQzOyqa+gHmGjOuynPusiWmyLjWF3kiFssjPnSom3/mrJC6wBJZQ6jDGb5Ii/haE+hLbEUSjJP1ROqRtlmu1BRj8pM1evbNW4yIy2FFlMWgHZQrGJF9HoDQejtyFfkyI3Piwpz2clOQZ3zI6rjdPJt+jBBFLjNweutAvcLGiIUapqxmTYbJs3Nb/B7WJiDYfdArZi7D32pS2/zIrat4epB4dHsQIklb7/F1O9XZgLoW5csqFfGdanCk0ZskrIivBQ==",
+            "sep": false
+          },
+          {
+            "type": "statement",
+            "nav": "Intelligence Must Evolve",
+            "kicker": "Intelligence Must Evolve",
+            "body": "\"What if systems could understand implicit needs instead of waiting for explicit requests?\"",
+            "sub": "Users often don't know they need assistance.  Windows frequently has enough context to recognize it.",
+            "src": "",
+            "caption": "",
+            "sep": true
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Learning Milestones",
+            "body": "<p>To serve the users proactively, intelligence must evolve to understand them better.</p><p>I started with exploring a maturity milestone model describing how system learns and build understanding over time about the user.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "",
+            "sep": true
+          },
+          {
+            "type": "rows",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "label": "Day 0 to Day 45",
+                "cells": [
+                  {
+                    "heading": "Discover the user",
+                    "body": "",
+                    "src": ""
+                  },
+                  {
+                    "heading": "",
+                    "body": "Windows understands immediate context.<div><ul><li>device state</li><li>environment</li><li>active tasks</li></ul></div>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "Month 1 to Month 6",
+                "cells": [
+                  {
+                    "heading": "Know the user",
+                    "body": "",
+                    "src": ""
+                  },
+                  {
+                    "heading": "",
+                    "body": "Windows recognizes routines.<div><ul><li>repeated behaviours</li><li>recurring workflows</li><li>habits</li></ul></div>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "Month 6 to Year 1",
+                "cells": [
+                  {
+                    "heading": "Understands the user",
+                    "body": "",
+                    "src": ""
+                  },
+                  {
+                    "heading": "",
+                    "body": "Windows begins forming user models.<div><ul><li>preferences</li><li>patterns</li><li>intent</li></ul></div>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "Beyond 1 year",
+                "cells": [
+                  {
+                    "heading": "Deeply understands the user",
+                    "body": "",
+                    "src": ""
+                  },
+                  {
+                    "heading": "",
+                    "body": "Long-term understanding unlocks richer and more personalized assistance.",
+                    "src": ""
+                  }
+                ]
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/2acaf686d669d59c97152892e1d19a531b953d9bf66a0c5378e026e33547dd33.webp",
+                "caption": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Signals that Build Understanding",
+            "body": "Once I defined how intelligence evolves, the next question emerged: <span style=\"font-size: 0.9rem;\">What should it learn from?</span><div><span style=\"font-size: 0.9rem;\">I mapped the signals that help Windows develop understanding.</span></div>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": ""
+          },
+          {
+            "type": "cards",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "title": "Account Signals",
+                "body": "<ul><li>Account activity</li><li>Ecosystem interactions</li><li>Persona information</li></ul>",
+                "icon": "users",
+                "src": ""
+              },
+              {
+                "title": "Device Signals",
+                "body": "<ul><li>Device condition</li><li>Device performance</li><li>Usage behaviour</li></ul>",
+                "icon": "devices-3",
+                "src": ""
+              },
+              {
+                "title": "Behavioural Signals",
+                "body": "<ul><li>Routine actions</li><li>Tasks frequency</li><li>Historical patterns</li></ul>",
+                "icon": "brain",
+                "src": ""
+              },
+              {
+                "title": "Environmental Signals",
+                "body": "<ul><li>Location</li><li>Time</li><li>Surrounding conditions</li></ul>",
+                "icon": "landscape",
+                "src": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "Recommendation Framework",
+            "kicker": "Recommendation Framework",
+            "heading": "Connecting Understanding Into Action",
+            "body": "<p>The remaining challenge was building an operating model that translates user understanding and system signals into meaningful assistance, turning intelligence into action that actually helps.</p><p>This is where I landed the recommendation framework.</p><p></p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true,
+            "hsize": ""
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/3047415df741ebb3bd37ef83bd6c45a7b0a06129e9a8fd5dd928d50d822d2917.webp",
+                "caption": "Rather than designing individual recommendation experiences, I focused on defining a reusable framework that could scale across Windows and Copilot scenarios."
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "cards",
+            "nav": "",
+            "kicker": "",
+            "heading": "Framework Anatomy",
+            "items": [
+              {
+                "title": "Inputs",
+                "body": "<ul><li>User segments</li><li>Learning milestones</li><li>System signals</li></ul>",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Decision",
+                "body": "<ul><li>Trigger</li><li>Recommendation intent</li><li>Confidence and relevance</li></ul>",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Delivery",
+                "body": "<ul><li>Recommendation type</li><li>Surface</li><li>UI treatment</li></ul>",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Outcome",
+                "body": "<ul><li>User action</li><li>User satisfraction</li><li>Feedback</li><li>Improved future understanding</li></ul>",
+                "icon": "",
+                "src": ""
+              }
+            ],
+            "sep": false,
+            "hsize": "sm"
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/0883093cfd2d8cbab517c072c4ddb1a56a2e77f2a127d445c94b7dc3da069751.webp",
+                "caption": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "<p>The framework described how the intelligence should operate. Copilot recommendations became one way to express that intelligence to users.</p><p>I defined recommendations as proactive suggestions informed by user history, actions, device understanding, and learning over time, with the goal of improving productivity, efficiency, and outcomes.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false
+          },
+          {
+            "type": "statement",
+            "nav": "",
+            "kicker": "",
+            "body": "<p>Copilot recommendations became the visible output of a broader proactive intelligence system</p>",
+            "sub": "Rather than isolated prompts or notifications, Copilot recommendations was an expression of the framework",
+            "src": "",
+            "caption": "",
+            "editorName": "Copilot recommendations became the visible ou…"
+          },
+          {
+            "type": "text",
+            "nav": "Surfaces",
+            "kicker": "Recommendation Surfaces",
+            "heading": "Meeting Users Where Assistance Is Most Useful",
+            "body": "<p>A recommendation's effectiveness depends not only on what is recommended, but also where it appears.</p><p>We explored recommendation delivery across multiple Windows surfaces, recognizing that different situations demand different levels of attention, urgency, and interruption.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true,
+            "hsize": ""
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/c496dcf34636647c2d910714075b46432de892a5ce7d75d7f1dace0c35e1e317.webp",
+                "caption": "For recommendations that benefit from explanation, conversation, and follow-up actions."
+              },
+              {
+                "src": "/assets/uploads/e4540471c590bd31de79a60a66af02bc255a42b25f253b05094d754b16d478de.webp",
+                "caption": "For contextual assistance while users are actively configuring or managing their device."
+              },
+              {
+                "src": "/assets/uploads/83928398a4b41e084215d69516b216f981b576dffe5ab4b9f6e44647e30d0736.webp",
+                "caption": "For moments when users are already exploring or seeking solutions."
+              },
+              {
+                "src": "/assets/uploads/c5806c0e653614829725ea636aaa7d0026c62ad3b19035c806c582656c440f0d.webp",
+                "caption": "For timely recommendations that require immediate awareness."
+              },
+              {
+                "src": "/assets/uploads/1122f42a09116e5744242e85b8039685592217df29ba5033fe887bed399f00ef.webp",
+                "caption": "For contextual interventions closely tied to active workflows and tasks."
+              },
+              {
+                "src": "/assets/uploads/49b99ebab99daff28742f5836e7d24fc2b0b8ed6f940db79f85e34bfe3d251e1.webp",
+                "caption": "For passive and routine recommendations that can provide value before the user enters the desktop experience."
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "<figure class=\"rt__fig\"><p>The framework intentionally avoided positioning recommendations as a Copilot-only feature.</p><p>Instead, it treated recommendations as a Windows capability that could surface wherever user context made them most valuable.</p></figure>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false,
+            "editorName": "Recommendations utilize user history and …",
+            "hsize": "sm"
+          },
+          {
+            "type": "text",
+            "nav": "Taxonomy",
+            "kicker": "Recommendation Taxonomy",
+            "heading": "Not Every Recommendation Serves the Same Purpose",
+            "body": "<p>As scenarios expanded, I needed a consistent way to define why a recommendation exists before deciding how it should be presented.</p><p>I developed four recommendation categories: Discovery, Assistive, Critical, and Routine.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true,
+            "hsize": ""
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Discovery",
+            "body": "Introduces capabilities, features, or skills users may not know exist.",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true,
+            "editorName": "<i>Recommendations</i> utilize user history and …",
+            "hsize": "sm"
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/8277cf655d6c5d7d543ab71ba9a08cf0be9e32c763baa7f8ef9f106bfce7878e.mp4",
+                "caption": "Recommending user to adjust display settings as the user has been working in low light conditions at night for a few days.",
+                "controls": true
+              },
+              {
+                "src": "/assets/uploads/72a92458940a7117e1451a3881de584ce2157d3e7b40aedfc599186f2b1d9281.webp",
+                "caption": "Recommending user a personalized sci-fi theme for desktop created through Copilot based on user’s interest and search query"
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Assistive",
+            "body": "<p>Helps users complete an existing task more efficiently.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true,
+            "editorName": "<i>Recommendations</i> utilize user history and …",
+            "hsize": "sm"
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/6e09a446ec151202ffef9b28522c9e9d876826035762fada600ee5536d90dfc9.mov",
+                "caption": "User navigates to Settings to set focus session. Copilot recommends a focus time slot based on user’s tasks and device usage patterns.",
+                "controls": true
+              },
+              {
+                "src": "/assets/uploads/54ba2ad13fb1d3fb388c236fab1e6c5f72af49eac37f10e45afc67afd2235ce4.webp",
+                "caption": "User recently searched for a shows PNG image and downloads a JPEG, Copilot predicts the next action and recommends the user to remove background on the context menu."
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Critical",
+            "body": "<p>Prompts action when timing and context are important.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true,
+            "editorName": "<i>Recommendations</i> utilize user history and …",
+            "hsize": "sm"
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/8281caf428c900c7334ea79a3b5e2fffe4c58c213674c66e44e3a441a43d0211.mov",
+                "caption": "User initiates the rendering of a large video file. Copilot predicts the necessary storage space, warns the user of potential rendering failure due to insufficient system storage, and recommends removing the least used files and apps.",
+                "controls": true
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Routine",
+            "body": "<p>Supports healthy habits and recurring behaviors over time.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true,
+            "editorName": "<i>Recommendations</i> utilize user history and …",
+            "hsize": "sm"
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/ae8b85340b8928e8148be052eef6decba7187c8917369e17ed52db9bf09f5660.mov",
+                "caption": "Copilot knows about user’s schedule and the devices they engage with. As user’s smartwatch (account linked) is running low on battery he is nudged to charge the watch and prepare for his evening run through a system notification.",
+                "controls": true
+              },
+              {
+                "src": "/assets/uploads/c46c3f917ea4bd038f0f4f7e6913fd87f044196840cee90fdfb8591e88760ecb.webp",
+                "caption": "Copilot knows about user’s schedule and the devices they engage with. As user’s smartwatch (account linked) is running low on battery he is nudged to charge the watch and prepare for his evening workout through Lockscreen."
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "Anatomy",
+            "kicker": "Recommendation Anatomy",
+            "heading": "Turning Intelligence Into Trustworthy Experiences",
+            "body": "<p>While recommendation scenarios varied, users still needed a predictable interaction model. <span style=\"font-size: 0.9rem;\">To support consistency across surfaces, I defined a common recommendation anatomy.</span></p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true,
+            "hsize": ""
+          },
+          {
+            "type": "focus",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "src": "/assets/uploads/db84a5346f2b2744b960265e6039f36049caa86d68be05cc624fadb7e6c2de30.webp",
+            "caption": "",
+            "sticky": true,
+            "annotations": [
+              {
+                "x": 28.5,
+                "y": 18.8,
+                "title": "Identity",
+                "body": "Clearly communicates that the recommendation comes from Copilot.",
+                "focus": {
+                  "shape": "rect",
+                  "x": 25.1,
+                  "y": 13.9,
+                  "w": 34,
+                  "h": 10
+                }
+              },
+              {
+                "x": 60.7,
+                "y": 18.8,
+                "title": "Overflow menu ",
+                "body": "A place to provide user feedback or customization setting",
+                "focus": {
+                  "shape": "circle",
+                  "x": 61.5,
+                  "y": 14.5,
+                  "w": 4.7,
+                  "h": 8.4
+                }
+              },
+              {
+                "x": 71.8,
+                "y": 19.2,
+                "title": "Close button",
+                "body": "Give user control to dismiss the recommendation\n",
+                "focus": {
+                  "shape": "circle",
+                  "x": 65.4,
+                  "y": 14.7,
+                  "w": 4.6,
+                  "h": 8.3
+                }
+              },
+              {
+                "x": 71.6,
+                "y": 33.1,
+                "title": "Context & Value",
+                "body": "Explains why the recommendation is appearing and what benefit the user receives",
+                "focus": {
+                  "shape": "rect",
+                  "x": 29.7,
+                  "y": 21.6,
+                  "w": 40.8,
+                  "h": 21.4
+                }
+              },
+              {
+                "x": 71.8,
+                "y": 59.9,
+                "title": "Content and Control Area",
+                "body": "A flexible region that adapts to different recommendation types and scenarios to provide additional context, value or supplementary controls",
+                "focus": {
+                  "shape": "rect",
+                  "x": 29.5,
+                  "y": 41.7,
+                  "w": 41.1,
+                  "h": 32.1
+                }
+              },
+              {
+                "x": 71.8,
+                "y": 78.9,
+                "title": "Actions",
+                "body": "Provides immediate ways to act on the recommendation, or link the user out to see more details",
+                "focus": {
+                  "shape": "rect",
+                  "x": 29.6,
+                  "y": 72.4,
+                  "w": 40.9,
+                  "h": 13.6
+                }
+              }
+            ],
+            "sep": false,
+            "editorName": "Anotomy disect"
+          },
+          {
+            "type": "text",
+            "nav": "Landing the principals",
+            "kicker": "Landing the principals",
+            "heading": "Designing Trustworthy Proactive Intelligence",
+            "body": "<p>As recommendations grow more personalized and proactive, the challenge shifts from <em>what the system can do</em> to <em>what the system should do</em>.</p>\n\n<p><span class=\"tdim\">Without clear guardrails, proactive assistance can quickly feel intrusive, promotional, or unpredictable. </span></p><p><span class=\"tdim\">To keep recommendations helpful, trustworthy, and aligned with user expectations, I partnered across teams to define a set of foundational principles, giving future recommendation experiences across Windows and Copilot a consistent, principled foundation.</span></p>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "stickies",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "stickySize": "natural",
+            "items": [
+              {
+                "label": "Personalization",
+                "heading": "Recommendations should adapt to a user's context, behaviors, and goals rather than relying on generic system rules.",
+                "body": "<p>Relevant to you, not everyone</p>",
+                "src": ""
+              },
+              {
+                "label": "Learns Over Time",
+                "heading": "As Windows learns more about a user, recommendations become increasingly relevant and personalized.",
+                "body": "<p>Better understanding. Better assistance</p>",
+                "src": ""
+              },
+              {
+                "label": "Trust & Transparency",
+                "heading": "Users should understand why they're receiving a recommendation and what signal or context led to it.",
+                "body": "<p>Always explain why.</p>",
+                "src": ""
+              },
+              {
+                "label": "Proactive Assistance",
+                "heading": "The system should identify opportunities where assistance is valuable before a user explicitly seeks help.",
+                "body": "Help before users ask.",
+                "src": ""
+              },
+              {
+                "label": "No Intrusive Upselling",
+                "heading": "Recommendations should serve user needs, not engagement goals or promotional objectives.",
+                "body": "Create value, not noise.",
+                "src": ""
+              },
+              {
+                "label": "User Control",
+                "heading": "Users should be able to dismiss, customize, or ignore recommendations at any time.",
+                "body": "Helpful, never forceful.",
+                "src": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "rows",
+            "nav": "Impact",
+            "kicker": "Impact",
+            "heading": "Scale - Influence - Adopt",
+            "items": [
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "Designed to Scale Beyond a Sprint",
+                    "body": "The framework was intentionally created as a reusable model rather than a single recommendation experience. By defining common patterns for learning, triggers, recommendation types, surfaces, and trust principles, it provided a shared language that could be adopted across Windows teams.",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "Influence Across Windows",
+                    "body": "<p>The recommendations framework was shared with Windows Skills, Plugins, User Agents - Research, Content, PM, and Engineering teams as a foundation for future recommendations and feature discovery experiences.</p>",
+                    "src": ""
+                  }
+                ]
+              },
+              {
+                "label": "",
+                "cells": [
+                  {
+                    "heading": "From Framework to Product",
+                    "body": "Subsequent Windows explorations, including contextual recommendation experiences showcased as part of the Copilot+ PC vision, reflected many of the same ideas explored in this work:<div><ul><li>Assistance should appear in context</li><li>Systems should understand users over time</li><li>Recommendations should be proactive, not reactive</li><li>AI should extend beyond chat experiences into Windows itself</li></ul></div>",
+                    "src": "https://www.youtube.com/embed/aZbHd4suAnQ?start=659&end=699&controls=0&disablekb=1&fs=0&playsinline=1&rel=0"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/7cdf595e24d60937793f396677d3ae28b26ea1291056646811e0a9425c3c5f6f.webp",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/4f1127c606a41c7630f4c317394061c3d72fa41d83afae36833ee8e6369c1fa6.webp",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/536cb71becede7ccda72efd8fc5a81ba0d63897868a932b8e548b96ed15a7736.webp",
+                "caption": ""
+              }
+            ],
+            "sep": false,
+            "editorName": "Recommendations across UX"
+          },
+          {
+            "type": "gallery",
+            "locked": true,
+            "encStub": true,
+            "iv": "Q8lVjGWOCzuZPOmD",
+            "ct": "gMvv/9uY8uBJOjZW5LDihBuc7lKijX8KOOFmJeZhdNBZEd2xATQE5BJ2hEy9kFOOADMAutSarif9BKGJdO15Mhoo/xNa7Rh27Wyc4ipr6GdENK6ym25QZnYF3UDM6TjMRCOUJO78oxAS4XMYMX8bZh943w4xzQAPydIFa7XsH6AGwz8sYMFDDYIGnoZCwEZ6D5/5ZCvInyA1S4tIy05r95En9+DvLJxssTNfo6VwHBk1zY8ulAJsnpYujrck0SRO+iLEPJ5Ou1fQsokRbzzNd44CBxWhGtdngqU0XnrmvQU/GNrre5Tl+I6Qnm63ZuAd2DX5WMLP+urepnbAUZH08qzgaIZPTGMu3Ia5N96qLlBwEo+WqXQy+t58qki2hy+bT7MBQUFtYyiuKnLLNRsB5ndBMSmvtDX72gibtMlk3Mlfw5f5RK4xix4iLqaQBmkFY/cv8DkEKj6xyGRSZSqs0KyrjMlXsfSsRL0jV2ePCYQYdmtK2q9sQOS8rFbCD7/x+mPWug0Gg+8AyKTEVzgUKkdhyF8YTCECwz8bXJb3bYJMkQ7tYqQolG+4i0ugA3jNWBoZh4CqzekO/ZrK8bWZ1ePS98MdMYQXxIvpqiBZITdkKUhwqHiDmEjyG3VJdf99d2S9FqrnOMqPAYkWRCLrRyti+8t0SAk1tunnWExQQQPI3YjyvJuhUWjs0Wl3ZmCPh8smZuHx49OyubP+Pm0ugs+mv3lbJ+LlaqRvjPHo58LrtXIrRZlVmsIG1jBtd4AI0dz9u6zg+G1uWMkcve0U2FX1f21rS+6guU1FLXeNoOsNYLIWFTLugfWgP9JNwqG01Iqvn2+pxHIlHis023GSpyQwlur8VSmmwshsRZG1Vkkj3XSFlvsBh2CSV1Zj8TE4oEh/syoDIOoHwAFe8r9OzTBM5qZ+R2flLuQwVjO+0xV7KdPdPwi+gmfBqctR/KSv97Anz4mM8UtCJLCSarXNCK2kMNLH3RsiUlu+BMilyWJbpLJvMP99B+ThxbbzoqjgwtjHmdC47l0OZjwpO7sglRElB7KUGospTsaV4LfRwm85h6GsZ0sbd/LyToidXcO1Yy3gUvQTMrGzHBeajLwzlgj90RVTPcItQa+aBa0lUThpYeZCuWGy8TgdEgBfJc8TyYw0WAS8wdtALlx1z/oGRfq8BsOhUbmqT3BDs8W6pTEJXB9VRUepB1y3aUq0v0Xcw4KpnC57Y2fr/74olv6RH70fZGGhmqdhkBy7mn+iNeQKvQgKgMyh/WcD3E7bZ5a9z0fIgznhqWO9PpkPvxt4VIkbogubpZwSNuGiKkEDaqlYXfXigNxaMEEJykTvERcM+Uow4DjpIXsSEwo44bLd9Xzo+z8vZ3n3qcsAeHRGCxhB/QHnGt+mK4AyYOZvXTgSdRl4XOdiTnhz+9lS7/1nTrGf7WUj6KUHNkXkGElmoKYzk+6Aw5n0oFnKbh1JO7X5hRZ2HHLW6cHpjlcIgYiIs8KC6OIkaK+CphHtyXxhZ4wleBgGiaOHPxbPURE/Yy4YnD0FOvhGCfwuxKYX9SFhhkKuktbptFOU7wh0UlDVOUUdVzD6YipL389Y9gfE9XEMG71IczdNFeaxSMHKQE4gPbqWwPh7uv8y+89IwI1gGcjyfFKKcIEK3NLE1LMZ/3enBqedvyKS9JURk/euZ79L9TY2hVMw6VHmDGt3RnhmZjuEnkz+wTxL5AtA8k7TKazbY8q5DLPbcsLvbgTxcUd4xpq4/mS/6i4/z387AKK6DpDisjNSxZrYcD/mgSdCg7l9xPnOQGrFCtYLGzcYOc5WMVEonF1bkZCyo0+wxVB66J4BGOgcmxWJT31862vztxyOPoBZR6TivEE6mruWkw/WgpUk0LqcE0kt5uEH1JosK6pKH53oLZiZB2IyXv6oQWHjoJgk2eAQaN7+eXEUVEunEFfsp2YgkhX/U93t4ZdmX21aYY/rJfkb7i5aO43ZTBUQaVFvlcEsdWjy3jJAb6pmbID0vTbk0J4eye0n9WkvAS2bmhX9zfAitOmApLrbobBGmcDZJuCSJlj5I4utHMy6wkDsDDThBcdYtI5YkikmV9ipmSzcUOzPsvDFeAt5Z5+2MIpZI5o33tw6kONL9qFrQ8X8dD71H4PjRCY0P8oc596O0Il3KnPnkuJplR42URxB9J3RMeql58lumqcr/JE2ZYASElsQXEgpLZy+KvuAl6RVMHIYX1fJJLQCMw90/d8chlrLDQDfuhgPvfbAMJsPWEzftm1DTqflqeIu8xVdYLdVaUJLpO0n+43TQz+FVuzCQno6BVG3f4P2NSI2EZpTywq5QbxT0wQgYpWH1w9T064Wu9EPR/JQAf84QOg8BtY3p+zvdHtxLHbqRW+5X6m+6m7cTYd9SjA9xLiyGyiv4or2AZ6hI+PqTAV0bRA7G7AgTthDPrsNpATAUBkO5INLzvO1O2hcWa4fLXBUIFP6Qwicju36+7nmO6AJNx0hMIGnmQ1bpwT6A2M78oGhtewrjgVudkgdOnsB5iIsaexqraMSCeLlvEIyb5VB0tJ/SJQt3fbEdi/p4wIjdjmKrF3fJqd9tQ8LUkhahJY3D8ud26CDC+Rb9nCElyH+y2dkeM1z/In3IGJpubFb1X4uXYycwapB+J9rHDvEuq+icjV5AiAkZcpgFS0/F+0xHN5XwCBj2+2Qs8CIuyg0Pd8wMZ999DuSEMHTc+Pj+tvSwfnUJwhXtdjMZIqZYmLnNZYlHFtBbMu0hpSFEsggfaBZ8I1znW4hEj9ryZytUqwy2JMamsPpY0cm6a6zbfJJnMqDPbFBLx290gV9+yQV8iJO/XBBh4Gsl7yJTdvee6NhrF3Hg9nu+vFpq2qot8kxBKrDrGJ6gsAzd0bxgxPdx8z2n7nJV9m1FI2M1cu5gRyEDQrhrTCT+YCXGTkAJDTD8yAhP5lpdQi6loDZRnX0fpblLnaMB+JyOrhPA0X3b0LQWSCBHw=="
+          },
+          {
+            "type": "statement",
+            "nav": "",
+            "kicker": "",
+            "body": "\"Where should Copilot live?\" <b><i><span class=\"tdim\" style=\"\">to</span> </i></b>\"Where should intelligence appear?\"<div><br></div><div>\"Is every AI experience on Windows a Copilot experience?\"</div>",
+            "sub": "The fundamental question the framework landed ",
+            "src": "",
+            "caption": ""
+          }
+        ],
+        "skim": {
+          "media": [
+            {
+              "src": "https://www.youtube.com/embed/aZbHd4suAnQ?start=659&end=699&controls=0&disablekb=1&fs=0&playsinline=1&rel=0",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/3047415df741ebb3bd37ef83bd6c45a7b0a06129e9a8fd5dd928d50d822d2917.webp",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/1a31472b25981387e858ee6d172d7e25980cda5016d92b91f185ee6f0db66594.webp",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/6e09a446ec151202ffef9b28522c9e9d876826035762fada600ee5536d90dfc9.mov",
+              "caption": "",
+              "controls": true
+            },
+            {
+              "src": "/assets/uploads/54ba2ad13fb1d3fb388c236fab1e6c5f72af49eac37f10e45afc67afd2235ce4.webp",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/00aa007fdedb3a2b9897d3fe3bad414155c0d7f7d411c106724d7b32c7bf0f83.webp",
+              "caption": ""
+            }
+          ],
+          "beats": [
+            {
+              "problem": "Copilot only acts when people prompt it",
+              "move": "[[Recommendation Framework]] turns signals into proactive assistance",
+              "outcome": "Scales across **Lockscreen, App window, Settings, Taskbar & Copilot**"
+            },
+            {
+              "problem": "No shared language for why a recommendation exists",
+              "move": "Four-category taxonomy: Discovery, Assistive, Critical, Routine",
+              "outcome": "Every surface knows what it's delivering and why"
+            },
+            {
+              "problem": "Proactive AI risks feeling intrusive or promotional",
+              "move": "Foundational trust principles govern all recommendation behavior",
+              "outcome": "Guardrails ship with the framework, not after"
+            }
+          ],
+          "generatedAt": 1787519425373
+        },
+        "enc": {
+          "v": 1,
+          "it": 210000,
+          "wraps": {
+            "owner": {
+              "salt": "1+dGqWwie5WBndc4EdGVVg==",
+              "iv": "vQWt+7Gj+vhk2VWf",
+              "ct": "E7XuD+EhZ8cbaC9m5sKix2CKEUNKcG3wHWBlRt2wBOBqHM+nh+C6N6Lo38ul7vbp"
+            }
+          }
+        }
+      },
+      "cardDesc": "Designed the framework that lets Windows Copilot proactively surface recommendations before users even ask.",
+      "depth": {
+        "on": true,
+        "strength": 0.03,
+        "focus": 0.46,
+        "zoom": 1.05,
+        "softness": 0.014,
+        "map": "/assets/uploads/8c0f3366a5f4bd872aebe7f9dafbe2698df737cac5f5ca31a11279b85e4bffd2.webp"
+      },
+      "hidden": false,
+      "parDir": "down",
+      "parAmt": 50
+    },
+    {
       "id": "w1783840785203",
       "featured": true,
       "theme": "grid",
@@ -946,6 +2072,11 @@
                 "salt": "MHB0XRop7gzkoPD+O9ZGwA==",
                 "iv": "YAKUeNqICsG5w3n+",
                 "ct": "04WGsnZ8FghX7EI3mKsYtc9E3n61fNBwzB7NsGtdZZoYtyRE4lSPlAY+tD0wKiNx"
+              },
+              "svmsx4mxop": {
+                "salt": "Tj2xr3cKh5nIVDstl1HWfg==",
+                "iv": "VsrDLZyZNQ5mcwe9",
+                "ct": "kL8L/XIE7KpDpfzKdj6tREYkmIalJTqZ9qBYjLcs/T9AFPHRPbUsQY5om5gPeUf4"
               }
             }
           }
@@ -2039,6 +3170,11 @@
                 "salt": "+FOEkkm00OnPmgSvuF4Rpw==",
                 "iv": "KC0mHd7IOWEy1HLK",
                 "ct": "bxEUnF1u/pRpej58azIvu7ZPB+QHw73BZgMdcPGKU3A4GhYt9Hvo6Yn/P4ucJ8OA"
+              },
+              "svmsx4mxop": {
+                "salt": "gXo2q9D7ltGwb+pOgfJm1Q==",
+                "iv": "/UIpUEnE6TV4K3P9",
+                "ct": "X5kwfWT/70tF1fWyiIDSAtCMjX7OmDXJhdhPqjS8t5NUO6AWFUosjldwmpUXTWD7"
               }
             }
           }
@@ -2089,600 +3225,6 @@
       "parDir": "down",
       "parAmt": 50,
       "cardDesc": "Windows Hello's redesign to feel modern and trustworthy across passkeys, new devices, and evolving security models."
-    },
-    {
-      "id": "w1783924971648",
-      "featured": true,
-      "theme": "grid",
-      "plateTag": "Unified Consent",
-      "client": "Microsoft Account",
-      "period": "2022 — 2023",
-      "title": "One Microsoft, One Consent",
-      "desc": "Microsoft’s consent strategy was moving from product-level permissions to an account-level model that could support connected, personalized experiences across the Microsoft ecosystem. My role was to translate that strategy into a scalable user experience framework, helping make consent clearer, more reusable, and consistent across product entry points like Windows OOBE, sign-in, apps, and contextual notices.",
-      "tags": [
-        "Platform Design",
-        "Systems Thinking",
-        "Trust Frameworks",
-        "Ecosystem Strategy",
-        "Cross-Functional Leadership",
-        "Scalable Design Systems"
-      ],
-      "image": "/assets/uploads/cd132b9755109dcf36ed4b8d48738d7f489a514bf872c64722a1a3aee50862d3.png",
-      "study": {
-        "tagline": "Creating a clearer, more consistent consent experience across Microsoft products, devices, and account journeys.",
-        "role": "Product Designer II working horizontally with multiple product teams",
-        "team": "1 Designer, 1 Product Manager, 3 Developers, 1 Content Designer, Partner product teams, Privacy and Compliances",
-        "timeline": "2022 — 2023",
-        "scope": "Identifying an account level consent framework that can be used across products and ecosystems",
-        "cover": "",
-        "unlockHash": "",
-        "blocks": [
-          {
-            "type": "text",
-            "nav": "Introduction",
-            "kicker": "Introduction",
-            "heading": "The Problem",
-            "body": "Microsoft products increasingly worked together through a shared Microsoft account, yet consent was still requested independently across products.<div><br></div><div>Users encountered separate privacy notices and permission requests across Windows, Edge, Outlook, Teams, Office, and sign-in experiences, often being asked for similar permissions multiple times. The result wasn't just added friction. It fragmented trust by forcing users to make account-level decisions through disconnected product-level experiences.</div>",
-            "list": [],
-            "src": "",
-            "caption": ""
-          },
-          {
-            "type": "gallery",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "items": [
-              {
-                "src": "/assets/uploads/fa51e4583597215f73142f2a76c0c1ca4b5c4c6e2a89431e065a7d9fe71f1f05.png",
-                "caption": "Windows 11 OOBE"
-              },
-              {
-                "src": "/assets/uploads/344fb955873ad603f7dc812123e079dae98b29d31689015126fb08c02545513c.png",
-                "caption": "Microsoft Edge"
-              },
-              {
-                "src": "/assets/uploads/646eb2e95dd0a2fdab61adaf309930f0c15f718e55bd4d1c07701ebe2f22ba80.png",
-                "caption": "OneDrive"
-              },
-              {
-                "src": "/assets/uploads/72de2b3c9baa4aaed62b55510421f9e907df3d38174ff25110780980a1e4008a.png",
-                "caption": "M365 Win32 apps"
-              },
-              {
-                "src": "/assets/uploads/5c010ade1fc86657c3d05782d3fa64683aa41d7906e1a46673c17dd572df753e.png",
-                "caption": "M365 Mobile apps"
-              }
-            ],
-            "sep": false
-          },
-          {
-            "type": "text",
-            "nav": "",
-            "kicker": "",
-            "heading": "Why It Mattered",
-            "body": "As Microsoft invested in more connected and personalized experiences, consent became a critical dependency.<div><br></div><div>Without a shared consent model, products had to request permissions independently, creating inconsistent experiences for users and making it harder for Microsoft teams to deliver seamless cross-product experiences at scale. The broader goal was to enable connected experiences across the Microsoft ecosystem while providing a scalable framework for evolving privacy and regulatory needs.</div>",
-            "list": [],
-            "src": "",
-            "caption": ""
-          },
-          {
-            "type": "text",
-            "nav": "Design Challenge",
-            "kicker": "Design Challenge",
-            "heading": "Translating business strategy into an experience framework that could:",
-            "body": "<ul><li>Help users understand the value behind consent</li><li>Create a consistent experience across Microsoft surfaces</li><li>Build user trust and confidence</li><li>Scale across products, devices, and future consent scenarios</li></ul>",
-            "list": [],
-            "src": "",
-            "caption": ""
-          },
-          {
-            "type": "stickies",
-            "nav": "",
-            "kicker": "",
-            "heading": "Experience Principles",
-            "items": [
-              {
-                "label": "1",
-                "heading": "Create a One Microsoft experience",
-                "body": "Show users that the value of consent extended across Microsoft products and devices, not just the product they were currently using.",
-                "src": ""
-              },
-              {
-                "label": "2",
-                "heading": "Turn consent into a value conversation",
-                "body": "Explain why account-based data use could make Microsoft experiences more seamless, personalized, and useful.",
-                "src": ""
-              },
-              {
-                "label": "3",
-                "heading": "Inspire trust",
-                "body": "Give users a sense of confidence and control so the experience felt transparent rather than transactional.",
-                "src": ""
-              }
-            ],
-            "sep": false,
-            "hsize": "sm",
-            "stickySize": "natural"
-          },
-          {
-            "type": "text",
-            "nav": "Explorations",
-            "kicker": "Explorations",
-            "heading": "How do we communicate value beyond text?",
-            "body": "I tested whether product icons, account identity, and ecosystem cues could make the Microsoft account value proposition visible before users read the details.",
-            "list": [],
-            "src": "",
-            "caption": "",
-            "editorName": "How do we communicate value beyond text?",
-            "hsize": "sm"
-          },
-          {
-            "type": "media",
-            "locked": true,
-            "vaultBlock": "57cf08424bc3ab202f2cbbc9e53da80be2488e8d6de168135dd4e2c4152317fc.json",
-            "sep": false
-          },
-          {
-            "type": "text",
-            "nav": "",
-            "kicker": "",
-            "heading": "How much content do we show?",
-            "body": "I explored the line between transparency and cognitive load, especially because this was a compliance-heavy surface where too much copy could reduce comprehension.",
-            "list": [],
-            "src": "",
-            "caption": "",
-            "hsize": "sm",
-            "sep": true
-          },
-          {
-            "type": "media",
-            "locked": true,
-            "vaultBlock": "a8bf52611eecb0a5fb7d4dfb2c0cbb7396b35e6acc88f1afec6d5eac25cef139.json",
-            "sep": false
-          },
-          {
-            "type": "text",
-            "nav": "",
-            "kicker": "",
-            "heading": "How do we present the content?",
-            "body": "<p>I explored whether Unified Consent should be framed as a product experience or a Microsoft account experience. This helped us evaluate how users interpret consent: as permission for a single app or as a relationship with their Microsoft account across products.</p>",
-            "list": [],
-            "src": "",
-            "caption": "",
-            "hsize": "sm"
-          },
-          {
-            "type": "media",
-            "locked": true,
-            "vaultBlock": "3e340a271f4ebf30266506e7f5c6aabe250fbbb010d52e10a7b35c6b2fdc71c2.json",
-            "sep": false
-          },
-          {
-            "type": "text",
-            "nav": "User research",
-            "kicker": "User research",
-            "heading": "Defining a unified Microsoft account messaging strategy",
-            "body": "<p>I led the design and synthesis of an evaluative research study that established how Microsoft account consent messaging should appear across Windows. The work aligned teams around a consistent interaction model, clarified the most effective delivery surfaces, and translated participant feedback into actionable cross-product design principles.</p>",
-            "list": [],
-            "src": "",
-            "caption": ""
-          },
-          {
-            "type": "text",
-            "nav": "",
-            "kicker": "",
-            "heading": "Testing how much information to show upfront",
-            "body": "<p>We compared a fully expanded notice with progressive disclosure to understand how users scanned, explored, and understood the message.</p><p><br></p><figure class=\"rt__fig\"><img src=\"/assets/uploads/58d08bb5aa586c46ed749d7e4226b0c8e1fba9b5c697c19dece61455d262c59a.png\" alt=\"\"></figure><p>The chevron/accordion design serves two kinds of users (like to read or like to skim) and optimized for comprehension.</p>",
-            "list": [],
-            "src": "",
-            "caption": "",
-            "hsize": "sm",
-            "sep": true
-          },
-          {
-            "type": "voices",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "mode": "verbatim",
-            "vsize": "",
-            "items": [
-              {
-                "side": "left",
-                "heading": "",
-                "body": "“It makes me want to actually read it because it is less daunting”",
-                "cite": "Less overwhelming"
-              },
-              {
-                "side": "right",
-                "heading": "",
-                "body": "“I think Option B is the right amount of text that you can read and even stop on something that gets your attention”",
-                "cite": "At your own pace"
-              }
-            ],
-            "sep": false
-          },
-          {
-            "type": "text",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "body": "When we ask users: “do you think this message is about Word, Office, or Microsoft account? <div><ul><li>Option B: 100% </li><li>Option A: 83%</li></ul><div>When asked which was the least valuable item</div></div><div><ul><li>“Recommendations just for you” ranked as the least valuable item</li></ul></div><div><br></div>",
-            "list": [],
-            "src": "",
-            "caption": "",
-            "sep": false
-          },
-          {
-            "type": "text",
-            "nav": "",
-            "kicker": "",
-            "heading": "Testing how visual treatment affects perceived ownership",
-            "body": "<p>We compared an account-styled dialog with a product-native presentation to understand which treatment communicated the scope and source of the message more clearly.</p><p><br></p><figure class=\"rt__fig\"><img src=\"/assets/uploads/a7369a2e817ec88875102e4cdd10dc3f7c0a9ee4bf1688ab682a28a46d06a009.png\" alt=\"\"></figure><p>The Microsoft account–styled dialog communicated account ownership more clearly.</p>",
-            "list": [],
-            "src": "",
-            "caption": "",
-            "hsize": "sm"
-          },
-          {
-            "type": "voices",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "mode": "verbatim",
-            "vsize": "",
-            "items": [
-              {
-                "side": "left",
-                "heading": "",
-                "body": "<p>“It really is what resembles for example, the Outlook log in which I know is also a box.”</p>",
-                "cite": "The scope of notice is clear"
-              }
-            ],
-            "sep": false
-          },
-          {
-            "type": "text",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "body": "Visual consistency with Microsoft account experiences helped users understand who was communicating and how broadly the message applied.<br><div><ul><li>Users recognised the dialog from previous account and sign-in experiences.</li><li>5 of 10 users expanded individual sections while reading through the message.</li></ul><div><br></div><div><br></div></div>",
-            "list": [],
-            "src": "",
-            "caption": "",
-            "sep": false
-          },
-          {
-            "type": "text",
-            "nav": "Landing the design",
-            "kicker": "Landing the design",
-            "heading": "From Notice to Identity",
-            "body": "<p>As Microsoft Account evolved toward a more unified identity, we shifted Unified Consent from a text-forward notice to a branded Microsoft Account experience. Introducing illustration and MSA visual language helped create continuity across sign-in, onboarding, and account management surfaces, reinforcing that this was an account-level experience rather than a standalone consent dialog.</p>",
-            "list": [],
-            "src": "",
-            "caption": "",
-            "sep": true,
-            "hsize": "lg"
-          },
-          {
-            "type": "compare",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "beforeSrc": "/assets/uploads/5df32394fa6e5d5e8342f3be09d3c1eb87ad06c8e020af6652ef25749fab40ca.png",
-            "afterSrc": "/assets/uploads/9700ec72cf817acc1863f3baa074bee9c4c5d1a5417ff83952f2699ed70f6ff9.png",
-            "beforeLabel": "Before",
-            "afterLabel": "After",
-            "body": "Microsoft Account was undergoing a broader effort to create a more cohesive identity across sign-in, onboarding, account management, and privacy experiences.",
-            "editorName": "MSA evolving",
-            "sep": false
-          },
-          {
-            "type": "text",
-            "nav": "",
-            "kicker": "",
-            "heading": "Evolving Beyond Disclosure",
-            "body": "As part of the broader Microsoft Account (MSA) redesign, the content team was defining a new communication language grounded in three principles:<div><br></div><div><ul><li><b>Simplicity: </b>Reduce cognitive effort and make information easier to understand.</li><li><b>Transparency: </b>Clearly explain what is happening and why.</li><li><b>Value-Oriented Communication: </b>Focus on the benefits users receive, not just what Microsoft is asking for.</li></ul></div>",
-            "list": [],
-            "src": "",
-            "caption": ""
-          },
-          {
-            "type": "compare",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "beforeSrc": "/assets/uploads/7487d987996026cd87e32ea39bbd896008fefe43bec3c13e53341daa58d60dcf.png",
-            "afterSrc": "/assets/uploads/08d4bcd129304699369ea53d59427dda1baeda92e7cc111af6dbd68c3b9b5b87.png",
-            "beforeLabel": "Before",
-            "afterLabel": "After",
-            "body": "",
-            "editorName": "UC comparision",
-            "sep": false
-          },
-          {
-            "type": "split",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "leftLabel": "Before",
-            "left": "<p>The experience prioritized disclosure through expandable sections, requiring users to uncover information as they explored. Research showed experience was not easy comprehension and this conflicted with MSA principles of simplicity, transparency, and value-oriented communication.</p>",
-            "leftImg": "",
-            "rightLabel": "After",
-            "right": "<span class=\"tdim\">The content team evolved the experience to prioritize comprehension. Through iterative testing and refinement, key messages were surfaced directly through clearer content, stronger visuals, and a cohesive One Microsoft narrative. Users no longer had to discover the value. They understood it immediately.</span>",
-            "rightImg": "",
-            "sep": false,
-            "editorName": "Before after comparison"
-          },
-          {
-            "type": "text",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "body": "The goal was not simply to improve comprehension, but to create continuity across Microsoft Account touchpoints and help users recognize Unified Consent as part of the broader Microsoft Account journey.",
-            "list": [],
-            "src": "",
-            "caption": "",
-            "sep": false
-          },
-          {
-            "type": "gallery",
-            "nav": "",
-            "kicker": "",
-            "heading": "Signed in users",
-            "items": [
-              {
-                "src": "/assets/uploads/8e612ed851f765bda770a627cbd28c03a147b852865933805092e92b722ac000.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/0282226c0dc42c565d6c22d10ab0482debbabd44981d60cc892ab4080dea0b00.png",
-                "caption": ""
-              }
-            ],
-            "hsize": "sm"
-          },
-          {
-            "type": "gallery",
-            "nav": "",
-            "kicker": "",
-            "heading": "Signed out users",
-            "items": [
-              {
-                "src": "/assets/uploads/e48385c711079ef1a198eeeaad6630fbdb7a8a7b9d9bb9af58a8e8764ed176e9.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/fe2d2b8c7e9f1cf0b9fbfb18b7fe996510be3c898d8f39bfd3266d7a386f4220.png",
-                "caption": ""
-              }
-            ],
-            "hsize": "sm",
-            "sep": false
-          },
-          {
-            "type": "text",
-            "nav": "Shipped Design",
-            "kicker": "Shipped Design",
-            "heading": "One framework. Many Microsoft experiences.",
-            "body": "Consent comes to life",
-            "list": [],
-            "src": "",
-            "caption": ""
-          },
-          {
-            "type": "media",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "items": [
-              {
-                "src": "/assets/uploads/9e89a84b15ed6256152697fda4a1a57dd7c986033a26f5c79d77c3f7811b437f.mp4",
-                "caption": "",
-                "controls": true
-              },
-              {
-                "src": "/assets/uploads/f4e7eb0d73989c62eb6df7cc4d3d2d6f3978dcf9e7922d7382e9d61423588521.mp4",
-                "caption": "",
-                "controls": true,
-                "size": "custom",
-                "shrink": 70,
-                "bg": "#000000"
-              }
-            ],
-            "sep": false,
-            "editorName": "Shipped design"
-          },
-          {
-            "type": "mediagrid",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "gridLayout": "uniform",
-            "items": [
-              {
-                "src": "/assets/uploads/dcc7be55e70a381d9b5afafe7ffb07c5aa0ee7d8ec998936b00e9547136746ee.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/8fc12a70193c8ae805cdb8b9edfe42a5ba124269fa34fef7bd909a9d9b0cbf20.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/cd0b193f8ce790bd4ab5cdeff5467d5e9edb2dcf2fd3faad87c32f4d77653f0e.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/2b49de95194d4296cd2faacf0b47ec27e9cd0bbe2511f1a129983c07c4bd3ae8.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/6fc83cbf4994c36a7585a4506525149f72ea3451cd5d5ee3f456f5ef660a0e75.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/fb5dfb82166ed8c884404c19d608c595c2c651e19665ec45bc6336ab8fa36d55.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/52170d59ce42914c5ccc57334eb9d6ff4c23fbc94f5f3976a14076c930690947.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/449fd8f4bd59d57e513e0e971aca5b24499ff7c5cd35e1e4b56320c7ffc76d39.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/36e8ae973e747f087f6b7101ffc16ecf8eb5f76c93db49691aaa226bcf046e5a.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/9a8307296f701d7a3d2c460548d9b57474e666ee5faabe5b33e6dddfdc705130.png",
-                "caption": ""
-              }
-            ],
-            "sep": false
-          },
-          {
-            "type": "text",
-            "nav": "Consent framework",
-            "kicker": "Consent framework",
-            "heading": "Designing the Consent Framework",
-            "body": "<p>What started as a solution to fragmented privacy notices evolved into a reusable consent framework. The platform enabled new regulatory and compliance scenarios to onboard without rebuilding consent experiences from scratch. The framework was easily bakeable to:</p><p></p><ul><li>Win32 apps</li><li>Web apps</li><li>Mobile</li><li>MacOS</li><li>Windows OOBE</li></ul><p></p>",
-            "list": [],
-            "src": "",
-            "caption": ""
-          },
-          {
-            "type": "media",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "items": [
-              {
-                "src": "/assets/uploads/d2850be8be87e3c2f020f7734eefa6721d12ac4d523e346220ce3ceadf8adae3.png",
-                "caption": ""
-              }
-            ],
-            "sep": false
-          },
-          {
-            "type": "text",
-            "nav": "",
-            "kicker": "",
-            "heading": "",
-            "body": "<p>Unified Consent was to simplify how users granted permissions across Microsoft experiences. But as the framework matured, its value extended far beyond a single consent experience. It became an enabled future consent scenarios, including evolving regulatory requirements and region-specific experiences such as DMA, without requiring products to recreate consent experiences independently.</p><p></p>",
-            "list": [],
-            "src": "",
-            "caption": "",
-            "sep": false
-          },
-          {
-            "type": "cards",
-            "nav": "Impact",
-            "kicker": "Impact",
-            "heading": "",
-            "items": [
-              {
-                "title": "Product Impact",
-                "body": "Created the experience framework for Microsoft’s Unified Consent strategy, replacing fragmented product-level consent experiences with a scalable account-level model across Microsoft surfaces.",
-                "icon": "",
-                "src": ""
-              },
-              {
-                "title": "Strategic Impact",
-                "body": "Helped establish a reusable consent foundation that enabled Microsoft teams to deliver personalized cross-product experiences while adapting to evolving privacy and regulatory requirements.",
-                "icon": "",
-                "src": ""
-              },
-              {
-                "title": "Platform Impact",
-                "body": "Contributed to the evolution of Unified Consent from a single consent notice into a platform powering Unified Consent, DMA compliance, Xbox privacy scenarios, and future Microsoft privacy experiences at billion-account scale.",
-                "icon": "",
-                "src": ""
-              }
-            ],
-            "sep": true
-          },
-          {
-            "type": "metrics",
-            "nav": "",
-            "kicker": "",
-            "heading": "As of the Nov'24 MSA MAU Consented",
-            "items": [
-              {
-                "value": "~1.009",
-                "label": "Billion"
-              }
-            ],
-            "hsize": "sm",
-            "sep": false
-          }
-        ],
-        "enc": {
-          "v": 1,
-          "it": 210000,
-          "wraps": {
-            "owner": {
-              "salt": "d8t57dclhlL1p2kRuwiVvQ==",
-              "iv": "ZpBcyDZbFeIxN+2T",
-              "ct": "0cCBatRJ1rXZqMcgW8JE6jHx4fYhbDEhSGt/PmunPANAd7IgZAMOPLKDkqm5oDiO"
-            },
-            "tickets": {
-              "svms2t5b5t": {
-                "salt": "sfpqdKmJsircG/b8kg998g==",
-                "iv": "g61SeEzMtAkqrin8",
-                "ct": "I1QmGqAG2RGzMy6w1z6Zl/3uvfBHfIxi4cXBVqgz1p9b+5PFu2bBChji/eq4/IrT"
-              }
-            }
-          }
-        },
-        "skim": {
-          "beats": [
-            {
-              "problem": "Consent fragmented across five product surfaces",
-              "move": "Replaces product level privacy dialogs with one [[MSA-branded]] experience",
-              "outcome": "People recognize account ownership, not app permission"
-            },
-            {
-              "problem": "Disclosure-first layout buried the value proposition",
-              "move": "Illustration and MSA visual language surface value before copy",
-              "outcome": "Comprehension lands without expanding accordion sections"
-            },
-            {
-              "problem": "Every new regulation required a rebuilt consent screen",
-              "move": "One reusable framework across all environments and ecosystem",
-              "outcome": "Framework that scales to **~1B MAU** without rebuilding, bakes into Win32, Web, Mobile, MacOS, OOBE"
-            }
-          ],
-          "generatedAt": 1786092876537,
-          "media": [
-            {
-              "src": "/assets/uploads/08d4bcd129304699369ea53d59427dda1baeda92e7cc111af6dbd68c3b9b5b87.png",
-              "caption": ""
-            },
-            {
-              "src": "/assets/uploads/9e89a84b15ed6256152697fda4a1a57dd7c986033a26f5c79d77c3f7811b437f.mp4",
-              "caption": "",
-              "kind": "video"
-            },
-            {
-              "src": "/assets/uploads/e31630f2564f85366606fdfa049c98f848fc9aaad1807615e04fea966ccdb249.png",
-              "caption": ""
-            },
-            {
-              "src": "/assets/uploads/0bd55e8e76cfaf1acfbba45c1f83d2905c36c40a2401082363d59ba24c70b2ee.png",
-              "caption": ""
-            },
-            {
-              "src": "/assets/uploads/98e56ba21986de0f752cdf8153d9f4b667d331307a2983e0ef303b03059e5170.png",
-              "caption": ""
-            }
-          ]
-        }
-      },
-      "cardDesc": "Consent framework to unifying product level permissions across Windows, sign-in, and app entry points to an account level consent."
     },
     {
       "id": "w1783695671548",
@@ -3140,6 +3682,11 @@
                 "salt": "OsQ8+wB8vb9zbsN8DKP0+Q==",
                 "iv": "gxJaFtc5gw/Gt6nE",
                 "ct": "XIHxy37+scPSGMfqKOVU6OPj3Q2vrmOI19bJua6vn8UYqhGDE9TymdIqPP5IFWaB"
+              },
+              "svmsx4mxop": {
+                "salt": "UUkJZbeUzEg5VpWpRQX18A==",
+                "iv": "cHYLpINHlFJ9i1jX",
+                "ct": "plMY057xN23Bml6CJnlTUTPN3vHzoHYxLLxHZFNu6VRr5q08ldApTIbkq6oYlYOz"
               }
             }
           }
@@ -3183,9 +3730,609 @@
           ]
         }
       },
-      "parDir": "down",
+      "parDir": "up",
       "parAmt": 50,
-      "cardDesc": "Shaped end-to-end Game Pass growth strategy across acquisition, retention, and reactivation to reduce churn and guide future investment."
+      "cardDesc": "Shaped end-to-end Game Pass growth strategy across acquisition, retention, and reactivation to reduce churn and guide future investment.",
+      "hidden": false
+    },
+    {
+      "id": "w1783924971648",
+      "featured": true,
+      "theme": "grid",
+      "plateTag": "Unified Consent",
+      "client": "Microsoft Account",
+      "period": "2022 — 2023",
+      "title": "One Microsoft, One Consent",
+      "desc": "Microsoft’s consent strategy was moving from product-level permissions to an account-level model that could support connected, personalized experiences across the Microsoft ecosystem. My role was to translate that strategy into a scalable user experience framework, helping make consent clearer, more reusable, and consistent across product entry points like Windows OOBE, sign-in, apps, and contextual notices.",
+      "tags": [
+        "Platform Design",
+        "Systems Thinking",
+        "Trust Frameworks",
+        "Ecosystem Strategy",
+        "Cross-Functional Leadership",
+        "Scalable Design Systems"
+      ],
+      "image": "/assets/uploads/cd132b9755109dcf36ed4b8d48738d7f489a514bf872c64722a1a3aee50862d3.png",
+      "study": {
+        "tagline": "Creating a clearer, more consistent consent experience across Microsoft products, devices, and account journeys.",
+        "role": "Product Designer II working horizontally with multiple product teams",
+        "team": "1 Designer, 1 Product Manager, 3 Developers, 1 Content Designer, Partner product teams, Privacy and Compliances",
+        "timeline": "2022 — 2023",
+        "scope": "Identifying an account level consent framework that can be used across products and ecosystems",
+        "cover": "",
+        "unlockHash": "",
+        "blocks": [
+          {
+            "type": "text",
+            "nav": "Introduction",
+            "kicker": "Introduction",
+            "heading": "The Problem",
+            "body": "Microsoft products increasingly worked together through a shared Microsoft account, yet consent was still requested independently across products.<div><br></div><div>Users encountered separate privacy notices and permission requests across Windows, Edge, Outlook, Teams, Office, and sign-in experiences, often being asked for similar permissions multiple times. The result wasn't just added friction. It fragmented trust by forcing users to make account-level decisions through disconnected product-level experiences.</div>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/fa51e4583597215f73142f2a76c0c1ca4b5c4c6e2a89431e065a7d9fe71f1f05.png",
+                "caption": "Windows 11 OOBE"
+              },
+              {
+                "src": "/assets/uploads/344fb955873ad603f7dc812123e079dae98b29d31689015126fb08c02545513c.png",
+                "caption": "Microsoft Edge"
+              },
+              {
+                "src": "/assets/uploads/646eb2e95dd0a2fdab61adaf309930f0c15f718e55bd4d1c07701ebe2f22ba80.png",
+                "caption": "OneDrive"
+              },
+              {
+                "src": "/assets/uploads/72de2b3c9baa4aaed62b55510421f9e907df3d38174ff25110780980a1e4008a.png",
+                "caption": "M365 Win32 apps"
+              },
+              {
+                "src": "/assets/uploads/5c010ade1fc86657c3d05782d3fa64683aa41d7906e1a46673c17dd572df753e.png",
+                "caption": "M365 Mobile apps"
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Why It Mattered",
+            "body": "As Microsoft invested in more connected and personalized experiences, consent became a critical dependency.<div><br></div><div>Without a shared consent model, products had to request permissions independently, creating inconsistent experiences for users and making it harder for Microsoft teams to deliver seamless cross-product experiences at scale. The broader goal was to enable connected experiences across the Microsoft ecosystem while providing a scalable framework for evolving privacy and regulatory needs.</div>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "text",
+            "nav": "Design Challenge",
+            "kicker": "Design Challenge",
+            "heading": "Translating business strategy into an experience framework that could:",
+            "body": "<ul><li>Help users understand the value behind consent</li><li>Create a consistent experience across Microsoft surfaces</li><li>Build user trust and confidence</li><li>Scale across products, devices, and future consent scenarios</li></ul>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "stickies",
+            "nav": "",
+            "kicker": "",
+            "heading": "Experience Principles",
+            "items": [
+              {
+                "label": "1",
+                "heading": "Create a One Microsoft experience",
+                "body": "Show users that the value of consent extended across Microsoft products and devices, not just the product they were currently using.",
+                "src": ""
+              },
+              {
+                "label": "2",
+                "heading": "Turn consent into a value conversation",
+                "body": "Explain why account-based data use could make Microsoft experiences more seamless, personalized, and useful.",
+                "src": ""
+              },
+              {
+                "label": "3",
+                "heading": "Inspire trust",
+                "body": "Give users a sense of confidence and control so the experience felt transparent rather than transactional.",
+                "src": ""
+              }
+            ],
+            "sep": false,
+            "hsize": "sm",
+            "stickySize": "natural"
+          },
+          {
+            "type": "text",
+            "nav": "Explorations",
+            "kicker": "Explorations",
+            "heading": "How do we communicate value beyond text?",
+            "body": "I tested whether product icons, account identity, and ecosystem cues could make the Microsoft account value proposition visible before users read the details.",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "editorName": "How do we communicate value beyond text?",
+            "hsize": "sm"
+          },
+          {
+            "type": "media",
+            "locked": true,
+            "vaultBlock": "57cf08424bc3ab202f2cbbc9e53da80be2488e8d6de168135dd4e2c4152317fc.json",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "How much content do we show?",
+            "body": "I explored the line between transparency and cognitive load, especially because this was a compliance-heavy surface where too much copy could reduce comprehension.",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "sm",
+            "sep": true
+          },
+          {
+            "type": "media",
+            "locked": true,
+            "vaultBlock": "a8bf52611eecb0a5fb7d4dfb2c0cbb7396b35e6acc88f1afec6d5eac25cef139.json",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "How do we present the content?",
+            "body": "<p>I explored whether Unified Consent should be framed as a product experience or a Microsoft account experience. This helped us evaluate how users interpret consent: as permission for a single app or as a relationship with their Microsoft account across products.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "sm"
+          },
+          {
+            "type": "media",
+            "locked": true,
+            "vaultBlock": "3e340a271f4ebf30266506e7f5c6aabe250fbbb010d52e10a7b35c6b2fdc71c2.json",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "User research",
+            "kicker": "User research",
+            "heading": "Defining a unified Microsoft account messaging strategy",
+            "body": "<p>I led the design and synthesis of an evaluative research study that established how Microsoft account consent messaging should appear across Windows. The work aligned teams around a consistent interaction model, clarified the most effective delivery surfaces, and translated participant feedback into actionable cross-product design principles.</p>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Testing how much information to show upfront",
+            "body": "<p>We compared a fully expanded notice with progressive disclosure to understand how users scanned, explored, and understood the message.</p><p><br></p><figure class=\"rt__fig\"><img src=\"/assets/uploads/58d08bb5aa586c46ed749d7e4226b0c8e1fba9b5c697c19dece61455d262c59a.png\" alt=\"\"></figure><p>The chevron/accordion design serves two kinds of users (like to read or like to skim) and optimized for comprehension.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "sm",
+            "sep": true
+          },
+          {
+            "type": "voices",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "mode": "verbatim",
+            "vsize": "",
+            "items": [
+              {
+                "side": "left",
+                "heading": "",
+                "body": "“It makes me want to actually read it because it is less daunting”",
+                "cite": "Less overwhelming"
+              },
+              {
+                "side": "right",
+                "heading": "",
+                "body": "“I think Option B is the right amount of text that you can read and even stop on something that gets your attention”",
+                "cite": "At your own pace"
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "When we ask users: “do you think this message is about Word, Office, or Microsoft account? <div><ul><li>Option B: 100% </li><li>Option A: 83%</li></ul><div>When asked which was the least valuable item</div></div><div><ul><li>“Recommendations just for you” ranked as the least valuable item</li></ul></div><div><br></div>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Testing how visual treatment affects perceived ownership",
+            "body": "<p>We compared an account-styled dialog with a product-native presentation to understand which treatment communicated the scope and source of the message more clearly.</p><p><br></p><figure class=\"rt__fig\"><img src=\"/assets/uploads/a7369a2e817ec88875102e4cdd10dc3f7c0a9ee4bf1688ab682a28a46d06a009.png\" alt=\"\"></figure><p>The Microsoft account–styled dialog communicated account ownership more clearly.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "sm"
+          },
+          {
+            "type": "voices",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "mode": "verbatim",
+            "vsize": "",
+            "items": [
+              {
+                "side": "left",
+                "heading": "",
+                "body": "<p>“It really is what resembles for example, the Outlook log in which I know is also a box.”</p>",
+                "cite": "The scope of notice is clear"
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "Visual consistency with Microsoft account experiences helped users understand who was communicating and how broadly the message applied.<br><div><ul><li>Users recognised the dialog from previous account and sign-in experiences.</li><li>5 of 10 users expanded individual sections while reading through the message.</li></ul><div><br></div><div><br></div></div>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "Landing the design",
+            "kicker": "Landing the design",
+            "heading": "From Notice to Identity",
+            "body": "<p>As Microsoft Account evolved toward a more unified identity, we shifted Unified Consent from a text-forward notice to a branded Microsoft Account experience. Introducing illustration and MSA visual language helped create continuity across sign-in, onboarding, and account management surfaces, reinforcing that this was an account-level experience rather than a standalone consent dialog.</p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": true,
+            "hsize": "lg"
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "beforeSrc": "/assets/uploads/5df32394fa6e5d5e8342f3be09d3c1eb87ad06c8e020af6652ef25749fab40ca.png",
+            "afterSrc": "/assets/uploads/9700ec72cf817acc1863f3baa074bee9c4c5d1a5417ff83952f2699ed70f6ff9.png",
+            "beforeLabel": "Before",
+            "afterLabel": "After",
+            "body": "Microsoft Account was undergoing a broader effort to create a more cohesive identity across sign-in, onboarding, account management, and privacy experiences.",
+            "editorName": "MSA evolving",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Evolving Beyond Disclosure",
+            "body": "As part of the broader Microsoft Account (MSA) redesign, the content team was defining a new communication language grounded in three principles:<div><br></div><div><ul><li><b>Simplicity: </b>Reduce cognitive effort and make information easier to understand.</li><li><b>Transparency: </b>Clearly explain what is happening and why.</li><li><b>Value-Oriented Communication: </b>Focus on the benefits users receive, not just what Microsoft is asking for.</li></ul></div>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "compare",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "beforeSrc": "/assets/uploads/7487d987996026cd87e32ea39bbd896008fefe43bec3c13e53341daa58d60dcf.png",
+            "afterSrc": "/assets/uploads/08d4bcd129304699369ea53d59427dda1baeda92e7cc111af6dbd68c3b9b5b87.png",
+            "beforeLabel": "Before",
+            "afterLabel": "After",
+            "body": "",
+            "editorName": "UC comparision",
+            "sep": false
+          },
+          {
+            "type": "split",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "leftLabel": "Before",
+            "left": "<p>The experience prioritized disclosure through expandable sections, requiring users to uncover information as they explored. Research showed experience was not easy comprehension and this conflicted with MSA principles of simplicity, transparency, and value-oriented communication.</p>",
+            "leftImg": "",
+            "rightLabel": "After",
+            "right": "<span class=\"tdim\">The content team evolved the experience to prioritize comprehension. Through iterative testing and refinement, key messages were surfaced directly through clearer content, stronger visuals, and a cohesive One Microsoft narrative. Users no longer had to discover the value. They understood it immediately.</span>",
+            "rightImg": "",
+            "sep": false,
+            "editorName": "Before after comparison"
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "The goal was not simply to improve comprehension, but to create continuity across Microsoft Account touchpoints and help users recognize Unified Consent as part of the broader Microsoft Account journey.",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "Signed in users",
+            "items": [
+              {
+                "src": "/assets/uploads/8e612ed851f765bda770a627cbd28c03a147b852865933805092e92b722ac000.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/0282226c0dc42c565d6c22d10ab0482debbabd44981d60cc892ab4080dea0b00.png",
+                "caption": ""
+              }
+            ],
+            "hsize": "sm"
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "",
+            "heading": "Signed out users",
+            "items": [
+              {
+                "src": "/assets/uploads/e48385c711079ef1a198eeeaad6630fbdb7a8a7b9d9bb9af58a8e8764ed176e9.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/fe2d2b8c7e9f1cf0b9fbfb18b7fe996510be3c898d8f39bfd3266d7a386f4220.png",
+                "caption": ""
+              }
+            ],
+            "hsize": "sm",
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "Shipped Design",
+            "kicker": "Shipped Design",
+            "heading": "One framework. Many Microsoft experiences.",
+            "body": "Consent comes to life",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/9e89a84b15ed6256152697fda4a1a57dd7c986033a26f5c79d77c3f7811b437f.mp4",
+                "caption": "",
+                "controls": true
+              },
+              {
+                "src": "/assets/uploads/f4e7eb0d73989c62eb6df7cc4d3d2d6f3978dcf9e7922d7382e9d61423588521.mp4",
+                "caption": "",
+                "controls": true,
+                "size": "custom",
+                "shrink": 70,
+                "bg": "#000000"
+              }
+            ],
+            "sep": false,
+            "editorName": "Shipped design"
+          },
+          {
+            "type": "mediagrid",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "gridLayout": "uniform",
+            "items": [
+              {
+                "src": "/assets/uploads/dcc7be55e70a381d9b5afafe7ffb07c5aa0ee7d8ec998936b00e9547136746ee.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/8fc12a70193c8ae805cdb8b9edfe42a5ba124269fa34fef7bd909a9d9b0cbf20.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/cd0b193f8ce790bd4ab5cdeff5467d5e9edb2dcf2fd3faad87c32f4d77653f0e.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/2b49de95194d4296cd2faacf0b47ec27e9cd0bbe2511f1a129983c07c4bd3ae8.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/6fc83cbf4994c36a7585a4506525149f72ea3451cd5d5ee3f456f5ef660a0e75.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/fb5dfb82166ed8c884404c19d608c595c2c651e19665ec45bc6336ab8fa36d55.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/52170d59ce42914c5ccc57334eb9d6ff4c23fbc94f5f3976a14076c930690947.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/449fd8f4bd59d57e513e0e971aca5b24499ff7c5cd35e1e4b56320c7ffc76d39.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/b0ec03e5047b3c778e5fce025600e260ba7fa695c05a8c8f2ba99754283628a3.webp",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/4bdd85fdc7eabca3f5321f00af4829557391bfcdcd7b9e961644c8fec1a0b042.webp",
+                "caption": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "Consent framework",
+            "kicker": "Consent framework",
+            "heading": "Designing the Consent Framework",
+            "body": "<p>What started as a solution to fragmented privacy notices evolved into a reusable consent framework. The platform enabled new regulatory and compliance scenarios to onboard without rebuilding consent experiences from scratch. The framework was easily bakeable to:</p><p></p><ul><li>Win32 apps</li><li>Web apps</li><li>Mobile</li><li>MacOS</li><li>Windows OOBE</li></ul><p></p>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/d2850be8be87e3c2f020f7734eefa6721d12ac4d523e346220ce3ceadf8adae3.png",
+                "caption": ""
+              }
+            ],
+            "sep": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
+            "body": "<p>Unified Consent was to simplify how users granted permissions across Microsoft experiences. But as the framework matured, its value extended far beyond a single consent experience. It became an enabled future consent scenarios, including evolving regulatory requirements and region-specific experiences such as DMA, without requiring products to recreate consent experiences independently.</p><p></p>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "sep": false
+          },
+          {
+            "type": "cards",
+            "nav": "Impact",
+            "kicker": "Impact",
+            "heading": "",
+            "items": [
+              {
+                "title": "Product Impact",
+                "body": "Created the experience framework for Microsoft’s Unified Consent strategy, replacing fragmented product-level consent experiences with a scalable account-level model across Microsoft surfaces.",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Strategic Impact",
+                "body": "Helped establish a reusable consent foundation that enabled Microsoft teams to deliver personalized cross-product experiences while adapting to evolving privacy and regulatory requirements.",
+                "icon": "",
+                "src": ""
+              },
+              {
+                "title": "Platform Impact",
+                "body": "Contributed to the evolution of Unified Consent from a single consent notice into a platform powering Unified Consent, DMA compliance, Xbox privacy scenarios, and future Microsoft privacy experiences at billion-account scale.",
+                "icon": "",
+                "src": ""
+              }
+            ],
+            "sep": true
+          },
+          {
+            "type": "metrics",
+            "nav": "",
+            "kicker": "",
+            "heading": "As of the Nov'24 MSA MAU Consented",
+            "items": [
+              {
+                "value": "~1.009",
+                "label": "Billion"
+              }
+            ],
+            "hsize": "sm",
+            "sep": false
+          }
+        ],
+        "enc": {
+          "v": 1,
+          "it": 210000,
+          "wraps": {
+            "owner": {
+              "salt": "d8t57dclhlL1p2kRuwiVvQ==",
+              "iv": "ZpBcyDZbFeIxN+2T",
+              "ct": "0cCBatRJ1rXZqMcgW8JE6jHx4fYhbDEhSGt/PmunPANAd7IgZAMOPLKDkqm5oDiO"
+            },
+            "tickets": {
+              "svms2t5b5t": {
+                "salt": "sfpqdKmJsircG/b8kg998g==",
+                "iv": "g61SeEzMtAkqrin8",
+                "ct": "I1QmGqAG2RGzMy6w1z6Zl/3uvfBHfIxi4cXBVqgz1p9b+5PFu2bBChji/eq4/IrT"
+              },
+              "svmsx4mxop": {
+                "salt": "+4s3AbmSXglbeYpGkdi8Sg==",
+                "iv": "qcp/RNsD2yfNIKLI",
+                "ct": "gxcqf4eWCsxfmPlC56iVxSkWQQfL6NWYM9opfXugOWVyQMr21lN5O5Qb3t8+2rgW"
+              }
+            }
+          }
+        },
+        "skim": {
+          "beats": [
+            {
+              "problem": "Consent fragmented across five product surfaces",
+              "move": "Replaces product level privacy dialogs with one [[MSA-branded]] experience",
+              "outcome": "People recognize account ownership, not app permission"
+            },
+            {
+              "problem": "Disclosure-first layout buried the value proposition",
+              "move": "Illustration and MSA visual language surface value before copy",
+              "outcome": "Comprehension lands without expanding accordion sections"
+            },
+            {
+              "problem": "Every new regulation required a rebuilt consent screen",
+              "move": "One reusable framework across all environments and ecosystem",
+              "outcome": "Framework that scales to **~1B MAU** without rebuilding, bakes into Win32, Web, Mobile, MacOS, OOBE"
+            }
+          ],
+          "generatedAt": 1786092876537,
+          "media": [
+            {
+              "src": "/assets/uploads/08d4bcd129304699369ea53d59427dda1baeda92e7cc111af6dbd68c3b9b5b87.png",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/9e89a84b15ed6256152697fda4a1a57dd7c986033a26f5c79d77c3f7811b437f.mp4",
+              "caption": "",
+              "kind": "video"
+            },
+            {
+              "src": "/assets/uploads/e31630f2564f85366606fdfa049c98f848fc9aaad1807615e04fea966ccdb249.png",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/0bd55e8e76cfaf1acfbba45c1f83d2905c36c40a2401082363d59ba24c70b2ee.png",
+              "caption": ""
+            },
+            {
+              "src": "/assets/uploads/98e56ba21986de0f752cdf8153d9f4b667d331307a2983e0ef303b03059e5170.png",
+              "caption": ""
+            }
+          ]
+        }
+      },
+      "cardDesc": "Consent framework to unifying product level permissions across Windows, sign-in, and app entry points to an account level consent."
     },
     {
       "id": "xbox",
@@ -4061,9 +5208,9 @@
       "createdAt": 1785131404481,
       "days": 0,
       "workIds": [
+        "w1783840785203",
         "w1784023223052",
         "w1783924971648",
-        "w1783840785203",
         "w1783695671548"
       ],
       "highlightIdx": [
@@ -4098,8 +5245,7 @@
         18,
         19,
         20,
-        21,
-        22
+        21
       ]
     },
     {
@@ -4110,6 +5256,34 @@
       "ticketHash": "bf6029afc159d4f79d237e12df5f9896331bd088b341db4142212066cf5141ae",
       "createdAt": 1785686668460,
       "days": 0,
+      "workIds": [],
+      "highlightIdx": [],
+      "capabilityIdx": []
+    },
+    {
+      "id": "svmsx4mxop",
+      "name": "New Pass",
+      "audience": "",
+      "ticketHash": "11507a0e2f5e69d5dfa40a62a1bd7b6ee57e6bcd85c67c9b8431b36fff21c437",
+      "createdAt": 1786964687881,
+      "days": 15,
+      "workIds": [
+        "w1783840785203",
+        "w1784023223052",
+        "w1783924971648",
+        "w1783695671548"
+      ],
+      "highlightIdx": [],
+      "capabilityIdx": [],
+      "revoked": false
+    },
+    {
+      "id": "svmt95vidi",
+      "name": "New view",
+      "audience": "",
+      "ticketHash": "",
+      "createdAt": 1787692361670,
+      "days": 3,
       "workIds": [],
       "highlightIdx": [],
       "capabilityIdx": []
@@ -5293,8 +6467,423 @@
     ]
   },
   "heroMotion": {
-    "ambient": "aurora",
+    "ambient": "media",
     "field": "letter",
     "scope": "hero"
-  }
+  },
+  "genSections": [
+    {
+      "id": "g1787577191621",
+      "name": "Concept Cloud",
+      "spec": {
+        "version": 1,
+        "root": {
+          "type": "section",
+          "props": {
+            "gap": "lg",
+            "align": "left",
+            "valign": "top",
+            "cols": 2,
+            "pad": "lg",
+            "radius": "none",
+            "bg": "none"
+          },
+          "children": [
+            {
+              "type": "stack",
+              "props": {
+                "gap": "sm",
+                "align": "left",
+                "valign": "top",
+                "cols": 2,
+                "pad": "none",
+                "radius": "none",
+                "bg": "none"
+              },
+              "children": [
+                {
+                  "type": "pill",
+                  "text": "Component",
+                  "tone": "accent"
+                },
+                {
+                  "type": "heading",
+                  "text": "ConceptCloud",
+                  "size": "lg"
+                },
+                {
+                  "type": "text",
+                  "text": "A data-driven, flex-packed field of categorical pills. Importance tiers shift weight and contrast — not size. Stable across renders, adaptive across breakpoints.",
+                  "size": "md",
+                  "tone": "dim",
+                  "align": "left"
+                }
+              ]
+            },
+            {
+              "type": "divider"
+            },
+            {
+              "type": "stack",
+              "props": {
+                "gap": "md",
+                "align": "left",
+                "valign": "top",
+                "cols": 2,
+                "pad": "none",
+                "radius": "none",
+                "bg": "none"
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "text": "VARIANT — Interactive · Center · Normal density · Pill shape",
+                  "size": "sm",
+                  "tone": "faint",
+                  "align": "left"
+                },
+                {
+                  "type": "card",
+                  "props": {
+                    "gap": "md",
+                    "align": "left",
+                    "valign": "top",
+                    "cols": 2,
+                    "pad": "lg",
+                    "radius": "md",
+                    "bg": "elev"
+                  },
+                  "children": [
+                    {
+                      "type": "row",
+                      "props": {
+                        "gap": "sm",
+                        "align": "center",
+                        "valign": "top",
+                        "cols": 2,
+                        "pad": "none",
+                        "radius": "none",
+                        "bg": "none"
+                      },
+                      "children": [
+                        {
+                          "type": "card",
+                          "props": {
+                            "gap": "md",
+                            "align": "left",
+                            "valign": "top",
+                            "cols": 2,
+                            "pad": "sm",
+                            "radius": "lg",
+                            "bg": "none"
+                          },
+                          "children": [
+                            {
+                              "type": "icon",
+                              "name": "layers",
+                              "size": "sm"
+                            },
+                            {
+                              "type": "text",
+                              "text": "Information Architecture",
+                              "size": "sm",
+                              "tone": "accent",
+                              "align": "left"
+                            }
+                          ],
+                          "style": "background: rgba(216,166,87,0.08); border: 1px solid rgba(216,166,87,0.35); box-shadow: 0 0 0 0 transparent, inset 0 1px 0 rgba(255,255,255,0.06); padding: 6px 14px; gap: 6px; transition: box-shadow 0.2s, border-color 0.2s, background 0.2s"
+                        },
+                        {
+                          "type": "card",
+                          "props": {
+                            "gap": "md",
+                            "align": "left",
+                            "valign": "top",
+                            "cols": 2,
+                            "pad": "sm",
+                            "radius": "lg",
+                            "bg": "none"
+                          },
+                          "children": [
+                            {
+                              "type": "icon",
+                              "name": "target",
+                              "size": "sm"
+                            },
+                            {
+                              "type": "text",
+                              "text": "User Research",
+                              "size": "sm",
+                              "tone": "default",
+                              "align": "left"
+                            }
+                          ],
+                          "style": "background: var(--bg-2); border: 1px solid var(--line); padding: 6px 14px; gap: 6px; transition: box-shadow 0.2s, border-color 0.2s, background 0.2s"
+                        },
+                        {
+                          "type": "card",
+                          "props": {
+                            "gap": "md",
+                            "align": "left",
+                            "valign": "top",
+                            "cols": 2,
+                            "pad": "sm",
+                            "radius": "lg",
+                            "bg": "none"
+                          },
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Wireframing",
+                              "size": "sm",
+                              "tone": "dim",
+                              "align": "left"
+                            }
+                          ],
+                          "style": "background: var(--bg-2); border: 1px solid var(--line); padding: 6px 14px; gap: 6px; transition: box-shadow 0.2s, border-color 0.2s, background 0.2s"
+                        },
+                        {
+                          "type": "card",
+                          "props": {
+                            "gap": "md",
+                            "align": "left",
+                            "valign": "top",
+                            "cols": 2,
+                            "pad": "sm",
+                            "radius": "lg",
+                            "bg": "none"
+                          },
+                          "children": [
+                            {
+                              "type": "icon",
+                              "name": "bolt",
+                              "size": "sm"
+                            },
+                            {
+                              "type": "text",
+                              "text": "Interaction Design",
+                              "size": "sm",
+                              "tone": "accent",
+                              "align": "left"
+                            }
+                          ],
+                          "style": "background: rgba(216,166,87,0.08); border: 1px solid rgba(216,166,87,0.35); padding: 6px 14px; gap: 6px; transition: box-shadow 0.2s, border-color 0.2s, background 0.2s"
+                        },
+                        {
+                          "type": "card",
+                          "props": {
+                            "gap": "md",
+                            "align": "left",
+                            "valign": "top",
+                            "cols": 2,
+                            "pad": "sm",
+                            "radius": "lg",
+                            "bg": "none"
+                          },
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Accessibility",
+                              "size": "sm",
+                              "tone": "dim",
+                              "align": "left"
+                            }
+                          ],
+                          "style": "background: var(--bg-2); border: 1px solid var(--line); padding: 6px 14px; gap: 6px; transition: box-shadow 0.2s, border-color 0.2s, background 0.2s"
+                        },
+                        {
+                          "type": "card",
+                          "props": {
+                            "gap": "md",
+                            "align": "left",
+                            "valign": "top",
+                            "cols": 2,
+                            "pad": "sm",
+                            "radius": "lg",
+                            "bg": "none"
+                          },
+                          "children": [
+                            {
+                              "type": "icon",
+                              "name": "chart",
+                              "size": "sm"
+                            },
+                            {
+                              "type": "text",
+                              "text": "Analytics",
+                              "size": "sm",
+                              "tone": "default",
+                              "align": "left"
+                            }
+                          ],
+                          "style": "background: var(--bg-2); border: 1px solid var(--line); padding: 6px 14px; gap: 6px; transition: box-shadow 0.2s, border-color 0.2s, background 0.2s"
+                        },
+                        {
+                          "type": "card",
+                          "props": {
+                            "gap": "md",
+                            "align": "left",
+                            "valign": "top",
+                            "cols": 2,
+                            "pad": "sm",
+                            "radius": "lg",
+                            "bg": "none"
+                          },
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Prototyping",
+                              "size": "sm",
+                              "tone": "dim",
+                              "align": "left"
+                            }
+                          ],
+                          "style": "background: var(--bg-2); border: 1px solid var(--line); padding: 6px 14px; gap: 6px; transition: box-shadow 0.2s, border-color 0.2s, background 0.2s"
+                        },
+                        {
+                          "type": "card",
+                          "props": {
+                            "gap": "md",
+                            "align": "left",
+                            "valign": "top",
+                            "cols": 2,
+                            "pad": "sm",
+                            "radius": "lg",
+                            "bg": "none"
+                          },
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Design Systems",
+                              "size": "sm",
+                              "tone": "accent",
+                              "align": "left"
+                            },
+                            {
+                              "type": "icon",
+                              "name": "layers",
+                              "size": "sm"
+                            }
+                          ],
+                          "style": "background: rgba(216,166,87,0.08); border: 1px solid rgba(216,166,87,0.35); padding: 6px 14px; gap: 6px; transition: box-shadow 0.2s, border-color 0.2s, background 0.2s"
+                        },
+                        {
+                          "type": "card",
+                          "props": {
+                            "gap": "md",
+                            "align": "left",
+                            "valign": "top",
+                            "cols": 2,
+                            "pad": "sm",
+                            "radius": "lg",
+                            "bg": "none"
+                          },
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Motion",
+                              "size": "sm",
+                              "tone": "dim",
+                              "align": "left"
+                            }
+                          ],
+                          "style": "background: var(--bg-2); border: 1px solid var(--line); padding: 6px 14px; gap: 6px; transition: box-shadow 0.2s, border-color 0.2s, background 0.2s"
+                        },
+                        {
+                          "type": "card",
+                          "props": {
+                            "gap": "md",
+                            "align": "left",
+                            "valign": "top",
+                            "cols": 2,
+                            "pad": "sm",
+                            "radius": "lg",
+                            "bg": "none"
+                          },
+                          "children": []
+                        }
+                      ],
+                      "style": ""
+                    }
+                  ],
+                  "style": "border: 1px solid var(--line); box-shadow: 0 2px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "createdAt": 1787577191621
+    }
+  ],
+  "customIcons": {
+    "smartphone": "<rect x=\"7\" y=\"2\" width=\"10\" height=\"20\" rx=\"2\" ry=\"2\"/><line x1=\"12\" y1=\"18\" x2=\"12\" y2=\"18.01\"/>",
+    "devices": "<rect x=\"2\" y=\"14\" width=\"14\" height=\"9\" rx=\"1.5\"/><path d=\"M5 14v-1a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1\"/><line x1=\"8\" y1=\"20\" x2=\"10\" y2=\"20\"/><rect x=\"17\" y=\"4\" width=\"5\" height=\"9\" rx=\"1\"/><line x1=\"19\" y1=\"11.5\" x2=\"20\" y2=\"11.5\"/>",
+    "devices-3": "<rect x=\"2\" y=\"4\" width=\"13\" height=\"10\" rx=\"1.5\"/><path d=\"M2 11h13\"/><path d=\"M8 14v2\"/><path d=\"M5 16h6\"/><rect x=\"17\" y=\"8\" width=\"5\" height=\"8\" rx=\"1\"/><path d=\"M19 16v1\"/>",
+    "brain": "<path d=\"M12 5c0-1.7-1.3-3-3-3a3 3 0 0 0-2.8 4A3.5 3.5 0 0 0 4 9.5c0 1.2.6 2.2 1.5 2.8A3 3 0 0 0 7 17v2h5v-2\"/><path d=\"M12 5c0-1.7 1.3-3 3-3a3 3 0 0 1 2.8 4A3.5 3.5 0 0 1 20 9.5c0 1.2-.6 2.2-1.5 2.8A3 3 0 0 1 17 17v2h-5v-2\"/><path d=\"M12 5v12\"/>",
+    "landscape": "<path d=\"M2 18l5-7 4 5 3-3 5 5H2z\"/><circle cx=\"18\" cy=\"6\" r=\"2.5\"/>"
+  },
+  "iconKeywords": {
+    "smartphone": [
+      "smartphone",
+      "phone",
+      "mobile",
+      "device",
+      "cell",
+      "iphone",
+      "android",
+      "handheld",
+      "screen",
+      "touch"
+    ],
+    "devices": [
+      "laptop",
+      "smartphone",
+      "mobile",
+      "computer",
+      "device",
+      "screen",
+      "phone",
+      "desktop",
+      "responsive",
+      "technology"
+    ],
+    "devices-3": [
+      "devices",
+      "desktop",
+      "mobile",
+      "screen",
+      "monitor",
+      "phone",
+      "display",
+      "hardware",
+      "technology",
+      "multi-device"
+    ],
+    "brain": [
+      "brain",
+      "mind",
+      "intelligence",
+      "cognitive",
+      "mental",
+      "think",
+      "neural",
+      "memory",
+      "ai",
+      "smart"
+    ],
+    "landscape": [
+      "landscape",
+      "scenery",
+      "nature",
+      "mountains",
+      "hills",
+      "outdoors",
+      "terrain",
+      "scene",
+      "photo",
+      "image"
+    ]
+  },
+  "cardArrange": "inorganic"
 }
