@@ -10428,7 +10428,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (r.status === 413) e.tooLarge = 1;
       throw e;
     }
-    return true;
+    return await r.json().catch(function () { return { ok: true }; });
   }
 
   function jsonByteLen(s) { try { return new TextEncoder().encode(s).length; } catch (e) { return (s || "").length; } }
@@ -10541,11 +10541,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         // re-commits on the next publish. This is what stops a slow/flaky tail from masquerading
         // as a failure.
         pubProgress(60, "Publishing your content\u2026");
-        await putContentR2(json, token);
+        var pubRes = await putContentR2(json, token);
         pubStopCreep();
         finalisePublished();
         pubProgress(100, "Your site is live and ready to view.", { done: true, viewUrl: viewUrl });
-        ghCommitViaGitData(token, json, "Update content.json via admin").catch(function () {});
+        // Version history: the Worker now commits content.json to git server-side as part of the R2 write
+        // (one auth context - can't desync). If it reported back, just surface any lag; on an older Worker
+        // (no git field) fall back to the client mirror - but NEVER swallow its failure again.
+        if (pubRes && pubRes.git) { if (!pubRes.git.ok) status("Live \u2014 but the version-history mirror is lagging (" + (pubRes.git.error || "unknown") + "); it retries on the next publish.", false); }
+        else { ghCommitViaGitData(token, json, "Update content.json via admin").catch(function (e) { status("Live \u2014 version-history mirror failed: " + ((e && e.message) || e), false); }); }
         return;
       }
       // Direct-token mode (no admin session): the git commit IS the live path.

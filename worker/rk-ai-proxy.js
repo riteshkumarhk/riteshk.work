@@ -979,7 +979,12 @@ export default {
         // Validate it parses as JSON so a corrupt/truncated publish can never blank the live site.
         try { JSON.parse(new TextDecoder().decode(buf)); } catch (e) { return json({ error: "Not valid JSON \u2014 nothing written" }, 400, cors); }
         await env.MEDIA.put("content.json", buf, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
-        return json({ ok: true, size: buf.byteLength }, 200, cors);
+        // Mirror to git server-side (version history + Pages fallback). Best-effort: R2 already made the
+        // site live, so a git hiccup returns ok:true with git.ok=false rather than failing the publish -
+        // but it's REPORTED to the studio (never silently swallowed like the old client-side mirror).
+        let git = { ok: false, error: "GitHub not configured on the Worker" };
+        if (env.GH_TOKEN && env.OWNER && env.REPO) git = await ghCommitContent(env, new Uint8Array(buf), "Update content.json via admin");
+        return json({ ok: true, size: buf.byteLength, git: git }, 200, cors);
       } catch (e) {
         return json({ error: "Content publish failed", detail: String((e && e.message) || e) }, 500, cors);
       }
@@ -1838,6 +1843,38 @@ function aiUsageClean(days) {
     if (Object.keys(po).length) out[d] = po;
   }
   return out;
+}
+// Commit content.json to the repo server-side with the Worker's OWN GH_TOKEN, so the R2 write and the
+// git mirror share ONE auth context and can't desync (the browser no longer needs a step-up token that
+// the R2 write already consumed). blob -> tree -> commit -> ref, with one retry on a fast-forward race.
+async function ghCommitContent(env, bytes, message) {
+  const owner = env.OWNER || "", repo = env.REPO || "", branch = env.BRANCH || "main";
+  if (!owner || !repo || !env.GH_TOKEN) return { ok: false, error: "GitHub not configured on the Worker" };
+  const base = "https://api.github.com/repos/" + owner + "/" + repo;
+  const H = { "Authorization": "token " + env.GH_TOKEN, "Accept": "application/vnd.github+json", "User-Agent": "rk-admin-proxy", "X-GitHub-Api-Version": "2022-11-28" };
+  const api = async (u, opts) => {
+    const res = await fetch(u, Object.assign({ headers: H }, opts || {}));
+    let b = null; try { b = await res.json(); } catch (e) {}
+    if (!res.ok) { const er = new Error((b && b.message) || ("HTTP " + res.status)); er.http = res.status; throw er; }
+    return b;
+  };
+  let s = ""; const CH = 0x8000; for (let i = 0; i < bytes.length; i += CH) s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+  const b64 = btoa(s);
+  const once = async () => {
+    const ref = await api(base + "/git/ref/heads/" + branch);
+    const head = ref.object.sha;
+    const headCommit = await api(base + "/git/commits/" + head);
+    const blob = await api(base + "/git/blobs", { method: "POST", body: JSON.stringify({ content: b64, encoding: "base64" }) });
+    const tree = await api(base + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: headCommit.tree.sha, tree: [{ path: "content.json", mode: "100644", type: "blob", sha: blob.sha }] }) });
+    const commit = await api(base + "/git/commits", { method: "POST", body: JSON.stringify({ message: message, tree: tree.sha, parents: [head] }) });
+    await api(base + "/git/refs/heads/" + branch, { method: "PATCH", body: JSON.stringify({ sha: commit.sha }) });
+    return commit.sha;
+  };
+  try { return { ok: true, sha: await once() }; }
+  catch (e1) {
+    if (e1 && (e1.http === 409 || e1.http === 422)) { try { return { ok: true, sha: await once() }; } catch (e2) { return { ok: false, error: String((e2 && e2.message) || e2) }; } }
+    return { ok: false, error: String((e1 && e1.message) || e1) };
+  }
 }
 // Inject the real key + stream the provider response back (owner-session-gated proxy).
 async function aiForward(request, cors, cfg, realKey, subPath, searchParams) {
