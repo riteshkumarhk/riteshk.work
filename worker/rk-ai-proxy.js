@@ -1294,6 +1294,30 @@ export default {
       const ok = await aiResolveKey(env, "openai"), gk = await aiResolveKey(env, "gemini");
       return aiEmbedCore(cors, input, (b && b.provider === "gemini") ? "gemini" : "openai", (b && typeof b.model === "string" && b.model.trim()) || "", ok, gk);
     }
+    // Roaming AI token-usage ledger: each device PUTs its own cumulative day-map under its device id
+    // (idempotent overwrite, so retries never double-count); GET returns every device bucket and the
+    // studio sums them for a cross-device total. Owner-session-gated; stored in VAULT_GRANTS ("ai:usage").
+    if (url.pathname === "/admin/ai/usage") {
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Usage store not configured" }, 503, cors);
+      if (request.method === "GET") return json({ ok: true, usage: (await env.VAULT_GRANTS.get("ai:usage", "json")) || { v: 1, devices: {} } }, 200, cors);
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      let b; try { b = await request.json(); } catch (e) { return json({ error: "Bad JSON" }, 400, cors); }
+      const store = (await env.VAULT_GRANTS.get("ai:usage", "json")) || { v: 1, devices: {} };
+      if (!store.devices) store.devices = {};
+      if (b && b.reset) {
+        if (b.device) delete store.devices[String(b.device).slice(0, 64)]; else store.devices = {};
+        await env.VAULT_GRANTS.put("ai:usage", JSON.stringify(store));
+        return json({ ok: true, usage: store }, 200, cors);
+      }
+      const dev = String((b && b.device) || "").slice(0, 64);
+      if (!dev) return json({ error: "device required" }, 400, cors);
+      store.devices[dev] = { updated: Date.now(), days: aiUsageClean(b && b.days) };
+      const cutoff = Date.now() - 180 * 24 * 3600 * 1000; // forget devices silent for 180 days
+      for (const k of Object.keys(store.devices)) if (((store.devices[k] && store.devices[k].updated) || 0) < cutoff) delete store.devices[k];
+      await env.VAULT_GRANTS.put("ai:usage", JSON.stringify(store));
+      return json({ ok: true, usage: store }, 200, cors);
+    }
     if (url.pathname.indexOf("/admin/ai/") === 0) {
       // the session may arrive wherever a provider key would (bearer / x-api-key / ?key=), so the studio's
       // existing per-provider request builders carry it unchanged; the Worker swaps in the real key below.
@@ -1790,6 +1814,29 @@ async function aiKeyStatus(env) {
   try { store = (env.VAULT_GRANTS && await env.VAULT_GRANTS.get("ai:keys", "json")) || {}; } catch (e) { store = {}; }
   const out = {};
   for (const p in PROVIDERS) out[p] = { set: !!store[p] || !!env[PROVIDERS[p].keyVar], roaming: !!store[p] };
+  return out;
+}
+// Sanitize an incoming per-device usage map { "YYYY-MM-DD": { provider: { model: {in,out,calls} } } }:
+// coerce to bounded non-negative integers, drop junk, cap fan-out, keep only the last 120 dated days.
+function aiUsageClean(days) {
+  const out = {};
+  if (!days || typeof days !== "object") return out;
+  const dates = Object.keys(days).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().slice(-120);
+  const clamp = (n, hi) => Math.max(0, Math.min(hi, Math.round(+n || 0)));
+  for (const d of dates) {
+    const provs = days[d]; if (!provs || typeof provs !== "object") continue;
+    const po = {};
+    for (const p of Object.keys(provs).slice(0, 12)) {
+      const models = provs[p]; if (!models || typeof models !== "object") continue;
+      const mo = {};
+      for (const m of Object.keys(models).slice(0, 40)) {
+        const v = models[m] || {}, inn = clamp(v.in, 1e12), outn = clamp(v.out, 1e12), calls = clamp(v.calls, 1e9);
+        if (inn || outn || calls) mo[String(m).slice(0, 80)] = { in: inn, out: outn, calls: calls };
+      }
+      if (Object.keys(mo).length) po[String(p).slice(0, 20)] = mo;
+    }
+    if (Object.keys(po).length) out[d] = po;
+  }
   return out;
 }
 // Inject the real key + stream the provider response back (owner-session-gated proxy).

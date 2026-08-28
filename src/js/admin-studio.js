@@ -2355,7 +2355,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (r.status === 501) return { unavailable: true, reason: "no embeddings provider is set up \u2014 Claude has none, so add an OpenAI or Gemini key to your proxy" };   // stable config state, not a transient failure
       if (!r.ok) return { failed: true, reason: r.status === 404 ? "the /embed route isn\u2019t deployed on your proxy yet" : r.status === 401 ? "the access token was rejected" : "the server returned error " + r.status };
       var j = await r.json().catch(function () { return null; });
-      if (j && Array.isArray(j.embeddings) && j.embeddings.length) return { embeddings: j.embeddings };
+      if (j && Array.isArray(j.embeddings) && j.embeddings.length) { try { aiUsageRecord(prov, "embeddings", Math.ceil(arr.join(" ").length / 4), 0); } catch (e) {} return { embeddings: j.embeddings }; }
       return { failed: true, reason: "no embeddings were returned" };
     } catch (e) { return { failed: true, reason: "the proxy couldn\u2019t be reached (offline, or CORS isn\u2019t allowing this origin)" }; }
   }
@@ -11451,6 +11451,114 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       .then(function (res) { if (res.ok && res.j && res.j.providers) aiCfKeys = res.j.providers; if (done) done(res.ok ? null : ((res.j && res.j.error) || "Save failed.")); })
       .catch(function () { if (done) done("Could not reach your Worker."); });
   }
+
+  // ---------- AI token-usage ledger: counts every AI call (both modes) here, roams across devices via the
+  // Worker. This device keeps a cumulative day-map in localStorage; a debounced flush PUTs it under a stable
+  // device id (idempotent, so retries never double-count), and the studio sums all device buckets for a total.
+  var AI_USAGE_KEY = "rk:ai:usage";          // { v, days: { "YYYY-MM-DD": { provider: { model: {in,out,calls} } } } }
+  var AI_USAGE_DEV_KEY = "rk:ai:usage:dev";
+  var aiUsageRemote = null;                   // last server aggregate: { v, devices: { id: {updated, days} } }
+  var aiUsageFlushT = 0;
+  function aiUsageDevId() {
+    var id = ""; try { id = localStorage.getItem(AI_USAGE_DEV_KEY) || ""; } catch (e) {}
+    if (!id) { id = "d-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); try { localStorage.setItem(AI_USAGE_DEV_KEY, id); } catch (e) {} }
+    return id;
+  }
+  function aiUsageLocal() { try { var s = JSON.parse(localStorage.getItem(AI_USAGE_KEY)); if (s && s.days) return s; } catch (e) {} return { v: 1, days: {} }; }
+  function aiUsageSaveLocal(s) { try { localStorage.setItem(AI_USAGE_KEY, JSON.stringify(s)); } catch (e) {} }
+  function aiUsageDay() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  // Record one call's token usage. Writes locally always + schedules a roaming flush.
+  function aiUsageRecord(provider, model, inTok, outTok) {
+    inTok = Math.max(0, Math.round(+inTok || 0)); outTok = Math.max(0, Math.round(+outTok || 0));
+    if (!inTok && !outTok) return;
+    provider = String(provider || "other").slice(0, 20); model = String(model || "?").slice(0, 80);
+    var s = aiUsageLocal(), day = aiUsageDay();
+    var d = s.days[day] || (s.days[day] = {}), p = d[provider] || (d[provider] = {}), m = p[model] || (p[model] = { in: 0, out: 0, calls: 0 });
+    m.in += inTok; m.out += outTok; m.calls += 1;
+    var dates = Object.keys(s.days); if (dates.length > 130) { dates.sort(); dates.slice(0, dates.length - 130).forEach(function (x) { delete s.days[x]; }); }
+    aiUsageSaveLocal(s); aiUsageScheduleFlush();
+  }
+  // Pull {in,out} out of any provider's raw JSON response (chat / vision / embed shapes).
+  function aiUsageFromJson(provider, j) {
+    if (!j) return null;
+    if (provider === "gemini") { var u = j.usageMetadata || {}; var gi = +u.promptTokenCount || 0, go = (+u.candidatesTokenCount || 0) + (+u.thoughtsTokenCount || 0); return (gi || go) ? { in: gi, out: go } : null; }
+    var us = j.usage; if (!us) return null;
+    if (provider === "anthropic") return { in: (+us.input_tokens || 0) + (+us.cache_creation_input_tokens || 0) + (+us.cache_read_input_tokens || 0), out: +us.output_tokens || 0 };
+    return { in: +us.prompt_tokens || +us.input_tokens || 0, out: +us.completion_tokens || +us.output_tokens || 0 };
+  }
+  function aiUsageScheduleFlush() { if (aiUsageFlushT) return; aiUsageFlushT = setTimeout(function () { aiUsageFlushT = 0; aiUsageFlush(); }, 4000); }
+  // Idempotently overwrite this device's bucket on the Worker (no double-count on retry).
+  function aiUsageFlush(done) {
+    var sess = aiSess();
+    if (!sess || !ADMIN_WORKER) { if (done) done(); return; }
+    fetch(ADMIN_WORKER + "/admin/ai/usage", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ device: aiUsageDevId(), days: aiUsageLocal().days }) })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { if (j && j.usage) aiUsageRemote = j.usage; if (done) done(); })
+      .catch(function () { if (done) done(); });
+  }
+  function aiUsagePull(done) {
+    var sess = aiSess();
+    if (!sess || !ADMIN_WORKER) { aiUsageRemote = null; if (done) done(); return; }
+    fetch(ADMIN_WORKER + "/admin/ai/usage", { headers: { Authorization: "Bearer " + sess } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { aiUsageRemote = (j && j.usage) || null; if (done) done(); })
+      .catch(function () { if (done) done(); });
+  }
+  function aiUsageReset(done) {
+    aiUsageSaveLocal({ v: 1, days: {} });
+    var sess = aiSess();
+    if (sess && ADMIN_WORKER) fetch(ADMIN_WORKER + "/admin/ai/usage", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ reset: true }) }).then(function () { aiUsageRemote = { v: 1, devices: {} }; if (done) done(); }).catch(function () { if (done) done(); });
+    else { aiUsageRemote = null; if (done) done(); }
+  }
+  // One merged day-map = every OTHER device's last-synced bucket + THIS device's freshest local (authoritative).
+  function aiUsageMerged() {
+    var mine = aiUsageDevId(), acc = {};
+    function add(days) {
+      if (!days) return;
+      Object.keys(days).forEach(function (dt) {
+        var src = days[dt], dd = acc[dt] || (acc[dt] = {});
+        Object.keys(src).forEach(function (pv) {
+          var sp = src[pv], dp = dd[pv] || (dd[pv] = {});
+          Object.keys(sp).forEach(function (md) { var sm = sp[md] || {}, dm = dp[md] || (dp[md] = { in: 0, out: 0, calls: 0 }); dm.in += +sm.in || 0; dm.out += +sm.out || 0; dm.calls += +sm.calls || 0; });
+        });
+      });
+    }
+    var devices = (aiUsageRemote && aiUsageRemote.devices) || {};
+    Object.keys(devices).forEach(function (id) { if (id !== mine) add(devices[id].days); });
+    add(aiUsageLocal().days);
+    return acc;
+  }
+  // Rough $/1M tokens [in, out] by model - ESTIMATE only, provider prices drift. Prefix match, provider fallback.
+  var AI_PRICE = [
+    [/^gpt-4o-mini/, 0.15, 0.6], [/^gpt-4o/, 2.5, 10], [/^gpt-4\.1-nano/, 0.1, 0.4], [/^gpt-4\.1-mini/, 0.4, 1.6], [/^gpt-4\.1/, 2, 8],
+    [/^o3-mini/, 1.1, 4.4], [/^o1-mini/, 1.1, 4.4], [/^o1\b|^o3\b/, 15, 60], [/^gpt-3\.5/, 0.5, 1.5],
+    [/embedding-3-small/, 0.02, 0], [/embedding-3-large/, 0.13, 0], [/embedding/, 0.1, 0],
+    [/haiku/, 0.8, 4], [/sonnet/, 3, 15], [/opus/, 15, 75],
+    [/flash-8b/, 0.04, 0.15], [/gemini.*flash/, 0.15, 0.6], [/gemini.*pro/, 1.25, 5]
+  ];
+  var AI_PRICE_FALLBACK = { openai: [1, 3], gemini: [0.3, 1.2], anthropic: [3, 15], custom: [1, 3], other: [1, 3] };
+  function aiModelPrice(provider, model) { for (var i = 0; i < AI_PRICE.length; i++) if (AI_PRICE[i][0].test(model)) return [AI_PRICE[i][1], AI_PRICE[i][2]]; return AI_PRICE_FALLBACK[provider] || AI_PRICE_FALLBACK.other; }
+  // Roll a merged day-map into totals + per-provider + per-model + per-day-tokens + est cost.
+  function aiUsageTotals(days) {
+    var t = { in: 0, out: 0, calls: 0, cost: 0, byProv: {}, byModel: {}, byDay: {} };
+    Object.keys(days || {}).forEach(function (dt) {
+      var pv = days[dt], dayTok = 0;
+      Object.keys(pv).forEach(function (p) {
+        var md = pv[p];
+        Object.keys(md).forEach(function (m) {
+          var u = md[m] || {}, i = +u.in || 0, o = +u.out || 0, tok = i + o, pr = aiModelPrice(p, m), cost = (i / 1e6) * pr[0] + (o / 1e6) * pr[1];
+          t.in += i; t.out += o; t.calls += +u.calls || 0; t.cost += cost; dayTok += tok;
+          t.byProv[p] = (t.byProv[p] || 0) + tok;
+          var mk = p + " / " + m; var e = t.byModel[mk] || (t.byModel[mk] = { tok: 0, cost: 0, calls: 0 }); e.tok += tok; e.cost += cost; e.calls += +u.calls || 0;
+        });
+      });
+      t.byDay[dt] = dayTok;
+    });
+    return t;
+  }
+  function aiFmtTok(n) { n = +n || 0; return n >= 1e9 ? (n / 1e9).toFixed(2) + "B" : n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n)); }
+  function aiFmtCost(c) { c = +c || 0; return c > 0 && c < 0.01 ? "<$0.01" : "$" + c.toFixed(c < 100 ? 2 : 0); }
+
   function aiCfg(purpose) {
     const scope = aiScope(purpose);
     const p = aiGet(scope, "provider") || "openai";
@@ -11508,6 +11616,44 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var lc = aiLocalKeyCount();
     var mig = lc ? '<button type="button" class="btn btn--ghost aicf__mig" data-aicf-migrate>Move this browser\u2019s ' + lc + ' saved key' + (lc > 1 ? "s" : "") + ' to Cloudflare</button>' : "";
     return (warn || mig) ? ('<div class="aiblk aiblk--cfextra">' + warn + mig + "</div>") : "";
+  }
+  // The Usage section at the bottom of AI settings: lifetime tokens + est cost, a 30-day trend, a
+  // per-provider split and the top models. Reads the merged (cross-device) day-map from aiUsageMerged().
+  function aiUsagePanel() {
+    var merged = aiUsageMerged(), t = aiUsageTotals(merged);
+    var roams = aiMode() === "cf" && !!aiSess() && !!ADMIN_WORKER;
+    var note = roams ? "Counts every device - synced through Cloudflare." : "This device only - put your keys on Cloudflare to roam usage across devices.";
+    var head = '<div class="aiuse__head"><span class="aiuse__ttl">Token usage</span><button type="button" class="aiuse__reset" data-aiuse-reset>Reset</button></div>';
+    if (!(t.in + t.out)) return '<div class="aiuse aiuse--empty">' + head + '<div class="aiuse__note">' + note + '</div><div class="aiuse__blank">No AI usage yet - run a Prepare tool and your token count shows up here.</div></div>';
+    var now = new Date(), mx = 1, series = [];
+    for (var i = 29; i >= 0; i--) { var dt = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i); var k = dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0") + "-" + String(dt.getDate()).padStart(2, "0"); var dv = t.byDay[k] || 0; if (dv > mx) mx = dv; series.push({ k: k, v: dv }); }
+    var bars = series.map(function (s) { return '<span class="aiuse__bar' + (s.v ? "" : " is-zero") + '" style="height:' + Math.max(2, Math.round((s.v / mx) * 100)) + '%" title="' + s.k + ": " + aiFmtTok(s.v) + ' tokens"></span>'; }).join("");
+    var provs = Object.keys(t.byProv).sort(function (a, b) { return t.byProv[b] - t.byProv[a]; }), pmx = 1;
+    provs.forEach(function (p) { if (t.byProv[p] > pmx) pmx = t.byProv[p]; });
+    var prow = provs.map(function (p) { return '<div class="aiuse__prow"><span class="aiuse__plab">' + escHtml(providerName(p)) + '</span><span class="aiuse__ptrack"><span class="aiuse__pfill" style="width:' + Math.max(3, Math.round(t.byProv[p] / pmx * 100)) + '%"></span></span><span class="aiuse__pval">' + aiFmtTok(t.byProv[p]) + "</span></div>"; }).join("");
+    var models = Object.keys(t.byModel).map(function (k) { return { k: k, tok: t.byModel[k].tok, cost: t.byModel[k].cost, calls: t.byModel[k].calls }; }).sort(function (a, b) { return b.tok - a.tok; }).slice(0, 6);
+    var mrow = models.map(function (m) { return '<div class="aiuse__mrow"><span class="aiuse__mname">' + escHtml(m.k) + '</span><span class="aiuse__mmeta">' + m.calls + " call" + (m.calls === 1 ? "" : "s") + " \u00b7 " + aiFmtTok(m.tok) + " \u00b7 " + aiFmtCost(m.cost) + "</span></div>"; }).join("");
+    return '<div class="aiuse">' + head + '<div class="aiuse__note">' + note + '</div>' +
+      '<div class="aiuse__stats">' +
+        '<div class="aiuse__stat aiuse__stat--big"><b>' + aiFmtTok(t.in + t.out) + '</b><span>tokens</span></div>' +
+        '<div class="aiuse__stat aiuse__stat--big"><b>' + aiFmtCost(t.cost) + '</b><span>est. cost</span></div>' +
+        '<div class="aiuse__stat"><b>' + aiFmtTok(t.calls) + '</b><span>calls</span></div>' +
+        '<div class="aiuse__stat"><b>' + aiFmtTok(t.in) + ' / ' + aiFmtTok(t.out) + '</b><span>in / out</span></div>' +
+      '</div>' +
+      '<div class="aiuse__spark" role="img" aria-label="Token usage over the last 30 days">' + bars + '</div><div class="aiuse__sparkcap">Last 30 days</div>' +
+      (prow ? '<div class="aiuse__sub">By provider</div>' + prow : "") +
+      (mrow ? '<div class="aiuse__sub">Top models</div><div class="aiuse__models">' + mrow + "</div>" : "") +
+      '<div class="aiuse__foot">Costs are estimates from public list prices and can drift from your actual bill.</div>' +
+    "</div>";
+  }
+  function aiWireUsage(container, repaint) {
+    var rb = container.querySelector("[data-aiuse-reset]");
+    if (!rb) return;
+    rb.addEventListener("click", function () {
+      Promise.resolve(confirmModal({ title: "Reset usage stats?", sub: "Clears the token counts on all your devices. Your keys and content aren\u2019t touched.", cta: "Reset", okClass: "btn--danger", cancel: "Keep" })).then(function (go) {
+        if (!go) return; var was = btnBusy(rb, "Resetting\u2026"); aiUsageReset(function () { btnIdle(rb, was); if (repaint) repaint(); status("Usage stats reset.", true); });
+      });
+    });
   }
   // Save every filled data-aicf-key input in a container to Cloudflare (sequential; clears each on success).
   function aiCfSaveInputs(container, done) {
@@ -11613,6 +11759,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
                    : (aiBlock("txt", "Content generation", "text") + aiBlock("img", "Image generation", "imagery"));
       if (mode === "cf") html += aiCfExtras();
       html += '<div class="af__hint" style="margin:.1rem 0 .2rem">' + (imgOK ? "Image service supports generation." : "Your image service (Claude) can\u2019t generate images \u2014 pick OpenAI or Gemini for imagery.") + "</div>";
+      html += aiUsagePanel();
       bodyEl.innerHTML = html;
       bodyEl.querySelectorAll("[data-aiscope]").forEach(function (sel) {
         sel.addEventListener("change", function () { aiPersistVisible(modal); aiSetProvider(sel.getAttribute("data-aiscope"), sel.value); paint(); });
@@ -11625,8 +11772,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       aiWireCfEntry(bodyEl, function () { aiCfRefresh(paint); });
       var migBtn = bodyEl.querySelector("[data-aicf-migrate]");
       if (migBtn) migBtn.addEventListener("click", function () { aiMigrateLocalToCf(paint); });
+      aiWireUsage(bodyEl, paint);
     }
     if (aiMode() === "cf") aiCfRefresh(paint);
+    aiUsagePull(paint);
     paint();
     var close = function () { if (opts && opts.onClose) opts.onClose(); else modal.remove(); };
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
@@ -11795,6 +11944,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       res = await fetch(base + "/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: model, max_tokens: maxTokens, temperature: temp, system: system, messages: [{ role: "user", content: user }] }) });
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
+      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
       return { ok: true, text: ((((j && j.content) || [])).map(function (b) { return b.text || ""; }).join("")).trim() };
     }
     if (p === "gemini") {
@@ -11805,6 +11955,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
       var cand = (j && j.candidates && j.candidates[0]) || {};
+      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
       return { ok: true, text: ((((cand.content && cand.content.parts) || [])).map(function (x) { return x.text || ""; }).join("")).trim() };
     }
     var ob = { model: model, messages: [{ role: "system", content: system }, { role: "user", content: user }], temperature: temp, max_tokens: maxTokens };
@@ -11812,6 +11963,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     res = await fetch(base + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify(ob) });
     j = await res.json().catch(function () { return null; });
     if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
+    (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
     return { ok: true, text: ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim() };
   }
   // Streaming variant of aiChatOnce: reads the SSE body and calls onDelta(fullSoFar, chunk)
@@ -11832,10 +11984,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     } else {
       url = base + "/chat/completions";
       headers = { "Content-Type": "application/json", Authorization: "Bearer " + key };
-      body = { model: model, messages: [{ role: "system", content: system }, { role: "user", content: user }], temperature: temp, max_tokens: maxTokens, stream: true };
+      body = { model: model, messages: [{ role: "system", content: system }, { role: "user", content: user }], temperature: temp, max_tokens: maxTokens, stream: true, stream_options: { include_usage: true } };
       if (opts.json) body.response_format = { type: "json_object" };
     }
-    var full = "";
+    var full = "", uIn = 0, uOut = 0, uSet = false;
     try {
       var res = await fetch(url, { method: "POST", headers: headers, body: JSON.stringify(body) });
       if (!res.ok || !res.body) { var je = await res.json().catch(function () { return null; }); return { ok: false, status: res.status, err: (je && je.error && je.error.message) || ("HTTP " + res.status) }; }
@@ -11852,11 +12004,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           var payload = line.slice(5).trim();
           if (!payload || payload === "[DONE]") continue;
           var ev; try { ev = JSON.parse(payload); } catch (e) { continue; }
-          if (p === "anthropic") { if (ev.type === "content_block_delta" && ev.delta && typeof ev.delta.text === "string") push(ev.delta.text); }
-          else if (p === "gemini") { var gp = ev.candidates && ev.candidates[0] && ev.candidates[0].content && ev.candidates[0].content.parts; if (gp) for (var gi = 0; gi < gp.length; gi++) if (gp[gi] && typeof gp[gi].text === "string") push(gp[gi].text); }
-          else { var d = ev.choices && ev.choices[0] && ev.choices[0].delta; if (d && typeof d.content === "string") push(d.content); }
+          if (p === "anthropic") { if (ev.type === "content_block_delta" && ev.delta && typeof ev.delta.text === "string") push(ev.delta.text); if (ev.type === "message_start" && ev.message && ev.message.usage) { uIn = +ev.message.usage.input_tokens || uIn; uSet = true; } if (ev.usage && ev.usage.output_tokens != null) { uOut = +ev.usage.output_tokens || uOut; uSet = true; } }
+          else if (p === "gemini") { var gp = ev.candidates && ev.candidates[0] && ev.candidates[0].content && ev.candidates[0].content.parts; if (gp) for (var gi = 0; gi < gp.length; gi++) if (gp[gi] && typeof gp[gi].text === "string") push(gp[gi].text); if (ev.usageMetadata) { uIn = +ev.usageMetadata.promptTokenCount || uIn; uOut = (+ev.usageMetadata.candidatesTokenCount || 0) + (+ev.usageMetadata.thoughtsTokenCount || 0) || uOut; uSet = true; } }
+          else { var d = ev.choices && ev.choices[0] && ev.choices[0].delta; if (d && typeof d.content === "string") push(d.content); if (ev.usage) { uIn = +ev.usage.prompt_tokens || uIn; uOut = +ev.usage.completion_tokens || uOut; uSet = true; } }
         }
       }
+      if (uSet) aiUsageRecord(p, model, uIn, uOut);
       return { ok: true, text: full.trim() };
     } catch (e) { return { ok: false, err: e.message || String(e), emitted: full.length > 0 }; }
   }
@@ -11896,6 +12049,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       res = await fetch(base + "/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: model, max_tokens: opts.maxTokens || 2000, temperature: opts.temperature != null ? opts.temperature : 1, system: system, messages: [{ role: "user", content: content }] }) });
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
+      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
       return { ok: true, text: (((j && j.content) || []).map(function (b) { return b.text || ""; }).join("")).trim() };
     }
     if (p === "gemini") {
@@ -11907,6 +12061,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
       var cand = (j && j.candidates && j.candidates[0]) || {};
+      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
       return { ok: true, text: (((cand.content && cand.content.parts) || []).map(function (x) { return x.text || ""; }).join("")).trim() };
     }
     var msgs = [{ role: "system", content: system }, { role: "user", content: [{ type: "text", text: prompt }].concat(imgs.map(function (im) { return { type: "image_url", image_url: { url: "data:" + im.mime + ";base64," + im.b64 } }; })) }];
@@ -11914,6 +12069,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     res = await fetch(base + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify(ob) });
     j = await res.json().catch(function () { return null; });
     if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
+    (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
     return { ok: true, text: ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim() };
   }
   // Conversational vision turn for the whiteboard mock: like aiVisionOnce but returns PLAIN TEXT
@@ -11928,6 +12084,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       res = await fetch(base + "/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: model, max_tokens: maxTok, temperature: temp, system: system, messages: [{ role: "user", content: content }] }) });
       j = await res.json().catch(function () { return null; });
       if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
+      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
       return (((j && j.content) || []).map(function (b) { return b.text || ""; }).join("")).trim();
     }
     if (p === "gemini") {
@@ -11938,6 +12095,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       j = await res.json().catch(function () { return null; });
       if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
       var cand = (j && j.candidates && j.candidates[0]) || {};
+      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
       return (((cand.content && cand.content.parts) || []).map(function (x) { return x.text || ""; }).join("")).trim();
     }
     var uc = [{ type: "text", text: user }];
@@ -11945,6 +12103,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     res = await fetch(base + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify({ model: model, messages: [{ role: "system", content: system }, { role: "user", content: uc }], max_tokens: maxTok, temperature: temp }) });
     j = await res.json().catch(function () { return null; });
     if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
+    (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
     return ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim();
   }
   async function visionModels(cfg) {
