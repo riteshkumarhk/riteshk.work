@@ -46,3 +46,8 @@ enabled = true
 
 [observability.logs]
 enabled = true
+
+# Daily cron (03:30 UTC ≈ 09:00 IST) drives the opt-in analytics recap push. The scheduled() handler
+# reads cfg:digest, gates weekly recaps to Mondays, and dedupes to once per UTC day.
+[triggers]
+crons = ["30 3 * * *"]

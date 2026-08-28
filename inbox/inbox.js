@@ -293,7 +293,7 @@
         h("button", { class: "iconbtn", title: "Refresh", onclick: loadTab, html: "&#8635;" })
       ])]),
       notifNudge(),
-      h("div", { class: "tabs" }, [tabBtn("requests", "Requests"), tabBtn("bookings", "Bookings"), tabBtn("approved", "Approved"), tabBtn("curated", "Curated")]),
+      h("div", { class: "tabs" }, [tabBtn("requests", "Requests"), tabBtn("bookings", "Bookings"), tabBtn("approved", "Approved"), tabBtn("curated", "Curated"), tabBtn("insights", "Insights")]),
       h("div", { class: "tabbody", id: "tabbody" }, [h("div", { class: "spinner" })])
     ].filter(Boolean));
   }
@@ -302,7 +302,137 @@
     setBody([h("div", { class: "spinner" })]);
     if (accessTab === "requests") return loadRequests();
     if (accessTab === "bookings") return loadBookings();
+    if (accessTab === "insights") return loadInsights();
     return loadGrants();
+  }
+
+  /* ---------- Insights: website analytics, read with the SAME passkey session as the inbox ---------- */
+  var insMDays = 7;          // mobile default window
+  var insCaseMap = null;     // id -> case title, lazy-loaded from the public content.json
+  var INS_EV_LBL = { case_open: "Case opened", deepcut_unlock: "Deeper cut unlocked", resume_download: "R\u00e9sum\u00e9 opened", contact_submit: "Contact clicked", request_access: "Access requested", vcard_download: "Contact saved", booking_open: "Booking opened", skim_open: "Skim view" };
+  var INS_CC = { US: "United States", CA: "Canada", MX: "Mexico", BR: "Brazil", AR: "Argentina", CL: "Chile", CO: "Colombia", GB: "United Kingdom", IE: "Ireland", FR: "France", DE: "Germany", ES: "Spain", PT: "Portugal", IT: "Italy", NL: "Netherlands", BE: "Belgium", CH: "Switzerland", AT: "Austria", SE: "Sweden", NO: "Norway", DK: "Denmark", FI: "Finland", PL: "Poland", CZ: "Czechia", RU: "Russia", UA: "Ukraine", TR: "Turkey", IN: "India", PK: "Pakistan", BD: "Bangladesh", LK: "Sri Lanka", CN: "China", JP: "Japan", KR: "South Korea", TW: "Taiwan", HK: "Hong Kong", SG: "Singapore", MY: "Malaysia", ID: "Indonesia", TH: "Thailand", VN: "Vietnam", PH: "Philippines", AU: "Australia", NZ: "New Zealand", AE: "UAE", SA: "Saudi Arabia", IL: "Israel", EG: "Egypt", ZA: "South Africa", NG: "Nigeria", KE: "Kenya", MA: "Morocco" };
+  function insEsc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function insFlag(cc) { cc = String(cc || "").toUpperCase(); if (!/^[A-Z]{2}$/.test(cc)) return "\uD83C\uDF10"; return String.fromCodePoint.apply(null, [].map.call(cc, function (c) { return 127397 + c.charCodeAt(0); })); }
+  function insNum(n) { n = n || 0; if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M"; if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "k"; return String(n); }
+  function insAgo(at) { var s = Math.max(0, (Date.now() - (at || 0)) / 1000); if (s < 60) return "just now"; if (s < 3600) return Math.floor(s / 60) + "m ago"; if (s < 86400) return Math.floor(s / 3600) + "h ago"; return Math.floor(s / 86400) + "d ago"; }
+  function ensureCaseMap() {
+    if (insCaseMap) return Promise.resolve(insCaseMap);
+    try { var c = JSON.parse(localStorage.getItem("rk:inbox:casemap") || "null"); if (c && c.at && (Date.now() - c.at < 864e5) && c.map) { insCaseMap = c.map; return Promise.resolve(insCaseMap); } } catch (e) {}
+    return fetch("https://media.riteshk.work/content.json?t=" + Date.now()).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      var m = {}; ((j && j.work) || []).forEach(function (w) { if (w && w.id) m[w.id] = w.title || w.client || w.id; });
+      insCaseMap = m; try { localStorage.setItem("rk:inbox:casemap", JSON.stringify({ at: Date.now(), map: m })); } catch (e) {}
+      return m;
+    }).catch(function () { insCaseMap = {}; return {}; });
+  }
+  function insCaseName(id) { return (insCaseMap && insCaseMap[id]) || id; }
+  async function loadInsights() {
+    setBody([h("div", { class: "spinner" })]);
+    var pair = await Promise.all([
+      api("/admin/insights?days=" + insMDays, { headers: authHdr() }),
+      api("/inbox/digest", { headers: authHdr() })
+    ]);
+    var res = pair[0], dg = pair[1];
+    if (res.status === 401 || dg.status === 401) { localStorage.removeItem(SS); return showVerify(); }
+    if (res.status === 0) return setBody([offlineState()]);
+    if (!res.ok) return setBody([h("div", { class: "note err", text: (res.json && res.json.error) || "Couldn\u2019t load insights." })]);
+    await ensureCaseMap();
+    insRender(res.json || {}, (dg.ok && dg.json) ? dg.json : { enabled: false, freq: "daily" });
+  }
+  function insDayToggle() {
+    var wrap = h("div", { class: "insdays" });
+    [[1, "24h"], [7, "7d"], [30, "30d"], [90, "90d"]].forEach(function (d) {
+      var b = h("button", { class: "insday" + (insMDays === d[0] ? " insday--on" : ""), text: d[1] });
+      b.addEventListener("click", function () { if (insMDays !== d[0]) { insMDays = d[0]; loadInsights(); } });
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+  function insCard(n, label) { return '<div class="inscard"><div class="inscard__n">' + n + '</div><div class="inscard__l">' + insEsc(label) + '</div></div>'; }
+  function insSpark(series) {
+    series = series || []; if (series.length < 2) return '<div class="insempty">Not enough data yet for a trend.</div>';
+    var W = 320, H = 64, pad = 4, n = series.length, max = series.reduce(function (m, p) { return Math.max(m, p.count || 0); }, 1);
+    var pts = series.map(function (p, i) { var x = pad + i / (n - 1) * (W - 2 * pad); var y = H - pad - (p.count || 0) / max * (H - 2 * pad); return x.toFixed(1) + "," + y.toFixed(1); });
+    var area = "M" + pad + "," + (H - pad) + " L" + pts.join(" L") + " L" + (W - pad) + "," + (H - pad) + " Z";
+    return '<svg class="insspark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none"><path class="insspark__a" d="' + area + '"/><polyline class="insspark__l" points="' + pts.join(" ") + '"/></svg>';
+  }
+  function insBarsHtml(pairs, limit) {
+    var arr = (pairs || []).filter(function (e) { return e[1]; });
+    if (!arr.length) return '';
+    arr.sort(function (a, b) { return b[1] - a[1]; });
+    var max = arr[0][1] || 1;
+    return '<div class="insbars">' + arr.slice(0, limit || 8).map(function (e) {
+      return '<div class="insbar"><span class="insbar__l">' + e[0] + '</span><span class="insbar__t"><span class="insbar__f" style="width:' + Math.round(e[1] / max * 100) + '%"></span></span><span class="insbar__n">' + e[1] + '</span></div>';
+    }).join('') + '</div>';
+  }
+  function insCountryHtml(geo) {
+    return insBarsHtml(Object.keys(geo || {}).map(function (k) {
+      var cc = /^[A-Za-z]{2}$/.test(k) ? k.toUpperCase() : "";
+      var name = cc ? (INS_CC[cc] || cc) : insEsc(k);
+      return [(cc ? insFlag(cc) : "\uD83C\uDF10") + " " + name, geo[k]];
+    }), 10);
+  }
+  function insCasesHtml(obj) { return insBarsHtml(Object.keys(obj || {}).map(function (k) { return [insEsc(insCaseName(k)), obj[k]]; }), 8); }
+  function insDevHtml(obj) { return insBarsHtml(Object.keys(obj || {}).map(function (k) { return [insEsc(k), obj[k]]; }), 6); }
+  function insFeedHtml(recent) {
+    if (!recent || !recent.length) return '<div class="insempty">No events captured yet.</div>';
+    return '<ul class="insfeed">' + recent.slice(0, 20).map(function (r) {
+      var lbl = INS_EV_LBL[r.t] || r.t;
+      var what = r.id ? (' <b>' + insEsc(insCaseName(r.id)) + '</b>') : '';
+      var wh = r.c ? (insFlag(r.c) + ' ') : '';
+      return '<li><span class="insfeed__w">' + wh + '</span><span class="insfeed__l">' + insEsc(lbl) + what + '</span><span class="insfeed__t">' + insAgo(r.at) + '</span></li>';
+    }).join('') + '</ul>';
+  }
+  function insRender(d, digest) {
+    var ev = d.events || {}, tr = d.traffic || {};
+    var cfHas = tr.configured && !tr.error && (tr.total || 0) > 0;
+    var pv = cfHas ? (tr.total || 0) : (ev.pageviews || 0);
+    var cards = '<div class="inscards">' +
+      insCard(insNum(pv), "Page views") +
+      insCard(insNum(ev.total || 0), "Intent events") +
+      insCard(insNum((ev.types && ev.types.case_open) || 0), "Case opens") +
+      insCard(insNum((ev.types && ev.types.deepcut_unlock) || 0), "Deeper-cut unlocks") +
+      '</div>';
+    var countries = insCountryHtml(cfHas ? tr.geo : ev.geo);
+    var cases = insCasesHtml((ev.targets || {}).case_open);
+    var devices = insDevHtml(ev.devices);
+    var html = cards +
+      '<div class="inspanel"><div class="insph">Traffic \u00b7 ' + (cfHas ? "Cloudflare" : "first-party") + '</div>' + insSpark(cfHas ? tr.series : ev.series) + '</div>' +
+      (countries ? '<div class="inspanel"><div class="insph">Top countries</div>' + countries + '</div>' : '') +
+      (cases ? '<div class="inspanel"><div class="insph">Most-opened cases</div>' + cases + '</div>' : '') +
+      '<div class="inspanel"><div class="insph">Recent activity</div>' + insFeedHtml(ev.recent) + '</div>' +
+      (devices ? '<div class="inspanel"><div class="insph">Devices</div>' + devices + '</div>' : '');
+    setBody([insDayToggle(), h("div", { class: "ins", html: html }), insDigestCard(digest)]);
+  }
+  function insDigestCard(pref) {
+    var state = { enabled: !!(pref && pref.enabled), freq: (pref && pref.freq) || "daily" };
+    var card = h("div", { class: "insdig" });
+    function save() {
+      api("/inbox/digest", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHdr()), body: JSON.stringify({ enabled: state.enabled, freq: state.freq }) }).then(function (r) {
+        if (r.status === 401) { localStorage.removeItem(SS); return showVerify(); }
+        toast(r.ok ? (state.enabled ? "Recap on" : "Recap off") : "Couldn\u2019t save \u2014 try again");
+      });
+    }
+    function paint() {
+      card.innerHTML = "";
+      card.appendChild(h("div", { class: "insdig__h", text: "Recap notifications" }));
+      card.appendChild(h("div", { class: "muted small", text: "A push summary of your traffic, straight to this phone." }));
+      var row = h("label", { class: "insdig__row" });
+      var cb = h("input", { type: "checkbox" }); cb.checked = state.enabled;
+      cb.addEventListener("change", function () { state.enabled = cb.checked; save(); paint(); });
+      row.appendChild(cb); row.appendChild(h("span", { text: state.enabled ? ("On \u00b7 " + state.freq) : "Off" }));
+      card.appendChild(row);
+      if (state.enabled) {
+        var freq = h("div", { class: "insdays insdig__freq" });
+        [["daily", "Daily"], ["weekly", "Weekly"]].forEach(function (f) {
+          var fb = h("button", { class: "insday" + (state.freq === f[0] ? " insday--on" : ""), text: f[1] });
+          fb.addEventListener("click", function () { if (state.freq !== f[0]) { state.freq = f[0]; save(); paint(); } });
+          freq.appendChild(fb);
+        });
+        card.appendChild(freq);
+      }
+    }
+    paint();
+    return card;
   }
   async function loadBookings() {
     var r = await api("/admin/bookings", { headers: authHdr() });

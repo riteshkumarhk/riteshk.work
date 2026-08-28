@@ -63,6 +63,7 @@ async function ownerEmail(env) {
 }
 
 export default {
+  async scheduled(event, env, ctx) { ctx.waitUntil(runDigest(env)); },
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
     const cors = corsHeaders(origin, env);
@@ -717,6 +718,20 @@ export default {
       if (!n) return json({ error: "No devices are subscribed yet \u2014 enable notifications first." }, 400, cors);
       await pushToAll(env, { title: "Test notification", body: "Push is working \u2014 you\u2019ll be pinged on new requests.", tag: "rk-test", url: "/inbox/" });
       return json({ ok: true, devices: n }, 200, cors);
+    }
+    // ---------- inbox PWA: get/set the analytics recap-push preference (session-gated) ----------
+    if (url.pathname === "/inbox/digest") {
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Store not configured" }, 500, cors);
+      if (request.method === "GET") { const p = (await env.VAULT_GRANTS.get("cfg:digest", "json")) || { enabled: false, freq: "daily" }; return json({ enabled: !!p.enabled, freq: p.freq === "weekly" ? "weekly" : "daily" }, 200, cors); }
+      if (request.method === "POST") {
+        let b; try { b = await request.json(); } catch (e) { return json({ error: "Bad JSON" }, 400, cors); }
+        const cur = (await env.VAULT_GRANTS.get("cfg:digest", "json")) || {};
+        const pref = { enabled: !!(b && b.enabled), freq: (b && b.freq === "weekly") ? "weekly" : "daily", lastSentDay: cur.lastSentDay || "", updatedAt: Date.now() };
+        await env.VAULT_GRANTS.put("cfg:digest", JSON.stringify(pref));
+        return json({ enabled: pref.enabled, freq: pref.freq }, 200, cors);
+      }
+      return json({ error: "Method not allowed" }, 405, cors);
     }
     // Owner's private ticket keyring: an opaque recovery-encrypted blob {svId:code}, stored server-side
     // (cross-device). The Worker never sees the codes — only the ciphertext.
@@ -2017,6 +2032,43 @@ async function pushToAll(env, payloadObj) {
     if (!sub || !sub.endpoint) continue;
     try { const st = await sendOnePush(env, sub, payloadObj); if (st === 404 || st === 410) { try { await env.VAULT_GRANTS.delete(k.name); } catch (e) {} } } catch (e) {}
   }
+}
+// Sum the last `span` COMPLETED UTC days (excludes today) from the first-party event aggregate.
+async function digestStats(env, span) {
+  let agg = null; try { agg = await env.VAULT_GRANTS.get("ev:agg", "json"); } catch (e) {}
+  const days = (agg && agg.days) || {};
+  const out = { pv: 0, case_open: 0, deepcut_unlock: 0, resume_download: 0, contact_submit: 0, total: 0 };
+  const today = new Date();
+  for (let i = 1; i <= span; i++) {
+    const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - i));
+    const b = days[d.toISOString().slice(0, 10)]; if (!b) continue;
+    out.pv += b.pv || 0;
+    const t = b.types || {};
+    for (const key of ["case_open", "deepcut_unlock", "resume_download", "contact_submit"]) { out[key] += t[key] || 0; out.total += t[key] || 0; }
+  }
+  return out;
+}
+// Cron entrypoint: when the owner has opted in, push a traffic recap (daily, or weekly on Mondays),
+// deduped to at most once per UTC day. Quiet windows send nothing.
+async function runDigest(env) {
+  if (!env.VAULT_GRANTS || !env.VAPID_PRIVATE) return;
+  let pref = null; try { pref = await env.VAULT_GRANTS.get("cfg:digest", "json"); } catch (e) {}
+  if (!pref || !pref.enabled) return;
+  const today = new Date().toISOString().slice(0, 10);
+  if (pref.lastSentDay === today) return;
+  const weekly = pref.freq === "weekly";
+  if (weekly && new Date().getUTCDay() !== 1) return;
+  const s = await digestStats(env, weekly ? 7 : 1);
+  pref.lastSentDay = today;
+  try { await env.VAULT_GRANTS.put("cfg:digest", JSON.stringify(pref)); } catch (e) {}
+  if (!s.pv && !s.total) return;
+  const parts = [];
+  if (s.pv) parts.push(s.pv + (s.pv === 1 ? " view" : " views"));
+  if (s.case_open) parts.push(s.case_open + " case open" + (s.case_open === 1 ? "" : "s"));
+  if (s.resume_download) parts.push(s.resume_download + " r\u00e9sum\u00e9");
+  if (s.contact_submit) parts.push(s.contact_submit + " contact");
+  if (s.deepcut_unlock) parts.push(s.deepcut_unlock + " unlock" + (s.deepcut_unlock === 1 ? "" : "s"));
+  await pushToAll(env, { kind: "digest", title: "riteshk \u00b7 " + (weekly ? "weekly" : "daily") + " recap", body: (weekly ? "This week" : "Yesterday") + ": " + parts.join(" \u00b7 "), tag: "rk-digest", url: "/inbox/" });
 }
 
 /* ---------- WebAuthn (passkey) helpers — dependency-free ---------- */
