@@ -1160,6 +1160,11 @@ body.adm-lock .cursor { display: none !important; }
 .aiblk__warn code { font-family: var(--mono); font-size: .9em; }
 .aiblk--cfextra { display: flex; flex-direction: column; gap: .6rem; }
 .aicf__mig { align-self: flex-start; }
+.aicf__row { display: flex; gap: .5rem; flex-wrap: wrap; }
+.aicf__entry { display: flex; gap: .5rem; align-items: stretch; }
+.aicf__entry[hidden] { display: none; }
+.aicf__entry input { flex: 1; min-width: 0; }
+.aicf__add, .aicf__rm, .aicf__done, .aicf__cancel { font-size: .78rem; padding: .45rem .85rem; white-space: nowrap; }
 
 /* ---------- case study (L2) authoring ---------- */
 .study__toggle { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }

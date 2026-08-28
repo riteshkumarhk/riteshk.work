@@ -11474,10 +11474,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var keyUI, advanced = "";
     if (cf) {
       const st = aiCfKeys && aiCfKeys[p];
-      const stat = st ? (st.set ? '<span class="aiblk__cf aiblk__cf--set">stored on Cloudflare</span>' : '<span class="aiblk__cf">not set yet</span>') : '<span class="aiblk__cf">checking\u2026</span>';
-      keyUI = '<div class="af"><label class="af__label">' + escHtml(providerName(p)) + ' key ' + stat + '</label>' +
-        '<input type="password" class="aicf-in" data-aicf-key="' + p + '" placeholder="' + (st && st.set ? "Paste to replace" : "Paste your key") + '" autocomplete="off" />' +
-        '<div class="af__hint">Saved encrypted on Cloudflare - never in this browser, and it works on all your devices.' + (st && st.set ? ' <button type="button" class="aiblk__link" data-aicf-clear="' + p + '">Remove</button>' : "") + "</div></div>";
+      const isSet = !!(st && st.set);
+      const stat = st ? (isSet ? '<span class="aiblk__cf aiblk__cf--set">stored on Cloudflare</span>' : '<span class="aiblk__cf">not set</span>') : '<span class="aiblk__cf">checking\u2026</span>';
+      keyUI = '<div class="af aicf" data-aicf-prov="' + p + '"><label class="af__label">' + escHtml(providerName(p)) + ' key ' + stat + "</label>" +
+        '<div class="aicf__row"><button type="button" class="btn btn--ghost aicf__add" data-aicf-add="' + p + '">' + (isSet ? "Replace key" : "Add API key") + "</button>" + (isSet ? '<button type="button" class="btn btn--ghost aicf__rm" data-aicf-clear="' + p + '">Remove</button>' : "") + "</div>" +
+        '<div class="aicf__entry" hidden><input type="password" class="aicf-in" data-aicf-key="' + p + '" placeholder="Paste your ' + escHtml(providerName(p)) + ' key" autocomplete="off" /><button type="button" class="btn btn--primary aicf__done" data-aicf-done="' + p + '">Done</button><button type="button" class="btn btn--ghost aicf__cancel" data-aicf-cancel="' + p + '">Cancel</button></div>' +
+        '<div class="af__hint">Click Done and the key goes straight to Cloudflare, encrypted - it never stays in this browser, and it works on all your devices.</div></div>';
     } else {
       const key = aiGet(scope, "key") || "";
       const masked = key ? (key.slice(0, 3) + "\u2022\u2022\u2022\u2022\u2022\u2022" + key.slice(-4)) : "";
@@ -11504,7 +11506,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function aiCfExtras() {
     var warn = aiCfSecret ? "" : '<div class="aiblk__warn">Before saving keys here, set <code>AI_KEY_SECRET</code> on your Worker.</div>';
     var lc = aiLocalKeyCount();
-    var mig = lc ? '<button type="button" class="btn btn--ghost aicf__mig" data-aicf-migrate>Move my ' + lc + ' browser key' + (lc > 1 ? "s" : "") + ' to Cloudflare</button>' : "";
+    var mig = lc ? '<button type="button" class="btn btn--ghost aicf__mig" data-aicf-migrate>Move this browser\u2019s ' + lc + ' saved key' + (lc > 1 ? "s" : "") + ' to Cloudflare</button>' : "";
     return (warn || mig) ? ('<div class="aiblk aiblk--cfextra">' + warn + mig + "</div>") : "";
   }
   // Save every filled data-aicf-key input in a container to Cloudflare (sequential; clears each on success).
@@ -11517,6 +11519,22 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var el = inputs[i];
       aiCfSaveKey(el.getAttribute("data-aicf-key"), el.value.trim(), function (e) { if (e) errs.push(e); else el.value = ""; next(i + 1); });
     })(0);
+  }
+  // Wire the button-driven CF key rows inside a container: Add/Replace reveals the input + Done (POSTs to
+  // Cloudflare) + Cancel; Remove clears. onSaved(provider|null) fires after a successful save/clear.
+  function aiWireCfEntry(container, onSaved) {
+    container.querySelectorAll("[data-aicf-add]").forEach(function (b) {
+      b.addEventListener("click", function () { var af = b.closest(".aicf"); if (!af) return; var ent = af.querySelector(".aicf__entry"), row = af.querySelector(".aicf__row"); if (ent) { ent.hidden = false; var i = ent.querySelector("input"); if (i) try { i.focus(); } catch (e) {} } if (row) row.hidden = true; });
+    });
+    container.querySelectorAll("[data-aicf-cancel]").forEach(function (b) {
+      b.addEventListener("click", function () { var af = b.closest(".aicf"); if (!af) return; var ent = af.querySelector(".aicf__entry"), row = af.querySelector(".aicf__row"); if (ent) { ent.hidden = true; var i = ent.querySelector("input"); if (i) i.value = ""; } if (row) row.hidden = false; });
+    });
+    container.querySelectorAll("[data-aicf-done]").forEach(function (b) {
+      b.addEventListener("click", function () { var pv = b.getAttribute("data-aicf-done"); var af = b.closest(".aicf"); var inp = af && af.querySelector("input"); var val = inp ? inp.value.trim() : ""; if (!val) { status("Paste your key first."); return; } var was = btnBusy(b, "Sending\u2026"); aiCfSaveKey(pv, val, function (e) { btnIdle(b, was); if (e) { status(e); return; } if (inp) inp.value = ""; status("Sent to Cloudflare, encrypted - it never touched this browser.", true); if (onSaved) onSaved(pv); }); });
+    });
+    container.querySelectorAll("[data-aicf-clear]").forEach(function (b) {
+      b.addEventListener("click", function () { aiCfSaveKey(b.getAttribute("data-aicf-clear"), "", function (e) { status(e || "Key removed from Cloudflare."); if (onSaved) onSaved(null); }); });
+    });
   }
   // One-time migration: push each browser-stored provider key up to Cloudflare, then wipe it locally.
   function aiMigrateLocalToCf(done) {
@@ -11604,9 +11622,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       bodyEl.querySelectorAll("[data-aimode]").forEach(function (btn) {
         btn.addEventListener("click", function () { localStorage.setItem("rk:ai:mode", btn.getAttribute("data-aimode")); if (aiMode() === "cf") aiCfRefresh(paint); else paint(); if (activeTab === "ai") renderBody(); });
       });
-      bodyEl.querySelectorAll("[data-aicf-clear]").forEach(function (b) {
-        b.addEventListener("click", function () { aiCfSaveKey(b.getAttribute("data-aicf-clear"), "", function (e) { status(e || "Key removed from Cloudflare."); aiCfRefresh(paint); }); });
-      });
+      aiWireCfEntry(bodyEl, function () { aiCfRefresh(paint); });
       var migBtn = bodyEl.querySelector("[data-aicf-migrate]");
       if (migBtn) migBtn.addEventListener("click", function () { aiMigrateLocalToCf(paint); });
     }
@@ -12018,6 +12034,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       holder.innerHTML = aiBlock(scope, label, note);
       var sel = holder.querySelector("#aiProvider_" + scope);
       if (sel) sel.addEventListener("change", function () { aiSetProvider(scope, sel.value); paint(); });
+      var _ent = holder.querySelector(".aicf__entry"); if (_ent) { _ent.hidden = false; var _row = holder.querySelector(".aicf__row"); if (_row) _row.hidden = true; }
+      aiWireCfEntry(holder, function () { close(); if (onReady) onReady(); });
     }
     if (aiMode() === "cf") aiCfRefresh(paint);
     paint();
