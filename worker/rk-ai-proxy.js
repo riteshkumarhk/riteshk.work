@@ -20,6 +20,7 @@
      ADMIN_SALT      (secret)  the salt hex that pairs with ADMIN_HASH
      ADMIN_ITERS     (text)    210000   (optional; must match how ADMIN_HASH was made)
      SESSION_SECRET  (secret)  a long random string used to sign login sessions
+     AI_KEY_SECRET   (secret)  random string that encrypts your saved AI keys in KV (roaming across devices)
      GH_TOKEN        (secret)  a GitHub token (Contents: read+write on your repo)
      OWNER           (text)    riteshkumarhk
      REPO            (text)    riteshk.work
@@ -1260,6 +1261,53 @@ export default {
     // normalized { embeddings:[[...]], model, dims, provider }. Claude is intentionally absent —
     // Anthropic ships no embeddings API. If the requested provider's key is missing it falls back
     // to whichever embeddings key IS configured. The enterprise-grade upgrade to the lexical cosine.
+    // ---------- owner AI: provider keys live ENCRYPTED in KV (roam across devices), owner-session-gated ----------
+    // The studio saves a key here (never localStorage); the Worker AES-GCM-encrypts it with AI_KEY_SECRET and
+    // stores it in VAULT_GRANTS ("ai:keys"). AI calls hit /admin/ai/<provider>/... with the owner session; the
+    // Worker decrypts server-side and forwards, so nothing sensitive lives in the browser and it follows you anywhere.
+    if (url.pathname === "/admin/ai/keys") {
+      if (request.method !== "GET") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      return json({ ok: true, providers: await aiKeyStatus(env), secret: !!env.AI_KEY_SECRET }, 200, cors);
+    }
+    if (url.pathname === "/admin/ai/key") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      if (!env.VAULT_GRANTS) return json({ error: "Key store not configured" }, 503, cors);
+      if (!env.AI_KEY_SECRET) return json({ error: "Server encryption secret (AI_KEY_SECRET) is not set" }, 503, cors);
+      let b; try { b = await request.json(); } catch (e) { return json({ error: "Bad JSON" }, 400, cors); }
+      const provider = String((b && b.provider) || "");
+      if (!PROVIDERS[provider]) return json({ error: "Unknown provider" }, 400, cors);
+      const store = (await env.VAULT_GRANTS.get("ai:keys", "json")) || {};
+      const key = String((b && b.key) || "").trim();
+      if (key) store[provider] = await aiEncrypt(env, key);
+      else delete store[provider]; // empty key = clear it
+      await env.VAULT_GRANTS.put("ai:keys", JSON.stringify(store));
+      return json({ ok: true, providers: await aiKeyStatus(env) }, 200, cors);
+    }
+    if (url.pathname === "/admin/ai/embed") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
+      let b; try { b = await request.json(); } catch (e) { return json({ error: "Bad JSON" }, 400, cors); }
+      const input = aiEmbedInput(b);
+      if (!input) return json({ error: "input (string or string[]) required" }, 400, cors);
+      const ok = await aiResolveKey(env, "openai"), gk = await aiResolveKey(env, "gemini");
+      return aiEmbedCore(cors, input, (b && b.provider === "gemini") ? "gemini" : "openai", (b && typeof b.model === "string" && b.model.trim()) || "", ok, gk);
+    }
+    if (url.pathname.indexOf("/admin/ai/") === 0) {
+      // the session may arrive wherever a provider key would (bearer / x-api-key / ?key=), so the studio's
+      // existing per-provider request builders carry it unchanged; the Worker swaps in the real key below.
+      const sess = bearer(request.headers.get("Authorization")) || request.headers.get("x-api-key") || url.searchParams.get("key") || "";
+      if (!(await verifySession(sess, env))) return json({ error: "Unauthorized" }, 401, cors);
+      const segs = url.pathname.slice("/admin/ai/".length).split("/").filter(Boolean);
+      const provider = segs.shift();
+      const cfg = PROVIDERS[provider];
+      if (!cfg) return json({ error: "Unknown provider" }, 404, cors);
+      const realKey = await aiResolveKey(env, provider);
+      if (!realKey) return json({ error: provider + " has no key set - add one in the studio, or set " + cfg.keyVar + " on the Worker" }, 400, cors);
+      return aiForward(request, cors, cfg, realKey, segs.join("/"), url.searchParams);
+    }
+
     if (url.pathname === "/embed") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
       const presented = bearer(request.headers.get("Authorization")) || request.headers.get("x-api-key") || "";
@@ -1702,6 +1750,96 @@ async function verifySession(token, env) {
     const obj = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload)));
     return !!(obj && obj.exp && obj.exp > Date.now());
   } catch (e) { return false; }
+}
+
+/* ---------- AI provider keys: AES-GCM encrypted-at-rest in KV, owner-session-gated (roaming) ---------- */
+async function aiCryptoKey(env) {
+  const material = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(env.AI_KEY_SECRET || "")));
+  return crypto.subtle.importKey("raw", material, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+async function aiEncrypt(env, plaintext) {
+  const key = await aiCryptoKey(env);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(String(plaintext))));
+  return b64urlFromBytes(iv) + "." + b64urlFromBytes(ct);
+}
+async function aiDecrypt(env, blob) {
+  const s = String(blob || ""), dot = s.indexOf(".");
+  if (dot < 1) return "";
+  try {
+    const key = await aiCryptoKey(env);
+    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64urlToBytes(s.slice(0, dot)) }, key, b64urlToBytes(s.slice(dot + 1)));
+    return new TextDecoder().decode(pt);
+  } catch (e) { return ""; }
+}
+// Owner's KV-stored (decrypted) key first, else the legacy env secret. "" if neither.
+async function aiResolveKey(env, provider) {
+  try {
+    if (env.VAULT_GRANTS && env.AI_KEY_SECRET) {
+      const store = await env.VAULT_GRANTS.get("ai:keys", "json");
+      const blob = store && store[provider];
+      if (blob) { const k = await aiDecrypt(env, blob); if (k) return k; }
+    }
+  } catch (e) {}
+  const cfg = PROVIDERS[provider];
+  return (cfg && env[cfg.keyVar]) || "";
+}
+// Booleans only (never the key): which providers have a usable key + whether it's the roaming (KV) one.
+async function aiKeyStatus(env) {
+  let store = {};
+  try { store = (env.VAULT_GRANTS && await env.VAULT_GRANTS.get("ai:keys", "json")) || {}; } catch (e) { store = {}; }
+  const out = {};
+  for (const p in PROVIDERS) out[p] = { set: !!store[p] || !!env[PROVIDERS[p].keyVar], roaming: !!store[p] };
+  return out;
+}
+// Inject the real key + stream the provider response back (owner-session-gated proxy).
+async function aiForward(request, cors, cfg, realKey, subPath, searchParams) {
+  const target = new URL(cfg.base + (subPath ? "/" + subPath : ""));
+  if (searchParams) for (const [k, v] of searchParams) if (k !== "key") target.searchParams.set(k, v);
+  const headers = new Headers();
+  const ct = request.headers.get("Content-Type"); if (ct) headers.set("Content-Type", ct);
+  if (cfg.inject === "bearer") headers.set("Authorization", "Bearer " + realKey);
+  if (cfg.inject === "xapikey") { headers.set("x-api-key", realKey); headers.set("anthropic-version", request.headers.get("anthropic-version") || "2023-06-01"); }
+  if (cfg.inject === "query") target.searchParams.set("key", realKey);
+  const method = request.method;
+  const body = (method === "GET" || method === "HEAD") ? undefined : await request.arrayBuffer();
+  let upstream;
+  try { upstream = await fetch(target.toString(), { method, headers, body }); }
+  catch (e) { return json({ error: "Upstream request failed" }, 502, cors); }
+  const out = new Headers(upstream.headers);
+  for (const [k, v] of Object.entries(cors)) out.set(k, v);
+  return new Response(upstream.body, { status: upstream.status, headers: out });
+}
+// Normalize an embeddings request body to a clean string[] (or null).
+function aiEmbedInput(b) {
+  let input = b && b.input;
+  if (typeof input === "string") input = [input];
+  if (!Array.isArray(input)) return null;
+  input = input.slice(0, 16).map((s) => String(s == null ? "" : s).replace(/\s+/g, " ").trim().slice(0, 8000)).filter(Boolean);
+  return input.length ? input : null;
+}
+// Shared embeddings core (OpenAI or Gemini; Claude has none). Keys are passed in so callers resolve them.
+async function aiEmbedCore(cors, input, wantProvider, model, openaiKey, geminiKey) {
+  const use = (wantProvider === "gemini" && geminiKey) ? "gemini" : openaiKey ? "openai" : geminiKey ? "gemini" : null;
+  if (!use) return json({ error: "No embeddings provider is configured (add an OpenAI or Gemini key - Claude has no embeddings API)", code: "no_embeddings_provider" }, 501, cors);
+  let embeddings = [], mdl = "";
+  try {
+    if (use === "gemini") {
+      mdl = model || "text-embedding-004";
+      const up = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + mdl + ":batchEmbedContents?key=" + geminiKey, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requests: input.map((t) => ({ model: "models/" + mdl, content: { parts: [{ text: t }] }, taskType: "SEMANTIC_SIMILARITY" })) }) });
+      if (!up.ok) { const t = await up.text().catch(() => ""); return json({ error: "Embeddings error", detail: String(t).slice(0, 200) }, up.status, cors); }
+      const j = await up.json().catch(() => null);
+      embeddings = (j && Array.isArray(j.embeddings)) ? j.embeddings.map((e) => e && e.values).filter(Array.isArray) : [];
+    } else {
+      mdl = model || "text-embedding-3-small";
+      const up = await fetch("https://api.openai.com/v1/embeddings", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openaiKey }, body: JSON.stringify({ model: mdl, input }) });
+      if (!up.ok) { const t = await up.text().catch(() => ""); return json({ error: "Embeddings error", detail: String(t).slice(0, 200) }, up.status, cors); }
+      const j = await up.json().catch(() => null);
+      embeddings = (j && Array.isArray(j.data)) ? j.data.map((d) => d && d.embedding).filter(Array.isArray) : [];
+    }
+  } catch (e) { return json({ error: "Upstream embeddings request failed" }, 502, cors); }
+  if (!embeddings.length) return json({ error: "No embeddings returned" }, 502, cors);
+  return json({ embeddings, model: mdl, dims: embeddings[0].length, provider: use }, 200, cors);
 }
 // Verify a redeemed curated-view grant token (payload {g, exp} + HMAC). Returns the payload
 // ({g: the KV grant id}) when the signature + expiry check out, else null. The caller then

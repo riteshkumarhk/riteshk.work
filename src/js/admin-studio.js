@@ -2336,16 +2336,20 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   // configured (stay lexical, silently); { embeddings }/{ ok, score } = success; { failed, reason } =
   // the proxy IS on but /embed was unreachable → the caller surfaces it and lets the user choose.
   async function atsEmbed(texts) {
+    var sess = aiSess();
+    var roaming = aiMode() === "cf" && !!ADMIN_WORKER && !!sess;
     var px = aiProxy();
-    if (!px || !px.on || !px.url || !px.token) return { off: true };   // neural only when the AI proxy is configured
+    var _emUrl = roaming ? (ADMIN_WORKER + "/admin/ai/embed") : (px && px.on && px.url && px.token) ? (px.url + "/embed") : "";
+    var _emAuth = roaming ? sess : ((px && px.token) || "");
+    if (!_emUrl) return { off: true };   // neural only when roaming (CF) or the manual proxy is configured
     var arr = (Array.isArray(texts) ? texts : [texts]).map(function (t) { return String(t == null ? "" : t); }).filter(function (s) { return s.trim(); });
     if (!arr.length) return { off: true };
     var prov = "openai";
     try { if (aiGet(aiScope("txt"), "provider") === "gemini") prov = "gemini"; } catch (e) {}   // embeddings follow the text provider (Claude has none → openai)
     try {
-      var r = await fetch(px.url + "/embed", {
+      var r = await fetch(_emUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + px.token },
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + _emAuth },
         body: JSON.stringify({ input: arr, provider: prov }),
       });
       if (r.status === 501) return { unavailable: true, reason: "no embeddings provider is set up \u2014 Claude has none, so add an OpenAI or Gemini key to your proxy" };   // stable config state, not a transient failure
@@ -11418,6 +11422,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     localStorage.removeItem("rk:ai:" + scope + ":key");
   }
   var AI_PROXY_PROVIDERS = ["openai", "gemini", "anthropic"];
+  // AI key mode: "cf" = keys live encrypted on the Cloudflare Worker (roam to every device, gated by your
+  // owner session); "local" = keys live only in this browser. Default local for back-compat.
+  function aiMode() { return localStorage.getItem("rk:ai:mode") === "cf" ? "cf" : "local"; }
+  function aiSess() { try { return (typeof adminSession === "function" && adminSession()) || ""; } catch (e) { return ""; } }
   function aiProxy() {
     return {
       on: localStorage.getItem("rk:ai:proxy:on") === "1",
@@ -11425,44 +11433,108 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       token: localStorage.getItem("rk:ai:proxy:token") || "",
     };
   }
+  // Cached status of the owner's Cloudflare-stored keys (booleans only, never the keys). Refreshed on open.
+  var aiCfKeys = null, aiCfSecret = false;
+  function aiCfRefresh(done) {
+    var sess = aiSess();
+    if (!sess || !ADMIN_WORKER) { aiCfKeys = null; if (done) done(null); return; }
+    fetch(ADMIN_WORKER + "/admin/ai/keys", { headers: { Authorization: "Bearer " + sess } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { aiCfKeys = (j && j.providers) || null; aiCfSecret = !!(j && j.secret); if (done) done(aiCfKeys); })
+      .catch(function () { if (done) done(null); });
+  }
+  function aiCfSaveKey(provider, key, done) {
+    var sess = aiSess();
+    if (!sess || !ADMIN_WORKER) { if (done) done("Sign in to your studio first."); return; }
+    fetch(ADMIN_WORKER + "/admin/ai/key", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ provider: provider, key: key }) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) { if (res.ok && res.j && res.j.providers) aiCfKeys = res.j.providers; if (done) done(res.ok ? null : ((res.j && res.j.error) || "Save failed.")); })
+      .catch(function () { if (done) done("Could not reach your Worker."); });
+  }
   function aiCfg(purpose) {
     const scope = aiScope(purpose);
     const p = aiGet(scope, "provider") || "openai";
+    const canProxy = AI_PROXY_PROVIDERS.indexOf(p) !== -1;
+    const sess = aiSess();
+    const roaming = canProxy && aiMode() === "cf" && !!ADMIN_WORKER && !!sess;
     const px = aiProxy();
-    const viaProxy = px.on && !!px.url && AI_PROXY_PROVIDERS.indexOf(p) !== -1;
+    const legacyProxy = !roaming && canProxy && px.on && !!px.url;
+    const viaProxy = roaming || legacyProxy;
     return {
-      purpose: purpose || "img", scope: scope, provider: p, proxied: viaProxy,
-      key: viaProxy ? px.token : (aiGet(scope, "key") || ""),
+      purpose: purpose || "img", scope: scope, provider: p, proxied: viaProxy, roaming: roaming,
+      key: roaming ? sess : legacyProxy ? px.token : (aiGet(scope, "key") || ""),
       model: (aiGet(scope, "model") || bestModel(p, purpose) || AI_DEFAULT_MODEL[p] || "").trim(),
-      base: viaProxy ? (px.url + "/" + p) : (aiGet(scope, "base") || AI_DEFAULT_BASE[p] || "").trim().replace(/\/+$/, ""),
+      base: roaming ? (ADMIN_WORKER + "/admin/ai/" + p) : legacyProxy ? (px.url + "/" + p) : (aiGet(scope, "base") || AI_DEFAULT_BASE[p] || "").trim().replace(/\/+$/, ""),
     };
   }
   function aiBlock(scope, label, note) {
     const p = aiGet(scope, "provider") || "openai";
-    const key = aiGet(scope, "key") || "";
-    const masked = key ? (key.slice(0, 3) + "\u2022\u2022\u2022\u2022\u2022\u2022" + key.slice(-4)) : "";
+    const cf = aiMode() === "cf" && AI_PROXY_PROVIDERS.indexOf(p) !== -1;
     const opts = AI_PROVIDERS.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === p ? " selected" : "") + ">" + x[1] + "</option>"; }).join("");
-    let advanced;
-    if (p === "custom") {
-      const model = aiGet(scope, "model") || "";
-      const base = aiGet(scope, "base") || "";
-      advanced = '<div class="af__row"><div class="af"><label class="af__label">Model</label><input type="text" id="aiModel_' + scope + '" value="' + escAttr(model) + '" placeholder="your-model-id" /><div class="af__hint">' + escHtml(modelHint(p)) + '</div></div>' +
-        '<div class="af"><label class="af__label">API base URL</label><input type="text" id="aiBase_' + scope + '" value="' + escAttr(base) + '" placeholder="https://\u2026/v1" /></div></div>';
+    var keyUI, advanced = "";
+    if (cf) {
+      const st = aiCfKeys && aiCfKeys[p];
+      const stat = st ? (st.set ? '<span class="aiblk__cf aiblk__cf--set">stored on Cloudflare</span>' : '<span class="aiblk__cf">not set yet</span>') : '<span class="aiblk__cf">checking\u2026</span>';
+      keyUI = '<div class="af"><label class="af__label">' + escHtml(providerName(p)) + ' key ' + stat + '</label>' +
+        '<input type="password" class="aicf-in" data-aicf-key="' + p + '" placeholder="' + (st && st.set ? "Paste to replace" : "Paste your key") + '" autocomplete="off" />' +
+        '<div class="af__hint">Saved encrypted on Cloudflare - never in this browser, and it works on all your devices.' + (st && st.set ? ' <button type="button" class="aiblk__link" data-aicf-clear="' + p + '">Remove</button>' : "") + "</div></div>";
     } else {
-      advanced = '<div class="af__hint aiblk__auto">\u2728 Model &amp; endpoint are chosen automatically \u2014 always the best available for ' + escHtml(providerName(p)) + '.</div>';
+      const key = aiGet(scope, "key") || "";
+      const masked = key ? (key.slice(0, 3) + "\u2022\u2022\u2022\u2022\u2022\u2022" + key.slice(-4)) : "";
+      keyUI = '<div class="af"><label class="af__label">API key</label><input type="password" id="aiKey_' + scope + '" placeholder="' + (key ? "Saved \u2014 paste to replace" : "Paste your key") + '" autocomplete="off" /><div class="af__hint">' + (key ? ("In use: " + escHtml(masked)) : "Not set") + "</div></div>";
+      if (p === "custom") {
+        const model = aiGet(scope, "model") || "", base = aiGet(scope, "base") || "";
+        advanced = '<div class="af__row"><div class="af"><label class="af__label">Model</label><input type="text" id="aiModel_' + scope + '" value="' + escAttr(model) + '" placeholder="your-model-id" /><div class="af__hint">' + escHtml(modelHint(p)) + '</div></div>' +
+          '<div class="af"><label class="af__label">API base URL</label><input type="text" id="aiBase_' + scope + '" value="' + escAttr(base) + '" placeholder="https://\u2026/v1" /></div></div>';
+      } else {
+        advanced = '<div class="af__hint aiblk__auto">\u2728 Model &amp; endpoint are chosen automatically \u2014 always the best available for ' + escHtml(providerName(p)) + '.</div>';
+      }
     }
     return '<div class="aiblk"><div class="aiblk__head">' + label + (note ? ' <span>' + note + "</span>" : "") + "</div>" +
       '<div class="af"><label class="af__label">Service</label><select id="aiProvider_' + scope + '" data-aiscope="' + scope + '">' + opts + "</select></div>" +
-      '<div class="af"><label class="af__label">API key</label><input type="password" id="aiKey_' + scope + '" placeholder="' + (key ? "Saved \u2014 paste to replace" : "Paste your key") + '" autocomplete="off" /><div class="af__hint">' + (key ? ("In use: " + escHtml(masked)) : "Not set") + "</div></div>" +
-      advanced + "</div>";
+      keyUI + advanced + "</div>";
   }
-  function aiProxyBlock(px) {
-    const maskedTok = px.token ? (px.token.slice(0, 3) + "\u2022\u2022\u2022\u2022\u2022\u2022" + px.token.slice(-4)) : "";
-    return '<div class="aiblk"><div class="aiblk__head">Private proxy <span>keeps keys off this site</span></div>' +
-      '<label class="chk"><input type="checkbox" id="aiProxyOn"' + (px.on ? " checked" : "") + ' /> Route AI through my Cloudflare Worker</label>' +
-      '<div class="af"><label class="af__label">Worker URL</label><input type="text" id="aiProxyUrl" value="' + escAttr(px.url) + '" placeholder="https://rk-ai-proxy.you.workers.dev" autocomplete="off" /></div>' +
-      '<div class="af"><label class="af__label">Access token</label><input type="password" id="aiProxyToken" placeholder="' + (px.token ? "Saved \u2014 paste to replace" : "Paste your ACCESS_TOKEN") + '" autocomplete="off" /><div class="af__hint">' + (px.token ? ("In use: " + escHtml(maskedTok)) : "Not set") + "</div></div>" +
-      '<div class="af__hint">When on, pick the provider below that matches a key you configured on the Worker \u2014 your own API key isn\u2019t needed here. Custom providers still call direct.</div></div>';
+  function aiModeToggle(mode) {
+    return '<div class="aimode"><div class="aimode__lbl">Where your AI keys live</div><div class="aimode__opts">' +
+      '<button type="button" class="aimode__opt' + (mode === "cf" ? " is-on" : "") + '" data-aimode="cf"><b>Cloudflare</b><span>encrypted, roams to every device</span></button>' +
+      '<button type="button" class="aimode__opt' + (mode === "local" ? " is-on" : "") + '" data-aimode="local"><b>This browser</b><span>stays on this device only</span></button>' +
+      "</div></div>";
+  }
+  function aiLocalKeyCount() { var n = 0; try { Object.keys(localStorage).forEach(function (k) { if (/^rk:ai:[a-z]+:key$/.test(k)) n++; }); } catch (e) {} return n; }
+  function aiCfExtras() {
+    var warn = aiCfSecret ? "" : '<div class="aiblk__warn">Before saving keys here, set <code>AI_KEY_SECRET</code> on your Worker.</div>';
+    var lc = aiLocalKeyCount();
+    var mig = lc ? '<button type="button" class="btn btn--ghost aicf__mig" data-aicf-migrate>Move my ' + lc + ' browser key' + (lc > 1 ? "s" : "") + ' to Cloudflare</button>' : "";
+    return (warn || mig) ? ('<div class="aiblk aiblk--cfextra">' + warn + mig + "</div>") : "";
+  }
+  // Save every filled data-aicf-key input in a container to Cloudflare (sequential; clears each on success).
+  function aiCfSaveInputs(container, done) {
+    var inputs = [].slice.call(container.querySelectorAll("[data-aicf-key]")).filter(function (i) { return i.value.trim(); });
+    if (!inputs.length) { if (done) done(null); return; }
+    var errs = [];
+    (function next(i) {
+      if (i >= inputs.length) { if (done) done(errs.length ? errs.join("; ") : null); return; }
+      var el = inputs[i];
+      aiCfSaveKey(el.getAttribute("data-aicf-key"), el.value.trim(), function (e) { if (e) errs.push(e); else el.value = ""; next(i + 1); });
+    })(0);
+  }
+  // One-time migration: push each browser-stored provider key up to Cloudflare, then wipe it locally.
+  function aiMigrateLocalToCf(done) {
+    if (!aiSess() || !ADMIN_WORKER) { status("Sign in to your studio first."); if (done) done(); return; }
+    var jobs = [];
+    try {
+      ["all", "txt", "img"].forEach(function (scope) {
+        var pr = localStorage.getItem("rk:ai:" + scope + ":provider") || "";
+        var ky = localStorage.getItem("rk:ai:" + scope + ":key") || "";
+        if (ky && AI_PROXY_PROVIDERS.indexOf(pr) !== -1) jobs.push({ scope: scope, provider: pr, key: ky });
+      });
+    } catch (e) {}
+    if (!jobs.length) { status("No browser keys to move."); if (done) done(); return; }
+    (function next(i) {
+      if (i >= jobs.length) { aiCfRefresh(function () { status("Moved your keys to Cloudflare - removed from this browser.", true); if (done) done(); }); return; }
+      var job = jobs[i];
+      aiCfSaveKey(job.provider, job.key, function (e) { if (!e) { try { localStorage.removeItem("rk:ai:" + job.scope + ":key"); } catch (x) {} } next(i + 1); });
+    })(0);
   }
   function aiPickProvider(scope, p) {
     aiSetProvider(scope, p);
@@ -11516,10 +11588,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     function paint() {
       var same = aiSameKey();
       var imgOK = aiSupportsImages();
-      var html = aiProxyBlock(aiProxy()) +
+      var mode = aiMode();
+      var html = aiModeToggle(mode) +
         '<label class="chk aiblk__same"><input type="checkbox" data-aiset-same' + (same ? " checked" : "") + " /> Use the same service &amp; key for content and image</label>";
       html += same ? aiBlock("all", "AI service", "content + image")
                    : (aiBlock("txt", "Content generation", "text") + aiBlock("img", "Image generation", "imagery"));
+      if (mode === "cf") html += aiCfExtras();
       html += '<div class="af__hint" style="margin:.1rem 0 .2rem">' + (imgOK ? "Image service supports generation." : "Your image service (Claude) can\u2019t generate images \u2014 pick OpenAI or Gemini for imagery.") + "</div>";
       bodyEl.innerHTML = html;
       bodyEl.querySelectorAll("[data-aiscope]").forEach(function (sel) {
@@ -11527,7 +11601,16 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       });
       var sameCb = bodyEl.querySelector("[data-aiset-same]");
       if (sameCb) sameCb.addEventListener("change", function () { aiPersistVisible(modal); localStorage.setItem("rk:ai:same", sameCb.checked ? "1" : "0"); paint(); });
+      bodyEl.querySelectorAll("[data-aimode]").forEach(function (btn) {
+        btn.addEventListener("click", function () { localStorage.setItem("rk:ai:mode", btn.getAttribute("data-aimode")); if (aiMode() === "cf") aiCfRefresh(paint); else paint(); if (activeTab === "ai") renderBody(); });
+      });
+      bodyEl.querySelectorAll("[data-aicf-clear]").forEach(function (b) {
+        b.addEventListener("click", function () { aiCfSaveKey(b.getAttribute("data-aicf-clear"), "", function (e) { status(e || "Key removed from Cloudflare."); aiCfRefresh(paint); }); });
+      });
+      var migBtn = bodyEl.querySelector("[data-aicf-migrate]");
+      if (migBtn) migBtn.addEventListener("click", function () { aiMigrateLocalToCf(paint); });
     }
+    if (aiMode() === "cf") aiCfRefresh(paint);
     paint();
     var close = function () { if (opts && opts.onClose) opts.onClose(); else modal.remove(); };
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
@@ -11539,6 +11622,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     });
     modal.querySelector("[data-go]").addEventListener("click", function () {
       aiPersistVisible(modal);
+      if (aiMode() === "cf") {
+        aiCfSaveInputs(bodyEl, function (err) { if (activeTab === "ai") renderBody(); if (err) status(err); else status("Saved - your AI keys live encrypted on Cloudflare and roam to every device.", true); aiCfRefresh(paint); });
+        return;
+      }
       if (activeTab === "ai") renderBody();
       status("AI settings saved \u2014 local only.", true);
       close();
@@ -11642,7 +11729,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
 
   /* ---------- AI text generation (writing) ---------- */
-  function aiHasKey(purpose) { return !!aiCfg(purpose).key; }
+  function aiHasKey(purpose) {
+    var cfg = aiCfg(purpose);
+    if (cfg.roaming) { var st = aiCfKeys && aiCfKeys[cfg.provider]; return st ? !!st.set : true; } // optimistic until status loads; the Worker returns a clear error if truly unset
+    return !!cfg.key;
+  }
   // ---- model auto-resolution: list what the key can actually use, pick the best, fall back gracefully ----
   const aiModelsCache = {};
   async function aiListModels(cfg) {
@@ -11928,6 +12019,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var sel = holder.querySelector("#aiProvider_" + scope);
       if (sel) sel.addEventListener("change", function () { aiSetProvider(scope, sel.value); paint(); });
     }
+    if (aiMode() === "cf") aiCfRefresh(paint);
     paint();
     sameBox.addEventListener("change", paint);
     var close = function () { modal.remove(); };
@@ -11938,6 +12030,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       localStorage.setItem("rk:ai:same", sameBox.checked ? "1" : "0");
       var sel = holder.querySelector("#aiProvider_" + scope), p = sel ? sel.value : "openai";
       localStorage.setItem("rk:ai:" + scope + ":provider", p);
+      if (aiMode() === "cf" && AI_PROXY_PROVIDERS.indexOf(p) !== -1) {
+        var cfEl = holder.querySelector("[data-aicf-key]"), cfVal = cfEl ? cfEl.value.trim() : "";
+        if (!cfVal) { if (aiCfKeys && aiCfKeys[p] && aiCfKeys[p].set) { close(); if (onReady) onReady(); } else { err.textContent = "Paste your " + providerName(p) + " key to continue."; } return; }
+        var goBtn = this, was = btnBusy(goBtn, "Saving\u2026");
+        aiCfSaveKey(p, cfVal, function (e) { btnIdle(goBtn, was); if (e) { err.textContent = e; return; } close(); if (onReady) onReady(); });
+        return;
+      }
       var k = holder.querySelector("#aiKey_" + scope), m = holder.querySelector("#aiModel_" + scope), b = holder.querySelector("#aiBase_" + scope);
       if (k && k.value.trim()) localStorage.setItem("rk:ai:" + scope + ":key", k.value.trim());
       if (p === "custom") {

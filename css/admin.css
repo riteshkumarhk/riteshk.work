@@ -1145,6 +1145,21 @@ body.adm-lock .cursor { display: none !important; }
 .aiblk__head span { color: var(--text-faint); text-transform: none; letter-spacing: 0; margin-left: .3rem; }
 .aiblk__same { margin-bottom: 1rem; }
 .aiblk__auto { color: var(--text-dim); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: .55rem .7rem; margin-top: .1rem; line-height: 1.5; }
+.aimode { margin-bottom: 1rem; }
+.aimode__lbl { font-family: var(--mono); font-size: .64rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text); margin-bottom: .5rem; }
+.aimode__opts { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.aimode__opt { display: flex; flex-direction: column; gap: .15rem; text-align: left; padding: .6rem .75rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); color: var(--text-dim); cursor: pointer; transition: border-color .12s, background .12s, color .12s; }
+.aimode__opt:hover { border-color: var(--text-dim); }
+.aimode__opt.is-on { border-color: var(--accent); background: var(--bg-elev); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
+.aimode__opt b { font-size: .84rem; font-weight: 600; }
+.aimode__opt span { font-size: .68rem; color: var(--text-dim); line-height: 1.3; }
+.aiblk__cf { font-family: var(--mono); font-size: .56rem; letter-spacing: .04em; text-transform: uppercase; color: var(--text-faint); border: 1px solid var(--line); border-radius: 100px; padding: .1rem .4rem; margin-left: .3rem; white-space: nowrap; }
+.aiblk__cf--set { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.aiblk__link { background: none; border: 0; color: var(--accent); font: inherit; font-size: .74rem; cursor: pointer; padding: 0; text-decoration: underline; }
+.aiblk__warn { font-size: .74rem; color: #e6b800; line-height: 1.5; margin-bottom: .5rem; }
+.aiblk__warn code { font-family: var(--mono); font-size: .9em; }
+.aiblk--cfextra { display: flex; flex-direction: column; gap: .6rem; }
+.aicf__mig { align-self: flex-start; }
 
 /* ---------- case study (L2) authoring ---------- */
 .study__toggle { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
