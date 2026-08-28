@@ -8332,7 +8332,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (cat === "backup") {
       return '<div class="rkqg"><div class="rkqg__head">Content backup <span class="rkqg__sub">a local copy of your content</span></div>' +
         '<div class="rkqg__row"><button class="btn btn--primary" data-act="backup-dl">' + IC.save + ' Download content backup</button></div>' +
-        '<div class="af__hint">Saves an unencrypted <code>content.json</code> to this device \u2014 keep it private. Handy before big edits.</div></div>';
+        '<div class="af__hint">Saves an unencrypted <code>content.json</code> to this device \u2014 keep it private. Handy before big edits.</div>' +
+        '<div class="rkqg__row" style="margin-top:1rem"><button class="btn btn--ghost" data-act="backup-restore">' + IC.history + ' Restore from a backup...</button></div>' +
+        '<div class="af__hint">Read a backup file, see everything inside, and pick exactly what to bring back. It loads into the editor to review before you Publish.</div></div>';
     }
     if (cat === "security") {
       return '<div class="rkqg"><div class="rkqg__head">Security <span class="rkqg__sub">how you sign in to the studio</span></div>' +
@@ -8818,6 +8820,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "set-back") { setSub = null; renderSetPanel(); return; }
     if (act === "recruiter-toggle") { recruiterToggle(); renderSetPanel(); return; }
     if (act === "backup-dl") { downloadContentBackup(); return; }
+    if (act === "backup-restore") { backupPickAndRestore(); return; }
     if (act === "open-passkeys") { setSub = "passkeys"; renderSetPanel(); return; }
     if (act === "open-publish") { setSub = "publish"; renderSetPanel(); return; }
     if (act === "open-ai") { setSub = "ai"; renderSetPanel(); return; }
@@ -10623,6 +10626,117 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       setTimeout(function () { try { URL.revokeObjectURL(a.href); } catch (e) {} }, 4000);
       status("Backup saved to this device \u2014 it holds your unlocked content in plain text, so keep it private (don\u2019t commit or share it).", true);
     } catch (e) { status("Couldn\u2019t create the backup."); }
+  }
+
+  // ---------- selective recovery: read a downloaded backup, show what's inside, restore only what you tick.
+  // Case studies (work[]) are pickable one by one; everything else is grouped into whole "site sections".
+  var BACKUP_SECTIONS = [
+    ["landing", "Landing & hero", ["landing", "heroMotion", "typography", "cardArrange"]],
+    ["contact", "Contact & r\u00e9sum\u00e9", ["contact"]],
+    ["highlights", "Highlights", ["highlights"]],
+    ["capabilities", "Capabilities", ["capabilities"]],
+    ["path", "Career path", ["path"]],
+    ["recognition", "Recognition", ["recognition"]],
+    ["education", "Education", ["education"]],
+    ["about", "About page", ["aboutSections", "aboutGallery"]],
+    ["worklayout", "Work layout & grouping", ["workSections"]],
+    ["recruiter", "Recruiter views", ["specialViews", "recruiterMode"]],
+    ["journey", "Design journey", ["journey"]],
+    ["gensections", "Generated sections", ["genSections"]],
+    ["icons", "Custom icons", ["customIcons", "iconKeywords"]],
+    ["music", "Music", ["music"]]
+  ];
+  function backupUnitSummary(backup, keys) {
+    var v = backup[keys[0]];
+    if (Array.isArray(v)) return v.length + " item" + (v.length === 1 ? "" : "s");
+    if (typeof v === "boolean") return v ? "on" : "off";
+    if (typeof v === "string") return v ? "set" : "empty";
+    if (v && typeof v === "object") { var n = Object.keys(v).length; return n + " setting" + (n === 1 ? "" : "s"); }
+    return v == null ? "-" : "present";
+  }
+  function backupPickAndRestore() {
+    var inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "application/json,.json";
+    inp.addEventListener("change", function () {
+      var f = inp.files && inp.files[0]; if (!f) return;
+      var rd = new FileReader();
+      rd.onload = function () {
+        var backup; try { backup = JSON.parse(String(rd.result)); } catch (e) { status("That file is not valid JSON - choose a content backup (.json)."); return; }
+        var hasSection = BACKUP_SECTIONS.some(function (s) { return s[2].some(function (k) { return backup && (k in backup); }); });
+        if (!backup || typeof backup !== "object" || (!Array.isArray(backup.work) && !hasSection)) { status("That does not look like a content backup."); return; }
+        backupRestoreModal(backup, f.name, f.lastModified);
+      };
+      rd.onerror = function () { status("Couldn\u2019t read that file."); };
+      rd.readAsText(f);
+    });
+    inp.click();
+  }
+  function backupRestoreModal(backup, filename, lastMod) {
+    var curIds = (Array.isArray(data.work) ? data.work : []).map(function (w) { return String(w && w.id); });
+    var works = (Array.isArray(backup.work) ? backup.work : []).map(function (w, i) {
+      return { key: String((w && w.id) || ("i" + i)), title: (w && w.title) || "(untitled)", client: (w && w.client) || "", exists: !!(w && w.id != null && curIds.indexOf(String(w.id)) !== -1) };
+    });
+    var sections = BACKUP_SECTIONS.filter(function (s) { return s[2].some(function (k) { return k in backup; }); });
+    var when = ""; try { if (lastMod) when = new Date(lastMod).toLocaleDateString(); } catch (e) {}
+    var workRows = works.length ? works.map(function (w) {
+      return '<label class="bkr__row"><input type="checkbox" data-bkr-work="' + escAttr(w.key) + '" checked /><span class="bkr__t">' + escHtml(w.title) + '</span><span class="bkr__meta">' + (w.client ? escHtml(w.client) + " - " : "") + '<span class="bkr__tag ' + (w.exists ? "bkr__tag--rep" : "bkr__tag--new") + '">' + (w.exists ? "replaces current" : "new") + '</span></span></label>';
+    }).join("") : '<div class="bkr__empty">No case studies in this backup.</div>';
+    var secRows = sections.map(function (s) {
+      return '<label class="bkr__row"><input type="checkbox" data-bkr-sec="' + escAttr(s[0]) + '" /><span class="bkr__t">' + escHtml(s[1]) + '</span><span class="bkr__meta">' + escHtml(backupUnitSummary(backup, s[2])) + '</span></label>';
+    }).join("");
+    var modal = document.createElement("div");
+    modal.className = "pass pass--wide";
+    modal.innerHTML =
+      '<div class="pass__box"><div class="pass__title">Restore from backup</div>' +
+      '<div class="pass__sub">From <b>' + escHtml(filename || "backup.json") + '</b>' + (when ? " - saved " + escHtml(when) : "") + '. Tick what to bring back. It loads into the editor so you can review in the preview, then Publish.</div>' +
+      '<div class="bkr__body">' +
+        '<div class="bkr__grouphead"><span>Case studies</span><span class="bkr__bulk"><button type="button" data-bkr-all="work">All</button><button type="button" data-bkr-none="work">None</button></span></div>' +
+        workRows +
+        (secRows ? '<div class="bkr__grouphead"><span>Site sections</span><span class="bkr__bulk"><button type="button" data-bkr-all="sec">All</button><button type="button" data-bkr-none="sec">None</button></span></div>' + secRows : "") +
+      '</div>' +
+      '<div class="pass__err"></div>' +
+      '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button><button class="btn btn--primary" data-go>Recover selected</button></div></div>';
+    document.body.appendChild(modal);
+    var err = modal.querySelector(".pass__err");
+    var onKey = function (e) { if (e.key === "Escape") { e.preventDefault(); close(); } };
+    var close = function () { modal.remove(); document.removeEventListener("keydown", onKey); };
+    document.addEventListener("keydown", onKey);
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    modal.querySelectorAll("[data-bkr-all]").forEach(function (b) { b.addEventListener("click", function () { var g = b.getAttribute("data-bkr-all"); modal.querySelectorAll(g === "work" ? "[data-bkr-work]" : "[data-bkr-sec]").forEach(function (c) { c.checked = true; }); }); });
+    modal.querySelectorAll("[data-bkr-none]").forEach(function (b) { b.addEventListener("click", function () { var g = b.getAttribute("data-bkr-none"); modal.querySelectorAll(g === "work" ? "[data-bkr-work]" : "[data-bkr-sec]").forEach(function (c) { c.checked = false; }); }); });
+    modal.querySelector("[data-go]").addEventListener("click", function () {
+      var selWork = [].slice.call(modal.querySelectorAll("[data-bkr-work]:checked")).map(function (c) { return c.getAttribute("data-bkr-work"); });
+      var selSec = [].slice.call(modal.querySelectorAll("[data-bkr-sec]:checked")).map(function (c) { return c.getAttribute("data-bkr-sec"); });
+      if (!selWork.length && !selSec.length) { err.textContent = "Pick at least one thing to recover."; return; }
+      close();
+      backupRecover(backup, selWork, selSec);
+    });
+  }
+  function backupRecover(backup, selWork, selSec) {
+    histPush(); // snapshot current content so the whole recovery is one Ctrl+Z away
+    var added = 0, replaced = 0;
+    if (selWork && selWork.length && Array.isArray(backup.work)) {
+      if (!Array.isArray(data.work)) data.work = [];
+      selWork.forEach(function (key) {
+        var src = backup.work.filter(function (w, i) { return String((w && w.id) || ("i" + i)) === key; })[0];
+        if (!src) return;
+        var idx = (src.id != null) ? data.work.map(function (w) { return String(w && w.id); }).indexOf(String(src.id)) : -1;
+        if (idx >= 0) { data.work[idx] = clone(src); replaced++; } else { data.work.push(clone(src)); added++; }
+      });
+    }
+    var secN = 0;
+    (selSec || []).forEach(function (unit) {
+      var row = BACKUP_SECTIONS.filter(function (s) { return s[0] === unit; })[0]; if (!row) return;
+      row[2].forEach(function (k) { if (k in backup) data[k] = clone(backup[k]); });
+      secN++;
+    });
+    renderBody(); apply(true); closeSettings();
+    var parts = [];
+    if (added) parts.push(added + (added === 1 ? " new case study" : " new case studies"));
+    if (replaced) parts.push(replaced + (replaced === 1 ? " replaced case study" : " replaced case studies"));
+    if (secN) parts.push(secN + (secN === 1 ? " section" : " sections"));
+    status("Recovered " + (parts.join(", ") || "nothing") + " into the editor \u2014 review in the preview, then Publish to make it live.", true);
   }
 
   async function publishManual() {

@@ -1193,6 +1193,20 @@ body.adm-lock .cursor { display: none !important; }
 .aiuse__mname { font-family: var(--mono); font-size: .72rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .aiuse__mmeta { flex: 0 0 auto; font-size: .68rem; color: var(--text-dim); white-space: nowrap; }
 .aiuse__foot { font-size: .66rem; color: var(--text-faint); font-style: italic; line-height: 1.4; }
+.pass--wide .pass__box { width: min(560px, 92vw); max-width: 560px; }
+.bkr__body { max-height: 46vh; overflow: auto; margin: .5rem 0 .2rem; text-align: left; border: 1px solid var(--line); border-radius: 10px; padding: .3rem; }
+.bkr__grouphead { display: flex; align-items: center; justify-content: space-between; font-family: var(--mono); font-size: .6rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); padding: .55rem .5rem .35rem; }
+.bkr__bulk { display: flex; gap: .6rem; }
+.bkr__bulk button { background: none; border: 0; color: var(--accent); font: inherit; font-size: .68rem; cursor: pointer; padding: 0; text-decoration: underline; }
+.bkr__row { display: flex; align-items: center; gap: .55rem; padding: .5rem .55rem; border-radius: 8px; cursor: pointer; }
+.bkr__row:hover { background: var(--bg-2); }
+.bkr__row input { flex: 0 0 auto; accent-color: var(--accent); width: 15px; height: 15px; }
+.bkr__t { flex: 1 1 auto; min-width: 0; font-size: .82rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bkr__meta { flex: 0 0 auto; display: flex; align-items: center; gap: .4rem; font-size: .7rem; color: var(--text-dim); }
+.bkr__tag { font-family: var(--mono); font-size: .56rem; letter-spacing: .04em; text-transform: uppercase; border-radius: 100px; padding: .1rem .42rem; border: 1px solid var(--line); white-space: nowrap; }
+.bkr__tag--new { color: #7bbf7b; border-color: color-mix(in srgb, #7bbf7b 45%, transparent); }
+.bkr__tag--rep { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.bkr__empty { padding: .7rem .6rem; font-size: .78rem; color: var(--text-dim); }
 
 /* ---------- case study (L2) authoring ---------- */
 .study__toggle { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
