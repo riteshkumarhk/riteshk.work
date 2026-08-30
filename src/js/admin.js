@@ -699,8 +699,6 @@ import {
     // saveAdminSession writes it on every sign-in and it survives exit). So Present mode stays available on a
     // trusted device even after admin mode is closed; the unlock itself still asks for the recovery passphrase.
     const owner = !!(localStorage.getItem(HASH_KEY) || localStorage.getItem("rk:owner"));
-    // Installing the site as an app is offered only to the owner (signed in / their device) - never nagged to visitors.
-    const canInstall = !!window.__rkInstall && (owner || !!(localStorage.getItem("rk:admin:sess") || localStorage.getItem("rk:owner")));
     menuEl = document.createElement("div");
     menuEl.className = "cmenu";
     menuEl.innerHTML =
@@ -721,8 +719,7 @@ import {
       '<div class="cmenu__sep"></div>' +
       '<button class="cmenu__item" data-open="special"><span class="cmenu__ico">\u25c7</span><span><b>Recruiter or hiring manager</b><i>Enter a ticket for a curated view</i></span></button>' +
       (owner ? '<button class="cmenu__item" data-open="present"><span class="cmenu__ico">\u25b6</span><span><b>Present mode</b><i>Unlock all work for presenting, not editing</i></span></button>' : "") +
-      '<button class="cmenu__item" data-open="admin"><span class="cmenu__ico">\u2726</span><span><b>' + (narrow ? "Recognise this device" : "Admin mode") + '</b><i>' + (narrow ? "Sign in so this phone isn\u2019t counted" : "Edit &amp; curate the site") + "</i></span></button>" +
-      (canInstall ? '<button class="cmenu__item" data-open="install"><span class="cmenu__ico">\u2913</span><span><b>Install app</b><i>Add this site to your home screen</i></span></button>' : "");
+      '<button class="cmenu__item" data-open="admin"><span class="cmenu__ico">\u2726</span><span><b>' + (narrow ? "Admin sign-in" : "Admin mode") + '</b><i>' + (narrow ? "Mute this device + insights" : "Edit &amp; curate the site") + "</i></span></button>";
     document.body.appendChild(menuEl);
     positionMenu();
     placeSoundToast();   // push any live “sound on” toast below the menu we just opened
@@ -771,7 +768,6 @@ import {
     if (which === "special") ticketDialog();
     else if (which === "present") presentDialog();
     else if (which === "admin") gate();
-    else if (which === "install") { var p = window.__rkInstall; if (p && p.prompt) { window.__rkInstall = null; p.prompt(); } }
   }
 
   /* ---------- ticket entry (visitor) ---------- */
