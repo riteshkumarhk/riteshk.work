@@ -1521,6 +1521,7 @@
     if (view) {
       if (view.getAttribute("data-view") === "full") scrollToCase();
       else { try { scroller.scrollTo({ top: 0, behavior: "smooth" }); } catch (e2) { scroller.scrollTop = 0; } }
+      closeSheet();
       return;
     }
     var open = e.target.closest("[data-open]");
@@ -1923,6 +1924,15 @@
     show(0);
   }
 
+  // Effective navigator mode for the current viewport - desktop and mobile can be chosen independently
+  // (data.caseNav = desktop, data.caseNavM = mobile; mobile falls back to desktop when unset).
+  function navModeVal(v) { return (v === "immersive" || v === "mini") ? "mini" : "rail"; }
+  function currentNavMode() {
+    var d = (window.RK && window.RK.data) || {};
+    var desk = navModeVal(d.caseNav);
+    var mob = d.caseNavM ? navModeVal(d.caseNavM) : desk;
+    return (window.matchMedia && window.matchMedia("(max-width: 999px)").matches) ? mob : desk;
+  }
   // Apply just the section-navigator structure (rail vs immersive) for w, re-reading the live caseNav
   // setting - split out so the studio can flip modes in the open preview without a full content re-render.
   function applyNav(w) {
@@ -1930,8 +1940,8 @@
     var blocks = st.blocks || [];
     var showIntro = !!(w.image || st.cover) || blocks.length > 0;
     overlay.querySelector("[data-toc]").innerHTML = tocHtml(blocks, showIntro);
-    var cn = (window.RK && window.RK.data && window.RK.data.caseNav) || "";
-    var navMode = (cn === "immersive" || cn === "mini") ? "mini" : "rail";
+    var navMode = currentNavMode();
+    _lastNavMode = navMode;
     overlay.classList.toggle("pj--mini", navMode === "mini");
     overlay.classList.remove("pj--sheet-open", "pj--atfull");
     _navItems = navItems(blocks, showIntro);
@@ -2046,6 +2056,7 @@
   }
   var lastSpyId = null; // last spied section id - auto-scroll the mobile nav only when it changes
   var _navItems = []; // shared nav model (immersive pill + dots + minimap) for the current project
+  var _lastNavMode = null; // last applied navigator mode - re-apply only when the breakpoint flips it
   function updateSpy() {
     if (!overlay || !overlay.classList.contains("is-open")) return;
     var y = scroller.scrollTop + topOffset() + 14;
@@ -2097,7 +2108,8 @@
     }
     var sec = overlay.querySelector("#" + (window.CSS && CSS.escape ? CSS.escape(id) : id));
     if (!sec) return;
-    scroller.scrollTo({ top: Math.max(0, sec.offsetTop - topOffset() - 8), behavior: "smooth" });
+    var target = scroller.scrollTop + sec.getBoundingClientRect().top - scroller.getBoundingClientRect().top - topOffset() - 8;
+    try { scroller.scrollTo({ top: Math.max(0, Math.round(target)), behavior: "smooth" }); } catch (e) { scroller.scrollTop = Math.max(0, Math.round(target)); }
   }
 
   /* ---------- background lock + a11y ---------- */
@@ -2275,7 +2287,7 @@
       var d = data(); var w = (d && d.work || []).filter(function (x) { return x && x.id === activeId; })[0];
       if (w) autoResolveVaultBlocks(w);
     });
-    window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) { updateSpy(); isoParallax(); clearTimeout(galleryTimer); galleryTimer = setTimeout(function () { normalizeGalleries(); graphWire(); galleryNav(); }, 160); } });
+    window.addEventListener("resize", function () { if (overlay && overlay.classList.contains("is-open")) { if (activeId != null && currentNavMode() !== _lastNavMode) { var _wc = workById(activeId); if (_wc) applyNav(_wc); } updateSpy(); isoParallax(); clearTimeout(galleryTimer); galleryTimer = setTimeout(function () { normalizeGalleries(); graphWire(); galleryNav(); }, 160); } });
     // Editor → preview: the admin editor posts the block index of a clicked section; scroll the
     // preview to it and flash it (the reverse of the preview → editor selectBlock message).
     window.addEventListener("message", function (e) {

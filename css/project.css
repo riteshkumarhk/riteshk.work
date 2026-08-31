@@ -780,10 +780,12 @@ html.pj-lock, html.pj-lock body { overflow: hidden; }
 .pj--mini .pj__shell { grid-template-columns: minmax(0, 1fr); max-width: min(1120px, 92vw); }
 .pj--mini .pj__main { padding-top: clamp(1.5rem, 4vw, 3rem); }
 .pj--mini .pj__side {
-  position: fixed; right: 0; top: 50%; transform: translateY(-50%); height: auto; max-height: 92vh; width: auto;
+  position: fixed; right: 0; top: 50%; transform: translateY(-50%); height: auto; max-height: 88vh; width: auto; max-width: 3.5rem;
   z-index: 6; flex-direction: column; align-items: flex-end; gap: 0; overflow: visible;
-  padding: 1rem clamp(.7rem, 1.5vw, 1.15rem); border: 0; background: none;
+  padding: .85rem .5rem; border: 0; background: none; transition: max-width .3s var(--ease);
 }
+/* collapsed = a slim right-edge strip: a small, FIXED hit area (no longer scales with the viewport) so it can't sit over content; hover/focus/peek releases the width */
+.pj--mini .pj__side:hover, .pj--mini .pj__side:focus-within, .pj--mini.pj--navpeek .pj__side { max-width: 30rem; }
 .pj--mini .pj__side::before {
   content: ""; position: absolute; inset: -.4rem -.55rem; border-radius: 14px; background: var(--bg-elev);
   border: 1px solid var(--line); box-shadow: 0 30px 70px -30px rgba(0, 0, 0, .85);
@@ -802,20 +804,22 @@ html.pj-lock, html.pj-lock body { overflow: hidden; }
 /* "All work" now lives in the top-left back button, not inside the panel */
 .pj--mini .pj__side-back { display: none; }
 .pj--mini .pj__toc { display: flex; flex-direction: column; align-items: flex-end; gap: 0; border: 0; }
-.pj--mini .pj__toc-chip { position: relative; display: flex; align-items: center; justify-content: flex-end; gap: .6rem; padding: .46rem .2rem; color: var(--text-faint); }
-.pj--mini .pj__toc-chip::before { display: none; }
-.pj--mini .pj__toc-lbl { order: 1; font-family: var(--sans); font-size: .84rem; white-space: nowrap; overflow: hidden; text-align: right; max-width: 0; opacity: 0; transform: translateX(5px); transition: max-width .3s var(--ease), opacity .22s var(--ease), transform .3s var(--ease); }
-.pj--mini .pj__toc-chip::after { content: ""; order: 2; flex: none; width: 16px; height: 2px; border-radius: 2px; background: currentColor; opacity: .5; transition: width .25s var(--ease), height .25s var(--ease), border-radius .25s var(--ease), opacity .25s var(--ease); }
-.pj--mini .pj__side:hover .pj__toc-lbl, .pj--mini .pj__side:focus-within .pj__toc-lbl, .pj--mini.pj--navpeek .pj__toc-lbl { max-width: 30ch; opacity: 1; transform: none; }
+.pj--mini .pj__toc-chip { position: relative; display: flex; align-items: center; justify-content: flex-end; gap: 0; padding: .5rem .2rem; color: var(--text-faint); }
+/* collapsed marker = a dash (placeholder for the label) + a dot; on hover the dash gives way to the text and the dot grows into a bullet */
+.pj--mini .pj__toc-chip::before { content: ""; display: block; order: 1; flex: none; width: 14px; height: 2px; border-radius: 2px; background: currentColor; opacity: .5; transition: width .28s var(--ease), opacity .22s var(--ease); }
+.pj--mini .pj__toc-lbl { order: 2; font-family: var(--sans); font-size: .92rem; white-space: nowrap; overflow: hidden; text-align: right; max-width: 0; opacity: 0; transform: translateX(4px); transition: max-width .3s var(--ease), opacity .22s var(--ease), transform .3s var(--ease); }
+.pj--mini .pj__toc-chip::after { content: ""; order: 3; flex: none; width: 5px; height: 5px; margin-left: .42rem; border-radius: 50%; background: currentColor; opacity: .5; transition: width .25s var(--ease), height .25s var(--ease), opacity .25s var(--ease); }
 .pj--mini .pj__toc-chip:hover { color: var(--text-dim); }
-.pj--mini .pj__toc-chip:hover::after { width: 22px; opacity: .9; }
+.pj--mini .pj__toc-chip:hover::before { width: 18px; opacity: .9; }
 .pj--mini .pj__toc-chip.is-active { color: var(--accent); }
-.pj--mini .pj__toc-chip.is-active::after { width: 22px; opacity: 1; }
-/* expanded panel: the collapsed tick-dashes soften into dots (the rail reads as a scrollbar, the open list as bullets) */
-.pj--mini .pj__side:hover .pj__toc-chip::after, .pj--mini .pj__side:focus-within .pj__toc-chip::after, .pj--mini.pj--navpeek .pj__toc-chip::after { width: 6px; height: 6px; border-radius: 50%; opacity: .6; }
-.pj--mini .pj__side:hover .pj__toc-chip.is-active::after, .pj--mini .pj__side:focus-within .pj__toc-chip.is-active::after, .pj--mini.pj--navpeek .pj__toc-chip.is-active::after { width: 8px; height: 8px; opacity: 1; }
-/* mini intro row: drop the base divider + extra margin so the tick rail and expanded list stay one uniform column */
-.pj--mini .pj__toc-chip--intro { margin-bottom: 0; padding: .46rem .2rem; border-bottom: 0; }
+.pj--mini .pj__toc-chip.is-active::before { width: 18px; opacity: 1; }
+.pj--mini .pj__side:hover .pj__toc-lbl, .pj--mini .pj__side:focus-within .pj__toc-lbl, .pj--mini.pj--navpeek .pj__toc-lbl { max-width: 30ch; opacity: 1; transform: none; }
+/* expanded: the dash gives way to the full label, the dot grows */
+.pj--mini .pj__side:hover .pj__toc-chip::before, .pj--mini .pj__side:focus-within .pj__toc-chip::before, .pj--mini.pj--navpeek .pj__toc-chip::before { width: 0; opacity: 0; }
+.pj--mini .pj__side:hover .pj__toc-chip::after, .pj--mini .pj__side:focus-within .pj__toc-chip::after, .pj--mini.pj--navpeek .pj__toc-chip::after { width: 7px; height: 7px; opacity: .6; }
+.pj--mini .pj__side:hover .pj__toc-chip.is-active::after, .pj--mini .pj__side:focus-within .pj__toc-chip.is-active::after, .pj--mini.pj--navpeek .pj__toc-chip.is-active::after { width: 9px; height: 9px; opacity: 1; }
+/* mini intro row: identical size / weight / case to every other section (no mono divider header) */
+.pj--mini .pj__toc-chip--intro { margin-bottom: 0; padding: .5rem .2rem; border-bottom: 0; font-family: var(--sans); text-transform: none; letter-spacing: normal; }
 
 /* immersive extras: a contextual jump arrow shown ONLY while the nav is collapsed - expanding the panel
    (hover / open sheet) swaps it for the real Overview-Full toggle - plus a floating section pill */
@@ -854,7 +858,7 @@ html[data-appearance="light"] .pj--mini .pj__nowpill { background: rgba(242, 238
 /* mini mode on touch/narrow: right-edge panel off; the sidebar becomes a bottom sheet + a dots pill */
 @media (max-width: 999px) {
   .pj--mini .pj__side {
-    position: fixed; left: 0; right: 0; bottom: 0; top: auto; transform: translateY(103%); max-height: 72vh; width: auto;
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; transform: translateY(103%); max-height: 72vh; width: auto; max-width: none;
     overflow-y: auto; overflow-x: hidden; flex-direction: column; align-items: stretch; gap: 0; z-index: 41;
     padding: 1.1rem clamp(1rem, 5vw, 1.5rem) calc(1.4rem + env(safe-area-inset-bottom));
     border: 0; border-top: 1px solid var(--line); border-radius: 18px 18px 0 0;
@@ -866,13 +870,14 @@ html[data-appearance="light"] .pj--mini .pj__nowpill { background: rgba(242, 238
   .pj--mini.pj--hasnav .pj__topback { display: none; }
   .pj--mini .pj__side-head, .pj--mini .pj__viewseg { max-height: none; opacity: 1; overflow: visible; pointer-events: auto; }
   .pj--mini .pj__side-head { display: block; margin: 0 0 .8rem; font-size: .8rem; text-align: left; }
-  .pj--mini .pj__viewseg { align-self: flex-start; margin: 0 0 .6rem; }
+  .pj--mini .pj__viewseg { align-self: stretch; margin: .15rem 0 1.15rem; padding: 4px; }
+  .pj--mini .pj__viewseg-btn { flex: 1; padding: .62rem 1rem; font-size: .82rem; }
   .pj--mini .pj__toc { display: flex; flex-direction: column; gap: 0; border: 0; align-items: stretch; }
-  .pj--mini .pj__toc-chip { flex: none; justify-content: flex-start; border: 0; border-radius: 9px; padding: .7rem .75rem; color: var(--text-dim); }
+  .pj--mini .pj__toc-chip { flex: none; justify-content: flex-start; border: 0; border-radius: 9px; padding: .9rem .8rem; color: var(--text-dim); }
   .pj--mini .pj__toc-chip::before, .pj--mini .pj__toc-chip::after { display: none; }
-  .pj--mini .pj__toc-lbl { max-width: none; opacity: 1; transform: none; white-space: normal; text-align: left; font-family: var(--sans); font-size: .98rem; }
+  .pj--mini .pj__toc-lbl { max-width: none; opacity: 1; transform: none; white-space: normal; text-align: left; font-family: var(--sans); font-size: 1.02rem; }
   .pj--mini .pj__toc-chip.is-active { background: var(--line-soft); color: var(--text); }
-  .pj--mini .pj__toc-chip--intro { display: block; border: 0; margin: 0; padding: .7rem .75rem; }
+  .pj--mini .pj__toc-chip--intro { display: block; border: 0; margin: 0; padding: .9rem .8rem; }
   .pj--mini .pj__dots {
     display: inline-flex; align-items: center; gap: .5rem; position: fixed; left: 50%;
     bottom: calc(1rem + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 32;

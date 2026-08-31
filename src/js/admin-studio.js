@@ -6616,13 +6616,16 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     hmPush(); saveDraft();
   }
   function caseNavBlock() {
-    var mode = (data.caseNav === "immersive" || data.caseNav === "mini") ? "immersive" : "rail";
+    var dm = (data.caseNav === "immersive" || data.caseNav === "mini") ? "immersive" : "rail";
+    var mm = data.caseNavM ? ((data.caseNavM === "immersive" || data.caseNavM === "mini") ? "immersive" : "rail") : dm;
+    var seg = function (a, cur) { return '<div class="aimode__opts">' +
+      '<button type="button" class="aimode__opt' + (cur === "rail" ? " is-on" : "") + '" data-act="' + a + '" data-v="rail"><b>Classic nav</b><span>persistent section links (left rail on desktop, top bar on mobile)</span></button>' +
+      '<button type="button" class="aimode__opt' + (cur === "immersive" ? " is-on" : "") + '" data-act="' + a + '" data-v="immersive"><b>Immersive</b><span>tucks to the edge, expands on hover</span></button>' + "</div>"; };
     return '<div class="aimode"><div class="aimode__lbl">Case-study navigation</div>' +
       '<div class="af__hint" style="margin:-.15rem 0 .7rem">How readers move between sections inside a case study. <b>Immersive</b> frees the reading column and tucks the navigator to the right edge \u2014 hover to reveal it, with a floating section marker and a contextual jump arrow (a dots sheet on mobile). Open any case study in the preview to see it \u2014 no Publish needed.</div>' +
-      '<div class="aimode__opts">' +
-      '<button type="button" class="aimode__opt' + (mode === "rail" ? " is-on" : "") + '" data-act="casenav" data-v="rail"><b>Left nav</b><span>persistent sidebar of section links</span></button>' +
-      '<button type="button" class="aimode__opt' + (mode === "immersive" ? " is-on" : "") + '" data-act="casenav" data-v="immersive"><b>Immersive</b><span>tucks to the edge, expands on hover</span></button>' +
-      "</div></div>";
+      '<div class="aimode__lbl" style="font-size:.82rem;margin:.1rem 0 .35rem">Desktop</div>' + seg("casenav", dm) +
+      '<div class="aimode__lbl" style="font-size:.82rem;margin:.9rem 0 .35rem">Mobile</div>' + seg("casenavm", mm) +
+      "</div>";
   }
   function heroMotionBlock() {
     var seg = function (act, val, opts) {
@@ -8856,7 +8859,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "book-dismiss") { bookDo(b.dataset.uid, "dismiss", b); return; }
     if (act === "book-refresh") { loadBookings(); return; }
     if (act === "media-open") { mediaOpen(); return; }
-    if (act === "casenav") { data.caseNav = b.dataset.v === "immersive" ? "immersive" : "rail"; saveDraft(true); try { var _fw = frameWin(); if (_fw) { try { _fw.RK.data = resolvePreviewData(data); } catch (e) {} _fw.postMessage({ __rk: "caseNav" }, "*"); } } catch (e) {} renderBody(); status("Case-study navigation \u2014 " + (data.caseNav === "immersive" ? "Immersive" : "Left nav") + " \u00b7 previewing live (open a case study in the preview to see it).", true); return; }
+    if (act === "casenav" || act === "casenavm") { var _cnv = b.dataset.v === "immersive" ? "immersive" : "rail"; if (act === "casenavm") data.caseNavM = _cnv; else data.caseNav = _cnv; saveDraft(true); try { var _fw = frameWin(); if (_fw) { try { _fw.RK.data = resolvePreviewData(data); } catch (e) {} _fw.postMessage({ __rk: "caseNav" }, "*"); } } catch (e) {} renderBody(); status("Case-study navigation \u2014 " + (act === "casenavm" ? "Mobile" : "Desktop") + " " + (_cnv === "immersive" ? "Immersive" : "Classic nav") + " \u00b7 previewing live (open a case study in the preview to see it).", true); return; }
     if (act === "icon-open") { iconManageModal(); return; }
     if (act === "ver-refresh") { loadVersions(); return; }
     if (act === "ver-load") { if (confirm("Load this version into the editor? Your current unsaved edits will be replaced \u2014 Publishing is still required to make it live.")) applyVersion(b.dataset.sha, b.dataset.when); return; }
