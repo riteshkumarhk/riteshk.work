@@ -157,6 +157,7 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm.is-prevoff .adm__preview { display: none; }
 .adm.is-prevoff .adm__editor { border-right: 0; }
 .adm.is-prevoff .adm__resizer { display: none; }
+.adm.is-prevoff .adm__dev { display: none; }
 .adm.is-prevoff .adm__l2 { max-width: 1040px; }
 .adm__newtab { padding: .3rem .55rem; display: inline-flex; align-items: center; gap: .4rem; border-radius: 100px; color: var(--text-dim); transition: color .2s ease, border-color .2s ease; }
 .adm__newtab svg { display: block; }
@@ -1238,6 +1239,7 @@ body.adm-lock .cursor { display: none !important; }
 .adm.is-noprev .adm__preview { display: none; }
 .adm.is-noprev .adm__editor { border-right: 0; }
 .adm.is-noprev .adm__resizer { display: none; }
+.adm.is-noprev .adm__dev { display: none; }
 .adm.is-noprev .adm__l2 { max-width: 1040px; }
 .study__panel { margin-top: .3rem; padding: 0; border: 0; background: none; }
 .l2grp { border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem 1.1rem; margin-bottom: 1rem; background: var(--bg-2); }
