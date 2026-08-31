@@ -845,12 +845,15 @@ html.pj-lock body { position: fixed; left: 0; right: 0; width: 100%; }
 .pj--mini:has(.pj__side:hover) .pj__jump, .pj--mini:has(.pj__side:focus-within) .pj__jump, .pj--mini.pj--navpeek .pj__jump, .pj--mini.pj--sheet-open .pj__jump { display: none; }
 .pj__nowpill { display: none; }
 .pj--mini.pj--hasnav .pj__nowpill {
-  display: inline-flex; align-items: center; position: fixed; top: .8rem; left: 50%; transform: translateX(-50%);
+  display: inline-flex; align-items: center; position: fixed; top: .8rem; left: 50%;
+  transform: translateX(-50%) translateY(-8px); opacity: 0; pointer-events: none;
   z-index: 7; max-width: min(56vw, 22rem); padding: .5rem 1.05rem; border-radius: 100px;
   border: 1px solid var(--line); background: rgba(8, 8, 10, .6); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   color: var(--text); font-family: var(--mono); font-size: .68rem; letter-spacing: .05em; cursor: pointer;
-  box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .6); transition: color .3s, border-color .3s, transform .3s var(--ease);
+  box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .6); transition: color .3s, border-color .3s, opacity .32s var(--ease), transform .32s var(--ease);
 }
+/* redundant on the overview (top of the case study) - fades in only once a section scrolls under the top chrome */
+.pj--mini.pj--hasnav.pj--insection .pj__nowpill { opacity: 1; pointer-events: auto; transform: translateX(-50%); }
 html[data-appearance="light"] .pj--mini .pj__nowpill { background: rgba(242, 238, 230, .68); }
 .pj--mini .pj__nowpill:hover { border-color: var(--accent); }
 .pj__nowpill-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -1943,7 +1943,7 @@
     var navMode = currentNavMode();
     _lastNavMode = navMode;
     overlay.classList.toggle("pj--mini", navMode === "mini");
-    overlay.classList.remove("pj--sheet-open", "pj--atfull");
+    overlay.classList.remove("pj--sheet-open", "pj--atfull", "pj--insection");
     _navItems = navItems(blocks, showIntro);
     overlay.classList.toggle("pj--hasnav", navMode === "mini" && _navItems.length > 0);
     var _dots = overlay.querySelector("[data-dotswrap]"); if (_dots) _dots.innerHTML = dotsHtml(_navItems);
@@ -2109,6 +2109,8 @@
     overlay.querySelectorAll(".pj__dot").forEach(function (d) { d.classList.toggle("is-active", d.getAttribute("data-dot") === id); });
     var pillT = overlay.querySelector("[data-nowpill] .pj__nowpill-t");
     if (pillT) { var nit = _navItems.filter(function (n) { return n.id === id; })[0]; pillT.textContent = nit ? nit.label : (id === "__intro" ? "Overview" : ""); }
+    // The section pill is redundant on the overview (top) - only surface it once a real section is under the top chrome.
+    overlay.classList.toggle("pj--insection", !!(id && id !== "__intro"));
     // Keep the active chip visible in the mobile horizontal nav: only when the section actually
     // changes (so we never fight a manual sideways scroll), and scroll the bar itself horizontally
     // (scrollBy on the bar, never scrollIntoView, so the page never moves).
