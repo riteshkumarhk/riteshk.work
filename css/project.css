@@ -791,32 +791,38 @@ html.pj-lock, html.pj-lock body { overflow: hidden; }
   transition: opacity .28s var(--ease), transform .28s var(--ease);
 }
 .pj--mini .pj__side:hover::before, .pj--mini .pj__side:focus-within::before, .pj--mini.pj--navpeek .pj__side::before { opacity: 1; transform: none; }
-.pj--mini .pj__side-head, .pj--mini .pj__viewseg, .pj--mini .pj__side-back {
+.pj--mini .pj__side-head, .pj--mini .pj__viewseg {
   max-height: 0; opacity: 0; overflow: hidden; margin: 0 .2rem; padding: 0; pointer-events: none;
   transition: max-height .3s var(--ease), opacity .22s var(--ease), margin .3s var(--ease);
 }
 .pj--mini .pj__side:hover .pj__side-head, .pj--mini .pj__side:focus-within .pj__side-head, .pj--mini.pj--navpeek .pj__side-head { max-height: 3.4rem; opacity: 1; margin: 0 .2rem .55rem; pointer-events: auto; }
 .pj--mini .pj__side:hover .pj__viewseg, .pj--mini .pj__side:focus-within .pj__viewseg, .pj--mini.pj--navpeek .pj__viewseg { max-height: 3rem; opacity: 1; margin: .25rem .2rem .9rem; pointer-events: auto; }
-.pj--mini .pj__side:hover .pj__side-back, .pj--mini .pj__side:focus-within .pj__side-back, .pj--mini.pj--navpeek .pj__side-back { max-height: 3rem; opacity: 1; margin: .7rem .2rem 0; pointer-events: auto; }
 .pj--mini .pj__side-head { font-family: var(--mono); font-size: .7rem; text-align: right; }
 .pj--mini .pj__viewseg { align-self: flex-end; }
-.pj--mini .pj__side-back { align-self: flex-end; }
+/* "All work" now lives in the top-left back button, not inside the panel */
+.pj--mini .pj__side-back { display: none; }
 .pj--mini .pj__toc { display: flex; flex-direction: column; align-items: flex-end; gap: 0; border: 0; }
 .pj--mini .pj__toc-chip { position: relative; display: flex; align-items: center; justify-content: flex-end; gap: .6rem; padding: .46rem .2rem; color: var(--text-faint); }
 .pj--mini .pj__toc-chip::before { display: none; }
 .pj--mini .pj__toc-lbl { order: 1; font-family: var(--sans); font-size: .84rem; white-space: nowrap; overflow: hidden; text-align: right; max-width: 0; opacity: 0; transform: translateX(5px); transition: max-width .3s var(--ease), opacity .22s var(--ease), transform .3s var(--ease); }
-.pj--mini .pj__toc-chip::after { content: ""; order: 2; flex: none; width: 16px; height: 2px; border-radius: 2px; background: currentColor; opacity: .5; transition: width .25s var(--ease), opacity .25s var(--ease); }
+.pj--mini .pj__toc-chip::after { content: ""; order: 2; flex: none; width: 16px; height: 2px; border-radius: 2px; background: currentColor; opacity: .5; transition: width .25s var(--ease), height .25s var(--ease), border-radius .25s var(--ease), opacity .25s var(--ease); }
 .pj--mini .pj__side:hover .pj__toc-lbl, .pj--mini .pj__side:focus-within .pj__toc-lbl, .pj--mini.pj--navpeek .pj__toc-lbl { max-width: 30ch; opacity: 1; transform: none; }
 .pj--mini .pj__toc-chip:hover { color: var(--text-dim); }
 .pj--mini .pj__toc-chip:hover::after { width: 22px; opacity: .9; }
 .pj--mini .pj__toc-chip.is-active { color: var(--accent); }
 .pj--mini .pj__toc-chip.is-active::after { width: 22px; opacity: 1; }
+/* expanded panel: the collapsed tick-dashes soften into dots (the rail reads as a scrollbar, the open list as bullets) */
+.pj--mini .pj__side:hover .pj__toc-chip::after, .pj--mini .pj__side:focus-within .pj__toc-chip::after, .pj--mini.pj--navpeek .pj__toc-chip::after { width: 6px; height: 6px; border-radius: 50%; opacity: .6; }
+.pj--mini .pj__side:hover .pj__toc-chip.is-active::after, .pj--mini .pj__side:focus-within .pj__toc-chip.is-active::after, .pj--mini.pj--navpeek .pj__toc-chip.is-active::after { width: 8px; height: 8px; opacity: 1; }
 /* mini intro row: drop the base divider + extra margin so the tick rail and expanded list stay one uniform column */
 .pj--mini .pj__toc-chip--intro { margin-bottom: 0; padding: .46rem .2rem; border-bottom: 0; }
 
 /* immersive extras: a contextual jump arrow shown ONLY while the nav is collapsed - expanding the panel
    (hover / open sheet) swaps it for the real Overview-Full toggle - plus a floating section pill */
 .pj--mini .pj__icon[data-pj="prev"], .pj--mini .pj__icon[data-pj="next"] { display: none; }
+/* desktop immersive: a back-to-all-work button mirrored opposite the close X (top-left vs top-right) */
+.pj__topback { display: none; }
+.pj--mini.pj--hasnav .pj__topback { display: grid; position: fixed; top: .8rem; left: clamp(.8rem, 3vw, 1.6rem); z-index: 8; }
 .pj__jump { display: none; }
 /* standalone bottom-right FAB — the linear-scroll affordance, SEPARATE from the minimap on both breakpoints (top-centre pill = orientation, right-edge/bottom-centre minimap = navigation, this FAB = in/out). Sits outside .pj__side so hovering the ticks never touches it. */
 .pj--mini.pj--hasnav .pj__jump {
@@ -856,9 +862,10 @@ html[data-appearance="light"] .pj--mini .pj__nowpill { background: rgba(242, 238
   }
   .pj--mini .pj__side::before { display: none; }
   .pj--mini.pj--sheet-open .pj__side { transform: none; }
-  .pj--mini .pj__side-head, .pj--mini .pj__viewseg, .pj--mini .pj__side-back { max-height: none; opacity: 1; overflow: visible; pointer-events: auto; }
+  /* the desktop-only top-left back button stays hidden in the mobile sheet (X + browser back cover it) */
+  .pj--mini.pj--hasnav .pj__topback { display: none; }
+  .pj--mini .pj__side-head, .pj--mini .pj__viewseg { max-height: none; opacity: 1; overflow: visible; pointer-events: auto; }
   .pj--mini .pj__side-head { display: block; margin: 0 0 .8rem; font-size: .8rem; text-align: left; }
-  .pj--mini .pj__side-back { display: inline-flex; align-self: flex-start; margin: .9rem 0 .2rem; }
   .pj--mini .pj__viewseg { align-self: flex-start; margin: 0 0 .6rem; }
   .pj--mini .pj__toc { display: flex; flex-direction: column; gap: 0; border: 0; align-items: stretch; }
   .pj--mini .pj__toc-chip { flex: none; justify-content: flex-start; border: 0; border-radius: 9px; padding: .7rem .75rem; color: var(--text-dim); }
