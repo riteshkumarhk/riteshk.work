@@ -1618,22 +1618,40 @@
             "sep": true
           },
           {
-            "type": "steps",
+            "type": "columns",
             "nav": "",
             "kicker": "",
             "heading": "",
             "items": [
               {
-                "title": "Surface Unification",
-                "body": "A single continuous onboarding journey"
+                "label": "01",
+                "cells": [
+                  {
+                    "heading": "Surface Unification",
+                    "body": "A single continuous onboarding journey",
+                    "src": ""
+                  }
+                ]
               },
               {
-                "title": "Layout Unification",
-                "body": "Create a common onboarding language.<div><br></div><div>Shared:</div><div><ul><li>Visual structure</li><li>Navigation model</li><li>Progress model</li><li>CTA placement</li><li>Interaction patterns</li></ul></div><div><br></div><div>The goal was to make every step feel like part of the same journey regardless of content.</div>"
+                "label": "02",
+                "cells": [
+                  {
+                    "heading": "Layout Unification",
+                    "body": "<p>Create a common onboarding language.</p><p>Shared:</p><p><ul><li>Visual structure</li><li>Navigation model</li><li>Progress model</li><li>CTA placement</li><li>Interaction patterns</li></ul></p><p>The goal was to make every step feel like part of the same journey regardless of content.</p>",
+                    "src": ""
+                  }
+                ]
               },
               {
-                "title": "Consent Unification",
-                "body": "Rather than treating consent as standalone interruptions, integrate them into the narrative of onboarding."
+                "label": "03",
+                "cells": [
+                  {
+                    "heading": "Consent Unification",
+                    "body": "Rather than treating consent as standalone interruptions, integrate them into the narrative of onboarding.",
+                    "src": ""
+                  }
+                ]
               }
             ],
             "sep": false
