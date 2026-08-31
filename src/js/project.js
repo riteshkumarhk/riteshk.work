@@ -95,17 +95,18 @@
     if (isVideo(url, k)) return "video";
     return "image";
   }
-  function frameEl(src, cls, label) {
+  function frameEl(src, cls, label, siteFullscreen) {
     var vid = label === "video" ? " pjb__frame--video" : "";
+    var fs = siteFullscreen === false ? "" : '<button class="pjb__fs" type="button" data-fs aria-label="Toggle fullscreen \u2014 ' + attr(label) + '" title="Fullscreen">' + FS_SVG + '<span>Fullscreen</span></button>';
     return '<div class="pjb__frame ' + cls + vid + '">' +
       '<iframe class="pjb__frame-el" src="' + attr(src) + '" loading="lazy" allow="fullscreen; autoplay; clipboard-read; clipboard-write" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>' +
-      '<button class="pjb__fs" type="button" data-fs aria-label="Toggle fullscreen \u2014 ' + attr(label) + '" title="Fullscreen">' + FS_SVG + '<span>Fullscreen</span></button></div>';
+      fs + '</div>';
   }
   function mediaEl(m, cls) {
     var url = mediaUrl(mediaSrc(m));
     if (!url) return "";
     var kind = mediaKind(m);
-    if (kind === "figma") return frameEl(figmaEmbed(url), cls, "prototype");
+    if (kind === "figma") return frameEl(figmaEmbed(url), cls, "prototype", false);
     if (kind === "office") return frameEl(officeEmbed(url), cls, "slideshow");
     if (kind === "pdf") return frameEl(url + (/[#?]/.test(url) ? "" : "#view=FitH"), cls, "PDF");
     if (kind === "embed") return frameEl(ytEmbed(url), cls, /(1drv|onedrive|sharepoint)/i.test(url) ? "slideshow" : "video");
@@ -1230,6 +1231,35 @@
   function exitFs() { var fn = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen; if (fn) { try { fn.call(document); } catch (e) {} } }
   function toggleElFs(el) { if (fsEl() === el) exitFs(); else reqFs(el); }
   function toggleFrameFs(btn) { var f = btn.closest(".pjb__frame"); toggleElFs((f && f.querySelector(".pjb__frame-el")) || f); }
+
+  var videoCursorTimer = 0;
+  function fullscreenVideo() {
+    var el = fsEl();
+    return el && el.matches && el.matches("video.pjb__media-el, video.pj__cover-el") ? el : null;
+  }
+  function showVideoCursor(video) {
+    clearTimeout(videoCursorTimer);
+    videoCursorTimer = 0;
+    video.classList.remove("is-cursor-idle");
+    if (!video.paused && !video.ended) {
+      videoCursorTimer = setTimeout(function () {
+        if (fsEl() === video && !video.paused && !video.ended) video.classList.add("is-cursor-idle");
+      }, 1800);
+    }
+  }
+  function syncVideoCursor() {
+    var video = fullscreenVideo();
+    clearTimeout(videoCursorTimer);
+    videoCursorTimer = 0;
+    document.querySelectorAll("video.is-cursor-idle").forEach(function (el) { el.classList.remove("is-cursor-idle"); });
+    if (video) showVideoCursor(video);
+  }
+  document.addEventListener("fullscreenchange", syncVideoCursor);
+  document.addEventListener("webkitfullscreenchange", syncVideoCursor);
+  document.addEventListener("pointermove", function () { var video = fullscreenVideo(); if (video) showVideoCursor(video); }, true);
+  document.addEventListener("play", function (e) { if (e.target === fullscreenVideo()) showVideoCursor(e.target); }, true);
+  document.addEventListener("pause", function (e) { if (e.target === fullscreenVideo()) showVideoCursor(e.target); }, true);
+  document.addEventListener("ended", function (e) { if (e.target === fullscreenVideo()) showVideoCursor(e.target); }, true);
 
   var lbx = null, lbxImg = null, lbxCap = null, lbxScale = 1, lbxX = 0, lbxY = 0, lbxReturn = null;
   var lbxNav = null, lbxGroup = [], lbxIdx = 0;
