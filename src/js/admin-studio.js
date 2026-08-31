@@ -14976,7 +14976,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       _prevToggle.title = nowOff ? "Show the live preview" : "Hide the live preview";
     });
     var _newtab = root.querySelector("[data-newtab]");
-    if (_newtab) _newtab.addEventListener("click", function () { try { window.open(newtabVisitUrl || previewUrl(), "_blank", "noopener"); } catch (e) {} });
+    if (_newtab) _newtab.addEventListener("click", function () {
+      try {
+        if (newtabVisitUrl) { window.open(newtabVisitUrl, "_blank", "noopener"); return; }   // post-publish "Visit site" -> the live site
+        saveDraft(true);   // flush the in-memory draft synchronously so the new tab's ?preview reads the very latest unpublished edits
+        window.open(previewUrl(), "_blank", "noopener");
+      } catch (e) {}
+    });
     if (localStorage.getItem(PREV_OFF_KEY) === "1" && _prevToggle) { root.classList.add("is-prevoff"); _prevToggle.setAttribute("aria-pressed", "false"); _prevToggle.title = "Show the live preview"; }
     // Resizable editor/preview divider - drag to set the editor width (persists). Drag it right to shrink
     // the preview down to a tablet/phone width and watch the site reflow - a live responsive view.
