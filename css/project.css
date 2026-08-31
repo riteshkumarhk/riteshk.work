@@ -852,8 +852,8 @@ html.pj-lock body { position: fixed; left: 0; right: 0; width: 100%; }
   color: var(--text); font-family: var(--mono); font-size: .68rem; letter-spacing: .05em; cursor: pointer;
   box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .6); transition: color .3s, border-color .3s, opacity .32s var(--ease), transform .32s var(--ease);
 }
-/* redundant on the overview (top of the case study) - fades in only once a section scrolls under the top chrome */
-.pj--mini.pj--hasnav.pj--insection .pj__nowpill { opacity: 1; pointer-events: auto; transform: translateX(-50%); }
+/* redundant only at the very top - fades in the moment the page scrolls off the top (reads "Overview" until a section is under the chrome) */
+.pj--mini.pj--hasnav.pj--scrolled .pj__nowpill { opacity: 1; pointer-events: auto; transform: translateX(-50%); }
 html[data-appearance="light"] .pj--mini .pj__nowpill { background: rgba(242, 238, 230, .68); }
 .pj--mini .pj__nowpill:hover { border-color: var(--accent); }
 .pj__nowpill-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
