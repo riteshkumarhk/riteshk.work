@@ -690,6 +690,19 @@ html[data-appearance="light"] .pjb__gallery-nav:hover { background: rgba(247, 24
 .rk-preview .pjb--drop-before::before, .rk-preview .pjb--drop-after::after { content: ""; position: absolute; left: 0; right: 0; height: 3px; background: var(--accent); border-radius: 2px; z-index: 8; box-shadow: 0 0 0 3px rgba(216, 166, 71, .18); pointer-events: none; }
 .rk-preview .pjb--drop-before::before { top: -1.5px; }
 .rk-preview .pjb--drop-after::after { bottom: -1.5px; }
+/* live-preview: item drag grip + drop indicators (adapts to row vs column layouts) */
+.pvigrip { position: absolute; top: 3px; left: 3px; z-index: 6; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 1px solid var(--line); border-radius: 5px; background: var(--bg-elev); color: var(--text-dim); cursor: grab; opacity: 0; transition: opacity .15s var(--ease), color .15s, border-color .15s; }
+.rk-preview .pv-hasgrip { position: relative; }
+.pv-hasgrip:hover > .pvigrip, .pvigrip:focus-visible { opacity: .95; }
+.pvigrip:hover { color: var(--text); border-color: var(--accent); }
+.pvigrip:active { cursor: grabbing; }
+.pvigrip svg { display: block; pointer-events: none; }
+.rk-preview .pv-item-dragging { opacity: .4; }
+.rk-preview .pv-drop-before::before, .rk-preview .pv-drop-after::after, .rk-preview .pv-drop-left::before, .rk-preview .pv-drop-right::after { content: ""; position: absolute; background: var(--accent); border-radius: 2px; z-index: 7; box-shadow: 0 0 0 2px rgba(216, 166, 71, .18); pointer-events: none; }
+.rk-preview .pv-drop-before::before { top: -3px; left: 0; right: 0; height: 3px; }
+.rk-preview .pv-drop-after::after { bottom: -3px; left: 0; right: 0; height: 3px; }
+.rk-preview .pv-drop-left::before { left: -3px; top: 0; bottom: 0; width: 3px; }
+.rk-preview .pv-drop-right::after { right: -3px; top: 0; bottom: 0; width: 3px; }
 
 /* focus full-screen — image left, clickable annotation list stacked top-right */
 .pjfx { position: fixed; inset: 0; z-index: 1400; display: flex; align-items: center; justify-content: center; gap: clamp(1rem, 3vw, 2.2rem); padding: clamp(1rem, 4vw, 3rem); background: rgba(6, 6, 8, .92); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: 0; visibility: hidden; transition: opacity .3s var(--ease), visibility .3s var(--ease); }

@@ -8566,6 +8566,20 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     saveDraft(true); renderL2();
     status("Section moved.", true);
   }
+  // Live-preview drag-to-reorder: move an item within a block's flat items array (posted by an item grip).
+  function previewItemMove(block, from, to) {
+    if (openStudy < 0 || !data.work[openStudy] || !data.work[openStudy].study) return;
+    var s = data.work[openStudy].study.blocks;
+    var b = s && s[block];
+    if (!b || !Array.isArray(b.items) || from < 0 || from >= b.items.length) return;
+    var it = b.items.splice(from, 1)[0];
+    if (to > from) to--;
+    to = Math.max(0, Math.min(b.items.length, to));
+    b.items.splice(to, 0, it);
+    openBlock = block;
+    saveDraft(true); renderL2();
+    status("Item moved.", true);
+  }
 
   /* ---------- blank templates ---------- */
   function blankSv() {
@@ -15156,6 +15170,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (d.__rk === "selectBlock" && typeof d.index === "number") selectPreviewBlock(d.index);
       else if (d.__rk === "blockAct" && typeof d.index === "number") previewBlockAct(d.act, d.index);
     else if (d.__rk === "blockMove" && typeof d.from === "number" && typeof d.to === "number") previewBlockMove(d.from, d.to);
+    else if (d.__rk === "itemMove" && typeof d.block === "number" && typeof d.from === "number" && typeof d.to === "number") previewItemMove(d.block, d.from, d.to);
     });
   }
 

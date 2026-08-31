@@ -179,6 +179,7 @@
   var returnScrollY = 0, lastFocus = null, spyRaf = 0;
   var previewSelIdx = -1; // admin live-preview: index of the section whose floating action toolbar is shown
   var pvDragIdx = -1;     // admin live-preview: index of the section currently being drag-reordered
+  var pvItemFrom = -1, pvItemBlock = -1, pvItemSelCls = null; // admin live-preview: item drag state
 
   /* ---------- small helpers (reuse RK where possible) ---------- */
   function esc(s) {
@@ -1469,10 +1470,21 @@
       if (cmp) { e.preventDefault(); openCmpLbx(cmp); }
     });
     overlay.addEventListener("keydown", onOverlayKey);
-    // Live-preview drag-to-reorder: a grip (from applyPreviewDrag) starts an HTML5 drag; the drop point
-    // is marked live and a blockMove is posted to the editor on drop. Edge auto-scroll because the overlay
-    // owns its own scroller (native DnD auto-scroll doesn't reach it). Only active in PREVIEW.
+    // Live-preview drag-to-reorder: section grips (data-pvgrip) reorder sections; item grips
+    // (data-pvigrip) reorder items within their block. The drop point is marked live and a
+    // blockMove/itemMove is posted to the editor on drop. Edge auto-scroll (the overlay owns its scroller).
     overlay.addEventListener("dragstart", function (e) {
+      var ig = e.target.closest("[data-pvigrip]");
+      if (ig) {
+        var it = ig.closest("[data-pv-item]"), isec = ig.closest("[data-block]");
+        if (!it || !isec) return;
+        pvItemBlock = +isec.getAttribute("data-block");
+        pvItemFrom = +it.getAttribute("data-pv-item");
+        pvItemSelCls = pvItemSel(isec);
+        it.classList.add("pv-item-dragging");
+        try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "pvitem"); } catch (x) {}
+        return;
+      }
       var g = e.target.closest("[data-pvgrip]"); if (!g) return;
       var sec = g.closest("[data-block]"); if (!sec) return;
       pvDragIdx = +sec.getAttribute("data-block");
@@ -1480,31 +1492,55 @@
       try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "pvsec:" + pvDragIdx); } catch (x) {}
     });
     overlay.addEventListener("dragover", function (e) {
+      var content = overlay.querySelector("[data-content]"); if (!content) return;
+      if (pvItemFrom >= 0 && pvItemSelCls) {
+        e.preventDefault(); try { e.dataTransfer.dropEffect = "move"; } catch (x) {}
+        pvDragScroll(e.clientY); pvItemClear(content);
+        var isec = content.querySelector('[data-block="' + pvItemBlock + '"]'); if (!isec) return;
+        var tgt = e.target.closest(pvItemSelCls);
+        if (!tgt || !isec.contains(tgt) || +tgt.getAttribute("data-pv-item") === pvItemFrom) return;
+        var horiz = pvItemsHorizontal(tgt), r = tgt.getBoundingClientRect();
+        var after = horiz ? (e.clientX - r.left) > r.width / 2 : (e.clientY - r.top) > r.height / 2;
+        tgt.classList.add(horiz ? (after ? "pv-drop-right" : "pv-drop-left") : (after ? "pv-drop-after" : "pv-drop-before"));
+        return;
+      }
       if (pvDragIdx < 0) return;
       e.preventDefault(); try { e.dataTransfer.dropEffect = "move"; } catch (x) {}
       pvDragScroll(e.clientY);
-      var content = overlay.querySelector("[data-content]"); if (!content) return;
       content.querySelectorAll(".pjb--drop-before, .pjb--drop-after").forEach(function (x) { x.classList.remove("pjb--drop-before", "pjb--drop-after"); });
       var sec = e.target.closest("[data-block]");
       if (!sec || +sec.getAttribute("data-block") === pvDragIdx) return;
-      var r = sec.getBoundingClientRect();
-      sec.classList.add((e.clientY - r.top) > r.height / 2 ? "pjb--drop-after" : "pjb--drop-before");
+      var r2 = sec.getBoundingClientRect();
+      sec.classList.add((e.clientY - r2.top) > r2.height / 2 ? "pjb--drop-after" : "pjb--drop-before");
     });
     overlay.addEventListener("drop", function (e) {
+      if (pvItemFrom >= 0 && pvItemSelCls) {
+        e.preventDefault();
+        var isec = overlay.querySelector('[data-block="' + pvItemBlock + '"]');
+        var tgt = e.target.closest(pvItemSelCls);
+        if (isec && tgt && isec.contains(tgt)) {
+          var ref = +tgt.getAttribute("data-pv-item");
+          if (ref !== pvItemFrom) {
+            var horiz = pvItemsHorizontal(tgt), r = tgt.getBoundingClientRect();
+            var after = horiz ? (e.clientX - r.left) > r.width / 2 : (e.clientY - r.top) > r.height / 2;
+            try { window.parent.postMessage({ __rk: "itemMove", block: pvItemBlock, from: pvItemFrom, to: (after ? ref + 1 : ref) }, "*"); } catch (x) {}
+          }
+        }
+        pvDragReset(); return;
+      }
       if (pvDragIdx < 0) return;
       e.preventDefault();
       var sec = e.target.closest("[data-block]");
       if (sec) {
-        var ref = +sec.getAttribute("data-block");
-        if (ref !== pvDragIdx) {
-          var r = sec.getBoundingClientRect();
-          var to = ((e.clientY - r.top) > r.height / 2) ? ref + 1 : ref;
-          try { window.parent.postMessage({ __rk: "blockMove", from: pvDragIdx, to: to }, "*"); } catch (x) {}
+        var ref2 = +sec.getAttribute("data-block");
+        if (ref2 !== pvDragIdx) {
+          var r3 = sec.getBoundingClientRect();
+          try { window.parent.postMessage({ __rk: "blockMove", from: pvDragIdx, to: (((e.clientY - r3.top) > r3.height / 2) ? ref2 + 1 : ref2) }, "*"); } catch (x) {}
         }
       }
-      pvDragIdx = -1; pvDragClear();
+      pvDragReset();
     });
-    overlay.addEventListener("dragend", function () { pvDragIdx = -1; pvDragClear(); });
+    overlay.addEventListener("dragend", pvDragReset);
   }
 
   // Admin live-preview only: a floating action toolbar pinned to the top-right of the
@@ -1545,23 +1581,42 @@
   // straight in the preview. HTML5 drag posts a blockMove to the editor, which mutates the draft and
   // re-renders. Grips are re-injected after each morph (the morph strips nodes not in the render html).
   var PV_GRIP = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>';
+  // Which element is a draggable ITEM inside each item-based block type (a direct child of its
+  // container, in b.items order). Reordering posts an itemMove; the flat items array makes the editor
+  // side uniform. Excludes cloud (chips too small for a grip) + device.
+  var PV_ITEM_SEL = { cards: ".pjb__card", metrics: ".pjb__metric", steps: ".pjb__step", faq: ".pjb__qa", columns: ".pjb__coln", rows: ".pjb__row", stickies: ".pjb__sticky", voices: ".pjb__voice", media: ".pjb__shot", mediagrid: ".pjb__grid-cell", gallery: ".pjb__slide", workflow: ".pjb__flow-step" };
+  function pvItemSel(sec) { var m = (String(sec.className).match(/pjb--(\w+)/) || [])[1]; return PV_ITEM_SEL[m] || null; }
+  function pvItemsHorizontal(el) { var s = el.nextElementSibling || el.previousElementSibling; if (!s) return false; var a = el.getBoundingClientRect(), b = s.getBoundingClientRect(); return Math.abs(a.top - b.top) < Math.min(a.height, b.height) * 0.5; }
+  function pvMakeGrip(cls, attr, title) {
+    var g = document.createElement("button");
+    g.type = "button"; g.className = cls; g.setAttribute("draggable", "true");
+    g.setAttribute(attr, ""); g.setAttribute("contenteditable", "false");
+    g.setAttribute("title", title); g.setAttribute("aria-label", title);
+    g.innerHTML = PV_GRIP;
+    return g;
+  }
   function applyPreviewDrag() {
     if (!PREVIEW || !overlay) return;
     var content = overlay.querySelector("[data-content]");
     if (!content) return;
     content.querySelectorAll("[data-block]").forEach(function (sec) {
-      if (sec.querySelector(":scope > .pvgrip")) return;
-      var g = document.createElement("button");
-      g.type = "button"; g.className = "pvgrip"; g.setAttribute("draggable", "true");
-      g.setAttribute("data-pvgrip", ""); g.setAttribute("contenteditable", "false");
-      g.setAttribute("title", "Drag to reorder section"); g.setAttribute("aria-label", "Drag to reorder section");
-      g.innerHTML = PV_GRIP;
-      sec.appendChild(g);
+      if (!sec.querySelector(":scope > .pvgrip")) sec.appendChild(pvMakeGrip("pvgrip", "data-pvgrip", "Drag to reorder section"));
+      var isel = pvItemSel(sec);
+      if (!isel) return;
+      var k = 0;
+      sec.querySelectorAll(isel).forEach(function (it) {
+        it.setAttribute("data-pv-item", k++);
+        if (!it.querySelector(":scope > .pvigrip")) { it.classList.add("pv-hasgrip"); it.appendChild(pvMakeGrip("pvigrip", "data-pvigrip", "Drag to reorder")); }
+      });
     });
   }
-  function pvDragClear() {
+  function pvItemClear(root) {
+    (root || overlay).querySelectorAll(".pv-drop-before, .pv-drop-after, .pv-drop-left, .pv-drop-right").forEach(function (x) { x.classList.remove("pv-drop-before", "pv-drop-after", "pv-drop-left", "pv-drop-right"); });
+  }
+  function pvDragReset() {
+    pvDragIdx = -1; pvItemFrom = -1; pvItemBlock = -1; pvItemSelCls = null;
     if (!overlay) return;
-    overlay.querySelectorAll(".pjb--drop-before, .pjb--drop-after, .pjb--dragging").forEach(function (x) { x.classList.remove("pjb--drop-before", "pjb--drop-after", "pjb--dragging"); });
+    overlay.querySelectorAll(".pjb--drop-before, .pjb--drop-after, .pjb--dragging, .pv-item-dragging, .pv-drop-before, .pv-drop-after, .pv-drop-left, .pv-drop-right").forEach(function (x) { x.classList.remove("pjb--drop-before", "pjb--drop-after", "pjb--dragging", "pv-item-dragging", "pv-drop-before", "pv-drop-after", "pv-drop-left", "pv-drop-right"); });
   }
   function pvDragScroll(y) {
     if (!scroller) return;
