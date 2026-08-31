@@ -2051,6 +2051,13 @@
   /* ---------- scroll-spy + jump ---------- */
   function topOffset() {
     if (window.matchMedia && window.matchMedia("(min-width: 1000px)").matches) return 24;
+    // Immersive (mini) on mobile: the section nav is a bottom SHEET whose offsetHeight is huge and must
+    // never be used as a top inset - that overshoot is what sent section jumps back to the very top.
+    // Only the floating "now" pill sits up top, so inset just past it. Classic mobile: the sticky bar IS the inset.
+    if (overlay.classList.contains("pj--mini")) {
+      var pill = overlay.querySelector(".pj__nowpill");
+      return (pill && pill.offsetHeight ? pill.offsetHeight : 40) + 18;
+    }
     var side = overlay.querySelector(".pj__side");
     return side ? side.offsetHeight + 8 : 60;
   }
@@ -2114,12 +2121,21 @@
 
   /* ---------- background lock + a11y ---------- */
   function lockBg(on) {
+    var body = document.body;
     if (on) {
       if (window.__lenis && window.__lenis.stop) window.__lenis.stop();
       document.documentElement.classList.add("pj-lock");
+      // Pin the page at its current offset. On mobile `overflow:hidden` alone doesn't stop touch
+      // scroll, so the landing drifts / bleeds through behind the fixed overlay while swiping -
+      // fixing the body at -scrollY is the reliable cross-browser freeze.
+      body.style.top = (-(returnScrollY || 0)) + "px";
     } else {
       if (window.__lenis && window.__lenis.start) window.__lenis.start();
       document.documentElement.classList.remove("pj-lock");
+      body.style.top = "";
+      // Unpinning snaps the document to 0; restore synchronously so there's no flash before Lenis
+      // reconciles its own offset on the next frame.
+      try { window.scrollTo(0, returnScrollY || 0); } catch (e) {}
     }
   }
   function setSiteInert(on) {
