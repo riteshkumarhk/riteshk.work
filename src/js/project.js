@@ -178,6 +178,7 @@
   var overlay = null, scroller = null, activeId = null;
   var returnScrollY = 0, lastFocus = null, spyRaf = 0;
   var previewSelIdx = -1; // admin live-preview: index of the section whose floating action toolbar is shown
+  var pvDragIdx = -1;     // admin live-preview: index of the section currently being drag-reordered
 
   /* ---------- small helpers (reuse RK where possible) ---------- */
   function esc(s) {
@@ -1468,6 +1469,42 @@
       if (cmp) { e.preventDefault(); openCmpLbx(cmp); }
     });
     overlay.addEventListener("keydown", onOverlayKey);
+    // Live-preview drag-to-reorder: a grip (from applyPreviewDrag) starts an HTML5 drag; the drop point
+    // is marked live and a blockMove is posted to the editor on drop. Edge auto-scroll because the overlay
+    // owns its own scroller (native DnD auto-scroll doesn't reach it). Only active in PREVIEW.
+    overlay.addEventListener("dragstart", function (e) {
+      var g = e.target.closest("[data-pvgrip]"); if (!g) return;
+      var sec = g.closest("[data-block]"); if (!sec) return;
+      pvDragIdx = +sec.getAttribute("data-block");
+      sec.classList.add("pjb--dragging");
+      try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "pvsec:" + pvDragIdx); } catch (x) {}
+    });
+    overlay.addEventListener("dragover", function (e) {
+      if (pvDragIdx < 0) return;
+      e.preventDefault(); try { e.dataTransfer.dropEffect = "move"; } catch (x) {}
+      pvDragScroll(e.clientY);
+      var content = overlay.querySelector("[data-content]"); if (!content) return;
+      content.querySelectorAll(".pjb--drop-before, .pjb--drop-after").forEach(function (x) { x.classList.remove("pjb--drop-before", "pjb--drop-after"); });
+      var sec = e.target.closest("[data-block]");
+      if (!sec || +sec.getAttribute("data-block") === pvDragIdx) return;
+      var r = sec.getBoundingClientRect();
+      sec.classList.add((e.clientY - r.top) > r.height / 2 ? "pjb--drop-after" : "pjb--drop-before");
+    });
+    overlay.addEventListener("drop", function (e) {
+      if (pvDragIdx < 0) return;
+      e.preventDefault();
+      var sec = e.target.closest("[data-block]");
+      if (sec) {
+        var ref = +sec.getAttribute("data-block");
+        if (ref !== pvDragIdx) {
+          var r = sec.getBoundingClientRect();
+          var to = ((e.clientY - r.top) > r.height / 2) ? ref + 1 : ref;
+          try { window.parent.postMessage({ __rk: "blockMove", from: pvDragIdx, to: to }, "*"); } catch (x) {}
+        }
+      }
+      pvDragIdx = -1; pvDragClear();
+    });
+    overlay.addEventListener("dragend", function () { pvDragIdx = -1; pvDragClear(); });
   }
 
   // Admin live-preview only: a floating action toolbar pinned to the top-right of the
@@ -1503,6 +1540,34 @@
     tb.setAttribute("contenteditable", "false");
     tb.innerHTML = pvToolbarHtml(previewSelIdx, secs.length, sec.classList.contains("pjb--locked"), sec.classList.contains("pjb--flush"));
     sec.appendChild(tb);
+  }
+  // Admin live-preview: a hover-revealed drag grip on every section lets the owner reorder sections
+  // straight in the preview. HTML5 drag posts a blockMove to the editor, which mutates the draft and
+  // re-renders. Grips are re-injected after each morph (the morph strips nodes not in the render html).
+  var PV_GRIP = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>';
+  function applyPreviewDrag() {
+    if (!PREVIEW || !overlay) return;
+    var content = overlay.querySelector("[data-content]");
+    if (!content) return;
+    content.querySelectorAll("[data-block]").forEach(function (sec) {
+      if (sec.querySelector(":scope > .pvgrip")) return;
+      var g = document.createElement("button");
+      g.type = "button"; g.className = "pvgrip"; g.setAttribute("draggable", "true");
+      g.setAttribute("data-pvgrip", ""); g.setAttribute("contenteditable", "false");
+      g.setAttribute("title", "Drag to reorder section"); g.setAttribute("aria-label", "Drag to reorder section");
+      g.innerHTML = PV_GRIP;
+      sec.appendChild(g);
+    });
+  }
+  function pvDragClear() {
+    if (!overlay) return;
+    overlay.querySelectorAll(".pjb--drop-before, .pjb--drop-after, .pjb--dragging").forEach(function (x) { x.classList.remove("pjb--drop-before", "pjb--drop-after", "pjb--dragging"); });
+  }
+  function pvDragScroll(y) {
+    if (!scroller) return;
+    var vh = window.innerHeight || 800, edge = 72;
+    if (y < edge) scroller.scrollTop -= (edge - y) * 0.6;
+    else if (y > vh - edge) scroller.scrollTop += (y - (vh - edge)) * 0.6;
   }
 
   function onOverlayClick(e) {
@@ -2012,7 +2077,7 @@
       resolveVaultMedia(contentEl); // swap vault placeholders for signed URLs (authorised viewers only)
       autoResolveVaultBlocks(w);    // fetch vault-hosted locked sections if the viewer is already authorised
       if (window.RKGen && RKGen.hydrate) RKGen.hydrate(contentEl); // wire drag/zoom on generated fx nodes
-      if (PREVIEW) applyPreviewToolbar(); // morph strips the injected toolbar node; re-add it in the same frame (no flicker)
+      if (PREVIEW) { applyPreviewToolbar(); applyPreviewDrag(); } // morph strips the injected toolbar/grips; re-add them in the same frame (no flicker)
       if (keepAnchor) { restoreAnchor(keepAnchor); requestAnimationFrame(function () { restoreAnchor(keepAnchor); }); }
     });
   }
