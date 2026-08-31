@@ -2041,12 +2041,31 @@
     var target = sibs[(idx + dir + sibs.length) % sibs.length];
     if (target) openProject(target.id, { push: true });
   }
-  function scrollToCase() {
-    var body = overlay && overlay.querySelector(".pj__body");
-    if (!body || !scroller) return;
-    var target = scroller.scrollTop + body.getBoundingClientRect().top - scroller.getBoundingClientRect().top - topOffset();
-    try { scroller.scrollTo({ top: Math.max(0, Math.round(target)), behavior: "smooth" }); } catch (e) { scroller.scrollTop = Math.max(0, Math.round(target)); }
+  // Scroll so `anchor` sits just below the top chrome, then KEEP it pinned there for a beat. Media/fonts
+  // in the overview finish loading AFTER the jump, grow the page above the target, and would otherwise
+  // slide the section away - leaving the reader parked back in the overview. Bails on any manual wheel/touch.
+  var _unpin = null;
+  function scrollToAnchor(anchor, extra) {
+    if (!anchor || !scroller) return;
+    var aim = function () { return Math.max(0, Math.round(scroller.scrollTop + anchor.getBoundingClientRect().top - scroller.getBoundingClientRect().top - topOffset() - (extra || 0))); };
+    try { scroller.scrollTo({ top: aim(), behavior: "smooth" }); } catch (e) { scroller.scrollTop = aim(); }
+    if (_unpin) _unpin();
+    var content = overlay.querySelector("[data-content]") || scroller;
+    var lastH = content.scrollHeight, ro = null, timer = 0, dead = false;
+    var off = function () { if (dead) return; dead = true; try { if (ro) ro.disconnect(); } catch (e) {} scroller.removeEventListener("wheel", off); scroller.removeEventListener("touchstart", off); clearTimeout(timer); _unpin = null; };
+    if (window.ResizeObserver) {
+      ro = new ResizeObserver(function () {
+        var h = content.scrollHeight; if (h === lastH) return; lastH = h;   // a real reflow (media/fonts), not the initial observe fire
+        var t = aim(); if (Math.abs(t - scroller.scrollTop) > 2) { try { scroller.scrollTo({ top: t, behavior: "auto" }); } catch (e) { scroller.scrollTop = t; } }
+      });
+      try { ro.observe(content); } catch (e) {}
+    }
+    scroller.addEventListener("wheel", off, { passive: true });
+    scroller.addEventListener("touchstart", off, { passive: true });
+    timer = setTimeout(off, 1800);
+    _unpin = off;
   }
+  function scrollToCase() { scrollToAnchor(overlay && overlay.querySelector(".pj__body"), 0); }
 
   /* ---------- scroll-spy + jump ---------- */
   function topOffset() {
@@ -2114,9 +2133,7 @@
       return;
     }
     var sec = overlay.querySelector("#" + (window.CSS && CSS.escape ? CSS.escape(id) : id));
-    if (!sec) return;
-    var target = scroller.scrollTop + sec.getBoundingClientRect().top - scroller.getBoundingClientRect().top - topOffset() - 8;
-    try { scroller.scrollTo({ top: Math.max(0, Math.round(target)), behavior: "smooth" }); } catch (e) { scroller.scrollTop = Math.max(0, Math.round(target)); }
+    scrollToAnchor(sec, 8);
   }
 
   /* ---------- background lock + a11y ---------- */
