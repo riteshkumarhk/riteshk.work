@@ -976,6 +976,8 @@ body.adm-lock .cursor { display: none !important; }
 .mobadm__note { font-size: .82rem; line-height: 1.5; color: var(--text-faint); margin: 0 auto 22px; max-width: 36ch; }
 .mobadm__actions { display: flex; gap: 10px; }
 .mobadm__actions .btn { flex: 1; justify-content: center; }
+.mobadm__unrec { display: block; width: 100%; margin-top: 12px; padding: 4px; background: none; border: 0; color: #ff9b9b; font: inherit; font-size: .82rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; opacity: .8; }
+.mobadm__unrec:hover { opacity: 1; }
 .mobadm__back { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--text); font-size: 20px; line-height: 1; cursor: pointer; }
 .mobins__bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 4px 10px; }
 .mobins__bar b { font-family: var(--serif); font-size: 1.15rem; color: var(--text); }

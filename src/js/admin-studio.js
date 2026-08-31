@@ -8270,7 +8270,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   // ---------- Settings side-pane (right drawer): declutters the "\u22EF" menu; each setting is a panel
   // instead of a stacked dialog. Simple ones inline (One-tap Allow / Recruiter / Backup); Passkeys /
   // Publishing / AI launch their existing proven dialogs from here.
-  var SET_CATS = [["allow", IC.zap, "One-tap Allow"], ["recruiter", IC.ticket, "Recruiter mode"], ["autopub", IC.refresh, "Auto-publish"], ["security", IC.shield, "Security"], ["publish", IC.publish, "Publishing"], ["ai", IC.spark, "AI"], ["history", IC.history, "Version history"], ["backup", IC.save, "Backup"]];
+  var SET_CATS = [["allow", IC.zap, "One-tap Allow"], ["recruiter", IC.ticket, "Recruiter mode"], ["security", IC.shield, "Security"], ["publish", IC.publish, "Publishing"], ["ai", IC.spark, "AI"], ["history", IC.history, "Version history"], ["backup", IC.save, "Backup"]];
   var setPane, setNav, setPanel, activeSetCat = "allow", setSub = null;
   function openSettings() {
     if (!setPane) return;
@@ -8297,9 +8297,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!setPanel) return;
     if (setSub) { renderSetSub(); return; }
     if (activeSetCat === "allow") { computeAllowMeta().then(function () { if (setPanel && !setSub) setPanel.innerHTML = quickGrantPanel(); }); return; }
-    if (activeSetCat === "autopub") { setPanel.innerHTML = autopubPanelHtml(); wireAutopub(setPanel); return; }
     if (activeSetCat === "history") { setPanel.innerHTML = versionsPanelHtml(); loadVersions(); return; }
     setPanel.innerHTML = settingsPanelHtml(activeSetCat);
+    if (activeSetCat === "publish") wireAutopub(setPanel);
     if (activeSetCat === "recruiter") recruiterStateSync();
   }
   // Drill into a deeper view (Select what they see / Passkeys / Publishing / AI) inside the right
@@ -8340,9 +8340,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return '<div class="rkqg"><div class="rkqg__head">Security <span class="rkqg__sub">how you sign in to the studio</span></div>' +
         '<div class="af__hint" style="margin:.2rem 0 1rem">Sign in with a passkey \u2014 Windows Hello, Face ID or a security key \u2014 or change the admin key you type on this device. Both keep working.</div>' +
         '<div class="rkqg__row"><button class="btn btn--primary" data-act="open-passkeys">' + IC.key + ' Manage passkeys</button></div>' +
-        '<div class="rkqg__row" style="margin-top:.6rem"><button class="btn btn--ghost" data-act="open-adminkey">' + LOCK_SVG + ' Change admin key</button></div></div>';
+        '<div class="rkqg__row" style="margin-top:.6rem"><button class="btn btn--ghost" data-act="open-adminkey">' + LOCK_SVG + ' Change admin key</button></div>' +
+        '<div class="rkqg__head" style="margin-top:1.4rem">This device <span class="rkqg__sub">recognised &amp; muted from your analytics</span></div>' +
+        '<div class="af__hint" style="margin:.2rem 0 .7rem">This device is recognised as yours, so your own visits don\u2019t count in Insights. Un-recognise it to start counting this device again \u2014 you\u2019ll need to sign in to mute it or use Present mode.</div>' +
+        '<div class="rkqg__row"><button class="btn btn--danger" data-act="unrecognise-device">Un-recognise this device</button></div></div>';
     }
-    if (cat === "publish") return launchPanelHtml("Publishing", "Connect GitHub, replace the token, or publish manually.", "open-publish", "Open publishing settings");
+    if (cat === "publish") return launchPanelHtml("Publishing", "Connect GitHub, replace the token, or publish manually.", "open-publish", "Open publishing settings") + autopubPanelHtml();
     if (cat === "ai") return launchPanelHtml("AI", "Connect OpenAI, Gemini or Claude for the Prepare tools.", "open-ai", "Open AI settings");
     return "";
   }
@@ -8820,6 +8823,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "set-back") { setSub = null; renderSetPanel(); return; }
     if (act === "recruiter-toggle") { recruiterToggle(); renderSetPanel(); return; }
     if (act === "backup-dl") { downloadContentBackup(); return; }
+    if (act === "unrecognise-device") {
+      Promise.resolve(confirmModal({ title: "Un-recognise this device?", sub: "Your visits from this device will start counting in your analytics again. You\u2019ll need to sign in again to mute it or use Present mode.", cta: "Un-recognise", okClass: "btn--danger", cancel: "Keep recognised" })).then(function (go) {
+        if (!go) return;
+        try { localStorage.removeItem("rk:owner"); localStorage.removeItem("rk:noanalytics"); } catch (e) {}
+        clearAdminSession();
+        try { location.reload(); } catch (e) {}
+      });
+      return;
+    }
     if (act === "backup-restore") { backupPickAndRestore(); return; }
     if (act === "open-passkeys") { setSub = "passkeys"; renderSetPanel(); return; }
     if (act === "open-publish") { setSub = "publish"; renderSetPanel(); return; }

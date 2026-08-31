@@ -13,7 +13,7 @@ import {
   clone, escHtml, escAttr, RK_KDF_IT, sha256,
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
-  rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath, adminLogin, adminSession, ADMIN_WORKER, TURNSTILE_SITEKEY,
+  rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath, adminLogin, adminSession, clearAdminSession, ADMIN_WORKER, TURNSTILE_SITEKEY,
   vaultSignedUrl, vaultRedeem, ownerVaultGrant, webauthnSupported, webauthnList, webauthnAuth, authStatus, cachedAuthMode, recoverWithPassphrase
 } from "./admin-core.js";
 
@@ -631,8 +631,7 @@ import {
   }
   function mobRender(view) {
     if (!mobEl) return;
-    if (view === "insights") { mobEl.innerHTML = mobInsShell(); mobLoadInsights(); }
-    else mobEl.innerHTML = mobConfirmHtml();
+    mobEl.innerHTML = (view === "unrecog") ? mobUnrecogHtml() : mobConfirmHtml();
   }
   function onMobClick(e) {
     var b = e.target.closest("[data-mob]");
@@ -640,8 +639,9 @@ import {
     var a = b.dataset.mob;
     if (a === "close") mobClose();
     else if (a === "confirm") mobRender("confirm");
-    else if (a === "insights") mobRender("insights");
-    else if (a === "days") { mobDays = +b.dataset.d || 7; if (mobEl) mobEl.querySelectorAll(".mobins__d").forEach(function (x) { x.classList.toggle("is-on", x === b); }); mobLoadInsights(); }
+    else if (a === "exit") { clearAdminSession(); mobClose(); }
+    else if (a === "unrecognise") mobRender("unrecog");
+    else if (a === "dounrecog") { try { localStorage.removeItem("rk:owner"); localStorage.removeItem("rk:noanalytics"); } catch (x) {} clearAdminSession(); mobClose(); try { location.reload(); } catch (x) {} }
   }
   function mobConfirmHtml() {
     return '<div class="mobadm__box">' +
@@ -649,8 +649,17 @@ import {
       '<div class="mobadm__check">\u2713</div>' +
       '<h2 class="mobadm__title">This device is recognised</h2>' +
       '<p class="mobadm__sub">You\u2019re signed in as the owner. This phone <b>won\u2019t be counted</b> in your analytics.</p>' +
-      '<p class="mobadm__note">Editing &amp; publishing live in the <b>desktop studio</b>. Recruiter approvals come through the <b>Requests</b> app.</p>' +
-      '<div class="mobadm__actions"><button class="btn btn--ghost" data-mob="close">Done</button><button class="btn btn--primary" data-mob="insights">View insights</button></div>' +
+      '<p class="mobadm__note">The admin studio &amp; Prepare tools are <b>desktop-only</b> \u2014 sign in on a computer to edit, curate or publish. Recruiter approvals come through the <b>Requests</b> app.</p>' +
+      '<div class="mobadm__actions"><button class="btn btn--primary" data-mob="exit">Exit admin mode</button></div>' +
+      '<button class="mobadm__unrec" data-mob="unrecognise">Un-recognise this device</button>' +
+      "</div>";
+  }
+  function mobUnrecogHtml() {
+    return '<div class="mobadm__box">' +
+      '<button class="mobadm__x" data-mob="confirm" aria-label="Back">\u2715</button>' +
+      '<h2 class="mobadm__title">Un-recognise this device?</h2>' +
+      '<p class="mobadm__sub">Your visits from this phone will <b>start counting</b> in your analytics again, and you\u2019ll need to sign in again to mute it or use Present mode.</p>' +
+      '<div class="mobadm__actions"><button class="btn btn--ghost" data-mob="confirm">Cancel</button><button class="btn btn--danger" data-mob="dounrecog">Un-recognise</button></div>' +
       "</div>";
   }
   function mobInsShell() {
