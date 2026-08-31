@@ -1326,102 +1326,6 @@
         "unlockHash": "",
         "blocks": [
           {
-            "type": "statement",
-            "nav": "Why Onboarding Matters",
-            "kicker": "",
-            "body": "Why Onboarding Matters?",
-            "sub": "",
-            "src": "",
-            "caption": "",
-            "hsize": "lg"
-          },
-          {
-            "type": "gallery",
-            "nav": "",
-            "kicker": "",
-            "heading": "Onboarding for growth",
-            "items": [
-              {
-                "src": "/assets/uploads/723f68cf77a3db66ddce6352a5c234e3afcefed70fd5c1330d9b1c7ff04ace9b.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/0270dead8082905d240029040611f8b39cddd905d96a35ff1a01a34bae67cfbc.png",
-                "caption": ""
-              }
-            ],
-            "locked": false
-          },
-          {
-            "type": "text",
-            "nav": "",
-            "kicker": "",
-            "heading": "Onboarding as a growth challenge",
-            "body": "<figure class=\"rt__fig\"><p>Most onboarding experiences are optimized for completion.</p></figure><p>I discovered Edge's onboarding challenge was fundamentally a growth challenge.</p><p><span style=\"font-size: 0.9rem;\">Different users entered Edge with dramatically different goals:</span></p><p></p><ul><li><span style=\"font-size: 0.9rem;\">MVUs wanted speed</span></li><li><span style=\"font-size: 0.9rem;\">Edge PBs needed retention</span></li><li><span style=\"font-size: 0.9rem;\">Dual-browser users needed conversion</span></li><li><span style=\"font-size: 0.9rem;\">Local-account users needed MSA adoption</span></li><li><span style=\"font-size: 0.9rem;\">Dormant users needed re-engagement</span></li></ul><p></p><p><span style=\"font-size: 0.9rem;\">Onboarding wasn't just helping users finish setup. It was helping them move up the Edge growth ladder.</span></p>",
-            "list": [],
-            "src": "",
-            "caption": "",
-            "hsize": "sm"
-          },
-          {
-            "type": "text",
-            "nav": "Understanding Modern Onboarding",
-            "kicker": "",
-            "heading": "Modern Onboarding",
-            "body": "While studying onboarding patterns across Windows OOBE and modern browsers, I noticed a common trend: successful onboarding experiences focused less on setup and more on helping users experience value quickly.",
-            "list": [],
-            "src": "",
-            "caption": ""
-          },
-          {
-            "type": "gallery",
-            "nav": "",
-            "kicker": "CHROME ONBOARDING",
-            "heading": "",
-            "items": [
-              {
-                "src": "/assets/uploads/7438c8f38e67e8c476d93a8f8ccab13a85969d961eeb562568ebe4efe19d5290.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/6747063d92869b041b1c8ed9b1edce9fb2f0d407c48bf0e400841b3934dc8c56.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/b8e0e05c327fdd60d425ed2b39091465689704205260894d54b19409fd43d951.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/738c60f4f35294f919f0eb4ae3f045c64292a9237e6bd6fe7f39363fe3b1e637.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/09e7f338d45843f17de5ac0f888d6a6880d1da3cacdc49cc8e96ec8a75e1d37b.png",
-                "caption": ""
-              }
-            ]
-          },
-          {
-            "type": "gallery",
-            "nav": "",
-            "kicker": "windows oobe (Out of box experience)",
-            "heading": "",
-            "items": [
-              {
-                "src": "/assets/uploads/521802936b55fa9049de0f3977ba3e3e16fec6e64e0e27cdf0eccc9bacc7c9ed.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/84679c475ac02b1e3e1071aa8fd141e39a918ce2069ef19f873e1fa1bbb3f8cc.png",
-                "caption": ""
-              },
-              {
-                "src": "/assets/uploads/651dfd1b24c28216f4c388d912d591881e46ccb7716de41e8acfbc3124c98a3f.png",
-                "caption": ""
-              }
-            ]
-          },
-          {
             "type": "media",
             "nav": "Existing Experience",
             "kicker": "EDGE ONBOARDING",
@@ -1476,7 +1380,7 @@
             "nav": "",
             "kicker": "",
             "heading": "",
-            "body": "The existing onboarding experience had evolved organically over time.<div><br></div><div>Sign-in, consent, import, personalization, pinning and activation were spread across disconnected surfaces.</div><div><br></div><div>Users experienced onboarding as separate experiences rather than a coherent journey. This contributed to drop-off between stages and made future growth initiatives increasingly difficult to scale.</div>",
+            "body": "<p>The existing onboarding experience had evolved organically over time.</p><p>Sign-in, consent, import, personalization, pinning and activation were spread across disconnected surfaces.</p><p>Users experienced onboarding as separate experiences rather than a coherent journey. This contributed to drop-off between stages and made future growth initiatives increasingly difficult to scale.</p>",
             "list": [],
             "src": "",
             "caption": "",
@@ -1522,6 +1426,94 @@
           },
           {
             "type": "text",
+            "nav": "Modern Onboarding",
+            "kicker": "Modern Onboarding",
+            "heading": "Setup Versus Value",
+            "body": "While studying onboarding patterns across Windows OOBE and modern browsers, I noticed a common trend: successful onboarding experiences focused less on setup and more on helping users experience value quickly.",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "CHROME ONBOARDING",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/7438c8f38e67e8c476d93a8f8ccab13a85969d961eeb562568ebe4efe19d5290.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/6747063d92869b041b1c8ed9b1edce9fb2f0d407c48bf0e400841b3934dc8c56.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/b8e0e05c327fdd60d425ed2b39091465689704205260894d54b19409fd43d951.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/738c60f4f35294f919f0eb4ae3f045c64292a9237e6bd6fe7f39363fe3b1e637.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/09e7f338d45843f17de5ac0f888d6a6880d1da3cacdc49cc8e96ec8a75e1d37b.png",
+                "caption": ""
+              }
+            ],
+            "sep": true
+          },
+          {
+            "type": "gallery",
+            "nav": "",
+            "kicker": "windows oobe (Out of box experience)",
+            "heading": "",
+            "items": [
+              {
+                "src": "/assets/uploads/521802936b55fa9049de0f3977ba3e3e16fec6e64e0e27cdf0eccc9bacc7c9ed.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/84679c475ac02b1e3e1071aa8fd141e39a918ce2069ef19f873e1fa1bbb3f8cc.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/651dfd1b24c28216f4c388d912d591881e46ccb7716de41e8acfbc3124c98a3f.png",
+                "caption": ""
+              }
+            ],
+            "sep": true
+          },
+          {
+            "type": "gallery",
+            "nav": "Why onboarding matters",
+            "kicker": "Why onboarding matters",
+            "heading": "Onboarding For Growth",
+            "items": [
+              {
+                "src": "/assets/uploads/723f68cf77a3db66ddce6352a5c234e3afcefed70fd5c1330d9b1c7ff04ace9b.png",
+                "caption": ""
+              },
+              {
+                "src": "/assets/uploads/0270dead8082905d240029040611f8b39cddd905d96a35ff1a01a34bae67cfbc.png",
+                "caption": ""
+              }
+            ],
+            "locked": false
+          },
+          {
+            "type": "text",
+            "nav": "",
+            "kicker": "",
+            "heading": "Onboarding as a growth challenge",
+            "body": "<figure class=\"rt__fig\"><p>I discovered Edge's onboarding challenge was fundamentally a growth challenge but currently it was optimized for completion.</p><p>Different users entered Edge with dramatically different goals:</p><p><ul><li>MVUs wanted speed</li><li>Edge PBs needed retention</li><li>Dual-browser users needed conversion</li><li>Local-account users needed MSA adoption</li><li>Dormant users needed re-engagement</li></ul></p><p>Onboarding wasn't just helping users finish setup. It was helping them move up the Edge growth ladder.</p></figure>",
+            "list": [],
+            "src": "",
+            "caption": "",
+            "hsize": "sm"
+          },
+          {
+            "type": "text",
             "nav": "Design Perspective",
             "kicker": "the turning point",
             "heading": "My viewpoint",
@@ -1545,38 +1537,62 @@
             "sep": false
           },
           {
-            "type": "stickies",
+            "type": "text",
             "nav": "",
             "kicker": "",
             "heading": "Problems Identified",
-            "items": [
-              {
-                "label": "01",
-                "heading": "",
-                "body": "<p>Fragmented in multiple surfaces - Hard / Soft increasing the overall step counts</p>",
-                "src": "/assets/uploads/5d3b00ffb5c325d1dec6bc2361c6ce45b13b660f0787ce536b75338c45e9e2de.png"
-              },
-              {
-                "label": "02",
-                "heading": "",
-                "body": "<p>Multiple screens with similar objectives - Consents / Customize</p>",
-                "src": "/assets/uploads/861f5dbe23cba0f04110de4fc4cb4b7e032561d3be5f7aabc504fb442b8f65e9.png"
-              },
-              {
-                "label": "03",
-                "heading": "",
-                "body": "<p>Prioritizes consents (blocking overlays) over personalization, and other growth opportunities</p>",
-                "src": "/assets/uploads/c98184ccd0fefb8e9f8ce7cec765b74d92ddfa134562be35a5535bdb7a48854d.png"
-              },
-              {
-                "label": "04",
-                "heading": "",
-                "body": "Follows outdated pattern and can be perceived as distracting or following dark patterns",
-                "src": "/assets/uploads/300ff5eae04e5c84065a2ee5130501c68b140376f647cc93b85606afa1fc1d10.png"
-              }
-            ],
+            "body": "",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "figure",
+            "nav": "",
+            "kicker": "01",
+            "heading": "Fragmented in multiple surfaces - Hard / Soft increasing the overall step counts",
+            "body": "",
+            "src": "/assets/uploads/a4f817dcaf49dc302eee772ef18203a54ffcd1bb116561f12fe150a26c1e4fcb.webp",
+            "caption": "",
+            "flip": false,
             "hsize": "sm",
-            "stickySize": "natural"
+            "sep": false
+          },
+          {
+            "type": "figure",
+            "nav": "",
+            "kicker": "02",
+            "heading": "Multiple screens with similar objectives - Consents / Customize",
+            "body": "",
+            "src": "/assets/uploads/843a479d76d937df1e59443bbc2e994f4b75cc31616bc03b669776c8e1397b8e.webp",
+            "caption": "",
+            "flip": false,
+            "sep": false,
+            "hsize": "sm"
+          },
+          {
+            "type": "figure",
+            "nav": "",
+            "kicker": "03",
+            "heading": "Prioritizes consents (blocking overlays) over personalization, and other growth opportunities",
+            "body": "",
+            "src": "/assets/uploads/7296469827ff022d455510b38147174104009b696e69beb49171e12f0bbfc98c.webp",
+            "caption": "",
+            "flip": false,
+            "sep": false,
+            "hsize": "sm"
+          },
+          {
+            "type": "figure",
+            "nav": "",
+            "kicker": "04",
+            "heading": "Follows outdated pattern and can be perceived as distracting or following dark patterns",
+            "body": "",
+            "src": "/assets/uploads/27586e8283ae8e23303714f5fef87f13edc7547f3f04ae02e5b0bd47f257bdb3.webp",
+            "caption": "",
+            "flip": false,
+            "sep": false,
+            "hsize": "sm"
           },
           {
             "type": "compare",
@@ -1632,7 +1648,7 @@
             "nav": "",
             "kicker": "",
             "heading": "",
-            "body": "After exploring the breadth of possibilities, a clear pattern emerged across every successful direction:<div><br></div><div><ul><li>One onboarding journey</li><li>One narrative</li><li>One visual language</li><li>One place where users configure Edge</li></ul></div><div><br></div><div>The question was no longer whether onboarding should be unified.</div><div><br></div><div>The question became:</div><div><br></div><div>What is the most compelling version of a unified onboarding experience?</div>",
+            "body": "<p>After exploring the breadth of possibilities, a clear pattern emerged across every successful direction:</p><p><ul><li>One onboarding journey</li><li>One narrative</li><li>One visual language</li><li>One place where users configure Edge</li></ul></p><p>The question was no longer whether onboarding should be unified.</p><p>The question became:</p><p>What is the most compelling version of a unified onboarding experience?</p>",
             "list": [],
             "src": "",
             "caption": "",
@@ -1644,7 +1660,7 @@
             "nav": "Landing The Vision",
             "kicker": "the vision",
             "heading": "Future of Unified Onboarding",
-            "body": "With alignment forming around unification, I shifted focus from exploring different surfaces to exploring the full potential of a unified onboarding experience.<div><br></div><div>The goal was no longer to redesign individual onboarding screens.</div><div><br></div><div>The goal was to rethink what onboarding could become if every critical setup, personalization, and activation moment lived within a single continuous journey.</div>",
+            "body": "<p>With alignment forming around unification, I shifted focus from exploring different surfaces to exploring the full potential of a unified onboarding experience.</p><p>The goal was no longer to redesign individual onboarding screens.</p><p>The goal was to rethink what onboarding could become if every critical setup, personalization, and activation moment lived within a single continuous journey.</p>",
             "list": [],
             "src": "",
             "caption": "",
@@ -1661,7 +1677,7 @@
             "nav": "",
             "kicker": "",
             "heading": "",
-            "body": "Rather than treating onboarding as separate experiences owned by different teams, the Unified FRE vision proposed a single onboarding framework where onboarding, activation, personalization, consent, and habit formation worked together as one cohesive system.<br><br>The goal wasn't simply to merge screens.<br><br>The goal was to create a continuous journey that helped users understand, personalize, and adopt Edge from day one.",
+            "body": "<p>Rather than treating onboarding as separate experiences owned by different teams, the Unified FRE vision proposed a single onboarding framework where onboarding, activation, personalization, consent, and habit formation worked together as one cohesive system.</p><p>The goal wasn't simply to merge screens.</p><p>The goal was to create a continuous journey that helped users understand, personalize, and adopt Edge from day one.</p>",
             "list": [],
             "src": "",
             "caption": "",
