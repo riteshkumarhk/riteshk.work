@@ -879,28 +879,26 @@ html[data-appearance="light"] .pj--mini .pj__nowpill { background: rgba(242, 238
      so nothing fades / reflows as the sheet slides in - that replay read as a "refresh" on the toggle */
   .pj--mini .pj__side-head, .pj--mini .pj__viewseg { max-height: none; opacity: 1; overflow: visible; pointer-events: auto; transition: none; }
   .pj--mini .pj__side-head { display: block; margin: 0 0 .8rem; font-size: .8rem; text-align: center; }
-  .pj--mini .pj__viewseg { align-self: center; width: min(16rem, 72%); margin: .15rem 0 1.15rem; padding: 4px; gap: 4px; }
-  .pj--mini .pj__viewseg-btn { flex: 1; padding: .72rem 1rem; font-size: .82rem; transition: none; }
-  .pj--mini .pj__toc { display: flex; flex-direction: column; gap: .5rem; border: 0; align-items: stretch; }
-  /* each section is a tappable tile: a faint container holding a leading dot (echoes the "..." pill
-     that opens the sheet) + the section name in sentence case, not the rail's uppercase mono */
+  /* compact, SECONDARY toggle (was a big primary-looking control): a small mono-caps outlined pill with
+     content-width segments (Overview wider, Full narrower) and a gold active segment, centred */
+  .pj--mini .pj__viewseg { align-self: center; width: auto; margin: .1rem 0 1.35rem; padding: 3px; gap: 2px; }
+  .pj--mini .pj__viewseg-btn { flex: 0 0 auto; padding: .44rem 1.05rem; font-size: .64rem; transition: none; }
+  /* sections = ONE grouped card (a faint well) with rows split by hairline dividers, not separate tiles */
+  .pj--mini .pj__toc { display: flex; flex-direction: column; gap: 0; align-items: stretch; padding: .4rem; border: 1px solid var(--line-soft); border-radius: 16px; background: var(--bg-2); }
   .pj--mini .pj__toc-chip {
-    flex: none; display: flex; align-items: center; gap: .7rem; justify-content: center;
-    padding: .85rem 1.1rem; border-radius: 12px; text-transform: none; color: var(--text-dim);
-    background: var(--bg-2); border: 1px solid var(--line-soft); transition: none;
+    flex: none; display: flex; align-items: center; justify-content: center;
+    padding: .95rem 1rem; border: 0; border-top: 1px solid var(--line-soft); border-radius: 10px;
+    background: none; color: var(--text-dim); text-transform: none; transition: none;
   }
-  /* centre-aligned sheet: the leading dot is dropped so the section name sits centred on its own */
-  .pj--mini .pj__toc-chip::before { display: none; }
-  .pj--mini .pj__toc-chip::after { display: none; }
+  .pj--mini .pj__toc-chip::before, .pj--mini .pj__toc-chip::after { display: none; }
   .pj--mini .pj__toc-lbl { order: 1; max-width: none; opacity: 1; transform: none; white-space: normal; text-align: center; font-family: var(--sans); font-size: 1.02rem; text-transform: none; }
-  .pj--mini .pj__toc-chip.is-active { background: var(--line-soft); border-color: var(--line); color: var(--text); }
-  /* clamp the active dot to a real circle - the desktop rail grows .is-active::before to an 18px dash, which leaked in as a stretched gold ellipse */
-  .pj--mini .pj__toc-chip.is-active::before { background: var(--accent); opacity: 1; width: 6px; height: 6px; }
-  /* keep the leading dots present even while the sheet has focus / during the first-visit peek
-     (the desktop rail hides ::before in those states to swap the dash for the label) */
-  .pj--mini .pj__side:hover .pj__toc-chip::before, .pj--mini .pj__side:focus-within .pj__toc-chip::before, .pj--mini.pj--navpeek .pj__toc-chip::before { width: 6px; height: 6px; opacity: .55; }
-  .pj--mini .pj__side:hover .pj__toc-chip.is-active::before, .pj--mini .pj__side:focus-within .pj__toc-chip.is-active::before, .pj--mini.pj--navpeek .pj__toc-chip.is-active::before { opacity: 1; }
-  .pj--mini .pj__toc-chip--intro { display: flex; border: 1px solid var(--line-soft); margin: 0; padding: .85rem 1.1rem; }
+  /* the current section = a grey rounded affordance floating in the card: a small vertical margin +
+     suppressing its own divider AND the next row's, so no hairline ever touches the highlight */
+  .pj--mini .pj__toc-chip:first-child { border-top-color: transparent; }
+  .pj--mini .pj__toc-chip.is-active { background: var(--line-soft); color: var(--text); margin: .25rem 0; border-top-color: transparent; }
+  .pj--mini .pj__toc-chip.is-active .pj__toc-lbl { font-weight: 500; }
+  .pj--mini .pj__toc-chip.is-active + .pj__toc-chip { border-top-color: transparent; }
+  .pj--mini .pj__toc-chip--intro { display: flex; margin: 0; padding: .95rem 1rem; }
   .pj--mini .pj__dots {
     display: inline-flex; align-items: center; gap: .5rem; position: fixed; left: 50%;
     bottom: calc(1rem + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 32;
