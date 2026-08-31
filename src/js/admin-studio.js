@@ -8301,6 +8301,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     setPanel.innerHTML = settingsPanelHtml(activeSetCat);
     if (activeSetCat === "publish") wireAutopub(setPanel);
     if (activeSetCat === "recruiter") recruiterStateSync();
+    if (activeSetCat === "ai") {
+      var aiRepaint = function () {
+        if (!setPanel || setSub || activeSetCat !== "ai") return;
+        setPanel.innerHTML = settingsPanelHtml("ai");
+        aiWireUsage(setPanel, aiRepaint);
+      };
+      aiWireUsage(setPanel, aiRepaint);
+      aiUsagePull(aiRepaint);
+    }
   }
   // Drill into a deeper view (Select what they see / Passkeys / Publishing / AI) inside the right
   // panel, keeping the rail visible, with a back arrow to the category's main view.
@@ -8337,16 +8346,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="af__hint">Read a backup file, see everything inside, and pick exactly what to bring back. It loads into the editor to review before you Publish.</div></div>';
     }
     if (cat === "security") {
-      return '<div class="rkqg"><div class="rkqg__head">Security <span class="rkqg__sub">how you sign in to the studio</span></div>' +
-        '<div class="af__hint" style="margin:.2rem 0 1rem">Sign in with a passkey \u2014 Windows Hello, Face ID or a security key \u2014 or change the admin key you type on this device. Both keep working.</div>' +
+      return '<div class="rkqg"><div class="rkqg__head">Passkeys <span class="rkqg__sub">how you sign in</span></div>' +
+        '<div class="af__hint" style="margin:.2rem 0 .8rem">Your day-to-day sign-in \u2014 Windows Hello, Face ID or a security key. Add one per device (laptop, phone) so you\u2019re never locked out. Enrolment happens only here in the studio.</div>' +
         '<div class="rkqg__row"><button class="btn btn--primary" data-act="open-passkeys">' + IC.key + ' Manage passkeys</button></div>' +
-        '<div class="rkqg__row" style="margin-top:.6rem"><button class="btn btn--ghost" data-act="open-adminkey">' + LOCK_SVG + ' Change admin key</button></div>' +
-        '<div class="rkqg__head" style="margin-top:1.4rem">This device <span class="rkqg__sub">recognised &amp; muted from your analytics</span></div>' +
-        '<div class="af__hint" style="margin:.2rem 0 .7rem">This device is recognised as yours, so your own visits don\u2019t count in Insights. Un-recognise it to start counting this device again \u2014 you\u2019ll need to sign in to mute it or use Present mode.</div>' +
-        '<div class="rkqg__row"><button class="btn btn--danger" data-act="unrecognise-device">Un-recognise this device</button></div></div>';
+        '<div class="rkqg__head" style="margin-top:1.6rem">Admin key <span class="rkqg__sub">recovery &amp; encryption key</span></div>' +
+        '<div class="af__hint" style="margin:.2rem 0 .8rem">The key you type on this device. It\u2019s your recovery fallback and the encryption key \u2014 and it\u2019s required to enrol passkeys. Keep it somewhere safe; passkeys are for everyday sign-in, this is the master.</div>' +
+        '<div class="rkqg__row"><button class="btn btn--ghost" data-act="open-adminkey">' + LOCK_SVG + ' Change admin key</button></div></div>';
     }
     if (cat === "publish") return launchPanelHtml("Publishing", "Connect GitHub, replace the token, or publish manually.", "open-publish", "Open publishing settings") + autopubPanelHtml();
-    if (cat === "ai") return launchPanelHtml("AI", "Connect OpenAI, Gemini or Claude for the Prepare tools.", "open-ai", "Open AI settings");
+    if (cat === "ai") return launchPanelHtml("AI settings", "Connect OpenAI, Gemini or Claude for the Prepare tools \u2014 keys stay in this browser or roam via Cloudflare.", "open-ai", "Open AI settings") + aiUsagePanel();
     return "";
   }
   function autopubPanelHtml() {
@@ -8823,15 +8831,6 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "set-back") { setSub = null; renderSetPanel(); return; }
     if (act === "recruiter-toggle") { recruiterToggle(); renderSetPanel(); return; }
     if (act === "backup-dl") { downloadContentBackup(); return; }
-    if (act === "unrecognise-device") {
-      Promise.resolve(confirmModal({ title: "Un-recognise this device?", sub: "Your visits from this device will start counting in your analytics again. You\u2019ll need to sign in again to mute it or use Present mode.", cta: "Un-recognise", okClass: "btn--danger", cancel: "Keep recognised" })).then(function (go) {
-        if (!go) return;
-        try { localStorage.removeItem("rk:owner"); localStorage.removeItem("rk:noanalytics"); } catch (e) {}
-        clearAdminSession();
-        try { location.reload(); } catch (e) {}
-      });
-      return;
-    }
     if (act === "backup-restore") { backupPickAndRestore(); return; }
     if (act === "open-passkeys") { setSub = "passkeys"; renderSetPanel(); return; }
     if (act === "open-publish") { setSub = "publish"; renderSetPanel(); return; }
@@ -11889,7 +11888,6 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
                    : (aiBlock("txt", "Content generation", "text") + aiBlock("img", "Image generation", "imagery"));
       if (mode === "cf") html += aiCfExtras();
       html += '<div class="af__hint" style="margin:.1rem 0 .2rem">' + (imgOK ? "Image service supports generation." : "Your image service (Claude) can\u2019t generate images \u2014 pick OpenAI or Gemini for imagery.") + "</div>";
-      html += aiUsagePanel();
       bodyEl.innerHTML = html;
       bodyEl.querySelectorAll("[data-aiscope]").forEach(function (sel) {
         sel.addEventListener("change", function () { aiPersistVisible(modal); aiSetProvider(sel.getAttribute("data-aiscope"), sel.value); paint(); });
@@ -11902,10 +11900,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       aiWireCfEntry(bodyEl, function () { aiCfRefresh(paint); });
       var migBtn = bodyEl.querySelector("[data-aicf-migrate]");
       if (migBtn) migBtn.addEventListener("click", function () { aiMigrateLocalToCf(paint); });
-      aiWireUsage(bodyEl, paint);
     }
     if (aiMode() === "cf") aiCfRefresh(paint);
-    aiUsagePull(paint);
     paint();
     var close = function () { if (opts && opts.onClose) opts.onClose(); else modal.remove(); };
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });

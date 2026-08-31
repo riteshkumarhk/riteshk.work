@@ -361,7 +361,7 @@ import {
   }
   function studioUrlExit() { try { if (window.__STUDIO_PAGE) { location.href = "/"; return; } if (location.pathname === "/studio") history.replaceState({}, "", "/"); } catch (e) {} }
   function openStudio() {
-    if (window.innerWidth < ADMIN_MIN) { mobileSignedIn(); return; }   // phone: recognise device + read-only insights; the editor is desktop-only
+    if (window.innerWidth < ADMIN_MIN) { mobileSignedIn(); return; }   // phone: mute this device; the editor is desktop-only
     try { localStorage.setItem("rk:noanalytics", "1"); } catch (e) {}   // stop counting the owner's own visits in Web Analytics
     loadStudio().then(function () {
       if (window.__RKStudio) {
@@ -611,55 +611,54 @@ import {
     if (localStorage.getItem(MUSIC_ON_KEY) !== "0") musAutoStart();
   }
 
-  // ---- Mobile owner: sign in to recognise this device (excludes it from analytics) + a lean,
-  // read-only Insights readout. The full studio (editing/publishing) stays desktop-only; recruiter
-  // approvals happen in the Requests PWA. rk:owner is set by saveAdminSession on auth. ----
+  // ---- Mobile owner: a lean /studio page for phones. Signing in mutes this device (rk:owner, set by
+  // saveAdminSession) so your own visits don't count in Insights; a toggle flips it back. The full
+  // studio (editing/publishing) stays desktop-only; recruiter approvals happen in the Requests PWA. ----
   var mobEl = null, mobDays = 7;
   function mobileSignedIn() {
     try { localStorage.setItem("rk:owner", "1"); localStorage.setItem("rk:noanalytics", "1"); } catch (e) {}
-    mobOpen("confirm");
+    mobOpen();
   }
   function mobClose() { if (mobEl) { mobEl.remove(); mobEl = null; document.body.style.overflow = ""; } }
-  function mobOpen(view) {
+  function mobOpen() {
     mobClose();
     mobEl = document.createElement("div");
     mobEl.className = "mobadm";
     document.body.appendChild(mobEl);
     document.body.style.overflow = "hidden";
     mobEl.addEventListener("click", onMobClick);
-    mobRender(view || "confirm");
+    mobRender();
   }
-  function mobRender(view) {
+  function mobRender() {
     if (!mobEl) return;
-    mobEl.innerHTML = (view === "unrecog") ? mobUnrecogHtml() : mobConfirmHtml();
+    mobEl.innerHTML = mobConfirmHtml();
   }
   function onMobClick(e) {
     var b = e.target.closest("[data-mob]");
     if (!b) { if (e.target === mobEl) mobClose(); return; }
     var a = b.dataset.mob;
     if (a === "close") mobClose();
-    else if (a === "confirm") mobRender("confirm");
     else if (a === "exit") { clearAdminSession(); mobClose(); }
-    else if (a === "unrecognise") mobRender("unrecog");
-    else if (a === "dounrecog") { try { localStorage.removeItem("rk:owner"); localStorage.removeItem("rk:noanalytics"); } catch (x) {} clearAdminSession(); mobClose(); try { location.reload(); } catch (x) {} }
+    else if (a === "mute") {
+      var muted = false; try { muted = !!localStorage.getItem("rk:owner"); } catch (x) {}
+      try {
+        if (muted) { localStorage.removeItem("rk:owner"); localStorage.removeItem("rk:noanalytics"); }
+        else { localStorage.setItem("rk:owner", "1"); localStorage.setItem("rk:noanalytics", "1"); }
+      } catch (x) {}
+      mobRender();
+    }
   }
   function mobConfirmHtml() {
+    var muted = false; try { muted = !!localStorage.getItem("rk:owner"); } catch (e) {}
     return '<div class="mobadm__box">' +
       '<button class="mobadm__x" data-mob="close" aria-label="Close">\u2715</button>' +
       '<div class="mobadm__check">\u2713</div>' +
-      '<h2 class="mobadm__title">This device is recognised</h2>' +
-      '<p class="mobadm__sub">You\u2019re signed in as the owner. This phone <b>won\u2019t be counted</b> in your analytics.</p>' +
-      '<p class="mobadm__note">The admin studio &amp; Prepare tools are <b>desktop-only</b> \u2014 sign in on a computer to edit, curate or publish. Recruiter approvals come through the <b>Requests</b> app.</p>' +
+      '<h2 class="mobadm__title">You\u2019re signed in</h2>' +
+      '<p class="mobadm__sub">Signed in as the owner on this phone.</p>' +
+      '<button class="mobadm__mute' + (muted ? " is-muted" : "") + '" data-mob="mute" role="switch" aria-checked="' + (muted ? "true" : "false") + '">' + (muted ? "\u25cf This device is muted" : "\u25cb Count this device") + "</button>" +
+      '<p class="mobadm__note mobadm__mutenote">' + (muted ? "Your visits from this phone won\u2019t count in your Insights." : "This phone now counts in your analytics \u2014 tap above to mute it.") + "</p>" +
+      '<p class="mobadm__note">The studio &amp; Prepare tools are <b>desktop-only</b> \u2014 sign in on a computer to edit, curate or publish. Recruiter approvals come through the <b>Requests</b> app.</p>' +
       '<div class="mobadm__actions"><button class="btn btn--primary" data-mob="exit">Exit admin mode</button></div>' +
-      '<button class="mobadm__unrec" data-mob="unrecognise">Un-recognise this device</button>' +
-      "</div>";
-  }
-  function mobUnrecogHtml() {
-    return '<div class="mobadm__box">' +
-      '<button class="mobadm__x" data-mob="confirm" aria-label="Back">\u2715</button>' +
-      '<h2 class="mobadm__title">Un-recognise this device?</h2>' +
-      '<p class="mobadm__sub">Your visits from this phone will <b>start counting</b> in your analytics again, and you\u2019ll need to sign in again to mute it or use Present mode.</p>' +
-      '<div class="mobadm__actions"><button class="btn btn--ghost" data-mob="confirm">Cancel</button><button class="btn btn--danger" data-mob="dounrecog">Un-recognise</button></div>' +
       "</div>";
   }
   function mobInsShell() {
@@ -728,7 +727,7 @@ import {
       '<div class="cmenu__sep"></div>' +
       '<button class="cmenu__item" data-open="special"><span class="cmenu__ico">\u25c7</span><span><b>Recruiter or hiring manager</b><i>Enter a ticket for a curated view</i></span></button>' +
       (owner ? '<button class="cmenu__item" data-open="present"><span class="cmenu__ico">\u25b6</span><span><b>Present mode</b><i>Unlock all work for presenting, not editing</i></span></button>' : "") +
-      '<button class="cmenu__item" data-open="admin"><span class="cmenu__ico">\u2726</span><span><b>' + (narrow ? "Admin sign-in" : "Admin mode") + '</b><i>' + (narrow ? "Mute this device + insights" : "Edit &amp; curate the site") + "</i></span></button>";
+      '<button class="cmenu__item" data-open="admin"><span class="cmenu__ico">\u2726</span><span><b>' + (narrow ? "Admin sign-in" : "Admin mode") + '</b><i>' + (narrow ? "Mute this device" : "Edit &amp; curate the site") + "</i></span></button>";
     document.body.appendChild(menuEl);
     positionMenu();
     placeSoundToast();   // push any live “sound on” toast below the menu we just opened
