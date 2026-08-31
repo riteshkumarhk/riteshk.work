@@ -641,6 +641,8 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .sv-banner__exp { color: var(--text-dim); border-left: 1px solid var(--line); padding-left: .7rem; white-space: nowrap; }
 .sv-banner__exit { font-family: var(--mono); font-size: .66rem; color: #0a0a0a; background: var(--accent); border: 0; border-radius: 100px; padding: .35rem .75rem; cursor: pointer; flex: none; }
 .sv-banner__exit:hover { background: var(--accent-2); }
+.preview-banner--nodraft { border-color: rgba(217, 138, 58, .5); }
+.preview-banner--nodraft .sv-banner__dot { background: #d98a3a; animation: none; box-shadow: none; }
 
 /* ---------- recruiter ticket flyout (soft, non-blocking) ---------- */
 .rkfly {

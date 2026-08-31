@@ -1071,6 +1071,23 @@
     document.body.appendChild(b);
     document.body.classList.add("has-sv");
   }
+  // Owner-only heads-up shown ONLY in a standalone preview tab (?preview / ?draft opened from the studio's
+  // "open in a new tab") - never inside the studio's live-preview iframe, which already frames it.
+  function rkTopLevel() { try { return window.top === window.self; } catch (e) { return false; } }
+  function showPreviewBanner(hasDraft) {
+    removeSvBanner();
+    var b = document.createElement("div");
+    b.className = "sv-banner preview-banner" + (hasDraft ? "" : " preview-banner--nodraft");
+    b.innerHTML =
+      '<span class="sv-banner__dot"></span>' +
+      '<span class="sv-banner__txt">' + (hasDraft
+        ? "Preview \u2014 unpublished draft \u00b7 how your site looks once you publish"
+        : "Preview \u2014 no local draft found \u00b7 showing your published site") + "</span>" +
+      '<button class="sv-banner__exit" type="button" aria-label="Dismiss preview banner">Dismiss \u2715</button>';
+    b.querySelector(".sv-banner__exit").addEventListener("click", removeSvBanner);
+    document.body.appendChild(b);
+    document.body.classList.add("has-sv");
+  }
 
   /* ---------- data loading ---------- */
   // Fast, stable signature of the published content so the admin can tell when a
@@ -1113,10 +1130,11 @@
     // The local draft is a PRIVATE admin working copy. Only render it when
     // explicitly previewing (?draft) or inside the admin live-preview iframe
     // (?preview). The public site always renders the committed content.json.
-    let data = published;
+    let data = published, previewDraft = false;
     const params = new URLSearchParams(location.search);
-    if (params.has("draft") || params.has("preview")) {
-      try { const d = localStorage.getItem(DRAFT_KEY); if (d) data = JSON.parse(d); } catch (e) { /* ignore bad draft */ }
+    const isPreview = params.has("draft") || params.has("preview");
+    if (isPreview) {
+      try { const d = localStorage.getItem(DRAFT_KEY); if (d) { data = JSON.parse(d); previewDraft = true; } } catch (e) { /* ignore bad draft */ }
     }
 
     DATA = data;
@@ -1186,6 +1204,7 @@
 
     render(initial);
     if (activeSv) showSvBanner(activeSv);
+    else if (isPreview && rkTopLevel()) showPreviewBanner(previewDraft);
     document.body.classList.remove("site-loading");
     window.__siteRendered = true;
     document.dispatchEvent(new Event("site:rendered"));
