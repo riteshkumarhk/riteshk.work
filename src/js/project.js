@@ -2043,7 +2043,11 @@
   }
   // Tiny on-screen diagnostic — with ?sdbg in the URL, or ALWAYS in the admin live-preview — so a section
   // jump can be read off-screen in one glance. sdbg() sets the base line; sdbgTail() appends a live line.
-  function sdbgOn() { return PREVIEW || /[?&]sdbg/.test(location.search); }
+  function sdbgOn() {
+    var asked = /[?&]sdbg/.test(location.search);
+    try { if (asked) localStorage.setItem("rk:sdbg", "1"); else asked = localStorage.getItem("rk:sdbg") === "1"; } catch (e) {}
+    return PREVIEW || asked;
+  }
   function sdbg(msg) {
     if (!sdbgOn()) return;
     var d = document.getElementById("__sdbg");
@@ -2182,7 +2186,10 @@
       scroller.scrollTo({ top: cov ? Math.max(0, cov.offsetHeight - vh * 0.5) : 0, behavior: "smooth" });
       return;
     }
-    var sec = overlay.querySelector("#" + (window.CSS && CSS.escape ? CSS.escape(id) : id));
+    var selector = "#" + (window.CSS && CSS.escape ? CSS.escape(id) : id);
+    var matches = overlay.querySelectorAll(selector);
+    var sec = matches[0];
+    sdbg("tap id=" + id + " matches=" + matches.length + " st=" + Math.round(scroller.scrollTop));
     scrollToAnchor(sec, 8);
   }
 
@@ -2420,6 +2427,7 @@
         return;
       }
     });
+    if (sdbgOn()) sdbg("ready preview=" + (PREVIEW ? 1 : 0) + " path=" + location.pathname);
     if (PREVIEW) { document.documentElement.classList.add("rk-preview"); return; } // the admin editor drives the overlay; skip link/history/deep-link wiring
     document.addEventListener("click", onDocLinkClick);
     window.addEventListener("popstate", route);
