@@ -2048,13 +2048,20 @@
     try { if (asked) localStorage.setItem("rk:sdbg", "1"); else asked = localStorage.getItem("rk:sdbg") === "1"; } catch (e) {}
     return PREVIEW || asked;
   }
-  function sdbg(msg) {
+  function sdbgPlace() {
     if (!sdbgOn()) return;
     var d = document.getElementById("__sdbg");
-    if (!d) { d = document.createElement("div"); d.id = "__sdbg"; d.style.cssText = "position:fixed;left:6px;bottom:6px;z-index:99999;max-width:94vw;padding:7px 9px;background:rgba(0,0,0,.86);color:#5f5;font:11px/1.45 ui-monospace,monospace;border:1px solid #5f5;border-radius:6px;white-space:pre-wrap;pointer-events:none"; document.body.appendChild(d); }
+    if (!d) { d = document.createElement("div"); d.id = "__sdbg"; d.style.cssText = "position:fixed;left:6px;bottom:6px;z-index:99999;max-width:94vw;padding:7px 9px;background:rgba(0,0,0,.86);color:#5f5;font:11px/1.45 ui-monospace,monospace;border:1px solid #5f5;border-radius:6px;white-space:pre-wrap;pointer-events:none"; }
+    var host = overlay && activeId != null ? overlay : document.body;
+    if (d.parentNode !== host) host.appendChild(d);
+    return d;
+  }
+  function sdbg(msg) {
+    var d = sdbgPlace();
+    if (!d) return;
     d.dataset.base = msg; d.textContent = msg;
   }
-  function sdbgTail(t) { if (!sdbgOn()) return; var d = document.getElementById("__sdbg"); if (d) d.textContent = (d.dataset.base || "") + "\n" + t; }
+  function sdbgTail(t) { var d = sdbgPlace(); if (d) d.textContent = (d.dataset.base || "") + "\n" + t; }
   // Jump so `anchor` sits just under the top chrome and HOLD it there, driving the scroll OURSELVES (never the
   // native smooth-scroll, which commits to a scrollTop computed before the media loads) and RE-AIMing at the
   // live element every frame so mid-glide reflow can't strand it. CRITICAL: we do NOT bail on touchmove during
@@ -2234,6 +2241,7 @@
       setSiteInert(true);
     }
     activeId = id;
+    sdbgPlace();
     try { window.__rkTrack && window.__rkTrack("case_open", id); } catch (e) {}
     var keepAnchor = opts.keepScroll ? captureAnchor() : null;
     fillContent(w, keepAnchor);
@@ -2266,6 +2274,7 @@
     }
     if (activeId) { delete vaultResolving[activeId]; delete vaultTried[activeId]; }   // let a reopened project re-attempt + re-show the "Unlocking…" state (recovers from a transient fetch fail)
     activeId = null;
+    sdbgPlace();
     previewSelIdx = -1;
     if (opts.push !== false) { try { history.pushState({}, "", "/"); } catch (e) {} }
     try { document.dispatchEvent(new Event("rk:route")); } catch (e) {}
