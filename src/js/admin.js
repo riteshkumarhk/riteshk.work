@@ -502,7 +502,7 @@ import {
   function placeSoundToast() {
     var el = document.querySelector(".soundtoast");
     if (!el) return;
-    if (menuEl) {                                    // ··· menu open → sit below it, never over it
+    if (menuEl && !menuEl.classList.contains("cmenu--sheet")) {   // anchored ··· menu open → sit below it, never over it
       var mr = menuEl.getBoundingClientRect();
       var cw = document.documentElement.clientWidth;  // excludes the scrollbar so the edge lines up with the menu
       el.classList.remove("soundtoast--low");
@@ -710,7 +710,19 @@ import {
     const owner = !!(localStorage.getItem(HASH_KEY) || localStorage.getItem("rk:owner"));
     menuEl = document.createElement("div");
     menuEl.className = "cmenu";
+    // On phones the ··· menu opens as a bottom SHEET (dim scrim + slide-up panel) instead of an anchored
+    // flyout, matching the case-study nav sheet so the mobile chrome feels consistent across the site.
+    var asSheet = window.innerWidth <= 999;
+    if (asSheet) {
+      menuEl.classList.add("cmenu--sheet");
+      var scrim = document.createElement("div");
+      scrim.className = "cmenu__scrim";
+      scrim.addEventListener("click", closeMenu);
+      document.body.appendChild(scrim);
+      menuEl.__scrim = scrim;
+    }
     menuEl.innerHTML =
+      (asSheet ? '<div class="cmenu__grip" aria-hidden="true"></div>' : "") +
       '<div class="cmenu__grp"><div class="cmenu__head">Ambience</div>' +
         '<div class="mus">' +
           '<button class="mus__btn" data-mus="prev" aria-label="Previous track">' + MUS_ICON.prev + "</button>" +
@@ -738,6 +750,7 @@ import {
     setTimeout(function () { document.addEventListener("click", onDocClick); }, 0);
   }
   function positionMenu() {
+    if (menuEl && menuEl.classList.contains("cmenu--sheet")) return;   // the mobile sheet is CSS-pinned to the bottom — no anchoring
     const anchor = document.getElementById("moreBtn") || document.getElementById("clock");
     if (!anchor || !menuEl) return;
     const r = anchor.getBoundingClientRect();
@@ -747,6 +760,7 @@ import {
   }
   function closeMenu() {
     if (!menuEl) return;
+    if (menuEl.__scrim) { menuEl.__scrim.remove(); menuEl.__scrim = null; }
     menuEl.remove(); menuEl = null;
     document.removeEventListener("click", onDocClick);
     window.removeEventListener("resize", positionMenu);
