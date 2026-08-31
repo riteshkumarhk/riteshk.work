@@ -2041,20 +2041,25 @@
     var target = sibs[(idx + dir + sibs.length) % sibs.length];
     if (target) openProject(target.id, { push: true });
   }
-  // Jump so `anchor` sits just under the top chrome and HOLD it there. The native smooth-scroll can't be
-  // trusted for this: it commits to a scrollTop computed BEFORE the overview media has loaded, so on any
-  // machine where the scroll actually animates (everything except reduced-motion) the media loading mid-flight
-  // grows the page above the target and the animation lands up in the OVERVIEW - the reported "tap a section,
-  // jump to the top" bug (invisible on reduced-motion / instant-scroll machines). So we drive the scroll
-  // ourselves and RE-AIM at the live element every frame, then pin it across any later reflow too.
+  // Tiny on-screen diagnostic — only with ?sdbg in the URL — so a real-device tap can be captured in one screenshot.
+  function sdbg(msg) {
+    if (!/[?&]sdbg/.test(location.search)) return;
+    var d = document.getElementById("__sdbg");
+    if (!d) { d = document.createElement("div"); d.id = "__sdbg"; d.style.cssText = "position:fixed;left:6px;bottom:6px;z-index:99999;max-width:94vw;padding:7px 9px;background:rgba(0,0,0,.86);color:#5f5;font:11px/1.45 ui-monospace,monospace;border:1px solid #5f5;border-radius:6px;white-space:pre-wrap;pointer-events:none"; document.body.appendChild(d); }
+    d.textContent = msg;
+  }
+  // Jump so `anchor` sits just under the top chrome and HOLD it there, driving the scroll OURSELVES (never the
+  // native smooth-scroll, which commits to a scrollTop computed before the media loads) and RE-AIMing at the
+  // live element every frame so mid-glide reflow can't strand it. CRITICAL: we do NOT bail on touchmove during
+  // the glide - on a touchscreen the tap's own finger travel (+ the sheet sliding out from under the finger)
+  // fires touchmove and would kill the glide a frame or two in, stranding the reader near the overview. The
+  // glide is short; let it finish, then listen for the reader taking over.
   var _unpin = null;
   function cancelPin() { if (_unpin) _unpin(); }   // any fresh scroll intent (Overview / top / intro chip) drops an active section pin so it can't yank back
   function scrollToAnchor(anchor, extra) {
     if (!anchor || !scroller) return;
     if (_unpin) _unpin();
     extra = extra || 0;
-    // Absolute scrollTop that puts the anchor at the inset - invariant to our own scrolling, so it only
-    // changes when the page actually REFLOWS (exactly what we must track).
     var aim = function () { return Math.max(0, Math.round(scroller.scrollTop + anchor.getBoundingClientRect().top - scroller.getBoundingClientRect().top - topOffset() - extra)); };
     var content = overlay.querySelector("[data-content]") || scroller;
     var raf = 0, ro = null, cap = 0, dead = false, lastH = content.scrollHeight;
@@ -2065,31 +2070,30 @@
       scroller.removeEventListener("wheel", off); scroller.removeEventListener("touchmove", off);
       clearTimeout(cap); _unpin = null;
     };
-    // After the glide, keep re-aligning on every real height change (media/fonts that finish loading LATER),
-    // releasing the instant the reader scrolls (wheel / a real touch-drag - a tap must NOT count), hard-capped.
+    // Only AFTER the glide lands: hold across late media reflow, releasing when the reader actually scrolls.
     var pin = function () {
       lastH = content.scrollHeight;
       if (window.ResizeObserver) {
         ro = new ResizeObserver(function () { var h = content.scrollHeight; if (h === lastH) return; lastH = h; var t = aim(); if (Math.abs(t - scroller.scrollTop) > 2) scroller.scrollTop = t; });
         try { ro.observe(content); } catch (e) {}
       }
+      scroller.addEventListener("wheel", off, { passive: true });
+      scroller.addEventListener("touchmove", off, { passive: true });
       cap = setTimeout(off, 6000);
     };
-    scroller.addEventListener("wheel", off, { passive: true });
-    scroller.addEventListener("touchmove", off, { passive: true });
     _unpin = off;
-    // Reduced motion (or no rAF) -> no glide, just land and hold.
-    if ((window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) || !window.requestAnimationFrame) { scroller.scrollTop = aim(); pin(); return; }
-    // Self-driven ease (easeOutCubic) that recomputes the LIVE target every frame - reflow during the glide
-    // can no longer strand us at a stale scrollTop.
-    var DUR = 600, t0 = 0, from = scroller.scrollTop;
+    var from = scroller.scrollTop, aim0 = aim();
+    var reduce = (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) || !window.requestAnimationFrame;
+    if (reduce) { scroller.scrollTop = aim(); pin(); sdbg("id=" + (anchor.id || "?") + " reduce=1 from=" + Math.round(from) + " aim=" + aim0 + " final=" + Math.round(scroller.scrollTop)); return; }
+    var DUR = 600, t0 = 0, frames = 0;
     var step = function (ts) {
       if (dead) return;
       if (!t0) t0 = ts;
+      frames++;
       var p = Math.min(1, (ts - t0) / DUR), e = 1 - Math.pow(1 - p, 3);
       scroller.scrollTop = Math.round(from + (aim() - from) * e);
       if (p < 1) raf = requestAnimationFrame(step);
-      else { raf = 0; scroller.scrollTop = aim(); pin(); }
+      else { raf = 0; scroller.scrollTop = aim(); pin(); sdbg("id=" + (anchor.id || "?") + " reduce=0 from=" + Math.round(from) + " aim0=" + aim0 + " aimE=" + aim() + " final=" + Math.round(scroller.scrollTop) + " f=" + frames); }
     };
     raf = requestAnimationFrame(step);
   }
