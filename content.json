@@ -1602,7 +1602,7 @@
               },
               {
                 "title": "Layout Unification",
-                "body": "Create a common onboarding language.<div><br></div><div>Shared:</div><div><ul><li>visual structure</li><li>navigation model</li><li>progress model</li><li>CTA placement</li><li>interaction patterns</li></ul></div><div><br></div><div>The goal was to make every step feel like part of the same journey regardless of content.</div>"
+                "body": "Create a common onboarding language.<div><br></div><div>Shared:</div><div><ul><li>Visual structure</li><li>Navigation model</li><li>Progress model</li><li>CTA placement</li><li>Interaction patterns</li></ul></div><div><br></div><div>The goal was to make every step feel like part of the same journey regardless of content.</div>"
               },
               {
                 "title": "Consent Unification",
