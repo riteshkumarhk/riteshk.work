@@ -1826,48 +1826,66 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (!document.execCommand("insertHTML", false, html || "<p><br></p>")) area.innerHTML = html;
     } catch (e) { area.innerHTML = html; }
   }
-  function rtClearFormat(area) {
-    area.focus();
-    // With a highlighted selection, clear formatting on THAT text only (bold/italic/colour/alignment/indent) — images untouched.
-    var sel = window.getSelection();
-    var hasSel = sel && sel.rangeCount && !sel.isCollapsed && area.contains(sel.anchorNode) && area.contains(sel.focusNode);
-    if (hasSel) {
-      try { document.execCommand("removeFormat", false, null); } catch (e) {}
-      try { document.execCommand("justifyLeft", false, null); } catch (e) {}
-      try { document.execCommand("styleWithCSS", false, true); } catch (e) {}
-      for (var g = 0; g < 12; g++) { try { document.execCommand("outdent", false, null); } catch (e) {} }
-      try { document.execCommand("styleWithCSS", false, false); } catch (e) {}
-      rtSerialize(area);
-      status("Formatting cleared for the selected text.");
-      return;
-    }
-    // Nothing selected: strip formatting from ALL text, but keep images exactly where they are.
+  // Reduce any rich-text container to the site's clean prose — <p> paragraphs (inner line breaks
+  // kept as <br>) plus images/media as bare <figure>s, in order — stripping EVERY class, style,
+  // colour and block/table/quote wrapper. This is the "paste through Notepad" clean; browser
+  // removeFormat only strips inline styling and leaves pasted block wrappers (what rendered as cards).
+  // Works on attached or detached nodes (uses textContent, not innerText).
+  function rtCleanContainer(root) {
     var parts = [], buf = [];
-    function figHtml(img) { return '<figure class="rt__fig"><img src="' + escAttr(img.getAttribute("src") || img.src || "") + '" alt="' + escAttr(img.getAttribute("alt") || "") + '" /></figure>'; }
     function flush() {
       if (!buf.length) return;
-      buf.join("\n").split(/\n{2,}/).forEach(function (para) {
+      buf.join("").split(/\n{2,}/).forEach(function (para) {
         var lines = para.split(/\n/).map(function (l) { return l.trim(); }).filter(function (l) { return l; });
         if (lines.length) parts.push("<p>" + lines.map(escForRt).join("<br>") + "</p>");
       });
       buf = [];
     }
-    Array.prototype.forEach.call(area.childNodes, function (node) {
-      if (node.nodeType === 3) { if (node.textContent.trim()) buf.push(node.textContent); return; }
-      if (node.nodeType !== 1) return;
-      var media = node.matches("img, video, iframe, svg") ? [node] : Array.prototype.slice.call(node.querySelectorAll("img, video, iframe, svg"));
-      if (media.length) {
-        var txt = (node.innerText || node.textContent || "").replace(/\u00a0/g, " ").trim();
-        if (txt) buf.push(txt);
-        flush();
-        media.forEach(function (m) { parts.push(m.tagName === "IMG" ? figHtml(m) : '<figure class="rt__fig">' + m.outerHTML + "</figure>"); });
-        return;
-      }
-      buf.push((node.innerText || node.textContent || "").replace(/\u00a0/g, " "));
-      buf.push("");
-    });
+    function figFor(el) {
+      if (el.tagName === "IMG") return '<figure class="rt__fig"><img src="' + escAttr(el.getAttribute("src") || el.src || "") + '" alt="' + escAttr(el.getAttribute("alt") || "") + '" /></figure>';
+      return '<figure class="rt__fig">' + el.outerHTML + "</figure>";
+    }
+    (function walk(node) {
+      Array.prototype.forEach.call(node.childNodes, function (c) {
+        if (c.nodeType === 3) { buf.push(c.textContent.replace(/\s+/g, " ")); return; }
+        if (c.nodeType !== 1) return;
+        var tag = c.tagName;
+        if (tag === "BR") { buf.push("\n"); return; }
+        if (/^(IMG|VIDEO|IFRAME|SVG)$/.test(tag)) { flush(); parts.push(figFor(c)); return; }
+        var block = /^(P|DIV|LI|UL|OL|BLOCKQUOTE|H[1-6]|FIGURE|TABLE|THEAD|TBODY|TR|TD|TH|SECTION|ARTICLE|HEADER|FOOTER|ASIDE|PRE|HR)$/.test(tag);
+        if (block) buf.push("\n\n");
+        walk(c);
+        if (block) buf.push("\n\n");
+      });
+    })(root);
     flush();
-    rtSetHtml(area, parts.join("") || "<p><br></p>");
+    return parts.join("");
+  }
+  function rtClearFormat(area) {
+    area.focus();
+    var sel = window.getSelection();
+    var hasSel = sel && sel.rangeCount && !sel.isCollapsed && area.contains(sel.anchorNode) && area.contains(sel.focusNode);
+    if (hasSel) {
+      // Clean ONLY the selection, as thoroughly as a Notepad round-trip. An inline selection (no block
+      // or media) becomes plain text in place so the surrounding paragraph survives; a selection that
+      // spans blocks/lists/media is rebuilt as clean <p>s + kept images. insertHTML keeps it undoable.
+      var range = sel.getRangeAt(0);
+      var frag = document.createElement("div");
+      frag.appendChild(range.cloneContents());
+      var html;
+      if (frag.querySelector("img, video, iframe, svg, p, div, li, ul, ol, blockquote, h1, h2, h3, h4, h5, h6, figure, table, pre, hr")) {
+        html = rtCleanContainer(frag);
+      } else {
+        var t = sel.toString();
+        html = t ? escForRt(t).replace(/\r?\n/g, "<br>") : "";
+      }
+      try { document.execCommand("insertHTML", false, html); } catch (e) {}
+      rtSerialize(area);
+      status("Formatting cleared for the selected text.");
+      return;
+    }
+    // Nothing selected: clean the whole field the same way, keeping images where they are.
+    rtSetHtml(area, rtCleanContainer(area) || "<p><br></p>");
     rtSerialize(area);
     status("Text formatting cleared \u2014 images kept.");
   }
