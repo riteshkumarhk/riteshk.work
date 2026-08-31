@@ -2216,6 +2216,13 @@
       },
     });
   }
+  // Sign-in / identity dialogs (class "pass--lock") must not be soft-dismissable: a capture-phase guard
+  // swallows a backdrop click or Esc so only an explicit control (Cancel / the action) can close them.
+  if (!window.__rkAuthDismissGuard) {
+    window.__rkAuthDismissGuard = 1;
+    document.addEventListener("click", function (ev) { if (ev.target && ev.target.classList && ev.target.classList.contains("pass--lock")) ev.stopImmediatePropagation(); }, true);
+    document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && document.querySelector(".pass--lock")) ev.stopImmediatePropagation(); }, true);
+  }
   function passModal(opts) {
     var modal = document.createElement("div");
     modal.className = "pass";
@@ -2229,6 +2236,7 @@
       (opts.requestCtx && window.RK && window.RK.requestAccess ? '<button type="button" class="pass__link" data-request>No pass? Request access</button>' : "") +
       "</div>";
     document.body.appendChild(modal);
+    modal.classList.add("pass--lock");
     var inp = modal.querySelector("input"), err = modal.querySelector(".pass__err");
     setTimeout(function () { try { inp.focus(); } catch (e) {} }, 30);
     var done = function () { modal.remove(); };

@@ -9910,6 +9910,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
         '<button class="btn btn--primary" data-go>' + escHtml(opts.cta || "Continue") + '</button></div></div>';
       document.body.appendChild(modal);
+      modal.classList.add("pass--lock");
       var inp = modal.querySelector("input"), cf = modal.querySelector("[data-confirm]"), err = modal.querySelector(".pass__err");
       setTimeout(function () { try { inp.focus(); } catch (e) {} }, 30);
       var closed = false;
@@ -15210,6 +15211,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
         '<button class="btn btn--primary" data-go>Verify</button></div></div>';
       document.body.appendChild(modal);
+      modal.classList.add("pass--lock");
       const rec = modal.querySelector("[data-rec]"), pw = modal.querySelector("[data-pw]"), err = modal.querySelector(".pass__err"), go = modal.querySelector("[data-go]");
       try { rec.focus(); } catch (e) {}
       const done = function (v) { modal.remove(); resolve(v); };
@@ -15237,6 +15239,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Done</button>' +
       '<button class="btn btn--primary" data-add>\uFF0B Add a passkey</button></div></div>';
     document.body.appendChild(modal);
+    modal.classList.add("pass--lock");
     settingsMount(modal, opts);
     const err = modal.querySelector(".pass__err"), listEl = modal.querySelector("[data-pklist]");
     const done = () => { if (opts && opts.onClose) opts.onClose(); else modal.remove(); };
@@ -15285,6 +15288,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
       '<button class="btn btn--primary" data-go>Update key</button></div></div>';
     document.body.appendChild(modal);
+    modal.classList.add("pass--lock");
     settingsMount(modal, opts);
     const cur = modal.querySelector("[data-cur]"), nw = modal.querySelector("[data-new]"), cf = modal.querySelector("[data-confirm]"), err = modal.querySelector(".pass__err");
     setTimeout(function () { try { cur.focus(); } catch (e) {} }, 30);

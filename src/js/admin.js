@@ -208,6 +208,7 @@ import {
         "</div>" +
       "</div></div>";
     document.body.appendChild(modal);
+    modal.classList.add("pass--lock");
     const pass = modal.querySelector('input[type="password"]');
     const confirm2 = modal.querySelector("[data-confirm]");
     const err = modal.querySelector(".pass__err");
@@ -778,6 +779,13 @@ import {
     else if (which === "admin") gate();
   }
 
+  // Sign-in / identity dialogs (class "pass--lock") must not be soft-dismissable: a capture-phase guard
+  // swallows a backdrop click or Esc so only an explicit control (Cancel / the action) can close them.
+  if (!window.__rkAuthDismissGuard) {
+    window.__rkAuthDismissGuard = 1;
+    document.addEventListener("click", function (ev) { if (ev.target && ev.target.classList && ev.target.classList.contains("pass--lock")) ev.stopImmediatePropagation(); }, true);
+    document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && document.querySelector(".pass--lock")) ev.stopImmediatePropagation(); }, true);
+  }
   /* ---------- ticket entry (visitor) ---------- */
   function ticketDialog() {
     const modal = document.createElement("div");
@@ -790,6 +798,7 @@ import {
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
       '<button class="btn btn--primary" data-go>Enter</button></div></div>';
     document.body.appendChild(modal);
+    modal.classList.add("pass--lock");
     const inp = modal.querySelector("input");
     const err = modal.querySelector(".pass__err");
     inp.focus();
@@ -885,6 +894,7 @@ import {
         '<div class="pass__actions"><button class="btn btn--ghost" data-cancel type="button">Cancel</button><button class="btn btn--primary" data-go type="button">Send request</button></div>' +
       '</div>';
     document.body.appendChild(modal);
+    modal.classList.add("pass--lock");
     var box = modal.querySelector(".pass__box"), errEl = modal.querySelector(".pass__err"), go = modal.querySelector("[data-go]");
     if (opts.context) { var cx = modal.querySelector(".rkreq__ctx"); cx.textContent = "Requesting: " + opts.context; cx.hidden = false; }
     var tsWidget = null, tsEl = modal.querySelector(".rkreq__ts");
@@ -1106,6 +1116,7 @@ import {
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
       '<button class="btn btn--primary" data-go>Present</button></div></div>';
     document.body.appendChild(modal);
+    modal.classList.add("pass--lock");
     const inp = modal.querySelector("input");
     const err = modal.querySelector(".pass__err");
     const goBtn = modal.querySelector("[data-go]");
