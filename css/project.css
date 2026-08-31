@@ -773,6 +773,84 @@ html[data-appearance="light"] .pjb__gallery-nav:hover { background: rgba(247, 24
 /* background lock while overlay open */
 html.pj-lock, html.pj-lock body { overflow: hidden; }
 
+/* ---------- minimal (right) case-study navigator (opt-in via Appearance -> caseNav) ---------- */
+/* Mini mode: no rail, no top bar. Content is a single centred column; the whole sidebar (project name,
+   view toggle, section list, back) collapses to a tick-strip pinned to the right edge and expands on
+   hover/focus into a floating panel. On touch/narrow it becomes a bottom sheet opened by a dots pill. */
+.pj--mini .pj__shell { grid-template-columns: minmax(0, 1fr); max-width: min(1120px, 92vw); }
+.pj--mini .pj__main { padding-top: clamp(1.5rem, 4vw, 3rem); }
+.pj--mini .pj__side {
+  position: fixed; right: 0; top: 50%; transform: translateY(-50%); height: auto; max-height: 92vh; width: auto;
+  z-index: 6; flex-direction: column; align-items: flex-end; gap: 0; overflow: visible;
+  padding: 1rem clamp(.7rem, 1.5vw, 1.15rem); border: 0; background: none;
+}
+.pj--mini .pj__side::before {
+  content: ""; position: absolute; inset: -.4rem -.55rem; border-radius: 14px; background: var(--bg-elev);
+  border: 1px solid var(--line); box-shadow: 0 30px 70px -30px rgba(0, 0, 0, .85);
+  opacity: 0; transform: scaleX(.92); transform-origin: right center; z-index: -1; pointer-events: none;
+  transition: opacity .28s var(--ease), transform .28s var(--ease);
+}
+.pj--mini .pj__side:hover::before, .pj--mini .pj__side:focus-within::before, .pj--mini.pj--navpeek .pj__side::before { opacity: 1; transform: none; }
+.pj--mini .pj__side-head, .pj--mini .pj__viewseg, .pj--mini .pj__side-back {
+  max-height: 0; opacity: 0; overflow: hidden; margin: 0 .2rem; padding: 0; pointer-events: none;
+  transition: max-height .3s var(--ease), opacity .22s var(--ease), margin .3s var(--ease);
+}
+.pj--mini .pj__side:hover .pj__side-head, .pj--mini .pj__side:focus-within .pj__side-head, .pj--mini.pj--navpeek .pj__side-head { max-height: 3.4rem; opacity: 1; margin: 0 .2rem .7rem; pointer-events: auto; }
+.pj--mini .pj__side:hover .pj__viewseg, .pj--mini .pj__side:focus-within .pj__viewseg, .pj--mini.pj--navpeek .pj__viewseg { max-height: 3rem; opacity: 1; margin: .7rem .2rem 0; pointer-events: auto; }
+.pj--mini .pj__side:hover .pj__side-back, .pj--mini .pj__side:focus-within .pj__side-back, .pj--mini.pj--navpeek .pj__side-back { max-height: 3rem; opacity: 1; margin: .5rem .2rem 0; pointer-events: auto; }
+.pj--mini .pj__side-head { font-family: var(--mono); font-size: .7rem; text-align: right; }
+.pj--mini .pj__viewseg { align-self: flex-end; }
+.pj--mini .pj__side-back { align-self: flex-end; }
+.pj--mini .pj__toc { display: flex; flex-direction: column; align-items: flex-end; gap: 0; border: 0; }
+.pj--mini .pj__toc-chip { position: relative; display: flex; align-items: center; justify-content: flex-end; gap: .6rem; padding: .27rem .2rem; color: var(--text-faint); }
+.pj--mini .pj__toc-chip::before { display: none; }
+.pj--mini .pj__toc-lbl { order: 1; font-family: var(--sans); font-size: .84rem; white-space: nowrap; overflow: hidden; text-align: right; max-width: 0; opacity: 0; transform: translateX(5px); transition: max-width .3s var(--ease), opacity .22s var(--ease), transform .3s var(--ease); }
+.pj--mini .pj__toc-chip::after { content: ""; order: 2; flex: none; width: 16px; height: 2px; border-radius: 2px; background: currentColor; opacity: .5; transition: width .25s var(--ease), opacity .25s var(--ease); }
+.pj--mini .pj__side:hover .pj__toc-lbl, .pj--mini .pj__side:focus-within .pj__toc-lbl, .pj--mini.pj--navpeek .pj__toc-lbl { max-width: 30ch; opacity: 1; transform: none; }
+.pj--mini .pj__toc-chip:hover { color: var(--text-dim); }
+.pj--mini .pj__toc-chip:hover::after { width: 22px; opacity: .9; }
+.pj--mini .pj__toc-chip.is-active { color: var(--accent); }
+.pj--mini .pj__toc-chip.is-active::after { width: 22px; opacity: 1; }
+
+.pj__dots, .pj__sheet-bg { display: none; }
+
+/* mini mode on touch/narrow: right-edge panel off; the sidebar becomes a bottom sheet + a dots pill */
+@media (max-width: 999px) {
+  .pj--mini .pj__side {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; transform: translateY(103%); max-height: 72vh; width: auto;
+    overflow-y: auto; overflow-x: hidden; flex-direction: column; align-items: stretch; gap: 0; z-index: 41;
+    padding: 1.1rem clamp(1rem, 5vw, 1.5rem) calc(1.4rem + env(safe-area-inset-bottom));
+    border: 0; border-top: 1px solid var(--line); border-radius: 18px 18px 0 0;
+    background: var(--bg-elev); box-shadow: 0 -22px 55px rgba(0, 0, 0, .5); transition: transform .32s var(--ease);
+  }
+  .pj--mini .pj__side::before { display: none; }
+  .pj--mini.pj--sheet-open .pj__side { transform: none; }
+  .pj--mini .pj__side-head, .pj--mini .pj__viewseg, .pj--mini .pj__side-back { max-height: none; opacity: 1; overflow: visible; pointer-events: auto; }
+  .pj--mini .pj__side-head { display: block; margin: 0 0 .8rem; font-size: .8rem; text-align: left; }
+  .pj--mini .pj__side-back { display: none; }
+  .pj--mini .pj__viewseg { align-self: flex-start; margin: 0 0 .6rem; }
+  .pj--mini .pj__toc { display: flex; flex-direction: column; gap: 0; border: 0; align-items: stretch; }
+  .pj--mini .pj__toc-chip { flex: none; justify-content: flex-start; border: 0; border-radius: 9px; padding: .7rem .75rem; color: var(--text-dim); }
+  .pj--mini .pj__toc-chip::before, .pj--mini .pj__toc-chip::after { display: none; }
+  .pj--mini .pj__toc-lbl { max-width: none; opacity: 1; transform: none; white-space: normal; text-align: left; font-family: var(--sans); font-size: .98rem; }
+  .pj--mini .pj__toc-chip.is-active { background: var(--line-soft); color: var(--text); }
+  .pj--mini .pj__toc-chip--intro { display: block; border: 0; margin: 0; padding: .7rem .75rem; }
+  .pj--mini .pj__dots {
+    display: inline-flex; align-items: center; gap: .55rem; position: fixed; left: 50%;
+    bottom: calc(1rem + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 32;
+    padding: .5rem .95rem; border-radius: 100px; border: 1px solid var(--line); background: var(--bg-elev);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: var(--text-dim);
+    font-family: var(--mono); font-size: .64rem; letter-spacing: .05em; text-transform: uppercase; cursor: pointer; box-shadow: 0 12px 32px rgba(0, 0, 0, .4);
+  }
+  .pj--mini .pj__dots:empty { display: none; }
+  .pj--mini.pj--sheet-open .pj__dots { opacity: 0; pointer-events: none; }
+  .pj__dots-row { display: inline-flex; align-items: center; gap: 5px; }
+  .pj__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); opacity: .45; transition: opacity .2s, background .2s, transform .2s; }
+  .pj__dot.is-active { background: var(--accent); opacity: 1; transform: scale(1.4); }
+  .pj__dots-lbl, .pj__dots-chev { flex: none; }
+  .pj--mini.pj--sheet-open .pj__sheet-bg { display: block; position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, .5); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+}
+
 /* responsive */
 @media (max-width: 999px) {
   .pj__shell { grid-template-columns: 1fr; }

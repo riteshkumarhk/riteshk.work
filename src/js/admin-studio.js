@@ -6615,6 +6615,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     t.style.setProperty("--fill", Math.round(((t.value - t.min) / (t.max - t.min)) * 100) + "%");
     hmPush(); saveDraft();
   }
+  function caseNavBlock() {
+    var mode = (data.caseNav === "mini") ? "mini" : "rail";
+    return '<div class="aimode"><div class="aimode__lbl">Case-study navigation</div>' +
+      '<div class="af__hint" style="margin:-.15rem 0 .7rem">How readers move between sections inside a case study. <b>Minimal</b> frees the reading column and tucks the navigator to the right edge \u2014 hover to reveal it (a dots sheet on mobile). Applies on Publish.</div>' +
+      '<div class="aimode__opts">' +
+      '<button type="button" class="aimode__opt' + (mode === "rail" ? " is-on" : "") + '" data-act="casenav" data-v="rail"><b>Left rail</b><span>persistent sidebar of section links</span></button>' +
+      '<button type="button" class="aimode__opt' + (mode === "mini" ? " is-on" : "") + '" data-act="casenav" data-v="mini"><b>Minimal (right)</b><span>tucks to the edge, hover to reveal</span></button>' +
+      "</div></div>";
+  }
   function heroMotionBlock() {
     var seg = function (act, val, opts) {
       return '<div class="adm__hm-seg">' + opts.map(function (o) {
@@ -6651,7 +6660,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
 
   const sections = {
     insights() { return insightsSection(); },
-    type() { return secHead("Appearance", "Your site\u2019s typography and the hero\u2019s living motion \u2014 pick the font system that drives every headline, label and paragraph, then tune how the statement reacts to the cursor over its ambient backdrop. Everything previews live and publishes with the site.") + group(typographySection()) + group(heroMotionBlock()); },
+    type() { return secHead("Appearance", "Your site\u2019s typography and the hero\u2019s living motion \u2014 pick the font system that drives every headline, label and paragraph, then tune how the statement reacts to the cursor over its ambient backdrop. Everything previews live and publishes with the site.") + group(typographySection()) + group(heroMotionBlock()) + group(caseNavBlock()); },
     landing() {
       return (
         secHead("Landing", "Write plainly, then hit <em>Auto-style</em> and the editorial colour is applied for you: products like Microsoft&nbsp;AI turn bronze, &ldquo;leading Growth Design for Microsoft Edge&rdquo; turns bold, and the closing word (why) turns italic. It also runs on publish.") +
@@ -8847,6 +8856,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "book-dismiss") { bookDo(b.dataset.uid, "dismiss", b); return; }
     if (act === "book-refresh") { loadBookings(); return; }
     if (act === "media-open") { mediaOpen(); return; }
+    if (act === "casenav") { data.caseNav = b.dataset.v === "mini" ? "mini" : "rail"; saveDraft(true); renderBody(); status("Case-study navigation \u2014 " + (data.caseNav === "mini" ? "Minimal (right)" : "Left rail") + ". Publish to apply.", true); return; }
     if (act === "icon-open") { iconManageModal(); return; }
     if (act === "ver-refresh") { loadVersions(); return; }
     if (act === "ver-load") { if (confirm("Load this version into the editor? Your current unsaved edits will be replaced \u2014 Publishing is still required to make it live.")) applyVersion(b.dataset.sha, b.dataset.when); return; }

@@ -989,10 +989,23 @@
   function tocHtml(blocks, showIntro) {
     var items = blocks.map(function (b, i) { return b.nav ? { label: b.nav, id: "pjs-" + slug(b.nav, i) } : null; }).filter(Boolean);
     if (items.length + (showIntro ? 1 : 0) < 2) return "";
-    var chips = showIntro ? '<button class="pj__toc-chip pj__toc-chip--intro is-active" data-goto="__intro">Project info</button>' : "";
+    var chips = showIntro ? '<button class="pj__toc-chip pj__toc-chip--intro is-active" data-goto="__intro"><span class="pj__toc-lbl">Project info</span></button>' : "";
     return chips + items.map(function (it, i) {
-      return '<button class="pj__toc-chip' + (!showIntro && i === 0 ? " is-active" : "") + '" data-goto="' + it.id + '">' + esc(it.label) + "</button>";
+      return '<button class="pj__toc-chip' + (!showIntro && i === 0 ? " is-active" : "") + '" data-goto="' + it.id + '" aria-label="' + attr(it.label) + '"><span class="pj__toc-lbl">' + esc(it.label) + "</span></button>";
     }).join("");
+  }
+  // Shared nav model for the minimal (right) navigator + mobile dots/sheet: same sections as the rail
+  // TOC, with an "Overview" entry that jumps to the top. Returns [] when there aren't enough sections.
+  function navItems(blocks, showIntro) {
+    var items = blocks.map(function (b, i) { return b.nav ? { label: b.nav, id: "pjs-" + slug(b.nav, i) } : null; }).filter(Boolean);
+    if (items.length + (showIntro ? 1 : 0) < 2) return [];
+    return (showIntro ? [{ label: "Overview", id: "__intro" }] : []).concat(items);
+  }
+  function dotsHtml(items) {
+    if (!items.length) return "";
+    var dots = items.map(function (it) { return '<span class="pj__dot" data-dot="' + it.id + '"></span>'; }).join("");
+    return '<span class="pj__dots-row">' + dots + '</span><span class="pj__dots-lbl">Sections</span>' +
+      '<svg class="pj__dots-chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>';
   }
   function coverHtml(w, st) {
     var cov = w.image || (st && st.cover);   // unified: the project image doubles as the case-study cover
@@ -1375,6 +1388,8 @@
           '</aside>' +
           '<main class="pj__main" data-content></main>' +
         '</div>' +
+        '<button class="pj__dots" data-dots type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Sections"></button>' +
+        '<div class="pj__sheet-bg" data-sheetbg></div>' +
       '</div>';
     document.body.appendChild(overlay);
     scroller = overlay.querySelector(".pj__scroll");
@@ -1486,8 +1501,11 @@
       openLbx(group, imgs.indexOf(clickedImg));
       return;
     }
+    if (e.target.closest("[data-sheetbg]")) { closeSheet(); return; }
+    var dotsBtn = e.target.closest("[data-dots]");
+    if (dotsBtn) { var sheetOpen = overlay.classList.toggle("pj--sheet-open"); dotsBtn.setAttribute("aria-expanded", sheetOpen ? "true" : "false"); return; }
     var goto = e.target.closest("[data-goto]");
-    if (goto) { gotoSection(goto.getAttribute("data-goto")); return; }
+    if (goto) { gotoSection(goto.getAttribute("data-goto")); closeSheet(); return; }
     var view = e.target.closest("[data-view]");
     if (view) {
       if (view.getAttribute("data-view") === "full") scrollToCase();
@@ -1901,6 +1919,12 @@
     var blocks = st.blocks || [];
     var showIntro = !!(w.image || st.cover) || blocks.length > 0;
     overlay.querySelector("[data-toc]").innerHTML = tocHtml(blocks, showIntro);
+    var navMode = (window.RK && window.RK.data && window.RK.data.caseNav === "mini") ? "mini" : "rail";
+    overlay.classList.toggle("pj--mini", navMode === "mini");
+    overlay.classList.remove("pj--sheet-open");
+    var _navItems = navItems(blocks, showIntro);
+    var _dots = overlay.querySelector("[data-dots]"); if (_dots) _dots.innerHTML = dotsHtml(_navItems);
+    if (navMode === "mini" && _navItems.length) { try { if (!localStorage.getItem("rk:pj:navpeek")) { localStorage.setItem("rk:pj:navpeek", "1"); overlay.classList.add("pj--navpeek"); setTimeout(function () { overlay.classList.remove("pj--navpeek"); }, 2400); } } catch (e) {} }
     var contentEl = overlay.querySelector("[data-content]");
     var html = contentHtml(w);
     // In the admin live-preview, re-rendering the SAME project on every keystroke
@@ -2022,9 +2046,8 @@
       secs.forEach(function (s) { if (s.offsetTop <= y) active = s; });
       id = active ? active.id : null;
     }
-    overlay.querySelectorAll(".pj__toc-chip").forEach(function (c) {
-      c.classList.toggle("is-active", c.getAttribute("data-goto") === id);
-    });
+    overlay.querySelectorAll(".pj__toc-chip").forEach(function (c) { c.classList.toggle("is-active", c.getAttribute("data-goto") === id); });
+    overlay.querySelectorAll(".pj__dot").forEach(function (d) { d.classList.toggle("is-active", d.getAttribute("data-dot") === id); });
     // Keep the active chip visible in the mobile horizontal nav: only when the section actually
     // changes (so we never fight a manual sideways scroll), and scroll the bar itself horizontally
     // (scrollBy on the bar, never scrollIntoView, so the page never moves).
@@ -2040,6 +2063,7 @@
       }
     }
   }
+  function closeSheet() { if (!overlay) return; overlay.classList.remove("pj--sheet-open"); var d = overlay.querySelector("[data-dots]"); if (d) d.setAttribute("aria-expanded", "false"); }
   function gotoSection(id) {
     if (id === "__intro") {
       var cov = overlay.querySelector(".pj__cover");
