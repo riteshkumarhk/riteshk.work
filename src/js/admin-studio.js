@@ -297,17 +297,20 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     updateDirtyUI();
     clearTimeout(saveTimer);
     const save = () => {
+      let ok = true;
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
         localStorage.setItem(DRAFT_SIG_KEY, (window.RK && window.RK.publishedSig) || "");
         narrate();
       } catch (e) {
+        ok = false;
         status("\u26a0 Draft too big to auto-save locally \u2014 your images are safe at full quality here. Hit Publish to store them (large ones are hosted as files automatically).");
       }
       histPush();
+      return ok;
     };
-    if (immediate) save();
-    else saveTimer = setTimeout(save, 400);
+    if (immediate) return save();
+    saveTimer = setTimeout(save, 400);
   }
 
   function readDraft() {
@@ -9287,7 +9290,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "fa-select") { if (faJustMoved) { faJustMoved = false; return; } faSel = +b.dataset.aindex; faPlacing = false; renderL2(); return; }
     if (act === "fa-remove") { const bl = faBlock(i, +b.dataset.bindex); if (bl && bl.annotations) { bl.annotations.splice(+b.dataset.aindex, 1); if (faSel >= bl.annotations.length) faSel = bl.annotations.length - 1; saveDraft(true); renderL2(); } return; }
     if (act === "fa-focustoggle") { const bl = faBlock(i, +b.dataset.bindex); const a = bl && bl.annotations && bl.annotations[+b.dataset.aindex]; if (a) { if (a.focus) delete a.focus; else a.focus = { shape: "rect", x: 25, y: 25, w: 35, h: 35 }; faSel = +b.dataset.aindex; saveDraft(true); renderL2(); } return; }
-    if (act === "study-preview") { saveDraft(true); status("Opening your current draft in a new tab\u2026"); return; }
+    if (act === "study-preview") { if (saveDraft(true)) status("Opening your current draft in a new tab\u2026"); else { e.preventDefault(); status("Draft too big to preview \u2014 Publish to view the updates."); } return; }
     if (act === "work-dup") {
       const src = data.work[i];
       if (!src || src.encWork) return;
@@ -14979,7 +14982,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (_newtab) _newtab.addEventListener("click", function () {
       try {
         if (newtabVisitUrl) { window.open(newtabVisitUrl, "_blank", "noopener"); return; }   // post-publish "Visit site" -> the live site
-        saveDraft(true);   // flush the in-memory draft synchronously so the new tab's ?preview reads the very latest unpublished edits
+        // Flush the in-memory draft so the new tab's ?preview reads the latest edits. If it's too big for
+        // localStorage (many not-yet-published images as data URLs), a separate tab can't see it -> say so.
+        if (!saveDraft(true)) { status("Draft too big to preview in a new tab \u2014 Publish to view the updates."); return; }
         window.open(previewUrl(), "_blank", "noopener");
       } catch (e) {}
     });
