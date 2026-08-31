@@ -812,8 +812,8 @@ html.pj-lock, html.pj-lock body { overflow: hidden; }
 .pj--mini .pj__toc-chip.is-active { color: var(--accent); }
 .pj--mini .pj__toc-chip.is-active::after { width: 22px; opacity: 1; }
 
-/* immersive extras: contextual jump arrow (stands in for the Overview/Full toggle) + floating section pill */
-.pj--mini .pj__viewseg { display: none; }
+/* immersive extras: a contextual jump arrow shown ONLY while the nav is collapsed - expanding the panel
+   (hover / open sheet) swaps it for the real Overview-Full toggle - plus a floating section pill */
 .pj--mini .pj__icon[data-pj="prev"], .pj--mini .pj__icon[data-pj="next"] { display: none; }
 .pj__jump { display: none; }
 .pj--mini.pj--hasnav .pj__jump {
@@ -824,6 +824,7 @@ html.pj-lock, html.pj-lock body { overflow: hidden; }
 .pj--mini .pj__jump:hover { transform: translateY(-2px); filter: brightness(1.07); }
 .pj--mini .pj__jump svg, .pj--mini .pj__dots-jump svg { transition: transform .4s var(--ease); }
 .pj--mini.pj--atfull .pj__jump svg, .pj--mini.pj--atfull .pj__dots-jump svg { transform: rotate(180deg); }
+.pj--mini .pj__side:hover .pj__jump, .pj--mini .pj__side:focus-within .pj__jump, .pj--mini.pj--navpeek .pj__jump { display: none; }
 .pj__nowpill { display: none; }
 .pj--mini.pj--hasnav .pj__nowpill {
   display: inline-flex; align-items: center; position: fixed; top: .8rem; left: 50%; transform: translateX(-50%);
@@ -868,7 +869,7 @@ html[data-appearance="light"] .pj--mini .pj__nowpill { background: rgba(242, 238
     box-shadow: 0 12px 32px rgba(0, 0, 0, .4);
   }
   .pj--mini .pj__dots:empty { display: none; }
-  .pj--mini .pj__jump { display: none; }
+  .pj--mini.pj--hasnav .pj__jump { display: none; }
   .pj--mini.pj--sheet-open .pj__dots { opacity: 0; pointer-events: none; }
   .pj__dots-jump { display: grid; place-items: center; flex: none; width: 27px; height: 27px; border: 0; border-radius: 50%; background: var(--accent); color: #0a0a0a; cursor: pointer; }
   .pj__dots-open { display: inline-flex; align-items: center; gap: .5rem; padding: .15rem .5rem .15rem .1rem; background: none; border: 0; color: inherit; cursor: pointer; font: inherit; }
