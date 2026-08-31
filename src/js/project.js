@@ -1004,8 +1004,9 @@
   function dotsHtml(items) {
     if (!items.length) return "";
     var dots = items.map(function (it) { return '<span class="pj__dot" data-dot="' + it.id + '"></span>'; }).join("");
-    return '<span class="pj__dots-row">' + dots + '</span><span class="pj__dots-lbl">Sections</span>' +
-      '<svg class="pj__dots-chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>';
+    return '<button class="pj__dots-jump" data-jump type="button" aria-label="Jump into the case study"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12l7 7 7-7"/></svg></button>' +
+      '<button class="pj__dots-open" data-dots type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Sections"><span class="pj__dots-row">' + dots + '</span>' +
+      '<svg class="pj__dots-chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>';
   }
   function coverHtml(w, st) {
     var cov = w.image || (st && st.cover);   // unified: the project image doubles as the case-study cover
@@ -1376,8 +1377,10 @@
           '<button class="pj__icon" data-pj="next" aria-label="Next project" title="Next"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button>' +
           '<button class="pj__icon pj__icon--close" data-pj="close" aria-label="Close case study" title="Close"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
         '</div>' +
+        '<button class="pj__nowpill" data-nowpill type="button"><span class="pj__nowpill-t"></span></button>' +
         '<div class="pj__shell">' +
           '<aside class="pj__side">' +
+            '<button class="pj__jump" data-jump type="button" aria-label="Jump into the case study"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12l7 7 7-7"/></svg></button>' +
             '<div class="pj__side-head" data-crumb></div>' +
             '<div class="pj__viewseg" data-viewseg hidden>' +
               '<button class="pj__viewseg-btn is-active" type="button" data-view="overview">Overview</button>' +
@@ -1388,7 +1391,7 @@
           '</aside>' +
           '<main class="pj__main" data-content></main>' +
         '</div>' +
-        '<button class="pj__dots" data-dots type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Sections"></button>' +
+        '<div class="pj__dots" data-dotswrap></div>' +
         '<div class="pj__sheet-bg" data-sheetbg></div>' +
       '</div>';
     document.body.appendChild(overlay);
@@ -1502,6 +1505,14 @@
       return;
     }
     if (e.target.closest("[data-sheetbg]")) { closeSheet(); return; }
+    if (e.target.closest("[data-nowpill]")) { try { scroller.scrollTo({ top: 0, behavior: "smooth" }); } catch (e2) { scroller.scrollTop = 0; } return; }
+    if (e.target.closest("[data-jump]")) {
+      // Immersive nav: one contextual arrow stands in for the Overview/Full toggle - down at the top
+      // dives into the case study (Full), up once you're inside returns to the top (Overview).
+      if (overlay.classList.contains("pj--atfull")) { try { scroller.scrollTo({ top: 0, behavior: "smooth" }); } catch (e2) { scroller.scrollTop = 0; } }
+      else scrollToCase();
+      closeSheet(); return;
+    }
     var dotsBtn = e.target.closest("[data-dots]");
     if (dotsBtn) { var sheetOpen = overlay.classList.toggle("pj--sheet-open"); dotsBtn.setAttribute("aria-expanded", sheetOpen ? "true" : "false"); return; }
     var goto = e.target.closest("[data-goto]");
@@ -1912,19 +1923,26 @@
     show(0);
   }
 
-  function fillContent(w, keepAnchor) {
-    var head = overlay.querySelector("[data-crumb]");
-    head.innerHTML = '<b>' + esc(w.client || "") + "</b>" + (w.plateTag ? "<span>" + esc(w.plateTag) + "</span>" : "");
+  // Apply just the section-navigator structure (rail vs immersive) for w, re-reading the live caseNav
+  // setting - split out so the studio can flip modes in the open preview without a full content re-render.
+  function applyNav(w) {
     var st = w.study || {};
     var blocks = st.blocks || [];
     var showIntro = !!(w.image || st.cover) || blocks.length > 0;
     overlay.querySelector("[data-toc]").innerHTML = tocHtml(blocks, showIntro);
-    var navMode = (window.RK && window.RK.data && window.RK.data.caseNav === "mini") ? "mini" : "rail";
+    var cn = (window.RK && window.RK.data && window.RK.data.caseNav) || "";
+    var navMode = (cn === "immersive" || cn === "mini") ? "mini" : "rail";
     overlay.classList.toggle("pj--mini", navMode === "mini");
-    overlay.classList.remove("pj--sheet-open");
-    var _navItems = navItems(blocks, showIntro);
-    var _dots = overlay.querySelector("[data-dots]"); if (_dots) _dots.innerHTML = dotsHtml(_navItems);
+    overlay.classList.remove("pj--sheet-open", "pj--atfull");
+    _navItems = navItems(blocks, showIntro);
+    overlay.classList.toggle("pj--hasnav", navMode === "mini" && _navItems.length > 0);
+    var _dots = overlay.querySelector("[data-dotswrap]"); if (_dots) _dots.innerHTML = dotsHtml(_navItems);
     if (navMode === "mini" && _navItems.length) { try { if (!localStorage.getItem("rk:pj:navpeek")) { localStorage.setItem("rk:pj:navpeek", "1"); overlay.classList.add("pj--navpeek"); setTimeout(function () { overlay.classList.remove("pj--navpeek"); }, 2400); } } catch (e) {} }
+  }
+  function fillContent(w, keepAnchor) {
+    var head = overlay.querySelector("[data-crumb]");
+    head.innerHTML = '<b>' + esc(w.client || "") + "</b>" + (w.plateTag ? "<span>" + esc(w.plateTag) + "</span>" : "");
+    applyNav(w);
     var contentEl = overlay.querySelector("[data-content]");
     var html = contentHtml(w);
     // In the admin live-preview, re-rendering the SAME project on every keystroke
@@ -2027,15 +2045,19 @@
     return side ? side.offsetHeight + 8 : 60;
   }
   var lastSpyId = null; // last spied section id - auto-scroll the mobile nav only when it changes
+  var _navItems = []; // shared nav model (immersive pill + dots + minimap) for the current project
   function updateSpy() {
     if (!overlay || !overlay.classList.contains("is-open")) return;
     var y = scroller.scrollTop + topOffset() + 14;
+    var segBody = overlay.querySelector(".pj__body");
+    var atFull = segBody ? (y >= segBody.offsetTop) : (scroller.scrollTop > (scroller.clientHeight || 700) * 0.6);
+    overlay.classList.toggle("pj--atfull", atFull);
     var seg = overlay.querySelector("[data-viewseg]");
     if (seg && !seg.hidden) {
-      var segBody = overlay.querySelector(".pj__body");
-      var atFull = segBody ? (y >= segBody.offsetTop) : false;
       seg.querySelectorAll(".pj__viewseg-btn").forEach(function (b) { b.classList.toggle("is-active", atFull ? b.getAttribute("data-view") === "full" : b.getAttribute("data-view") === "overview"); });
     }
+    var jlbl = atFull ? "Back to the top" : "Jump into the case study";
+    overlay.querySelectorAll("[data-jump]").forEach(function (j) { j.setAttribute("aria-label", jlbl); j.setAttribute("title", jlbl); });
     var secs = [].slice.call(overlay.querySelectorAll("[data-nav]"));
     if (!secs.length) return;
     var id;
@@ -2048,6 +2070,8 @@
     }
     overlay.querySelectorAll(".pj__toc-chip").forEach(function (c) { c.classList.toggle("is-active", c.getAttribute("data-goto") === id); });
     overlay.querySelectorAll(".pj__dot").forEach(function (d) { d.classList.toggle("is-active", d.getAttribute("data-dot") === id); });
+    var pillT = overlay.querySelector("[data-nowpill] .pj__nowpill-t");
+    if (pillT) { var nit = _navItems.filter(function (n) { return n.id === id; })[0]; pillT.textContent = nit ? nit.label : (id === "__intro" ? "Overview" : ""); }
     // Keep the active chip visible in the mobile horizontal nav: only when the section actually
     // changes (so we never fight a manual sideways scroll), and scroll the bar itself horizontally
     // (scrollBy on the bar, never scrollIntoView, so the page never moves).
@@ -2283,6 +2307,12 @@
       if (d.__rk === "selectInPreview") {
         previewSelIdx = typeof d.index === "number" ? d.index : -1;
         applyPreviewToolbar();
+        return;
+      }
+      // Studio -> preview: the case-study navigator mode changed (Appearance tab). Re-apply the nav to
+      // the open overlay live, no Publish needed.
+      if (d.__rk === "caseNav") {
+        if (overlay.classList.contains("is-open") && activeId != null) { var wc = workById(activeId); if (wc) { applyNav(wc); updateSpy(); } }
         return;
       }
     });

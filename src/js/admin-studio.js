@@ -6616,12 +6616,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     hmPush(); saveDraft();
   }
   function caseNavBlock() {
-    var mode = (data.caseNav === "mini") ? "mini" : "rail";
+    var mode = (data.caseNav === "immersive" || data.caseNav === "mini") ? "immersive" : "rail";
     return '<div class="aimode"><div class="aimode__lbl">Case-study navigation</div>' +
-      '<div class="af__hint" style="margin:-.15rem 0 .7rem">How readers move between sections inside a case study. <b>Minimal</b> frees the reading column and tucks the navigator to the right edge \u2014 hover to reveal it (a dots sheet on mobile). Applies on Publish.</div>' +
+      '<div class="af__hint" style="margin:-.15rem 0 .7rem">How readers move between sections inside a case study. <b>Immersive</b> frees the reading column and tucks the navigator to the right edge \u2014 hover to reveal it, with a floating section marker and a contextual jump arrow (a dots sheet on mobile). Open any case study in the preview to see it \u2014 no Publish needed.</div>' +
       '<div class="aimode__opts">' +
-      '<button type="button" class="aimode__opt' + (mode === "rail" ? " is-on" : "") + '" data-act="casenav" data-v="rail"><b>Left rail</b><span>persistent sidebar of section links</span></button>' +
-      '<button type="button" class="aimode__opt' + (mode === "mini" ? " is-on" : "") + '" data-act="casenav" data-v="mini"><b>Minimal (right)</b><span>tucks to the edge, hover to reveal</span></button>' +
+      '<button type="button" class="aimode__opt' + (mode === "rail" ? " is-on" : "") + '" data-act="casenav" data-v="rail"><b>Left nav</b><span>persistent sidebar of section links</span></button>' +
+      '<button type="button" class="aimode__opt' + (mode === "immersive" ? " is-on" : "") + '" data-act="casenav" data-v="immersive"><b>Immersive</b><span>tucks to the edge, expands on hover</span></button>' +
       "</div></div>";
   }
   function heroMotionBlock() {
@@ -8856,7 +8856,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "book-dismiss") { bookDo(b.dataset.uid, "dismiss", b); return; }
     if (act === "book-refresh") { loadBookings(); return; }
     if (act === "media-open") { mediaOpen(); return; }
-    if (act === "casenav") { data.caseNav = b.dataset.v === "mini" ? "mini" : "rail"; saveDraft(true); renderBody(); status("Case-study navigation \u2014 " + (data.caseNav === "mini" ? "Minimal (right)" : "Left rail") + ". Publish to apply.", true); return; }
+    if (act === "casenav") { data.caseNav = b.dataset.v === "immersive" ? "immersive" : "rail"; saveDraft(true); try { var _fw = frameWin(); if (_fw) { try { _fw.RK.data = resolvePreviewData(data); } catch (e) {} _fw.postMessage({ __rk: "caseNav" }, "*"); } } catch (e) {} renderBody(); status("Case-study navigation \u2014 " + (data.caseNav === "immersive" ? "Immersive" : "Left nav") + " \u00b7 previewing live (open a case study in the preview to see it).", true); return; }
     if (act === "icon-open") { iconManageModal(); return; }
     if (act === "ver-refresh") { loadVersions(); return; }
     if (act === "ver-load") { if (confirm("Load this version into the editor? Your current unsaved edits will be replaced \u2014 Publishing is still required to make it live.")) applyVersion(b.dataset.sha, b.dataset.when); return; }
