@@ -680,6 +680,8 @@ html[data-appearance="light"] .pjb__gallery-nav:hover { background: rgba(247, 24
 .pjtb__b--danger:hover { background: rgba(255, 122, 122, .14); color: #ff7a7a; }
 .pjtb__b--lock.is-locked { color: var(--accent); background: rgba(216, 166, 71, .16); }
 .pjtb__b--lock.is-locked:hover { color: var(--accent); background: rgba(216, 166, 71, .26); }
+.pjtb__b.is-off { color: var(--accent); background: rgba(216, 166, 71, .16); }
+.pjtb__b.is-off:hover { color: var(--accent); background: rgba(216, 166, 71, .26); }
 /* live-preview: section drag grip + drop indicators (admin preview only) */
 .rk-preview .pjb { position: relative; }
 .pvgrip { position: absolute; top: .55rem; left: .55rem; z-index: 7; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 7px; background: var(--bg-elev); color: var(--text-dim); cursor: grab; opacity: 0; transition: opacity .18s var(--ease), color .18s, border-color .18s; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }

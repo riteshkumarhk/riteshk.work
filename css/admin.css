@@ -1320,7 +1320,7 @@ body.adm-lock .cursor { display: none !important; }
 .study__block-sep svg, .study__block-off svg { display: block; }
 .study__block-head:hover .study__block-sep, .study__block-head:hover .study__block-off, .study__block.is-open .study__block-sep, .study__block.is-open .study__block-off, .study__block-sep.is-off, .study__block-off.is-off { display: grid; }
 .study__block-sep:hover, .study__block-off:hover { color: var(--text); border-color: var(--accent); }
-.study__block-off.is-off { color: var(--accent); border-color: var(--accent); background: rgba(216, 166, 71, .12); }
+.study__block-sep.is-off, .study__block-off.is-off { color: var(--accent); border-color: var(--accent); background: rgba(216, 166, 71, .12); }
 .study__block.is-off { border-style: dashed; }
 .study__block.is-off .study__block-label, .study__block.is-off .study__block-badge { opacity: .5; }
 /* divider + on/off + lock read as one group, tighter than the .6rem head gap that separates them from the +/move/dup/delete ops */
