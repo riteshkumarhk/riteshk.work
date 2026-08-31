@@ -285,7 +285,11 @@ import {
     }
 
     const done = () => modal.remove();
-    modal.querySelector("[data-cancel]").addEventListener("click", done);
+    // On the dedicated /studio page the gate is all there is (e.g. a hard refresh re-prompts it), so Cancel
+    // should leave for the public site rather than stranding the owner on a blank editor. From the landing
+    // ··· menu (not a studio page) Cancel just closes the dialog.
+    const onCancel = () => { done(); if (window.__STUDIO_PAGE) { try { location.href = "/"; } catch (e) {} } };
+    modal.querySelector("[data-cancel]").addEventListener("click", onCancel);
     modal.addEventListener("click", (e) => { if (e.target === modal) done(); });
 
     async function submit() {
