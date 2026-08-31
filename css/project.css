@@ -676,6 +676,7 @@ html[data-appearance="light"] .pjb__gallery-nav:hover { background: rgba(247, 24
 .pjtb__b { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-dim); font: inherit; font-size: .92rem; line-height: 1; cursor: pointer; transition: background .15s var(--ease), color .15s var(--ease); }
 .pjtb__b:hover { background: rgba(236, 231, 225, .08); color: var(--text); }
 .pjtb__b:disabled { opacity: .32; cursor: default; }
+.pjtb__sep { flex: 0 0 auto; align-self: stretch; width: 1px; margin: 3px 3px; background: var(--line); }
 .pjtb__b--danger:hover { background: rgba(255, 122, 122, .14); color: #ff7a7a; }
 .pjtb__b--lock.is-locked { color: var(--accent); background: rgba(216, 166, 71, .16); }
 .pjtb__b--lock.is-locked:hover { color: var(--accent); background: rgba(216, 166, 71, .26); }

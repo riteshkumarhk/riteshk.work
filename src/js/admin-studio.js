@@ -4584,9 +4584,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<button class="iconbtn" data-act="study-blockdup" data-index="' + i + '" data-bindex="' + j + '" title="Duplicate section" aria-label="Duplicate section">' + IC.dup + '</button>' +
       '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + '</button>' +
       "</span>" +
+      '<span class="study__block-toggles">' +
       '<button class="iconbtn study__block-sep' + (b.sep === false ? " is-off" : "") + '" data-act="study-blocksep" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.sep === false ? "Flowing into the previous section \u2014 click to add a separator line above" : "Separator line above \u2014 click to flow into the previous section") + '" aria-label="Toggle separator line above">' + (b.sep === false ? IC.divoff : IC.divon) + '</button>' +
       '<button class="iconbtn study__block-off' + (b.off ? " is-off" : "") + '" data-act="study-blockoff" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.off ? "Section hidden from the live site \u2014 click to show" : "Section is on \u2014 click to hide it from the live site") + '" aria-label="' + (b.off ? "Show section" : "Hide section") + '">' + (b.off ? IC.eyeoff : IC.eye) + '</button>' +
       '<button class="iconbtn study__block-lock' + (b.locked ? " is-locked" : "") + '" data-act="study-blocklock" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.locked ? "Locked \u2014 click to unlock" : "Lock this section \u2014 deeper-cut only") + '" aria-label="' + (b.locked ? "Unlock section" : "Lock section") + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' + (b.locked ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<path d="M8 10.5V6.8a4 4 0 0 1 7.5-1.6"/>') + "</svg></button>" +
+      "</span>" +
       '<span class="study__block-chev" aria-hidden="true">' + IC.chev + '</span>' +
       "</div>";
     var common = sfInput(i, j, "nav", "Section label", "Shows in the left nav \u2014 leave blank to hide it there") + sfInput(i, j, "kicker", "Kicker", "small label above the block");

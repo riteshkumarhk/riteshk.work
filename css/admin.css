@@ -1323,6 +1323,8 @@ body.adm-lock .cursor { display: none !important; }
 .study__block-off.is-off { color: var(--accent); border-color: var(--accent); background: rgba(216, 166, 71, .12); }
 .study__block.is-off { border-style: dashed; }
 .study__block.is-off .study__block-label, .study__block.is-off .study__block-badge { opacity: .5; }
+/* divider + on/off + lock read as one group, tighter than the .6rem head gap that separates them from the +/move/dup/delete ops */
+.study__block-toggles { display: flex; align-items: center; gap: .2rem; flex: 0 0 auto; }
 /* Heading field + inline heading-size picker on one row */
 .af__headrow { display: flex; align-items: stretch; gap: .5rem; }
 .af__headrow > input { flex: 1 1 auto; width: auto; min-width: 0; }
