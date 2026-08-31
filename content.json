@@ -6885,5 +6885,7 @@
       "image"
     ]
   },
-  "cardArrange": "inorganic"
+  "cardArrange": "inorganic",
+  "caseNav": "immersive",
+  "caseNavM": "immersive"
 }
