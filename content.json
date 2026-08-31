@@ -1638,7 +1638,7 @@
                 "cells": [
                   {
                     "heading": "Layout Unification",
-                    "body": "<p>Create a common onboarding language.</p><p>Shared:</p><p><ul><li>Visual structure</li><li>Navigation model</li><li>Progress model</li><li>CTA placement</li><li>Interaction patterns</li></ul></p><p>The goal was to make every step feel like part of the same journey regardless of content.</p>",
+                    "body": "<p>Create a common onboarding language.</p><p>Shared interaction pattern with:</p><p></p><ul><li>Visual structure</li><li>Navigation model</li><li>Progress model</li><li>CTA placement</li></ul><p></p><p>The goal was to make every step feel like part of the same journey regardless of content.</p>",
                     "src": ""
                   }
                 ]
