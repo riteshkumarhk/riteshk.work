@@ -1505,11 +1505,11 @@
       return;
     }
     if (e.target.closest("[data-sheetbg]")) { closeSheet(); return; }
-    if (e.target.closest("[data-nowpill]")) { try { scroller.scrollTo({ top: 0, behavior: "smooth" }); } catch (e2) { scroller.scrollTop = 0; } return; }
+    if (e.target.closest("[data-nowpill]")) { cancelPin(); try { scroller.scrollTo({ top: 0, behavior: "smooth" }); } catch (e2) { scroller.scrollTop = 0; } return; }
     if (e.target.closest("[data-jump]")) {
       // Immersive nav: one contextual arrow stands in for the Overview/Full toggle - down at the top
       // dives into the case study (Full), up once you're inside returns to the top (Overview).
-      if (overlay.classList.contains("pj--atfull")) { try { scroller.scrollTo({ top: 0, behavior: "smooth" }); } catch (e2) { scroller.scrollTop = 0; } }
+      if (overlay.classList.contains("pj--atfull")) { cancelPin(); try { scroller.scrollTo({ top: 0, behavior: "smooth" }); } catch (e2) { scroller.scrollTop = 0; } }
       else scrollToCase();
       closeSheet(); return;
     }
@@ -1520,7 +1520,7 @@
     var view = e.target.closest("[data-view]");
     if (view) {
       if (view.getAttribute("data-view") === "full") scrollToCase();
-      else { try { scroller.scrollTo({ top: 0, behavior: "smooth" }); } catch (e2) { scroller.scrollTop = 0; } }
+      else { cancelPin(); try { scroller.scrollTo({ top: 0, behavior: "smooth" }); } catch (e2) { scroller.scrollTop = 0; } }
       closeSheet();
       return;
     }
@@ -2041,18 +2041,21 @@
     var target = sibs[(idx + dir + sibs.length) % sibs.length];
     if (target) openProject(target.id, { push: true });
   }
-  // Scroll so `anchor` sits just below the top chrome, then KEEP it pinned there for a beat. Media/fonts
-  // in the overview finish loading AFTER the jump, grow the page above the target, and would otherwise
-  // slide the section away - leaving the reader parked back in the overview. Bails on any manual wheel/touch.
+  // Scroll so `anchor` sits just below the top chrome, then KEEP it pinned there across LATE reflow. Overview
+  // videos/images on a real network finish loading well AFTER the jump and grow the page above the target;
+  // Chrome scroll-anchors over that, but mobile Safari / in-app webviews do NOT - so the section slid below the
+  // fold and the OVERVIEW filled the screen (the reported "tapped a section, went back to the top" bug). We keep
+  // re-aligning on every real height change and only let go when the reader actually scrolls.
   var _unpin = null;
+  function cancelPin() { if (_unpin) _unpin(); }   // any fresh scroll intent (Overview / top / intro chip) must drop an active section pin so it can't yank back
   function scrollToAnchor(anchor, extra) {
     if (!anchor || !scroller) return;
+    if (_unpin) _unpin();
     var aim = function () { return Math.max(0, Math.round(scroller.scrollTop + anchor.getBoundingClientRect().top - scroller.getBoundingClientRect().top - topOffset() - (extra || 0))); };
     try { scroller.scrollTo({ top: aim(), behavior: "smooth" }); } catch (e) { scroller.scrollTop = aim(); }
-    if (_unpin) _unpin();
     var content = overlay.querySelector("[data-content]") || scroller;
-    var lastH = content.scrollHeight, ro = null, timer = 0, dead = false;
-    var off = function () { if (dead) return; dead = true; try { if (ro) ro.disconnect(); } catch (e) {} scroller.removeEventListener("wheel", off); scroller.removeEventListener("touchstart", off); clearTimeout(timer); _unpin = null; };
+    var lastH = content.scrollHeight, ro = null, cap = 0, dead = false;
+    var off = function () { if (dead) return; dead = true; try { if (ro) ro.disconnect(); } catch (e) {} scroller.removeEventListener("wheel", off); scroller.removeEventListener("touchmove", off); clearTimeout(cap); _unpin = null; };
     if (window.ResizeObserver) {
       ro = new ResizeObserver(function () {
         var h = content.scrollHeight; if (h === lastH) return; lastH = h;   // a real reflow (media/fonts), not the initial observe fire
@@ -2060,9 +2063,11 @@
       });
       try { ro.observe(content); } catch (e) {}
     }
+    // Release the instant the reader takes over (wheel / a real touch-drag - a tap alone must NOT count, or the
+    // pin dies before the late media even loads), with a hard cap so a looping-media block can never trap scroll.
     scroller.addEventListener("wheel", off, { passive: true });
-    scroller.addEventListener("touchstart", off, { passive: true });
-    timer = setTimeout(off, 1800);
+    scroller.addEventListener("touchmove", off, { passive: true });
+    cap = setTimeout(off, 7000);
     _unpin = off;
   }
   function scrollToCase() { scrollToAnchor(overlay && overlay.querySelector(".pj__body"), 0); }
@@ -2130,6 +2135,7 @@
   function closeSheet() { if (!overlay) return; overlay.classList.remove("pj--sheet-open"); var d = overlay.querySelector("[data-dots]"); if (d) d.setAttribute("aria-expanded", "false"); }
   function gotoSection(id) {
     if (id === "__intro") {
+      cancelPin();
       var cov = overlay.querySelector(".pj__cover");
       var vh = scroller.clientHeight || window.innerHeight || 700;
       scroller.scrollTo({ top: cov ? Math.max(0, cov.offsetHeight - vh * 0.5) : 0, behavior: "smooth" });
@@ -2195,6 +2201,7 @@
 
   function closeProject(opts) {
     opts = opts || {};
+    cancelPin();
     var wasOpen = overlay && overlay.classList.contains("is-open");
     destroyStage();
     if (wasOpen) {
