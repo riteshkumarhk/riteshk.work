@@ -1194,7 +1194,7 @@
       var kind = mediaKind(m);
       var stKind = kind === "video" ? "video" : (isGifM(m) ? "gif" : (kind === "image" ? "image" : "frame"));
       var dur = m.dur ? Math.max(1, +m.dur) * 1000 : 5000;
-      return '<div class="pj__stage-slide' + (j === 0 ? " is-active" : "") + '" data-slide="' + j + '" data-kind="' + stKind + '" data-dur="' + dur + '">' + stageSlideMedia(m) + "</div>";
+      return '<div class="pj__stage-slide' + (j === 0 ? " is-active" : "") + '" data-slide="' + j + '" data-kind="' + stKind + '" data-dur="' + dur + (kind === "figma" ? '" data-own-fs="1' : "") + '">' + stageSlideMedia(m) + "</div>";
     }).join("");
     var thumbs = slides.map(function (m, j) { return stageThumbEl(m, j, j === 0); }).join("");
     return '<section class="pj__stage" data-stage data-count="' + slides.length + '">' +
@@ -1235,7 +1235,7 @@
   var videoCursorTimer = 0;
   function fullscreenVideo() {
     var el = fsEl();
-    return el && el.matches && el.matches("video.pjb__media-el, video.pj__cover-el") ? el : null;
+    return el && el.matches && el.matches("video.pjb__media-el, video.pj__cover-el, video.pj__stage-el") ? el : null;
   }
   function showVideoCursor(video) {
     clearTimeout(videoCursorTimer);
@@ -1866,6 +1866,7 @@
     var slides = [].slice.call(stage.querySelectorAll(".pj__stage-slide"));
     var thumbs = [].slice.call(stage.querySelectorAll(".pj__stage-thumb"));
     var fill = stage.querySelector("[data-stage-fill]");
+    var fsBtn = stage.querySelector("[data-stage-fs]");
     var noAuto = document.documentElement.classList.contains("lite") || PREVIEW;
     var idx = 0, timer = 0, paused = false, userPaused = false, visible = true, curVid = null, onEnd = null, onTime = null, io = null, ytDone = {};
     function clearTimer() { if (timer) { clearTimeout(timer); timer = 0; } }
@@ -1884,6 +1885,7 @@
       // scroll the whole overlay vertically on short screens and crop the title above the stage).
       if (thumbs[idx] && strip) { try { var tb = thumbs[idx]; strip.scrollBy({ left: (tb.getBoundingClientRect().left - strip.getBoundingClientRect().left) - (strip.clientWidth - tb.offsetWidth) / 2, behavior: "smooth" }); } catch (e) {} }
       var s = slides[idx];
+      if (fsBtn) fsBtn.hidden = s.hasAttribute("data-own-fs");
       if (s.getAttribute("data-kind") === "video") {
         var v = s.querySelector("video");
         if (v) { curVid = v; v.loop = false; onEnd = function () { next(); }; onTime = function () { if (v.duration) setFill(v.currentTime / v.duration * 100); }; v.addEventListener("ended", onEnd); v.addEventListener("timeupdate", onTime); }
