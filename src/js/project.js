@@ -2041,13 +2041,16 @@
     var target = sibs[(idx + dir + sibs.length) % sibs.length];
     if (target) openProject(target.id, { push: true });
   }
-  // Tiny on-screen diagnostic — only with ?sdbg in the URL — so a real-device tap can be captured in one screenshot.
+  // Tiny on-screen diagnostic — with ?sdbg in the URL, or ALWAYS in the admin live-preview — so a section
+  // jump can be read off-screen in one glance. sdbg() sets the base line; sdbgTail() appends a live line.
+  function sdbgOn() { return PREVIEW || /[?&]sdbg/.test(location.search); }
   function sdbg(msg) {
-    if (!/[?&]sdbg/.test(location.search)) return;
+    if (!sdbgOn()) return;
     var d = document.getElementById("__sdbg");
     if (!d) { d = document.createElement("div"); d.id = "__sdbg"; d.style.cssText = "position:fixed;left:6px;bottom:6px;z-index:99999;max-width:94vw;padding:7px 9px;background:rgba(0,0,0,.86);color:#5f5;font:11px/1.45 ui-monospace,monospace;border:1px solid #5f5;border-radius:6px;white-space:pre-wrap;pointer-events:none"; document.body.appendChild(d); }
-    d.textContent = msg;
+    d.dataset.base = msg; d.textContent = msg;
   }
+  function sdbgTail(t) { if (!sdbgOn()) return; var d = document.getElementById("__sdbg"); if (d) d.textContent = (d.dataset.base || "") + "\n" + t; }
   // Jump so `anchor` sits just under the top chrome and HOLD it there, driving the scroll OURSELVES (never the
   // native smooth-scroll, which commits to a scrollTop computed before the media loads) and RE-AIMing at the
   // live element every frame so mid-glide reflow can't strand it. CRITICAL: we do NOT bail on touchmove during
@@ -2080,6 +2083,17 @@
       scroller.addEventListener("wheel", off, { passive: true });
       scroller.addEventListener("touchmove", off, { passive: true });
       cap = setTimeout(off, 6000);
+      // Watchdog (preview / ?sdbg only): after the jump lands, watch for the scroll COLLAPSING back toward
+      // the top - records the lowest scrollTop seen and when, so the real repro tells us if/when it happens.
+      if (sdbgOn()) {
+        var w0 = Date.now(), minSt = scroller.scrollTop, minAt = 0;
+        var wd = setInterval(function () {
+          var st = scroller.scrollTop, tt = Math.round(anchor.getBoundingClientRect().top - scroller.getBoundingClientRect().top);
+          if (st < minSt) { minSt = st; minAt = Date.now() - w0; }
+          sdbgTail("live st=" + Math.round(st) + " tTop=" + tt + " min=" + Math.round(minSt) + "@" + minAt + "ms" + (minSt < 80 ? " COLLAPSE" : ""));
+          if (dead || Date.now() - w0 > 4500) clearInterval(wd);
+        }, 150);
+      }
     };
     _unpin = off;
     var from = scroller.scrollTop, aim0 = aim();
