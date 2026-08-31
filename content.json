@@ -1326,17 +1326,28 @@
         "unlockHash": "",
         "blocks": [
           {
-            "type": "media",
+            "type": "text",
             "nav": "Existing Experience",
-            "kicker": "EDGE ONBOARDING",
+            "kicker": "Existing Experience",
             "heading": "What the current FRE showed",
+            "body": "<div><p>The existing onboarding experience had evolved organically over time.</p><p>Sign-in, consent, import, personalization, pinning and activation were spread across disconnected surfaces.</p></div>",
+            "list": [],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "media",
+            "nav": "",
+            "kicker": "",
+            "heading": "",
             "items": [
               {
                 "src": "/assets/uploads/560a661ed72009d61ae11755ae9b4850644e1b9f0671e16a2877e26a3ff871c7.mp4",
                 "caption": "",
                 "controls": true
               }
-            ]
+            ],
+            "sep": false
           },
           {
             "type": "gallery",
@@ -1380,39 +1391,39 @@
             "nav": "",
             "kicker": "",
             "heading": "",
-            "body": "<p>The existing onboarding experience had evolved organically over time.</p><p>Sign-in, consent, import, personalization, pinning and activation were spread across disconnected surfaces.</p><p>Users experienced onboarding as separate experiences rather than a coherent journey. This contributed to drop-off between stages and made future growth initiatives increasingly difficult to scale.</p>",
+            "body": "<p>Users experienced onboarding as separate experiences rather than a coherent journey. This contributed to drop-off between stages and made future growth initiatives increasingly difficult to scale.</p>",
             "list": [],
             "src": "",
             "caption": "",
             "sep": false
           },
           {
-            "type": "columns",
+            "type": "rows",
             "nav": "Business Justification",
             "kicker": "Business justification",
             "heading": "Why two surfaces? ",
             "items": [
               {
-                "label": "",
+                "label": "Hard surface",
                 "cells": [
                   {
-                    "heading": "Hard surface",
+                    "heading": "",
                     "body": "Ensure critical setup and compliance actions happen before users start browsing.<div><ul><li>Sign-in</li><li>Sync notice</li><li>Data import</li><li>Privacy consents</li></ul></div>",
                     "src": ""
                   },
                   {
-                    "heading": "High-priority actions because they directly impacted:",
-                    "body": "<div><ul><li>User retention</li><li>Browser switching success</li><li>Compliance requirements</li><li>Microsoft account adoption</li></ul></div>",
+                    "heading": "",
+                    "body": "High-priority actions because they directly impacted:<div><ul><li>User retention</li><li>Browser switching success</li><li>Compliance requirements</li><li>Microsoft account adoption</li></ul></div>",
                     "src": ""
                   }
                 ]
               },
               {
-                "label": "",
+                "label": "Soft surface",
                 "cells": [
                   {
-                    "heading": "Soft surface",
-                    "body": "Drive personalization and activation without introducing excessive friction.<div><br><div><ul><li><span style=\"font-size: 0.9rem;\">Themes</span></li><li>Layout preferences</li><li>Pinning</li><li>New tab customization</li></ul></div></div>",
+                    "heading": "",
+                    "body": "<p>Drive personalization and activation without introducing excessive friction.</p><p><ul><li>Themes</li><li>Layout preferences</li><li>Pinning</li><li>New tab customization</li></ul></p>",
                     "src": ""
                   },
                   {
@@ -1566,7 +1577,7 @@
             "body": "",
             "src": "/assets/uploads/843a479d76d937df1e59443bbc2e994f4b75cc31616bc03b669776c8e1397b8e.webp",
             "caption": "",
-            "flip": false,
+            "flip": true,
             "sep": false,
             "hsize": "sm"
           },
@@ -1590,7 +1601,7 @@
             "body": "",
             "src": "/assets/uploads/27586e8283ae8e23303714f5fef87f13edc7547f3f04ae02e5b0bd47f257bdb3.webp",
             "caption": "",
-            "flip": false,
+            "flip": true,
             "sep": false,
             "hsize": "sm"
           },
@@ -1735,7 +1746,7 @@
             "nav": "",
             "kicker": "",
             "heading": "",
-            "body": "Once leadership aligned on the opportunity, the work evolved from exploration into product development. <span style=\"font-size: 0.9rem;\">This required translating the vision into something that could actually ship.</span>",
+            "body": "<p>Once leadership aligned on the opportunity, the work evolved from exploration into product development. This required translating the vision into something that could actually ship.</p>",
             "list": [],
             "src": "",
             "caption": "",
@@ -1779,7 +1790,7 @@
             "nav": "",
             "kicker": "",
             "heading": "Compromises & Reality",
-            "body": "The final experience wasn't a direct translation of the original vision.<div><br></div><div>Privacy requirements, engineering constraints, experimentation needs, and rollout realities all shaped the final product.</div><div><br></div><div>My role evolved from generating future-state concepts to helping teams identify which ideas delivered the most value while remaining feasible to ship.</div>",
+            "body": "<p>The final experience wasn't a direct translation of the original vision.</p><p>Privacy requirements, engineering constraints, experimentation needs, and rollout realities all shaped the final product.</p><p>My role evolved from generating future-state concepts to helping teams identify which ideas delivered the most value while remaining feasible to ship.</p>",
             "list": [],
             "src": "",
             "caption": "",
