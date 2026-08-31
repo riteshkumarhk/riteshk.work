@@ -700,6 +700,23 @@ import {
       '<div class="mobins__sec"><h3>Where visitors are</h3>' + countries(cfHas ? tr.geo : ev.geo) + "</div>" +
       '<div class="mobins__sec"><h3>Recent activity</h3>' + recent(ev.recent) + "</div>";
   }
+  // Lock the page behind the mobile sheet — stop Lenis + pin the body via the shared pj-lock rule, which also
+  // hides the scrollbar so the sheet + scrim sit truly edge-to-edge and centred (no scrollbar-gutter offset).
+  var _sheetY = 0;
+  function sheetLock(on) {
+    var b = document.body;
+    if (on) {
+      _sheetY = window.scrollY || window.pageYOffset || 0;
+      if (window.__lenis && window.__lenis.stop) window.__lenis.stop();
+      document.documentElement.classList.add("pj-lock");
+      b.style.top = (-_sheetY) + "px";
+    } else {
+      if (window.__lenis && window.__lenis.start) window.__lenis.start();
+      document.documentElement.classList.remove("pj-lock");
+      b.style.top = "";
+      try { if (window.__lenis && window.__lenis.scrollTo) window.__lenis.scrollTo(_sheetY, { immediate: true }); else window.scrollTo(0, _sheetY); } catch (e) {}
+    }
+  }
   function buildMenu() {
     var _fly = document.querySelector(".rkfly"); if (_fly && _fly.__dismiss) _fly.__dismiss(true);   // fold the recruiter flyout away — the menu itself offers “Special view”
     const theme = (window.__theme ? window.__theme.mode() : (localStorage.getItem(THEME_KEY) || "system"));
@@ -715,6 +732,7 @@ import {
     var asSheet = window.innerWidth <= 999;
     if (asSheet) {
       menuEl.classList.add("cmenu--sheet");
+      sheetLock(true);
       var scrim = document.createElement("div");
       scrim.className = "cmenu__scrim";
       scrim.addEventListener("click", closeMenu);
@@ -760,8 +778,10 @@ import {
   }
   function closeMenu() {
     if (!menuEl) return;
+    var wasSheet = menuEl.classList.contains("cmenu--sheet");
     if (menuEl.__scrim) { menuEl.__scrim.remove(); menuEl.__scrim = null; }
     menuEl.remove(); menuEl = null;
+    if (wasSheet) sheetLock(false);
     document.removeEventListener("click", onDocClick);
     window.removeEventListener("resize", positionMenu);
     placeSoundToast();   // menu gone → return the toast to the corner
