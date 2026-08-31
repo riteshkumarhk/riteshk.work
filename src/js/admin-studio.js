@@ -293,19 +293,42 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     saveDraft(immediate);
   }
 
+  // Local-draft storage gauge (status-bar chip). No browser API gives the exact localStorage cap and it
+  // varies by device/browser, so we show % against a conservative default that SELF-CALIBRATES to this
+  // device's real ceiling the first time a save actually fails (persisted); the hard "full" state is
+  // driven by that real failure, not the estimate.
+  var LS_CAP_KEY = "rk:adm:lscap", LS_CAP_DEFAULT = 5 * 1024 * 1024;
+  var draftBytes = 0, draftFull = false;
+  function lsCap() { try { return Math.max(1, +localStorage.getItem(LS_CAP_KEY) || LS_CAP_DEFAULT); } catch (e) { return LS_CAP_DEFAULT; } }
+  function fmtMB(n) { return (n / 1048576).toFixed(n < 1048576 ? 2 : 1) + " MB"; }
+  function updateDraftMeter() {
+    var chip = root && root.querySelector("[data-draftmeter]"); if (!chip) return;
+    var cap = lsCap(), pct = Math.min(999, Math.round(draftBytes / cap * 100));
+    chip.setAttribute("data-lvl", (draftFull || pct >= 85) ? "hi" : pct >= 65 ? "mid" : "lo");
+    var tx = chip.querySelector("[data-draftmeter-tx]"); if (tx) tx.textContent = draftFull ? "Draft full" : ("Draft " + pct + "%");
+    chip.title = draftFull
+      ? ("Local draft storage is full (" + fmtMB(draftBytes) + ") \u2014 recent edits can\u2019t be saved on this device. Publish to offload images to hosted files and free space, or download a backup from Settings.")
+      : ("Local draft \u00b7 " + pct + "% of this browser\u2019s draft storage (~" + fmtMB(draftBytes) + ").\nImages you add stay in the draft until you Publish, which hosts them as files and frees space.");
+  }
+
   function saveDraft(immediate) {
     updateDirtyUI();
     clearTimeout(saveTimer);
     const save = () => {
       let ok = true;
+      const s = JSON.stringify(data);
+      draftBytes = s.length;
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+        localStorage.setItem(DRAFT_KEY, s);
         localStorage.setItem(DRAFT_SIG_KEY, (window.RK && window.RK.publishedSig) || "");
+        draftFull = false;
         narrate();
       } catch (e) {
-        ok = false;
+        ok = false; draftFull = true;
+        try { if (draftBytes < lsCap()) localStorage.setItem(LS_CAP_KEY, String(draftBytes)); } catch (_) {}   // learn this device's real ceiling from the failure
         status("\u26a0 Draft too big to auto-save locally \u2014 your images are safe at full quality here. Hit Publish to store them (large ones are hosted as files automatically).");
       }
+      updateDraftMeter();
       histPush();
       return ok;
     };
@@ -10549,6 +10572,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         if (window.RK) { window.RK.published = clone(data); if (window.RK.sig) window.RK.publishedSig = window.RK.sig(JSON.stringify(data)); }
         try { localStorage.setItem("rk:adm:pubtime", String(Date.now())); } catch (e) {}
         updateDirtyUI();
+        draftBytes = 0; draftFull = false; updateDraftMeter();   // draft cleared -> gauge back to empty
         histReset();
       };
       if (viaR2) {
@@ -14847,6 +14871,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<button class="adm__hist-btn" data-redo type="button" aria-label="Redo" title="Redo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg></button>' +
         "</div>" +
         '<span class="adm__status" aria-live="polite">Editing local draft</span>' +
+        '<span class="adm__dmeter" data-draftmeter data-lvl="lo" tabindex="0" aria-label="Local draft storage"><span class="adm__dmeter-dot"></span><span class="adm__dmeter-tx" data-draftmeter-tx>Draft 0%</span></span>' +
         '<button class="adm__bar-prev" data-prevtoggle type="button" aria-label="Show or hide the live preview" title="Hide the live preview" aria-pressed="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="14" y1="4" x2="14" y2="20"/></svg><span class="adm__bar-prev-tx">Live preview</span></button>' +
         '<div class="adm__dev" data-dev-wrap>' +
           '<button class="adm__dev-btn" data-dev-toggle type="button" aria-haspopup="true" aria-expanded="false" title="Preview size"><span class="adm__dev-ic" data-dev-ic>' + DEV_ICON.responsive + '</span><span class="adm__dev-lbl" data-dev-lbl>Responsive</span><svg class="adm__dev-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
@@ -14989,6 +15014,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       } catch (e) {}
     });
     if (localStorage.getItem(PREV_OFF_KEY) === "1" && _prevToggle) { root.classList.add("is-prevoff"); _prevToggle.setAttribute("aria-pressed", "false"); _prevToggle.title = "Show the live preview"; }
+    try { draftBytes = (localStorage.getItem(DRAFT_KEY) || "").length; } catch (e) {}   // seed the gauge from the persisted draft
+    updateDraftMeter();
     // Resizable editor/preview divider - drag to set the editor width (persists). Drag it right to shrink
     // the preview down to a tablet/phone width and watch the site reflow - a live responsive view.
     (function () {
