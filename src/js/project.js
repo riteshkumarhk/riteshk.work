@@ -959,6 +959,7 @@
     gen: genBlock,
   };
   function renderBlock(b, i) {
+    if (b.off) return "";
     var navLabel = b.nav || "";
     var idAttr = navLabel ? ' id="pjs-' + slug(navLabel, i) + '"' : "";
     var navAttr = navLabel ? ' data-nav="' + attr(navLabel) + '"' : "";
@@ -988,7 +989,7 @@
     }).join("") + "</dl>";
   }
   function tocHtml(blocks, showIntro) {
-    var items = blocks.map(function (b, i) { return b.nav ? { label: b.nav, id: "pjs-" + slug(b.nav, i) } : null; }).filter(Boolean);
+    var items = blocks.map(function (b, i) { return (b.nav && !b.off) ? { label: b.nav, id: "pjs-" + slug(b.nav, i) } : null; }).filter(Boolean);
     if (items.length + (showIntro ? 1 : 0) < 2) return "";
     var chips = showIntro ? '<button class="pj__toc-chip pj__toc-chip--intro is-active" data-goto="__intro"><span class="pj__toc-lbl">Project info</span></button>' : "";
     return chips + items.map(function (it, i) {
@@ -998,7 +999,7 @@
   // Shared nav model for the minimal (right) navigator + mobile dots/sheet: same sections as the rail
   // TOC, with an "Overview" entry that jumps to the top. Returns [] when there aren't enough sections.
   function navItems(blocks, showIntro) {
-    var items = blocks.map(function (b, i) { return b.nav ? { label: b.nav, id: "pjs-" + slug(b.nav, i) } : null; }).filter(Boolean);
+    var items = blocks.map(function (b, i) { return (b.nav && !b.off) ? { label: b.nav, id: "pjs-" + slug(b.nav, i) } : null; }).filter(Boolean);
     if (items.length + (showIntro ? 1 : 0) < 2) return [];
     return (showIntro ? [{ label: "Overview", id: "__intro" }] : []).concat(items);
   }
@@ -1473,7 +1474,7 @@
   // selected section (add-above / move up / move down / duplicate / delete) — mirrors the
   // editor's per-row ops so sections can be managed straight from the preview. Buttons post
   // their intent to the parent editor, which mutates the draft and re-renders the preview.
-  function pvToolbarHtml(idx, total, locked) {
+  function pvToolbarHtml(idx, total, locked, flush) {
     var up = idx <= 0, down = idx >= total - 1;
     // same house-style icon family as the editor's per-row controls (24-grid, 1.75 stroke, currentColor)
     var ic = function (p) { return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none">' + p + '</svg>'; };
@@ -1481,8 +1482,10 @@
       '<button type="button" class="pjtb__b" data-pjtb="up"' + (up ? " disabled" : "") + ' title="Move up" aria-label="Move up">' + ic('<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>') + '</button>' +
       '<button type="button" class="pjtb__b" data-pjtb="down"' + (down ? " disabled" : "") + ' title="Move down" aria-label="Move down">' + ic('<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>') + '</button>' +
       '<button type="button" class="pjtb__b" data-pjtb="dup" title="Duplicate section" aria-label="Duplicate section">' + ic('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>') + '</button>' +
-      '<button type="button" class="pjtb__b pjtb__b--lock' + (locked ? " is-locked" : "") + '" data-pjtb="lock" title="' + (locked ? "Locked \u2014 click to unlock" : "Lock \u2014 deeper-cut only") + '" aria-label="Toggle lock">' + ic(locked ? '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>' : '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>') + '</button>' +
-      '<button type="button" class="pjtb__b pjtb__b--danger" data-pjtb="del" title="Remove section" aria-label="Remove section">' + ic('<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>') + '</button>';
+      '<button type="button" class="pjtb__b pjtb__b--danger" data-pjtb="del" title="Remove section" aria-label="Remove section">' + ic('<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>') + '</button>' +
+      '<button type="button" class="pjtb__b' + (flush ? " is-off" : "") + '" data-pjtb="sep" title="' + (flush ? "Flowing into the previous section \u2014 click to add a separator line above" : "Separator line above \u2014 click to flow into the previous section") + '" aria-label="Toggle separator line above">' + ic(flush ? '<rect x="4.5" y="3.5" width="15" height="6" rx="1.5"/><rect x="4.5" y="14.5" width="15" height="6" rx="1.5"/><line x1="2.5" y1="12" x2="21.5" y2="12" stroke-dasharray="2.4 2.4" opacity="0.5"/>' : '<rect x="4.5" y="3.5" width="15" height="6" rx="1.5"/><rect x="4.5" y="14.5" width="15" height="6" rx="1.5"/><line x1="2.5" y1="12" x2="21.5" y2="12"/>') + '</button>' +
+      '<button type="button" class="pjtb__b" data-pjtb="off" title="Section is on \u2014 click to hide it from the live site" aria-label="Hide section">' + ic('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>') + '</button>' +
+      '<button type="button" class="pjtb__b pjtb__b--lock' + (locked ? " is-locked" : "") + '" data-pjtb="lock" title="' + (locked ? "Locked \u2014 click to unlock" : "Lock \u2014 deeper-cut only") + '" aria-label="Toggle lock">' + ic(locked ? '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>' : '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>') + '</button>';
   }
   function applyPreviewToolbar() {
     if (!PREVIEW || !overlay) return;
@@ -1498,7 +1501,7 @@
     var tb = document.createElement("div");
     tb.className = "pjtb";
     tb.setAttribute("contenteditable", "false");
-    tb.innerHTML = pvToolbarHtml(previewSelIdx, secs.length, sec.classList.contains("pjb--locked"));
+    tb.innerHTML = pvToolbarHtml(previewSelIdx, secs.length, sec.classList.contains("pjb--locked"), sec.classList.contains("pjb--flush"));
     sec.appendChild(tb);
   }
 

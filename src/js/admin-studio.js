@@ -713,6 +713,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     add: svgIco('<path d="M5 12h14"/><path d="M12 5v14"/>'),
     chev: svgIco('<path d="m9 18 6-6-6-6"/>', 16),
     chevD: svgIco('<path d="m6 9 6 6 6-6"/>', 13),
+    eye: svgIco('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>'),
+    eyeoff: svgIco('<path d="M9.9 5.1A9.5 9.5 0 0 1 12 5c6.5 0 10 7 10 7a17.7 17.7 0 0 1-2.16 3.11M6.06 6.06A17.75 17.75 0 0 0 2 12s3.5 7 10 7a9.4 9.4 0 0 0 3-.49"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="m3 3 18 18"/>'),
+    divon: svgIco('<rect x="4.5" y="3.5" width="15" height="6" rx="1.5"/><rect x="4.5" y="14.5" width="15" height="6" rx="1.5"/><line x1="2.5" y1="12" x2="21.5" y2="12"/>', 15),
+    divoff: svgIco('<rect x="4.5" y="3.5" width="15" height="6" rx="1.5"/><rect x="4.5" y="14.5" width="15" height="6" rx="1.5"/><line x1="2.5" y1="12" x2="21.5" y2="12" stroke-dasharray="2.4 2.4" opacity="0.5"/>', 15),
     zap: svgIco('<path d="M13 2 3 14h9l-1 8 10-12h-9z"/>'),
     ticket: svgIco('<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v2"/><path d="M13 11v2"/><path d="M13 17v2"/>'),
     shield: svgIco('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>'),
@@ -4580,6 +4584,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<button class="iconbtn" data-act="study-blockdup" data-index="' + i + '" data-bindex="' + j + '" title="Duplicate section" aria-label="Duplicate section">' + IC.dup + '</button>' +
       '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + '</button>' +
       "</span>" +
+      '<button class="iconbtn study__block-sep' + (b.sep === false ? " is-off" : "") + '" data-act="study-blocksep" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.sep === false ? "Flowing into the previous section \u2014 click to add a separator line above" : "Separator line above \u2014 click to flow into the previous section") + '" aria-label="Toggle separator line above">' + (b.sep === false ? IC.divoff : IC.divon) + '</button>' +
+      '<button class="iconbtn study__block-off' + (b.off ? " is-off" : "") + '" data-act="study-blockoff" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.off ? "Section hidden from the live site \u2014 click to show" : "Section is on \u2014 click to hide it from the live site") + '" aria-label="' + (b.off ? "Show section" : "Hide section") + '">' + (b.off ? IC.eyeoff : IC.eye) + '</button>' +
       '<button class="iconbtn study__block-lock' + (b.locked ? " is-locked" : "") + '" data-act="study-blocklock" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.locked ? "Locked \u2014 click to unlock" : "Lock this section \u2014 deeper-cut only") + '" aria-label="' + (b.locked ? "Unlock section" : "Lock section") + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' + (b.locked ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<path d="M8 10.5V6.8a4 4 0 0 1 7.5-1.6"/>') + "</svg></button>" +
       '<span class="study__block-chev" aria-hidden="true">' + IC.chev + '</span>' +
       "</div>";
@@ -4632,9 +4638,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     else if (b.type === "gen") body = genEditor(i, j, b);
     var hasHeading = /^(text|metrics|steps|media|split|cards|cloud|gallery|mediagrid|device|isolayers|figure|columns|rows|compare|stickies|voices|workflow|focus)$/.test(b.type);
     var sizeCtl = (b.type === "statement") ? sfSelect(i, j, "hsize", "Statement size", [["", "Standard"], ["sm", "Compact \u2014 easier to read"], ["lg", "Large \u2014 display"]], "Shrink it if the standard size feels too big for the copy.") : "";
-    var sepCtl = '<label class="chk block-sep"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="sep"' + (b.sep !== false ? " checked" : "") + " /> Separator line above \u2014 uncheck to flow into the previous section</label>";
-    return '<div class="card study__block' + (open ? " is-open" : "") + (b.locked ? " is-locked" : "") + '">' + head +
-      '<div class="study__block-body">' + sepCtl + common + body + sizeCtl + "</div></div>";
+    return '<div class="card study__block' + (open ? " is-open" : "") + (b.locked ? " is-locked" : "") + (b.off ? " is-off" : "") + '">' + head +
+      '<div class="study__block-body">' + common + body + sizeCtl + "</div></div>";
   }
   function smeta(i, field, label, hint, ph) {
     var st = data.work[i].study;
@@ -8542,6 +8547,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     else if (act === "down") { if (j >= s.length - 1) return; var c = s[j + 1]; s[j + 1] = s[j]; s[j] = c; openBlock = j + 1; }
     else if (act === "dup") { s.splice(j + 1, 0, JSON.parse(JSON.stringify(s[j]))); openBlock = j + 1; status("Section duplicated \u2014 editing the copy.", true); }
     else if (act === "lock") { s[j].locked = !s[j].locked; openBlock = j; status(s[j].locked ? "Section locked \u2014 hidden behind the deeper-cut pass." : "Section unlocked.", true); }
+    else if (act === "sep") { if (s[j].sep === false) delete s[j].sep; else s[j].sep = false; openBlock = j; status(s[j].sep === false ? "Divider off \u2014 flows into the previous section." : "Divider on \u2014 separator line above.", true); }
+    else if (act === "off") { s[j].off = true; openBlock = -1; status("Section hidden from the live site \u2014 re-enable it from the block list on the left.", true); }
     else if (act === "del") { s.splice(j, 1); openBlock = -1; }
     else return;
     saveDraft(true); renderL2();
@@ -9297,6 +9304,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "study-blockremove") { const j = +b.dataset.bindex; data.work[i].study.blocks.splice(j, 1); if (openBlock === j) openBlock = -1; else if (openBlock > j) openBlock--; saveDraft(true); renderL2(); return; }
     if (act === "study-blockdup") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s.splice(j + 1, 0, JSON.parse(JSON.stringify(s[j]))); openBlock = j + 1; saveDraft(true); renderL2(); status("Section duplicated \u2014 editing the copy.", true); } return; }
     if (act === "study-blocklock") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].locked = !s[j].locked; saveDraft(true); renderL2(); status(s[j].locked ? "Section locked \u2014 hidden behind the deeper-cut pass." : "Section unlocked.", true); } return; }
+    if (act === "study-blocksep") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { if (s[j].sep === false) delete s[j].sep; else s[j].sep = false; saveDraft(true); renderL2(); status(s[j].sep === false ? "Divider off \u2014 this section flows into the previous one." : "Divider on \u2014 separator line above.", true); } return; }
+    if (act === "study-blockoff") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { if (s[j].off) delete s[j].off; else s[j].off = true; saveDraft(true); renderL2(); status(s[j].off ? "Section hidden from the live site \u2014 still listed here so you can toggle it back." : "Section shown on the live site.", true); } return; }
     if (act === "hsize-toggle") { var hsSel = b.closest(".hsize"); if (hsSel) { var wasHsOpen = hsSel.classList.contains("is-open"); if (root) root.querySelectorAll(".hsize.is-open").forEach(function (x) { x.classList.remove("is-open"); }); if (!wasHsOpen) hsSel.classList.add("is-open"); } return; }
     if (act === "hsize-set") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].hsize = b.dataset.hsize || ""; saveDraft(true); renderL2(); } return; }
     if (act === "item-add") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items = bl.items || []; bl.items.push(blankItem(bl.type)); saveDraft(true); renderL2(); return; }

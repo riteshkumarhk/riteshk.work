@@ -1314,8 +1314,15 @@ body.adm-lock .cursor { display: none !important; }
 .study__block-lock:hover { color: var(--text); border-color: var(--accent); }
 .study__block-lock.is-locked { color: var(--accent); border-color: var(--accent); background: rgba(216, 166, 71, .12); }
 .study__block.is-locked { border-color: rgba(216, 166, 71, .42); }
-/* separator toggle moved to the TOP of the section (matches the live-preview hierarchy) */
-.block-sep { width: 100%; margin: .1rem 0 1.05rem; padding-bottom: .85rem; border-bottom: 1px solid var(--line); }
+/* section divider (separator-above) + on/off toggles — sit beside the lock; same reveal rules,
+   but also stay visible at rest when in their non-default state so status is glanceable. */
+.study__block-sep, .study__block-off { flex: 0 0 auto; display: none; place-items: center; width: 27px; height: 27px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--text-faint); cursor: pointer; transition: color .2s, border-color .2s, background .2s; }
+.study__block-sep svg, .study__block-off svg { display: block; }
+.study__block-head:hover .study__block-sep, .study__block-head:hover .study__block-off, .study__block.is-open .study__block-sep, .study__block.is-open .study__block-off, .study__block-sep.is-off, .study__block-off.is-off { display: grid; }
+.study__block-sep:hover, .study__block-off:hover { color: var(--text); border-color: var(--accent); }
+.study__block-off.is-off { color: var(--accent); border-color: var(--accent); background: rgba(216, 166, 71, .12); }
+.study__block.is-off { border-style: dashed; }
+.study__block.is-off .study__block-label, .study__block.is-off .study__block-badge { opacity: .5; }
 /* Heading field + inline heading-size picker on one row */
 .af__headrow { display: flex; align-items: stretch; gap: .5rem; }
 .af__headrow > input { flex: 1 1 auto; width: auto; min-width: 0; }
