@@ -790,14 +790,14 @@ html.pj-lock, html.pj-lock body { overflow: hidden; }
   opacity: 0; transform: scaleX(.92); transform-origin: right center; z-index: -1; pointer-events: none;
   transition: opacity .28s var(--ease), transform .28s var(--ease);
 }
-.pj--mini .pj__side:hover:not(:has(.pj__jump:hover))::before, .pj--mini .pj__side:focus-within:not(:has(.pj__jump:focus))::before, .pj--mini.pj--navpeek .pj__side::before { opacity: 1; transform: none; }
+.pj--mini .pj__side:hover::before, .pj--mini .pj__side:focus-within::before, .pj--mini.pj--navpeek .pj__side::before { opacity: 1; transform: none; }
 .pj--mini .pj__side-head, .pj--mini .pj__viewseg, .pj--mini .pj__side-back {
   max-height: 0; opacity: 0; overflow: hidden; margin: 0 .2rem; padding: 0; pointer-events: none;
   transition: max-height .3s var(--ease), opacity .22s var(--ease), margin .3s var(--ease);
 }
-.pj--mini .pj__side:hover:not(:has(.pj__jump:hover)) .pj__side-head, .pj--mini .pj__side:focus-within:not(:has(.pj__jump:focus)) .pj__side-head, .pj--mini.pj--navpeek .pj__side-head { max-height: 3.4rem; opacity: 1; margin: 0 .2rem .55rem; pointer-events: auto; }
-.pj--mini .pj__side:hover:not(:has(.pj__jump:hover)) .pj__viewseg, .pj--mini .pj__side:focus-within:not(:has(.pj__jump:focus)) .pj__viewseg, .pj--mini.pj--navpeek .pj__viewseg { max-height: 3rem; opacity: 1; margin: .25rem .2rem .9rem; pointer-events: auto; }
-.pj--mini .pj__side:hover:not(:has(.pj__jump:hover)) .pj__side-back, .pj--mini .pj__side:focus-within:not(:has(.pj__jump:focus)) .pj__side-back, .pj--mini.pj--navpeek .pj__side-back { max-height: 3rem; opacity: 1; margin: .7rem .2rem 0; pointer-events: auto; }
+.pj--mini .pj__side:hover .pj__side-head, .pj--mini .pj__side:focus-within .pj__side-head, .pj--mini.pj--navpeek .pj__side-head { max-height: 3.4rem; opacity: 1; margin: 0 .2rem .55rem; pointer-events: auto; }
+.pj--mini .pj__side:hover .pj__viewseg, .pj--mini .pj__side:focus-within .pj__viewseg, .pj--mini.pj--navpeek .pj__viewseg { max-height: 3rem; opacity: 1; margin: .25rem .2rem .9rem; pointer-events: auto; }
+.pj--mini .pj__side:hover .pj__side-back, .pj--mini .pj__side:focus-within .pj__side-back, .pj--mini.pj--navpeek .pj__side-back { max-height: 3rem; opacity: 1; margin: .7rem .2rem 0; pointer-events: auto; }
 .pj--mini .pj__side-head { font-family: var(--mono); font-size: .7rem; text-align: right; }
 .pj--mini .pj__viewseg { align-self: flex-end; }
 .pj--mini .pj__side-back { align-self: flex-end; }
@@ -806,7 +806,7 @@ html.pj-lock, html.pj-lock body { overflow: hidden; }
 .pj--mini .pj__toc-chip::before { display: none; }
 .pj--mini .pj__toc-lbl { order: 1; font-family: var(--sans); font-size: .84rem; white-space: nowrap; overflow: hidden; text-align: right; max-width: 0; opacity: 0; transform: translateX(5px); transition: max-width .3s var(--ease), opacity .22s var(--ease), transform .3s var(--ease); }
 .pj--mini .pj__toc-chip::after { content: ""; order: 2; flex: none; width: 16px; height: 2px; border-radius: 2px; background: currentColor; opacity: .5; transition: width .25s var(--ease), opacity .25s var(--ease); }
-.pj--mini .pj__side:hover:not(:has(.pj__jump:hover)) .pj__toc-lbl, .pj--mini .pj__side:focus-within:not(:has(.pj__jump:focus)) .pj__toc-lbl, .pj--mini.pj--navpeek .pj__toc-lbl { max-width: 30ch; opacity: 1; transform: none; }
+.pj--mini .pj__side:hover .pj__toc-lbl, .pj--mini .pj__side:focus-within .pj__toc-lbl, .pj--mini.pj--navpeek .pj__toc-lbl { max-width: 30ch; opacity: 1; transform: none; }
 .pj--mini .pj__toc-chip:hover { color: var(--text-dim); }
 .pj--mini .pj__toc-chip:hover::after { width: 22px; opacity: .9; }
 .pj--mini .pj__toc-chip.is-active { color: var(--accent); }
@@ -818,17 +818,18 @@ html.pj-lock, html.pj-lock body { overflow: hidden; }
    (hover / open sheet) swaps it for the real Overview-Full toggle - plus a floating section pill */
 .pj--mini .pj__icon[data-pj="prev"], .pj--mini .pj__icon[data-pj="next"] { display: none; }
 .pj__jump { display: none; }
+/* standalone bottom-right FAB — the linear-scroll affordance, SEPARATE from the minimap on both breakpoints (top-centre pill = orientation, right-edge/bottom-centre minimap = navigation, this FAB = in/out). Sits outside .pj__side so hovering the ticks never touches it. */
 .pj--mini.pj--hasnav .pj__jump {
-  /* centre the 34px circle on the 16px tick axis: the tick centre sits (.2rem + 8px) in from the right, the arrow half-width is 17px */
-  display: grid; place-items: center; align-self: flex-end; width: 34px; height: 34px; margin: 0 calc(.2rem - 9px) .9rem 0;
-  border: 0; border-radius: 50%; background: var(--accent); color: #0a0a0a; cursor: pointer;
-  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, .7); transition: transform .3s var(--ease), filter .3s;
+  display: grid; place-items: center; position: fixed; z-index: 8;
+  right: clamp(.9rem, 2.2vw, 1.5rem); bottom: clamp(1rem, 3vw, 1.6rem);
+  width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--accent); color: #0a0a0a; cursor: pointer;
+  box-shadow: 0 10px 26px -10px rgba(0, 0, 0, .75); transition: transform .3s var(--ease), filter .3s, opacity .3s;
 }
 .pj--mini .pj__jump:hover { transform: translateY(-2px); filter: brightness(1.07); }
-.pj--mini .pj__jump svg, .pj--mini .pj__dots-jump svg { transition: transform .4s var(--ease); }
-.pj--mini.pj--atfull .pj__jump svg, .pj--mini.pj--atfull .pj__dots-jump svg { transform: rotate(180deg); }
-/* the arrow and the full nav are mutually exclusive: hovering the minimap (ticks) hides the arrow and reveals the panel + Overview/Full toggle; hovering the arrow itself does neither (see the :has guards above) so it stays clickable */
-.pj--mini .pj__side:hover:not(:has(.pj__jump:hover)) .pj__jump, .pj--mini .pj__side:focus-within:not(:has(.pj__jump:focus)) .pj__jump, .pj--mini.pj--navpeek .pj__jump { display: none; }
+.pj--mini .pj__jump svg { transition: transform .4s var(--ease); }
+.pj--mini.pj--atfull .pj__jump svg { transform: rotate(180deg); }
+/* arrow ⇄ full-nav mutually exclusive: expanding the minimap (desktop hover/focus, mobile sheet, first-visit peek) hides the FAB since the Overview/Full toggle then lives in the panel */
+.pj--mini:has(.pj__side:hover) .pj__jump, .pj--mini:has(.pj__side:focus-within) .pj__jump, .pj--mini.pj--navpeek .pj__jump, .pj--mini.pj--sheet-open .pj__jump { display: none; }
 .pj__nowpill { display: none; }
 .pj--mini.pj--hasnav .pj__nowpill {
   display: inline-flex; align-items: center; position: fixed; top: .8rem; left: 50%; transform: translateX(-50%);
@@ -868,15 +869,13 @@ html[data-appearance="light"] .pj--mini .pj__nowpill { background: rgba(242, 238
   .pj--mini .pj__dots {
     display: inline-flex; align-items: center; gap: .5rem; position: fixed; left: 50%;
     bottom: calc(1rem + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 32;
-    padding: .4rem .5rem .4rem .45rem; border-radius: 100px; border: 1px solid var(--line); background: var(--bg-elev);
+    padding: .35rem .55rem; border-radius: 100px; border: 1px solid var(--line); background: var(--bg-elev);
     -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: var(--text-dim);
     box-shadow: 0 12px 32px rgba(0, 0, 0, .4);
   }
   .pj--mini .pj__dots:empty { display: none; }
-  .pj--mini.pj--hasnav .pj__jump { display: none; }
   .pj--mini.pj--sheet-open .pj__dots { opacity: 0; pointer-events: none; }
-  .pj__dots-jump { display: grid; place-items: center; flex: none; width: 27px; height: 27px; border: 0; border-radius: 50%; background: var(--accent); color: #0a0a0a; cursor: pointer; }
-  .pj__dots-open { display: inline-flex; align-items: center; gap: .5rem; padding: .15rem .5rem .15rem .1rem; background: none; border: 0; color: inherit; cursor: pointer; font: inherit; }
+  .pj__dots-open { display: inline-flex; align-items: center; gap: .5rem; padding: .15rem .35rem; background: none; border: 0; color: inherit; cursor: pointer; font: inherit; }
   .pj__dots-row { display: inline-flex; align-items: center; gap: 5px; }
   .pj__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); opacity: .45; transition: opacity .2s, background .2s, transform .2s; }
   .pj__dot.is-active { background: var(--accent); opacity: 1; transform: scale(1.4); }

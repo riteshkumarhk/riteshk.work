@@ -1004,8 +1004,7 @@
   function dotsHtml(items) {
     if (!items.length) return "";
     var dots = items.map(function (it) { return '<span class="pj__dot" data-dot="' + it.id + '"></span>'; }).join("");
-    return '<button class="pj__dots-jump" data-jump type="button" aria-label="Jump into the case study"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12l7 7 7-7"/></svg></button>' +
-      '<button class="pj__dots-open" data-dots type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Sections"><span class="pj__dots-row">' + dots + '</span>' +
+    return '<button class="pj__dots-open" data-dots type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Sections"><span class="pj__dots-row">' + dots + '</span>' +
       '<svg class="pj__dots-chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>';
   }
   function coverHtml(w, st) {
@@ -1380,7 +1379,6 @@
         '<button class="pj__nowpill" data-nowpill type="button"><span class="pj__nowpill-t"></span></button>' +
         '<div class="pj__shell">' +
           '<aside class="pj__side">' +
-            '<button class="pj__jump" data-jump type="button" aria-label="Jump into the case study"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12l7 7 7-7"/></svg></button>' +
             '<div class="pj__side-head" data-crumb></div>' +
             '<div class="pj__viewseg" data-viewseg hidden>' +
               '<button class="pj__viewseg-btn is-active" type="button" data-view="overview">Overview</button>' +
@@ -1392,6 +1390,7 @@
           '<main class="pj__main" data-content></main>' +
         '</div>' +
         '<div class="pj__dots" data-dotswrap></div>' +
+        '<button class="pj__jump" data-jump type="button" aria-label="Jump into the case study"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12l7 7 7-7"/></svg></button>' +
         '<div class="pj__sheet-bg" data-sheetbg></div>' +
       '</div>';
     document.body.appendChild(overlay);
