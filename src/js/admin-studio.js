@@ -6129,6 +6129,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     intro += '<div class="slides__actions">' +
       '<button class="btn btn--primary" data-act="slide-rehearse" data-index="' + i + '"' + (has || nBlocks ? "" : " disabled") + ">" + IC.play + " Rehearse deck</button>" +
       '<button class="btn btn--auto" data-act="slide-build" data-index="' + i + '"' + (nBlocks ? "" : " disabled") + ">" + IC.spark + " " + (has ? "Rebuild from sections" : "Build deck from my sections") + "</button>" +
+      '<button class="btn btn--auto" data-act="slide-ai-draft" data-index="' + i + '"' + (nBlocks ? "" : " disabled") + ">" + IC.spark + " Draft with AI</button>" +
       "</div></section>";
     var list = has ? slides.map(function (s, k) { return slideCard(i, s, k, slides.length, openSlide === k); }).join("") : '<div class="adm__empty">No slides yet \u2014 build a draft from your sections, or add one below. Until then, <b>Rehearse</b> shows an auto-generated deck.</div>';
     var body = '<section class="l2grp"><div class="l2grp__head">Slides' + (has ? ' <span>\u2014 reorder with the arrows \u00b7 click a slide to edit</span>' : "") + "</div>" +
@@ -6187,6 +6188,58 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     catch (e) { status("Couldn\u2019t decrypt the slideshow."); return; }
     openSlide = -1; saveDraft(true); renderL2();
     status("Slideshow unlocked for editing \u2014 it re-seals on Publish.", true);
+  }
+  // Owner-only: compose a fresh narrative deck from the case study with AI. Mirrors skimGenerate
+  // (reads the case via skimGather, offers to include locked sections) but returns a slide array
+  // constrained to the deck's own layouts + fields. Replaces study.slides in the draft.
+  var DECK_AI_LAYOUTS = { statement: ["kicker", "title", "sub"], section: ["kicker", "title", "sub"], text: ["kicker", "title", "body"], metric: ["kicker", "value", "label"], quote: ["quote", "attribution"] };
+  async function deckAiDraft(i, btn) {
+    var w = data.work[i];
+    if (!w || !w.study) { status("Add some case-study sections first."); return; }
+    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { deckAiDraft(i, btn); }); return; }
+    if (!(w.study.blocks && w.study.blocks.length)) { status("Add a few case-study sections first \u2014 the AI drafts the deck from them."); return; }
+    if (w.study.slides && w.study.slides.length) {
+      var okReplace = await confirmModal({ title: "Replace the deck with an AI draft?", sub: "This replaces your current " + w.study.slides.length + " slide" + (w.study.slides.length === 1 ? "" : "s") + " with a fresh AI-composed deck from this case study.", cta: "Draft new deck" });
+      if (!okReplace) return;
+    }
+    var srcW = w, includeLocked = false;
+    var lockedN = (w.study.blocks || []).filter(function (b) { return b && b.locked; }).length;
+    if (lockedN) {
+      includeLocked = await confirmModal({ title: "Include your locked sections?", sub: "Let the AI read your " + lockedN + " locked section" + (lockedN > 1 ? "s" : "") + " so the deck covers the full story. Used only for this run \u2014 nothing is saved unlocked.", cancel: "Public only", cta: "Include locked" });
+      if (includeLocked) { var uc = await skimUnlockedClone(w); if (uc) srcW = uc; else includeLocked = false; }
+    }
+    var g;
+    try { g = skimGather(srcW, includeLocked); } catch (e) { status("Couldn\u2019t read this case study."); return; }
+    if (!g.text || g.text.length < 60) { status("Not enough case content yet \u2014 add a few sections first."); return; }
+    if (btn) { btn.disabled = true; btn.textContent = "Composing the deck\u2026"; }
+    status("Reading the case & composing a deck\u2026");
+    var system = "You are a Principal product designer composing a SHORT, punchy slideshow you will present LIVE to a hiring panel. Turn a case study into a narrative deck: one idea per slide, a confident cover, then context \u2192 problem \u2192 approach \u2192 the key moves/decisions \u2192 measurable outcome, ending on impact. Skimmable, senior, honest \u2014 name the real thing, never filler. Use ONLY facts from the case; NEVER invent numbers or quotes. Use ONLY these layouts and their EXACT fields: statement{kicker,title,sub} (the opening cover \u2014 title=the project, kicker=the client, sub=one line); section{kicker,title,sub} (an act divider \u2014 kicker is a number like \"01\"); text{kicker,title,body} (a point \u2014 body \u2264 40 words); metric{kicker,value,label} (ONE number \u2014 value like \"+38%\", label = what it measured); quote{quote,attribution} (a real user/stakeholder voice from the case). Do NOT use any other layout or field. Every slide also has \"notes\": what you'd SAY out loud on that slide (\u2264 30 words, first person, present tense). Return STRICT JSON only, no prose.";
+    var user = "CASE STUDY:\n" + g.text +
+      "\n\nCompose 6\u201310 slides for THIS case. Slide 1 = a statement cover (title=the project title, kicker=the client, sub=the one-line pitch). Include at least one section divider and, if the case has real numbers, at least one metric. If the case has a real user/stakeholder quote, use a quote slide. End on the outcome/impact. Keep every slide to ONE idea; lead with the substance; never invent facts. Return STRICT JSON: {\"slides\":[{\"layout\":\"statement\",\"slots\":{\"kicker\":\"\",\"title\":\"\",\"sub\":\"\"},\"notes\":\"\"}]} \u2014 only the allowed layouts + fields, nothing else.";
+    try {
+      var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 2600, temperature: 0.5, json: true });
+      var j = csgenParse(out);
+      var rawSlides = (j && Array.isArray(j.slides)) ? j.slides : [];
+      var slides = [];
+      rawSlides.forEach(function (s) {
+        if (!s || typeof s !== "object") return;
+        var layout = DECK_AI_LAYOUTS[s.layout] ? s.layout : "text";
+        var allow = DECK_AI_LAYOUTS[layout];
+        var src = (s.slots && typeof s.slots === "object") ? s.slots : s;
+        var slots = {};
+        allow.forEach(function (k) { var v = src[k]; if (v != null && String(v).trim()) slots[k] = String(v).trim(); });
+        if (!Object.keys(slots).length) return;
+        var sl = blankSlide(layout); sl.slots = slots; sl.notes = String(s.notes || "").trim();
+        slides.push(sl);
+      });
+      if (!slides.length) { status("The AI didn\u2019t return a usable deck \u2014 try again."); if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Draft with AI"; } return; }
+      w.study.slides = slides;
+      openSlide = -1;
+      saveDraft(true);
+      if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Draft with AI"; }
+      if (openStudy === i) renderL2();
+      status("Drafted a " + slides.length + "-slide deck \u2014 reorder, refine or Rehearse it.", true);
+    } catch (e) { status("Deck draft failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Draft with AI"; } }
   }
   function studyEditor(w, i) {
     var st = w.study;
@@ -9629,6 +9682,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "slide-media-upload") { var _muw = data.work[i], muk = +b.dataset.sindex, mus = _muw && _muw.study && _muw.study.slides && _muw.study.slides[muk]; if (!mus) return; pickMedia(function (uri) { mus.slots = mus.slots || {}; mus.slots.media = { src: uri }; if (isVideoVal(uri)) mus.slots.media.kind = "video"; saveDraft(true); renderL2(); }); return; }
     if (act === "slide-media-clear") { var _mcw = data.work[i], mck = +b.dataset.sindex, mcs = _mcw && _mcw.study && _mcw.study.slides && _mcw.study.slides[mck]; if (!mcs) return; if (mcs.slots) delete mcs.slots.media; saveDraft(true); renderL2(); return; }
     if (act === "slide-decrypt") { decryptDeckForEdit(i); return; }
+    if (act === "slide-ai-draft") { deckAiDraft(i, b); return; }
     if (act === "hsize-toggle") { var hsSel = b.closest(".hsize"); if (hsSel) { var wasHsOpen = hsSel.classList.contains("is-open"); if (root) root.querySelectorAll(".hsize.is-open").forEach(function (x) { x.classList.remove("is-open"); }); if (!wasHsOpen) hsSel.classList.add("is-open"); } return; }
     if (act === "hsize-set") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].hsize = b.dataset.hsize || ""; saveDraft(true); renderL2(); } return; }
     if (act === "item-add") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items = bl.items || []; bl.items.push(blankItem(bl.type)); saveDraft(true); renderL2(); return; }
