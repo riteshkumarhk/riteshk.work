@@ -72,6 +72,44 @@
   }
   window.__rkTrack = track;
 
+  /* ---------- local interaction log ----------
+     A small ring buffer of the owner's own taps / section jumps / JS errors so a misbehaving control
+     is diagnosable from the studio's Log button instead of guessing. Owner or preview only; it stays
+     on THIS device (localStorage) and is never sent anywhere unless the owner copies it. */
+  var RK_LOG_KEY = "rk:elog", RK_LOG_MAX = 160;
+  function rkLogOn() { try { return rkIsOwner() || /[?&](preview|draft|log)\b/.test(location.search); } catch (e) { return false; } }
+  function rkLog(k, d) {
+    if (!rkLogOn()) return;
+    try {
+      if (localStorage.getItem("rk:elog:rec") !== "1") return;   // capture only while the owner is recording
+      var ctx = window.top !== window.self ? "preview" : (/^\/studio(\/|$)/.test(location.pathname) ? "studio" : "site");
+      var a = JSON.parse(localStorage.getItem(RK_LOG_KEY) || "[]");
+      a.push({ t: Date.now(), k: k, d: String(d == null ? "" : d).slice(0, 200), c: ctx });
+      if (a.length > RK_LOG_MAX) a = a.slice(a.length - RK_LOG_MAX);
+      localStorage.setItem(RK_LOG_KEY, JSON.stringify(a));
+    } catch (e) {}
+  }
+  window.__rklog = rkLog;
+  function rkElDesc(el) {
+    if (!el || !el.tagName) return "?";
+    var s = el.tagName.toLowerCase();
+    if (el.id) s += "#" + el.id;
+    var cls = (typeof el.className === "string" ? el.className : "").trim().split(/\s+/).filter(Boolean).slice(0, 3);
+    if (cls.length) s += "." + cls.join(".");
+    try { for (var i = 0; i < el.attributes.length; i++) { var n = el.attributes[i].name; if (n.indexOf("data-") === 0 && n !== "data-content" && n !== "data-block") { s += " [" + n + (el.attributes[i].value ? "=" + el.attributes[i].value : "") + "]"; break; } } } catch (e) {}
+    var txt = (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 28);
+    return s + (txt ? ' "' + txt + '"' : "");
+  }
+  if (typeof document !== "undefined") {
+    document.addEventListener("click", function (e) {
+      if (!rkLogOn()) return;
+      var t = e.target, hit = (t && t.closest && t.closest("button, a, [role=button], [data-goto], [data-pj], [data-act], [data-nowpill], [data-jump], [data-dots], [data-view]")) || t;
+      rkLog("tap", rkElDesc(hit));
+    }, true);
+    window.addEventListener("error", function (e) { rkLog("error", (e && e.message) || "script error"); });
+    window.addEventListener("unhandledrejection", function (e) { var r = e && e.reason; rkLog("error", "promise: " + ((r && r.message) || r || "")); });
+  }
+
   /* Build + download a vCard (.vcf) from the contact model — a "save my details" for recruiters.
      Pure client-side (Blob), no dependency. vCard 3.0 with CRLF line breaks. */
   function vcEsc(s) { return String(s == null ? "" : s).replace(/([\\,;])/g, "\\$1").replace(/\r?\n/g, "\\n"); }

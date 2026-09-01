@@ -2370,6 +2370,7 @@
   function gotoSection(id) {
     if (id === "__intro") {
       cancelPin();
+      if (window.__rklog) window.__rklog("nav", "\u2192 overview (top)");
       var cov = overlay.querySelector(".pj__cover");
       var vh = scroller.clientHeight || window.innerHeight || 700;
       scroller.scrollTo({ top: cov ? Math.max(0, cov.offsetHeight - vh * 0.5) : 0, behavior: "smooth" });
@@ -2379,6 +2380,7 @@
     var matches = overlay.querySelectorAll(selector);
     var sec = matches[0];
     sdbg("tap id=" + id + " matches=" + matches.length + " st=" + Math.round(scroller.scrollTop));
+    if (window.__rklog) window.__rklog("nav", "\u2192 section " + id + " (" + matches.length + " match" + (sec ? "" : ", NOT FOUND") + ")");
     scrollToAnchor(sec, 8);
   }
 

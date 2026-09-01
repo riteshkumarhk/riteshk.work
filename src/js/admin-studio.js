@@ -8913,6 +8913,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "book-dismiss") { bookDo(b.dataset.uid, "dismiss", b); return; }
     if (act === "book-refresh") { loadBookings(); return; }
     if (act === "media-open") { mediaOpen(); return; }
+    if (act === "logs-rec") { if (logsRecOn()) { logsSetRec(false); logsModal(); } else { logsSetRec(true); status("Recording \u2014 reproduce it in the preview, then tap the red dot again to stop."); } return; }
     if (act === "casenav" || act === "casenavm") { var _cnv = b.dataset.v === "immersive" ? "immersive" : "rail"; if (act === "casenavm") data.caseNavM = _cnv; else data.caseNav = _cnv; saveDraft(true); try { var _fw = frameWin(); if (_fw) { try { _fw.RK.data = resolvePreviewData(data); } catch (e) {} _fw.postMessage({ __rk: "caseNav" }, "*"); } } catch (e) {} renderBody(); status("Case-study navigation \u2014 " + (act === "casenavm" ? "Mobile" : "Desktop") + " " + (_cnv === "immersive" ? "Immersive" : "Classic nav") + " \u00b7 previewing live (open a case study in the preview to see it).", true); return; }
     if (act === "icon-open") { iconManageModal(); return; }
     if (act === "ver-refresh") { loadVersions(); return; }
@@ -10339,6 +10340,61 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   let pubDismiss = null;   // success-only auto-clear timer
   let newtabVisitUrl = null, newtabVisitTimer = null;   // post-publish "Visit site" state for the last status-bar button
   function pubBar() { return root && root.querySelector(".adm__statusbar"); }
+  // Activity log viewer: reads the ring buffer render.js records (this-device taps / section jumps /
+  // errors, owner+preview only) and lets the owner copy it to share for a faster diagnosis. Screen-agnostic.
+  function logsRead() { try { return JSON.parse(localStorage.getItem("rk:elog") || "[]"); } catch (e) { return []; } }
+  function logsHhmmss(t) { var d = new Date(t); var p = function (n) { return ("0" + n).slice(-2); }; return p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds()); }
+  function logsPlain(a) { return a.map(function (o) { return logsHhmmss(o.t) + " [" + (o.c || "") + "] " + o.k + ": " + (o.d || ""); }).join("\n"); }
+  function logsListHtml(a) {
+    if (!a.length) return '<div class="af__hint" style="padding:1rem;text-align:center">No events yet \u2014 tap around in the preview, then hit Refresh.</div>';
+    return a.slice().reverse().map(function (o) {
+      return '<div class="rklog__row rklog__row--' + escAttr(o.k) + '"><span class="rklog__t">' + logsHhmmss(o.t) + '</span><span class="rklog__c">' + escHtml(o.c || "") + '</span><span class="rklog__k">' + escHtml(o.k) + '</span><span class="rklog__d">' + escHtml(o.d || "") + "</span></div>";
+    }).join("");
+  }
+  function logsCopy(txt) {
+    var done = function () { status("Activity log copied \u2014 paste it to me."); };
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(txt).then(done, function () { logsCopyFallback(txt, done); }); return; } } catch (e) {}
+    logsCopyFallback(txt, done);
+  }
+  function logsCopyFallback(txt, done) {
+    try { var ta = document.createElement("textarea"); ta.value = txt; ta.style.cssText = "position:fixed;top:0;left:0;opacity:0"; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); ta.remove(); done(); } catch (e) { status("Copy failed \u2014 select the text manually."); }
+  }
+  function logsRecOn() { try { return localStorage.getItem("rk:elog:rec") === "1"; } catch (e) { return false; } }
+  function logsSyncBtn() {
+    var b = root && root.querySelector(".adm__logs-btn"); if (!b) return;
+    var on = logsRecOn();
+    b.classList.toggle("is-rec", on);
+    var tx = b.querySelector(".adm__logs-rec-tx"); if (tx) tx.hidden = !on;
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.setAttribute("aria-label", on ? "Stop recording activity log" : "Record activity log");
+    b.title = on ? "Stop recording \u2014 then copy the log" : "Record a log of your taps & jumps to share";
+  }
+  function logsSetRec(on) { try { if (on) localStorage.removeItem("rk:elog"); localStorage.setItem("rk:elog:rec", on ? "1" : "0"); } catch (e) {} logsSyncBtn(); }
+  function logsModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "pass pass--wide logsm";
+    wrap.innerHTML = '<div class="pass__box"><button class="pass__x" data-x type="button" aria-label="Close">' + IC.close + "</button>" +
+      '<div class="pass__title">' + IC.book + " Activity log</div>" +
+      '<div class="af__hint" style="margin:.1rem 0 .7rem">Your recent taps, section jumps and errors on this device (owner &amp; preview only, stored locally). Reproduce a problem in the preview, then <b>Copy</b> and paste it to me for a faster fix.</div>' +
+      '<div class="logsm__bar"><button class="btn btn--primary" data-lg="copy">' + IC.save + ' Copy</button><button class="btn btn--ghost" data-lg="rec"><span class="logsm__recdot"></span> Record again</button><button class="btn btn--ghost" data-lg="refresh">' + IC.refresh + ' Refresh</button><button class="btn btn--ghost" data-lg="clear">' + IC.trash + ' Clear</button><span class="logsm__count" data-lg-count></span></div>' +
+      '<div class="rklog" data-lg-list></div></div>';
+    document.body.appendChild(wrap);
+    var listEl = wrap.querySelector("[data-lg-list]"), countEl = wrap.querySelector("[data-lg-count]");
+    var paint = function () { var a = logsRead(); listEl.innerHTML = logsListHtml(a); if (countEl) countEl.textContent = a.length + " event" + (a.length === 1 ? "" : "s"); };
+    paint();
+    var close = function () { document.removeEventListener("keydown", esc, true); wrap.remove(); };
+    var esc = function (ev) { if (ev.key === "Escape") close(); };
+    document.addEventListener("keydown", esc, true);
+    wrap.addEventListener("click", function (e) {
+      if (e.target === wrap || e.target.closest("[data-x]")) { close(); return; }
+      var b = e.target.closest("[data-lg]"); if (!b) return;
+      var k = b.getAttribute("data-lg");
+      if (k === "refresh") paint();
+      else if (k === "clear") { try { localStorage.removeItem("rk:elog"); } catch (er) {} paint(); status("Activity log cleared."); }
+      else if (k === "rec") { close(); logsSetRec(true); status("Recording \u2014 reproduce it in the preview, then tap the red dot to stop."); }
+      else if (k === "copy") logsCopy(logsPlain(logsRead()));
+    });
+  }
   function pubProgress(pct, label, opts) {
     opts = opts || {};
     if (pubDismiss) { clearTimeout(pubDismiss); pubDismiss = null; }   // a fresh update cancels any pending auto-clear
@@ -14948,6 +15004,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<div class="adm__dev-pop" hidden>' + deviceOptsHtml() + "</div>" +
         "</div>" +
         '<button class="btn btn--ghost adm__newtab" data-newtab type="button" aria-label="Open live preview in a new tab" title="Open live preview in a new tab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg><span class="adm__newtab-tx" hidden></span></button>' +
+        '<button class="btn btn--ghost adm__logs-btn" data-act="logs-rec" type="button" aria-pressed="false" aria-label="Record activity log" title="Record a log of your taps &amp; jumps to share"><span class="adm__logs-dot"></span><span class="adm__logs-rec-tx" hidden>REC</span></button>' +
       "</div>" +
       '<div class="adm__main">' +
         '<div class="adm__editor"><div class="adm__body"></div>' +
@@ -14974,6 +15031,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="adm__set-body"><nav class="adm__set-nav" data-set-nav></nav><div class="adm__set-panel" data-set-panel></div></div>' +
       "</div></div>";
     document.body.appendChild(root);
+    logsSyncBtn();   // reflect a recording that survived a studio reload
     body = root.querySelector(".adm__body");
     l2 = root.querySelector(".adm__l2");
     l2body = root.querySelector(".adm__l2-body");
