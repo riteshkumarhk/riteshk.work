@@ -3980,6 +3980,20 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   var ICON_NAMES = ["users", "idea", "coins", "chart", "target", "lock", "spark", "clock", "shield", "check", "bolt", "layers"];
   function admIcon(n) { return (window.RK && window.RK.iconSvg) ? window.RK.iconSvg(n) : ""; }
   function admIconNames() { return (window.RK && window.RK.iconNames) ? window.RK.iconNames() : ICON_NAMES; }
+  // Icons offered in the pickers — excludes RETIRED ones (deleted from the library but kept alive so
+  // existing usages still render). A retired icon is purged for real once its last usage is replaced.
+  function admIconNamesPickable() { var r = (data && data.iconsRetired) || null; var ns = admIconNames(); return r ? ns.filter(function (n) { return !r[n]; }) : ns; }
+  // After an item's icon changes, if the OLD icon was retired and is now unused anywhere, remove it for good.
+  function maybePurgeRetiredIcon(prev, next) {
+    if (!prev || prev === next) return;
+    if (!(data.iconsRetired && data.iconsRetired[prev])) return;
+    if (iconUsageSites(prev).length > 0) return;   // still used elsewhere — keep it alive
+    if (data.customIcons) delete data.customIcons[prev];
+    if (data.iconKeywords) delete data.iconKeywords[prev];
+    delete data.iconsRetired[prev];
+    if (window.RK && window.RK.unregisterIcons) window.RK.unregisterIcons(prev);
+    try { var u = iconUsageGet(); if (u[prev]) { delete u[prev]; localStorage.setItem(ICON_USAGE_KEY, JSON.stringify(u)); } } catch (e) {}
+  }
   // Split a Figma-exported SVG (a frame whose direct children are the layers) into
   // one data-URI SVG per layer — each keeps the original viewBox + <defs> so it
   // renders identically and aligns when stacked. Handles raster <image>, vector and
@@ -4034,10 +4048,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     };
     var q = (query || "").trim();
     if (q) {
-      var hits = rankIconNames(admIconNames()).filter(function (n) { return iconMatchesQuery(n, q); }).slice(0, 40);
+      var hits = rankIconNames(admIconNamesPickable()).filter(function (n) { return iconMatchesQuery(n, q); }).slice(0, 40);
       return hits.length ? hits.map(function (n) { return cell(n, admIcon(n), n); }).join("") : '<div class="iconpick__empty">No matches \u2014 Generate one below.</div>';
     }
-    var shown = rankIconNames(admIconNames()).slice(0, 31);
+    var shown = rankIconNames(admIconNamesPickable()).slice(0, 31);
     if (cur && shown.indexOf(cur) < 0) shown = [cur].concat(shown.slice(0, 30));
     return cell("", "\u2205", "No icon", " iconpick__b--none") + shown.map(function (n) { return cell(n, admIcon(n), n); }).join("");
   }
@@ -4049,7 +4063,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return '<button type="button" class="iconpick__gen" data-act="icon-gen" ' + dd + ">" + IC.spark + " Generate</button>" +
         '<button type="button" class="iconpick__gen iconpick__more" data-act="icon-more" ' + dd + ">More\u2026</button>";
     }
-    var total = admIconNames().length;
+    var total = admIconNamesPickable().length;
     return total > 31
       ? '<button type="button" class="iconpick__gen iconpick__more" data-act="icon-more" ' + dd + ">More icons\u2026 <span class=\"iconpick__count\">" + total + "</span></button>"
       : '<button type="button" class="iconpick__gen" data-act="icon-gen" ' + dd + ">" + IC.spark + " Generate an icon\u2026</button>";
@@ -5247,6 +5261,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var have = {}; (admIconNames() || []).forEach(function (n) { have[n] = 1; });
     var base = name || "icon", nm = base, c = 2; while (have[nm]) nm = base + "-" + (c++);
     data.customIcons = data.customIcons || {}; data.customIcons[nm] = svg;
+    if (data.iconsRetired) delete data.iconsRetired[nm];
     if (keywords && keywords.length) { data.iconKeywords = data.iconKeywords || {}; data.iconKeywords[nm] = keywords.slice(0, 10); }
     var reg = {}; reg[nm] = svg; if (window.RK && window.RK.registerIcons) window.RK.registerIcons(reg);
     return nm;
@@ -5416,9 +5431,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var kw = n ? '<span class="iconlib__kw" data-kw="' + escAttr(n) + '" title="Edit keywords" aria-label="Edit keywords"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>' : "";
       return '<button type="button" class="iconlib__b' + (extra || "") + (n === sel ? " is-on" : "") + '" data-icon="' + escAttr(n) + '" title="' + escAttr(title || n) + '">' + kw + inner + '<span class="iconlib__nm">' + escHtml(title || n) + "</span></button>";
     }
-    function matches() { return rankIconNames(admIconNames()).filter(function (n) { return iconMatchesQuery(n, query); }); }
+    function matches() { return rankIconNames(admIconNamesPickable()).filter(function (n) { return iconMatchesQuery(n, query); }); }
     function renderGrid() {
       var names = matches();
+      if (sel && !query && names.indexOf(sel) < 0) names = [sel].concat(names);   // keep the item's current icon visible even if it's been retired
       emptyEl.hidden = names.length > 0;
       gridEl.innerHTML = (query ? "" : cellHtml("", "\u2205", "No icon", " iconlib__b--none")) + names.map(function (n) { return cellHtml(n, admIcon(n), n); }).join("");
     }
@@ -5439,7 +5455,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       gridEl.querySelectorAll(".iconlib__b").forEach(function (x) { x.classList.toggle("is-on", x === b); });
     });
     contBtn.addEventListener("click", function () {
+      var prev = it[key];
       it[key] = sel; if (sel) bumpIconUsage(sel);
+      maybePurgeRetiredIcon(prev, sel);
       saveDraft(true); renderL2(); status(sel ? "Icon applied." : "Icon cleared.", true); close();
     });
     genBtn.addEventListener("click", function () {
@@ -5457,23 +5475,28 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var sites = iconUsageSites(name), works = [];
     sites.forEach(function (s) { if (works.indexOf(s.work) < 0) works.push(s.work); });
     var where = works.length ? " (" + works.slice(0, 4).join(", ") + (works.length > 4 ? ", and more" : "") + ")" : "";
-    var sub = sites.length
-      ? '"' + name + '" is used in ' + sites.length + " place" + (sites.length === 1 ? "" : "s") + where + ". Deleting it replaces every use with the closest-matching icon (picked by AI). This cannot be undone."
+    var inUse = sites.length > 0;
+    var sub = inUse
+      ? '"' + name + '" is used in ' + sites.length + " place" + (sites.length === 1 ? "" : "s") + where + ". It stays on those \u2014 this only removes it from your library so you won't pick it again. It disappears for good once you swap those out for another icon."
       : '"' + name + '" is not used anywhere. Remove it from your icon library? This cannot be undone.';
-    var ok = await confirmModal({ title: "Delete this icon?", sub: sub, cta: "Delete icon", okClass: "btn--danger" });
+    var ok = await confirmModal({ title: inUse ? "Remove this icon from the library?" : "Delete this icon?", sub: sub, cta: inUse ? "Remove from library" : "Delete icon", okClass: "btn--danger" });
     if (!ok) return false;
-    var replacement = "";
-    if (sites.length) {
-      status("Finding the best replacement icon...");
-      replacement = await aiPickReplacementIcon(name, sites.map(function (s) { return s.ctx; }).filter(Boolean));
-      sites.forEach(function (s) { var bl = data.work[s.wi] && data.work[s.wi].study && data.work[s.wi].study.blocks[s.bj]; var it = bl && bl.items && bl.items[s.k]; if (it) it.icon = replacement; });
+    if (inUse) {
+      // Soft-delete: keep the svg + keywords + live registration so the places already using it still
+      // render; just hide it from the pickers. It's purged for real when its last usage is replaced.
+      data.iconsRetired = data.iconsRetired || {};
+      data.iconsRetired[name] = true;
+      saveDraft(true); renderL2();
+      status("Removed from your library \u2014 still shown on the " + sites.length + " place" + (sites.length === 1 ? "" : "s") + " using it.", true);
+    } else {
+      if (data.customIcons) delete data.customIcons[name];
+      if (data.iconKeywords) delete data.iconKeywords[name];
+      if (data.iconsRetired) delete data.iconsRetired[name];
+      if (window.RK && window.RK.unregisterIcons) window.RK.unregisterIcons(name);
+      saveDraft(true); renderL2();
+      status("Icon deleted.", true);
     }
-    if (data.customIcons) delete data.customIcons[name];
-    if (data.iconKeywords) delete data.iconKeywords[name];
-    if (window.RK && window.RK.unregisterIcons) window.RK.unregisterIcons(name);
-    saveDraft(true); renderL2();
-    status(sites.length ? ("Deleted - " + sites.length + " use" + (sites.length === 1 ? "" : "s") + ' now show "' + replacement + '".') : "Icon deleted.", true);
-    if (onDone) try { onDone(replacement); } catch (e) {}
+    if (onDone) try { onDone(name); } catch (e) {}
     return true;
   }
 
@@ -5501,12 +5524,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<button type="button" class="iconlib__b" data-icon="' + escAttr(n) + '" title="' + escAttr(n) + '">' + kw + admIcon(n) + '<span class="iconlib__nm">' + escHtml(n) + "</span></button>" +
         "</div>";
     }
-    function matches() { return rankIconNames(admIconNames()).filter(function (n) { return iconMatchesQuery(n, query); }); }
+    function matches() { return rankIconNames(admIconNamesPickable()).filter(function (n) { return iconMatchesQuery(n, query); }); }
     function renderGrid() {
       usage = iconUsageGet() || {};
       var names = matches();
       emptyEl.hidden = names.length > 0;
-      var total = admIconNames().length, custom = Object.keys(data.customIcons || {}).length;
+      var total = admIconNamesPickable().length, custom = Object.keys(data.customIcons || {}).filter(function (n) { return !(data.iconsRetired && data.iconsRetired[n]); }).length;
       if (sumEl) sumEl.textContent = total + " icons, " + custom + " custom" + (query ? (", " + names.length + " match" + (names.length === 1 ? "" : "es")) : "");
       gridEl.innerHTML = names.map(cellHtml).join("");
     }
@@ -9367,7 +9390,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "media-bgclear") { const bj = +b.dataset.bindex, k = +b.dataset.iindex; const bl = data.work[i].study.blocks[bj]; const it = bl && bl.items && bl.items[k]; if (it) { it.bg = ""; saveDraft(true); renderL2(); refreshL2Preview(); } return; }
     if (act === "item-upload") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield; pickMedia(function (uri) { const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = uri; if (isVideoVal(uri)) bl.items[k].controls = true; saveDraft(true); renderL2(); } }, { vault: !!(data.work[i].study.blocks[bj] && data.work[i].study.blocks[bj].locked) }); return; }
     if (act === "item-upload-multi") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; if (!bl) return; bl.items = bl.items || []; pickMediaMulti(function () { const it = blankItem(bl.type); bl.items.push(it); return it; }, function () { saveDraft(true); renderL2(); }, { vault: !!bl.locked }); return; }
-    if (act === "item-icon") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield, name = b.dataset.icon; const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { bl.items[k][f] = name; bumpIconUsage(name); saveDraft(true); refreshL2Preview(); const grid = b.closest(".iconpick"); if (grid) grid.querySelectorAll(".iconpick__b").forEach(function (x) { x.classList.toggle("is-on", x === b); }); const dd = b.closest(".icondd"); if (dd) { const cur = dd.querySelector(".icondd__cur"); if (cur) cur.innerHTML = name ? admIcon(name) : "\u2205"; const nm = dd.querySelector(".icondd__name"); if (nm) nm.textContent = name || "No icon"; if (dd.tagName === "DETAILS") dd.open = false; } } return; }
+    if (act === "item-icon") { const bj = +b.dataset.bindex, k = +b.dataset.iindex, f = b.dataset.ifield, name = b.dataset.icon; const bl = data.work[i].study.blocks[bj]; if (bl && bl.items && bl.items[k]) { const prevIcon = bl.items[k][f]; bl.items[k][f] = name; bumpIconUsage(name); maybePurgeRetiredIcon(prevIcon, name); saveDraft(true); refreshL2Preview(); const grid = b.closest(".iconpick"); if (grid) grid.querySelectorAll(".iconpick__b").forEach(function (x) { x.classList.toggle("is-on", x === b); }); const dd = b.closest(".icondd"); if (dd) { const cur = dd.querySelector(".icondd__cur"); if (cur) cur.innerHTML = name ? admIcon(name) : "\u2205"; const nm = dd.querySelector(".icondd__name"); if (nm) nm.textContent = name || "No icon"; if (dd.tagName === "DETAILS") dd.open = false; } } return; }
     if (act === "icon-gen") { var gq = b.closest(".icondd__panel"); gq = gq && gq.querySelector(".icondd__q"); iconGenModal(+b.dataset.index, +b.dataset.bindex, +b.dataset.iindex, b.dataset.ifield, gq ? gq.value : ""); return; }
     if (act === "icon-more") { var mq = b.closest(".icondd__panel"); mq = mq && mq.querySelector(".icondd__q"); iconLibModal(+b.dataset.index, +b.dataset.bindex, +b.dataset.iindex, b.dataset.ifield, mq ? mq.value : ""); return; }
     if (act === "item-clear") { const bl = data.work[i].study.blocks[+b.dataset.bindex], k = +b.dataset.iindex; if (bl && bl.items && bl.items[k]) { bl.items[k][b.dataset.ifield] = ""; saveDraft(true); renderL2(); } return; }
@@ -10840,7 +10863,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     ["recruiter", "Recruiter views", ["specialViews", "recruiterMode"]],
     ["journey", "Design journey", ["journey"]],
     ["gensections", "Generated sections", ["genSections"]],
-    ["icons", "Custom icons", ["customIcons", "iconKeywords"]],
+    ["icons", "Custom icons", ["customIcons", "iconKeywords", "iconsRetired"]],
     ["music", "Music", ["music"]]
   ];
   function backupUnitSummary(backup, keys) {
