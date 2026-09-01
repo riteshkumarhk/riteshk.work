@@ -2801,7 +2801,8 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .adm__twt-seg button, .adm__hm-seg button, .adm__tsub button { font-size: .64rem; text-transform: uppercase; padding: .4rem .9rem; }
 .mlib__seg { font-size: .64rem; text-transform: uppercase; padding: .34rem .74rem; }
 .ins__dbtn { font-size: .72rem; letter-spacing: .04em; padding: .36rem .74rem; }
-.cl__lenbtn { font-size: .74rem; text-transform: uppercase; padding: .4rem .82rem; }
+/* cl__len carries long, descriptive labels (ATS source/mode) — sentence-case sans reads calm where mono-uppercase would shout */
+.cl__lenbtn { font-family: var(--sans); font-size: .8rem; letter-spacing: 0; text-transform: none; padding: .38rem .9rem; }
 /* Hero motion controls (Appearance tab) — living type + ambient work */
 .adm__hm { margin-top: 1rem; display: flex; flex-direction: column; gap: .85rem; }
 .adm__hm-ctl { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
