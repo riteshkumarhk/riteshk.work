@@ -2232,7 +2232,7 @@
     extra = extra || 0;
     var aim = function () { return Math.max(0, Math.round(scroller.scrollTop + anchor.getBoundingClientRect().top - scroller.getBoundingClientRect().top - topOffset() - extra)); };
     var content = overlay.querySelector("[data-content]") || scroller;
-    var raf = 0, ro = null, cap = 0, poll = 0, dead = false, lastH = content.scrollHeight, pinnedTop = 0, tY = null;
+    var raf = 0, ro = null, cap = 0, poll = 0, dead = false, lastH = content.scrollHeight, tY = null;
     var off = function () {
       if (dead) return; dead = true;
       if (raf) cancelAnimationFrame(raf);
@@ -2249,20 +2249,20 @@
     // scroll-anchoring backstop (desktop Chrome's anchor silently hid this for months).
     var onTS = function (e) { var t = e.touches && e.touches[0]; tY = t ? t.clientY : null; };
     var onTM = function (e) { var t = e.touches && e.touches[0], y = t ? t.clientY : null; if (y == null) return; if (tY == null) { tY = y; return; } if (Math.abs(y - tY) > 10) off(); };
-    // Re-seat the anchor under the top chrome. Releases the instant the reader scrolls (scrollTop drifts from
-    // where we last pinned); otherwise it tracks the anchor through ANY reflow - grow, shrink, or net-zero -
-    // that a scrollHeight-only ResizeObserver would miss.
+    // Re-seat the anchor under the top chrome through ANY late reflow - grow, shrink, or net-zero. It must
+    // NOT release when scrollTop merely jumps: a grow above the target moves scrollTop (the browser scroll-
+    // anchors it, or we chase it) with no reader intent, and reading that jump as "the reader scrolled" is
+    // exactly what stranded the section (release -> the following shrink is never corrected). Control is
+    // handed back only by a real gesture (touchmove > 10px / wheel), which a reflow can never fake.
     var repin = function () {
       if (dead) return;
-      if (Math.abs(scroller.scrollTop - pinnedTop) > 4) { off(); return; }   // reader took over
       var t = aim(); if (Math.abs(t - scroller.scrollTop) > 2) scroller.scrollTop = t;
-      pinnedTop = scroller.scrollTop;
     };
     // Only AFTER the glide lands: hold the section in place across late media reflow, letting go the moment
     // the reader takes over. A 100ms poll (mobile-safe - a background tab freezes rAF/ResizeObserver) plus a
     // ResizeObserver fast-path for an instant, jitter-free correction on a real height change.
     var pin = function () {
-      lastH = content.scrollHeight; pinnedTop = scroller.scrollTop;
+      lastH = content.scrollHeight;
       if (window.ResizeObserver) {
         ro = new ResizeObserver(function () { var h = content.scrollHeight; if (h === lastH) return; lastH = h; repin(); });
         try { ro.observe(content); } catch (e) {}
