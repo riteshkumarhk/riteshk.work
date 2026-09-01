@@ -1695,22 +1695,20 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function richArea(attrs, value) {
     return '<div class="rt__area" contenteditable="true" spellcheck="true" data-ph="Write here\u2026 use the bar above to format" ' + attrs + ">" + richInit(value) + "</div>";
   }
+  function richFieldWrap(attrs, value) { return '<div class="rt__field">' + richTools() + richArea(attrs, value) + "</div>"; }   // wraps toolbar + area so the focus ring hugs just the editor
   function richBlock(i, j, field, label, hint) {
     var b = data.work[i].study.blocks[j];
-    return '<div class="af rt"><label class="af__label">' + label + "</label>" + richTools() +
-      richArea('data-sblock="' + i + '" data-bindex="' + j + '" data-rtfield="' + field + '"', b[field]) +
+    return '<div class="af rt"><label class="af__label">' + label + "</label>" + richFieldWrap('data-sblock="' + i + '" data-bindex="' + j + '" data-rtfield="' + field + '"', b[field]) +
       (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
   }
   function richItem(i, j, k, field, label) {
     var it = (data.work[i].study.blocks[j].items[k]) || {};
-    return '<div class="af rt"><label class="af__label">' + label + "</label>" + richTools() +
-      richArea('data-sblock="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-rtifield="' + field + '"', it[field]) + "</div>";
+    return '<div class="af rt"><label class="af__label">' + label + "</label>" + richFieldWrap('data-sblock="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-rtifield="' + field + '"', it[field]) + "</div>";
   }
   function richCell(i, j, k, c, field, label) {
     var it = (data.work[i].study.blocks[j].items[k]) || {};
     var cell = (it.cells && it.cells[c]) || {};
-    return '<div class="af rt"><label class="af__label">' + label + "</label>" + richTools() +
-      richArea('data-sblock="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ccell="' + c + '" data-rtcellfield="' + field + '"', cell[field]) + "</div>";
+    return '<div class="af rt"><label class="af__label">' + label + "</label>" + richFieldWrap('data-sblock="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ccell="' + c + '" data-rtcellfield="' + field + '"', cell[field]) + "</div>";
   }
   function rtSerialize(area) {
     var clone = area.cloneNode(true);
@@ -8188,8 +8186,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (opts.render !== false) renderBody();
   }
   function richJourney(c, e, val) {
-    return '<div class="af rt"><label class="af__label">Description (optional)</label>' + richTools() +
-      richArea('data-rtjrn="body" data-jc="' + c + '" data-je="' + e + '"', val) + "</div>";
+    return '<div class="af rt"><label class="af__label">Description (optional)</label>' + richFieldWrap('data-rtjrn="body" data-jc="' + c + '" data-je="' + e + '"', val) + "</div>";
   }
   function journeyWorkOptions(sel) {
     var opts = '<option value="">\u2014 no case study \u2014</option>';
