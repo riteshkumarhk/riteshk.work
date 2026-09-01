@@ -1930,7 +1930,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .ats__score-x > span { font-size: .72rem; color: var(--text-dim); display: block; }
 
 /* Prepare tab: compact launcher rows (each opens its tool in a dialog) */
-.prep-rows { display: flex; flex-direction: column; gap: .6rem; margin-top: 1rem; }
+.prep-rows { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
 .prep-row { display: flex; align-items: center; gap: .9rem; width: 100%; text-align: left; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: .8rem 1rem; cursor: pointer; color: inherit; transition: border-color .12s, background .12s; }
 .prep-row:hover { border-color: var(--accent); background: var(--bg-elev); }
 .prep-row__b { flex: 0 0 auto; }
@@ -2638,11 +2638,11 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .wb__topfix span { color: var(--accent); font-weight: 600; }
 
 /* ---------- Insights (analytics readout) ---------- */
-.ins__ctrls { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: 0 0 1.1rem; }
+.ins__ctrls { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: 0 0 1rem; }
 /* .ins__days / .ins__dbtn share the segmented-control look — see the ".adm__hm-seg" block below */
 .ins__mute { margin-left: auto; border: 1px solid var(--line-soft, rgba(255, 255, 255, .14)); background: transparent; color: var(--text-dim); border-radius: 20px; padding: .36rem .8rem; font: 600 .72rem/1 var(--mono); cursor: pointer; }
 .ins__mute.is-on { color: var(--accent); border-color: var(--accent); }
-.ins__cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: .7rem; margin: 0 0 1.1rem; }
+.ins__cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: .7rem; margin: 0 0 1rem; }
 .ins__card { background: rgba(255, 255, 255, .03); border: 1px solid var(--line-soft, rgba(255, 255, 255, .08)); border-radius: 12px; padding: .9rem 1rem; box-shadow: 0 2px 8px -5px rgba(0, 0, 0, .35); }
 .ins__card-n { font: 600 1.7rem/1 var(--serif); color: var(--text); }
 .ins__card-l { margin-top: .3rem; font-size: .82rem; color: var(--text); }
