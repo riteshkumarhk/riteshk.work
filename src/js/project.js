@@ -1415,6 +1415,7 @@
     overlay.innerHTML =
       '<div class="pj__scroll">' +
         '<div class="pj__ctrl">' +
+          '<button class="pj__icon pj__icon--present" data-pj="present" aria-label="Present this case study" title="Present"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>' +
           '<button class="pj__icon" data-pj="prev" aria-label="Previous project" title="Previous"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>' +
           '<button class="pj__icon" data-pj="next" aria-label="Next project" title="Next"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button>' +
           '<button class="pj__icon pj__icon--close" data-pj="close" aria-label="Close case study" title="Close"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
@@ -1702,6 +1703,7 @@
     if (act) {
       var kind = act.getAttribute("data-pj");
       if (kind === "back" || kind === "close") { e.preventDefault(); closeProject({ push: true }); }
+      else if (kind === "present") { e.preventDefault(); presentDeck(workById(activeId)); }
       else if (kind === "prev") nav(-1);
       else if (kind === "next") nav(1);
       else if (kind === "read") { e.preventDefault(); scrollToCase(); }
@@ -2127,6 +2129,7 @@
     var head = overlay.querySelector("[data-crumb]");
     head.innerHTML = '<b>' + esc(w.client || "") + "</b>" + (w.plateTag ? "<span>" + esc(w.plateTag) + "</span>" : "");
     applyNav(w);
+    overlay.classList.toggle("pj--canpresent", pjIsOwner());
     var contentEl = overlay.querySelector("[data-content]");
     var html = contentHtml(w);
     // In the admin live-preview, re-rendering the SAME project on every keystroke
@@ -2582,7 +2585,95 @@
 
   /* ---------- bootstrap ---------- */
   function init() {
-    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.unregisterIcons = unregisterIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.setStudyLocked = clearUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; }
+    /* ---------- Presentation deck (owner-only slideshow) ---------- */
+    function pjIsOwner() { try { return localStorage.getItem("rk:owner") === "1"; } catch (e) { return false; } }
+    function pjPlain(s) { return String(s == null ? "" : s).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(); }
+    function pjBodyHtml(body) { return isRichHtml(body) ? safeHtml(body) : md(body || ""); }
+    function pjFirstMedia(b) { var it = b.items || []; for (var i = 0; i < it.length; i++) { if (it[i] && mediaSrc(it[i])) return it[i]; } return null; }
+    function pjSlideBody(b) {
+      var t = "";
+      if (b.body) t = pjPlain(b.body);
+      else if (b.desc) t = pjPlain(b.desc);
+      else if (b.list && b.list.length) return b.list.map(function (x) { return "- " + x; }).join("\n");
+      else if (b.items && b.items.length) { var a = b.items.map(function (x) { return x.text || x.label || x.title || ""; }).filter(Boolean); if (a.length) return a.slice(0, 6).map(function (x) { return "- " + x; }).join("\n"); }
+      if (t.length > 300) t = t.slice(0, 300).replace(/\s+\S*$/, "") + "\u2026";
+      return t;
+    }
+    function pjBlockToSlide(b) {
+      var head = b.heading || b.nav || "";
+      var kick = b.kicker || "";
+      if (b.type === "metrics" && b.items && b.items[0]) { var m = b.items[0]; return { layout: "metric", slots: { value: m.value || "", label: m.label || head, sub: kick } }; }
+      var media = pjFirstMedia(b);
+      if ((b.type === "media" || b.type === "gallery" || b.type === "showpiece") && media) { return { layout: "media", slots: { media: media, caption: media.caption || head } }; }
+      if (b.type === "stmt") { return { layout: "statement", slots: { kicker: kick, title: pjPlain(b.body), sub: pjPlain(b.sub) } }; }
+      var body = pjSlideBody(b);
+      if (media) return { layout: "split", slots: { heading: head, body: body, media: media } };
+      return { layout: "text", slots: { kicker: kick, title: head, body: body } };
+    }
+    function pjDeckSlides(w, st) {
+      if (st && st.slides && st.slides.length) return st.slides.filter(function (s) { return s && !s.hidden; });
+      var slides = [{ layout: "statement", slots: { kicker: w.client || "", title: w.title || "Untitled", sub: w.cardDesc || "" } }];
+      ((st && st.blocks) || []).forEach(function (b) { if (!b || b.off || b.locked) return; var s = pjBlockToSlide(b); if (s) slides.push(s); });
+      return slides;
+    }
+    function pjMediaHtml(z, cls) { var m = z.media || (z.src ? { src: z.src } : null); return (m && mediaSrc(m)) ? mediaEl(m, cls) : '<div class="pjps__ph"></div>'; }
+    function renderPjSlide(s) {
+      var L = s.layout || "text", z = s.slots || {};
+      if (L === "statement") return '<div class="pjps pjps--statement"><div class="pjps__body">' + (z.kicker ? '<div class="pjps__kicker">' + esc(z.kicker) + "</div>" : "") + '<h2 class="pjps__title">' + esc(z.title || "") + "</h2>" + (z.sub ? '<p class="pjps__sub">' + esc(z.sub) + "</p>" : "") + "</div></div>";
+      if (L === "metric") return '<div class="pjps pjps--metric"><div class="pjps__body">' + (z.kicker ? '<div class="pjps__kicker">' + esc(z.kicker) + "</div>" : "") + '<div class="pjps__metric-v">' + esc(z.value || "") + '</div><div class="pjps__metric-l">' + esc(z.label || "") + "</div>" + (z.sub ? '<p class="pjps__sub">' + esc(z.sub) + "</p>" : "") + "</div></div>";
+      if (L === "media") return '<figure class="pjps pjps--media">' + pjMediaHtml(z, "pjps__media-el") + (z.caption ? '<figcaption class="pjps__cap">' + esc(z.caption) + "</figcaption>" : "") + "</figure>";
+      if (L === "split") return '<div class="pjps pjps--split"><div class="pjps__col pjps__col--text"><div class="pjps__body">' + (z.heading ? '<h2 class="pjps__title">' + esc(z.heading) + "</h2>" : "") + (z.body ? '<div class="pjps__prose">' + pjBodyHtml(z.body) + "</div>" : "") + '</div></div><div class="pjps__col pjps__col--media">' + pjMediaHtml(z, "pjps__media-el") + "</div></div>";
+      return '<div class="pjps pjps--text"><div class="pjps__body">' + (z.kicker ? '<div class="pjps__kicker">' + esc(z.kicker) + "</div>" : "") + (z.title ? '<h2 class="pjps__title">' + esc(z.title) + "</h2>" : "") + (z.body ? '<div class="pjps__prose">' + pjBodyHtml(z.body) + "</div>" : "") + "</div></div>";
+    }
+    var pjpStage = null;
+    function presentDeck(w) {
+      if (!w || pjpStage) return;
+      var st = w.study || {};
+      var slides = pjDeckSlides(w, st);
+      if (!slides.length) return;
+      var idx = 0;
+      var stage = document.createElement("div");
+      pjpStage = stage;
+      stage.className = "pjp";
+      stage.setAttribute("role", "dialog"); stage.setAttribute("aria-modal", "true"); stage.setAttribute("aria-label", "Presentation");
+      stage.innerHTML =
+        '<div class="pjp__stagewrap"><div class="pjp__frame" data-pjp-frame></div></div>' +
+        '<div class="pjp__bar"><button class="pjp__x" data-pjp="exit" aria-label="Exit presentation" title="Exit (Esc)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
+        '<div class="pjp__progress" data-pjp-progress></div><span class="pjp__count" data-pjp-count></span></div>' +
+        '<button class="pjp__edge pjp__edge--prev" data-pjp="prev" aria-label="Previous slide"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>' +
+        '<button class="pjp__edge pjp__edge--next" data-pjp="next" aria-label="Next slide"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>';
+      document.body.appendChild(stage);
+      var frame = stage.querySelector("[data-pjp-frame]"), prog = stage.querySelector("[data-pjp-progress]"), count = stage.querySelector("[data-pjp-count]");
+      prog.innerHTML = slides.map(function (_, i) { return '<span class="pjp__pdot" data-pjp-dot="' + i + '"></span>'; }).join("");
+      document.documentElement.classList.add("pjp-on");
+      function render() {
+        var s = slides[idx];
+        frame.innerHTML = renderPjSlide(s);
+        frame.className = "pjp__frame pjp__frame--" + (s.layout || "text");
+        void frame.offsetWidth; frame.classList.add("pjp__frame--in");
+        count.textContent = (idx + 1) + " / " + slides.length;
+        [].forEach.call(prog.children, function (d, i) { d.classList.toggle("is-on", i <= idx); });
+      }
+      function go(d) { var n = Math.max(0, Math.min(slides.length - 1, idx + d)); if (n === idx) return; idx = n; render(); }
+      function exit() { document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { stage.remove(); pjpStage = null; }, 240); }
+      function onKey(e) {
+        if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); go(1); }
+        else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
+        else if (e.key === "Escape") { e.preventDefault(); exit(); }
+        else if (e.key === "Home") { idx = 0; render(); }
+        else if (e.key === "End") { idx = slides.length - 1; render(); }
+      }
+      stage.addEventListener("click", function (e) {
+        var d = e.target.closest("[data-pjp-dot]"); if (d) { idx = +d.getAttribute("data-pjp-dot"); render(); return; }
+        var b = e.target.closest("[data-pjp]"); if (!b) return;
+        var k = b.getAttribute("data-pjp");
+        if (k === "exit") exit(); else if (k === "prev") go(-1); else if (k === "next") go(1);
+      });
+      document.addEventListener("keydown", onKey);
+      render();
+    }
+
+    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.unregisterIcons = unregisterIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.setStudyLocked = clearUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.presentDeck = presentDeck; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; }
     // A fresh vault grant just arrived (Present mode's owner grant, or a recruiter link). If a case
     // study is open, drop its "already tried" latch and re-resolve its vault-hosted deeper cuts so
     // they swap in immediately — no reopen needed.
