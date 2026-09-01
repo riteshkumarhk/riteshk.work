@@ -13539,8 +13539,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="af"><label class="af__label">Targeting</label><div class="iprep__levels">' +
           IPREP_LEVELS.map(function (l) { return '<button type="button" class="iprep__lvl' + (g.level === l[0] ? " is-on" : "") + '" data-rk-lvl="' + l[0] + '"><span class="iprep__lvl-name">' + l[1] + '</span><span class="iprep__lvl-desc">' + l[2] + "</span></button>"; }).join("") +
         "</div></div>" +
-        '<div class="af"><label class="af__label">Job description</label><textarea id="rkJd" rows="5" placeholder="Paste the JD text (or a link, or add a file)\u2026">' + escHtml(g.jd || "") + "</textarea>" +
-        '<div class="af__hint">A link is sent as context (job sites often block reading \u2014 paste the text for best results). <button class="iprep__filebtn" data-rk-file type="button">Add PDF / Word / text\u2026</button></div></div>' +
+        '<div class="af"><label class="af__label">Job description</label>' +
+        '<div class="cl__row"><input type="url" class="cl__url" data-rk-jd-url placeholder="Paste the job posting URL\u2026" /><button class="btn btn--ghost" type="button" data-rk-jd-fetch>Fetch</button></div>' +
+        '<textarea id="rkJd" rows="5" placeholder="\u2026or paste the JD text">' + escHtml(g.jd || "") + "</textarea>" +
+        '<div class="af__hint">A link is read via a reader service (r.jina.ai) to pull the page text (job sites often block it \u2014 paste the text if it fails). <button class="iprep__filebtn" data-rk-file type="button">Add PDF / Word / text\u2026</button></div></div>' +
         '<div class="rolekit__resume">' + (hasResume ? "\u2713 Using your r\u00e9sum\u00e9 from Contact." : "No r\u00e9sum\u00e9 attached \u2014 add one under Contact for a sharper cover note &amp; gap analysis.") + "</div>" +
       "</div>" +
       '<div class="rolekit__tabs" hidden>' +
@@ -13566,6 +13568,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var backBtn = modal.querySelector("[data-rk-back]");
     var runBtns = [].slice.call(modal.querySelectorAll("[data-rk-run]"));
     var jdEl = modal.querySelector("#rkJd");
+    var rkJdUrl = modal.querySelector("[data-rk-jd-url]");
+    var rkJdFetch = modal.querySelector("[data-rk-jd-fetch]");
+    if (rkJdFetch) rkJdFetch.addEventListener("click", async function () {
+      var errEl = modal.querySelector(".pass__err"); if (errEl) errEl.textContent = "";
+      btnBusy(rkJdFetch, "Fetching\u2026");
+      try { var jt = await clFetchJd(rkJdUrl ? rkJdUrl.value : ""); if (jdEl) jdEl.value = jt; g.jd = jt; }
+      catch (e2) { if (errEl) errEl.textContent = (e2 && e2.message) || "Couldn\u2019t read that link \u2014 paste the description instead."; }
+      btnIdle(rkJdFetch, "Fetch");
+    });
     var close = function () { g.jd = jdEl.value; modal.remove(); };
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
@@ -13810,8 +13821,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
               '<div class="af"><label class="af__label">Focus</label><select id="iprepScope"><option value="study"' + (g.scope === "study" ? " selected" : "") + '>This case study (deep dive)</option><option value="portfolio"' + (g.scope === "portfolio" ? " selected" : "") + '>Whole portfolio</option></select></div>' +
               '<div class="af"><label class="af__label">How many</label><select id="iprepCount"><option>6</option><option selected>10</option><option>14</option></select></div>' +
             "</div>") +
-        '<div class="af"><label class="af__label">Target role or job description <span class="af__opt">(optional)</span></label><textarea id="iprepJd" rows="3" placeholder="Paste a role title, the JD text, or a link\u2026">' + escHtml(g.jd || "") + '</textarea>' +
-        '<div class="af__hint">A link is sent as context (job sites often block reading \u2014 paste the text for best results). <button class="iprep__filebtn" data-iprep-file type="button">Add PDF / Word / text\u2026</button></div></div>' +
+        '<div class="af"><label class="af__label">Target role or job description <span class="af__opt">(optional)</span></label>' +
+        '<div class="cl__row"><input type="url" class="cl__url" data-iprep-jd-url placeholder="Paste the job posting URL\u2026" /><button class="btn btn--ghost" type="button" data-iprep-jd-fetch>Fetch</button></div>' +
+        '<textarea id="iprepJd" rows="3" placeholder="\u2026or paste a role title / the JD text">' + escHtml(g.jd || "") + '</textarea>' +
+        '<div class="af__hint">A link is read via a reader service (r.jina.ai) to pull the page text (job sites often block it \u2014 paste the text if it fails). <button class="iprep__filebtn" data-iprep-file type="button">Add PDF / Word / text\u2026</button></div></div>' +
       '</div>' +
       '<div class="iprep__list" hidden></div>' +
       '<div class="pass__err"></div>' +
@@ -13829,6 +13842,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var runBtn = modal.querySelector("[data-iprep-run]");
     var newBtn = modal.querySelector("[data-iprep-new]");
     var jdEl = modal.querySelector("#iprepJd");
+    var iprepJdUrl = modal.querySelector("[data-iprep-jd-url]");
+    var iprepJdFetch = modal.querySelector("[data-iprep-jd-fetch]");
+    if (iprepJdFetch) iprepJdFetch.addEventListener("click", async function () {
+      var errEl = modal.querySelector(".pass__err"); if (errEl) errEl.textContent = "";
+      btnBusy(iprepJdFetch, "Fetching\u2026");
+      try { var jt = await clFetchJd(iprepJdUrl ? iprepJdUrl.value : ""); if (jdEl) jdEl.value = jt; g.jd = jt; }
+      catch (e2) { if (errEl) errEl.textContent = (e2 && e2.message) || "Couldn\u2019t read that link \u2014 paste the description instead."; }
+      btnIdle(iprepJdFetch, "Fetch");
+    });
     var close = function () { g.jd = jdEl.value; modal.remove(); };
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
@@ -14201,7 +14223,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           "</div></div>" +
         '<div class="af"><label class="af__label">Company &amp; job description <span class="af__opt">(optional)</span></label>' +
           '<input type="text" class="wb__company" placeholder="Company you\u2019re interviewing at \u2014 e.g. Stripe, Google\u2026" value="' + escAttr(st.company || "") + '" />' +
-          '<textarea class="cl__jd wb__jd" rows="4" placeholder="Paste the job description \u2014 I\u2019ll bias the prompt, the probes and the scoring toward what the role demands.">' + escHtml(st.jd || "") + '</textarea>' +
+          '<div class="cl__row"><input type="url" class="cl__url" data-wb-jd-url placeholder="Paste the job posting URL\u2026" /><button class="btn btn--ghost" type="button" data-wb-jd-fetch>Fetch</button></div>' +
+          '<textarea class="cl__jd wb__jd" rows="4" placeholder="\u2026or paste the job description \u2014 I\u2019ll bias the prompt, the probes and the scoring toward what the role demands.">' + escHtml(st.jd || "") + '</textarea>' +
           '<div class="af__hint">Company \u2192 I match how they interview at this level (prompt type, answer depth, collaboration). ' + (storyJdText() ? 'Leave the description blank to reuse your \u201cAlign to a role\u201d target from the storyteller.' : 'Both optional.') + '</div>' +
         "</div>" +
         '<div class="af"><label class="af__label">Flavour / your own prompt (optional)</label>' +
@@ -14229,6 +14252,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var ownEl = modal.querySelector(".wb__own");
     var companyEl = modal.querySelector(".wb__company");
     var jdEl = modal.querySelector(".wb__jd");
+    var wbJdUrl = modal.querySelector("[data-wb-jd-url]");
+    var wbJdFetch = modal.querySelector("[data-wb-jd-fetch]");
+    if (wbJdFetch) wbJdFetch.addEventListener("click", async function () {
+      var errEl = modal.querySelector(".pass__err"); if (errEl) errEl.textContent = "";
+      btnBusy(wbJdFetch, "Fetching\u2026");
+      try { var jt = await clFetchJd(wbJdUrl ? wbJdUrl.value : ""); if (jdEl) jdEl.value = jt; st.jd = jt; wbSave(); }
+      catch (e2) { if (errEl) errEl.textContent = (e2 && e2.message) || "Couldn\u2019t read that link \u2014 paste the description instead."; }
+      btnIdle(wbJdFetch, "Fetch");
+    });
     var watchCleanup = null, micCleanup = null, timerCleanup = null;
     var miniEl = null, miniMic = null, curTimerText = "", doListen = null;
     var pipWin = null, pipTimeEl = null, pipMic = null;
