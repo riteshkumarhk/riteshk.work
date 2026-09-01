@@ -2856,3 +2856,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .slidepv__stage .pjps--split .pjps__col--text { padding: 60px 64px; }
 
 .slidepull__card { text-align: left; }
+/* Slide preview font overrides for the new layouts (increment 4a) */
+.slidepv__stage .pjps__quote { font-size: 54px; }
+.slidepv__stage .pjps__attr { font-size: 15px; }
+.slidepv__stage .pjps__secnum { font-size: 32px; }

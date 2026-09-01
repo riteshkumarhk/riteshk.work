@@ -2606,6 +2606,7 @@
       var media = pjFirstMedia(b);
       if ((b.type === "media" || b.type === "gallery" || b.type === "mediagrid" || b.type === "figure" || b.type === "showpiece") && media) { return { layout: "media", slots: { media: media, caption: media.caption || head } }; }
       if (b.type === "statement" || b.type === "stmt") { return { layout: "statement", slots: { kicker: kick || head, title: pjPlain(b.body), sub: pjPlain(b.sub) } }; }
+      if (b.type === "voices" && b.items && b.items[0]) { var v0 = b.items[0]; return { layout: "quote", slots: { quote: pjPlain(v0.text || v0.quote || v0.body || v0.q || ""), attribution: b.heading || v0.attr || v0.who || v0.label || "" } }; }
       var body = pjSlideBody(b);
       if (media) return { layout: "split", slots: { heading: head, body: body, media: media } };
       return { layout: "text", slots: { kicker: kick, title: head, body: body } };
@@ -2626,7 +2627,14 @@
       if (L === "metric") return '<div class="pjps pjps--metric"><div class="pjps__body">' + (z.kicker ? '<div class="pjps__kicker">' + esc(z.kicker) + "</div>" : "") + '<div class="pjps__metric-v">' + esc(z.value || "") + '</div><div class="pjps__metric-l">' + esc(z.label || "") + "</div>" + (z.sub ? '<p class="pjps__sub">' + esc(z.sub) + "</p>" : "") + "</div></div>";
       if (L === "media") return '<figure class="pjps pjps--media">' + pjMediaHtml(z, "pjps__media-el") + (z.caption ? '<figcaption class="pjps__cap">' + esc(z.caption) + "</figcaption>" : "") + "</figure>";
       if (L === "split") return '<div class="pjps pjps--split"><div class="pjps__col pjps__col--text"><div class="pjps__body">' + (z.heading ? '<h2 class="pjps__title">' + esc(z.heading) + "</h2>" : "") + (z.body ? '<div class="pjps__prose">' + pjBodyHtml(z.body) + "</div>" : "") + '</div></div><div class="pjps__col pjps__col--media">' + pjMediaHtml(z, "pjps__media-el") + "</div></div>";
+      if (L === "quote") return '<div class="pjps pjps--quote"><div class="pjps__body"><blockquote class="pjps__quote">' + esc(z.quote || "") + "</blockquote>" + (z.attribution ? '<div class="pjps__attr">' + esc(z.attribution) + "</div>" : "") + "</div></div>";
+      if (L === "section") return '<div class="pjps pjps--section"><div class="pjps__body">' + (z.kicker ? '<div class="pjps__secnum">' + esc(z.kicker) + "</div>" : "") + '<h2 class="pjps__title">' + esc(z.title || "") + "</h2>" + (z.sub ? '<p class="pjps__sub">' + esc(z.sub) + "</p>" : "") + "</div></div>";
       return '<div class="pjps pjps--text"><div class="pjps__body">' + (z.kicker ? '<div class="pjps__kicker">' + esc(z.kicker) + "</div>" : "") + (z.title ? '<h2 class="pjps__title">' + esc(z.title) + "</h2>" : "") + (z.body ? '<div class="pjps__prose">' + pjBodyHtml(z.body) + "</div>" : "") + "</div></div>";
+    }
+    function pjSlideTitle(s) {
+      var z = (s && s.slots) || {};
+      var t = z.title || z.heading || z.quote || z.value || z.label || z.caption || z.kicker || "";
+      return pjPlain(t).slice(0, 60) || (s ? (s.layout || "Slide") : "");
     }
     var pjpStage = null;
     function presentDeck(w, opts) {
@@ -2643,11 +2651,14 @@
       stage.innerHTML =
         '<div class="pjp__stagewrap"><div class="pjp__frame" data-pjp-frame></div></div>' +
         '<div class="pjp__bar"><button class="pjp__x" data-pjp="exit" aria-label="Exit presentation" title="Exit (Esc)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
-        '<div class="pjp__progress" data-pjp-progress></div><span class="pjp__count" data-pjp-count></span></div>' +
+        '<div class="pjp__progress" data-pjp-progress></div><span class="pjp__count" data-pjp-count></span>' +
+        '<button class="pjp__notesbtn" data-pjp="notes" aria-label="Presenter notes (P)" title="Presenter notes (P)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button></div>' +
         '<button class="pjp__edge pjp__edge--prev" data-pjp="prev" aria-label="Previous slide"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>' +
-        '<button class="pjp__edge pjp__edge--next" data-pjp="next" aria-label="Next slide"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>';
+        '<button class="pjp__edge pjp__edge--next" data-pjp="next" aria-label="Next slide"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>' +
+        '<div class="pjp__present" data-pjp-panel><div class="pjp__pnotes"><span class="pjp__plabel">Notes</span><div class="pjp__pnotes-body" data-pjp-notes></div></div><div class="pjp__pnext"><span class="pjp__plabel">Up next</span><div class="pjp__pnext-body" data-pjp-next></div></div></div>';
       document.body.appendChild(stage);
       var frame = stage.querySelector("[data-pjp-frame]"), prog = stage.querySelector("[data-pjp-progress]"), count = stage.querySelector("[data-pjp-count]");
+      var notesEl = stage.querySelector("[data-pjp-notes]"), nextEl = stage.querySelector("[data-pjp-next]"), presenting = false;
       prog.innerHTML = slides.map(function (_, i) { return '<span class="pjp__pdot" data-pjp-dot="' + i + '"></span>'; }).join("");
       document.documentElement.classList.add("pjp-on");
       function render() {
@@ -2656,14 +2667,18 @@
         frame.className = "pjp__frame pjp__frame--" + (s.layout || "text");
         void frame.offsetWidth; frame.classList.add("pjp__frame--in");
         count.textContent = (idx + 1) + " / " + slides.length;
+        if (notesEl) notesEl.textContent = (s.notes && String(s.notes).trim()) ? s.notes : "\u2014 No notes for this slide \u2014";
+        if (nextEl) nextEl.textContent = (idx < slides.length - 1) ? pjSlideTitle(slides[idx + 1]) : "End of deck";
         [].forEach.call(prog.children, function (d, i) { d.classList.toggle("is-on", i <= idx); });
       }
       function go(d) { var n = Math.max(0, Math.min(slides.length - 1, idx + d)); if (n === idx) return; idx = n; render(); }
+      function togglePresent() { presenting = !presenting; stage.classList.toggle("pjp--presenting", presenting); }
       function exit() { document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { stage.remove(); pjpStage = null; }, 240); }
       function onKey(e) {
         if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); go(1); }
         else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
         else if (e.key === "Escape") { e.preventDefault(); exit(); }
+        else if (e.key === "p" || e.key === "P") { e.preventDefault(); togglePresent(); }
         else if (e.key === "Home") { idx = 0; render(); }
         else if (e.key === "End") { idx = slides.length - 1; render(); }
       }
@@ -2671,7 +2686,7 @@
         var d = e.target.closest("[data-pjp-dot]"); if (d) { idx = +d.getAttribute("data-pjp-dot"); render(); return; }
         var b = e.target.closest("[data-pjp]"); if (!b) return;
         var k = b.getAttribute("data-pjp");
-        if (k === "exit") exit(); else if (k === "prev") go(-1); else if (k === "next") go(1);
+        if (k === "exit") exit(); else if (k === "prev") go(-1); else if (k === "next") go(1); else if (k === "notes") togglePresent();
       });
       document.addEventListener("keydown", onKey);
       render();

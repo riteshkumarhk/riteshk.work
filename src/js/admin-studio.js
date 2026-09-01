@@ -6014,7 +6014,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     ["text", "Heading + text", "A heading and a paragraph of supporting copy."],
     ["metric", "Metric", "One huge number with a label \u2014 an outcome spotlight."],
     ["media", "Media", "A full-bleed image or video with an optional caption."],
-    ["split", "Split", "Text on one side, media on the other."]
+    ["split", "Split", "Text on one side, media on the other."],
+    ["quote", "Quote", "A pulled quote with attribution \u2014 a voice or verbatim."],
+    ["section", "Section divider", "A number or kicker + title to break the deck into acts."]
   ];
   function slideLayoutName(l) { var m = SLIDE_LAYOUTS.filter(function (x) { return x[0] === l; })[0]; return m ? m[1] : (l || "Slide"); }
   function slideLayoutDesc(l) { var m = SLIDE_LAYOUTS.filter(function (x) { return x[0] === l; })[0]; return m ? m[2] : ""; }
@@ -6055,6 +6057,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (L === "metric") return slText(i, k, "kicker", "Kicker") + '<div class="af__row">' + slText(i, k, "value", "Value", null, { ph: "+38%" }) + slText(i, k, "label", "Label", null, { ph: "week-2 retention" }) + "</div>";
     if (L === "media") return slMedia(i, k) + slText(i, k, "caption", "Caption");
     if (L === "split") return slText(i, k, "heading", "Heading") + slText(i, k, "body", "Body", null, { area: true, rows: 5 }) + slMedia(i, k);
+    if (L === "quote") return slText(i, k, "quote", "Quote", null, { area: true, rows: 3 }) + slText(i, k, "attribution", "Attribution", "e.g. What clients actually said");
+    if (L === "section") return slText(i, k, "kicker", "Number / kicker", null, { ph: "02" }) + slText(i, k, "title", "Title") + slText(i, k, "sub", "Sub-line");
     return "";
   }
   function slidePvHtml(s) {
@@ -6087,7 +6091,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   function slideCard(i, s, k, len, open) {
     var lname = slideLayoutName(s.layout), z = s.slots || {};
-    var raw = z.title || z.heading || z.label || z.value || z.caption || z.kicker || "";
+    var raw = z.title || z.heading || z.quote || z.label || z.value || z.caption || z.kicker || "";
     var label = String(raw).replace(/<[^>]+>/g, " ").replace(/[\*\[\]]/g, "").replace(/\s+/g, " ").trim();
     if (!label) label = "Slide " + (k + 1);
     if (label.length > 46) label = label.slice(0, 46) + "\u2026";
