@@ -1234,9 +1234,9 @@ body.adm-lock .cursor { display: none !important; }
 .aiblk--cfextra { display: flex; flex-direction: column; gap: .6rem; }
 .aicf__mig { align-self: flex-start; }
 .aicf__row { display: flex; gap: .5rem; flex-wrap: wrap; }
-.aicf__entry { display: flex; gap: .5rem; align-items: stretch; }
+.aicf__entry { display: flex; gap: .5rem; align-items: center; }
 .aicf__entry[hidden] { display: none; }
-.aicf__entry input { flex: 1; min-width: 0; }
+.aicf__entry input { flex: 1; min-width: 0; margin-bottom: 0; }
 .aicf__add, .aicf__rm, .aicf__done, .aicf__cancel { font-size: .78rem; padding: .45rem .85rem; white-space: nowrap; }
 .aiuse { margin-top: 1.1rem; padding-top: 1rem; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: .7rem; }
 .aiuse__head { display: flex; align-items: center; justify-content: space-between; }
@@ -1943,9 +1943,9 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 
 /* Prepare tool dialog: reuse the .pass overlay, widen the box, strip the inner panel frame */
 .prep-dialog .pass__box { position: relative; width: min(880px, 94vw); padding: 1.6rem 1.5rem; }
-/* Prepare-tool dialog footers: natural-width, right-aligned CTAs (don't stretch full-width in the 880px dialog) */
-.prep-dialog .pass__actions, .iprep-modal .pass__actions, .story-modal .pass__actions, .wb-modal .pass__actions { justify-content: flex-end; flex-wrap: wrap; }
-.prep-dialog .pass__actions .btn, .iprep-modal .pass__actions .btn, .story-modal .pass__actions .btn, .wb-modal .pass__actions .btn { flex: 0 0 auto; }
+/* Wide-dialog footers: natural-width, right-aligned CTAs with a min-width so the secondary isn't tiny (the narrow sign-in modal keeps its 50/50 flex:1 split) */
+.pass--wide .pass__actions { justify-content: flex-end; flex-wrap: wrap; }
+.pass--wide .pass__actions .btn { flex: 0 0 auto; min-width: 5.5rem; }
 .prep-dialog__x { position: absolute; top: .6rem; right: .7rem; z-index: 2; background: none; border: 0; color: var(--text-faint); font-size: 1.4rem; line-height: 1; cursor: pointer; padding: .1rem .35rem; border-radius: 6px; transition: color .12s, background .12s; }
 .prep-dialog__x:hover { color: var(--text); background: rgba(255, 255, 255, .07); }
 .prep-dialog .prep-dialog__body > .ats,
@@ -2444,8 +2444,9 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 
 /* ---------- Cover letter builder (next to ATS) ---------- */
 .cl { margin-top: 1rem; border: 1px solid var(--line); border-radius: 12px; padding: 1rem; background: var(--bg-2); }
-.cl__row { display: flex; gap: .5rem; margin-bottom: .5rem; }
+.cl__row { display: flex; gap: .5rem; margin-bottom: .5rem; align-items: center; }
 .cl__url { flex: 1; min-width: 0; }
+.cl__row .cl__url { margin-bottom: 0; } /* the row aligns the input + Fetch button — the input's own bottom margin would over-stretch the button */
 .cl__jd { width: 100%; resize: vertical; box-sizing: border-box; }
 .cl__row2 { display: flex; gap: .5rem; align-items: center; margin: .5rem 0; }
 .cl__company { flex: 1; min-width: 0; }
