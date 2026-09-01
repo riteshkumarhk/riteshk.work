@@ -236,6 +236,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   let menuUsed = false;   // set once the visitor opens the ··· menu — the ticket nudge stays hidden afterwards
   const ticketPlain = {}; // owner-only plaintext tickets, never published
   const studyUnlockPlain = {}; // owner-only plaintext deeper-cut passes, never published
+  const studyUnlockedForEdit = {}; // per-study: owner has flipped the editor "unlock locked sections" switch this session
   const hostedBytes = {}; // "/assets/uploads/<hash>.<ext>" -> data URI (this session) for instant local preview
 
   const TABS = [
@@ -4402,9 +4403,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         st.blocks = out;
       } catch (e) { status("Couldn\u2019t decrypt the protected sections."); return; }
     }
-    saveDraft(true); renderL2();
+    studyUnlockedForEdit[w.id] = true;
     try { var _fw = frameWin(); if (_fw && _fw.RK && _fw.RK.setStudyUnlocked) _fw.RK.setStudyUnlocked(w.id); } catch (e) {}   // reveal the now-unlocked sections in the live preview (translucent veil)
-    refreshL2Preview();
+    saveDraft(true); renderL2(); refreshL2Preview();
     status("Protected sections unlocked for editing \u2014 they\u2019ll be re-protected on Publish.", true);
   }
   // Owner-only: turn a hidden encrypted project back into an editable one.
@@ -4419,6 +4420,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     try { const sek = await rkUnwrapSek(recovery, wrap); full = await rkDecWithSek(sek, stub); await rkResolveEncToDataUri(full, sek); }
     catch (e) { recoveryPassCache = null; status("That recovery passphrase didn\u2019t unlock this project."); return; }
     data.work[i] = full;
+    if (full && full.id) studyUnlockedForEdit[full.id] = true;
     try { var _fw = frameWin(); if (_fw && _fw.RK && _fw.RK.setStudyUnlocked && full && full.id) _fw.RK.setStudyUnlocked(full.id); } catch (e) {}   // reveal the now-unlocked sections when this project is opened in the preview
     saveDraft(true); renderBody();
     status("Hidden project unlocked for editing \u2014 it re-encrypts on Publish.", true);
@@ -5991,6 +5993,19 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     root.querySelectorAll(".adm__dev-opt").forEach(function (o) { o.classList.toggle("is-on", o.dataset.dev === previewDevice); });
     refitDevice();
   }
+  // A switch under the Sections title to unlock this study's "Locked" (deeper-cut) sections for editing.
+  // OFF = they render like a visitor sees (opaque gate in the preview); ON = unlocked (enter the encryption
+  // key if they're still sealed) so their content shows under a translucent veil. Re-protected on Publish.
+  function lockSwitchHtml(w, i) {
+    var on = !!studyUnlockedForEdit[w.id];
+    var n = (w.study.blocks || []).filter(function (b) { return b && b.locked; }).length;
+    var lockIco = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>';
+    return '<div class="l2lock' + (on ? " is-on" : "") + '">' +
+      '<span class="l2lock__tx"><b>' + lockIco + n + ' locked section' + (n === 1 ? "" : "s") + '</b>' +
+      '<span>' + (on ? "Unlocked \u2014 their content shows in the preview; re-protected on Publish." : "Hidden like a visitor sees. Flip on to unlock &amp; edit them.") + '</span></span>' +
+      '<button type="button" class="l2lock__sw" role="switch" aria-checked="' + (on ? "true" : "false") + '" data-act="study-unlocktoggle" data-index="' + i + '" aria-label="Unlock locked sections for editing"><span class="l2lock__knob"></span></button>' +
+      "</div>";
+  }
   function studyEditor(w, i) {
     var st = w.study;
     var blocks = st.blocks || (st.blocks = []);
@@ -6027,7 +6042,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     // ---- Story: sections + deeper-cut ----
     var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
     var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
-    var sections = '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span>' + (blocks.length ? '<span class="l2grp__actions"><button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">' + IC.spark + ' Review feedback</button><button class="btn btn--auto l2grp__ai" data-act="iprep-open" data-index="' + i + '" title="Generate likely interview questions from this case study">' + IC.mic + ' Interview prep</button><button class="btn btn--auto l2grp__ai" data-act="story-open" data-index="' + i + '" title="Build a presentation narrative \u2014 pick a length &amp; audience, get story angles + a beat-by-beat script">' + IC.book + ' Design storyteller</button></span>' : "") + "</div>" +
+    var hasLocked = blocks.some(function (b) { return b && b.locked; });
+    var lockSwitch = hasLocked ? lockSwitchHtml(w, i) : "";
+    var sections = '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span>' + (blocks.length ? '<span class="l2grp__actions"><button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">' + IC.spark + ' Review feedback</button><button class="btn btn--auto l2grp__ai" data-act="iprep-open" data-index="' + i + '" title="Generate likely interview questions from this case study">' + IC.mic + ' Interview prep</button><button class="btn btn--auto l2grp__ai" data-act="story-open" data-index="' + i + '" title="Build a presentation narrative \u2014 pick a length &amp; audience, get story angles + a beat-by-beat script">' + IC.book + ' Design storyteller</button></span>' : "") + "</div>" + lockSwitch +
       '<div class="study__blocks">' + list + "</div>" + add + "</section>";
     var unlockBlock = '<section class="l2grp"><div class="l2grp__head">Deeper-cut pass <span>\u2014 optional gate for \u201cLocked\u201d sections</span></div>' +
       '<div class="af"><input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
@@ -9334,6 +9351,24 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "study-pick") { sectionPicker(i); return; }
     if (act === "study-blockadd") { sectionPicker(i, +b.dataset.bindex); return; }
     if (act === "study-decrypt") { decryptStudyForEdit(i); return; }
+    if (act === "study-unlocktoggle") {
+      var _wk = data.work[i]; if (!_wk || !_wk.study) return;
+      var _wid = _wk.id, _on = b.getAttribute("aria-checked") === "true";
+      if (!_on) {
+        // turning ON: if any locked section is still sealed, run the key-prompt decrypt flow (it sets the
+        // switch + preview flags and re-renders on success); otherwise just reveal the already-plaintext ones.
+        var _sealed = (_wk.study.blocks || []).some(function (bl) { return bl && bl.locked && (bl.encStub || bl.vaultBlock); });
+        if (_sealed) { decryptStudyForEdit(i); return; }
+        studyUnlockedForEdit[_wid] = true;
+        try { var _fw = frameWin(); if (_fw && _fw.RK && _fw.RK.setStudyUnlocked) _fw.RK.setStudyUnlocked(_wid); } catch (e) {}
+      } else {
+        // turning OFF: re-lock the editor preview (draft keeps its content; it re-encrypts on Publish).
+        studyUnlockedForEdit[_wid] = false;
+        try { var _fw2 = frameWin(); if (_fw2 && _fw2.RK && _fw2.RK.setStudyLocked) _fw2.RK.setStudyLocked(_wid); } catch (e) {}
+      }
+      renderL2(); refreshL2Preview();
+      return;
+    }
     if (act === "work-decrypt") { decryptWorkForEdit(i); return; }
     if (act === "study-blocktoggle") {
       if (e.detail > 1) return; // 2nd click of a double-click - let dblclick handle rename

@@ -233,6 +233,7 @@
   }
   function isUnlocked(id) { try { return sessionStorage.getItem(UNLOCK_KEY + id) === "1"; } catch (e) { return false; } }
   function setUnlocked(id) { try { var was = sessionStorage.getItem(UNLOCK_KEY + id) === "1"; sessionStorage.setItem(UNLOCK_KEY + id, "1"); if (!was) { try { window.__rkTrack && window.__rkTrack("deepcut_unlock", id); } catch (e) {} } } catch (e) {} }
+  function clearUnlocked(id) { try { sessionStorage.removeItem(UNLOCK_KEY + id); } catch (e) {} }   // owner re-locks the editor preview (does not re-encrypt the draft — Publish does that)
 
   /* ---------- locked-section decryption (envelope) ----------
      Protected blocks ship as ciphertext stubs. A credential (deeper-cut pass or a
@@ -2581,7 +2582,7 @@
 
   /* ---------- bootstrap ---------- */
   function init() {
-    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.unregisterIcons = unregisterIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; }
+    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.unregisterIcons = unregisterIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.setStudyLocked = clearUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; }
     // A fresh vault grant just arrived (Present mode's owner grant, or a recruiter link). If a case
     // study is open, drop its "already tried" latch and re-resolve its vault-hosted deeper cuts so
     // they swap in immediately — no reopen needed.
