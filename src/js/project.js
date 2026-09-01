@@ -2232,24 +2232,46 @@
     extra = extra || 0;
     var aim = function () { return Math.max(0, Math.round(scroller.scrollTop + anchor.getBoundingClientRect().top - scroller.getBoundingClientRect().top - topOffset() - extra)); };
     var content = overlay.querySelector("[data-content]") || scroller;
-    var raf = 0, ro = null, cap = 0, dead = false, lastH = content.scrollHeight;
+    var raf = 0, ro = null, cap = 0, poll = 0, dead = false, lastH = content.scrollHeight, pinnedTop = 0, tY = null;
     var off = function () {
       if (dead) return; dead = true;
       if (raf) cancelAnimationFrame(raf);
       try { if (ro) ro.disconnect(); } catch (e) {}
-      scroller.removeEventListener("wheel", off); scroller.removeEventListener("touchmove", off);
-      clearTimeout(cap); _unpin = null;
+      clearInterval(poll); clearTimeout(cap);
+      scroller.removeEventListener("wheel", off);
+      scroller.removeEventListener("touchstart", onTS);
+      scroller.removeEventListener("touchmove", onTM);
+      _unpin = null;
     };
-    // Only AFTER the glide lands: hold across late media reflow, releasing when the reader actually scrolls.
+    // A stray touchmove (the tap's own finger settling, a rest, the sheet sliding out from under the finger)
+    // must NOT release the pin - only the reader ACTUALLY scrolling does. Releasing on the first touchmove is
+    // what let a late media reflow strand the section above the fold on mobile, where there's no native
+    // scroll-anchoring backstop (desktop Chrome's anchor silently hid this for months).
+    var onTS = function (e) { var t = e.touches && e.touches[0]; tY = t ? t.clientY : null; };
+    var onTM = function (e) { var t = e.touches && e.touches[0], y = t ? t.clientY : null; if (y == null) return; if (tY == null) { tY = y; return; } if (Math.abs(y - tY) > 10) off(); };
+    // Re-seat the anchor under the top chrome. Releases the instant the reader scrolls (scrollTop drifts from
+    // where we last pinned); otherwise it tracks the anchor through ANY reflow - grow, shrink, or net-zero -
+    // that a scrollHeight-only ResizeObserver would miss.
+    var repin = function () {
+      if (dead) return;
+      if (Math.abs(scroller.scrollTop - pinnedTop) > 4) { off(); return; }   // reader took over
+      var t = aim(); if (Math.abs(t - scroller.scrollTop) > 2) scroller.scrollTop = t;
+      pinnedTop = scroller.scrollTop;
+    };
+    // Only AFTER the glide lands: hold the section in place across late media reflow, letting go the moment
+    // the reader takes over. A 100ms poll (mobile-safe - a background tab freezes rAF/ResizeObserver) plus a
+    // ResizeObserver fast-path for an instant, jitter-free correction on a real height change.
     var pin = function () {
-      lastH = content.scrollHeight;
+      lastH = content.scrollHeight; pinnedTop = scroller.scrollTop;
       if (window.ResizeObserver) {
-        ro = new ResizeObserver(function () { var h = content.scrollHeight; if (h === lastH) return; lastH = h; var t = aim(); if (Math.abs(t - scroller.scrollTop) > 2) scroller.scrollTop = t; });
+        ro = new ResizeObserver(function () { var h = content.scrollHeight; if (h === lastH) return; lastH = h; repin(); });
         try { ro.observe(content); } catch (e) {}
       }
+      poll = setInterval(repin, 100);
       scroller.addEventListener("wheel", off, { passive: true });
-      scroller.addEventListener("touchmove", off, { passive: true });
-      cap = setTimeout(off, 6000);
+      scroller.addEventListener("touchstart", onTS, { passive: true });
+      scroller.addEventListener("touchmove", onTM, { passive: true });
+      cap = setTimeout(off, 4000);
       // Watchdog (preview / ?sdbg only): after the jump lands, watch for the scroll COLLAPSING back toward
       // the top - records the lowest scrollTop seen and when, so the real repro tells us if/when it happens.
       if (sdbgOn()) {
