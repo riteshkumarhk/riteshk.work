@@ -189,6 +189,8 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .rklog__row--sys .rklog__k { color: #b48ce6; }
 .rklog__row--error .rklog__k, .rklog__row--error .rklog__d { color: #ff8f8f; }
 .rklog__d { color: var(--text-dim); word-break: break-word; }
+.rklog__hdr { padding: .5rem .6rem; border-bottom: 1px solid var(--line); background: var(--bg-2); color: var(--text-faint); white-space: pre-wrap; word-break: break-word; }
+.rklog__hdr b { color: var(--text-dim); font-weight: 500; }
 .adm__newtab.is-visit { color: var(--accent); border-color: var(--accent); padding-right: .7rem; }
 /* live-preview device toggle (Desktop / Phone) */
 .adm__dev { position: relative; display: inline-flex; }

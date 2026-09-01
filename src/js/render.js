@@ -34,7 +34,7 @@
     document.addEventListener("error", function (e) {
       const el = e && e.target, t = el && el.tagName;
       if (!t || (t !== "IMG" && t !== "VIDEO" && t !== "SOURCE" && t !== "AUDIO")) return;
-      if (window.__rklog) window.__rklog("sys", "media load error: " + ((el.currentSrc || el.getAttribute("src") || "").split("/").pop() || "").slice(0, 44));
+      if (window.__rklog) window.__rklog("sys", "media failed to load \u2014 " + ((el.currentSrc || el.getAttribute("src") || "").split("/").pop() || "").slice(0, 44));
       if (el.__r2fix || !MEDIA_BASE) return;
       const src = el.getAttribute("src") || "";
       if (src.indexOf(MEDIA_BASE) === 0) return;                 // already on R2 -> a genuine 404, don't loop
@@ -79,14 +79,29 @@
      on THIS device (localStorage) and is never sent anywhere unless the owner copies it. */
   var RK_LOG_KEY = "rk:elog", RK_LOG_MAX = 160;
   function rkLogOn() { try { return rkIsOwner() || /[?&](preview|draft|log)\b/.test(location.search); } catch (e) { return false; } }
+  // A one-time environment stamp so anyone reading the log later (another engineer or AI) knows the device, viewport and page it came from.
+  function rkEnvMeta() {
+    try {
+      return JSON.stringify({
+        vw: window.innerWidth, vh: window.innerHeight,
+        dpr: Math.round((window.devicePixelRatio || 1) * 100) / 100,
+        rm: (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) ? "reduce" : "no-preference",
+        path: location.pathname + location.search,
+        title: (document.title || "").slice(0, 80),
+        ua: (navigator.userAgent || "").slice(0, 140)
+      });
+    } catch (e) { return "{}"; }
+  }
   function rkLog(k, d) {
     if (!rkLogOn()) return;
     try {
       if (localStorage.getItem("rk:elog:rec") !== "1") return;   // capture only while the owner is recording
       var ctx = window.top !== window.self ? "preview" : (/^\/studio(\/|$)/.test(location.pathname) ? "studio" : "site");
       var a = JSON.parse(localStorage.getItem(RK_LOG_KEY) || "[]");
+      var hasMeta = false; for (var i = 0; i < a.length; i++) { if (a[i].k === "meta") { hasMeta = true; break; } }
+      if (!hasMeta) a.unshift({ t: Date.now(), k: "meta", d: rkEnvMeta(), c: ctx });   // stamp the environment once, at record-start
       a.push({ t: Date.now(), k: k, d: String(d == null ? "" : d).slice(0, 200), c: ctx });
-      if (a.length > RK_LOG_MAX) a = a.slice(a.length - RK_LOG_MAX);
+      if (a.length > RK_LOG_MAX) { var head = (a[0] && a[0].k === "meta") ? [a[0]] : []; a = head.concat(a.slice(a.length - (RK_LOG_MAX - head.length))); }   // keep the env stamp pinned even when the ring buffer overflows
       localStorage.setItem(RK_LOG_KEY, JSON.stringify(a));
     } catch (e) {}
   }

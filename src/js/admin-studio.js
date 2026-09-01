@@ -10344,11 +10344,46 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   // errors, owner+preview only) and lets the owner copy it to share for a faster diagnosis. Screen-agnostic.
   function logsRead() { try { return JSON.parse(localStorage.getItem("rk:elog") || "[]"); } catch (e) { return []; } }
   function logsHhmmss(t) { var d = new Date(t); var p = function (n) { return ("0" + n).slice(-2); }; return p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds()); }
-  function logsPlain(a) { return a.map(function (o) { return logsHhmmss(o.t) + " [" + (o.c || "") + "] " + o.k + ": " + (o.d || ""); }).join("\n"); }
+  function logsFullTime(t) { var d = new Date(t); var p = function (n) { return ("0" + n).slice(-2); }; return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + logsHhmmss(t); }
+  function logsPad(s, n) { s = String(s); while (s.length < n) s += " "; return s; }
+  var LOG_CH = { tap: "USER", nav: "NAV", sys: "SYS", error: "ERR", meta: "META" };
+  function logsLabel(k) { return LOG_CH[k] || String(k || "").toUpperCase(); }
+  function logsCtxLabel(c) { return c === "preview" ? "preview (in-studio iframe)" : c === "studio" ? "studio" : c === "site" ? "live site" : (c || "?"); }
+  function logsMeta(a) { for (var i = 0; i < a.length; i++) if (a[i].k === "meta") return a[i]; return null; }
+  function logsEnv(m) { try { return (m && JSON.parse(m.d)) || {}; } catch (e) { return {}; } }
+  function logsEvents(a) { return a.filter(function (o) { return o.k !== "meta"; }); }
+  function logsBaseT(a) { var m = logsMeta(a), e = logsEvents(a); return (m && m.t) || (e[0] && e[0].t) || 0; }
+  // A self-describing header so a stranger (human or AI) can reconstruct the session with no extra explaining.
+  function logsHeaderLines(a) {
+    var m = logsMeta(a), env = logsEnv(m), e = logsEvents(a);
+    var t0 = (m && m.t) || (e[0] && e[0].t) || Date.now();
+    var ctx = (m && m.c) || (e[0] && e[0].c) || "";
+    var L = ["# riteshk.work \u2014 activity log", "# recorded " + logsFullTime(t0) + " \u00b7 context: " + logsCtxLabel(ctx)];
+    if (env.path) L.push("# page: " + env.path + (env.title ? '  "' + env.title + '"' : ""));
+    if (env.vw) L.push("# viewport: " + env.vw + "\u00d7" + env.vh + (env.dpr ? " \u00b7 dpr " + env.dpr : "") + (env.rm ? " \u00b7 reduced-motion: " + env.rm : ""));
+    if (env.ua) L.push("# UA: " + env.ua);
+    L.push("# channels: USER=taps/clicks \u00b7 NAV=section routing \u00b7 SYS=scroll & layout \u00b7 ERR=errors/failed media");
+    L.push("#");
+    return L;
+  }
+  function logsPlain(a) {
+    if (!a.length) return "(no events recorded)";
+    var t0 = logsBaseT(a);
+    var rows = logsEvents(a).map(function (o) { return logsPad("+" + Math.max(0, o.t - t0) + "ms", 8) + " " + logsPad(logsLabel(o.k), 5) + " " + (o.d || ""); });
+    return logsHeaderLines(a).concat(rows).join("\n");
+  }
   function logsListHtml(a) {
-    if (!a.length) return '<div class="af__hint" style="padding:1rem;text-align:center">No events yet \u2014 tap around in the preview, then hit Refresh.</div>';
-    return a.slice().reverse().map(function (o) {
-      return '<div class="rklog__row rklog__row--' + escAttr(o.k) + '"><span class="rklog__t">' + logsHhmmss(o.t) + '</span><span class="rklog__c">' + escHtml(o.c || "") + '</span><span class="rklog__k">' + escHtml(o.k) + '</span><span class="rklog__d">' + escHtml(o.d || "") + "</span></div>";
+    var e = logsEvents(a);
+    if (!e.length) return '<div class="af__hint" style="padding:1rem;text-align:center">No events yet \u2014 reproduce the issue in the preview, then hit <b>Copy</b>.</div>';
+    var m = logsMeta(a), env = logsEnv(m), t0 = logsBaseT(a), hdr = "";
+    if (m) {
+      hdr = '<div class="rklog__hdr"><b>' + escHtml(logsCtxLabel(m.c)) + '</b>' +
+        (env.vw ? " \u00b7 " + env.vw + "\u00d7" + env.vh : "") + (env.rm ? " \u00b7 " + escHtml(env.rm) : "") +
+        (env.path ? "\n" + escHtml(env.path) + (env.title ? '  "' + escHtml(env.title) + '"' : "") : "") +
+        (env.ua ? "\n" + escHtml(env.ua) : "") + "</div>";
+    }
+    return hdr + e.slice().reverse().map(function (o) {
+      return '<div class="rklog__row rklog__row--' + escAttr(o.k) + '"><span class="rklog__t">+' + Math.max(0, o.t - t0) + 'ms</span><span class="rklog__c">' + escHtml(o.c || "") + '</span><span class="rklog__k">' + escHtml(logsLabel(o.k)) + '</span><span class="rklog__d">' + escHtml(o.d || "") + "</span></div>";
     }).join("");
   }
   function logsCopy(txt) {
@@ -10380,7 +10415,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="rklog" data-lg-list></div></div>';
     document.body.appendChild(wrap);
     var listEl = wrap.querySelector("[data-lg-list]"), countEl = wrap.querySelector("[data-lg-count]");
-    var paint = function () { var a = logsRead(); listEl.innerHTML = logsListHtml(a); if (countEl) countEl.textContent = a.length + " event" + (a.length === 1 ? "" : "s"); };
+    var paint = function () { var a = logsRead(); listEl.innerHTML = logsListHtml(a); if (countEl) { var n = logsEvents(a).length; countEl.textContent = n + " event" + (n === 1 ? "" : "s"); } };
     paint();
     var close = function () { document.removeEventListener("keydown", esc, true); wrap.remove(); };
     var esc = function (ev) { if (ev.key === "Escape") close(); };

@@ -1676,7 +1676,7 @@
       closeSheet(); return;
     }
     var dotsBtn = e.target.closest("[data-dots]");
-    if (dotsBtn) { var sheetOpen = overlay.classList.toggle("pj--sheet-open"); dotsBtn.setAttribute("aria-expanded", sheetOpen ? "true" : "false"); if (window.__rklog) window.__rklog("sys", "sheet " + (sheetOpen ? "opened" : "closed")); return; }
+    if (dotsBtn) { var sheetOpen = overlay.classList.toggle("pj--sheet-open"); dotsBtn.setAttribute("aria-expanded", sheetOpen ? "true" : "false"); if (window.__rklog) window.__rklog("sys", "section menu " + (sheetOpen ? "opened" : "closed")); return; }
     var goto = e.target.closest("[data-goto]");
     if (goto) { gotoSection(goto.getAttribute("data-goto")); closeSheet(); return; }
     var view = e.target.closest("[data-view]");
@@ -2260,7 +2260,7 @@
     // handed back only by a real gesture (touchmove > 10px / wheel), which a reflow can never fake.
     var repin = function () {
       if (dead) return;
-      var t = aim(); if (Math.abs(t - scroller.scrollTop) > 2) { if (window.__rklog) window.__rklog("sys", "pin re-aim \u2192 " + t + " (content reflowed)"); scroller.scrollTop = t; }
+      var t = aim(); if (Math.abs(t - scroller.scrollTop) > 2) { if (window.__rklog) window.__rklog("sys", "re-anchored to " + t + "px (content grew above the target)"); scroller.scrollTop = t; }
     };
     // Only AFTER the glide lands: hold the section in place across late media reflow, letting go the moment
     // the reader takes over. A 100ms poll (mobile-safe - a background tab freezes rAF/ResizeObserver) plus a
@@ -2290,9 +2290,9 @@
     };
     _unpin = off;
     var from = scroller.scrollTop, aim0 = aim();
-    if (window.__rklog) window.__rklog("sys", "jump: from " + Math.round(from) + " \u2192 aim " + aim0);
+    if (window.__rklog) window.__rklog("sys", "scroll jump: " + Math.round(from) + "px \u2192 target " + aim0 + "px");
     var reduce = (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) || !window.requestAnimationFrame;
-    if (reduce) { scroller.scrollTop = aim(); pin(); sdbg("id=" + (anchor.id || "?") + " reduce=1 from=" + Math.round(from) + " aim=" + aim0 + " final=" + Math.round(scroller.scrollTop)); if (window.__rklog) window.__rklog("sys", "landed at " + Math.round(scroller.scrollTop) + " (instant)"); return; }
+    if (reduce) { scroller.scrollTop = aim(); pin(); sdbg("id=" + (anchor.id || "?") + " reduce=1 from=" + Math.round(from) + " aim=" + aim0 + " final=" + Math.round(scroller.scrollTop)); if (window.__rklog) window.__rklog("sys", "landed at " + Math.round(scroller.scrollTop) + "px (instant, reduced-motion)"); return; }
     var DUR = 600, t0 = 0, frames = 0;
     var step = function (ts) {
       if (dead) return;
@@ -2301,7 +2301,7 @@
       var p = Math.min(1, (ts - t0) / DUR), e = 1 - Math.pow(1 - p, 3);
       scroller.scrollTop = Math.round(from + (aim() - from) * e);
       if (p < 1) raf = requestAnimationFrame(step);
-      else { raf = 0; scroller.scrollTop = aim(); pin(); sdbg("id=" + (anchor.id || "?") + " reduce=0 from=" + Math.round(from) + " aim0=" + aim0 + " aimE=" + aim() + " final=" + Math.round(scroller.scrollTop) + " f=" + frames); if (window.__rklog) window.__rklog("sys", "landed at " + Math.round(scroller.scrollTop) + " (" + frames + "f glide)"); }
+      else { raf = 0; scroller.scrollTop = aim(); pin(); sdbg("id=" + (anchor.id || "?") + " reduce=0 from=" + Math.round(from) + " aim0=" + aim0 + " aimE=" + aim() + " final=" + Math.round(scroller.scrollTop) + " f=" + frames); if (window.__rklog) window.__rklog("sys", "landed at " + Math.round(scroller.scrollTop) + "px (" + frames + "-frame glide)"); }
     };
     raf = requestAnimationFrame(step);
   }
@@ -2357,7 +2357,7 @@
     // (scrollBy on the bar, never scrollIntoView, so the page never moves).
     if (id !== lastSpyId) {
       lastSpyId = id;
-      if (window.__rklog) window.__rklog("sys", "now in: " + (id || "\u2014"));
+      if (window.__rklog) window.__rklog("sys", "now viewing: " + (id || "\u2014"));
       var bar = overlay.querySelector(".pj__side");
       var chip = overlay.querySelector(".pj__toc-chip.is-active");
       if (bar && chip && bar.scrollWidth > bar.clientWidth + 4) {
@@ -2368,11 +2368,11 @@
       }
     }
   }
-  function closeSheet() { if (!overlay) return; var wasOpen = overlay.classList.contains("pj--sheet-open"); overlay.classList.remove("pj--sheet-open"); var d = overlay.querySelector("[data-dots]"); if (d) d.setAttribute("aria-expanded", "false"); if (wasOpen && window.__rklog) window.__rklog("sys", "sheet closed"); }
+  function closeSheet() { if (!overlay) return; var wasOpen = overlay.classList.contains("pj--sheet-open"); overlay.classList.remove("pj--sheet-open"); var d = overlay.querySelector("[data-dots]"); if (d) d.setAttribute("aria-expanded", "false"); if (wasOpen && window.__rklog) window.__rklog("sys", "section menu closed"); }
   function gotoSection(id) {
     if (id === "__intro") {
       cancelPin();
-      if (window.__rklog) window.__rklog("nav", "\u2192 overview (top)");
+      if (window.__rklog) window.__rklog("nav", "jump to overview (top)");
       var cov = overlay.querySelector(".pj__cover");
       var vh = scroller.clientHeight || window.innerHeight || 700;
       scroller.scrollTo({ top: cov ? Math.max(0, cov.offsetHeight - vh * 0.5) : 0, behavior: "smooth" });
@@ -2382,7 +2382,7 @@
     var matches = overlay.querySelectorAll(selector);
     var sec = matches[0];
     sdbg("tap id=" + id + " matches=" + matches.length + " st=" + Math.round(scroller.scrollTop));
-    if (window.__rklog) window.__rklog("nav", "\u2192 section " + id + " (" + matches.length + " match" + (sec ? "" : ", NOT FOUND") + ")");
+    if (window.__rklog) window.__rklog("nav", "jump to section " + id + " (" + matches.length + " match" + (sec ? "" : ", NOT FOUND") + ")");
     scrollToAnchor(sec, 8);
   }
 
@@ -2427,7 +2427,7 @@
       setSiteInert(true);
     }
     activeId = id;
-    if (window.__rklog) window.__rklog("sys", "case opened: " + id);
+    if (window.__rklog) window.__rklog("sys", "case opened \u2014 " + id);
     sdbgPlace();
     try { window.__rkTrack && window.__rkTrack("case_open", id); } catch (e) {}
     var keepAnchor = opts.keepScroll ? captureAnchor() : null;
