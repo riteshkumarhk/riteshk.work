@@ -2602,19 +2602,22 @@
     function pjBlockToSlide(b) {
       var head = b.heading || b.nav || "";
       var kick = b.kicker || "";
-      if (b.type === "metrics" && b.items && b.items[0]) { var m = b.items[0]; return { layout: "metric", slots: { value: m.value || "", label: m.label || head, sub: kick } }; }
+      if (b.type === "metrics" && b.items && b.items[0]) { var m = b.items[0]; return { layout: "metric", slots: { kicker: kick, value: m.value || "", label: m.label || head } }; }
       var media = pjFirstMedia(b);
-      if ((b.type === "media" || b.type === "gallery" || b.type === "showpiece") && media) { return { layout: "media", slots: { media: media, caption: media.caption || head } }; }
-      if (b.type === "stmt") { return { layout: "statement", slots: { kicker: kick, title: pjPlain(b.body), sub: pjPlain(b.sub) } }; }
+      if ((b.type === "media" || b.type === "gallery" || b.type === "mediagrid" || b.type === "figure" || b.type === "showpiece") && media) { return { layout: "media", slots: { media: media, caption: media.caption || head } }; }
+      if (b.type === "statement" || b.type === "stmt") { return { layout: "statement", slots: { kicker: kick || head, title: pjPlain(b.body), sub: pjPlain(b.sub) } }; }
       var body = pjSlideBody(b);
       if (media) return { layout: "split", slots: { heading: head, body: body, media: media } };
       return { layout: "text", slots: { kicker: kick, title: head, body: body } };
     }
-    function pjDeckSlides(w, st) {
-      if (st && st.slides && st.slides.length) return st.slides.filter(function (s) { return s && !s.hidden; });
+    function pjAutoSlides(w, st) {
       var slides = [{ layout: "statement", slots: { kicker: w.client || "", title: w.title || "Untitled", sub: w.cardDesc || "" } }];
       ((st && st.blocks) || []).forEach(function (b) { if (!b || b.off || b.locked) return; var s = pjBlockToSlide(b); if (s) slides.push(s); });
       return slides;
+    }
+    function pjDeckSlides(w, st) {
+      if (st && st.slides && st.slides.length) return st.slides.filter(function (s) { return s && !s.hidden; });
+      return pjAutoSlides(w, st);
     }
     function pjMediaHtml(z, cls) { var m = z.media || (z.src ? { src: z.src } : null); return (m && mediaSrc(m)) ? mediaEl(m, cls) : '<div class="pjps__ph"></div>'; }
     function renderPjSlide(s) {
@@ -2626,12 +2629,13 @@
       return '<div class="pjps pjps--text"><div class="pjps__body">' + (z.kicker ? '<div class="pjps__kicker">' + esc(z.kicker) + "</div>" : "") + (z.title ? '<h2 class="pjps__title">' + esc(z.title) + "</h2>" : "") + (z.body ? '<div class="pjps__prose">' + pjBodyHtml(z.body) + "</div>" : "") + "</div></div>";
     }
     var pjpStage = null;
-    function presentDeck(w) {
+    function presentDeck(w, opts) {
+      opts = opts || {};
       if (!w || pjpStage) return;
       var st = w.study || {};
-      var slides = pjDeckSlides(w, st);
+      var slides = (opts.slides && opts.slides.length) ? opts.slides : pjDeckSlides(w, st);
       if (!slides.length) return;
-      var idx = 0;
+      var idx = Math.max(0, Math.min(slides.length - 1, opts.start || 0));
       var stage = document.createElement("div");
       pjpStage = stage;
       stage.className = "pjp";
@@ -2673,7 +2677,7 @@
       render();
     }
 
-    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.unregisterIcons = unregisterIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.setStudyLocked = clearUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.presentDeck = presentDeck; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; }
+    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.unregisterIcons = unregisterIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.setStudyLocked = clearUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.presentDeck = presentDeck; window.RK.renderDeckSlide = function (s) { return renderPjSlide(s || {}); }; window.RK.deckAutoSlides = function (w) { return pjAutoSlides(w, (w && w.study) || {}); }; window.RK.deckSlideFromBlock = function (b) { return b ? pjBlockToSlide(b) : null; }; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; }
     // A fresh vault grant just arrived (Present mode's owner grant, or a recruiter link). If a case
     // study is open, drop its "already tried" latch and re-resolve its vault-hosted deeper cuts so
     // they swap in immediately — no reopen needed.

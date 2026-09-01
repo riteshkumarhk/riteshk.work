@@ -2827,3 +2827,32 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .adm__hm-note { font-family: var(--sans); font-size: .72rem; color: var(--text-faint); flex: 1 1 12rem; }
 @media (max-width: 720px) { .adm__hm-sliders { grid-template-columns: 1fr; } }
 @media (max-width: 720px) { .adm__tcards { grid-template-columns: 1fr; } }
+
+/* ============ Slideshow editor (owner-only presentation deck) ============ */
+.slides__intro { font-family: var(--sans); font-size: .82rem; line-height: 1.5; color: var(--text-dim); margin: .1rem 0 1rem; max-width: 60ch; }
+.slides__actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+.slides__actions .btn { flex: 0 0 auto; }
+.study__block--slide .study__block-badge { background: rgba(216, 166, 87, .16); color: var(--accent); }
+.slides__list .adm__empty { line-height: 1.5; }
+
+/* Inline WYSIWYG slide preview: a fixed 1280x720 "stage" scaled to the card width (like a PPT thumbnail). */
+.slides__pvwrap { margin: .3rem 0 .9rem; display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; }
+.slidepv { position: relative; width: 100%; overflow: hidden; border-radius: 12px; background: #08080a; border: 1px solid var(--line-soft, rgba(255,255,255,.08)); box-shadow: 0 18px 44px -26px rgba(0,0,0,.8); }
+.slidepv__stage { position: absolute; top: 0; left: 0; width: 1280px; height: 720px; transform-origin: top left; }
+.slides__rehearse1 { align-self: flex-start; }
+.slides__pull { margin: 0 0 .7rem; }
+
+/* Fix the deck typography to the 1280-wide stage (project.css uses vw/vh clamps meant for full-screen). */
+.slidepv__stage .pjps { padding: 70px 92px; }
+.slidepv__stage .pjps__kicker { font-size: 15px; letter-spacing: .22em; margin-bottom: 20px; }
+.slidepv__stage .pjps__title { font-size: 64px; line-height: 1.05; }
+.slidepv__stage .pjps--statement .pjps__title { font-size: 76px; }
+.slidepv__stage .pjps--text .pjps__title, .slidepv__stage .pjps--split .pjps__title { font-size: 52px; margin-bottom: 20px; }
+.slidepv__stage .pjps__sub { font-size: 26px; margin-top: 22px; }
+.slidepv__stage .pjps__prose { font-size: 22px; line-height: 1.5; }
+.slidepv__stage .pjps__metric-v { font-size: 210px; }
+.slidepv__stage .pjps__metric-l { font-size: 30px; }
+.slidepv__stage .pjps__cap { font-size: 18px; padding: 60px 40px 30px; }
+.slidepv__stage .pjps--split .pjps__col--text { padding: 60px 64px; }
+
+.slidepull__card { text-align: left; }
