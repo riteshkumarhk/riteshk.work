@@ -2635,10 +2635,13 @@
     function pjNum(v, d) { var n = parseFloat(v); return isFinite(n) ? Math.max(0, Math.min(100, n)) : d; }
     function renderFreeBlock(bl) {
       if (!bl) return "";
-      var pos = "left:" + pjNum(bl.x, 8) + "%;top:" + pjNum(bl.y, 8) + "%;width:" + pjNum(bl.w, 40) + "%;";
-      if (bl.kind === "media") return '<div class="pjps__fb pjps__fb--media" style="' + pos + '">' + pjMediaHtml(bl, "pjps__media-el") + "</div>";
-      var cls = "pjps__fb pjps__fb--text pjps__fb--" + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " pjps__fb--a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left");
-      return '<div class="' + cls + '" style="' + pos + '">' + pjBodyHtml(bl.text || "") + "</div>";
+      var st = "left:" + pjNum(bl.x, 8) + "%;top:" + pjNum(bl.y, 8) + "%;width:" + pjNum(bl.w, 40) + "%;";
+      var boxed = bl.h != null && isFinite(parseFloat(bl.h));
+      if (boxed) st += "height:" + pjNum(bl.h, 20) + "%;";
+      if (bl.rot) st += "transform:rotate(" + (parseFloat(bl.rot) || 0) + "deg);";
+      if (bl.kind === "media") return '<div class="pjps__fb pjps__fb--media' + (boxed ? " pjps__fb--fit" : "") + '" style="' + st + '">' + pjMediaHtml(bl, "pjps__media-el") + "</div>";
+      var cls = "pjps__fb pjps__fb--text pjps__fb--" + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " pjps__fb--a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " pjps__fb--boxed pjps__fb--v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "");
+      return '<div class="' + cls + '" style="' + st + '">' + pjBodyHtml(bl.text || "") + "</div>";
     }
     function pjSlideTitle(s) {
       var z = (s && s.slots) || {};
