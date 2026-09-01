@@ -1943,6 +1943,9 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 
 /* Prepare tool dialog: reuse the .pass overlay, widen the box, strip the inner panel frame */
 .prep-dialog .pass__box { position: relative; width: min(880px, 94vw); padding: 1.6rem 1.5rem; }
+/* Prepare-tool dialog footers: natural-width, right-aligned CTAs (don't stretch full-width in the 880px dialog) */
+.prep-dialog .pass__actions, .iprep-modal .pass__actions, .story-modal .pass__actions, .wb-modal .pass__actions { justify-content: flex-end; flex-wrap: wrap; }
+.prep-dialog .pass__actions .btn, .iprep-modal .pass__actions .btn, .story-modal .pass__actions .btn, .wb-modal .pass__actions .btn { flex: 0 0 auto; }
 .prep-dialog__x { position: absolute; top: .6rem; right: .7rem; z-index: 2; background: none; border: 0; color: var(--text-faint); font-size: 1.4rem; line-height: 1; cursor: pointer; padding: .1rem .35rem; border-radius: 6px; transition: color .12s, background .12s; }
 .prep-dialog__x:hover { color: var(--text); background: rgba(255, 255, 255, .07); }
 .prep-dialog .prep-dialog__body > .ats,
@@ -2446,9 +2449,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .cl__jd { width: 100%; resize: vertical; box-sizing: border-box; }
 .cl__row2 { display: flex; gap: .5rem; align-items: center; margin: .5rem 0; }
 .cl__company { flex: 1; min-width: 0; }
-.cl__len { display: inline-flex; flex-shrink: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.cl__lenbtn { border: 0; background: transparent; color: var(--text-dim); padding: .4rem .75rem; cursor: pointer; font-size: .78rem; }
-.cl__lenbtn.is-on { background: var(--accent); color: #16110a; font-weight: 600; }
+.cl__len { flex-shrink: 0; } /* segmented-control look now comes from the shared .adm__hm-seg block */
 .cl__note { font-size: .72rem; color: var(--text-faint); margin: .45rem 0 0; line-height: 1.45; }
 .cl__out { margin-top: .7rem; }
 .cl__load, .cl__ok { display: flex; align-items: center; gap: .5rem; font-size: .85rem; color: var(--text-dim); padding: .5rem 0; }
@@ -2791,17 +2792,18 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .adm__twt { margin-top: 1.1rem; display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
 .adm__twt-label { font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); }
 .adm__twt-hint { font-family: var(--sans); font-size: .72rem; color: var(--text-faint); flex: 1 1 100%; }
-/* Segmented control — one craft language across the studio: hero motion + heading weight (Appearance), media library, insights range. Sizing is per-control at the end; the look is shared. */
-.adm__twt-seg, .adm__hm-seg, .mlib__segs, .ins__days { display: inline-flex; gap: .18rem; padding: .22rem; background: var(--bg-2); border: 1px solid var(--line); border-radius: 100px; box-shadow: inset 0 1px 2px rgba(0, 0, 0, .22); }
-.adm__twt-seg button, .adm__hm-seg button, .mlib__seg, .ins__dbtn { font-family: var(--mono); letter-spacing: .05em; color: var(--text-dim); background: transparent; border: 0; border-radius: 100px; cursor: pointer; white-space: nowrap; transition: color .2s var(--ease), background .2s var(--ease), box-shadow .2s var(--ease), transform .12s var(--ease); }
-.adm__twt-seg button:hover:not(.is-on), .adm__hm-seg button:hover:not(.is-on), .mlib__seg:hover:not(.is-on), .ins__dbtn:hover:not(.is-on) { color: var(--text); }
-.adm__twt-seg button:active, .adm__hm-seg button:active, .mlib__seg:active, .ins__dbtn:active { transform: translateY(.5px); }
-.adm__twt-seg button.is-on, .adm__hm-seg button.is-on, .mlib__seg.is-on, .ins__dbtn.is-on { color: #241a09; font-weight: 600; background: linear-gradient(180deg, #e8ba6b, #cd923d); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .42), 0 3px 9px -5px rgba(184, 132, 58, .6); }
-.adm__twt-seg button:focus-visible, .adm__hm-seg button:focus-visible, .mlib__seg:focus-visible, .ins__dbtn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(216, 166, 71, .28); }
-.adm__twt-seg button.is-on:focus-visible, .adm__hm-seg button.is-on:focus-visible, .mlib__seg.is-on:focus-visible, .ins__dbtn.is-on:focus-visible { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .42), 0 3px 9px -5px rgba(184, 132, 58, .6), 0 0 0 3px rgba(216, 166, 71, .28); }
+/* Segmented control — one craft language across the studio: hero motion + heading weight (Appearance), media library, insights range, cover-letter/résumé length toggles. Sizing is per-control at the end; the look is shared. */
+.adm__twt-seg, .adm__hm-seg, .mlib__segs, .ins__days, .cl__len { display: inline-flex; gap: .18rem; padding: .22rem; background: var(--bg-2); border: 1px solid var(--line); border-radius: 100px; box-shadow: inset 0 1px 2px rgba(0, 0, 0, .22); }
+.adm__twt-seg button, .adm__hm-seg button, .mlib__seg, .ins__dbtn, .cl__lenbtn { font-family: var(--mono); letter-spacing: .05em; color: var(--text-dim); background: transparent; border: 0; border-radius: 100px; cursor: pointer; white-space: nowrap; transition: color .2s var(--ease), background .2s var(--ease), box-shadow .2s var(--ease), transform .12s var(--ease); }
+.adm__twt-seg button:hover:not(.is-on), .adm__hm-seg button:hover:not(.is-on), .mlib__seg:hover:not(.is-on), .ins__dbtn:hover:not(.is-on), .cl__lenbtn:hover:not(.is-on) { color: var(--text); }
+.adm__twt-seg button:active, .adm__hm-seg button:active, .mlib__seg:active, .ins__dbtn:active, .cl__lenbtn:active { transform: translateY(.5px); }
+.adm__twt-seg button.is-on, .adm__hm-seg button.is-on, .mlib__seg.is-on, .ins__dbtn.is-on, .cl__lenbtn.is-on { color: #241a09; font-weight: 600; background: linear-gradient(180deg, #e8ba6b, #cd923d); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .42), 0 3px 9px -5px rgba(184, 132, 58, .6); }
+.adm__twt-seg button:focus-visible, .adm__hm-seg button:focus-visible, .mlib__seg:focus-visible, .ins__dbtn:focus-visible, .cl__lenbtn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(216, 166, 71, .28); }
+.adm__twt-seg button.is-on:focus-visible, .adm__hm-seg button.is-on:focus-visible, .mlib__seg.is-on:focus-visible, .ins__dbtn.is-on:focus-visible, .cl__lenbtn.is-on:focus-visible { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .42), 0 3px 9px -5px rgba(184, 132, 58, .6), 0 0 0 3px rgba(216, 166, 71, .28); }
 .adm__twt-seg button, .adm__hm-seg button { font-size: .64rem; text-transform: uppercase; padding: .4rem .9rem; }
 .mlib__seg { font-size: .64rem; text-transform: uppercase; padding: .34rem .74rem; }
 .ins__dbtn { font-size: .72rem; letter-spacing: .04em; padding: .36rem .74rem; }
+.cl__lenbtn { font-size: .74rem; text-transform: uppercase; padding: .4rem .82rem; }
 /* Hero motion controls (Appearance tab) — living type + ambient work */
 .adm__hm { margin-top: 1rem; display: flex; flex-direction: column; gap: .85rem; }
 .adm__hm-ctl { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
