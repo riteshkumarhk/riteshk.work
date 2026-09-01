@@ -4403,6 +4403,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       } catch (e) { status("Couldn\u2019t decrypt the protected sections."); return; }
     }
     saveDraft(true); renderL2();
+    try { var _fw = frameWin(); if (_fw && _fw.RK && _fw.RK.setStudyUnlocked) _fw.RK.setStudyUnlocked(w.id); } catch (e) {}   // reveal the now-unlocked sections in the live preview (translucent veil)
+    refreshL2Preview();
     status("Protected sections unlocked for editing \u2014 they\u2019ll be re-protected on Publish.", true);
   }
   // Owner-only: turn a hidden encrypted project back into an editable one.
@@ -4417,6 +4419,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     try { const sek = await rkUnwrapSek(recovery, wrap); full = await rkDecWithSek(sek, stub); await rkResolveEncToDataUri(full, sek); }
     catch (e) { recoveryPassCache = null; status("That recovery passphrase didn\u2019t unlock this project."); return; }
     data.work[i] = full;
+    try { var _fw = frameWin(); if (_fw && _fw.RK && _fw.RK.setStudyUnlocked && full && full.id) _fw.RK.setStudyUnlocked(full.id); } catch (e) {}   // reveal the now-unlocked sections when this project is opened in the preview
     saveDraft(true); renderBody();
     status("Hidden project unlocked for editing \u2014 it re-encrypts on Publish.", true);
   }

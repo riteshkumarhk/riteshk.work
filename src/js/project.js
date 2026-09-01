@@ -976,11 +976,12 @@
     // section. `isUnlocked` persists in sessionStorage from an earlier unlock, but the freshly-loaded
     // blocks are re-fetched as stubs; without this guard they'd vanish instead of showing the mask.
     var sealed = !!b.encStub || !!b.vaultBlock;
-    // On the real site a locked section stays content-until-unlocked (sealed stub or the isUnlocked gate).
-    // In the admin live preview the OWNER sees the real content under a TRANSLUCENT "locked" veil (so they
-    // can tell what's in a deeper-cut section while editing) — except sealed stubs, which carry no content.
-    var realLocked = b.locked && (sealed || (!PREVIEW && !isUnlocked(activeId)));
-    var previewLocked = b.locked && PREVIEW && !sealed;
+    var unlocked = isUnlocked(activeId);
+    // In the editor preview a locked section stays the OPAQUE deeper-cut gate until the owner unlocks it
+    // (enters the encryption key); once unlocked, its real content shows under a TRANSLUCENT veil so they
+    // can peek while editing. Public site is content-until-unlocked as before; sealed stubs keep the mask.
+    var previewLocked = b.locked && PREVIEW && unlocked && !sealed;
+    var realLocked = b.locked && !previewLocked && (sealed || !unlocked);
     var inner = realLocked ? lockedBlock(b) : ((RENDERERS[b.type] || function () { return ""; })(b));
     if (previewLocked) inner += lockVeil();
     var hsize = b.hsize === "sm" ? " pjb--hsm" : b.hsize === "lg" ? " pjb--hlg" : "";
