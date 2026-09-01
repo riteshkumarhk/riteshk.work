@@ -1039,7 +1039,7 @@
     return b.work.some(function (w) {
       if (w.encWork && w.enc && w.enc.wraps && w.enc.wraps.owner) return true;
       var st = w.study;
-      return !!(st && st.enc && st.enc.wraps && st.enc.wraps.owner);
+      return !!(st && ((st.enc && st.enc.wraps && st.enc.wraps.owner) || (st.slidesEnc && st.slidesEnc.wraps && st.slidesEnc.wraps.owner)));
     });
   }
   async function presentAll(recovery) {
@@ -1077,6 +1077,12 @@
         hadProtected++;
         // A successful unwrap proves the passphrase even when the study is vault-only (0 encStubs to decrypt).
         try { var sek2 = await rkUnwrapSek(recovery, swrap); passOk = true; if (await rkDecryptStudyBlocks(st, sek2)) unlocked++; rkMarkUnlocked(w.id); ids.push(w.id); } catch (e) {}
+      }
+      // Owner-only slideshow deck: decrypt its sealed slides so the composed deck plays in Present mode.
+      var dwrap = st && st.slidesEnc && st.slidesEnc.wraps && st.slidesEnc.wraps.owner;
+      if (dwrap) {
+        hadProtected++;
+        try { var dsek = await rkUnwrapSek(recovery, dwrap); st.slides = await rkDecWithSek(dsek, st.slidesEnc); delete st.slidesEnc; passOk = true; unlocked++; rkMarkUnlocked(w.id); if (ids.indexOf(w.id) === -1) ids.push(w.id); } catch (e) {}
       }
     }
     if (hadProtected && !passOk) { removeSvBanner(); return { ok: false, reason: "pass" }; }

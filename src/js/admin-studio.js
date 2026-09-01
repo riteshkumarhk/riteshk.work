@@ -6118,8 +6118,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function slidesPanel(w, i) {
     var st = w.study; var slides = st.slides || []; var has = slides.length; var nBlocks = (st.blocks || []).length;
     var intro = '<section class="l2grp"><div class="l2grp__head">Slideshow <span>\u2014 present this case study full-screen \u00b7 owner-only</span></div>' +
-      '<div class="slides__intro">Compose a linear deck from this case study \u2014 choose a layout per slide and pull content from your sections, or just press <b>Rehearse</b> for an auto-built deck. Only you (signed in) can open it; visitors never see it.</div>' +
-      '<div class="slides__actions">' +
+      '<div class="slides__intro">Compose a linear deck from this case study \u2014 choose a layout per slide and pull content from your sections, or just press <b>Rehearse</b> for an auto-built deck. Only you (signed in) can open it; visitors never see it. On Publish the deck is <b>encrypted</b> \u2014 its slides never ship as readable text.</div>';
+    if (st.slidesEnc && !has) {
+      return intro + '<section class="l2grp"><div class="adm__empty slides__sealed">' + LOCK_SVG + ' This slideshow is protected \u2014 its slides aren\u2019t in your published file. <button class="btn btn--ghost" data-act="slide-decrypt" data-index="' + i + '">Unlock to edit</button></div></section>';
+    }
+    intro += '<div class="slides__actions">' +
       '<button class="btn btn--primary" data-act="slide-rehearse" data-index="' + i + '"' + (has || nBlocks ? "" : " disabled") + ">" + IC.play + " Rehearse deck</button>" +
       '<button class="btn btn--auto" data-act="slide-build" data-index="' + i + '"' + (nBlocks ? "" : " disabled") + ">" + IC.spark + " " + (has ? "Rebuild from sections" : "Build deck from my sections") + "</button>" +
       "</div></section>";
@@ -6164,6 +6167,22 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         status("Pulled \u201c" + slideBlockName(block).label + "\u201d onto the slide.", true);
       });
     });
+  }
+  // Owner-only: turn a published study's sealed slideshow (slidesEnc) back into an editable plaintext
+  // deck using the recovery passphrase. It re-seals automatically on the next Publish.
+  async function decryptDeckForEdit(i) {
+    const w = data.work[i]; if (!w || !w.study || !w.study.slidesEnc) return;
+    const wrap = w.study.slidesEnc.wraps && w.study.slidesEnc.wraps.owner;
+    if (!wrap) { status("This slideshow has no owner key to unlock."); return; }
+    const recovery = await ensureRecoveryPass();
+    if (recovery === null) return;
+    let sek;
+    try { sek = await rkUnwrapSek(recovery, wrap); }
+    catch (e) { recoveryPassCache = null; status("That recovery passphrase didn\u2019t unlock the slideshow."); return; }
+    try { w.study.slides = await rkDecWithSek(sek, w.study.slidesEnc); delete w.study.slidesEnc; }
+    catch (e) { status("Couldn\u2019t decrypt the slideshow."); return; }
+    openSlide = -1; saveDraft(true); renderL2();
+    status("Slideshow unlocked for editing \u2014 it re-seals on Publish.", true);
   }
   function studyEditor(w, i) {
     var st = w.study;
@@ -9605,6 +9624,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "slide-pull") { slidePullPicker(i, +b.dataset.sindex); return; }
     if (act === "slide-media-upload") { var _muw = data.work[i], muk = +b.dataset.sindex, mus = _muw && _muw.study && _muw.study.slides && _muw.study.slides[muk]; if (!mus) return; pickMedia(function (uri) { mus.slots = mus.slots || {}; mus.slots.media = { src: uri }; if (isVideoVal(uri)) mus.slots.media.kind = "video"; saveDraft(true); renderL2(); }); return; }
     if (act === "slide-media-clear") { var _mcw = data.work[i], mck = +b.dataset.sindex, mcs = _mcw && _mcw.study && _mcw.study.slides && _mcw.study.slides[mck]; if (!mcs) return; if (mcs.slots) delete mcs.slots.media; saveDraft(true); renderL2(); return; }
+    if (act === "slide-decrypt") { decryptDeckForEdit(i); return; }
     if (act === "hsize-toggle") { var hsSel = b.closest(".hsize"); if (hsSel) { var wasHsOpen = hsSel.classList.contains("is-open"); if (root) root.querySelectorAll(".hsize.is-open").forEach(function (x) { x.classList.remove("is-open"); }); if (!wasHsOpen) hsSel.classList.add("is-open"); } return; }
     if (act === "hsize-set") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].hsize = b.dataset.hsize || ""; saveDraft(true); renderL2(); } return; }
     if (act === "item-add") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items = bl.items || []; bl.items.push(blankItem(bl.type)); saveDraft(true); renderL2(); return; }
@@ -9838,9 +9858,30 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!token) await inlineProtectedImages(pubData);
     await loadTicketKeyring();
     await encryptLockedForPublish(pubData, token || null);
+    await encryptDecksForPublish(pubData);
     await registerVaultGrants(pubData);
     await saveTicketKeyring();
     return JSON.stringify(pubData, null, 2);
+  }
+  // Owner-only slideshow decks are private: encrypt each study's `slides` with a fresh key wrapped by
+  // the owner recovery passphrase (owner-only — no ticket/deeper-cut wraps), strip the plaintext, and
+  // ship only `slidesEnc` in content.json. Present mode (render.js) decrypts it; visitors only see
+  // ciphertext. Runs on the publish CLONE, so the live draft keeps plaintext slides.
+  async function encryptDecksForPublish(pubData) {
+    var works = (pubData && pubData.work) || [];
+    for (var wi = 0; wi < works.length; wi++) {
+      var w = works[wi];
+      if (!w || w.encWork) continue;   // a hidden whole-project is already fully encrypted (incl. its slides)
+      var st = w.study;
+      if (!st || typeof st !== "object") continue;
+      if (!Array.isArray(st.slides) || !st.slides.length) { if (st.slidesEnc) delete st.slidesEnc; continue; }
+      var recovery = await ensureRecoveryPass();
+      if (recovery === null) throw { rkEnc: true, cancelled: true };
+      var sek = rkNewSek();
+      var enc = await rkEncWithSek(sek, st.slides);
+      st.slidesEnc = { v: 1, it: RK_KDF_IT, iv: enc.iv, ct: enc.ct, wraps: { owner: await rkWrapSek(recovery, sek) } };
+      delete st.slides;
+    }
   }
   // ---------- per-image protected media: encrypt each image and host it as its own
   //   /assets/protected/<hash>.enc file, so content.json never bloats with big media. ----------
