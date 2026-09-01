@@ -10882,7 +10882,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return '<label class="bkr__row"><input type="checkbox" data-bkr-sec="' + escAttr(s[0]) + '" /><span class="bkr__t">' + escHtml(s[1]) + '</span><span class="bkr__meta">' + escHtml(backupUnitSummary(backup, s[2])) + '</span></label>';
     }).join("");
     var modal = document.createElement("div");
-    modal.className = "pass pass--wide";
+    modal.className = "pass pass--wide bkr";
     modal.innerHTML =
       '<div class="pass__box"><div class="pass__title">Restore from backup</div>' +
       '<div class="pass__sub">From <b>' + escHtml(filename || "backup.json") + '</b>' + (when ? " - saved " + escHtml(when) : "") + '. Tick what to bring back. It loads into the editor so you can review in the preview, then Publish.</div>' +
