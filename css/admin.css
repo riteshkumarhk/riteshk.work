@@ -1942,7 +1942,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .prep-row:hover .prep-row__go { color: var(--accent); transform: translateX(3px); }
 
 /* Prepare tool dialog: reuse the .pass overlay, widen the box, strip the inner panel frame */
-.prep-dialog .pass__box { position: relative; width: min(780px, 94vw); padding: 1.6rem 1.5rem; }
+.prep-dialog .pass__box { position: relative; width: min(880px, 94vw); padding: 1.6rem 1.5rem; }
 .prep-dialog__x { position: absolute; top: .6rem; right: .7rem; z-index: 2; background: none; border: 0; color: var(--text-faint); font-size: 1.4rem; line-height: 1; cursor: pointer; padding: .1rem .35rem; border-radius: 6px; transition: color .12s, background .12s; }
 .prep-dialog__x:hover { color: var(--text); background: rgba(255, 255, 255, .07); }
 .prep-dialog .prep-dialog__body > .ats,
@@ -2459,7 +2459,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .cl__acts { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .7rem; }
 
 /* Whiteboard coach */
-.wb-modal .pass__box { max-width: 820px; }
+.wb-modal .pass__box { width: min(880px, 94vw); }
 .wb__setup { display: flex; flex-direction: column; gap: .9rem; text-align: left; margin-top: .3rem; }
 .wb__setup[hidden] { display: none; }
 .wb__opts3 { grid-template-columns: repeat(3, 1fr); }
