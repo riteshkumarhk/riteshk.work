@@ -759,6 +759,11 @@ html[data-appearance="light"] .pjb__gallery-nav:hover { background: rgba(247, 24
 .pjb__lock-req:hover { color: var(--accent); }
 .pjb__lock-spin { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: pjb-lock-spin .8s linear infinite; }
 @keyframes pjb-lock-spin { to { transform: rotate(360deg); } }
+/* admin live-preview: a locked section is shown as its real content under a TRANSLUCENT veil (owner can see what's under the lock while editing); the public site still shows the opaque gate above. */
+.pjb--lockprev { position: relative; }
+.pjb__lockveil { position: absolute; inset: 0; z-index: 5; display: flex; align-items: flex-start; justify-content: flex-end; padding: .7rem; pointer-events: none; background: rgba(8, 8, 10, .34); border: 1px dashed rgba(216, 166, 71, .5); border-radius: 10px; }
+.pjb__lockveil-tag { display: inline-flex; align-items: center; gap: .38rem; padding: .32rem .62rem; border-radius: 100px; background: rgba(8, 8, 10, .82); border: 1px solid rgba(216, 166, 71, .5); color: var(--accent); font-family: var(--mono); font-size: .58rem; letter-spacing: .05em; text-transform: uppercase; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.pjb__lockveil-tag svg { width: 12px; height: 12px; }
 
 /* buttons + tags */
 .pj__btn { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; font-family: var(--mono); font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; padding: .8rem 1.4rem; border-radius: 100px; border: 1px solid var(--line); background: none; color: var(--text); transition: color .3s, border-color .3s, background .3s; }

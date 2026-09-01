@@ -727,6 +727,12 @@
       '</div>';
   }
 
+  // Admin live-preview only: a translucent scrim + badge over a locked section's real content, so the
+  // owner can see what's in a deeper-cut section while editing (the public site shows the opaque gate).
+  function lockVeil() {
+    return '<div class="pjb__lockveil" aria-hidden="true"><span class="pjb__lockveil-tag">' + LOCK_SVG + "Locked \u2014 deeper cut</span></div>";
+  }
+
   function stickiesBlock(b) {
     var items = (b.items || []).map(function (n) {
       var media = mediaSrc(n) ? '<div class="pjb__sticky-media">' + mediaEl(n, "pjb__media-el") + "</div>" : "";
@@ -970,14 +976,16 @@
     // section. `isUnlocked` persists in sessionStorage from an earlier unlock, but the freshly-loaded
     // blocks are re-fetched as stubs; without this guard they'd vanish instead of showing the mask.
     var sealed = !!b.encStub || !!b.vaultBlock;
-    // In the admin live preview, mirror the editor: a section flagged locked ALWAYS shows the
-    // deeper-cut mask, so the owner sees exactly what a visitor sees. On the real site it stays
-    // content-until-unlocked (sealed stub or the isUnlocked gate) as before.
-    var locked = b.locked && (PREVIEW || sealed || !isUnlocked(activeId));
-    var inner = locked ? lockedBlock(b) : ((RENDERERS[b.type] || function () { return ""; })(b));
+    // On the real site a locked section stays content-until-unlocked (sealed stub or the isUnlocked gate).
+    // In the admin live preview the OWNER sees the real content under a TRANSLUCENT "locked" veil (so they
+    // can tell what's in a deeper-cut section while editing) — except sealed stubs, which carry no content.
+    var realLocked = b.locked && (sealed || (!PREVIEW && !isUnlocked(activeId)));
+    var previewLocked = b.locked && PREVIEW && !sealed;
+    var inner = realLocked ? lockedBlock(b) : ((RENDERERS[b.type] || function () { return ""; })(b));
+    if (previewLocked) inner += lockVeil();
     var hsize = b.hsize === "sm" ? " pjb--hsm" : b.hsize === "lg" ? " pjb--hlg" : "";
     var flush = b.sep === false ? " pjb--flush" : "";
-    return '<section class="pjb pjb--' + esc(b.type) + (locked ? " pjb--locked" : "") + hsize + flush + '"' + idAttr + navAttr +
+    return '<section class="pjb pjb--' + esc(b.type) + (realLocked || previewLocked ? " pjb--locked" : "") + (previewLocked ? " pjb--lockprev" : "") + hsize + flush + '"' + idAttr + navAttr +
       ' data-block="' + i + '" style="--i:' + i + '">' + inner + "</section>";
   }
 
