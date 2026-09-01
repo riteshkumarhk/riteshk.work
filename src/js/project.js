@@ -2207,11 +2207,7 @@
   }
   // Tiny on-screen diagnostic — with ?sdbg in the URL, or ALWAYS in the admin live-preview — so a section
   // jump can be read off-screen in one glance. sdbg() sets the base line; sdbgTail() appends a live line.
-  function sdbgOn() {
-    var asked = /[?&]sdbg/.test(location.search);
-    try { if (asked) localStorage.setItem("rk:sdbg", "1"); else asked = localStorage.getItem("rk:sdbg") === "1"; } catch (e) {}
-    return PREVIEW || asked;
-  }
+  function sdbgOn() { return /[?&]sdbg/.test(location.search); }
   function sdbgPlace() {
     if (!sdbgOn()) return;
     var d = document.getElementById("__sdbg");
@@ -2623,17 +2619,6 @@
       }
     });
     if (sdbgOn()) sdbg("ready preview=" + (PREVIEW ? 1 : 0) + " path=" + location.pathname);
-    // Tap tracer (preview / ?sdbg only): document-capture so it sees the tap even if a handler
-    // eats it before gotoSection. One screenshot then says whether the chip tap fired a click at
-    // all, what element it landed on, and whether it was recognised as a section chip.
-    if (sdbgOn()) {
-      var _tag = function (t) { return (t && t.tagName ? t.tagName : "?") + "." + String((t && t.className) || "").replace(/\s+/g, ".").slice(0, 26); };
-      document.addEventListener("touchend", function (ev) { sdbg("TOUCHEND " + _tag(ev.target)); }, true);
-      document.addEventListener("click", function (ev) {
-        var t = ev.target, g = t.closest && t.closest("[data-goto]");
-        sdbg("CLICK " + _tag(t) + " goto=" + (g ? g.getAttribute("data-goto") : "-") + " sheet=" + (overlay && overlay.classList.contains("pj--sheet-open") ? 1 : 0));
-      }, true);
-    }
     if (PREVIEW) { document.documentElement.classList.add("rk-preview"); return; } // the admin editor drives the overlay; skip link/history/deep-link wiring
     document.addEventListener("click", onDocLinkClick);
     window.addEventListener("popstate", route);
