@@ -225,8 +225,8 @@ html.lite .page { animation: none; }
 /* Discovery hint — a subtle bronze particle halo around the ··· button,
    shown until the visitor opens the menu for the first time. */
 .nav__morewrap { position: relative; display: inline-grid; place-items: center; }
-/* Inside the studio live-preview, the "…" menu (which leads to admin sign-in) is a nested-studio trap — hide it. */
-.rk-preview .nav__morewrap { display: none; }
+/* Inside the studio live-preview, keep the "…" button visible (it's part of the real layout the owner is analysing) but inert — clicking it would sign into a nested admin studio. */
+.rk-preview .nav__morewrap { pointer-events: none; }
 .nav__hint { position: absolute; inset: 0; display: none; pointer-events: none; }
 .nav__morewrap.is-hint .nav__hint { display: block; }
 .nav__hint::before { content: ""; position: absolute; top: 50%; left: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: radial-gradient(circle, rgba(216,166,87,.22), transparent 70%); animation: hintGlow 2.6s ease-in-out infinite; }
