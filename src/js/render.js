@@ -34,6 +34,7 @@
     document.addEventListener("error", function (e) {
       const el = e && e.target, t = el && el.tagName;
       if (!t || (t !== "IMG" && t !== "VIDEO" && t !== "SOURCE" && t !== "AUDIO")) return;
+      if (window.__rklog) window.__rklog("sys", "media load error: " + ((el.currentSrc || el.getAttribute("src") || "").split("/").pop() || "").slice(0, 44));
       if (el.__r2fix || !MEDIA_BASE) return;
       const src = el.getAttribute("src") || "";
       if (src.indexOf(MEDIA_BASE) === 0) return;                 // already on R2 -> a genuine 404, don't loop

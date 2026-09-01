@@ -10376,7 +10376,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     wrap.innerHTML = '<div class="pass__box"><button class="pass__x" data-x type="button" aria-label="Close">' + IC.close + "</button>" +
       '<div class="pass__title">' + IC.book + " Activity log</div>" +
       '<div class="af__hint" style="margin:.1rem 0 .7rem">Your recent taps, section jumps and errors on this device (owner &amp; preview only, stored locally). Reproduce a problem in the preview, then <b>Copy</b> and paste it to me for a faster fix.</div>' +
-      '<div class="logsm__bar"><button class="btn btn--primary" data-lg="copy">' + IC.save + ' Copy</button><button class="btn btn--ghost" data-lg="rec"><span class="logsm__recdot"></span> Record again</button><button class="btn btn--ghost" data-lg="refresh">' + IC.refresh + ' Refresh</button><button class="btn btn--ghost" data-lg="clear">' + IC.trash + ' Clear</button><span class="logsm__count" data-lg-count></span></div>' +
+      '<div class="logsm__bar"><button class="btn btn--primary" data-lg="copy">' + IC.save + ' Copy</button><button class="btn btn--ghost" data-lg="rec"><span class="logsm__recdot"></span> Record again</button><span class="logsm__count" data-lg-count></span></div>' +
       '<div class="rklog" data-lg-list></div></div>';
     document.body.appendChild(wrap);
     var listEl = wrap.querySelector("[data-lg-list]"), countEl = wrap.querySelector("[data-lg-count]");
@@ -10386,12 +10386,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var esc = function (ev) { if (ev.key === "Escape") close(); };
     document.addEventListener("keydown", esc, true);
     wrap.addEventListener("click", function (e) {
-      if (e.target === wrap || e.target.closest("[data-x]")) { close(); return; }
+      if (e.target.closest("[data-x]")) { close(); return; }
       var b = e.target.closest("[data-lg]"); if (!b) return;
       var k = b.getAttribute("data-lg");
-      if (k === "refresh") paint();
-      else if (k === "clear") { try { localStorage.removeItem("rk:elog"); } catch (er) {} paint(); status("Activity log cleared."); }
-      else if (k === "rec") { close(); logsSetRec(true); status("Recording \u2014 reproduce it in the preview, then tap the red dot to stop."); }
+      if (k === "rec") { close(); logsSetRec(true); status("Recording \u2014 reproduce it in the preview, then tap the red dot to stop."); }
       else if (k === "copy") logsCopy(logsPlain(logsRead()));
     });
   }
@@ -15003,8 +15001,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<button class="adm__dev-btn" data-dev-toggle type="button" aria-haspopup="true" aria-expanded="false" title="Preview size"><span class="adm__dev-ic" data-dev-ic>' + DEV_ICON.responsive + '</span><span class="adm__dev-lbl" data-dev-lbl>Responsive</span><svg class="adm__dev-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
           '<div class="adm__dev-pop" hidden>' + deviceOptsHtml() + "</div>" +
         "</div>" +
-        '<button class="btn btn--ghost adm__newtab" data-newtab type="button" aria-label="Open live preview in a new tab" title="Open live preview in a new tab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg><span class="adm__newtab-tx" hidden></span></button>' +
         '<button class="btn btn--ghost adm__logs-btn" data-act="logs-rec" type="button" aria-pressed="false" aria-label="Record activity log" title="Record a log of your taps &amp; jumps to share"><span class="adm__logs-dot"></span><span class="adm__logs-rec-tx" hidden>REC</span></button>' +
+        '<button class="btn btn--ghost adm__newtab" data-newtab type="button" aria-label="Open live preview in a new tab" title="Open live preview in a new tab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg><span class="adm__newtab-tx" hidden></span></button>' +
       "</div>" +
       '<div class="adm__main">' +
         '<div class="adm__editor"><div class="adm__body"></div>' +

@@ -791,7 +791,7 @@ import {
     placeSoundToast();   // menu gone → return the toast to the corner
   }
   function onDocClick(e) { if (menuEl && !menuEl.contains(e.target) && e.target.id !== "clock") closeMenu(); }
-  function toggleMenu(e) { if (e) e.stopPropagation(); menuUsed = true; thDismiss(true); if (menuEl) closeMenu(); else buildMenu(); }
+  function toggleMenu(e) { if (document.documentElement.classList.contains("rk-preview")) { if (e) { e.preventDefault(); e.stopPropagation(); } return; } if (e) e.stopPropagation(); menuUsed = true; thDismiss(true); if (menuEl) closeMenu(); else buildMenu(); }
   function onMenuClick(e) {
     const mus = e.target.closest("[data-mus]");
     if (mus) {
