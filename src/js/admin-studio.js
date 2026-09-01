@@ -6003,7 +6003,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="l2lock' + (on ? " is-on" : "") + '">' +
       '<span class="l2lock__tx"><b>' + lockIco + n + ' locked section' + (n === 1 ? "" : "s") + '</b>' +
       '<span>' + (on ? "Unlocked \u2014 their content shows in the preview; re-protected on Publish." : "Hidden like a visitor sees. Flip on to unlock &amp; edit them.") + '</span></span>' +
-      '<button type="button" class="l2lock__sw" role="switch" aria-checked="' + (on ? "true" : "false") + '" data-act="study-unlocktoggle" data-index="' + i + '" aria-label="Unlock locked sections for editing"><span class="l2lock__knob"></span></button>' +
+      '<button type="button" class="rksw" role="switch" aria-checked="' + (on ? "true" : "false") + '" data-act="study-unlocktoggle" data-index="' + i + '" aria-label="Unlock locked sections for editing"><span class="rksw__knob"></span></button>' +
       "</div>";
   }
   function studyEditor(w, i) {
@@ -8466,7 +8466,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function autopubPanelHtml() {
     return '<div class="rkqg"><div class="rkqg__head">Auto-publish <span class="rkqg__sub">publish your draft on a timer</span></div>' +
       '<div class="adm__auto" data-autopub>' +
-        '<button class="adm__auto-sw" type="button" data-autopub-toggle role="switch" aria-checked="false" title="Auto-publish on a timer"><span class="adm__auto-lbl">Auto-publish</span><span class="adm__auto-track"><span class="adm__auto-knob"></span></span></button>' +
+        '<button class="adm__auto-sw" type="button" data-autopub-toggle role="switch" aria-checked="false" title="Auto-publish on a timer"><span class="adm__auto-lbl">Auto-publish</span><span class="rksw rksw--sm"><span class="rksw__knob"></span></span></button>' +
         '<label class="adm__auto-opt"><input type="radio" name="autopub-every" value="30" data-autopub-every /><span>Every 30 minutes</span></label>' +
         '<label class="adm__auto-opt"><input type="radio" name="autopub-every" value="60" data-autopub-every /><span>Every hour</span></label>' +
       "</div>" +
