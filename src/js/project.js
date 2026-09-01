@@ -2633,6 +2633,18 @@
       return '<div class="pjps pjps--text"><div class="pjps__body">' + (z.kicker ? '<div class="pjps__kicker">' + esc(z.kicker) + "</div>" : "") + (z.title ? '<h2 class="pjps__title">' + esc(z.title) + "</h2>" : "") + (z.body ? '<div class="pjps__prose">' + pjBodyHtml(z.body) + "</div>" : "") + "</div></div>";
     }
     function pjNum(v, d) { var n = parseFloat(v); return isFinite(n) ? Math.max(0, Math.min(100, n)) : d; }
+    function pjSafeColor(v) { v = String(v == null ? "" : v).trim(); return /^(#[0-9a-fA-F]{3,8}|rgba?\([\d.,%\s]+\)|var\(--[\w-]+\)|[a-zA-Z]+)$/.test(v) ? v : ""; }
+    function renderFreeShape(bl, st) {
+      var sh = /^(rect|ellipse|line|arrow)$/.test(bl.shape) ? bl.shape : "rect";
+      var stroke = pjSafeColor(bl.stroke) || "var(--accent)", sw = Math.max(0, parseFloat(bl.strokeW) || 0);
+      if (sh === "line" || sh === "arrow") {
+        var bar = '<span class="pjps__fbln" style="height:' + (sw || 2) + "px;background:" + stroke + '"></span>';
+        var head = sh === "arrow" ? '<span class="pjps__fbah" style="border-top-width:' + ((sw || 2) * 2.2) + "px;border-bottom-width:" + ((sw || 2) * 2.2) + "px;border-left:" + ((sw || 2) * 3.2) + "px solid " + stroke + '"></span>' : "";
+        return '<div class="pjps__fb pjps__fb--shape pjps__fb--' + sh + '" style="' + st + '">' + bar + head + "</div>";
+      }
+      var fill = pjSafeColor(bl.fill), bg = fill ? "background:" + fill + ";" : "", bd = sw > 0 ? "border:" + sw + "px solid " + stroke + ";" : "", rad = sh === "ellipse" ? "border-radius:50%;" : (bl.radius ? "border-radius:" + (parseFloat(bl.radius) || 0) + "px;" : "");
+      return '<div class="pjps__fb pjps__fb--shape" style="' + st + bg + bd + rad + '"></div>';
+    }
     function renderFreeBlock(bl) {
       if (!bl) return "";
       var st = "left:" + pjNum(bl.x, 8) + "%;top:" + pjNum(bl.y, 8) + "%;width:" + pjNum(bl.w, 40) + "%;";
@@ -2640,6 +2652,8 @@
       if (boxed) st += "height:" + pjNum(bl.h, 20) + "%;";
       if (bl.rot) st += "transform:rotate(" + (parseFloat(bl.rot) || 0) + "deg);";
       if (bl.kind === "media") return '<div class="pjps__fb pjps__fb--media' + (boxed ? " pjps__fb--fit" : "") + '" style="' + st + '">' + pjMediaHtml(bl, "pjps__media-el") + "</div>";
+      if (bl.kind === "shape") return renderFreeShape(bl, st);
+      if (bl.kind === "icon") return '<div class="pjps__fb pjps__fb--icon" style="' + st + "color:" + (pjSafeColor(bl.color) || "var(--accent)") + '">' + iconSvg(bl.name || "star") + "</div>";
       var cls = "pjps__fb pjps__fb--text pjps__fb--" + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " pjps__fb--a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " pjps__fb--boxed pjps__fb--v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "");
       return '<div class="' + cls + '" style="' + st + '">' + pjBodyHtml(bl.text || "") + "</div>";
     }

@@ -6293,17 +6293,49 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (gv) { if (gx == null) gv.hidden = true; else { gv.hidden = false; gv.style.left = gx + "%"; } }
     if (gh) { if (gy == null) gh.hidden = true; else { gh.hidden = false; gh.style.top = gy + "%"; } }
   }
+  var FREE_SWATCHES = [["var(--accent)", "Gold"], ["#ECE7E1", "Light"], ["#8a857e", "Grey"], ["#141417", "Dark"], ["#ffffff", "White"], ["", "None"]];
+  function freeColor(v) { v = String(v == null ? "" : v).trim(); return /^(#[0-9a-fA-F]{3,8}|rgba?\([\d.,%\s]+\)|var\(--[\w-]+\)|[a-zA-Z]+)$/.test(v) ? v : ""; }
+  function freeColorField(label, i, k, idx, field, val) {
+    var sw = FREE_SWATCHES.map(function (s) { return '<button type="button" class="sfbclr' + (String(val || "") === s[0] ? " is-on" : "") + (s[0] === "" ? " sfbclr--none" : "") + '"' + (s[0] ? ' style="background:' + s[0] + '"' : "") + ' data-act="free-color" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" data-field="' + field + '" data-val="' + escAttr(s[0]) + '" title="' + s[1] + '"></button>'; }).join("");
+    var cust = (val && String(val).charAt(0) === "#") ? val : "#d8a657";
+    return '<div class="af"><label class="af__label">' + label + '</label><div class="sfbclr-row">' + sw + '<input type="color" class="sfbclr-cust" value="' + cust + '" data-freecolor="' + field + '" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" title="Custom colour" /></div></div>';
+  }
+  function editorShapeInner(bl) {
+    var sh = /^(rect|ellipse|line|arrow)$/.test(bl.shape) ? bl.shape : "rect";
+    var stroke = freeColor(bl.stroke) || "var(--accent)", sw = Math.max(0, parseFloat(bl.strokeW) || 0);
+    if (sh === "line" || sh === "arrow") {
+      var bar = '<span class="sfb__ln" style="height:' + (sw || 2) + "px;background:" + stroke + '"></span>';
+      var hd = sh === "arrow" ? '<span class="sfb__ah" style="border-top-width:' + ((sw || 2) * 2.2) + "px;border-bottom-width:" + ((sw || 2) * 2.2) + "px;border-left:" + ((sw || 2) * 3.2) + "px solid " + stroke + '"></span>' : "";
+      return '<div class="sfb__shape sfb__shape--' + sh + '">' + bar + hd + "</div>";
+    }
+    var fill = freeColor(bl.fill), bg = fill ? "background:" + fill + ";" : "", bd = sw > 0 ? "border:" + sw + "px solid " + stroke + ";" : "", rad = sh === "ellipse" ? "border-radius:50%;" : (bl.radius ? "border-radius:" + (parseFloat(bl.radius) || 0) + "px;" : "");
+    return '<div class="sfb__shape" style="' + bg + bd + rad + '"></div>';
+  }
+  function freeIconPicker(cb) {
+    var names = (window.RK && window.RK.iconNames) ? window.RK.iconNames() : [];
+    var modal = document.createElement("div"); modal.className = "pass pass--wide sfbiconpick";
+    modal.innerHTML = '<div class="pass__box"><div class="pass__title">Pick an icon</div><div class="pass__sub">' + names.length + ' icons \u2014 click to place it on the slide.</div><div class="sfbicons">' + names.map(function (n) { return '<button type="button" class="sfbicons__b" data-icon="' + escAttr(n) + '" title="' + escAttr(n) + '">' + ((window.RK && window.RK.iconSvg) ? window.RK.iconSvg(n) : "") + "</button>"; }).join("") + '</div><div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button></div></div>';
+    document.body.appendChild(modal);
+    var close = function () { modal.remove(); document.removeEventListener("keydown", onK); };
+    var onK = function (e) { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", onK);
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    modal.querySelectorAll("[data-icon]").forEach(function (btn) { btn.addEventListener("click", function () { var nm = btn.getAttribute("data-icon"); close(); cb(nm); }); });
+  }
   function freeBlockEl(i, k, idx, bl, sel, single) {
     var st = "left:" + fnum(bl.x, 8) + "%;top:" + fnum(bl.y, 8) + "%;width:" + fnum(bl.w, 40) + "%;";
     var boxed = bl.h != null && isFinite(parseFloat(bl.h));
     if (boxed) st += "height:" + fnum(bl.h, 20) + "%;";
     if (bl.rot) st += "transform:rotate(" + (parseFloat(bl.rot) || 0) + "deg);";
-    var inner;
-    if (bl.kind === "media") inner = bl.src ? '<img src="' + escAttr(bl.src) + '" alt="" draggable="false">' : '<div class="sfb__ph">Media</div>';
+    var inner, kind = bl.kind === "media" ? "media" : bl.kind === "shape" ? "shape" : bl.kind === "icon" ? "icon" : "text";
+    if (kind === "media") inner = bl.src ? '<img src="' + escAttr(bl.src) + '" alt="" draggable="false">' : '<div class="sfb__ph">Media</div>';
+    else if (kind === "shape") inner = editorShapeInner(bl);
+    else if (kind === "icon") inner = '<div class="sfb__icon" style="color:' + (freeColor(bl.color) || "var(--accent)") + '">' + ((window.RK && window.RK.iconSvg) ? window.RK.iconSvg(bl.name || "star") : "") + "</div>";
     else { var _tx = String(bl.text || ""), _body = _tx.trim() ? (/<[a-z!/]/i.test(_tx) ? _tx : escHtml(_tx)) : '<span class="sfb__empty">Text</span>'; inner = '<div class="sfb__tx sfb--' + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "") + '">' + _body + "</div>"; }
     var chrome = single ? (FREE_HANDLES.map(function (h) { return '<span class="sfb__h sfb__h--' + h + '" data-fbh="' + h + '"></span>'; }).join("") + '<span class="sfb__rot" data-fbrot title="Drag to rotate"></span>') : "";
-    var bx = boxed ? (bl.kind === "media" ? " sfb--fit" : " sfb--boxed") : "";
-    return '<div class="sfb sfb--' + (bl.kind === "media" ? "media" : "text") + bx + (sel ? " is-sel" : "") + (single ? " is-single" : "") + '" data-fb="' + idx + '" data-fbdrag style="' + st + '">' + inner + chrome + "</div>";
+    var bx = boxed && kind === "media" ? " sfb--fit" : (boxed && kind === "text" ? " sfb--boxed" : "");
+    return '<div class="sfb sfb--' + kind + bx + (sel ? " is-sel" : "") + (single ? " is-single" : "") + '" data-fb="' + idx + '" data-fbdrag style="' + st + '">' + inner + chrome + "</div>";
   }
   function freeStageHtml(i, k) {
     var blocks = slideBlocks(i, k) || [];
@@ -6315,7 +6347,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function freeCanvasHtml(i, k) {
     return '<div class="slides__pvwrap"><div class="slidepv slidepv--free" data-slidepvbox="' + k + '"><div class="slidepv__stage slidefree__stage" data-slidepv="' + k + '" data-freestage="' + i + ':' + k + '">' + freeStageHtml(i, k) + "</div></div>" +
       '<div class="slidefree__tools"><button type="button" class="btn btn--ghost" data-act="free-add-text" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + " Text</button>" +
-      '<button type="button" class="btn btn--ghost" data-act="free-add-media" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + ' Media</button><span class="slidefree__hint">Drag to move \u00b7 handles resize \u00b7 top dot rotates \u00b7 Shift-click or box-select several \u00b7 arrows nudge</span></div></div>';
+      '<button type="button" class="btn btn--ghost" data-act="free-add-media" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + ' Media</button>' +
+      '<select class="slidefree__addshape" data-freeaddshape data-fi="' + i + '" data-fk="' + k + '"><option value="">+ Shape\u2026</option><option value="rect">Rectangle</option><option value="ellipse">Oval</option><option value="line">Line</option><option value="arrow">Arrow</option></select>' +
+      '<button type="button" class="btn btn--ghost" data-act="free-add-icon" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + ' Icon</button>' +
+      '<span class="slidefree__hint">Drag to move \u00b7 handles resize \u00b7 top dot rotates \u00b7 Shift-click or box-select several \u00b7 arrows nudge</span></div></div>';
   }
   function freeZRow(i, k, idx) {
     return '<div class="slidefree__z">' + [["back", "To back"], ["backward", "Back"], ["forward", "Fwd"], ["front", "To front"]].map(function (o) { return '<button type="button" class="btn btn--ghost" data-act="free-z" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" data-zdir="' + o[0] + '">' + o[1] + "</button>"; }).join("") + "</div>";
@@ -6340,11 +6375,28 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }
     var idx = freeSel.ids[0], bl = blocks[idx];
     if (!bl) return '<div class="slidefree__sel slidefree__sel--none">Select a block to edit it.</div>';
-    var head = '<div class="slidefree__selhead"><b>' + (bl.kind === "media" ? "Media block" : "Text block") + '</b><button class="iconbtn iconbtn--danger" data-act="free-del" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" title="Delete block">' + IC.trash + "</button></div>";
+    var _kn = bl.kind === "media" ? "Media" : bl.kind === "shape" ? "Shape" : bl.kind === "icon" ? "Icon" : "Text";
+    var head = '<div class="slidefree__selhead"><b>' + _kn + ' block</b><button class="iconbtn iconbtn--danger" data-act="free-del" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" title="Delete block">' + IC.trash + "</button></div>";
     if (bl.kind === "media") {
       return '<div class="slidefree__sel">' + head +
         '<div class="af"><label class="af__label">Media URL</label><input type="text" data-freefield="src" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + escAttr(bl.src || "") + '" placeholder="Paste a URL\u2026" />' +
         '<div class="imgblk__row"><button class="btn btn--ghost" data-act="free-media-upload" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">Upload\u2026</button></div></div>' +
+        '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
+    }
+    if (bl.kind === "shape") {
+      var shapeSel = [["rect", "Rectangle"], ["ellipse", "Oval"], ["line", "Line"], ["arrow", "Arrow"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.shape || "rect") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
+      var isLn = bl.shape === "line" || bl.shape === "arrow";
+      return '<div class="slidefree__sel">' + head +
+        '<div class="af"><label class="af__label">Shape</label><select data-freeshape data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + shapeSel + "</select></div>" +
+        (isLn ? "" : freeColorField("Fill", i, k, idx, "fill", bl.fill)) +
+        freeColorField(isLn ? "Colour" : "Border", i, k, idx, "stroke", bl.stroke) +
+        '<div class="af__row"><div class="af"><label class="af__label">' + (isLn ? "Thickness" : "Border") + '</label>' + numField('<input type="number" data-freefield="strokeW" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (parseFloat(bl.strokeW) || 0) + '" min="0" max="40" step="1" />') + "</div>" + (bl.shape === "rect" ? '<div class="af"><label class="af__label">Corner</label>' + numField('<input type="number" data-freefield="radius" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (parseFloat(bl.radius) || 0) + '" min="0" max="200" step="1" />') + "</div>" : '<div class="af"></div>') + "</div>" +
+        '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
+    }
+    if (bl.kind === "icon") {
+      return '<div class="slidefree__sel">' + head +
+        '<div class="af"><label class="af__label">Icon</label><div class="sfbicon-cur">' + ((window.RK && window.RK.iconSvg) ? window.RK.iconSvg(bl.name || "star") : "") + '<button type="button" class="btn btn--ghost" data-act="free-icon-pick" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">Change icon\u2026</button></div></div>' +
+        freeColorField("Colour", i, k, idx, "color", bl.color) +
         '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
     }
     var sizes = [["sm", "Small"], ["md", "Medium"], ["lg", "Large"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.size || "md") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
@@ -6366,6 +6418,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var f = t.dataset.freefield;
     if (f === "src") bl.src = String(t.value || "").trim();
     else if (f === "rot") { var n = parseFloat(t.value); bl.rot = isFinite(n) ? ((Math.round(n) % 360) + 360) % 360 : 0; }
+    else if (f === "strokeW" || f === "radius") { var m = parseFloat(t.value); bl[f] = isFinite(m) ? Math.max(0, m) : 0; }
     else bl.text = t.value;
     saveDraft(); freePvRefresh(+t.dataset.fi, +t.dataset.fk);
   }
@@ -9161,6 +9214,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (t.dataset.sblock !== undefined && t.dataset.bfield && t.dataset.bfield !== "locked") { onStudyBlock(t); return; }
     if (t.dataset.slide !== undefined && t.dataset.sslot) { onSlideEdit(t); return; }
     if (t.dataset.freefield !== undefined) { onFreeFieldEdit(t); return; }
+    if (t.dataset.freecolor !== undefined) { var _cb = freeBlk(t); if (_cb) { _cb[t.dataset.freecolor] = t.value; saveDraft(); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
     if (t.dataset.path) { setPath(data, t.dataset.path, t.value); apply(); return; }
     if (t.dataset.sv !== undefined && t.dataset.field) { onSvInput(t); return; }
     if (t.dataset.list && t.dataset.scalar) { data[t.dataset.list][+t.dataset.index] = t.value; apply(); return; }
@@ -9207,6 +9261,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (t.dataset.freesize !== undefined) { var _fbz = freeBlk(t); if (_fbz) { _fbz.size = t.value; saveDraft(true); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
     if (t.dataset.freealign !== undefined) { var _fba = freeBlk(t); if (_fba) { _fba.align = t.value; saveDraft(true); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
     if (t.dataset.freevalign !== undefined) { var _fbv = freeBlk(t); if (_fbv) { _fbv.valign = t.value; saveDraft(true); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
+    if (t.dataset.freeaddshape !== undefined) { var _sfi = +t.dataset.fi, _sfk = +t.dataset.fk, _sarr = slideBlocks(_sfi, _sfk), _sv = t.value; t.value = ""; if (!_sarr || !_sv) return; var _nb = (_sv === "line" || _sv === "arrow") ? { kind: "shape", shape: _sv, x: 12, y: 46, w: 34, h: 8, stroke: "var(--accent)", strokeW: 3 } : { kind: "shape", shape: _sv, x: 14, y: 16, w: 26, h: 22, fill: "", stroke: "var(--accent)", strokeW: 2, radius: 0 }; _sarr.push(_nb); freeSelSet(_sfi, _sfk, [_sarr.length - 1]); saveDraft(true); renderL2(); return; }
+    if (t.dataset.freeshape !== undefined) { var _fsb = freeBlk(t); if (_fsb) { _fsb.shape = t.value; saveDraft(true); renderL2(); } return; }
     if (t.dataset.statementsize !== undefined) { data.landing = data.landing || {}; data.landing.statementSize = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.worktitlesize !== undefined) { data.landing = data.landing || {}; data.landing.workTitleSize = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.worktitlealign !== undefined) { data.landing = data.landing || {}; data.landing.workTitleAlign = t.value; saveDraft(true); apply(true); return; }
@@ -9956,6 +10012,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       else { _dbox.sort(function (a, c) { return a.y - c.y; }); var _f2 = _dbox[0], _l2 = _dbox[_dbox.length - 1], _tot2 = _dbox.reduce(function (s, o) { return s + o.h; }, 0), _gap2 = ((_l2.y + _l2.h - _f2.y) - _tot2) / (_dbox.length - 1), _cur2 = _f2.y; _dbox.forEach(function (o) { var bl = _db[o.ix]; if (bl) bl.y = Math.round(_cur2 * 10) / 10; _cur2 += o.h + _gap2; }); }
       saveDraft(true); renderL2(); return;
     }
+    if (act === "free-add-icon") { var _fik = +b.dataset.sindex; freeIconPicker(function (name) { var arr = slideBlocks(i, _fik); if (!arr) return; arr.push({ kind: "icon", name: name, x: 14, y: 14, w: 12, h: 12, color: "var(--accent)" }); freeSelSet(i, _fik, [arr.length - 1]); saveDraft(true); renderL2(); }); return; }
+    if (act === "free-icon-pick") { var _ipk = +b.dataset.sindex, _ip = slideBlocks(i, _ipk), _ipb = _ip && _ip[+b.dataset.fbi]; if (!_ipb) return; freeIconPicker(function (name) { _ipb.name = name; saveDraft(true); renderL2(); }); return; }
+    if (act === "free-color") { var _cak = +b.dataset.sindex, _ca = slideBlocks(i, _cak), _cab = _ca && _ca[+b.dataset.fbi]; if (!_cab) return; var _cf = b.dataset.field, _cv = b.dataset.val; if (_cv) _cab[_cf] = _cv; else delete _cab[_cf]; saveDraft(true); renderL2(); return; }
     if (act === "hsize-toggle") { var hsSel = b.closest(".hsize"); if (hsSel) { var wasHsOpen = hsSel.classList.contains("is-open"); if (root) root.querySelectorAll(".hsize.is-open").forEach(function (x) { x.classList.remove("is-open"); }); if (!wasHsOpen) hsSel.classList.add("is-open"); } return; }
     if (act === "hsize-set") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].hsize = b.dataset.hsize || ""; saveDraft(true); renderL2(); } return; }
     if (act === "item-add") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items = bl.items || []; bl.items.push(blankItem(bl.type)); saveDraft(true); renderL2(); return; }
