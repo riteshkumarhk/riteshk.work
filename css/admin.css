@@ -2899,3 +2899,8 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .slidefree__sel { margin: .9rem 0 .2rem; padding: .9rem; border: 1px solid var(--line-soft, rgba(255,255,255,.09)); border-radius: 12px; background: var(--bg-2, rgba(255,255,255,.02)); }
 .slidefree__sel--none { margin: .9rem 0 .2rem; font-family: var(--sans); font-size: .8rem; color: var(--text-faint); font-style: italic; }
 .slidefree__selhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: .6rem; font-family: var(--sans); font-size: .8rem; color: var(--text-dim); }
+/* Freeform rich text (P3): tighten injected HTML in the editor block preview */
+.sfb__tx p { margin: 0 0 .3em; } .sfb__tx p:last-child { margin-bottom: 0; }
+.sfb__tx ul, .sfb__tx ol { margin: .2em 0; padding-left: 1.1em; }
+.sfb__tx a { color: var(--accent); }
+.slidefree__sel .rt__field { margin-top: .1rem; }

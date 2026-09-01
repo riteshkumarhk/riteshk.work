@@ -1721,6 +1721,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     clone.querySelectorAll("img[data-src]").forEach(function (im) { im.setAttribute("src", im.getAttribute("data-src")); im.removeAttribute("data-src"); });
     var html = rtClean(clone.innerHTML).trim();
     if (/^(\s|<br\s*\/?>|<p>(\s|<br\s*\/?>)*<\/p>|<div>(\s|<br\s*\/?>)*<\/div>)*$/i.test(html)) html = "";
+    if (area.dataset.freert !== undefined) {
+      var fbl = slideBlocks(+area.dataset.fi, +area.dataset.fk); fbl = fbl && fbl[+area.dataset.fbi];
+      if (fbl) { fbl.text = html; saveDraft(); freePvRefresh(+area.dataset.fi, +area.dataset.fk); }
+      return;
+    }
     if (area.dataset.rtjrn !== undefined) {
       var jc = +area.dataset.jc, je = +area.dataset.je;
       var jd = data.journey && data.journey.chapters && data.journey.chapters[jc];
@@ -6283,7 +6288,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (bl.rot) st += "transform:rotate(" + (parseFloat(bl.rot) || 0) + "deg);";
     var inner;
     if (bl.kind === "media") inner = bl.src ? '<img src="' + escAttr(bl.src) + '" alt="" draggable="false">' : '<div class="sfb__ph">Media</div>';
-    else inner = '<div class="sfb__tx sfb--' + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "") + '">' + (String(bl.text || "").trim() ? escHtml(bl.text) : '<span class="sfb__empty">Text</span>') + "</div>";
+    else { var _tx = String(bl.text || ""), _body = _tx.trim() ? (/<[a-z!/]/i.test(_tx) ? _tx : escHtml(_tx)) : '<span class="sfb__empty">Text</span>'; inner = '<div class="sfb__tx sfb--' + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "") + '">' + _body + "</div>"; }
     var chrome = single ? (FREE_HANDLES.map(function (h) { return '<span class="sfb__h sfb__h--' + h + '" data-fbh="' + h + '"></span>'; }).join("") + '<span class="sfb__rot" data-fbrot title="Drag to rotate"></span>') : "";
     var bx = boxed ? (bl.kind === "media" ? " sfb--fit" : " sfb--boxed") : "";
     return '<div class="sfb sfb--' + (bl.kind === "media" ? "media" : "text") + bx + (sel ? " is-sel" : "") + (single ? " is-single" : "") + '" data-fb="' + idx + '" data-fbdrag style="' + st + '">' + inner + chrome + "</div>";
@@ -6325,7 +6330,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var aligns = [["left", "Left"], ["center", "Centre"], ["right", "Right"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.align || "left") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
     var valignCtl = (bl.h != null) ? ('<div class="af"><label class="af__label">Vertical</label><select data-freevalign data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + [["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.valign || "top") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select></div>") : '<div class="af"></div>';
     return '<div class="slidefree__sel">' + head +
-      '<div class="af"><label class="af__label">Text</label><textarea data-freefield="text" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" rows="2">' + escHtml(bl.text || "") + "</textarea></div>" +
+      '<div class="af rt"><label class="af__label">Text</label>' + richFieldWrap('data-freert data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '"', bl.text) + "</div>" +
       '<div class="af__row"><div class="af"><label class="af__label">Size</label><select data-freesize data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + sizes + "</select></div>" +
       '<div class="af"><label class="af__label">Align</label><select data-freealign data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + aligns + "</select></div></div>" +
       '<div class="af__row">' + valignCtl + freeRotRow(i, k, idx, bl) + "</div>" + freeZRow(i, k, idx) + "</div>";
@@ -9099,7 +9104,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (t.classList && (t.classList.contains("cl__url") || t.classList.contains("cl__jd") || t.classList.contains("cl__company")) && t.closest(".cl")) { onClInput(t); return; }
     if (t.dataset.heromotion !== undefined) { onHeroMotion(t); return; }
     if (t.dataset.gpath !== undefined || t.dataset.genName !== undefined) { onGenEdit(t); return; }
-    if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined || t.dataset.rtcellfield !== undefined || t.dataset.rtjrn !== undefined) { rtSerialize(t); return; }
+    if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined || t.dataset.rtcellfield !== undefined || t.dataset.rtjrn !== undefined || t.dataset.freert !== undefined) { rtSerialize(t); return; }
     if (t.dataset.jmeta !== undefined || t.dataset.jname !== undefined || t.dataset.jfield !== undefined || t.dataset.jimg !== undefined) { onJourneyEdit(t); return; }
     if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.parx !== undefined) { onParxInput(t); return; }
