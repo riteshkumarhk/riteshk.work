@@ -6016,12 +6016,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     ["media", "Media", "A full-bleed image or video with an optional caption."],
     ["split", "Split", "Text on one side, media on the other."],
     ["quote", "Quote", "A pulled quote with attribution \u2014 a voice or verbatim."],
-    ["section", "Section divider", "A number or kicker + title to break the deck into acts."]
+    ["section", "Section divider", "A number or kicker + title to break the deck into acts."],
+    ["free", "Freeform", "A blank canvas \u2014 drag text & media anywhere you want."]
   ];
   function slideLayoutName(l) { var m = SLIDE_LAYOUTS.filter(function (x) { return x[0] === l; })[0]; return m ? m[1] : (l || "Slide"); }
   function slideLayoutDesc(l) { var m = SLIDE_LAYOUTS.filter(function (x) { return x[0] === l; })[0]; return m ? m[2] : ""; }
   function blankSlide(layout) {
-    return { id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: layout || "statement", slots: {}, notes: "" };
+    var s = { id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: layout || "statement", slots: {}, notes: "" };
+    if (s.layout === "free") s.blocks = [];
+    return s;
   }
   function slideBlockName(b) {
     var t = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", cloud: "Concept cloud", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Slider", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices", isolayers: "Layers", focus: "Focus", gen: "Generated" })[b.type] || b.type;
@@ -6076,6 +6079,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   function slidePvSetup() {
     slidePvFit();
+    freeDragInit();
     if (window.ResizeObserver && l2body) {
       if (!slidePvRO) slidePvRO = new ResizeObserver(function () { slidePvFit(); });
       try { slidePvRO.disconnect(); slidePvRO.observe(l2body); } catch (e) {}
@@ -6092,6 +6096,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function slideCard(i, s, k, len, open) {
     var lname = slideLayoutName(s.layout), z = s.slots || {};
     var raw = z.title || z.heading || z.quote || z.label || z.value || z.caption || z.kicker || "";
+    if (!raw && s.layout === "free") { var _flb = (s.blocks || []).filter(function (bb) { return bb && bb.kind !== "media" && String(bb.text || "").trim(); })[0]; raw = _flb ? _flb.text : "Freeform slide"; }
     var label = String(raw).replace(/<[^>]+>/g, " ").replace(/[\*\[\]]/g, "").replace(/\s+/g, " ").trim();
     if (!label) label = "Slide " + (k + 1);
     if (label.length > 46) label = label.slice(0, 46) + "\u2026";
@@ -6109,14 +6114,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       "</span>" +
       '<span class="study__block-chev" aria-hidden="true">' + IC.chev + "</span>" +
       "</div>";
-    var bodyHtml = open ? ('<div class="study__block-body">' +
-      slLayoutPicker(i, k, s) +
-      '<div class="slides__pvwrap"><div class="slidepv" data-slidepvbox="' + k + '"><div class="slidepv__stage" data-slidepv="' + k + '">' + slidePvHtml(s) + "</div></div>" +
-      '<button type="button" class="btn btn--ghost slides__rehearse1" data-act="slide-rehearse" data-index="' + i + '" data-sindex="' + k + '">' + IC.play + " Rehearse from here</button></div>" +
-      '<div class="slides__pull"><button type="button" class="btn btn--auto" data-act="slide-pull" data-index="' + i + '" data-sindex="' + k + '">' + IC.fwd + " Pull content from a section\u2026</button></div>" +
-      slideSlotFields(i, k, s) +
-      slText(i, k, "notes", "Speaker notes", "Private prompts for you \u2014 shown in presenter view (coming soon), never on the slide.", { area: true, rows: 3, notes: true }) +
-      "</div>") : "";
+    var editBody;
+    if (s.layout === "free") {
+      editBody = freeCanvasHtml(i, k) + freeSelPanel(i, k) +
+        '<button type="button" class="btn btn--ghost slides__rehearse1" data-act="slide-rehearse" data-index="' + i + '" data-sindex="' + k + '">' + IC.play + " Rehearse from here</button>";
+    } else {
+      editBody = '<div class="slides__pvwrap"><div class="slidepv" data-slidepvbox="' + k + '"><div class="slidepv__stage" data-slidepv="' + k + '">' + slidePvHtml(s) + "</div></div>" +
+        '<button type="button" class="btn btn--ghost slides__rehearse1" data-act="slide-rehearse" data-index="' + i + '" data-sindex="' + k + '">' + IC.play + " Rehearse from here</button></div>" +
+        '<div class="slides__pull"><button type="button" class="btn btn--auto" data-act="slide-pull" data-index="' + i + '" data-sindex="' + k + '">' + IC.fwd + " Pull content from a section\u2026</button></div>" +
+        slideSlotFields(i, k, s);
+    }
+    var bodyHtml = open ? ('<div class="study__block-body">' + slLayoutPicker(i, k, s) + editBody + slText(i, k, "notes", "Speaker notes", "Private prompts for you \u2014 shown in presenter view, never on the slide.", { area: true, rows: 3, notes: true }) + "</div>") : "";
     return '<div class="card study__block study__block--slide' + (open ? " is-open" : "") + (s.hidden ? " is-off" : "") + '">' + head + bodyHtml + "</div>";
   }
   function slidesPanel(w, i) {
@@ -6240,6 +6248,94 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (openStudy === i) renderL2();
       status("Drafted a " + slides.length + "-slide deck \u2014 reorder, refine or Rehearse it.", true);
     } catch (e) { status("Deck draft failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Draft with AI"; } }
+  }
+  /* ---------- Freeform slide editor (drag/resize blocks on a blank 16:9 canvas) ---------- */
+  var freeSel = null;  // { i, k, idx } — the selected freeform block
+  var freeDrag = null; // active drag/resize state
+  function fnum(v, d) { var n = parseFloat(v); return isFinite(n) ? Math.max(0, Math.min(100, n)) : d; }
+  function slideBlocks(i, k) { var s = data.work[i] && data.work[i].study && data.work[i].study.slides && data.work[i].study.slides[k]; return s ? (s.blocks || (s.blocks = [])) : null; }
+  function freeBlk(t) { var bl = slideBlocks(+t.dataset.fi, +t.dataset.fk); return bl ? bl[+t.dataset.fbi] : null; }
+  function freeBlockEl(i, k, idx, bl, sel) {
+    var pos = "left:" + fnum(bl.x, 8) + "%;top:" + fnum(bl.y, 8) + "%;width:" + fnum(bl.w, 40) + "%;";
+    var inner = bl.kind === "media"
+      ? (bl.src ? '<img src="' + escAttr(bl.src) + '" alt="" draggable="false">' : '<div class="sfb__ph">Media</div>')
+      : '<div class="sfb__tx sfb--' + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + '">' + (String(bl.text || "").trim() ? escHtml(bl.text) : '<span class="sfb__empty">Text</span>') + "</div>";
+    return '<div class="sfb sfb--' + (bl.kind === "media" ? "media" : "text") + (sel ? " is-sel" : "") + '" data-fb="' + idx + '" data-fbdrag style="' + pos + '">' + inner + '<span class="sfb__rz" data-fbrz title="Drag to resize"></span></div>';
+  }
+  function freeStageHtml(i, k) {
+    var blocks = slideBlocks(i, k) || [];
+    var body = blocks.length ? blocks.map(function (bl, ix) { return freeBlockEl(i, k, ix, bl, freeSel && freeSel.i === i && freeSel.k === k && freeSel.idx === ix); }).join("") : '<div class="slidefree__empty">Empty canvas \u2014 add a Text or Media block, then drag it anywhere.</div>';
+    return body;
+  }
+  function freeCanvasHtml(i, k) {
+    return '<div class="slides__pvwrap"><div class="slidepv slidepv--free" data-slidepvbox="' + k + '"><div class="slidepv__stage slidefree__stage" data-slidepv="' + k + '" data-freestage="' + i + ':' + k + '">' + freeStageHtml(i, k) + "</div></div>" +
+      '<div class="slidefree__tools"><button type="button" class="btn btn--ghost" data-act="free-add-text" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + " Text</button>" +
+      '<button type="button" class="btn btn--ghost" data-act="free-add-media" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + ' Media</button><span class="slidefree__hint">Drag to move \u00b7 drag the corner to resize \u00b7 click to edit</span></div></div>';
+  }
+  function freeSelPanel(i, k) {
+    if (!freeSel || freeSel.i !== i || freeSel.k !== k) return '<div class="slidefree__sel slidefree__sel--none">Select a block on the canvas to edit its content, or add one above.</div>';
+    var bl = (slideBlocks(i, k) || [])[freeSel.idx]; if (!bl) return "";
+    var head = '<div class="slidefree__selhead"><b>' + (bl.kind === "media" ? "Media block" : "Text block") + '</b><button class="iconbtn iconbtn--danger" data-act="free-del" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + freeSel.idx + '" title="Delete block">' + IC.trash + "</button></div>";
+    if (bl.kind === "media") {
+      return '<div class="slidefree__sel">' + head +
+        '<div class="af"><label class="af__label">Media URL</label><input type="text" data-freefield="src" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + freeSel.idx + '" value="' + escAttr(bl.src || "") + '" placeholder="Paste a URL\u2026" />' +
+        '<div class="imgblk__row"><button class="btn btn--ghost" data-act="free-media-upload" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + freeSel.idx + '">Upload\u2026</button></div></div></div>';
+    }
+    var sizes = [["sm", "Small"], ["md", "Medium"], ["lg", "Large"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.size || "md") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
+    var aligns = [["left", "Left"], ["center", "Centre"], ["right", "Right"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.align || "left") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
+    return '<div class="slidefree__sel">' + head +
+      '<div class="af"><label class="af__label">Text</label><textarea data-freefield="text" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + freeSel.idx + '" rows="2">' + escHtml(bl.text || "") + "</textarea></div>" +
+      '<div class="af__row"><div class="af"><label class="af__label">Size</label><select data-freesize data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + freeSel.idx + '">' + sizes + "</select></div>" +
+      '<div class="af"><label class="af__label">Align</label><select data-freealign data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + freeSel.idx + '">' + aligns + "</select></div></div></div>";
+  }
+  function freePvRefresh(i, k) {
+    if (!root) return;
+    var stage = root.querySelector('[data-freestage="' + i + ":" + k + '"]');
+    if (stage) { stage.innerHTML = freeStageHtml(i, k); slidePvFit(); }
+  }
+  function onFreeFieldEdit(t) {
+    var bl = freeBlk(t); if (!bl) return;
+    if (t.dataset.freefield === "src") bl.src = String(t.value || "").trim(); else bl.text = t.value;
+    saveDraft(); freePvRefresh(+t.dataset.fi, +t.dataset.fk);
+  }
+  function freeDragInit() {
+    if (freeDragInit._on || !root) return; freeDragInit._on = true;
+    root.addEventListener("pointerdown", function (e) {
+      var blk = e.target.closest(".sfb[data-fb]"); if (!blk) return;
+      var stage = blk.closest("[data-freestage]"); if (!stage) return;
+      var mid = stage.getAttribute("data-freestage").split(":"), i = +mid[0], k = +mid[1], idx = +blk.getAttribute("data-fb");
+      var bl = (slideBlocks(i, k) || [])[idx]; if (!bl) return;
+      var wasSel = freeSel && freeSel.i === i && freeSel.k === k && freeSel.idx === idx;
+      freeSel = { i: i, k: k, idx: idx };
+      var rect = stage.getBoundingClientRect();
+      freeDrag = { mode: e.target.closest("[data-fbrz]") ? "resize" : "move", el: blk, bl: bl, i: i, k: k, sw: rect.width || 1, sh: rect.height || 1, sx: e.clientX, sy: e.clientY, ox: fnum(bl.x, 8), oy: fnum(bl.y, 8), ow: fnum(bl.w, 40), moved: false };
+      blk.classList.add("is-drag");
+      window.addEventListener("pointermove", onFreeMove);
+      window.addEventListener("pointerup", function () { onFreeUp(wasSel); }, { once: true });
+      e.preventDefault();
+    });
+  }
+  function onFreeMove(e) {
+    if (!freeDrag) return;
+    var dx = (e.clientX - freeDrag.sx) / freeDrag.sw * 100, dy = (e.clientY - freeDrag.sy) / freeDrag.sh * 100;
+    if (Math.abs(e.clientX - freeDrag.sx) + Math.abs(e.clientY - freeDrag.sy) > 3) freeDrag.moved = true;
+    if (freeDrag.mode === "resize") {
+      freeDrag.bl.w = Math.round(Math.max(6, Math.min(100, freeDrag.ow + dx)) * 10) / 10;
+      freeDrag.el.style.width = freeDrag.bl.w + "%";
+    } else {
+      freeDrag.bl.x = Math.round(Math.max(0, Math.min(100, freeDrag.ox + dx)) * 10) / 10;
+      freeDrag.bl.y = Math.round(Math.max(0, Math.min(100, freeDrag.oy + dy)) * 10) / 10;
+      freeDrag.el.style.left = freeDrag.bl.x + "%"; freeDrag.el.style.top = freeDrag.bl.y + "%";
+    }
+  }
+  function onFreeUp(wasSel) {
+    window.removeEventListener("pointermove", onFreeMove);
+    if (!freeDrag) return;
+    freeDrag.el.classList.remove("is-drag");
+    var moved = freeDrag.moved;
+    freeDrag = null;
+    if (moved) { saveDraft(true); renderL2(); }
+    else if (!wasSel) { renderL2(); }   // a clean click just (re)selects — repaint the panel + highlight
   }
   function studyEditor(w, i) {
     var st = w.study;
@@ -8572,6 +8668,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     _l2ScrollY = 0;
     openBlock = -1;
     openSlide = -1;
+    freeSel = null;
     const w = data.work[i];
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
     l2body.innerHTML = studyEditor(w, i);
@@ -8919,6 +9016,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (t.dataset.study !== undefined && t.dataset.sfield) { onStudyMeta(t); return; }
     if (t.dataset.sblock !== undefined && t.dataset.bfield && t.dataset.bfield !== "locked") { onStudyBlock(t); return; }
     if (t.dataset.slide !== undefined && t.dataset.sslot) { onSlideEdit(t); return; }
+    if (t.dataset.freefield !== undefined) { onFreeFieldEdit(t); return; }
     if (t.dataset.path) { setPath(data, t.dataset.path, t.value); apply(); return; }
     if (t.dataset.sv !== undefined && t.dataset.field) { onSvInput(t); return; }
     if (t.dataset.list && t.dataset.scalar) { data[t.dataset.list][+t.dataset.index] = t.value; apply(); return; }
@@ -8962,6 +9060,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (_slw && _slw.study && _slw.study.slides && _slw.study.slides[_slk]) { _slw.study.slides[_slk].layout = t.value; saveDraft(true); renderL2(); }
       return;
     }
+    if (t.dataset.freesize !== undefined) { var _fbz = freeBlk(t); if (_fbz) { _fbz.size = t.value; saveDraft(true); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
+    if (t.dataset.freealign !== undefined) { var _fba = freeBlk(t); if (_fba) { _fba.align = t.value; saveDraft(true); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
     if (t.dataset.statementsize !== undefined) { data.landing = data.landing || {}; data.landing.statementSize = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.worktitlesize !== undefined) { data.landing = data.landing || {}; data.landing.workTitleSize = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.worktitlealign !== undefined) { data.landing = data.landing || {}; data.landing.workTitleAlign = t.value; saveDraft(true); apply(true); return; }
@@ -9683,6 +9783,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "slide-media-clear") { var _mcw = data.work[i], mck = +b.dataset.sindex, mcs = _mcw && _mcw.study && _mcw.study.slides && _mcw.study.slides[mck]; if (!mcs) return; if (mcs.slots) delete mcs.slots.media; saveDraft(true); renderL2(); return; }
     if (act === "slide-decrypt") { decryptDeckForEdit(i); return; }
     if (act === "slide-ai-draft") { deckAiDraft(i, b); return; }
+    if (act === "free-add-text") { var _fat = slideBlocks(i, +b.dataset.sindex); if (_fat) { _fat.push({ kind: "text", x: 8, y: Math.min(74, 12 + _fat.length * 6), w: 46, size: "md", align: "left", text: "New text" }); freeSel = { i: i, k: +b.dataset.sindex, idx: _fat.length - 1 }; saveDraft(true); renderL2(); } return; }
+    if (act === "free-add-media") { var _fam = slideBlocks(i, +b.dataset.sindex); if (_fam) { _fam.push({ kind: "media", x: 10, y: Math.min(74, 12 + _fam.length * 6), w: 40, src: "" }); freeSel = { i: i, k: +b.dataset.sindex, idx: _fam.length - 1 }; saveDraft(true); renderL2(); } return; }
+    if (act === "free-del") { var _fd = slideBlocks(i, +b.dataset.sindex); if (_fd) { _fd.splice(+b.dataset.fbi, 1); freeSel = null; saveDraft(true); renderL2(); } return; }
+    if (act === "free-media-upload") { var _fu = slideBlocks(i, +b.dataset.sindex), _fub = _fu && _fu[+b.dataset.fbi]; if (!_fub) return; pickMedia(function (uri) { _fub.src = uri; saveDraft(true); renderL2(); }); return; }
     if (act === "hsize-toggle") { var hsSel = b.closest(".hsize"); if (hsSel) { var wasHsOpen = hsSel.classList.contains("is-open"); if (root) root.querySelectorAll(".hsize.is-open").forEach(function (x) { x.classList.remove("is-open"); }); if (!wasHsOpen) hsSel.classList.add("is-open"); } return; }
     if (act === "hsize-set") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].hsize = b.dataset.hsize || ""; saveDraft(true); renderL2(); } return; }
     if (act === "item-add") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items = bl.items || []; bl.items.push(blankItem(bl.type)); saveDraft(true); renderL2(); return; }

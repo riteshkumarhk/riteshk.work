@@ -1104,3 +1104,16 @@ html.pjp-on { overflow: hidden; }
 .pjp__pnext-body { font-family: var(--serif); font-size: 1.15rem; line-height: 1.3; color: var(--text-dim); }
 @media (max-width: 640px) { .pjp__present { grid-template-columns: 1fr; gap: .7rem; padding-top: 1.6rem; } .pjp__pnext { display: none; } }
 @media (prefers-reduced-motion: reduce) { .pjp__present { transition: none; } }
+/* Freeform layout — %-positioned blocks on a blank 16:9 canvas (increment 4c) */
+.pjps--free { position: absolute; inset: 0; padding: 0; display: block; }
+.pjps__fb { position: absolute; box-sizing: border-box; }
+.pjps__fb--text { font-family: var(--serif); color: var(--text); line-height: 1.18; }
+.pjps__fb--sm { font-family: var(--sans); font-weight: 400; font-size: clamp(.85rem, 1.5vw, 1.3rem); line-height: 1.45; color: var(--text-dim); }
+.pjps__fb--md { font-size: clamp(1.3rem, 3vw, 2.6rem); }
+.pjps__fb--lg { font-size: clamp(2rem, 5.4vw, 4.6rem); font-weight: 300; }
+.pjps__fb--aleft { text-align: left; }
+.pjps__fb--acenter { text-align: center; }
+.pjps__fb--aright { text-align: right; }
+.pjps__fb--text p { margin: 0 0 .4em; } .pjps__fb--text p:last-child { margin-bottom: 0; }
+.pjps__fb--media img, .pjps__fb--media video, .pjps__fb--media .pjps__media-el { width: 100%; height: auto; display: block; border-radius: 5px; }
+.pjps__fb--media .pjps__ph { aspect-ratio: 16 / 10; border-radius: 5px; }

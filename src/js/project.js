@@ -2629,7 +2629,16 @@
       if (L === "split") return '<div class="pjps pjps--split"><div class="pjps__col pjps__col--text"><div class="pjps__body">' + (z.heading ? '<h2 class="pjps__title">' + esc(z.heading) + "</h2>" : "") + (z.body ? '<div class="pjps__prose">' + pjBodyHtml(z.body) + "</div>" : "") + '</div></div><div class="pjps__col pjps__col--media">' + pjMediaHtml(z, "pjps__media-el") + "</div></div>";
       if (L === "quote") return '<div class="pjps pjps--quote"><div class="pjps__body"><blockquote class="pjps__quote">' + esc(z.quote || "") + "</blockquote>" + (z.attribution ? '<div class="pjps__attr">' + esc(z.attribution) + "</div>" : "") + "</div></div>";
       if (L === "section") return '<div class="pjps pjps--section"><div class="pjps__body">' + (z.kicker ? '<div class="pjps__secnum">' + esc(z.kicker) + "</div>" : "") + '<h2 class="pjps__title">' + esc(z.title || "") + "</h2>" + (z.sub ? '<p class="pjps__sub">' + esc(z.sub) + "</p>" : "") + "</div></div>";
+      if (L === "free") return '<div class="pjps pjps--free">' + ((s.blocks) || []).map(function (bl) { return renderFreeBlock(bl); }).join("") + "</div>";
       return '<div class="pjps pjps--text"><div class="pjps__body">' + (z.kicker ? '<div class="pjps__kicker">' + esc(z.kicker) + "</div>" : "") + (z.title ? '<h2 class="pjps__title">' + esc(z.title) + "</h2>" : "") + (z.body ? '<div class="pjps__prose">' + pjBodyHtml(z.body) + "</div>" : "") + "</div></div>";
+    }
+    function pjNum(v, d) { var n = parseFloat(v); return isFinite(n) ? Math.max(0, Math.min(100, n)) : d; }
+    function renderFreeBlock(bl) {
+      if (!bl) return "";
+      var pos = "left:" + pjNum(bl.x, 8) + "%;top:" + pjNum(bl.y, 8) + "%;width:" + pjNum(bl.w, 40) + "%;";
+      if (bl.kind === "media") return '<div class="pjps__fb pjps__fb--media" style="' + pos + '">' + pjMediaHtml(bl, "pjps__media-el") + "</div>";
+      var cls = "pjps__fb pjps__fb--text pjps__fb--" + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " pjps__fb--a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left");
+      return '<div class="' + cls + '" style="' + pos + '">' + pjBodyHtml(bl.text || "") + "</div>";
     }
     function pjSlideTitle(s) {
       var z = (s && s.slots) || {};
