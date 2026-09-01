@@ -1659,7 +1659,15 @@
       return;
     }
     if (e.target.closest("[data-sheetbg]")) { closeSheet(); return; }
-    if (e.target.closest("[data-nowpill]")) { cancelPin(); try { scroller.scrollTo({ top: 0, behavior: "smooth" }); } catch (e2) { scroller.scrollTop = 0; } return; }
+    if (e.target.closest("[data-nowpill]")) {
+      // The now-pill NAMES the section you're currently in - tapping it snaps to THAT section's top
+      // (you've scrolled into/past its start), not back to the overview.
+      var npAct = overlay.querySelector(".pj__toc-chip.is-active");
+      var npId = npAct ? npAct.getAttribute("data-goto") : null;
+      if (npId && npId !== "__intro") gotoSection(npId);
+      else { cancelPin(); try { scroller.scrollTo({ top: 0, behavior: "smooth" }); } catch (e2) { scroller.scrollTop = 0; } }
+      return;
+    }
     if (e.target.closest("[data-jump]")) {
       // Immersive nav: one contextual arrow stands in for the Overview/Full toggle - down at the top
       // dives into the case study (Full), up once you're inside returns to the top (Overview).
