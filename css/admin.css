@@ -2925,6 +2925,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .sfbclr.is-on { outline: 2px solid var(--accent); outline-offset: 1px; }
 .sfbclr--none { background: repeating-linear-gradient(45deg, #4a4a4a 0 4px, #222 4px 8px); }
 .sfbclr-cust { width: 26px; height: 22px; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 5px; background: none; cursor: pointer; }
+.sfbrange { width: 100%; accent-color: var(--accent); cursor: pointer; }
 .sfbicon-cur { display: flex; align-items: center; gap: .7rem; }
 .sfbicon-cur svg { width: 26px; height: 26px; color: var(--accent); }
 .sfbicons { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: .4rem; max-height: 50vh; overflow: auto; margin: .3rem 0 .2rem; }

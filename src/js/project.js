@@ -2634,6 +2634,7 @@
     }
     function pjNum(v, d) { var n = parseFloat(v); return isFinite(n) ? Math.max(0, Math.min(100, n)) : d; }
     function pjSafeColor(v) { v = String(v == null ? "" : v).trim(); return /^(#[0-9a-fA-F]{3,8}|rgba?\([\d.,%\s]+\)|var\(--[\w-]+\)|[a-zA-Z]+)$/.test(v) ? v : ""; }
+    function pjShadow(v) { return v === "strong" ? "drop-shadow(0 14px 40px rgba(0,0,0,.6))" : v === "medium" ? "drop-shadow(0 8px 24px rgba(0,0,0,.45))" : v === "soft" ? "drop-shadow(0 4px 12px rgba(0,0,0,.32))" : "none"; }
     function renderFreeShape(bl, st) {
       var sh = /^(rect|ellipse|line|arrow)$/.test(bl.shape) ? bl.shape : "rect";
       var stroke = pjSafeColor(bl.stroke) || "var(--accent)", sw = Math.max(0, parseFloat(bl.strokeW) || 0);
@@ -2651,6 +2652,8 @@
       var boxed = bl.h != null && isFinite(parseFloat(bl.h));
       if (boxed) st += "height:" + pjNum(bl.h, 20) + "%;";
       if (bl.rot) st += "transform:rotate(" + (parseFloat(bl.rot) || 0) + "deg);";
+      if (bl.opacity != null && +bl.opacity < 100) st += "opacity:" + (Math.max(0, Math.min(100, +bl.opacity)) / 100) + ";";
+      if (bl.shadow) st += "filter:" + pjShadow(bl.shadow) + ";";
       if (bl.kind === "media") return '<div class="pjps__fb pjps__fb--media' + (boxed ? " pjps__fb--fit" : "") + '" style="' + st + '">' + pjMediaHtml(bl, "pjps__media-el") + "</div>";
       if (bl.kind === "shape") return renderFreeShape(bl, st);
       if (bl.kind === "icon") return '<div class="pjps__fb pjps__fb--icon" style="' + st + "color:" + (pjSafeColor(bl.color) || "var(--accent)") + '">' + iconSvg(bl.name || "star") + "</div>";

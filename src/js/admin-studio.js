@@ -6300,6 +6300,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var cust = (val && String(val).charAt(0) === "#") ? val : "#d8a657";
     return '<div class="af"><label class="af__label">' + label + '</label><div class="sfbclr-row">' + sw + '<input type="color" class="sfbclr-cust" value="' + cust + '" data-freecolor="' + field + '" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" title="Custom colour" /></div></div>';
   }
+  function freeShadowCss(v) { return v === "strong" ? "drop-shadow(0 14px 40px rgba(0,0,0,.6))" : v === "medium" ? "drop-shadow(0 8px 24px rgba(0,0,0,.45))" : v === "soft" ? "drop-shadow(0 4px 12px rgba(0,0,0,.32))" : "none"; }
+  function freeFxRow(i, k, idx, bl) {
+    var shadows = [["", "None"], ["soft", "Soft"], ["medium", "Medium"], ["strong", "Strong"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.shadow || "") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
+    var op = bl.opacity == null ? 100 : Math.max(0, Math.min(100, +bl.opacity));
+    return '<div class="af__row"><div class="af"><label class="af__label">Opacity</label><input type="range" class="sfbrange" min="0" max="100" step="1" data-freefield="opacity" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + op + '" /></div>' +
+      '<div class="af"><label class="af__label">Shadow</label><select data-freeshadow data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + shadows + "</select></div></div>";
+  }
   function editorShapeInner(bl) {
     var sh = /^(rect|ellipse|line|arrow)$/.test(bl.shape) ? bl.shape : "rect";
     var stroke = freeColor(bl.stroke) || "var(--accent)", sw = Math.max(0, parseFloat(bl.strokeW) || 0);
@@ -6328,6 +6335,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var boxed = bl.h != null && isFinite(parseFloat(bl.h));
     if (boxed) st += "height:" + fnum(bl.h, 20) + "%;";
     if (bl.rot) st += "transform:rotate(" + (parseFloat(bl.rot) || 0) + "deg);";
+    if (bl.opacity != null && +bl.opacity < 100) st += "opacity:" + (Math.max(0, Math.min(100, +bl.opacity)) / 100) + ";";
+    if (bl.shadow) st += "filter:" + freeShadowCss(bl.shadow) + ";";
     var inner, kind = bl.kind === "media" ? "media" : bl.kind === "shape" ? "shape" : bl.kind === "icon" ? "icon" : "text";
     if (kind === "media") inner = bl.src ? '<img src="' + escAttr(bl.src) + '" alt="" draggable="false">' : '<div class="sfb__ph">Media</div>';
     else if (kind === "shape") inner = editorShapeInner(bl);
@@ -6381,7 +6390,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return '<div class="slidefree__sel">' + head +
         '<div class="af"><label class="af__label">Media URL</label><input type="text" data-freefield="src" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + escAttr(bl.src || "") + '" placeholder="Paste a URL\u2026" />' +
         '<div class="imgblk__row"><button class="btn btn--ghost" data-act="free-media-upload" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">Upload\u2026</button></div></div>' +
-        '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
+        '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
     }
     if (bl.kind === "shape") {
       var shapeSel = [["rect", "Rectangle"], ["ellipse", "Oval"], ["line", "Line"], ["arrow", "Arrow"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.shape || "rect") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
@@ -6391,13 +6400,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         (isLn ? "" : freeColorField("Fill", i, k, idx, "fill", bl.fill)) +
         freeColorField(isLn ? "Colour" : "Border", i, k, idx, "stroke", bl.stroke) +
         '<div class="af__row"><div class="af"><label class="af__label">' + (isLn ? "Thickness" : "Border") + '</label>' + numField('<input type="number" data-freefield="strokeW" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (parseFloat(bl.strokeW) || 0) + '" min="0" max="40" step="1" />') + "</div>" + (bl.shape === "rect" ? '<div class="af"><label class="af__label">Corner</label>' + numField('<input type="number" data-freefield="radius" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (parseFloat(bl.radius) || 0) + '" min="0" max="200" step="1" />') + "</div>" : '<div class="af"></div>') + "</div>" +
-        '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
+        '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
     }
     if (bl.kind === "icon") {
       return '<div class="slidefree__sel">' + head +
         '<div class="af"><label class="af__label">Icon</label><div class="sfbicon-cur">' + ((window.RK && window.RK.iconSvg) ? window.RK.iconSvg(bl.name || "star") : "") + '<button type="button" class="btn btn--ghost" data-act="free-icon-pick" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">Change icon\u2026</button></div></div>' +
         freeColorField("Colour", i, k, idx, "color", bl.color) +
-        '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
+        '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
     }
     var sizes = [["sm", "Small"], ["md", "Medium"], ["lg", "Large"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.size || "md") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
     var aligns = [["left", "Left"], ["center", "Centre"], ["right", "Right"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.align || "left") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
@@ -6406,7 +6415,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="af rt"><label class="af__label">Text</label>' + richFieldWrap('data-freert data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '"', bl.text) + "</div>" +
       '<div class="af__row"><div class="af"><label class="af__label">Size</label><select data-freesize data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + sizes + "</select></div>" +
       '<div class="af"><label class="af__label">Align</label><select data-freealign data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + aligns + "</select></div></div>" +
-      '<div class="af__row">' + valignCtl + freeRotRow(i, k, idx, bl) + "</div>" + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
+      '<div class="af__row">' + valignCtl + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
   }
   function freePvRefresh(i, k) {
     if (!root) return;
@@ -6419,6 +6428,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (f === "src") bl.src = String(t.value || "").trim();
     else if (f === "rot") { var n = parseFloat(t.value); bl.rot = isFinite(n) ? ((Math.round(n) % 360) + 360) % 360 : 0; }
     else if (f === "strokeW" || f === "radius") { var m = parseFloat(t.value); bl[f] = isFinite(m) ? Math.max(0, m) : 0; }
+    else if (f === "opacity") { var o = parseFloat(t.value); bl.opacity = isFinite(o) ? Math.max(0, Math.min(100, o)) : 100; }
     else bl.text = t.value;
     saveDraft(); freePvRefresh(+t.dataset.fi, +t.dataset.fk);
   }
@@ -9263,6 +9273,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (t.dataset.freevalign !== undefined) { var _fbv = freeBlk(t); if (_fbv) { _fbv.valign = t.value; saveDraft(true); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
     if (t.dataset.freeaddshape !== undefined) { var _sfi = +t.dataset.fi, _sfk = +t.dataset.fk, _sarr = slideBlocks(_sfi, _sfk), _sv = t.value; t.value = ""; if (!_sarr || !_sv) return; var _nb = (_sv === "line" || _sv === "arrow") ? { kind: "shape", shape: _sv, x: 12, y: 46, w: 34, h: 8, stroke: "var(--accent)", strokeW: 3 } : { kind: "shape", shape: _sv, x: 14, y: 16, w: 26, h: 22, fill: "", stroke: "var(--accent)", strokeW: 2, radius: 0 }; _sarr.push(_nb); freeSelSet(_sfi, _sfk, [_sarr.length - 1]); saveDraft(true); renderL2(); return; }
     if (t.dataset.freeshape !== undefined) { var _fsb = freeBlk(t); if (_fsb) { _fsb.shape = t.value; saveDraft(true); renderL2(); } return; }
+    if (t.dataset.freeshadow !== undefined) { var _shb = freeBlk(t); if (_shb) { if (t.value) _shb.shadow = t.value; else delete _shb.shadow; saveDraft(true); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
     if (t.dataset.statementsize !== undefined) { data.landing = data.landing || {}; data.landing.statementSize = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.worktitlesize !== undefined) { data.landing = data.landing || {}; data.landing.workTitleSize = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.worktitlealign !== undefined) { data.landing = data.landing || {}; data.landing.workTitleAlign = t.value; saveDraft(true); apply(true); return; }
