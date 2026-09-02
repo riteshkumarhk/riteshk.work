@@ -6031,6 +6031,29 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (s.layout === "free") s.blocks = [];
     return s;
   }
+  // Convert-to-freeform on-ramp: map a structured slide's slots onto positioned freeform blocks.
+  function slotsToFreeBlocks(s) {
+    var z = s.slots || {}, L = s.layout, out = [];
+    function T(text, size, align, x, y, w) { if (text == null || String(text).trim() === "") return; out.push({ kind: "text", text: String(text), size: size, align: align, x: x, y: y, w: w }); }
+    function M(m, x, y, w, h) { var src = m && (typeof m === "string" ? m : m.src); if (!src) return; out.push({ kind: "media", src: src, x: x, y: y, w: w, h: h }); }
+    if (L === "statement") { T(z.kicker, "sm", "center", 14, 30, 72); T(z.title, "lg", "center", 10, 37, 80); T(z.sub, "sm", "center", 18, 63, 64); }
+    else if (L === "section") { T(z.kicker, "sm", "center", 20, 33, 60); T(z.title, "lg", "center", 10, 42, 80); T(z.sub, "sm", "center", 20, 65, 60); }
+    else if (L === "metric") { T(z.kicker, "sm", "center", 20, 24, 60); T(z.value, "lg", "center", 12, 32, 76); T(z.label, "sm", "center", 20, 60, 60); T(z.sub, "sm", "center", 22, 70, 56); }
+    else if (L === "media") { M(z.media, 8, 9, 84, 72); T(z.caption, "sm", "left", 8, 84, 84); }
+    else if (L === "split") { T(z.heading, "md", "left", 6, 20, 42); T(z.body, "sm", "left", 6, 38, 42); M(z.media, 52, 13, 42, 68); }
+    else if (L === "quote") { T(z.quote, "lg", "center", 12, 30, 76); T(z.attribution, "sm", "center", 25, 63, 50); }
+    else { T(z.kicker, "sm", "left", 10, 16, 78); T(z.title, "md", "left", 10, 24, 80); T(z.body, "sm", "left", 10, 44, 80); }
+    return out;
+  }
+  function slideConvertToFree(i, k) {
+    var st = data.work[i] && data.work[i].study, s = st && st.slides && st.slides[k];
+    if (!s || s.layout === "free") return;
+    s.blocks = slotsToFreeBlocks(s);
+    s.layout = "free";
+    freeSel = null;
+    saveDraft(true); renderL2();
+    status("Converted to a freeform slide \u2014 drag anything. Ctrl+Z to undo.", true);
+  }
   function slideBlockName(b) {
     var t = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", cloud: "Concept cloud", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Slider", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices", isolayers: "Layers", focus: "Focus", gen: "Generated" })[b.type] || b.type;
     var raw = (b.editorName && b.editorName.trim()) || b.name || b.nav || b.heading || b.kicker || t;
@@ -6121,12 +6144,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       "</div>";
     var editBody;
     if (s.layout === "free") {
-      editBody = freeCanvasHtml(i, k) + freeSelPanel(i, k) +
+      editBody = freeCanvasHtml(i, k) + freeSelPanel(i, k) + freeLayersPanel(i, k) +
         '<button type="button" class="btn btn--ghost slides__rehearse1" data-act="slide-rehearse" data-index="' + i + '" data-sindex="' + k + '">' + IC.play + " Rehearse from here</button>";
     } else {
       editBody = '<div class="slides__pvwrap"><div class="slidepv" data-slidepvbox="' + k + '"><div class="slidepv__stage" data-slidepv="' + k + '">' + slidePvHtml(s) + "</div></div>" +
         '<button type="button" class="btn btn--ghost slides__rehearse1" data-act="slide-rehearse" data-index="' + i + '" data-sindex="' + k + '">' + IC.play + " Rehearse from here</button></div>" +
         '<div class="slides__pull"><button type="button" class="btn btn--auto" data-act="slide-pull" data-index="' + i + '" data-sindex="' + k + '">' + IC.fwd + " Pull content from a section\u2026</button></div>" +
+        '<div class="slides__tofree"><button type="button" class="btn btn--ghost" data-act="slide-tofree" data-index="' + i + '" data-sindex="' + k + '">' + IC.edit + ' Customize freely</button><span class="af__hint">Turn this into a freeform canvas \u2014 arrange text &amp; media anywhere.</span></div>' +
         slideSlotFields(i, k, s);
     }
     var bodyHtml = open ? ('<div class="study__block-body">' + slLayoutPicker(i, k, s) + editBody + slText(i, k, "notes", "Speaker notes", "Private prompts for you \u2014 shown in presenter view, never on the slide.", { area: true, rows: 3, notes: true }) + "</div>") : "";
@@ -6256,6 +6280,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   /* ---------- Freeform slide editor: PowerPoint-style canvas (select / move / resize / rotate) ---------- */
   var freeSel = null;   // { i, k, ids:[idx,...] } — the current selection
+  var freeClipboard = null;   // [block,...] deep-cloned — survives across slides (copy/cut/paste)
   var freeDrag = null;  // active pointer gesture
   var FREE_HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
   function fnum(v, d) { var n = parseFloat(v); return isFinite(n) ? Math.max(0, Math.min(100, n)) : d; }
@@ -6417,6 +6442,19 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="af"><label class="af__label">Align</label><select data-freealign data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + aligns + "</select></div></div>" +
       '<div class="af__row">' + valignCtl + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
   }
+  function freeLayersPanel(i, k) {
+    var blocks = slideBlocks(i, k) || [];
+    if (!blocks.length) return "";
+    var rows = "";
+    for (var idx = blocks.length - 1; idx >= 0; idx--) {
+      var bl = blocks[idx];
+      var kn = bl.kind === "media" ? "Media" : bl.kind === "shape" ? ({ rect: "Rectangle", ellipse: "Oval", line: "Line", arrow: "Arrow" }[bl.shape] || "Shape") : bl.kind === "icon" ? "Icon" : "Text";
+      var lbl = bl.kind === "text" ? (String(bl.text || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 34) || "Text") : bl.kind === "icon" ? (bl.name || "star") : bl.kind === "media" ? (String(bl.src || "").split("/").pop().slice(0, 30) || "\u2014") : "\u2014";
+      var on = (freeSelOn(i, k) && freeSelHas(idx)) ? " is-on" : "";
+      rows += '<button type="button" class="slidefree__layer' + on + '" data-act="free-layer" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '"><span class="slidefree__layer-k">' + escHtml(kn) + '</span><span class="slidefree__layer-l">' + escHtml(lbl) + '</span></button>';
+    }
+    return '<div class="slidefree__layers"><div class="slidefree__layers-h">Layers <span>top \u2192 bottom</span></div>' + rows + "</div>";
+  }
   function freePvRefresh(i, k) {
     if (!root) return;
     var stage = root.querySelector('[data-freestage="' + i + ":" + k + '"]');
@@ -6528,11 +6566,23 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     else renderL2();
   }
   function onFreeKey(e) {
-    if (!freeSel || !freeSel.ids || !freeSel.ids.length) return;
     if (openStudy < 0 || l2Tab !== "slides") return;
     var tag = (e.target && e.target.tagName) || "";
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || (e.target && e.target.isContentEditable)) return;
+    if ((e.ctrlKey || e.metaKey) && (e.key === "v" || e.key === "V")) {
+      if (!freeClipboard || !freeClipboard.length) return;
+      var pi = openStudy, pk = openSlide, ps = data.work[pi] && data.work[pi].study && data.work[pi].study.slides && data.work[pi].study.slides[pk];
+      if (!ps || ps.layout !== "free") return;
+      var parr = slideBlocks(pi, pk); if (!parr) return;
+      e.preventDefault();
+      var addP = []; freeClipboard.forEach(function (b) { var cp = JSON.parse(JSON.stringify(b)); cp.x = Math.min(100, fnum(b.x, 8) + 3); cp.y = Math.min(100, fnum(b.y, 8) + 3); parr.push(cp); addP.push(parr.length - 1); });
+      if (addP.length) freeSelSet(pi, pk, addP);
+      saveDraft(true); renderL2(); status(addP.length + (addP.length === 1 ? " block" : " blocks") + " pasted.", true); return;
+    }
+    if (!freeSel || !freeSel.ids || !freeSel.ids.length) return;
     var i = freeSel.i, k = freeSel.k, blocks = slideBlocks(i, k) || [];
+    if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) { e.preventDefault(); freeClipboard = freeSel.ids.map(function (ix) { return blocks[ix]; }).filter(Boolean).map(function (b) { return JSON.parse(JSON.stringify(b)); }); status(freeClipboard.length + (freeClipboard.length === 1 ? " block copied" : " blocks copied") + " \u2014 paste on any slide.", true); return; }
+    if ((e.ctrlKey || e.metaKey) && (e.key === "x" || e.key === "X")) { e.preventDefault(); freeClipboard = freeSel.ids.map(function (ix) { return blocks[ix]; }).filter(Boolean).map(function (b) { return JSON.parse(JSON.stringify(b)); }); freeSel.ids.slice().sort(function (a, b) { return b - a; }).forEach(function (ix) { blocks.splice(ix, 1); }); freeSel = null; saveDraft(true); renderL2(); status("Cut \u2014 paste on any slide.", true); return; }
     if (e.key === "Escape") { freeSel = null; renderL2(); return; }
     if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); freeSel.ids.slice().sort(function (a, b) { return b - a; }).forEach(function (ix) { blocks.splice(ix, 1); }); freeSel = null; saveDraft(true); renderL2(); return; }
     if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) { e.preventDefault(); var add = []; freeSel.ids.forEach(function (ix) { var b = blocks[ix]; if (!b) return; var cp = JSON.parse(JSON.stringify(b)); cp.x = Math.min(100, fnum(b.x, 8) + 2); cp.y = Math.min(100, fnum(b.y, 8) + 2); blocks.push(cp); add.push(blocks.length - 1); }); if (add.length) freeSelSet(i, k, add); saveDraft(true); renderL2(); return; }
@@ -10026,6 +10076,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "free-add-icon") { var _fik = +b.dataset.sindex; freeIconPicker(function (name) { var arr = slideBlocks(i, _fik); if (!arr) return; arr.push({ kind: "icon", name: name, x: 14, y: 14, w: 12, h: 12, color: "var(--accent)" }); freeSelSet(i, _fik, [arr.length - 1]); saveDraft(true); renderL2(); }); return; }
     if (act === "free-icon-pick") { var _ipk = +b.dataset.sindex, _ip = slideBlocks(i, _ipk), _ipb = _ip && _ip[+b.dataset.fbi]; if (!_ipb) return; freeIconPicker(function (name) { _ipb.name = name; saveDraft(true); renderL2(); }); return; }
     if (act === "free-color") { var _cak = +b.dataset.sindex, _ca = slideBlocks(i, _cak), _cab = _ca && _ca[+b.dataset.fbi]; if (!_cab) return; var _cf = b.dataset.field, _cv = b.dataset.val; if (_cv) _cab[_cf] = _cv; else delete _cab[_cf]; saveDraft(true); renderL2(); return; }
+    if (act === "free-layer") { freeSelSet(i, +b.dataset.sindex, [+b.dataset.fbi]); renderL2(); return; }
+    if (act === "slide-tofree") { slideConvertToFree(i, +b.dataset.sindex); return; }
     if (act === "hsize-toggle") { var hsSel = b.closest(".hsize"); if (hsSel) { var wasHsOpen = hsSel.classList.contains("is-open"); if (root) root.querySelectorAll(".hsize.is-open").forEach(function (x) { x.classList.remove("is-open"); }); if (!wasHsOpen) hsSel.classList.add("is-open"); } return; }
     if (act === "hsize-set") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].hsize = b.dataset.hsize || ""; saveDraft(true); renderL2(); } return; }
     if (act === "item-add") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items = bl.items || []; bl.items.push(blankItem(bl.type)); saveDraft(true); renderL2(); return; }

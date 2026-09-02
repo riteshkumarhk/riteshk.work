@@ -2899,6 +2899,17 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .slidefree__sel { margin: .9rem 0 .2rem; padding: .9rem; border: 1px solid var(--line-soft, rgba(255,255,255,.09)); border-radius: 12px; background: var(--bg-2, rgba(255,255,255,.02)); }
 .slidefree__sel--none { margin: .9rem 0 .2rem; font-family: var(--sans); font-size: .8rem; color: var(--text-faint); font-style: italic; }
 .slidefree__selhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: .6rem; font-family: var(--sans); font-size: .8rem; color: var(--text-dim); }
+.slides__tofree { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: .5rem 0 .2rem; }
+.slides__tofree .af__hint { margin: 0; }
+.slidefree__layers { margin: .7rem 0 .2rem; border: 1px solid var(--line-soft, rgba(255,255,255,.09)); border-radius: 12px; background: var(--bg-2, rgba(255,255,255,.02)); padding: .4rem; }
+.slidefree__layers-h { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--mono); text-transform: uppercase; letter-spacing: .1em; font-size: .58rem; color: var(--text-faint); padding: .2rem .4rem .35rem; }
+.slidefree__layers-h span { text-transform: none; letter-spacing: 0; }
+.slidefree__layer { display: flex; align-items: baseline; gap: .55rem; width: 100%; text-align: left; padding: .4rem .5rem; border: 0; border-top: 1px solid var(--line-soft, rgba(255,255,255,.06)); border-radius: 8px; background: none; color: var(--text-dim); cursor: pointer; font-family: var(--sans); }
+.slidefree__layer:first-of-type { border-top: 0; }
+.slidefree__layer:hover { background: rgba(255,255,255,.03); color: var(--text); }
+.slidefree__layer.is-on { background: rgba(216,166,87,.14); color: var(--text); }
+.slidefree__layer-k { flex: 0 0 auto; font-family: var(--mono); font-size: .58rem; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); min-width: 4.6rem; }
+.slidefree__layer-l { flex: 1 1 auto; font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Freeform rich text (P3): tighten injected HTML in the editor block preview */
 .sfb__tx p { margin: 0 0 .3em; } .sfb__tx p:last-child { margin-bottom: 0; }
 .sfb__tx ul, .sfb__tx ol { margin: .2em 0; padding-left: 1.1em; }
