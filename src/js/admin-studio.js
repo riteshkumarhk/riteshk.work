@@ -6648,7 +6648,6 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
 
     return '<div class="study__panel" data-l2tab-panel="' + tab + '">' +
       panel +
-      '<div class="study__foot"><a class="btn btn--ghost" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '">Preview case study ' + IC.ext + '</a><button class="btn btn--primary" data-act="study-close" data-index="' + i + '">Done</button></div>' +
       "</div>";
   }
   function studyToggle(w, i) {
@@ -9925,7 +9924,6 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return;
     }
     if (act === "study-toggle") { openL2(i); return; }
-    if (act === "study-close") { closeL2(); return; }
     if (act === "journey-edit") { openJourneyEditor(); return; }
     if (act === "journey-close") { closeJourneyEditor(); return; }
     if (act === "journey-chaptoggle") {
