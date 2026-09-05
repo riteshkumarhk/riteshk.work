@@ -1727,6 +1727,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (fbl) { fbl.text = html; saveDraft(); freePvRefresh(+area.dataset.fi, +area.dataset.fk); }
       return;
     }
+    if (area.dataset.rtnotes !== undefined) {
+      var _nsw = data.work[+area.dataset.slide], _nss = _nsw && _nsw.study && _nsw.study.slides && _nsw.study.slides[+area.dataset.sindex];
+      if (_nss) { _nss.notes = html; saveDraft(); }
+      return;
+    }
     if (area.dataset.rtjrn !== undefined) {
       var jc = +area.dataset.jc, je = +area.dataset.je;
       var jd = data.journey && data.journey.chapters && data.journey.chapters[jc];
@@ -6233,6 +6238,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       : '<input type="text" ' + attrs + ' value="' + escAttr(v) + '"' + (opts.ph ? ' placeholder="' + escAttr(opts.ph) + '"' : "") + " />";
     return '<div class="af"><label class="af__label">' + escHtml(label) + "</label>" + ctrl + (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
   }
+  function slNotesRich(i, k) {
+    var s = data.work[i].study.slides[k];
+    return '<div class="af rt slides__notesrt"><label class="af__label">Speaker notes</label>' +
+      richFieldWrap('data-slide="' + i + '" data-sindex="' + k + '" data-rtnotes="1"', s.notes || "") +
+      '<div class="af__hint">Private prompts for you \u2014 shown in your presenter view (and the separate presenter window), never on the slide. Bold the words you want to catch mid-talk.</div></div>';
+  }
   function slMedia(i, k) {
     var s = data.work[i].study.slides[k], m = (s.slots && s.slots.media) || null, v = (m && m.src) || "";
     return '<div class="af"><label class="af__label">Media</label>' +
@@ -6365,7 +6376,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="slides__work">' +
       '<div class="slides__center">' + slideEditHead(i, sel, slides) +
       '<div class="slides__canvas-body">' + freeCanvasStage(i, sel) + "</div>" +
-      '<div class="slides__canvas-notes">' + slText(i, sel, "notes", "Speaker notes", "Private prompts for you \u2014 shown in presenter view, never on the slide.", { area: true, rows: 3, notes: true }) + "</div></div>" +
+      '<div class="slides__canvas-notes">' + slNotesRich(i, sel) + "</div></div>" +
       '<aside class="slides__props">' + slidePropsPanel(i, sel, s) + "</aside>" +
       "</div>";
   }
@@ -9683,7 +9694,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (t.classList && (t.classList.contains("cl__url") || t.classList.contains("cl__jd") || t.classList.contains("cl__company")) && t.closest(".cl")) { onClInput(t); return; }
     if (t.dataset.heromotion !== undefined) { onHeroMotion(t); return; }
     if (t.dataset.gpath !== undefined || t.dataset.genName !== undefined) { onGenEdit(t); return; }
-    if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined || t.dataset.rtcellfield !== undefined || t.dataset.rtjrn !== undefined || t.dataset.freert !== undefined) { rtSerialize(t); return; }
+    if (t.dataset.rtfield !== undefined || t.dataset.rtifield !== undefined || t.dataset.rtcellfield !== undefined || t.dataset.rtjrn !== undefined || t.dataset.freert !== undefined || t.dataset.rtnotes !== undefined) { rtSerialize(t); return; }
     if (t.dataset.jmeta !== undefined || t.dataset.jname !== undefined || t.dataset.jfield !== undefined || t.dataset.jimg !== undefined) { onJourneyEdit(t); return; }
     if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.parx !== undefined) { onParxInput(t); return; }

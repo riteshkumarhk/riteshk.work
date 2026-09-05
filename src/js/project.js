@@ -2684,6 +2684,7 @@
       var t = z.title || z.heading || z.quote || z.value || z.label || z.caption || z.kicker || "";
       return pjPlain(t).slice(0, 60) || (s ? (s.layout || "Slide") : "");
     }
+    function pjNotesHtml(n) { return (n && String(n).trim()) ? pjBodyHtml(n) : '<span class="pjp__pnote-empty">\u2014 No notes for this slide \u2014</span>'; }
     var pjpStage = null;
     function presentDeck(w, opts) {
       opts = opts || {};
@@ -2700,7 +2701,8 @@
         '<div class="pjp__stagewrap"><div class="pjp__frame" data-pjp-frame></div></div>' +
         '<div class="pjp__bar"><button class="pjp__x" data-pjp="exit" aria-label="Exit presentation" title="Exit (Esc)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
         '<div class="pjp__progress" data-pjp-progress></div><span class="pjp__count" data-pjp-count></span>' +
-        '<button class="pjp__notesbtn" data-pjp="notes" aria-label="Presenter notes (P)" title="Presenter notes (P)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button></div>' +
+        '<button class="pjp__notesbtn" data-pjp="notes" aria-label="Presenter notes (P)" title="Presenter notes (P)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>' +
+        '<button class="pjp__popbtn" data-pjp="popout" aria-label="Open presenter window" title="Open the presenter view in a separate window — keep your notes private while screen-sharing the slides"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button></div>' +
         '<button class="pjp__edge pjp__edge--prev" data-pjp="prev" aria-label="Previous slide"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>' +
         '<button class="pjp__edge pjp__edge--next" data-pjp="next" aria-label="Next slide"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>' +
         '<div class="pjp__present" data-pjp-panel>' +
@@ -2711,10 +2713,10 @@
       document.body.appendChild(stage);
       var frame = stage.querySelector("[data-pjp-frame]"), prog = stage.querySelector("[data-pjp-progress]"), count = stage.querySelector("[data-pjp-count]");
       var notesEl = stage.querySelector("[data-pjp-notes]"), nextEl = stage.querySelector("[data-pjp-next]"), presenting = false;
-      var nextThumb = stage.querySelector("[data-pjp-nextthumb]"), timerEl = stage.querySelector("[data-pjp-timer]"), clockEl = stage.querySelector("[data-pjp-clock]"), startT = Date.now();
+      var nextThumb = stage.querySelector("[data-pjp-nextthumb]"), timerEl = stage.querySelector("[data-pjp-timer]"), clockEl = stage.querySelector("[data-pjp-clock]"), startT = Date.now(), presenterWin = null;
       function pjPad(n) { return (n < 10 ? "0" : "") + n; }
       function fmtDur(ms) { var s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return (h ? h + ":" + pjPad(m) : m) + ":" + pjPad(s % 60); }
-      function tick() { if (timerEl) timerEl.textContent = fmtDur(Date.now() - startT); if (clockEl) { try { clockEl.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch (e) { clockEl.textContent = ""; } } }
+      function tick() { if (timerEl) timerEl.textContent = fmtDur(Date.now() - startT); if (clockEl) { try { clockEl.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch (e) { clockEl.textContent = ""; } } if (presenterWin && !presenterWin.closed) { try { var _pt = presenterWin.document.querySelector("[data-pp-timer]"); if (_pt) _pt.textContent = fmtDur(Date.now() - startT); var _pc = presenterWin.document.querySelector("[data-pp-clock]"); if (_pc && clockEl) _pc.textContent = clockEl.textContent; } catch (e) {} } }
       var clockTimer = setInterval(tick, 1000); tick();
       prog.innerHTML = slides.map(function (_, i) { return '<span class="pjp__pdot" data-pjp-dot="' + i + '"></span>'; }).join("");
       document.documentElement.classList.add("pjp-on");
@@ -2723,7 +2725,7 @@
       function updateChrome() {
         var s = slides[idx];
         count.textContent = (idx + 1) + " / " + slides.length;
-        if (notesEl) notesEl.textContent = (s.notes && String(s.notes).trim()) ? s.notes : "\u2014 No notes for this slide \u2014";
+        if (notesEl) notesEl.innerHTML = pjNotesHtml(s.notes);
         if (nextEl) nextEl.textContent = (idx < slides.length - 1) ? pjSlideTitle(slides[idx + 1]) : "End of deck";
         if (nextThumb) {
           if (idx < slides.length - 1) {
@@ -2734,6 +2736,7 @@
           } else { nextThumb.classList.add("is-end"); nextThumb.innerHTML = ""; }
         }
         [].forEach.call(prog.children, function (d, i) { d.classList.toggle("is-on", i <= idx); });
+        syncPresenter();
       }
       // Auto-animate: FLIP every block whose match-key exists on both slides from its old rect to its new one.
       function magicMove(oldEl, newEl) {
@@ -2775,7 +2778,69 @@
       }
       function go(d) { var n = Math.max(0, Math.min(slides.length - 1, idx + d)); if (n === idx) return; idx = n; render(d); }
       function togglePresent() { presenting = !presenting; stage.classList.toggle("pjp--presenting", presenting); if (presenting) updateChrome(); }
-      function exit() { clearInterval(clockTimer); document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { stage.remove(); pjpStage = null; }, 240); }
+      // A second-screen / screen-share-safe presenter view: a SEPARATE window (private) shows notes,
+      // timer, current + next slide; the main window stays the clean slides you share. Same-origin, so
+      // the main window drives both. Share just the slides WINDOW (or a 2nd display) to keep notes hidden.
+      function presenterDocHtml() {
+        var links = [].slice.call(document.querySelectorAll('link[rel="stylesheet"]')).map(function (l) { return '<link rel="stylesheet" href="' + l.href + '">'; }).join("");
+        var css = "<style>" +
+          ".pp-body{margin:0;background:#050506;color:#ece7e1;font-family:var(--sans,Inter,system-ui,sans-serif);height:100vh;overflow:hidden}" +
+          ".pp{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;height:100vh;box-sizing:border-box;padding:18px}" +
+          ".pp__main{display:flex;flex-direction:column;min-width:0;gap:14px}" +
+          ".pp__nowwrap{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:var(--bg,#0a0a0c);border:1px solid rgba(255,255,255,.12)}" +
+          ".pp__now{position:absolute;inset:0}.pp__now .slidepv__stage{position:absolute;top:0;left:0;transform-origin:top left}.pp__now .slidepv__stage .pjps--free{padding:0}" +
+          ".pp__meta{display:flex;align-items:center;gap:14px}.pp__time{display:flex;align-items:baseline;gap:6px;font-family:var(--mono,ui-monospace,monospace)}.pp__time span{font-size:2rem;font-variant-numeric:tabular-nums}.pp__time em{font-style:normal;text-transform:uppercase;letter-spacing:.12em;font-size:.6rem;color:#8a857e}" +
+          ".pp__clock{margin-left:auto;font-family:var(--mono,monospace);font-size:1rem;color:#b8b2aa}.pp__count{font-family:var(--mono,monospace);font-size:1rem;color:#b8b2aa}" +
+          ".pp__ctrls{display:flex;gap:10px;margin-top:auto}.pp__btn{font-family:var(--mono,monospace);font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:#ece7e1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:.7rem 1.1rem;cursor:pointer}.pp__btn:hover{border-color:var(--accent,#d8a657);color:var(--accent,#d8a657)}.pp__btn--next{flex:1;background:var(--accent,#d8a657);color:#161206;border-color:var(--accent,#d8a657);font-weight:600}.pp__btn--next:hover{color:#161206}.pp__btn--end{margin-left:auto}" +
+          ".pp__side{display:flex;flex-direction:column;min-width:0;gap:8px;overflow:hidden}.pp__lbl{font-family:var(--mono,monospace);text-transform:uppercase;letter-spacing:.16em;font-size:.62rem;color:var(--accent,#d8a657)}" +
+          ".pp__notes{flex:1 1 auto;overflow:auto;font-size:1.35rem;line-height:1.5;color:#ece7e1}.pp__notes p{margin:0 0 .6em}.pp__pnote-empty{color:#6f6a63}" +
+          ".pp__nextbox{flex:0 0 auto;border-top:1px solid rgba(255,255,255,.1);padding-top:8px}.pp__next{position:relative;width:100%;max-width:260px;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:var(--bg,#0a0a0c);border:1px solid rgba(255,255,255,.1);margin:.35rem 0}.pp__next .slidepv__stage{position:absolute;top:0;left:0;transform-origin:top left}.pp__next .slidepv__stage .pjps--free{padding:0}.pp__nexttitle{font-family:var(--serif,Georgia,serif);color:#b8b2aa;font-size:1rem}" +
+          ".pp__hint{flex:0 0 auto;font-size:.78rem;line-height:1.4;color:#8a857e;border-top:1px solid rgba(255,255,255,.08);padding-top:8px}@media(max-width:820px){.pp{grid-template-columns:1fr}}" +
+          "</style>";
+        return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Presenter view \u2014 riteshk.work</title>" + links + css + "</head><body class=\"pp-body\">" +
+          '<div class="pp"><div class="pp__main">' +
+          '<div class="pp__nowwrap"><div class="pp__now" data-pp-now></div></div>' +
+          '<div class="pp__meta"><div class="pp__time"><span data-pp-timer>0:00</span><em>elapsed</em></div><button class="pp__btn" data-pp="timer-reset">Reset</button><span class="pp__clock" data-pp-clock></span><span class="pp__count" data-pp-count></span></div>' +
+          '<div class="pp__ctrls"><button class="pp__btn" data-pp="prev">\u2039 Previous</button><button class="pp__btn pp__btn--next" data-pp="next">Next \u203a</button><button class="pp__btn pp__btn--end" data-pp="exit">End</button></div>' +
+          '</div><div class="pp__side">' +
+          '<div class="pp__lbl">Speaker notes</div><div class="pp__notes" data-pp-notes></div>' +
+          '<div class="pp__nextbox"><div class="pp__lbl">Next slide</div><div class="pp__next" data-pp-next></div><div class="pp__nexttitle" data-pp-nexttitle></div></div>' +
+          '<div class="pp__hint">\uD83D\uDD12 Only you see this window. When you screen-share, share the <b>slides window</b> (not your whole screen), or keep this on a second display \u2014 your audience won\u2019t see your notes.</div>' +
+          '</div></div></body></html>';
+      }
+      function syncPresenter() {
+        if (!presenterWin || presenterWin.closed) return;
+        var doc = presenterWin.document, s = slides[idx];
+        var now = doc.querySelector("[data-pp-now]");
+        if (now) { now.innerHTML = '<div class="slidepv__stage">' + renderPjSlide(s) + "</div>"; var _w = now.clientWidth || 640, _st = now.firstChild; if (_st) _st.style.transform = "scale(" + (_w / 1280) + ")"; }
+        var nx = doc.querySelector("[data-pp-next]"), nt = doc.querySelector("[data-pp-nexttitle]");
+        if (idx < slides.length - 1) {
+          if (nx) { nx.style.display = ""; nx.innerHTML = '<div class="slidepv__stage">' + renderPjSlide(slides[idx + 1]) + "</div>"; var _nw = nx.clientWidth || 240, _nst = nx.firstChild; if (_nst) _nst.style.transform = "scale(" + (_nw / 1280) + ")"; }
+          if (nt) nt.textContent = pjSlideTitle(slides[idx + 1]);
+        } else { if (nx) { nx.style.display = "none"; nx.innerHTML = ""; } if (nt) nt.textContent = "End of deck"; }
+        var nb = doc.querySelector("[data-pp-notes]"); if (nb) nb.innerHTML = pjNotesHtml(s.notes);
+        var cc = doc.querySelector("[data-pp-count]"); if (cc) cc.textContent = (idx + 1) + " / " + slides.length;
+        var tv = doc.querySelector("[data-pp-timer]"); if (tv) tv.textContent = fmtDur(Date.now() - startT);
+        var ck = doc.querySelector("[data-pp-clock]"); if (ck && clockEl) ck.textContent = clockEl.textContent;
+      }
+      function onPresenterClosed() { presenterWin = null; stage.classList.remove("pjp--popped"); var pb = stage.querySelector('[data-pjp="popout"]'); if (pb) pb.classList.remove("is-on"); }
+      function openPresenter() {
+        if (presenterWin && !presenterWin.closed) { presenterWin.focus(); return; }
+        presenterWin = window.open("", "rkPresenter", "width=1060,height=720");
+        if (!presenterWin) return;   // popup blocked — the browser shows its own prompt
+        presenterWin.document.open(); presenterWin.document.write(presenterDocHtml()); presenterWin.document.close();
+        presenterWin.document.addEventListener("click", function (e) {
+          var b = e.target.closest("[data-pp]"); if (!b) return;
+          var k = b.getAttribute("data-pp");
+          if (k === "prev") go(-1); else if (k === "next") go(1); else if (k === "exit") exit(); else if (k === "timer-reset") { startT = Date.now(); tick(); syncPresenter(); }
+        });
+        presenterWin.addEventListener("keydown", onKey);
+        presenterWin.addEventListener("beforeunload", onPresenterClosed);
+        stage.classList.add("pjp--popped"); presenting = false; stage.classList.remove("pjp--presenting");
+        var pb = stage.querySelector('[data-pjp="popout"]'); if (pb) pb.classList.add("is-on");
+        setTimeout(syncPresenter, 60); syncPresenter();
+      }
+      function exit() { clearInterval(clockTimer); if (presenterWin && !presenterWin.closed) { try { presenterWin.removeEventListener("beforeunload", onPresenterClosed); presenterWin.close(); } catch (e) {} } presenterWin = null; document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { stage.remove(); pjpStage = null; }, 240); }
       function onKey(e) {
         if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); go(1); }
         else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
@@ -2788,7 +2853,7 @@
         var d = e.target.closest("[data-pjp-dot]"); if (d) { var _to = +d.getAttribute("data-pjp-dot"); var _dd = _to > idx ? 1 : -1; idx = _to; render(_dd); return; }
         var b = e.target.closest("[data-pjp]"); if (!b) return;
         var k = b.getAttribute("data-pjp");
-        if (k === "exit") exit(); else if (k === "prev") go(-1); else if (k === "next") go(1); else if (k === "notes") togglePresent(); else if (k === "timer-reset") { startT = Date.now(); tick(); }
+        if (k === "exit") exit(); else if (k === "prev") go(-1); else if (k === "next") go(1); else if (k === "notes") togglePresent(); else if (k === "popout") openPresenter(); else if (k === "timer-reset") { startT = Date.now(); tick(); syncPresenter(); }
       });
       document.addEventListener("keydown", onKey);
       render(1);
