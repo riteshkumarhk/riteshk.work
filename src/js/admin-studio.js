@@ -755,7 +755,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     distV: svgIco('<path d="M5 4h14"/><path d="M5 20h14"/><rect x="8" y="10" width="8" height="4" rx="1"/>', 16),
     lock: svgIco('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', 15),
     unlock: svgIco('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>', 15),
-    link: svgIco('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>', 15)
+    link: svgIco('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>', 15),
+    angle: svgIco('<path d="M3 21V5a1 1 0 0 1 1-1h16"/><path d="M3 17a10 10 0 0 1 10-10"/>', 13),
+    corner: svgIco('<path d="M4 20V9a5 5 0 0 1 5-5h11"/>', 13),
+    brush: svgIco('<path d="m9.06 11.9 8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/>', 14),
+    expand: svgIco('<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>', 14)
   };
   const EYE_ON = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   const EYE_OFF = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
@@ -7020,69 +7024,123 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<button type="button" class="btn btn--ghost" data-act="free-matchsize" data-index="' + i + '" data-sindex="' + k + '" data-dim="w" title="Same width as the first-selected block">Same width</button>' +
       '<button type="button" class="btn btn--ghost" data-act="free-matchsize" data-index="' + i + '" data-sindex="' + k + '" data-dim="h" title="Same height as the first-selected block">Same height</button></div>';
   }
+  // --- Figma-style inspector: collapsible labelled sections + a compact icon-prefixed field grid ---
+  var freeSecCollapsed = {};   // { sectionKey: true=collapsed / false=open } — persists across selections
+  var FREE_SEC_DEFAULT_COLLAPSED = { bg: true, border: true, link: true };
+  function fsecOpen(key, forceOpen) { var v = freeSecCollapsed[key]; if (v != null) return !v; return forceOpen ? true : !FREE_SEC_DEFAULT_COLLAPSED[key]; }
+  function fsec(key, title, body, right, forceOpen) {
+    var open = fsecOpen(key, forceOpen);
+    return '<section class="fsec' + (open ? "" : " is-collapsed") + '" data-fsec="' + escAttr(key) + '"><div class="fsec__head"><button type="button" class="fsec__toggle" data-act="free-sec-toggle" data-seckey="' + escAttr(key) + '"><span class="fsec__chev">' + IC.chev + "</span>" + escHtml(title) + "</button>" + (right ? '<span class="fsec__head-r">' + right + "</span>" : "") + '</div><div class="fsec__body">' + body + "</div></section>";
+  }
+  function ffield(ic, input, title) { return '<label class="ffield"' + (title ? ' title="' + escAttr(title) + '"' : "") + '><span class="ffield__ic">' + ic + "</span>" + input + "</label>"; }
+  function ffnum(field, i, k, idx, val, attrs) { return '<input type="number" class="ffield__in" data-freefield="' + field + '" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (val == null || val === "" ? "" : val) + '"' + (attrs || "") + " />"; }
+  function freeColorSwatches(i, k, idx, field, val) {
+    var sw = FREE_SWATCHES.map(function (s) { return '<button type="button" class="sfbclr' + (String(val || "") === s[0] ? " is-on" : "") + (s[0] === "" ? " sfbclr--none" : "") + '"' + (s[0] ? ' style="background:' + s[0] + '"' : "") + ' data-act="free-color" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" data-field="' + field + '" data-val="' + escAttr(s[0]) + '" title="' + s[1] + '"></button>'; }).join("");
+    var cust = (val && String(val).charAt(0) === "#") ? val : "#d8a657";
+    return '<div class="sfbclr-row">' + sw + '<input type="color" class="sfbclr-cust" value="' + cust + '" data-freecolor="' + field + '" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" title="Custom colour" /></div>';
+  }
+  // Position section — X/Y, W/H (with a chain-link aspect toggle for ratio-lockable kinds), rotation + optional corner.
+  function freePosSection(i, k, idx, bl, withCorner) {
+    var r = function (v) { return Math.round(v * 10) / 10; };
+    var xy = '<div class="fgrid2">' + ffield("X", ffnum("x", i, k, idx, r(fnum(bl.x, 8)), ' min="0" max="100" step="0.5"'), "X position (%)") + ffield("Y", ffnum("y", i, k, idx, r(fnum(bl.y, 8)), ' min="0" max="100" step="0.5"'), "Y position (%)") + "</div>";
+    var canRatio = bl.kind === "media" || bl.kind === "section" || bl.kind === "shape";
+    var wIn = ffield("W", ffnum("w", i, k, idx, r(fnum(bl.w, 40)), ' min="0" max="100" step="0.5"'), "Width (%)");
+    var hIn = ffield("H", ffnum("h", i, k, idx, bl.h != null ? r(fnum(bl.h, 20)) : "", ' min="0" max="100" step="0.5" placeholder="auto"'), "Height (%) \u2014 blank = auto");
+    var wh = canRatio
+      ? '<div class="fwh">' + wIn + '<button type="button" class="fwh__chain' + (bl.arlock ? " is-on" : "") + '" data-act="free-arlock" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" title="' + (bl.arlock ? "Unlink \u2014 resize freely" : "Link width & height (lock aspect ratio; Shift also works)") + '" aria-label="Lock aspect ratio">' + IC.link + "</button>" + hIn + "</div>"
+      : '<div class="fgrid2">' + wIn + hIn + "</div>";
+    var rot = ffield(IC.angle, ffnum("rot", i, k, idx, Math.round(parseFloat(bl.rot) || 0), ' min="0" max="359" step="1"'), "Rotation");
+    var rotRow = withCorner
+      ? '<div class="fgrid2">' + rot + ffield(IC.corner, ffnum("radius", i, k, idx, parseFloat(bl.radius) || 0, ' min="0" max="200" step="1"'), "Corner radius") + "</div>"
+      : '<div class="fgrid2">' + rot + '<span class="ffield-spacer"></span></div>';
+    return fsec("pos", "Position", xy + wh + rotRow);
+  }
+  function freeEffectsSection(i, k, idx, bl) {
+    var shadows = [["", "None"], ["soft", "Soft"], ["medium", "Medium"], ["strong", "Strong"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.shadow || "") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
+    var op = bl.opacity == null ? 100 : Math.max(0, Math.min(100, +bl.opacity));
+    var body = '<div class="af"><label class="af__label">Opacity <span class="af__val">' + op + '%</span></label><input type="range" class="sfbrange" min="0" max="100" step="1" data-freefield="opacity" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + op + '" /></div>' +
+      '<div class="af"><label class="af__label">Shadow</label><select data-freeshadow data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + shadows + "</select></div>";
+    return fsec("fx", "Effects", body);
+  }
+  function freeArrangeSection(i, k, idx) { return fsec("arrange", "Arrange", freeZRow(i, k, idx)); }
+  function freeLinkSection(i, k, idx, bl) {
+    var hasLink = !!(bl.href || bl.jump != null);
+    var body = '<div class="af"><label class="af__label">Open a URL</label><input type="text" data-freefield="href" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + escAttr(bl.href || "") + '" placeholder="https://\u2026" /></div>' +
+      '<div class="af"><label class="af__label">\u2026or jump to slide</label><input type="number" class="fnum-clean" data-freefield="jump" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (bl.jump != null ? bl.jump : "") + '" min="1" max="99" step="1" placeholder="\u2014" /></div>' +
+      '<div class="af__hint">Clickable in Present \u2014 a URL opens in a new tab, a slide number jumps there.</div>';
+    return fsec("link", "Link", body, "", hasLink);
+  }
+  // Compact top toolbar: align-to-slide (single) or align + distribute (multi).
+  function freeAlignBar(i, k, n) {
+    function ab(dir, ico, title) { return '<button type="button" class="fbar__b" data-act="free-align" data-index="' + i + '" data-sindex="' + k + '" data-align="' + dir + '" title="' + title + '" aria-label="' + title + '">' + ico + "</button>"; }
+    var row = '<div class="fpanel__align">' + ab("left", IC.alignL, "Align left") + ab("centerH", IC.alignCH, "Align centre") + ab("right", IC.alignR, "Align right") + '<span class="fbar__sep"></span>' + ab("top", IC.alignT, "Align top") + ab("middleV", IC.alignMV, "Align middle") + ab("bottom", IC.alignB, "Align bottom");
+    if (n >= 3) row += '<span class="fbar__sep"></span><button type="button" class="fbar__b" data-act="free-distribute" data-index="' + i + '" data-sindex="' + k + '" data-axis="h" title="Distribute horizontally" aria-label="Distribute horizontally">' + IC.distH + '</button><button type="button" class="fbar__b" data-act="free-distribute" data-index="' + i + '" data-sindex="' + k + '" data-axis="v" title="Distribute vertically" aria-label="Distribute vertically">' + IC.distV + "</button>";
+    return row + "</div>";
+  }
+  // Header action icons: format painter, duplicate, fill-slide, lock, delete.
+  function freeHeadActs(i, k, idx, bl) {
+    function ib(act, ico, title, cls) { return '<button type="button" class="iconbtn' + (cls ? " " + cls : "") + '" data-act="' + act + '" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" title="' + escAttr(title) + '" aria-label="' + escAttr(title) + '">' + ico + "</button>"; }
+    var canFill = bl.kind === "media" || bl.kind === "section" || bl.kind === "shape";
+    return ib("free-copystyle", IC.pipette, "Copy style") +
+      (freeStyleClip ? ib("free-paintstyle", IC.brush, "Paint copied style", "is-on") : "") +
+      ib("free-dup", IC.dup, "Duplicate (Ctrl+D)") +
+      (canFill ? ib("free-fill", IC.expand, "Fill the slide") : "") +
+      ib("free-lock", bl.lock ? IC.lock : IC.unlock, bl.lock ? "Unlock" : "Lock position & size", bl.lock ? "is-on" : "") +
+      ib("free-del", IC.trash, "Delete", "iconbtn--danger");
+  }
   function freeSelPanel(i, k) {
     if (!freeSelOn(i, k)) return '<div class="slidefree__sel slidefree__sel--none">Select a block on the canvas to edit it \u2014 drag to move, the handles to resize, the top dot to rotate. Shift-click or drag a box to select several.</div>';
     var blocks = slideBlocks(i, k) || [];
     if (freeSel.ids.length > 1) {
       var _anyG = freeSel.ids.some(function (ix) { return blocks[ix] && blocks[ix].g; });
-      var _grpRow = '<div class="slidefree__grp"><button type="button" class="btn btn--ghost" data-act="free-group" data-index="' + i + '" data-sindex="' + k + '" title="Lock these blocks together (Ctrl+G)">' + IC.group + ' Group</button>' + (_anyG ? '<button type="button" class="btn btn--ghost" data-act="free-ungroup" data-index="' + i + '" data-sindex="' + k + '" title="Ungroup (Ctrl+Shift+G)">' + IC.ungroup + ' Ungroup</button>' : "") + '<button type="button" class="btn btn--ghost" data-act="free-dup" data-index="' + i + '" data-sindex="' + k + '" title="Duplicate selected">' + IC.dup + ' Duplicate</button>' + (freeStyleClip ? '<button type="button" class="btn btn--ghost" data-act="free-paintstyle" data-index="' + i + '" data-sindex="' + k + '" title="Paint the copied style onto all selected">' + IC.check + ' Paint style</button>' : "") + "</div>";
-      return '<div class="slidefree__sel"><div class="slidefree__selhead"><b>' + freeSel.ids.length + ' blocks selected' + (_anyG ? " \u00b7 grouped" : "") + '</b><button class="iconbtn iconbtn--danger" data-act="free-del" data-index="' + i + '" data-sindex="' + k + '" title="Delete selected">' + IC.trash + '</button></div>' + _grpRow + freeAlignRow(i, k, freeSel.ids.length) + freeMatchRow(i, k) + '<div class="af__hint">Drag to move them together, or nudge with the arrow keys. <b>Group</b> keeps them locked together; Shift-click a block to add or remove it.</div></div>';
+      var mActs = '<button type="button" class="iconbtn" data-act="free-dup" data-index="' + i + '" data-sindex="' + k + '" title="Duplicate selected" aria-label="Duplicate">' + IC.dup + "</button>" + (freeStyleClip ? '<button type="button" class="iconbtn is-on" data-act="free-paintstyle" data-index="' + i + '" data-sindex="' + k + '" title="Paint copied style onto all" aria-label="Paint style">' + IC.brush + "</button>" : "") + '<button type="button" class="iconbtn iconbtn--danger" data-act="free-del" data-index="' + i + '" data-sindex="' + k + '" title="Delete selected" aria-label="Delete">' + IC.trash + "</button>";
+      var mHead = '<div class="fpanel__head"><span class="fpanel__kind">' + freeSel.ids.length + " selected" + (_anyG ? " \u00b7 grouped" : "") + '</span><span class="fpanel__head-acts">' + mActs + "</span></div>";
+      var grpBody = '<div class="fbtnrow"><button type="button" class="btn btn--ghost" data-act="free-group" data-index="' + i + '" data-sindex="' + k + '" title="Group (Ctrl+G)">' + IC.group + " Group</button>" + (_anyG ? '<button type="button" class="btn btn--ghost" data-act="free-ungroup" data-index="' + i + '" data-sindex="' + k + '" title="Ungroup (Ctrl+Shift+G)">' + IC.ungroup + " Ungroup</button>" : "") + "</div>";
+      var matchBody = '<div class="fbtnrow"><button type="button" class="btn btn--ghost" data-act="free-matchsize" data-index="' + i + '" data-sindex="' + k + '" data-dim="w" title="Same width as the first-selected block">Same width</button><button type="button" class="btn btn--ghost" data-act="free-matchsize" data-index="' + i + '" data-sindex="' + k + '" data-dim="h" title="Same height as the first-selected block">Same height</button></div>';
+      return '<div class="fpanel fpanel--multi">' + mHead + freeAlignBar(i, k, freeSel.ids.length) + fsec("group", "Group", grpBody) + fsec("match", "Match size", matchBody) + '<div class="af__hint">Drag to move them together, or nudge with the arrow keys. Shift-click a block to add or remove it.</div></div>';
     }
     var idx = freeSel.ids[0], bl = blocks[idx];
     if (!bl) return '<div class="slidefree__sel slidefree__sel--none">Select a block to edit it.</div>';
     var _kn = bl.kind === "media" ? "Media" : bl.kind === "shape" ? "Shape" : bl.kind === "icon" ? "Icon" : bl.kind === "section" ? "Section" : "Text";
-    var _ops = '<span class="slidefree__selhead-ops"><button class="iconbtn' + (bl.lock ? " is-on" : "") + '" data-act="free-lock" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" title="' + (bl.lock ? "Unlock this block" : "Lock position & size") + '" aria-label="' + (bl.lock ? "Unlock" : "Lock") + '">' + (bl.lock ? IC.lock : IC.unlock) + '</button><button class="iconbtn iconbtn--danger" data-act="free-del" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" title="Delete block">' + IC.trash + "</button></span>";
-    var head = '<div class="slidefree__selhead"><b>' + _kn + " block" + (bl.lock ? ' <span class="slidefree__lockchip">Locked</span>' : "") + "</b>" + _ops + "</div>" + freeGeomRow(i, k, idx, bl) + freeActionsRow(i, k, idx, bl) + freeLinkRow(i, k, idx, bl);
+    var da = 'data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '"';
+    var head = '<div class="fpanel__head"><span class="fpanel__kind">' + _kn + (bl.lock ? ' <span class="slidefree__lockchip">Locked</span>' : "") + '</span><span class="fpanel__head-acts">' + freeHeadActs(i, k, idx, bl) + "</span></div>";
+    var top = head + freeAlignBar(i, k, 1);
+    var fxaz = freeEffectsSection(i, k, idx, bl) + freeArrangeSection(i, k, idx) + freeLinkSection(i, k, idx, bl);
     if (bl.kind === "section") {
-      return '<div class="slidefree__sel">' + head +
-        '<div class="af__hint">Pulled live from your case study \u2014 comparison sliders, device mockups &amp; galleries render for real. Edit the source section then re-pull to refresh.</div>' +
+      var secBody = '<div class="af__hint">Pulled live from your case study \u2014 sliders, device mockups &amp; galleries render for real. Edit the source then re-pull.</div>' +
         '<label class="sfbflip"><input type="checkbox" data-act="free-flip" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '"' + (bl.flip ? " checked" : "") + '> Mirror (flip horizontally)</label>' +
-        '<div class="imgblk__row"><button class="btn btn--ghost" data-act="free-section-repull" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">Replace section\u2026</button></div>' +
-        '<label class="sfbflip"><input type="checkbox" data-act="free-arlock" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '"' + (bl.arlock ? " checked" : "") + '> Lock aspect ratio when resizing (or hold Shift)</label>' +
-        '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
+        '<div class="fbtnrow"><button class="btn btn--ghost" data-act="free-section-repull" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">Replace section\u2026</button></div>';
+      return '<div class="fpanel">' + top + freePosSection(i, k, idx, bl, false) + fsec("kind", "Section", secBody) + fxaz + "</div>";
     }
     if (bl.kind === "media") {
-      var mda = 'data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '"';
       var fitSel = [["cover", "Cover (fill)"], ["contain", "Contain (fit)"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.fit === "contain" ? "contain" : "cover") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
-      return '<div class="slidefree__sel">' + head +
-        '<div class="af"><label class="af__label">Media URL</label><input type="text" data-freefield="src" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + escAttr(bl.src || "") + '" placeholder="Paste a URL\u2026" />' +
-        '<div class="imgblk__row"><button class="btn btn--ghost" data-act="free-media-upload" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">Upload\u2026</button></div></div>' +
-        '<div class="af__row"><div class="af"><label class="af__label">Fit</label><select data-freefit ' + mda + ">" + fitSel + '</select></div><div class="af"><label class="af__label">Corner</label>' + numField('<input type="number" data-freefield="radius" ' + mda + ' value="' + (parseFloat(bl.radius) || 0) + '" min="0" max="200" step="1" />') + "</div></div>" +
-        '<div class="af__row">' + freeColorField("Border", i, k, idx, "stroke", bl.stroke) + '<div class="af"><label class="af__label">Border width</label>' + numField('<input type="number" data-freefield="strokeW" ' + mda + ' value="' + (parseFloat(bl.strokeW) || 0) + '" min="0" max="40" step="1" />') + "</div></div>" +
-        '<label class="sfbflip"><input type="checkbox" data-act="free-arlock" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '"' + (bl.arlock ? " checked" : "") + '> Lock aspect ratio when resizing (or hold Shift)</label>' +
-        '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
+      var imgBody = '<div class="af"><label class="af__label">Source</label><input type="text" data-freefield="src" ' + da + ' value="' + escAttr(bl.src || "") + '" placeholder="Paste a URL\u2026" /><div class="fbtnrow"><button class="btn btn--ghost" data-act="free-media-upload" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">Upload\u2026</button></div></div>' +
+        '<div class="af"><label class="af__label">Fit</label><select data-freefit ' + da + ">" + fitSel + "</select></div>";
+      var brBody = freeColorSwatches(i, k, idx, "stroke", bl.stroke) + '<div class="af"><label class="af__label">Border width</label><input type="number" class="fnum-clean" data-freefield="strokeW" ' + da + ' value="' + (parseFloat(bl.strokeW) || 0) + '" min="0" max="40" step="1" /></div>';
+      return '<div class="fpanel">' + top + freePosSection(i, k, idx, bl, true) + fsec("kind", "Image", imgBody) + fsec("border", "Border", brBody) + fxaz + "</div>";
     }
     if (bl.kind === "shape") {
       var shapeSel = [["rect", "Rectangle"], ["ellipse", "Oval"], ["line", "Line"], ["arrow", "Arrow"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.shape || "rect") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
       var isLn = bl.shape === "line" || bl.shape === "arrow";
-      return '<div class="slidefree__sel">' + head +
-        '<div class="af"><label class="af__label">Shape</label><select data-freeshape data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + shapeSel + "</select></div>" +
-        (isLn ? "" : freeColorField("Fill", i, k, idx, "fill", bl.fill)) +
-        freeColorField(isLn ? "Colour" : "Border", i, k, idx, "stroke", bl.stroke) +
-        '<div class="af__row"><div class="af"><label class="af__label">' + (isLn ? "Thickness" : "Border") + '</label>' + numField('<input type="number" data-freefield="strokeW" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (parseFloat(bl.strokeW) || 0) + '" min="0" max="40" step="1" />') + "</div>" + (bl.shape === "rect" ? '<div class="af"><label class="af__label">Corner</label>' + numField('<input type="number" data-freefield="radius" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (parseFloat(bl.radius) || 0) + '" min="0" max="200" step="1" />') + "</div>" : '<div class="af"></div>') + "</div>" +
-        '<label class="sfbflip"><input type="checkbox" data-act="free-arlock" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '"' + (bl.arlock ? " checked" : "") + '> Lock aspect ratio when resizing (or hold Shift)</label>' +
-        '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
+      var shBody = '<div class="af"><label class="af__label">Shape</label><select data-freeshape ' + da + ">" + shapeSel + "</select></div>";
+      var strokeBody = freeColorSwatches(i, k, idx, "stroke", bl.stroke) + '<div class="af"><label class="af__label">' + (isLn ? "Thickness" : "Border width") + '</label><input type="number" class="fnum-clean" data-freefield="strokeW" ' + da + ' value="' + (parseFloat(bl.strokeW) || 0) + '" min="0" max="40" step="1" /></div>';
+      var shapeSecs = fsec("shape", "Shape", shBody) + (isLn ? "" : fsec("fill", "Fill", freeColorSwatches(i, k, idx, "fill", bl.fill))) + fsec("stroke", isLn ? "Line" : "Stroke", strokeBody);
+      return '<div class="fpanel">' + top + freePosSection(i, k, idx, bl, !isLn && bl.shape === "rect") + shapeSecs + fxaz + "</div>";
     }
     if (bl.kind === "icon") {
-      return '<div class="slidefree__sel">' + head +
-        '<div class="af"><label class="af__label">Icon</label><div class="sfbicon-cur">' + ((window.RK && window.RK.iconSvg) ? window.RK.iconSvg(bl.name || "star") : "") + '<button type="button" class="btn btn--ghost" data-act="free-icon-pick" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">Change icon\u2026</button></div></div>' +
-        freeColorField("Colour", i, k, idx, "color", bl.color) +
-        '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
+      var icoBody = '<div class="sfbicon-cur">' + ((window.RK && window.RK.iconSvg) ? window.RK.iconSvg(bl.name || "star") : "") + '<button type="button" class="btn btn--ghost" data-act="free-icon-pick" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">Change icon\u2026</button></div>' + freeColorSwatches(i, k, idx, "color", bl.color);
+      return '<div class="fpanel">' + top + freePosSection(i, k, idx, bl, false) + fsec("kind", "Icon", icoBody) + fxaz + "</div>";
     }
     var sizes = [["sm", "Compact"], ["md", "Normal"], ["lg", "Large"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.size || "md") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
     var aligns = [["left", "Left"], ["center", "Centre"], ["right", "Right"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.align || "left") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
     var fontSel = [["", "Default"], ["serif", "Serif"], ["mono", "Mono"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.font || "") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
-    var da = 'data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '"';
-    var valignCtl = (bl.h != null) ? ('<div class="af"><label class="af__label">Vertical</label><select data-freevalign data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + [["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.valign || "top") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select></div>") : '<div class="af"></div>';
-    return '<div class="slidefree__sel">' + head +
-      '<div class="af rt"><label class="af__label">Text</label>' + richFieldWrap('data-freert data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '"', bl.text) + "</div>" +
-      '<div class="af__row"><div class="af"><label class="af__label">Size</label><select data-freesize data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + sizes + "</select></div>" +
-      '<div class="af"><label class="af__label">Align</label><select data-freealign data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + aligns + "</select></div></div>" +
-      '<div class="af__row"><div class="af"><label class="af__label">Typeface</label><select data-freefont ' + da + ">" + fontSel + "</select></div>" + freeColorField("Text colour", i, k, idx, "color", bl.color) + "</div>" +
-      '<div class="af__row"><div class="af"><label class="af__label">Line height</label>' + numField('<input type="number" data-freefield="lh" ' + da + ' value="' + (bl.lh != null ? bl.lh : "") + '" min="0.7" max="3" step="0.05" placeholder="auto" />') + '</div><div class="af"><label class="af__label">Tracking</label>' + numField('<input type="number" data-freefield="ls" ' + da + ' value="' + (bl.ls != null ? bl.ls : "") + '" min="-0.1" max="0.6" step="0.01" placeholder="0" />') + "</div></div>" +
-      freeColorField("Box fill", i, k, idx, "bg", bl.bg) +
-      (freeColor(bl.bg) ? '<div class="af__row"><div class="af"><label class="af__label">Padding</label>' + numField('<input type="number" data-freefield="pad" ' + da + ' value="' + (bl.pad != null ? bl.pad : 18) + '" min="0" max="120" step="2" />') + '</div><div class="af"><label class="af__label">Corner</label>' + numField('<input type="number" data-freefield="radius" ' + da + ' value="' + (parseFloat(bl.radius) || 0) + '" min="0" max="200" step="1" />') + "</div></div>" : "") +
-      '<div class="af__row">' + valignCtl + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
+    var valignCtl = (bl.h != null) ? ('<div class="af"><label class="af__label">Vertical</label><select data-freevalign ' + da + ">" + [["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.valign || "top") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select></div>") : '<div class="af"></div>';
+    var textBody = '<div class="af rt"><label class="af__label">Content</label>' + richFieldWrap("data-freert " + da, bl.text) + "</div>" +
+      '<div class="af__row"><div class="af"><label class="af__label">Typeface</label><select data-freefont ' + da + ">" + fontSel + '</select></div><div class="af"><label class="af__label">Size</label><select data-freesize ' + da + ">" + sizes + "</select></div></div>" +
+      '<div class="af__row"><div class="af"><label class="af__label">Align</label><select data-freealign ' + da + ">" + aligns + "</select></div>" + valignCtl + "</div>" +
+      '<div class="af__row"><div class="af"><label class="af__label">Line height</label><input type="number" class="fnum-clean" data-freefield="lh" ' + da + ' value="' + (bl.lh != null ? bl.lh : "") + '" min="0.7" max="3" step="0.05" placeholder="auto" /></div><div class="af"><label class="af__label">Tracking</label><input type="number" class="fnum-clean" data-freefield="ls" ' + da + ' value="' + (bl.ls != null ? bl.ls : "") + '" min="-0.1" max="0.6" step="0.01" placeholder="0" /></div></div>';
+    var bgBody = freeColorSwatches(i, k, idx, "bg", bl.bg) + (freeColor(bl.bg) ? '<div class="af__row"><div class="af"><label class="af__label">Padding</label><input type="number" class="fnum-clean" data-freefield="pad" ' + da + ' value="' + (bl.pad != null ? bl.pad : 18) + '" min="0" max="120" step="2" /></div><div class="af"><label class="af__label">Corner</label><input type="number" class="fnum-clean" data-freefield="radius" ' + da + ' value="' + (parseFloat(bl.radius) || 0) + '" min="0" max="200" step="1" /></div></div>' : "");
+    return '<div class="fpanel">' + top + freePosSection(i, k, idx, bl, false) + fsec("text", "Text", textBody) + fsec("color", "Colour", freeColorSwatches(i, k, idx, "color", bl.color)) + fsec("bg", "Background", bgBody) + fxaz + "</div>";
   }
   function freeLayersPanel(i, k) {
     var blocks = slideBlocks(i, k) || [];
@@ -10776,6 +10834,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "free-flip") { var _flk = +b.dataset.sindex, _fl = slideBlocks(i, _flk), _flb = _fl && _fl[+b.dataset.fbi]; if (_flb) { _flb.flip = !_flb.flip; saveDraft(true); renderL2(); } return; }
     if (act === "free-lock") { var _lok = +b.dataset.sindex, _lo = slideBlocks(i, _lok), _lob = _lo && _lo[+b.dataset.fbi]; if (_lob) { if (_lob.lock) delete _lob.lock; else _lob.lock = true; saveDraft(true); renderL2(); status(_lob.lock ? "Block locked \u2014 it won\u2019t move until you unlock it." : "Block unlocked.", true); } return; }
     if (act === "free-arlock") { var _ark = +b.dataset.sindex, _ar = slideBlocks(i, _ark), _arb = _ar && _ar[+b.dataset.fbi]; if (_arb) { if (_arb.arlock) delete _arb.arlock; else _arb.arlock = true; saveDraft(true); renderL2(); } return; }
+    if (act === "free-sec-toggle") { var _fse = b.closest(".fsec"); if (!_fse) return; var _fsc = !_fse.classList.contains("is-collapsed"); _fse.classList.toggle("is-collapsed", _fsc); if (b.dataset.seckey) freeSecCollapsed[b.dataset.seckey] = _fsc; return; }
     if (act === "free-copystyle") { var _csk = +b.dataset.sindex, _cs = slideBlocks(i, _csk), _csb = _cs && _cs[+b.dataset.fbi]; if (_csb) { freeStyleClip = freeCopyStyle(_csb); renderL2(); status("Style copied \u2014 select an element and hit Paint style.", true); } return; }
     if (act === "free-paintstyle") { if (!freeStyleClip) { status("Copy a style first."); return; } var _psk = +b.dataset.sindex, _ps = slideBlocks(i, _psk); if (!_ps) return; var _pids = (freeSelOn(i, _psk) && freeSel.ids.length) ? freeSel.ids : [+b.dataset.fbi]; var _pn = 0; _pids.forEach(function (ix) { if (_ps[ix]) { freePaintOne(_ps[ix], freeStyleClip); _pn++; } }); saveDraft(true); renderL2(); status("Style painted onto " + _pn + (_pn === 1 ? " element." : " elements."), true); return; }
     if (act === "free-dup") { var _duk = +b.dataset.sindex, _du = slideBlocks(i, _duk); if (!_du) return; var _dids = (freeSelOn(i, _duk) && freeSel.ids.length) ? freeSel.ids.slice() : [+b.dataset.fbi]; var _dadd = [], _ddup = []; _dids.forEach(function (ix) { var bb = _du[ix]; if (!bb) return; var cp = JSON.parse(JSON.stringify(bb)); cp.x = Math.min(100, fnum(bb.x, 8) + 2); cp.y = Math.min(100, fnum(bb.y, 8) + 2); _du.push(cp); _ddup.push(cp); _dadd.push(_du.length - 1); }); freeReidGroups(_ddup); if (_dadd.length) freeSelSet(i, _duk, _dadd); saveDraft(true); renderL2(); status(_dadd.length + (_dadd.length === 1 ? " element" : " elements") + " duplicated.", true); return; }
