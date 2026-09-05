@@ -6376,6 +6376,36 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     intro += slidesToolbar(i, has, nBlocks) + "</section>";
     return intro + slidesNav(w, i);
   }
+  var slideMulti = null;        // { i, ids:[k,...] } — slides multi-selected for bulk actions
+  var slideActCollapsed = {};   // { slideId: true } — collapsed section groups (view-only)
+  function slideMultiOn(i) { return !!(slideMulti && slideMulti.i === i && slideMulti.ids && slideMulti.ids.length); }
+  function slideMultiHas(k) { return !!(slideMulti && slideMulti.ids && slideMulti.ids.indexOf(k) >= 0); }
+  function slideMultiToggle(i, k) { if (!slideMulti || slideMulti.i !== i) slideMulti = { i: i, ids: [] }; var p = slideMulti.ids.indexOf(k); if (p >= 0) slideMulti.ids.splice(p, 1); else slideMulti.ids.push(k); if (!slideMulti.ids.length) slideMulti = null; }
+  function slideThumbMeta(s) {
+    var bits = "", tr = s.transition;
+    if (tr && tr !== "fade") { var trl = tr === "magic" ? "Magic" : tr === "push" ? "Push" : "Cut"; bits += '<span class="slides__thumbtr slides__thumbtr--' + tr + '" title="Transition: ' + trl + '">' + trl + "</span>"; }
+    if (s.notes && String(s.notes).replace(/<[^>]+>/g, "").trim()) bits += '<span class="slides__thumbnote" title="Has speaker notes">' + IC.book + "</span>";
+    return bits ? '<span class="slides__thumbmeta">' + bits + "</span>" : "";
+  }
+  function slideGroupHead(i, k, s) {
+    var collapsed = !!slideActCollapsed[s.id];
+    return '<div class="slides__group' + (collapsed ? " is-collapsed" : "") + '" data-act="slide-act-toggle" data-index="' + i + '" data-sindex="' + k + '" title="Collapse / expand this section"><span class="slides__group-chev">' + IC.chev + '</span><span class="slides__group-lbl">' + escHtml(s.act) + '</span><button class="iconbtn slides__group-x" data-act="slide-act-remove" data-index="' + i + '" data-sindex="' + k + '" title="Remove section header">' + IC.close + "</button></div>";
+  }
+  function slideBulkBar(i) {
+    if (!slideMultiOn(i)) return "";
+    var slides = (data.work[i] && data.work[i].study && data.work[i].study.slides) || [];
+    var n = slideMulti.ids.length, allH = slideMulti.ids.every(function (k) { return slides[k] && slides[k].hidden; });
+    return '<div class="slides__bulk"><span class="slides__bulk-n">' + n + " selected</span>" +
+      '<button class="btn btn--ghost" data-act="slide-bulk-dup" data-index="' + i + '">' + IC.dup + " Duplicate</button>" +
+      '<button class="btn btn--ghost" data-act="slide-bulk-hide" data-index="' + i + '">' + (allH ? IC.eye + " Show" : IC.eyeoff + " Hide") + "</button>" +
+      '<button class="btn btn--ghost slides__bulk-del" data-act="slide-bulk-del" data-index="' + i + '">' + IC.trash + " Delete</button>" +
+      '<button class="btn btn--ghost" data-act="slide-bulk-clear" data-index="' + i + '">Clear</button></div>';
+  }
+  function slideStartSection(i) {
+    var w = data.work[i], slides = w && w.study && w.study.slides; if (!slides || !slides.length) { status("Add a slide first."); return; }
+    var sel = (openSlide >= 0 && slides[openSlide]) ? openSlide : 0, s = slides[sel];
+    slideNamePrompt({ title: "Start a section", sub: "Groups this slide and the ones after it under a heading in the navigator.", ph: "e.g. 01 Context", value: s.act || "" }).then(function (v) { if (v == null) return; if (v) s.act = v; else delete s.act; saveDraft(true); renderL2(); status(v ? "Section started." : "Section header removed.", true); });
+  }
   function slideThumbInner(i, s, k) {
     if (s.layout === "free") {
       var blocks = slideBlocks(i, k) || [];
@@ -6397,11 +6427,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function slideThumb(i, s, k, len, active, variant) {
     var cls = variant === "all" ? "slides__allcard" : "slides__navitem";
     var grip = variant === "all" ? "" : '<span class="sortgrip slides__thumbgrip" data-grip data-sortkey="slide:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + "</span>";
-    return '<div class="' + cls + (active ? " is-active" : "") + (s.hidden ? " is-off" : "") + '" data-act="slide-select" data-index="' + i + '" data-sindex="' + k + '" data-variant="' + variant + '" tabindex="0" role="button" aria-label="Slide ' + (k + 1) + '">' +
+    return '<div class="' + cls + (active ? " is-active" : "") + (s.hidden ? " is-off" : "") + (slideMultiHas(k) ? " is-multisel" : "") + '" data-act="slide-select" data-index="' + i + '" data-sindex="' + k + '" data-variant="' + variant + '" tabindex="0" role="button" aria-label="Slide ' + (k + 1) + '">' +
       grip +
       '<span class="slides__thumbnum">' + (k + 1) + "</span>" +
       '<span class="slidepv slides__thumbpv">' + slideThumbInner(i, s, k) + "</span>" +
       slideThumbOps(i, k, len, s) +
+      slideThumbMeta(s) +
+      (slideMultiHas(k) ? '<span class="slides__thumbcheck" aria-hidden="true">' + IC.check + "</span>" : "") +
       (s.hidden ? '<span class="slides__thumbbadge">Skipped</span>' : "") +
       "</div>";
   }
@@ -6432,8 +6464,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var slides = w.study.slides || [], has = slides.length;
     var sel = (openSlide >= 0 && slides[openSlide]) ? openSlide : (has ? 0 : -1);
     if (!has) return '<section class="l2grp slides__navwrap"><div class="adm__empty">No slides yet \u2014 use <b>Add slide</b> above, or press <b>Rehearse</b> for an auto-built deck. Your slide editor opens on the right.</div></section>';
-    return '<section class="l2grp slides__navwrap"><aside class="slides__nav"><div class="slides__nav-scroll">' +
-      slides.map(function (s, k) { return slideThumb(i, s, k, slides.length, k === sel, "nav"); }).join("") +
+    var rows = "", hideGroup = false;
+    slides.forEach(function (s, k) {
+      if (s.act) { rows += slideGroupHead(i, k, s); hideGroup = !!slideActCollapsed[s.id]; }
+      if (hideGroup) return;
+      rows += slideThumb(i, s, k, slides.length, k === sel, "nav");
+    });
+    return '<section class="l2grp slides__navwrap"><aside class="slides__nav">' + slideBulkBar(i) + '<div class="slides__nav-scroll">' +
+      rows +
       '</div><button class="btn btn--add slides__nav-add" data-act="slide-add" data-index="' + i + '">' + IC.add + " Add a slide</button></aside></section>";
   }
   // RIGHT preview pane becomes the live slide editor (canvas + tools/inspector + presenter notes),
@@ -6598,7 +6636,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       { id: "layout", label: "Add a layout\u2026", hint: "Pick a template", run: function () { slideLayoutPickerModal(i); } },
       { id: "section", label: "Generate from a section", run: function () { slideNewFromSection(i); } },
       { sep: true },
-      { id: "deck", label: "Build deck from all sections", run: function () { slideBuildDeck(i); } }
+      { id: "deck", label: "Build deck from all sections", run: function () { slideBuildDeck(i); } },
+      { id: "act", label: "Start a section here", hint: "Group slides in the navigator", run: function () { slideStartSection(i); } }
     ];
     else if (which === "text") items = [
       { id: "kicker", label: "Kicker", hint: "Accent mono", run: function () { slideAddBlock(i, { kind: "text", role: "kicker", size: "sm", align: "left", text: "", ph: "Kicker" }); } },
@@ -9970,7 +10009,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }
     if (t.dataset.slidetrans !== undefined) {
       var _sti = +t.dataset.slidetrans, _stk = +t.dataset.sindex, _stw = data.work[_sti];
-      if (_stw && _stw.study && _stw.study.slides && _stw.study.slides[_stk]) { var _sts = _stw.study.slides[_stk]; if (t.value === "fade") delete _sts.transition; else _sts.transition = t.value; saveDraft(true); }
+      if (_stw && _stw.study && _stw.study.slides && _stw.study.slides[_stk]) { var _sts = _stw.study.slides[_stk]; if (t.value === "fade") delete _sts.transition; else _sts.transition = t.value; saveDraft(true); renderL2(); }
       return;
     }
     if (t.dataset.freesize !== undefined) { var _fbz = freeBlk(t); if (_fbz) { _fbz.size = t.value; saveDraft(true); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
@@ -10676,13 +10715,19 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "slide-add") { slideLayoutPickerModal(i); return; }
     if (act === "slide-addabove") { var _aaw = data.work[i], _aas = _aaw && _aaw.study && _aaw.study.slides, _aak = +b.dataset.sindex; if (!_aas) return; _aas.splice(_aak, 0, { id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: "free", blocks: [], notes: "" }); openSlide = _aak; freeSel = null; saveDraft(true); renderL2(); status("Blank slide added above.", true); return; }
     if (act === "slide-view") { slideView = b.dataset.view === "all" ? "all" : "current"; renderSlideStage(); return; }
-    if (act === "slide-select") { if (e.target.closest("button, input, select, textarea, [data-grip]")) return; var _ssk = +b.dataset.sindex; if (openSlide !== _ssk) { var _nt = slideNavScrollTop(); openSlide = _ssk; renderL2(); slideNavScrollTo(_nt); } return; }
+    if (act === "slide-select") { if (e.target.closest("button, input, select, textarea, [data-grip]")) return; var _ssk = +b.dataset.sindex; if (e.shiftKey || e.ctrlKey || e.metaKey) { slideMultiToggle(i, _ssk); renderL2(); return; } slideMulti = null; if (openSlide !== _ssk) { var _nt = slideNavScrollTop(); openSlide = _ssk; renderL2(); slideNavScrollTo(_nt); } return; }
     if (act === "slide-goprev" || act === "slide-gonext") { var _gw = data.work[i], _gsl = _gw && _gw.study && _gw.study.slides; if (!_gsl || !_gsl.length) return; var _cur = (openSlide >= 0 && _gsl[openSlide]) ? openSlide : 0; var _gnt = slideNavScrollTop(); openSlide = act === "slide-goprev" ? Math.max(0, _cur - 1) : Math.min(_gsl.length - 1, _cur + 1); renderL2(); slideNavScrollTo(_gnt); return; }
     if (act === "slide-remove") { var _srw = data.work[i], srk = +b.dataset.sindex, srs = _srw && _srw.study && _srw.study.slides; if (!srs) return; srs.splice(srk, 1); if (openSlide === srk) openSlide = -1; else if (openSlide > srk) openSlide--; saveDraft(true); renderL2(); return; }
     if (act === "slide-up") { var _suw = data.work[i], suk = +b.dataset.sindex, sus = _suw && _suw.study && _suw.study.slides; if (sus && suk > 0) { var _sut = sus[suk - 1]; sus[suk - 1] = sus[suk]; sus[suk] = _sut; if (openSlide === suk) openSlide = suk - 1; else if (openSlide === suk - 1) openSlide = suk; saveDraft(true); renderL2(); } return; }
     if (act === "slide-down") { var _sdw = data.work[i], sdk = +b.dataset.sindex, sds = _sdw && _sdw.study && _sdw.study.slides; if (sds && sdk < sds.length - 1) { var _sdt = sds[sdk + 1]; sds[sdk + 1] = sds[sdk]; sds[sdk] = _sdt; if (openSlide === sdk) openSlide = sdk + 1; else if (openSlide === sdk + 1) openSlide = sdk; saveDraft(true); renderL2(); } return; }
     if (act === "slide-dup") { var _spw = data.work[i], spk = +b.dataset.sindex, sps = _spw && _spw.study && _spw.study.slides; if (sps && sps[spk]) { var _spsrc = sps[spk]; if (_spsrc.blocks) { for (var _spmi = 0; _spmi < _spsrc.blocks.length; _spmi++) { if (!_spsrc.blocks[_spmi].mid) _spsrc.blocks[_spmi].mid = "m" + Date.now().toString(36) + _spmi + Math.random().toString(36).slice(2, 5); } } var _spc = JSON.parse(JSON.stringify(_spsrc)); _spc.id = "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); if (_spc.transition == null && _spsrc.transition == null) _spc.transition = "magic"; sps.splice(spk + 1, 0, _spc); openSlide = spk + 1; saveDraft(true); renderL2(); status("Slide duplicated \u2014 set to Magic Move so moving things auto-animates.", true); } return; }
     if (act === "slide-hide") { var _shw = data.work[i], shk = +b.dataset.sindex, shs = _shw && _shw.study && _shw.study.slides; if (shs && shs[shk]) { if (shs[shk].hidden) delete shs[shk].hidden; else shs[shk].hidden = true; saveDraft(true); renderL2(); status(shs[shk].hidden ? "Slide will be skipped in the deck." : "Slide back in the deck.", true); } return; }
+    if (act === "slide-bulk-clear") { slideMulti = null; renderL2(); return; }
+    if (act === "slide-bulk-dup") { var _bdw = data.work[i], _bds = _bdw && _bdw.study && _bdw.study.slides; if (!_bds || !slideMultiOn(i)) return; var _bids = slideMulti.ids.slice().sort(function (a, c) { return c - a; }); _bids.forEach(function (kk) { var src = _bds[kk]; if (!src) return; if (src.blocks) src.blocks.forEach(function (bb, mi) { if (!bb.mid) bb.mid = "m" + Date.now().toString(36) + mi + Math.random().toString(36).slice(2, 5); }); var cp = JSON.parse(JSON.stringify(src)); cp.id = "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); delete cp.act; _bds.splice(kk + 1, 0, cp); }); slideMulti = null; saveDraft(true); renderL2(); status(_bids.length + " slides duplicated.", true); return; }
+    if (act === "slide-bulk-hide") { var _bhw = data.work[i], _bhs = _bhw && _bhw.study && _bhw.study.slides; if (!_bhs || !slideMultiOn(i)) return; var _allH = slideMulti.ids.every(function (kk) { return _bhs[kk] && _bhs[kk].hidden; }); slideMulti.ids.forEach(function (kk) { if (!_bhs[kk]) return; if (_allH) delete _bhs[kk].hidden; else _bhs[kk].hidden = true; }); saveDraft(true); renderL2(); status(_allH ? "Slides back in the deck." : "Slides will be skipped.", true); return; }
+    if (act === "slide-bulk-del") { var _bxw = data.work[i], _bxs = _bxw && _bxw.study && _bxw.study.slides; if (!_bxs || !slideMultiOn(i)) return; var _bn = slideMulti.ids.length; confirmModal({ title: "Delete " + _bn + " slide" + (_bn === 1 ? "" : "s") + "?", sub: "This removes the selected slides from the deck.", cta: "Delete" }).then(function (ok) { if (!ok) return; slideMulti.ids.slice().sort(function (a, c) { return c - a; }).forEach(function (kk) { _bxs.splice(kk, 1); if (openSlide === kk) openSlide = -1; else if (openSlide > kk) openSlide--; }); slideMulti = null; saveDraft(true); renderL2(); status(_bn + " slides deleted.", true); }); return; }
+    if (act === "slide-act-toggle") { if (e.target.closest("button")) return; var _atw = data.work[i], _ats = _atw && _atw.study && _atw.study.slides, _atk = +b.dataset.sindex; if (_ats && _ats[_atk] && _ats[_atk].id) { var _aid = _ats[_atk].id; if (slideActCollapsed[_aid]) delete slideActCollapsed[_aid]; else slideActCollapsed[_aid] = true; renderL2(); } return; }
+    if (act === "slide-act-remove") { var _arw2 = data.work[i], _ars2 = _arw2 && _arw2.study && _arw2.study.slides, _ark2 = +b.dataset.sindex; if (_ars2 && _ars2[_ark2]) { delete _ars2[_ark2].act; saveDraft(true); renderL2(); status("Section header removed.", true); } return; }
     if (act === "slide-toggle") { if (e.target.closest("button, input, select, textarea, [data-grip]")) return; var _stk = +b.dataset.sindex; openSlide = (openSlide === _stk) ? -1 : _stk; renderL2(); return; }
     if (act === "slide-menu") { slideToolbarMenu(b, b.dataset.menu, i); return; }
     if (act === "slide-build") { slideBuildDeck(i); return; }

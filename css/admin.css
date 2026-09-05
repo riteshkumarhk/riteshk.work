@@ -2942,6 +2942,29 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .slides__thumbops .iconbtn { width: 24px; height: 24px; }
 .slides__thumbops .iconbtn svg { width: 13px; height: 13px; }
 .slides__thumbbadge { position: absolute; bottom: .4rem; left: .42rem; z-index: 2; font: 600 .54rem/1 var(--mono); text-transform: uppercase; letter-spacing: .05em; color: #241a09; background: #e0a35a; padding: .16rem .34rem; border-radius: 5px; }
+/* Glance badges: transition + speaker-notes markers on each slide thumb */
+.slides__thumbmeta { position: absolute; bottom: .4rem; right: .42rem; z-index: 2; display: flex; gap: 3px; align-items: center; pointer-events: none; }
+.slides__thumbtr { font: 600 .5rem/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; padding: .13rem .3rem; border-radius: 4px; background: rgba(8,8,10,.74); color: var(--text-dim); }
+.slides__thumbtr--magic { color: var(--accent); }
+.slides__thumbnote { display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 4px; background: rgba(8,8,10,.74); color: var(--text-dim); }
+.slides__thumbnote svg { width: 10px; height: 10px; }
+/* Multi-selected slides + bulk-action bar */
+.slides__navitem.is-multisel, .slides__allcard.is-multisel { border-color: rgba(216,166,71,.7); box-shadow: 0 0 0 2px rgba(216,166,71,.4); }
+.slides__thumbcheck { position: absolute; top: .3rem; right: .3rem; z-index: 4; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; background: var(--accent); color: #241a09; }
+.slides__thumbcheck svg { width: 12px; height: 12px; }
+.slides__bulk { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; padding: .5rem; margin-bottom: .5rem; border: 1px solid rgba(216,166,71,.55); border-radius: 10px; background: rgba(216,166,71,.1); }
+.slides__bulk-n { font: 600 .72rem/1 var(--sans); color: var(--text); margin-right: auto; }
+.slides__bulk .btn { padding: .28rem .5rem; font-size: .7rem; min-width: 0; }
+.slides__bulk-del:hover { color: #ff7a7a; border-color: #ff7a7a; }
+/* Collapsible section groups in the navigator */
+.slides__group { display: flex; align-items: center; gap: .35rem; padding: .5rem .5rem .28rem; cursor: pointer; user-select: none; }
+.slides__group-chev { display: inline-grid; place-items: center; color: var(--text-faint); transition: transform .15s var(--ease); }
+.slides__group-chev svg { width: 13px; height: 13px; }
+.slides__group:not(.is-collapsed) .slides__group-chev { transform: rotate(90deg); }
+.slides__group-lbl { font: 600 .62rem/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slides__group-x { width: 20px; height: 20px; opacity: 0; flex: 0 0 auto; }
+.slides__group:hover .slides__group-x { opacity: .7; }
+.slides__group-x svg { width: 11px; height: 11px; }
 .slidefree__stage--ro { pointer-events: none; }
 .slidefree__empty--thumb { font-size: 44px; }
 .slides__canvas { border: 1px solid var(--line-soft); border-radius: 14px; background: var(--bg-2); padding: 1rem 1.1rem 1.1rem; box-shadow: 0 2px 8px -4px rgba(0,0,0,.38); }
