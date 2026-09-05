@@ -936,7 +936,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
    pointer inside admin mode and modal dialogs, and hide the custom dot in admin.
    .atsv / .rbz are body-level fixed overlays (z-index above the custom cursor), so they
    need the native cursor restored too or the pointer vanishes over the viewer. */
-.adm, .pass, .mlib, .atsv, .rbz, .rbz__jdmodal, .depthdemo, .kwed { cursor: auto; }
+.adm, .pass, .mlib, .atsv, .rbz, .rbz__jdmodal, .depthdemo, .kwed, .smenu__pop { cursor: auto; }
 body.adm-lock .cursor { display: none !important; }
 
 /* ---------- project imagery controls (Work tab) ---------- */
@@ -2888,6 +2888,16 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .slidelay__blank { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mono); font-size: .68rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: .12em; }
 .slidelay__name { font-family: var(--sans); font-size: .82rem; color: var(--text-dim); }
 .slidelay__card:hover .slidelay__name, .slidelay__card:focus-visible .slidelay__name { color: var(--text); }
+.slides__toolbar { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; margin: .3rem 0 .2rem; }
+.slides__tb-l, .slides__tb-r { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.slides__dd { display: inline-flex; align-items: center; gap: .3rem; }
+.slides__dd svg:last-child { opacity: .7; }
+.smenu__pop { position: fixed; z-index: 10050; min-width: 210px; background: var(--bg-elev, #1c1c20); border: 1px solid var(--line-soft, rgba(255,255,255,.12)); border-radius: 12px; box-shadow: 0 18px 44px -18px rgba(0,0,0,.85); padding: .35rem; }
+.smenu__item { display: flex; flex-direction: column; align-items: flex-start; width: 100%; gap: .05rem; padding: .5rem .6rem; border: 0; border-radius: 8px; background: none; color: var(--text); cursor: pointer; text-align: left; font-family: var(--sans); }
+.smenu__item:hover { background: rgba(255,255,255,.06); }
+.smenu__lbl { font-size: .84rem; }
+.smenu__hint { font-size: .67rem; color: var(--text-faint); font-style: normal; }
+.smenu__sep { height: 1px; background: var(--line-soft, rgba(255,255,255,.1)); margin: .3rem; }
 .sfb__empty { color: var(--text-faint); font-style: italic; }
 .sfb img { width: 100%; height: auto; display: block; border-radius: 5px; pointer-events: none; }
 .sfb__ph { display: grid; place-items: center; aspect-ratio: 16 / 10; background: linear-gradient(135deg, rgba(216, 166, 87, .16), rgba(216, 166, 87, .03)); border-radius: 5px; font-family: var(--mono); font-size: 20px; color: var(--accent); }

@@ -6239,11 +6239,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (st.slidesEnc && !has) {
       return intro + '<section class="l2grp"><div class="adm__empty slides__sealed">' + LOCK_SVG + ' This slideshow is protected \u2014 its slides aren\u2019t in your published file. <button class="btn btn--ghost" data-act="slide-decrypt" data-index="' + i + '">Unlock to edit</button></div></section>';
     }
-    intro += '<div class="slides__actions">' +
-      '<button class="btn btn--primary" data-act="slide-rehearse" data-index="' + i + '"' + (has || nBlocks ? "" : " disabled") + ">" + IC.play + " Rehearse deck</button>" +
-      '<button class="btn btn--auto" data-act="slide-build" data-index="' + i + '"' + (nBlocks ? "" : " disabled") + ">" + IC.spark + " " + (has ? "Rebuild from sections" : "Build deck from my sections") + "</button>" +
-      '<button class="btn btn--auto" data-act="slide-ai-draft" data-index="' + i + '"' + (nBlocks ? "" : " disabled") + ">" + IC.spark + " Draft with AI</button>" +
-      "</div></section>";
+    intro += slidesToolbar(i, has, nBlocks) + "</section>";
     var list = has ? slides.map(function (s, k) { return slideCard(i, s, k, slides.length, openSlide === k); }).join("") : '<div class="adm__empty">No slides yet \u2014 build a draft from your sections, or add one below. Until then, <b>Rehearse</b> shows an auto-generated deck.</div>';
     var body = '<section class="l2grp"><div class="l2grp__head">Slides' + (has ? ' <span>\u2014 reorder with the arrows \u00b7 click a slide to edit</span>' : "") + "</div>" +
       '<div class="study__blocks slides__list">' + list + "</div>" +
@@ -6285,6 +6281,104 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         status("Pulled \u201c" + slideBlockName(block).label + "\u201d onto the slide.", true);
       });
     });
+  }
+  var slideMenuEl = null;
+  function slideMenuClose() { if (slideMenuEl) { slideMenuEl.remove(); slideMenuEl = null; } document.removeEventListener("pointerdown", slideMenuOutside, true); document.removeEventListener("keydown", slideMenuKey, true); }
+  function slideMenuOutside(e) { if (slideMenuEl && !slideMenuEl.contains(e.target) && !(e.target.closest && e.target.closest('[data-act="slide-menu"]'))) slideMenuClose(); }
+  function slideMenuKey(e) { if (e.key === "Escape") slideMenuClose(); }
+  function slideMenuOpen(anchor, items) {
+    slideMenuClose();
+    var pop = document.createElement("div"); pop.className = "smenu__pop";
+    pop.innerHTML = items.map(function (it) { return it.sep ? '<div class="smenu__sep"></div>' : '<button type="button" class="smenu__item" data-smi="' + it.id + '"><span class="smenu__lbl">' + escHtml(it.label) + "</span>" + (it.hint ? '<em class="smenu__hint">' + escHtml(it.hint) + "</em>" : "") + "</button>"; }).join("");
+    document.body.appendChild(pop);
+    var r = anchor.getBoundingClientRect(), pw = pop.offsetWidth || 210, vw = window.innerWidth;
+    pop.style.top = Math.round(r.bottom + 6) + "px";
+    pop.style.left = Math.round(Math.max(8, Math.min(r.left, vw - pw - 10))) + "px";
+    slideMenuEl = pop;
+    pop.addEventListener("click", function (e) { var b = e.target.closest("[data-smi]"); if (!b) return; var it = items.filter(function (x) { return x.id === b.getAttribute("data-smi"); })[0]; slideMenuClose(); if (it && it.run) it.run(); });
+    setTimeout(function () { document.addEventListener("pointerdown", slideMenuOutside, true); document.addEventListener("keydown", slideMenuKey, true); }, 0);
+  }
+  function slideCurrentFree(i) { var st = data.work[i] && data.work[i].study, sl = st && st.slides; if (!sl) return -1; if (openSlide >= 0 && sl[openSlide] && sl[openSlide].layout === "free") return openSlide; return -1; }
+  function slideEnsureFree(i) { var k = slideCurrentFree(i); if (k >= 0) return k; var st = data.work[i].study = data.work[i].study || blankStudy(); st.slides = st.slides || []; st.slides.push({ id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: "free", blocks: [], notes: "" }); openSlide = st.slides.length - 1; return openSlide; }
+  function slideAddBlock(i, block) { var k = slideEnsureFree(i), arr = slideBlocks(i, k); if (!arr) return; if (block.x == null) block.x = 12; if (block.y == null) block.y = Math.min(78, 14 + arr.length * 5); if (block.w == null) block.w = block.kind === "media" ? 44 : 50; arr.push(block); freeSelSet(i, k, [arr.length - 1]); saveDraft(true); renderL2(); }
+  function slideAddBlankFree(i) { var st = data.work[i].study = data.work[i].study || blankStudy(); st.slides = st.slides || []; st.slides.push({ id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: "free", blocks: [], notes: "" }); openSlide = st.slides.length - 1; freeSel = null; saveDraft(true); renderL2(); status("Blank slide added.", true); }
+  function slideAddBackground(i) { pickMedia(function (uri) { var k = slideEnsureFree(i), arr = slideBlocks(i, k); if (!arr) return; arr.unshift({ kind: "media", src: uri, x: 0, y: 0, w: 100, h: 100 }); freeSelSet(i, k, [0]); saveDraft(true); renderL2(); status("Background added \u2014 it fills the slide (sent to back).", true); }); }
+  function slideAddMediaUpload(i) { pickMedia(function (uri) { slideAddBlock(i, { kind: "media", src: uri, w: 44 }); }); }
+  function slideBuildDeck(i) {
+    var _sbw = data.work[i]; if (!_sbw || !_sbw.study) return;
+    var _auto = (window.RK && window.RK.deckAutoSlides) ? window.RK.deckAutoSlides(_sbw) : [];
+    if (!_auto.length) { status("Add some sections first, then build a deck."); return; }
+    var _buildIt = function () { _sbw.study.slides = _auto.map(function (a) { var sl = blankSlide(a.layout); sl.slots = a.slots || {}; return sl; }); openSlide = 0; saveDraft(true); renderL2(); status("Built " + _sbw.study.slides.length + " slides from your sections \u2014 reorder & refine them.", true); };
+    if (_sbw.study.slides && _sbw.study.slides.length) confirmModal({ title: "Rebuild the deck from sections?", sub: "This replaces your current " + _sbw.study.slides.length + " slide" + (_sbw.study.slides.length === 1 ? "" : "s") + " with a fresh draft derived from the case study.", cta: "Rebuild deck" }).then(function (ok) { if (ok) _buildIt(); });
+    else _buildIt();
+  }
+  function slideSectionPickModal(i, opts) {
+    var w = data.work[i]; if (!w || !w.study) { status("No case study sections yet."); return; }
+    var blocks = w.study.blocks || [];
+    function secMedia(b) { var m = (window.RK && window.RK.deckSlideFromBlock) ? (window.RK.deckSlideFromBlock(b).slots || {}).media : null; return m && m.src ? m : null; }
+    var cards = "";
+    blocks.forEach(function (b, bi) { if (!b || b.off || b.encStub || b.vaultBlock) return; if (opts.mediaOnly && !secMedia(b)) return; var nm = slideBlockName(b); cards += '<button type="button" class="secpick__card slidepull__card" data-pull="' + bi + '"><span class="secpick__prev">' + sectionPreview(b.type) + '</span><span class="secpick__name">' + escHtml(nm.label) + '<span class="secpick__tag">' + escHtml(nm.type) + "</span></span></button>"; });
+    if (!cards) cards = '<div class="adm__empty">' + escHtml(opts.empty || "No sections to pull from yet.") + "</div>";
+    var modal = document.createElement("div"); modal.className = "pass pass--wide secpick slidepull";
+    modal.innerHTML = '<div class="pass__box"><div class="pass__title">' + escHtml(opts.title) + '</div><div class="pass__sub">' + escHtml(opts.sub || "") + '</div><div class="secpick__grid">' + cards + '</div><div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button></div></div>';
+    document.body.appendChild(modal);
+    var onKey = function (e) { if (e.key === "Escape") close(); };
+    var close = function () { modal.remove(); document.removeEventListener("keydown", onKey); };
+    document.addEventListener("keydown", onKey);
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    modal.querySelectorAll("[data-pull]").forEach(function (btn) { btn.addEventListener("click", function () { var block = blocks[+btn.getAttribute("data-pull")]; var mapped = (window.RK && window.RK.deckSlideFromBlock) ? window.RK.deckSlideFromBlock(block) : null; if (!mapped) { status("Couldn\u2019t read that section."); return; } close(); opts.onPick(block, mapped); }); });
+  }
+  function slideNewFromSection(i) {
+    slideSectionPickModal(i, { title: "Generate a slide from a section", sub: "Creates a new slide from that section\u2019s content \u2014 edit it freely after.", onPick: function (block, mapped) {
+      var st = data.work[i].study = data.work[i].study || blankStudy(); st.slides = st.slides || [];
+      var sl = blankSlide(mapped.layout); sl.slots = mapped.slots || {}; st.slides.push(sl); openSlide = st.slides.length - 1; freeSel = null; saveDraft(true); renderL2();
+      status("Slide added from \u201c" + slideBlockName(block).label + "\u201d.", true);
+    } });
+  }
+  function slideTextFromSection(i) {
+    slideSectionPickModal(i, { title: "Add text from a section", sub: "Drops that section\u2019s text onto the current slide as an editable text box.", onPick: function (block, mapped) {
+      var z = mapped.slots || {}, t = z.body || z.title || z.heading || z.quote || z.value || z.label || "";
+      if (!t) { status("That section has no text to pull."); return; }
+      slideAddBlock(i, { kind: "text", size: "sm", align: "left", text: String(t), w: 60, h: 42 });
+    } });
+  }
+  function slideMediaFromSection(i) {
+    slideSectionPickModal(i, { mediaOnly: true, title: "Pull media from a section", sub: "Drops that section\u2019s image or video onto the current slide.", empty: "None of your sections have an image or video yet.", onPick: function (block, mapped) {
+      var m = (mapped.slots || {}).media; if (!m || !m.src) { status("That section has no image/video."); return; }
+      slideAddBlock(i, { kind: "media", src: m.src, w: 44 });
+    } });
+  }
+  function slideToolbarMenu(anchor, which, i) {
+    var items;
+    if (which === "slide") items = [
+      { id: "blank", label: "Add blank", hint: "Empty canvas", run: function () { slideAddBlankFree(i); } },
+      { id: "layout", label: "Add a layout\u2026", hint: "Pick a template", run: function () { slideLayoutPickerModal(i); } },
+      { id: "section", label: "Generate from a section", run: function () { slideNewFromSection(i); } },
+      { sep: true },
+      { id: "deck", label: "Build deck from all sections", run: function () { slideBuildDeck(i); } }
+    ];
+    else if (which === "text") items = [
+      { id: "kicker", label: "Kicker", hint: "Accent mono", run: function () { slideAddBlock(i, { kind: "text", role: "kicker", size: "sm", align: "left", text: "", ph: "Kicker" }); } },
+      { id: "heading", label: "Heading", hint: "Compact \u00b7 Normal \u00b7 Large", run: function () { slideAddBlock(i, { kind: "text", size: "md", align: "left", text: "", ph: "Heading" }); } },
+      { id: "rich", label: "Rich text", run: function () { slideAddBlock(i, { kind: "text", size: "sm", align: "left", text: "", ph: "Add your text" }); } },
+      { id: "caption", label: "Caption", run: function () { slideAddBlock(i, { kind: "text", role: "caption", size: "sm", align: "left", text: "", ph: "Caption" }); } },
+      { sep: true },
+      { id: "fromsec", label: "From a section", run: function () { slideTextFromSection(i); } }
+    ];
+    else items = [
+      { id: "bg", label: "Upload a background", hint: "Full-bleed", run: function () { slideAddBackground(i); } },
+      { id: "up", label: "Add a picture or video", run: function () { slideAddMediaUpload(i); } },
+      { sep: true },
+      { id: "fromsec", label: "Pull from a section", run: function () { slideMediaFromSection(i); } }
+    ];
+    slideMenuOpen(anchor, items);
+  }
+  function slidesToolbar(i, has, nBlocks) {
+    function dd(menu, label) { return '<button type="button" class="btn btn--ghost slides__dd" data-act="slide-menu" data-menu="' + menu + '" data-index="' + i + '">' + label + " " + IC.chevD + "</button>"; }
+    return '<div class="slides__toolbar"><div class="slides__tb-l">' + dd("slide", IC.add + " Add slide") + dd("text", "Add text") + dd("media", "Add media") + "</div>" +
+      '<div class="slides__tb-r"><button class="btn btn--ghost" data-act="slide-rehearse" data-index="' + i + '"' + (has || nBlocks ? "" : " disabled") + ">" + IC.play + " Rehearse</button>" +
+      '<button class="btn btn--auto" data-act="slide-ai-draft" data-index="' + i + '"' + (nBlocks ? "" : " disabled") + ">" + IC.spark + " Draft with AI</button></div></div>";
   }
   // Owner-only: turn a published study's sealed slideshow (slidesEnc) back into an editable plaintext
   // deck using the recovery passphrase. It re-seals automatically on the next Publish.
@@ -6509,7 +6603,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         freeColorField("Colour", i, k, idx, "color", bl.color) +
         '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
     }
-    var sizes = [["sm", "Small"], ["md", "Medium"], ["lg", "Large"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.size || "md") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
+    var sizes = [["sm", "Compact"], ["md", "Normal"], ["lg", "Large"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.size || "md") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
     var aligns = [["left", "Left"], ["center", "Centre"], ["right", "Right"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.align || "left") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
     var valignCtl = (bl.h != null) ? ('<div class="af"><label class="af__label">Vertical</label><select data-freevalign data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + [["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.valign || "top") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select></div>") : '<div class="af"></div>';
     return '<div class="slidefree__sel">' + head +
@@ -10115,15 +10209,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "slide-dup") { var _spw = data.work[i], spk = +b.dataset.sindex, sps = _spw && _spw.study && _spw.study.slides; if (sps && sps[spk]) { var _spc = JSON.parse(JSON.stringify(sps[spk])); _spc.id = "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); sps.splice(spk + 1, 0, _spc); openSlide = spk + 1; saveDraft(true); renderL2(); status("Slide duplicated \u2014 editing the copy.", true); } return; }
     if (act === "slide-hide") { var _shw = data.work[i], shk = +b.dataset.sindex, shs = _shw && _shw.study && _shw.study.slides; if (shs && shs[shk]) { if (shs[shk].hidden) delete shs[shk].hidden; else shs[shk].hidden = true; saveDraft(true); renderL2(); status(shs[shk].hidden ? "Slide will be skipped in the deck." : "Slide back in the deck.", true); } return; }
     if (act === "slide-toggle") { if (e.target.closest("button, input, select, textarea, [data-grip]")) return; var _stk = +b.dataset.sindex; openSlide = (openSlide === _stk) ? -1 : _stk; renderL2(); return; }
-    if (act === "slide-build") {
-      var _sbw = data.work[i]; if (!_sbw || !_sbw.study) return;
-      var _auto = (window.RK && window.RK.deckAutoSlides) ? window.RK.deckAutoSlides(_sbw) : [];
-      if (!_auto.length) { status("Add some sections first, then build a deck."); return; }
-      var _buildIt = function () { _sbw.study.slides = _auto.map(function (a) { var sl = blankSlide(a.layout); sl.slots = a.slots || {}; return sl; }); openSlide = 0; saveDraft(true); renderL2(); status("Built " + _sbw.study.slides.length + " slides from your sections \u2014 reorder & refine them.", true); };
-      if (_sbw.study.slides && _sbw.study.slides.length) confirmModal({ title: "Rebuild the deck from sections?", sub: "This replaces your current " + _sbw.study.slides.length + " slide" + (_sbw.study.slides.length === 1 ? "" : "s") + " with a fresh draft derived from the case study.", cta: "Rebuild deck" }).then(function (ok) { if (ok) _buildIt(); });
-      else _buildIt();
-      return;
-    }
+    if (act === "slide-menu") { slideToolbarMenu(b, b.dataset.menu, i); return; }
+    if (act === "slide-build") { slideBuildDeck(i); return; }
     if (act === "slide-rehearse") {
       var _rhw = data.work[i]; if (!_rhw || !(window.RK && window.RK.presentDeck)) { status("Reload the studio to rehearse \u2014 the deck player didn\u2019t load."); return; }
       var _rhopts = {};
