@@ -2867,6 +2867,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .sfb { position: absolute; box-sizing: border-box; cursor: move; outline: 1.5px dashed transparent; outline-offset: 3px; border-radius: 3px; touch-action: none; user-select: none; }
 .sfb:hover { outline-color: rgba(216, 166, 87, .45); }
 .sfb.is-sel { outline: 2px solid var(--accent); outline-offset: 3px; }
+.sfb--grouped.is-sel { outline-style: dashed; }
 .sfb.is-drag { outline-style: solid; outline-color: var(--accent); }
 .sfb__tx { font-family: var(--serif); color: #ECE7E1; line-height: 1.18; word-break: break-word; }
 .sfb__tx.sm { font-family: var(--sans); font-size: 22px; line-height: 1.45; color: #b8b2aa; }
@@ -3049,6 +3050,9 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .sfb__guide { position: absolute; z-index: 18; background: var(--accent); pointer-events: none; }
 .sfb__guide--v { top: 0; bottom: 0; width: 1px; margin-left: -.5px; }
 .sfb__guide--h { left: 0; right: 0; height: 1px; margin-top: -.5px; }
+.slidefree__grp { display: flex; gap: .3rem; margin: 0 0 .55rem; }
+.slidefree__grp .btn { flex: 0 0 auto; padding: .3rem .7rem; font-size: .72rem; }
+.slidefree__grp .btn svg { margin-right: .3rem; vertical-align: -.18em; }
 .slidefree__align { display: flex; align-items: center; gap: .18rem; flex-wrap: wrap; margin-top: .35rem; }
 .slidefree__align-lbl { font-family: var(--sans); font-size: .66rem; color: var(--text-faint); margin-right: .25rem; }
 .slidefree__align .btn { flex: 0 0 auto; padding: .26rem .5rem; font-size: .72rem; min-width: 1.9rem; font-family: var(--mono); }

@@ -738,7 +738,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     board: svgIco('<path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/>'),
     trash: svgIco('<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>'),
     play: svgIco('<path d="M6 4.5v15a.7.7 0 0 0 1.06.6l12-7.5a.7.7 0 0 0 0-1.2l-12-7.5A.7.7 0 0 0 6 4.5z"/>'),
-    slides: svgIco('<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>')
+    slides: svgIco('<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>'),
+    group: svgIco('<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="7" height="5" rx="1"/><rect x="10" y="12" width="7" height="5" rx="1"/>'),
+    ungroup: svgIco('<rect x="5" y="4" width="8" height="6" rx="1"/><rect x="11" y="14" width="8" height="6" rx="1"/>')
   };
   const EYE_ON = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   const EYE_OFF = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
@@ -6639,6 +6641,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function freeSelHas(idx) { return !!(freeSel && freeSel.ids && freeSel.ids.indexOf(idx) >= 0); }
   function freeSelOne() { return (freeSel && freeSel.ids && freeSel.ids.length === 1) ? freeSel.ids[0] : -1; }
   function freeSelSet(i, k, ids) { freeSel = { i: i, k: k, ids: ids.slice() }; }
+  // Grouping is an editor-only concept: grouped blocks share a `g` id; render/present ignore it.
+  function freeNewGroupId() { return "g" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function freeExpandToGroups(blocks, ids) {
+    if (!blocks) return ids.slice();
+    var gs = {}; ids.forEach(function (ix) { var b = blocks[ix]; if (b && b.g) gs[b.g] = 1; });
+    var out = ids.slice();
+    if (Object.keys(gs).length) blocks.forEach(function (b, ix) { if (b && b.g && gs[b.g] && out.indexOf(ix) < 0) out.push(ix); });
+    return out.sort(function (a, c) { return a - c; });
+  }
+  function freeReidGroups(arr) { var map = {}; arr.forEach(function (b) { if (b && b.g) { if (!map[b.g]) map[b.g] = freeNewGroupId(); b.g = map[b.g]; } }); }
+  function freeCleanGroups(blocks) { if (!blocks) return; var cnt = {}; blocks.forEach(function (b) { if (b && b.g) cnt[b.g] = (cnt[b.g] || 0) + 1; }); blocks.forEach(function (b) { if (b && b.g && cnt[b.g] < 2) delete b.g; }); }
   function freeBlk(t) { var bl = slideBlocks(+t.dataset.fi, +t.dataset.fk); return bl ? bl[+t.dataset.fbi] : null; }
   // pure transform math (pixel space so rotation is unit-correct) — unit-tested: anchor corner stays fixed at any angle
   function freeRot2(vx, vy, deg) { var r = (deg || 0) * Math.PI / 180, c = Math.cos(r), s = Math.sin(r); return [vx * c - vy * s, vx * s + vy * c]; }
@@ -6719,7 +6732,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     else { var _tx = String(bl.text || ""), _body = _tx.trim() ? (/<[a-z!/]/i.test(_tx) ? _tx : escHtml(_tx)) : '<span class="sfb__empty">' + escHtml(bl.ph || "Text") + '</span>'; inner = '<div class="sfb__tx ' + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + (bl.role === "kicker" || bl.role === "caption" ? " " + bl.role : "") + " a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "") + '">' + _body + "</div>"; }
     var chrome = single ? (FREE_HANDLES.map(function (h) { return '<span class="sfb__h sfb__h--' + h + '" data-fbh="' + h + '"></span>'; }).join("") + '<span class="sfb__rot" data-fbrot title="Drag to rotate"></span>') : "";
     var bx = boxed && kind === "media" ? " sfb--fit" : (boxed && kind === "text" ? " sfb--boxed" : "");
-    return '<div class="sfb sfb--' + kind + bx + (sel ? " is-sel" : "") + (single ? " is-single" : "") + (kind === "text" && !String(bl.text || "").trim() ? " is-empty" : "") + '" data-fb="' + idx + '" data-fbdrag style="' + st + '">' + inner + chrome + "</div>";
+    return '<div class="sfb sfb--' + kind + bx + (sel ? " is-sel" : "") + (single ? " is-single" : "") + (bl.g ? " sfb--grouped" : "") + (kind === "text" && !String(bl.text || "").trim() ? " is-empty" : "") + '" data-fb="' + idx + '" data-fbdrag style="' + st + '">' + inner + chrome + "</div>";
   }
   function freeBgHtml(s) {
     var b = s && s.background; if (!b) return "";
@@ -6816,7 +6829,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!freeSelOn(i, k)) return '<div class="slidefree__sel slidefree__sel--none">Select a block on the canvas to edit it \u2014 drag to move, the handles to resize, the top dot to rotate. Shift-click or drag a box to select several.</div>';
     var blocks = slideBlocks(i, k) || [];
     if (freeSel.ids.length > 1) {
-      return '<div class="slidefree__sel"><div class="slidefree__selhead"><b>' + freeSel.ids.length + ' blocks selected</b><button class="iconbtn iconbtn--danger" data-act="free-del" data-index="' + i + '" data-sindex="' + k + '" title="Delete selected">' + IC.trash + '</button></div>' + freeAlignRow(i, k, freeSel.ids.length) + '<div class="af__hint">Drag to move them together, or nudge with the arrow keys. Click a single block to edit its content.</div></div>';
+      var _anyG = freeSel.ids.some(function (ix) { return blocks[ix] && blocks[ix].g; });
+      var _grpRow = '<div class="slidefree__grp"><button type="button" class="btn btn--ghost" data-act="free-group" data-index="' + i + '" data-sindex="' + k + '" title="Lock these blocks together (Ctrl+G)">' + IC.group + ' Group</button>' + (_anyG ? '<button type="button" class="btn btn--ghost" data-act="free-ungroup" data-index="' + i + '" data-sindex="' + k + '" title="Ungroup (Ctrl+Shift+G)">' + IC.ungroup + ' Ungroup</button>' : "") + "</div>";
+      return '<div class="slidefree__sel"><div class="slidefree__selhead"><b>' + freeSel.ids.length + ' blocks selected' + (_anyG ? " \u00b7 grouped" : "") + '</b><button class="iconbtn iconbtn--danger" data-act="free-del" data-index="' + i + '" data-sindex="' + k + '" title="Delete selected">' + IC.trash + '</button></div>' + _grpRow + freeAlignRow(i, k, freeSel.ids.length) + '<div class="af__hint">Drag to move them together, or nudge with the arrow keys. <b>Group</b> keeps them locked together; Shift-click a block to add or remove it.</div></div>';
     }
     var idx = freeSel.ids[0], bl = blocks[idx];
     if (!bl) return '<div class="slidefree__sel slidefree__sel--none">Select a block to edit it.</div>';
@@ -6913,13 +6928,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }
     if (blkEl) {
       var midx = +blkEl.getAttribute("data-fb");
+      var blocks = slideBlocks(i, k) || [];
       if (e.shiftKey) {
         var ids = freeSelOn(i, k) ? freeSel.ids.slice() : [];
-        var p = ids.indexOf(midx); if (p >= 0) ids.splice(p, 1); else ids.push(midx);
-        freeSelSet(i, k, ids.length ? ids : [midx]); renderL2(); return;
+        var grp = freeExpandToGroups(blocks, [midx]);
+        var allIn = grp.every(function (x) { return ids.indexOf(x) >= 0; });
+        if (allIn) ids = ids.filter(function (x) { return grp.indexOf(x) < 0; });
+        else grp.forEach(function (x) { if (ids.indexOf(x) < 0) ids.push(x); });
+        freeSelSet(i, k, ids.length ? ids : grp); renderL2(); return;
       }
-      if (!freeSelHas(midx) || !freeSelOn(i, k)) freeSelSet(i, k, [midx]);
-      var blocks = slideBlocks(i, k) || [], stageEl = meta.stage;
+      if (!freeSelHas(midx) || !freeSelOn(i, k)) freeSelSet(i, k, freeExpandToGroups(blocks, [midx]));
+      var stageEl = meta.stage;
       freeDrag = { mode: "move", i: i, k: k, sw: sw, sh: sh, sx: e.clientX, sy: e.clientY, moved: false, stage: stageEl, items: freeSel.ids.map(function (ix) { var b = blocks[ix]; if (!b) return null; var el = stageEl.querySelector('.sfb[data-fb="' + ix + '"]'); if (el) el.style.willChange = "transform"; return { bl: b, el: el, ox: fnum(b.x, 8), oy: fnum(b.y, 8), nx: fnum(b.x, 8), ny: fnum(b.y, 8), rotTf: (parseFloat(b.rot) ? " rotate(" + (parseFloat(b.rot) || 0) + "deg)" : "") }; }).filter(Boolean) };
       if (freeDrag.items.length === 1) {
         var mel = freeDrag.items[0].el, mr = mel ? mel.getBoundingClientRect() : null;
@@ -6991,7 +7010,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (d.moved && d.marq) {
         var blocks = slideBlocks(d.i, d.k) || [], hit = d.base.slice(), stage = root.querySelector('[data-freestage="' + d.i + ":" + d.k + '"]');
         blocks.forEach(function (bl, ix) { var el = stage && stage.querySelector('.sfb[data-fb="' + ix + '"]'); if (!el) return; var b = el.getBoundingClientRect(); if (b.left < d.marq.x1 && b.right > d.marq.x0 && b.top < d.marq.y1 && b.bottom > d.marq.y0 && hit.indexOf(ix) < 0) hit.push(ix); });
-        if (hit.length) freeSelSet(d.i, d.k, hit); else freeSel = null;
+        if (hit.length) freeSelSet(d.i, d.k, freeExpandToGroups(blocks, hit)); else freeSel = null;
       } else if (!d.add) freeSel = null;
       renderL2(); return;
     }
@@ -7008,17 +7027,24 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (!ps || ps.layout !== "free") return;
       var parr = slideBlocks(pi, pk); if (!parr) return;
       e.preventDefault();
-      var addP = []; freeClipboard.forEach(function (b) { var cp = JSON.parse(JSON.stringify(b)); cp.x = Math.min(100, fnum(b.x, 8) + 3); cp.y = Math.min(100, fnum(b.y, 8) + 3); parr.push(cp); addP.push(parr.length - 1); });
+      var addP = [], _pasted = []; freeClipboard.forEach(function (b) { var cp = JSON.parse(JSON.stringify(b)); cp.x = Math.min(100, fnum(b.x, 8) + 3); cp.y = Math.min(100, fnum(b.y, 8) + 3); parr.push(cp); _pasted.push(cp); addP.push(parr.length - 1); });
+      freeReidGroups(_pasted);
       if (addP.length) freeSelSet(pi, pk, addP);
       saveDraft(true); renderL2(); status(addP.length + (addP.length === 1 ? " block" : " blocks") + " pasted.", true); return;
     }
     if (!freeSel || !freeSel.ids || !freeSel.ids.length) return;
     var i = freeSel.i, k = freeSel.k, blocks = slideBlocks(i, k) || [];
+    if ((e.ctrlKey || e.metaKey) && (e.key === "g" || e.key === "G")) {
+      e.preventDefault();
+      if (e.shiftKey) { var _ugk = {}; freeSel.ids.forEach(function (ix) { if (blocks[ix] && blocks[ix].g) _ugk[blocks[ix].g] = 1; }); if (Object.keys(_ugk).length) { blocks.forEach(function (bl) { if (bl && bl.g && _ugk[bl.g]) delete bl.g; }); saveDraft(true); renderL2(); status("Ungrouped.", true); } }
+      else if (freeSel.ids.length > 1) { var _gkid = freeNewGroupId(); freeSel.ids.forEach(function (ix) { if (blocks[ix]) blocks[ix].g = _gkid; }); saveDraft(true); renderL2(); status("Grouped " + freeSel.ids.length + " blocks.", true); }
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) { e.preventDefault(); freeClipboard = freeSel.ids.map(function (ix) { return blocks[ix]; }).filter(Boolean).map(function (b) { return JSON.parse(JSON.stringify(b)); }); status(freeClipboard.length + (freeClipboard.length === 1 ? " block copied" : " blocks copied") + " \u2014 paste on any slide.", true); return; }
-    if ((e.ctrlKey || e.metaKey) && (e.key === "x" || e.key === "X")) { e.preventDefault(); freeClipboard = freeSel.ids.map(function (ix) { return blocks[ix]; }).filter(Boolean).map(function (b) { return JSON.parse(JSON.stringify(b)); }); freeSel.ids.slice().sort(function (a, b) { return b - a; }).forEach(function (ix) { blocks.splice(ix, 1); }); freeSel = null; saveDraft(true); renderL2(); status("Cut \u2014 paste on any slide.", true); return; }
+    if ((e.ctrlKey || e.metaKey) && (e.key === "x" || e.key === "X")) { e.preventDefault(); freeClipboard = freeSel.ids.map(function (ix) { return blocks[ix]; }).filter(Boolean).map(function (b) { return JSON.parse(JSON.stringify(b)); }); freeSel.ids.slice().sort(function (a, b) { return b - a; }).forEach(function (ix) { blocks.splice(ix, 1); }); freeSel = null; freeCleanGroups(blocks); saveDraft(true); renderL2(); status("Cut \u2014 paste on any slide.", true); return; }
     if (e.key === "Escape") { freeSel = null; renderL2(); return; }
-    if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); freeSel.ids.slice().sort(function (a, b) { return b - a; }).forEach(function (ix) { blocks.splice(ix, 1); }); freeSel = null; saveDraft(true); renderL2(); return; }
-    if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) { e.preventDefault(); var add = []; freeSel.ids.forEach(function (ix) { var b = blocks[ix]; if (!b) return; var cp = JSON.parse(JSON.stringify(b)); cp.x = Math.min(100, fnum(b.x, 8) + 2); cp.y = Math.min(100, fnum(b.y, 8) + 2); blocks.push(cp); add.push(blocks.length - 1); }); if (add.length) freeSelSet(i, k, add); saveDraft(true); renderL2(); return; }
+    if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); freeSel.ids.slice().sort(function (a, b) { return b - a; }).forEach(function (ix) { blocks.splice(ix, 1); }); freeSel = null; freeCleanGroups(blocks); saveDraft(true); renderL2(); return; }
+    if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) { e.preventDefault(); var add = [], _dup = []; freeSel.ids.forEach(function (ix) { var b = blocks[ix]; if (!b) return; var cp = JSON.parse(JSON.stringify(b)); cp.x = Math.min(100, fnum(b.x, 8) + 2); cp.y = Math.min(100, fnum(b.y, 8) + 2); blocks.push(cp); _dup.push(cp); add.push(blocks.length - 1); }); freeReidGroups(_dup); if (add.length) freeSelSet(i, k, add); saveDraft(true); renderL2(); return; }
     if (/^Arrow/.test(e.key)) {
       var step = e.shiftKey ? 5 : 0.5, dx = 0, dy = 0;
       if (e.key === "ArrowLeft") dx = -step; else if (e.key === "ArrowRight") dx = step; else if (e.key === "ArrowUp") dy = -step; else if (e.key === "ArrowDown") dy = step; else return;
@@ -10486,7 +10512,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "slide-ai-draft") { deckAiDraft(i, b); return; }
     if (act === "free-add-text") { var _fat = slideBlocks(i, +b.dataset.sindex); if (_fat) { _fat.push({ kind: "text", x: 8, y: Math.min(74, 12 + _fat.length * 6), w: 46, size: "md", align: "left", text: "New text" }); freeSelSet(i, +b.dataset.sindex, [_fat.length - 1]); saveDraft(true); renderL2(); } return; }
     if (act === "free-add-media") { var _fam = slideBlocks(i, +b.dataset.sindex); if (_fam) { _fam.push({ kind: "media", x: 10, y: Math.min(74, 12 + _fam.length * 6), w: 40, src: "" }); freeSelSet(i, +b.dataset.sindex, [_fam.length - 1]); saveDraft(true); renderL2(); } return; }
-    if (act === "free-del") { var _fdk = +b.dataset.sindex, _fd = slideBlocks(i, _fdk); if (_fd) { if (freeSelOn(i, _fdk)) { freeSel.ids.slice().sort(function (a, c) { return c - a; }).forEach(function (ix) { _fd.splice(ix, 1); }); } else if (b.dataset.fbi != null) { _fd.splice(+b.dataset.fbi, 1); } freeSel = null; saveDraft(true); renderL2(); } return; }
+    if (act === "free-del") { var _fdk = +b.dataset.sindex, _fd = slideBlocks(i, _fdk); if (_fd) { if (freeSelOn(i, _fdk)) { freeSel.ids.slice().sort(function (a, c) { return c - a; }).forEach(function (ix) { _fd.splice(ix, 1); }); } else if (b.dataset.fbi != null) { _fd.splice(+b.dataset.fbi, 1); } freeSel = null; freeCleanGroups(_fd); saveDraft(true); renderL2(); } return; }
     if (act === "free-z") { var _zk = +b.dataset.sindex, _zb = slideBlocks(i, _zk), _zi = +b.dataset.fbi, _zd = b.dataset.zdir; if (_zb && _zb[_zi]) { var _zmv = _zb.splice(_zi, 1)[0], _zni; if (_zd === "front") { _zb.push(_zmv); _zni = _zb.length - 1; } else if (_zd === "back") { _zb.unshift(_zmv); _zni = 0; } else if (_zd === "forward") { _zni = Math.min(_zb.length, _zi + 1); _zb.splice(_zni, 0, _zmv); } else { _zni = Math.max(0, _zi - 1); _zb.splice(_zni, 0, _zmv); } freeSelSet(i, _zk, [_zni]); saveDraft(true); renderL2(); } return; }
     if (act === "free-media-upload") { var _fu = slideBlocks(i, +b.dataset.sindex), _fub = _fu && _fu[+b.dataset.fbi]; if (!_fub) return; pickMedia(function (uri) { _fub.src = uri; saveDraft(true); renderL2(); }); return; }
     if (act === "free-align") {
@@ -10516,6 +10542,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "free-icon-pick") { var _ipk = +b.dataset.sindex, _ip = slideBlocks(i, _ipk), _ipb = _ip && _ip[+b.dataset.fbi]; if (!_ipb) return; freeIconPicker(function (name) { _ipb.name = name; saveDraft(true); renderL2(); }); return; }
     if (act === "free-color") { var _cak = +b.dataset.sindex, _ca = slideBlocks(i, _cak), _cab = _ca && _ca[+b.dataset.fbi]; if (!_cab) return; var _cf = b.dataset.field, _cv = b.dataset.val; if (_cv) _cab[_cf] = _cv; else delete _cab[_cf]; saveDraft(true); renderL2(); return; }
     if (act === "free-layer") { freeSelSet(i, +b.dataset.sindex, [+b.dataset.fbi]); renderL2(); return; }
+    if (act === "free-group") { var _grk = +b.dataset.sindex, _grb = slideBlocks(i, _grk); if (_grb && freeSelOn(i, _grk) && freeSel.ids.length > 1) { var _grid = freeNewGroupId(); freeSel.ids.forEach(function (ix) { if (_grb[ix]) _grb[ix].g = _grid; }); saveDraft(true); renderL2(); status("Grouped " + freeSel.ids.length + " blocks \u2014 they move & select together.", true); } return; }
+    if (act === "free-ungroup") { var _urk = +b.dataset.sindex, _urb = slideBlocks(i, _urk); if (_urb && freeSelOn(i, _urk)) { var _ug = {}; freeSel.ids.forEach(function (ix) { if (_urb[ix] && _urb[ix].g) _ug[_urb[ix].g] = 1; }); _urb.forEach(function (bl) { if (bl && bl.g && _ug[bl.g]) delete bl.g; }); saveDraft(true); renderL2(); status("Ungrouped.", true); } return; }
     if (act === "slide-tofree") { slideConvertToFree(i, +b.dataset.sindex); return; }
     if (act === "slide-savelayout") { slideSaveAsLayout(i, +b.dataset.sindex); return; }
     if (act === "slide-bg") { slideBgModal(i, +b.dataset.sindex); return; }
