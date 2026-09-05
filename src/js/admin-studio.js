@@ -6031,6 +6031,82 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (s.layout === "free") s.blocks = [];
     return s;
   }
+  // The default PowerPoint-style layout set \u2014 each is a freeform (canvas) slide seeded with positioned placeholder blocks.
+  var SLIDE_LAYOUTS_LIB = [
+    { id: "title", name: "Title Slide", blocks: [
+      { kind: "text", role: "kicker", size: "sm", align: "center", x: 15, y: 33, w: 70, ph: "Kicker" },
+      { kind: "text", size: "lg", align: "center", x: 8, y: 40, w: 84, ph: "Presentation title" },
+      { kind: "text", role: "caption", size: "sm", align: "center", x: 20, y: 62, w: 60, ph: "Subtitle" }
+    ] },
+    { id: "titlecontent", name: "Title and Content", blocks: [
+      { kind: "text", size: "md", align: "left", x: 7, y: 9, w: 86, ph: "Title" },
+      { kind: "text", size: "sm", align: "left", x: 7, y: 27, w: 86, h: 63, valign: "top", ph: "Add your content" }
+    ] },
+    { id: "section", name: "Section Header", blocks: [
+      { kind: "text", role: "kicker", size: "sm", align: "left", x: 8, y: 36, w: 50, ph: "01" },
+      { kind: "text", size: "lg", align: "left", x: 8, y: 43, w: 84, ph: "Section title" }
+    ] },
+    { id: "twocontent", name: "Two Content", blocks: [
+      { kind: "text", size: "md", align: "left", x: 7, y: 8, w: 86, ph: "Title" },
+      { kind: "text", size: "sm", align: "left", x: 7, y: 27, w: 42, h: 62, ph: "Content" },
+      { kind: "text", size: "sm", align: "left", x: 51, y: 27, w: 42, h: 62, ph: "Content" }
+    ] },
+    { id: "comparison", name: "Comparison", blocks: [
+      { kind: "text", size: "md", align: "left", x: 7, y: 6, w: 86, ph: "Title" },
+      { kind: "text", size: "sm", align: "left", x: 7, y: 23, w: 42, ph: "Heading" },
+      { kind: "text", size: "sm", align: "left", x: 7, y: 31, w: 42, h: 57, ph: "Content" },
+      { kind: "text", size: "sm", align: "left", x: 51, y: 23, w: 42, ph: "Heading" },
+      { kind: "text", size: "sm", align: "left", x: 51, y: 31, w: 42, h: 57, ph: "Content" }
+    ] },
+    { id: "titleonly", name: "Title Only", blocks: [
+      { kind: "text", size: "md", align: "left", x: 7, y: 8, w: 86, ph: "Title" }
+    ] },
+    { id: "blank", name: "Blank", blocks: [] },
+    { id: "contentcaption", name: "Content with Caption", blocks: [
+      { kind: "text", size: "md", align: "left", x: 7, y: 10, w: 30, ph: "Title" },
+      { kind: "text", size: "sm", align: "left", x: 7, y: 27, w: 30, h: 61, ph: "Caption text" },
+      { kind: "media", x: 41, y: 10, w: 52, h: 78 }
+    ] },
+    { id: "picturecaption", name: "Picture with Caption", blocks: [
+      { kind: "media", x: 7, y: 10, w: 58, h: 72 },
+      { kind: "text", size: "md", align: "left", x: 69, y: 28, w: 24, ph: "Title" },
+      { kind: "text", role: "caption", size: "sm", align: "left", x: 69, y: 50, w: 24, ph: "Caption" }
+    ] }
+  ];
+  function slideLayoutThumb(blocks) {
+    var inner = (blocks || []).map(function (b) {
+      var h = b.h != null ? fnum(b.h, 12) : (b.role === "kicker" ? 7 : b.size === "lg" ? 15 : b.size === "md" ? 11 : 8);
+      var st = "left:" + fnum(b.x, 8) + "%;top:" + fnum(b.y, 8) + "%;width:" + fnum(b.w, 40) + "%;height:" + h + "%;";
+      var cl = b.kind === "media" ? "slidelay__ph slidelay__ph--media" : (b.role === "kicker" ? "slidelay__ph slidelay__ph--kicker" : "slidelay__ph slidelay__ph--text");
+      return '<span class="' + cl + '" style="' + st + '"></span>';
+    }).join("");
+    return '<span class="slidelay__mini">' + (inner || '<span class="slidelay__blank">Blank</span>') + "</span>";
+  }
+  function slideLayoutPickerModal(i) {
+    if (!data.work[i]) return;
+    var cards = SLIDE_LAYOUTS_LIB.map(function (lib) {
+      return '<button type="button" class="slidelay__card" data-slidelay="' + lib.id + '"><span class="slidelay__thumb">' + slideLayoutThumb(lib.blocks) + '</span><span class="slidelay__name">' + escHtml(lib.name) + "</span></button>";
+    }).join("");
+    var modal = document.createElement("div");
+    modal.className = "pass pass--wide slidelay";
+    modal.innerHTML = '<div class="pass__box"><div class="pass__title">Add a slide</div><div class="pass__sub">Pick a layout to start from \u2014 every element is editable on the canvas: drag, resize, restyle.</div><div class="slidelay__grid">' + cards + '</div><div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button></div></div>';
+    document.body.appendChild(modal);
+    var onKey = function (e) { if (e.key === "Escape") close(); };
+    var close = function () { modal.remove(); document.removeEventListener("keydown", onKey); };
+    document.addEventListener("keydown", onKey);
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    modal.querySelectorAll("[data-slidelay]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var lib = SLIDE_LAYOUTS_LIB.filter(function (x) { return x.id === btn.getAttribute("data-slidelay"); })[0]; if (!lib) return;
+        var w = data.work[i]; w.study = w.study || blankStudy(); w.study.slides = w.study.slides || [];
+        w.study.slides.push({ id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: "free", blocks: JSON.parse(JSON.stringify(lib.blocks || [])), notes: "" });
+        openSlide = w.study.slides.length - 1; freeSel = null;
+        close(); saveDraft(true); renderL2();
+        status(lib.name + " added \u2014 click any placeholder to edit.", true);
+      });
+    });
+  }
   // Convert-to-freeform on-ramp: map a structured slide's slots onto positioned freeform blocks.
   function slotsToFreeBlocks(s) {
     var z = s.slots || {}, L = s.layout, out = [];
@@ -6366,7 +6442,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (kind === "media") inner = bl.src ? '<img src="' + escAttr(bl.src) + '" alt="" draggable="false">' : '<div class="sfb__ph">Media</div>';
     else if (kind === "shape") inner = editorShapeInner(bl);
     else if (kind === "icon") inner = '<div class="sfb__icon" style="color:' + (freeColor(bl.color) || "var(--accent)") + '">' + ((window.RK && window.RK.iconSvg) ? window.RK.iconSvg(bl.name || "star") : "") + "</div>";
-    else { var _tx = String(bl.text || ""), _body = _tx.trim() ? (/<[a-z!/]/i.test(_tx) ? _tx : escHtml(_tx)) : '<span class="sfb__empty">Text</span>'; inner = '<div class="sfb__tx sfb--' + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "") + '">' + _body + "</div>"; }
+    else { var _tx = String(bl.text || ""), _body = _tx.trim() ? (/<[a-z!/]/i.test(_tx) ? _tx : escHtml(_tx)) : '<span class="sfb__empty">' + escHtml(bl.ph || "Text") + '</span>'; inner = '<div class="sfb__tx ' + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + (bl.role === "kicker" || bl.role === "caption" ? " " + bl.role : "") + " a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "") + '">' + _body + "</div>"; }
     var chrome = single ? (FREE_HANDLES.map(function (h) { return '<span class="sfb__h sfb__h--' + h + '" data-fbh="' + h + '"></span>'; }).join("") + '<span class="sfb__rot" data-fbrot title="Drag to rotate"></span>') : "";
     var bx = boxed && kind === "media" ? " sfb--fit" : (boxed && kind === "text" ? " sfb--boxed" : "");
     return '<div class="sfb sfb--' + kind + bx + (sel ? " is-sel" : "") + (single ? " is-single" : "") + '" data-fb="' + idx + '" data-fbdrag style="' + st + '">' + inner + chrome + "</div>";
@@ -10032,7 +10108,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "study-blocklock") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].locked = !s[j].locked; saveDraft(true); renderL2(); status(s[j].locked ? "Section locked \u2014 hidden behind the deeper-cut pass." : "Section unlocked.", true); } return; }
     if (act === "study-blocksep") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { if (s[j].sep === false) delete s[j].sep; else s[j].sep = false; saveDraft(true); renderL2(); status(s[j].sep === false ? "Divider off \u2014 this section flows into the previous one." : "Divider on \u2014 separator line above.", true); } return; }
     if (act === "study-blockoff") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { if (s[j].off) delete s[j].off; else s[j].off = true; saveDraft(true); renderL2(); status(s[j].off ? "Section hidden from the live site \u2014 still listed here so you can toggle it back." : "Section shown on the live site.", true); } return; }
-    if (act === "slide-add") { var _saw = data.work[i]; if (!_saw) return; _saw.study = _saw.study || blankStudy(); _saw.study.slides = _saw.study.slides || []; _saw.study.slides.push(blankSlide("statement")); openSlide = _saw.study.slides.length - 1; saveDraft(true); renderL2(); return; }
+    if (act === "slide-add") { slideLayoutPickerModal(i); return; }
     if (act === "slide-remove") { var _srw = data.work[i], srk = +b.dataset.sindex, srs = _srw && _srw.study && _srw.study.slides; if (!srs) return; srs.splice(srk, 1); if (openSlide === srk) openSlide = -1; else if (openSlide > srk) openSlide--; saveDraft(true); renderL2(); return; }
     if (act === "slide-up") { var _suw = data.work[i], suk = +b.dataset.sindex, sus = _suw && _suw.study && _suw.study.slides; if (sus && suk > 0) { var _sut = sus[suk - 1]; sus[suk - 1] = sus[suk]; sus[suk] = _sut; if (openSlide === suk) openSlide = suk - 1; else if (openSlide === suk - 1) openSlide = suk; saveDraft(true); renderL2(); } return; }
     if (act === "slide-down") { var _sdw = data.work[i], sdk = +b.dataset.sindex, sds = _sdw && _sdw.study && _sdw.study.slides; if (sds && sdk < sds.length - 1) { var _sdt = sds[sdk + 1]; sds[sdk + 1] = sds[sdk]; sds[sdk] = _sdt; if (openSlide === sdk) openSlide = sdk + 1; else if (openSlide === sdk + 1) openSlide = sdk; saveDraft(true); renderL2(); } return; }

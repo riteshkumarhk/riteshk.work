@@ -2657,7 +2657,7 @@
       if (bl.kind === "media") return '<div class="pjps__fb pjps__fb--media' + (boxed ? " pjps__fb--fit" : "") + '" style="' + st + '">' + pjMediaHtml(bl, "pjps__media-el") + "</div>";
       if (bl.kind === "shape") return renderFreeShape(bl, st);
       if (bl.kind === "icon") return '<div class="pjps__fb pjps__fb--icon" style="' + st + "color:" + (pjSafeColor(bl.color) || "var(--accent)") + '">' + iconSvg(bl.name || "star") + "</div>";
-      var cls = "pjps__fb pjps__fb--text pjps__fb--" + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " pjps__fb--a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " pjps__fb--boxed pjps__fb--v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "");
+      var cls = "pjps__fb pjps__fb--text pjps__fb--" + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " pjps__fb--a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (bl.role === "kicker" || bl.role === "caption" ? " pjps__fb--" + bl.role : "") + (boxed ? " pjps__fb--boxed pjps__fb--v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "");
       return '<div class="' + cls + '" style="' + st + '">' + pjBodyHtml(bl.text || "") + "</div>";
     }
     function pjSlideTitle(s) {
