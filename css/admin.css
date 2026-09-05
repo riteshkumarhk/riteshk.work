@@ -3115,7 +3115,7 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .sfb__rot:active { cursor: grabbing; }
 .sfb__marquee { position: absolute; z-index: 20; border: 1px solid var(--accent); background: rgba(216, 166, 87, .12); pointer-events: none; }
 .slidefree__z { display: flex; gap: .35rem; flex-wrap: wrap; margin-top: .2rem; }
-.slidefree__z .btn { flex: 1 1 auto; padding: .3rem .4rem; font-size: .68rem; }
+.slidefree__z .btn { flex: 1 1 auto; padding: .3rem .4rem; font-size: .68rem; display: flex; align-items: center; justify-content: center; }
 .slidefree__tools { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
 .slidefree__tools .btn { flex: 0 0 auto; }
 .slidefree__hint { font-family: var(--sans); font-size: .72rem; color: var(--text-faint); }
