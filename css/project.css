@@ -1147,7 +1147,10 @@ html.pjp-on { overflow: hidden; }
 .pjps__fb--text p { margin: 0 0 .4em; } .pjps__fb--text p:last-child { margin-bottom: 0; }
 .pjps__fb--media img, .pjps__fb--media video, .pjps__fb--media .pjps__media-el { width: 100%; height: auto; display: block; border-radius: 5px; }
 .pjps__fb--media .pjps__ph { aspect-ratio: 16 / 10; border-radius: 5px; }
-/* Freeform boxed text (vertical align) + fitted media (P1) */
+/* Pulled case-study section on a slide: render live at design width, zoom-fit to the box */
+.pjps__fb--section { overflow: visible; height: auto; }
+.pjps__secwrap { width: 1120px; transform-origin: top left; }
+.pjps__secwrap > .pjb { margin: 0; }
 .pjps__fb--boxed { display: flex; flex-direction: column; }
 .pjps__fb--vtop { justify-content: flex-start; }
 .pjps__fb--vmiddle { justify-content: center; }

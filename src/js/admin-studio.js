@@ -740,7 +740,19 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     play: svgIco('<path d="M6 4.5v15a.7.7 0 0 0 1.06.6l12-7.5a.7.7 0 0 0 0-1.2l-12-7.5A.7.7 0 0 0 6 4.5z"/>'),
     slides: svgIco('<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>'),
     group: svgIco('<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="7" height="5" rx="1"/><rect x="10" y="12" width="7" height="5" rx="1"/>'),
-    ungroup: svgIco('<rect x="5" y="4" width="8" height="6" rx="1"/><rect x="11" y="14" width="8" height="6" rx="1"/>')
+    ungroup: svgIco('<rect x="5" y="4" width="8" height="6" rx="1"/><rect x="11" y="14" width="8" height="6" rx="1"/>'),
+    alignL: svgIco('<line x1="3" y1="4" x2="3" y2="20"/><rect x="6" y="6" width="12" height="4" rx="1"/><rect x="6" y="14" width="8" height="4" rx="1"/>', 16),
+    alignCH: svgIco('<line x1="12" y1="4" x2="12" y2="20"/><rect x="6" y="6" width="12" height="4" rx="1"/><rect x="8" y="14" width="8" height="4" rx="1"/>', 16),
+    alignR: svgIco('<line x1="21" y1="4" x2="21" y2="20"/><rect x="6" y="6" width="12" height="4" rx="1"/><rect x="10" y="14" width="8" height="4" rx="1"/>', 16),
+    alignT: svgIco('<line x1="4" y1="3" x2="20" y2="3"/><rect x="6" y="6" width="4" height="12" rx="1"/><rect x="14" y="6" width="4" height="8" rx="1"/>', 16),
+    alignMV: svgIco('<line x1="4" y1="12" x2="20" y2="12"/><rect x="6" y="6" width="4" height="12" rx="1"/><rect x="14" y="8" width="4" height="8" rx="1"/>', 16),
+    alignB: svgIco('<line x1="4" y1="21" x2="20" y2="21"/><rect x="6" y="6" width="4" height="12" rx="1"/><rect x="14" y="10" width="4" height="8" rx="1"/>', 16),
+    zFront: svgIco('<path d="M5 3h14"/><path d="M12 21V8"/><path d="m7 13 5-5 5 5"/>', 16),
+    zForward: svgIco('<path d="M12 20V6"/><path d="m6 12 6-6 6 6"/>', 16),
+    zBackward: svgIco('<path d="M12 4v14"/><path d="m6 12 6 6 6-6"/>', 16),
+    zBack: svgIco('<path d="M5 21h14"/><path d="M12 3v13"/><path d="m7 11 5 5 5-5"/>', 16),
+    distH: svgIco('<path d="M4 5v14"/><path d="M20 5v14"/><rect x="10" y="8" width="4" height="8" rx="1"/>', 16),
+    distV: svgIco('<path d="M5 4h14"/><path d="M5 20h14"/><rect x="8" y="10" width="8" height="4" rx="1"/>', 16)
   };
   const EYE_ON = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   const EYE_OFF = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
@@ -6298,6 +6310,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       stage.style.transform = "scale(" + sc + ")";
       box.style.height = Math.round(720 * sc) + "px";
     });
+    fitFreeSections();
+  }
+  function fitFreeSections() {
+    if (!root) return;
+    root.querySelectorAll(".sfb--section").forEach(function (el) {
+      var wrap = el.querySelector(".sfb__secwrap"); if (!wrap) return;
+      var bw = el.clientWidth || 0; if (bw > 0) wrap.style.zoom = (bw / 1120).toFixed(4);
+    });
   }
   function slidePvSetup() {
     slidePvFit();
@@ -6403,6 +6423,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   // LEFT editor pane: just the slide navigator rail. The slide EDITOR itself lives in the right
   // preview pane (renderSlideStage), and the Current/All-slides toggle lives in the status bar.
+  function slideNavScrollTop() { var e = root && root.querySelector(".adm__editor"); return e ? e.scrollTop : 0; }
+  function slideNavScrollTo(t) { var e = root && root.querySelector(".adm__editor"); if (e) e.scrollTop = t; requestAnimationFrame(function () { var e2 = root && root.querySelector(".adm__editor"); if (e2) e2.scrollTop = t; }); }
   function slidesNav(w, i) {
     var slides = w.study.slides || [], has = slides.length;
     var sel = (openSlide >= 0 && slides[openSlide]) ? openSlide : (has ? 0 : -1);
@@ -6513,22 +6535,37 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (_sbw.study.slides && _sbw.study.slides.length) confirmModal({ title: "Rebuild the deck from sections?", sub: "This replaces your current " + _sbw.study.slides.length + " slide" + (_sbw.study.slides.length === 1 ? "" : "s") + " with a fresh draft derived from the case study.", cta: "Rebuild deck" }).then(function (ok) { if (ok) _buildIt(); });
     else _buildIt();
   }
+  // Fit each live section thumbnail (rendered at 1120px design width) into its picker card frame.
+  function fitSecpickThumbs(modal) {
+    (modal || document).querySelectorAll("[data-secthumb]").forEach(function (t) {
+      var wrap = t.querySelector(".secpick__thumb-wrap"); if (!wrap) return;
+      var bw = t.clientWidth || 0; if (bw > 0) wrap.style.zoom = (bw / 1120).toFixed(4);
+    });
+  }
   function slideSectionPickModal(i, opts) {
     var w = data.work[i]; if (!w || !w.study) { status("No case study sections yet."); return; }
     var blocks = w.study.blocks || [];
     function secMedia(b) { var m = (window.RK && window.RK.deckSlideFromBlock) ? (window.RK.deckSlideFromBlock(b).slots || {}).media : null; return m && m.src ? m : null; }
     var cards = "";
-    blocks.forEach(function (b, bi) { if (!b || b.off || b.encStub || b.vaultBlock) return; if (opts.mediaOnly && !secMedia(b)) return; var nm = slideBlockName(b); cards += '<button type="button" class="secpick__card slidepull__card" data-pull="' + bi + '"><span class="secpick__prev">' + sectionPreview(b.type) + '</span><span class="secpick__name">' + escHtml(nm.label) + '<span class="secpick__tag">' + escHtml(nm.type) + "</span></span></button>"; });
+    var canThumb = !!(window.RK && window.RK.renderStudyBlock);
+    blocks.forEach(function (b, bi) { if (!b || b.off || b.encStub || b.vaultBlock) return; if (opts.mediaOnly && !secMedia(b)) return; var nm = slideBlockName(b); var prev = canThumb ? '<span class="secpick__prev secpick__prev--live"><span class="secpick__thumb" data-secthumb><span class="secpick__thumb-wrap">' + window.RK.renderStudyBlock(b) + '</span></span></span>' : '<span class="secpick__prev">' + sectionPreview(b.type) + '</span>'; cards += '<button type="button" class="secpick__card slidepull__card" data-pull="' + bi + '">' + prev + '<span class="secpick__name">' + escHtml(nm.label) + '<span class="secpick__tag">' + escHtml(nm.type) + "</span></span></button>"; });
     if (!cards) cards = '<div class="adm__empty">' + escHtml(opts.empty || "No sections to pull from yet.") + "</div>";
     var modal = document.createElement("div"); modal.className = "pass pass--wide secpick slidepull";
     modal.innerHTML = '<div class="pass__box"><div class="pass__title">' + escHtml(opts.title) + '</div><div class="pass__sub">' + escHtml(opts.sub || "") + '</div><div class="secpick__grid">' + cards + '</div><div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button></div></div>';
     document.body.appendChild(modal);
+    if (canThumb) fitSecpickThumbs(modal);
     var onKey = function (e) { if (e.key === "Escape") close(); };
     var close = function () { modal.remove(); document.removeEventListener("keydown", onKey); };
     document.addEventListener("keydown", onKey);
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     modal.querySelector("[data-cancel]").addEventListener("click", close);
-    modal.querySelectorAll("[data-pull]").forEach(function (btn) { btn.addEventListener("click", function () { var block = blocks[+btn.getAttribute("data-pull")]; var mapped = (window.RK && window.RK.deckSlideFromBlock) ? window.RK.deckSlideFromBlock(block) : null; if (!mapped) { status("Couldn\u2019t read that section."); return; } close(); opts.onPick(block, mapped); }); });
+    modal.querySelectorAll("[data-pull]").forEach(function (btn) { btn.addEventListener("click", function () { var block = blocks[+btn.getAttribute("data-pull")]; if (opts.asSection) { close(); opts.onPick(block); return; } var mapped = (window.RK && window.RK.deckSlideFromBlock) ? window.RK.deckSlideFromBlock(block) : null; if (!mapped) { status("Couldn\u2019t read that section."); return; } close(); opts.onPick(block, mapped); }); });
+  }
+  function slideSectionAsElement(i) {
+    slideSectionPickModal(i, { asSection: true, title: "Pull a section onto the slide", sub: "Drops the real section \u2014 comparison sliders, device mockups, galleries, isometric stacks \u2026 \u2014 onto this slide as a live element you can move, scale, rotate and mirror.", empty: "No case-study sections to pull from yet.", onPick: function (block) {
+      slideAddBlock(i, { kind: "section", block: JSON.parse(JSON.stringify(block)), x: 8, y: 8, w: 84 });
+      status("Pulled \u201c" + slideBlockName(block).label + "\u201d onto the slide.", true);
+    } });
   }
   function slideNewFromSection(i) {
     slideSectionPickModal(i, { title: "Generate a slide from a section", sub: "Creates a new slide from that section\u2019s content \u2014 edit it freely after.", onPick: function (block, mapped) {
@@ -6744,8 +6781,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (bl.rot) st += "transform:rotate(" + (parseFloat(bl.rot) || 0) + "deg);";
     if (bl.opacity != null && +bl.opacity < 100) st += "opacity:" + (Math.max(0, Math.min(100, +bl.opacity)) / 100) + ";";
     if (bl.shadow) st += "filter:" + freeShadowCss(bl.shadow) + ";";
-    var inner, kind = bl.kind === "media" ? "media" : bl.kind === "shape" ? "shape" : bl.kind === "icon" ? "icon" : "text";
-    if (kind === "media") inner = bl.src ? '<img src="' + escAttr(bl.src) + '" alt="" draggable="false">' : '<div class="sfb__ph">Media</div>';
+    var inner, kind = bl.kind === "media" ? "media" : bl.kind === "shape" ? "shape" : bl.kind === "icon" ? "icon" : bl.kind === "section" ? "section" : "text";
+    if (kind === "section") { st = st.replace(/height:[^;]*;/, ""); boxed = false; inner = '<div class="sfb__secwrap" style="width:1120px;' + (bl.flip ? "transform:scaleX(-1);" : "") + '">' + ((window.RK && window.RK.renderStudyBlock && bl.block) ? window.RK.renderStudyBlock(bl.block) : '<div class="sfb__ph">Section</div>') + "</div>"; }
+    else if (kind === "media") inner = bl.src ? '<img src="' + escAttr(bl.src) + '" alt="" draggable="false">' : '<div class="sfb__ph">Media</div>';
     else if (kind === "shape") inner = editorShapeInner(bl);
     else if (kind === "icon") inner = '<div class="sfb__icon" style="color:' + (freeColor(bl.color) || "var(--accent)") + '">' + ((window.RK && window.RK.iconSvg) ? window.RK.iconSvg(bl.name || "star") : "") + "</div>";
     else { var _tx = String(bl.text || ""), _body = _tx.trim() ? (/<[a-z!/]/i.test(_tx) ? _tx : escHtml(_tx)) : '<span class="sfb__empty">' + escHtml(bl.ph || "Text") + '</span>'; inner = '<div class="sfb__tx ' + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + (bl.role === "kicker" || bl.role === "caption" ? " " + bl.role : "") + " a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "") + '">' + _body + "</div>"; }
@@ -6797,6 +6835,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<button type="button" class="btn btn--ghost" data-act="free-add-media" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + ' Media</button>' +
       '<select class="slidefree__addshape" data-freeaddshape data-fi="' + i + '" data-fk="' + k + '"><option value="">+ Shape\u2026</option><option value="rect">Rectangle</option><option value="ellipse">Oval</option><option value="line">Line</option><option value="arrow">Arrow</option></select>' +
       '<button type="button" class="btn btn--ghost" data-act="free-add-icon" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + ' Icon</button>' +
+      '<button type="button" class="btn btn--ghost slidefree__tools-sec" data-act="free-add-section" data-index="' + i + '" data-sindex="' + k + '" title="Pull a real case-study section onto this slide">' + IC.add + ' Section</button>' +
       '<button type="button" class="btn btn--ghost" data-act="slide-bg" data-index="' + i + '" data-sindex="' + k + '">' + IC.board + ' Background</button>' +
       '<span class="slidefree__hint">Drag to move \u00b7 handles resize \u00b7 top dot rotates \u00b7 Shift-click or box-select several \u00b7 arrows nudge</span></div></div>';
   }
@@ -6812,6 +6851,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<button type="button" class="btn btn--ghost" data-act="free-add-media" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + ' Media</button>' +
       '<select class="slidefree__addshape" data-freeaddshape data-fi="' + i + '" data-fk="' + k + '"><option value="">+ Shape\u2026</option><option value="rect">Rectangle</option><option value="ellipse">Oval</option><option value="line">Line</option><option value="arrow">Arrow</option></select>' +
       '<button type="button" class="btn btn--ghost" data-act="free-add-icon" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + ' Icon</button>' +
+      '<button type="button" class="btn btn--ghost slidefree__tools-sec" data-act="free-add-section" data-index="' + i + '" data-sindex="' + k + '" title="Pull a real case-study section onto this slide">' + IC.add + ' Section</button>' +
       '<button type="button" class="btn btn--ghost" data-act="slide-bg" data-index="' + i + '" data-sindex="' + k + '">' + IC.board + ' Background</button>' +
       "</div>";
   }
@@ -6830,18 +6870,18 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="af__hint">How this slide enters. <b>Magic Move</b> glides matching text, media &amp; shapes from the previous slide into place.</div></div></div>';
   }
   function freeZRow(i, k, idx) {
-    return '<div class="slidefree__z">' + [["back", "To back"], ["backward", "Back"], ["forward", "Fwd"], ["front", "To front"]].map(function (o) { return '<button type="button" class="btn btn--ghost" data-act="free-z" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" data-zdir="' + o[0] + '">' + o[1] + "</button>"; }).join("") + "</div>";
+    return '<div class="slidefree__z">' + [["back", IC.zBack, "Send to back"], ["backward", IC.zBackward, "Send backward"], ["forward", IC.zForward, "Bring forward"], ["front", IC.zFront, "Bring to front"]].map(function (o) { return '<button type="button" class="btn btn--ghost" data-act="free-z" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" data-zdir="' + o[0] + '" title="' + o[2] + '" aria-label="' + o[2] + '">' + o[1] + "</button>"; }).join("") + "</div>";
   }
   function freeRotRow(i, k, idx, bl) {
     return '<div class="af"><label class="af__label">Rotation</label>' + numField('<input type="number" data-freefield="rot" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (Math.round(parseFloat(bl.rot) || 0)) + '" min="0" max="359" step="1" />') + "</div>";
   }
   function freeAlignRow(i, k, n) {
-    function ab(dir, lbl, title) { return '<button type="button" class="btn btn--ghost" data-act="free-align" data-index="' + i + '" data-sindex="' + k + '" data-align="' + dir + '" title="' + title + '">' + lbl + "</button>"; }
+    function ab(dir, ico, title) { return '<button type="button" class="btn btn--ghost" data-act="free-align" data-index="' + i + '" data-sindex="' + k + '" data-align="' + dir + '" title="' + title + '" aria-label="' + title + '">' + ico + "</button>"; }
     var row = '<div class="slidefree__align"><span class="slidefree__align-lbl">' + (n > 1 ? "Align" : "To slide") + "</span>" +
-      ab("left", "L", "Align left") + ab("centerH", "C", "Align centre") + ab("right", "R", "Align right") +
+      ab("left", IC.alignL, "Align left") + ab("centerH", IC.alignCH, "Align centre") + ab("right", IC.alignR, "Align right") +
       '<span class="slidefree__align-sep"></span>' +
-      ab("top", "T", "Align top") + ab("middleV", "M", "Align middle") + ab("bottom", "B", "Align bottom");
-    if (n >= 3) row += '<span class="slidefree__align-sep"></span><button type="button" class="btn btn--ghost" data-act="free-distribute" data-index="' + i + '" data-sindex="' + k + '" data-axis="h" title="Distribute horizontally">\u2194</button><button type="button" class="btn btn--ghost" data-act="free-distribute" data-index="' + i + '" data-sindex="' + k + '" data-axis="v" title="Distribute vertically">\u2195</button>';
+      ab("top", IC.alignT, "Align top") + ab("middleV", IC.alignMV, "Align middle") + ab("bottom", IC.alignB, "Align bottom");
+    if (n >= 3) row += '<span class="slidefree__align-sep"></span><button type="button" class="btn btn--ghost" data-act="free-distribute" data-index="' + i + '" data-sindex="' + k + '" data-axis="h" title="Distribute horizontally" aria-label="Distribute horizontally">' + IC.distH + '</button><button type="button" class="btn btn--ghost" data-act="free-distribute" data-index="' + i + '" data-sindex="' + k + '" data-axis="v" title="Distribute vertically" aria-label="Distribute vertically">' + IC.distV + '</button>';
     return row + "</div>";
   }
   function freeSelPanel(i, k) {
@@ -6854,8 +6894,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }
     var idx = freeSel.ids[0], bl = blocks[idx];
     if (!bl) return '<div class="slidefree__sel slidefree__sel--none">Select a block to edit it.</div>';
-    var _kn = bl.kind === "media" ? "Media" : bl.kind === "shape" ? "Shape" : bl.kind === "icon" ? "Icon" : "Text";
+    var _kn = bl.kind === "media" ? "Media" : bl.kind === "shape" ? "Shape" : bl.kind === "icon" ? "Icon" : bl.kind === "section" ? "Section" : "Text";
     var head = '<div class="slidefree__selhead"><b>' + _kn + ' block</b><button class="iconbtn iconbtn--danger" data-act="free-del" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" title="Delete block">' + IC.trash + "</button></div>";
+    if (bl.kind === "section") {
+      return '<div class="slidefree__sel">' + head +
+        '<div class="af__hint">Pulled live from your case study \u2014 comparison sliders, device mockups &amp; galleries render for real. Edit the source section then re-pull to refresh.</div>' +
+        '<label class="sfbflip"><input type="checkbox" data-act="free-flip" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '"' + (bl.flip ? " checked" : "") + '> Mirror (flip horizontally)</label>' +
+        '<div class="imgblk__row"><button class="btn btn--ghost" data-act="free-section-repull" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">Replace section\u2026</button></div>' +
+        '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
+    }
     if (bl.kind === "media") {
       return '<div class="slidefree__sel">' + head +
         '<div class="af"><label class="af__label">Media URL</label><input type="text" data-freefield="src" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + escAttr(bl.src || "") + '" placeholder="Paste a URL\u2026" />' +
@@ -6893,8 +6940,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var rows = "";
     for (var idx = blocks.length - 1; idx >= 0; idx--) {
       var bl = blocks[idx];
-      var kn = bl.kind === "media" ? "Media" : bl.kind === "shape" ? ({ rect: "Rectangle", ellipse: "Oval", line: "Line", arrow: "Arrow" }[bl.shape] || "Shape") : bl.kind === "icon" ? "Icon" : "Text";
-      var lbl = bl.kind === "text" ? (String(bl.text || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 34) || "Text") : bl.kind === "icon" ? (bl.name || "star") : bl.kind === "media" ? (String(bl.src || "").split("/").pop().slice(0, 30) || "\u2014") : "\u2014";
+      var kn = bl.kind === "media" ? "Media" : bl.kind === "shape" ? ({ rect: "Rectangle", ellipse: "Oval", line: "Line", arrow: "Arrow" }[bl.shape] || "Shape") : bl.kind === "icon" ? "Icon" : bl.kind === "section" ? "Section" : "Text";
+      var lbl = bl.kind === "text" ? (String(bl.text || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 34) || "Text") : bl.kind === "icon" ? (bl.name || "star") : bl.kind === "section" ? (bl.block ? slideBlockName(bl.block).label : "Section") : bl.kind === "media" ? (String(bl.src || "").split("/").pop().slice(0, 30) || "\u2014") : "\u2014";
       var on = (freeSelOn(i, k) && freeSelHas(idx)) ? " is-on" : "";
       rows += '<button type="button" class="slidefree__layer' + on + '" data-act="free-layer" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '"><span class="slidefree__layer-k">' + escHtml(kn) + '</span><span class="slidefree__layer-l">' + escHtml(lbl) + '</span></button>';
     }
@@ -10507,8 +10554,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "slide-add") { slideLayoutPickerModal(i); return; }
     if (act === "slide-addabove") { var _aaw = data.work[i], _aas = _aaw && _aaw.study && _aaw.study.slides, _aak = +b.dataset.sindex; if (!_aas) return; _aas.splice(_aak, 0, { id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: "free", blocks: [], notes: "" }); openSlide = _aak; freeSel = null; saveDraft(true); renderL2(); status("Blank slide added above.", true); return; }
     if (act === "slide-view") { slideView = b.dataset.view === "all" ? "all" : "current"; renderSlideStage(); return; }
-    if (act === "slide-select") { if (e.target.closest("button, input, select, textarea, [data-grip]")) return; var _ssk = +b.dataset.sindex; if (openSlide !== _ssk) { openSlide = _ssk; renderL2(); } return; }
-    if (act === "slide-goprev" || act === "slide-gonext") { var _gw = data.work[i], _gsl = _gw && _gw.study && _gw.study.slides; if (!_gsl || !_gsl.length) return; var _cur = (openSlide >= 0 && _gsl[openSlide]) ? openSlide : 0; openSlide = act === "slide-goprev" ? Math.max(0, _cur - 1) : Math.min(_gsl.length - 1, _cur + 1); renderL2(); return; }
+    if (act === "slide-select") { if (e.target.closest("button, input, select, textarea, [data-grip]")) return; var _ssk = +b.dataset.sindex; if (openSlide !== _ssk) { var _nt = slideNavScrollTop(); openSlide = _ssk; renderL2(); slideNavScrollTo(_nt); } return; }
+    if (act === "slide-goprev" || act === "slide-gonext") { var _gw = data.work[i], _gsl = _gw && _gw.study && _gw.study.slides; if (!_gsl || !_gsl.length) return; var _cur = (openSlide >= 0 && _gsl[openSlide]) ? openSlide : 0; var _gnt = slideNavScrollTop(); openSlide = act === "slide-goprev" ? Math.max(0, _cur - 1) : Math.min(_gsl.length - 1, _cur + 1); renderL2(); slideNavScrollTo(_gnt); return; }
     if (act === "slide-remove") { var _srw = data.work[i], srk = +b.dataset.sindex, srs = _srw && _srw.study && _srw.study.slides; if (!srs) return; srs.splice(srk, 1); if (openSlide === srk) openSlide = -1; else if (openSlide > srk) openSlide--; saveDraft(true); renderL2(); return; }
     if (act === "slide-up") { var _suw = data.work[i], suk = +b.dataset.sindex, sus = _suw && _suw.study && _suw.study.slides; if (sus && suk > 0) { var _sut = sus[suk - 1]; sus[suk - 1] = sus[suk]; sus[suk] = _sut; if (openSlide === suk) openSlide = suk - 1; else if (openSlide === suk - 1) openSlide = suk; saveDraft(true); renderL2(); } return; }
     if (act === "slide-down") { var _sdw = data.work[i], sdk = +b.dataset.sindex, sds = _sdw && _sdw.study && _sdw.study.slides; if (sds && sdk < sds.length - 1) { var _sdt = sds[sdk + 1]; sds[sdk + 1] = sds[sdk]; sds[sdk] = _sdt; if (openSlide === sdk) openSlide = sdk + 1; else if (openSlide === sdk + 1) openSlide = sdk; saveDraft(true); renderL2(); } return; }
@@ -10558,6 +10605,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       saveDraft(true); renderL2(); return;
     }
     if (act === "free-add-icon") { var _fik = +b.dataset.sindex; freeIconPicker(function (name) { var arr = slideBlocks(i, _fik); if (!arr) return; arr.push({ kind: "icon", name: name, x: 14, y: 14, w: 12, h: 12, color: "var(--accent)" }); freeSelSet(i, _fik, [arr.length - 1]); saveDraft(true); renderL2(); }); return; }
+    if (act === "free-add-section") { slideSectionAsElement(i); return; }
+    if (act === "free-flip") { var _flk = +b.dataset.sindex, _fl = slideBlocks(i, _flk), _flb = _fl && _fl[+b.dataset.fbi]; if (_flb) { _flb.flip = !_flb.flip; saveDraft(true); renderL2(); } return; }
+    if (act === "free-section-repull") { var _rpk = +b.dataset.sindex, _rp = slideBlocks(i, _rpk), _rpb = _rp && _rp[+b.dataset.fbi]; if (!_rpb) return; slideSectionPickModal(i, { asSection: true, title: "Replace this section", sub: "Pick another case-study section to swap in \u2014 position, size &amp; mirror stay.", empty: "No sections to pull from yet.", onPick: function (block) { _rpb.block = JSON.parse(JSON.stringify(block)); saveDraft(true); renderL2(); status("Section replaced.", true); } }); return; }
     if (act === "free-icon-pick") { var _ipk = +b.dataset.sindex, _ip = slideBlocks(i, _ipk), _ipb = _ip && _ip[+b.dataset.fbi]; if (!_ipb) return; freeIconPicker(function (name) { _ipb.name = name; saveDraft(true); renderL2(); }); return; }
     if (act === "free-color") { var _cak = +b.dataset.sindex, _ca = slideBlocks(i, _cak), _cab = _ca && _ca[+b.dataset.fbi]; if (!_cab) return; var _cf = b.dataset.field, _cv = b.dataset.val; if (_cv) _cab[_cf] = _cv; else delete _cab[_cf]; saveDraft(true); renderL2(); return; }
     if (act === "free-layer") { freeSelSet(i, +b.dataset.sindex, [+b.dataset.fbi]); renderL2(); return; }

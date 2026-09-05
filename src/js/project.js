@@ -2676,8 +2676,33 @@
       if (bl.kind === "media") return '<div class="pjps__fb pjps__fb--media' + (boxed ? " pjps__fb--fit" : "") + '"' + mk + ' style="' + st + '">' + pjMediaHtml(bl, "pjps__media-el") + "</div>";
       if (bl.kind === "shape") return renderFreeShape(bl, st, mk);
       if (bl.kind === "icon") return '<div class="pjps__fb pjps__fb--icon"' + mk + ' style="' + st + "color:" + (pjSafeColor(bl.color) || "var(--accent)") + '">' + iconSvg(bl.name || "star") + "</div>";
+      if (bl.kind === "section") return '<div class="pjps__fb pjps__fb--section"' + mk + ' style="' + st.replace(/height:[^;]*;/, "") + '"><div class="pjps__secwrap" style="width:1120px;' + (bl.flip ? "transform:scaleX(-1);" : "") + '">' + renderStudyBlockInner(bl.block) + "</div></div>";
       var cls = "pjps__fb pjps__fb--text pjps__fb--" + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " pjps__fb--a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (bl.role === "kicker" || bl.role === "caption" ? " pjps__fb--" + bl.role : "") + (boxed ? " pjps__fb--boxed pjps__fb--v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "");
       return '<div class="' + cls + '"' + mk + ' style="' + st + '">' + pjBodyHtml(bl.text || "") + "</div>";
+    }
+    function renderStudyBlockInner(b) {
+      if (!b) return "";
+      var inner = (RENDERERS[b.type] || function () { return ""; })(b);
+      var hsize = b.hsize === "sm" ? " pjb--hsm" : b.hsize === "lg" ? " pjb--hlg" : "";
+      return '<section class="pjb pjb--' + esc(b.type) + hsize + '" style="--i:0">' + inner + "</section>";
+    }
+    // A pulled section renders at a fixed design width, then zoom-fits to its freeform box (transform-independent).
+    function fitSections(root) {
+      if (!root) return;
+      [].forEach.call(root.querySelectorAll(".pjps__fb--section"), function (fb) {
+        var w = fb.querySelector(".pjps__secwrap"); if (!w) return;
+        var bw = fb.clientWidth || 0; if (bw) w.style.zoom = bw / 1120;
+      });
+    }
+    function enhanceStudyBlocks(root) {
+      if (!root) return;
+      try { normalizeGalleries(root); } catch (e) {}
+      try { galleryNav(root); } catch (e) {}
+      try { isoEnhance(root); } catch (e) {}
+      try { graphWire(root); } catch (e) {}
+      try { focusEnhance(root); } catch (e) {}
+      try { if (typeof initStage === "function") initStage(root); } catch (e) {}
+      try { if (window.RKGen && RKGen.hydrate) RKGen.hydrate(root); } catch (e) {}
     }
     function pjSlideTitle(s) {
       var z = (s && s.slots) || {};
@@ -2763,11 +2788,12 @@
         var kids = frame.querySelectorAll(".pjps"); for (var j = 0; j < kids.length - 1; j++) kids[j].remove();
         var oldEl = frame.querySelector(".pjps"), s = slides[idx];
         var tmp = document.createElement("div"); tmp.innerHTML = renderPjSlide(s); var newEl = tmp.firstChild;
+        function place(el) { frame.appendChild(el); fitSections(el); enhanceStudyBlocks(el); }
         updateChrome();
-        if (!oldEl) { frame.appendChild(newEl); frame.classList.remove("pjp__frame--in"); void frame.offsetWidth; frame.classList.add("pjp__frame--in"); return; }
+        if (!oldEl) { place(newEl); frame.classList.remove("pjp__frame--in"); void frame.offsetWidth; frame.classList.add("pjp__frame--in"); return; }
         var trans = pjSlideTrans(s);
-        if (reduceMo || trans === "none") { oldEl.remove(); frame.appendChild(newEl); return; }
-        frame.appendChild(newEl);
+        if (reduceMo || trans === "none") { oldEl.remove(); place(newEl); return; }
+        place(newEl);
         if (trans === "magic" && oldEl.querySelector("[data-mk]") && newEl.querySelector("[data-mk]")) { magicMove(oldEl, newEl); return; }
         var dirf = dir < 0 ? -1 : 1;
         if (trans === "push") { newEl.style.setProperty("--pjd", dirf); oldEl.style.setProperty("--pjd", dirf); newEl.classList.add("pjps--in-push"); }
@@ -2859,7 +2885,7 @@
       render(1);
     }
 
-    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.unregisterIcons = unregisterIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.setStudyLocked = clearUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.presentDeck = presentDeck; window.RK.renderDeckSlide = function (s) { return renderPjSlide(s || {}); }; window.RK.deckAutoSlides = function (w) { return pjAutoSlides(w, (w && w.study) || {}); }; window.RK.deckSlideFromBlock = function (b) { return b ? pjBlockToSlide(b) : null; }; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; }
+    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.unregisterIcons = unregisterIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.setStudyLocked = clearUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.presentDeck = presentDeck; window.RK.renderDeckSlide = function (s) { return renderPjSlide(s || {}); }; window.RK.deckAutoSlides = function (w) { return pjAutoSlides(w, (w && w.study) || {}); }; window.RK.deckSlideFromBlock = function (b) { return b ? pjBlockToSlide(b) : null; }; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; window.RK.renderStudyBlock = renderStudyBlockInner; window.RK.fitSections = fitSections; window.RK.enhanceBlocks = enhanceStudyBlocks; }
     // A fresh vault grant just arrived (Present mode's owner grant, or a recruiter link). If a case
     // study is open, drop its "already tried" latch and re-resolve its vault-hosted deeper cuts so
     // they swap in immediately — no reopen needed.
