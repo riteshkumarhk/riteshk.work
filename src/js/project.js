@@ -2641,16 +2641,28 @@
     function pjNum(v, d) { var n = parseFloat(v); return isFinite(n) ? Math.max(0, Math.min(100, n)) : d; }
     function pjSafeColor(v) { v = String(v == null ? "" : v).trim(); return /^(#[0-9a-fA-F]{3,8}|rgba?\([\d.,%\s]+\)|var\(--[\w-]+\)|[a-zA-Z]+)$/.test(v) ? v : ""; }
     function pjShadow(v) { return v === "strong" ? "drop-shadow(0 14px 40px rgba(0,0,0,.6))" : v === "medium" ? "drop-shadow(0 8px 24px rgba(0,0,0,.45))" : v === "soft" ? "drop-shadow(0 4px 12px rgba(0,0,0,.32))" : "none"; }
-    function renderFreeShape(bl, st) {
+    // Stable key used to match blocks between two slides for Magic Move. Prefers an explicit mid
+    // (assigned when a slide is duplicated), else falls back to content so identical text/media tween.
+    function pjBlockKey(bl) {
+      if (!bl) return "";
+      var raw, k = bl.kind || "text";
+      if (bl.mid) raw = "mid:" + bl.mid;
+      else if (k === "media") raw = "media:" + (bl.src || (bl.media && bl.media.src) || "");
+      else if (k === "icon") raw = "icon:" + (bl.name || "");
+      else if (k === "shape") raw = "shape:" + (bl.shape || "rect") + ":" + (bl.fill || "") + ":" + (bl.stroke || "");
+      else raw = "text:" + pjPlain(bl.text || "").slice(0, 48).toLowerCase();
+      return raw.replace(/[^a-z0-9:._-]/gi, "_").slice(0, 80);
+    }
+    function renderFreeShape(bl, st, mk) {
       var sh = /^(rect|ellipse|line|arrow)$/.test(bl.shape) ? bl.shape : "rect";
       var stroke = pjSafeColor(bl.stroke) || "var(--accent)", sw = Math.max(0, parseFloat(bl.strokeW) || 0);
       if (sh === "line" || sh === "arrow") {
         var bar = '<span class="pjps__fbln" style="height:' + (sw || 2) + "px;background:" + stroke + '"></span>';
         var head = sh === "arrow" ? '<span class="pjps__fbah" style="border-top-width:' + ((sw || 2) * 2.2) + "px;border-bottom-width:" + ((sw || 2) * 2.2) + "px;border-left:" + ((sw || 2) * 3.2) + "px solid " + stroke + '"></span>' : "";
-        return '<div class="pjps__fb pjps__fb--shape pjps__fb--' + sh + '" style="' + st + '">' + bar + head + "</div>";
+        return '<div class="pjps__fb pjps__fb--shape pjps__fb--' + sh + '"' + (mk || "") + ' style="' + st + '">' + bar + head + "</div>";
       }
       var fill = pjSafeColor(bl.fill), bg = fill ? "background:" + fill + ";" : "", bd = sw > 0 ? "border:" + sw + "px solid " + stroke + ";" : "", rad = sh === "ellipse" ? "border-radius:50%;" : (bl.radius ? "border-radius:" + (parseFloat(bl.radius) || 0) + "px;" : "");
-      return '<div class="pjps__fb pjps__fb--shape" style="' + st + bg + bd + rad + '"></div>';
+      return '<div class="pjps__fb pjps__fb--shape"' + (mk || "") + ' style="' + st + bg + bd + rad + '"></div>';
     }
     function renderFreeBlock(bl) {
       if (!bl) return "";
@@ -2660,11 +2672,12 @@
       if (bl.rot) st += "transform:rotate(" + (parseFloat(bl.rot) || 0) + "deg);";
       if (bl.opacity != null && +bl.opacity < 100) st += "opacity:" + (Math.max(0, Math.min(100, +bl.opacity)) / 100) + ";";
       if (bl.shadow) st += "filter:" + pjShadow(bl.shadow) + ";";
-      if (bl.kind === "media") return '<div class="pjps__fb pjps__fb--media' + (boxed ? " pjps__fb--fit" : "") + '" style="' + st + '">' + pjMediaHtml(bl, "pjps__media-el") + "</div>";
-      if (bl.kind === "shape") return renderFreeShape(bl, st);
-      if (bl.kind === "icon") return '<div class="pjps__fb pjps__fb--icon" style="' + st + "color:" + (pjSafeColor(bl.color) || "var(--accent)") + '">' + iconSvg(bl.name || "star") + "</div>";
+      var mk = ' data-mk="' + pjBlockKey(bl) + '"';
+      if (bl.kind === "media") return '<div class="pjps__fb pjps__fb--media' + (boxed ? " pjps__fb--fit" : "") + '"' + mk + ' style="' + st + '">' + pjMediaHtml(bl, "pjps__media-el") + "</div>";
+      if (bl.kind === "shape") return renderFreeShape(bl, st, mk);
+      if (bl.kind === "icon") return '<div class="pjps__fb pjps__fb--icon"' + mk + ' style="' + st + "color:" + (pjSafeColor(bl.color) || "var(--accent)") + '">' + iconSvg(bl.name || "star") + "</div>";
       var cls = "pjps__fb pjps__fb--text pjps__fb--" + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " pjps__fb--a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (bl.role === "kicker" || bl.role === "caption" ? " pjps__fb--" + bl.role : "") + (boxed ? " pjps__fb--boxed pjps__fb--v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "");
-      return '<div class="' + cls + '" style="' + st + '">' + pjBodyHtml(bl.text || "") + "</div>";
+      return '<div class="' + cls + '"' + mk + ' style="' + st + '">' + pjBodyHtml(bl.text || "") + "</div>";
     }
     function pjSlideTitle(s) {
       var z = (s && s.slots) || {};
@@ -2696,17 +2709,54 @@
       var notesEl = stage.querySelector("[data-pjp-notes]"), nextEl = stage.querySelector("[data-pjp-next]"), presenting = false;
       prog.innerHTML = slides.map(function (_, i) { return '<span class="pjp__pdot" data-pjp-dot="' + i + '"></span>'; }).join("");
       document.documentElement.classList.add("pjp-on");
-      function render() {
+      var reduceMo = (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches), transTimer = 0;
+      function pjSlideTrans(s) { var t = s && s.transition; return (t === "none" || t === "push" || t === "magic") ? t : "fade"; }
+      function updateChrome() {
         var s = slides[idx];
-        frame.innerHTML = renderPjSlide(s);
-        frame.className = "pjp__frame pjp__frame--" + (s.layout || "text");
-        void frame.offsetWidth; frame.classList.add("pjp__frame--in");
         count.textContent = (idx + 1) + " / " + slides.length;
         if (notesEl) notesEl.textContent = (s.notes && String(s.notes).trim()) ? s.notes : "\u2014 No notes for this slide \u2014";
         if (nextEl) nextEl.textContent = (idx < slides.length - 1) ? pjSlideTitle(slides[idx + 1]) : "End of deck";
         [].forEach.call(prog.children, function (d, i) { d.classList.toggle("is-on", i <= idx); });
       }
-      function go(d) { var n = Math.max(0, Math.min(slides.length - 1, idx + d)); if (n === idx) return; idx = n; render(); }
+      // Auto-animate: FLIP every block whose match-key exists on both slides from its old rect to its new one.
+      function magicMove(oldEl, newEl) {
+        var olds = {};
+        [].forEach.call(oldEl.querySelectorAll("[data-mk]"), function (el) { var k = el.getAttribute("data-mk"); if (!(k in olds)) olds[k] = el; });
+        var moved = [];
+        [].forEach.call(newEl.querySelectorAll("[data-mk]"), function (el) {
+          var k = el.getAttribute("data-mk"), o = olds[k];
+          if (o) {
+            var nr = el.getBoundingClientRect(), or = o.getBoundingClientRect();
+            var dx = or.left - nr.left, dy = or.top - nr.top, sx = or.width / (nr.width || 1), sy = or.height / (nr.height || 1);
+            var base = el.style.transform || "";
+            el.style.transformOrigin = "top left"; el.style.transition = "none";
+            el.style.transform = "translate(" + dx + "px," + dy + "px) scale(" + sx + "," + sy + ") " + base;
+            o.style.visibility = "hidden"; moved.push({ el: el, base: base });
+          } else { el.classList.add("pjps--in-fade"); void el.offsetWidth; el.classList.add("is-live"); }
+        });
+        oldEl.classList.add("pjps--out-fade");
+        requestAnimationFrame(function () { requestAnimationFrame(function () { moved.forEach(function (m) { m.el.style.transition = "transform .52s var(--ease)"; m.el.style.transform = m.base; }); }); });
+        transTimer = setTimeout(function () { if (oldEl.parentNode) oldEl.remove(); moved.forEach(function (m) { m.el.style.transition = ""; m.el.style.transformOrigin = ""; }); [].forEach.call(newEl.querySelectorAll(".pjps--in-fade"), function (el) { el.classList.remove("pjps--in-fade", "is-live"); }); }, 560);
+      }
+      function render(dir) {
+        clearTimeout(transTimer);
+        var kids = frame.querySelectorAll(".pjps"); for (var j = 0; j < kids.length - 1; j++) kids[j].remove();
+        var oldEl = frame.querySelector(".pjps"), s = slides[idx];
+        var tmp = document.createElement("div"); tmp.innerHTML = renderPjSlide(s); var newEl = tmp.firstChild;
+        updateChrome();
+        if (!oldEl) { frame.appendChild(newEl); frame.classList.remove("pjp__frame--in"); void frame.offsetWidth; frame.classList.add("pjp__frame--in"); return; }
+        var trans = pjSlideTrans(s);
+        if (reduceMo || trans === "none") { oldEl.remove(); frame.appendChild(newEl); return; }
+        frame.appendChild(newEl);
+        if (trans === "magic" && oldEl.querySelector("[data-mk]") && newEl.querySelector("[data-mk]")) { magicMove(oldEl, newEl); return; }
+        var dirf = dir < 0 ? -1 : 1;
+        if (trans === "push") { newEl.style.setProperty("--pjd", dirf); oldEl.style.setProperty("--pjd", dirf); newEl.classList.add("pjps--in-push"); }
+        else newEl.classList.add("pjps--in-fade");
+        void newEl.offsetWidth; newEl.classList.add("is-live");
+        oldEl.classList.add(trans === "push" ? "pjps--out-push" : "pjps--out-fade");
+        transTimer = setTimeout(function () { if (oldEl.parentNode) oldEl.remove(); if (newEl.parentNode) { newEl.classList.remove("pjps--in-fade", "pjps--in-push", "is-live"); newEl.style.removeProperty("--pjd"); } }, 520);
+      }
+      function go(d) { var n = Math.max(0, Math.min(slides.length - 1, idx + d)); if (n === idx) return; idx = n; render(d); }
       function togglePresent() { presenting = !presenting; stage.classList.toggle("pjp--presenting", presenting); }
       function exit() { document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { stage.remove(); pjpStage = null; }, 240); }
       function onKey(e) {
@@ -2714,17 +2764,17 @@
         else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
         else if (e.key === "Escape") { e.preventDefault(); exit(); }
         else if (e.key === "p" || e.key === "P") { e.preventDefault(); togglePresent(); }
-        else if (e.key === "Home") { idx = 0; render(); }
-        else if (e.key === "End") { idx = slides.length - 1; render(); }
+        else if (e.key === "Home") { idx = 0; render(-1); }
+        else if (e.key === "End") { idx = slides.length - 1; render(1); }
       }
       stage.addEventListener("click", function (e) {
-        var d = e.target.closest("[data-pjp-dot]"); if (d) { idx = +d.getAttribute("data-pjp-dot"); render(); return; }
+        var d = e.target.closest("[data-pjp-dot]"); if (d) { var _to = +d.getAttribute("data-pjp-dot"); var _dd = _to > idx ? 1 : -1; idx = _to; render(_dd); return; }
         var b = e.target.closest("[data-pjp]"); if (!b) return;
         var k = b.getAttribute("data-pjp");
         if (k === "exit") exit(); else if (k === "prev") go(-1); else if (k === "next") go(1); else if (k === "notes") togglePresent();
       });
       document.addEventListener("keydown", onKey);
-      render();
+      render(1);
     }
 
     if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.unregisterIcons = unregisterIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.setStudyLocked = clearUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.presentDeck = presentDeck; window.RK.renderDeckSlide = function (s) { return renderPjSlide(s || {}); }; window.RK.deckAutoSlides = function (w) { return pjAutoSlides(w, (w && w.study) || {}); }; window.RK.deckSlideFromBlock = function (b) { return b ? pjBlockToSlide(b) : null; }; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; }

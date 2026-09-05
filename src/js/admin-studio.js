@@ -6775,7 +6775,16 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function slidePropsPanel(i, k, s) {
     return '<div class="slides__props-head">Properties</div>' +
       '<div class="slides__props-add"><div class="slides__props-lbl">Add to slide</div>' + freeToolsRow(i, k) + "</div>" +
-      freeSelPanel(i, k);
+      freeSelPanel(i, k) +
+      slideTransRow(i, k, s);
+  }
+  function slideTransRow(i, k, s) {
+    var cur = (s && s.transition) || "fade";
+    var opts = [["none", "None"], ["fade", "Fade"], ["push", "Push"], ["magic", "Magic Move"]];
+    return '<div class="slides__slideset"><div class="slides__props-lbl">This slide</div>' +
+      '<div class="af"><label class="af__label">Transition in</label><select data-slidetrans="' + i + '" data-sindex="' + k + '">' +
+      opts.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select>" +
+      '<div class="af__hint">How this slide enters. <b>Magic Move</b> glides matching text, media &amp; shapes from the previous slide into place.</div></div></div>';
   }
   function freeZRow(i, k, idx) {
     return '<div class="slidefree__z">' + [["back", "To back"], ["backward", "Back"], ["forward", "Fwd"], ["front", "To front"]].map(function (o) { return '<button type="button" class="btn btn--ghost" data-act="free-z" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" data-zdir="' + o[0] + '">' + o[1] + "</button>"; }).join("") + "</div>";
@@ -9736,6 +9745,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (_slw && _slw.study && _slw.study.slides && _slw.study.slides[_slk]) { _slw.study.slides[_slk].layout = t.value; saveDraft(true); renderL2(); }
       return;
     }
+    if (t.dataset.slidetrans !== undefined) {
+      var _sti = +t.dataset.slidetrans, _stk = +t.dataset.sindex, _stw = data.work[_sti];
+      if (_stw && _stw.study && _stw.study.slides && _stw.study.slides[_stk]) { var _sts = _stw.study.slides[_stk]; if (t.value === "fade") delete _sts.transition; else _sts.transition = t.value; saveDraft(true); }
+      return;
+    }
     if (t.dataset.freesize !== undefined) { var _fbz = freeBlk(t); if (_fbz) { _fbz.size = t.value; saveDraft(true); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
     if (t.dataset.freealign !== undefined) { var _fba = freeBlk(t); if (_fba) { _fba.align = t.value; saveDraft(true); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
     if (t.dataset.freevalign !== undefined) { var _fbv = freeBlk(t); if (_fbv) { _fbv.valign = t.value; saveDraft(true); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
@@ -10442,7 +10456,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "slide-remove") { var _srw = data.work[i], srk = +b.dataset.sindex, srs = _srw && _srw.study && _srw.study.slides; if (!srs) return; srs.splice(srk, 1); if (openSlide === srk) openSlide = -1; else if (openSlide > srk) openSlide--; saveDraft(true); renderL2(); return; }
     if (act === "slide-up") { var _suw = data.work[i], suk = +b.dataset.sindex, sus = _suw && _suw.study && _suw.study.slides; if (sus && suk > 0) { var _sut = sus[suk - 1]; sus[suk - 1] = sus[suk]; sus[suk] = _sut; if (openSlide === suk) openSlide = suk - 1; else if (openSlide === suk - 1) openSlide = suk; saveDraft(true); renderL2(); } return; }
     if (act === "slide-down") { var _sdw = data.work[i], sdk = +b.dataset.sindex, sds = _sdw && _sdw.study && _sdw.study.slides; if (sds && sdk < sds.length - 1) { var _sdt = sds[sdk + 1]; sds[sdk + 1] = sds[sdk]; sds[sdk] = _sdt; if (openSlide === sdk) openSlide = sdk + 1; else if (openSlide === sdk + 1) openSlide = sdk; saveDraft(true); renderL2(); } return; }
-    if (act === "slide-dup") { var _spw = data.work[i], spk = +b.dataset.sindex, sps = _spw && _spw.study && _spw.study.slides; if (sps && sps[spk]) { var _spc = JSON.parse(JSON.stringify(sps[spk])); _spc.id = "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); sps.splice(spk + 1, 0, _spc); openSlide = spk + 1; saveDraft(true); renderL2(); status("Slide duplicated \u2014 editing the copy.", true); } return; }
+    if (act === "slide-dup") { var _spw = data.work[i], spk = +b.dataset.sindex, sps = _spw && _spw.study && _spw.study.slides; if (sps && sps[spk]) { var _spsrc = sps[spk]; if (_spsrc.blocks) { for (var _spmi = 0; _spmi < _spsrc.blocks.length; _spmi++) { if (!_spsrc.blocks[_spmi].mid) _spsrc.blocks[_spmi].mid = "m" + Date.now().toString(36) + _spmi + Math.random().toString(36).slice(2, 5); } } var _spc = JSON.parse(JSON.stringify(_spsrc)); _spc.id = "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); if (_spc.transition == null && _spsrc.transition == null) _spc.transition = "magic"; sps.splice(spk + 1, 0, _spc); openSlide = spk + 1; saveDraft(true); renderL2(); status("Slide duplicated \u2014 set to Magic Move so moving things auto-animates.", true); } return; }
     if (act === "slide-hide") { var _shw = data.work[i], shk = +b.dataset.sindex, shs = _shw && _shw.study && _shw.study.slides; if (shs && shs[shk]) { if (shs[shk].hidden) delete shs[shk].hidden; else shs[shk].hidden = true; saveDraft(true); renderL2(); status(shs[shk].hidden ? "Slide will be skipped in the deck." : "Slide back in the deck.", true); } return; }
     if (act === "slide-toggle") { if (e.target.closest("button, input, select, textarea, [data-grip]")) return; var _stk = +b.dataset.sindex; openSlide = (openSlide === _stk) ? -1 : _stk; renderL2(); return; }
     if (act === "slide-menu") { slideToolbarMenu(b, b.dataset.menu, i); return; }

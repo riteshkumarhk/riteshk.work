@@ -1048,6 +1048,16 @@ html.pjp-on { overflow: hidden; }
 .pjp__frame { position: relative; width: min(94vw, calc(94vh * 16 / 9)); height: min(94vh, calc(94vw * 9 / 16)); background: var(--bg, #0a0a0c); overflow: hidden; box-shadow: 0 40px 120px -30px rgba(0, 0, 0, .8); }
 .pjp__frame--in { animation: pjpFrameIn .42s var(--ease); }
 @keyframes pjpFrameIn { from { opacity: 0; transform: translateY(16px) scale(.992); } to { opacity: 1; transform: none; } }
+/* Slide transitions (fade / push). Two slides coexist in the frame during the change; only the
+   transitioning elements carry a transition so nothing else animates. Magic Move is driven inline in JS. */
+.pjps--in-fade, .pjps--out-fade, .pjps--in-push, .pjps--out-push { transition: opacity .42s var(--ease), transform .42s var(--ease); will-change: opacity, transform; }
+.pjps--in-fade { opacity: 0; }
+.pjps--in-fade.is-live { opacity: 1; }
+.pjps--out-fade { opacity: 0; }
+.pjps--in-push { transform: translateX(calc(var(--pjd, 1) * 100%)); }
+.pjps--in-push.is-live { transform: translateX(0); }
+.pjps--out-push { transform: translateX(calc(var(--pjd, 1) * -100%)); }
+@media (prefers-reduced-motion: reduce) { .pjps--in-fade, .pjps--out-fade, .pjps--in-push, .pjps--out-push { transition: none; } }
 
 .pjps { position: absolute; inset: 0; display: grid; padding: clamp(2rem, 5vw, 5.5rem); box-sizing: border-box; }
 .pjps__body { align-self: center; max-width: 46ch; }

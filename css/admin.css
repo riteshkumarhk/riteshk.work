@@ -2991,6 +2991,8 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .slides__props .slidefree__tools { margin: 0; }
 .slides__props .slidefree__tools .btn, .slides__props .slidefree__addshape { font-size: .68rem; }
 .slides__props .slidefree__sel, .slides__props .slidefree__sel--none { margin: .8rem 0 0; }
+.slides__slideset { margin-top: 1rem; padding-top: .9rem; border-top: 1px solid var(--line-soft); }
+.slides__slideset .af { margin-bottom: 0; }
 @media (max-width: 1180px) {
   .slides__work { grid-template-columns: minmax(0, 1fr) clamp(250px, 30%, 320px); }
 }
