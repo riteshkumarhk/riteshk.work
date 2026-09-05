@@ -1107,6 +1107,9 @@ html.pjp-on { overflow: hidden; }
 /* Freeform layout — %-positioned blocks on a blank 16:9 canvas (increment 4c) */
 .pjps--free { position: absolute; inset: 0; padding: 0; display: block; }
 .pjps__fb { position: absolute; box-sizing: border-box; }
+.pjps__bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+.pjps__bg .pjps__bg-el, .pjps__bg img, .pjps__bg video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pjps--free > .pjps__fb { z-index: 1; }
 .pjps__fb--text { font-family: var(--serif); color: var(--text); line-height: 1.18; }
 .pjps__fb--sm { font-family: var(--sans); font-weight: 400; font-size: clamp(.85rem, 1.5vw, 1.3rem); line-height: 1.45; color: var(--text-dim); }
 .pjps__fb--md { font-size: clamp(1.3rem, 3vw, 2.6rem); }

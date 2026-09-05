@@ -2957,6 +2957,15 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .slidelay__cardops .iconbtn svg { width: 13px; height: 13px; }
 .slidelay__nameinput { width: 100%; }
 .sfb__empty { color: var(--text-faint); font-style: italic; }
+.sfb__bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
+.sfb__bg img, .sfb__bg video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.slidefree__stage > .sfb { z-index: 1; }
+.sfb.is-empty:not(.is-sel) { outline: 1px dashed var(--line-soft, rgba(255,255,255,.2)); outline-offset: -1px; border-radius: 3px; }
+.slidebg__row { display: flex; align-items: center; gap: .7rem; margin: 0 0 .7rem; }
+.slidebg__lbl { min-width: 3.4rem; font-size: .72rem; color: var(--text-faint); }
+.slidebg__sws { display: inline-flex; gap: .4rem; flex-wrap: wrap; }
+.slidebg__sw { width: 26px; height: 26px; }
+.slidebg__cur { font-size: .7rem; color: var(--text-faint); }
 .sfb img { width: 100%; height: auto; display: block; border-radius: 5px; pointer-events: none; }
 .sfb__ph { display: grid; place-items: center; aspect-ratio: 16 / 10; background: linear-gradient(135deg, rgba(216, 166, 87, .16), rgba(216, 166, 87, .03)); border-radius: 5px; font-family: var(--mono); font-size: 20px; color: var(--accent); }
 .sfb--boxed .sfb__tx { height: 100%; display: flex; flex-direction: column; }

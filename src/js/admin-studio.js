@@ -6334,7 +6334,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function slideThumbInner(i, s, k) {
     if (s.layout === "free") {
       var blocks = slideBlocks(i, k) || [];
-      var inner = blocks.length ? blocks.map(function (bl, ix) { return freeBlockEl(i, k, ix, bl, false, false); }).join("") : '<div class="slidefree__empty slidefree__empty--thumb">Empty</div>';
+      var inner = freeBgHtml(s) + (blocks.length ? blocks.map(function (bl, ix) { return freeBlockEl(i, k, ix, bl, false, false); }).join("") : '<div class="slidefree__empty slidefree__empty--thumb">Empty</div>');
       return '<div class="slidepv__stage slidefree__stage slidefree__stage--ro">' + inner + "</div>";
     }
     return '<div class="slidepv__stage">' + slidePvHtml(s) + "</div>";
@@ -6686,14 +6686,45 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     else { var _tx = String(bl.text || ""), _body = _tx.trim() ? (/<[a-z!/]/i.test(_tx) ? _tx : escHtml(_tx)) : '<span class="sfb__empty">' + escHtml(bl.ph || "Text") + '</span>'; inner = '<div class="sfb__tx ' + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + (bl.role === "kicker" || bl.role === "caption" ? " " + bl.role : "") + " a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "") + '">' + _body + "</div>"; }
     var chrome = single ? (FREE_HANDLES.map(function (h) { return '<span class="sfb__h sfb__h--' + h + '" data-fbh="' + h + '"></span>'; }).join("") + '<span class="sfb__rot" data-fbrot title="Drag to rotate"></span>') : "";
     var bx = boxed && kind === "media" ? " sfb--fit" : (boxed && kind === "text" ? " sfb--boxed" : "");
-    return '<div class="sfb sfb--' + kind + bx + (sel ? " is-sel" : "") + (single ? " is-single" : "") + '" data-fb="' + idx + '" data-fbdrag style="' + st + '">' + inner + chrome + "</div>";
+    return '<div class="sfb sfb--' + kind + bx + (sel ? " is-sel" : "") + (single ? " is-single" : "") + (kind === "text" && !String(bl.text || "").trim() ? " is-empty" : "") + '" data-fb="' + idx + '" data-fbdrag style="' + st + '">' + inner + chrome + "</div>";
+  }
+  function freeBgHtml(s) {
+    var b = s && s.background; if (!b) return "";
+    if (b.type === "color") { var c = String(b.value || "").trim(); return c ? '<div class="sfb__bg" style="background:' + escAttr(c) + '"></div>' : ""; }
+    if (b.type === "media" && b.value) { return '<div class="sfb__bg">' + (isVideoVal(b.value) ? '<video src="' + escAttr(b.value) + '" muted loop playsinline></video>' : '<img src="' + escAttr(b.value) + '" alt="">') + "</div>"; }
+    return "";
+  }
+  function slideBgModal(i, k) {
+    var st = data.work[i] && data.work[i].study, s = st && st.slides && st.slides[k]; if (!s) return;
+    var cur = s.background || null;
+    var sw = FREE_SWATCHES.filter(function (x) { return x[0]; }).map(function (x) {
+      var on = cur && cur.type === "color" && cur.value === x[0];
+      return '<button type="button" class="sfbclr slidebg__sw' + (on ? " is-on" : "") + '" style="background:' + x[0] + '" data-bgcolor="' + escAttr(x[0]) + '" title="' + x[1] + '"></button>';
+    }).join("");
+    var modal = document.createElement("div"); modal.className = "pass pass--confirm slidebg";
+    modal.innerHTML = '<div class="pass__box"><div class="pass__title">Slide background</div><div class="pass__sub">Fills the whole slide behind your content \u2014 pick a colour or drop in an image / video.</div>' +
+      '<div class="slidebg__row"><span class="slidebg__lbl">Colour</span><span class="slidebg__sws">' + sw + '</span></div>' +
+      '<div class="slidebg__row"><span class="slidebg__lbl">Media</span><button class="btn btn--ghost" data-bgmedia>' + IC.add + ' Image or video\u2026</button>' + (cur && cur.type === "media" ? '<span class="slidebg__cur">' + (isVideoVal(cur.value) ? "Video set" : "Image set") + "</span>" : "") + '</div>' +
+      '<div class="pass__actions"><button class="btn btn--danger" data-bgnone' + (cur ? "" : " disabled") + '>Remove background</button><button class="btn btn--ghost" data-cancel>Done</button></div></div>';
+    document.body.appendChild(modal);
+    var onKey = function (e) { if (e.key === "Escape") close(); };
+    var close = function () { modal.remove(); document.removeEventListener("keydown", onKey); };
+    document.addEventListener("keydown", onKey);
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    modal.querySelector("[data-cancel]").addEventListener("click", close);
+    var apply = function (bg) { if (bg) s.background = bg; else delete s.background; saveDraft(true); close(); renderL2(); status(bg ? "Background updated." : "Background removed.", true); };
+    modal.querySelectorAll("[data-bgcolor]").forEach(function (b) { b.addEventListener("click", function () { apply({ type: "color", value: b.getAttribute("data-bgcolor") }); }); });
+    modal.querySelector("[data-bgmedia]").addEventListener("click", function () { close(); pickMedia(function (uri) { s.background = { type: "media", value: uri }; saveDraft(true); renderL2(); status("Background media set.", true); }); });
+    modal.querySelector("[data-bgnone]").addEventListener("click", function () { apply(null); });
   }
   function freeStageHtml(i, k) {
     var blocks = slideBlocks(i, k) || [];
+    var s = data.work[i] && data.work[i].study && data.work[i].study.slides && data.work[i].study.slides[k];
+    var bg = freeBgHtml(s);
     var marquee = '<div class="sfb__guide sfb__guide--v" data-fbgv hidden></div><div class="sfb__guide sfb__guide--h" data-fbgh hidden></div><div class="sfb__marquee" data-fbmarquee hidden></div>';
-    if (!blocks.length) return '<div class="slidefree__empty">Empty canvas \u2014 add a Text or Media block, then drag, resize &amp; rotate it anywhere.</div>' + marquee;
+    if (!blocks.length) return bg + '<div class="slidefree__empty">Empty canvas \u2014 add a Text or Media block, then drag, resize &amp; rotate it anywhere.</div>' + marquee;
     var on = freeSelOn(i, k), one = freeSelOne();
-    return blocks.map(function (bl, ix) { return freeBlockEl(i, k, ix, bl, on && freeSelHas(ix), on && one === ix); }).join("") + marquee;
+    return bg + blocks.map(function (bl, ix) { return freeBlockEl(i, k, ix, bl, on && freeSelHas(ix), on && one === ix); }).join("") + marquee;
   }
   function freeCanvasHtml(i, k) {
     return '<div class="slides__pvwrap"><div class="slidepv slidepv--free" data-slidepvbox="' + k + '"><div class="slidepv__stage slidefree__stage" data-slidepv="' + k + '" data-freestage="' + i + ':' + k + '">' + freeStageHtml(i, k) + "</div></div>" +
@@ -6701,6 +6732,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<button type="button" class="btn btn--ghost" data-act="free-add-media" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + ' Media</button>' +
       '<select class="slidefree__addshape" data-freeaddshape data-fi="' + i + '" data-fk="' + k + '"><option value="">+ Shape\u2026</option><option value="rect">Rectangle</option><option value="ellipse">Oval</option><option value="line">Line</option><option value="arrow">Arrow</option></select>' +
       '<button type="button" class="btn btn--ghost" data-act="free-add-icon" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + ' Icon</button>' +
+      '<button type="button" class="btn btn--ghost" data-act="slide-bg" data-index="' + i + '" data-sindex="' + k + '">' + IC.board + ' Background</button>' +
       '<span class="slidefree__hint">Drag to move \u00b7 handles resize \u00b7 top dot rotates \u00b7 Shift-click or box-select several \u00b7 arrows nudge</span></div></div>';
   }
   function freeZRow(i, k, idx) {
@@ -10413,6 +10445,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "free-layer") { freeSelSet(i, +b.dataset.sindex, [+b.dataset.fbi]); renderL2(); return; }
     if (act === "slide-tofree") { slideConvertToFree(i, +b.dataset.sindex); return; }
     if (act === "slide-savelayout") { slideSaveAsLayout(i, +b.dataset.sindex); return; }
+    if (act === "slide-bg") { slideBgModal(i, +b.dataset.sindex); return; }
     if (act === "hsize-toggle") { var hsSel = b.closest(".hsize"); if (hsSel) { var wasHsOpen = hsSel.classList.contains("is-open"); if (root) root.querySelectorAll(".hsize.is-open").forEach(function (x) { x.classList.remove("is-open"); }); if (!wasHsOpen) hsSel.classList.add("is-open"); } return; }
     if (act === "hsize-set") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].hsize = b.dataset.hsize || ""; saveDraft(true); renderL2(); } return; }
     if (act === "item-add") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items = bl.items || []; bl.items.push(blankItem(bl.type)); saveDraft(true); renderL2(); return; }

@@ -2621,6 +2621,12 @@
       return pjAutoSlides(w, st);
     }
     function pjMediaHtml(z, cls) { var m = z.media || (z.src ? { src: z.src } : null); return (m && mediaSrc(m)) ? mediaEl(m, cls) : '<div class="pjps__ph"></div>'; }
+    function pjFreeBg(s) {
+      var b = s && s.background; if (!b) return "";
+      if (b.type === "color") { var c = pjSafeColor(b.value); return c ? '<div class="pjps__bg" style="background:' + c + '"></div>' : ""; }
+      if (b.type === "media" && b.value) return '<div class="pjps__bg">' + pjMediaHtml({ src: b.value }, "pjps__bg-el") + "</div>";
+      return "";
+    }
     function renderPjSlide(s) {
       var L = s.layout || "text", z = s.slots || {};
       if (L === "statement") return '<div class="pjps pjps--statement"><div class="pjps__body">' + (z.kicker ? '<div class="pjps__kicker">' + esc(z.kicker) + "</div>" : "") + '<h2 class="pjps__title">' + esc(z.title || "") + "</h2>" + (z.sub ? '<p class="pjps__sub">' + esc(z.sub) + "</p>" : "") + "</div></div>";
@@ -2629,7 +2635,7 @@
       if (L === "split") return '<div class="pjps pjps--split"><div class="pjps__col pjps__col--text"><div class="pjps__body">' + (z.heading ? '<h2 class="pjps__title">' + esc(z.heading) + "</h2>" : "") + (z.body ? '<div class="pjps__prose">' + pjBodyHtml(z.body) + "</div>" : "") + '</div></div><div class="pjps__col pjps__col--media">' + pjMediaHtml(z, "pjps__media-el") + "</div></div>";
       if (L === "quote") return '<div class="pjps pjps--quote"><div class="pjps__body"><blockquote class="pjps__quote">' + esc(z.quote || "") + "</blockquote>" + (z.attribution ? '<div class="pjps__attr">' + esc(z.attribution) + "</div>" : "") + "</div></div>";
       if (L === "section") return '<div class="pjps pjps--section"><div class="pjps__body">' + (z.kicker ? '<div class="pjps__secnum">' + esc(z.kicker) + "</div>" : "") + '<h2 class="pjps__title">' + esc(z.title || "") + "</h2>" + (z.sub ? '<p class="pjps__sub">' + esc(z.sub) + "</p>" : "") + "</div></div>";
-      if (L === "free") return '<div class="pjps pjps--free">' + ((s.blocks) || []).map(function (bl) { return renderFreeBlock(bl); }).join("") + "</div>";
+      if (L === "free") return '<div class="pjps pjps--free">' + pjFreeBg(s) + ((s.blocks) || []).map(function (bl) { return renderFreeBlock(bl); }).join("") + "</div>";
       return '<div class="pjps pjps--text"><div class="pjps__body">' + (z.kicker ? '<div class="pjps__kicker">' + esc(z.kicker) + "</div>" : "") + (z.title ? '<h2 class="pjps__title">' + esc(z.title) + "</h2>" : "") + (z.body ? '<div class="pjps__prose">' + pjBodyHtml(z.body) + "</div>" : "") + "</div></div>";
     }
     function pjNum(v, d) { var n = parseFloat(v); return isFinite(n) ? Math.max(0, Math.min(100, n)) : d; }
