@@ -2703,10 +2703,19 @@
         '<button class="pjp__notesbtn" data-pjp="notes" aria-label="Presenter notes (P)" title="Presenter notes (P)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button></div>' +
         '<button class="pjp__edge pjp__edge--prev" data-pjp="prev" aria-label="Previous slide"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>' +
         '<button class="pjp__edge pjp__edge--next" data-pjp="next" aria-label="Next slide"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>' +
-        '<div class="pjp__present" data-pjp-panel><div class="pjp__pnotes"><span class="pjp__plabel">Notes</span><div class="pjp__pnotes-body" data-pjp-notes></div></div><div class="pjp__pnext"><span class="pjp__plabel">Up next</span><div class="pjp__pnext-body" data-pjp-next></div></div></div>';
+        '<div class="pjp__present" data-pjp-panel>' +
+        '<div class="pjp__pmeta"><div class="pjp__ptime"><span class="pjp__ptime-v" data-pjp-timer>0:00</span><span class="pjp__ptime-l">elapsed</span></div><button class="pjp__ptimereset" data-pjp="timer-reset" title="Reset the timer">Reset</button><span class="pjp__pclock" data-pjp-clock></span></div>' +
+        '<div class="pjp__pnotes"><span class="pjp__plabel">Notes</span><div class="pjp__pnotes-body" data-pjp-notes></div></div>' +
+        '<div class="pjp__pnext"><span class="pjp__plabel">Up next</span><div class="pjp__pnext-thumb" data-pjp-nextthumb></div><div class="pjp__pnext-body" data-pjp-next></div></div>' +
+        '</div>';
       document.body.appendChild(stage);
       var frame = stage.querySelector("[data-pjp-frame]"), prog = stage.querySelector("[data-pjp-progress]"), count = stage.querySelector("[data-pjp-count]");
       var notesEl = stage.querySelector("[data-pjp-notes]"), nextEl = stage.querySelector("[data-pjp-next]"), presenting = false;
+      var nextThumb = stage.querySelector("[data-pjp-nextthumb]"), timerEl = stage.querySelector("[data-pjp-timer]"), clockEl = stage.querySelector("[data-pjp-clock]"), startT = Date.now();
+      function pjPad(n) { return (n < 10 ? "0" : "") + n; }
+      function fmtDur(ms) { var s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return (h ? h + ":" + pjPad(m) : m) + ":" + pjPad(s % 60); }
+      function tick() { if (timerEl) timerEl.textContent = fmtDur(Date.now() - startT); if (clockEl) { try { clockEl.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch (e) { clockEl.textContent = ""; } } }
+      var clockTimer = setInterval(tick, 1000); tick();
       prog.innerHTML = slides.map(function (_, i) { return '<span class="pjp__pdot" data-pjp-dot="' + i + '"></span>'; }).join("");
       document.documentElement.classList.add("pjp-on");
       var reduceMo = (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches), transTimer = 0;
@@ -2716,6 +2725,14 @@
         count.textContent = (idx + 1) + " / " + slides.length;
         if (notesEl) notesEl.textContent = (s.notes && String(s.notes).trim()) ? s.notes : "\u2014 No notes for this slide \u2014";
         if (nextEl) nextEl.textContent = (idx < slides.length - 1) ? pjSlideTitle(slides[idx + 1]) : "End of deck";
+        if (nextThumb) {
+          if (idx < slides.length - 1) {
+            nextThumb.classList.remove("is-end");
+            nextThumb.innerHTML = '<div class="slidepv__stage">' + renderPjSlide(slides[idx + 1]) + "</div>";
+            var _sc = (nextThumb.clientWidth || 300) / 1280, _stg = nextThumb.firstChild;
+            if (_stg) _stg.style.transform = "scale(" + _sc + ")";
+          } else { nextThumb.classList.add("is-end"); nextThumb.innerHTML = ""; }
+        }
         [].forEach.call(prog.children, function (d, i) { d.classList.toggle("is-on", i <= idx); });
       }
       // Auto-animate: FLIP every block whose match-key exists on both slides from its old rect to its new one.
@@ -2757,8 +2774,8 @@
         transTimer = setTimeout(function () { if (oldEl.parentNode) oldEl.remove(); if (newEl.parentNode) { newEl.classList.remove("pjps--in-fade", "pjps--in-push", "is-live"); newEl.style.removeProperty("--pjd"); } }, 520);
       }
       function go(d) { var n = Math.max(0, Math.min(slides.length - 1, idx + d)); if (n === idx) return; idx = n; render(d); }
-      function togglePresent() { presenting = !presenting; stage.classList.toggle("pjp--presenting", presenting); }
-      function exit() { document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { stage.remove(); pjpStage = null; }, 240); }
+      function togglePresent() { presenting = !presenting; stage.classList.toggle("pjp--presenting", presenting); if (presenting) updateChrome(); }
+      function exit() { clearInterval(clockTimer); document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { stage.remove(); pjpStage = null; }, 240); }
       function onKey(e) {
         if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); go(1); }
         else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
@@ -2771,7 +2788,7 @@
         var d = e.target.closest("[data-pjp-dot]"); if (d) { var _to = +d.getAttribute("data-pjp-dot"); var _dd = _to > idx ? 1 : -1; idx = _to; render(_dd); return; }
         var b = e.target.closest("[data-pjp]"); if (!b) return;
         var k = b.getAttribute("data-pjp");
-        if (k === "exit") exit(); else if (k === "prev") go(-1); else if (k === "next") go(1); else if (k === "notes") togglePresent();
+        if (k === "exit") exit(); else if (k === "prev") go(-1); else if (k === "next") go(1); else if (k === "notes") togglePresent(); else if (k === "timer-reset") { startT = Date.now(); tick(); }
       });
       document.addEventListener("keydown", onKey);
       render(1);
