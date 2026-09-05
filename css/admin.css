@@ -1609,12 +1609,14 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .secpick__tab.is-on .secpick__tabn { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, var(--line-soft)); }
 .secpick__panel[hidden] { display: none; }
 .secpick__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(212px, 1fr)); gap: .7rem; margin: .2rem 0 1.1rem; }
-.secpick__card { display: flex; flex-direction: column; text-align: left; gap: .5rem; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: .6rem .6rem .8rem; cursor: pointer; transition: border-color .2s, transform .2s, background .2s; color: var(--text); }
+.secpick__card { display: flex; flex-direction: column; text-align: left; gap: .5rem; min-width: 0; overflow: hidden; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: .6rem .6rem .8rem; cursor: pointer; transition: border-color .2s, transform .2s, background .2s; color: var(--text); }
 .secpick__card:hover { border-color: var(--accent); transform: translateY(-2px); background: var(--bg-elev); }
 .secpick__prev { display: block; height: 118px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: #050506; }
-.secpick__prev--live { position: relative; }
-.secpick__thumb { display: block; width: 100%; height: 100%; overflow: hidden; }
-.secpick__thumb-wrap { width: 1120px; transform-origin: top left; pointer-events: none; }
+/* Live thumbnail: render the section at 1120px OUT OF FLOW (absolute) then scale to fit — an in-flow
+   zoom let wide sections (galleries/carousels) blow up the grid track. Clipped by the fixed-size prev. */
+.secpick__prev--live { position: relative; contain: strict; }
+.secpick__thumb { position: absolute; inset: 0; overflow: hidden; }
+.secpick__thumb-wrap { position: absolute; top: 0; left: 0; width: 1120px; transform-origin: top left; pointer-events: none; }
 .secpick__thumb-wrap > .pjb { margin: 0; }
 /* z-order & alignment rows in the freeform inspector: compact icon buttons */
 .slidefree__z, .slidefree__align { display: flex; flex-wrap: wrap; align-items: center; gap: .32rem; margin-top: .55rem; }

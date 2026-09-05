@@ -6535,11 +6535,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (_sbw.study.slides && _sbw.study.slides.length) confirmModal({ title: "Rebuild the deck from sections?", sub: "This replaces your current " + _sbw.study.slides.length + " slide" + (_sbw.study.slides.length === 1 ? "" : "s") + " with a fresh draft derived from the case study.", cta: "Rebuild deck" }).then(function (ok) { if (ok) _buildIt(); });
     else _buildIt();
   }
-  // Fit each live section thumbnail (rendered at 1120px design width) into its picker card frame.
+  // Fit each live section thumbnail (rendered at 1120px design width, absolutely positioned) into its
+  // card frame with a transform scale — an in-flow zoom let wide sections blow up the grid track.
   function fitSecpickThumbs(modal) {
     (modal || document).querySelectorAll("[data-secthumb]").forEach(function (t) {
       var wrap = t.querySelector(".secpick__thumb-wrap"); if (!wrap) return;
-      var bw = t.clientWidth || 0; if (bw > 0) wrap.style.zoom = (bw / 1120).toFixed(4);
+      var bw = t.clientWidth || 0; if (bw > 0) wrap.style.transform = "scale(" + (bw / 1120).toFixed(4) + ")";
     });
   }
   function slideSectionPickModal(i, opts) {
@@ -6548,7 +6549,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     function secMedia(b) { var m = (window.RK && window.RK.deckSlideFromBlock) ? (window.RK.deckSlideFromBlock(b).slots || {}).media : null; return m && m.src ? m : null; }
     var cards = "";
     var canThumb = !!(window.RK && window.RK.renderStudyBlock);
-    blocks.forEach(function (b, bi) { if (!b || b.off || b.encStub || b.vaultBlock) return; if (opts.mediaOnly && !secMedia(b)) return; var nm = slideBlockName(b); var prev = canThumb ? '<span class="secpick__prev secpick__prev--live"><span class="secpick__thumb" data-secthumb><span class="secpick__thumb-wrap">' + window.RK.renderStudyBlock(b) + '</span></span></span>' : '<span class="secpick__prev">' + sectionPreview(b.type) + '</span>'; cards += '<button type="button" class="secpick__card slidepull__card" data-pull="' + bi + '">' + prev + '<span class="secpick__name">' + escHtml(nm.label) + '<span class="secpick__tag">' + escHtml(nm.type) + "</span></span></button>"; });
+    blocks.forEach(function (b, bi) { if (!b || b.off || b.encStub || b.vaultBlock) return; if (opts.mediaOnly && !secMedia(b)) return; var nm = slideBlockName(b); var prev = canThumb ? '<span class="secpick__prev secpick__prev--live"><span class="secpick__thumb" data-secthumb><span class="secpick__thumb-wrap">' + window.RK.renderStudyBlock(b) + '</span></span></span>' : '<span class="secpick__prev">' + sectionPreview(b.type) + '</span>'; cards += '<div class="secpick__card slidepull__card" data-pull="' + bi + '" role="button" tabindex="0">' + prev + '<span class="secpick__name">' + escHtml(nm.label) + '<span class="secpick__tag">' + escHtml(nm.type) + "</span></span></div>"; });
     if (!cards) cards = '<div class="adm__empty">' + escHtml(opts.empty || "No sections to pull from yet.") + "</div>";
     var modal = document.createElement("div"); modal.className = "pass pass--wide secpick slidepull";
     modal.innerHTML = '<div class="pass__box"><div class="pass__title">' + escHtml(opts.title) + '</div><div class="pass__sub">' + escHtml(opts.sub || "") + '</div><div class="secpick__grid">' + cards + '</div><div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button></div></div>';
@@ -6559,7 +6560,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     document.addEventListener("keydown", onKey);
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     modal.querySelector("[data-cancel]").addEventListener("click", close);
-    modal.querySelectorAll("[data-pull]").forEach(function (btn) { btn.addEventListener("click", function () { var block = blocks[+btn.getAttribute("data-pull")]; if (opts.asSection) { close(); opts.onPick(block); return; } var mapped = (window.RK && window.RK.deckSlideFromBlock) ? window.RK.deckSlideFromBlock(block) : null; if (!mapped) { status("Couldn\u2019t read that section."); return; } close(); opts.onPick(block, mapped); }); });
+    modal.querySelectorAll("[data-pull]").forEach(function (btn) { function pick() { var block = blocks[+btn.getAttribute("data-pull")]; if (opts.asSection) { close(); opts.onPick(block); return; } var mapped = (window.RK && window.RK.deckSlideFromBlock) ? window.RK.deckSlideFromBlock(block) : null; if (!mapped) { status("Couldn\u2019t read that section."); return; } close(); opts.onPick(block, mapped); } btn.addEventListener("click", pick); btn.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } }); });
   }
   function slideSectionAsElement(i) {
     slideSectionPickModal(i, { asSection: true, title: "Pull a section onto the slide", sub: "Drops the real section \u2014 comparison sliders, device mockups, galleries, isometric stacks \u2026 \u2014 onto this slide as a live element you can move, scale, rotate and mirror.", empty: "No case-study sections to pull from yet.", onPick: function (block) {
