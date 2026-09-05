@@ -4226,7 +4226,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
      Keys: "list:<name>" (L1 lists) · "block:<i>" (case-study sections) ·
      "item:<i>:<j>" (repeater items). Pointer-based, so it's reliable across
      browsers and auto-scrolls the editor when you drag near an edge. */
-  var SORT_ROW_SEL = ".rep__item, .study__block, .card, .cellrow, .adm__lsec, .adm__asec";
+  var SORT_ROW_SEL = ".rep__item, .study__block, .card, .cellrow, .adm__lsec, .adm__asec, .slides__navitem";
   function sortRowsFor(key) {
     return [].slice.call(root.querySelectorAll('[data-grip][data-sortkey="' + key + '"]'))
       .map(function (g) { return g.closest(SORT_ROW_SEL); }).filter(Boolean);
@@ -4299,6 +4299,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       after = function () {
         if (openBlock === from) openBlock = to;
         else { var ob = openBlock; if (from < ob) ob--; if (to <= ob) ob++; openBlock = ob; }
+        saveDraft(true); renderL2();
+      };
+    } else if (p[0] === "slide") {
+      var sli = +p[1], sst = data.work[sli] && data.work[sli].study; if (!sst || !sst.slides) return; arr = sst.slides;
+      after = function () {
+        if (openSlide === from) openSlide = to;
+        else { var os = openSlide; if (from < os) os--; if (to <= os) os++; openSlide = os; }
         saveDraft(true); renderL2();
       };
     } else if (p[0] === "item") {
@@ -6277,6 +6284,16 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!root) return;
     root.querySelectorAll(".slidepv").forEach(function (box) {
       var stage = box.querySelector(".slidepv__stage"); if (!stage) return;
+      var body = box.classList.contains("slidepv--free") ? box.closest(".slides__canvas-body") : null;
+      if (body) {   // main editing canvas: fit BOTH width and height so it fills the pane at any size
+        var wrap = box.closest(".slides__pvwrap"), hint = wrap && wrap.querySelector(".slidefree__hint");
+        var availW = body.clientWidth, availH = Math.max(90, body.clientHeight - (hint ? hint.offsetHeight + 10 : 0));
+        var w = Math.max(160, Math.min(availW, availH * 1280 / 720)), scF = w / 1280;
+        box.style.width = Math.round(w) + "px";
+        box.style.height = Math.round(720 * scF) + "px";
+        stage.style.transform = "scale(" + scF + ")";
+        return;
+      }
       var sc = box.clientWidth / 1280; if (!sc) return;
       stage.style.transform = "scale(" + sc + ")";
       box.style.height = Math.round(720 * sc) + "px";
@@ -6356,7 +6373,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   function slideThumb(i, s, k, len, active, variant) {
     var cls = variant === "all" ? "slides__allcard" : "slides__navitem";
+    var grip = variant === "all" ? "" : '<span class="sortgrip slides__thumbgrip" data-grip data-sortkey="slide:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + "</span>";
     return '<div class="' + cls + (active ? " is-active" : "") + (s.hidden ? " is-off" : "") + '" data-act="slide-select" data-index="' + i + '" data-sindex="' + k + '" data-variant="' + variant + '" tabindex="0" role="button" aria-label="Slide ' + (k + 1) + '">' +
+      grip +
       '<span class="slides__thumbnum">' + (k + 1) + "</span>" +
       '<span class="slidepv slides__thumbpv">' + slideThumbInner(i, s, k) + "</span>" +
       slideThumbOps(i, k, len, s) +
