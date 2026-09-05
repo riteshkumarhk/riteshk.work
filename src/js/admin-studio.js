@@ -6641,7 +6641,40 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   // Owner-only: compose a fresh narrative deck from the case study with AI. Mirrors skimGenerate
   // (reads the case via skimGather, offers to include locked sections) but returns a slide array
   // constrained to the deck's own layouts + fields. Replaces study.slides in the draft.
-  var DECK_AI_LAYOUTS = { statement: ["kicker", "title", "sub"], section: ["kicker", "title", "sub"], text: ["kicker", "title", "body"], metric: ["kicker", "value", "label"], quote: ["quote", "attribution"] };
+  var DECK_AI_LAYOUTS = { statement: ["kicker", "title", "sub"], section: ["kicker", "title", "sub"], text: ["kicker", "title", "body"], metric: ["kicker", "value", "label", "sub"], quote: ["quote", "attribution"], media: ["caption", "section"], split: ["heading", "body", "section"], showcase: ["kicker", "title", "section"] };
+  function deckSecMediaSrc(b) { try { var m = (window.RK && window.RK.deckSlideFromBlock) ? (window.RK.deckSlideFromBlock(b).slots || {}).media : null; return m && m.src ? m.src : null; } catch (e) { return null; } }
+  function deckAIBg(v) { v = String(v || "").toLowerCase(); if (v === "dark") return { type: "color", value: "#141417" }; if (v === "light") return { type: "color", value: "#ECE7E1" }; if (v === "accent") return { type: "color", value: "var(--accent)" }; return null; }
+  // Turn one AI slide spec into a real freeform slide. Section pulls resolve by index and NEVER embed a
+  // locked/vault section (that would leak decrypted content into a publishable slide).
+  function deckAIBuildSlide(s, pubBlocks) {
+    if (!s || typeof s !== "object") return null;
+    var layout = DECK_AI_LAYOUTS[s.layout] ? s.layout : "text";
+    var src = (s.slots && typeof s.slots === "object") ? s.slots : s;
+    var pullBlk = function () { var si = parseInt(src.section, 10); var b = (isFinite(si) && pubBlocks[si]) ? pubBlocks[si] : null; return (b && !b.locked && !b.off && !b.encStub && !b.vaultBlock) ? b : null; };
+    var sl = null;
+    if (layout === "showcase") {
+      var blk = pullBlk();
+      if (!blk) { if (!src.title && !src.kicker) return null; sl = freeSlideFromMapped({ layout: "section", slots: { kicker: String(src.kicker || "").trim(), title: String(src.title || "").trim() } }); }
+      else {
+        var blocks = [], head = false;
+        if (src.kicker && String(src.kicker).trim()) { blocks.push({ kind: "text", role: "kicker", size: "sm", align: "left", text: String(src.kicker).trim(), x: 6, y: 6, w: 88 }); head = true; }
+        if (src.title && String(src.title).trim()) { blocks.push({ kind: "text", size: "md", align: "left", text: String(src.title).trim(), x: 6, y: 11.5, w: 88 }); head = true; }
+        blocks.push({ kind: "section", block: JSON.parse(JSON.stringify(blk)), x: 6, y: head ? 27 : 10, w: 88 });
+        sl = { id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: "free", blocks: blocks, notes: "" };
+      }
+    } else {
+      var slots = {}, allow = DECK_AI_LAYOUTS[layout];
+      allow.forEach(function (k) { if (k === "section") return; var v = src[k]; if (v != null && String(v).trim()) slots[k] = String(v).trim(); });
+      if (layout === "media" || layout === "split") { var mb = pullBlk(), ms = mb ? deckSecMediaSrc(mb) : null; if (ms) slots.media = { src: ms }; else if (layout === "media" && !slots.caption) return null; }
+      if (!Object.keys(slots).length) return null;
+      sl = freeSlideFromMapped({ layout: layout, slots: slots });
+    }
+    if (!sl) return null;
+    sl.notes = String(s.notes || "").trim();
+    var tr = String(s.transition || "").toLowerCase(); if (tr === "none" || tr === "push" || tr === "magic") sl.transition = tr;
+    var bg = deckAIBg(s.background); if (bg) sl.background = bg;
+    return sl;
+  }
   async function deckAiDraft(i, btn) {
     var w = data.work[i];
     if (!w || !w.study) { status("Add some case-study sections first."); return; }
@@ -6662,25 +6695,20 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!g.text || g.text.length < 60) { status("Not enough case content yet \u2014 add a few sections first."); return; }
     if (btn) { btn.disabled = true; btn.textContent = "Composing the deck\u2026"; }
     status("Reading the case & composing a deck\u2026");
-    var system = "You are a Principal product designer composing a SHORT, punchy slideshow you will present LIVE to a hiring panel. Turn a case study into a narrative deck: one idea per slide, a confident cover, then context \u2192 problem \u2192 approach \u2192 the key moves/decisions \u2192 measurable outcome, ending on impact. Skimmable, senior, honest \u2014 name the real thing, never filler. Use ONLY facts from the case; NEVER invent numbers or quotes. Use ONLY these layouts and their EXACT fields: statement{kicker,title,sub} (the opening cover \u2014 title=the project, kicker=the client, sub=one line); section{kicker,title,sub} (an act divider \u2014 kicker is a number like \"01\"); text{kicker,title,body} (a point \u2014 body \u2264 40 words); metric{kicker,value,label} (ONE number \u2014 value like \"+38%\", label = what it measured); quote{quote,attribution} (a real user/stakeholder voice from the case). Do NOT use any other layout or field. Every slide also has \"notes\": what you'd SAY out loud on that slide (\u2264 30 words, first person, present tense). Return STRICT JSON only, no prose.";
+    var pubBlocks = w.study.blocks || [];
+    var invLines = [];
+    pubBlocks.forEach(function (b, bi) { if (!b || b.off || b.encStub || b.vaultBlock || b.locked) return; var nm = slideBlockName(b); invLines.push("[" + bi + "] " + nm.type + " \u2014 \"" + nm.label + "\""); });
+    var inventory = invLines.length ? invLines.join("\n") : "(none available to pull)";
+    var system = "You are a Principal product designer composing a SHORT, punchy slideshow to present LIVE to a hiring panel. Turn a case study into a narrative deck: one idea per slide \u2014 a confident cover, then context \u2192 problem \u2192 approach \u2192 the key moves \u2192 measurable outcome, ending on impact. Skimmable, senior, honest; name the real thing, never filler. Use ONLY facts from the case; NEVER invent numbers, quotes or images. The deck is a visual CANVAS, not bullet lists. Compose each slide by choosing ONE layout and filling its EXACT fields: statement{kicker,title,sub} = the opening cover (title=the project, kicker=the client, sub=one line); section{kicker,title,sub} = an act divider (kicker=a number like \"01\"); text{kicker,title,body} = one point (body \u2264 40 words); metric{kicker,value,label,sub} = ONE number (value like \"+38%\", label=what it measured); quote{quote,attribution} = a real voice from the case; showcase{kicker,title,section} = PULL A REAL SECTION from the case onto the slide (its actual before/after slider, device mockups, gallery, metric grid, concept cloud, workflow or chart renders LIVE) where \"section\" is the index from AVAILABLE SECTIONS and kicker/title are optional labels above it; media{caption,section} = a full image pulled from a section (section=its index); split{heading,body,section} = a point beside an image pulled from a section. Every slide also takes: \"notes\" (what you SAY out loud, \u2264 30 words, first person, present tense); \"transition\" (none|fade|push|magic \u2014 use \"magic\" Magic Move when this slide shares a title or element with the previous one so they glide into place; default fade); \"background\" (none|dark|light|accent \u2014 use sparingly behind a bold cover, divider or metric; default none). Prefer showcase/media/split over plain text whenever a section holds a real artefact \u2014 show the work, don't just describe it. Reference sections ONLY by the exact index shown. Return STRICT JSON only, no prose.";
     var user = "CASE STUDY:\n" + g.text +
-      "\n\nCompose 6\u201310 slides for THIS case. Slide 1 = a statement cover (title=the project title, kicker=the client, sub=the one-line pitch). Include at least one section divider and, if the case has real numbers, at least one metric. If the case has a real user/stakeholder quote, use a quote slide. End on the outcome/impact. Keep every slide to ONE idea; lead with the substance; never invent facts. Return STRICT JSON: {\"slides\":[{\"layout\":\"statement\",\"slots\":{\"kicker\":\"\",\"title\":\"\",\"sub\":\"\"},\"notes\":\"\"}]} \u2014 only the allowed layouts + fields, nothing else.";
+      "\n\nAVAILABLE SECTIONS (pull any by its index number with showcase / media / split):\n" + inventory +
+      "\n\nCompose 6\u201312 slides for THIS case. Slide 1 = a statement cover (title=the project, kicker=the client, sub=the one-line pitch). Include at least one section divider; if the case has real numbers use a metric; if it has a real quote use it. IMPORTANT: whenever a section listed above is a real artefact (slider, devices, gallery, metric grid, concept cloud, workflow, chart, figure), PULL IT with a showcase slide instead of describing it in words \u2014 that is the strongest part of the deck. Vary the rhythm; end on the outcome/impact. Return STRICT JSON: {\"slides\":[{\"layout\":\"statement\",\"slots\":{\"kicker\":\"\",\"title\":\"\",\"sub\":\"\"},\"notes\":\"\",\"transition\":\"fade\",\"background\":\"none\"},{\"layout\":\"showcase\",\"slots\":{\"kicker\":\"\",\"title\":\"\",\"section\":0},\"notes\":\"\"}]} \u2014 only the allowed layouts + fields.";
     try {
-      var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 2600, temperature: 0.5, json: true });
+      var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 3200, temperature: 0.5, json: true });
       var j = csgenParse(out);
       var rawSlides = (j && Array.isArray(j.slides)) ? j.slides : [];
       var slides = [];
-      rawSlides.forEach(function (s) {
-        if (!s || typeof s !== "object") return;
-        var layout = DECK_AI_LAYOUTS[s.layout] ? s.layout : "text";
-        var allow = DECK_AI_LAYOUTS[layout];
-        var src = (s.slots && typeof s.slots === "object") ? s.slots : s;
-        var slots = {};
-        allow.forEach(function (k) { var v = src[k]; if (v != null && String(v).trim()) slots[k] = String(v).trim(); });
-        if (!Object.keys(slots).length) return;
-        var sl = freeSlideFromMapped({ layout: layout, slots: slots }); sl.notes = String(s.notes || "").trim();
-        slides.push(sl);
-      });
+      rawSlides.forEach(function (s) { var sl = deckAIBuildSlide(s, pubBlocks); if (sl) slides.push(sl); });
       if (!slides.length) { status("The AI didn\u2019t return a usable deck \u2014 try again."); if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Draft with AI"; } return; }
       w.study.slides = slides;
       openSlide = -1;
