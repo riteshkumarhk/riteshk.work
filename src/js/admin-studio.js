@@ -6777,6 +6777,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function freePaintOne(bl, clip) { if (!bl || !clip) return; var allow = FREE_STYLE_KEYS[bl.kind || "text"] || []; allow.forEach(function (k) { if (clip.style[k] != null) bl[k] = clip.style[k]; }); }
   var freeDrag = null;  // active pointer gesture
   var freeGrid = { on: false, cols: 12, margin: 6 };   // optional layout grid overlay + snap (view aid, not persisted)
+  var freeLastDown = null;   // { i,k,idx,t } — for manual double-click detection (native dblclick breaks because every click re-renders the stage)
   function freeGridLinesX() { if (!freeGrid.on) return []; var M = freeGrid.margin, cols = Math.max(1, freeGrid.cols), inner = 100 - 2 * M, cw = inner / cols, xs = [M, 100 - M]; for (var c = 1; c < cols; c++) xs.push(Math.round((M + c * cw) * 100) / 100); return xs; }
   function freeGridLinesY() { return freeGrid.on ? [freeGrid.margin, 100 - freeGrid.margin] : []; }
   function freeGridOverlay() { if (!freeGrid.on) return ""; return '<div class="sfb__grid" data-fbgrid>' + freeGridLinesX().map(function (x) { return '<i class="sfb__grid-v" style="left:' + x + '%"></i>'; }).join("") + freeGridLinesY().map(function (y) { return '<i class="sfb__grid-h" style="top:' + y + '%"></i>'; }).join("") + "</div>"; }
@@ -7241,7 +7242,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var meta = freeStageMeta(e.target); if (!meta) return;
     var blkEl = e.target.closest && e.target.closest(".sfb[data-fb]"); if (!blkEl) return;
     var idx = +blkEl.getAttribute("data-fb"), bl = (slideBlocks(meta.i, meta.k) || [])[idx];
-    if (bl && bl.kind === "text" && !bl.lock) { e.preventDefault(); freeStartEdit(meta.i, meta.k, idx); }
+    if (!freeEditing && bl && bl.kind === "text" && !bl.lock) { e.preventDefault(); freeStartEdit(meta.i, meta.k, idx); }
   }
   // Inline text editing: double-click a text block to edit it in place (contenteditable) instead of the side panel.
   function freeStartEdit(i, k, idx) {
@@ -7373,7 +7374,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (freeCheatEl) { freeCheatEl.remove(); freeCheatEl = null; return; }
     var rows = [["Move \u00b7 nudge", "Drag \u00b7 Arrows \u00b7 Shift+Arrows"], ["Duplicate", "Ctrl+D \u00b7 Alt-drag"], ["Copy \u00b7 Cut \u00b7 Paste", "Ctrl+C \u00b7 Ctrl+X \u00b7 Ctrl+V"], ["Select all", "Ctrl+A"], ["Cycle selection", "Tab \u00b7 Shift+Tab"], ["Group \u00b7 Ungroup", "Ctrl+G \u00b7 Ctrl+Shift+G"], ["Bring forward \u00b7 back", "Ctrl+] \u00b7 Ctrl+["], ["To front \u00b7 back", "Ctrl+Shift+] \u00b7 Ctrl+Shift+["], ["Opacity 10\u2013100%", "1 \u2026 9 \u00b7 0"], ["Edit text in place", "Double-click"], ["Context menu", "Right-click"], ["Add image", "Drag a file in \u00b7 Paste"], ["Delete", "Del \u00b7 Backspace"], ["Deselect", "Esc"], ["This cheat sheet", "?"]];
     var el = document.createElement("div"); el.className = "fcheat";
-    el.innerHTML = '<div class="fcheat__box"><div class="fcheat__head"><b>Slide editor shortcuts</b><button type="button" class="fcheat__x" aria-label="Close">' + IC.close + "</button></div><div class="fcheat__grid">" + rows.map(function (r) { return '<div class="fcheat__r"><span>' + escHtml(r[0]) + "</span><kbd>" + escHtml(r[1]) + "</kbd></div>"; }).join("") + "</div></div>";
+    el.innerHTML = '<div class="fcheat__box"><div class="fcheat__head"><b>Slide editor shortcuts</b><button type="button" class="fcheat__x" aria-label="Close">' + IC.close + '</button></div><div class="fcheat__grid">' + rows.map(function (r) { return '<div class="fcheat__r"><span>' + escHtml(r[0]) + "</span><kbd>" + escHtml(r[1]) + "</kbd></div>"; }).join("") + "</div></div>";
     document.body.appendChild(el);
     freeCheatEl = el;
     el.addEventListener("click", function (ev) { if (ev.target === el || (ev.target.closest && ev.target.closest(".fcheat__x"))) freeCheatToggle(); });
@@ -7402,6 +7403,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (blkEl) {
       var midx = +blkEl.getAttribute("data-fb");
       var blocks = slideBlocks(i, k) || [];
+      var _mbl = blocks[midx], _now = Date.now();
+      if (freeLastDown && freeLastDown.i === i && freeLastDown.k === k && freeLastDown.idx === midx && (_now - freeLastDown.t) < 450 && _mbl && _mbl.kind === "text" && !_mbl.lock) { freeLastDown = null; e.preventDefault(); freeStartEdit(i, k, midx); return; }
+      freeLastDown = { i: i, k: k, idx: midx, t: _now };
       if (blocks[midx] && blocks[midx].lock && !e.shiftKey) { if (!freeSelHas(midx) || !freeSelOn(i, k)) { freeSelSet(i, k, [midx]); renderL2(); } e.preventDefault(); return; }
       if (e.shiftKey) {
         var ids = freeSelOn(i, k) ? freeSel.ids.slice() : [];
@@ -7494,7 +7498,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       } else if (!d.add) freeSel = null;
       renderL2(); return;
     }
-    if (d.moved) { saveDraft(true); renderL2(); }
+    if (d.moved) { freeLastDown = null; saveDraft(true); renderL2(); }
     else renderL2();
   }
   function onFreeKey(e) {
