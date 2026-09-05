@@ -1157,6 +1157,8 @@ html.pjp-on { overflow: hidden; }
 .pjps__fb--vbottom { justify-content: flex-end; }
 .pjps__fb--media.pjps__fb--fit { overflow: hidden; }
 .pjps__fb--media.pjps__fb--fit img, .pjps__fb--media.pjps__fb--fit video, .pjps__fb--media.pjps__fb--fit .pjps__media-el { height: 100%; object-fit: cover; }
+.pjps__fb--media.pjps__fb--contain img, .pjps__fb--media.pjps__fb--contain video, .pjps__fb--media.pjps__fb--contain .pjps__media-el { object-fit: contain; }
+.pjps__fb--link { cursor: pointer; }
 /* Freeform shapes + icons (P4) */
 .pjps__fb--shape { box-sizing: border-box; }
 .pjps__fb--line, .pjps__fb--arrow { display: flex; align-items: center; overflow: visible; }

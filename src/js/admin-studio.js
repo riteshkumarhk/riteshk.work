@@ -752,7 +752,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     zBackward: svgIco('<path d="M12 4v14"/><path d="m6 12 6 6 6-6"/>', 16),
     zBack: svgIco('<path d="M5 21h14"/><path d="M12 3v13"/><path d="m7 11 5 5 5-5"/>', 16),
     distH: svgIco('<path d="M4 5v14"/><path d="M20 5v14"/><rect x="10" y="8" width="4" height="8" rx="1"/>', 16),
-    distV: svgIco('<path d="M5 4h14"/><path d="M5 20h14"/><rect x="8" y="10" width="8" height="4" rx="1"/>', 16)
+    distV: svgIco('<path d="M5 4h14"/><path d="M5 20h14"/><rect x="8" y="10" width="8" height="4" rx="1"/>', 16),
+    lock: svgIco('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', 15),
+    unlock: svgIco('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>', 15),
+    link: svgIco('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>', 15)
   };
   const EYE_ON = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   const EYE_OFF = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
@@ -6789,6 +6792,16 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (bl.opacity != null && +bl.opacity < 100) st += "opacity:" + (Math.max(0, Math.min(100, +bl.opacity)) / 100) + ";";
     if (bl.shadow) st += "filter:" + freeShadowCss(bl.shadow) + ";";
     var inner, kind = bl.kind === "media" ? "media" : bl.kind === "shape" ? "shape" : bl.kind === "icon" ? "icon" : bl.kind === "section" ? "section" : "text";
+    if (kind === "text") {
+      var _tc = freeColor(bl.color); if (_tc) st += "color:" + _tc + ";";
+      if (bl.font === "serif") st += "font-family:var(--serif);"; else if (bl.font === "mono") st += "font-family:var(--mono);";
+      if (bl.lh != null && isFinite(+bl.lh)) st += "line-height:" + Math.max(0.7, Math.min(3, +bl.lh)) + ";";
+      if (bl.ls != null && isFinite(+bl.ls)) st += "letter-spacing:" + Math.max(-0.1, Math.min(0.6, +bl.ls)) + "em;";
+      var _bg = freeColor(bl.bg); if (_bg) { st += "background:" + _bg + ";padding:" + (bl.pad != null ? Math.max(0, +bl.pad) : 18) + "px;"; if (bl.radius) st += "border-radius:" + (parseFloat(bl.radius) || 0) + "px;"; }
+    } else if (kind === "media") {
+      if (bl.radius) st += "border-radius:" + (parseFloat(bl.radius) || 0) + "px;overflow:hidden;";
+      var _mbw = parseFloat(bl.strokeW) || 0, _mbc = freeColor(bl.stroke); if (_mbw > 0 && _mbc) st += "border:" + _mbw + "px solid " + _mbc + ";box-sizing:border-box;";
+    }
     var isPh = (kind === "media" && !bl.src) || (kind === "text" && bl.content && !String(bl.text || "").trim());
     if (kind === "section") { st = st.replace(/height:[^;]*;/, ""); boxed = false; inner = '<div class="sfb__secwrap" style="width:1120px;' + (bl.flip ? "transform:scaleX(-1);" : "") + '">' + ((window.RK && window.RK.renderStudyBlock && bl.block) ? window.RK.renderStudyBlock(bl.block) : '<div class="sfb__ph">Section</div>') + "</div>"; }
     else if (kind === "media") inner = bl.src ? '<img src="' + escAttr(bl.src) + '" alt="" draggable="false">' : phInsertCluster(i, k, idx);
@@ -6796,9 +6809,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     else if (kind === "icon") inner = '<div class="sfb__icon" style="color:' + (freeColor(bl.color) || "var(--accent)") + '">' + ((window.RK && window.RK.iconSvg) ? window.RK.iconSvg(bl.name || "star") : "") + "</div>";
     else if (isPh) inner = phInsertCluster(i, k, idx);
     else { var _tx = String(bl.text || ""), _body = _tx.trim() ? (/<[a-z!/]/i.test(_tx) ? _tx : escHtml(_tx)) : '<span class="sfb__empty">' + escHtml(bl.ph || "Text") + '</span>'; inner = '<div class="sfb__tx ' + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + (bl.role === "kicker" || bl.role === "caption" ? " " + bl.role : "") + " a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "") + '">' + _body + "</div>"; }
-    var chrome = single ? (FREE_HANDLES.map(function (h) { return '<span class="sfb__h sfb__h--' + h + '" data-fbh="' + h + '"></span>'; }).join("") + '<span class="sfb__rot" data-fbrot title="Drag to rotate"></span>') : "";
-    var bx = boxed && kind === "media" ? " sfb--fit" : (boxed && kind === "text" ? " sfb--boxed" : "");
-    return '<div class="sfb sfb--' + kind + bx + (isPh ? " sfb--ph" : "") + (sel ? " is-sel" : "") + (single ? " is-single" : "") + (bl.g ? " sfb--grouped" : "") + (kind === "text" && !String(bl.text || "").trim() ? " is-empty" : "") + '" data-fb="' + idx + '" data-fbdrag style="' + st + '">' + inner + chrome + "</div>";
+    var chrome = (single && !bl.lock) ? (FREE_HANDLES.map(function (h) { return '<span class="sfb__h sfb__h--' + h + '" data-fbh="' + h + '"></span>'; }).join("") + '<span class="sfb__rot" data-fbrot title="Drag to rotate"></span>') : "";
+    var badge = (bl.lock || bl.href || bl.jump != null) ? '<span class="sfb__badges">' + (bl.lock ? '<span class="sfb__badge sfb__badge--lock" title="Locked">' + IC.lock + "</span>" : "") + ((bl.href || bl.jump != null) ? '<span class="sfb__badge sfb__badge--link" title="Links in Present">' + IC.link + "</span>" : "") + "</span>" : "";
+    var bx = boxed && kind === "media" ? " sfb--fit" + (bl.fit === "contain" ? " sfb--contain" : "") : (boxed && kind === "text" ? " sfb--boxed" : "");
+    return '<div class="sfb sfb--' + kind + bx + (isPh ? " sfb--ph" : "") + (bl.lock ? " sfb--locked" : "") + (sel ? " is-sel" : "") + (single ? " is-single" : "") + (bl.g ? " sfb--grouped" : "") + (kind === "text" && !String(bl.text || "").trim() ? " is-empty" : "") + '" data-fb="' + idx + '" data-fbdrag style="' + st + '">' + inner + badge + chrome + "</div>";
   }
   function freeBgHtml(s) {
     var b = s && s.background; if (!b) return "";
@@ -6884,6 +6898,20 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function freeRotRow(i, k, idx, bl) {
     return '<div class="af"><label class="af__label">Rotation</label>' + numField('<input type="number" data-freefield="rot" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (Math.round(parseFloat(bl.rot) || 0)) + '" min="0" max="359" step="1" />') + "</div>";
   }
+  // Precise position & size (all in slide %). H blank = auto-height (text hugs its content).
+  function freeGeomRow(i, k, idx, bl) {
+    function f(field, lbl, val, ph) { return '<label class="slidefree__geom-f"><span>' + lbl + '</span><input type="number" data-freefield="' + field + '" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (val == null || val === "" ? "" : val) + '" min="0" max="100" step="0.5"' + (ph ? ' placeholder="' + ph + '"' : "") + " /></label>"; }
+    var r = function (v) { return Math.round(v * 10) / 10; };
+    return '<div class="slidefree__geom" title="Position &amp; size, in slide %">' + f("x", "X", r(fnum(bl.x, 8))) + f("y", "Y", r(fnum(bl.y, 8))) + f("w", "W", r(fnum(bl.w, 40))) + f("h", "H", bl.h != null ? r(fnum(bl.h, 20)) : "", "auto") + "</div>";
+  }
+  // Make an element clickable in Present: open a URL, or jump to another slide.
+  function freeLinkRow(i, k, idx, bl) {
+    var tag = bl.href ? " \u00b7 web" : (bl.jump != null ? " \u00b7 slide " + bl.jump : "");
+    return '<details class="slidefree__link"' + ((bl.href || bl.jump != null) ? " open" : "") + '><summary>' + IC.link + " Link" + tag + "</summary>" +
+      '<div class="af"><label class="af__label">Open a URL</label><input type="text" data-freefield="href" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + escAttr(bl.href || "") + '" placeholder="https://\u2026" /></div>' +
+      '<div class="af"><label class="af__label">\u2026or jump to slide</label>' + numField('<input type="number" data-freefield="jump" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (bl.jump != null ? bl.jump : "") + '" min="1" max="99" step="1" placeholder="\u2014" />') + "</div>" +
+      '<div class="af__hint">Clickable in Present mode \u2014 a URL opens in a new tab, a slide number jumps there.</div></details>';
+  }
   function freeAlignRow(i, k, n) {
     function ab(dir, ico, title) { return '<button type="button" class="btn btn--ghost" data-act="free-align" data-index="' + i + '" data-sindex="' + k + '" data-align="' + dir + '" title="' + title + '" aria-label="' + title + '">' + ico + "</button>"; }
     var row = '<div class="slidefree__align"><span class="slidefree__align-lbl">' + (n > 1 ? "Align" : "To slide") + "</span>" +
@@ -6904,7 +6932,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var idx = freeSel.ids[0], bl = blocks[idx];
     if (!bl) return '<div class="slidefree__sel slidefree__sel--none">Select a block to edit it.</div>';
     var _kn = bl.kind === "media" ? "Media" : bl.kind === "shape" ? "Shape" : bl.kind === "icon" ? "Icon" : bl.kind === "section" ? "Section" : "Text";
-    var head = '<div class="slidefree__selhead"><b>' + _kn + ' block</b><button class="iconbtn iconbtn--danger" data-act="free-del" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" title="Delete block">' + IC.trash + "</button></div>";
+    var _ops = '<span class="slidefree__selhead-ops"><button class="iconbtn' + (bl.lock ? " is-on" : "") + '" data-act="free-lock" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" title="' + (bl.lock ? "Unlock this block" : "Lock position & size") + '" aria-label="' + (bl.lock ? "Unlock" : "Lock") + '">' + (bl.lock ? IC.lock : IC.unlock) + '</button><button class="iconbtn iconbtn--danger" data-act="free-del" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" title="Delete block">' + IC.trash + "</button></span>";
+    var head = '<div class="slidefree__selhead"><b>' + _kn + " block" + (bl.lock ? ' <span class="slidefree__lockchip">Locked</span>' : "") + "</b>" + _ops + "</div>" + freeGeomRow(i, k, idx, bl) + freeLinkRow(i, k, idx, bl);
     if (bl.kind === "section") {
       return '<div class="slidefree__sel">' + head +
         '<div class="af__hint">Pulled live from your case study \u2014 comparison sliders, device mockups &amp; galleries render for real. Edit the source section then re-pull to refresh.</div>' +
@@ -6913,9 +6942,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
     }
     if (bl.kind === "media") {
+      var mda = 'data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '"';
+      var fitSel = [["cover", "Cover (fill)"], ["contain", "Contain (fit)"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.fit === "contain" ? "contain" : "cover") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
       return '<div class="slidefree__sel">' + head +
         '<div class="af"><label class="af__label">Media URL</label><input type="text" data-freefield="src" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + escAttr(bl.src || "") + '" placeholder="Paste a URL\u2026" />' +
         '<div class="imgblk__row"><button class="btn btn--ghost" data-act="free-media-upload" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">Upload\u2026</button></div></div>' +
+        '<div class="af__row"><div class="af"><label class="af__label">Fit</label><select data-freefit ' + mda + ">" + fitSel + '</select></div><div class="af"><label class="af__label">Corner</label>' + numField('<input type="number" data-freefield="radius" ' + mda + ' value="' + (parseFloat(bl.radius) || 0) + '" min="0" max="200" step="1" />') + "</div></div>" +
+        '<div class="af__row">' + freeColorField("Border", i, k, idx, "stroke", bl.stroke) + '<div class="af"><label class="af__label">Border width</label>' + numField('<input type="number" data-freefield="strokeW" ' + mda + ' value="' + (parseFloat(bl.strokeW) || 0) + '" min="0" max="40" step="1" />') + "</div></div>" +
         '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
     }
     if (bl.kind === "shape") {
@@ -6936,11 +6969,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }
     var sizes = [["sm", "Compact"], ["md", "Normal"], ["lg", "Large"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.size || "md") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
     var aligns = [["left", "Left"], ["center", "Centre"], ["right", "Right"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.align || "left") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
+    var fontSel = [["", "Default"], ["serif", "Serif"], ["mono", "Mono"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.font || "") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
+    var da = 'data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '"';
     var valignCtl = (bl.h != null) ? ('<div class="af"><label class="af__label">Vertical</label><select data-freevalign data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + [["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]].map(function (o) { return '<option value="' + o[0] + '"' + ((bl.valign || "top") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select></div>") : '<div class="af"></div>';
     return '<div class="slidefree__sel">' + head +
       '<div class="af rt"><label class="af__label">Text</label>' + richFieldWrap('data-freert data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '"', bl.text) + "</div>" +
       '<div class="af__row"><div class="af"><label class="af__label">Size</label><select data-freesize data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + sizes + "</select></div>" +
       '<div class="af"><label class="af__label">Align</label><select data-freealign data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '">' + aligns + "</select></div></div>" +
+      '<div class="af__row"><div class="af"><label class="af__label">Typeface</label><select data-freefont ' + da + ">" + fontSel + "</select></div>" + freeColorField("Text colour", i, k, idx, "color", bl.color) + "</div>" +
+      '<div class="af__row"><div class="af"><label class="af__label">Line height</label>' + numField('<input type="number" data-freefield="lh" ' + da + ' value="' + (bl.lh != null ? bl.lh : "") + '" min="0.7" max="3" step="0.05" placeholder="auto" />') + '</div><div class="af"><label class="af__label">Tracking</label>' + numField('<input type="number" data-freefield="ls" ' + da + ' value="' + (bl.ls != null ? bl.ls : "") + '" min="-0.1" max="0.6" step="0.01" placeholder="0" />') + "</div></div>" +
+      freeColorField("Box fill", i, k, idx, "bg", bl.bg) +
+      (freeColor(bl.bg) ? '<div class="af__row"><div class="af"><label class="af__label">Padding</label>' + numField('<input type="number" data-freefield="pad" ' + da + ' value="' + (bl.pad != null ? bl.pad : 18) + '" min="0" max="120" step="2" />') + '</div><div class="af"><label class="af__label">Corner</label>' + numField('<input type="number" data-freefield="radius" ' + da + ' value="' + (parseFloat(bl.radius) || 0) + '" min="0" max="200" step="1" />') + "</div></div>" : "") +
       '<div class="af__row">' + valignCtl + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
   }
   function freeLayersPanel(i, k) {
@@ -6968,6 +7007,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     else if (f === "rot") { var n = parseFloat(t.value); bl.rot = isFinite(n) ? ((Math.round(n) % 360) + 360) % 360 : 0; }
     else if (f === "strokeW" || f === "radius") { var m = parseFloat(t.value); bl[f] = isFinite(m) ? Math.max(0, m) : 0; }
     else if (f === "opacity") { var o = parseFloat(t.value); bl.opacity = isFinite(o) ? Math.max(0, Math.min(100, o)) : 100; }
+    else if (f === "x" || f === "y" || f === "w") { var g = parseFloat(t.value); if (isFinite(g)) bl[f] = Math.max(0, Math.min(100, Math.round(g * 10) / 10)); }
+    else if (f === "h") { var hv = String(t.value).trim(); if (hv === "") delete bl.h; else { var hn = parseFloat(hv); if (isFinite(hn)) bl.h = Math.max(1, Math.min(100, Math.round(hn * 10) / 10)); } }
+    else if (f === "pad") { var pv = parseFloat(t.value); bl.pad = isFinite(pv) ? Math.max(0, Math.min(120, Math.round(pv))) : 0; }
+    else if (f === "lh") { var lv = parseFloat(t.value); if (isFinite(lv)) bl.lh = Math.max(0.7, Math.min(3, lv)); else delete bl.lh; }
+    else if (f === "ls") { var sv = parseFloat(t.value); if (isFinite(sv)) bl.ls = Math.max(-0.1, Math.min(0.6, sv)); else delete bl.ls; }
+    else if (f === "href") { var uv = String(t.value || "").trim(); if (uv) bl.href = uv; else delete bl.href; }
+    else if (f === "jump") { var jv = parseInt(t.value, 10); if (isFinite(jv) && jv > 0) bl.jump = jv; else delete bl.jump; }
     else bl.text = t.value;
     saveDraft(); freePvRefresh(+t.dataset.fi, +t.dataset.fk);
   }
@@ -7005,6 +7051,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (blkEl) {
       var midx = +blkEl.getAttribute("data-fb");
       var blocks = slideBlocks(i, k) || [];
+      if (blocks[midx] && blocks[midx].lock && !e.shiftKey) { if (!freeSelHas(midx) || !freeSelOn(i, k)) { freeSelSet(i, k, [midx]); renderL2(); } e.preventDefault(); return; }
       if (e.shiftKey) {
         var ids = freeSelOn(i, k) ? freeSel.ids.slice() : [];
         var grp = freeExpandToGroups(blocks, [midx]);
@@ -7119,13 +7166,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) { e.preventDefault(); freeClipboard = freeSel.ids.map(function (ix) { return blocks[ix]; }).filter(Boolean).map(function (b) { return JSON.parse(JSON.stringify(b)); }); status(freeClipboard.length + (freeClipboard.length === 1 ? " block copied" : " blocks copied") + " \u2014 paste on any slide.", true); return; }
     if ((e.ctrlKey || e.metaKey) && (e.key === "x" || e.key === "X")) { e.preventDefault(); freeClipboard = freeSel.ids.map(function (ix) { return blocks[ix]; }).filter(Boolean).map(function (b) { return JSON.parse(JSON.stringify(b)); }); freeSel.ids.slice().sort(function (a, b) { return b - a; }).forEach(function (ix) { blocks.splice(ix, 1); }); freeSel = null; freeCleanGroups(blocks); saveDraft(true); renderL2(); status("Cut \u2014 paste on any slide.", true); return; }
     if (e.key === "Escape") { freeSel = null; renderL2(); return; }
-    if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); freeSel.ids.slice().sort(function (a, b) { return b - a; }).forEach(function (ix) { blocks.splice(ix, 1); }); freeSel = null; freeCleanGroups(blocks); saveDraft(true); renderL2(); return; }
+    if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); freeSel.ids.filter(function (ix) { return blocks[ix] && !blocks[ix].lock; }).slice().sort(function (a, b) { return b - a; }).forEach(function (ix) { blocks.splice(ix, 1); }); freeSel = null; freeCleanGroups(blocks); saveDraft(true); renderL2(); return; }
     if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) { e.preventDefault(); var add = [], _dup = []; freeSel.ids.forEach(function (ix) { var b = blocks[ix]; if (!b) return; var cp = JSON.parse(JSON.stringify(b)); cp.x = Math.min(100, fnum(b.x, 8) + 2); cp.y = Math.min(100, fnum(b.y, 8) + 2); blocks.push(cp); _dup.push(cp); add.push(blocks.length - 1); }); freeReidGroups(_dup); if (add.length) freeSelSet(i, k, add); saveDraft(true); renderL2(); return; }
     if (/^Arrow/.test(e.key)) {
       var step = e.shiftKey ? 5 : 0.5, dx = 0, dy = 0;
       if (e.key === "ArrowLeft") dx = -step; else if (e.key === "ArrowRight") dx = step; else if (e.key === "ArrowUp") dy = -step; else if (e.key === "ArrowDown") dy = step; else return;
       e.preventDefault();
-      freeSel.ids.forEach(function (ix) { var b = blocks[ix]; if (!b) return; b.x = Math.round(Math.max(0, Math.min(100, fnum(b.x, 8) + dx)) * 10) / 10; b.y = Math.round(Math.max(0, Math.min(100, fnum(b.y, 8) + dy)) * 10) / 10; });
+      freeSel.ids.forEach(function (ix) { var b = blocks[ix]; if (!b || b.lock) return; b.x = Math.round(Math.max(0, Math.min(100, fnum(b.x, 8) + dx)) * 10) / 10; b.y = Math.round(Math.max(0, Math.min(100, fnum(b.y, 8) + dy)) * 10) / 10; });
       saveDraft(); freePvRefresh(i, k); return;
     }
   }
@@ -9869,6 +9916,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (t.dataset.freeaddshape !== undefined) { var _sfi = +t.dataset.fi, _sfk = +t.dataset.fk, _sarr = slideBlocks(_sfi, _sfk), _sv = t.value; t.value = ""; if (!_sarr || !_sv) return; var _nb = (_sv === "line" || _sv === "arrow") ? { kind: "shape", shape: _sv, x: 12, y: 46, w: 34, h: 8, stroke: "var(--accent)", strokeW: 3 } : { kind: "shape", shape: _sv, x: 14, y: 16, w: 26, h: 22, fill: "", stroke: "var(--accent)", strokeW: 2, radius: 0 }; _sarr.push(_nb); freeSelSet(_sfi, _sfk, [_sarr.length - 1]); saveDraft(true); renderL2(); return; }
     if (t.dataset.freeshape !== undefined) { var _fsb = freeBlk(t); if (_fsb) { _fsb.shape = t.value; saveDraft(true); renderL2(); } return; }
     if (t.dataset.freeshadow !== undefined) { var _shb = freeBlk(t); if (_shb) { if (t.value) _shb.shadow = t.value; else delete _shb.shadow; saveDraft(true); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
+    if (t.dataset.freefont !== undefined) { var _fnb = freeBlk(t); if (_fnb) { if (t.value === "serif" || t.value === "mono") _fnb.font = t.value; else delete _fnb.font; saveDraft(true); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
+    if (t.dataset.freefit !== undefined) { var _ftb = freeBlk(t); if (_ftb) { if (t.value === "contain") _ftb.fit = "contain"; else delete _ftb.fit; saveDraft(true); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
     if (t.dataset.statementsize !== undefined) { data.landing = data.landing || {}; data.landing.statementSize = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.worktitlesize !== undefined) { data.landing = data.landing || {}; data.landing.workTitleSize = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.worktitlealign !== undefined) { data.landing = data.landing || {}; data.landing.workTitleAlign = t.value; saveDraft(true); apply(true); return; }
@@ -10617,6 +10666,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "free-add-icon") { var _fik = +b.dataset.sindex; freeIconPicker(function (name) { var arr = slideBlocks(i, _fik); if (!arr) return; arr.push({ kind: "icon", name: name, x: 14, y: 14, w: 12, h: 12, color: "var(--accent)" }); freeSelSet(i, _fik, [arr.length - 1]); saveDraft(true); renderL2(); }); return; }
     if (act === "free-add-section") { slideSectionAsElement(i); return; }
     if (act === "free-flip") { var _flk = +b.dataset.sindex, _fl = slideBlocks(i, _flk), _flb = _fl && _fl[+b.dataset.fbi]; if (_flb) { _flb.flip = !_flb.flip; saveDraft(true); renderL2(); } return; }
+    if (act === "free-lock") { var _lok = +b.dataset.sindex, _lo = slideBlocks(i, _lok), _lob = _lo && _lo[+b.dataset.fbi]; if (_lob) { if (_lob.lock) delete _lob.lock; else _lob.lock = true; saveDraft(true); renderL2(); status(_lob.lock ? "Block locked \u2014 it won\u2019t move until you unlock it." : "Block unlocked.", true); } return; }
     if (act === "free-section-repull") { var _rpk = +b.dataset.sindex, _rp = slideBlocks(i, _rpk), _rpb = _rp && _rp[+b.dataset.fbi]; if (!_rpb) return; slideSectionPickModal(i, { asSection: true, title: "Replace this section", sub: "Pick another case-study section to swap in \u2014 position, size &amp; mirror stay.", empty: "No sections to pull from yet.", onPick: function (block) { _rpb.block = JSON.parse(JSON.stringify(block)); saveDraft(true); renderL2(); status("Section replaced.", true); } }); return; }
     if (act === "ph-text") { var _phk = +b.dataset.sindex, _pha = slideBlocks(i, _phk), _phb = _pha && _pha[+b.dataset.fbi]; if (!_phb) return; delete _phb.content; freeSelSet(i, _phk, [+b.dataset.fbi]); saveDraft(true); renderL2(); var _ce = root.querySelector("[data-freert] [contenteditable]"); if (_ce && _ce.focus) _ce.focus(); return; }
     if (act === "ph-media") { var _pmk = +b.dataset.sindex, _pmi = +b.dataset.fbi; pickMedia(function (uri) { var a = slideBlocks(i, _pmk), bl = a && a[_pmi]; if (!bl) return; bl.kind = "media"; bl.src = uri; delete bl.content; delete bl.ph; freeSelSet(i, _pmk, [_pmi]); saveDraft(true); renderL2(); }); return; }

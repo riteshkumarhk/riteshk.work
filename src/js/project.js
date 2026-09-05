@@ -2640,6 +2640,7 @@
     }
     function pjNum(v, d) { var n = parseFloat(v); return isFinite(n) ? Math.max(0, Math.min(100, n)) : d; }
     function pjSafeColor(v) { v = String(v == null ? "" : v).trim(); return /^(#[0-9a-fA-F]{3,8}|rgba?\([\d.,%\s]+\)|var\(--[\w-]+\)|[a-zA-Z]+)$/.test(v) ? v : ""; }
+    function pjSafeHref(u) { u = String(u == null ? "" : u).trim(); return /^(https?:\/\/|mailto:|tel:|\/|#)/i.test(u) ? u : ""; }
     function pjShadow(v) { return v === "strong" ? "drop-shadow(0 14px 40px rgba(0,0,0,.6))" : v === "medium" ? "drop-shadow(0 8px 24px rgba(0,0,0,.45))" : v === "soft" ? "drop-shadow(0 4px 12px rgba(0,0,0,.32))" : "none"; }
     // Stable key used to match blocks between two slides for Magic Move. Prefers an explicit mid
     // (assigned when a slide is duplicated), else falls back to content so identical text/media tween.
@@ -2673,12 +2674,25 @@
       if (bl.opacity != null && +bl.opacity < 100) st += "opacity:" + (Math.max(0, Math.min(100, +bl.opacity)) / 100) + ";";
       if (bl.shadow) st += "filter:" + pjShadow(bl.shadow) + ";";
       var mk = ' data-mk="' + pjBlockKey(bl) + '"';
-      if (bl.kind === "media") return '<div class="pjps__fb pjps__fb--media' + (boxed ? " pjps__fb--fit" : "") + '"' + mk + ' style="' + st + '">' + pjMediaHtml(bl, "pjps__media-el") + "</div>";
-      if (bl.kind === "shape") return renderFreeShape(bl, st, mk);
-      if (bl.kind === "icon") return '<div class="pjps__fb pjps__fb--icon"' + mk + ' style="' + st + "color:" + (pjSafeColor(bl.color) || "var(--accent)") + '">' + iconSvg(bl.name || "star") + "</div>";
-      if (bl.kind === "section") return '<div class="pjps__fb pjps__fb--section"' + mk + ' style="' + st.replace(/height:[^;]*;/, "") + '"><div class="pjps__secwrap" style="width:1120px;' + (bl.flip ? "transform:scaleX(-1);" : "") + '">' + renderStudyBlockInner(bl.block) + "</div></div>";
-      var cls = "pjps__fb pjps__fb--text pjps__fb--" + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " pjps__fb--a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (bl.role === "kicker" || bl.role === "caption" ? " pjps__fb--" + bl.role : "") + (boxed ? " pjps__fb--boxed pjps__fb--v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "");
-      return '<div class="' + cls + '"' + mk + ' style="' + st + '">' + pjBodyHtml(bl.text || "") + "</div>";
+      var _hr = bl.href ? pjSafeHref(bl.href) : "";
+      var lk = _hr ? ' data-pjhref="' + esc(_hr) + '"' : (bl.jump != null && isFinite(parseInt(bl.jump, 10)) ? ' data-pjjump="' + (parseInt(bl.jump, 10) || 1) + '"' : "");
+      var lkc = lk ? " pjps__fb--link" : "";
+      if (bl.kind === "media") {
+        var ms = st; if (bl.radius) ms += "border-radius:" + (parseFloat(bl.radius) || 0) + "px;overflow:hidden;";
+        var mbw = parseFloat(bl.strokeW) || 0, mbc = pjSafeColor(bl.stroke); if (mbw > 0 && mbc) ms += "border:" + mbw + "px solid " + mbc + ";box-sizing:border-box;";
+        return '<div class="pjps__fb pjps__fb--media' + (boxed ? " pjps__fb--fit" + (bl.fit === "contain" ? " pjps__fb--contain" : "") : "") + lkc + '"' + mk + lk + ' style="' + ms + '">' + pjMediaHtml(bl, "pjps__media-el") + "</div>";
+      }
+      if (bl.kind === "shape") return renderFreeShape(bl, st, mk + lk);
+      if (bl.kind === "icon") return '<div class="pjps__fb pjps__fb--icon' + lkc + '"' + mk + lk + ' style="' + st + "color:" + (pjSafeColor(bl.color) || "var(--accent)") + '">' + iconSvg(bl.name || "star") + "</div>";
+      if (bl.kind === "section") return '<div class="pjps__fb pjps__fb--section' + lkc + '"' + mk + lk + ' style="' + st.replace(/height:[^;]*;/, "") + '"><div class="pjps__secwrap" style="width:1120px;' + (bl.flip ? "transform:scaleX(-1);" : "") + '">' + renderStudyBlockInner(bl.block) + "</div></div>";
+      var ts = st;
+      var _tc = pjSafeColor(bl.color); if (_tc) ts += "color:" + _tc + ";";
+      if (bl.font === "serif") ts += "font-family:var(--serif);"; else if (bl.font === "mono") ts += "font-family:var(--mono);";
+      if (bl.lh != null && isFinite(+bl.lh)) ts += "line-height:" + Math.max(0.7, Math.min(3, +bl.lh)) + ";";
+      if (bl.ls != null && isFinite(+bl.ls)) ts += "letter-spacing:" + Math.max(-0.1, Math.min(0.6, +bl.ls)) + "em;";
+      var _tbg = pjSafeColor(bl.bg); if (_tbg) { ts += "background:" + _tbg + ";padding:" + (bl.pad != null ? Math.max(0, +bl.pad) : 18) + "px;"; if (bl.radius) ts += "border-radius:" + (parseFloat(bl.radius) || 0) + "px;"; }
+      var cls = "pjps__fb pjps__fb--text pjps__fb--" + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + " pjps__fb--a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (bl.role === "kicker" || bl.role === "caption" ? " pjps__fb--" + bl.role : "") + (boxed ? " pjps__fb--boxed pjps__fb--v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "") + lkc;
+      return '<div class="' + cls + '"' + mk + lk + ' style="' + ts + '">' + pjBodyHtml(bl.text || "") + "</div>";
     }
     function renderStudyBlockInner(b) {
       if (!b) return "";
@@ -2893,6 +2907,13 @@
         else if (e.key === "End") { idx = slides.length - 1; render(1); }
       }
       stage.addEventListener("click", function (e) {
+        var lk = e.target.closest("[data-pjhref],[data-pjjump]");
+        if (lk && stage.contains(lk)) {
+          var hr = lk.getAttribute("data-pjhref");
+          if (hr) { window.open(hr, "_blank", "noopener"); return; }
+          var jp = parseInt(lk.getAttribute("data-pjjump"), 10);
+          if (isFinite(jp)) { var _jt = Math.max(0, Math.min(slides.length - 1, jp - 1)); var _jd = _jt > idx ? 1 : -1; idx = _jt; render(_jd); return; }
+        }
         var d = e.target.closest("[data-pjp-dot]"); if (d) { var _to = +d.getAttribute("data-pjp-dot"); var _dd = _to > idx ? 1 : -1; idx = _to; render(_dd); return; }
         var b = e.target.closest("[data-pjp]"); if (!b) return;
         var k = b.getAttribute("data-pjp");
