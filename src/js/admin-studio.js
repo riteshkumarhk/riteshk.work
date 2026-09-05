@@ -16465,25 +16465,27 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     // Resizable editor/preview divider - drag to set the editor width (persists). Drag it right to shrink
     // the preview down to a tablet/phone width and watch the site reflow - a live responsive view.
     (function () {
-      var SPLIT_KEY = "rk:adm:split";
+      var SPLIT_KEY = "rk:adm:split", NAV_KEY = "rk:adm:navsplit";
       var main = root.querySelector(".adm__main"), rz = root.querySelector(".adm__resizer"), badge = root.querySelector("[data-prevw]");
       if (!main || !rz) return;
-      try { var saved = localStorage.getItem(SPLIT_KEY); if (saved) main.style.setProperty("--adm-ecol", saved); } catch (e) {}
+      // On the Slideshow tab the same divider resizes the navigator vs the slide editor (its own var + key).
+      function slides() { return root.classList.contains("is-slidestage"); }
+      function cfg() { return slides() ? { v: "--adm-navcol", key: NAV_KEY, minL: 220, minR: 520 } : { v: "--adm-ecol", key: SPLIT_KEY, minL: 400, minR: 300 }; }
+      try { var s1 = localStorage.getItem(SPLIT_KEY); if (s1) main.style.setProperty("--adm-ecol", s1); var s2 = localStorage.getItem(NAV_KEY); if (s2) main.style.setProperty("--adm-navcol", s2); } catch (e) {}
       var dragging = false;
       function clampPx(px) {
-        var w = main.getBoundingClientRect().width || window.innerWidth;
-        var minEditor = 400, minPreview = 300, max = Math.max(minEditor, w - minPreview);
-        return Math.round(Math.max(minEditor, Math.min(max, px)));
+        var c = cfg(), w = main.getBoundingClientRect().width || window.innerWidth, max = Math.max(c.minL, w - c.minR);
+        return Math.round(Math.max(c.minL, Math.min(max, px)));
       }
       function updateBadge(px) {
-        if (!badge) return;
+        if (!badge || slides()) return;
         var pw = Math.max(0, Math.round((main.getBoundingClientRect().width || 0) - px));
         var lab = pw < 500 ? "Mobile" : pw < 900 ? "Tablet" : "Desktop";
         badge.textContent = pw + "px \u00b7 " + lab;
       }
-      function setPx(px) { px = clampPx(px); main.style.setProperty("--adm-ecol", px + "px"); updateBadge(px); refitDevice(); try { localStorage.setItem(SPLIT_KEY, px + "px"); } catch (e) {} }
+      function setPx(px) { var c = cfg(); px = clampPx(px); main.style.setProperty(c.v, px + "px"); if (!slides()) { updateBadge(px); refitDevice(); } try { localStorage.setItem(c.key, px + "px"); } catch (e) {} }
       rz.addEventListener("pointerdown", function (e) {
-        if (root.classList.contains("is-prevoff") || root.classList.contains("is-noprev")) return;
+        if (!slides() && (root.classList.contains("is-prevoff") || root.classList.contains("is-noprev"))) return;
         dragging = true; try { rz.setPointerCapture(e.pointerId); } catch (x) {}
         var ed0 = root.querySelector(".adm__editor"); updateBadge(ed0 ? ed0.getBoundingClientRect().width : 0);
         root.classList.add("is-resizing"); e.preventDefault();
@@ -16494,12 +16496,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       rz.addEventListener("pointercancel", end);
       rz.addEventListener("keydown", function (e) {
         var ed = root.querySelector(".adm__editor"); if (!ed) return;
-        var cur = ed.getBoundingClientRect().width;
+        var cur = ed.getBoundingClientRect().width, c = cfg();
         if (e.key === "ArrowLeft") { setPx(cur - 24); e.preventDefault(); }
         else if (e.key === "ArrowRight") { setPx(cur + 24); e.preventDefault(); }
-        else if (e.key === "Home") { main.style.removeProperty("--adm-ecol"); try { localStorage.removeItem(SPLIT_KEY); } catch (x) {} e.preventDefault(); }
+        else if (e.key === "Home") { main.style.removeProperty(c.v); try { localStorage.removeItem(c.key); } catch (x) {} e.preventDefault(); }
       });
-      rz.addEventListener("dblclick", function () { main.style.removeProperty("--adm-ecol"); try { localStorage.removeItem(SPLIT_KEY); } catch (e) {} });
+      rz.addEventListener("dblclick", function () { var c = cfg(); main.style.removeProperty(c.v); try { localStorage.removeItem(c.key); } catch (e) {} });
     })();
     // Device preview toggle (Desktop / Phone): scales the live-preview area only, never opens a tab.
     var _devWrap = root.querySelector("[data-dev-wrap]");
