@@ -6492,6 +6492,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var ridx = +blkEl.getAttribute("data-fb"), rbl = (slideBlocks(i, k) || [])[ridx]; if (!rbl) return;
       var br = blkEl.getBoundingClientRect(), ccx = br.left + br.width / 2, ccy = br.top + br.height / 2;
       freeDrag = { mode: "rotate", i: i, k: k, el: blkEl, bl: rbl, cx: ccx, cy: ccy, startAng: Math.atan2(e.clientY - ccy, e.clientX - ccx) * 180 / Math.PI, startRot: parseFloat(rbl.rot) || 0, moved: false };
+      blkEl.style.willChange = "transform";
       bindFreeMove(); e.preventDefault(); return;
     }
     if (blkEl) {
@@ -6503,7 +6504,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       }
       if (!freeSelHas(midx) || !freeSelOn(i, k)) freeSelSet(i, k, [midx]);
       var blocks = slideBlocks(i, k) || [], stageEl = meta.stage;
-      freeDrag = { mode: "move", i: i, k: k, sw: sw, sh: sh, sx: e.clientX, sy: e.clientY, moved: false, stage: stageEl, items: freeSel.ids.map(function (ix) { var b = blocks[ix]; return b ? { bl: b, el: stageEl.querySelector('.sfb[data-fb="' + ix + '"]'), ox: fnum(b.x, 8), oy: fnum(b.y, 8) } : null; }).filter(Boolean) };
+      freeDrag = { mode: "move", i: i, k: k, sw: sw, sh: sh, sx: e.clientX, sy: e.clientY, moved: false, stage: stageEl, items: freeSel.ids.map(function (ix) { var b = blocks[ix]; if (!b) return null; var el = stageEl.querySelector('.sfb[data-fb="' + ix + '"]'); if (el) el.style.willChange = "transform"; return { bl: b, el: el, ox: fnum(b.x, 8), oy: fnum(b.y, 8), nx: fnum(b.x, 8), ny: fnum(b.y, 8), rotTf: (parseFloat(b.rot) ? " rotate(" + (parseFloat(b.rot) || 0) + "deg)" : "") }; }).filter(Boolean) };
       if (freeDrag.items.length === 1) {
         var mel = freeDrag.items[0].el, mr = mel ? mel.getBoundingClientRect() : null;
         freeDrag.mw = mr ? mr.width / sw * 100 : fnum(freeDrag.items[0].bl.w, 40);
@@ -6519,8 +6520,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   function onFreeMove(e) {
     var d = freeDrag; if (!d) return;
+    d.ev = e;
+    if (!d.moved && Math.abs(e.clientX - d.sx) + Math.abs(e.clientY - d.sy) > 3) d.moved = true;
+    if (!d.raf) d.raf = requestAnimationFrame(freeFrame);
+  }
+  // One visual update per frame — move via GPU transform (no layout), resize/rotate/marquee coalesced.
+  function freeFrame() {
+    var d = freeDrag; if (!d) return; d.raf = 0;
+    var e = d.ev; if (!e) return;
     var ddx = e.clientX - d.sx, ddy = e.clientY - d.sy;
-    if (Math.abs(ddx) + Math.abs(ddy) > 3) d.moved = true;
     if (d.mode === "move") {
       var pdx = ddx / d.sw * 100, pdy = ddy / d.sh * 100;
       if (d.items.length === 1 && d.snapX && !e.altKey) {
@@ -6528,11 +6536,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         var tx = 7 / d.sw * 100, ty = 7 / d.sh * 100;
         var sxr = freeSnapAxis(nx, [0, d.mw / 2, d.mw], d.snapX, tx), syr = freeSnapAxis(ny, [0, d.mh / 2, d.mh], d.snapY, ty);
         if (sxr) nx = sxr.nb; if (syr) ny = syr.nb;
-        it0.bl.x = Math.round(nx * 10) / 10; it0.bl.y = Math.round(ny * 10) / 10;
-        if (it0.el) { it0.el.style.left = it0.bl.x + "%"; it0.el.style.top = it0.bl.y + "%"; }
+        it0.nx = Math.round(nx * 10) / 10; it0.ny = Math.round(ny * 10) / 10;
+        if (it0.el) it0.el.style.transform = "translate3d(" + ((it0.nx - it0.ox) / 100 * d.sw).toFixed(2) + "px," + ((it0.ny - it0.oy) / 100 * d.sh).toFixed(2) + "px,0)" + it0.rotTf;
         freeGuides(d.stage, sxr ? sxr.guide : null, syr ? syr.guide : null);
       } else {
-        d.items.forEach(function (it) { it.bl.x = Math.round(Math.max(0, Math.min(100, it.ox + pdx)) * 10) / 10; it.bl.y = Math.round(Math.max(0, Math.min(100, it.oy + pdy)) * 10) / 10; if (it.el) { it.el.style.left = it.bl.x + "%"; it.el.style.top = it.bl.y + "%"; } });
+        d.items.forEach(function (it) {
+          it.nx = Math.round(Math.max(0, Math.min(100, it.ox + pdx)) * 10) / 10;
+          it.ny = Math.round(Math.max(0, Math.min(100, it.oy + pdy)) * 10) / 10;
+          if (it.el) it.el.style.transform = "translate3d(" + ((it.nx - it.ox) / 100 * d.sw).toFixed(2) + "px," + ((it.ny - it.oy) / 100 * d.sh).toFixed(2) + "px,0)" + it.rotTf;
+        });
       }
     } else if (d.mode === "resize") {
       var nr = freeResize(d.R, d.handle, ddx, ddy, d.rot);
@@ -6553,6 +6565,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function onFreeUp() {
     window.removeEventListener("pointermove", onFreeMove);
     var d = freeDrag; freeDrag = null; if (!d) return;
+    if (d.raf) { cancelAnimationFrame(d.raf); d.raf = 0; }
+    if (d.mode === "move") {
+      if (d.moved) d.items.forEach(function (it) { if (it.nx != null) { it.bl.x = it.nx; it.bl.y = it.ny; } });
+      d.items.forEach(function (it) { if (it.el) it.el.style.willChange = ""; });
+    } else if (d.el && d.mode === "rotate") { d.el.style.willChange = ""; }
     if (d.mode === "marquee") {
       if (d.el) d.el.hidden = true;
       if (d.moved && d.marq) {
