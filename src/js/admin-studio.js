@@ -6274,7 +6274,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     freeDragInit();
     if (window.ResizeObserver && l2body) {
       if (!slidePvRO) slidePvRO = new ResizeObserver(function () { slidePvFit(); });
-      try { slidePvRO.disconnect(); slidePvRO.observe(l2body); } catch (e) {}
+      try { slidePvRO.disconnect(); slidePvRO.observe(l2body); var _pv = root && root.querySelector(".adm__preview"); if (_pv) slidePvRO.observe(_pv); } catch (e) {}
     }
   }
   function slidePvRefresh(i, k) {
@@ -6329,7 +6329,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return intro + '<section class="l2grp"><div class="adm__empty slides__sealed">' + LOCK_SVG + ' This slideshow is protected \u2014 its slides aren\u2019t in your published file. <button class="btn btn--ghost" data-act="slide-decrypt" data-index="' + i + '">Unlock to edit</button></div></section>';
     }
     intro += slidesToolbar(i, has, nBlocks) + "</section>";
-    return intro + slidesShell(w, i);
+    return intro + slidesNav(w, i);
   }
   function slideThumbInner(i, s, k) {
     if (s.layout === "free") {
@@ -6373,25 +6373,42 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="slides__canvas-body">' + slLayoutPicker(i, sel, s) + slideEditBody(i, s, sel) + "</div>" +
       '<div class="slides__canvas-notes">' + slText(i, sel, "notes", "Speaker notes", "Private prompts for you \u2014 shown in presenter view, never on the slide.", { area: true, rows: 3, notes: true }) + "</div></div>";
   }
-  function slidesShell(w, i) {
+  // LEFT editor pane: just the slide navigator rail. The slide EDITOR itself lives in the right
+  // preview pane (renderSlideStage), and the Current/All-slides toggle lives in the status bar.
+  function slidesNav(w, i) {
     var slides = w.study.slides || [], has = slides.length;
     var sel = (openSlide >= 0 && slides[openSlide]) ? openSlide : (has ? 0 : -1);
-    var tabs = '<div class="slides__viewtabs" role="tablist">' +
-      '<button class="slides__viewtab' + (slideView !== "all" ? " is-on" : "") + '" data-act="slide-view" data-view="current">Current</button>' +
-      '<button class="slides__viewtab' + (slideView === "all" ? " is-on" : "") + '" data-act="slide-view" data-view="all">View all' + (has ? " \u00b7 " + has : "") + "</button></div>";
-    if (!has) return '<section class="l2grp slides__shellwrap">' + tabs + '<div class="adm__empty">No slides yet \u2014 use <b>Add slide</b> above, or press <b>Rehearse</b> for an auto-built deck.</div></section>';
-    var inner;
+    if (!has) return '<section class="l2grp slides__navwrap"><div class="adm__empty">No slides yet \u2014 use <b>Add slide</b> above, or press <b>Rehearse</b> for an auto-built deck. Your slide editor opens on the right.</div></section>';
+    return '<section class="l2grp slides__navwrap"><aside class="slides__nav"><div class="slides__nav-scroll">' +
+      slides.map(function (s, k) { return slideThumb(i, s, k, slides.length, k === sel, "nav"); }).join("") +
+      '</div><button class="btn btn--add slides__nav-add" data-act="slide-add" data-index="' + i + '">' + IC.add + " Add a slide</button></aside></section>";
+  }
+  // RIGHT preview pane becomes the live slide editor (canvas + tools/inspector + presenter notes),
+  // or the thumbnail sorter when the status-bar view is "All slides". Called on every renderL2.
+  function renderSlideStage() {
+    var stage = root && root.querySelector("[data-slidestage]");
+    var vwrap = root && root.querySelector("[data-slideview-wrap]");
+    var active = openStudy >= 0 && l2Tab === "slides" && !!(data.work[openStudy]);
+    if (root) root.classList.toggle("is-slidestage", active);
+    if (vwrap) vwrap.hidden = !active;
+    if (!stage) return;
+    if (!active) { stage.hidden = true; stage.innerHTML = ""; return; }
+    stage.hidden = false;
+    var w = data.work[openStudy], st = w.study || {}, slides = st.slides || [];
+    var lbl = vwrap && vwrap.querySelector("[data-slideview-lbl]"); if (lbl) lbl.textContent = slideView === "all" ? "All slides" : "Current slide";
+    if (st.slidesEnc && !slides.length) { stage.innerHTML = '<div class="slides__stagewrap"><div class="adm__empty">' + LOCK_SVG + ' This slideshow is protected \u2014 unlock it on the left to edit.</div></div>'; return; }
+    if (!slides.length) { stage.innerHTML = '<div class="slides__stagewrap"><div class="adm__empty slides__stage-empty">Your slide editor appears here. Use <b>Add slide</b> on the left to start.</div></div>'; return; }
+    var sel = (openSlide >= 0 && slides[openSlide]) ? openSlide : 0;
+    var bodyHtml;
     if (slideView === "all") {
-      inner = '<div class="slides__allgrid">' + slides.map(function (s, k) { return slideThumb(i, s, k, slides.length, k === sel, "all"); }).join("") +
-        '<button class="slides__alladd" data-act="slide-add" data-index="' + i + '" title="Add a slide">' + IC.add + "<span>Add</span></button></div>" +
+      bodyHtml = '<div class="slides__allgrid">' + slides.map(function (s, k) { return slideThumb(openStudy, s, k, slides.length, k === sel, "all"); }).join("") +
+        '<button class="slides__alladd" data-act="slide-add" data-index="' + openStudy + '" title="Add a slide">' + IC.add + "<span>Add</span></button></div>" +
         '<div class="slides__allhint">Click to select \u00b7 double-click to edit \u00b7 the arrows on a slide reorder it</div>';
     } else {
-      inner = '<div class="slides__shell"><aside class="slides__nav"><div class="slides__nav-scroll">' +
-        slides.map(function (s, k) { return slideThumb(i, s, k, slides.length, k === sel, "nav"); }).join("") +
-        '</div><button class="btn btn--add slides__nav-add" data-act="slide-add" data-index="' + i + '">' + IC.add + " Add a slide</button></aside>" +
-        slideCanvasPane(i, sel, slides) + "</div>";
+      bodyHtml = slideCanvasPane(openStudy, sel, slides);
     }
-    return '<section class="l2grp slides__shellwrap">' + tabs + inner + "</section>";
+    stage.innerHTML = '<div class="slides__stagewrap">' + bodyHtml + "</div>";
+    slidePvFit();
   }
   function slidePullPicker(i, k) {
     var w = data.work[i]; if (!w || !w.study) return;
@@ -9301,6 +9318,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
     l2body.innerHTML = studyEditor(w, i);
     paintL2Tabs();
+    renderSlideStage();
     var _bar0 = root && root.querySelector(".adm__l2-bar"); if (_bar0) _bar0.classList.remove("is-hidden");
     resolveMediaSizes(l2body);
     slidePvSetup();
@@ -9318,6 +9336,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     const w = data.work[openStudy];
     l2body.innerHTML = studyEditor(w, openStudy);
     paintL2Tabs();
+    renderSlideStage();
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
     resolveMediaSizes(l2body);
     slidePvSetup();
@@ -9329,7 +9348,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     openStudy = -1;
     openBlock = -1;
     if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
-    if (root) { root.classList.remove("is-l2"); root.classList.remove("is-preview"); root.classList.remove("is-noprev"); }
+    if (root) { root.classList.remove("is-l2"); root.classList.remove("is-preview"); root.classList.remove("is-noprev"); root.classList.remove("is-slidestage"); }
+    var _stg = root && root.querySelector("[data-slidestage]"); if (_stg) { _stg.hidden = true; _stg.innerHTML = ""; }
+    var _svw = root && root.querySelector("[data-slideview-wrap]"); if (_svw) _svw.hidden = true;
     if (body) body.hidden = false;
     const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0;
     const vt = root && root.querySelector("[data-view]"); if (vt) vt.textContent = "Preview";
@@ -10388,7 +10409,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "study-blocksep") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { if (s[j].sep === false) delete s[j].sep; else s[j].sep = false; saveDraft(true); renderL2(); status(s[j].sep === false ? "Divider off \u2014 this section flows into the previous one." : "Divider on \u2014 separator line above.", true); } return; }
     if (act === "study-blockoff") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { if (s[j].off) delete s[j].off; else s[j].off = true; saveDraft(true); renderL2(); status(s[j].off ? "Section hidden from the live site \u2014 still listed here so you can toggle it back." : "Section shown on the live site.", true); } return; }
     if (act === "slide-add") { slideLayoutPickerModal(i); return; }
-    if (act === "slide-view") { slideView = b.dataset.view === "all" ? "all" : "current"; renderL2(); return; }
+    if (act === "slide-view") { slideView = b.dataset.view === "all" ? "all" : "current"; renderSlideStage(); return; }
     if (act === "slide-select") { if (e.target.closest("button, input, select, textarea, [data-grip]")) return; var _ssk = +b.dataset.sindex; if (openSlide !== _ssk) { openSlide = _ssk; renderL2(); } return; }
     if (act === "slide-goprev" || act === "slide-gonext") { var _gw = data.work[i], _gsl = _gw && _gw.study && _gw.study.slides; if (!_gsl || !_gsl.length) return; var _cur = (openSlide >= 0 && _gsl[openSlide]) ? openSlide : 0; openSlide = act === "slide-goprev" ? Math.max(0, _cur - 1) : Math.min(_gsl.length - 1, _cur + 1); renderL2(); return; }
     if (act === "slide-remove") { var _srw = data.work[i], srk = +b.dataset.sindex, srs = _srw && _srw.study && _srw.study.slides; if (!srs) return; srs.splice(srk, 1); if (openSlide === srk) openSlide = -1; else if (openSlide > srk) openSlide--; saveDraft(true); renderL2(); return; }
@@ -16199,6 +16220,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<button class="adm__dev-btn" data-dev-toggle type="button" aria-haspopup="true" aria-expanded="false" title="Preview size"><span class="adm__dev-ic" data-dev-ic>' + DEV_ICON.responsive + '</span><span class="adm__dev-lbl" data-dev-lbl>Responsive</span><svg class="adm__dev-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
           '<div class="adm__dev-pop" hidden>' + deviceOptsHtml() + "</div>" +
         "</div>" +
+        '<div class="adm__dev adm__slideview" data-slideview-wrap hidden><button class="adm__dev-btn" data-slideview-toggle type="button" aria-haspopup="true" aria-expanded="false" title="Slide view"><span class="adm__dev-ic">' + IC.board + '</span><span class="adm__dev-lbl" data-slideview-lbl>Current slide</span><svg class="adm__dev-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="adm__dev-pop" hidden><button class="adm__dev-opt" data-slideview="current" type="button">Current slide</button><button class="adm__dev-opt" data-slideview="all" type="button">All slides</button></div></div>' +
         '<button class="btn btn--ghost adm__logs-btn" data-act="logs-rec" type="button" aria-pressed="false" aria-label="Record activity log" title="Record a log of your taps &amp; jumps to share"><span class="adm__logs-dot"></span><span class="adm__logs-rec-tx" hidden>REC</span></button>' +
         '<button class="btn btn--ghost adm__newtab" data-newtab type="button" aria-label="Open live preview in a new tab" title="Open live preview in a new tab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg><span class="adm__newtab-tx" hidden></span></button>' +
       "</div>" +
@@ -16220,6 +16242,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<div class="adm__prevw" data-prevw aria-hidden="true"></div>' +
           '<div class="adm__devlabel" data-devlabel aria-hidden="true"></div>' +
           '<div class="adm__device" data-device><iframe class="adm__frame" title="Live preview of your site" src="' + previewUrl() + '"></iframe></div>' +
+          '<div class="adm__slidestage" data-slidestage hidden></div>' +
         "</section>" +
       "</div>" +
       '<div class="adm__settings" hidden><div class="adm__set-sheet">' +
@@ -16415,6 +16438,16 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       window.addEventListener("resize", refitDevice);
       document.addEventListener("click", function (e) { if (!_devWrap.contains(e.target)) _devClose(); });
       applyPreviewDevice();
+    }
+    // Slideshow tab: the status-bar "Current slide / All slides" dropdown drives the right-pane editor.
+    var _svWrap = root.querySelector("[data-slideview-wrap]");
+    if (_svWrap) {
+      var _svBtn = _svWrap.querySelector("[data-slideview-toggle]");
+      var _svPop = _svWrap.querySelector(".adm__dev-pop");
+      var _svClose = function () { if (_svPop) _svPop.hidden = true; _svWrap.classList.remove("is-open"); if (_svBtn) _svBtn.setAttribute("aria-expanded", "false"); };
+      if (_svBtn) _svBtn.addEventListener("click", function (e) { e.stopPropagation(); var open = _svPop.hidden; _svPop.hidden = !open; _svWrap.classList.toggle("is-open", open); _svBtn.setAttribute("aria-expanded", open ? "true" : "false"); });
+      if (_svPop) _svPop.addEventListener("click", function (e) { var opt = e.target.closest("[data-slideview]"); if (!opt) return; slideView = opt.getAttribute("data-slideview") === "all" ? "all" : "current"; _svClose(); renderSlideStage(); });
+      document.addEventListener("click", function (e) { if (!_svWrap.contains(e.target)) _svClose(); });
     }
     // Auto-hide the L2 bar (title + tabs) on scroll down, reveal on scroll up.
     root.addEventListener("scroll", l2BarScroll, true);

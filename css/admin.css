@@ -2966,6 +2966,25 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .slidebg__sws { display: inline-flex; gap: .4rem; flex-wrap: wrap; }
 .slidebg__sw { width: 26px; height: 26px; }
 .slidebg__cur { font-size: .7rem; color: var(--text-faint); }
+/* Slideshow tab: the RIGHT preview pane becomes the live slide editor; left pane = navigator */
+.adm__slidestage { display: none; }
+.adm__slideview { display: none; }
+.adm.is-slidestage .adm__main { grid-template-columns: minmax(240px, 360px) minmax(0, 1fr) !important; }
+.adm.is-slidestage .adm__resizer { display: none !important; }
+.adm.is-slidestage .adm__device, .adm.is-slidestage .adm__prevw, .adm.is-slidestage .adm__devlabel { display: none !important; }
+.adm.is-slidestage .adm__slidestage { display: block; height: 100%; overflow: auto; }
+.adm.is-slidestage .adm__preview { display: flex !important; background: #050506; }
+.adm.is-slidestage .adm__editor { border-right: 1px solid var(--line) !important; }
+.adm.is-slidestage .adm__dev, .adm.is-slidestage .adm__bar-prev { display: none !important; }
+.adm.is-slidestage .adm__slideview { display: inline-flex; }
+.slides__stagewrap { padding: 1.1rem clamp(1rem, 3vw, 2.4rem) 2.2rem; max-width: 1180px; margin: 0 auto; }
+.slides__stage-empty { line-height: 1.6; text-align: center; padding: 2.4rem 1.2rem; }
+.slides__navwrap .slides__nav { position: static; }
+.slides__navwrap .slides__nav-scroll { max-height: none; overflow: visible; }
+@media (max-width: 899px) {
+  .adm.is-slidestage .adm__main { grid-template-columns: 1fr !important; }
+  .adm.is-slidestage .adm__preview, .adm.is-slidestage .adm__slidestage { display: none !important; }
+}
 .sfb img { width: 100%; height: auto; display: block; border-radius: 5px; pointer-events: none; }
 .sfb__ph { display: grid; place-items: center; aspect-ratio: 16 / 10; background: linear-gradient(135deg, rgba(216, 166, 87, .16), rgba(216, 166, 87, .03)); border-radius: 5px; font-family: var(--mono); font-size: 20px; color: var(--accent); }
 .sfb--boxed .sfb__tx { height: 100%; display: flex; flex-direction: column; }
