@@ -6067,7 +6067,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     ] },
     { id: "titlecontent", name: "Title and Content", blocks: [
       { kind: "text", size: "md", align: "left", x: 7, y: 9, w: 86, ph: "Title" },
-      { kind: "text", size: "sm", align: "left", x: 7, y: 27, w: 86, h: 63, valign: "top", ph: "Add your content" }
+      { kind: "text", size: "sm", align: "left", x: 7, y: 27, w: 86, h: 63, valign: "top", content: true, ph: "Add your content" }
     ] },
     { id: "section", name: "Section Header", blocks: [
       { kind: "text", role: "kicker", size: "sm", align: "left", x: 8, y: 36, w: 50, ph: "01" },
@@ -6075,15 +6075,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     ] },
     { id: "twocontent", name: "Two Content", blocks: [
       { kind: "text", size: "md", align: "left", x: 7, y: 8, w: 86, ph: "Title" },
-      { kind: "text", size: "sm", align: "left", x: 7, y: 27, w: 42, h: 62, ph: "Content" },
-      { kind: "text", size: "sm", align: "left", x: 51, y: 27, w: 42, h: 62, ph: "Content" }
+      { kind: "text", size: "sm", align: "left", x: 7, y: 27, w: 42, h: 62, content: true, ph: "Content" },
+      { kind: "text", size: "sm", align: "left", x: 51, y: 27, w: 42, h: 62, content: true, ph: "Content" }
     ] },
     { id: "comparison", name: "Comparison", blocks: [
       { kind: "text", size: "md", align: "left", x: 7, y: 6, w: 86, ph: "Title" },
       { kind: "text", size: "sm", align: "left", x: 7, y: 23, w: 42, ph: "Heading" },
-      { kind: "text", size: "sm", align: "left", x: 7, y: 31, w: 42, h: 57, ph: "Content" },
+      { kind: "text", size: "sm", align: "left", x: 7, y: 31, w: 42, h: 57, content: true, ph: "Content" },
       { kind: "text", size: "sm", align: "left", x: 51, y: 23, w: 42, ph: "Heading" },
-      { kind: "text", size: "sm", align: "left", x: 51, y: 31, w: 42, h: 57, ph: "Content" }
+      { kind: "text", size: "sm", align: "left", x: 51, y: 31, w: 42, h: 57, content: true, ph: "Content" }
     ] },
     { id: "titleonly", name: "Title Only", blocks: [
       { kind: "text", size: "md", align: "left", x: 7, y: 8, w: 86, ph: "Title" }
@@ -6774,6 +6774,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     modal.querySelector("[data-cancel]").addEventListener("click", close);
     modal.querySelectorAll("[data-icon]").forEach(function (btn) { btn.addEventListener("click", function () { var nm = btn.getAttribute("data-icon"); close(); cb(nm); }); });
   }
+  // Empty layout placeholders (Content regions + media) show a PowerPoint-style insert cluster:
+  // click Text / Media / Section / Icon to fill the placeholder in place (keeps its x/y/w/h).
+  function phInsertCluster(i, k, idx) {
+    function b(act, ico, lbl) { return '<button type="button" class="sfb__ins-b" data-act="' + act + '" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" title="Insert ' + lbl + '">' + ico + "<span>" + lbl + "</span></button>"; }
+    return '<div class="sfb__insert"><span class="sfb__insert-h">Add content</span><div class="sfb__insert-row">' + b("ph-text", IC.edit, "Text") + b("ph-media", IC.board, "Media") + b("ph-section", IC.slides, "Section") + b("ph-icon", IC.spark, "Icon") + "</div></div>";
+  }
   function freeBlockEl(i, k, idx, bl, sel, single) {
     var st = "left:" + fnum(bl.x, 8) + "%;top:" + fnum(bl.y, 8) + "%;width:" + fnum(bl.w, 40) + "%;";
     var boxed = bl.h != null && isFinite(parseFloat(bl.h));
@@ -6782,14 +6788,16 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (bl.opacity != null && +bl.opacity < 100) st += "opacity:" + (Math.max(0, Math.min(100, +bl.opacity)) / 100) + ";";
     if (bl.shadow) st += "filter:" + freeShadowCss(bl.shadow) + ";";
     var inner, kind = bl.kind === "media" ? "media" : bl.kind === "shape" ? "shape" : bl.kind === "icon" ? "icon" : bl.kind === "section" ? "section" : "text";
+    var isPh = (kind === "media" && !bl.src) || (kind === "text" && bl.content && !String(bl.text || "").trim());
     if (kind === "section") { st = st.replace(/height:[^;]*;/, ""); boxed = false; inner = '<div class="sfb__secwrap" style="width:1120px;' + (bl.flip ? "transform:scaleX(-1);" : "") + '">' + ((window.RK && window.RK.renderStudyBlock && bl.block) ? window.RK.renderStudyBlock(bl.block) : '<div class="sfb__ph">Section</div>') + "</div>"; }
-    else if (kind === "media") inner = bl.src ? '<img src="' + escAttr(bl.src) + '" alt="" draggable="false">' : '<div class="sfb__ph">Media</div>';
+    else if (kind === "media") inner = bl.src ? '<img src="' + escAttr(bl.src) + '" alt="" draggable="false">' : phInsertCluster(i, k, idx);
     else if (kind === "shape") inner = editorShapeInner(bl);
     else if (kind === "icon") inner = '<div class="sfb__icon" style="color:' + (freeColor(bl.color) || "var(--accent)") + '">' + ((window.RK && window.RK.iconSvg) ? window.RK.iconSvg(bl.name || "star") : "") + "</div>";
+    else if (isPh) inner = phInsertCluster(i, k, idx);
     else { var _tx = String(bl.text || ""), _body = _tx.trim() ? (/<[a-z!/]/i.test(_tx) ? _tx : escHtml(_tx)) : '<span class="sfb__empty">' + escHtml(bl.ph || "Text") + '</span>'; inner = '<div class="sfb__tx ' + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + (bl.role === "kicker" || bl.role === "caption" ? " " + bl.role : "") + " a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "") + '">' + _body + "</div>"; }
     var chrome = single ? (FREE_HANDLES.map(function (h) { return '<span class="sfb__h sfb__h--' + h + '" data-fbh="' + h + '"></span>'; }).join("") + '<span class="sfb__rot" data-fbrot title="Drag to rotate"></span>') : "";
     var bx = boxed && kind === "media" ? " sfb--fit" : (boxed && kind === "text" ? " sfb--boxed" : "");
-    return '<div class="sfb sfb--' + kind + bx + (sel ? " is-sel" : "") + (single ? " is-single" : "") + (bl.g ? " sfb--grouped" : "") + (kind === "text" && !String(bl.text || "").trim() ? " is-empty" : "") + '" data-fb="' + idx + '" data-fbdrag style="' + st + '">' + inner + chrome + "</div>";
+    return '<div class="sfb sfb--' + kind + bx + (isPh ? " sfb--ph" : "") + (sel ? " is-sel" : "") + (single ? " is-single" : "") + (bl.g ? " sfb--grouped" : "") + (kind === "text" && !String(bl.text || "").trim() ? " is-empty" : "") + '" data-fb="' + idx + '" data-fbdrag style="' + st + '">' + inner + chrome + "</div>";
   }
   function freeBgHtml(s) {
     var b = s && s.background; if (!b) return "";
@@ -6976,6 +6984,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function bindFreeMove() { window.addEventListener("pointermove", onFreeMove); window.addEventListener("pointerup", onFreeUp, { once: true }); }
   function onFreeDown(e) {
     if (e.button != null && e.button !== 0) return;
+    if (e.target.closest("button")) return; // placeholder insert-cluster buttons receive their own clicks (no drag)
     var meta = freeStageMeta(e.target); if (!meta) return;
     var i = meta.i, k = meta.k, sw = meta.rect.width || 1, sh = meta.rect.height || 1;
     var handleEl = e.target.closest("[data-fbh]"), rotEl = e.target.closest("[data-fbrot]"), blkEl = e.target.closest(".sfb[data-fb]");
@@ -10608,6 +10617,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "free-add-section") { slideSectionAsElement(i); return; }
     if (act === "free-flip") { var _flk = +b.dataset.sindex, _fl = slideBlocks(i, _flk), _flb = _fl && _fl[+b.dataset.fbi]; if (_flb) { _flb.flip = !_flb.flip; saveDraft(true); renderL2(); } return; }
     if (act === "free-section-repull") { var _rpk = +b.dataset.sindex, _rp = slideBlocks(i, _rpk), _rpb = _rp && _rp[+b.dataset.fbi]; if (!_rpb) return; slideSectionPickModal(i, { asSection: true, title: "Replace this section", sub: "Pick another case-study section to swap in \u2014 position, size &amp; mirror stay.", empty: "No sections to pull from yet.", onPick: function (block) { _rpb.block = JSON.parse(JSON.stringify(block)); saveDraft(true); renderL2(); status("Section replaced.", true); } }); return; }
+    if (act === "ph-text") { var _phk = +b.dataset.sindex, _pha = slideBlocks(i, _phk), _phb = _pha && _pha[+b.dataset.fbi]; if (!_phb) return; delete _phb.content; freeSelSet(i, _phk, [+b.dataset.fbi]); saveDraft(true); renderL2(); var _ce = root.querySelector("[data-freert] [contenteditable]"); if (_ce && _ce.focus) _ce.focus(); return; }
+    if (act === "ph-media") { var _pmk = +b.dataset.sindex, _pmi = +b.dataset.fbi; pickMedia(function (uri) { var a = slideBlocks(i, _pmk), bl = a && a[_pmi]; if (!bl) return; bl.kind = "media"; bl.src = uri; delete bl.content; delete bl.ph; freeSelSet(i, _pmk, [_pmi]); saveDraft(true); renderL2(); }); return; }
+    if (act === "ph-section") { var _psk = +b.dataset.sindex, _psi = +b.dataset.fbi; slideSectionPickModal(i, { asSection: true, title: "Pull a section into this placeholder", sub: "Drops a real case-study section here \u2014 comparison sliders, device mockups, galleries \u2026", empty: "No sections to pull from yet.", onPick: function (block) { var a = slideBlocks(i, _psk), bl = a && a[_psi]; if (!bl) return; bl.kind = "section"; bl.block = JSON.parse(JSON.stringify(block)); delete bl.content; delete bl.ph; delete bl.h; freeSelSet(i, _psk, [_psi]); saveDraft(true); renderL2(); status("Pulled \u201c" + slideBlockName(block).label + "\u201d into the placeholder.", true); } }); return; }
+    if (act === "ph-icon") { var _pik = +b.dataset.sindex, _pii = +b.dataset.fbi; freeIconPicker(function (name) { var a = slideBlocks(i, _pik), bl = a && a[_pii]; if (!bl) return; bl.kind = "icon"; bl.name = name; bl.color = bl.color || "var(--accent)"; delete bl.content; delete bl.ph; delete bl.text; freeSelSet(i, _pik, [_pii]); saveDraft(true); renderL2(); }); return; }
     if (act === "free-icon-pick") { var _ipk = +b.dataset.sindex, _ip = slideBlocks(i, _ipk), _ipb = _ip && _ip[+b.dataset.fbi]; if (!_ipb) return; freeIconPicker(function (name) { _ipb.name = name; saveDraft(true); renderL2(); }); return; }
     if (act === "free-color") { var _cak = +b.dataset.sindex, _ca = slideBlocks(i, _cak), _cab = _ca && _ca[+b.dataset.fbi]; if (!_cab) return; var _cf = b.dataset.field, _cv = b.dataset.val; if (_cv) _cab[_cf] = _cv; else delete _cab[_cf]; saveDraft(true); renderL2(); return; }
     if (act === "free-layer") { freeSelSet(i, +b.dataset.sindex, [+b.dataset.fbi]); renderL2(); return; }

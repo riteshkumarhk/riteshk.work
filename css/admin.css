@@ -3089,6 +3089,16 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .sfb--section .sfb__secwrap { width: 1120px; transform-origin: top left; pointer-events: none; }
 .sfb--section .sfb__secwrap > .pjb { margin: 0; }
 .sfb--section.is-sel { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* PowerPoint-style smart placeholder: empty content/media regions show an insert cluster */
+.sfb--ph { border: 1px dashed var(--line); border-radius: 8px; background: rgba(255, 255, 255, .02); }
+.sfb--ph.is-sel { border-color: var(--accent); }
+.sfb__insert { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .55rem; pointer-events: none; padding: .4rem; box-sizing: border-box; }
+.sfb__insert-h { font-family: var(--mono); font-size: .56rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-faint); }
+.sfb__insert-row { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: center; pointer-events: auto; }
+.sfb__ins-b { display: inline-flex; flex-direction: column; align-items: center; gap: .28rem; padding: .5rem; min-width: 56px; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 9px; color: var(--text-dim); cursor: pointer; transition: border-color .15s var(--ease), color .15s var(--ease), background .15s var(--ease), transform .15s var(--ease); }
+.sfb__ins-b:hover { border-color: var(--accent); color: var(--text); background: var(--bg-2); transform: translateY(-1px); }
+.sfb__ins-b svg { width: 17px; height: 17px; }
+.sfb__ins-b span { font-size: .58rem; letter-spacing: .01em; }
 .slidefree__tools-sec { color: var(--accent); }
 .sfbflip { display: flex; align-items: center; gap: .5rem; font-size: 13px; color: var(--text-dim); margin: .1rem 0 .2rem; cursor: pointer; }
 .sfbflip input { flex: 0 0 auto; }
