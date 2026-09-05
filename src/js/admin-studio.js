@@ -6721,6 +6721,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   /* ---------- Freeform slide editor: PowerPoint-style canvas (select / move / resize / rotate) ---------- */
   var freeSel = null;   // { i, k, ids:[idx,...] } — the current selection
   var freeClipboard = null;   // [block,...] deep-cloned — survives across slides (copy/cut/paste)
+  var freeStyleClip = null;   // { kind, style:{...} } — format-painter: copied look, paint onto others
+  // Style keys the format painter copies, per kind. Painting applies only the clip keys valid for the target.
+  var FREE_STYLE_KEYS = {
+    text: ["color", "font", "lh", "ls", "bg", "pad", "radius", "shadow", "opacity", "size", "align", "valign", "role"],
+    media: ["radius", "stroke", "strokeW", "shadow", "opacity", "fit"],
+    shape: ["fill", "stroke", "strokeW", "radius", "shadow", "opacity"],
+    icon: ["color", "shadow", "opacity"],
+    section: ["shadow", "opacity"]
+  };
+  function freeCopyStyle(bl) { var kind = bl.kind || "text"; var out = {}; (FREE_STYLE_KEYS[kind] || []).forEach(function (k) { if (bl[k] != null) out[k] = bl[k]; }); return { kind: kind, style: out }; }
+  function freePaintOne(bl, clip) { if (!bl || !clip) return; var allow = FREE_STYLE_KEYS[bl.kind || "text"] || []; allow.forEach(function (k) { if (clip.style[k] != null) bl[k] = clip.style[k]; }); }
   var freeDrag = null;  // active pointer gesture
   var FREE_HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
   function fnum(v, d) { var n = parseFloat(v); return isFinite(n) ? Math.max(0, Math.min(100, n)) : d; }
@@ -6743,13 +6754,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function freeBlk(t) { var bl = slideBlocks(+t.dataset.fi, +t.dataset.fk); return bl ? bl[+t.dataset.fbi] : null; }
   // pure transform math (pixel space so rotation is unit-correct) — unit-tested: anchor corner stays fixed at any angle
   function freeRot2(vx, vy, deg) { var r = (deg || 0) * Math.PI / 180, c = Math.cos(r), s = Math.sin(r); return [vx * c - vy * s, vx * s + vy * c]; }
-  function freeResize(R, handle, ddx, ddy, rot) {
+  function freeResize(R, handle, ddx, ddy, rot, lockRatio) {
     var r = (rot || 0) * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
     var dlx = ddx * c + ddy * s, dly = -ddx * s + ddy * c;
     var west = handle.indexOf("w") >= 0, east = handle.indexOf("e") >= 0, north = handle.indexOf("n") >= 0, south = handle.indexOf("s") >= 0;
     var w0 = R.w, h0 = R.h;
     var nw = Math.max(8, w0 + (east ? dlx : 0) - (west ? dlx : 0));
     var nh = Math.max(8, h0 + (south ? dly : 0) - (north ? dly : 0));
+    if (lockRatio && (east || west) && (north || south) && w0 > 0 && h0 > 0) {
+      var kf = Math.abs(nw / w0 - 1) >= Math.abs(nh / h0 - 1) ? nw / w0 : nh / h0;
+      nw = Math.max(8, w0 * kf); nh = Math.max(8, h0 * kf);
+    }
     var ax = east ? -w0 / 2 : west ? w0 / 2 : 0, ay = south ? -h0 / 2 : north ? h0 / 2 : 0;
     var cx0 = R.x + w0 / 2, cy0 = R.y + h0 / 2;
     var aw = freeRot2(ax, ay, rot || 0), awx = cx0 + aw[0], awy = cy0 + aw[1];
@@ -6940,6 +6955,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<div class="af"><label class="af__label">\u2026or jump to slide</label>' + numField('<input type="number" data-freefield="jump" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (bl.jump != null ? bl.jump : "") + '" min="1" max="99" step="1" placeholder="\u2014" />') + "</div>" +
       '<div class="af__hint">Clickable in Present mode \u2014 a URL opens in a new tab, a slide number jumps there.</div></details>';
   }
+  // Quick element actions: copy/paint style (format painter), duplicate, and full-bleed fill.
+  function freeActionsRow(i, k, idx, bl) {
+    function ab(act, lbl, extra) { return '<button type="button" class="slidefree__act' + (extra || "") + '" data-act="' + act + '" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">' + lbl + "</button>"; }
+    var canFill = bl.kind === "media" || bl.kind === "section" || bl.kind === "shape";
+    return '<div class="slidefree__acts">' +
+      ab("free-copystyle", IC.dup + " Copy style") +
+      (freeStyleClip ? ab("free-paintstyle", IC.check + " Paint style", " is-paint") : "") +
+      ab("free-dup", IC.dup + " Duplicate") +
+      (canFill ? ab("free-fill", "\u2922 Fill slide") : "") +
+      "</div>";
+  }
   function freeAlignRow(i, k, n) {
     function ab(dir, ico, title) { return '<button type="button" class="btn btn--ghost" data-act="free-align" data-index="' + i + '" data-sindex="' + k + '" data-align="' + dir + '" title="' + title + '" aria-label="' + title + '">' + ico + "</button>"; }
     var row = '<div class="slidefree__align"><span class="slidefree__align-lbl">' + (n > 1 ? "Align" : "To slide") + "</span>" +
@@ -6949,24 +6975,31 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (n >= 3) row += '<span class="slidefree__align-sep"></span><button type="button" class="btn btn--ghost" data-act="free-distribute" data-index="' + i + '" data-sindex="' + k + '" data-axis="h" title="Distribute horizontally" aria-label="Distribute horizontally">' + IC.distH + '</button><button type="button" class="btn btn--ghost" data-act="free-distribute" data-index="' + i + '" data-sindex="' + k + '" data-axis="v" title="Distribute vertically" aria-label="Distribute vertically">' + IC.distV + '</button>';
     return row + "</div>";
   }
+  // Make a multi-selection the same width/height as the first-selected (the reference).
+  function freeMatchRow(i, k) {
+    return '<div class="slidefree__align slidefree__match"><span class="slidefree__align-lbl">Match</span>' +
+      '<button type="button" class="btn btn--ghost" data-act="free-matchsize" data-index="' + i + '" data-sindex="' + k + '" data-dim="w" title="Same width as the first-selected block">Same width</button>' +
+      '<button type="button" class="btn btn--ghost" data-act="free-matchsize" data-index="' + i + '" data-sindex="' + k + '" data-dim="h" title="Same height as the first-selected block">Same height</button></div>';
+  }
   function freeSelPanel(i, k) {
     if (!freeSelOn(i, k)) return '<div class="slidefree__sel slidefree__sel--none">Select a block on the canvas to edit it \u2014 drag to move, the handles to resize, the top dot to rotate. Shift-click or drag a box to select several.</div>';
     var blocks = slideBlocks(i, k) || [];
     if (freeSel.ids.length > 1) {
       var _anyG = freeSel.ids.some(function (ix) { return blocks[ix] && blocks[ix].g; });
-      var _grpRow = '<div class="slidefree__grp"><button type="button" class="btn btn--ghost" data-act="free-group" data-index="' + i + '" data-sindex="' + k + '" title="Lock these blocks together (Ctrl+G)">' + IC.group + ' Group</button>' + (_anyG ? '<button type="button" class="btn btn--ghost" data-act="free-ungroup" data-index="' + i + '" data-sindex="' + k + '" title="Ungroup (Ctrl+Shift+G)">' + IC.ungroup + ' Ungroup</button>' : "") + "</div>";
-      return '<div class="slidefree__sel"><div class="slidefree__selhead"><b>' + freeSel.ids.length + ' blocks selected' + (_anyG ? " \u00b7 grouped" : "") + '</b><button class="iconbtn iconbtn--danger" data-act="free-del" data-index="' + i + '" data-sindex="' + k + '" title="Delete selected">' + IC.trash + '</button></div>' + _grpRow + freeAlignRow(i, k, freeSel.ids.length) + '<div class="af__hint">Drag to move them together, or nudge with the arrow keys. <b>Group</b> keeps them locked together; Shift-click a block to add or remove it.</div></div>';
+      var _grpRow = '<div class="slidefree__grp"><button type="button" class="btn btn--ghost" data-act="free-group" data-index="' + i + '" data-sindex="' + k + '" title="Lock these blocks together (Ctrl+G)">' + IC.group + ' Group</button>' + (_anyG ? '<button type="button" class="btn btn--ghost" data-act="free-ungroup" data-index="' + i + '" data-sindex="' + k + '" title="Ungroup (Ctrl+Shift+G)">' + IC.ungroup + ' Ungroup</button>' : "") + '<button type="button" class="btn btn--ghost" data-act="free-dup" data-index="' + i + '" data-sindex="' + k + '" title="Duplicate selected">' + IC.dup + ' Duplicate</button>' + (freeStyleClip ? '<button type="button" class="btn btn--ghost" data-act="free-paintstyle" data-index="' + i + '" data-sindex="' + k + '" title="Paint the copied style onto all selected">' + IC.check + ' Paint style</button>' : "") + "</div>";
+      return '<div class="slidefree__sel"><div class="slidefree__selhead"><b>' + freeSel.ids.length + ' blocks selected' + (_anyG ? " \u00b7 grouped" : "") + '</b><button class="iconbtn iconbtn--danger" data-act="free-del" data-index="' + i + '" data-sindex="' + k + '" title="Delete selected">' + IC.trash + '</button></div>' + _grpRow + freeAlignRow(i, k, freeSel.ids.length) + freeMatchRow(i, k) + '<div class="af__hint">Drag to move them together, or nudge with the arrow keys. <b>Group</b> keeps them locked together; Shift-click a block to add or remove it.</div></div>';
     }
     var idx = freeSel.ids[0], bl = blocks[idx];
     if (!bl) return '<div class="slidefree__sel slidefree__sel--none">Select a block to edit it.</div>';
     var _kn = bl.kind === "media" ? "Media" : bl.kind === "shape" ? "Shape" : bl.kind === "icon" ? "Icon" : bl.kind === "section" ? "Section" : "Text";
     var _ops = '<span class="slidefree__selhead-ops"><button class="iconbtn' + (bl.lock ? " is-on" : "") + '" data-act="free-lock" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" title="' + (bl.lock ? "Unlock this block" : "Lock position & size") + '" aria-label="' + (bl.lock ? "Unlock" : "Lock") + '">' + (bl.lock ? IC.lock : IC.unlock) + '</button><button class="iconbtn iconbtn--danger" data-act="free-del" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" title="Delete block">' + IC.trash + "</button></span>";
-    var head = '<div class="slidefree__selhead"><b>' + _kn + " block" + (bl.lock ? ' <span class="slidefree__lockchip">Locked</span>' : "") + "</b>" + _ops + "</div>" + freeGeomRow(i, k, idx, bl) + freeLinkRow(i, k, idx, bl);
+    var head = '<div class="slidefree__selhead"><b>' + _kn + " block" + (bl.lock ? ' <span class="slidefree__lockchip">Locked</span>' : "") + "</b>" + _ops + "</div>" + freeGeomRow(i, k, idx, bl) + freeActionsRow(i, k, idx, bl) + freeLinkRow(i, k, idx, bl);
     if (bl.kind === "section") {
       return '<div class="slidefree__sel">' + head +
         '<div class="af__hint">Pulled live from your case study \u2014 comparison sliders, device mockups &amp; galleries render for real. Edit the source section then re-pull to refresh.</div>' +
         '<label class="sfbflip"><input type="checkbox" data-act="free-flip" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '"' + (bl.flip ? " checked" : "") + '> Mirror (flip horizontally)</label>' +
         '<div class="imgblk__row"><button class="btn btn--ghost" data-act="free-section-repull" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">Replace section\u2026</button></div>' +
+        '<label class="sfbflip"><input type="checkbox" data-act="free-arlock" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '"' + (bl.arlock ? " checked" : "") + '> Lock aspect ratio when resizing (or hold Shift)</label>' +
         '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
     }
     if (bl.kind === "media") {
@@ -6977,6 +7010,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         '<div class="imgblk__row"><button class="btn btn--ghost" data-act="free-media-upload" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '">Upload\u2026</button></div></div>' +
         '<div class="af__row"><div class="af"><label class="af__label">Fit</label><select data-freefit ' + mda + ">" + fitSel + '</select></div><div class="af"><label class="af__label">Corner</label>' + numField('<input type="number" data-freefield="radius" ' + mda + ' value="' + (parseFloat(bl.radius) || 0) + '" min="0" max="200" step="1" />') + "</div></div>" +
         '<div class="af__row">' + freeColorField("Border", i, k, idx, "stroke", bl.stroke) + '<div class="af"><label class="af__label">Border width</label>' + numField('<input type="number" data-freefield="strokeW" ' + mda + ' value="' + (parseFloat(bl.strokeW) || 0) + '" min="0" max="40" step="1" />') + "</div></div>" +
+        '<label class="sfbflip"><input type="checkbox" data-act="free-arlock" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '"' + (bl.arlock ? " checked" : "") + '> Lock aspect ratio when resizing (or hold Shift)</label>' +
         '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
     }
     if (bl.kind === "shape") {
@@ -6987,6 +7021,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         (isLn ? "" : freeColorField("Fill", i, k, idx, "fill", bl.fill)) +
         freeColorField(isLn ? "Colour" : "Border", i, k, idx, "stroke", bl.stroke) +
         '<div class="af__row"><div class="af"><label class="af__label">' + (isLn ? "Thickness" : "Border") + '</label>' + numField('<input type="number" data-freefield="strokeW" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (parseFloat(bl.strokeW) || 0) + '" min="0" max="40" step="1" />') + "</div>" + (bl.shape === "rect" ? '<div class="af"><label class="af__label">Corner</label>' + numField('<input type="number" data-freefield="radius" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (parseFloat(bl.radius) || 0) + '" min="0" max="200" step="1" />') + "</div>" : '<div class="af"></div>') + "</div>" +
+        '<label class="sfbflip"><input type="checkbox" data-act="free-arlock" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '"' + (bl.arlock ? " checked" : "") + '> Lock aspect ratio when resizing (or hold Shift)</label>' +
         '<div class="af__row">' + freeRotRow(i, k, idx, bl) + "</div>" + freeFxRow(i, k, idx, bl) + freeZRow(i, k, idx) + freeAlignRow(i, k, 1) + "</div>";
     }
     if (bl.kind === "icon") {
@@ -7133,7 +7168,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         });
       }
     } else if (d.mode === "resize") {
-      var nr = freeResize(d.R, d.handle, ddx, ddy, d.rot);
+      var nr = freeResize(d.R, d.handle, ddx, ddy, d.rot, d.bl.arlock || e.shiftKey);
       d.bl.x = Math.round(nr.x / d.sw * 1000) / 10; d.bl.y = Math.round(nr.y / d.sh * 1000) / 10; d.bl.w = Math.round(nr.w / d.sw * 1000) / 10;
       if (d.setH) d.bl.h = Math.round(nr.h / d.sh * 1000) / 10;
       if (d.el) { d.el.style.left = d.bl.x + "%"; d.el.style.top = d.bl.y + "%"; d.el.style.width = d.bl.w + "%"; if (d.setH) d.el.style.height = d.bl.h + "%"; }
@@ -10695,6 +10730,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "free-add-section") { slideSectionAsElement(i); return; }
     if (act === "free-flip") { var _flk = +b.dataset.sindex, _fl = slideBlocks(i, _flk), _flb = _fl && _fl[+b.dataset.fbi]; if (_flb) { _flb.flip = !_flb.flip; saveDraft(true); renderL2(); } return; }
     if (act === "free-lock") { var _lok = +b.dataset.sindex, _lo = slideBlocks(i, _lok), _lob = _lo && _lo[+b.dataset.fbi]; if (_lob) { if (_lob.lock) delete _lob.lock; else _lob.lock = true; saveDraft(true); renderL2(); status(_lob.lock ? "Block locked \u2014 it won\u2019t move until you unlock it." : "Block unlocked.", true); } return; }
+    if (act === "free-arlock") { var _ark = +b.dataset.sindex, _ar = slideBlocks(i, _ark), _arb = _ar && _ar[+b.dataset.fbi]; if (_arb) { if (_arb.arlock) delete _arb.arlock; else _arb.arlock = true; saveDraft(true); renderL2(); } return; }
+    if (act === "free-copystyle") { var _csk = +b.dataset.sindex, _cs = slideBlocks(i, _csk), _csb = _cs && _cs[+b.dataset.fbi]; if (_csb) { freeStyleClip = freeCopyStyle(_csb); renderL2(); status("Style copied \u2014 select an element and hit Paint style.", true); } return; }
+    if (act === "free-paintstyle") { if (!freeStyleClip) { status("Copy a style first."); return; } var _psk = +b.dataset.sindex, _ps = slideBlocks(i, _psk); if (!_ps) return; var _pids = (freeSelOn(i, _psk) && freeSel.ids.length) ? freeSel.ids : [+b.dataset.fbi]; var _pn = 0; _pids.forEach(function (ix) { if (_ps[ix]) { freePaintOne(_ps[ix], freeStyleClip); _pn++; } }); saveDraft(true); renderL2(); status("Style painted onto " + _pn + (_pn === 1 ? " element." : " elements."), true); return; }
+    if (act === "free-dup") { var _duk = +b.dataset.sindex, _du = slideBlocks(i, _duk); if (!_du) return; var _dids = (freeSelOn(i, _duk) && freeSel.ids.length) ? freeSel.ids.slice() : [+b.dataset.fbi]; var _dadd = [], _ddup = []; _dids.forEach(function (ix) { var bb = _du[ix]; if (!bb) return; var cp = JSON.parse(JSON.stringify(bb)); cp.x = Math.min(100, fnum(bb.x, 8) + 2); cp.y = Math.min(100, fnum(bb.y, 8) + 2); _du.push(cp); _ddup.push(cp); _dadd.push(_du.length - 1); }); freeReidGroups(_ddup); if (_dadd.length) freeSelSet(i, _duk, _dadd); saveDraft(true); renderL2(); status(_dadd.length + (_dadd.length === 1 ? " element" : " elements") + " duplicated.", true); return; }
+    if (act === "free-fill") { var _fik2 = +b.dataset.sindex, _fi2 = slideBlocks(i, _fik2), _fib = _fi2 && _fi2[+b.dataset.fbi]; if (!_fib) return; _fib.x = 0; _fib.y = 0; _fib.w = 100; _fib.h = 100; if (_fib.kind === "media" && !_fib.fit) _fib.fit = "cover"; delete _fib.rot; saveDraft(true); renderL2(); status("Filled the slide.", true); return; }
+    if (act === "free-matchsize") { var _msk = +b.dataset.sindex, _ms = slideBlocks(i, _msk); if (!_ms || !freeSelOn(i, _msk) || freeSel.ids.length < 2) return; var _mdim = b.dataset.dim, _ref = _ms[freeSel.ids[0]]; if (!_ref) return; var _mn = 0; freeSel.ids.forEach(function (ix) { var bb = _ms[ix]; if (!bb || bb === _ref) return; if (_mdim === "w") { bb.w = fnum(_ref.w, 40); _mn++; } else if (_ref.h != null) { bb.h = fnum(_ref.h, 20); _mn++; } }); saveDraft(true); renderL2(); status(_mn ? ("Matched " + (_mdim === "w" ? "width" : "height") + " on " + _mn + ".") : "The reference block has no fixed height to match.", true); return; }
     if (act === "free-section-repull") { var _rpk = +b.dataset.sindex, _rp = slideBlocks(i, _rpk), _rpb = _rp && _rp[+b.dataset.fbi]; if (!_rpb) return; slideSectionPickModal(i, { asSection: true, title: "Replace this section", sub: "Pick another case-study section to swap in \u2014 position, size &amp; mirror stay.", empty: "No sections to pull from yet.", onPick: function (block) { _rpb.block = JSON.parse(JSON.stringify(block)); saveDraft(true); renderL2(); status("Section replaced.", true); } }); return; }
     if (act === "ph-text") { var _phk = +b.dataset.sindex, _pha = slideBlocks(i, _phk), _phb = _pha && _pha[+b.dataset.fbi]; if (!_phb) return; delete _phb.content; freeSelSet(i, _phk, [+b.dataset.fbi]); saveDraft(true); renderL2(); var _ce = root.querySelector("[data-freert] [contenteditable]"); if (_ce && _ce.focus) _ce.focus(); return; }
     if (act === "ph-media") { var _pmk = +b.dataset.sindex, _pmi = +b.dataset.fbi; pickMedia(function (uri) { var a = slideBlocks(i, _pmk), bl = a && a[_pmi]; if (!bl) return; bl.kind = "media"; bl.src = uri; delete bl.content; delete bl.ph; freeSelSet(i, _pmk, [_pmi]); saveDraft(true); renderL2(); }); return; }

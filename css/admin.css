@@ -3095,6 +3095,12 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .slidefree__link[open] { padding-bottom: .4rem; }
 .slidefree__link .af { margin-bottom: .4rem; }
 .slidefree__link .af:last-child { margin-bottom: .1rem; }
+.slidefree__acts { display: flex; flex-wrap: wrap; gap: .3rem; margin: 0 0 .55rem; }
+.slidefree__act { display: inline-flex; align-items: center; gap: .3rem; padding: .34rem .6rem; font-size: .72rem; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 8px; color: var(--text-dim); cursor: pointer; transition: border-color .15s var(--ease), color .15s var(--ease), background .15s var(--ease); }
+.slidefree__act:hover { border-color: var(--accent); color: var(--text); background: var(--bg-2); }
+.slidefree__act svg { width: 13px; height: 13px; }
+.slidefree__act.is-paint { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.slidefree__match .btn { flex: 0 0 auto; padding: .26rem .55rem; font-size: .7rem; min-width: 0; font-family: var(--sans); }
 .sfb__badges { position: absolute; top: 3px; right: 3px; z-index: 3; display: flex; gap: 3px; pointer-events: none; }
 .sfb__badge { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; background: rgba(8, 8, 10, .72); color: var(--accent); }
 .sfb__badge svg { width: 11px; height: 11px; }
