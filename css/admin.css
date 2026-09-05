@@ -936,7 +936,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
    pointer inside admin mode and modal dialogs, and hide the custom dot in admin.
    .atsv / .rbz are body-level fixed overlays (z-index above the custom cursor), so they
    need the native cursor restored too or the pointer vanishes over the viewer. */
-.adm, .pass, .mlib, .atsv, .rbz, .rbz__jdmodal, .depthdemo, .kwed, .smenu__pop { cursor: auto; }
+.adm, .pass, .mlib, .atsv, .rbz, .rbz__jdmodal, .depthdemo, .kwed, .smenu__pop, .fctx, .fcheat { cursor: auto; }
 body.adm-lock .cursor { display: none !important; }
 
 /* ---------- project imagery controls (Work tab) ---------- */
@@ -3142,6 +3142,20 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .sfb__guide { position: absolute; z-index: 18; background: var(--accent); pointer-events: none; }
 .sfb__guide--v { top: 0; bottom: 0; width: 1px; margin-left: -.5px; }
 .sfb__guide--h { left: 0; right: 0; height: 1px; margin-top: -.5px; }
+.sfb__spacing { position: absolute; inset: 0; z-index: 19; pointer-events: none; }
+.sfb__sbar { position: absolute; display: grid; place-items: center; }
+.sfb__grid { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.sfb__grid-v { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(120, 160, 255, .28); }
+.sfb__grid-h { position: absolute; left: 0; right: 0; height: 1px; background: rgba(120, 160, 255, .28); }
+.slidefree__tools-grid.is-on { border-color: var(--accent); color: var(--accent); }
+.sfb__sbar--h { height: 0; border-top: 1px solid #ff5c8a; transform: translateY(-.5px); }
+.sfb__sbar--v { width: 0; border-left: 1px solid #ff5c8a; transform: translateX(-.5px); }
+.sfb__sbar::before, .sfb__sbar::after { content: ""; position: absolute; background: #ff5c8a; }
+.sfb__sbar--h::before, .sfb__sbar--h::after { top: -3px; width: 1px; height: 7px; }
+.sfb__sbar--h::before { left: 0; } .sfb__sbar--h::after { right: 0; }
+.sfb__sbar--v::before, .sfb__sbar--v::after { left: -3px; height: 1px; width: 7px; }
+.sfb__sbar--v::before { top: 0; } .sfb__sbar--v::after { bottom: 0; }
+.sfb__sbar i { font: 600 10px var(--mono); font-style: normal; color: #fff; background: #ff5c8a; padding: 1px 4px; border-radius: 3px; line-height: 1.3; white-space: nowrap; }
 .slidefree__grp { display: flex; gap: .3rem; margin: 0 0 .55rem; }
 .slidefree__grp .btn { flex: 0 0 auto; padding: .3rem .7rem; font-size: .72rem; }
 .slidefree__grp .btn svg { margin-right: .3rem; vertical-align: -.18em; }
@@ -3176,6 +3190,29 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .sfb__badge svg { width: 11px; height: 11px; }
 .sfb__badge--link { color: #8ab4ff; }
 .sfb--locked { cursor: default; }
+.sfb.is-editing { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 6; cursor: text; }
+.sfb.is-editing .sfb__tx { cursor: text; min-height: 1em; outline: none; }
+.sfb.is-editing .sfb__h, .sfb.is-editing .sfb__rot, .sfb.is-editing .sfb__badges { display: none; }
+.slidefree__stage.is-dropover { outline: 2px dashed var(--accent); outline-offset: -6px; }
+.slidefree__stage.is-dropover::after { content: "Drop image"; position: absolute; inset: 0; display: grid; place-items: center; font: 600 .8rem var(--sans); letter-spacing: .02em; color: var(--accent); background: rgba(216, 166, 87, .08); pointer-events: none; z-index: 40; }
+.fctx { position: fixed; z-index: 10050; min-width: 176px; padding: .3rem; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 44px -18px rgba(0, 0, 0, .85); font-family: var(--sans); }
+.fctx__b { display: flex; align-items: center; justify-content: space-between; gap: 1.25rem; width: 100%; padding: .4rem .55rem; background: none; border: 0; border-radius: 6px; color: var(--text-dim); font-size: .78rem; line-height: 1.2; text-align: left; cursor: pointer; }
+.fctx__b:hover { background: var(--bg-2); color: var(--text); }
+.fctx__b kbd { font-family: var(--mono); font-size: .62rem; color: var(--text-faint); background: none; border: 0; padding: 0; }
+.fctx__sep { height: 1px; margin: .25rem .2rem; background: var(--line-soft); }
+.slidefree__tools-help { flex: 0 0 auto; width: 28px; padding: 0 !important; font-weight: 700; }
+.fcheat { position: fixed; inset: 0; z-index: 10060; display: grid; place-items: center; background: rgba(6, 6, 8, .58); backdrop-filter: blur(3px); }
+.fcheat__box { width: min(440px, 92vw); max-height: 86vh; overflow: auto; padding: 1.1rem 1.25rem 1.35rem; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 30px 70px -24px rgba(0, 0, 0, .9); font-family: var(--sans); }
+.fcheat__head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 .85rem; }
+.fcheat__head b { font-size: .95rem; color: var(--text); }
+.fcheat__x { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: none; color: var(--text-dim); cursor: pointer; }
+.fcheat__x:hover { background: var(--bg-2); color: var(--text); }
+.fcheat__x svg { width: 16px; height: 16px; }
+.fcheat__grid { display: grid; gap: .1rem; }
+.fcheat__r { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .42rem .1rem; border-top: 1px solid var(--line-soft); }
+.fcheat__r:first-child { border-top: 0; }
+.fcheat__r span { font-size: .8rem; color: var(--text-dim); }
+.fcheat__r kbd { font-family: var(--mono); font-size: .68rem; color: var(--text); background: var(--bg-2); border: 1px solid var(--line-soft); border-radius: 5px; padding: .12rem .4rem; white-space: nowrap; }
 .sfb--fit.sfb--contain img, .sfb--fit.sfb--contain video { object-fit: contain; }
 /* Freeform shapes/icons + colour swatches + icon picker (P4) */
 .sfb--shape .sfb__shape, .sfb--icon .sfb__icon { position: absolute; inset: 0; box-sizing: border-box; }

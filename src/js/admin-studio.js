@@ -6776,6 +6776,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function freeCopyStyle(bl) { var kind = bl.kind || "text"; var out = {}; (FREE_STYLE_KEYS[kind] || []).forEach(function (k) { if (bl[k] != null) out[k] = bl[k]; }); return { kind: kind, style: out }; }
   function freePaintOne(bl, clip) { if (!bl || !clip) return; var allow = FREE_STYLE_KEYS[bl.kind || "text"] || []; allow.forEach(function (k) { if (clip.style[k] != null) bl[k] = clip.style[k]; }); }
   var freeDrag = null;  // active pointer gesture
+  var freeGrid = { on: false, cols: 12, margin: 6 };   // optional layout grid overlay + snap (view aid, not persisted)
+  function freeGridLinesX() { if (!freeGrid.on) return []; var M = freeGrid.margin, cols = Math.max(1, freeGrid.cols), inner = 100 - 2 * M, cw = inner / cols, xs = [M, 100 - M]; for (var c = 1; c < cols; c++) xs.push(Math.round((M + c * cw) * 100) / 100); return xs; }
+  function freeGridLinesY() { return freeGrid.on ? [freeGrid.margin, 100 - freeGrid.margin] : []; }
+  function freeGridOverlay() { if (!freeGrid.on) return ""; return '<div class="sfb__grid" data-fbgrid>' + freeGridLinesX().map(function (x) { return '<i class="sfb__grid-v" style="left:' + x + '%"></i>'; }).join("") + freeGridLinesY().map(function (y) { return '<i class="sfb__grid-h" style="top:' + y + '%"></i>'; }).join("") + "</div>"; }
+  var freeEditing = null;   // { i, k, idx, el } — a text block being edited inline on the canvas
   var FREE_HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
   function fnum(v, d) { var n = parseFloat(v); return isFinite(n) ? Math.max(0, Math.min(100, n)) : d; }
   function slideBlocks(i, k) { var s = data.work[i] && data.work[i].study && data.work[i].study.slides && data.work[i].study.slides[k]; return s ? (s.blocks || (s.blocks = [])) : null; }
@@ -6826,6 +6831,45 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var gv = stage.querySelector("[data-fbgv]"), gh = stage.querySelector("[data-fbgh]");
     if (gv) { if (gx == null) gv.hidden = true; else { gv.hidden = false; gv.style.left = gx + "%"; } }
     if (gh) { if (gy == null) gh.hidden = true; else { gh.hidden = false; gh.style.top = gy + "%"; } }
+  }
+  // Figma-style equal-spacing snap: when a single block sits between two neighbours, snap so the two gaps
+  // match, and hand back measurement bars to draw. Works per-axis; px in, px out.
+  function freeSpacingSnap(others, dl, dt, dw, dh, th) {
+    var dr = dl + dw, db = dt + dh, bars = [], out = { x: null, y: null, bars: bars };
+    var vo = others.filter(function (o) { return o.t < db && o.b > dt; });
+    var lft = null, rgt = null;
+    vo.forEach(function (o) { if (o.r <= dl + th) { if (!lft || o.r > lft.r) lft = o; } });
+    vo.forEach(function (o) { if (o.l >= dr - th) { if (!rgt || o.l < rgt.l) rgt = o; } });
+    if (lft && rgt && rgt.l - lft.r - dw >= 0) {
+      var gh = (rgt.l - lft.r - dw) / 2, ideal = lft.r + gh;
+      if (Math.abs(dl - ideal) <= th) { dl = ideal; dr = dl + dw; out.x = dl;
+        var yh1 = (Math.max(dt, lft.t) + Math.min(db, lft.b)) / 2, yh2 = (Math.max(dt, rgt.t) + Math.min(db, rgt.b)) / 2;
+        bars.push({ o: "h", x: lft.r, y: yh1, len: dl - lft.r, label: Math.round(gh) });
+        bars.push({ o: "h", x: dr, y: yh2, len: rgt.l - dr, label: Math.round(gh) });
+      }
+    }
+    var ho = others.filter(function (o) { return o.l < dr && o.r > dl; });
+    var top = null, bot = null;
+    ho.forEach(function (o) { if (o.b <= dt + th) { if (!top || o.b > top.b) top = o; } });
+    ho.forEach(function (o) { if (o.t >= db - th) { if (!bot || o.t < bot.t) bot = o; } });
+    if (top && bot && bot.t - top.b - dh >= 0) {
+      var gv = (bot.t - top.b - dh) / 2, idealY = top.b + gv;
+      if (Math.abs(dt - idealY) <= th) { dt = idealY; db = dt + dh; out.y = dt;
+        var xv1 = (Math.max(dl, top.l) + Math.min(dr, top.r)) / 2, xv2 = (Math.max(dl, bot.l) + Math.min(dr, bot.r)) / 2;
+        bars.push({ o: "v", x: xv1, y: top.b, len: dt - top.b, label: Math.round(gv) });
+        bars.push({ o: "v", x: xv2, y: db, len: bot.t - db, label: Math.round(gv) });
+      }
+    }
+    return out;
+  }
+  function freeSpacing(stage, bars, sw, sh) {
+    if (!stage) return; var box = stage.querySelector("[data-fbspace]"); if (!box) return;
+    if (!bars || !bars.length) { if (box.innerHTML) box.innerHTML = ""; return; }
+    box.innerHTML = bars.map(function (b) {
+      return b.o === "h"
+        ? '<div class="sfb__sbar sfb__sbar--h" style="left:' + (b.x / sw * 100) + "%;top:" + (b.y / sh * 100) + "%;width:" + (Math.max(0, b.len) / sw * 100) + '%"><i>' + b.label + "</i></div>"
+        : '<div class="sfb__sbar sfb__sbar--v" style="left:' + (b.x / sw * 100) + "%;top:" + (b.y / sh * 100) + "%;height:" + (Math.max(0, b.len) / sh * 100) + '%"><i>' + b.label + "</i></div>";
+    }).join("");
   }
   var FREE_SWATCHES = [["var(--accent)", "Gold"], ["#ECE7E1", "Light"], ["#8a857e", "Grey"], ["#141417", "Dark"], ["#ffffff", "White"], ["", "None"]];
   function freeColor(v) { v = String(v == null ? "" : v).trim(); return /^(#[0-9a-fA-F]{3,8}|rgba?\([\d.,%\s]+\)|var\(--[\w-]+\)|[a-zA-Z]+)$/.test(v) ? v : ""; }
@@ -6933,7 +6977,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var blocks = slideBlocks(i, k) || [];
     var s = data.work[i] && data.work[i].study && data.work[i].study.slides && data.work[i].study.slides[k];
     var bg = freeBgHtml(s);
-    var marquee = '<div class="sfb__guide sfb__guide--v" data-fbgv hidden></div><div class="sfb__guide sfb__guide--h" data-fbgh hidden></div><div class="sfb__marquee" data-fbmarquee hidden></div>';
+    var marquee = freeGridOverlay() + '<div class="sfb__guide sfb__guide--v" data-fbgv hidden></div><div class="sfb__guide sfb__guide--h" data-fbgh hidden></div><div class="sfb__spacing" data-fbspace></div><div class="sfb__marquee" data-fbmarquee hidden></div>';
     if (!blocks.length) return bg + '<div class="slidefree__empty">Empty canvas \u2014 add a Text or Media block, then drag, resize &amp; rotate it anywhere.</div>' + marquee;
     var on = freeSelOn(i, k), one = freeSelOne();
     return bg + blocks.map(function (bl, ix) { return freeBlockEl(i, k, ix, bl, on && freeSelHas(ix), on && one === ix); }).join("") + marquee;
@@ -6946,7 +6990,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<button type="button" class="btn btn--ghost" data-act="free-add-icon" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + ' Icon</button>' +
       '<button type="button" class="btn btn--ghost slidefree__tools-sec" data-act="free-add-section" data-index="' + i + '" data-sindex="' + k + '" title="Pull a real case-study section onto this slide">' + IC.add + ' Section</button>' +
       '<button type="button" class="btn btn--ghost" data-act="slide-bg" data-index="' + i + '" data-sindex="' + k + '">' + IC.board + ' Background</button>' +
-      '<span class="slidefree__hint">Drag to move \u00b7 handles resize \u00b7 top dot rotates \u00b7 Shift-click or box-select several \u00b7 arrows nudge</span></div></div>';
+      '<button type="button" class="btn btn--ghost slidefree__tools-grid' + (freeGrid.on ? " is-on" : "") + '" data-act="free-grid" title="Toggle a 12-column layout grid + snap">' + IC.board + ' Grid</button>' +
+      '<button type="button" class="btn btn--ghost slidefree__tools-help" data-act="free-cheat" title="Keyboard shortcuts (?)">?</button>' +
+      '<span class="slidefree__hint">Drag to move \u00b7 handles resize \u00b7 top dot rotates \u00b7 Shift-click or box-select several \u00b7 arrows nudge \u00b7 <b>?</b> shortcuts</span></div></div>';
   }
   // Center column = just the slide canvas. Its add-element tools + selected-element inspector live in the
   // right Properties panel now (slidePropsPanel). The Layers list is intentionally gone.
@@ -7183,14 +7229,159 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     root.addEventListener("pointerdown", onFreeDown);
     document.addEventListener("keydown", onFreeKey);
     root.addEventListener("dblclick", onSlideDbl);
+    root.addEventListener("contextmenu", onFreeContext);
+    root.addEventListener("dragover", onFreeDragOver);
+    root.addEventListener("drop", onFreeDrop);
+    root.addEventListener("dragleave", onFreeDragLeave);
+    document.addEventListener("paste", onFreePaste);
   }
   function onSlideDbl(e) {
-    var card = e.target.closest && e.target.closest('.slides__allcard[data-act="slide-select"]'); if (!card) return;
-    openSlide = +card.getAttribute("data-sindex"); slideView = "current"; renderL2();
+    var card = e.target.closest && e.target.closest('.slides__allcard[data-act="slide-select"]');
+    if (card) { openSlide = +card.getAttribute("data-sindex"); slideView = "current"; renderL2(); return; }
+    var meta = freeStageMeta(e.target); if (!meta) return;
+    var blkEl = e.target.closest && e.target.closest(".sfb[data-fb]"); if (!blkEl) return;
+    var idx = +blkEl.getAttribute("data-fb"), bl = (slideBlocks(meta.i, meta.k) || [])[idx];
+    if (bl && bl.kind === "text" && !bl.lock) { e.preventDefault(); freeStartEdit(meta.i, meta.k, idx); }
+  }
+  // Inline text editing: double-click a text block to edit it in place (contenteditable) instead of the side panel.
+  function freeStartEdit(i, k, idx) {
+    var blocks = slideBlocks(i, k), bl = blocks && blocks[idx];
+    if (!bl || bl.kind !== "text" || bl.lock) return;
+    if (freeEditing) freeCommitEdit();
+    freeSelSet(i, k, [idx]); renderL2();
+    var stage = root && root.querySelector('[data-freestage="' + i + ":" + k + '"]'); if (!stage) return;
+    var blkEl = stage.querySelector('.sfb[data-fb="' + idx + '"]'); if (!blkEl) return;
+    var tx = blkEl.querySelector(".sfb__tx"); if (!tx) return;
+    if (tx.querySelector(".sfb__empty")) tx.innerHTML = "";
+    tx.setAttribute("contenteditable", "true");
+    blkEl.classList.add("is-editing");
+    freeEditing = { i: i, k: k, idx: idx, el: tx };
+    tx.addEventListener("blur", freeCommitEdit);
+    tx.addEventListener("keydown", freeEditKey);
+    tx.focus();
+    try { var rg = document.createRange(); rg.selectNodeContents(tx); var sl = window.getSelection(); sl.removeAllRanges(); sl.addRange(rg); } catch (err) {}
+  }
+  function freeEditKey(e) {
+    e.stopPropagation();
+    if (e.key === "Escape" || ((e.ctrlKey || e.metaKey) && e.key === "Enter")) { e.preventDefault(); freeCommitEdit(); }
+  }
+  function freeCommitEdit() {
+    var ed = freeEditing; if (!ed) return; freeEditing = null;
+    var tx = ed.el; tx.removeEventListener("blur", freeCommitEdit); tx.removeEventListener("keydown", freeEditKey);
+    tx.removeAttribute("contenteditable");
+    var blocks = slideBlocks(ed.i, ed.k), bl = blocks && blocks[ed.idx];
+    if (bl) { var html = rtClean(tx.innerHTML).trim(); if (/^(\s|<br\s*\/?>|&nbsp;)*$/i.test(html)) html = ""; bl.text = html; saveDraft(true); }
+    if (openStudy >= 0) renderL2();
+  }
+  // Right-click context menu on the canvas — mirrors the common block actions at the cursor.
+  var freeCtxEl = null;
+  function freeCtxClose() { if (freeCtxEl) { freeCtxEl.remove(); freeCtxEl = null; document.removeEventListener("pointerdown", freeCtxOutside, true); document.removeEventListener("keydown", freeCtxEsc, true); } }
+  function freeCtxOutside(e) { if (freeCtxEl && !freeCtxEl.contains(e.target)) freeCtxClose(); }
+  function freeCtxEsc(e) { if (e.key === "Escape") { freeCtxClose(); } }
+  function onFreeContext(e) {
+    var meta = freeStageMeta(e.target); if (!meta) return;
+    e.preventDefault();
+    if (freeEditing) freeCommitEdit();
+    var i = meta.i, k = meta.k, blocks = slideBlocks(i, k) || [];
+    var blkEl = e.target.closest && e.target.closest(".sfb[data-fb]");
+    var idx = blkEl ? +blkEl.getAttribute("data-fb") : -1;
+    if (idx >= 0 && !freeSelHas(idx)) { freeSelSet(i, k, freeExpandToGroups(blocks, [idx])); renderL2(); }
+    var onBlock = idx >= 0, locked = onBlock && blocks[idx] && blocks[idx].lock, items = [];
+    if (onBlock) { items.push(["cut", "Cut", "Ctrl+X"], ["copy", "Copy", "Ctrl+C"]); }
+    if (freeClipboard && freeClipboard.length) items.push(["paste", "Paste", "Ctrl+V"]);
+    if (onBlock) {
+      items.push(["dup", "Duplicate", "Ctrl+D"], ["sep"], ["front", "Bring to front"], ["forward", "Bring forward"], ["backward", "Send backward"], ["back", "Send to back"], ["sep"], [locked ? "unlock" : "lock", locked ? "Unlock" : "Lock"], ["del", "Delete", "Del"]);
+    } else { items.push(["selall", "Select all"]); }
+    if (!items.length) return;
+    freeCtxClose();
+    var menu = document.createElement("div"); menu.className = "fctx";
+    menu.innerHTML = items.map(function (it) { return it[0] === "sep" ? '<div class="fctx__sep"></div>' : '<button type="button" class="fctx__b" data-ctx="' + it[0] + '"><span>' + escHtml(it[1]) + "</span>" + (it[2] ? "<kbd>" + escHtml(it[2]) + "</kbd>" : "") + "</button>"; }).join("");
+    document.body.appendChild(menu);
+    var mw = menu.offsetWidth, mh = menu.offsetHeight;
+    menu.style.left = Math.max(6, Math.min(e.clientX, window.innerWidth - mw - 8)) + "px";
+    menu.style.top = Math.max(6, Math.min(e.clientY, window.innerHeight - mh - 8)) + "px";
+    freeCtxEl = menu;
+    menu.addEventListener("click", function (ev) { var b = ev.target.closest("[data-ctx]"); if (b) freeCtxRun(b.getAttribute("data-ctx"), i, k, idx); });
+    setTimeout(function () { document.addEventListener("pointerdown", freeCtxOutside, true); document.addEventListener("keydown", freeCtxEsc, true); }, 0);
+  }
+  function freeCtxRun(act, i, k, idx) {
+    freeCtxClose();
+    var blocks = slideBlocks(i, k); if (!blocks) return;
+    var ids = (freeSelOn(i, k) && freeSel.ids.length) ? freeSel.ids.slice() : (idx >= 0 ? [idx] : []);
+    var clone = function (x) { return JSON.parse(JSON.stringify(x)); };
+    if (act === "copy") { if (!ids.length) return; freeClipboard = ids.map(function (x) { return blocks[x]; }).filter(Boolean).map(clone); status(freeClipboard.length + (freeClipboard.length === 1 ? " block copied." : " blocks copied."), true); return; }
+    if (act === "cut") { if (!ids.length) return; freeClipboard = ids.map(function (x) { return blocks[x]; }).filter(Boolean).map(clone); ids.slice().sort(function (a, c) { return c - a; }).forEach(function (x) { blocks.splice(x, 1); }); freeSel = null; freeCleanGroups(blocks); saveDraft(true); renderL2(); return; }
+    if (act === "paste") { if (!freeClipboard || !freeClipboard.length) return; var pa = [], pd = []; freeClipboard.forEach(function (b) { var cp = clone(b); cp.x = Math.min(100, fnum(b.x, 8) + 3); cp.y = Math.min(100, fnum(b.y, 8) + 3); blocks.push(cp); pd.push(cp); pa.push(blocks.length - 1); }); freeReidGroups(pd); freeSelSet(i, k, pa); saveDraft(true); renderL2(); return; }
+    if (act === "dup") { if (!ids.length) return; var da = [], dd = []; ids.forEach(function (x) { var b = blocks[x]; if (!b) return; var cp = clone(b); cp.x = Math.min(100, fnum(b.x, 8) + 2); cp.y = Math.min(100, fnum(b.y, 8) + 2); blocks.push(cp); dd.push(cp); da.push(blocks.length - 1); }); freeReidGroups(dd); freeSelSet(i, k, da); saveDraft(true); renderL2(); return; }
+    if (act === "del") { if (!ids.length) return; ids.filter(function (x) { return blocks[x] && !blocks[x].lock; }).slice().sort(function (a, c) { return c - a; }).forEach(function (x) { blocks.splice(x, 1); }); freeSel = null; freeCleanGroups(blocks); saveDraft(true); renderL2(); return; }
+    if (act === "lock" || act === "unlock") { if (idx < 0 || !blocks[idx]) return; if (blocks[idx].lock) delete blocks[idx].lock; else blocks[idx].lock = true; saveDraft(true); renderL2(); return; }
+    if (act === "selall") { if (!blocks.length) return; freeSelSet(i, k, blocks.map(function (_, x) { return x; })); renderL2(); return; }
+    if (idx >= 0 && /^(front|back|forward|backward)$/.test(act)) { var mv = blocks.splice(idx, 1)[0], ni; if (act === "front") { blocks.push(mv); ni = blocks.length - 1; } else if (act === "back") { blocks.unshift(mv); ni = 0; } else if (act === "forward") { ni = Math.min(blocks.length, idx + 1); blocks.splice(ni, 0, mv); } else { ni = Math.max(0, idx - 1); blocks.splice(ni, 0, mv); } freeSelSet(i, k, [ni]); saveDraft(true); renderL2(); return; }
+  }
+  // Drag an image file onto the canvas, or paste one from the clipboard — drops a media block where you let go.
+  function freeClearDropover() { if (root) root.querySelectorAll(".slidefree__stage.is-dropover").forEach(function (s) { s.classList.remove("is-dropover"); }); }
+  function freeDragHasFile(dt) { return !!(dt && (Array.prototype.some.call(dt.items || [], function (it) { return it.kind === "file"; }) || (dt.types && Array.prototype.indexOf.call(dt.types, "Files") >= 0))); }
+  function onFreeDragOver(e) {
+    if (openStudy < 0 || l2Tab !== "slides") return;
+    var meta = freeStageMeta(e.target); if (!meta) return;
+    if (!freeDragHasFile(e.dataTransfer)) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = "copy";
+    meta.stage.classList.add("is-dropover");
+  }
+  function onFreeDragLeave(e) { if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest("[data-freestage]")) freeClearDropover(); }
+  function onFreeDrop(e) {
+    if (openStudy < 0 || l2Tab !== "slides") { freeClearDropover(); return; }
+    var meta = freeStageMeta(e.target); if (!meta) return;
+    var files = e.dataTransfer && e.dataTransfer.files;
+    var imgs = files ? Array.prototype.filter.call(files, function (f) { return /^image\//.test(f.type); }) : [];
+    freeClearDropover();
+    if (!imgs.length) return;
+    e.preventDefault();
+    var xp = (e.clientX - meta.rect.left) / (meta.rect.width || 1) * 100, yp = (e.clientY - meta.rect.top) / (meta.rect.height || 1) * 100;
+    imgs.forEach(function (f, n) { freeDropImage(meta.i, meta.k, f, xp + n * 3, yp + n * 3); });
+  }
+  function onFreePaste(e) {
+    if (openStudy < 0 || l2Tab !== "slides" || freeEditing) return;
+    var tag = (e.target && e.target.tagName) || "";
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || (e.target && e.target.isContentEditable)) return;
+    var items = e.clipboardData && e.clipboardData.items; if (!items) return;
+    var imgs = [];
+    Array.prototype.forEach.call(items, function (it) { if (it.kind === "file" && /^image\//.test(it.type)) { var f = it.getAsFile(); if (f) imgs.push(f); } });
+    if (!imgs.length) return;
+    var pi = openStudy, pk = openSlide, ps = data.work[pi] && data.work[pi].study && data.work[pi].study.slides && data.work[pi].study.slides[pk];
+    if (!ps || ps.layout !== "free") return;
+    e.preventDefault();
+    imgs.forEach(function (f, n) { freeDropImage(pi, pk, f, 30 + n * 3, 30 + n * 3); });
+  }
+  function freeDropImage(i, k, file, xPct, yPct) {
+    if (!file || !/^image\//.test(file.type)) return;
+    var arr = slideBlocks(i, k); if (!arr) return;
+    prepareUpload(file).then(function (f0) {
+      if (!f0) return;
+      fileToDataUri(f0).then(function (uri) {
+        var a2 = slideBlocks(i, k); if (!a2) return;
+        var w = 40, blk = { kind: "media", src: uri, w: w, x: Math.max(0, Math.min(100 - w, (xPct != null ? xPct : 30) - w / 2)), y: Math.max(0, Math.min(92, (yPct != null ? yPct : 30) - 12)) };
+        a2.push(blk); var newIdx = a2.length - 1;
+        freeSelSet(i, k, [newIdx]); saveDraft(true); renderL2(); status("Image added.", true);
+        hostUploaded(uri, f0, function (path) { var a3 = slideBlocks(i, k); if (a3 && a3[newIdx] && a3[newIdx].src === uri) { a3[newIdx].src = path; saveDraft(true); } });
+      });
+    });
+  }
+  // Keyboard cheat sheet overlay (toggled with ?).
+  var freeCheatEl = null;
+  function freeCheatToggle() {
+    if (freeCheatEl) { freeCheatEl.remove(); freeCheatEl = null; return; }
+    var rows = [["Move \u00b7 nudge", "Drag \u00b7 Arrows \u00b7 Shift+Arrows"], ["Duplicate", "Ctrl+D \u00b7 Alt-drag"], ["Copy \u00b7 Cut \u00b7 Paste", "Ctrl+C \u00b7 Ctrl+X \u00b7 Ctrl+V"], ["Select all", "Ctrl+A"], ["Cycle selection", "Tab \u00b7 Shift+Tab"], ["Group \u00b7 Ungroup", "Ctrl+G \u00b7 Ctrl+Shift+G"], ["Bring forward \u00b7 back", "Ctrl+] \u00b7 Ctrl+["], ["To front \u00b7 back", "Ctrl+Shift+] \u00b7 Ctrl+Shift+["], ["Opacity 10\u2013100%", "1 \u2026 9 \u00b7 0"], ["Edit text in place", "Double-click"], ["Context menu", "Right-click"], ["Add image", "Drag a file in \u00b7 Paste"], ["Delete", "Del \u00b7 Backspace"], ["Deselect", "Esc"], ["This cheat sheet", "?"]];
+    var el = document.createElement("div"); el.className = "fcheat";
+    el.innerHTML = '<div class="fcheat__box"><div class="fcheat__head"><b>Slide editor shortcuts</b><button type="button" class="fcheat__x" aria-label="Close">' + IC.close + "</button></div><div class="fcheat__grid">" + rows.map(function (r) { return '<div class="fcheat__r"><span>' + escHtml(r[0]) + "</span><kbd>" + escHtml(r[1]) + "</kbd></div>"; }).join("") + "</div></div>";
+    document.body.appendChild(el);
+    freeCheatEl = el;
+    el.addEventListener("click", function (ev) { if (ev.target === el || (ev.target.closest && ev.target.closest(".fcheat__x"))) freeCheatToggle(); });
   }
   function bindFreeMove() { window.addEventListener("pointermove", onFreeMove); window.addEventListener("pointerup", onFreeUp, { once: true }); }
   function onFreeDown(e) {
     if (e.button != null && e.button !== 0) return;
+    if (freeEditing) { if (e.target === freeEditing.el || (freeEditing.el.contains && freeEditing.el.contains(e.target))) return; freeCommitEdit(); return; }
     if (e.target.closest("button")) return; // placeholder insert-cluster buttons receive their own clicks (no drag)
     var meta = freeStageMeta(e.target); if (!meta) return;
     var i = meta.i, k = meta.k, sw = meta.rect.width || 1, sh = meta.rect.height || 1;
@@ -7222,14 +7413,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       }
       if (!freeSelHas(midx) || !freeSelOn(i, k)) freeSelSet(i, k, freeExpandToGroups(blocks, [midx]));
       var stageEl = meta.stage;
-      freeDrag = { mode: "move", i: i, k: k, sw: sw, sh: sh, sx: e.clientX, sy: e.clientY, moved: false, stage: stageEl, items: freeSel.ids.map(function (ix) { var b = blocks[ix]; if (!b) return null; var el = stageEl.querySelector('.sfb[data-fb="' + ix + '"]'); if (el) el.style.willChange = "transform"; return { bl: b, el: el, ox: fnum(b.x, 8), oy: fnum(b.y, 8), nx: fnum(b.x, 8), ny: fnum(b.y, 8), rotTf: (parseFloat(b.rot) ? " rotate(" + (parseFloat(b.rot) || 0) + "deg)" : "") }; }).filter(Boolean) };
+      freeDrag = { mode: "move", i: i, k: k, sw: sw, sh: sh, sx: e.clientX, sy: e.clientY, moved: false, altDup: !!(e.altKey && !e.shiftKey), stage: stageEl, items: freeSel.ids.map(function (ix) { var b = blocks[ix]; if (!b) return null; var el = stageEl.querySelector('.sfb[data-fb="' + ix + '"]'); if (el) el.style.willChange = "transform"; return { bl: b, el: el, ox: fnum(b.x, 8), oy: fnum(b.y, 8), nx: fnum(b.x, 8), ny: fnum(b.y, 8), rotTf: (parseFloat(b.rot) ? " rotate(" + (parseFloat(b.rot) || 0) + "deg)" : "") }; }).filter(Boolean) };
       if (freeDrag.items.length === 1) {
         var mel = freeDrag.items[0].el, mr = mel ? mel.getBoundingClientRect() : null;
         freeDrag.mw = mr ? mr.width / sw * 100 : fnum(freeDrag.items[0].bl.w, 40);
         freeDrag.mh = mr ? mr.height / sh * 100 : 20;
-        var xs = [0, 50, 100], ys = [0, 50, 100];
-        stageEl.querySelectorAll(".sfb[data-fb]").forEach(function (el) { if (+el.getAttribute("data-fb") === midx) return; var r = el.getBoundingClientRect(); var l = (r.left - meta.rect.left) / sw * 100, t = (r.top - meta.rect.top) / sh * 100, ww = r.width / sw * 100, hh = r.height / sh * 100; xs.push(l, l + ww / 2, l + ww); ys.push(t, t + hh / 2, t + hh); });
-        freeDrag.snapX = xs; freeDrag.snapY = ys;
+        var xs = [0, 50, 100], ys = [0, 50, 100], others = [];
+        if (freeGrid.on) { Array.prototype.push.apply(xs, freeGridLinesX()); Array.prototype.push.apply(ys, freeGridLinesY()); }
+        stageEl.querySelectorAll(".sfb[data-fb]").forEach(function (el) { if (+el.getAttribute("data-fb") === midx) return; var r = el.getBoundingClientRect(); var l = (r.left - meta.rect.left) / sw * 100, t = (r.top - meta.rect.top) / sh * 100, ww = r.width / sw * 100, hh = r.height / sh * 100; xs.push(l, l + ww / 2, l + ww); ys.push(t, t + hh / 2, t + hh); others.push({ l: r.left - meta.rect.left, t: r.top - meta.rect.top, r: r.right - meta.rect.left, b: r.bottom - meta.rect.top, w: r.width, h: r.height }); });
+        freeDrag.snapX = xs; freeDrag.snapY = ys; freeDrag.others = others;
       }
       bindFreeMove(); e.preventDefault(); return;
     }
@@ -7254,10 +7446,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         var tx = 7 / d.sw * 100, ty = 7 / d.sh * 100;
         var sxr = freeSnapAxis(nx, [0, d.mw / 2, d.mw], d.snapX, tx), syr = freeSnapAxis(ny, [0, d.mh / 2, d.mh], d.snapY, ty);
         if (sxr) nx = sxr.nb; if (syr) ny = syr.nb;
+        var space = (d.others && d.others.length) ? freeSpacingSnap(d.others, nx / 100 * d.sw, ny / 100 * d.sh, d.mw / 100 * d.sw, d.mh / 100 * d.sh, 6) : null;
+        if (space) { if (!sxr && space.x != null) nx = space.x / d.sw * 100; if (!syr && space.y != null) ny = space.y / d.sh * 100; }
         it0.nx = Math.round(nx * 10) / 10; it0.ny = Math.round(ny * 10) / 10;
         if (it0.el) it0.el.style.transform = "translate3d(" + ((it0.nx - it0.ox) / 100 * d.sw).toFixed(2) + "px," + ((it0.ny - it0.oy) / 100 * d.sh).toFixed(2) + "px,0)" + it0.rotTf;
         freeGuides(d.stage, sxr ? sxr.guide : null, syr ? syr.guide : null);
+        freeSpacing(d.stage, space ? space.bars : null, d.sw, d.sh);
       } else {
+        freeGuides(d.stage, null, null); freeSpacing(d.stage, null, d.sw, d.sh);
         d.items.forEach(function (it) {
           it.nx = Math.round(Math.max(0, Math.min(100, it.ox + pdx)) * 10) / 10;
           it.ny = Math.round(Math.max(0, Math.min(100, it.oy + pdy)) * 10) / 10;
@@ -7287,6 +7483,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (d.mode === "move") {
       if (d.moved) d.items.forEach(function (it) { if (it.nx != null) { it.bl.x = it.nx; it.bl.y = it.ny; } });
       d.items.forEach(function (it) { if (it.el) it.el.style.willChange = ""; });
+      if (d.altDup && d.moved) { var _db = slideBlocks(d.i, d.k), _dc = []; if (_db) { d.items.forEach(function (it) { if (!it.bl) return; var cp = JSON.parse(JSON.stringify(it.bl)); cp.x = it.ox; cp.y = it.oy; _db.push(cp); _dc.push(cp); }); freeReidGroups(_dc); } }
     } else if (d.el && d.mode === "rotate") { d.el.style.willChange = ""; }
     if (d.mode === "marquee") {
       if (d.el) d.el.hidden = true;
@@ -7315,6 +7512,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       if (addP.length) freeSelSet(pi, pk, addP);
       saveDraft(true); renderL2(); status(addP.length + (addP.length === 1 ? " block" : " blocks") + " pasted.", true); return;
     }
+    // Shortcuts that don't need a current selection ---------------------------------
+    var fpi = openStudy, fpk = openSlide, fps = data.work[fpi] && data.work[fpi].study && data.work[fpi].study.slides && data.work[fpi].study.slides[fpk];
+    var fbl = (fps && fps.layout === "free") ? (slideBlocks(fpi, fpk) || []) : null;
+    if (e.key === "?" || (e.shiftKey && e.key === "/")) { e.preventDefault(); freeCheatToggle(); return; }
+    if (e.key === "Escape" && freeCheatEl) { e.preventDefault(); freeCheatToggle(); return; }
+    if (fbl && fbl.length && (e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) { e.preventDefault(); freeSelSet(fpi, fpk, fbl.map(function (_, x) { return x; })); renderL2(); return; }
+    if (fbl && fbl.length && e.key === "Tab") { e.preventDefault(); var cur = (freeSel && freeSelOn(fpi, fpk) && freeSel.ids.length) ? freeSel.ids[freeSel.ids.length - 1] : -1; var nxt = e.shiftKey ? (cur <= 0 ? fbl.length - 1 : cur - 1) : (cur < 0 || cur >= fbl.length - 1 ? 0 : cur + 1); freeSelSet(fpi, fpk, freeExpandToGroups(fbl, [nxt])); renderL2(); return; }
     if (!freeSel || !freeSel.ids || !freeSel.ids.length) return;
     var i = freeSel.i, k = freeSel.k, blocks = slideBlocks(i, k) || [];
     if ((e.ctrlKey || e.metaKey) && (e.key === "g" || e.key === "G")) {
@@ -7328,6 +7532,24 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (e.key === "Escape") { freeSel = null; renderL2(); return; }
     if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); freeSel.ids.filter(function (ix) { return blocks[ix] && !blocks[ix].lock; }).slice().sort(function (a, b) { return b - a; }).forEach(function (ix) { blocks.splice(ix, 1); }); freeSel = null; freeCleanGroups(blocks); saveDraft(true); renderL2(); return; }
     if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) { e.preventDefault(); var add = [], _dup = []; freeSel.ids.forEach(function (ix) { var b = blocks[ix]; if (!b) return; var cp = JSON.parse(JSON.stringify(b)); cp.x = Math.min(100, fnum(b.x, 8) + 2); cp.y = Math.min(100, fnum(b.y, 8) + 2); blocks.push(cp); _dup.push(cp); add.push(blocks.length - 1); }); freeReidGroups(_dup); if (add.length) freeSelSet(i, k, add); saveDraft(true); renderL2(); return; }
+    if ((e.ctrlKey || e.metaKey) && (e.key === "]" || e.key === "[")) {
+      e.preventDefault();
+      var front = e.key === "]", selB = freeSel.ids.slice().sort(function (a, b) { return a - b; }).map(function (ix) { return blocks[ix]; }).filter(Boolean);
+      if (!selB.length) return;
+      if (e.shiftKey || selB.length > 1) {
+        var rest = blocks.filter(function (b) { return selB.indexOf(b) < 0; }), merged = front ? rest.concat(selB) : selB.concat(rest);
+        blocks.length = 0; Array.prototype.push.apply(blocks, merged);
+        var st0 = front ? blocks.length - selB.length : 0, nids = []; for (var q = 0; q < selB.length; q++) nids.push(st0 + q);
+        freeSelSet(i, k, nids);
+      } else { var ix0 = freeSel.ids[0], mv0 = blocks.splice(ix0, 1)[0], ni0 = front ? Math.min(blocks.length, ix0 + 1) : Math.max(0, ix0 - 1); blocks.splice(ni0, 0, mv0); freeSelSet(i, k, [ni0]); }
+      saveDraft(true); renderL2(); return;
+    }
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && /^[0-9]$/.test(e.key)) {
+      e.preventDefault();
+      var op = e.key === "0" ? 100 : parseInt(e.key, 10) * 10;
+      freeSel.ids.forEach(function (ix) { if (blocks[ix] && !blocks[ix].lock) blocks[ix].opacity = op; });
+      saveDraft(true); renderL2(); status("Opacity " + op + "%", true); return;
+    }
     if (/^Arrow/.test(e.key)) {
       var step = e.shiftKey ? 5 : 0.5, dx = 0, dy = 0;
       if (e.key === "ArrowLeft") dx = -step; else if (e.key === "ArrowRight") dx = step; else if (e.key === "ArrowUp") dy = -step; else if (e.key === "ArrowDown") dy = step; else return;
@@ -10802,6 +11024,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "slide-decrypt") { decryptDeckForEdit(i); return; }
     if (act === "slide-ai-draft") { deckAiDraft(i, b); return; }
     if (act === "free-add-text") { var _fat = slideBlocks(i, +b.dataset.sindex); if (_fat) { _fat.push({ kind: "text", x: 8, y: Math.min(74, 12 + _fat.length * 6), w: 46, size: "md", align: "left", text: "New text" }); freeSelSet(i, +b.dataset.sindex, [_fat.length - 1]); saveDraft(true); renderL2(); } return; }
+    if (act === "free-cheat") { freeCheatToggle(); return; }
+    if (act === "free-grid") { freeGrid.on = !freeGrid.on; renderL2(); status(freeGrid.on ? "Layout grid on \u2014 blocks snap to the 12 columns." : "Layout grid off.", true); return; }
     if (act === "free-add-media") { var _fam = slideBlocks(i, +b.dataset.sindex); if (_fam) { _fam.push({ kind: "media", x: 10, y: Math.min(74, 12 + _fam.length * 6), w: 40, src: "" }); freeSelSet(i, +b.dataset.sindex, [_fam.length - 1]); saveDraft(true); renderL2(); } return; }
     if (act === "free-del") { var _fdk = +b.dataset.sindex, _fd = slideBlocks(i, _fdk); if (_fd) { if (freeSelOn(i, _fdk)) { freeSel.ids.slice().sort(function (a, c) { return c - a; }).forEach(function (ix) { _fd.splice(ix, 1); }); } else if (b.dataset.fbi != null) { _fd.splice(+b.dataset.fbi, 1); } freeSel = null; freeCleanGroups(_fd); saveDraft(true); renderL2(); } return; }
     if (act === "free-z") { var _zk = +b.dataset.sindex, _zb = slideBlocks(i, _zk), _zi = +b.dataset.fbi, _zd = b.dataset.zdir; if (_zb && _zb[_zi]) { var _zmv = _zb.splice(_zi, 1)[0], _zni; if (_zd === "front") { _zb.push(_zmv); _zni = _zb.length - 1; } else if (_zd === "back") { _zb.unshift(_zmv); _zni = 0; } else if (_zd === "forward") { _zni = Math.min(_zb.length, _zi + 1); _zb.splice(_zni, 0, _zmv); } else { _zni = Math.max(0, _zi - 1); _zb.splice(_zni, 0, _zmv); } freeSelSet(i, _zk, [_zni]); saveDraft(true); renderL2(); } return; }
