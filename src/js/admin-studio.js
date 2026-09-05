@@ -224,6 +224,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   let openBlock = -1; // which section (block) is expanded in the L2 sections accordion
   let openSlide = -1; // which slide is expanded in the Slideshow tab
+  var slideView = "current"; // Slideshow shell view: "current" (nav rail + big canvas) or "all" (thumbnail sorter)
   var slidePvRO = null; // ResizeObserver that refits inline slide previews when the editor width changes
   let journeyOpen = false; // is the Design Journey editor open in the L2 panel?
   let openJC = -1; // which journey chapter is expanded in the accordion
@@ -6197,6 +6198,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     host.innerHTML = slidePvHtml(s);
     slidePvFit();
   }
+  function slideEditBody(i, s, k) {
+    if (s.layout === "free") {
+      return freeCanvasHtml(i, k) + freeSelPanel(i, k) + freeLayersPanel(i, k) +
+        '<button type="button" class="btn btn--ghost slides__rehearse1" data-act="slide-rehearse" data-index="' + i + '" data-sindex="' + k + '">' + IC.play + " Rehearse from here</button>";
+    }
+    return '<div class="slides__pvwrap"><div class="slidepv" data-slidepvbox="' + k + '"><div class="slidepv__stage" data-slidepv="' + k + '">' + slidePvHtml(s) + "</div></div>" +
+      '<button type="button" class="btn btn--ghost slides__rehearse1" data-act="slide-rehearse" data-index="' + i + '" data-sindex="' + k + '">' + IC.play + " Rehearse from here</button></div>" +
+      '<div class="slides__pull"><button type="button" class="btn btn--auto" data-act="slide-pull" data-index="' + i + '" data-sindex="' + k + '">' + IC.fwd + " Pull content from a section\u2026</button></div>" +
+      '<div class="slides__tofree"><button type="button" class="btn btn--ghost" data-act="slide-tofree" data-index="' + i + '" data-sindex="' + k + '">' + IC.edit + ' Customize freely</button><span class="af__hint">Turn this into a freeform canvas \u2014 arrange text &amp; media anywhere.</span></div>' +
+      slideSlotFields(i, k, s);
+  }
   function slideCard(i, s, k, len, open) {
     var lname = slideLayoutName(s.layout), z = s.slots || {};
     var raw = z.title || z.heading || z.quote || z.label || z.value || z.caption || z.kicker || "";
@@ -6218,17 +6230,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       "</span>" +
       '<span class="study__block-chev" aria-hidden="true">' + IC.chev + "</span>" +
       "</div>";
-    var editBody;
-    if (s.layout === "free") {
-      editBody = freeCanvasHtml(i, k) + freeSelPanel(i, k) + freeLayersPanel(i, k) +
-        '<button type="button" class="btn btn--ghost slides__rehearse1" data-act="slide-rehearse" data-index="' + i + '" data-sindex="' + k + '">' + IC.play + " Rehearse from here</button>";
-    } else {
-      editBody = '<div class="slides__pvwrap"><div class="slidepv" data-slidepvbox="' + k + '"><div class="slidepv__stage" data-slidepv="' + k + '">' + slidePvHtml(s) + "</div></div>" +
-        '<button type="button" class="btn btn--ghost slides__rehearse1" data-act="slide-rehearse" data-index="' + i + '" data-sindex="' + k + '">' + IC.play + " Rehearse from here</button></div>" +
-        '<div class="slides__pull"><button type="button" class="btn btn--auto" data-act="slide-pull" data-index="' + i + '" data-sindex="' + k + '">' + IC.fwd + " Pull content from a section\u2026</button></div>" +
-        '<div class="slides__tofree"><button type="button" class="btn btn--ghost" data-act="slide-tofree" data-index="' + i + '" data-sindex="' + k + '">' + IC.edit + ' Customize freely</button><span class="af__hint">Turn this into a freeform canvas \u2014 arrange text &amp; media anywhere.</span></div>' +
-        slideSlotFields(i, k, s);
-    }
+    var editBody = slideEditBody(i, s, k);
     var bodyHtml = open ? ('<div class="study__block-body">' + slLayoutPicker(i, k, s) + editBody + slText(i, k, "notes", "Speaker notes", "Private prompts for you \u2014 shown in presenter view, never on the slide.", { area: true, rows: 3, notes: true }) + "</div>") : "";
     return '<div class="card study__block study__block--slide' + (open ? " is-open" : "") + (s.hidden ? " is-off" : "") + '">' + head + bodyHtml + "</div>";
   }
@@ -6240,11 +6242,67 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return intro + '<section class="l2grp"><div class="adm__empty slides__sealed">' + LOCK_SVG + ' This slideshow is protected \u2014 its slides aren\u2019t in your published file. <button class="btn btn--ghost" data-act="slide-decrypt" data-index="' + i + '">Unlock to edit</button></div></section>';
     }
     intro += slidesToolbar(i, has, nBlocks) + "</section>";
-    var list = has ? slides.map(function (s, k) { return slideCard(i, s, k, slides.length, openSlide === k); }).join("") : '<div class="adm__empty">No slides yet \u2014 build a draft from your sections, or add one below. Until then, <b>Rehearse</b> shows an auto-generated deck.</div>';
-    var body = '<section class="l2grp"><div class="l2grp__head">Slides' + (has ? ' <span>\u2014 reorder with the arrows \u00b7 click a slide to edit</span>' : "") + "</div>" +
-      '<div class="study__blocks slides__list">' + list + "</div>" +
-      '<div class="study__add"><button class="btn btn--add" data-act="slide-add" data-index="' + i + '">+ Add a slide</button></div></section>';
-    return intro + body;
+    return intro + slidesShell(w, i);
+  }
+  function slideThumbInner(i, s, k) {
+    if (s.layout === "free") {
+      var blocks = slideBlocks(i, k) || [];
+      var inner = blocks.length ? blocks.map(function (bl, ix) { return freeBlockEl(i, k, ix, bl, false, false); }).join("") : '<div class="slidefree__empty slidefree__empty--thumb">Empty</div>';
+      return '<div class="slidepv__stage slidefree__stage slidefree__stage--ro">' + inner + "</div>";
+    }
+    return '<div class="slidepv__stage">' + slidePvHtml(s) + "</div>";
+  }
+  function slideThumbOps(i, k, len, s) {
+    return '<span class="slides__thumbops">' +
+      '<button class="iconbtn" data-act="slide-up" data-index="' + i + '" data-sindex="' + k + '"' + (k === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + "</button>" +
+      '<button class="iconbtn" data-act="slide-down" data-index="' + i + '" data-sindex="' + k + '"' + (k === len - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + "</button>" +
+      '<button class="iconbtn" data-act="slide-dup" data-index="' + i + '" data-sindex="' + k + '" title="Duplicate slide">' + IC.dup + "</button>" +
+      '<button class="iconbtn study__block-off' + (s.hidden ? " is-off" : "") + '" data-act="slide-hide" data-index="' + i + '" data-sindex="' + k + '" title="' + (s.hidden ? "Skipped \u2014 click to include" : "In the deck \u2014 click to skip") + '">' + (s.hidden ? IC.eyeoff : IC.eye) + "</button>" +
+      '<button class="iconbtn iconbtn--danger" data-act="slide-remove" data-index="' + i + '" data-sindex="' + k + '" title="Remove">' + IC.trash + "</button>" +
+      "</span>";
+  }
+  function slideThumb(i, s, k, len, active, variant) {
+    var cls = variant === "all" ? "slides__allcard" : "slides__navitem";
+    return '<div class="' + cls + (active ? " is-active" : "") + (s.hidden ? " is-off" : "") + '" data-act="slide-select" data-index="' + i + '" data-sindex="' + k + '" data-variant="' + variant + '" tabindex="0" role="button" aria-label="Slide ' + (k + 1) + '">' +
+      '<span class="slides__thumbnum">' + (k + 1) + "</span>" +
+      '<span class="slidepv slides__thumbpv">' + slideThumbInner(i, s, k) + "</span>" +
+      slideThumbOps(i, k, len, s) +
+      (s.hidden ? '<span class="slides__thumbbadge">Skipped</span>' : "") +
+      "</div>";
+  }
+  function slideEditHead(i, sel, slides) {
+    var s = slides[sel], lname = slideLayoutName(s.layout);
+    return '<div class="slides__canvas-head"><span class="slides__canvas-badge">' + escHtml(lname) + "</span>" +
+      '<span class="slides__canvas-count">Slide ' + (sel + 1) + " of " + slides.length + "</span>" +
+      (s.hidden ? '<button class="btn btn--ghost slides__canvas-skip" data-act="slide-hide" data-index="' + i + '" data-sindex="' + sel + '">' + IC.eyeoff + " Skipped \u2014 include</button>" : "") +
+      '<span class="slides__canvas-nav"><button class="iconbtn" data-act="slide-goprev" data-index="' + i + '"' + (sel === 0 ? " disabled" : "") + ' title="Previous slide">' + IC.up + '</button><button class="iconbtn" data-act="slide-gonext" data-index="' + i + '"' + (sel === slides.length - 1 ? " disabled" : "") + ' title="Next slide">' + IC.down + "</button></span></div>";
+  }
+  function slideCanvasPane(i, sel, slides) {
+    var s = slides[sel];
+    if (!s) return '<div class="slides__canvas"><div class="adm__empty slides__canvas-empty">Select a slide on the left, or add one to begin.</div></div>';
+    return '<div class="slides__canvas">' + slideEditHead(i, sel, slides) +
+      '<div class="slides__canvas-body">' + slLayoutPicker(i, sel, s) + slideEditBody(i, s, sel) + "</div>" +
+      '<div class="slides__canvas-notes">' + slText(i, sel, "notes", "Speaker notes", "Private prompts for you \u2014 shown in presenter view, never on the slide.", { area: true, rows: 3, notes: true }) + "</div></div>";
+  }
+  function slidesShell(w, i) {
+    var slides = w.study.slides || [], has = slides.length;
+    var sel = (openSlide >= 0 && slides[openSlide]) ? openSlide : (has ? 0 : -1);
+    var tabs = '<div class="slides__viewtabs" role="tablist">' +
+      '<button class="slides__viewtab' + (slideView !== "all" ? " is-on" : "") + '" data-act="slide-view" data-view="current">Current</button>' +
+      '<button class="slides__viewtab' + (slideView === "all" ? " is-on" : "") + '" data-act="slide-view" data-view="all">View all' + (has ? " \u00b7 " + has : "") + "</button></div>";
+    if (!has) return '<section class="l2grp slides__shellwrap">' + tabs + '<div class="adm__empty">No slides yet \u2014 use <b>Add slide</b> above, or press <b>Rehearse</b> for an auto-built deck.</div></section>';
+    var inner;
+    if (slideView === "all") {
+      inner = '<div class="slides__allgrid">' + slides.map(function (s, k) { return slideThumb(i, s, k, slides.length, k === sel, "all"); }).join("") +
+        '<button class="slides__alladd" data-act="slide-add" data-index="' + i + '" title="Add a slide">' + IC.add + "<span>Add</span></button></div>" +
+        '<div class="slides__allhint">Click to select \u00b7 double-click to edit \u00b7 the arrows on a slide reorder it</div>';
+    } else {
+      inner = '<div class="slides__shell"><aside class="slides__nav"><div class="slides__nav-scroll">' +
+        slides.map(function (s, k) { return slideThumb(i, s, k, slides.length, k === sel, "nav"); }).join("") +
+        '</div><button class="btn btn--add slides__nav-add" data-act="slide-add" data-index="' + i + '">' + IC.add + " Add a slide</button></aside>" +
+        slideCanvasPane(i, sel, slides) + "</div>";
+    }
+    return '<section class="l2grp slides__shellwrap">' + tabs + inner + "</section>";
   }
   function slidePullPicker(i, k) {
     var w = data.work[i]; if (!w || !w.study) return;
@@ -6645,6 +6703,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (freeDragInit._on || !root) return; freeDragInit._on = true;
     root.addEventListener("pointerdown", onFreeDown);
     document.addEventListener("keydown", onFreeKey);
+    root.addEventListener("dblclick", onSlideDbl);
+  }
+  function onSlideDbl(e) {
+    var card = e.target.closest && e.target.closest('.slides__allcard[data-act="slide-select"]'); if (!card) return;
+    openSlide = +card.getAttribute("data-sindex"); slideView = "current"; renderL2();
   }
   function bindFreeMove() { window.addEventListener("pointermove", onFreeMove); window.addEventListener("pointerup", onFreeUp, { once: true }); }
   function onFreeDown(e) {
@@ -9111,6 +9174,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     _l2ScrollY = 0;
     openBlock = -1;
     openSlide = -1;
+    slideView = "current";
     freeSel = null;
     const w = data.work[i];
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
@@ -10203,6 +10267,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "study-blocksep") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { if (s[j].sep === false) delete s[j].sep; else s[j].sep = false; saveDraft(true); renderL2(); status(s[j].sep === false ? "Divider off \u2014 this section flows into the previous one." : "Divider on \u2014 separator line above.", true); } return; }
     if (act === "study-blockoff") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { if (s[j].off) delete s[j].off; else s[j].off = true; saveDraft(true); renderL2(); status(s[j].off ? "Section hidden from the live site \u2014 still listed here so you can toggle it back." : "Section shown on the live site.", true); } return; }
     if (act === "slide-add") { slideLayoutPickerModal(i); return; }
+    if (act === "slide-view") { slideView = b.dataset.view === "all" ? "all" : "current"; renderL2(); return; }
+    if (act === "slide-select") { if (e.target.closest("button, input, select, textarea, [data-grip]")) return; var _ssk = +b.dataset.sindex; if (openSlide !== _ssk) { openSlide = _ssk; renderL2(); } return; }
+    if (act === "slide-goprev" || act === "slide-gonext") { var _gw = data.work[i], _gsl = _gw && _gw.study && _gw.study.slides; if (!_gsl || !_gsl.length) return; var _cur = (openSlide >= 0 && _gsl[openSlide]) ? openSlide : 0; openSlide = act === "slide-goprev" ? Math.max(0, _cur - 1) : Math.min(_gsl.length - 1, _cur + 1); renderL2(); return; }
     if (act === "slide-remove") { var _srw = data.work[i], srk = +b.dataset.sindex, srs = _srw && _srw.study && _srw.study.slides; if (!srs) return; srs.splice(srk, 1); if (openSlide === srk) openSlide = -1; else if (openSlide > srk) openSlide--; saveDraft(true); renderL2(); return; }
     if (act === "slide-up") { var _suw = data.work[i], suk = +b.dataset.sindex, sus = _suw && _suw.study && _suw.study.slides; if (sus && suk > 0) { var _sut = sus[suk - 1]; sus[suk - 1] = sus[suk]; sus[suk] = _sut; if (openSlide === suk) openSlide = suk - 1; else if (openSlide === suk - 1) openSlide = suk; saveDraft(true); renderL2(); } return; }
     if (act === "slide-down") { var _sdw = data.work[i], sdk = +b.dataset.sindex, sds = _sdw && _sdw.study && _sdw.study.slides; if (sds && sdk < sds.length - 1) { var _sdt = sds[sdk + 1]; sds[sdk + 1] = sds[sdk]; sds[sdk] = _sdt; if (openSlide === sdk) openSlide = sdk + 1; else if (openSlide === sdk + 1) openSlide = sdk; saveDraft(true); renderL2(); } return; }
