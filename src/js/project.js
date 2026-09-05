@@ -2703,6 +2703,23 @@
       try { focusEnhance(root); } catch (e) {}
       try { if (typeof initStage === "function") initStage(root); } catch (e) {}
       try { if (window.RKGen && RKGen.hydrate) RKGen.hydrate(root); } catch (e) {}
+      try { wireCompare(root); } catch (e) {}
+    }
+    // Before/after compare slider is wired on the case-study overlay only; pulled sections on a deck
+    // slide need their own drag + zoom handlers (reusing the module cmp* closures + the lightbox).
+    function wireCompare(root) {
+      if (!root || root.__cmpWired) return; root.__cmpWired = 1;
+      root.addEventListener("pointerdown", function (e) {
+        if (e.target.closest("[data-cmp-zoom]")) return;
+        var cmp = e.target.closest(".pjb__cmp"); if (!cmp) return;
+        cmpDrag = cmp; cmpMove(e);
+        document.addEventListener("pointermove", cmpMove);
+        document.addEventListener("pointerup", cmpEnd);
+      });
+      root.addEventListener("click", function (e) {
+        var z = e.target.closest("[data-cmp-zoom]"); if (!z) return;
+        var cmp = z.closest(".pjb__cmp"); if (cmp) openCmpLbx(cmp);
+      });
     }
     function pjSlideTitle(s) {
       var z = (s && s.slots) || {};
