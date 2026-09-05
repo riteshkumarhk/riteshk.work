@@ -6083,14 +6083,77 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }).join("");
     return '<span class="slidelay__mini">' + (inner || '<span class="slidelay__blank">Blank</span>') + "</span>";
   }
+  function slideUserLayouts() { return (data.slideLayouts && data.slideLayouts.slice()) || []; }
+  // Snapshot a slide's blocks into a reusable layout: keep geometry/kind/styling, turn text into placeholders.
+  function slideLayoutSnapshot(blocks) {
+    return (blocks || []).map(function (b) {
+      var kind = b.kind === "media" ? "media" : b.kind === "shape" ? "shape" : b.kind === "icon" ? "icon" : "text";
+      var o = { kind: kind, x: fnum(b.x, 8), y: fnum(b.y, 8), w: fnum(b.w, 40) };
+      if (b.h != null) o.h = fnum(b.h, 20);
+      if (b.rot) o.rot = parseFloat(b.rot) || 0;
+      if (b.opacity != null && +b.opacity < 100) o.opacity = +b.opacity;
+      if (b.shadow) o.shadow = b.shadow;
+      if (kind === "text") { o.size = (b.size === "sm" || b.size === "lg") ? b.size : "md"; o.align = (b.align === "center" || b.align === "right") ? b.align : "left"; if (b.role) o.role = b.role; if (b.valign) o.valign = b.valign; var t = String(b.text || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(); o.ph = t ? t.slice(0, 44) : (b.ph || "Text"); }
+      else if (kind === "shape") { o.shape = b.shape || "rect"; if (b.fill) o.fill = b.fill; if (b.stroke) o.stroke = b.stroke; if (b.strokeW != null) o.strokeW = b.strokeW; if (b.radius != null) o.radius = b.radius; }
+      else if (kind === "icon") { o.name = b.name || "star"; if (b.color) o.color = b.color; }
+      return o;
+    });
+  }
+  // Small text-prompt modal \u2192 resolves the trimmed value, or null on cancel.
+  function slideNamePrompt(opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+      var modal = document.createElement("div");
+      modal.className = "pass pass--confirm";
+      modal.innerHTML = '<div class="pass__box"><div class="pass__title">' + escHtml(opts.title || "Name") + "</div>" +
+        (opts.sub ? '<div class="pass__sub">' + escHtml(opts.sub) + "</div>" : "") +
+        '<input type="text" class="slidelay__nameinput" value="' + escAttr(opts.value || "") + '" placeholder="' + escAttr(opts.ph || "Layout name") + '" maxlength="48" />' +
+        '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button><button class="btn btn--primary" data-ok>' + escHtml(opts.cta || "Save") + "</button></div></div>";
+      document.body.appendChild(modal);
+      var inp = modal.querySelector("input");
+      var done = function (v) { modal.remove(); document.removeEventListener("keydown", onKey); resolve(v); };
+      var ok = function () { var val = (inp.value || "").trim(); if (!val) { inp.focus(); return; } done(val); };
+      var onKey = function (e) { if (e.key === "Escape") { e.preventDefault(); done(null); } else if (e.key === "Enter") { e.preventDefault(); ok(); } };
+      document.addEventListener("keydown", onKey);
+      modal.addEventListener("click", function (e) { if (e.target === modal) done(null); });
+      modal.querySelector("[data-cancel]").addEventListener("click", function () { done(null); });
+      modal.querySelector("[data-ok]").addEventListener("click", ok);
+      setTimeout(function () { inp.focus(); inp.select(); }, 0);
+    });
+  }
+  function slideSaveAsLayout(i, k) {
+    var st = data.work[i] && data.work[i].study, s = st && st.slides && st.slides[k];
+    if (!s) return;
+    var blocks = (s.layout === "free") ? (s.blocks || []) : slotsToFreeBlocks(s);
+    if (!blocks.length) { status("Add a few blocks to the slide first, then save it as a layout."); return; }
+    slideNamePrompt({ title: "Save as a layout", sub: "Reuse this arrangement from Add slide \u2192 Add a layout. Text becomes editable placeholders.", ph: "e.g. Title + two columns", cta: "Save layout" }).then(function (name) {
+      if (!name) return;
+      data.slideLayouts = data.slideLayouts || [];
+      data.slideLayouts.push({ id: "ul" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name, blocks: slideLayoutSnapshot(blocks) });
+      saveDraft(true);
+      status("Saved \u201c" + name + "\u201d to Your layouts.", true);
+    });
+  }
+  function slideAddFromLayoutBlocks(i, blocks, name) {
+    var w = data.work[i]; w.study = w.study || blankStudy(); w.study.slides = w.study.slides || [];
+    w.study.slides.push({ id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: "free", blocks: JSON.parse(JSON.stringify(blocks || [])), notes: "" });
+    openSlide = w.study.slides.length - 1; freeSel = null;
+    saveDraft(true); renderL2();
+    status((name || "Layout") + " added \u2014 click any placeholder to edit.", true);
+  }
   function slideLayoutPickerModal(i) {
     if (!data.work[i]) return;
-    var cards = SLIDE_LAYOUTS_LIB.map(function (lib) {
+    var std = SLIDE_LAYOUTS_LIB.map(function (lib) {
       return '<button type="button" class="slidelay__card" data-slidelay="' + lib.id + '"><span class="slidelay__thumb">' + slideLayoutThumb(lib.blocks) + '</span><span class="slidelay__name">' + escHtml(lib.name) + "</span></button>";
     }).join("");
+    var user = slideUserLayouts();
+    var userHtml = user.length ? ('<div class="slidelay__grouphd">Your layouts</div><div class="slidelay__grid">' + user.map(function (u) {
+      return '<div class="slidelay__cardwrap"><button type="button" class="slidelay__card" data-userlay="' + escAttr(u.id) + '"><span class="slidelay__thumb">' + slideLayoutThumb(u.blocks) + '</span><span class="slidelay__name">' + escHtml(u.name) + "</span></button>" +
+        '<span class="slidelay__cardops"><button class="iconbtn" data-lay-ren="' + escAttr(u.id) + '" title="Rename">' + IC.edit + '</button><button class="iconbtn iconbtn--danger" data-lay-del="' + escAttr(u.id) + '" title="Delete layout">' + IC.trash + "</button></span></div>";
+    }).join("") + "</div>") : "";
     var modal = document.createElement("div");
     modal.className = "pass pass--wide slidelay";
-    modal.innerHTML = '<div class="pass__box"><div class="pass__title">Add a slide</div><div class="pass__sub">Pick a layout to start from \u2014 every element is editable on the canvas: drag, resize, restyle.</div><div class="slidelay__grid">' + cards + '</div><div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button></div></div>';
+    modal.innerHTML = '<div class="pass__box"><div class="pass__title">Add a slide</div><div class="pass__sub">Pick a layout to start from \u2014 every element is editable on the canvas: drag, resize, restyle.</div>' + userHtml + (user.length ? '<div class="slidelay__grouphd">Standard layouts</div>' : "") + '<div class="slidelay__grid">' + std + '</div><div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button></div></div>';
     document.body.appendChild(modal);
     var onKey = function (e) { if (e.key === "Escape") close(); };
     var close = function () { modal.remove(); document.removeEventListener("keydown", onKey); };
@@ -6100,11 +6163,35 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     modal.querySelectorAll("[data-slidelay]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var lib = SLIDE_LAYOUTS_LIB.filter(function (x) { return x.id === btn.getAttribute("data-slidelay"); })[0]; if (!lib) return;
-        var w = data.work[i]; w.study = w.study || blankStudy(); w.study.slides = w.study.slides || [];
-        w.study.slides.push({ id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: "free", blocks: JSON.parse(JSON.stringify(lib.blocks || [])), notes: "" });
-        openSlide = w.study.slides.length - 1; freeSel = null;
-        close(); saveDraft(true); renderL2();
-        status(lib.name + " added \u2014 click any placeholder to edit.", true);
+        close(); slideAddFromLayoutBlocks(i, lib.blocks, lib.name);
+      });
+    });
+    modal.querySelectorAll("[data-userlay]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var u = slideUserLayouts().filter(function (x) { return x.id === btn.getAttribute("data-userlay"); })[0]; if (!u) return;
+        close(); slideAddFromLayoutBlocks(i, u.blocks, u.name);
+      });
+    });
+    modal.querySelectorAll("[data-lay-del]").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation(); var id = btn.getAttribute("data-lay-del");
+        var u = slideUserLayouts().filter(function (x) { return x.id === id; })[0];
+        confirmModal({ title: "Delete this layout?", sub: (u ? "\u201c" + u.name + "\u201d" : "This layout") + " will be removed from Your layouts. Slides you already made from it are unaffected.", cta: "Delete layout" }).then(function (okd) {
+          if (!okd) return;
+          data.slideLayouts = slideUserLayouts().filter(function (x) { return x.id !== id; });
+          saveDraft(true); close(); slideLayoutPickerModal(i);
+        });
+      });
+    });
+    modal.querySelectorAll("[data-lay-ren]").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation(); var id = btn.getAttribute("data-lay-ren");
+        var u = slideUserLayouts().filter(function (x) { return x.id === id; })[0]; if (!u) return;
+        slideNamePrompt({ title: "Rename layout", value: u.name, cta: "Rename" }).then(function (name) {
+          if (!name) return;
+          (data.slideLayouts || []).forEach(function (x) { if (x.id === id) x.name = name; });
+          saveDraft(true); close(); slideLayoutPickerModal(i);
+        });
       });
     });
   }
@@ -6275,7 +6362,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="slides__canvas-head"><span class="slides__canvas-badge">' + escHtml(lname) + "</span>" +
       '<span class="slides__canvas-count">Slide ' + (sel + 1) + " of " + slides.length + "</span>" +
       (s.hidden ? '<button class="btn btn--ghost slides__canvas-skip" data-act="slide-hide" data-index="' + i + '" data-sindex="' + sel + '">' + IC.eyeoff + " Skipped \u2014 include</button>" : "") +
-      '<span class="slides__canvas-nav"><button class="iconbtn" data-act="slide-goprev" data-index="' + i + '"' + (sel === 0 ? " disabled" : "") + ' title="Previous slide">' + IC.up + '</button><button class="iconbtn" data-act="slide-gonext" data-index="' + i + '"' + (sel === slides.length - 1 ? " disabled" : "") + ' title="Next slide">' + IC.down + "</button></span></div>";
+      '<span class="slides__canvas-right">' +
+      (s.layout === "free" ? '<button class="btn btn--ghost slides__savelay" data-act="slide-savelayout" data-index="' + i + '" data-sindex="' + sel + '" title="Save this arrangement as a reusable layout">' + IC.save + " Save as layout</button>" : "") +
+      '<span class="slides__canvas-nav"><button class="iconbtn" data-act="slide-goprev" data-index="' + i + '"' + (sel === 0 ? " disabled" : "") + ' title="Previous slide">' + IC.up + '</button><button class="iconbtn" data-act="slide-gonext" data-index="' + i + '"' + (sel === slides.length - 1 ? " disabled" : "") + ' title="Next slide">' + IC.down + "</button></span></span></div>";
   }
   function slideCanvasPane(i, sel, slides) {
     var s = slides[sel];
@@ -10323,6 +10412,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "free-color") { var _cak = +b.dataset.sindex, _ca = slideBlocks(i, _cak), _cab = _ca && _ca[+b.dataset.fbi]; if (!_cab) return; var _cf = b.dataset.field, _cv = b.dataset.val; if (_cv) _cab[_cf] = _cv; else delete _cab[_cf]; saveDraft(true); renderL2(); return; }
     if (act === "free-layer") { freeSelSet(i, +b.dataset.sindex, [+b.dataset.fbi]); renderL2(); return; }
     if (act === "slide-tofree") { slideConvertToFree(i, +b.dataset.sindex); return; }
+    if (act === "slide-savelayout") { slideSaveAsLayout(i, +b.dataset.sindex); return; }
     if (act === "hsize-toggle") { var hsSel = b.closest(".hsize"); if (hsSel) { var wasHsOpen = hsSel.classList.contains("is-open"); if (root) root.querySelectorAll(".hsize.is-open").forEach(function (x) { x.classList.remove("is-open"); }); if (!wasHsOpen) hsSel.classList.add("is-open"); } return; }
     if (act === "hsize-set") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].hsize = b.dataset.hsize || ""; saveDraft(true); renderL2(); } return; }
     if (act === "item-add") { const bl = data.work[i].study.blocks[+b.dataset.bindex]; bl.items = bl.items || []; bl.items.push(blankItem(bl.type)); saveDraft(true); renderL2(); return; }

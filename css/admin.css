@@ -2929,7 +2929,9 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .slides__canvas-badge { font: 600 .58rem/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--accent); border: 1px solid var(--line-soft); border-radius: 100px; padding: .3rem .62rem; }
 .slides__canvas-count { font-size: .72rem; color: var(--text-faint); }
 .slides__canvas-skip { padding: .3rem .7rem; font-size: .68rem; }
-.slides__canvas-nav { margin-left: auto; display: flex; gap: .2rem; }
+.slides__canvas-nav { display: flex; gap: .2rem; }
+.slides__canvas-right { margin-left: auto; display: flex; align-items: center; gap: .5rem; }
+.slides__savelay { padding: .3rem .7rem; font-size: .68rem; }
 .slides__canvas-empty { line-height: 1.5; }
 .slides__canvas-notes { margin-top: 1rem; padding-top: .95rem; border-top: 1px solid var(--line-soft); }
 .slides__canvas-notes .af { margin-bottom: 0; }
@@ -2944,6 +2946,16 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
   .slides__nav-scroll { flex-direction: row; max-height: none; overflow-x: auto; }
   .slides__navitem { min-width: 128px; }
 }
+/* P4 save-as-layout: gallery groups + custom-card ops */
+.slidelay__grouphd { font: 600 .62rem/1 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--text-faint); margin: .2rem 0 .6rem; }
+.slidelay__grouphd + .slidelay__grid { margin-bottom: 1.1rem; }
+.slidelay__cardwrap { position: relative; display: flex; }
+.slidelay__cardwrap .slidelay__card { width: 100%; }
+.slidelay__cardops { position: absolute; top: .35rem; right: .35rem; display: none; gap: .1rem; background: rgba(10,10,12,.82); border: 1px solid var(--line-soft); border-radius: 8px; padding: .14rem; }
+.slidelay__cardwrap:hover .slidelay__cardops, .slidelay__cardwrap:focus-within .slidelay__cardops { display: flex; }
+.slidelay__cardops .iconbtn { width: 24px; height: 24px; }
+.slidelay__cardops .iconbtn svg { width: 13px; height: 13px; }
+.slidelay__nameinput { width: 100%; }
 .sfb__empty { color: var(--text-faint); font-style: italic; }
 .sfb img { width: 100%; height: auto; display: block; border-radius: 5px; pointer-events: none; }
 .sfb__ph { display: grid; place-items: center; aspect-ratio: 16 / 10; background: linear-gradient(135deg, rgba(216, 166, 87, .16), rgba(216, 166, 87, .03)); border-radius: 5px; font-family: var(--mono); font-size: 20px; color: var(--accent); }
