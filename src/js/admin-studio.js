@@ -7674,7 +7674,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       }
       if (!freeSelHas(midx) || !freeSelOn(i, k)) freeSelSet(i, k, freeExpandToGroups(blocks, [midx]));
       var stageEl = meta.stage;
-      freeDrag = { mode: "move", i: i, k: k, sw: sw, sh: sh, sx: e.clientX, sy: e.clientY, moved: false, altDup: !!(e.altKey && !e.shiftKey), stage: stageEl, items: freeSel.ids.map(function (ix) { var b = blocks[ix]; if (!b) return null; var el = stageEl.querySelector('.sfb[data-fb="' + ix + '"]'); if (el) el.style.willChange = "transform"; return { bl: b, el: el, ox: fnum(b.x, 8), oy: fnum(b.y, 8), nx: fnum(b.x, 8), ny: fnum(b.y, 8), rotTf: (parseFloat(b.rot) ? " rotate(" + (parseFloat(b.rot) || 0) + "deg)" : "") }; }).filter(Boolean) };
+      freeDrag = { mode: "move", i: i, k: k, sw: sw, sh: sh, sx: e.clientX, sy: e.clientY, moved: false, altDup: !!(e.altKey && !e.shiftKey), stage: stageEl, usw: stageEl.offsetWidth || sw, ush: stageEl.offsetHeight || sh, items: freeSel.ids.map(function (ix) { var b = blocks[ix]; if (!b) return null; var el = stageEl.querySelector('.sfb[data-fb="' + ix + '"]'); if (el) el.style.willChange = "transform"; return { bl: b, el: el, ox: fnum(b.x, 8), oy: fnum(b.y, 8), nx: fnum(b.x, 8), ny: fnum(b.y, 8), rotTf: (parseFloat(b.rot) ? " rotate(" + (parseFloat(b.rot) || 0) + "deg)" : "") }; }).filter(Boolean) };
       if (freeDrag.items.length === 1) {
         var mel = freeDrag.items[0].el, mr = mel ? mel.getBoundingClientRect() : null;
         freeDrag.mw = mr ? mr.width / sw * 100 : fnum(freeDrag.items[0].bl.w, 40);
@@ -7686,7 +7686,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       }
       bindFreeMove(); e.preventDefault(); return;
     }
-    freeDrag = { mode: "marquee", i: i, k: k, rect: meta.rect, sx: e.clientX, sy: e.clientY, el: meta.stage.querySelector("[data-fbmarquee]"), add: e.shiftKey, base: (e.shiftKey && freeSelOn(i, k)) ? freeSel.ids.slice() : [], moved: false };
+    freeDrag = { mode: "marquee", i: i, k: k, rect: meta.rect, sc: (meta.rect.width / (meta.stage.offsetWidth || meta.rect.width)) || 1, sx: e.clientX, sy: e.clientY, el: meta.stage.querySelector("[data-fbmarquee]"), add: e.shiftKey, base: (e.shiftKey && freeSelOn(i, k)) ? freeSel.ids.slice() : [], moved: false };
     bindFreeMove(); e.preventDefault();
   }
   function onFreeMove(e) {
@@ -7710,7 +7710,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         var space = (d.others && d.others.length) ? freeSpacingSnap(d.others, nx / 100 * d.sw, ny / 100 * d.sh, d.mw / 100 * d.sw, d.mh / 100 * d.sh, 6) : null;
         if (space) { if (!sxr && space.x != null) nx = space.x / d.sw * 100; if (!syr && space.y != null) ny = space.y / d.sh * 100; }
         it0.nx = Math.round(nx * 10) / 10; it0.ny = Math.round(ny * 10) / 10;
-        if (it0.el) it0.el.style.transform = "translate3d(" + ((it0.nx - it0.ox) / 100 * d.sw).toFixed(2) + "px," + ((it0.ny - it0.oy) / 100 * d.sh).toFixed(2) + "px,0)" + it0.rotTf;
+        if (it0.el) it0.el.style.transform = "translate3d(" + ((it0.nx - it0.ox) / 100 * d.usw).toFixed(2) + "px," + ((it0.ny - it0.oy) / 100 * d.ush).toFixed(2) + "px,0)" + it0.rotTf;
         freeGuides(d.stage, sxr ? sxr.guide : null, syr ? syr.guide : null);
         freeSpacing(d.stage, space ? space.bars : null, d.sw, d.sh);
       } else {
@@ -7718,7 +7718,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         d.items.forEach(function (it) {
           it.nx = Math.round(Math.max(0, Math.min(100, it.ox + pdx)) * 10) / 10;
           it.ny = Math.round(Math.max(0, Math.min(100, it.oy + pdy)) * 10) / 10;
-          if (it.el) it.el.style.transform = "translate3d(" + ((it.nx - it.ox) / 100 * d.sw).toFixed(2) + "px," + ((it.ny - it.oy) / 100 * d.sh).toFixed(2) + "px,0)" + it.rotTf;
+          if (it.el) it.el.style.transform = "translate3d(" + ((it.nx - it.ox) / 100 * d.usw).toFixed(2) + "px," + ((it.ny - it.oy) / 100 * d.ush).toFixed(2) + "px,0)" + it.rotTf;
         });
       }
     } else if (d.mode === "resize") {
@@ -7734,7 +7734,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     } else if (d.mode === "marquee") {
       var r = d.rect;
       d.marq = { x0: Math.min(d.sx, e.clientX), y0: Math.min(d.sy, e.clientY), x1: Math.max(d.sx, e.clientX), y1: Math.max(d.sy, e.clientY) };
-      if (d.el) { d.el.hidden = false; d.el.style.left = (d.marq.x0 - r.left) + "px"; d.el.style.top = (d.marq.y0 - r.top) + "px"; d.el.style.width = (d.marq.x1 - d.marq.x0) + "px"; d.el.style.height = (d.marq.y1 - d.marq.y0) + "px"; }
+      if (d.el) { var _ms = d.sc || 1; d.el.hidden = false; d.el.style.left = ((d.marq.x0 - r.left) / _ms) + "px"; d.el.style.top = ((d.marq.y0 - r.top) / _ms) + "px"; d.el.style.width = ((d.marq.x1 - d.marq.x0) / _ms) + "px"; d.el.style.height = ((d.marq.y1 - d.marq.y0) / _ms) + "px"; }
     }
   }
   function onFreeUp() {
