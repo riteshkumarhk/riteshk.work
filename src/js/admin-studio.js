@@ -227,6 +227,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   let openBlock = -1; // which section (block) is expanded in the L2 sections accordion
   var storyThumbs = false, storyLocked = false; // Story-rail view (thumbnails vs sliced) + show-locked toggle
   try { storyThumbs = localStorage.getItem("rk:story:thumbs") === "1"; storyLocked = localStorage.getItem("rk:story:locked") === "1"; } catch (e) {}
+  var storyThumbObs = null; // IntersectionObserver that lazily renders rail thumbnails as they scroll into view
   let openSlide = -1; // which slide is expanded in the Slideshow tab
   var slideView = "current"; // Slideshow shell view: "current" (nav rail + big canvas) or "all" (thumbnail sorter)
   var slidePvRO = null; // ResizeObserver that refits inline slide previews when the editor width changes
@@ -4621,11 +4622,32 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   // ---- Story section rail (P1): a thumbnail/sliced navigator beside the section editor. Reuses the
   // slide-thumbnail render (deckSlideFromBlock -> renderDeckSlide) + the existing study-block* ops + block sort.
-  function storySecThumb(b) {
+  function storySecThumb(b, i, j) {
     if (b.encStub || b.vaultBlock) return '<span class="slidepv story__thumb story__thumb--lock"><span class="story__thumb-locki">' + LOCK_SVG + "</span></span>";
-    var s; try { s = (window.RK && window.RK.deckSlideFromBlock) ? window.RK.deckSlideFromBlock(b) : null; } catch (e) { s = null; }
-    if (!s) s = { layout: "text", slots: { title: studyBlockLabel(b) } };
-    return '<span class="slidepv story__thumb"><span class="slidepv__stage">' + slidePvHtml(s) + "</span></span>";
+    // Lazy: render an empty stage now (slidePvFit still reserves its height); the observer fills it on scroll-in.
+    return '<span class="slidepv story__thumb" data-storythumb="' + i + ":" + j + '"><span class="slidepv__stage"></span></span>';
+  }
+  function fillStoryThumb(el) {
+    var key = el.getAttribute("data-storythumb"); if (!key) return;
+    el.removeAttribute("data-storythumb");
+    var p = key.split(":"), wi = +p[0], bj = +p[1];
+    var w = data.work[wi], b = w && w.study && w.study.blocks && w.study.blocks[bj];
+    var stage = el.querySelector(".slidepv__stage"); if (!stage) return;
+    var s; try { s = (b && window.RK && window.RK.deckSlideFromBlock) ? window.RK.deckSlideFromBlock(b) : null; } catch (e) { s = null; }
+    if (!s) s = { layout: "text", slots: { title: b ? studyBlockLabel(b) : "Section" } };
+    stage.innerHTML = slidePvHtml(s);
+    var sc = el.clientWidth / 1280; if (sc) { stage.style.transform = "scale(" + sc + ")"; el.style.height = Math.round(720 * sc) + "px"; }
+  }
+  function setupStoryLazyThumbs() {
+    if (storyThumbObs) { try { storyThumbObs.disconnect(); } catch (e) {} storyThumbObs = null; }
+    if (!root) return;
+    var pend = root.querySelectorAll("[data-storythumb]"); if (!pend.length) return;
+    if (typeof IntersectionObserver === "undefined") { pend.forEach(fillStoryThumb); return; }
+    // Observe against the viewport (root:null) — the scroll container differs (rail-scroll box vs the case-stage editor pane).
+    storyThumbObs = new IntersectionObserver(function (ents) {
+      ents.forEach(function (en) { if (en.isIntersecting) { storyThumbObs.unobserve(en.target); fillStoryThumb(en.target); } });
+    }, { root: null, rootMargin: "400px 0px" });
+    pend.forEach(function (el) { storyThumbObs.observe(el); });
   }
   function storyInsHtml(i, at) { return '<button type="button" class="story__ins" data-act="study-blockadd" data-index="' + i + '" data-bindex="' + at + '" title="Insert a section here" aria-label="Insert a section here"><span class="story__ins-line"></span><span class="story__ins-plus">' + IC.add + "</span></button>"; }
   function storyRailItem(i, b, j, len) {
@@ -4642,7 +4664,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="story__item' + (active ? " is-active" : "") + (b.off ? " is-off" : "") + (isEnc ? " is-enc" : "") + '" data-act="story-nav" data-index="' + i + '" data-bindex="' + j + '" tabindex="0" role="button" aria-label="Section ' + (j + 1) + '">' +
       '<span class="sortgrip story__item-grip" data-grip data-sortkey="block:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + "</span>" +
       '<span class="story__item-num">' + (j + 1) + "</span>" +
-      storySecThumb(b) +
+      storySecThumb(b, i, j) +
       '<span class="story__item-meta"><span class="story__item-type">' + escHtml(studyBlockTypeName(b)) + '</span><span class="story__item-label">' + escHtml(studyBlockLabel(b)) + "</span></span>" +
       ops +
       (b.off ? '<span class="story__item-badge">Hidden</span>' : "") +
@@ -9991,6 +10013,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var _bar0 = root && root.querySelector(".adm__l2-bar"); if (_bar0) _bar0.classList.remove("is-hidden");
     resolveMediaSizes(l2body);
     slidePvSetup();
+    setupStoryLazyThumbs();
     body.hidden = true;
     l2.hidden = false;
     if (root) root.classList.add("is-l2");
@@ -10010,6 +10033,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
     resolveMediaSizes(l2body);
     slidePvSetup();
+    setupStoryLazyThumbs();
     parxScheduleDemo();
     previewProject(w.id, true);
   }

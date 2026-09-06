@@ -2983,6 +2983,11 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .story__item:hover .story__item-grip, .story__item:focus-within .story__item-grip { opacity: .85; }
 .story__item-num { font: 600 .58rem/1 var(--mono); color: var(--text-faint); }
 .story__thumb { display: block; position: relative; overflow: hidden; border-radius: 6px; background: #08080a; box-shadow: none; }
+.story__thumb[data-storythumb] { background: #0b0b0d; }
+@media (prefers-reduced-motion: no-preference) {
+  .story__thumb[data-storythumb] { background: linear-gradient(100deg, #0b0b0d 30%, #16161b 50%, #0b0b0d 70%); background-size: 220% 100%; animation: storyThumbShimmer 1.5s ease-in-out infinite; }
+}
+@keyframes storyThumbShimmer { 0% { background-position: 220% 0; } 100% { background-position: -120% 0; } }
 .story__thumb--lock { display: grid; place-items: center; aspect-ratio: 16 / 9; color: var(--text-faint); }
 .story__thumb-locki { display: grid; place-items: center; }
 .story__thumb-locki svg { width: 20px; height: 20px; }
