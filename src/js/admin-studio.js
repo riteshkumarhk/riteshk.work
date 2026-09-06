@@ -10248,6 +10248,21 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var blocks = data.work[openStudy].study.blocks || [];
     if (!(idx >= 0 && idx < blocks.length)) return;
     openBlock = idx;
+    // 3-pane case-study shell: the section editor lives in the right pane, the outline in the left rail.
+    var caseStg = root && root.querySelector("[data-casestage]");
+    if (root && root.classList.contains("is-casestage") && caseStg) {
+      renderCaseStage();                                   // repaint the right pane for the newly picked section
+      if (l2body) l2body.querySelectorAll(".story__item").forEach(function (x) {
+        x.classList.toggle("is-active", +x.getAttribute("data-bindex") === idx);
+      });
+      var railItem = l2body && l2body.querySelector('.story__item[data-bindex="' + idx + '"]');
+      if (railItem) railItem.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      caseStg.scrollTop = 0;
+      var ed = caseStg.querySelector(".study__block");
+      if (ed) { ed.classList.add("is-flash"); setTimeout(function () { ed.classList.remove("is-flash"); }, 1100); }
+      syncPreviewSelection();
+      return;
+    }
     var wrap = l2body && l2body.querySelector(".study__blocks");
     if (!wrap) return;
     var items = wrap.querySelectorAll(".study__block");
