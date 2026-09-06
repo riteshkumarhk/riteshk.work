@@ -17143,27 +17143,41 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     // Resizable editor/preview divider - drag to set the editor width (persists). Drag it right to shrink
     // the preview down to a tablet/phone width and watch the site reflow - a live responsive view.
     (function () {
-      var SPLIT_KEY = "rk:adm:split", NAV_KEY = "rk:adm:navsplit";
+      var SPLIT_KEY = "rk:adm:split", NAV_KEY = "rk:adm:navsplit", CASE_KEY = "rk:adm:casesplit";
       var main = root.querySelector(".adm__main"), rz = root.querySelector(".adm__resizer"), badge = root.querySelector("[data-prevw]");
       if (!main || !rz) return;
-      // On the Slideshow tab the same divider resizes the navigator vs the slide editor (its own var + key).
       function slides() { return root.classList.contains("is-slidestage"); }
-      function cfg() { return slides() ? { v: "--adm-navcol", key: NAV_KEY, minL: 220, minR: 520 } : { v: "--adm-ecol", key: SPLIT_KEY, minL: 400, minR: 300 }; }
-      try { var s1 = localStorage.getItem(SPLIT_KEY); if (s1) main.style.setProperty("--adm-ecol", s1); var s2 = localStorage.getItem(NAV_KEY); if (s2) main.style.setProperty("--adm-navcol", s2); } catch (e) {}
+      function caseStage() { return root.classList.contains("is-casestage"); }
+      // Slideshow tab: navigator vs slide editor. Case-study 3-pane: the divider sizes the RIGHT section editor (fromRight).
+      function cfg() {
+        if (caseStage()) return { v: "--adm-edcol", key: CASE_KEY, fromRight: true, min: 300, keepOther: 720 };
+        return slides() ? { v: "--adm-navcol", key: NAV_KEY, minL: 220, minR: 520 } : { v: "--adm-ecol", key: SPLIT_KEY, minL: 400, minR: 300 };
+      }
+      try { var s1 = localStorage.getItem(SPLIT_KEY); if (s1) main.style.setProperty("--adm-ecol", s1); var s2 = localStorage.getItem(NAV_KEY); if (s2) main.style.setProperty("--adm-navcol", s2); var s3 = localStorage.getItem(CASE_KEY); if (s3) main.style.setProperty("--adm-edcol", s3); } catch (e) {}
       var dragging = false;
       function clampPx(px) {
         var c = cfg(), w = main.getBoundingClientRect().width || window.innerWidth, max = Math.max(c.minL, w - c.minR);
         return Math.round(Math.max(c.minL, Math.min(max, px)));
       }
       function updateBadge(px) {
-        if (!badge || slides()) return;
+        if (!badge || slides() || caseStage()) return;
         var pw = Math.max(0, Math.round((main.getBoundingClientRect().width || 0) - px));
         var lab = pw < 500 ? "Mobile" : pw < 900 ? "Tablet" : "Desktop";
         badge.textContent = pw + "px \u00b7 " + lab;
       }
-      function setPx(px) { var c = cfg(); px = clampPx(px); main.style.setProperty(c.v, px + "px"); if (!slides()) { updateBadge(px); refitDevice(); } try { localStorage.setItem(c.key, px + "px"); } catch (e) {} }
+      function setPx(px) {
+        var c = cfg(), w = main.getBoundingClientRect().width || window.innerWidth;
+        if (c.fromRight) {   // divider at the preview|editor boundary -> the RIGHT pane width is main.width - px
+          var right = Math.round(Math.max(c.min, Math.min(Math.max(c.min, w - c.keepOther), w - px)));
+          main.style.setProperty(c.v, right + "px"); refitDevice();
+          try { localStorage.setItem(c.key, right + "px"); } catch (e) {}
+          return;
+        }
+        px = clampPx(px); main.style.setProperty(c.v, px + "px"); if (!slides()) { updateBadge(px); refitDevice(); } try { localStorage.setItem(c.key, px + "px"); } catch (e) {}
+      }
       rz.addEventListener("pointerdown", function (e) {
-        if (!slides() && (root.classList.contains("is-prevoff") || root.classList.contains("is-noprev"))) return;
+        if (root.classList.contains("is-prevfull")) return;
+        if (!slides() && !caseStage() && (root.classList.contains("is-prevoff") || root.classList.contains("is-noprev"))) return;
         dragging = true; try { rz.setPointerCapture(e.pointerId); } catch (x) {}
         var ed0 = root.querySelector(".adm__editor"); updateBadge(ed0 ? ed0.getBoundingClientRect().width : 0);
         root.classList.add("is-resizing"); e.preventDefault();
@@ -17173,8 +17187,16 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       rz.addEventListener("pointerup", end);
       rz.addEventListener("pointercancel", end);
       rz.addEventListener("keydown", function (e) {
+        var c = cfg(), w = main.getBoundingClientRect().width;
+        if (c.fromRight) {
+          var cs = root.querySelector(".adm__casestage"), rw = cs ? cs.getBoundingClientRect().width : 0, dpx = w - rw;
+          if (e.key === "ArrowLeft") { setPx(dpx - 24); e.preventDefault(); }
+          else if (e.key === "ArrowRight") { setPx(dpx + 24); e.preventDefault(); }
+          else if (e.key === "Home") { main.style.removeProperty(c.v); try { localStorage.removeItem(c.key); } catch (x) {} e.preventDefault(); }
+          return;
+        }
         var ed = root.querySelector(".adm__editor"); if (!ed) return;
-        var cur = ed.getBoundingClientRect().width, c = cfg();
+        var cur = ed.getBoundingClientRect().width;
         if (e.key === "ArrowLeft") { setPx(cur - 24); e.preventDefault(); }
         else if (e.key === "ArrowRight") { setPx(cur + 24); e.preventDefault(); }
         else if (e.key === "Home") { main.style.removeProperty(c.v); try { localStorage.removeItem(c.key); } catch (x) {} e.preventDefault(); }

@@ -3105,8 +3105,8 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .adm.is-slidestage .adm__slideview { display: inline-flex; }
 /* 3-pane case-study shell: section rail (left) · live preview (center) · section editor (right) */
 .adm__casestage { display: none; }
-.adm.is-casestage .adm__main { grid-template-columns: clamp(280px, 23%, 372px) minmax(0, 1fr) clamp(320px, 30%, 460px) !important; }
-.adm.is-casestage .adm__resizer { display: none !important; }
+.adm.is-casestage .adm__main { grid-template-columns: clamp(280px, 23%, 372px) minmax(0, 1fr) var(--adm-edcol, clamp(320px, 30%, 460px)) !important; }
+.adm.is-casestage .adm__resizer { display: flex !important; left: calc(100% - var(--adm-edcol, clamp(320px, 30%, 460px))); }
 .adm.is-casestage .adm__casestage { display: block; overflow: auto; border-left: 1px solid var(--line); background: var(--bg-2); padding: 1rem 1.1rem; }
 .adm.is-casestage .adm__editor { overflow: auto; border-right: 1px solid var(--line); }
 .adm.is-casestage .l2tabs { flex-wrap: wrap; row-gap: .3rem; }
@@ -3128,6 +3128,7 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .adm.is-prevfull .adm__bar-prev { color: var(--accent); border-color: var(--accent); border-style: solid; }
 /* Editor-only inside the 3-pane case-study shell: rail + section editor fill, preview column drops */
 .adm.is-casestage.is-prevoff .adm__main { grid-template-columns: clamp(280px, 26%, 400px) minmax(0, 1fr) !important; }
+.adm.is-casestage.is-prevoff .adm__resizer { display: none !important; }
 .adm.is-casestage.is-prevfull .adm__main { grid-template-columns: minmax(0, 1fr) !important; }
 /* Preview-only in slideshow mode still keeps the slide nav (it lives in the editor pane) */
 .adm.is-slidestage.is-prevfull .adm__main { grid-template-columns: var(--adm-navcol, 248px) minmax(0, 1fr) !important; }
