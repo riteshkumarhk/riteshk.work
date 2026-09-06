@@ -2995,7 +2995,7 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .story__rail-pass-hint { font-size: .62rem; color: var(--text-faint); line-height: 1.35; }
 /* Case study | Slideshow toggle relocated to the top of the right pane (case) / slide canvas (slides) */
 .casestage__top { display: flex; justify-content: center; padding-bottom: .7rem; margin-bottom: .3rem; border-bottom: 1px solid var(--line-soft); }
-.slidestage__top { display: flex; justify-content: flex-end; padding: .1rem clamp(1rem, 3vw, 2.4rem) .7rem; }
+.slidestage__top { display: flex; justify-content: center; padding: .1rem clamp(1rem, 3vw, 2.4rem) .7rem; }
 .story__rail-scroll { display: flex; flex-direction: column; gap: .25rem; max-height: 66vh; overflow: auto; padding: .15rem; margin: -.15rem; }
 .story__rail-add { width: 100%; }
 .story__rail-empty { padding: 1rem .5rem; color: var(--text-faint); font-size: .78rem; text-align: center; }
@@ -3210,6 +3210,8 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .slides__notespanel .af { margin-bottom: 0; }
 .slides__props { border-left: 1px solid var(--line); min-height: 0; overflow: auto; padding: 1rem .9rem 1.6rem; background: rgba(0, 0, 0, .16); }
 .slides__props-head { font: 600 .6rem/1 var(--mono); text-transform: uppercase; letter-spacing: .09em; color: var(--text-faint); margin: 0 0 .85rem; }
+.slides__props-empty { color: var(--text-dim); font-size: .82rem; line-height: 1.6; padding: 1.4rem .2rem; text-align: center; }
+.slides__props-empty b { color: var(--text); font-weight: 600; }
 .slides__props-add { margin-bottom: .35rem; }
 .slides__props-lbl { font-size: .68rem; color: var(--text-faint); margin-bottom: .45rem; }
 .slides__props .slidefree__tools { margin: 0; }

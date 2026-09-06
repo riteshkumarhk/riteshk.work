@@ -6622,11 +6622,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!stage) return;
     if (!active) { stage.hidden = true; stage.innerHTML = ""; return; }
     stage.hidden = false;
-    var _allTop = '<div class="slidestage__top">' + modeToggleHtml() + "</div>";   // toggle bar for the no-props states (sealed / empty / all-slides); the canvas view carries it in the props panel
     var w = data.work[openStudy], st = w.study || {}, slides = st.slides || [];
+    var sealed = !!(st.slidesEnc && !slides.length);
+    // The mode toggle lives in the right pane for the current-slide view; only float it into the canvas
+    // when the right pane is hidden (the all-slides grid or the sealed state).
+    var _allTop = (slideView !== "all" && !sealed) ? "" : ('<div class="slidestage__top">' + modeToggleHtml() + "</div>");
     var lbl = vwrap && vwrap.querySelector("[data-slideview-lbl]"); if (lbl) lbl.textContent = slideView === "all" ? "All slides" : "Current slide";
-    if (st.slidesEnc && !slides.length) { stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="adm__empty">' + LOCK_SVG + ' This slideshow is protected \u2014 unlock it on the left to edit.</div></div>'; return; }
-    if (!slides.length) { stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="adm__empty slides__stage-empty">Your slide editor appears here. Use <b>Add slide</b> on the left to start.</div></div>'; return; }
+    if (sealed) { stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="adm__empty">' + LOCK_SVG + ' This slideshow is protected \u2014 unlock it on the left to edit.</div></div>'; return; }
+    if (!slides.length) { stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="adm__empty slides__stage-empty">Your slide editor appears here. Use <b>Add a slide</b> or <b>Draft with AI</b> on the left to start.</div></div>'; return; }
     var sel = (openSlide >= 0 && slides[openSlide]) ? openSlide : 0;
     if (slideView === "all") {
       stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="slides__allgrid">' + slides.map(function (s, k) { return slideThumb(openStudy, s, k, slides.length, k === sel, "all"); }).join("") +
@@ -6643,8 +6646,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var stage = root && root.querySelector("[data-casestage]");
     var w = (openStudy >= 0) ? data.work[openStudy] : null;
     var slides0 = (w && w.study && w.study.slides) || [];
+    var sealed = !!(w && w.study && w.study.slidesEnc && !slides0.length);
     var isStory = !!(w && l2Tab === "story" && !journeyOpen);
-    var isSlideProps = !!(w && l2Tab === "slides" && slideView !== "all" && slides0.length > 0);
+    var isSlideProps = !!(w && l2Tab === "slides" && slideView !== "all" && !sealed);   // right pane shows in the current-slide view even before the first slide (it carries the mode toggle)
     var active = isStory || isSlideProps;
     if (root) root.classList.toggle("is-casestage", active);
     if (!stage) return;
@@ -6652,8 +6656,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     stage.hidden = false;
     if (isStory) { stage.innerHTML = caseEditorHtml(w, openStudy); resolveMediaSizes(stage); }
     else {
-      var sel = (openSlide >= 0 && slides0[openSlide]) ? openSlide : 0;
-      stage.innerHTML = '<div class="casestage__top">' + modeToggleHtml() + '</div><aside class="slides__props">' + slidePropsPanel(openStudy, sel, slides0[sel] || {}) + "</aside>";
+      var propsBody;
+      if (!slides0.length) propsBody = '<div class="slides__props-head">Slide</div><div class="slides__props-empty">No slides yet. Use <b>Add a slide</b> or <b>Draft with AI</b> on the left to start building your deck.</div>';
+      else { var sel = (openSlide >= 0 && slides0[openSlide]) ? openSlide : 0; propsBody = slidePropsPanel(openStudy, sel, slides0[sel] || {}); }
+      stage.innerHTML = '<div class="casestage__top">' + modeToggleHtml() + '</div><aside class="slides__props">' + propsBody + "</aside>";
     }
   }
   function slidePullPicker(i, k) {
