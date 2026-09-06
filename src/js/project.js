@@ -2657,10 +2657,30 @@
       else raw = "text:" + pjPlain(bl.text || "").slice(0, 48).toLowerCase();
       return raw.replace(/[^a-z0-9:._-]/gi, "_").slice(0, 80);
     }
+    function freeConnectorSvg(bl) {
+      var stroke = pjSafeColor(bl.stroke) || "var(--accent)", sw = Math.max(1, parseFloat(bl.strokeW) || 2);
+      var curved = bl.route === "curved";
+      var W = Math.max(12, Math.round(pjNum(bl.w, 40) * 12.8)), H = Math.max(12, Math.round(pjNum(bl.h, 12) * 7.2));
+      var up = bl.dir === "ur", m = sw * 2 + 1;
+      var sx = m, sy = up ? H - m : m, ex = W - m, ey = up ? m : H - m, mx = Math.round(W / 2);
+      var r = 0, d;
+      if (curved) {
+        d = "M" + sx + " " + sy + " C" + mx + " " + sy + " " + mx + " " + ey + " " + ex + " " + ey;
+      } else {
+        var vdir = ey >= sy ? 1 : -1;
+        r = Math.round(Math.max(0, Math.min(46, Math.abs(ey - sy) / 2, mx - sx - 1, ex - mx - 1)));
+        d = "M" + sx + " " + sy + " L" + (mx - r) + " " + sy + " Q" + mx + " " + sy + " " + mx + " " + (sy + vdir * r) + " L" + mx + " " + (ey - vdir * r) + " Q" + mx + " " + ey + " " + (mx + r) + " " + ey + " L" + ex + " " + ey;
+      }
+      var finalSeg = ex - mx - r;
+      var ah = Math.round(Math.min(Math.max(12, sw * 5), Math.max(6, finalSeg * 0.85), H * 0.85)), hb = Math.round(ah * 0.6);
+      var head = bl.shape === "arrow" ? '<path d="M' + ex + " " + ey + " L" + (ex - ah) + " " + (ey - hb) + " L" + (ex - ah) + " " + (ey + hb) + ' Z" fill="' + stroke + '"/>' : "";
+      return '<svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible"><path d="' + d + '" fill="none" stroke="' + stroke + '" stroke-width="' + sw + '" stroke-linecap="round" stroke-linejoin="round"/>' + head + "</svg>";
+    }
     function renderFreeShape(bl, st, mk) {
       var sh = /^(rect|ellipse|line|arrow)$/.test(bl.shape) ? bl.shape : "rect";
       var stroke = pjSafeColor(bl.stroke) || "var(--accent)", sw = Math.max(0, parseFloat(bl.strokeW) || 0);
       if (sh === "line" || sh === "arrow") {
+        if (bl.route === "curved" || bl.route === "elbow") return '<div class="pjps__fb pjps__fb--shape pjps__fb--conn"' + (mk || "") + ' style="' + st + '">' + freeConnectorSvg(bl) + "</div>";
         var bar = '<span class="pjps__fbln" style="height:' + (sw || 2) + "px;background:" + stroke + '"></span>';
         var head = sh === "arrow" ? '<span class="pjps__fbah" style="border-top-width:' + ((sw || 2) * 2.2) + "px;border-bottom-width:" + ((sw || 2) * 2.2) + "px;border-left:" + ((sw || 2) * 3.2) + "px solid " + stroke + '"></span>' : "";
         return '<div class="pjps__fb pjps__fb--shape pjps__fb--' + sh + '"' + (mk || "") + ' style="' + st + '">' + bar + head + "</div>";
@@ -2926,7 +2946,7 @@
       render(1);
     }
 
-    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.unregisterIcons = unregisterIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.setStudyLocked = clearUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.presentDeck = presentDeck; window.RK.renderDeckSlide = function (s) { return renderPjSlide(s || {}); }; window.RK.deckAutoSlides = function (w) { return pjAutoSlides(w, (w && w.study) || {}); }; window.RK.deckSlideFromBlock = function (b) { return b ? pjBlockToSlide(b) : null; }; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; window.RK.renderStudyBlock = renderStudyBlockInner; window.RK.fitSections = fitSections; window.RK.enhanceBlocks = enhanceStudyBlocks; }
+    if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.unregisterIcons = unregisterIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.setStudyLocked = clearUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.presentDeck = presentDeck; window.RK.renderDeckSlide = function (s) { return renderPjSlide(s || {}); }; window.RK.deckAutoSlides = function (w) { return pjAutoSlides(w, (w && w.study) || {}); }; window.RK.deckSlideFromBlock = function (b) { return b ? pjBlockToSlide(b) : null; }; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; window.RK.renderStudyBlock = renderStudyBlockInner; window.RK.fitSections = fitSections; window.RK.enhanceBlocks = enhanceStudyBlocks; window.RK.freeConnector = freeConnectorSvg; }
     // A fresh vault grant just arrived (Present mode's owner grant, or a recruiter link). If a case
     // study is open, drop its "already tried" latch and re-resolve its vault-hosted deeper cuts so
     // they swap in immediately — no reopen needed.
