@@ -2975,6 +2975,20 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .story__pill svg { width: 13px; height: 13px; }
 .story__pill:hover { color: var(--text); border-color: var(--text-faint); }
 .story__pill.is-on { background: linear-gradient(180deg, #e8ba6b, #cd923d); border-color: transparent; color: #241a09; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .42); }
+.story__pill--ai { padding: .34rem .5rem; margin-left: auto; }
+.story__pill--ai svg { width: 14px; height: 14px; }
+/* rail section quick-actions: reveal the hide + lock toggles here (they default to display:none in the block-head) */
+.story__item-ops .study__block-off, .story__item-ops .study__block-lock { display: grid; }
+/* Deeper-cut pass, tucked at the bottom of the outline rail (only when there are locked sections) */
+.story__rail-pass { margin-top: .55rem; padding: .55rem .6rem; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--bg-2); display: flex; flex-direction: column; gap: .32rem; }
+.story__rail-pass-h { display: inline-flex; align-items: center; gap: .32rem; font: 600 .58rem/1 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--text-faint); }
+.story__rail-pass-h svg { width: 12px; height: 12px; }
+.story__rail-pass-in { width: 100%; padding: .42rem .55rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font-size: .78rem; }
+.story__rail-pass-in:focus { outline: none; border-color: var(--accent); }
+.story__rail-pass-hint { font-size: .62rem; color: var(--text-faint); line-height: 1.35; }
+/* Case study | Slideshow toggle relocated to the top of the right pane (case) / slide canvas (slides) */
+.casestage__top { display: flex; justify-content: center; padding-bottom: .7rem; margin-bottom: .3rem; border-bottom: 1px solid var(--line-soft); }
+.slidestage__top { display: flex; justify-content: center; padding: .1rem 0 .6rem; }
 .story__rail-scroll { display: flex; flex-direction: column; gap: .25rem; max-height: 66vh; overflow: auto; padding: .15rem; margin: -.15rem; }
 .story__rail-add { width: 100%; }
 .story__rail-empty { padding: 1rem .5rem; color: var(--text-faint); font-size: .78rem; text-align: center; }

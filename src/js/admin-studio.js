@@ -4670,12 +4670,19 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       (b.off ? '<span class="story__item-badge">Hidden</span>' : "") +
       "</div>";
   }
+  function railDeeperCut(w, i) {
+    var st = w.study || {}, unlockVal = studyUnlockPlain[w.id] || "";
+    return '<div class="story__rail-pass"><span class="story__rail-pass-h">' + LOCK_SVG + " Deeper-cut pass</span>" +
+      '<input type="text" class="story__rail-pass-in" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
+      '<span class="story__rail-pass-hint">' + (st.unlockHash ? "Pass set \u2713 \u00b7 " : "Not set \u00b7 ") + "unlocks Locked sections for pass-holders on the live site</span></div>";
+  }
   function storyRail(w, i) {
     var blocks = w.study.blocks || [];
     var hasLocked = blocks.some(function (b) { return b && (b.locked || b.encStub || b.vaultBlock); });
     var tabs = '<div class="story__rail-tabs">' +
       '<button type="button" class="story__pill' + (storyThumbs ? " is-on" : "") + '" data-act="story-thumbs" data-index="' + i + '" aria-pressed="' + storyThumbs + '" title="Toggle between thumbnail cards and a sliced list">' + IC.board + " Thumbnails</button>" +
-      (hasLocked ? '<button type="button" class="story__pill' + (storyLocked ? " is-on" : "") + '" data-act="story-locked" data-index="' + i + '" aria-pressed="' + storyLocked + '" title="Show or hide the locked / vaulted sections">' + LOCK_SVG + " View locked sections</button>" : "") +
+      (hasLocked ? '<button type="button" class="story__pill' + (storyLocked ? " is-on" : "") + '" data-act="story-locked" data-index="' + i + '" aria-pressed="' + storyLocked + '" title="Show &amp; unlock the locked / vaulted sections for editing">' + LOCK_SVG + " View locked sections</button>" : "") +
+      '<button type="button" class="story__pill story__pill--ai" data-act="l2ai-menu" aria-haspopup="true" title="AI tools \u2014 review feedback, interview prep, storyteller" aria-label="AI tools">' + IC.spark + "</button>" +
       "</div>";
     var rows = "";
     blocks.forEach(function (b, j) {
@@ -4685,7 +4692,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!rows) rows = '<div class="story__rail-empty">No sections here yet.</div>';
     return '<aside class="story__rail' + (storyThumbs ? " is-thumbs" : " is-sliced") + '">' + tabs +
       '<div class="story__rail-scroll">' + rows + "</div>" +
-      '<button class="btn btn--add story__rail-add" data-act="study-pick" data-index="' + i + '">' + IC.add + " Add a section</button></aside>";
+      '<button class="btn btn--add story__rail-add" data-act="study-pick" data-index="' + i + '">' + IC.add + " Add a section</button>" +
+      (hasLocked ? railDeeperCut(w, i) : "") + "</aside>";
   }
   function blockEditor(i, b, j, len, open) {
     var typeName = studyBlockTypeName(b);
@@ -4715,19 +4723,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<span class="sortgrip study__block-grip" data-grip data-sortkey="block:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
       '<span class="study__block-badge">' + escHtml(typeName) + "</span>" +
       '<span class="study__block-label' + (custom ? " is-custom" : "") + '" title="Double-click to rename">' + escHtml(label) + "</span>" +
-      '<span class="study__block-ops">' +
-      '<button class="iconbtn" data-act="study-blockadd" data-index="' + i + '" data-bindex="' + j + '" title="Add a section above" aria-label="Add a section above">' + IC.add + '</button>' +
-      '<button class="iconbtn" data-act="study-blockup" data-index="' + i + '" data-bindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
-      '<button class="iconbtn" data-act="study-blockdown" data-index="' + i + '" data-bindex="' + j + '"' + (j === len - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
-      '<button class="iconbtn" data-act="study-blockdup" data-index="' + i + '" data-bindex="' + j + '" title="Duplicate section" aria-label="Duplicate section">' + IC.dup + '</button>' +
-      '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + '</button>' +
-      "</span>" +
       '<span class="study__block-toggles">' +
       '<button class="iconbtn study__block-sep' + (b.sep === false ? " is-off" : "") + '" data-act="study-blocksep" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.sep === false ? "Flowing into the previous section \u2014 click to add a separator line above" : "Separator line above \u2014 click to flow into the previous section") + '" aria-label="Toggle separator line above">' + (b.sep === false ? IC.divoff : IC.divon) + '</button>' +
       '<button class="iconbtn study__block-off' + (b.off ? " is-off" : "") + '" data-act="study-blockoff" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.off ? "Section hidden from the live site \u2014 click to show" : "Section is on \u2014 click to hide it from the live site") + '" aria-label="' + (b.off ? "Show section" : "Hide section") + '">' + (b.off ? IC.eyeoff : IC.eye) + '</button>' +
       '<button class="iconbtn study__block-lock' + (b.locked ? " is-locked" : "") + '" data-act="study-blocklock" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.locked ? "Locked \u2014 click to unlock" : "Lock this section \u2014 deeper-cut only") + '" aria-label="' + (b.locked ? "Unlock section" : "Lock section") + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' + (b.locked ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<path d="M8 10.5V6.8a4 4 0 0 1 7.5-1.6"/>') + "</svg></button>" +
       "</span>" +
-      '<span class="study__block-chev" aria-hidden="true">' + IC.chev + '</span>' +
       "</div>";
     var common = sfInput(i, j, "nav", "Section label", "Shows in the left nav \u2014 leave blank to hide it there") + sfInput(i, j, "kicker", "Kicker", "small label above the block");
     var body = "";
@@ -6068,6 +6068,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var ai = m === "case" ? '<button type="button" class="iconbtn l2ai" data-act="l2ai-menu" aria-haspopup="true" title="AI tools \u2014 review feedback, interview prep, storyteller" aria-label="AI tools">' + IC.spark + "</button>" : "";
     return seg + ai;
   }
+  // Just the Case study | Slideshow segment — now lives at the top of the right pane (case) / slide canvas (slides).
+  function modeToggleHtml() {
+    var m = l2Mode();
+    return '<div class="l2mode" role="tablist" aria-label="Editor surface">' +
+      '<button type="button" role="tab" aria-selected="' + (m === "case") + '" class="l2mode__btn' + (m === "case" ? " is-on" : "") + '" data-act="l2mode" data-l2mode="case">Case study</button>' +
+      '<button type="button" role="tab" aria-selected="' + (m === "slides") + '" class="l2mode__btn' + (m === "slides" ? " is-on" : "") + '" data-act="l2mode" data-l2mode="slides">Slideshow</button>' +
+      "</div>";
+  }
   function l2TabsHtml() {
     return L2_TABS.map(function (t) {
       return '<button type="button" class="l2tab' + (l2Tab === t[0] ? " is-on" : "") + '" data-act="l2tab" data-l2tab="' + t[0] + '">' + t[1] + "</button>";
@@ -6079,7 +6087,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var tb = root && root.querySelector("[data-l2tabs]");
     if (tb) { tb.innerHTML = caseMode ? l2TabsHtml() : ""; tb.hidden = !caseMode; }
     var mb = root && root.querySelector("[data-l2modebar]");
-    if (mb) { mb.innerHTML = show ? l2ModeBarHtml() : ""; mb.hidden = !show; }
+    if (mb) { mb.innerHTML = ""; mb.hidden = true; } // mode toggle relocated to the right pane / slide canvas
   }
   // Auto-hide the sticky L2 bar (title + tabs) on scroll down, reveal on scroll up.
   function l2BarScroll() {
@@ -6582,17 +6590,18 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!stage) return;
     if (!active) { stage.hidden = true; stage.innerHTML = ""; return; }
     stage.hidden = false;
+    var _sstop = '<div class="slidestage__top">' + modeToggleHtml() + "</div>";
     var w = data.work[openStudy], st = w.study || {}, slides = st.slides || [];
     var lbl = vwrap && vwrap.querySelector("[data-slideview-lbl]"); if (lbl) lbl.textContent = slideView === "all" ? "All slides" : "Current slide";
-    if (st.slidesEnc && !slides.length) { stage.innerHTML = '<div class="slides__stagewrap"><div class="adm__empty">' + LOCK_SVG + ' This slideshow is protected \u2014 unlock it on the left to edit.</div></div>'; return; }
-    if (!slides.length) { stage.innerHTML = '<div class="slides__stagewrap"><div class="adm__empty slides__stage-empty">Your slide editor appears here. Use <b>Add slide</b> on the left to start.</div></div>'; return; }
+    if (st.slidesEnc && !slides.length) { stage.innerHTML = _sstop + '<div class="slides__stagewrap"><div class="adm__empty">' + LOCK_SVG + ' This slideshow is protected \u2014 unlock it on the left to edit.</div></div>'; return; }
+    if (!slides.length) { stage.innerHTML = _sstop + '<div class="slides__stagewrap"><div class="adm__empty slides__stage-empty">Your slide editor appears here. Use <b>Add slide</b> on the left to start.</div></div>'; return; }
     var sel = (openSlide >= 0 && slides[openSlide]) ? openSlide : 0;
     if (slideView === "all") {
-      stage.innerHTML = '<div class="slides__stagewrap"><div class="slides__allgrid">' + slides.map(function (s, k) { return slideThumb(openStudy, s, k, slides.length, k === sel, "all"); }).join("") +
+      stage.innerHTML = _sstop + '<div class="slides__stagewrap"><div class="slides__allgrid">' + slides.map(function (s, k) { return slideThumb(openStudy, s, k, slides.length, k === sel, "all"); }).join("") +
         '<button class="slides__alladd" data-act="slide-add" data-index="' + openStudy + '" title="Add a slide">' + IC.add + "<span>Add</span></button></div>" +
         '<div class="slides__allhint">Click to select \u00b7 double-click to edit \u00b7 the arrows on a slide reorder it</div></div>';
     } else {
-      stage.innerHTML = slideCanvasPane(openStudy, sel, slides);
+      stage.innerHTML = _sstop + slideCanvasPane(openStudy, sel, slides);
     }
     slidePvFit();
   }
@@ -7668,20 +7677,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function caseEditorHtml(w, i) {
     var st = w.study || {};
     var blocks = st.blocks || [];
-    var unlockVal = studyUnlockPlain[w.id] || "";
     var list = (openBlock >= 0 && blocks[openBlock]) ? blockEditor(i, blocks[openBlock], openBlock, blocks.length, true)
       : (blocks.length ? '<div class="adm__empty study__pickhint">Select a section on the left to edit it.<span>The rail is your outline \u2014 reorder, add, hide &amp; lock from there.</span></div>'
-        : '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>');
-    var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
-    var hasLocked = blocks.some(function (b) { return b && b.locked; });
-    var lockSwitch = hasLocked ? lockSwitchHtml(w, i) : "";
-    var sections = '<section class="l2grp"><div class="l2grp__head">Section editor <span>\u2014 pick one on the left</span></div>' + lockSwitch +
-      '<div class="study__blocks study__blocks--single">' + list + "</div>" + add + "</section>";
-    var unlockBlock = '<section class="l2grp"><div class="l2grp__head">Deeper-cut pass <span>\u2014 optional gate for \u201cLocked\u201d sections</span></div>' +
-      '<div class="af"><input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
-      '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks for pass-holders \u00b7 case-insensitive \u00b7 Locked sections are moved to your private vault on Publish (zero content in your file)</div></div>" +
-      "</section>";
-    return sections + unlockBlock;
+        : '<div class="adm__empty">No sections yet \u2014 add the first one from the rail on the left.</div>');
+    return '<div class="casestage__top">' + modeToggleHtml() + "</div>" +
+      '<section class="l2grp"><div class="l2grp__head">Section editor <span>\u2014 pick one on the left</span></div>' +
+      '<div class="study__blocks study__blocks--single">' + list + "</div></section>";
   }
   function studyEditor(w, i) {
     var st = w.study;
@@ -11121,7 +11122,23 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }
     if (act === "work-decrypt") { decryptWorkForEdit(i); return; }
     if (act === "story-thumbs") { storyThumbs = !storyThumbs; try { localStorage.setItem("rk:story:thumbs", storyThumbs ? "1" : "0"); } catch (e) {} renderL2(); return; }
-    if (act === "story-locked") { storyLocked = !storyLocked; try { localStorage.setItem("rk:story:locked", storyLocked ? "1" : "0"); } catch (e) {} renderL2(); return; }
+    if (act === "story-locked") {
+      storyLocked = !storyLocked;
+      try { localStorage.setItem("rk:story:locked", storyLocked ? "1" : "0"); } catch (e) {}
+      var _slw = data.work[i];
+      if (_slw && _slw.study) {
+        var _slid = _slw.id;
+        if (storyLocked) {
+          if ((_slw.study.blocks || []).some(function (bl) { return bl && bl.locked && (bl.encStub || bl.vaultBlock); })) { decryptStudyForEdit(i); return; }
+          studyUnlockedForEdit[_slid] = true;
+          try { var _slf = frameWin(); if (_slf && _slf.RK && _slf.RK.setStudyUnlocked) _slf.RK.setStudyUnlocked(_slid); } catch (e) {}
+        } else {
+          studyUnlockedForEdit[_slid] = false;
+          try { var _slf2 = frameWin(); if (_slf2 && _slf2.RK && _slf2.RK.setStudyLocked) _slf2.RK.setStudyLocked(_slid); } catch (e) {}
+        }
+      }
+      renderL2(); return;
+    }
     if (act === "story-nav") {
       if (e.target.closest("button, [data-grip]")) return;
       var _snj = +b.dataset.bindex; openBlock = _snj; renderL2();
