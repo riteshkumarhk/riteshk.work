@@ -7648,13 +7648,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<button type="button" class="btn btn--add adm__beat-add" data-act="beat-add" data-index="' + i + '">+ Add a key move</button>' +
       "</section>";
 
-    // ---- Story: sections + deeper-cut ----
-    var list = blocks.map(function (b, j) { return blockEditor(i, b, j, blocks.length, openBlock === j); }).join("") || '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>';
+    // ---- Story: single-section editor (the rail on the left is the outline) + deeper-cut ----
+    var list = (openBlock >= 0 && blocks[openBlock]) ? blockEditor(i, blocks[openBlock], openBlock, blocks.length, true)
+      : (blocks.length ? '<div class="adm__empty study__pickhint">Select a section on the left to edit it.<span>The rail is your outline \u2014 reorder, add, hide &amp; lock from there.</span></div>'
+        : '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>');
     var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
     var hasLocked = blocks.some(function (b) { return b && b.locked; });
     var lockSwitch = hasLocked ? lockSwitchHtml(w, i) : "";
-    var sections = '<section class="l2grp"><div class="l2grp__head">Sections <span>\u2014 click a section to expand &amp; edit it</span>' + (blocks.length ? '<span class="l2grp__actions"><button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">' + IC.spark + ' Review feedback</button><button class="btn btn--auto l2grp__ai" data-act="iprep-open" data-index="' + i + '" title="Generate likely interview questions from this case study">' + IC.mic + ' Interview prep</button><button class="btn btn--auto l2grp__ai" data-act="story-open" data-index="' + i + '" title="Build a presentation narrative \u2014 pick a length &amp; audience, get story angles + a beat-by-beat script">' + IC.book + ' Design storyteller</button></span>' : "") + "</div>" + lockSwitch +
-      '<div class="study__blocks">' + list + "</div>" + add + "</section>";
+    var sections = '<section class="l2grp"><div class="l2grp__head">Section editor <span>\u2014 pick one on the left</span>' + (blocks.length ? '<span class="l2grp__actions"><button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">' + IC.spark + ' Review feedback</button><button class="btn btn--auto l2grp__ai" data-act="iprep-open" data-index="' + i + '" title="Generate likely interview questions from this case study">' + IC.mic + ' Interview prep</button><button class="btn btn--auto l2grp__ai" data-act="story-open" data-index="' + i + '" title="Build a presentation narrative \u2014 pick a length &amp; audience, get story angles + a beat-by-beat script">' + IC.book + ' Design storyteller</button></span>' : "") + "</div>" + lockSwitch +
+      '<div class="study__blocks study__blocks--single">' + list + "</div>" + add + "</section>";
     var unlockBlock = '<section class="l2grp"><div class="l2grp__head">Deeper-cut pass <span>\u2014 optional gate for \u201cLocked\u201d sections</span></div>' +
       '<div class="af"><input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
       '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks for pass-holders \u00b7 case-insensitive \u00b7 Locked sections are moved to your private vault on Publish (zero content in your file)</div></div>" +
@@ -11034,11 +11036,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "study-blocktoggle") {
       if (e.detail > 1) return; // 2nd click of a double-click - let dblclick handle rename
       const j = +b.dataset.bindex;
-      const wrap = b.closest(".study__blocks");
       clearTimeout(blockRenameTimer);
       blockRenameTimer = setTimeout(function () {
-        openBlock = (openBlock === j) ? -1 : j;
-        if (wrap) wrap.querySelectorAll(".study__block").forEach(function (x, k) { x.classList.toggle("is-open", k === openBlock); });
+        // Rail-driven single editor: the head no longer collapses to empty; keep this section open & re-sync the preview.
+        if (openBlock !== j) { openBlock = j; renderL2(); }
         try { const fw = frameWin(); if (fw) fw.postMessage({ __rk: "gotoBlock", index: j }, "*"); } catch (err) {}
         syncPreviewSelection();
       }, 220);
