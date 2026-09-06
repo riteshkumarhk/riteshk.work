@@ -1045,7 +1045,26 @@ html.pjp-on { overflow: hidden; }
 @keyframes pjpIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pjpOut { to { opacity: 0; } }
 .pjp__stagewrap { width: 100vw; height: 100vh; display: grid; place-items: center; }
-.pjp__frame { position: relative; width: min(94vw, calc(94vh * 16 / 9)); height: min(94vh, calc(94vw * 9 / 16)); background: var(--bg, #0a0a0c); overflow: hidden; box-shadow: 0 40px 120px -30px rgba(0, 0, 0, .8); }
+.pjp__frame { position: relative; width: min(94vw, calc(94vh * 16 / 9)); height: min(94vh, calc(94vw * 9 / 16)); background: var(--bg, #0a0a0c); overflow: hidden; box-shadow: 0 40px 120px -30px rgba(0, 0, 0, .8); container-type: size; }
+/* PowerPoint-style uniform scaling: in Present mode, size deck text to the SLIDE (the fixed 16:9 frame),
+   not the viewport — so proportions stay identical on a 4K screen, a laptop or a projector, and text never
+   looks tiny when screen-shared. cqw = 1% of the frame width; values are the design sizes at a 1280px frame. */
+.pjp__frame .pjps { padding: 5.5cqw; }
+.pjp__frame .pjps__kicker { font-size: 1.25cqw; }
+.pjp__frame .pjps__title { font-size: 6.25cqw; }
+.pjp__frame .pjps__sub { font-size: 2.1cqw; }
+.pjp__frame .pjps__prose { font-size: 1.85cqw; }
+.pjp__frame .pjps__metric-v { font-size: 17.5cqw; }
+.pjp__frame .pjps__metric-l { font-size: 2.5cqw; }
+.pjp__frame .pjps__cap { font-size: 1.2cqw; padding: 3cqw 1.7cqw 1.3cqw; }
+.pjp__frame .pjps__quote { font-size: 5.25cqw; }
+.pjp__frame .pjps__attr { font-size: 1.25cqw; }
+.pjp__frame .pjps__secnum { font-size: 2.75cqw; }
+.pjp__frame .pjps--split .pjps__col--text { padding: 4.5cqw; }
+.pjp__frame .pjps__fb--sm { font-size: 1.72cqw; }
+.pjp__frame .pjps__fb--md { font-size: 3.28cqw; }
+.pjp__frame .pjps__fb--lg { font-size: 5.78cqw; }
+.pjp__frame .pjps__fb--kicker { font-size: 1.56cqw; }
 .pjp__frame--in { animation: pjpFrameIn .42s var(--ease); }
 @keyframes pjpFrameIn { from { opacity: 0; transform: translateY(16px) scale(.992); } to { opacity: 1; transform: none; } }
 /* Slide transitions (fade / push). Two slides coexist in the frame during the change; only the
