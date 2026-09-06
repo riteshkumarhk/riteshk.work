@@ -6032,15 +6032,30 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if ((w.desc && String(w.desc).trim()) || (w.cardDesc && String(w.cardDesc).trim()) || (w.tags && String(w.tags).trim()) || w.image) return "details";
     return "gen";
   }
-  var L2_TABS = [["gen", "Generate using AI"], ["details", "Details"], ["highlights", "Highlights"], ["story", "Story"], ["slides", "Slideshow"]];
+  var L2_TABS = [["gen", "Generate using AI"], ["details", "Details"], ["highlights", "Highlights"], ["story", "Story"]];
+  var _lastCaseTab = "story"; // remembers the case-study sub-tab when you flip to Slideshow
+  function l2Mode() { return l2Tab === "slides" ? "slides" : "case"; }
+  function l2ModeBarHtml() {
+    var m = l2Mode();
+    var seg = '<div class="l2mode" role="tablist" aria-label="Editor surface">' +
+      '<button type="button" role="tab" aria-selected="' + (m === "case") + '" class="l2mode__btn' + (m === "case" ? " is-on" : "") + '" data-act="l2mode" data-l2mode="case">Case study</button>' +
+      '<button type="button" role="tab" aria-selected="' + (m === "slides") + '" class="l2mode__btn' + (m === "slides" ? " is-on" : "") + '" data-act="l2mode" data-l2mode="slides">Slideshow</button>' +
+      "</div>";
+    var ai = m === "case" ? '<button type="button" class="iconbtn l2ai" data-act="l2ai-menu" aria-haspopup="true" title="AI tools \u2014 review feedback, interview prep, storyteller" aria-label="AI tools">' + IC.spark + "</button>" : "";
+    return seg + ai;
+  }
   function l2TabsHtml() {
     return L2_TABS.map(function (t) {
       return '<button type="button" class="l2tab' + (l2Tab === t[0] ? " is-on" : "") + '" data-act="l2tab" data-l2tab="' + t[0] + '">' + t[1] + "</button>";
     }).join("");
   }
   function paintL2Tabs() {
+    var show = openStudy >= 0 && !journeyOpen;
+    var caseMode = show && l2Mode() === "case";
     var tb = root && root.querySelector("[data-l2tabs]");
-    if (tb) tb.innerHTML = (openStudy >= 0 && !journeyOpen) ? l2TabsHtml() : "";
+    if (tb) { tb.innerHTML = caseMode ? l2TabsHtml() : ""; tb.hidden = !caseMode; }
+    var mb = root && root.querySelector("[data-l2modebar]");
+    if (mb) { mb.innerHTML = show ? l2ModeBarHtml() : ""; mb.hidden = !show; }
   }
   // Auto-hide the sticky L2 bar (title + tabs) on scroll down, reveal on scroll up.
   function l2BarScroll() {
@@ -7655,7 +7670,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
     var hasLocked = blocks.some(function (b) { return b && b.locked; });
     var lockSwitch = hasLocked ? lockSwitchHtml(w, i) : "";
-    var sections = '<section class="l2grp"><div class="l2grp__head">Section editor <span>\u2014 pick one on the left</span>' + (blocks.length ? '<span class="l2grp__actions"><button class="btn btn--auto l2grp__ai" data-act="fbrev-open" data-index="' + i + '" title="Paste or upload feedback \u2014 AI maps each point to the right section">' + IC.spark + ' Review feedback</button><button class="btn btn--auto l2grp__ai" data-act="iprep-open" data-index="' + i + '" title="Generate likely interview questions from this case study">' + IC.mic + ' Interview prep</button><button class="btn btn--auto l2grp__ai" data-act="story-open" data-index="' + i + '" title="Build a presentation narrative \u2014 pick a length &amp; audience, get story angles + a beat-by-beat script">' + IC.book + ' Design storyteller</button></span>' : "") + "</div>" + lockSwitch +
+    var sections = '<section class="l2grp"><div class="l2grp__head">Section editor <span>\u2014 pick one on the left</span></div>' + lockSwitch +
       '<div class="study__blocks study__blocks--single">' + list + "</div>" + add + "</section>";
     var unlockBlock = '<section class="l2grp"><div class="l2grp__head">Deeper-cut pass <span>\u2014 optional gate for \u201cLocked\u201d sections</span></div>' +
       '<div class="af"><input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
@@ -9758,7 +9773,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   function setL2BackLabel(txt) {
     var bk = root && root.querySelector(".adm__l2-back");
-    if (bk) bk.innerHTML = IC.back + ' ' + txt;
+    if (bk) { bk.innerHTML = IC.back; bk.setAttribute("aria-label", txt); bk.setAttribute("title", txt); }
   }
   function openJourneyEditor() {
     journeyData();
@@ -10952,11 +10967,33 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var _nt = b.dataset.l2tab;
       if (_nt && _nt !== l2Tab) {
         l2Tab = _nt;
+        if (_nt !== "slides") _lastCaseTab = _nt;
         var _lb = root.querySelector(".adm__l2-bar"); if (_lb) _lb.classList.remove("is-hidden");
         _l2ScrollY = 0;
         renderL2();
         var _le = root.querySelector(".adm__editor"); if (_le) _le.scrollTop = 0;
       }
+      return;
+    }
+    if (act === "l2mode") {
+      var _m = b.dataset.l2mode;
+      if (_m === "slides" && l2Tab !== "slides") { _lastCaseTab = (l2Tab && l2Tab !== "slides") ? l2Tab : _lastCaseTab; l2Tab = "slides"; }
+      else if (_m === "case" && l2Tab === "slides") { l2Tab = _lastCaseTab || "story"; }
+      else return;
+      var _lb3 = root.querySelector(".adm__l2-bar"); if (_lb3) _lb3.classList.remove("is-hidden");
+      _l2ScrollY = 0;
+      renderL2();
+      var _le3 = root.querySelector(".adm__editor"); if (_le3) _le3.scrollTop = 0;
+      return;
+    }
+    if (act === "l2ai-menu") {
+      var _aidx = openStudy;
+      if (_aidx < 0) return;
+      slideMenuOpen(b, [
+        { id: "fbrev", label: "Review feedback", hint: "Map notes to sections", run: function () { fbReviewModal(_aidx); } },
+        { id: "iprep", label: "Interview prep", hint: "Likely questions", run: function () { iprepModal(_aidx); } },
+        { id: "story", label: "Design storyteller", hint: "Narrative + script", run: function () { storyModal(_aidx); } }
+      ]);
       return;
     }
     if (act === "study-toggle") { openL2(i); return; }
@@ -16906,8 +16943,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<div class="adm__l2" hidden>' +
             '<div class="adm__l2-bar">' +
               '<div class="adm__l2-barrow">' +
-                '<button class="btn btn--ghost adm__l2-back" data-l2-back>' + IC.back + ' Back to projects</button>' +
+                '<button class="btn btn--ghost adm__l2-back" data-l2-back aria-label="Back to projects" title="Back to projects">' + IC.back + '</button>' +
                 '<span class="adm__l2-title"></span>' +
+                '<div class="l2modebar" data-l2modebar></div>' +
               "</div>" +
               '<div class="l2tabs" data-l2tabs></div>' +
             "</div>" +
