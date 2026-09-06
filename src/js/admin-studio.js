@@ -7386,8 +7386,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var _kn = bl.kind === "media" ? "Media" : bl.kind === "shape" ? "Shape" : bl.kind === "icon" ? "Icon" : bl.kind === "section" ? "Section" : "Text";
     var da = 'data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '"';
     var head = '<div class="fpanel__head"><span class="fpanel__kind">' + _kn + (bl.lock ? ' <span class="slidefree__lockchip">Locked</span>' : "") + '</span><span class="fpanel__head-acts">' + freeHeadActs(i, k, idx, bl) + "</span></div>";
-    var top = head + freeAlignBar(i, k, 1);
-    var fxaz = freeEffectsSection(i, k, idx, bl) + freeArrangeSection(i, k, idx) + freeLinkSection(i, k, idx, bl);
+    var top = head + freeAlignBar(i, k, 1) + freeArrangeSection(i, k, idx);
+    var fxaz = freeEffectsSection(i, k, idx, bl) + freeLinkSection(i, k, idx, bl);
     if (bl.kind === "section") {
       var secBody = '<div class="af__hint">Pulled live from your case study \u2014 sliders, device mockups &amp; galleries render for real. Edit the source then re-pull.</div>' +
         '<label class="sfbflip"><input type="checkbox" data-act="free-flip" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '"' + (bl.flip ? " checked" : "") + '> Mirror (flip horizontally)</label>' +
