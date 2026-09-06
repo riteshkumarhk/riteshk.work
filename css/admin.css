@@ -3103,7 +3103,8 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .slidelay__cardops .iconbtn { width: 24px; height: 24px; }
 .slidelay__cardops .iconbtn svg { width: 13px; height: 13px; }
 .slidelay__nameinput { width: 100%; }
-.sfb__empty { color: var(--text-faint); font-style: italic; }
+/* Placeholder text previews its role styling (gold kicker, light heading, …), just dimmed — the dashed box already flags "empty". */
+.sfb__empty { color: inherit; opacity: .58; }
 .sfb__bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
 .sfb__bg img, .sfb__bg video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .slidefree__stage > .sfb { z-index: 1; }
