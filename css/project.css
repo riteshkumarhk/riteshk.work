@@ -1038,7 +1038,7 @@ html.lite .pjb { animation: none; }
 /* ============ Presentation deck (owner-only slideshow) ============ */
 html.pjp-on { overflow: hidden; }
 .pj__icon--present { display: none; }
-.pj--canpresent .pj__icon--present { display: grid; }
+.pj--canpresent .pj__icon--present, .pj--publicdeck .pj__icon--present { display: grid; }
 .pj__icon--present svg { transform: translateX(1px); }
 .pjp { position: fixed; inset: 0; z-index: 12000; background: #08080a; display: grid; place-items: center; animation: pjpIn .28s var(--ease); overflow: hidden; }
 .pjp--out { animation: pjpOut .22s var(--ease) forwards; }

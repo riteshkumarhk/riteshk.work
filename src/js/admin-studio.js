@@ -6475,11 +6475,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   function slidesPanel(w, i) {
     var st = w.study; var slides = st.slides || []; var has = slides.length;
-    var intro = '<section class="l2grp slides__topbar"><div class="l2grp__head">Slideshow <span>\u2014 owner-only \u00b7 encrypted on publish</span></div>';
     if (st.slidesEnc && !has) {
-      return intro + '<div class="adm__empty slides__sealed">' + LOCK_SVG + ' This slideshow is protected \u2014 its slides aren\u2019t in your published file. <button class="btn btn--ghost" data-act="slide-decrypt" data-index="' + i + '">Unlock to edit</button></div></section>';
+      return '<section class="l2grp slides__topbar"><div class="l2grp__head">Slideshow <span>\u2014 owner-only \u00b7 encrypted on publish</span></div><div class="adm__empty slides__sealed">' + LOCK_SVG + ' This slideshow is protected \u2014 its slides aren\u2019t in your published file. <button class="btn btn--ghost" data-act="slide-decrypt" data-index="' + i + '">Unlock to edit</button></div></section>';
     }
-    intro += "</section>";
+    var pub = !!st.slidesPublic;
+    var sub = pub ? "public \u00b7 plays from the case study" : "owner-only \u00b7 encrypted on publish";
+    var encToggle = has ? '<label class="chk slides__enc"><input type="checkbox" data-act="slides-public" data-index="' + i + '"' + (pub ? " checked" : "") + ' /><span>Public slideshow \u2014 add a <b>Play</b> button to the case study so anyone can present it. Unchecked keeps it encrypted &amp; owner-only (Present mode).</span></label>' : "";
+    var intro = '<section class="l2grp slides__topbar"><div class="l2grp__head">Slideshow <span>\u2014 ' + sub + '</span></div>' + encToggle + "</section>";
     return intro + slidesNav(w, i);
   }
   var slideMulti = null;        // { i, ids:[k,...] } — slides multi-selected for bulk actions
@@ -10627,6 +10629,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (t.dataset.gpath !== undefined) { onGenEdit(t); return; }
     if (t.dataset.jsel !== undefined) { onJourneyEdit(t); return; }
     if (t.dataset.act === "journey-toggle") { journeyData().enabled = t.checked; saveDraft(true); apply(true); renderBody(); return; }
+    if (t.dataset.act === "slides-public") { var _spw = data.work[+t.dataset.index]; if (_spw && _spw.study) { if (t.checked) _spw.study.slidesPublic = true; else delete _spw.study.slidesPublic; saveDraft(true); renderL2(); status(t.checked ? "Slideshow is public \u2014 a Play button shows on the case study; it ships unencrypted on Publish." : "Slideshow is owner-only again \u2014 it re-encrypts on Publish.", true); } return; }
     if (t.dataset.atsFile !== undefined) { if (t.files && t.files[0]) { atsPickedFile = t.files[0]; atsState.source = "file"; var _afp = t.closest(".ats"); if (_afp) { var _fn = _afp.querySelector(".ats__filename"); if (_fn) _fn.value = atsPickedFile.name; atsUpdateCheckBtn(_afp); } } t.value = ""; return; }
     if (t.dataset.msz !== undefined) { onMediaSizeInput(t); return; }
     if (t.dataset.csgen !== undefined) { const s = csgenState(t.dataset.csid); s[t.dataset.csgen] = t.value; return; }
@@ -11656,6 +11659,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var st = w.study;
       if (!st || typeof st !== "object") continue;
       if (!Array.isArray(st.slides) || !st.slides.length) { if (st.slidesEnc) delete st.slidesEnc; continue; }
+      if (st.slidesPublic) { if (st.slidesEnc) delete st.slidesEnc; continue; }   // public deck: ship plaintext slides so the case-study Play button works for everyone
       var recovery = await ensureRecoveryPass();
       if (recovery === null) throw { rkEnc: true, cancelled: true };
       var sek = rkNewSek();

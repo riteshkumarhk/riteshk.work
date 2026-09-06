@@ -485,6 +485,9 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 
 .chk { display: inline-flex; align-items: center; gap: .45rem; font-size: .8rem; color: var(--text-dim); cursor: pointer; }
 .chk input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.slides__enc { display: flex; align-items: flex-start; gap: .5rem; margin-top: .7rem; line-height: 1.4; }
+.slides__enc input { margin-top: .12rem; flex: 0 0 auto; }
+.slides__enc b { color: var(--text); font-weight: 600; }
 /* ---- One design-system checkbox + radio for the whole studio (replaces native accent-color tinting). Scopes: .adm (studio) + .pass (every modal) + the one out-of-scope depth toggle. ---- */
 .adm input[type="checkbox"], .pass input[type="checkbox"], .depthp__toggle input[type="checkbox"] {
   -webkit-appearance: none; appearance: none; box-sizing: border-box;

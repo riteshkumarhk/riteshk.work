@@ -2126,11 +2126,14 @@
     if (navMode === "mini" && _navItems.length) { try { if (!localStorage.getItem("rk:pj:navpeek")) { localStorage.setItem("rk:pj:navpeek", "1"); overlay.classList.add("pj--navpeek"); setTimeout(function () { overlay.classList.remove("pj--navpeek"); }, 2400); } } catch (e) {} }
   }
   function pjIsOwner() { try { return localStorage.getItem("rk:owner") === "1"; } catch (e) { return false; } }
+  // A deck the owner marked public ships its slides in the clear, so anyone can play it from the case study.
+  function pjDeckPublic(w) { var st = w && w.study; if (!st || !st.slidesPublic) return false; return !!(st.slides && st.slides.filter(function (s) { return s && !s.hidden; }).length); }
   function fillContent(w, keepAnchor) {
     var head = overlay.querySelector("[data-crumb]");
     head.innerHTML = '<b>' + esc(w.client || "") + "</b>" + (w.plateTag ? "<span>" + esc(w.plateTag) + "</span>" : "");
     applyNav(w);
     overlay.classList.toggle("pj--canpresent", pjIsOwner());
+    overlay.classList.toggle("pj--publicdeck", pjDeckPublic(w));
     var contentEl = overlay.querySelector("[data-content]");
     var html = contentHtml(w);
     // In the admin live-preview, re-rendering the SAME project on every keystroke
