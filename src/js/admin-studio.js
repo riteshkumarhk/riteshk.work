@@ -6572,6 +6572,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }
     slidePvFit();
   }
+  // Case-study 3-pane shell: rail (left) · live preview (center) · this section editor (right).
+  function renderCaseStage() {
+    var stage = root && root.querySelector("[data-casestage]");
+    var active = openStudy >= 0 && l2Tab === "story" && !journeyOpen && !!(data.work[openStudy]);
+    if (root) root.classList.toggle("is-casestage", active);
+    if (!stage) return;
+    if (!active) { stage.hidden = true; stage.innerHTML = ""; return; }
+    stage.hidden = false;
+    stage.innerHTML = caseEditorHtml(data.work[openStudy], openStudy);
+    resolveMediaSizes(stage);
+  }
   function slidePullPicker(i, k) {
     var w = data.work[i]; if (!w || !w.study) return;
     var blocks = (w.study.blocks || []);
@@ -7630,6 +7641,24 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       saveDraft(); freePvRefresh(i, k); return;
     }
   }
+  function caseEditorHtml(w, i) {
+    var st = w.study || {};
+    var blocks = st.blocks || [];
+    var unlockVal = studyUnlockPlain[w.id] || "";
+    var list = (openBlock >= 0 && blocks[openBlock]) ? blockEditor(i, blocks[openBlock], openBlock, blocks.length, true)
+      : (blocks.length ? '<div class="adm__empty study__pickhint">Select a section on the left to edit it.<span>The rail is your outline \u2014 reorder, add, hide &amp; lock from there.</span></div>'
+        : '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>');
+    var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
+    var hasLocked = blocks.some(function (b) { return b && b.locked; });
+    var lockSwitch = hasLocked ? lockSwitchHtml(w, i) : "";
+    var sections = '<section class="l2grp"><div class="l2grp__head">Section editor <span>\u2014 pick one on the left</span></div>' + lockSwitch +
+      '<div class="study__blocks study__blocks--single">' + list + "</div>" + add + "</section>";
+    var unlockBlock = '<section class="l2grp"><div class="l2grp__head">Deeper-cut pass <span>\u2014 optional gate for \u201cLocked\u201d sections</span></div>' +
+      '<div class="af"><input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
+      '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks for pass-holders \u00b7 case-insensitive \u00b7 Locked sections are moved to your private vault on Publish (zero content in your file)</div></div>" +
+      "</section>";
+    return sections + unlockBlock;
+  }
   function studyEditor(w, i) {
     var st = w.study;
     var blocks = st.blocks || (st.blocks = []);
@@ -7663,24 +7692,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<button type="button" class="btn btn--add adm__beat-add" data-act="beat-add" data-index="' + i + '">+ Add a key move</button>' +
       "</section>";
 
-    // ---- Story: single-section editor (the rail on the left is the outline) + deeper-cut ----
-    var list = (openBlock >= 0 && blocks[openBlock]) ? blockEditor(i, blocks[openBlock], openBlock, blocks.length, true)
-      : (blocks.length ? '<div class="adm__empty study__pickhint">Select a section on the left to edit it.<span>The rail is your outline \u2014 reorder, add, hide &amp; lock from there.</span></div>'
-        : '<div class="adm__empty">No sections yet \u2014 add the first one below.</div>');
-    var add = '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">+ Add a section\u2026</button></div>';
-    var hasLocked = blocks.some(function (b) { return b && b.locked; });
-    var lockSwitch = hasLocked ? lockSwitchHtml(w, i) : "";
-    var sections = '<section class="l2grp"><div class="l2grp__head">Section editor <span>\u2014 pick one on the left</span></div>' + lockSwitch +
-      '<div class="study__blocks study__blocks--single">' + list + "</div>" + add + "</section>";
-    var unlockBlock = '<section class="l2grp"><div class="l2grp__head">Deeper-cut pass <span>\u2014 optional gate for \u201cLocked\u201d sections</span></div>' +
-      '<div class="af"><input type="text" data-study="' + i + '" data-sfield="unlock" value="' + escAttr(unlockVal) + '" placeholder="' + (st.unlockHash && !unlockVal ? "Set \u2014 type to change" : "e.g. edge-2026") + '" />' +
-      '<div class="af__hint">' + (st.unlockHash ? "Pass set \u2713" : "Not set") + " \u00b7 unlocks the \u201cLocked\u201d blocks for pass-holders \u00b7 case-insensitive \u00b7 Locked sections are moved to your private vault on Publish (zero content in your file)</div></div>" +
-      "</section>";
-
     var panel;
     if (tab === "gen") panel = csgenPanel(w, i);
     else if (tab === "highlights") panel = storyHeader + keyMoves + overviewMediaBlock(w, i);
-    else if (tab === "story") panel = '<div class="study__stage">' + storyRail(w, i) + '<div class="study__stage-main">' + sections + unlockBlock + "</div></div>";
+    else if (tab === "story") panel = '<div class="study__stage">' + storyRail(w, i) + "</div>"; // section editor renders in the right pane via renderCaseStage
     else if (tab === "slides") panel = slidesPanel(w, i);
     else panel = header + cover; // details (default)
 
@@ -9970,6 +9985,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     l2body.innerHTML = studyEditor(w, i);
     paintL2Tabs();
     renderSlideStage();
+    renderCaseStage();
     var _bar0 = root && root.querySelector(".adm__l2-bar"); if (_bar0) _bar0.classList.remove("is-hidden");
     resolveMediaSizes(l2body);
     slidePvSetup();
@@ -9988,6 +10004,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     l2body.innerHTML = studyEditor(w, openStudy);
     paintL2Tabs();
     renderSlideStage();
+    renderCaseStage();
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
     resolveMediaSizes(l2body);
     slidePvSetup();
@@ -9999,8 +10016,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     openStudy = -1;
     openBlock = -1;
     if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
-    if (root) { root.classList.remove("is-l2"); root.classList.remove("is-preview"); root.classList.remove("is-noprev"); root.classList.remove("is-slidestage"); }
+    if (root) { root.classList.remove("is-l2"); root.classList.remove("is-preview"); root.classList.remove("is-noprev"); root.classList.remove("is-slidestage"); root.classList.remove("is-casestage"); }
     var _stg = root && root.querySelector("[data-slidestage]"); if (_stg) { _stg.hidden = true; _stg.innerHTML = ""; }
+    var _cstg = root && root.querySelector("[data-casestage]"); if (_cstg) { _cstg.hidden = true; _cstg.innerHTML = ""; }
     var _svw = root && root.querySelector("[data-slideview-wrap]"); if (_svw) _svw.hidden = true;
     if (body) body.hidden = false;
     const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0;
@@ -16959,6 +16977,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<div class="adm__device" data-device><iframe class="adm__frame" title="Live preview of your site" src="' + previewUrl() + '"></iframe></div>' +
           '<div class="adm__slidestage" data-slidestage hidden></div>' +
         "</section>" +
+        '<aside class="adm__casestage" data-casestage hidden aria-label="Section editor"></aside>' +
       "</div>" +
       '<div class="adm__settings" hidden><div class="adm__set-sheet">' +
         '<div class="adm__set-head"><h2>Settings</h2><button class="btn btn--ghost adm__set-x" data-act="settings-close" type="button" aria-label="Close settings">' + IC.close + '</button></div>' +
