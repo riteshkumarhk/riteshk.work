@@ -2992,7 +2992,6 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .story__rail-pass-hint { font-size: .62rem; color: var(--text-faint); line-height: 1.35; }
 /* Case study | Slideshow toggle relocated to the top of the right pane (case) / slide canvas (slides) */
 .casestage__top { display: flex; justify-content: center; padding-bottom: .7rem; margin-bottom: .3rem; border-bottom: 1px solid var(--line-soft); }
-.slides__props-top { display: flex; justify-content: center; padding-bottom: .8rem; margin: -.15rem 0 .85rem; border-bottom: 1px solid var(--line-soft); }
 .slidestage__top { display: flex; justify-content: flex-end; padding: .1rem clamp(1rem, 3vw, 2.4rem) .7rem; }
 .story__rail-scroll { display: flex; flex-direction: column; gap: .25rem; max-height: 66vh; overflow: auto; padding: .15rem; margin: -.15rem; }
 .story__rail-add { width: 100%; }
@@ -3128,9 +3127,20 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .adm.is-slidestage .adm__slideview { display: inline-flex; }
 /* 3-pane case-study shell: section rail (left) · live preview (center) · section editor (right) */
 .adm__casestage { display: none; }
-.adm.is-casestage .adm__main { grid-template-columns: var(--adm-railcol, clamp(440px, 33%, 560px)) minmax(0, 1fr) clamp(300px, 26%, 440px) !important; }
-.adm.is-casestage .adm__resizer { display: flex !important; left: var(--adm-railcol, clamp(440px, 33%, 560px)); }
+.adm.is-casestage .adm__main { grid-template-columns: var(--adm-railcol, clamp(440px, 33%, 560px)) minmax(0, 1fr) var(--adm-edcol, clamp(320px, 26%, 460px)) !important; }
+.adm.is-slidestage.is-casestage .adm__main { grid-template-columns: var(--adm-navcol, 248px) minmax(0, 1fr) var(--adm-edcol, clamp(320px, 26%, 460px)) !important; }
+.adm.is-casestage:not(.is-slidestage) .adm__resizer { display: flex !important; left: var(--adm-railcol, clamp(440px, 33%, 560px)); }
+/* Right-edge resizer — drags the shared right pane (.adm__casestage) via --adm-edcol, in both Story + Slideshow */
+.adm__rzr { position: absolute; top: 0; bottom: 0; width: 16px; transform: translateX(-50%); z-index: 6; display: none; align-items: center; justify-content: center; cursor: col-resize; touch-action: none; }
+.adm__rzr::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; transform: translateX(-50%); background: var(--line); transition: background .15s var(--ease), width .15s var(--ease); }
+.adm__rzr:hover::before, .adm__rzr:focus-visible::before, .adm.is-resizing .adm__rzr::before { background: var(--accent); width: 2px; }
+.adm__rzr:hover .adm__resizer-grip, .adm__rzr:focus-visible .adm__resizer-grip, .adm.is-resizing .adm__rzr .adm__resizer-grip { opacity: 1; background: var(--accent); }
+.adm__rzr:focus-visible { outline: none; }
+.adm.is-casestage .adm__rzr { display: flex; left: calc(100% - var(--adm-edcol, clamp(320px, 26%, 460px))); }
+.adm.is-prevfull .adm__rzr, .adm.is-casestage.is-prevoff .adm__rzr { display: none !important; }
 .adm.is-casestage .adm__casestage { display: block; overflow: auto; border-left: 1px solid var(--line); background: var(--bg-2); padding: 1rem 1.1rem; }
+.adm__casestage .slides__props { border: 0; background: none; padding: 0; overflow: visible; min-height: 0; }
+.adm.is-slidestage .adm__slidestage > .slides__center { height: 100%; }
 .adm.is-casestage .adm__editor { overflow: auto; border-right: 1px solid var(--line); }
 .adm.is-casestage .l2tabs { flex-wrap: wrap; row-gap: .3rem; }
 .adm.is-casestage .l2tab { flex: 1 1 auto; }

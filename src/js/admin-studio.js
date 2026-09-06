@@ -6551,15 +6551,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       (s.layout === "free" ? '<button class="btn btn--ghost slides__savelay" data-act="slide-savelayout" data-index="' + i + '" data-sindex="' + sel + '" title="Save this arrangement as a reusable layout">' + IC.save + " Save as layout</button>" : "") +
       '<span class="slides__canvas-nav"><button class="iconbtn" data-act="slide-goprev" data-index="' + i + '"' + (sel === 0 ? " disabled" : "") + ' title="Previous slide">' + IC.up + '</button><button class="iconbtn" data-act="slide-gonext" data-index="' + i + '"' + (sel === slides.length - 1 ? " disabled" : "") + ' title="Next slide">' + IC.down + "</button></span></span></div>";
   }
+  // The slide CANVAS lives in the centre preview pane; the properties/inspector live in the shared
+  // right pane (.adm__casestage) via renderCaseStage — same chrome as the case-study section editor.
   function slideCanvasPane(i, sel, slides) {
     var s = slides[sel];
-    if (!s) return '<div class="slides__work"><div class="slides__center"><div class="adm__empty slides__canvas-empty">Select a slide on the left, or add one to begin.</div></div></div>';
-    return '<div class="slides__work">' +
-      '<div class="slides__center">' + slideEditHead(i, sel, slides) +
+    if (!s) return '<div class="slides__center"><div class="adm__empty slides__canvas-empty">Select a slide on the left, or add one to begin.</div></div>';
+    return '<div class="slides__center">' + slideEditHead(i, sel, slides) +
       '<div class="slides__canvas-body">' + freeCanvasStage(i, sel) + "</div>" +
-      '<div class="slides__canvas-notes">' + slNotesRich(i, sel) + "</div></div>" +
-      '<aside class="slides__props">' + slidePropsPanel(i, sel, s) + "</aside>" +
-      "</div>";
+      '<div class="slides__canvas-notes">' + slNotesRich(i, sel) + "</div></div>";
   }
   // LEFT editor pane: just the slide navigator rail. The slide EDITOR itself lives in the right
   // preview pane (renderSlideStage), and the Current/All-slides toggle lives in the status bar.
@@ -6607,16 +6606,24 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }
     slidePvFit();
   }
-  // Case-study 3-pane shell: rail (left) · live preview (center) · this section editor (right).
+  // Shared RIGHT pane (.adm__casestage): the case-study section editor (Story tab) OR the slide
+  // properties/inspector (Slideshow tab, current-slide view) — identical chrome, both edge-draggable.
   function renderCaseStage() {
     var stage = root && root.querySelector("[data-casestage]");
-    var active = openStudy >= 0 && l2Tab === "story" && !journeyOpen && !!(data.work[openStudy]);
+    var w = (openStudy >= 0) ? data.work[openStudy] : null;
+    var slides0 = (w && w.study && w.study.slides) || [];
+    var isStory = !!(w && l2Tab === "story" && !journeyOpen);
+    var isSlideProps = !!(w && l2Tab === "slides" && slideView !== "all" && slides0.length > 0);
+    var active = isStory || isSlideProps;
     if (root) root.classList.toggle("is-casestage", active);
     if (!stage) return;
     if (!active) { stage.hidden = true; stage.innerHTML = ""; return; }
     stage.hidden = false;
-    stage.innerHTML = caseEditorHtml(data.work[openStudy], openStudy);
-    resolveMediaSizes(stage);
+    if (isStory) { stage.innerHTML = caseEditorHtml(w, openStudy); resolveMediaSizes(stage); }
+    else {
+      var sel = (openSlide >= 0 && slides0[openSlide]) ? openSlide : 0;
+      stage.innerHTML = '<div class="casestage__top">' + modeToggleHtml() + '</div><aside class="slides__props">' + slidePropsPanel(openStudy, sel, slides0[sel] || {}) + "</aside>";
+    }
   }
   function slidePullPicker(i, k) {
     var w = data.work[i]; if (!w || !w.study) return;
@@ -7126,8 +7133,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       "</div>";
   }
   function slidePropsPanel(i, k, s) {
-    return '<div class="slides__props-top">' + modeToggleHtml() + "</div>" +
-      '<div class="slides__props-head">Properties</div>' +
+    return '<div class="slides__props-head">Properties</div>' +
       '<div class="slides__props-add"><div class="slides__props-lbl">Add to slide</div>' + freeToolsRow(i, k) + "</div>" +
       freeSelPanel(i, k) +
       slideTransRow(i, k, s);
@@ -10012,8 +10018,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
     l2body.innerHTML = studyEditor(w, i);
     paintL2Tabs();
-    renderSlideStage();
     renderCaseStage();
+    renderSlideStage();
     var _bar0 = root && root.querySelector(".adm__l2-bar"); if (_bar0) _bar0.classList.remove("is-hidden");
     resolveMediaSizes(l2body);
     slidePvSetup();
@@ -10032,8 +10038,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     const w = data.work[openStudy];
     l2body.innerHTML = studyEditor(w, openStudy);
     paintL2Tabs();
-    renderSlideStage();
     renderCaseStage();
+    renderSlideStage();
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
     resolveMediaSizes(l2body);
     slidePvSetup();
@@ -17044,6 +17050,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<div class="adm__device" data-device><iframe class="adm__frame" title="Live preview of your site" src="' + previewUrl() + '"></iframe></div>' +
           '<div class="adm__slidestage" data-slidestage hidden></div>' +
         "</section>" +
+        '<div class="adm__rzr" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Drag to resize the right panel" title="Drag to resize \u00b7 double-click to reset"><span class="adm__resizer-grip"></span></div>' +
         '<aside class="adm__casestage" data-casestage hidden aria-label="Section editor"></aside>' +
       "</div>" +
       '<div class="adm__settings" hidden><div class="adm__set-sheet">' +
@@ -17188,8 +17195,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       function caseStage() { return root.classList.contains("is-casestage"); }
       // Slideshow tab: navigator vs slide editor. Case-study 3-pane: the divider sizes the RIGHT section editor (fromRight).
       function cfg() {
-        if (caseStage()) return { v: "--adm-railcol", key: CASE_KEY, minL: 340, minR: 560 };   // drag the LEFT rail (holds the tabs); the right section editor stays a responsive clamp
-        return slides() ? { v: "--adm-navcol", key: NAV_KEY, minL: 220, minR: 520 } : { v: "--adm-ecol", key: SPLIT_KEY, minL: 400, minR: 300 };
+        if (slides()) return { v: "--adm-navcol", key: NAV_KEY, minL: 220, minR: 560 };   // slideshow (incl. current-view 3-pane): drag the nav width
+        if (caseStage()) return { v: "--adm-railcol", key: CASE_KEY, minL: 340, minR: 560 };   // case study: drag the LEFT rail (holds the tabs)
+        return { v: "--adm-ecol", key: SPLIT_KEY, minL: 400, minR: 300 };
       }
       try { var s1 = localStorage.getItem(SPLIT_KEY); if (s1) main.style.setProperty("--adm-ecol", s1); var s2 = localStorage.getItem(NAV_KEY); if (s2) main.style.setProperty("--adm-navcol", s2); var s3 = localStorage.getItem(CASE_KEY); if (s3) main.style.setProperty("--adm-railcol", s3); } catch (e) {}
       var dragging = false;
@@ -17240,6 +17248,31 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         else if (e.key === "Home") { main.style.removeProperty(c.v); try { localStorage.removeItem(c.key); } catch (x) {} e.preventDefault(); }
       });
       rz.addEventListener("dblclick", function () { var c = cfg(); main.style.removeProperty(c.v); try { localStorage.removeItem(c.key); } catch (e) {} });
+      // Right-edge resizer: drags the shared right pane (.adm__casestage) width via --adm-edcol.
+      var rzR = root.querySelector(".adm__rzr");
+      if (rzR) {
+        var ED_KEY = "rk:adm:edcol";
+        try { var _se = localStorage.getItem(ED_KEY); if (_se) main.style.setProperty("--adm-edcol", _se); } catch (e) {}
+        var dR = false;
+        function setEd(clientX) {
+          var b = main.getBoundingClientRect();
+          var rw = Math.round(Math.max(280, Math.min(Math.max(280, b.width - 520), b.right - clientX)));
+          main.style.setProperty("--adm-edcol", rw + "px"); refitDevice();
+          try { localStorage.setItem(ED_KEY, rw + "px"); } catch (e) {}
+        }
+        rzR.addEventListener("pointerdown", function (e) { if (!root.classList.contains("is-casestage")) return; dR = true; try { rzR.setPointerCapture(e.pointerId); } catch (x) {} root.classList.add("is-resizing"); e.preventDefault(); });
+        rzR.addEventListener("pointermove", function (e) { if (dR) setEd(e.clientX); });
+        function endR(e) { if (!dR) return; dR = false; try { rzR.releasePointerCapture(e.pointerId); } catch (x) {} root.classList.remove("is-resizing"); }
+        rzR.addEventListener("pointerup", endR); rzR.addEventListener("pointercancel", endR);
+        rzR.addEventListener("dblclick", function () { main.style.removeProperty("--adm-edcol"); try { localStorage.removeItem(ED_KEY); } catch (e) {} refitDevice(); });
+        rzR.addEventListener("keydown", function (e) {
+          if (!root.classList.contains("is-casestage")) return;
+          var cs = root.querySelector(".adm__casestage"), cur = cs ? cs.getBoundingClientRect().width : 360, wv = main.getBoundingClientRect().width;
+          if (e.key === "ArrowLeft") { main.style.setProperty("--adm-edcol", Math.round(Math.min(wv - 520, cur + 24)) + "px"); e.preventDefault(); }
+          else if (e.key === "ArrowRight") { main.style.setProperty("--adm-edcol", Math.round(Math.max(280, cur - 24)) + "px"); e.preventDefault(); }
+          else if (e.key === "Home") { main.style.removeProperty("--adm-edcol"); try { localStorage.removeItem(ED_KEY); } catch (x) {} e.preventDefault(); }
+        });
+      }
     })();
     // Device preview toggle (Desktop / Phone): scales the live-preview area only, never opens a tab.
     var _devWrap = root.querySelector("[data-dev-wrap]");
@@ -17285,7 +17318,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var _svPop = _svWrap.querySelector(".adm__dev-pop");
       var _svClose = function () { if (_svPop) _svPop.hidden = true; _svWrap.classList.remove("is-open"); if (_svBtn) _svBtn.setAttribute("aria-expanded", "false"); };
       if (_svBtn) _svBtn.addEventListener("click", function (e) { e.stopPropagation(); var open = _svPop.hidden; _svPop.hidden = !open; _svWrap.classList.toggle("is-open", open); _svBtn.setAttribute("aria-expanded", open ? "true" : "false"); });
-      if (_svPop) _svPop.addEventListener("click", function (e) { var opt = e.target.closest("[data-slideview]"); if (!opt) return; slideView = opt.getAttribute("data-slideview") === "all" ? "all" : "current"; _svClose(); renderSlideStage(); });
+      if (_svPop) _svPop.addEventListener("click", function (e) { var opt = e.target.closest("[data-slideview]"); if (!opt) return; slideView = opt.getAttribute("data-slideview") === "all" ? "all" : "current"; _svClose(); renderCaseStage(); renderSlideStage(); });
       document.addEventListener("click", function (e) { if (!_svWrap.contains(e.target)) _svClose(); });
     }
     // Auto-hide the L2 bar (title + tabs) on scroll down, reveal on scroll up.
