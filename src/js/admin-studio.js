@@ -7051,6 +7051,31 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     offsets.forEach(function (off) { targets.forEach(function (t) { var d = Math.abs((base + off) - t); if (d <= thresh && (!best || d < best.d)) best = { d: d, nb: t - off, guide: t }; }); });
     return best;
   }
+  function freeNearest(v, targets, th) { var best = null, bd = th; targets.forEach(function (t) { var d = Math.abs(v - t); if (d <= bd) { bd = d; best = t; } }); return best; }
+  // Per-deck persistent guides (Phase 2) as { x:[%], y:[%] } or null when none set.
+  function freeGuidesOf(i, k) { var st = data.work[i] && data.work[i].study, g = st && st.guides; return (g && ((g.x && g.x.length) || (g.y && g.y.length))) ? { x: g.x || [], y: g.y || [] } : null; }
+  // All resize snap targets on the slide, in SCALED px relative to the stage: canvas edges/centre, grid
+  // lines, persistent guides, and every OTHER block's edges + centres. exceptIdx = the block resizing.
+  function freeSnapTargetsPx(stageEl, meta, exceptIdx, sw, sh, i, k) {
+    var xs = [0, sw / 2, sw], ys = [0, sh / 2, sh];
+    if (freeGrid.on) { freeGridLinesX().forEach(function (x) { xs.push(x / 100 * sw); }); freeGridLinesY().forEach(function (y) { ys.push(y / 100 * sh); }); }
+    var g = freeGuidesOf(i, k); if (g) { g.x.forEach(function (x) { xs.push(x / 100 * sw); }); g.y.forEach(function (y) { ys.push(y / 100 * sh); }); }
+    stageEl.querySelectorAll(".sfb[data-fb]").forEach(function (el) {
+      if (+el.getAttribute("data-fb") === exceptIdx) return;
+      var r = el.getBoundingClientRect(), l = r.left - meta.rect.left, rr = r.right - meta.rect.left, t = r.top - meta.rect.top, b = r.bottom - meta.rect.top;
+      xs.push(l, (l + rr) / 2, rr); ys.push(t, (t + b) / 2, b);
+    });
+    return { x: xs, y: ys };
+  }
+  // Snap the moving edge(s) of a resize to the nearest target (scaled px); returns the adjusted rect + guide px.
+  function freeResizeSnap(nr, hnd, xs, ys, th) {
+    var right = nr.x + nr.w, bottom = nr.y + nr.h, gx = null, gy = null, s;
+    if (hnd.indexOf("e") >= 0) { s = freeNearest(right, xs, th); if (s != null && s - nr.x >= 8) { nr.w = s - nr.x; gx = s; } }
+    else if (hnd.indexOf("w") >= 0) { s = freeNearest(nr.x, xs, th); if (s != null && right - s >= 8) { nr.w = right - s; nr.x = s; gx = s; } }
+    if (hnd.indexOf("s") >= 0) { s = freeNearest(bottom, ys, th); if (s != null && s - nr.y >= 8) { nr.h = s - nr.y; gy = s; } }
+    else if (hnd.indexOf("n") >= 0) { s = freeNearest(nr.y, ys, th); if (s != null && bottom - s >= 8) { nr.h = bottom - s; nr.y = s; gy = s; } }
+    return { nr: nr, gx: gx, gy: gy };
+  }
   function freeGuides(stage, gx, gy) {
     if (!stage) return;
     var gv = stage.querySelector("[data-fbgv]"), gh = stage.querySelector("[data-fbgh]");
@@ -7649,7 +7674,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (blkEl && handleEl) {
       var hidx = +blkEl.getAttribute("data-fb"), hbl = (slideBlocks(i, k) || [])[hidx]; if (!hbl) return;
       var hnd = handleEl.getAttribute("data-fbh"), h0px = (hbl.h != null) ? fnum(hbl.h, 20) / 100 * sh : blkEl.offsetHeight;
-      freeDrag = { mode: "resize", i: i, k: k, sw: sw, sh: sh, el: blkEl, bl: hbl, handle: hnd, sx: e.clientX, sy: e.clientY, setH: /[ns]/.test(hnd), rot: parseFloat(hbl.rot) || 0, R: { x: fnum(hbl.x, 8) / 100 * sw, y: fnum(hbl.y, 8) / 100 * sh, w: fnum(hbl.w, 40) / 100 * sw, h: h0px }, moved: false };
+      freeDrag = { mode: "resize", i: i, k: k, sw: sw, sh: sh, el: blkEl, bl: hbl, handle: hnd, sx: e.clientX, sy: e.clientY, setH: /[ns]/.test(hnd), rot: parseFloat(hbl.rot) || 0, R: { x: fnum(hbl.x, 8) / 100 * sw, y: fnum(hbl.y, 8) / 100 * sh, w: fnum(hbl.w, 40) / 100 * sw, h: h0px }, stage: meta.stage, moved: false };
+      if (!freeDrag.rot) { var _rt = freeSnapTargetsPx(meta.stage, meta, hidx, sw, sh, i, k); freeDrag.snapPxX = _rt.x; freeDrag.snapPxY = _rt.y; }
       bindFreeMove(); e.preventDefault(); return;
     }
     if (blkEl && rotEl) {
@@ -7704,7 +7730,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var ddx = e.clientX - d.sx, ddy = e.clientY - d.sy;
     if (d.mode === "move") {
       var pdx = ddx / d.sw * 100, pdy = ddy / d.sh * 100;
-      if (d.items.length === 1 && d.snapX && !e.altKey) {
+      if (d.items.length === 1 && d.snapX && !e.altKey && !(e.ctrlKey || e.metaKey)) {
         var it0 = d.items[0], nx = Math.max(0, Math.min(100, it0.ox + pdx)), ny = Math.max(0, Math.min(100, it0.oy + pdy));
         var tx = 7 / d.sw * 100, ty = 7 / d.sh * 100;
         var sxr = freeSnapAxis(nx, [0, d.mw / 2, d.mw], d.snapX, tx), syr = freeSnapAxis(ny, [0, d.mh / 2, d.mh], d.snapY, ty);
@@ -7725,9 +7751,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       }
     } else if (d.mode === "resize") {
       var nr = freeResize(d.R, d.handle, ddx, ddy, d.rot, d.bl.arlock || e.shiftKey);
+      var rgx = null, rgy = null;
+      if (d.snapPxX && !e.altKey && !e.shiftKey && !d.bl.arlock && !(e.ctrlKey || e.metaKey)) {   // snap the moving edge(s); hold Cmd/Ctrl to suspend, aspect-lock opts out
+        var rs = freeResizeSnap(nr, d.handle, d.snapPxX, d.snapPxY, 7); nr = rs.nr; rgx = rs.gx; rgy = rs.gy;
+      }
       d.bl.x = Math.round(nr.x / d.sw * 1000) / 10; d.bl.y = Math.round(nr.y / d.sh * 1000) / 10; d.bl.w = Math.round(nr.w / d.sw * 1000) / 10;
       if (d.setH) d.bl.h = Math.round(nr.h / d.sh * 1000) / 10;
       if (d.el) { d.el.style.left = d.bl.x + "%"; d.el.style.top = d.bl.y + "%"; d.el.style.width = d.bl.w + "%"; if (d.setH) d.el.style.height = d.bl.h + "%"; }
+      freeGuides(d.stage, rgx != null ? rgx / d.sw * 100 : null, rgy != null ? rgy / d.sh * 100 : null);
     } else if (d.mode === "rotate") {
       var ang = Math.atan2(e.clientY - d.cy, e.clientX - d.cx) * 180 / Math.PI, rot = d.startRot + (ang - d.startAng);
       if (e.shiftKey) rot = Math.round(rot / 15) * 15;
