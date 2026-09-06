@@ -6569,7 +6569,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 17.8l-5.2 2.8 1-5.8L3.4 9.7l5.9-.9z"/></svg>',
       section: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.6" cy="6" r="1.2"/><circle cx="4.6" cy="12" r="1.2"/><circle cx="4.6" cy="18" r="1.2"/></svg>',
       badge: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2l6.4 2.7v4.9c0 4.3-2.8 7.1-6.4 8.1-3.6-1-6.4-3.8-6.4-8.1V5.9z"/><path d="M9.4 11.8l1.8 1.8 3.4-3.6"/></svg>',
-      notes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8.5 20h7"/></svg>'
+      notes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8.5 20h7"/></svg>',
+      grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/><path d="M9 3.5v17M15 3.5v17M3.5 9h17M3.5 15h17"/></svg>',
+      ruler: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.4" y="7" width="19.2" height="10" rx="1.6"/><path d="M6 7v3.2M9.5 7v4.6M13 7v3.2M16.5 7v4.6"/></svg>',
+      guide: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h16M8 4v16" stroke-dasharray="2.6 2.6"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/></svg>'
     };
     function mbtn(menu, title, svg) { return '<button type="button" class="iconbtn slides__ib-btn" data-act="slide-menu" data-menu="' + menu + '" data-index="' + i + '" title="' + title + '" aria-label="' + title + '">' + svg + "</button>"; }
     function abtn(act, title, svg) { return '<button type="button" class="iconbtn slides__ib-btn" data-act="' + act + '" data-index="' + i + '" data-sindex="' + sel + '" title="' + title + '" aria-label="' + title + '">' + svg + "</button>"; }
@@ -6580,6 +6583,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       abtn("free-add-icon", "Add an icon", SV.icon) + abtn("free-add-section", "Add a section", SV.section) + abtn("slide-add-badge", "Add a badge", SV.badge) +
       '<span class="slides__ib-sep"></span>' +
       '<button type="button" class="btn btn--ghost slides__ib-notes' + (slideNotesOpen ? " is-on" : "") + '" data-act="slide-notes" data-index="' + i + '" aria-pressed="' + slideNotesOpen + '">' + SV.notes + " Notes</button>" +
+      '<span class="slides__ib-sep"></span>' +
+      '<button type="button" class="iconbtn slides__ib-btn' + (freeGrid.on ? " is-on" : "") + '" data-act="free-grid" title="12-column layout grid + snap" aria-label="Grid" aria-pressed="' + freeGrid.on + '">' + SV.grid + "</button>" +
+      '<button type="button" class="iconbtn slides__ib-btn' + (freeRulers.on ? " is-on" : "") + '" data-act="free-rulers" title="Rulers \u2014 drag out guides that blocks snap to" aria-label="Rulers" aria-pressed="' + freeRulers.on + '">' + SV.ruler + "</button>" +
+      '<button type="button" class="iconbtn slides__ib-btn" data-act="slide-menu" data-menu="guides" data-index="' + i + '" title="Guides \u2014 safe margins, thirds, clear" aria-label="Guides">' + SV.guide + "</button>" +
       "</div>";
   }
   function slideCanvasPane(i, sel, slides) {
@@ -6877,6 +6884,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       { id: "line", label: "Line", run: function () { slideAddShape(i, "line"); } },
       { id: "arrow", label: "Arrow", run: function () { slideAddShape(i, "arrow"); } }
     ];
+    else if (which === "guides") items = [
+      { id: "safe", label: "Safe margins", hint: "5% inset frame", run: function () { freeGuidesSafe(i); } },
+      { id: "thirds", label: "Rule of thirds", run: function () { freeGuidesThirds(i); } },
+      { id: "center", label: "Centre lines", run: function () { freeGuidesCenter(i); } },
+      { sep: true },
+      { id: "clear", label: "Clear all guides", run: function () { freeGuidesClear(i); } }
+    ];
     else items = [
       { id: "bg", label: "Upload a background", hint: "Full-bleed", run: function () { slideAddBackground(i); } },
       { id: "up", label: "Add a picture or video", run: function () { slideAddMediaUpload(i); } },
@@ -7005,6 +7019,28 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function freeGridLinesX() { if (!freeGrid.on) return []; var M = freeGrid.margin, cols = Math.max(1, freeGrid.cols), inner = 100 - 2 * M, cw = inner / cols, xs = [M, 100 - M]; for (var c = 1; c < cols; c++) xs.push(Math.round((M + c * cw) * 100) / 100); return xs; }
   function freeGridLinesY() { return freeGrid.on ? [freeGrid.margin, 100 - freeGrid.margin] : []; }
   function freeGridOverlay() { if (!freeGrid.on) return ""; return '<div class="sfb__grid" data-fbgrid>' + freeGridLinesX().map(function (x) { return '<i class="sfb__grid-v" style="left:' + x + '%"></i>'; }).join("") + freeGridLinesY().map(function (y) { return '<i class="sfb__grid-h" style="top:' + y + '%"></i>'; }).join("") + "</div>"; }
+  var freeRulers = { on: false };   // top/left rulers + drag-out guides (session view aid; guides persist per deck)
+  function freeGuidesGet(i) { var st = data.work[i] && data.work[i].study; if (!st) return { x: [], y: [] }; if (!st.guides || typeof st.guides !== "object") st.guides = { x: [], y: [] }; if (!Array.isArray(st.guides.x)) st.guides.x = []; if (!Array.isArray(st.guides.y)) st.guides.y = []; return st.guides; }
+  function freeRulerTicks() { var o = []; for (var p = 0; p <= 100; p += 5) o.push(p); return o; }
+  function freeRulerMajors() { var o = []; for (var p = 0; p <= 100; p += 10) o.push(p); return o; }
+  function freeRulerHtml(i, k) {
+    if (!freeRulers.on) return "";
+    function tk(ax) { return freeRulerTicks().map(function (p) { var mj = p % 10 === 0; return '<i class="sfb__rule-t' + (mj ? " is-major" : "") + '" style="' + (ax === "x" ? "left" : "top") + ":" + p + '%">' + (mj ? "<b>" + p + "</b>" : "") + "</i>"; }).join(""); }
+    return '<div class="sfb__rule sfb__rule--x" data-fbruler="x" data-fi="' + i + '" data-fk="' + k + '" title="Drag down to pull a vertical guide">' + tk("x") + "</div>" +
+      '<div class="sfb__rule sfb__rule--y" data-fbruler="y" data-fi="' + i + '" data-fk="' + k + '" title="Drag right to pull a horizontal guide">' + tk("y") + "</div>" +
+      '<div class="sfb__rule-corner"></div>';
+  }
+  function freeGuidesHtml(i, k) {
+    var g = freeGuidesGet(i), out = "";
+    g.x.forEach(function (p, ix) { out += '<div class="sfb__gd sfb__gd--v" data-fbguide="x" data-gi="' + ix + '" data-fi="' + i + '" data-fk="' + k + '" style="left:' + p + '%"><span class="sfb__gd-lbl">' + Math.round(p) + "</span></div>"; });
+    g.y.forEach(function (p, ix) { out += '<div class="sfb__gd sfb__gd--h" data-fbguide="y" data-gi="' + ix + '" data-fi="' + i + '" data-fk="' + k + '" style="top:' + p + '%"><span class="sfb__gd-lbl">' + Math.round(p) + "</span></div>"; });
+    return out;
+  }
+  function freeGuidesAdd(i, xs, ys) { var g = freeGuidesGet(i); (xs || []).forEach(function (v) { if (g.x.indexOf(v) < 0) g.x.push(v); }); (ys || []).forEach(function (v) { if (g.y.indexOf(v) < 0) g.y.push(v); }); g.x.sort(function (a, b) { return a - b; }); g.y.sort(function (a, b) { return a - b; }); saveDraft(true); renderL2(); }
+  function freeGuidesSafe(i) { freeGuidesAdd(i, [5, 95], [5, 95]); status("Safe-margin guides added \u2014 keep content inside them for projectors.", true); }
+  function freeGuidesThirds(i) { freeGuidesAdd(i, [33.3, 66.7], [33.3, 66.7]); status("Rule-of-thirds guides added.", true); }
+  function freeGuidesCenter(i) { freeGuidesAdd(i, [50], [50]); status("Centre guides added.", true); }
+  function freeGuidesClear(i) { var g = freeGuidesGet(i); if (!g.x.length && !g.y.length) { status("No guides to clear."); return; } g.x = []; g.y = []; saveDraft(true); renderL2(); status("Guides cleared.", true); }
   var freeEditing = null;   // { i, k, idx, el } — a text block being edited inline on the canvas
   var FREE_HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
   function fnum(v, d) { var n = parseFloat(v); return isFinite(n) ? Math.max(0, Math.min(100, n)) : d; }
@@ -7060,6 +7096,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var xs = [0, sw / 2, sw], ys = [0, sh / 2, sh];
     if (freeGrid.on) { freeGridLinesX().forEach(function (x) { xs.push(x / 100 * sw); }); freeGridLinesY().forEach(function (y) { ys.push(y / 100 * sh); }); }
     var g = freeGuidesOf(i, k); if (g) { g.x.forEach(function (x) { xs.push(x / 100 * sw); }); g.y.forEach(function (y) { ys.push(y / 100 * sh); }); }
+    if (freeRulers.on) { freeRulerMajors().forEach(function (p) { xs.push(p / 100 * sw); ys.push(p / 100 * sh); }); }
     stageEl.querySelectorAll(".sfb[data-fb]").forEach(function (el) {
       if (+el.getAttribute("data-fb") === exceptIdx) return;
       var r = el.getBoundingClientRect(), l = r.left - meta.rect.left, rr = r.right - meta.rect.left, t = r.top - meta.rect.top, b = r.bottom - meta.rect.top;
@@ -7250,8 +7287,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   // Center column = just the slide canvas. Its add-element tools + selected-element inspector live in the
   // right Properties panel now (slidePropsPanel). The Layers list is intentionally gone.
   function freeCanvasStage(i, k) {
-    return '<div class="slides__pvwrap"><div class="slidepv slidepv--free" data-slidepvbox="' + k + '"><div class="slidepv__stage slidefree__stage" data-slidepv="' + k + '" data-freestage="' + i + ':' + k + '">' + freeStageHtml(i, k) + "</div></div>" +
-      '<div class="slidefree__hint">Drag to move \u00b7 handles resize \u00b7 top dot rotates \u00b7 Shift-click or box-select several \u00b7 arrows nudge</div></div>';
+    return '<div class="slides__pvwrap"><div class="slidepv slidepv--free' + (freeRulers.on ? " has-rulers" : "") + '" data-slidepvbox="' + k + '"><div class="slidepv__stage slidefree__stage" data-slidepv="' + k + '" data-freestage="' + i + ':' + k + '">' + freeStageHtml(i, k) + "</div>" + freeGuidesHtml(i, k) + freeRulerHtml(i, k) + "</div>" +
+      '<div class="slidefree__hint">Drag to move \u00b7 handles resize \u00b7 top dot rotates \u00b7 hold \u2318/Ctrl to bypass snapping</div></div>';
   }
   function freeToolsRow(i, k) {
     return '<div class="slidefree__tools">' +
@@ -7509,6 +7546,25 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     saveDraft(); freePvRefresh(+t.dataset.fi, +t.dataset.fk);
   }
   function freeStageMeta(el) { var s = el.closest && el.closest("[data-freestage]"); if (!s) return null; var m = s.getAttribute("data-freestage").split(":"); return { stage: s, i: +m[0], k: +m[1], rect: s.getBoundingClientRect() }; }
+  // Pull a guide out of a ruler (creating), or grab an existing guide to move/delete it. Guides persist per deck.
+  function freeGuideStart(el, e, creating) {
+    var i = +el.getAttribute("data-fi"), k = +el.getAttribute("data-fk");
+    var axis = creating ? el.getAttribute("data-fbruler") : el.getAttribute("data-fbguide");
+    var stage = root && root.querySelector('[data-freestage="' + i + ":" + k + '"]'); if (!stage) return;
+    var rect = stage.getBoundingClientRect(), live, gi = -1;
+    if (creating) { live = document.createElement("div"); live.className = "sfb__gd sfb__gd--" + (axis === "x" ? "v" : "h") + " sfb__gd--live"; live.innerHTML = '<span class="sfb__gd-lbl"></span>'; (stage.parentNode || stage).appendChild(live); }
+    else { live = el; gi = +el.getAttribute("data-gi"); el.classList.add("sfb__gd--live"); }
+    freeDrag = { mode: "guide", i: i, k: k, axis: axis, creating: creating, gi: gi, el: live, rect: rect, sx: e.clientX, sy: e.clientY, moved: false, off: false, pct: 0 };
+    var pct = axis === "x" ? (e.clientX - rect.left) / (rect.width || 1) * 100 : (e.clientY - rect.top) / (rect.height || 1) * 100;
+    freeGuidePaint(Math.max(0, Math.min(100, pct)));
+    bindFreeMove(); e.preventDefault();
+  }
+  function freeGuidePaint(pct) {
+    var d = freeDrag; if (!d || d.mode !== "guide") return;
+    d.pct = pct;
+    if (d.axis === "x") d.el.style.left = pct + "%"; else d.el.style.top = pct + "%";
+    var lbl = d.el.querySelector(".sfb__gd-lbl"); if (lbl) lbl.textContent = Math.round(pct);
+  }
   function freeDragInit() {
     if (freeDragInit._on || !root) return; freeDragInit._on = true;
     root.addEventListener("pointerdown", onFreeDown);
@@ -7668,6 +7724,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (e.button != null && e.button !== 0) return;
     if (freeEditing) { if (e.target === freeEditing.el || (freeEditing.el.contains && freeEditing.el.contains(e.target))) return; freeCommitEdit(); return; }
     if (e.target.closest("button")) return; // placeholder insert-cluster buttons receive their own clicks (no drag)
+    var _rlEl = e.target.closest("[data-fbruler]"), _gdEl = e.target.closest("[data-fbguide]");
+    if (_rlEl || _gdEl) { freeGuideStart(_rlEl || _gdEl, e, !!_rlEl); return; }
     var meta = freeStageMeta(e.target); if (!meta) return;
     var i = meta.i, k = meta.k, sw = meta.rect.width || 1, sh = meta.rect.height || 1;
     var handleEl = e.target.closest("[data-fbh]"), rotEl = e.target.closest("[data-fbrot]"), blkEl = e.target.closest(".sfb[data-fb]");
@@ -7709,6 +7767,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         freeDrag.mh = mr ? mr.height / sh * 100 : 20;
         var xs = [0, 50, 100], ys = [0, 50, 100], others = [];
         if (freeGrid.on) { Array.prototype.push.apply(xs, freeGridLinesX()); Array.prototype.push.apply(ys, freeGridLinesY()); }
+        var _mg = freeGuidesOf(i, k); if (_mg) { Array.prototype.push.apply(xs, _mg.x); Array.prototype.push.apply(ys, _mg.y); }
+        if (freeRulers.on) { var _rmj = freeRulerMajors(); Array.prototype.push.apply(xs, _rmj); Array.prototype.push.apply(ys, _rmj); }
         stageEl.querySelectorAll(".sfb[data-fb]").forEach(function (el) { if (+el.getAttribute("data-fb") === midx) return; var r = el.getBoundingClientRect(); var l = (r.left - meta.rect.left) / sw * 100, t = (r.top - meta.rect.top) / sh * 100, ww = r.width / sw * 100, hh = r.height / sh * 100; xs.push(l, l + ww / 2, l + ww); ys.push(t, t + hh / 2, t + hh); others.push({ l: r.left - meta.rect.left, t: r.top - meta.rect.top, r: r.right - meta.rect.left, b: r.bottom - meta.rect.top, w: r.width, h: r.height }); });
         freeDrag.snapX = xs; freeDrag.snapY = ys; freeDrag.others = others;
       }
@@ -7768,12 +7828,23 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var r = d.rect;
       d.marq = { x0: Math.min(d.sx, e.clientX), y0: Math.min(d.sy, e.clientY), x1: Math.max(d.sx, e.clientX), y1: Math.max(d.sy, e.clientY) };
       if (d.el) { var _ms = d.sc || 1; d.el.hidden = false; d.el.style.left = ((d.marq.x0 - r.left) / _ms) + "px"; d.el.style.top = ((d.marq.y0 - r.top) / _ms) + "px"; d.el.style.width = ((d.marq.x1 - d.marq.x0) / _ms) + "px"; d.el.style.height = ((d.marq.y1 - d.marq.y0) / _ms) + "px"; }
+    } else if (d.mode === "guide") {
+      var gp = d.axis === "x" ? (e.clientX - d.rect.left) / (d.rect.width || 1) * 100 : (e.clientY - d.rect.top) / (d.rect.height || 1) * 100;
+      d.off = d.axis === "x" ? (e.clientX < d.rect.left - 20 || e.clientX > d.rect.right + 20) : (e.clientY < d.rect.top - 20 || e.clientY > d.rect.bottom + 20);
+      freeGuidePaint(Math.max(0, Math.min(100, Math.round(gp * 2) / 2)));
+      if (d.el) d.el.classList.toggle("sfb__gd--del", d.off && !d.creating);
     }
   }
   function onFreeUp() {
     window.removeEventListener("pointermove", onFreeMove);
     var d = freeDrag; freeDrag = null; if (!d) return;
     if (d.raf) { cancelAnimationFrame(d.raf); d.raf = 0; }
+    if (d.mode === "guide") {
+      if (d.creating) { if (d.el && d.el.parentNode) d.el.remove(); if (d.moved && !d.off) { var _ga = freeGuidesGet(d.i)[d.axis]; if (_ga.indexOf(d.pct) < 0) _ga.push(d.pct); } }
+      else { var _gg = freeGuidesGet(d.i); if (d.off) _gg[d.axis].splice(d.gi, 1); else if (d.moved) _gg[d.axis][d.gi] = d.pct; if (d.el) d.el.classList.remove("sfb__gd--live", "sfb__gd--del"); }
+      if (d.moved) saveDraft(true);
+      renderL2(); return;
+    }
     if (d.mode === "move") {
       if (d.moved) d.items.forEach(function (it) { if (it.nx != null) { it.bl.x = it.nx; it.bl.y = it.ny; } });
       d.items.forEach(function (it) { if (it.el) it.el.style.willChange = ""; });
@@ -11392,6 +11463,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "free-add-text") { var _fat = slideBlocks(i, +b.dataset.sindex); if (_fat) { _fat.push({ kind: "text", x: 8, y: Math.min(74, 12 + _fat.length * 6), w: 46, size: "md", align: "left", text: "New text" }); freeSelSet(i, +b.dataset.sindex, [_fat.length - 1]); saveDraft(true); renderL2(); } return; }
     if (act === "free-cheat") { freeCheatToggle(); return; }
     if (act === "free-grid") { freeGrid.on = !freeGrid.on; renderL2(); status(freeGrid.on ? "Layout grid on \u2014 blocks snap to the 12 columns." : "Layout grid off.", true); return; }
+    if (act === "free-rulers") { freeRulers.on = !freeRulers.on; renderL2(); status(freeRulers.on ? "Rulers on \u2014 drag out from a ruler to drop a guide; blocks snap to guides & the 10% ticks." : "Rulers off.", true); return; }
     if (act === "free-add-media") { var _fam = slideBlocks(i, +b.dataset.sindex); if (_fam) { _fam.push({ kind: "media", x: 10, y: Math.min(74, 12 + _fam.length * 6), w: 40, src: "" }); freeSelSet(i, +b.dataset.sindex, [_fam.length - 1]); saveDraft(true); renderL2(); } return; }
     if (act === "free-del") { var _fdk = +b.dataset.sindex, _fd = slideBlocks(i, _fdk); if (_fd) { if (freeSelOn(i, _fdk)) { freeSel.ids.slice().sort(function (a, c) { return c - a; }).forEach(function (ix) { _fd.splice(ix, 1); }); } else if (b.dataset.fbi != null) { _fd.splice(+b.dataset.fbi, 1); } freeSel = null; freeCleanGroups(_fd); saveDraft(true); renderL2(); } return; }
     if (act === "free-z") { var _zk = +b.dataset.sindex, _zb = slideBlocks(i, _zk), _zi = +b.dataset.fbi, _zd = b.dataset.zdir; if (_zb && _zb[_zi]) { var _zmv = _zb.splice(_zi, 1)[0], _zni; if (_zd === "front") { _zb.push(_zmv); _zni = _zb.length - 1; } else if (_zd === "back") { _zb.unshift(_zmv); _zni = 0; } else if (_zd === "forward") { _zni = Math.min(_zb.length, _zi + 1); _zb.splice(_zni, 0, _zmv); } else { _zni = Math.max(0, _zi - 1); _zb.splice(_zni, 0, _zmv); } freeSelSet(i, _zk, [_zni]); saveDraft(true); renderL2(); } return; }
