@@ -137,7 +137,7 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__hist-btn:disabled { opacity: .3; cursor: not-allowed; }
 /* full-width studio status bar: live-preview toggle + undo/redo + status line */
 .adm__statusbar { display: flex; align-items: center; gap: .6rem; padding: .38rem .9rem; border-bottom: 1px solid var(--line); background: var(--bg-2); min-height: 42px; position: relative; }
-.adm__statusbar .adm__status { max-width: none; min-width: 0; text-align: left; }
+.adm__statusbar .adm__status { max-width: min(34vw, 320px); min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .adm__statusbar .adm__status.ok { color: #6fbf92; }
 /* publish progress fill + severity tones (the status bar is the single publish narrator) */
 .adm__statusbar::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: var(--accent); opacity: 0; transition: width .3s ease, opacity .3s ease; pointer-events: none; }
@@ -3117,7 +3117,7 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .adm.is-casestage .l2tab { flex: 1 1 auto; }
 .adm.is-casestage .adm__l2-barrow { flex-wrap: wrap; row-gap: .4rem; }
 .adm.is-casestage .study__stage { grid-template-columns: 1fr; }
-.adm.is-casestage .story__rail { position: static; }
+.adm.is-casestage .story__rail { position: static; min-width: 0; }
 .adm.is-casestage .story__rail-scroll { max-height: none; }
 @media (max-width: 1100px) {
   .adm.is-casestage .adm__main { grid-template-columns: minmax(0, 1fr) !important; }
