@@ -7402,9 +7402,27 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function ffield(ic, input, title) { return '<label class="ffield"' + (title ? ' title="' + escAttr(title) + '"' : "") + '><span class="ffield__ic">' + ic + "</span>" + input + "</label>"; }
   function ffnum(field, i, k, idx, val, attrs) { return '<input type="number" class="ffield__in" data-freefield="' + field + '" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" value="' + (val == null || val === "" ? "" : val) + '"' + (attrs || "") + " />"; }
   function freeColorSwatches(i, k, idx, field, val) {
-    var sw = FREE_SWATCHES.map(function (s) { return '<button type="button" class="sfbclr' + (String(val || "") === s[0] ? " is-on" : "") + (s[0] === "" ? " sfbclr--none" : "") + '"' + (s[0] ? ' style="background:' + s[0] + '"' : "") + ' data-act="free-color" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" data-field="' + field + '" data-val="' + escAttr(s[0]) + '" title="' + s[1] + '"></button>'; }).join("");
-    var cust = (val && String(val).charAt(0) === "#") ? val : "#d8a657";
-    return '<div class="sfbclr-row">' + sw + '<input type="color" class="sfbclr-cust" value="' + cust + '" data-freecolor="' + field + '" data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '" title="Custom colour" /></div>';
+    var cur = freeColor(val);
+    var hex = /^#[0-9a-fA-F]{3,8}$/.test(cur) ? cur.replace(/^#/, "").toUpperCase() : "";
+    var nativeVal = /^#[0-9a-fA-F]{6}$/.test(cur) ? cur : "#d8a657";
+    var swda = 'data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" data-field="' + field + '"';
+    var fbda = 'data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '"';
+    var chip = '<span class="sfbc__chip' + (cur ? "" : " is-none") + '"' + (cur ? ' style="background:' + cur + '"' : "") + '><input type="color" class="sfbc__native" value="' + nativeVal + '" data-freecolor="' + field + '" ' + fbda + ' title="Pick a colour" aria-label="Pick a colour" /></span>';
+    var hexInput = '<span class="sfbc__hexwrap"><span class="sfbc__hash">#</span><input type="text" class="sfbc__hex" value="' + escAttr(hex) + '" data-freehex="' + field + '" ' + fbda + ' placeholder="ECE7E1" maxlength="8" spellcheck="false" autocomplete="off" aria-label="Hex colour" /></span>';
+    var eye = (typeof window !== "undefined" && window.EyeDropper) ? '<button type="button" class="sfbc__btn" data-act="free-eyedrop" ' + swda + ' title="Pick a colour from the screen" aria-label="Eyedropper">' + IC.pipette + '</button>' : "";
+    var clear = '<button type="button" class="sfbc__btn sfbc__btn--clear' + (cur ? "" : " is-on") + '" data-act="free-color" ' + swda + ' data-val="" title="No colour" aria-label="No colour">' + IC.close + '</button>';
+    var sw = FREE_SWATCHES.filter(function (s) { return s[0]; }).map(function (s) { return '<button type="button" class="sfbc__sw' + (String(val || "") === s[0] ? " is-on" : "") + '" style="background:' + s[0] + '" data-act="free-color" ' + swda + ' data-val="' + escAttr(s[0]) + '" title="' + s[1] + '"></button>'; }).join("");
+    return '<div class="sfbc"><div class="sfbc__top">' + chip + hexInput + eye + clear + '</div><div class="sfbc__sw-row">' + sw + '</div></div>';
+  }
+  // Live-sync the colour control chip / hex / swatch highlights without a full panel re-render (native picker + hex input).
+  function sfbcSyncUI(el, val) {
+    var box = el.closest && el.closest(".sfbc"); if (!box) return;
+    var v = String(val == null ? "" : val);
+    var chip = box.querySelector(".sfbc__chip"); if (chip) { if (v) { chip.style.background = v; chip.classList.remove("is-none"); } else { chip.style.background = ""; chip.classList.add("is-none"); } }
+    var nat = box.querySelector(".sfbc__native"); if (nat && /^#[0-9a-fA-F]{6}$/.test(v)) nat.value = v;
+    var hx = box.querySelector(".sfbc__hex"); if (hx && document.activeElement !== hx) hx.value = /^#[0-9a-fA-F]{3,8}$/.test(v) ? v.replace(/^#/, "").toUpperCase() : "";
+    box.querySelectorAll(".sfbc__sw").forEach(function (b) { b.classList.toggle("is-on", b.getAttribute("data-val") === v); });
+    var clr = box.querySelector(".sfbc__btn--clear"); if (clr) clr.classList.toggle("is-on", !v);
   }
   // Position section — X/Y, W/H (with a chain-link aspect toggle for ratio-lockable kinds), rotation + optional corner.
   function freePosSection(i, k, idx, bl, withCorner) {
@@ -10629,7 +10647,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (t.dataset.sblock !== undefined && t.dataset.bfield && t.dataset.bfield !== "locked") { onStudyBlock(t); return; }
     if (t.dataset.slide !== undefined && t.dataset.sslot) { onSlideEdit(t); return; }
     if (t.dataset.freefield !== undefined) { onFreeFieldEdit(t); return; }
-    if (t.dataset.freecolor !== undefined) { var _cb = freeBlk(t); if (_cb) { _cb[t.dataset.freecolor] = t.value; saveDraft(); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
+    if (t.dataset.freecolor !== undefined) { var _cb = freeBlk(t); if (_cb) { _cb[t.dataset.freecolor] = t.value; saveDraft(); freePvRefresh(+t.dataset.fi, +t.dataset.fk); sfbcSyncUI(t, t.value); } return; }
+    if (t.dataset.freehex !== undefined) { var _hb = freeBlk(t); if (_hb) { var _hx = String(t.value || "").trim().replace(/^#/, ""); if (/^([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(_hx)) { _hb[t.dataset.freehex] = "#" + _hx; saveDraft(); freePvRefresh(+t.dataset.fi, +t.dataset.fk); sfbcSyncUI(t, "#" + _hx); } } return; }
     if (t.dataset.slidebgcolor !== undefined) { var _sbi = +t.dataset.sbi, _sbk = +t.dataset.sbk, _sbst = data.work[_sbi] && data.work[_sbi].study, _sbs = _sbst && _sbst.slides && _sbst.slides[_sbk]; if (_sbs) { _sbs.background = { type: "color", value: t.value }; saveDraft(); freePvRefresh(_sbi, _sbk); } return; }
     if (t.dataset.path) { setPath(data, t.dataset.path, t.value); apply(); return; }
     if (t.dataset.sv !== undefined && t.dataset.field) { onSvInput(t); return; }
@@ -11512,6 +11531,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "ph-icon") { var _pik = +b.dataset.sindex, _pii = +b.dataset.fbi; freeIconPicker(function (name) { var a = slideBlocks(i, _pik), bl = a && a[_pii]; if (!bl) return; bl.kind = "icon"; bl.name = name; bl.color = bl.color || "var(--accent)"; delete bl.content; delete bl.ph; delete bl.text; freeSelSet(i, _pik, [_pii]); saveDraft(true); renderL2(); }); return; }
     if (act === "free-icon-pick") { var _ipk = +b.dataset.sindex, _ip = slideBlocks(i, _ipk), _ipb = _ip && _ip[+b.dataset.fbi]; if (!_ipb) return; freeIconPicker(function (name) { _ipb.name = name; saveDraft(true); renderL2(); }); return; }
     if (act === "free-color") { var _cak = +b.dataset.sindex, _ca = slideBlocks(i, _cak), _cab = _ca && _ca[+b.dataset.fbi]; if (!_cab) return; var _cf = b.dataset.field, _cv = b.dataset.val; if (_cv) _cab[_cf] = _cv; else delete _cab[_cf]; saveDraft(true); renderL2(); return; }
+    if (act === "free-eyedrop") { var _edk = +b.dataset.sindex, _eda = slideBlocks(i, _edk), _edb = _eda && _eda[+b.dataset.fbi], _edf = b.dataset.field; if (!_edb) return; if (!window.EyeDropper) { status("This browser has no eyedropper \u2014 type a hex or use the colour box.", false); return; } try { new EyeDropper().open().then(function (res) { if (res && res.sRGBHex) { _edb[_edf] = res.sRGBHex; saveDraft(true); renderL2(); } }).catch(function () {}); } catch (e) {} return; }
     if (act === "free-layer") { freeSelSet(i, +b.dataset.sindex, [+b.dataset.fbi]); renderL2(); return; }
     if (act === "free-group") { var _grk = +b.dataset.sindex, _grb = slideBlocks(i, _grk); if (_grb && freeSelOn(i, _grk) && freeSel.ids.length > 1) { var _grid = freeNewGroupId(); freeSel.ids.forEach(function (ix) { if (_grb[ix]) _grb[ix].g = _grid; }); saveDraft(true); renderL2(); status("Grouped " + freeSel.ids.length + " blocks \u2014 they move & select together.", true); } return; }
     if (act === "free-ungroup") { var _urk = +b.dataset.sindex, _urb = slideBlocks(i, _urk); if (_urb && freeSelOn(i, _urk)) { var _ug = {}; freeSel.ids.forEach(function (ix) { if (_urb[ix] && _urb[ix].g) _ug[_urb[ix].g] = 1; }); _urb.forEach(function (bl) { if (bl && bl.g && _ug[bl.g]) delete bl.g; }); saveDraft(true); renderL2(); status("Ungrouped.", true); } return; }
