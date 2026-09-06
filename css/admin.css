@@ -3117,8 +3117,11 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .adm.is-casestage .story__rail-scroll { max-height: none; }
 @media (max-width: 1100px) {
   .adm.is-casestage .adm__main { grid-template-columns: minmax(0, 1fr) !important; }
-  .adm.is-casestage .adm__casestage { border-left: 0; border-top: 1px solid var(--line); }
-  .adm.is-casestage .adm__editor { border-right: 0; }
+  .adm.is-casestage .adm__resizer { display: none !important; }
+  .adm.is-casestage .adm__editor { order: 1; border-right: 0; }
+  .adm.is-casestage .adm__casestage { order: 2; border-left: 0; border-top: 1px solid var(--line); }
+  .adm.is-casestage .adm__preview { order: 3; min-height: 60vh; border-top: 1px solid var(--line); }
+  .adm.is-casestage .story__rail-scroll { max-height: 40vh; }
 }
 /* Preview layout modes: Split (default) · Editor only (is-prevoff) · Preview only (is-prevfull) */
 .adm.is-prevfull .adm__main { grid-template-columns: minmax(0, 1fr) !important; }
