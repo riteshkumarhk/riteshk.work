@@ -177,6 +177,10 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm.is-prevoff .adm__l2 { max-width: 1040px; }
 .adm__newtab { padding: .3rem .55rem; display: inline-flex; align-items: center; gap: .4rem; border-radius: 100px; color: var(--text-dim); transition: color .2s ease, border-color .2s ease; }
 .adm__newtab svg { display: block; }
+.adm__newtab .adm__newtab-play { display: none; }
+.adm.is-slidestage .adm__newtab .adm__newtab-ext { display: none; }
+.adm.is-slidestage .adm__newtab .adm__newtab-play { display: block; }
+.adm.is-slidestage .adm__newtab { color: var(--accent); }
 .adm__newtab:hover { color: var(--text); border-color: var(--accent); }
 .adm__newtab-tx { font-family: var(--mono); font-size: .6rem; letter-spacing: .09em; text-transform: uppercase; white-space: nowrap; }
 .adm__newtab-tx[hidden] { display: none; }
@@ -375,9 +379,9 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .l2ai svg { width: 16px; height: 16px; }
 .l2ai:hover { color: var(--accent); }
 /* case-study editor tabs */
-.l2tabs { display: flex; gap: .15rem; background: var(--bg-2); border: 1px solid var(--line); border-radius: 13px; padding: .28rem .4rem; }
+.l2tabs { display: flex; gap: .1rem; background: var(--bg-2); border: 1px solid var(--line); border-radius: 13px; padding: .24rem .32rem; }
 .l2tabs:empty { display: none; }
-.l2tab { flex: 1 1 0; text-align: center; font-size: .82rem; font-weight: 500; color: var(--text-dim); background: transparent; border: 0; border-radius: 9px; padding: .5rem .4rem; cursor: pointer; position: relative; white-space: nowrap; transition: color .16s ease; }
+.l2tab { flex: 1 1 0; text-align: center; font-size: .75rem; font-weight: 500; color: var(--text-dim); background: transparent; border: 0; border-radius: 9px; padding: .46rem .34rem; cursor: pointer; position: relative; white-space: nowrap; transition: color .16s ease; }
 .l2tab::after { content: ""; position: absolute; left: 50%; bottom: .14rem; width: 0; height: 2px; background: var(--accent); border-radius: 2px; transform: translateX(-50%); transition: width .22s ease; }
 .l2tab:hover { color: var(--text); }
 .l2tab.is-on { color: var(--text); font-weight: 600; }
@@ -2988,7 +2992,8 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .story__rail-pass-hint { font-size: .62rem; color: var(--text-faint); line-height: 1.35; }
 /* Case study | Slideshow toggle relocated to the top of the right pane (case) / slide canvas (slides) */
 .casestage__top { display: flex; justify-content: center; padding-bottom: .7rem; margin-bottom: .3rem; border-bottom: 1px solid var(--line-soft); }
-.slidestage__top { display: flex; justify-content: center; padding: .1rem 0 .6rem; }
+.slides__props-top { display: flex; justify-content: center; padding-bottom: .8rem; margin: -.15rem 0 .85rem; border-bottom: 1px solid var(--line-soft); }
+.slidestage__top { display: flex; justify-content: flex-end; padding: .1rem clamp(1rem, 3vw, 2.4rem) .7rem; }
 .story__rail-scroll { display: flex; flex-direction: column; gap: .25rem; max-height: 66vh; overflow: auto; padding: .15rem; margin: -.15rem; }
 .story__rail-add { width: 100%; }
 .story__rail-empty { padding: 1rem .5rem; color: var(--text-faint); font-size: .78rem; text-align: center; }
@@ -3077,7 +3082,7 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .slides__canvas-empty { line-height: 1.5; }
 .slides__canvas-notes { flex: 0 0 auto; margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--line-soft); max-height: 40%; overflow: auto; }
 .slides__canvas-notes .af { margin-bottom: 0; }
-.slides__allgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(184px, 1fr)); gap: .85rem; }
+.slides__allgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
 .slides__alladd { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .35rem; min-height: 128px; border: 1px dashed var(--line-soft); border-radius: 12px; background: none; color: var(--text-dim); cursor: pointer; font: 600 .72rem/1 var(--sans); transition: border-color .2s var(--ease), color .2s var(--ease); }
 .slides__alladd:hover { border-color: var(--accent); color: var(--text); }
 .slides__alladd svg { width: 18px; height: 18px; }
@@ -3119,12 +3124,12 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .adm.is-slidestage .adm__slidestage { display: block; height: 100%; overflow: hidden; }
 .adm.is-slidestage .adm__preview { display: flex !important; background: #050506; }
 .adm.is-slidestage .adm__editor { border-right: 1px solid var(--line) !important; }
-.adm.is-slidestage .adm__dev, .adm.is-slidestage .adm__bar-prev { display: none !important; }
+.adm.is-slidestage [data-dev-wrap] { display: none !important; }
 .adm.is-slidestage .adm__slideview { display: inline-flex; }
 /* 3-pane case-study shell: section rail (left) · live preview (center) · section editor (right) */
 .adm__casestage { display: none; }
-.adm.is-casestage .adm__main { grid-template-columns: clamp(280px, 23%, 372px) minmax(0, 1fr) var(--adm-edcol, clamp(320px, 30%, 460px)) !important; }
-.adm.is-casestage .adm__resizer { display: flex !important; left: calc(100% - var(--adm-edcol, clamp(320px, 30%, 460px))); }
+.adm.is-casestage .adm__main { grid-template-columns: var(--adm-railcol, clamp(440px, 33%, 560px)) minmax(0, 1fr) clamp(300px, 26%, 440px) !important; }
+.adm.is-casestage .adm__resizer { display: flex !important; left: var(--adm-railcol, clamp(440px, 33%, 560px)); }
 .adm.is-casestage .adm__casestage { display: block; overflow: auto; border-left: 1px solid var(--line); background: var(--bg-2); padding: 1rem 1.1rem; }
 .adm.is-casestage .adm__editor { overflow: auto; border-right: 1px solid var(--line); }
 .adm.is-casestage .l2tabs { flex-wrap: wrap; row-gap: .3rem; }
@@ -3148,7 +3153,7 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .adm.is-prevfull .adm__resizer { display: none !important; }
 .adm.is-prevfull .adm__bar-prev { color: var(--accent); border-color: var(--accent); border-style: solid; }
 /* Editor-only inside the 3-pane case-study shell: rail + section editor fill, preview column drops */
-.adm.is-casestage.is-prevoff .adm__main { grid-template-columns: clamp(280px, 26%, 400px) minmax(0, 1fr) !important; }
+.adm.is-casestage.is-prevoff .adm__main { grid-template-columns: var(--adm-railcol, clamp(440px, 33%, 560px)) minmax(0, 1fr) !important; }
 .adm.is-casestage.is-prevoff .adm__resizer { display: none !important; }
 .adm.is-casestage.is-prevfull .adm__main { grid-template-columns: minmax(0, 1fr) !important; }
 /* Preview-only in slideshow mode still keeps the slide nav (it lives in the editor pane) */

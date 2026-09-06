@@ -6587,21 +6587,23 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var active = openStudy >= 0 && l2Tab === "slides" && !!(data.work[openStudy]);
     if (root) root.classList.toggle("is-slidestage", active);
     if (vwrap) vwrap.hidden = !active;
+    var _ntb = root && root.querySelector("[data-newtab]");   // in slideshow this button rehearses the deck (contextual)
+    if (_ntb && !_ntb.classList.contains("is-visit")) { _ntb.title = active ? "Rehearse the slideshow" : "Open live preview in a new tab"; _ntb.setAttribute("aria-label", active ? "Rehearse the slideshow" : "Open live preview in a new tab"); }
     if (!stage) return;
     if (!active) { stage.hidden = true; stage.innerHTML = ""; return; }
     stage.hidden = false;
-    var _sstop = '<div class="slidestage__top">' + modeToggleHtml() + "</div>";
+    var _allTop = '<div class="slidestage__top">' + modeToggleHtml() + "</div>";   // toggle bar for the no-props states (sealed / empty / all-slides); the canvas view carries it in the props panel
     var w = data.work[openStudy], st = w.study || {}, slides = st.slides || [];
     var lbl = vwrap && vwrap.querySelector("[data-slideview-lbl]"); if (lbl) lbl.textContent = slideView === "all" ? "All slides" : "Current slide";
-    if (st.slidesEnc && !slides.length) { stage.innerHTML = _sstop + '<div class="slides__stagewrap"><div class="adm__empty">' + LOCK_SVG + ' This slideshow is protected \u2014 unlock it on the left to edit.</div></div>'; return; }
-    if (!slides.length) { stage.innerHTML = _sstop + '<div class="slides__stagewrap"><div class="adm__empty slides__stage-empty">Your slide editor appears here. Use <b>Add slide</b> on the left to start.</div></div>'; return; }
+    if (st.slidesEnc && !slides.length) { stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="adm__empty">' + LOCK_SVG + ' This slideshow is protected \u2014 unlock it on the left to edit.</div></div>'; return; }
+    if (!slides.length) { stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="adm__empty slides__stage-empty">Your slide editor appears here. Use <b>Add slide</b> on the left to start.</div></div>'; return; }
     var sel = (openSlide >= 0 && slides[openSlide]) ? openSlide : 0;
     if (slideView === "all") {
-      stage.innerHTML = _sstop + '<div class="slides__stagewrap"><div class="slides__allgrid">' + slides.map(function (s, k) { return slideThumb(openStudy, s, k, slides.length, k === sel, "all"); }).join("") +
+      stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="slides__allgrid">' + slides.map(function (s, k) { return slideThumb(openStudy, s, k, slides.length, k === sel, "all"); }).join("") +
         '<button class="slides__alladd" data-act="slide-add" data-index="' + openStudy + '" title="Add a slide">' + IC.add + "<span>Add</span></button></div>" +
         '<div class="slides__allhint">Click to select \u00b7 double-click to edit \u00b7 the arrows on a slide reorder it</div></div>';
     } else {
-      stage.innerHTML = _sstop + slideCanvasPane(openStudy, sel, slides);
+      stage.innerHTML = slideCanvasPane(openStudy, sel, slides);
     }
     slidePvFit();
   }
@@ -6774,7 +6776,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     slideMenuOpen(anchor, items);
   }
   function slidesToolbar(i, has, nBlocks) {
-    return '<div class="slides__toolbar"><div class="slides__tb-r"><button class="btn btn--ghost" data-act="slide-rehearse" data-index="' + i + '"' + (has || nBlocks ? "" : " disabled") + ">" + IC.play + " Rehearse</button>" +
+    return '<div class="slides__toolbar"><div class="slides__tb-r">' +
       '<button class="btn btn--auto" data-act="slide-ai-draft" data-index="' + i + '"' + (nBlocks ? "" : " disabled") + ">" + IC.spark + " Draft with AI</button></div></div>";
   }
   // Owner-only: turn a published study's sealed slideshow (slidesEnc) back into an editable plaintext
@@ -7124,7 +7126,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       "</div>";
   }
   function slidePropsPanel(i, k, s) {
-    return '<div class="slides__props-head">Properties</div>' +
+    return '<div class="slides__props-top">' + modeToggleHtml() + "</div>" +
+      '<div class="slides__props-head">Properties</div>' +
       '<div class="slides__props-add"><div class="slides__props-lbl">Add to slide</div>' + freeToolsRow(i, k) + "</div>" +
       freeSelPanel(i, k) +
       slideTransRow(i, k, s);
@@ -17016,9 +17019,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
           '<div class="adm__dev-pop" hidden>' + deviceOptsHtml() + "</div>" +
         "</div>" +
         '<div class="adm__dev adm__slideview" data-slideview-wrap hidden><button class="adm__dev-btn" data-slideview-toggle type="button" aria-haspopup="true" aria-expanded="false" title="Slide view"><span class="adm__dev-ic">' + IC.board + '</span><span class="adm__dev-lbl" data-slideview-lbl>Current slide</span><svg class="adm__dev-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="adm__dev-pop" hidden><button class="adm__dev-opt" data-slideview="current" type="button">Current slide</button><button class="adm__dev-opt" data-slideview="all" type="button">All slides</button></div></div>' +
+        '<button class="btn btn--ghost adm__newtab" data-newtab type="button" aria-label="Open live preview in a new tab" title="Open live preview in a new tab"><svg class="adm__newtab-ext" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg><svg class="adm__newtab-play" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span class="adm__newtab-tx" hidden></span></button>' +
         "</div>" +
         '<button class="btn btn--ghost adm__logs-btn" data-act="logs-rec" type="button" aria-pressed="false" aria-label="Record activity log" title="Record a log of your taps &amp; jumps to share"><span class="adm__logs-dot"></span><span class="adm__logs-rec-tx" hidden>REC</span></button>' +
-        '<button class="btn btn--ghost adm__newtab" data-newtab type="button" aria-label="Open live preview in a new tab" title="Open live preview in a new tab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg><span class="adm__newtab-tx" hidden></span></button>' +
       "</div>" +
       '<div class="adm__main">' +
         '<div class="adm__editor"><div class="adm__body"></div>' +
@@ -17160,6 +17163,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var _newtab = root.querySelector("[data-newtab]");
     if (_newtab) _newtab.addEventListener("click", function () {
       try {
+        if (root.classList.contains("is-slidestage") && openStudy >= 0 && data.work[openStudy] && window.RK && window.RK.presentDeck) { window.RK.presentDeck(data.work[openStudy], {}); return; }   // Slideshow: this button rehearses the deck
         if (newtabVisitUrl) { window.open(newtabVisitUrl, "_blank", "noopener"); return; }   // post-publish "Visit site" -> the live site
         // Flush the in-memory draft so the new tab's ?preview reads the latest edits. If it's too big for
         // localStorage (many not-yet-published images as data URLs), a separate tab can't see it -> say so.
@@ -17177,17 +17181,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     // Resizable editor/preview divider - drag to set the editor width (persists). Drag it right to shrink
     // the preview down to a tablet/phone width and watch the site reflow - a live responsive view.
     (function () {
-      var SPLIT_KEY = "rk:adm:split", NAV_KEY = "rk:adm:navsplit", CASE_KEY = "rk:adm:casesplit";
+      var SPLIT_KEY = "rk:adm:split", NAV_KEY = "rk:adm:navsplit", CASE_KEY = "rk:adm:railcol";
       var main = root.querySelector(".adm__main"), rz = root.querySelector(".adm__resizer"), badge = root.querySelector("[data-prevw]");
       if (!main || !rz) return;
       function slides() { return root.classList.contains("is-slidestage"); }
       function caseStage() { return root.classList.contains("is-casestage"); }
       // Slideshow tab: navigator vs slide editor. Case-study 3-pane: the divider sizes the RIGHT section editor (fromRight).
       function cfg() {
-        if (caseStage()) return { v: "--adm-edcol", key: CASE_KEY, fromRight: true, min: 300, keepOther: 720 };
+        if (caseStage()) return { v: "--adm-railcol", key: CASE_KEY, minL: 340, minR: 560 };   // drag the LEFT rail (holds the tabs); the right section editor stays a responsive clamp
         return slides() ? { v: "--adm-navcol", key: NAV_KEY, minL: 220, minR: 520 } : { v: "--adm-ecol", key: SPLIT_KEY, minL: 400, minR: 300 };
       }
-      try { var s1 = localStorage.getItem(SPLIT_KEY); if (s1) main.style.setProperty("--adm-ecol", s1); var s2 = localStorage.getItem(NAV_KEY); if (s2) main.style.setProperty("--adm-navcol", s2); var s3 = localStorage.getItem(CASE_KEY); if (s3) main.style.setProperty("--adm-edcol", s3); } catch (e) {}
+      try { var s1 = localStorage.getItem(SPLIT_KEY); if (s1) main.style.setProperty("--adm-ecol", s1); var s2 = localStorage.getItem(NAV_KEY); if (s2) main.style.setProperty("--adm-navcol", s2); var s3 = localStorage.getItem(CASE_KEY); if (s3) main.style.setProperty("--adm-railcol", s3); } catch (e) {}
       var dragging = false;
       function clampPx(px) {
         var c = cfg(), w = main.getBoundingClientRect().width || window.innerWidth, max = Math.max(c.minL, w - c.minR);
