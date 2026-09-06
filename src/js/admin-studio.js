@@ -223,6 +223,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return html;
   }
   let openBlock = -1; // which section (block) is expanded in the L2 sections accordion
+  var storyThumbs = false, storyLocked = false; // Story-rail view (thumbnails vs sliced) + show-locked toggle
+  try { storyThumbs = localStorage.getItem("rk:story:thumbs") === "1"; storyLocked = localStorage.getItem("rk:story:locked") === "1"; } catch (e) {}
   let openSlide = -1; // which slide is expanded in the Slideshow tab
   var slideView = "current"; // Slideshow shell view: "current" (nav rail + big canvas) or "all" (thumbnail sorter)
   var slidePvRO = null; // ResizeObserver that refits inline slide previews when the editor width changes
@@ -4245,7 +4247,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
      Keys: "list:<name>" (L1 lists) · "block:<i>" (case-study sections) ·
      "item:<i>:<j>" (repeater items). Pointer-based, so it's reliable across
      browsers and auto-scrolls the editor when you drag near an edge. */
-  var SORT_ROW_SEL = ".rep__item, .study__block, .card, .cellrow, .adm__lsec, .adm__asec, .slides__navitem";
+  var SORT_ROW_SEL = ".rep__item, .study__block, .card, .cellrow, .adm__lsec, .adm__asec, .slides__navitem, .story__item";
   function sortRowsFor(key) {
     return [].slice.call(root.querySelectorAll('[data-grip][data-sortkey="' + key + '"]'))
       .map(function (g) { return g.closest(SORT_ROW_SEL); }).filter(Boolean);
@@ -4607,8 +4609,62 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (wasDraw) renderL2(); else refreshL2Preview();
   }
 
+  var STUDY_TYPE_NAMES = { text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Before / after slider", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices", isolayers: "Isometric layers", focus: "Focus & annotate", gen: "Generated" };
+  function studyBlockTypeName(b) { return STUDY_TYPE_NAMES[b.type] || b.type; }
+  function studyBlockLabel(b) {
+    var custom = (typeof b.editorName === "string" && b.editorName.trim()) ? b.editorName.trim() : "";
+    var raw = custom || b.name || b.nav || b.kicker || b.heading || b.body || (b.items && b.items[0] && (b.items[0].q || b.items[0].title || b.items[0].value || b.items[0].caption || b.items[0].heading || b.items[0].label)) || "Untitled";
+    var label = String(raw).replace(/[\*\[\]]/g, "").replace(/\s+/g, " ").trim();
+    return label.length > 48 ? label.slice(0, 48) + "\u2026" : label;
+  }
+  // ---- Story section rail (P1): a thumbnail/sliced navigator beside the section editor. Reuses the
+  // slide-thumbnail render (deckSlideFromBlock -> renderDeckSlide) + the existing study-block* ops + block sort.
+  function storySecThumb(b) {
+    if (b.encStub || b.vaultBlock) return '<span class="slidepv story__thumb story__thumb--lock"><span class="story__thumb-locki">' + LOCK_SVG + "</span></span>";
+    var s; try { s = (window.RK && window.RK.deckSlideFromBlock) ? window.RK.deckSlideFromBlock(b) : null; } catch (e) { s = null; }
+    if (!s) s = { layout: "text", slots: { title: studyBlockLabel(b) } };
+    return '<span class="slidepv story__thumb"><span class="slidepv__stage">' + slidePvHtml(s) + "</span></span>";
+  }
+  function storyInsHtml(i, at) { return '<button type="button" class="story__ins" data-act="study-blockadd" data-index="' + i + '" data-bindex="' + at + '" title="Insert a section here" aria-label="Insert a section here"><span class="story__ins-line"></span><span class="story__ins-plus">' + IC.add + "</span></button>"; }
+  function storyRailItem(i, b, j, len) {
+    var isEnc = b.encStub || b.vaultBlock, active = openBlock === j;
+    var ops = '<span class="story__item-ops">' +
+      '<button class="iconbtn" data-act="study-blockup" data-index="' + i + '" data-bindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + "</button>" +
+      '<button class="iconbtn" data-act="study-blockdown" data-index="' + i + '" data-bindex="' + j + '"' + (j === len - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + "</button>" +
+      '<button class="iconbtn" data-act="study-blockadd" data-index="' + i + '" data-bindex="' + j + '" title="Add a section above" aria-label="Add a section above">' + IC.add + "</button>" +
+      '<button class="iconbtn" data-act="study-blockdup" data-index="' + i + '" data-bindex="' + j + '" title="Duplicate section" aria-label="Duplicate section">' + IC.dup + "</button>" +
+      '<button class="iconbtn study__block-off' + (b.off ? " is-off" : "") + '" data-act="study-blockoff" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.off ? "Hidden \u2014 click to show" : "On \u2014 click to hide") + '">' + (b.off ? IC.eyeoff : IC.eye) + "</button>" +
+      '<button class="iconbtn study__block-lock' + (b.locked ? " is-locked" : "") + '" data-act="study-blocklock" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.locked ? "Locked \u2014 click to unlock" : "Lock \u2014 deeper-cut only") + '"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' + (b.locked ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<path d="M8 10.5V6.8a4 4 0 0 1 7.5-1.6"/>') + "</svg></button>" +
+      '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + "</button>" +
+      "</span>";
+    return '<div class="story__item' + (active ? " is-active" : "") + (b.off ? " is-off" : "") + (isEnc ? " is-enc" : "") + '" data-act="story-nav" data-index="' + i + '" data-bindex="' + j + '" tabindex="0" role="button" aria-label="Section ' + (j + 1) + '">' +
+      '<span class="sortgrip story__item-grip" data-grip data-sortkey="block:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + "</span>" +
+      '<span class="story__item-num">' + (j + 1) + "</span>" +
+      storySecThumb(b) +
+      '<span class="story__item-meta"><span class="story__item-type">' + escHtml(studyBlockTypeName(b)) + '</span><span class="story__item-label">' + escHtml(studyBlockLabel(b)) + "</span></span>" +
+      ops +
+      (b.off ? '<span class="story__item-badge">Hidden</span>' : "") +
+      "</div>";
+  }
+  function storyRail(w, i) {
+    var blocks = w.study.blocks || [];
+    var hasLocked = blocks.some(function (b) { return b && (b.locked || b.encStub || b.vaultBlock); });
+    var tabs = '<div class="story__rail-tabs">' +
+      '<button type="button" class="story__pill' + (storyThumbs ? " is-on" : "") + '" data-act="story-thumbs" data-index="' + i + '" aria-pressed="' + storyThumbs + '" title="Toggle between thumbnail cards and a sliced list">' + IC.board + " Thumbnails</button>" +
+      (hasLocked ? '<button type="button" class="story__pill' + (storyLocked ? " is-on" : "") + '" data-act="story-locked" data-index="' + i + '" aria-pressed="' + storyLocked + '" title="Show or hide the locked / vaulted sections">' + LOCK_SVG + " View locked sections</button>" : "") +
+      "</div>";
+    var rows = "";
+    blocks.forEach(function (b, j) {
+      if ((b.locked || b.encStub || b.vaultBlock) && !storyLocked) return;
+      rows += storyInsHtml(i, j) + storyRailItem(i, b, j, blocks.length);
+    });
+    if (!rows) rows = '<div class="story__rail-empty">No sections here yet.</div>';
+    return '<aside class="story__rail' + (storyThumbs ? " is-thumbs" : " is-sliced") + '">' + tabs +
+      '<div class="story__rail-scroll">' + rows + "</div>" +
+      '<button class="btn btn--add story__rail-add" data-act="study-pick" data-index="' + i + '">' + IC.add + " Add a section</button></aside>";
+  }
   function blockEditor(i, b, j, len, open) {
-    var typeName = ({ text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Before / after slider", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices", isolayers: "Isometric layers", focus: "Focus & annotate", gen: "Generated" })[b.type] || b.type;
+    var typeName = studyBlockTypeName(b);
     if (b.encStub) {
       return '<div class="card study__block study__block--enc">' +
         '<div class="study__block-head study__block-head--enc">' +
@@ -4630,9 +4686,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '</div>';
     }
     var custom = (typeof b.editorName === "string" && b.editorName.trim()) ? b.editorName.trim() : "";
-    var raw = custom || b.name || b.nav || b.kicker || b.heading || b.body || (b.items && b.items[0] && (b.items[0].q || b.items[0].title || b.items[0].value || b.items[0].caption || b.items[0].heading || b.items[0].label)) || "Untitled";
-    var label = String(raw).replace(/[\*\[\]]/g, "").replace(/\s+/g, " ").trim();
-    if (label.length > 48) label = label.slice(0, 48) + "\u2026";
+    var label = studyBlockLabel(b);
     var head = '<div class="study__block-head" data-act="study-blocktoggle" data-index="' + i + '" data-bindex="' + j + '">' +
       '<span class="sortgrip study__block-grip" data-grip data-sortkey="block:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
       '<span class="study__block-badge">' + escHtml(typeName) + "</span>" +
@@ -7609,7 +7663,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var panel;
     if (tab === "gen") panel = csgenPanel(w, i);
     else if (tab === "highlights") panel = storyHeader + keyMoves + overviewMediaBlock(w, i);
-    else if (tab === "story") panel = sections + unlockBlock;
+    else if (tab === "story") panel = '<div class="study__stage">' + storyRail(w, i) + '<div class="study__stage-main">' + sections + unlockBlock + "</div></div>";
     else if (tab === "slides") panel = slidesPanel(w, i);
     else panel = header + cover; // details (default)
 
@@ -10968,6 +11022,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return;
     }
     if (act === "work-decrypt") { decryptWorkForEdit(i); return; }
+    if (act === "story-thumbs") { storyThumbs = !storyThumbs; try { localStorage.setItem("rk:story:thumbs", storyThumbs ? "1" : "0"); } catch (e) {} renderL2(); return; }
+    if (act === "story-locked") { storyLocked = !storyLocked; try { localStorage.setItem("rk:story:locked", storyLocked ? "1" : "0"); } catch (e) {} renderL2(); return; }
+    if (act === "story-nav") {
+      if (e.target.closest("button, [data-grip]")) return;
+      var _snj = +b.dataset.bindex; openBlock = _snj; renderL2();
+      try { var _snfw = frameWin(); if (_snfw) _snfw.postMessage({ __rk: "gotoBlock", index: _snj }, "*"); } catch (err) {}
+      var _snob = root.querySelector(".study__blocks .study__block.is-open"); if (_snob && _snob.scrollIntoView) _snob.scrollIntoView({ block: "nearest" });
+      return;
+    }
     if (act === "study-blocktoggle") {
       if (e.detail > 1) return; // 2nd click of a double-click - let dblclick handle rename
       const j = +b.dataset.bindex;
