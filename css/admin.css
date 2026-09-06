@@ -158,6 +158,10 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__bar-prev svg { display: block; }
 .adm__bar-prev:hover { color: var(--text); border-color: var(--accent); }
 .adm.is-prevoff .adm__bar-prev { color: var(--text-faint); border-style: dashed; }
+/* Center the live-preview toggle + screen-size dropdown in the toolbar (undo/redo stay left, log/new-tab right) */
+.adm__prevgroup { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: .6rem; }
+.adm__statusbar > .adm__logs-btn { margin-left: auto; }
+.adm.is-prevoff .adm__statusbar > .adm__newtab, .adm.is-noprev .adm__statusbar > .adm__newtab { margin-left: auto; }
 .adm__dmeter { margin-left: auto; display: inline-flex; align-items: center; gap: .4rem; font-family: var(--mono); font-size: .58rem; letter-spacing: .04em; color: var(--text-dim); border: 1px solid var(--line); border-radius: 100px; padding: .28rem .6rem; white-space: nowrap; cursor: default; flex: none; transition: color .25s ease, border-color .25s ease, background .25s ease; }
 .adm__dmeter:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .adm__dmeter-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .85; flex: none; }
