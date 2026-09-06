@@ -6714,6 +6714,49 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function slideAddMediaUpload(i) { pickMedia(function (uri) { slideAddBlock(i, { kind: "media", src: uri, w: 44 }); }); }
   function slideAddShape(i, sv) { slideAddBlock(i, (sv === "line" || sv === "arrow") ? { kind: "shape", shape: sv, x: 12, y: 46, w: 34, h: 8, stroke: "var(--accent)", strokeW: 3 } : { kind: "shape", shape: sv, x: 14, y: 16, w: 26, h: 22, fill: "", stroke: "var(--accent)", strokeW: 2, radius: 0 }); }
   function slideAddBadge(i) { slideAddBlock(i, { kind: "text", role: "badge", size: "sm", font: "mono", align: "center", bg: "var(--accent)", color: "#241a09", radius: 100, pad: 9, text: "", ph: "BADGE", w: 18 }); }
+  function phBlock(ph) { return JSON.parse(JSON.stringify(ph)); }
+  // Reflow a slide's blocks into a chosen arrangement: existing text fills the text slots and media the
+  // media slots (in order), each matched block adopting the slot's position/size/role; empty slots become
+  // placeholders, any extra content keeps its place, and shapes/icons/sections are left untouched on top.
+  function arrangeBlocksToLayout(cur, libBlocks) {
+    cur = cur || [];
+    var curText = [], curMedia = [], curOther = [];
+    cur.forEach(function (b) { if (!b) return; if (b.kind === "text") curText.push(b); else if (b.kind === "media") curMedia.push(b); else curOther.push(b); });
+    var textPh = [], mediaPh = [];
+    (libBlocks || []).forEach(function (p) { (p.kind === "media" ? mediaPh : textPh).push(p); });
+    function place(block, ph) {
+      ["x", "y", "w"].forEach(function (kk) { if (ph[kk] != null) block[kk] = ph[kk]; });
+      if (ph.h != null) block.h = ph.h; else if (block.kind === "text") delete block.h;
+      if (block.kind === "text" && block.role !== "badge") {
+        if (ph.size) block.size = ph.size;
+        if (ph.align) block.align = ph.align;
+        if (ph.valign) block.valign = ph.valign; else delete block.valign;
+        if (ph.role) block.role = ph.role; else delete block.role;
+      }
+      return block;
+    }
+    var out = [], ti = 0, mi = 0;
+    textPh.forEach(function (ph) { out.push(ti < curText.length ? place(curText[ti++], ph) : phBlock(ph)); });
+    for (; ti < curText.length; ti++) out.push(curText[ti]);
+    mediaPh.forEach(function (ph) { out.push(mi < curMedia.length ? place(curMedia[mi++], ph) : phBlock(ph)); });
+    for (; mi < curMedia.length; mi++) out.push(curMedia[mi]);
+    curOther.forEach(function (b) { out.push(b); });
+    return out;
+  }
+  function slideApplyArrangement(i, k, layId) {
+    var st = data.work[i] && data.work[i].study, s = st && st.slides && st.slides[k]; if (!s) return;
+    var lib = SLIDE_LAYOUTS_LIB.filter(function (x) { return x.id === layId; })[0]; if (!lib) return;
+    s.blocks = arrangeBlocksToLayout(s.blocks || [], lib.blocks);
+    s.layout = "free"; s.arrange = layId; freeSel = null;
+    saveDraft(true); renderL2();
+    status("\u201c" + lib.name + "\u201d layout applied \u2014 your content reflowed into it. Ctrl+Z to undo.", true);
+  }
+  function slideSetBg(i, k, bg) {
+    var st = data.work[i] && data.work[i].study, s = st && st.slides && st.slides[k]; if (!s) return;
+    if (bg) s.background = bg; else delete s.background;
+    saveDraft(true); renderL2();
+    status(bg ? "Background updated." : "Background removed.", true);
+  }
   // Everything is freeform now — a section/AI "layout+slots" is seeded onto a freeform canvas the owner can rearrange.
   function freeSlideFromMapped(mapped) {
     return { id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: "free", blocks: slotsToFreeBlocks({ layout: (mapped && mapped.layout) || "text", slots: (mapped && mapped.slots) || {} }), notes: (mapped && mapped.notes) ? String(mapped.notes) : "" };
@@ -7169,10 +7212,43 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<button type="button" class="btn btn--ghost" data-act="slide-bg" data-index="' + i + '" data-sindex="' + k + '">' + IC.board + ' Background</button>' +
       "</div>";
   }
+  // Slide-level properties — shown in the right pane when nothing on the canvas is selected. Lets the owner
+  // re-arrange the whole slide (content reflows into the picked layout) and set a background colour/media.
+  function slideLayoutSection(i, k, s) {
+    var cur = s && s.arrange;
+    var cells = SLIDE_LAYOUTS_LIB.map(function (lib) {
+      return '<button type="button" class="slidelay__pick' + (cur === lib.id ? " is-on" : "") + '" data-act="slide-applylayout" data-index="' + i + '" data-sindex="' + k + '" data-lay="' + escAttr(lib.id) + '" title="' + escAttr(lib.name) + '"><span class="slidelay__pickthumb">' + slideLayoutThumb(lib.blocks) + '</span><span class="slidelay__pickname">' + escHtml(lib.name) + '</span></button>';
+    }).join("");
+    var body = '<div class="slidelay__pickgrid">' + cells + '</div><div class="af__hint">Pick an arrangement \u2014 your text &amp; media reflow into it. Empty spots become placeholders you can fill.</div>';
+    return fsec("slidelayout", "Layout", body, "", true);
+  }
+  function slideBgSection(i, k, s) {
+    var bg = (s && s.background) || null;
+    var isColor = bg && bg.type === "color" && bg.value;
+    var isMedia = bg && bg.type === "media" && bg.value;
+    var noneSw = '<button type="button" class="sfbclr sfbclr--none slidebg__sw' + (!bg ? " is-on" : "") + '" data-act="slide-bg-none" data-index="' + i + '" data-sindex="' + k + '" title="No background"></button>';
+    var sw = FREE_SWATCHES.filter(function (x) { return x[0]; }).map(function (x) {
+      var on = isColor && bg.value === x[0];
+      return '<button type="button" class="sfbclr slidebg__sw' + (on ? " is-on" : "") + '" style="background:' + x[0] + '" data-act="slide-bgcolor" data-index="' + i + '" data-sindex="' + k + '" data-bgval="' + escAttr(x[0]) + '" title="' + x[1] + '"></button>';
+    }).join("");
+    var custVal = (isColor && String(bg.value).charAt(0) === "#") ? bg.value : "#141417";
+    var custom = '<input type="color" class="sfbclr-cust" value="' + custVal + '" data-slidebgcolor data-sbi="' + i + '" data-sbk="' + k + '" title="Custom background colour" />';
+    var mediaRow = isMedia
+      ? '<div class="slidebg__media"><span class="slidebg__thumb">' + (isVideoVal(bg.value) ? '<video src="' + escAttr(bg.value) + '" muted></video>' : '<img src="' + escAttr(bg.value) + '" alt="">') + '</span><span class="slidebg__medlbl">' + (isVideoVal(bg.value) ? "Video" : "Image") + '</span><button type="button" class="btn btn--ghost" data-act="slide-bg-media" data-index="' + i + '" data-sindex="' + k + '">Replace\u2026</button></div>'
+      : '<button type="button" class="btn btn--ghost slidebg__addmedia" data-act="slide-bg-media" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + ' Image or video\u2026</button>';
+    var body = '<div class="sfbclr-row slidebg__sws">' + noneSw + sw + custom + '</div>' + mediaRow;
+    return fsec("slidebg", "Background", body, "", true);
+  }
   function slidePropsPanel(i, k, s) {
-    return '<div class="slides__props-head">Properties</div>' +
-      freeSelPanel(i, k) +
-      slideTransRow(i, k, s);
+    if (freeSelOn(i, k)) {
+      return '<div class="slides__props-head">Properties</div>' +
+        freeSelPanel(i, k) +
+        slideTransRow(i, k, s);
+    }
+    return '<div class="slides__props-head">Slide</div>' +
+      '<div class="fpanel fpanel--slide">' + slideLayoutSection(i, k, s) + slideBgSection(i, k, s) + '</div>' +
+      slideTransRow(i, k, s) +
+      '<div class="af__hint slides__props-tip">Nothing selected. Click an element on the canvas to format it \u2014 or use the toolbar below the slide to add content.</div>';
   }
   function slideTransRow(i, k, s) {
     var cur = (s && s.transition) || "fade";
@@ -10424,6 +10500,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (t.dataset.slide !== undefined && t.dataset.sslot) { onSlideEdit(t); return; }
     if (t.dataset.freefield !== undefined) { onFreeFieldEdit(t); return; }
     if (t.dataset.freecolor !== undefined) { var _cb = freeBlk(t); if (_cb) { _cb[t.dataset.freecolor] = t.value; saveDraft(); freePvRefresh(+t.dataset.fi, +t.dataset.fk); } return; }
+    if (t.dataset.slidebgcolor !== undefined) { var _sbi = +t.dataset.sbi, _sbk = +t.dataset.sbk, _sbst = data.work[_sbi] && data.work[_sbi].study, _sbs = _sbst && _sbst.slides && _sbst.slides[_sbk]; if (_sbs) { _sbs.background = { type: "color", value: t.value }; saveDraft(); freePvRefresh(_sbi, _sbk); } return; }
     if (t.dataset.path) { setPath(data, t.dataset.path, t.value); apply(); return; }
     if (t.dataset.sv !== undefined && t.dataset.field) { onSvInput(t); return; }
     if (t.dataset.list && t.dataset.scalar) { data[t.dataset.list][+t.dataset.index] = t.value; apply(); return; }
@@ -11251,6 +11328,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "slide-ai-draft") { deckAiDraft(i, b); return; }
     if (act === "slide-add-badge") { slideAddBadge(i); return; }
     if (act === "slide-notes") { slideNotesOpen = !slideNotesOpen; renderSlideStage(); return; }
+    if (act === "slide-applylayout") { slideApplyArrangement(i, +b.dataset.sindex, b.dataset.lay); return; }
+    if (act === "slide-bgcolor") { slideSetBg(i, +b.dataset.sindex, { type: "color", value: b.dataset.bgval }); return; }
+    if (act === "slide-bg-none") { slideSetBg(i, +b.dataset.sindex, null); return; }
+    if (act === "slide-bg-media") { var _sbmk = +b.dataset.sindex; pickMedia(function (uri) { slideSetBg(i, _sbmk, { type: "media", value: uri }); }); return; }
     if (act === "free-add-text") { var _fat = slideBlocks(i, +b.dataset.sindex); if (_fat) { _fat.push({ kind: "text", x: 8, y: Math.min(74, 12 + _fat.length * 6), w: 46, size: "md", align: "left", text: "New text" }); freeSelSet(i, +b.dataset.sindex, [_fat.length - 1]); saveDraft(true); renderL2(); } return; }
     if (act === "free-cheat") { freeCheatToggle(); return; }
     if (act === "free-grid") { freeGrid.on = !freeGrid.on; renderL2(); status(freeGrid.on ? "Layout grid on \u2014 blocks snap to the 12 columns." : "Layout grid off.", true); return; }
