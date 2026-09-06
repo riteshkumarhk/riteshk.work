@@ -6699,9 +6699,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       });
     });
   }
-  var slideMenuEl = null;
-  function slideMenuClose() { if (slideMenuEl) { slideMenuEl.remove(); slideMenuEl = null; } document.removeEventListener("pointerdown", slideMenuOutside, true); document.removeEventListener("keydown", slideMenuKey, true); }
-  function slideMenuOutside(e) { if (slideMenuEl && !slideMenuEl.contains(e.target) && !(e.target.closest && e.target.closest('[data-act="slide-menu"]'))) slideMenuClose(); }
+  var slideMenuEl = null, slideMenuAnchor = null;
+  function slideMenuClose() { if (slideMenuEl) { slideMenuEl.remove(); slideMenuEl = null; } slideMenuAnchor = null; document.removeEventListener("pointerdown", slideMenuOutside, true); document.removeEventListener("keydown", slideMenuKey, true); }
+  // Click-outside dismisses; a click on the CURRENT launcher is left for its own handler to toggle shut.
+  function slideMenuOutside(e) { if (!slideMenuEl || slideMenuEl.contains(e.target)) return; if (slideMenuAnchor && slideMenuAnchor.contains && slideMenuAnchor.contains(e.target)) return; slideMenuClose(); }
   function slideMenuKey(e) { if (e.key === "Escape") slideMenuClose(); }
   function slideMenuOpen(anchor, items) {
     slideMenuClose();
@@ -6712,7 +6713,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var mt = r.bottom + 6; if (mt + ph > vh - 8) mt = Math.max(8, r.top - ph - 6);
     pop.style.top = Math.round(mt) + "px";
     pop.style.left = Math.round(Math.max(8, Math.min(r.left, vw - pw - 10))) + "px";
-    slideMenuEl = pop;
+    slideMenuEl = pop; slideMenuAnchor = anchor;
     pop.addEventListener("click", function (e) { var b = e.target.closest("[data-smi]"); if (!b) return; var it = items.filter(function (x) { return x.id === b.getAttribute("data-smi"); })[0]; slideMenuClose(); if (it && it.run) it.run(); });
     setTimeout(function () { document.addEventListener("pointerdown", slideMenuOutside, true); document.addEventListener("keydown", slideMenuKey, true); }, 0);
   }
@@ -6852,6 +6853,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     } });
   }
   function slideToolbarMenu(anchor, which, i) {
+    if (slideMenuEl && slideMenuAnchor === anchor) { slideMenuClose(); return; }   // second click on the launcher toggles it shut
     var items;
     if (which === "slide") items = [
       { id: "blank", label: "Add blank", hint: "Empty canvas", run: function () { slideAddBlankFree(i); } },
@@ -11196,6 +11198,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "l2ai-menu") {
       var _aidx = openStudy;
       if (_aidx < 0) return;
+      if (slideMenuEl && slideMenuAnchor === b) { slideMenuClose(); return; }
       slideMenuOpen(b, [
         { id: "fbrev", label: "Review feedback", hint: "Map notes to sections", run: function () { fbReviewModal(_aidx); } },
         { id: "iprep", label: "Interview prep", hint: "Likely questions", run: function () { iprepModal(_aidx); } },
