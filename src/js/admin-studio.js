@@ -6088,7 +6088,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var tb = root && root.querySelector("[data-l2tabs]");
     if (tb) { tb.innerHTML = caseMode ? l2TabsHtml() : ""; tb.hidden = !caseMode; }
     var mb = root && root.querySelector("[data-l2modebar]");
-    if (mb) { mb.innerHTML = ""; mb.hidden = true; } // mode toggle relocated to the right pane / slide canvas
+    if (mb) { mb.innerHTML = show ? l2ModeBarHtml() : ""; mb.hidden = !show; } // Case study | Slideshow tab nav stays in the left bar in both modes
   }
   // Auto-hide the sticky L2 bar (title + tabs) on scroll down, reveal on scroll up.
   function l2BarScroll() {
@@ -6624,9 +6624,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     stage.hidden = false;
     var w = data.work[openStudy], st = w.study || {}, slides = st.slides || [];
     var sealed = !!(st.slidesEnc && !slides.length);
-    // The mode toggle lives in the right pane for the current-slide view; only float it into the canvas
-    // when the right pane is hidden (the all-slides grid or the sealed state).
-    var _allTop = (slideView !== "all" && !sealed) ? "" : ('<div class="slidestage__top">' + modeToggleHtml() + "</div>");
+    // The Case study | Slideshow tab nav now lives in the left bar (data-l2modebar); nothing floats into the canvas.
+    var _allTop = "";
     var lbl = vwrap && vwrap.querySelector("[data-slideview-lbl]"); if (lbl) lbl.textContent = slideView === "all" ? "All slides" : "Current slide";
     if (sealed) { stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="adm__empty">' + LOCK_SVG + ' This slideshow is protected \u2014 unlock it on the left to edit.</div></div>'; return; }
     if (!slides.length) { stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="adm__empty slides__stage-empty">Your slide editor appears here. Use <b>Add a slide</b> or <b>Draft with AI</b> on the left to start.</div></div>'; return; }
@@ -6648,7 +6647,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var slides0 = (w && w.study && w.study.slides) || [];
     var sealed = !!(w && w.study && w.study.slidesEnc && !slides0.length);
     var isStory = !!(w && l2Tab === "story" && !journeyOpen);
-    var isSlideProps = !!(w && l2Tab === "slides" && slideView !== "all" && !sealed);   // right pane shows in the current-slide view even before the first slide (it carries the mode toggle)
+    var isSlideProps = !!(w && l2Tab === "slides" && slideView !== "all" && !sealed);   // right pane shows the slide inspector in the current-slide view (even before the first slide)
     var active = isStory || isSlideProps;
     if (root) root.classList.toggle("is-casestage", active);
     if (!stage) return;
@@ -6659,7 +6658,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var propsBody;
       if (!slides0.length) propsBody = '<div class="slides__props-head">Slide</div><div class="slides__props-empty">No slides yet. Use <b>Add a slide</b> or <b>Draft with AI</b> on the left to start building your deck.</div>';
       else { var sel = (openSlide >= 0 && slides0[openSlide]) ? openSlide : 0; propsBody = slidePropsPanel(openStudy, sel, slides0[sel] || {}); }
-      stage.innerHTML = '<div class="casestage__top">' + modeToggleHtml() + '</div><aside class="slides__props">' + propsBody + "</aside>";
+      stage.innerHTML = '<aside class="slides__props">' + propsBody + "</aside>";
     }
   }
   function slidePullPicker(i, k) {
@@ -6754,10 +6753,20 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     curOther.forEach(function (b) { out.push(b); });
     return out;
   }
+  // Real content = text with words, media with a src, or any shape/icon/section. Empty layout placeholders
+  // don't count, so browsing layouts on a blank slide swaps cleanly instead of piling placeholder clusters.
+  function slideRealBlocks(blocks) {
+    return (blocks || []).filter(function (b) {
+      if (!b) return false;
+      if (b.kind === "text") return !!String(b.text || "").trim();
+      if (b.kind === "media") return !!b.src;
+      return true;
+    });
+  }
   function slideApplyArrangement(i, k, layId) {
     var st = data.work[i] && data.work[i].study, s = st && st.slides && st.slides[k]; if (!s) return;
     var lib = SLIDE_LAYOUTS_LIB.filter(function (x) { return x.id === layId; })[0]; if (!lib) return;
-    s.blocks = arrangeBlocksToLayout(s.blocks || [], lib.blocks);
+    s.blocks = arrangeBlocksToLayout(slideRealBlocks(s.blocks), lib.blocks);
     s.layout = "free"; s.arrange = layId; freeSel = null;
     saveDraft(true); renderL2();
     status("\u201c" + lib.name + "\u201d layout applied \u2014 your content reflowed into it. Ctrl+Z to undo.", true);
@@ -7814,8 +7823,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var list = (openBlock >= 0 && blocks[openBlock]) ? blockEditor(i, blocks[openBlock], openBlock, blocks.length, true)
       : (blocks.length ? '<div class="adm__empty study__pickhint">Select a section on the left to edit it.<span>The rail is your outline \u2014 reorder, add, hide &amp; lock from there.</span></div>'
         : '<div class="adm__empty">No sections yet \u2014 add the first one from the rail on the left.</div>');
-    return '<div class="casestage__top">' + modeToggleHtml() + "</div>" +
-      '<section class="l2grp"><div class="l2grp__head">Section editor <span>\u2014 pick one on the left</span></div>' +
+    return '<section class="l2grp"><div class="l2grp__head">Section editor <span>\u2014 pick one on the left</span></div>' +
       '<div class="study__blocks study__blocks--single">' + list + "</div></section>";
   }
   function studyEditor(w, i) {
