@@ -6464,19 +6464,19 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   // preview pane (renderSlideStage), and the Current/All-slides toggle lives in the status bar.
   function slideNavScrollTop() { var e = root && root.querySelector(".adm__editor"); return e ? e.scrollTop : 0; }
   function slideNavScrollTo(t) { var e = root && root.querySelector(".adm__editor"); if (e) e.scrollTop = t; requestAnimationFrame(function () { var e2 = root && root.querySelector(".adm__editor"); if (e2) e2.scrollTop = t; }); }
+  function slideInsHtml(i, at) { return '<button type="button" class="slides__ins" data-act="slide-addabove" data-index="' + i + '" data-sindex="' + at + '" title="Insert a slide here" aria-label="Insert a slide here"><span class="slides__ins-line"></span><span class="slides__ins-plus">' + IC.add + "</span></button>"; }
   function slidesNav(w, i) {
     var slides = w.study.slides || [], has = slides.length;
     var sel = (openSlide >= 0 && slides[openSlide]) ? openSlide : (has ? 0 : -1);
-    if (!has) return '<section class="l2grp slides__navwrap"><div class="adm__empty">No slides yet \u2014 use <b>Add slide</b> above, or press <b>Rehearse</b> for an auto-built deck. Your slide editor opens on the right.</div></section>';
+    var addBtn = '<button class="btn btn--add slides__nav-add" data-act="slide-add" data-index="' + i + '">' + IC.add + " Add a slide " + IC.chevD + "</button>";
+    if (!has) return '<section class="l2grp slides__navwrap"><div class="adm__empty">No slides yet \u2014 add one to begin, or press <b>Rehearse</b> for an auto-built deck.</div>' + addBtn + "</section>";
     var rows = "", hideGroup = false;
     slides.forEach(function (s, k) {
       if (s.act) { rows += slideGroupHead(i, k, s); hideGroup = !!slideActCollapsed[s.id]; }
       if (hideGroup) return;
-      rows += slideThumb(i, s, k, slides.length, k === sel, "nav");
+      rows += slideInsHtml(i, k) + slideThumb(i, s, k, slides.length, k === sel, "nav");
     });
-    return '<section class="l2grp slides__navwrap"><aside class="slides__nav">' + slideBulkBar(i) + '<div class="slides__nav-scroll">' +
-      rows +
-      '</div><button class="btn btn--add slides__nav-add" data-act="slide-add" data-index="' + i + '">' + IC.add + " Add a slide</button></aside></section>";
+    return '<section class="l2grp slides__navwrap"><aside class="slides__nav">' + slideBulkBar(i) + '<div class="slides__nav-scroll">' + rows + "</div>" + addBtn + "</aside></section>";
   }
   // RIGHT preview pane becomes the live slide editor (canvas + tools/inspector + presenter notes),
   // or the thumbnail sorter when the status-bar view is "All slides". Called on every renderL2.
@@ -6548,8 +6548,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var pop = document.createElement("div"); pop.className = "smenu__pop";
     pop.innerHTML = items.map(function (it) { return it.sep ? '<div class="smenu__sep"></div>' : '<button type="button" class="smenu__item" data-smi="' + it.id + '"><span class="smenu__lbl">' + escHtml(it.label) + "</span>" + (it.hint ? '<em class="smenu__hint">' + escHtml(it.hint) + "</em>" : "") + "</button>"; }).join("");
     document.body.appendChild(pop);
-    var r = anchor.getBoundingClientRect(), pw = pop.offsetWidth || 210, vw = window.innerWidth;
-    pop.style.top = Math.round(r.bottom + 6) + "px";
+    var r = anchor.getBoundingClientRect(), pw = pop.offsetWidth || 210, ph = pop.offsetHeight || 0, vw = window.innerWidth, vh = window.innerHeight;
+    var mt = r.bottom + 6; if (mt + ph > vh - 8) mt = Math.max(8, r.top - ph - 6);
+    pop.style.top = Math.round(mt) + "px";
     pop.style.left = Math.round(Math.max(8, Math.min(r.left, vw - pw - 10))) + "px";
     slideMenuEl = pop;
     pop.addEventListener("click", function (e) { var b = e.target.closest("[data-smi]"); if (!b) return; var it = items.filter(function (x) { return x.id === b.getAttribute("data-smi"); })[0]; slideMenuClose(); if (it && it.run) it.run(); });
@@ -6660,9 +6661,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     slideMenuOpen(anchor, items);
   }
   function slidesToolbar(i, has, nBlocks) {
-    function dd(menu, label) { return '<button type="button" class="btn btn--ghost slides__dd" data-act="slide-menu" data-menu="' + menu + '" data-index="' + i + '">' + label + " " + IC.chevD + "</button>"; }
-    return '<div class="slides__toolbar"><div class="slides__tb-l">' + dd("slide", IC.add + " Add slide") + dd("text", "Add text") + dd("media", "Add media") + "</div>" +
-      '<div class="slides__tb-r"><button class="btn btn--ghost" data-act="slide-rehearse" data-index="' + i + '"' + (has || nBlocks ? "" : " disabled") + ">" + IC.play + " Rehearse</button>" +
+    return '<div class="slides__toolbar"><div class="slides__tb-r"><button class="btn btn--ghost" data-act="slide-rehearse" data-index="' + i + '"' + (has || nBlocks ? "" : " disabled") + ">" + IC.play + " Rehearse</button>" +
       '<button class="btn btn--auto" data-act="slide-ai-draft" data-index="' + i + '"' + (nBlocks ? "" : " disabled") + ">" + IC.spark + " Draft with AI</button></div></div>";
   }
   // Owner-only: turn a published study's sealed slideshow (slidesEnc) back into an editable plaintext
@@ -10996,7 +10995,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "study-blocklock") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].locked = !s[j].locked; saveDraft(true); renderL2(); status(s[j].locked ? "Section locked \u2014 hidden behind the deeper-cut pass." : "Section unlocked.", true); } return; }
     if (act === "study-blocksep") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { if (s[j].sep === false) delete s[j].sep; else s[j].sep = false; saveDraft(true); renderL2(); status(s[j].sep === false ? "Divider off \u2014 this section flows into the previous one." : "Divider on \u2014 separator line above.", true); } return; }
     if (act === "study-blockoff") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { if (s[j].off) delete s[j].off; else s[j].off = true; saveDraft(true); renderL2(); status(s[j].off ? "Section hidden from the live site \u2014 still listed here so you can toggle it back." : "Section shown on the live site.", true); } return; }
-    if (act === "slide-add") { slideLayoutPickerModal(i); return; }
+    if (act === "slide-add") { slideToolbarMenu(b, "slide", i); return; }
     if (act === "slide-addabove") { var _aaw = data.work[i], _aas = _aaw && _aaw.study && _aaw.study.slides, _aak = +b.dataset.sindex; if (!_aas) return; _aas.splice(_aak, 0, { id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: "free", blocks: [], notes: "" }); openSlide = _aak; freeSel = null; saveDraft(true); renderL2(); status("Blank slide added above.", true); return; }
     if (act === "slide-view") { slideView = b.dataset.view === "all" ? "all" : "current"; renderSlideStage(); return; }
     if (act === "slide-select") { if (e.target.closest("button, input, select, textarea, [data-grip]")) return; var _ssk = +b.dataset.sindex; if (e.shiftKey || e.ctrlKey || e.metaKey) { slideMultiToggle(i, _ssk); renderL2(); return; } slideMulti = null; if (openSlide !== _ssk) { var _nt = slideNavScrollTop(); openSlide = _ssk; renderL2(); slideNavScrollTo(_nt); } return; }

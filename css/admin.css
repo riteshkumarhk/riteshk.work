@@ -2919,15 +2919,20 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .slides__viewtab.is-on { background: linear-gradient(180deg, #e8ba6b, #cd923d); color: #241a09; box-shadow: inset 0 1px 0 rgba(255,255,255,.42), 0 3px 9px -5px rgba(184,132,58,.6); }
 .slides__shell { display: grid; grid-template-columns: 176px minmax(0, 1fr); gap: 1rem; align-items: start; }
 .slides__nav { display: flex; flex-direction: column; gap: .55rem; position: sticky; top: .3rem; }
-.slides__nav-scroll { display: flex; flex-direction: column; gap: .55rem; max-height: 62vh; overflow: auto; padding: .15rem; margin: -.15rem; }
+.slides__nav-scroll { display: flex; flex-direction: column; gap: .2rem; max-height: 62vh; overflow: auto; padding: .15rem; margin: -.15rem; }
 .slides__nav-add { width: 100%; }
+.slides__ins { display: block; width: 100%; height: .6rem; padding: 0; margin: 0; border: 0; background: none; position: relative; cursor: pointer; opacity: 0; transition: opacity .14s var(--ease); }
+.slides__ins:hover, .slides__ins:focus-visible { opacity: 1; outline: none; }
+.slides__ins-line { position: absolute; left: 1.55rem; right: .2rem; top: 50%; height: 2px; transform: translateY(-50%); background: var(--accent); border-radius: 2px; }
+.slides__ins-plus { position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 1.55rem; height: 1.3rem; color: var(--accent); }
+.slides__ins-plus svg { width: 13px; height: 13px; }
 .slides__navitem, .slides__allcard { position: relative; border: 1px solid var(--line-soft); border-radius: 11px; background: var(--bg-2); padding: .35rem .35rem .35rem 1.55rem; cursor: pointer; transition: border-color .2s var(--ease), box-shadow .2s var(--ease), transform .2s var(--ease); }
 .slides__navitem:hover, .slides__allcard:hover { border-color: var(--text-faint); }
 .slides__allcard:hover { transform: translateY(-1px); box-shadow: 0 6px 18px -10px rgba(0,0,0,.6); }
 .slides__navitem:focus-visible, .slides__allcard:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(216,166,71,.28); }
 .slides__navitem.is-active, .slides__allcard.is-active { border-color: rgba(216,166,71,.55); box-shadow: 0 0 0 2px rgba(216,166,71,.28); }
 .slides__navitem.is-off, .slides__allcard.is-off { opacity: .58; }
-.slides__thumbnum { position: absolute; top: .38rem; left: .42rem; z-index: 2; font: 600 .6rem/1 var(--mono); color: var(--text-faint); }
+.slides__thumbnum { position: absolute; top: .32rem; left: 0; width: 1.55rem; text-align: center; z-index: 2; font: 600 .62rem/1 var(--mono); color: var(--text-faint); }
 .slides__thumbgrip { position: absolute; left: .12rem; top: 50%; transform: translateY(-50%); z-index: 3; display: grid; place-items: center; width: 1.2rem; height: 1.7rem; border-radius: 5px; color: var(--text-faint); opacity: 0; cursor: grab; transition: opacity .15s var(--ease), color .15s var(--ease); }
 .slides__navitem:hover .slides__thumbgrip, .slides__navitem:focus-within .slides__thumbgrip { opacity: .85; }
 .slides__thumbgrip:hover { color: var(--text); opacity: 1; }
@@ -3012,10 +3017,10 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 /* Slideshow tab: the RIGHT preview pane becomes the live slide editor; left pane = navigator */
 .adm__slidestage { display: none; }
 .adm__slideview { display: none; }
-.adm.is-slidestage .adm__main { grid-template-columns: var(--adm-navcol, 320px) minmax(0, 1fr) !important; }
+.adm.is-slidestage .adm__main { grid-template-columns: var(--adm-navcol, 248px) minmax(0, 1fr) !important; }
 .adm.is-slidestage .l2tabs { flex-wrap: wrap; row-gap: .3rem; }
 .adm.is-slidestage .l2tab { flex: 1 1 auto; }
-.adm.is-slidestage .adm__resizer { display: flex !important; left: var(--adm-navcol, 320px); }
+.adm.is-slidestage .adm__resizer { display: flex !important; left: var(--adm-navcol, 248px); }
 .adm.is-slidestage .adm__device, .adm.is-slidestage .adm__prevw, .adm.is-slidestage .adm__devlabel { display: none !important; }
 .adm.is-slidestage .adm__slidestage { display: block; height: 100%; overflow: hidden; }
 .adm.is-slidestage .adm__preview { display: flex !important; background: #050506; }
