@@ -4683,7 +4683,6 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var tabs = '<div class="story__rail-tabs">' +
       '<button type="button" class="story__pill' + (storyThumbs ? " is-on" : "") + '" data-act="story-thumbs" data-index="' + i + '" aria-pressed="' + storyThumbs + '" title="Toggle between thumbnail cards and a sliced list">' + IC.board + " Thumbnails</button>" +
       (hasLocked ? '<button type="button" class="story__pill story__pill--lock' + (storyLocked ? " is-on" : "") + '" data-act="story-locked" data-index="' + i + '" aria-pressed="' + storyLocked + '" title="Show &amp; unlock the locked / vaulted sections for editing">' + LOCK_SVG + " View locked sections</button>" : "") +
-      '<button type="button" class="story__pill story__pill--ai" data-act="l2ai-menu" aria-haspopup="true" title="AI tools \u2014 review feedback, interview prep, storyteller" aria-label="AI tools">' + IC.spark + "</button>" +
       "</div>";
     var rows = "";
     blocks.forEach(function (b, j) {
@@ -7726,7 +7725,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (e.target.closest("button")) return; // placeholder insert-cluster buttons receive their own clicks (no drag)
     var _rlEl = e.target.closest("[data-fbruler]"), _gdEl = e.target.closest("[data-fbguide]");
     if (_rlEl || _gdEl) { freeGuideStart(_rlEl || _gdEl, e, !!_rlEl); return; }
-    var meta = freeStageMeta(e.target); if (!meta) return;
+    var meta = freeStageMeta(e.target);
+    if (!meta) {   // clicked off the slide: deselect when it lands in the empty canvas area (not on a control/panel)
+      if (freeSel && freeSel.ids && freeSel.ids.length && e.target.closest && e.target.closest(".slides__canvas-body") && !e.target.closest("button, input, textarea, select, [contenteditable]")) { freeSel = null; renderL2(); }
+      return;
+    }
     var i = meta.i, k = meta.k, sw = meta.rect.width || 1, sh = meta.rect.height || 1;
     var handleEl = e.target.closest("[data-fbh]"), rotEl = e.target.closest("[data-fbrot]"), blkEl = e.target.closest(".sfb[data-fb]");
     if (blkEl && handleEl) {
