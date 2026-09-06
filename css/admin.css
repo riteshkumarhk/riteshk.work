@@ -2969,6 +2969,7 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .slides__navitem:hover .slides__thumbops, .slides__navitem:focus-within .slides__thumbops, .slides__allcard:hover .slides__thumbops, .slides__allcard:focus-within .slides__thumbops { display: flex; }
 .slides__thumbops .iconbtn { width: 24px; height: 24px; }
 .slides__thumbops .iconbtn svg { width: 13px; height: 13px; }
+.slides__thumbops .study__block-off { display: grid; }
 .slides__thumbbadge { position: absolute; bottom: .4rem; left: .42rem; z-index: 2; font: 600 .54rem/1 var(--mono); text-transform: uppercase; letter-spacing: .05em; color: #241a09; background: #e0a35a; padding: .16rem .34rem; border-radius: 5px; }
 /* ---- Story section rail (P1): thumbnail/sliced navigator beside the section editor ---- */
 .study__stage { display: grid; grid-template-columns: 234px minmax(0, 1fr); gap: 1.1rem; align-items: start; }
