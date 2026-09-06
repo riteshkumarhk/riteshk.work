@@ -7134,11 +7134,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (bl.opacity != null && +bl.opacity < 100) st += "opacity:" + (Math.max(0, Math.min(100, +bl.opacity)) / 100) + ";";
     if (bl.shadow) st += "filter:" + freeShadowCss(bl.shadow) + ";";
     var inner, kind = bl.kind === "media" ? "media" : bl.kind === "shape" ? "shape" : bl.kind === "icon" ? "icon" : bl.kind === "section" ? "section" : "text";
+    var txStyle = "";
     if (kind === "text") {
-      var _tc = freeColor(bl.color); if (_tc) st += "color:" + _tc + ";";
-      if (bl.font === "serif") st += "font-family:var(--serif);"; else if (bl.font === "mono") st += "font-family:var(--mono);";
-      if (bl.lh != null && isFinite(+bl.lh)) st += "line-height:" + Math.max(0.7, Math.min(3, +bl.lh)) + ";";
-      if (bl.ls != null && isFinite(+bl.ls)) st += "letter-spacing:" + Math.max(-0.1, Math.min(0.6, +bl.ls)) + "em;";
+      // Colour/font/line-height/letter-spacing live on .sfb__tx: an inline colour on the outer .sfb is
+      // beaten by .sfb__tx's own role/size colour rule, so the override must sit on the text element itself.
+      var _tc = freeColor(bl.color); if (_tc) txStyle += "color:" + _tc + ";";
+      if (bl.font === "serif") txStyle += "font-family:var(--serif);"; else if (bl.font === "mono") txStyle += "font-family:var(--mono);";
+      if (bl.lh != null && isFinite(+bl.lh)) txStyle += "line-height:" + Math.max(0.7, Math.min(3, +bl.lh)) + ";";
+      if (bl.ls != null && isFinite(+bl.ls)) txStyle += "letter-spacing:" + Math.max(-0.1, Math.min(0.6, +bl.ls)) + "em;";
       var _bg = freeColor(bl.bg); if (_bg) { st += "background:" + _bg + ";padding:" + (bl.pad != null ? Math.max(0, +bl.pad) : 18) + "px;"; if (bl.radius) st += "border-radius:" + (parseFloat(bl.radius) || 0) + "px;"; }
     } else if (kind === "media") {
       if (bl.radius) st += "border-radius:" + (parseFloat(bl.radius) || 0) + "px;overflow:hidden;";
@@ -7150,7 +7153,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     else if (kind === "shape") inner = editorShapeInner(bl);
     else if (kind === "icon") inner = '<div class="sfb__icon" style="color:' + (freeColor(bl.color) || "var(--accent)") + '">' + ((window.RK && window.RK.iconSvg) ? window.RK.iconSvg(bl.name || "star") : "") + "</div>";
     else if (isPh) inner = phInsertCluster(i, k, idx);
-    else { var _tx = String(bl.text || ""), _body = _tx.trim() ? (/<[a-z!/]/i.test(_tx) ? _tx : escHtml(_tx)) : '<span class="sfb__empty">' + escHtml(bl.ph || "Text") + '</span>'; inner = '<div class="sfb__tx ' + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + (bl.role === "kicker" || bl.role === "caption" ? " " + bl.role : "") + " a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "") + '">' + _body + "</div>"; }
+    else { var _tx = String(bl.text || ""), _body = _tx.trim() ? (/<[a-z!/]/i.test(_tx) ? _tx : escHtml(_tx)) : '<span class="sfb__empty">' + escHtml(bl.ph || "Text") + '</span>'; inner = '<div class="sfb__tx ' + (bl.size === "sm" || bl.size === "lg" ? bl.size : "md") + (bl.role === "kicker" || bl.role === "caption" ? " " + bl.role : "") + " a" + (bl.align === "center" || bl.align === "right" ? bl.align : "left") + (boxed ? " v" + (bl.valign === "middle" || bl.valign === "bottom" ? bl.valign : "top") : "") + '"' + (txStyle ? ' style="' + txStyle + '"' : "") + '>' + _body + "</div>"; }
     var chrome = (single && !bl.lock) ? (FREE_HANDLES.map(function (h) { return '<span class="sfb__h sfb__h--' + h + '" data-fbh="' + h + '"></span>'; }).join("") + '<span class="sfb__rot" data-fbrot title="Drag to rotate"></span>') : "";
     var badge = (bl.lock || bl.href || bl.jump != null) ? '<span class="sfb__badges">' + (bl.lock ? '<span class="sfb__badge sfb__badge--lock" title="Locked">' + IC.lock + "</span>" : "") + ((bl.href || bl.jump != null) ? '<span class="sfb__badge sfb__badge--link" title="Links in Present">' + IC.link + "</span>" : "") + "</span>" : "";
     var bx = boxed && kind === "media" ? " sfb--fit" + (bl.fit === "contain" ? " sfb--contain" : "") : (boxed && kind === "text" ? " sfb--boxed" : "");
