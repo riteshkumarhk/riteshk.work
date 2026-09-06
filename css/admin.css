@@ -3115,6 +3115,18 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
   .adm.is-casestage .adm__casestage { border-left: 0; border-top: 1px solid var(--line); }
   .adm.is-casestage .adm__editor { border-right: 0; }
 }
+/* Preview layout modes: Split (default) · Editor only (is-prevoff) · Preview only (is-prevfull) */
+.adm.is-prevfull .adm__main { grid-template-columns: minmax(0, 1fr) !important; }
+.adm.is-prevfull .adm__editor,
+.adm.is-prevfull .adm__casestage { display: none !important; }
+.adm.is-prevfull .adm__resizer { display: none !important; }
+.adm.is-prevfull .adm__bar-prev { color: var(--accent); border-color: var(--accent); border-style: solid; }
+/* Editor-only inside the 3-pane case-study shell: rail + section editor fill, preview column drops */
+.adm.is-casestage.is-prevoff .adm__main { grid-template-columns: clamp(280px, 26%, 400px) minmax(0, 1fr) !important; }
+.adm.is-casestage.is-prevfull .adm__main { grid-template-columns: minmax(0, 1fr) !important; }
+/* Preview-only in slideshow mode still keeps the slide nav (it lives in the editor pane) */
+.adm.is-slidestage.is-prevfull .adm__main { grid-template-columns: var(--adm-navcol, 248px) minmax(0, 1fr) !important; }
+.adm.is-slidestage.is-prevfull .adm__editor { display: block !important; }
 .slides__navitem.is-active .slides__thumbops { display: flex; }
 /* Current-slide view = full-height 3-column work grid: center (canvas + notes) | properties */
 .slides__work { display: grid; grid-template-columns: minmax(0, 1fr) clamp(280px, 26%, 340px); height: 100%; min-height: 0; }

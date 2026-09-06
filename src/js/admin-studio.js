@@ -34,6 +34,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   const MUSIC_TRACK_KEY = "rk:music:track";
   const L2PREV_KEY = "rk:adm:l2prev"; // remember the L2 live-preview on/off choice
   const PREV_OFF_KEY = "rk:adm:prevoff"; // remember the main live-preview pane show/hide choice
+  const PREV_MODE_KEY = "rk:adm:prevmode"; // 3-state workspace layout: split | editor | preview
+  var prevLayout = "split";
   const DEFAULT_TRACKS = [
     { title: "Midnight", gen: "midnight" },
     { title: "Ember Glow", gen: "ember" },
@@ -17081,12 +17083,21 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       });
     }
     root.querySelector("[data-l2-back]").addEventListener("click", () => { if (journeyOpen) closeJourneyEditor(); else closeL2(); });
+    function setPrevMode(mode) {
+      prevLayout = (mode === "editor" || mode === "preview") ? mode : "split";
+      root.classList.toggle("is-prevoff", prevLayout === "editor");
+      root.classList.toggle("is-prevfull", prevLayout === "preview");
+      try { localStorage.setItem(PREV_MODE_KEY, prevLayout); localStorage.setItem(PREV_OFF_KEY, prevLayout === "editor" ? "1" : "0"); } catch (e) {}
+      var _pb = root.querySelector("[data-prevtoggle]"); if (!_pb) return;
+      var _lbl = ({ split: ["Split view", "Split view \u2014 click for editor only"], editor: ["Editor only", "Editor only \u2014 click for preview only"], preview: ["Preview only", "Preview only \u2014 click for split view"] })[prevLayout] || ["Split view", ""];
+      var _tx = _pb.querySelector(".adm__bar-prev-tx"); if (_tx) _tx.textContent = _lbl[0];
+      _pb.title = _lbl[1];
+      _pb.setAttribute("aria-pressed", prevLayout !== "editor" ? "true" : "false");
+    }
     var _prevToggle = root.querySelector("[data-prevtoggle]");
     if (_prevToggle) _prevToggle.addEventListener("click", function () {
-      var nowOff = root.classList.toggle("is-prevoff");
-      try { localStorage.setItem(PREV_OFF_KEY, nowOff ? "1" : "0"); } catch (e) {}
-      _prevToggle.setAttribute("aria-pressed", nowOff ? "false" : "true");
-      _prevToggle.title = nowOff ? "Show the live preview" : "Hide the live preview";
+      var order = ["split", "editor", "preview"];
+      setPrevMode(order[(order.indexOf(prevLayout) + 1) % 3] || "split");
     });
     var _newtab = root.querySelector("[data-newtab]");
     if (_newtab) _newtab.addEventListener("click", function () {
@@ -17098,7 +17109,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         window.open(previewUrl(), "_blank", "noopener");
       } catch (e) {}
     });
-    if (localStorage.getItem(PREV_OFF_KEY) === "1" && _prevToggle) { root.classList.add("is-prevoff"); _prevToggle.setAttribute("aria-pressed", "false"); _prevToggle.title = "Show the live preview"; }
+    try {
+      var _pm0 = localStorage.getItem(PREV_MODE_KEY);
+      if (!_pm0) _pm0 = (localStorage.getItem(PREV_OFF_KEY) === "1") ? "editor" : "split";
+      setPrevMode(_pm0);
+    } catch (e) { setPrevMode("split"); }
     try { draftBytes = (localStorage.getItem(DRAFT_KEY) || "").length; } catch (e) {}   // seed the gauge from the persisted draft
     updateDraftMeter();
     // Resizable editor/preview divider - drag to set the editor width (persists). Drag it right to shrink
