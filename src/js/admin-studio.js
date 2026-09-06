@@ -4682,7 +4682,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var hasLocked = blocks.some(function (b) { return b && (b.locked || b.encStub || b.vaultBlock); });
     var tabs = '<div class="story__rail-tabs">' +
       '<button type="button" class="story__pill' + (storyThumbs ? " is-on" : "") + '" data-act="story-thumbs" data-index="' + i + '" aria-pressed="' + storyThumbs + '" title="Toggle between thumbnail cards and a sliced list">' + IC.board + " Thumbnails</button>" +
-      (hasLocked ? '<button type="button" class="story__pill' + (storyLocked ? " is-on" : "") + '" data-act="story-locked" data-index="' + i + '" aria-pressed="' + storyLocked + '" title="Show &amp; unlock the locked / vaulted sections for editing">' + LOCK_SVG + " View locked sections</button>" : "") +
+      (hasLocked ? '<button type="button" class="story__pill story__pill--lock' + (storyLocked ? " is-on" : "") + '" data-act="story-locked" data-index="' + i + '" aria-pressed="' + storyLocked + '" title="Show &amp; unlock the locked / vaulted sections for editing">' + LOCK_SVG + " View locked sections</button>" : "") +
       '<button type="button" class="story__pill story__pill--ai" data-act="l2ai-menu" aria-haspopup="true" title="AI tools \u2014 review feedback, interview prep, storyteller" aria-label="AI tools">' + IC.spark + "</button>" +
       "</div>";
     var rows = "";
