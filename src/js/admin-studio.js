@@ -6474,12 +6474,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     return '<div class="card study__block study__block--slide' + (open ? " is-open" : "") + (s.hidden ? " is-off" : "") + '">' + head + bodyHtml + "</div>";
   }
   function slidesPanel(w, i) {
-    var st = w.study; var slides = st.slides || []; var has = slides.length; var nBlocks = (st.blocks || []).length;
+    var st = w.study; var slides = st.slides || []; var has = slides.length;
     var intro = '<section class="l2grp slides__topbar"><div class="l2grp__head">Slideshow <span>\u2014 owner-only \u00b7 encrypted on publish</span></div>';
     if (st.slidesEnc && !has) {
       return intro + '<div class="adm__empty slides__sealed">' + LOCK_SVG + ' This slideshow is protected \u2014 its slides aren\u2019t in your published file. <button class="btn btn--ghost" data-act="slide-decrypt" data-index="' + i + '">Unlock to edit</button></div></section>';
     }
-    intro += slidesToolbar(i, has, nBlocks) + "</section>";
+    intro += "</section>";
     return intro + slidesNav(w, i);
   }
   var slideMulti = null;        // { i, ids:[k,...] } — slides multi-selected for bulk actions
@@ -6596,15 +6596,18 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function slidesNav(w, i) {
     var slides = w.study.slides || [], has = slides.length;
     var sel = (openSlide >= 0 && slides[openSlide]) ? openSlide : (has ? 0 : -1);
+    var nBlocks = (w.study.blocks || []).length;
     var addBtn = '<button class="btn btn--add slides__nav-add" data-act="slide-add" data-index="' + i + '">' + IC.add + " Add a slide " + IC.chevD + "</button>";
-    if (!has) return '<section class="l2grp slides__navwrap"><div class="adm__empty">No slides yet \u2014 add one to begin, or press <b>Rehearse</b> for an auto-built deck.</div>' + addBtn + "</section>";
+    var aiBtn = '<button class="btn btn--auto slides__nav-ai" data-act="slide-ai-draft" data-index="' + i + '"' + (nBlocks ? "" : " disabled") + ' title="' + (nBlocks ? "Compose a narrative deck from this case study with AI" : "Add case-study sections first, then AI can draft a deck") + '">' + IC.spark + " Draft with AI</button>";
+    var foot = '<div class="slides__nav-foot">' + addBtn + aiBtn + "</div>";
+    if (!has) return '<section class="l2grp slides__navwrap"><div class="adm__empty">No slides yet \u2014 add one to begin, or <b>Draft with AI</b> from your sections.</div>' + foot + "</section>";
     var rows = "", hideGroup = false;
     slides.forEach(function (s, k) {
       if (s.act) { rows += slideGroupHead(i, k, s); hideGroup = !!slideActCollapsed[s.id]; }
       if (hideGroup) return;
       rows += slideInsHtml(i, k) + slideThumb(i, s, k, slides.length, k === sel, "nav");
     });
-    return '<section class="l2grp slides__navwrap"><aside class="slides__nav">' + slideBulkBar(i) + '<div class="slides__nav-scroll">' + rows + "</div>" + addBtn + "</aside></section>";
+    return '<section class="l2grp slides__navwrap"><aside class="slides__nav">' + slideBulkBar(i) + '<div class="slides__nav-scroll">' + rows + "</div>" + foot + "</aside></section>";
   }
   // RIGHT preview pane becomes the live slide editor (canvas + tools/inspector + presenter notes),
   // or the thumbnail sorter when the status-bar view is "All slides". Called on every renderL2.
