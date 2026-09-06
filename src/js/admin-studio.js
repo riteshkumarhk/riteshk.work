@@ -6598,7 +6598,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var sel = (openSlide >= 0 && slides[openSlide]) ? openSlide : (has ? 0 : -1);
     var nBlocks = (w.study.blocks || []).length;
     var addBtn = '<button class="btn btn--add slides__nav-add" data-act="slide-add" data-index="' + i + '">' + IC.add + " Add a slide " + IC.chevD + "</button>";
-    var aiBtn = '<button class="btn btn--auto slides__nav-ai" data-act="slide-ai-draft" data-index="' + i + '"' + (nBlocks ? "" : " disabled") + ' title="' + (nBlocks ? "Compose a narrative deck from this case study with AI" : "Add case-study sections first, then AI can draft a deck") + '">' + IC.spark + " Draft with AI</button>";
+    var aiBtn = '<button class="btn btn--auto slides__nav-ai" data-act="slide-ai-draft" data-index="' + i + '"' + (nBlocks ? "" : " disabled") + ' title="' + (nBlocks ? "Turn this case study into a slideshow \u2014 AI weaves your sections into a story (skipping or reordering for flow)" : "Add case-study sections first \u2014 the AI builds the slideshow from them") + '">' + IC.spark + " Draft with AI</button>";
     var foot = '<div class="slides__nav-foot">' + addBtn + aiBtn + "</div>";
     if (!has) return '<section class="l2grp slides__navwrap"><div class="adm__empty">No slides yet \u2014 add one to begin, or <b>Draft with AI</b> from your sections.</div>' + foot + "</section>";
     var rows = "", hideGroup = false;
@@ -6841,7 +6841,6 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       { id: "layout", label: "Add a layout\u2026", hint: "Pick a template", run: function () { slideLayoutPickerModal(i); } },
       { id: "section", label: "Generate from a section", run: function () { slideNewFromSection(i); } },
       { sep: true },
-      { id: "deck", label: "Build deck from all sections", run: function () { slideBuildDeck(i); } },
       { id: "act", label: "Start a section here", hint: "Group slides in the navigator", run: function () { slideStartSection(i); } }
     ];
     else if (which === "text") items = [
@@ -6930,7 +6929,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { deckAiDraft(i, btn); }); return; }
     if (!(w.study.blocks && w.study.blocks.length)) { status("Add a few case-study sections first \u2014 the AI drafts the deck from them."); return; }
     if (w.study.slides && w.study.slides.length) {
-      var okReplace = await confirmModal({ title: "Replace the deck with an AI draft?", sub: "This replaces your current " + w.study.slides.length + " slide" + (w.study.slides.length === 1 ? "" : "s") + " with a fresh AI-composed deck from this case study.", cta: "Draft new deck" });
+      var okReplace = await confirmModal({ title: "Replace the slideshow with an AI draft?", sub: "This replaces your current " + w.study.slides.length + " slide" + (w.study.slides.length === 1 ? "" : "s") + " with a fresh slideshow the AI weaves from your case-study sections.", cta: "Draft new slideshow" });
       if (!okReplace) return;
     }
     var srcW = w, includeLocked = false;
@@ -11318,7 +11317,6 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "slide-act-remove") { var _arw2 = data.work[i], _ars2 = _arw2 && _arw2.study && _arw2.study.slides, _ark2 = +b.dataset.sindex; if (_ars2 && _ars2[_ark2]) { delete _ars2[_ark2].act; saveDraft(true); renderL2(); status("Section header removed.", true); } return; }
     if (act === "slide-toggle") { if (e.target.closest("button, input, select, textarea, [data-grip]")) return; var _stk = +b.dataset.sindex; openSlide = (openSlide === _stk) ? -1 : _stk; renderL2(); return; }
     if (act === "slide-menu") { slideToolbarMenu(b, b.dataset.menu, i); return; }
-    if (act === "slide-build") { slideBuildDeck(i); return; }
     if (act === "slide-rehearse") {
       var _rhw = data.work[i]; if (!_rhw || !(window.RK && window.RK.presentDeck)) { status("Reload the studio to rehearse \u2014 the deck player didn\u2019t load."); return; }
       var _rhopts = {};
