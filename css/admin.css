@@ -3177,6 +3177,18 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .slides__center > * { width: 100%; }
 .slides__center > .slides__canvas-head { flex: 0 0 auto; }
 .slides__canvas-body { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
+/* Insert toolbar (replaces the old always-on notes strip) + the toggled speaker-notes panel */
+.slides__center > .slides__insertbar { flex: 0 0 auto; width: auto; align-self: center; max-width: 100%; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .4rem; margin-top: .8rem; padding: .5rem .6rem; background: var(--bg-2); border: 1px solid var(--line); border-radius: 14px; }
+.slides__ib-new { padding: .5rem .85rem; font-size: .8rem; gap: .35rem; border-radius: 10px; }
+.slides__ib-new svg { width: 15px; height: 15px; }
+.slides__ib-btn { width: 34px; height: 34px; border-radius: 9px; }
+.slides__ib-btn svg { width: 18px; height: 18px; }
+.slides__ib-sep { align-self: stretch; width: 1px; margin: .15rem .1rem; background: var(--line); }
+.slides__ib-notes { padding: .46rem .8rem; font-size: .78rem; gap: .35rem; border-radius: 10px; }
+.slides__ib-notes svg { width: 17px; height: 17px; }
+.slides__ib-notes.is-on { border-color: var(--accent); color: var(--accent); }
+.slides__notespanel { flex: 0 0 auto; margin-top: .7rem; border-top: 1px solid var(--line-soft); padding-top: .7rem; max-height: 34vh; overflow: auto; }
+.slides__notespanel .af { margin-bottom: 0; }
 .slides__props { border-left: 1px solid var(--line); min-height: 0; overflow: auto; padding: 1rem .9rem 1.6rem; background: rgba(0, 0, 0, .16); }
 .slides__props-head { font: 600 .6rem/1 var(--mono); text-transform: uppercase; letter-spacing: .09em; color: var(--text-faint); margin: 0 0 .85rem; }
 .slides__props-add { margin-bottom: .35rem; }

@@ -230,6 +230,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   var storyThumbObs = null; // IntersectionObserver that lazily renders rail thumbnails as they scroll into view
   let openSlide = -1; // which slide is expanded in the Slideshow tab
   var slideView = "current"; // Slideshow shell view: "current" (nav rail + big canvas) or "all" (thumbnail sorter)
+  var slideNotesOpen = false; // Slideshow: the speaker-notes panel is toggled from the insert bar
   var slidePvRO = null; // ResizeObserver that refits inline slide previews when the editor width changes
   let journeyOpen = false; // is the Design Journey editor open in the L2 panel?
   let openJC = -1; // which journey chapter is expanded in the accordion
@@ -6553,12 +6554,39 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   // The slide CANVAS lives in the centre preview pane; the properties/inspector live in the shared
   // right pane (.adm__casestage) via renderCaseStage — same chrome as the case-study section editor.
+  // Notes moved off the canvas onto a toggled panel (the insert bar's Notes button); the insert bar
+  // replaces the old always-on notes strip so the centre is canvas + a Pitch/Canva-style insert toolbar.
+  function slideNotesPanel(i, sel) {
+    return '<div class="slides__notespanel">' + slNotesRich(i, sel) + "</div>";
+  }
+  function slideInsertBar(i, sel) {
+    var SV = {
+      text: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6V4.5h16V6"/><path d="M12 4.5v15"/><path d="M8.5 19.5h7"/></svg>',
+      media: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M4 17l5-5 4 4 3-3 4 4"/></svg>',
+      shape: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="10" height="10" rx="2"/><circle cx="15.5" cy="15" r="5"/></svg>',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 17.8l-5.2 2.8 1-5.8L3.4 9.7l5.9-.9z"/></svg>',
+      section: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.6" cy="6" r="1.2"/><circle cx="4.6" cy="12" r="1.2"/><circle cx="4.6" cy="18" r="1.2"/></svg>',
+      badge: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2l6.4 2.7v4.9c0 4.3-2.8 7.1-6.4 8.1-3.6-1-6.4-3.8-6.4-8.1V5.9z"/><path d="M9.4 11.8l1.8 1.8 3.4-3.6"/></svg>',
+      notes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8.5 20h7"/></svg>'
+    };
+    function mbtn(menu, title, svg) { return '<button type="button" class="iconbtn slides__ib-btn" data-act="slide-menu" data-menu="' + menu + '" data-index="' + i + '" title="' + title + '" aria-label="' + title + '">' + svg + "</button>"; }
+    function abtn(act, title, svg) { return '<button type="button" class="iconbtn slides__ib-btn" data-act="' + act + '" data-index="' + i + '" data-sindex="' + sel + '" title="' + title + '" aria-label="' + title + '">' + svg + "</button>"; }
+    return '<div class="slides__insertbar" role="toolbar" aria-label="Insert into this slide">' +
+      '<button type="button" class="btn btn--auto slides__ib-new" data-act="slide-menu" data-menu="slide" data-index="' + i + '">' + IC.add + " New slide " + IC.chevD + "</button>" +
+      '<span class="slides__ib-sep"></span>' +
+      mbtn("text", "Add text", SV.text) + mbtn("media", "Add media", SV.media) + mbtn("shape", "Add a shape", SV.shape) +
+      abtn("free-add-icon", "Add an icon", SV.icon) + abtn("free-add-section", "Add a section", SV.section) + abtn("slide-add-badge", "Add a badge", SV.badge) +
+      '<span class="slides__ib-sep"></span>' +
+      '<button type="button" class="btn btn--ghost slides__ib-notes' + (slideNotesOpen ? " is-on" : "") + '" data-act="slide-notes" data-index="' + i + '" aria-pressed="' + slideNotesOpen + '">' + SV.notes + " Notes</button>" +
+      "</div>";
+  }
   function slideCanvasPane(i, sel, slides) {
     var s = slides[sel];
     if (!s) return '<div class="slides__center"><div class="adm__empty slides__canvas-empty">Select a slide on the left, or add one to begin.</div></div>';
     return '<div class="slides__center">' + slideEditHead(i, sel, slides) +
       '<div class="slides__canvas-body">' + freeCanvasStage(i, sel) + "</div>" +
-      '<div class="slides__canvas-notes">' + slNotesRich(i, sel) + "</div></div>";
+      (slideNotesOpen ? slideNotesPanel(i, sel) : "") +
+      slideInsertBar(i, sel) + "</div>";
   }
   // LEFT editor pane: just the slide navigator rail. The slide EDITOR itself lives in the right
   // preview pane (renderSlideStage), and the Current/All-slides toggle lives in the status bar.
@@ -6678,12 +6706,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     pop.addEventListener("click", function (e) { var b = e.target.closest("[data-smi]"); if (!b) return; var it = items.filter(function (x) { return x.id === b.getAttribute("data-smi"); })[0]; slideMenuClose(); if (it && it.run) it.run(); });
     setTimeout(function () { document.addEventListener("pointerdown", slideMenuOutside, true); document.addEventListener("keydown", slideMenuKey, true); }, 0);
   }
-  function slideCurrentFree(i) { var st = data.work[i] && data.work[i].study, sl = st && st.slides; if (!sl) return -1; if (openSlide >= 0 && sl[openSlide] && sl[openSlide].layout === "free") return openSlide; return -1; }
+  function slideCurrentFree(i) { var st = data.work[i] && data.work[i].study, sl = st && st.slides; if (!sl || !sl.length) return -1; var k = openSlide >= 0 ? openSlide : 0; return (sl[k] && sl[k].layout === "free") ? k : -1; }
   function slideEnsureFree(i) { var k = slideCurrentFree(i); if (k >= 0) return k; var st = data.work[i].study = data.work[i].study || blankStudy(); st.slides = st.slides || []; st.slides.push({ id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: "free", blocks: [], notes: "" }); openSlide = st.slides.length - 1; return openSlide; }
   function slideAddBlock(i, block) { var k = slideEnsureFree(i), arr = slideBlocks(i, k); if (!arr) return; if (block.x == null) block.x = 12; if (block.y == null) block.y = Math.min(78, 14 + arr.length * 5); if (block.w == null) block.w = block.kind === "media" ? 44 : 50; arr.push(block); freeSelSet(i, k, [arr.length - 1]); saveDraft(true); renderL2(); }
   function slideAddBlankFree(i) { var st = data.work[i].study = data.work[i].study || blankStudy(); st.slides = st.slides || []; st.slides.push({ id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: "free", blocks: [], notes: "" }); openSlide = st.slides.length - 1; freeSel = null; saveDraft(true); renderL2(); status("Blank slide added.", true); }
   function slideAddBackground(i) { pickMedia(function (uri) { var k = slideEnsureFree(i), arr = slideBlocks(i, k); if (!arr) return; arr.unshift({ kind: "media", src: uri, x: 0, y: 0, w: 100, h: 100 }); freeSelSet(i, k, [0]); saveDraft(true); renderL2(); status("Background added \u2014 it fills the slide (sent to back).", true); }); }
   function slideAddMediaUpload(i) { pickMedia(function (uri) { slideAddBlock(i, { kind: "media", src: uri, w: 44 }); }); }
+  function slideAddShape(i, sv) { slideAddBlock(i, (sv === "line" || sv === "arrow") ? { kind: "shape", shape: sv, x: 12, y: 46, w: 34, h: 8, stroke: "var(--accent)", strokeW: 3 } : { kind: "shape", shape: sv, x: 14, y: 16, w: 26, h: 22, fill: "", stroke: "var(--accent)", strokeW: 2, radius: 0 }); }
+  function slideAddBadge(i) { slideAddBlock(i, { kind: "text", role: "badge", size: "sm", font: "mono", align: "center", bg: "var(--accent)", color: "#241a09", radius: 100, pad: 9, text: "", ph: "BADGE", w: 18 }); }
   // Everything is freeform now — a section/AI "layout+slots" is seeded onto a freeform canvas the owner can rearrange.
   function freeSlideFromMapped(mapped) {
     return { id: "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), layout: "free", blocks: slotsToFreeBlocks({ layout: (mapped && mapped.layout) || "text", slots: (mapped && mapped.slots) || {} }), notes: (mapped && mapped.notes) ? String(mapped.notes) : "" };
@@ -6773,6 +6803,13 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       { id: "caption", label: "Caption", run: function () { slideAddBlock(i, { kind: "text", role: "caption", size: "sm", align: "left", text: "", ph: "Caption" }); } },
       { sep: true },
       { id: "fromsec", label: "From a section", run: function () { slideTextFromSection(i); } }
+    ];
+    else if (which === "shape") items = [
+      { id: "rect", label: "Rectangle", run: function () { slideAddShape(i, "rect"); } },
+      { id: "ellipse", label: "Oval", run: function () { slideAddShape(i, "ellipse"); } },
+      { sep: true },
+      { id: "line", label: "Line", run: function () { slideAddShape(i, "line"); } },
+      { id: "arrow", label: "Arrow", run: function () { slideAddShape(i, "arrow"); } }
     ];
     else items = [
       { id: "bg", label: "Upload a background", hint: "Full-bleed", run: function () { slideAddBackground(i); } },
@@ -7134,7 +7171,6 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   function slidePropsPanel(i, k, s) {
     return '<div class="slides__props-head">Properties</div>' +
-      '<div class="slides__props-add"><div class="slides__props-lbl">Add to slide</div>' + freeToolsRow(i, k) + "</div>" +
       freeSelPanel(i, k) +
       slideTransRow(i, k, s);
   }
@@ -10013,6 +10049,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     openBlock = -1;
     openSlide = -1;
     slideView = "current";
+    slideNotesOpen = false;
     freeSel = null;
     const w = data.work[i];
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
@@ -11212,6 +11249,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "slide-media-clear") { var _mcw = data.work[i], mck = +b.dataset.sindex, mcs = _mcw && _mcw.study && _mcw.study.slides && _mcw.study.slides[mck]; if (!mcs) return; if (mcs.slots) delete mcs.slots.media; saveDraft(true); renderL2(); return; }
     if (act === "slide-decrypt") { decryptDeckForEdit(i); return; }
     if (act === "slide-ai-draft") { deckAiDraft(i, b); return; }
+    if (act === "slide-add-badge") { slideAddBadge(i); return; }
+    if (act === "slide-notes") { slideNotesOpen = !slideNotesOpen; renderSlideStage(); return; }
     if (act === "free-add-text") { var _fat = slideBlocks(i, +b.dataset.sindex); if (_fat) { _fat.push({ kind: "text", x: 8, y: Math.min(74, 12 + _fat.length * 6), w: 46, size: "md", align: "left", text: "New text" }); freeSelSet(i, +b.dataset.sindex, [_fat.length - 1]); saveDraft(true); renderL2(); } return; }
     if (act === "free-cheat") { freeCheatToggle(); return; }
     if (act === "free-grid") { freeGrid.on = !freeGrid.on; renderL2(); status(freeGrid.on ? "Layout grid on \u2014 blocks snap to the 12 columns." : "Layout grid off.", true); return; }
