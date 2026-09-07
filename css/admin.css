@@ -376,9 +376,6 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .l2mode__btn:hover { color: var(--text); }
 .l2mode__btn.is-on { background: linear-gradient(180deg, #e8ba6b, #cd923d); color: #241a09; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .42); }
 .l2ai { flex: 0 0 auto; }
-/* Case study (2-panel): the mode toggle + AI tools sit top-left, next to the outline, ahead of the case title. */
-.adm.is-l2:not(.is-slidestage) .adm__l2-barrow .l2modebar { margin-left: 0; order: 1; }
-.adm.is-l2:not(.is-slidestage) .adm__l2-barrow .adm__l2-title { order: 2; min-width: 0; }
 .l2ai svg { width: 16px; height: 16px; }
 .l2ai:hover { color: var(--accent); }
 /* case-study editor tabs */
@@ -547,7 +544,7 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .workcard__private svg { flex: none; opacity: .75; }
 .workcard__private.is-disabled { opacity: .38; cursor: not-allowed; }
 .workcard__private input:disabled { cursor: not-allowed; }
-.workcard__foot .study__toggle { margin: 0; padding: 0; border-top: none; gap: .5rem; flex: 0 0 auto; }
+.workcard__foot .study__toggle { margin: 0; padding: 0; border-top: none; gap: .5rem; flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; }
 .workcard__foot .study__editbtn { flex: 0 0 auto; }
 .workcard.is-private .adm__lsec-sub { color: var(--accent); }
 .workcard__enc-note { margin-top: .5rem; }
@@ -1317,6 +1314,9 @@ body.adm-lock .cursor { display: none !important; }
 .study__editbtn.is-open { color: var(--text-dim); border-color: var(--line); font-weight: 400; }
 .study__editbtn.is-open:hover { background: none; color: var(--text); border-color: var(--accent); }
 .study__previewbtn { flex: 0 0 auto; }
+.study__slidesbtn { flex: 0 0 auto; }
+.study__slidesbtn.is-built { border-color: var(--accent); color: var(--accent); }
+.study__slidesbtn.is-built:hover { background: rgba(216, 166, 87, .1); color: var(--accent); }
 .study__meta { font-family: var(--mono); font-size: .62rem; color: var(--text-faint); flex: 0 0 auto; }
 /* ---------- L2 (case study) — side-by-side split, generously wide editor ---------- */
 .adm__l2-prev { margin-left: auto; flex: 0 0 auto; display: inline-flex; align-items: center; gap: .4rem; }

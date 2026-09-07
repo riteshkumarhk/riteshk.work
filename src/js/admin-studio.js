@@ -6067,7 +6067,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   var L2_TABS = [["gen", "Generate using AI"], ["details", "Details"], ["highlights", "Highlights"], ["story", "Story"]];
   var _lastCaseTab = "story"; // remembers the case-study sub-tab when you flip to Slideshow
   function l2Mode() { return l2Tab === "slides" ? "slides" : "case"; }
-  function l2ModeBarHtml() { return l2Mode() === "case" ? (modeToggleHtml() + l2aiBtn()) : ""; }   // case study: the mode toggle + AI tools sit top-left with the section list; slideshow keeps them on the canvas / inspector
+  function l2ModeBarHtml() { return l2Mode() === "case" ? l2aiBtn() : ""; }   // just the AI-tools button; the Case study | Slideshow toggle was removed (the deck is entered from the Work-tab card CTA)
   function l2aiBtn() { return l2Mode() === "case" ? '<button type="button" class="iconbtn l2ai" data-act="l2ai-menu" aria-haspopup="true" title="AI tools \u2014 review feedback, interview prep, storyteller" aria-label="AI tools">' + IC.spark + "</button>" : ""; }
   // Just the Case study | Slideshow segment — now lives at the top of the right pane (case) / slide canvas (slides).
   function modeToggleHtml() {
@@ -6633,8 +6633,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     stage.hidden = false;
     var w = data.work[openStudy], st = w.study || {}, slides = st.slides || [];
     var sealed = !!(st.slidesEnc && !slides.length);
-    // Mode toggle rides the right pane; in the all-slides grid / sealed state (right pane hidden) it sits atop the canvas.
-    var _allTop = (slideView === "all" || sealed) ? ('<div class="casestage__top slidestage__top">' + modeToggleHtml() + l2aiBtn() + "</div>") : "";
+    var _allTop = "";   // toggle removed — the deck is entered from the Work-tab card CTA
     var lbl = vwrap && vwrap.querySelector("[data-slideview-lbl]"); if (lbl) lbl.textContent = slideView === "all" ? "All slides" : "Current slide";
     if (sealed) { stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="adm__empty">' + LOCK_SVG + ' This slideshow is protected \u2014 unlock it on the left to edit.</div></div>'; return; }
     if (!slides.length) { stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="adm__empty slides__stage-empty">Your slide editor appears here. Use <b>Add a slide</b> or <b>Draft with AI</b> on the left to start.</div></div>'; return; }
@@ -6666,7 +6665,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var propsBody;
     if (!slides0.length) propsBody = '<div class="slides__props-head">Slide</div><div class="slides__props-empty">No slides yet. Use <b>Add a slide</b> or <b>Draft with AI</b> on the left to start building your deck.</div>';
     else { var sel = (openSlide >= 0 && slides0[openSlide]) ? openSlide : 0; propsBody = slidePropsPanel(openStudy, sel, slides0[sel] || {}); }
-    stage.innerHTML = '<div class="casestage__top">' + modeToggleHtml() + l2aiBtn() + "</div>" + '<aside class="slides__props">' + propsBody + "</aside>";
+    stage.innerHTML = '<aside class="slides__props">' + propsBody + "</aside>";
   }
   function slidePullPicker(i, k) {
     var w = data.work[i]; if (!w || !w.study) return;
@@ -8053,8 +8052,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return '<div class="study__toggle is-open"><button class="btn study__editbtn is-open" data-act="study-toggle" data-index="' + i + '">' + IC.chevD + ' Close case-study editor</button></div>';
     }
     var preview = n ? '<a class="btn btn--ghost study__previewbtn" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '" title="Open this project page in a new tab">Preview ' + IC.ext + '</a>' : "";
+    var st = w.study || {}, deckN = (st.slides && st.slides.length) || 0, sealedDeck = !!(st.slidesEnc && !deckN);
+    var slidesLbl = deckN ? ("Edit slideshow \u00b7 " + deckN + " slide" + (deckN === 1 ? "" : "s")) : (sealedDeck ? "Edit slideshow" : "Add slideshow");
+    var slidesBtn = '<button class="btn btn--ghost study__slidesbtn' + (deckN || sealedDeck ? " is-built" : "") + '" data-act="study-slides" data-index="' + i + '" title="' + (deckN || sealedDeck ? "Edit this project's presentation deck" : "Compose a presentation deck from this project") + '">' + IC.board + " " + slidesLbl + "</button>";
     return '<div class="study__toggle">' +
       '<button class="btn study__editbtn" data-act="study-toggle" data-index="' + i + '">' + IC.edit + ' Edit case-study page</button>' +
+      slidesBtn +
       preview +
       "</div>";
   }
@@ -10313,12 +10316,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       previewProject(data.work[openStudy].id, true);
     }, 180);
   }
-  function openL2(i) {
+  function openL2(i, landOn) {
     if (!data.work[i]) return;
     if (!data.work[i].study) data.work[i].study = blankStudy();
     slideMigrateDeckToFree(data.work[i].study);
     openStudy = i;
-    l2Tab = studyLandingTab(data.work[i]);
+    l2Tab = (landOn === "slides") ? "slides" : studyLandingTab(data.work[i]);
     _l2ScrollY = 0;
     openBlock = -1;
     openSlide = -1;
@@ -11342,17 +11345,6 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       }
       return;
     }
-    if (act === "l2mode") {
-      var _m = b.dataset.l2mode;
-      if (_m === "slides" && l2Tab !== "slides") { _lastCaseTab = (l2Tab && l2Tab !== "slides") ? l2Tab : _lastCaseTab; l2Tab = "slides"; }
-      else if (_m === "case" && l2Tab === "slides") { l2Tab = _lastCaseTab || "story"; }
-      else return;
-      var _lb3 = root.querySelector(".adm__l2-bar"); if (_lb3) _lb3.classList.remove("is-hidden");
-      _l2ScrollY = 0;
-      renderL2();
-      var _le3 = root.querySelector(".adm__editor"); if (_le3) _le3.scrollTop = 0;
-      return;
-    }
     if (act === "l2ai-menu") {
       var _aidx = openStudy;
       if (_aidx < 0) return;
@@ -11365,6 +11357,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return;
     }
     if (act === "study-toggle") { openL2(i); return; }
+    if (act === "study-slides") { openL2(i, "slides"); return; }
     if (act === "journey-edit") { openJourneyEditor(); return; }
     if (act === "journey-close") { closeJourneyEditor(); return; }
     if (act === "journey-chaptoggle") {
