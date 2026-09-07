@@ -6059,7 +6059,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   var L2_TABS = [["gen", "Generate using AI"], ["details", "Details"], ["highlights", "Highlights"], ["story", "Story"]];
   var _lastCaseTab = "story"; // remembers the case-study sub-tab when you flip to Slideshow
   function l2Mode() { return l2Tab === "slides" ? "slides" : "case"; }
-  function l2ModeBarHtml() { return ""; }   // left bar empty \u2014 the toggle + AI tools now sit together in the right pane
+  function l2ModeBarHtml() { return l2Mode() === "case" ? (modeToggleHtml() + l2aiBtn()) : ""; }   // case study: the mode toggle + AI tools sit top-left with the section list; slideshow keeps them on the canvas / inspector
   function l2aiBtn() { return l2Mode() === "case" ? '<button type="button" class="iconbtn l2ai" data-act="l2ai-menu" aria-haspopup="true" title="AI tools \u2014 review feedback, interview prep, storyteller" aria-label="AI tools">' + IC.spark + "</button>" : ""; }
   // Just the Case study | Slideshow segment — now lives at the top of the right pane (case) / slide canvas (slides).
   function modeToggleHtml() {
@@ -6647,20 +6647,18 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var w = (openStudy >= 0) ? data.work[openStudy] : null;
     var slides0 = (w && w.study && w.study.slides) || [];
     var sealed = !!(w && w.study && w.study.slidesEnc && !slides0.length);
-    var isStory = !!(w && l2Tab === "story" && !journeyOpen);
-    var isSlideProps = !!(w && l2Tab === "slides" && slideView !== "all" && !sealed);   // right pane shows the slide inspector in the current-slide view (even before the first slide)
-    var active = isStory || isSlideProps;
+    // The far-right pane is the SLIDESHOW inspector only. The case-study section editor moved into
+    // the LEFT pane (2-panel: outline rail + section editor | live preview); see studyEditor's story tab.
+    var isSlideProps = !!(w && l2Tab === "slides" && slideView !== "all" && !sealed);   // slide inspector in the current-slide view (even before the first slide)
+    var active = isSlideProps;
     if (root) root.classList.toggle("is-casestage", active);
     if (!stage) return;
     if (!active) { stage.hidden = true; stage.innerHTML = ""; return; }
     stage.hidden = false;
-    if (isStory) { stage.innerHTML = '<div class="casestage__top">' + modeToggleHtml() + l2aiBtn() + "</div>" + caseEditorHtml(w, openStudy); resolveMediaSizes(stage); }
-    else {
-      var propsBody;
-      if (!slides0.length) propsBody = '<div class="slides__props-head">Slide</div><div class="slides__props-empty">No slides yet. Use <b>Add a slide</b> or <b>Draft with AI</b> on the left to start building your deck.</div>';
-      else { var sel = (openSlide >= 0 && slides0[openSlide]) ? openSlide : 0; propsBody = slidePropsPanel(openStudy, sel, slides0[sel] || {}); }
-      stage.innerHTML = '<div class="casestage__top">' + modeToggleHtml() + l2aiBtn() + "</div>" + '<aside class="slides__props">' + propsBody + "</aside>";
-    }
+    var propsBody;
+    if (!slides0.length) propsBody = '<div class="slides__props-head">Slide</div><div class="slides__props-empty">No slides yet. Use <b>Add a slide</b> or <b>Draft with AI</b> on the left to start building your deck.</div>';
+    else { var sel = (openSlide >= 0 && slides0[openSlide]) ? openSlide : 0; propsBody = slidePropsPanel(openStudy, sel, slides0[sel] || {}); }
+    stage.innerHTML = '<div class="casestage__top">' + modeToggleHtml() + l2aiBtn() + "</div>" + '<aside class="slides__props">' + propsBody + "</aside>";
   }
   function slidePullPicker(i, k) {
     var w = data.work[i]; if (!w || !w.study) return;
@@ -8026,7 +8024,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var panel;
     if (tab === "gen") panel = csgenPanel(w, i);
     else if (tab === "highlights") panel = storyHeader + keyMoves + overviewMediaBlock(w, i);
-    else if (tab === "story") panel = '<div class="study__stage">' + storyRail(w, i) + "</div>"; // section editor renders in the right pane via renderCaseStage
+    else if (tab === "story") panel = '<div class="study__stage">' + storyRail(w, i) + '<div class="study__stage-main">' + caseEditorHtml(w, i) + "</div></div>"; // 2-panel: outline rail + the picked section's editor on the left, live preview on the right
     else if (tab === "slides") panel = slidesPanel(w, i);
     else panel = header + cover; // details (default)
 
@@ -10556,31 +10554,15 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var blocks = data.work[openStudy].study.blocks || [];
     if (!(idx >= 0 && idx < blocks.length)) return;
     openBlock = idx;
-    // 3-pane case-study shell: the section editor lives in the right pane, the outline in the left rail.
-    var caseStg = root && root.querySelector("[data-casestage]");
-    if (root && root.classList.contains("is-casestage") && caseStg) {
-      renderCaseStage();                                   // repaint the right pane for the newly picked section
-      if (l2body) l2body.querySelectorAll(".story__item").forEach(function (x) {
-        x.classList.toggle("is-active", +x.getAttribute("data-bindex") === idx);
-      });
-      var railItem = l2body && l2body.querySelector('.story__item[data-bindex="' + idx + '"]');
-      if (railItem) railItem.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      caseStg.scrollTop = 0;
-      var ed = caseStg.querySelector(".study__block");
-      if (ed) { ed.classList.add("is-flash"); setTimeout(function () { ed.classList.remove("is-flash"); }, 1100); }
-      syncPreviewSelection();
-      return;
-    }
-    var wrap = l2body && l2body.querySelector(".study__blocks");
-    if (!wrap) return;
-    var items = wrap.querySelectorAll(".study__block");
-    items.forEach(function (x, k) { x.classList.toggle("is-open", k === idx); });
-    var target = items[idx];
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
-      target.classList.add("is-flash");
-      setTimeout(function () { target.classList.remove("is-flash"); }, 1100);
-    }
+    // 2-panel case study: the outline rail + single-section editor both live in the LEFT pane.
+    // Re-render the left pane so the picked section's editor shows (the rail active-state follows openBlock).
+    renderL2();
+    var railItem = l2body && l2body.querySelector('.story__item[data-bindex="' + idx + '"]');
+    if (railItem) railItem.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    var main = l2body && l2body.querySelector(".study__stage-main");
+    if (main) main.scrollTop = 0;
+    var ed = main && main.querySelector(".study__block");
+    if (ed) { ed.classList.add("is-flash"); setTimeout(function () { ed.classList.remove("is-flash"); }, 1100); }
     syncPreviewSelection();
   }
   // Preview → editor: the floating preview toolbar posts a section action. Apply the same
