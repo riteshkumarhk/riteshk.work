@@ -4723,11 +4723,19 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<span class="sortgrip study__block-grip" data-grip data-sortkey="block:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
       '<span class="study__block-badge">' + escHtml(typeName) + "</span>" +
       '<span class="study__block-label' + (custom ? " is-custom" : "") + '" title="Double-click to rename">' + escHtml(label) + "</span>" +
+      '<span class="study__block-ops">' +
+      '<button class="iconbtn" data-act="study-blockadd" data-index="' + i + '" data-bindex="' + j + '" title="Add a section above" aria-label="Add a section above">' + IC.add + '</button>' +
+      '<button class="iconbtn" data-act="study-blockup" data-index="' + i + '" data-bindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
+      '<button class="iconbtn" data-act="study-blockdown" data-index="' + i + '" data-bindex="' + j + '"' + (j === len - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
+      '<button class="iconbtn" data-act="study-blockdup" data-index="' + i + '" data-bindex="' + j + '" title="Duplicate section" aria-label="Duplicate section">' + IC.dup + '</button>' +
+      '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + '</button>' +
+      "</span>" +
       '<span class="study__block-toggles">' +
       '<button class="iconbtn study__block-sep' + (b.sep === false ? " is-off" : "") + '" data-act="study-blocksep" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.sep === false ? "Flowing into the previous section \u2014 click to add a separator line above" : "Separator line above \u2014 click to flow into the previous section") + '" aria-label="Toggle separator line above">' + (b.sep === false ? IC.divoff : IC.divon) + '</button>' +
       '<button class="iconbtn study__block-off' + (b.off ? " is-off" : "") + '" data-act="study-blockoff" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.off ? "Section hidden from the live site \u2014 click to show" : "Section is on \u2014 click to hide it from the live site") + '" aria-label="' + (b.off ? "Show section" : "Hide section") + '">' + (b.off ? IC.eyeoff : IC.eye) + '</button>' +
       '<button class="iconbtn study__block-lock' + (b.locked ? " is-locked" : "") + '" data-act="study-blocklock" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.locked ? "Locked \u2014 click to unlock" : "Lock this section \u2014 deeper-cut only") + '" aria-label="' + (b.locked ? "Unlock section" : "Lock section") + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' + (b.locked ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<path d="M8 10.5V6.8a4 4 0 0 1 7.5-1.6"/>') + "</svg></button>" +
       "</span>" +
+      '<span class="study__block-chev" aria-hidden="true">' + IC.chev + '</span>' +
       "</div>";
     var common = sfInput(i, j, "nav", "Section label", "Shows in the left nav \u2014 leave blank to hide it there") + sfInput(i, j, "kicker", "Kicker", "small label above the block");
     var body = "";
@@ -8024,7 +8032,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var panel;
     if (tab === "gen") panel = csgenPanel(w, i);
     else if (tab === "highlights") panel = storyHeader + keyMoves + overviewMediaBlock(w, i);
-    else if (tab === "story") panel = '<div class="study__stage">' + storyRail(w, i) + '<div class="study__stage-main">' + caseEditorHtml(w, i) + "</div></div>"; // 2-panel: outline rail + the picked section's editor on the left, live preview on the right
+    else if (tab === "story") {
+      // Classic accordion: a full-width list of sections; click a head to expand its editor inline underneath.
+      var accList = blocks.map(function (bk, bj) { return blockEditor(i, bk, bj, blocks.length, openBlock === bj); }).join("") || '<div class="adm__empty">No sections yet. Add the first one below.</div>';
+      panel = '<section class="l2grp"><div class="l2grp__head">Sections <span>click a section to expand &amp; edit it</span></div>' +
+        '<div class="study__blocks">' + accList + '</div>' +
+        '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">' + IC.add + ' Add a section</button></div>' +
+        railDeeperCut(w, i) + '</section>';
+    }
     else if (tab === "slides") panel = slidesPanel(w, i);
     else panel = header + cover; // details (default)
 
@@ -10554,15 +10569,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var blocks = data.work[openStudy].study.blocks || [];
     if (!(idx >= 0 && idx < blocks.length)) return;
     openBlock = idx;
-    // 2-panel case study: the outline rail + single-section editor both live in the LEFT pane.
-    // Re-render the left pane so the picked section's editor shows (the rail active-state follows openBlock).
+    // Accordion: re-render so the picked section expands inline, then scroll to it and flash it.
     renderL2();
-    var railItem = l2body && l2body.querySelector('.story__item[data-bindex="' + idx + '"]');
-    if (railItem) railItem.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    var main = l2body && l2body.querySelector(".study__stage-main");
-    if (main) main.scrollTop = 0;
-    var ed = main && main.querySelector(".study__block");
-    if (ed) { ed.classList.add("is-flash"); setTimeout(function () { ed.classList.remove("is-flash"); }, 1100); }
+    var target = l2body && l2body.querySelector(".study__block.is-open");
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.classList.add("is-flash");
+      setTimeout(function () { target.classList.remove("is-flash"); }, 1100);
+    }
     syncPreviewSelection();
   }
   // Preview → editor: the floating preview toolbar posts a section action. Apply the same
@@ -11445,8 +11459,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       const j = +b.dataset.bindex;
       clearTimeout(blockRenameTimer);
       blockRenameTimer = setTimeout(function () {
-        // Rail-driven single editor: the head no longer collapses to empty; keep this section open & re-sync the preview.
-        if (openBlock !== j) { openBlock = j; renderL2(); }
+        // Accordion: click an open section's head to collapse it, otherwise expand it inline.
+        openBlock = (openBlock === j) ? -1 : j; renderL2();
         try { const fw = frameWin(); if (fw) fw.postMessage({ __rk: "gotoBlock", index: j }, "*"); } catch (err) {}
         syncPreviewSelection();
       }, 220);
