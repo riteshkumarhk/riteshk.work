@@ -6061,12 +6061,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function l2Mode() { return l2Tab === "slides" ? "slides" : "case"; }
   function l2ModeBarHtml() {
     var m = l2Mode();
-    var seg = '<div class="l2mode" role="tablist" aria-label="Editor surface">' +
-      '<button type="button" role="tab" aria-selected="' + (m === "case") + '" class="l2mode__btn' + (m === "case" ? " is-on" : "") + '" data-act="l2mode" data-l2mode="case">Case study</button>' +
-      '<button type="button" role="tab" aria-selected="' + (m === "slides") + '" class="l2mode__btn' + (m === "slides" ? " is-on" : "") + '" data-act="l2mode" data-l2mode="slides">Slideshow</button>' +
-      "</div>";
-    var ai = m === "case" ? '<button type="button" class="iconbtn l2ai" data-act="l2ai-menu" aria-haspopup="true" title="AI tools \u2014 review feedback, interview prep, storyteller" aria-label="AI tools">' + IC.spark + "</button>" : "";
-    return seg + ai;
+    // The Case study | Slideshow toggle lives in the right pane (modeToggleHtml); the left bar carries only the AI tools.
+    return m === "case" ? '<button type="button" class="iconbtn l2ai" data-act="l2ai-menu" aria-haspopup="true" title="AI tools \u2014 review feedback, interview prep, storyteller" aria-label="AI tools">' + IC.spark + "</button>" : "";
   }
   // Just the Case study | Slideshow segment — now lives at the top of the right pane (case) / slide canvas (slides).
   function modeToggleHtml() {
@@ -6632,8 +6628,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     stage.hidden = false;
     var w = data.work[openStudy], st = w.study || {}, slides = st.slides || [];
     var sealed = !!(st.slidesEnc && !slides.length);
-    // The Case study | Slideshow tab nav now lives in the left bar (data-l2modebar); nothing floats into the canvas.
-    var _allTop = "";
+    // Mode toggle rides the right pane; in the all-slides grid / sealed state (right pane hidden) it sits atop the canvas.
+    var _allTop = (slideView === "all" || sealed) ? ('<div class="slidestage__top">' + modeToggleHtml() + "</div>") : "";
     var lbl = vwrap && vwrap.querySelector("[data-slideview-lbl]"); if (lbl) lbl.textContent = slideView === "all" ? "All slides" : "Current slide";
     if (sealed) { stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="adm__empty">' + LOCK_SVG + ' This slideshow is protected \u2014 unlock it on the left to edit.</div></div>'; return; }
     if (!slides.length) { stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="adm__empty slides__stage-empty">Your slide editor appears here. Use <b>Add a slide</b> or <b>Draft with AI</b> on the left to start.</div></div>'; return; }
@@ -6661,12 +6657,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!stage) return;
     if (!active) { stage.hidden = true; stage.innerHTML = ""; return; }
     stage.hidden = false;
-    if (isStory) { stage.innerHTML = caseEditorHtml(w, openStudy); resolveMediaSizes(stage); }
+    if (isStory) { stage.innerHTML = '<div class="casestage__top">' + modeToggleHtml() + "</div>" + caseEditorHtml(w, openStudy); resolveMediaSizes(stage); }
     else {
       var propsBody;
       if (!slides0.length) propsBody = '<div class="slides__props-head">Slide</div><div class="slides__props-empty">No slides yet. Use <b>Add a slide</b> or <b>Draft with AI</b> on the left to start building your deck.</div>';
       else { var sel = (openSlide >= 0 && slides0[openSlide]) ? openSlide : 0; propsBody = slidePropsPanel(openStudy, sel, slides0[sel] || {}); }
-      stage.innerHTML = '<aside class="slides__props">' + propsBody + "</aside>";
+      stage.innerHTML = '<div class="casestage__top">' + modeToggleHtml() + "</div>" + '<aside class="slides__props">' + propsBody + "</aside>";
     }
   }
   function slidePullPicker(i, k) {
