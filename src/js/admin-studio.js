@@ -6059,11 +6059,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   var L2_TABS = [["gen", "Generate using AI"], ["details", "Details"], ["highlights", "Highlights"], ["story", "Story"]];
   var _lastCaseTab = "story"; // remembers the case-study sub-tab when you flip to Slideshow
   function l2Mode() { return l2Tab === "slides" ? "slides" : "case"; }
-  function l2ModeBarHtml() {
-    var m = l2Mode();
-    // The Case study | Slideshow toggle lives in the right pane (modeToggleHtml); the left bar carries only the AI tools.
-    return m === "case" ? '<button type="button" class="iconbtn l2ai" data-act="l2ai-menu" aria-haspopup="true" title="AI tools \u2014 review feedback, interview prep, storyteller" aria-label="AI tools">' + IC.spark + "</button>" : "";
-  }
+  function l2ModeBarHtml() { return ""; }   // left bar empty \u2014 the toggle + AI tools now sit together in the right pane
+  function l2aiBtn() { return l2Mode() === "case" ? '<button type="button" class="iconbtn l2ai" data-act="l2ai-menu" aria-haspopup="true" title="AI tools \u2014 review feedback, interview prep, storyteller" aria-label="AI tools">' + IC.spark + "</button>" : ""; }
   // Just the Case study | Slideshow segment — now lives at the top of the right pane (case) / slide canvas (slides).
   function modeToggleHtml() {
     var m = l2Mode();
@@ -6629,7 +6626,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var w = data.work[openStudy], st = w.study || {}, slides = st.slides || [];
     var sealed = !!(st.slidesEnc && !slides.length);
     // Mode toggle rides the right pane; in the all-slides grid / sealed state (right pane hidden) it sits atop the canvas.
-    var _allTop = (slideView === "all" || sealed) ? ('<div class="slidestage__top">' + modeToggleHtml() + "</div>") : "";
+    var _allTop = (slideView === "all" || sealed) ? ('<div class="casestage__top slidestage__top">' + modeToggleHtml() + l2aiBtn() + "</div>") : "";
     var lbl = vwrap && vwrap.querySelector("[data-slideview-lbl]"); if (lbl) lbl.textContent = slideView === "all" ? "All slides" : "Current slide";
     if (sealed) { stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="adm__empty">' + LOCK_SVG + ' This slideshow is protected \u2014 unlock it on the left to edit.</div></div>'; return; }
     if (!slides.length) { stage.innerHTML = _allTop + '<div class="slides__stagewrap"><div class="adm__empty slides__stage-empty">Your slide editor appears here. Use <b>Add a slide</b> or <b>Draft with AI</b> on the left to start.</div></div>'; return; }
@@ -6657,12 +6654,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!stage) return;
     if (!active) { stage.hidden = true; stage.innerHTML = ""; return; }
     stage.hidden = false;
-    if (isStory) { stage.innerHTML = '<div class="casestage__top">' + modeToggleHtml() + "</div>" + caseEditorHtml(w, openStudy); resolveMediaSizes(stage); }
+    if (isStory) { stage.innerHTML = '<div class="casestage__top">' + modeToggleHtml() + l2aiBtn() + "</div>" + caseEditorHtml(w, openStudy); resolveMediaSizes(stage); }
     else {
       var propsBody;
       if (!slides0.length) propsBody = '<div class="slides__props-head">Slide</div><div class="slides__props-empty">No slides yet. Use <b>Add a slide</b> or <b>Draft with AI</b> on the left to start building your deck.</div>';
       else { var sel = (openSlide >= 0 && slides0[openSlide]) ? openSlide : 0; propsBody = slidePropsPanel(openStudy, sel, slides0[sel] || {}); }
-      stage.innerHTML = '<div class="casestage__top">' + modeToggleHtml() + "</div>" + '<aside class="slides__props">' + propsBody + "</aside>";
+      stage.innerHTML = '<div class="casestage__top">' + modeToggleHtml() + l2aiBtn() + "</div>" + '<aside class="slides__props">' + propsBody + "</aside>";
     }
   }
   function slidePullPicker(i, k) {
@@ -7315,8 +7312,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var on = isColor && bg.value === x[0];
       return '<button type="button" class="sfbclr slidebg__sw' + (on ? " is-on" : "") + '" style="background:' + x[0] + '" data-act="slide-bgcolor" data-index="' + i + '" data-sindex="' + k + '" data-bgval="' + escAttr(x[0]) + '" title="' + x[1] + '"></button>';
     }).join("");
-    var custVal = (isColor && String(bg.value).charAt(0) === "#") ? bg.value : "#141417";
-    var custom = '<input type="color" class="sfbclr-cust" value="' + custVal + '" data-slidebgcolor data-sbi="' + i + '" data-sbk="' + k + '" title="Custom background colour" />';
+    var _sbPreset = FREE_SWATCHES.map(function (x) { return x[0]; });
+    var isCustomColor = isColor && _sbPreset.indexOf(bg.value) < 0;
+    var custom = '<button type="button" class="sfbclr slidebg__sw slidebg__cust' + (isCustomColor ? " is-on" : "") + '"' + (isCustomColor ? ' style="background:' + escAttr(bg.value) + '"' : "") + ' data-slidebg-chip data-act="slidebg-pick" data-index="' + i + '" data-sindex="' + k + '" title="Custom colour\u2026"></button>';
     var mediaRow = isMedia
       ? '<div class="slidebg__media"><span class="slidebg__thumb">' + (isVideoVal(bg.value) ? '<video src="' + escAttr(bg.value) + '" muted></video>' : '<img src="' + escAttr(bg.value) + '" alt="">') + '</span><span class="slidebg__medlbl">' + (isVideoVal(bg.value) ? "Video" : "Image") + '</span><button type="button" class="btn btn--ghost" data-act="slide-bg-media" data-index="' + i + '" data-sindex="' + k + '">Replace\u2026</button></div>'
       : '<button type="button" class="btn btn--ghost slidebg__addmedia" data-act="slide-bg-media" data-index="' + i + '" data-sindex="' + k + '">' + IC.add + ' Image or video\u2026</button>';
@@ -7404,7 +7402,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var nativeVal = /^#[0-9a-fA-F]{6}$/.test(cur) ? cur : "#d8a657";
     var swda = 'data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" data-field="' + field + '"';
     var fbda = 'data-fi="' + i + '" data-fk="' + k + '" data-fbi="' + idx + '"';
-    var chip = '<span class="sfbc__chip' + (cur ? "" : " is-none") + '"' + (cur ? ' style="background:' + cur + '"' : "") + '><input type="color" class="sfbc__native" value="' + nativeVal + '" data-freecolor="' + field + '" ' + fbda + ' title="Pick a colour" aria-label="Pick a colour" /></span>';
+    var chip = '<button type="button" class="sfbc__chip' + (cur ? "" : " is-none") + '"' + (cur ? ' style="background:' + cur + '"' : "") + ' data-act="free-color-pick" ' + swda + ' title="Open colour picker" aria-label="Open colour picker"></button>';
     var hexInput = '<span class="sfbc__hexwrap"><span class="sfbc__hash">#</span><input type="text" class="sfbc__hex" value="' + escAttr(hex) + '" data-freehex="' + field + '" ' + fbda + ' placeholder="ECE7E1" maxlength="8" spellcheck="false" autocomplete="off" aria-label="Hex colour" /></span>';
     var eye = (typeof window !== "undefined" && window.EyeDropper) ? '<button type="button" class="sfbc__btn" data-act="free-eyedrop" ' + swda + ' title="Pick a colour from the screen" aria-label="Eyedropper">' + IC.pipette + '</button>' : "";
     var clear = '<button type="button" class="sfbc__btn sfbc__btn--clear' + (cur ? "" : " is-on") + '" data-act="free-color" ' + swda + ' data-val="" title="No colour" aria-label="No colour">' + IC.close + '</button>';
@@ -7420,6 +7418,44 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var hx = box.querySelector(".sfbc__hex"); if (hx && document.activeElement !== hx) hx.value = /^#[0-9a-fA-F]{3,8}$/.test(v) ? v.replace(/^#/, "").toUpperCase() : "";
     box.querySelectorAll(".sfbc__sw").forEach(function (b) { b.classList.toggle("is-on", b.getAttribute("data-val") === v); });
     var clr = box.querySelector(".sfbc__btn--clear"); if (clr) clr.classList.toggle("is-on", !v);
+  }
+  // ── Figma-style colour picker popover (HSB square + hue slider + hex + eyedropper + swatches) ──
+  var rkPickEl = null, rkPickAnchorSel = ".sfbc__chip,[data-act=free-color-pick],[data-slidebg-chip]";
+  function pkHexToRgb(h) { h = String(h || "").replace("#", ""); if (h.length === 3) h = h.split("").map(function (c) { return c + c; }).join(""); var n = parseInt(h, 16); if (!isFinite(n)) return { r: 216, g: 166, b: 87 }; return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }; }
+  function pkRgbToHex(r, g, b) { return "#" + [r, g, b].map(function (x) { return Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, "0"); }).join("").toUpperCase(); }
+  function pkRgbToHsv(r, g, b) { r /= 255; g /= 255; b /= 255; var mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, h = 0; if (d) { if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 60; if (h < 0) h += 360; } return { h: h, s: mx ? d / mx : 0, v: mx }; }
+  function pkHsvToRgb(h, s, v) { var c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c, r, g, b; if (h < 60) { r = c; g = x; b = 0; } else if (h < 120) { r = x; g = c; b = 0; } else if (h < 180) { r = 0; g = c; b = x; } else if (h < 240) { r = 0; g = x; b = c; } else if (h < 300) { r = x; g = 0; b = c; } else { r = c; g = 0; b = x; } return { r: (r + m) * 255, g: (g + m) * 255, b: (b + m) * 255 }; }
+  function pkResolve(v) { v = String(v == null ? "" : v).trim(); if (/^var\(/.test(v)) { var t = document.createElement("span"); t.style.color = v; (root || document.body).appendChild(t); var c = getComputedStyle(t).color; t.remove(); var m = c.match(/\d+/g); if (m) return pkRgbToHex(+m[0], +m[1], +m[2]); } return v; }
+  function rkPickClose() { if (rkPickEl) { rkPickEl.remove(); rkPickEl = null; document.removeEventListener("pointerdown", rkPickOutside, true); document.removeEventListener("keydown", rkPickEsc, true); } }
+  function rkPickOutside(e) { if (rkPickEl && !rkPickEl.contains(e.target) && !(e.target.closest && e.target.closest(rkPickAnchorSel))) rkPickClose(); }
+  function rkPickEsc(e) { if (e.key === "Escape") { e.stopPropagation(); rkPickClose(); } }
+  function rkColorPicker(anchor, startVal, onChange) {
+    rkPickClose();
+    var hex = pkResolve(startVal || "#d8a657"); if (!/^#[0-9a-fA-F]{3,6}$/.test(hex)) hex = "#d8a657";
+    var rgb = pkHexToRgb(hex), hsv = pkRgbToHsv(rgb.r, rgb.g, rgb.b);
+    var el = document.createElement("div"); el.className = "rkpick";
+    var eyeBtn = window.EyeDropper ? '<button type="button" class="rkpick__eye" data-eye title="Pick a colour from the screen">' + IC.pipette + "</button>" : "";
+    el.innerHTML = '<div class="rkpick__sv" data-sv><div class="rkpick__sv-white"></div><div class="rkpick__sv-black"></div><div class="rkpick__sv-dot" data-svdot></div></div>' +
+      '<div class="rkpick__hue" data-hue><div class="rkpick__hue-thumb" data-huethumb></div></div>' +
+      '<div class="rkpick__foot"><div class="rkpick__prev" data-prev></div><div class="rkpick__hexwrap"><span class="rkpick__hash">#</span><input class="rkpick__hex" data-hex maxlength="6" spellcheck="false" autocomplete="off" aria-label="Hex colour" /></div>' + eyeBtn + "</div>" +
+      '<div class="rkpick__sw">' + FREE_SWATCHES.filter(function (s) { return s[0]; }).map(function (s) { return '<button type="button" class="rkpick__swb" data-sw="' + escAttr(s[0]) + '" style="background:' + s[0] + '" title="' + s[1] + '"></button>'; }).join("") + "</div>";
+    document.body && (root || document.body).appendChild(el); rkPickEl = el;
+    var ar = anchor.getBoundingClientRect(), pw = el.offsetWidth || 236, ph = el.offsetHeight || 320;
+    var left = Math.min(ar.left, window.innerWidth - pw - 10), top = ar.bottom + 8;
+    if (top + ph > window.innerHeight - 10) top = Math.max(10, ar.top - ph - 8);
+    el.style.left = Math.max(10, left) + "px"; el.style.top = Math.max(10, top) + "px";
+    var sv = el.querySelector("[data-sv]"), svdot = el.querySelector("[data-svdot]"), hue = el.querySelector("[data-hue]"), huethumb = el.querySelector("[data-huethumb]"), prev = el.querySelector("[data-prev]"), hexIn = el.querySelector("[data-hex]");
+    function curHex() { var c = pkHsvToRgb(hsv.h, hsv.s, hsv.v); return pkRgbToHex(c.r, c.g, c.b); }
+    function paint(typing) { var pure = pkHsvToRgb(hsv.h, 1, 1); sv.style.background = "rgb(" + Math.round(pure.r) + "," + Math.round(pure.g) + "," + Math.round(pure.b) + ")"; svdot.style.left = (hsv.s * 100) + "%"; svdot.style.top = ((1 - hsv.v) * 100) + "%"; huethumb.style.left = (hsv.h / 360 * 100) + "%"; var hx = curHex(); prev.style.background = hx; svdot.style.background = hx; if (!typing) hexIn.value = hx.replace("#", ""); }
+    function drag(target, handler) { target.addEventListener("pointerdown", function (e) { try { target.setPointerCapture(e.pointerId); } catch (err) {} var mv = function (ev) { var r = target.getBoundingClientRect(); handler((ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height); }; mv(e); var up = function () { target.removeEventListener("pointermove", mv); target.removeEventListener("pointerup", up); }; target.addEventListener("pointermove", mv); target.addEventListener("pointerup", up); e.preventDefault(); e.stopPropagation(); }); }
+    drag(sv, function (x, y) { hsv.s = Math.max(0, Math.min(1, x)); hsv.v = Math.max(0, Math.min(1, 1 - y)); paint(); onChange(curHex()); });
+    drag(hue, function (x) { hsv.h = Math.max(0, Math.min(359.9, x * 360)); paint(); onChange(curHex()); });
+    hexIn.addEventListener("input", function () { var v = hexIn.value.trim(); if (/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(v)) { var g = pkHexToRgb("#" + v); hsv = pkRgbToHsv(g.r, g.g, g.b); paint(true); onChange(curHex()); } });
+    el.querySelectorAll("[data-sw]").forEach(function (b) { b.addEventListener("click", function () { var raw = b.getAttribute("data-sw"); var g = pkHexToRgb(pkResolve(raw)); hsv = pkRgbToHsv(g.r, g.g, g.b); paint(); onChange(raw); }); });
+    var eyb = el.querySelector("[data-eye]"); if (eyb) eyb.addEventListener("click", function () { if (!window.EyeDropper) return; new EyeDropper().open().then(function (r) { if (r && r.sRGBHex) { var g = pkHexToRgb(r.sRGBHex); hsv = pkRgbToHsv(g.r, g.g, g.b); paint(); onChange(curHex()); } }).catch(function () {}); });
+    paint();
+    setTimeout(function () { document.addEventListener("pointerdown", rkPickOutside, true); document.addEventListener("keydown", rkPickEsc, true); }, 0);
+    return el;
   }
   // Position section — X/Y, W/H (with a chain-link aspect toggle for ratio-lockable kinds), rotation + optional corner.
   function freePosSection(i, k, idx, bl, withCorner) {
@@ -11535,6 +11571,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "free-color") { var _cak = +b.dataset.sindex, _ca = slideBlocks(i, _cak), _cab = _ca && _ca[+b.dataset.fbi]; if (!_cab) return; var _cf = b.dataset.field, _cv = b.dataset.val; if (_cv) _cab[_cf] = _cv; else delete _cab[_cf]; saveDraft(true); renderL2(); return; }
     if (act === "free-eyedrop") { var _edk = +b.dataset.sindex, _eda = slideBlocks(i, _edk), _edb = _eda && _eda[+b.dataset.fbi], _edf = b.dataset.field; if (!_edb) return; if (!window.EyeDropper) { status("This browser has no eyedropper \u2014 type a hex or use the colour box.", false); return; } try { new EyeDropper().open().then(function (res) { if (res && res.sRGBHex) { _edb[_edf] = res.sRGBHex; saveDraft(true); renderL2(); } }).catch(function () {}); } catch (e) {} return; }
     if (act === "free-conndir") { var _cdk = +b.dataset.sindex, _cda = slideBlocks(i, _cdk), _cdb = _cda && _cda[+b.dataset.fbi]; if (!_cdb) return; _cdb.dir = _cdb.dir === "ur" ? "dr" : "ur"; saveDraft(true); renderL2(); return; }
+    if (act === "free-color-pick") { var _cpk = +b.dataset.sindex, _cpa = slideBlocks(i, _cpk), _cpb = _cpa && _cpa[+b.dataset.fbi], _cpf = b.dataset.field; if (!_cpb) return; rkColorPicker(b, _cpb[_cpf], function (hx) { _cpb[_cpf] = hx; saveDraft(); freePvRefresh(i, _cpk); sfbcSyncUI(b, hx); }); return; }
+    if (act === "slidebg-pick") { var _spk2 = +b.dataset.sindex, _sps2 = data.work[i] && data.work[i].study && data.work[i].study.slides && data.work[i].study.slides[_spk2]; if (!_sps2) return; var _spc = (_sps2.background && _sps2.background.type === "color") ? _sps2.background.value : "#d8a657"; rkColorPicker(b, _spc, function (hx) { _sps2.background = { type: "color", value: hx }; saveDraft(); freePvRefresh(i, _spk2); b.style.background = hx; b.classList.add("is-on"); var _pbox = b.closest(".slidebg__sws"); if (_pbox) _pbox.querySelectorAll(".sfbclr:not(.slidebg__cust)").forEach(function (x) { x.classList.remove("is-on"); }); }); return; }
     if (act === "free-layer") { freeSelSet(i, +b.dataset.sindex, [+b.dataset.fbi]); renderL2(); return; }
     if (act === "free-group") { var _grk = +b.dataset.sindex, _grb = slideBlocks(i, _grk); if (_grb && freeSelOn(i, _grk) && freeSel.ids.length > 1) { var _grid = freeNewGroupId(); freeSel.ids.forEach(function (ix) { if (_grb[ix]) _grb[ix].g = _grid; }); saveDraft(true); renderL2(); status("Grouped " + freeSel.ids.length + " blocks \u2014 they move & select together.", true); } return; }
     if (act === "free-ungroup") { var _urk = +b.dataset.sindex, _urb = slideBlocks(i, _urk); if (_urb && freeSelOn(i, _urk)) { var _ug = {}; freeSel.ids.forEach(function (ix) { if (_urb[ix] && _urb[ix].g) _ug[_urb[ix].g] = 1; }); _urb.forEach(function (bl) { if (bl && bl.g && _ug[bl.g]) delete bl.g; }); saveDraft(true); renderL2(); status("Ungrouped.", true); } return; }
