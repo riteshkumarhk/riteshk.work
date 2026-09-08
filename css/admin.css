@@ -136,7 +136,11 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__hist-btn:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .adm__hist-btn:disabled { opacity: .3; cursor: not-allowed; }
 /* full-width studio status bar: live-preview toggle + undo/redo + status line */
-.adm__statusbar { display: flex; align-items: center; gap: .6rem; padding: .38rem .9rem; border-bottom: 1px solid var(--line); background: var(--bg-2); min-height: 42px; position: relative; }
+.adm__statusbar { --adm-bar-control-size: 34px; display: flex; align-items: center; gap: .6rem; padding: .38rem .9rem; border-bottom: 1px solid var(--line); background: var(--bg-2); min-height: 48px; position: relative; }
+.adm__statusbar :is(.adm__hist-btn,.adm__bar-prev,.adm__dev-btn,.adm__logs-btn,.adm__newtab) { box-sizing: border-box; height: var(--adm-bar-control-size); flex-shrink: 0; }
+.adm__statusbar .adm__hist-btn { width: var(--adm-bar-control-size); }
+.adm__statusbar :is(.adm__logs-btn,.adm__newtab) { width: auto; min-width: var(--adm-bar-control-size); justify-content: center; }
+.adm__statusbar .adm__logs-btn:has(.adm__logs-rec-tx[hidden]), .adm__statusbar .adm__newtab:has(.adm__newtab-tx[hidden]) { width: var(--adm-bar-control-size); padding-left: 0; padding-right: 0; }
 .adm__statusbar .adm__status { max-width: min(34vw, 320px); min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .adm__statusbar .adm__status.ok { color: #6fbf92; }
 /* publish progress fill + severity tones (the status bar is the single publish narrator) */
