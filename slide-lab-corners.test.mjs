@@ -3,6 +3,17 @@ import assert from "node:assert/strict";
 import { cornerPath, cornerSettings, cornerUpdate, selectedRectangles } from "./src/js/slide-lab-corners.mjs";
 
 const shape = { id: "box", type: "rectangle", width: 200, height: 100, version: 1, roundness: { type: 3 }, customData: { keep: true }, boundElements: [{ id: "label", type: "text" }] };
+test("image and video corners share styles, radius and original media references", () => {
+  for (const type of ["image", "embeddable"]) {
+    const media = { ...shape, type, fileId: "original", customData: { sectionVideo: { src: "original.mp4" } } };
+    assert.equal(selectedRectangles([media], { box: true }).length, 1);
+    const [updated] = cornerUpdate([media], ["box"], "squircle", 24);
+    assert.equal(cornerSettings(updated).mode, "squircle");
+    assert.equal(cornerSettings(updated).radius, 24);
+    assert.equal(updated.fileId, media.fileId);
+    assert.equal(updated.customData.sectionVideo, media.customData.sectionVideo);
+  }
+});
 test("round and continuous corners use distinct paths within the same bounds", () => {
   const [round] = cornerUpdate([shape], ["box"], "round", 24);
   const [squircle] = cornerUpdate([shape], ["box"], "squircle", 24);

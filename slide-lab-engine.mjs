@@ -23,6 +23,7 @@ export function cornerEnginePlugin() {
       const version = JSON.parse(await readFile("node_modules/@excalidraw/excalidraw/package.json", "utf8")).version;
       if (version !== "0.18.1") throw new Error("Revalidate the Slide Lab color adapter for Excalidraw " + version);
       const edits = [
+        ['                transform: isVisible ? `rotate(${el.angle}rad)` : "none",', '                transform: isVisible ? `rotate(${el.angle}rad)` : "none",\n                clipPath: el.customData?.labCorners ? `path("${labCornerPath(el)}")` : undefined,\n                "--embeddable-radius": el.customData?.labCorners ? "0px" : undefined,'],
         ['      const pixel = ctx.getImageData(\n        (clientX - appState.offsetLeft) * window.devicePixelRatio,\n        (clientY - appState.offsetTop) * window.devicePixelRatio,\n        1,\n        1\n      ).data;\n      return rgbToHex(pixel[0], pixel[1], pixel[2]);', '      return labSampleCanvasColor(app.canvas, clientX, clientY, colorPickerType === "canvasBackground" || !stableProps.selectedElements.length && !!excalidrawContainer?.querySelector(".merge-slide-color"));'],
         ['      if (isHoldingPointerDown) {\n        stableProps.onChange(', '      if (!currentColor) return;\n      if (isHoldingPointerDown) {\n        stableProps.onChange('],
         ['      onSelect2(getCurrentColor(event), event);', '      const pickedColor = getCurrentColor(event);\n      if (pickedColor) onSelect2(pickedColor, event);'],
@@ -42,6 +43,7 @@ export function cornerEnginePlugin() {
       source = source.replace('value: FONT_FAMILY.Nunito,\n    icon: FontFamilyNormalIcon,\n    text: t("labels.normal")', 'value: FONT_FAMILY.Inter,\n    icon: FontFamilyNormalIcon,\n    text: "Inter"');
       source = source.replace('value: FONT_FAMILY["Comic Shanns"],\n    icon: FontFamilyCodeIcon,\n    text: t("labels.code")', 'value: FONT_FAMILY["JetBrains Mono"],\n    icon: FontFamilyCodeIcon,\n    text: "JetBrains Mono"');
       source = patchFontPicker(source);
+      source = `import { cornerPath as labCornerPath } from ${JSON.stringify(resolve("src/js/slide-lab-corners.mjs").replaceAll("\\", "/"))};\n` + source;
       source = `import { sampleCanvasColor as labSampleCanvasColor } from ${JSON.stringify(resolve("src/js/slide-lab-eyedropper.mjs").replaceAll("\\", "/"))};\n` + source;
       source += '\nexport { ColorPicker as LabColorPicker, DEFAULT_ELEMENT_BACKGROUND_COLOR_PALETTE as LAB_BACKGROUND_PALETTE };\n';
       source = `import { FontCategoryTabs as LabFontCategoryTabs } from ${JSON.stringify(resolve("src/js/slide-font-tabs.jsx").replaceAll("\\", "/"))};\nimport { filterFontCategory as labFilterFontCategory } from ${JSON.stringify(resolve("src/js/slide-font-categories.mjs").replaceAll("\\", "/"))};\n` + source;
@@ -57,8 +59,16 @@ export function cornerEnginePlugin() {
       if (version !== "0.18.1") throw new Error("Revalidate the Slide Lab corner adapter for Excalidraw " + version);
       const shapeAnchor = "  embedsValidationStatus\n}) => {\n  switch (element.type) {";
       if (source.split(radiusAnchor).length !== 2 || source.split(shapeAnchor).length !== 2) throw new Error("Excalidraw corner adapter anchors changed");
-      source = source.replace(radiusAnchor, radiusAnchor + '\n  if (element.type === "rectangle" && element.customData?.labCorners) return labCornerSettings(element).radius;');
-      source = source.replace(shapeAnchor, '  embedsValidationStatus\n}) => {\n  if (element.type === "rectangle" && element.customData?.labCorners) return generator.path(labCornerPath(element), generateRoughOptions(element, true));\n  switch (element.type) {');
+      source = source.replace(radiusAnchor, radiusAnchor + '\n  if (element.customData?.labCorners) return labCornerSettings(element).radius;');
+      source = source.replace(shapeAnchor, '  embedsValidationStatus\n}) => {\n  if (["rectangle", "embeddable"].includes(element.type) && element.customData?.labCorners) return generator.path(labCornerPath(element), generateRoughOptions(element, true));\n  switch (element.type) {');
+      const mediaEdits = [
+        ['        if (element.roundness && context.roundRect) {', '        if (element.customData?.labCorners) {\n          context.clip(new Path2D(labCornerPath(element)));\n        } else if (element.roundness && context.roundRect) {'],
+        ['          clipPath.appendChild(clipRect);', '          if (element.customData?.labCorners) {\n            const clipShape = svgRoot.ownerDocument.createElementNS(SVG_NS, "path");\n            clipShape.setAttribute("d", labCornerPath(element));\n            clipShape.setAttribute("transform", `translate(${normalizedCropX} ${normalizedCropY})`);\n            clipPath.appendChild(clipShape);\n          } else clipPath.appendChild(clipRect);']
+      ];
+      for (const [before, after] of mediaEdits) {
+        if (source.split(before).length !== 2) throw new Error("Excalidraw media corner anchor changed: " + before);
+        source = source.replace(before, after);
+      }
       const fontStart = source.indexOf('    init("Cascadia", ...CascadiaFontFaces);');
       const fontEnd = source.indexOf('    _Fonts._initialized = true;', fontStart);
       if (fontStart < 0 || fontEnd < 0) throw new Error("Excalidraw font registry anchor changed");

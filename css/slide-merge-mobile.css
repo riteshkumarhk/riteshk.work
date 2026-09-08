@@ -12,7 +12,11 @@
   .merge-shell .merge-slide-list::-webkit-scrollbar { display:none; }
   .merge-shell .merge-slide { flex-basis:120px; }
   .merge-shell .merge-slide-actions { display:grid; grid-template-columns:repeat(2,32px); grid-template-rows:repeat(2,32px); gap:4px; width:80px; min-width:80px; align-content:center; justify-content:center; }
-  .merge-shell .merge-editor,.merge-shell.is-notes-hidden .merge-editor { grid-template-rows:44px minmax(0,1fr); }
+  .merge-shell .merge-editor,.merge-shell.is-notes-hidden .merge-editor { grid-template-rows:minmax(0,1fr); }
+  .merge-mobile-canvas-controls { position:absolute; z-index:6; bottom:12px; left:12px; right:12px; display:flex; gap:8px; pointer-events:none; }
+  .merge-mobile-canvas-controls>button { width:36px; height:36px; pointer-events:auto; background:var(--merge-bg); }
+  .merge-mobile-canvas-controls .merge-notes-toggle { margin-left:auto; }
+  .merge-shell .excalidraw .footer-center { display:none; }
   .merge-shell .merge-toolbar { gap:4px; padding:0 8px; }
   .merge-shell .merge-toolbar>input { padding:6px 2px; font-size:12px; }
   .merge-shell .merge-mobile-only { display:inline-flex; align-items:center; justify-content:center; }

@@ -1,8 +1,12 @@
 import { getSvgPath } from "figma-squircle";
 
+function supportsCorners(element) {
+  return element.type === "rectangle" || element.type === "image" || element.type === "embeddable";
+}
+
 export function selectedRectangles(elements, selectedIds = {}) {
   const owners = new Set(elements.filter(element => !element.isDeleted && selectedIds[element.id] && element.type === "text").map(element => element.containerId));
-  return elements.filter(element => element.type === "rectangle" && !element.isDeleted && !element.locked && (selectedIds[element.id] || owners.has(element.id)));
+  return elements.filter(element => supportsCorners(element) && !element.isDeleted && !element.locked && (selectedIds[element.id] || owners.has(element.id)));
 }
 
 export function cornerSettings(element) {
@@ -17,7 +21,7 @@ export function cornerSettings(element) {
 export function cornerUpdate(elements, ids, mode, radius) {
   const targets = new Set(ids);
   return elements.map(element => {
-    if (!targets.has(element.id) || element.type !== "rectangle" || element.locked || element.isDeleted) return element;
+    if (!targets.has(element.id) || !supportsCorners(element) || element.locked || element.isDeleted) return element;
     const current = cornerSettings(element);
     const nextMode = mode || (current.mode === "sharp" ? "round" : current.mode);
     const nextRadius = Math.min(current.limit, Math.max(0, Number.isFinite(radius) ? radius : current.radius || 16));

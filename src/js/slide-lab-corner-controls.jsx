@@ -90,7 +90,7 @@ export function CornerControls({ api, host, disabled }) {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
   if (!slot || !active || disabled) return null;
-  return createPortal(<fieldset className="lab-corners" aria-label="Rectangle edges">
+  return createPortal(<fieldset className="lab-corners" aria-label="Object edges">
     <legend>Edges</legend>
     <div className="lab-corner-modes" role="group" aria-label="Corner style">
       {["sharp", "round", "squircle"].map(mode => <button key={mode} type="button" title={mode === "squircle" ? "Squircle (continuous corners)" : mode === "round" ? "Round corners" : "Sharp corners"} aria-label={`${mode[0].toUpperCase()}${mode.slice(1)} corners`} aria-pressed={selected.every(item => item.mode === mode)} onClick={() => apply(mode)}><CornerIcon mode={mode} /></button>)}

@@ -10,7 +10,7 @@ the existing owner session through a new, narrowly scoped Worker route.
 - Slides occupy the right rail on desktop. Only this rail has a resize handle.
 - Drag the rail's left edge, use Left/Right arrow keys, or Home/double-click to reset.
 - Rail width persists separately in `rk:slide-merge:rail-width`; mobile uses a collapsible horizontal slide strip, initially closed.
-- At widths up to 900px, a two-row toolbar is docked below the slide title, outside the canvas.
+- At widths up to 900px, a two-row toolbar is docked above the canvas, without a slide-title row.
     Properties, Library and Notes share one bottom-sheet interaction, closed by default.
     Properties shows slide settings for an empty selection or the native object inspector
     for selected objects, including Excalidraw's different phone/tablet inspector layouts.
@@ -74,7 +74,11 @@ the existing owner session through a new, narrowly scoped Worker route.
     preserves existing notes. The first direct image/video is copied as
     original image bytes or a hosted video embed. Uploaded media paths use the site's R2 normalization.
     Unsupported/failed media aborts insertion with an error, not a partially generated slide.
-- Notes toggles independently of drawing tools. View groups native grid snapping,
+- Notes sits beside Help at the bottom right of the canvas and toggles independently of drawing tools.
+    Mobile Slides and Properties controls sit at the bottom left. Slide titles remain in the navigator.
+    Images and embedded videos share Sharp, Round and Squircle edges with an adjustable corner radius.
+    Canvas, SVG thumbnails and live video clipping use the same geometry; source media stays unchanged.
+    View groups native grid snapping,
   object snapping, slide-pixel rulers, safe margins, thirds and Fit slide.
 - Empty selection shows Slide properties: nine layouts, background swatches/custom
     colour, original-byte image/video backgrounds, and None/Fade/Push/Magic Move transitions.
