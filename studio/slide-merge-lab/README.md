@@ -58,8 +58,22 @@ the existing owner session through a new, narrowly scoped Worker route.
 - Sections opens the site-section picker and inserts into the current slide as a selected group.
     Existing objects, title, background and speaker notes stay unchanged. Native Undo removes the insertion;
     ungroup to edit individual objects. This does not create a new slide.
-- Add a slide offers Add blank, Add a layout (nine existing layouts), and Generate from a section.
+- Add a slide offers Add blank, Add a layout, and Generate from a section.
     Per-slide controls sit below thumbnails, never over the preview.
+- Both layout selectors share Stock (nine built-in layouts) and My layouts tabs, including
+    keyboard tab navigation. Slide properties > Save as layout names an editable snapshot of
+    the current composition, whether manually edited or generated. Text, shapes, groups,
+    connections, backgrounds and original media are retained; speaker notes are not included.
+    Saved previews use a fixed light canvas, independent of the surrounding UI theme.
+    My layouts supports rename and confirmed deletion. Deleting a template never changes slides.
+- Saved layouts live in independent IndexedDB `rk-slide-layouts-v1`, shared across slideshows
+    on this browser and site origin, not inside a deck. Reload and deck replacement retain them.
+    They are not yet synced across devices and are removed if browser site data is cleared.
+    Storage failures keep the naming dialog open with an error; no success is reported early.
+- Choosing a saved layout from Add a layout creates an independent slide with fresh element,
+    group and binding IDs. Applying one from Slide properties confirms replacement of the current
+    content/background, keeps speaker notes, and supports one-step native Undo. Stock layouts
+    retain their existing content-reflow behavior.
 - Empty media and main-content layout slots show Text, Media, Section and Icon insert buttons.
     These open the existing pickers and replace only the chosen slot, fitting content within its
     bounds in one undoable update. Controls follow zoom/pan, wrap on mobile, and stay out of rehearsal.
@@ -90,7 +104,9 @@ the existing owner session through a new, narrowly scoped Worker route.
     Images and embedded videos share Sharp, Round and Squircle edges with an adjustable corner radius.
     Canvas, SVG thumbnails and live video clipping use the same geometry; source media stays unchanged.
     View groups native grid snapping,
-  object snapping, slide-pixel rulers, safe margins, thirds and Fit slide.
+    object snapping, slide-pixel rulers, safe margins and thirds.
+- Fit slide is an icon button between the desktop zoom controls and Undo/Redo, using native
+    footer styling. It is no longer in View. Phones retain it in the bottom-left canvas controls.
 - Empty selection shows Slide properties: nine layouts, background swatches/custom
     colour, original-byte image/video backgrounds, and None/Fade/Push/Magic Move transitions.
 - Slide background uses the same native fill picker: palette, shades, shared custom
@@ -127,6 +143,9 @@ revision conflicts, cross-device merges, deletion, in-flight changes and offline
 JavaScript for Google API key patterns. The engine adapter removes upstream Firebase configuration.
 
 `node --test slide-merge.test.mjs` checks immutable slide operations and rail limits.
+`node --test slide-merge-layouts.test.mjs` checks editable template capture, original media,
+independent instances and reference remapping. Browser checks cover IndexedDB persistence,
+cross-deck reuse, rename/delete, storage failure, one-step Undo and both tabbed selectors.
 `node --test slide-merge-sections.test.mjs` checks source privacy filters, conversion, full notes,
 text excerpts, original media URLs and R2 path normalization.
 `node --test slide-merge-inserts.test.mjs` checks content starters and ruler coordinates.

@@ -20,7 +20,7 @@ function BadgePicker({ onPick }) {
   </>;
 }
 
-export function ContentPane({ pane, busy, onContent, onIcon, onSection, onNewLayout, onNewSection, onMedia, onUpload }) {
+export function ContentPane({ pane, busy, onContent, onIcon, onSection, onNewLayout, onNewSection, onMedia, onUpload, layoutPicker }) {
   return <Sidebar name="insert" className="merge-content-sidebar" docked={false}>
     <Sidebar.Header><strong>{PANE_LABELS[pane] || "Insert"}</strong></Sidebar.Header>
     <fieldset className="merge-pane-body" disabled={busy} aria-label={PANE_LABELS[pane] || "Insert"}>
@@ -29,7 +29,7 @@ export function ContentPane({ pane, busy, onContent, onIcon, onSection, onNewLay
       {pane === "text" && <div className="merge-text-choices">{CONTENT_BLOCKS.filter(([kind]) => kind !== "badge").map(([kind, title]) => <button key={kind} aria-label={`Insert ${title}`} onClick={() => onContent(kind)}><span className={`merge-text-preview merge-text-preview--${kind}`} aria-hidden="true">{samples[kind]}</span><strong>{title}</strong></button>)}</div>}
       {pane === "badges" && <BadgePicker onPick={onContent} />}
       {pane === "sections" && <SectionPicker embedded onPick={onSection} />}
-      {pane === "layout" && <LayoutDialog embedded onPick={onNewLayout} />}
+      {pane === "layout" && <LayoutDialog embedded {...layoutPicker} disabled={busy} onPick={onNewLayout} />}
       {pane === "source" && <SectionPicker embedded multiple onPick={onNewSection} />}
     </fieldset>
   </Sidebar>;

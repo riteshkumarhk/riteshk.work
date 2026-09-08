@@ -6,6 +6,7 @@ const toolPaths = {
   terminator:"M8 6h8a6 6 0 0 1 0 12H8A6 6 0 0 1 8 6Z",rounded:"M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z",inputoutput:"M7 5h15l-5 14H2Z",subprocess:"M3 5h18v14H3ZM7 5v14M17 5v14",database:"M4 6a8 3 0 0 0 16 0 8 3 0 0 0-16 0ZM4 6v12a8 3 0 0 0 16 0V6",connector:"M12 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12",triangle:"m12 3 10 18H2Z",hexagon:"M6 3h12l5 9-5 9H6l-5-9Z",
   up:"M12 19V5m-6 6 6-6 6 6",down:"M12 5v14m-6-6 6 6 6-6",copy:"M9 9h12v12H9ZM15 9V3H3v12h6",close:"M6 6l12 12M6 18 18 6",section:"M4 4h16v5H4ZM4 14h16M4 19h10",eye:"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12ZM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6",eyeoff:"M3 3l18 18M10 5h2c6 0 10 7 10 7s-1 2-3 4M6 6c-3 2-4 6-4 6s4 7 10 7h2M10 10l4 4",
   trash: "M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7",
+  save: "M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12l4 4v12ZM7 3v6h10V3M7 21v-8h10v8",
   hand: "M8 13V6a2 2 0 0 1 4 0v6M12 11V4a2 2 0 0 1 4 0v8M16 11V7a2 2 0 0 1 4 0v9c0 4-3 6-7 6-3 0-5-2-7-5l-3-4a2 2 0 0 1 3-2l2 2",
   selection: "m4 3 7 18 2-8 8-2Z", text: "M4 6V4h16v2M12 4v16M8 20h8",
   image: "M3 4h18v16H3ZM3 16l6-6 4 4 3-3 5 5M8 8h.01",

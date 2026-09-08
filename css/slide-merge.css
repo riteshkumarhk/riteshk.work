@@ -1,5 +1,6 @@
 .merge-shell .merge-library-sync{display:flex;align-items:center;gap:6px;min-width:0;max-width:280px;height:24px;padding:0 4px;border:0;border-radius:4px;background:transparent;color:inherit;font-size:11px;cursor:pointer}.merge-library-sync svg{width:14px;height:14px;flex-shrink:0}.merge-library-sync span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.merge-library-sync:hover{color:var(--merge-accent)}.merge-library-sync:focus-visible{outline:1px solid var(--merge-accent)}@media(max-width:900px){.merge-shell .merge-library-sync{max-width:180px;flex-shrink:0}.merge-status>span:last-child{display:none}}
 .merge-shell .excalidraw .main-menu-trigger{display:none}
+.merge-shell .merge-fit-slot{margin-left:8px}
 .merge-shell{--merge-bg:#202023;--merge-line:#3a3a3f;--merge-text:#ecebef;--merge-muted:#afafb8;--merge-accent:#d8a657;display:grid;grid-template:64px minmax(0,1fr) 32px / minmax(0,1fr) 200px;height:100dvh;color:var(--merge-text);background:var(--merge-bg);font-family:Inter,sans-serif;font-size:13px;letter-spacing:0}
 @media(min-width:901px){
   .merge-shell{grid-template-columns:minmax(0,1fr) min(var(--slide-pane-width,200px),max(160px,calc(100vw - 640px)))}

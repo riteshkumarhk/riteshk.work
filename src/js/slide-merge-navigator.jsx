@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ToolMenu, ToolIcon } from "./slide-merge-toolbar.jsx";
-import { PROPERTY_LAYOUTS } from "./slide-merge-properties.mjs";
+import { LayoutPicker } from "./slide-merge-layout-picker.jsx";
 import "../../css/slide-merge-navigator.css";
 
 function Action({ icon, label, ...props }) {
@@ -53,7 +53,12 @@ export function SectionDialog({ value, onSave, onClose }) {
   const [name, setName] = useState(value || "");
   return <DeckDialog title={value ? "Edit section" : "Start a section here"} onClose={onClose}><form onSubmit={event => { event.preventDefault(); onSave(name); }}><label className="merge-dialog-field">Section name<input autoFocus value={name} maxLength={120} onChange={event => setName(event.target.value)} /></label><footer>{value && <button className="is-danger" type="button" onClick={() => onSave("")}>Remove heading</button>}<button type="button" onClick={onClose}>Cancel</button><button className="merge-dialog-primary" type="submit" disabled={!name.trim()}>Save</button></footer></form></DeckDialog>;
 }
-export function LayoutDialog({ onPick, onClose, embedded = false }) {
-  const choices = <div className="merge-layout-choices">{PROPERTY_LAYOUTS.map(layout => <button key={layout.id} onClick={() => onPick(layout.id)}><span className="merge-layout-thumb" aria-hidden="true">{layout.slots.map((slot, index) => <span key={index} className={slot.kind === "media" ? "is-media" : ""} style={{left:`${slot.x}%`, top:`${slot.y}%`, width:`${slot.width}%`, height:`${slot.height}%`}} />)}{!layout.slots.length && <em>Blank</em>}</span><span>{layout.name}</span></button>)}</div>;
+export function LayoutDialog({ onPick, onClose, embedded = false, ...props }) {
+  const choices = <LayoutPicker {...props} onPick={onPick} />;
   return embedded ? choices : <DeckDialog title="Add a layout" onClose={onClose}>{choices}</DeckDialog>;
+}
+
+export function LayoutNameDialog({ value, onSave, onClose, busy, error }) {
+  const [name, setName] = useState(value || "");
+  return <DeckDialog title={value ? "Rename layout" : "Save as layout"} onClose={() => { if (!busy) onClose(); }}><form onSubmit={event => { event.preventDefault(); onSave(name); }}><label className="merge-dialog-field">Layout name<input autoFocus disabled={busy} value={name} maxLength={120} required onChange={event => setName(event.target.value)} /></label>{error && <p className="merge-layout-dialog-error" role="alert">{error}</p>}<footer><button type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="merge-dialog-primary" type="submit" disabled={busy || !name.trim()}>{busy ? "Saving..." : "Save layout"}</button></footer></form></DeckDialog>;
 }
