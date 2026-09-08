@@ -5,9 +5,22 @@
   "description": "Ritesh Kumar portfolio — static site (riteshk.work) with an esbuild module build.",
   "scripts": {
     "build": "node build.mjs",
-    "watch": "node build.mjs --watch"
+    "watch": "node build.mjs --watch",
+    "build:slide-lab": "node slide-lab.build.mjs"
   },
   "devDependencies": {
-    "esbuild": "^0.25.12"
+    "@excalidraw/excalidraw": "0.18.1",
+    "esbuild": "^0.25.12",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "overrides": {
+    "@excalidraw/excalidraw": {
+      "nanoid": "3.3.18"
+    },
+    "@excalidraw/mermaid-to-excalidraw": {
+      "nanoid": "5.1.16"
+    },
+    "lodash-es": "4.18.1"
   }
 }
