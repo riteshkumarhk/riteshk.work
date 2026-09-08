@@ -45,7 +45,7 @@ export function ToolMenu({ label, icon, children, disabled, active = false, capt
       panel.style.top = `${Math.max(8, top)}px`;
     } else panel.hidePopover();
   }}>
-    <summary title={label} aria-label={label} aria-disabled={disabled || undefined} onClick={event => { if (disabled) event.preventDefault(); }}><ToolIcon name={icon} />{caption && <span>{caption}</span>}<ToolIcon name="chevron" /></summary>
+    <summary title={label} aria-label={label} aria-disabled={disabled || undefined} onClick={event => { if (disabled) event.preventDefault(); }}>{React.isValidElement(icon) ? icon : <ToolIcon name={icon} />}{caption && <span>{caption}</span>}<ToolIcon name="chevron" /></summary>
     <div className="merge-tool-pop" popover="manual" onClick={event => { if (event.target.closest("button[data-close]")) details.current.open = false; }}>{children}</div>
   </details>;
 }

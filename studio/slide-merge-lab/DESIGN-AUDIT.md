@@ -14,7 +14,18 @@ accessibility certification or approval to migrate production Studio.
   Menu rows retain 36px height, left alignment and 8px padding.
 - Accessibility labels: name Library actions and associate the delete-slide
   confirmation with its heading. The library adapter remains lab-scoped.
-- Preserve the opacity slider without visual or behavioral changes.
+- Preserve opacity's native value, fill, geometry and keyboard behavior. Its
+   track now uses secondary `--text-dim`; primary sliders use `--accent` gold.
+- Read the published typography configuration at startup and window focus,
+   with R2-to-Pages fallback. Load the actual active font faces; do not infer
+   typography from the historical `--serif` token name. Build-time local faces
+   provide the initial snapshot, while external/custom families load at runtime.
+- Match narrow and wide Studio dialog variants, including display typography,
+   surfaces, equal-width narrow actions and neutral wide close buttons.
+- Capture dialog focus before controls become disabled; restore after unmount.
+- Theme native body-level portals, not only descendants of the editor root.
+   Help retains shortcuts and a neutral Close button, without external links.
+- New layouts start with editable "My layout", with Save immediately enabled.
 
 ## Coverage
 
@@ -28,13 +39,29 @@ accessibility certification or approval to migrate production Studio.
 | Insert panels | Icons, Text, Badges, Sections, Media and Library opened in the real editor; no horizontal rail overflow, inputs start-aligned. |
 | Empty/unavailable states | Empty Library, empty My layouts, no-match icon search and signed-out sync status checked. Forced network/storage failures not exercised. |
 | Layers | Real list, disabled controls, Add menu placement/dismissal/focus and corrected row spacing checked. |
-| Dialogs | Save layout blank-name guard, Cancel/Escape, neutral close, delete confirmation and accessible names checked. No content deleted. |
+| Dialogs | Save layout default and blank-name guard, Cancel focus return, neutral close, delete confirmation and accessible names checked. Native Help portal and mobile visibility confirmation measured. No content deleted. |
 | Reading/rehearsal | All slides has two cards; Editing off hides tools and keeps notes; rehearsal controls and viewport fit checked. |
 | Responsive | Desktop 1600px, narrow desktop 1024px and phone 390px inspected. Mobile object-sheet screenshots checked in dark/light; naming dialog fits. |
 
 Original media and deck content were not intentionally changed. This pass does
 not certify every native engine popup, assistive-technology combination, Safari
 fallback, authenticated library sync or real-device video/animation performance.
+
+## Phase 1 Boundary
+
+Visibility is a local draft intention, private by default. It is not a publishing
+action and does not change any live slideshow. The future public-payload builder
+requires explicit public intent and source-review confirmation; it excludes notes,
+skipped slides and owner metadata, rejects protected or unsupported sources, and
+preserves supported inline media bytes, including separate original SVG bytes.
+Original media may itself contain sensitive content or metadata: automated
+filtering is not a substitute for the required review. No production publisher,
+Worker or vault integration is included. Later AI/snapping phases remain deferred.
+
+The September 8 follow-up verified real Bureau fonts, narrow dialog screenshots,
+mobile 390px bounds, light/dark secondary slider colours, default Save state,
+Cancel focus return, and Help's portal/close/link removal. Source parity tests are
+regression guards, not proof that every engine popup has been visually audited.
 
 ## Preserve And Promote
 

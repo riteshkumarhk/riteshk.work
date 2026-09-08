@@ -60,11 +60,11 @@ export function SlideNavigator({ deck, thumbnails, busy, editing = true, choose,
   </>;
 }
 
-export function DeckDialog({ title, onClose, children }) {
-  const dialog = useRef(null);
-  useEffect(() => { const trigger = document.activeElement; dialog.current.showModal(); return () => { if (trigger?.isConnected) trigger.focus(); }; }, []);
-  return <dialog className="merge-deck-dialog" aria-label={title} ref={dialog} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onClose(); } }} onCancel={event => { event.preventDefault(); onClose(); }} onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
-    <header><h2>{title}</h2><Action icon="close" label="Close dialog" onClick={onClose} /></header>{children}
+export function DeckDialog({ title, onClose, children, wide = true }) {
+  const dialog = useRef(null), trigger = useRef(document.activeElement);
+  useEffect(() => { dialog.current.showModal(); dialog.current.querySelector("input:not(:disabled), footer button:not(:disabled)")?.focus(); return () => { requestAnimationFrame(() => { if (trigger.current?.isConnected && !document.querySelector("dialog[open]")) trigger.current.focus(); }); }; }, []);
+  return <dialog className={`merge-deck-dialog${wide ? " merge-deck-dialog--wide" : ""}`} aria-label={title} ref={dialog} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onClose(); } }} onCancel={event => { event.preventDefault(); onClose(); }} onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
+    <header><h2>{title}</h2>{wide && <Action icon="close" label="Close dialog" onClick={onClose} />}</header>{children}
   </dialog>;
 }
 export function LayoutDialog({ onPick, onClose, embedded = false, ...props }) {
@@ -73,6 +73,6 @@ export function LayoutDialog({ onPick, onClose, embedded = false, ...props }) {
 }
 
 export function LayoutNameDialog({ value, onSave, onClose, busy, error }) {
-  const [name, setName] = useState(value || "");
-  return <DeckDialog title={value ? "Rename layout" : "Save as layout"} onClose={() => { if (!busy) onClose(); }}><form onSubmit={event => { event.preventDefault(); onSave(name); }}><label className="merge-dialog-field">Layout name<input autoFocus disabled={busy} value={name} maxLength={120} required onChange={event => setName(event.target.value)} /></label>{error && <p className="merge-layout-dialog-error" role="alert">{error}</p>}<footer><button type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="merge-dialog-primary" type="submit" disabled={busy || !name.trim()}>{busy ? "Saving..." : "Save layout"}</button></footer></form></DeckDialog>;
+  const [name, setName] = useState(value || "My layout");
+  return <DeckDialog wide={false} title={value ? "Rename layout" : "Save as layout"} onClose={() => { if (!busy) onClose(); }}><form onSubmit={event => { event.preventDefault(); onSave(name); }}><label className="merge-dialog-field">Layout name<input autoFocus disabled={busy} value={name} maxLength={120} required onChange={event => setName(event.target.value)} /></label>{error && <p className="merge-layout-dialog-error" role="alert">{error}</p>}<footer><button type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="merge-dialog-primary" type="submit" disabled={busy || !name.trim()}>{busy ? "Saving..." : "Save layout"}</button></footer></form></DeckDialog>;
 }

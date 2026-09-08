@@ -1,0 +1,39 @@
+.merge-shell :is(.merge-background-media,.merge-media-upload button,.merge-section-actions button,.merge-log-actions button,.merge-all-slides>header>button,.merge-layout-empty button,.merge-source-status button,.library-menu-browse-button) {
+  display:inline-flex;align-items:center;justify-content:center;gap:.4rem;min-height:32px;max-width:100%;padding:.58rem 1rem;
+  font-family:var(--mono);font-size:.7rem;line-height:1.4;letter-spacing:0;text-transform:uppercase;font-weight:400;
+  border:1px solid var(--line);border-radius:100px;background:rgba(255,255,255,.022);color:var(--text);cursor:pointer;
+  white-space:normal;overflow-wrap:anywhere;transition:border-color .22s var(--ease),background .22s var(--ease),color .22s var(--ease),transform .18s var(--ease),box-shadow .22s var(--ease);
+}
+.merge-shell :is(.merge-background-media,.merge-media-upload button,.merge-section-actions button,.merge-log-actions button,.merge-all-slides>header>button,.merge-layout-empty button,.merge-source-status button,.library-menu-browse-button):hover:not(:disabled) {
+  border-color:var(--accent);background:rgba(216,166,71,.09);transform:translateY(-1px);box-shadow:0 6px 16px -9px rgba(0,0,0,.6);color:var(--text);
+}
+.merge-shell :is(.merge-background-media,.merge-media-upload button,.merge-section-actions button,.merge-log-actions button,.merge-all-slides>header>button,.merge-layout-empty button,.merge-source-status button,.library-menu-browse-button):active:not(:disabled) { transform:translateY(0);box-shadow:0 2px 5px -3px rgba(0,0,0,.55); }
+.merge-shell :is(.merge-background-media,.merge-media-upload button,.merge-section-actions button,.merge-log-actions button,.merge-all-slides>header>button,.merge-layout-empty button,.merge-source-status button,.library-menu-browse-button):disabled { opacity:.4;cursor:default;transform:none;box-shadow:none; }
+.merge-shell :is(.merge-pane-body input:not([type=checkbox]),.merge-pane-body select,.merge-notes textarea) { border-radius:8px;text-align:left;box-shadow:inset 0 1px 2px rgba(0,0,0,.2);transition:border-color .18s var(--ease),box-shadow .18s var(--ease); }
+.merge-shell :is(.merge-pane-body input:not([type=checkbox]),.merge-pane-body select,.merge-notes textarea):focus-visible { outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(216,166,71,.2),inset 0 1px 2px rgba(0,0,0,.18); }
+.merge-shell .merge-log-actions { padding:0;gap:.6rem;margin-bottom:1rem;text-align:left; }
+.merge-shell .merge-log-text { padding:0;text-align:left;font-family:var(--mono); }
+.merge-shell .merge-layout-dialog-copy { padding:0;margin:0;color:var(--text-dim);font-size:.8rem;line-height:1.5; }
+.merge-shell .merge-layout-dialog-error { padding:0;margin:.7rem 0;color:var(--ui-danger); }
+.merge-shell .merge-deck-dialog footer button { font-family:var(--mono);letter-spacing:0; }
+.merge-shell .merge-tool-pop { border-radius:10px; }
+@supports(appearance:base-select) { .merge-shell select::picker(select) { border-radius:10px; } }
+.merge-shell .merge-background-file button:focus-visible,.merge-shell button.is-danger:focus-visible { color:var(--ui-danger); }
+.merge-shell { --ui-slider-primary:var(--accent);--ui-slider-secondary:var(--text-dim); }
+.merge-shell .excalidraw .range-input { --color-slider-track:var(--ui-slider-primary);--color-slider-thumb:var(--text); }
+.merge-shell .excalidraw .range-input[data-testid="opacity"],.merge-shell .excalidraw .range-input[data-slider-variant="secondary"] { --color-slider-track:var(--ui-slider-secondary); }
+.merge-shell .excalidraw .range-input:focus-visible { outline:2px solid var(--accent);outline-offset:6px; }
+html:has(.merge-shell) .excalidraw .Modal__content { background:var(--bg-2);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:1.8rem 1.6rem;font-family:var(--sans);box-shadow:0 24px 60px -14px rgba(0,0,0,.62),0 4px 14px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.05); }
+html:has(.merge-shell) .excalidraw .Modal__content>.Island { border:0;border-radius:0;background:transparent;box-shadow:none;padding:0; }
+html:has(.merge-shell) .excalidraw .Modal__background { background:rgba(0,0,0,.65);backdrop-filter:blur(6px); }
+html:has(.merge-shell) .excalidraw .Dialog__title { font-family:var(--serif);font-size:1.5rem;font-weight:300;line-height:1.25;text-align:center;border:0;padding:0 1rem;margin:0 0 1.2rem;color:var(--text); }
+html:has(.merge-shell) .excalidraw .HelpDialog .Dialog__title { text-align:left;padding-left:0; }
+html:has(.merge-shell) .excalidraw .Dialog__close { top:.6rem;right:.7rem;width:32px;height:32px;padding:0;display:grid;place-items:center;border:0;border-radius:6px;background:none;color:var(--text-faint); }
+html:has(.merge-shell) .excalidraw .Dialog__close svg { width:18px;height:18px;stroke-width:1.75; }
+html:has(.merge-shell) .excalidraw .Dialog__close:hover { color:var(--text);background:rgba(255,255,255,.07); }
+html:has(.merge-shell) .excalidraw .Dialog__close:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
+html:has(.merge-shell) .excalidraw :is(.HelpDialog__btn,.Modal__content .excalidraw-button) { font-family:var(--mono);font-size:.7rem;font-weight:400;text-transform:uppercase;letter-spacing:0;border:1px solid var(--line);border-radius:100px;padding:.58rem 1rem;background:rgba(255,255,255,.022);color:var(--text);white-space:normal; }
+html:has(.merge-shell) .excalidraw :is(.HelpDialog__btn,.Modal__content .excalidraw-button):hover:not(:disabled) { border-color:var(--accent);background:rgba(216,166,71,.09);color:var(--text); }
+html:has(.merge-shell) .excalidraw :is(.HelpDialog h3,.HelpDialog__island h4) { font-family:var(--mono);font-size:.75rem;font-weight:500;color:var(--text-dim); }
+html:has(.merge-shell) .excalidraw .HelpDialog__key { font-family:var(--mono);background:var(--bg);color:var(--text-dim);border:1px solid var(--line); }
+@media(prefers-reduced-motion:reduce) { .merge-shell :is(.merge-background-media,.merge-media-upload button,.merge-section-actions button,.merge-log-actions button,.merge-all-slides>header>button,.merge-layout-empty button,.merge-source-status button,.library-menu-browse-button) { transition:none; } }

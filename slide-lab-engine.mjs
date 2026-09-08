@@ -25,6 +25,8 @@ export function cornerEnginePlugin() {
       const version = JSON.parse(await readFile("node_modules/@excalidraw/excalidraw/package.json", "utf8")).version;
       if (version !== "0.18.1") throw new Error("Revalidate the Slide Lab color adapter for Excalidraw " + version);
       const edits = [
+        ['        /* @__PURE__ */ jsx92(Header, {}),', '        !document.querySelector(".merge-shell") && /* @__PURE__ */ jsx92(Header, {}),'],
+        ['        isFullscreen && /* @__PURE__ */ jsx67(\n          "button",\n          {\n            className: "Dialog__close",', '        (isFullscreen || !!document.querySelector(".merge-shell")) && /* @__PURE__ */ jsx67(\n          "button",\n          {\n            className: "Dialog__close",'],
         ['                transform: isVisible ? `rotate(${el.angle}rad)` : "none",', '                transform: isVisible ? `rotate(${el.angle}rad)` : "none",\n                clipPath: el.customData?.labCorners ? `path("${labCornerPath(el)}")` : undefined,\n                "--embeddable-radius": el.customData?.labCorners ? "0px" : undefined,'],
         ['      const pixel = ctx.getImageData(\n        (clientX - appState.offsetLeft) * window.devicePixelRatio,\n        (clientY - appState.offsetTop) * window.devicePixelRatio,\n        1,\n        1\n      ).data;\n      return rgbToHex(pixel[0], pixel[1], pixel[2]);', '      return labSampleCanvasColor(app.canvas, clientX, clientY, colorPickerType === "canvasBackground" || !stableProps.selectedElements.length && !!excalidrawContainer?.querySelector(".merge-slide-color"));'],
         ['      if (isHoldingPointerDown) {\n        stableProps.onChange(', '      if (!currentColor) return;\n      if (isHoldingPointerDown) {\n        stableProps.onChange('],

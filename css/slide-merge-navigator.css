@@ -49,13 +49,33 @@
 .merge-add-slide .merge-tool-menu summary{width:100%;gap:8px;padding:8px;border:1px dashed var(--merge-line)}
 .merge-add-slide .merge-tool-menu summary span{font-size:12px}
 .merge-tool-pop hr{border:0;border-top:1px solid var(--merge-line);margin:6px 0}
-.merge-deck-dialog{width:min(680px,calc(100vw - 24px));max-height:calc(100dvh - 32px);padding:0;border:1px solid var(--merge-line);border-radius:8px;background:var(--merge-bg);color:var(--merge-text);overflow:auto}
-.merge-deck-dialog::backdrop{background:#0009}
-.merge-deck-dialog header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--merge-line)}
-.merge-deck-dialog h2{font-size:16px;font-weight:500;margin:0}
-.merge-deck-dialog footer{display:flex;gap:8px;justify-content:flex-end;padding:16px 20px;border-top:1px solid var(--merge-line)}
-.merge-deck-dialog footer button{padding:8px 14px;border:1px solid var(--merge-line);border-radius:4px;background:none;color:var(--merge-text)}
-.merge-deck-dialog footer .merge-dialog-primary{background:var(--merge-accent);color:#171717}
+.merge-deck-dialog{width:min(360px,90vw);max-height:calc(100dvh - 32px);padding:1.8rem 1.6rem;border:1px solid var(--line);border-radius:14px;background:var(--bg-2);color:var(--text);overflow:auto;text-align:center;font-family:var(--sans);box-shadow:0 24px 60px -14px rgba(0,0,0,.62),0 4px 14px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.05);animation:mergeDialogPop .24s var(--ease)}
+.merge-deck-dialog::backdrop{background:rgba(0,0,0,.65);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.merge-deck-dialog>header{display:block;padding:0;border:0;margin-bottom:1.2rem}
+.merge-deck-dialog h2{font-family:var(--serif);font-size:1.5rem;font-weight:300;line-height:1.25;color:var(--text);margin:0;overflow-wrap:anywhere}
+.merge-deck-dialog>header>button{position:absolute;top:.6rem;right:.7rem;width:32px;height:32px;padding:0;display:grid;place-items:center;border:0;border-radius:6px;background:none;color:var(--text-faint);transition:color .12s,background .12s}
+.merge-deck-dialog>header>button svg{width:18px;height:18px;stroke-width:1.75}
+.merge-deck-dialog>header>button:hover{color:var(--text);background:rgba(255,255,255,.07)}
+.merge-deck-dialog footer{display:flex;gap:.6rem;justify-content:flex-end;padding:0;border:0;margin-top:1.2rem}
+.merge-deck-dialog footer button{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:.4rem;font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;border-radius:100px;padding:.58rem 1rem;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--text-dim);white-space:normal;transition:border-color .22s var(--ease),background .22s var(--ease),color .22s var(--ease),transform .18s var(--ease),box-shadow .22s var(--ease)}
+.merge-deck-dialog footer button:hover:not(:disabled){color:var(--text);border-color:var(--accent);background:rgba(255,255,255,.045);transform:translateY(-1px);box-shadow:0 6px 16px -9px rgba(0,0,0,.6)}
+.merge-deck-dialog footer button:active:not(:disabled){transform:translateY(0);box-shadow:0 2px 5px -3px rgba(0,0,0,.55);transition-duration:.06s}
+.merge-deck-dialog footer .merge-dialog-primary{background:linear-gradient(180deg,#e8ba6b,#cd923d);border-color:rgba(120,84,28,.85);color:#241a09;font-weight:600;box-shadow:inset 0 1px 0 rgba(255,255,255,.42),0 4px 13px -6px rgba(184,132,58,.55),0 1px 2px rgba(0,0,0,.25)}
+.merge-deck-dialog footer .merge-dialog-primary:hover:not(:disabled){background:linear-gradient(180deg,#f2c87c,#d8a44e);border-color:rgba(120,84,28,.95);color:#241a09;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 8px 20px -6px rgba(184,132,58,.62),0 1px 2px rgba(0,0,0,.25)}
+.merge-deck-dialog footer .merge-dialog-primary:active:not(:disabled){box-shadow:inset 0 1px 2px rgba(90,60,15,.45),0 2px 6px -4px rgba(184,132,58,.5)}
+.merge-deck-dialog footer .is-danger{color:var(--ui-danger);border-color:color-mix(in srgb,var(--ui-danger) 38%,transparent);background:color-mix(in srgb,var(--ui-danger) 4.5%,transparent)}
+.merge-deck-dialog footer .is-danger:hover:not(:disabled){color:var(--ui-danger);border-color:var(--ui-danger);background:color-mix(in srgb,var(--ui-danger) 16%,transparent);box-shadow:0 6px 16px -9px color-mix(in srgb,var(--ui-danger) 45%,transparent)}
+.merge-deck-dialog footer button:disabled{opacity:.4;cursor:default;transform:none;box-shadow:none}
+.merge-deck-dialog--wide{width:min(680px,94vw);max-height:88vh;text-align:left}
+.merge-deck-dialog--wide>header{padding-right:1rem}
+.merge-deck-dialog--wide footer{flex-wrap:wrap}
+.merge-deck-dialog--wide footer button{flex:0 0 auto;min-width:5.5rem}
+.merge-deck-dialog .merge-dialog-field{padding:0;margin:0 0 .7rem;text-align:left}
+.merge-dialog-copy{font-size:.8rem;line-height:1.5;color:var(--text-dim);margin:0 0 1.2rem;overflow-wrap:anywhere}
+.merge-deck-dialog .merge-dialog-field input{background:var(--bg);border-radius:8px;padding:.7rem;font-family:var(--sans);font-size:.95rem;box-shadow:inset 0 1px 2px rgba(0,0,0,.2)}
+.merge-deck-dialog .merge-dialog-field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(216,166,71,.2),inset 0 1px 2px rgba(0,0,0,.18)}
+@keyframes mergeDialogPop{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.merge-deck-dialog{animation:none}.merge-deck-dialog footer button{transition:none}}
 .merge-dialog-field{display:grid;gap:8px;padding:20px;font-size:12px}
 .merge-dialog-field input,.merge-dialog-field select{width:100%;min-width:0;padding:10px;border:1px solid var(--merge-line);border-radius:4px;background:var(--merge-bg);color:var(--merge-text);font-size:16px}
 .merge-layout-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:20px}

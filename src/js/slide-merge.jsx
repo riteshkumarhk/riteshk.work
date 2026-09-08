@@ -31,9 +31,14 @@ import { canvasTheme } from "./slide-merge-appearance.mjs";
 import { useNotesResize } from "./slide-merge-notes.jsx";
 import { LayerPanel } from "./slide-merge-layers.jsx";
 import { ActivityDialog, AllSlides, EditorBar, HistoryControls, useActivity } from "./slide-merge-bar.jsx";
+import { VisibilityMenu, VisibilityConfirmation } from "./slide-merge-visibility.jsx";
+import { setDeckVisibility } from "./slide-merge-visibility.mjs";
+import { watchStudioTypography } from "./slide-merge-typography.mjs";
+import "../../css/slide-merge-controls.css";
 
 function useAppearance() {
   const [appearance, setAppearance] = useState(() => document.documentElement.dataset.appearance || "dark");
+  useEffect(() => watchStudioTypography(window, document), []);
   useEffect(() => {
     const update = () => setAppearance(document.documentElement.dataset.appearance || "dark");
     window.addEventListener("theme:change", update);
@@ -194,7 +199,7 @@ function Merger() {
     onDelete: layout => openDeckDialog({ kind: "delete-layout", layout }) };
   const [view, setView] = useState({ grid: false, snap: false, rulers: false, margins: false, thirds: false });
   const [settings,setSettings]=useState({}),[snapGuides,setSnapGuides]=useState(true);
-  const host = useRef(null), input = useRef(null), dialog = useRef(null);
+  const host = useRef(null), input = useRef(null);
   const editor = useRef(null);
   useEffect(() => {
     if (pane !== "library" || !host.current) return;
@@ -468,6 +473,13 @@ function Merger() {
     if (isDeck) next[key] = value;
     paint(next); schedule();
   }
+  function changeVisibility(isPublic) {
+    if (busy || !live.current.ready) return;
+    capture();
+    paint(setDeckVisibility(live.current.deck, isPublic ? "public" : "private"));
+    activity.note(isPublic ? "Public draft selected" : "Owner-only draft selected");
+    schedule(); setDeckDialog(null);
+  }
   function changeView(key, value) {
     activity.write("sys", `${key} ${value ? "enabled" : "disabled"}`);
     setView(previous => ({ ...previous, [key]: value }));
@@ -579,7 +591,6 @@ function Merger() {
     window.__slideMerge = { api, save, choose, importImage, deck: () => structuredClone(live.current.deck) };
     return () => { observer.disconnect(); clearTimeout(live.current.timer); document.removeEventListener("visibilitychange", flush); window.removeEventListener("beforeunload", leave); delete window.__slideMerge; };
   }, [api]);
-  useEffect(() => { if (confirm) dialog.current.showModal(); }, [confirm]);
   useEffect(() => {
     if (!api || editing || slideView !== "current" || present !== null || confirm || deckDialog || activity.showLog) return;
     const canvas = host.current.querySelector(".lab-canvas");
@@ -621,6 +632,7 @@ function Merger() {
   return <div className={`merge-shell ${resizing ? "is-resizing" : ""} ${notesResize.dragging ? "is-notes-resizing" : ""} ${!editing || notesOpen ? "" : "is-notes-hidden"} ${mobileUI.slides ? "mobile-slides-open" : ""} ${pane && !mobileUI.mobile ? "merge-rail-insert" : ""}`} data-editing={editing} data-slide-view={slideView} data-mobile-panel={mobileUI.mobile ? editing ? mobileUI.panel : "notes" : undefined} style={{ "--slide-pane-width": `${paneWidth}px`, "--notes-height": `${notesResize.height}px` }}>
     <header className="merge-header"><a href="/studio/slide-lab/" title="Back to engine lab" aria-label="Back to engine lab"><Icon name="back" /></a><span className="merge-brand">Slide studio <small>MERGER LAB</small></span>
       <input aria-label="Deck title" value={deck?.title || ""} disabled={busy || !editing} onChange={event => metadata("title", event.target.value, true)} />
+      <VisibilityMenu deck={deck} disabled={busy || present !== null || !!confirm || !!deckDialog} onChange={isPublic => { if (isPublic) { openPane(null, false); setDeckDialog({kind:"visibility"}); } else changeVisibility(false); }} />
       </header>
     <EditorBar historyRef={setHistoryTarget} status={status === "Saved on this device" && activity.message ? `${activity.message} - saved` : status} busy={busy || present !== null || !!confirm || !!deckDialog} editing={editing} onEditing={switchEditing} slideView={slideView} onView={switchView} onPlay={rehearse} canPlay={!!rehearsal.length} activity={activity} />
     <aside className="merge-slides" aria-label={pane && !mobileUI.mobile ? PANE_LABELS[pane] || "Library" : "Slides"}>
@@ -663,8 +675,9 @@ function Merger() {
     <input type="file" hidden ref={input} accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml,video/mp4,video/webm,video/quicktime,video/ogg,.svg,.mov" onChange={event => { importMedia(event.target.files[0], mediaPurpose === "background"); event.target.value = ""; }} />
     {present !== null && <Presenter slides={rehearsal} index={present} onIndex={index => { activity.write("nav", `Rehearsal slide ${index + 1}`); setPresent(index); }} onClose={() => { activity.note("Rehearsal closed", "nav"); setPresent(null); requestAnimationFrame(fit); }} />}
     {["save-layout", "rename-layout"].includes(deckDialog?.kind) && <LayoutNameDialog value={deckDialog.layout?.name} busy={busy} error={layoutSaveError} onClose={() => setDeckDialog(null)} onSave={saveLayout} />}
-    {["apply-layout", "delete-layout"].includes(deckDialog?.kind) && <DeckDialog title={deckDialog.kind === "apply-layout" ? "Apply saved layout?" : "Delete saved layout?"} onClose={() => { if (!busy) setDeckDialog(null); }}><p className="merge-layout-dialog-copy">{deckDialog.kind === "apply-layout" ? `Replace this slide's content and background with "${deckDialog.layout.name}"? Speaker notes are kept. You can undo this change.` : `Delete "${deckDialog.layout.name}" from My layouts? Existing slides are not changed.`}</p><footer><button disabled={busy} onClick={() => setDeckDialog(null)}>Cancel</button><button disabled={busy} className={deckDialog.kind === "delete-layout" ? "is-danger" : "merge-dialog-primary"} onClick={() => deckDialog.kind === "delete-layout" ? deleteLayout(deckDialog.layout) : useSavedLayout(deckDialog.layout)}>{deckDialog.kind === "delete-layout" ? "Delete layout" : "Apply layout"}</button></footer></DeckDialog>}
-    {confirm && <dialog ref={dialog} className="merge-confirm" aria-labelledby="merge-delete-title" onCancel={() => setConfirm(false)}><h2 id="merge-delete-title">Delete this slide?</h2><p>{deck.slides.find(slide => slide.id === confirm)?.title}</p><div><button onClick={() => setConfirm(false)}>Cancel</button><button className="is-danger" onClick={() => { setConfirm(false); modify("delete", confirm); }}>Delete slide</button></div></dialog>}
+    {deckDialog?.kind === "visibility" && <VisibilityConfirmation onClose={() => setDeckDialog(null)} onConfirm={() => changeVisibility(true)} />}
+    {["apply-layout", "delete-layout"].includes(deckDialog?.kind) && <DeckDialog wide={false} title={deckDialog.kind === "apply-layout" ? "Apply saved layout?" : "Delete saved layout?"} onClose={() => { if (!busy) setDeckDialog(null); }}><p className="merge-layout-dialog-copy">{deckDialog.kind === "apply-layout" ? `Replace this slide's content and background with "${deckDialog.layout.name}"? Speaker notes are kept. You can undo this change.` : `Delete "${deckDialog.layout.name}" from My layouts? Existing slides are not changed.`}</p><footer><button disabled={busy} onClick={() => setDeckDialog(null)}>Cancel</button><button disabled={busy} className={deckDialog.kind === "delete-layout" ? "is-danger" : "merge-dialog-primary"} onClick={() => deckDialog.kind === "delete-layout" ? deleteLayout(deckDialog.layout) : useSavedLayout(deckDialog.layout)}>{deckDialog.kind === "delete-layout" ? "Delete layout" : "Apply layout"}</button></footer></DeckDialog>}
+    {confirm && <DeckDialog wide={false} title="Delete this slide?" onClose={() => setConfirm(false)}><p className="merge-dialog-copy">{deck.slides.find(slide => slide.id === confirm)?.title}</p><footer><button onClick={() => setConfirm(false)}>Cancel</button><button className="is-danger" onClick={() => { setConfirm(false); modify("delete", confirm); }}><ToolIcon name="trash" />Delete slide</button></footer></DeckDialog>}
   </div>;
 }
 createRoot(document.getElementById("root")).render(<Merger />);

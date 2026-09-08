@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { siteTokenCss } from "./slide-merge-theme.mjs";
+import { siteTokenCss, studioTypographyCss } from "./slide-merge-theme.mjs";
 import { runInNewContext } from "node:vm";
 import { canvasTheme } from "./src/js/slide-merge-appearance.mjs";
 
@@ -50,4 +50,15 @@ test("appearance follows system, saved site modes and cross-tab changes", () => 
   assert.equal(attributes["data-appearance"], "dark");
   stored = "system"; handlers.storage({ key: "rk:theme" });
   assert.equal(attributes["data-appearance"], "light");
+});
+
+test("lab UI inherits the selected Studio typography, not the default serif fallback", () => {
+  const content = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
+  const fonts = ["./css/fonts.css", "./css/fonts-systems.css"].map(path => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
+  const active = content.typography.systems.find(system => system.id === content.typography.active);
+  const result = studioTypographyCss(content.typography, fonts);
+  for (const role of ["display", "text", "mono"]) assert.ok(result.includes(active[role].stack));
+  assert.ok(result.includes("@font-face"));
+  assert.doesNotMatch(studioTypographyCss(content.typography, ""), /--serif:|--sans:|--mono:/);
+  assert.equal(studioTypographyCss(null, fonts), "");
 });
