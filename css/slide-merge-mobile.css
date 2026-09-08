@@ -2,7 +2,7 @@
 .merge-drawing-tools,.merge-extra-tools { display:contents; }
 @media(max-width:900px) {
   .merge-shell { --mobile-panel-height:min(48dvh,420px); grid-template:88px 0 minmax(0,1fr) 28px / minmax(0,1fr); }
-  .merge-shell.mobile-slides-open { grid-template-rows:88px 110px minmax(0,1fr) 28px; }
+  .merge-shell.mobile-slides-open { grid-template-rows:88px 158px minmax(0,1fr) 28px; }
   .merge-shell .merge-header { padding:6px 10px; gap:6px; }
   .merge-shell .merge-brand { font-size:13px; }
   .merge-shell .merge-header>input { font-size:12px; }

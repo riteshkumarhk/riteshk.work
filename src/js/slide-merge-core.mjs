@@ -15,16 +15,38 @@ export function changeSlides(deck, action, id, newId) {
   if (action === "duplicate") {
     if (!newId || next.slides.some(slide => slide.id === newId)) throw new Error("Unique slide ID required");
     next.slides.splice(index + 1, 0, { ...structuredClone(next.slides[index]), id: newId, title: next.slides[index].title + " copy" });
+    delete next.slides[index + 1].section;
     next.selected = newId;
   } else if (action === "delete") {
     if (next.slides.length === 1) throw new Error("Keep at least one slide");
     next.slides.splice(index, 1);
     next.selected = next.slides[Math.min(index, next.slides.length - 1)].id;
+  } else if (action === "hide") {
+    next.slides[index].hidden = !next.slides[index].hidden;
   } else if (action === "up" || action === "down") {
     const target = index + (action === "up" ? -1 : 1);
     if (target >= 0 && target < next.slides.length) [next.slides[index], next.slides[target]] = [next.slides[target], next.slides[index]];
   } else throw new Error("Unknown slide action");
   return next;
+}
+export function insertSlide(deck, slide, beforeId = null) {
+  if (!slide.id || deck.slides.some(item => item.id === slide.id)) throw new Error("Unique slide ID required");
+  const next = structuredClone(deck);
+  const index = beforeId === null ? next.slides.length : next.slides.findIndex(item => item.id === beforeId);
+  if (index < 0) throw new Error("Slide not found");
+  next.slides.splice(index, 0, structuredClone(slide));
+  next.selected = slide.id;
+  return next;
+}
+export function setSlideSection(deck, id, name) {
+  const next = structuredClone(deck), slide = next.slides.find(item => item.id === id);
+  if (!slide) throw new Error("Slide not found");
+  if (name.trim()) slide.section = name.trim();
+  else delete slide.section;
+  return next;
+}
+export function presentationSlides(deck) {
+  return deck.slides.filter(slide => !slide.hidden);
 }
 export async function deckStore(value) {
   const database = await new Promise((resolve, reject) => {

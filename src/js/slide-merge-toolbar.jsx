@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import "../../css/slide-merge-toolbar.css";
 
 const toolPaths = {
+  up:"M12 19V5m-6 6 6-6 6 6",down:"M12 5v14m-6-6 6 6 6-6",copy:"M9 9h12v12H9ZM15 9V3H3v12h6",close:"M6 6l12 12M6 18 18 6",section:"M4 4h16v5H4ZM4 14h16M4 19h10",eye:"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12ZM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6",eyeoff:"M3 3l18 18M10 5h2c6 0 10 7 10 7s-1 2-3 4M6 6c-3 2-4 6-4 6s4 7 10 7h2M10 10l4 4",
   trash: "M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7",
   hand: "M8 13V6a2 2 0 0 1 4 0v6M12 11V4a2 2 0 0 1 4 0v8M16 11V7a2 2 0 0 1 4 0v9c0 4-3 6-7 6-3 0-5-2-7-5l-3-4a2 2 0 0 1 3-2l2 2",
   selection: "m4 3 7 18 2-8 8-2Z", text: "M4 6V4h16v2M12 4v16M8 20h8",
@@ -16,7 +17,7 @@ export function ToolIcon({ name }) {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={toolPaths[name]} /></svg>;
 }
 
-export function ToolMenu({ label, icon, children, disabled, active = false }) {
+export function ToolMenu({ label, icon, children, disabled, active = false, caption }) {
   const details = useRef(null);
   useEffect(() => { if (disabled && details.current) details.current.open = false; }, [disabled]);
   useEffect(() => {
@@ -41,7 +42,7 @@ export function ToolMenu({ label, icon, children, disabled, active = false }) {
       panel.style.top = `${Math.max(8, top)}px`;
     } else panel.hidePopover();
   }}>
-    <summary title={label} aria-label={label} aria-disabled={disabled || undefined} onClick={event => { if (disabled) event.preventDefault(); }}><ToolIcon name={icon} /><ToolIcon name="chevron" /></summary>
+    <summary title={label} aria-label={label} aria-disabled={disabled || undefined} onClick={event => { if (disabled) event.preventDefault(); }}><ToolIcon name={icon} />{caption && <span>{caption}</span>}<ToolIcon name="chevron" /></summary>
     <div className="merge-tool-pop" popover="manual" onClick={event => { if (event.target.closest("button[data-close]")) details.current.open = false; }}>{children}</div>
   </details>;
 }

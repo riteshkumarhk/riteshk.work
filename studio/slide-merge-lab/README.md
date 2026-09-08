@@ -16,7 +16,12 @@ the existing owner session through a new, narrowly scoped Worker route.
     for selected objects, including Excalidraw's different phone/tablet inspector layouts.
     Close, backdrop and Escape dismiss the sheet; nested pickers consume Escape first.
     Drawing Line is available in Draw on mobile. Guides and Fit use the actual canvas bounds.
-- Add, rename, duplicate, reorder and confirm-delete slides; edit notes; rehearse.
+- Each thumbnail has move up/down, insert above, duplicate, skip/include and confirm-delete controls.
+- Insert blank slides between existing slides or append through Add a slide.
+- Start a section here adds a named navigator divider to the selected slide; click it to rename/remove.
+    The divider moves with its slide and is not copied when duplicating a slide.
+- Skipped slides remain editable and saved but are omitted from rehearsal. Rehearsal starts at the
+    selected or next included slide, wrapping to the first included slide if needed. All skipped disables Rehearse.
 - Canvas edits use engine undo. Switching slides clears that slide's engine history.
 - Deck autosave uses isolated IndexedDB `rk-slide-merge-lab-v1`, not production storage.
 - Images retain original bytes. Text uses the shared platform-hosted font catalogue.
@@ -25,7 +30,15 @@ the existing owner session through a new, narrowly scoped Worker route.
 - Hand, Select, Text, Image, Shapes, Arrow, Line and Draw use native engine tools.
 - Icons searches the studio's built-in and published custom icons; insertion retains vector SVG bytes.
 - Content inserts editable text, lists, metrics, quotes, badges and a three-card section starter.
-- New slide lives in the slide rail: Blank, Title, Two columns and Product flow.
+- Add a slide offers Add blank, Add a layout (nine existing layouts), Generate from a section,
+    and Start a section here. Per-slide controls sit below thumbnails, never over the preview.
+- Generate from a section reads the published site or, only when selected, this browser's saved Studio
+    draft. Choose a case study and section; this never modifies source content. Locked, encrypted-stub,
+    vault and disabled sections are excluded. No vault resolution or decryption runs.
+- Text, statements, metrics, quotes and lists become native editable text. Long body text is excerpted
+    on the slide with full source prose retained in notes. The first direct image/video is copied as
+    original image bytes or a hosted video embed. Uploaded media paths use the site's R2 normalization.
+    Unsupported/failed media aborts insertion with an error, not a partially generated slide.
 - Notes toggles independently of drawing tools. View groups native grid snapping,
   object snapping, slide-pixel rulers, safe margins, thirds and Fit slide.
 - Empty selection shows Slide properties: nine layouts, background swatches/custom
@@ -51,6 +64,8 @@ revision conflicts, cross-device merges, deletion, in-flight changes and offline
 JavaScript for Google API key patterns. The engine adapter removes upstream Firebase configuration.
 
 `node --test slide-merge.test.mjs` checks immutable slide operations and rail limits.
+`node --test slide-merge-sections.test.mjs` checks source privacy filters, conversion, full notes,
+text excerpts, original media URLs and R2 path normalization.
 `node --test slide-merge-inserts.test.mjs` checks content starters and ruler coordinates.
 `node --test slide-merge-properties.test.mjs` checks layouts, selection ownership,
 transition matching, guide positioning and snapping.
@@ -102,7 +117,10 @@ show placeholders for those embeds. Video playback depends on browser support.
 Production-deck conversion, full export/thumbnail fidelity, presenter parity,
 private encryption and publishing compatibility remain unimplemented.
 Local drafts do not roam across devices. Real-hardware performance remains a user check.
-Content and slide layouts are starters, not imports of actual case-study sections.
+Section generation maps content, not a visual clone of the original block. Interactive/nested sections,
+YouTube/web embeds and multi-image galleries do not have full conversion parity. Only the first media
+item/metric/quote is used; hosted video playback and export fidelity retain the existing embed limitations.
+Custom saved production layouts and production deck import are not part of this lab.
 Icons are SVG image objects, not editable individual paths; unpublished studio icons
 are not available. Video-background thumbnails omit playback; video renders beneath
 artwork in the editor and rehearsal. Magic Move matches object IDs, text and image IDs;
