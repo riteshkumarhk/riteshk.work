@@ -57,14 +57,16 @@ export function CanvasToolbar({ api, disabled, onImage, children }) {
   }
   function button(type, label) { return <button type="button" className="merge-tool" title={label} aria-label={label} aria-pressed={tool === type} disabled={disabled} onClick={() => select(type)}><ToolIcon name={type} /></button>; }
   return <div className="merge-canvas-tools" role="toolbar" aria-label="Slide editing tools">
+    <div className="merge-drawing-tools">
     <div className="merge-tool-group">{button("hand", "Hand (H)")}{button("selection", "Select (V)")}</div>
     <div className="merge-tool-group">{button("text", "Text (T)")}<button className="merge-tool" title="Import original image" aria-label="Import original image" disabled={disabled} onClick={onImage}><ToolIcon name="image" /></button>
       <ToolMenu label="Shapes" icon={["rectangle", "diamond", "ellipse"].includes(tool) ? tool : "rectangle"} active={["rectangle", "diamond", "ellipse"].includes(tool)} disabled={disabled}>
         {[["rectangle", "Rectangle (R)"], ["diamond", "Diamond (D)"], ["ellipse", "Ellipse (O)"]].map(([type, label]) => <button key={type} data-close aria-pressed={tool === type} onClick={() => select(type)}><ToolIcon name={type} />{label}</button>)}
       </ToolMenu>{button("arrow", "Arrow (A)")}{button("line", "Line (L)")}
       <ToolMenu label="Draw" icon={tool === "eraser" ? "eraser" : "freedraw"} active={["freedraw", "eraser"].includes(tool)} disabled={disabled}>
+        <button className="merge-mobile-only" data-close onClick={()=>select("line")}><ToolIcon name="line" />Line (L)</button>
         {[["freedraw", "Pen (P)"], ["eraser", "Eraser (E)"]].map(([type, label]) => <button key={type} data-close aria-pressed={tool === type} onClick={() => select(type)}><ToolIcon name={type} />{label}</button>)}
       </ToolMenu>
-    </div>{children}
+    </div></div><div className="merge-extra-tools">{children}</div>
   </div>;
 }

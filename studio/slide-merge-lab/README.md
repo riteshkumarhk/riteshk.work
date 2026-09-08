@@ -6,10 +6,16 @@ the existing owner session through a new, narrowly scoped Worker route.
 
 ## Interaction model
 
-- Canvas first: native compact contextual properties float on the left.
+- Canvas first: native compact contextual properties float on the left on desktop.
 - Slides occupy the right rail on desktop. Only this rail has a resize handle.
 - Drag the rail's left edge, use Left/Right arrow keys, or Home/double-click to reset.
-- Rail width persists separately in `rk:slide-merge:rail-width`; mobile uses a horizontal slide strip.
+- Rail width persists separately in `rk:slide-merge:rail-width`; mobile uses a collapsible horizontal slide strip, initially closed.
+- At widths up to 900px, a two-row toolbar is docked below the slide title, outside the canvas.
+    Properties, Library and Notes share one bottom-sheet interaction, closed by default.
+    Properties shows slide settings for an empty selection or the native object inspector
+    for selected objects, including Excalidraw's different phone/tablet inspector layouts.
+    Close, backdrop and Escape dismiss the sheet; nested pickers consume Escape first.
+    Drawing Line is available in Draw on mobile. Guides and Fit use the actual canvas bounds.
 - Add, rename, duplicate, reorder and confirm-delete slides; edit notes; rehearse.
 - Canvas edits use engine undo. Switching slides clears that slide's engine history.
 - Deck autosave uses isolated IndexedDB `rk-slide-merge-lab-v1`, not production storage.
