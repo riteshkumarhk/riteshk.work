@@ -5,7 +5,7 @@ import { checkLabAssets } from "./slide-lab-security.mjs";
 
 await rm("studio/slide-lab/assets", { recursive: true, force: true });
 await build({
-  entryPoints: { app: "src/js/slide-lab.jsx", native: "src/js/slide-lab-native.js" },
+  entryPoints: { app: "src/js/slide-lab.jsx", native: "src/js/slide-lab-native.js", merge: "src/js/slide-merge.jsx" },
   outdir: "studio/slide-lab/assets",
   entryNames: "[name]",
   chunkNames: "chunk-[hash]",
