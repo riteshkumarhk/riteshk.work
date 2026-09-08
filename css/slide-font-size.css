@@ -1,0 +1,14 @@
+.excalidraw .lab-type-value { float: right; max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: .5rem; font-size: 11px; font-weight: 400; color: var(--text-secondary-color); }
+.excalidraw .lab-size-picker { max-width: calc(100vw - 48px); }
+.excalidraw .lab-size-picker > .Island { max-height: min(440px, calc(100dvh - 64px)); overflow-y: auto; }
+.excalidraw .lab-size-options { display: grid; gap: 2px; }
+.excalidraw .lab-size-options button { display: flex; justify-content: space-between; align-items: center; min-height: 32px; padding: 6px 10px; border: 0; border-radius: 4px; background: transparent; color: var(--text-primary-color); font: inherit; font-size: 12px; cursor: pointer; }
+.excalidraw .lab-size-options button:hover, .excalidraw .lab-size-options button[aria-checked="true"] { background: var(--button-hover-bg); }
+.excalidraw .lab-size-options button[aria-checked="true"] { box-shadow: inset 2px 0 var(--color-primary); }
+.excalidraw .lab-size-options button span:last-child { display: flex; align-items: center; gap: 8px; color: var(--text-secondary-color); }
+.excalidraw .lab-size-custom { display: flex; align-items: end; gap: 8px; border-top: 1px solid var(--default-border-color); padding-top: 10px; margin-top: 8px; }
+.excalidraw .lab-size-custom label { flex: 1; min-width: 0; font-size: 11px; }
+.excalidraw .lab-size-custom input { box-sizing: border-box; display: block; width: 100%; height: 32px; margin-top: 6px; padding: 4px 8px; background: var(--button-bg); color: var(--text-primary-color); border: 1px solid var(--default-border-color); border-radius: 4px; appearance: textfield; font: inherit; font-size: 12px; }
+.excalidraw .lab-size-custom input::-webkit-inner-spin-button, .excalidraw .lab-size-custom input::-webkit-outer-spin-button { appearance: none; }
+.excalidraw .lab-size-custom button { display: grid; place-items: center; width: 32px; height: 32px; background: var(--button-bg); color: var(--text-primary-color); border: 0; border-radius: 4px; cursor: pointer; }
+.excalidraw .lab-size-picker button:focus-visible, .excalidraw .lab-size-custom input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }

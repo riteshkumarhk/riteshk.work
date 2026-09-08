@@ -25,6 +25,9 @@ the existing owner session through a new, narrowly scoped Worker route.
 - Skipped slides remain editable and saved but are omitted from rehearsal. Rehearsal starts at the
     selected or next included slide, wrapping to the first included slide if needed. All skipped disables Rehearse.
 - Canvas edits use engine undo. Switching slides clears that slide's engine history.
+- Selection borders and resize-handle centers use true element/group bounds, matching snap
+    guides without the engine's extra selection padding. Mouse/touch hit target sizes remain
+    unchanged. This is a guarded adapter for the pinned engine, not a change to slide geometry.
 - Deck autosave uses isolated IndexedDB `rk-slide-merge-lab-v1`, not production storage.
 - Images retain original bytes. SVG files additionally retain `originalDataURL` because the native
     engine normalizes its SVG rendering copy. No vector rasterization or media re-encoding occurs.
@@ -107,6 +110,11 @@ the existing owner session through a new, narrowly scoped Worker route.
     object snapping, slide-pixel rulers, safe margins and thirds.
 - Fit slide is an icon button between the desktop zoom controls and Undo/Redo, using native
     footer styling. It is no longer in View. Phones retain it in the bottom-left canvas controls.
+- Typography keeps three font families and S/M/L sizes upfront. The fourth buttons open the
+    font library (book-type icon) and size menu (small/large type icon), using identical native controls.
+    Sizes are XS/Caption 12, S16, M20, L28, XL36, XXL48, Display64 and custom values from 1 to 1000
+    canvas units. Current values and mixed selections remain visible. The native size action retains
+    text reflow, bound-label resizing and Undo; existing text is not migrated to presets.
 - Empty selection shows Slide properties: nine layouts, background swatches/custom
     colour, original-byte image/video backgrounds, and None/Fade/Push/Magic Move transitions.
 - Slide background uses the same native fill picker: palette, shades, shared custom
@@ -146,6 +154,11 @@ JavaScript for Google API key patterns. The engine adapter removes upstream Fire
 `node --test slide-merge-layouts.test.mjs` checks editable template capture, original media,
 independent instances and reference remapping. Browser checks cover IndexedDB persistence,
 cross-deck reuse, rename/delete, storage failure, one-step Undo and both tabbed selectors.
+`node --test slide-lab-selection-bounds.test.mjs` checks native outline and handle alignment
+at 25/50/100/200% zoom, unchanged pointer hit sizes and fail-closed upstream patch anchors.
+`node --test slide-lab-typography.test.mjs` checks native size-action preservation, selection
+resolution and guarded patch anchors. Browser checks cover presets, custom validation, Undo,
+font selection, keyboard navigation and light/desktop plus dark/mobile popup geometry.
 `node --test slide-merge-sections.test.mjs` checks source privacy filters, conversion, full notes,
 text excerpts, original media URLs and R2 path normalization.
 `node --test slide-merge-inserts.test.mjs` checks content starters and ruler coordinates.

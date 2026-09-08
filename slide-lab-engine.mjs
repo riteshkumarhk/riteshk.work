@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import postcss from "postcss";
 import { patchFontPicker } from "./slide-lab-font-picker.mjs";
+import { patchSelectionBounds } from "./slide-lab-selection-bounds.mjs";
+import { patchTypography } from "./slide-lab-typography.mjs";
 
 export function stripUpstreamFirebase(source) {
   return source.replace(/VITE_APP_FIREBASE_CONFIG: '(?:[^'\\]|\\.)*'/g, 'VITE_APP_FIREBASE_CONFIG: "{}"');
@@ -42,7 +44,8 @@ export function cornerEnginePlugin() {
       source = source.replace('value: FONT_FAMILY.Excalifont,\n    icon: FreedrawIcon,\n    text: t("labels.handDrawn")', 'value: FONT_FAMILY.Fraunces,\n    icon: TextIcon,\n    text: "Fraunces"');
       source = source.replace('value: FONT_FAMILY.Nunito,\n    icon: FontFamilyNormalIcon,\n    text: t("labels.normal")', 'value: FONT_FAMILY.Inter,\n    icon: FontFamilyNormalIcon,\n    text: "Inter"');
       source = source.replace('value: FONT_FAMILY["Comic Shanns"],\n    icon: FontFamilyCodeIcon,\n    text: t("labels.code")', 'value: FONT_FAMILY["JetBrains Mono"],\n    icon: FontFamilyCodeIcon,\n    text: "JetBrains Mono"');
-      source = patchFontPicker(source);
+      source = patchTypography(patchSelectionBounds(patchFontPicker(source), "renderer"));
+      source = `import { FontSizePicker as LabFontSizePicker, FontLibraryIcon as LabFontLibraryIcon } from ${JSON.stringify(resolve("src/js/slide-font-size.jsx").replaceAll("\\", "/"))};\n` + source;
       source = `import { cornerPath as labCornerPath } from ${JSON.stringify(resolve("src/js/slide-lab-corners.mjs").replaceAll("\\", "/"))};\n` + source;
       source = `import { sampleCanvasColor as labSampleCanvasColor } from ${JSON.stringify(resolve("src/js/slide-lab-eyedropper.mjs").replaceAll("\\", "/"))};\n` + source;
       source += '\nexport { ColorPicker as LabColorPicker, DEFAULT_ELEMENT_BACKGROUND_COLOR_PALETTE as LAB_BACKGROUND_PALETTE };\n';
@@ -57,6 +60,7 @@ export function cornerEnginePlugin() {
       if (!source.includes(radiusAnchor)) return source !== original ? { contents: source, loader: "js", resolveDir: dirname(path) } : undefined;
       const version = JSON.parse(await readFile("node_modules/@excalidraw/excalidraw/package.json", "utf8")).version;
       if (version !== "0.18.1") throw new Error("Revalidate the Slide Lab corner adapter for Excalidraw " + version);
+      source = patchSelectionBounds(source, "handles");
       const shapeAnchor = "  embedsValidationStatus\n}) => {\n  switch (element.type) {";
       if (source.split(radiusAnchor).length !== 2 || source.split(shapeAnchor).length !== 2) throw new Error("Excalidraw corner adapter anchors changed");
       source = source.replace(radiusAnchor, radiusAnchor + '\n  if (element.customData?.labCorners) return labCornerSettings(element).radius;');
