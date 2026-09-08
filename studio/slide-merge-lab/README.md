@@ -20,6 +20,17 @@ published content, private decks, authentication and publishing are untouched.
 - New slide lives in the slide rail: Blank, Title, Two columns and Product flow.
 - Notes toggles independently of drawing tools. View groups native grid snapping,
   object snapping, slide-pixel rulers, safe margins, thirds and Fit slide.
+- Empty selection shows Slide properties: nine layouts, background swatches/custom
+    colour, original-byte image/video backgrounds, and None/Fade/Push/Magic Move transitions.
+- Layouts reposition free text/images, preserve grouped/locked objects and bound labels,
+    and replace untouched placeholders. Select a media placeholder then use Image to fill it.
+- Drag from the top/left ruler to insert horizontal/vertical guides. Drag to move;
+    arrow keys adjust, Shift increases the step, and Delete removes the focused guide.
+    Clear guides removes custom guides and preset overlays. Guide snapping uses a six-screen-pixel threshold.
+- Layout, background, transition and guide settings use the slide frame's metadata,
+    native Undo and isolated local autosave. Reduced motion disables rehearsal transitions.
+- Merger chrome consumes the site's CSS tokens at build time, including native
+    inspectors, flyouts and dialogs. Artwork colours remain independent.
 
 ## Build and checks
 
@@ -28,6 +39,8 @@ JavaScript for Google API key patterns. The engine adapter removes upstream Fire
 
 `node --test slide-merge.test.mjs` checks immutable slide operations and rail limits.
 `node --test slide-merge-inserts.test.mjs` checks content starters and ruler coordinates.
+`node --test slide-merge-properties.test.mjs` checks layouts, selection ownership,
+transition matching, guide positioning and snapping.
 Browser verification covers real rail dragging, keyboard resizing, reload persistence,
 floating-left inspector geometry, desktop/mobile screenshots, deck operations and rehearsal.
 
@@ -41,6 +54,8 @@ private encryption and publishing compatibility remain unimplemented.
 Local drafts do not roam across devices. Real-hardware performance remains a user check.
 Content and slide layouts are starters, not imports of actual case-study sections.
 Icons are SVG image objects, not editable individual paths; unpublished studio icons
-are not available. Rulers are read-only, guides are visual overlays (not draggable
-or snapping targets), and grid snapping is the engine grid rather than the production
-12-column layout grid. View aids and notes-panel visibility are session-only.
+are not available. Video-background thumbnails omit playback; video renders beneath
+artwork in the editor and rehearsal. Magic Move matches object IDs, text and image IDs;
+unmatched incoming objects fade in. It is not full production presenter parity.
+Grid snapping is the engine grid rather than the production 12-column layout grid.
+Custom guides persist per slide; preset visibility and notes-panel visibility are session-only.

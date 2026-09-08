@@ -12,9 +12,13 @@ import { CanvasToolbar, ToolMenu, ToolIcon } from "./slide-merge-toolbar.jsx";
 import { IconLibrary } from "./slide-merge-library.jsx";
 import { CanvasGuides } from "./slide-merge-guides.jsx";
 import { SLIDE_LAYOUTS, CONTENT_BLOCKS, contentSkeleton } from "./slide-merge-inserts.mjs";
+import { SlideProperties } from "./slide-merge-properties.jsx";
+import { slideSettings, slideOwnsFocus, layoutPlan, transitionMatch } from "./slide-merge-properties.mjs";
+import { guideSnap } from "./slide-merge-guide-core.mjs";
 import "@excalidraw/excalidraw/index.css";
 import "../../css/slide-lab.css";
 import "../../css/slide-merge.css";
+import "../../css/slide-merge-theme.css";
 
 const paths = {
   add: "M12 5v14M5 12h14", copy: "M9 9h12v12H9zM15 9V3H3v12h6", trash: "M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7",
@@ -29,6 +33,16 @@ function Embed({ element }) {
   return ["rich", "section", "video"].includes(kind) ? <iframe className="lab-embed" title={`Native ${kind}`} src={`/studio/slide-lab/native.html?fixture=${kind}`} /> : null;
 }
 const engineOptions = { tools: { image: false }, canvasActions: { loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, clearCanvas: false, changeViewBackgroundColor: false, toggleTheme: false } };
+function CanvasVideo({api}) {
+  const [video,setVideo]=useState(null),[failed,setFailed]=useState(false);
+  useEffect(()=>{if(!api)return;const update=(elements,state)=>{const element=elements.find(item=>!item.isDeleted&&item.customData?.slideBackgroundVideo);const next=element?{src:element.customData.slideBackgroundVideo,x:(state.scrollX+element.x)*state.zoom.value,y:(state.scrollY+element.y)*state.zoom.value,width:element.width*state.zoom.value,height:element.height*state.zoom.value}:null;setVideo(previous=>previous?.src===next?.src&&previous?.x===next?.x&&previous?.y===next?.y&&previous?.width===next?.width&&previous?.height===next?.height?previous:next);};update(api.getSceneElements(),api.getAppState());return api.onChange(update);},[api]);
+  useEffect(()=>setFailed(false),[video?.src]);
+  if(!video)return null;
+  return <div className="merge-video-layer" style={{left:video.x,top:video.y,width:video.width,height:video.height}}>{failed?<div role="status">Video unavailable in this browser</div>:<video className="merge-background-video" src={video.src} autoPlay muted loop playsInline onError={()=>setFailed(true)} />}</div>;
+}
+function sceneBackground(elements) { return elements.some(element=>!element.isDeleted&&element.customData?.slideBackgroundVideo)?"transparent":"#ffffff"; }
+function changed(element, update) { return { ...element, ...update, version: element.version + 1, versionNonce: Math.floor(Math.random()*2147483647), updated: Date.now() }; }
+function validEmbed(link) { return /^https:\/\/slide-lab\.invalid\/(rich|section|video|background)$/.test(link); }
 
 async function materialize(slide) {
   if (slide.scene) return slide;
@@ -46,16 +60,37 @@ async function materialize(slide) {
 function Presenter({ slides, index, onIndex, onClose }) {
   const [api, setApi] = useState(null);
   const stage = useRef(null);
+  const previous=useRef(null),engine=useRef(null);
   const slide = slides[index];
   useEffect(() => {
     if (!api) return;
     const scene = slide.scene;
     api.resetScene();
-    api.updateScene({ elements: scene.elements.map(element => element.id === FRAME_ID ? { ...element, name: "" } : element), appState: { ...scene.appState, selectedElementIds: {} }, captureUpdate: CaptureUpdateAction.NEVER });
+    api.updateScene({ elements: scene.elements.map(element => element.id === FRAME_ID ? { ...element, name: "" } : element), appState: { ...scene.appState, viewBackgroundColor:sceneBackground(scene.elements), selectedElementIds: {} }, captureUpdate: CaptureUpdateAction.NEVER });
     api.addFiles(Object.values(scene.files));
+    const old=previous.current;previous.current={slide,index};
+    let animationFrame=0,animation=null;
+    const transition=slideSettings(scene.elements).transition||"fade";
+    if(old&&old.slide.id!==slide.id&&!matchMedia("(prefers-reduced-motion: reduce)").matches&&transition!=="none") {
+      if(transition==="magic") {
+        const matches=transitionMatch(old.slide.scene.elements,scene.elements),start=performance.now();
+        const tick=now=>{
+          const progress=Math.min(1,(now-start)/520),ease=1-Math.pow(1-progress,3);
+          const interpolated=matches.map(match=>{
+            const target=match.next,source=match.previous;
+            const update={};
+            for(const key of ["x","y","width","height","angle","fontSize","opacity"]) if(Number.isFinite(target[key]))update[key]=source&&Number.isFinite(source[key])?source[key]+(target[key]-source[key])*ease:key==="opacity"?target[key]*ease:target[key];
+            if(source?.points?.length===target.points?.length&&target.points)update.points=target.points.map((point,pointIndex)=>point.map((value,axis)=>source.points[pointIndex][axis]+(value-source.points[pointIndex][axis])*ease));
+            return changed(target,update);
+          });
+          api.updateScene({elements:[...interpolated,scene.elements.find(element=>element.id===FRAME_ID)].filter(Boolean),captureUpdate:CaptureUpdateAction.NEVER});
+          if(progress<1)animationFrame=requestAnimationFrame(tick);else api.updateScene({elements:scene.elements,captureUpdate:CaptureUpdateAction.NEVER});
+        };animationFrame=requestAnimationFrame(tick);
+      } else animation=engine.current.animate(transition==="push"?[{transform:`translateX(${index<old.index?-100:100}%)`},{transform:"translateX(0)"}]:[{opacity:0},{opacity:1}],{duration:520,easing:"cubic-bezier(.16,1,.3,1)"});
+    }
     const fit = () => api.updateScene({ appState: { zoom: { value: stage.current.clientWidth / 1280 }, scrollX: 0, scrollY: 0 }, captureUpdate: CaptureUpdateAction.NEVER });
     const observer = new ResizeObserver(fit); observer.observe(stage.current); fit();
-    return () => observer.disconnect();
+    return () => { observer.disconnect();cancelAnimationFrame(animationFrame);animation?.cancel(); };
   }, [api, slide]);
   useEffect(() => {
     const key = event => {
@@ -68,7 +103,7 @@ function Presenter({ slides, index, onIndex, onClose }) {
   }, [index]);
   return <div className="merge-present" role="dialog" aria-modal="true" aria-label="Rehearsal">
     <header><strong>{slide.title}</strong><Button icon="close" label="Close rehearsal" onClick={onClose} autoFocus /></header>
-    <div className="merge-present-stage" ref={stage}><Excalidraw excalidrawAPI={setApi} viewModeEnabled zenModeEnabled aiEnabled={false} handleKeyboardGlobally={false} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={link => /^https:\/\/slide-lab\.invalid\/(rich|section|video)$/.test(link)} /></div>
+    <div className="merge-present-stage" ref={stage}><div className="merge-present-engine" ref={engine}><CanvasVideo api={api} /><Excalidraw excalidrawAPI={setApi} viewModeEnabled zenModeEnabled aiEnabled={false} handleKeyboardGlobally={false} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed} /></div></div>
     <footer><Button icon="back" label="Previous slide" disabled={!index} onClick={() => onIndex(index - 1)} /><span>{index + 1} / {slides.length}</span><Button icon="next" label="Next slide" disabled={index === slides.length - 1} onClick={() => onIndex(index + 1)} /><p>{slide.notes}</p></footer>
   </div>;
 }
@@ -79,6 +114,7 @@ function Merger() {
   const [thumbnails, setThumbnails] = useState({}), [present, setPresent] = useState(null), [confirm, setConfirm] = useState(false);
   const [iconOpen, setIconOpen] = useState(false), [notesOpen, setNotesOpen] = useState(true);
   const [view, setView] = useState({ grid: false, snap: false, rulers: false, margins: false, thirds: false });
+  const [settings,setSettings]=useState({}),[snapGuides,setSnapGuides]=useState(true);
   const host = useRef(null), input = useRef(null), dialog = useRef(null);
   const resize = useRef(null);
   const [paneWidth, setPaneWidth] = useState(() => {
@@ -130,16 +166,18 @@ function Merger() {
   function fit() {
     if (!api || !host.current) return;
     const width = host.current.clientWidth, height = host.current.clientHeight;
-    const zoom = Math.max(.1, Math.min((width - 64) / 1280, (height - 180) / 720, 1));
-    api.updateScene({ appState: { zoom: { value: zoom }, scrollX: (width / zoom - 1280) / 2, scrollY: (height / zoom - 720) / 2 }, captureUpdate: CaptureUpdateAction.NEVER });
+    const left=innerWidth>900?280:40,right=32;
+    const zoom = Math.max(.1, Math.min((width - left - right) / 1280, (height - 180) / 720, 1));
+    api.updateScene({ appState: { zoom: { value: zoom }, scrollX: (left+(width-left-right-1280*zoom)/2)/zoom, scrollY: (height / zoom - 720) / 2 }, captureUpdate: CaptureUpdateAction.NEVER });
   }
   async function mountSlide(slide) {
     live.current.ready = false;
     await loadPlatformFonts(slide.scene.elements);
     api.resetScene();
-    api.updateScene({ elements: restoreElements(slide.scene.elements, null, { repairBindings: true }), appState: { ...slide.scene.appState, currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, selectedElementIds: {}, gridModeEnabled: view.grid, objectsSnapModeEnabled: view.snap }, captureUpdate: CaptureUpdateAction.NEVER });
+    api.updateScene({ elements: restoreElements(slide.scene.elements, null, { repairBindings: true }), appState: { ...slide.scene.appState, viewBackgroundColor:sceneBackground(slide.scene.elements), currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, selectedElementIds: {}, gridModeEnabled: view.grid, objectsSnapModeEnabled: view.snap }, captureUpdate: CaptureUpdateAction.NEVER });
     api.addFiles(Object.values(slide.scene.files));
     api.history.clear(); live.current.version = getSceneVersion(slide.scene.elements); live.current.ready = true;
+    setSettings(slideSettings(slide.scene.elements));
     setSelection("[]"); setHasSelection(false); requestAnimationFrame(fit);
   }
   async function run(operation) {
@@ -162,7 +200,18 @@ function Merger() {
     setView(previous => previous.grid === state.gridModeEnabled && previous.snap === state.objectsSnapModeEnabled ? previous : { ...previous, grid: state.gridModeEnabled, snap: state.objectsSnapModeEnabled });
     const fixed = preserveLabelColors(elements);
     if (fixed !== elements) { api.updateScene({ elements: fixed, captureUpdate: CaptureUpdateAction.NEVER }); return; }
-    setHasSelection(Object.keys(state.selectedElementIds).some(id => state.selectedElementIds[id]) || state.activeTool.type !== "selection");
+    setHasSelection(!slideOwnsFocus(elements,state));
+    const nextSettings=slideSettings(elements);
+    setSettings(previous=>previous===nextSettings?previous:nextSettings);
+    if(snapGuides&&state.selectedElementsAreBeingDragged&&!live.current.snapping) {
+      const selected=elements.filter(element=>!element.isDeleted&&!element.locked&&element.id!==FRAME_ID&&state.selectedElementIds[element.id]);
+      const guides=[...(nextSettings.guides||[]),...(view.margins?[{axis:"x",position:64},{axis:"x",position:1216},{axis:"y",position:36},{axis:"y",position:684}]:[]),...(view.thirds?[{axis:"x",position:1280/3},{axis:"x",position:2560/3},{axis:"y",position:240},{axis:"y",position:480}]:[])];
+      if(selected.length&&guides.length) {
+        const left=Math.min(...selected.map(element=>element.x)),top=Math.min(...selected.map(element=>element.y));
+        const delta=guideSnap({x:left,y:top,width:Math.max(...selected.map(element=>element.x+element.width))-left,height:Math.max(...selected.map(element=>element.y+element.height))-top},guides,state.zoom.value);
+        if(delta.x||delta.y) { const ids=new Set(selected.flatMap(element=>[element.id,...(element.boundElements||[]).filter(bound=>bound.type==="text").map(bound=>bound.id)]));live.current.snapping=true;api.updateScene({elements:elements.map(element=>ids.has(element.id)?changed(element,{x:element.x+delta.x,y:element.y+delta.y}):element),captureUpdate:CaptureUpdateAction.NEVER});live.current.snapping=false; }
+      }
+    }
     const next = JSON.stringify(selectedLabels(elements, state.selectedElementIds).map(element => ({ id: element.id, color: element.strokeColor, linked: !element.customData?.labTextColor })));
     setSelection(previous => previous === next ? previous : next);
     const version = getSceneVersion(elements);
@@ -177,6 +226,44 @@ function Merger() {
     setView(previous => ({ ...previous, [key]: value }));
     if (key === "grid" || key === "snap") api.updateScene({ appState: { [key === "grid" ? "gridModeEnabled" : "objectsSnapModeEnabled"]: value }, captureUpdate: CaptureUpdateAction.NEVER });
   }
+  function commitSettings(update,elements=api.getSceneElementsIncludingDeleted()) {
+    const nextSettings={...slideSettings(elements),...update};
+    const next=elements.map(element=>element.id===FRAME_ID?changed(element,{customData:{...element.customData,slideSettings:nextSettings}}):element);
+    api.updateScene({elements:next,appState:{selectedElementIds:{},viewBackgroundColor:sceneBackground(next)},captureUpdate:CaptureUpdateAction.IMMEDIATELY});
+    setSettings(nextSettings);setHasSelection(false);schedule();
+  }
+  function applyLayout(layout) { return run(async()=>{
+    const elements=api.getSceneElementsIncludingDeleted(),plan=layoutPlan(elements,layout,DEFAULT_SLIDE_FONT,crypto.randomUUID());
+    await loadPlatformFonts(plan.additions);
+    const updates=new Map(plan.updates.map(update=>[update.id,update]));
+    const next=elements.map(element=>plan.removed.includes(element.id)?changed(element,{isDeleted:true}):updates.has(element.id)?changed(element,updates.get(element.id)):element);
+    const slots=new Map(plan.additions.map(element=>[element.id,element]));
+    const additions=restoreElements(convertToExcalidrawElements(plan.additions,{regenerateIds:false}).map(element=>element.type==="text"?{...element,...slots.get(element.id),originalText:slots.get(element.id).text,autoResize:false}:element),null,{repairBindings:true,refreshDimensions:true});
+    const restored=restoreElements([...next.filter(element=>element.id!==FRAME_ID),...additions,next.find(element=>element.id===FRAME_ID)],null,{repairBindings:true,refreshDimensions:true});
+    commitSettings({layout},restored);await save();
+  }); }
+  function setBackground(background,file) { return run(async()=>{
+    const elements=api.getSceneElementsIncludingDeleted().map(element=>element.customData?.slideBackground?changed(element,{isDeleted:true}):element);
+    let additions=[];
+    if(background) {
+      const skeleton={id:crypto.randomUUID(),x:0,y:0,width:1280,height:720,locked:true,frameId:FRAME_ID,roughness:0,strokeWidth:0,strokeColor:"transparent",fillStyle:"solid",customData:{slideBackground:true}};
+      if(background.type==="color")Object.assign(skeleton,{type:"rectangle",backgroundColor:background.color});
+      else if(file?.mimeType?.startsWith("video/"))Object.assign(skeleton,{type:"rectangle",backgroundColor:"transparent",opacity:0,customData:{...skeleton.customData,slideBackgroundVideo:file.dataURL}});
+      else {
+        const scale=Math.max(1280/file.width,720/file.height),width=1280/scale,height=720/scale;
+        Object.assign(skeleton,{type:"image",fileId:file.id,scale:[1,1],crop:{x:(file.width-width)/2,y:(file.height-height)/2,width,height,naturalWidth:file.width,naturalHeight:file.height}});
+      }
+      additions=restoreElements(convertToExcalidrawElements([skeleton],{regenerateIds:false}),null,{repairBindings:true});
+    }
+    commitSettings({background},[...additions,...elements]);if(file&&!file.mimeType.startsWith("video/"))api.addFiles([file]);await save();
+  }); }
+  async function backgroundMedia(file) {
+    try {
+      if(!/^(image\/(png|jpeg|webp|gif)|video\/(mp4|webm))$/.test(file.type))throw new Error("Choose PNG, JPEG, WebP, GIF, MP4 or WebM");
+      const original=file.type.startsWith("image/")?await originalImage(file):{id:crypto.randomUUID(),mimeType:file.type,dataURL:await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(file);})};
+      await setBackground({type:"media",name:file.name,mimeType:file.type},original);
+    } catch(error){fail(error);}
+  }
   function insertContent(kind) { return run(async () => {
     const skeleton = contentSkeleton(kind, DEFAULT_SLIDE_FONT, crypto.randomUUID());
     await loadPlatformFonts(skeleton);
@@ -188,8 +275,11 @@ function Merger() {
   function importImage(file, studioIcon = false) { return run(async () => {
     if (!file || (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) && !(studioIcon && file.type === "image/svg+xml"))) throw new Error("Choose PNG, JPEG, WebP or GIF");
     const image = await originalImage(file), width = Math.min(640, image.width);
-    const element = convertToExcalidrawElements([{ type: "image", fileId: image.id, x: 160, y: 160, width, height: width * image.height / image.width, scale: [1, 1], frameId: FRAME_ID }])[0];
-    api.updateScene({ elements: [...api.getSceneElementsIncludingDeleted(), element], appState: { selectedElementIds: { [element.id]: true } }, captureUpdate: CaptureUpdateAction.IMMEDIATELY }); api.addFiles([image]);
+    const elements=api.getSceneElementsIncludingDeleted(),selected=api.getAppState().selectedElementIds;
+    const placeholder=!studioIcon&&elements.find(element=>!element.isDeleted&&!element.locked&&selected[element.id]&&element.customData?.slidePlaceholder?.kind==="media");
+    const scale=placeholder?Math.min(placeholder.width/image.width,placeholder.height/image.height):width/image.width;
+    const element = convertToExcalidrawElements([{ type: "image", fileId: image.id, x: placeholder?placeholder.x+(placeholder.width-image.width*scale)/2:160, y: placeholder?placeholder.y+(placeholder.height-image.height*scale)/2:160, width:image.width*scale, height:image.height*scale, scale: [1, 1], frameId: FRAME_ID }])[0];
+    api.updateScene({ elements: [...elements.map(item=>item.id===placeholder?.id?changed(item,{isDeleted:true}):item), element], appState: { selectedElementIds: { [element.id]: true } }, captureUpdate: CaptureUpdateAction.IMMEDIATELY }); api.addFiles([image]);
     await save();
   }); }
   function receive(event) {
@@ -235,12 +325,14 @@ function Merger() {
             <ToolMenu label="Content" icon="content" disabled={busy}>{CONTENT_BLOCKS.map(([kind, label]) => <button key={kind} data-close onClick={() => insertContent(kind)}>{label}</button>)}</ToolMenu>
           </div><div className="merge-tool-group"><ToolMenu label="View" icon="view" disabled={busy}>
             {[["grid", "Grid and snap"], ["snap", "Snap to objects"], ["rulers", "Rulers"], ["margins", "Safe margins"], ["thirds", "Thirds"]].map(([key, label]) => <label className="merge-view-option" key={key}><input type="checkbox" checked={view[key]} onChange={event => changeView(key, event.target.checked)} />{label}</label>)}
-            <button data-close onClick={fit}>Fit slide</button><button data-close onClick={() => setView({ ...view, margins: false, thirds: false })}>Clear guides</button>
+            <label className="merge-view-option"><input type="checkbox" checked={snapGuides} onChange={event=>setSnapGuides(event.target.checked)} />Snap to guides</label>
+            <button data-close onClick={fit}>Fit slide</button><button data-close onClick={() => {setView({ ...view, margins: false, thirds: false });commitSettings({guides:[]});}}>Clear guides</button>
           </ToolMenu></div>
         </CanvasToolbar>
-        <CanvasGuides api={api} {...view} />
-        <div className="lab-canvas"><LabTextColorContext.Provider value={{ api, labels, linked: labels.every(label => label.linked), busy, changeLabelColor: color => { if (color && color !== "unlink" && color !== "transparent") { color = normalizeHex(color); if (!color) return; } const elements = api.getSceneElementsIncludingDeleted(); const targets = selectedLabels(elements, api.getAppState().selectedElementIds); api.updateScene({ elements: labelColorUpdate(elements, targets.map(element => element.id), color), captureUpdate: CaptureUpdateAction.IMMEDIATELY }); } }}>
-          <Excalidraw excalidrawAPI={setApi} onChange={onChange} viewModeEnabled={busy || present !== null || confirm || iconOpen} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: "light", currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: "#ffffff" } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={link => /^https:\/\/slide-lab\.invalid\/(rich|section|video)$/.test(link)}><MainMenu><MainMenu.DefaultItems.Help /></MainMenu></Excalidraw>
+        <CanvasGuides api={api} {...view} guides={settings.guides||[]} onGuides={guides=>commitSettings({guides})} disabled={busy||present!==null||confirm||iconOpen} />
+        {!hasSelection&&current&&<SlideProperties settings={settings} disabled={busy||present!==null||confirm||iconOpen} onLayout={applyLayout} onBackground={setBackground} onMedia={backgroundMedia} onTransition={transition=>commitSettings({transition})} />}
+        <div className="lab-canvas"><CanvasVideo api={api} /><LabTextColorContext.Provider value={{ api, labels, linked: labels.every(label => label.linked), busy, changeLabelColor: color => { if (color && color !== "unlink" && color !== "transparent") { color = normalizeHex(color); if (!color) return; } const elements = api.getSceneElementsIncludingDeleted(); const targets = selectedLabels(elements, api.getAppState().selectedElementIds); api.updateScene({ elements: labelColorUpdate(elements, targets.map(element => element.id), color), captureUpdate: CaptureUpdateAction.IMMEDIATELY }); } }}>
+          <Excalidraw excalidrawAPI={setApi} onChange={onChange} viewModeEnabled={busy || present !== null || confirm || iconOpen} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: "light", currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: "#ffffff" } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed}><MainMenu><MainMenu.DefaultItems.Help /></MainMenu></Excalidraw>
         </LabTextColorContext.Provider></div><CornerControls api={api} host={host} disabled={busy || present !== null} />{busy && <div className="lab-busy" role="status">Working</div>}
       </main><label className="merge-notes" id="merge-speaker-notes" hidden={!notesOpen}><span>Speaker notes</span><textarea aria-label="Speaker notes" value={current?.notes || ""} disabled={busy} onChange={event => metadata("notes", event.target.value)} /></label></section>
     <footer className="merge-status"><span role="status">{status}</span><span>{selectedIndex + 1} / {deck?.slides.length || 0}</span><span>Local draft</span></footer>

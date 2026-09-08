@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import "../../css/slide-merge-toolbar.css";
 
 const toolPaths = {
+  trash: "M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7",
   hand: "M8 13V6a2 2 0 0 1 4 0v6M12 11V4a2 2 0 0 1 4 0v8M16 11V7a2 2 0 0 1 4 0v9c0 4-3 6-7 6-3 0-5-2-7-5l-3-4a2 2 0 0 1 3-2l2 2",
   selection: "m4 3 7 18 2-8 8-2Z", text: "M4 6V4h16v2M12 4v16M8 20h8",
   image: "M3 4h18v16H3ZM3 16l6-6 4 4 3-3 5 5M8 8h.01",
