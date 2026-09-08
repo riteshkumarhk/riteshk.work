@@ -6,6 +6,24 @@ the existing owner session through a new, narrowly scoped Worker route.
 
 ## Interaction model
 
+- The top status bar follows Studio's outlined controls: native Undo/Redo at left,
+    green monospace saved status, centered Editing toggle and Current/All slides,
+    gold play glyph for Rehearse, and the activity-recording ring at right.
+- Editing off hides the insertion toolbar, properties, guides and slide-management
+    controls. The canvas is read-only; slide navigation, Fit, rehearsal and speaker
+    notes remain available. Notes can still be changed and saved. Turning editing
+    on/off keeps the same engine instance and history. Loading another slide respects
+    the current editing toggle rather than the scene's saved view-mode flag.
+- All slides opens a thumbnail sorter with open, move, duplicate, skip and delete
+    actions. Opening a slide returns to Current slide. Editing off removes the sorter
+    actions but keeps navigation available. This replaces the proposed Split view;
+    there is no second preview canvas.
+- Activity recording uses independent local storage `rk:slide-merge:log`, never
+    Studio's `rk:elog`. Stop opens Activity log with Copy and Record again. Events
+    include scene-change categories, slide/notes metadata edits, navigation, rehearsal,
+    save outcomes and redacted errors. Scene changes coalesce at pointer release or
+    after 600ms idle. At most 2,000 events are retained; text, notes, names, URLs and
+    media bytes are omitted. This is a diagnostic summary, not a full replay stream.
 - Canvas first: native compact contextual properties float on the left on desktop.
 - Slides occupy the right rail on desktop, with a resize handle on its left edge.
 - Drag the rail's left edge, use Left/Right arrow keys, or Home/double-click to reset.
@@ -29,7 +47,9 @@ the existing owner session through a new, narrowly scoped Worker route.
     The divider moves with its slide and is not copied when duplicating a slide.
 - Skipped slides remain editable and saved but are omitted from rehearsal. Rehearsal starts at the
     selected or next included slide, wrapping to the first included slide if needed. All skipped disables Rehearse.
-- Canvas edits use engine undo. Switching slides clears that slide's engine history.
+- Canvas edits use engine undo. Switching to a different slide clears engine history;
+    opening the already-current slide from All slides does not. Deck operations and
+    notes do not share the native canvas undo stack yet.
 - Selection borders and resize-handle centers use true element/group bounds, matching snap
     guides without the engine's extra selection padding. Mouse/touch hit target sizes remain
     unchanged. This is a guarded adapter for the pinned engine, not a change to slide geometry.

@@ -20,23 +20,23 @@ function InsertGap({ index, busy, add, section }) {
     {open && <div className="merge-gap-choices" role="group" aria-label="Insert here"><button disabled={busy} onClick={() => { setOpen(false); add(); }}><ToolIcon name="add" />Add slide</button><button disabled={busy} onClick={() => { setOpen(false); section(); }}><ToolIcon name="section" />Start section</button></div>}
   </div>;
 }
-export function SlideNavigator({ deck, thumbnails, busy, choose, modify, add, pick, section, remove }) {
+export function SlideNavigator({ deck, thumbnails, busy, editing = true, choose, modify, add, pick, section, remove }) {
   const menu = () => <><button data-close onClick={() => add("blank")}>Add blank</button><button data-close onClick={() => pick("layout")}>Add a layout...</button><button data-close onClick={() => pick("source")}>Generate from a section</button></>;
   return <>
-    <div className="merge-section-head"><h2>Slides <span>{deck?.slides.length || 0}</span></h2><div className="merge-navigator-actions"><Action icon="section" label="Start a section here" disabled={busy || !deck} onClick={() => section(deck.selected)} /><ToolMenu icon="add" label="Add a slide" disabled={busy || !deck}>{menu()}</ToolMenu></div></div>
+    <div className="merge-section-head"><h2>Slides <span>{deck?.slides.length || 0}</span></h2>{editing && <div className="merge-navigator-actions"><Action icon="section" label="Start a section here" disabled={busy || !deck} onClick={() => section(deck.selected)} /><ToolMenu icon="add" label="Add a slide" disabled={busy || !deck}>{menu()}</ToolMenu></div>}</div>
     <div className="merge-slide-list">{deck?.slides.map((slide, index) => <div className="merge-slide-entry" key={slide.id}>
-      {slide.section && <button className="merge-section-label" title="Rename or remove section" onClick={() => section(slide.id)} disabled={busy}><ToolIcon name="section" /><span>{slide.section}</span></button>}
-      <InsertGap index={index} busy={busy} add={() => add("blank", slide.id)} section={() => section(slide.id)} />
+      {slide.section && <button className="merge-section-label" title={editing ? "Rename or remove section" : "Section"} onClick={() => section(slide.id)} disabled={busy || !editing}><ToolIcon name="section" /><span>{slide.section}</span></button>}
+      {editing && <InsertGap index={index} busy={busy} add={() => add("blank", slide.id)} section={() => section(slide.id)} />}
       <article className={`merge-slide-card ${deck.selected === slide.id ? "is-active" : ""} ${slide.hidden ? "is-skipped" : ""}`}>
         <button className={`merge-slide ${deck.selected === slide.id ? "is-active" : ""}`} aria-label={`Slide ${index + 1}: ${slide.title}`} aria-current={deck.selected === slide.id ? "true" : undefined} disabled={busy} onClick={() => choose(slide.id)}><span className="merge-thumbnail" aria-hidden="true" dangerouslySetInnerHTML={{ __html: thumbnails[slide.id] || "" }} /><span><small>{String(index + 1).padStart(2, "0")}</small>{slide.title || "Untitled slide"}</span>{slide.hidden && <em className="merge-skipped-label">Skipped</em>}</button>
-        <div className="merge-thumb-actions" aria-label={`Actions for slide ${index + 1}`}>
+        {editing && <div className="merge-thumb-actions" aria-label={`Actions for slide ${index + 1}`}>
           <Action icon="up" label="Move slide up" disabled={busy || index === 0} onClick={() => modify("up", slide.id)} />
           <Action icon="down" label="Move slide down" disabled={busy || index === deck.slides.length - 1} onClick={() => modify("down", slide.id)} />
           <Action icon="add" label="Add slide above" disabled={busy} onClick={() => add("blank", slide.id)} />
           <Action icon="copy" label="Duplicate slide" disabled={busy} onClick={() => modify("duplicate", slide.id)} />
           <Action icon={slide.hidden ? "eyeoff" : "eye"} label={slide.hidden ? "Include in rehearsal" : "Skip in rehearsal"} aria-pressed={!!slide.hidden} disabled={busy} onClick={() => modify("hide", slide.id)} />
           <Action icon="trash" label="Delete slide" disabled={busy || deck.slides.length < 2} onClick={() => remove(slide.id)} />
-        </div>
+        </div>}
       </article>
     </div>)}</div>
   </>;
