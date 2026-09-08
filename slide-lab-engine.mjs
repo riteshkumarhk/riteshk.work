@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import postcss from "postcss";
+import { patchFontPicker } from "./slide-lab-font-picker.mjs";
 
 export function stripUpstreamFirebase(source) {
   return source.replace(/VITE_APP_FIREBASE_CONFIG: '(?:[^'\\]|\\.)*'/g, 'VITE_APP_FIREBASE_CONFIG: "{}"');
@@ -37,6 +38,8 @@ export function cornerEnginePlugin() {
       source = source.replace('value: FONT_FAMILY.Excalifont,\n    icon: FreedrawIcon,\n    text: t("labels.handDrawn")', 'value: FONT_FAMILY.Fraunces,\n    icon: TextIcon,\n    text: "Fraunces"');
       source = source.replace('value: FONT_FAMILY.Nunito,\n    icon: FontFamilyNormalIcon,\n    text: t("labels.normal")', 'value: FONT_FAMILY.Inter,\n    icon: FontFamilyNormalIcon,\n    text: "Inter"');
       source = source.replace('value: FONT_FAMILY["Comic Shanns"],\n    icon: FontFamilyCodeIcon,\n    text: t("labels.code")', 'value: FONT_FAMILY["JetBrains Mono"],\n    icon: FontFamilyCodeIcon,\n    text: "JetBrains Mono"');
+      source = patchFontPicker(source);
+      source = `import { FontCategoryTabs as LabFontCategoryTabs } from ${JSON.stringify(resolve("src/js/slide-font-tabs.jsx").replaceAll("\\", "/"))};\nimport { filterFontCategory as labFilterFontCategory } from ${JSON.stringify(resolve("src/js/slide-font-categories.mjs").replaceAll("\\", "/"))};\n` + source;
       pickerPatched++;
       return { contents: `import { LabRichColor, useLabCustomColors as labUseCustomColors } from ${JSON.stringify(resolve("src/js/slide-lab-color-picker.jsx").replaceAll("\\", "/"))};\nimport { LabStrokeLink, LabTextColorControls } from ${JSON.stringify(resolve("src/js/slide-lab-text-color.jsx").replaceAll("\\", "/"))};\n` + source, loader: "js", resolveDir: dirname(path) };
     });
