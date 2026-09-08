@@ -42,6 +42,10 @@ the existing owner session through a new, narrowly scoped Worker route.
 - Hand, Select, Text, Shapes, Arrow, Line and Draw use native engine tools. Shapes includes eight
     editable diagram presets: Start / End, Rounded process, Input / Output, Predefined process,
     Database, Connector, Triangle and Hexagon. Multi-part symbols are grouped and support native Undo.
+- Slide Background > Image or video opens that same Media pane for background selection,
+    including Upload media. Picking replaces only the background, keeps existing objects/notes,
+    and supports native Undo. Opening Media from the toolbar still inserts a normal object.
+    Hosted videos keep their original URL; uploaded images/videos retain their original bytes.
 - Media opens the shared pane with the case study's images and direct videos, including covers,
     overview media and nested section assets. Upload media stays pinned below the scrolling gallery.
     Upload accepts PNG, JPEG, WebP, GIF, AVIF, SVG, MP4, WebM, MOV and Ogg video. Original uploaded

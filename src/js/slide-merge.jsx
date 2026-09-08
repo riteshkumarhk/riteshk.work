@@ -166,7 +166,9 @@ function Merger() {
     return api.onChange((elements, state) => setPane(state.openSidebar?.name === "insert" ? state.openSidebar.tab : state.openSidebar ? "library" : null));
   }, [api]);
   const placeholderTarget = useRef(null);
-  function openPane(next, toggle = true, placeholderId = null) {
+  const [mediaPurpose, setMediaPurpose] = useState("insert");
+  function openPane(next, toggle = true, placeholderId = null, purpose = "insert") {
+    setMediaPurpose(purpose);
     placeholderTarget.current = placeholderId;
     const target = toggle && pane === next ? null : next;
     if (mobileUI.mobile) mobileUI.open(target);
@@ -444,7 +446,7 @@ function Merger() {
     const restored=restoreElements([...next.filter(element=>element.id!==FRAME_ID),...additions,next.find(element=>element.id===FRAME_ID)],null,{repairBindings:true,refreshDimensions:true});
     commitSettings({layout},restored);await save();
   }); }
-  function setBackground(background,file) { const apply=async()=>{
+  async function applyBackground(background,file) {
     const elements=api.getSceneElementsIncludingDeleted().map(element=>element.customData?.slideBackground?changed(element,{isDeleted:true}):element);
     let additions=[];
     if(background) {
@@ -458,14 +460,8 @@ function Merger() {
       additions=restoreElements(convertToExcalidrawElements([skeleton],{regenerateIds:false}),null,{repairBindings:true});
     }
     commitSettings({background},[...additions,...elements]);if(file&&!file.mimeType.startsWith("video/"))api.addFiles([file]);await save();
-  };return file?run(apply):apply().catch(fail); }
-  async function backgroundMedia(file) {
-    try {
-      if(!/^(image\/(png|jpeg|webp|gif)|video\/(mp4|webm))$/.test(file.type))throw new Error("Choose PNG, JPEG, WebP, GIF, MP4 or WebM");
-      const original=file.type.startsWith("image/")?await originalImage(file):{id:crypto.randomUUID(),mimeType:file.type,dataURL:await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(file);})};
-      await setBackground({type:"media",name:file.name,mimeType:file.type},original);
-    } catch(error){fail(error);}
   }
+  function setBackground(background,file) { return file ? run(() => applyBackground(background,file)) : applyBackground(background,file).catch(fail); }
   function insertIntoPlaceholder(additions) {
     const elements = api.getSceneElementsIncludingDeleted();
     const slot = elements.find(element => element.id === placeholderTarget.current && !element.isDeleted && !element.locked && element.customData?.slidePlaceholder);
@@ -491,22 +487,27 @@ function Merger() {
     api.updateScene({ elements: placeholderTarget.current ? insertIntoPlaceholder([element]) : [...elements.map(item=>item.id===placeholder?.id?changed(item,{isDeleted:true}):item), element], appState: { selectedElementIds: { [element.id]: true } }, captureUpdate: CaptureUpdateAction.IMMEDIATELY }); api.addFiles([image]);
     await save();
   }
-  function importMedia(source) {
+  function importMedia(source, asBackground = false) {
     if (!source) return;
     return run(async () => {
-      let file = source, videoUrl;
+      let file = source, videoUrl, videoMime;
       if (source.url) {
         const url = sectionMediaUrl(source.url);
         if (!url) throw new Error("This media URL is unavailable");
         const response = await fetch(url, { credentials:"omit", cache:"no-store", signal:AbortSignal.timeout(30000) });
         if (!response.ok) throw new Error("Media could not be loaded");
-        if ((response.headers.get("content-type") || "").startsWith("video/")) { await response.body?.cancel(); videoUrl = url; }
+        if ((response.headers.get("content-type") || "").startsWith("video/")) { videoMime = response.headers.get("content-type").split(";")[0]; await response.body?.cancel(); videoUrl = url; }
         else file = await response.blob();
       }
       if (!videoUrl && /^video\/(mp4|webm|quicktime|ogg)$/.test(file.type)) {
+        videoMime = file.type;
         videoUrl = await new Promise((resolve,reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); });
       }
-      if (videoUrl) {
+      if (asBackground) {
+        if (!videoUrl && !/^image\/(png|jpeg|webp|gif|svg\+xml|avif)$/.test(file.type)) throw new Error("Choose an image or video supported by Media");
+        const original = videoUrl ? { id: crypto.randomUUID(), mimeType: videoMime, dataURL: videoUrl } : await originalImage(file);
+        await applyBackground({ type: "media", name: source.name || source.title || (videoUrl ? "Video" : "Image"), mimeType: original.mimeType }, original);
+      } else if (videoUrl) {
         const element = restoreElements(convertToExcalidrawElements([{type:"embeddable",id:crypto.randomUUID(),x:320,y:180,width:640,height:360,frameId:FRAME_ID,link:"https://slide-lab.invalid/section-video",customData:{sectionVideo:videoUrl},backgroundColor:"transparent",strokeColor:"transparent"}]), null, { repairBindings:true })[0];
         api.updateScene({elements:insertIntoPlaceholder([element]),appState:{selectedElementIds:{[element.id]:true}},captureUpdate:CaptureUpdateAction.IMMEDIATELY});
         await save();
@@ -564,8 +565,8 @@ function Merger() {
             <MainMenu />
             <DefaultSidebar docked={false} onDock={false} />
             <Footer><button className={`help-icon merge-notes-toggle${notesOpen ? " active" : ""}`} title="Speaker notes" aria-label="Speaker notes panel" aria-expanded={notesOpen} aria-controls="merge-speaker-notes" onClick={() => setNotesOpen(!notesOpen)}><ToolIcon name="notes" /><span>Notes</span></button></Footer>
-            <ContentPane pane={pane} busy={busy} layoutPicker={layoutPicker} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={block => { finishPaneInsert(); addFromSection(block, true); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={blocks => addFromSection(blocks, false)} onMedia={importMedia} onUpload={() => input.current.click()} />
-            {!hasSelection&&current&&<SlideProperties mobileOpen={mobileUI.mobile && mobileUI.panel === "properties"} settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={backgroundMedia} onTransition={transition=>commitSettings({transition})} />}
+            <ContentPane pane={pane} busy={busy} layoutPicker={layoutPicker} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={block => { finishPaneInsert(); addFromSection(block, true); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={blocks => addFromSection(blocks, false)} onMedia={source => importMedia(source, mediaPurpose === "background")} onUpload={() => input.current.click()} />
+            {!hasSelection&&current&&<SlideProperties mobileOpen={mobileUI.mobile && mobileUI.panel === "properties"} settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onTransition={transition=>commitSettings({transition})} />}
           </Excalidraw>
           <FitSlideControl api={api} host={host} mobile={mobileUI.mobile} disabled={busy || present !== null || !!confirm || !!deckDialog} onFit={fit} />
           <PlaceholderActions api={api} disabled={busy || present !== null || !!confirm || !!deckDialog} onInsert={(id, next) => { api.updateScene({appState:{selectedElementIds:{[id]:true}},captureUpdate:CaptureUpdateAction.NEVER});openPane(next, false, id); }} />
@@ -573,7 +574,7 @@ function Merger() {
       </main><div className="merge-notes" id="merge-speaker-notes" hidden={mobileUI.mobile ? mobileUI.panel !== "notes" : !notesOpen}><div className="merge-notes-resizer" {...notesResize.handle} /><div className="merge-notes-heading"><strong>Speaker notes</strong><button className="merge-icon" title="Close notes" aria-label="Close notes" onClick={() => mobileUI.open(null)}><Icon name="close" /></button></div><textarea aria-label="Speaker notes" placeholder="Speaker notes" value={current?.notes || ""} disabled={busy} onChange={event => metadata("notes", event.target.value)} /></div></section>
     {mobileUI.mobile && mobileUI.panel && <><button className="merge-sheet-scrim" aria-label="Dismiss panel" tabIndex={-1} onClick={()=>mobileUI.open(null)} /><div className="merge-sheet-head"><strong>{mobileUI.panel === "properties" ? (hasSelection ? "Object properties" : "Slide properties") : PANE_LABELS[mobileUI.panel] || "Speaker notes"}</strong><button className="merge-icon merge-sheet-close" title="Close panel" aria-label="Close panel" onClick={()=>mobileUI.open(null)}><Icon name="close" /></button></div></>}
     <footer className="merge-status"><span role="status">{status}</span><button className="merge-library-sync" onClick={library.retry} title={library.status + ". Click to retry or sign in to Studio."}><Icon name="sync" /><span role="status">{library.status}</span></button><span>{selectedIndex + 1} / {deck?.slides.length || 0}</span><span>Local draft</span></footer>
-    <input type="file" hidden ref={input} accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml,video/mp4,video/webm,video/quicktime,video/ogg,.svg,.mov" onChange={event => { importMedia(event.target.files[0]); event.target.value = ""; }} />
+    <input type="file" hidden ref={input} accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml,video/mp4,video/webm,video/quicktime,video/ogg,.svg,.mov" onChange={event => { importMedia(event.target.files[0], mediaPurpose === "background"); event.target.value = ""; }} />
     {present !== null && <Presenter slides={rehearsal} index={present} onIndex={setPresent} onClose={() => { setPresent(null); requestAnimationFrame(fit); }} />}
     {deckDialog?.kind === "section" && <SectionDialog value={deck.slides.find(slide => slide.id === deckDialog.id)?.section} onClose={() => setDeckDialog(null)} onSave={saveSection} />}
     {["save-layout", "rename-layout"].includes(deckDialog?.kind) && <LayoutNameDialog value={deckDialog.layout?.name} busy={busy} error={layoutSaveError} onClose={() => setDeckDialog(null)} onSave={saveLayout} />}
