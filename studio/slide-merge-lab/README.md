@@ -42,6 +42,13 @@ the existing owner session through a new, narrowly scoped Worker route.
 - Hand, Select, Text, Shapes, Arrow, Line and Draw use native engine tools. Shapes includes eight
     editable diagram presets: Start / End, Rounded process, Input / Output, Predefined process,
     Database, Connector, Triangle and Hexagon. Multi-part symbols are grouped and support native Undo.
+- Manage layers, above Background in slide properties, opens the shared right panel.
+    The list shows front-to-back order with thumbnails, selection, rename, reorder,
+    duplicate/delete, hide/show and lock/unlock. Shift/Ctrl/Cmd-click selects multiple layers.
+    Add offers text, shapes and media. The left native inspector stays available for editing.
+    Mobile uses the existing panel sheet. The slide frame is excluded from layer actions.
+    Native reorder/duplicate/delete preserve bindings and Undo; hiding retains original opacity
+    and lock state. Renaming a shape does not rename its bound text. Changes autosave with the deck.
 - Slide Background > Image or video opens that same Media pane for background selection,
     including Upload media. Picking replaces only the background, keeps existing objects/notes,
     and supports native Undo. Opening Media from the toolbar still inserts a normal object.
@@ -160,6 +167,9 @@ revision conflicts, cross-device merges, deletion, in-flight changes and offline
 JavaScript for Google API key patterns. The engine adapter removes upstream Firebase configuration.
 
 `node --test slide-merge.test.mjs` checks immutable slide operations and rail limits.
+`node --test slide-merge-layers.test.mjs` checks layer ordering, frame protection, bound-text
+visibility, lock restoration and independent naming. Browser checks cover native bound-shape
+duplication/deletion and Undo, reorder, multi-selection, saved names and desktop/mobile placement.
 `node --test slide-merge-layouts.test.mjs` checks editable template capture, original media,
 independent instances and reference remapping. Browser checks cover IndexedDB persistence,
 cross-deck reuse, rename/delete, storage failure, one-step Undo and both tabbed selectors.

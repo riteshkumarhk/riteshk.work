@@ -29,6 +29,7 @@ import "../../css/slide-merge-theme.css";
 import { useMobilePanels } from "./slide-merge-mobile.jsx";
 import { canvasTheme } from "./slide-merge-appearance.mjs";
 import { useNotesResize } from "./slide-merge-notes.jsx";
+import { LayerPanel } from "./slide-merge-layers.jsx";
 
 function useAppearance() {
   const [appearance, setAppearance] = useState(() => document.documentElement.dataset.appearance || "dark");
@@ -71,6 +72,7 @@ function FitSlideControl({ api, host, disabled, onFit, mobile }) {
   return !mobile && slot && createPortal(<button className="ToolIcon_type_button ToolIcon_size_medium zoom-button ToolIcon_type_button--show ToolIcon" type="button" title="Fit slide" aria-label="Fit slide" disabled={disabled} onClick={onFit}><div className="ToolIcon__icon"><Icon name="fit" /></div></button>, slot);
 }
 function Embed({ element }) {
+  if (element.customData?.labLayerHidden) return null;
   const video = element.customData?.sectionVideo;
   if (video && sectionMediaUrl(video)) return <video className="lab-embed" src={video} controls playsInline preload="metadata" />;
   const kind = element.customData?.fixture;
@@ -79,7 +81,7 @@ function Embed({ element }) {
 const engineOptions = { tools: { image: false }, canvasActions: { loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, clearCanvas: false, changeViewBackgroundColor: false, toggleTheme: false } };
 function CanvasVideo({api}) {
   const [video,setVideo]=useState(null),[failed,setFailed]=useState(false);
-  useEffect(()=>{if(!api)return;const update=(elements,state)=>{const element=elements.find(item=>!item.isDeleted&&item.customData?.slideBackgroundVideo);const next=element?{src:element.customData.slideBackgroundVideo,x:(state.scrollX+element.x)*state.zoom.value,y:(state.scrollY+element.y)*state.zoom.value,width:element.width*state.zoom.value,height:element.height*state.zoom.value}:null;setVideo(previous=>previous?.src===next?.src&&previous?.x===next?.x&&previous?.y===next?.y&&previous?.width===next?.width&&previous?.height===next?.height?previous:next);};update(api.getSceneElements(),api.getAppState());return api.onChange(update);},[api]);
+  useEffect(()=>{if(!api)return;const update=(elements,state)=>{const element=elements.find(item=>!item.isDeleted&&!item.customData?.labLayerHidden&&item.customData?.slideBackgroundVideo);const next=element?{src:element.customData.slideBackgroundVideo,x:(state.scrollX+element.x)*state.zoom.value,y:(state.scrollY+element.y)*state.zoom.value,width:element.width*state.zoom.value,height:element.height*state.zoom.value}:null;setVideo(previous=>previous?.src===next?.src&&previous?.x===next?.x&&previous?.y===next?.y&&previous?.width===next?.width&&previous?.height===next?.height?previous:next);};update(api.getSceneElements(),api.getAppState());return api.onChange(update);},[api]);
   useEffect(()=>setFailed(false),[video?.src]);
   if(!video)return null;
   return <div className="merge-video-layer" style={{left:video.x,top:video.y,width:video.width,height:video.height}}>{failed?<div role="status">Video unavailable in this browser</div>:<video className="merge-background-video" src={video.src} autoPlay muted loop playsInline onError={()=>setFailed(true)} />}</div>;
@@ -565,8 +567,10 @@ function Merger() {
             <MainMenu />
             <DefaultSidebar docked={false} onDock={false} />
             <Footer><button className={`help-icon merge-notes-toggle${notesOpen ? " active" : ""}`} title="Speaker notes" aria-label="Speaker notes panel" aria-expanded={notesOpen} aria-controls="merge-speaker-notes" onClick={() => setNotesOpen(!notesOpen)}><ToolIcon name="notes" /><span>Notes</span></button></Footer>
-            <ContentPane pane={pane} busy={busy} layoutPicker={layoutPicker} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={block => { finishPaneInsert(); addFromSection(block, true); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={blocks => addFromSection(blocks, false)} onMedia={source => importMedia(source, mediaPurpose === "background")} onUpload={() => input.current.click()} />
-            {!hasSelection&&current&&<SlideProperties mobileOpen={mobileUI.mobile && mobileUI.panel === "properties"} settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onTransition={transition=>commitSettings({transition})} />}
+            <ContentPane pane={pane} busy={busy} layoutPicker={layoutPicker} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={block => { finishPaneInsert(); addFromSection(block, true); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={blocks => addFromSection(blocks, false)} onMedia={source => importMedia(source, mediaPurpose === "background")} onUpload={() => input.current.click()}>
+              {api && <LayerPanel api={api} disabled={busy||present!==null||confirm||!!deckDialog} onClose={() => openPane(null, false)} onAdd={kind => { if (kind === "media") openPane("media", false); else if (kind === "text") { finishPaneInsert(); insertContent("body"); } else { openPane(null, false); api.setActiveTool({ type:"rectangle" }); } }} />}
+            </ContentPane>
+            {!hasSelection&&current&&<SlideProperties mobileOpen={mobileUI.mobile && mobileUI.panel === "properties"} settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} />}
           </Excalidraw>
           <FitSlideControl api={api} host={host} mobile={mobileUI.mobile} disabled={busy || present !== null || !!confirm || !!deckDialog} onFit={fit} />
           <PlaceholderActions api={api} disabled={busy || present !== null || !!confirm || !!deckDialog} onInsert={(id, next) => { api.updateScene({appState:{selectedElementIds:{[id]:true}},captureUpdate:CaptureUpdateAction.NEVER});openPane(next, false, id); }} />

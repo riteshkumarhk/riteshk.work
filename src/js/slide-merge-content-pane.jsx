@@ -7,7 +7,7 @@ import { BADGE_PRESETS, CONTENT_BLOCKS } from "./slide-merge-inserts.mjs";
 import { ToolIcon } from "./slide-merge-toolbar.jsx";
 import "../../css/slide-merge-content-pane.css";
 
-export const PANE_LABELS = { media: "Media", icons: "Icons", text: "Text", badges: "Badges", sections: "Sections", library: "Library", layout: "Add a layout", source: "Generate from a section" };
+export const PANE_LABELS = { layers: "Layers", media: "Media", icons: "Icons", text: "Text", badges: "Badges", sections: "Sections", library: "Library", layout: "Add a layout", source: "Generate from a section" };
 const samples = { body: "A clear idea, grounded in evidence.", list: "First point\nSecond point\nThird point", metric: "42%", quote: '"A useful insight changes the next decision."', section: "Context / Decision / Outcome" };
 
 function BadgePicker({ onPick }) {
@@ -20,10 +20,11 @@ function BadgePicker({ onPick }) {
   </>;
 }
 
-export function ContentPane({ pane, busy, onContent, onIcon, onSection, onNewLayout, onNewSection, onMedia, onUpload, layoutPicker }) {
+export function ContentPane({ pane, busy, onContent, onIcon, onSection, onNewLayout, onNewSection, onMedia, onUpload, layoutPicker, children }) {
   return <Sidebar name="insert" className="merge-content-sidebar" docked={false}>
     <Sidebar.Header><strong>{PANE_LABELS[pane] || "Insert"}</strong></Sidebar.Header>
-    <fieldset className="merge-pane-body" disabled={busy} aria-label={PANE_LABELS[pane] || "Insert"}>
+    <fieldset className={`merge-pane-body${pane === "layers" ? " merge-pane-body--layers" : ""}`} disabled={busy} aria-label={PANE_LABELS[pane] || "Insert"}>
+      {pane === "layers" && children}
       {pane === "media" && <SectionPicker embedded mediaOnly onPick={onMedia} onUpload={onUpload} />}
       {pane === "icons" && <IconLibrary embedded onPick={onIcon} />}
       {pane === "text" && <div className="merge-text-choices">{CONTENT_BLOCKS.filter(([kind]) => kind !== "badge").map(([kind, title]) => <button key={kind} aria-label={`Insert ${title}`} onClick={() => onContent(kind)}><span className={`merge-text-preview merge-text-preview--${kind}`} aria-hidden="true">{samples[kind]}</span><strong>{title}</strong></button>)}</div>}

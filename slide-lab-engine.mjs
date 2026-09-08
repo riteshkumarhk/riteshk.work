@@ -49,6 +49,7 @@ export function cornerEnginePlugin() {
       source = `import { cornerPath as labCornerPath } from ${JSON.stringify(resolve("src/js/slide-lab-corners.mjs").replaceAll("\\", "/"))};\n` + source;
       source = `import { sampleCanvasColor as labSampleCanvasColor } from ${JSON.stringify(resolve("src/js/slide-lab-eyedropper.mjs").replaceAll("\\", "/"))};\n` + source;
       source += '\nexport { ColorPicker as LabColorPicker, DEFAULT_ELEMENT_BACKGROUND_COLOR_PALETTE as LAB_BACKGROUND_PALETTE };\n';
+      source += '\nexport { useExcalidrawActionManager as useLabActionManager, newElementWith as labNewElementWith };\n';
       source = `import { FontCategoryTabs as LabFontCategoryTabs } from ${JSON.stringify(resolve("src/js/slide-font-tabs.jsx").replaceAll("\\", "/"))};\nimport { filterFontCategory as labFilterFontCategory } from ${JSON.stringify(resolve("src/js/slide-font-categories.mjs").replaceAll("\\", "/"))};\n` + source;
       pickerPatched++;
       return { contents: `import { LabRichColor, useLabCustomColors as labUseCustomColors } from ${JSON.stringify(resolve("src/js/slide-lab-color-picker.jsx").replaceAll("\\", "/"))};\nimport { LabStrokeLink, LabTextColorControls } from ${JSON.stringify(resolve("src/js/slide-lab-text-color.jsx").replaceAll("\\", "/"))};\n` + source, loader: "js", resolveDir: dirname(path) };

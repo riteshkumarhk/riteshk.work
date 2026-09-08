@@ -16,13 +16,13 @@ export function useMobilePanels(api) {
     if (!api || !mobile) return;
     return api.onChange((elements, state) => {
       if (state.openSidebar) setPanel(state.openSidebar.name === "insert" ? state.openSidebar.tab : "library");
-      else setPanel(previous => ["library", "icons", "text", "badges", "sections", "layout", "source", "media"].includes(previous) ? null : previous);
+      else setPanel(previous => ["library", "icons", "text", "badges", "sections", "layout", "source", "media", "layers"].includes(previous) ? null : previous);
     });
   }, [api, mobile]);
   function open(next, selected = false) {
     setPanel(next);
     api?.updateScene({ appState: {
-      openSidebar: next === "library" ? { name: "default", tab: "library" } : ["icons", "text", "badges", "sections", "layout", "source", "media"].includes(next) ? { name: "insert", tab: next } : null,
+      openSidebar: next === "library" ? { name: "default", tab: "library" } : ["icons", "text", "badges", "sections", "layout", "source", "media", "layers"].includes(next) ? { name: "insert", tab: next } : null,
       openMenu: next === "properties" && selected ? "shape" : null,
       openPopup: null
     }, captureUpdate: CaptureUpdateAction.NEVER });
