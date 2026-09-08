@@ -7,11 +7,16 @@ the existing owner session through a new, narrowly scoped Worker route.
 ## Interaction model
 
 - Canvas first: native compact contextual properties float on the left on desktop.
-- Slides occupy the right rail on desktop. Only this rail has a resize handle.
+- Slides occupy the right rail on desktop, with a resize handle on its left edge.
 - Drag the rail's left edge, use Left/Right arrow keys, or Home/double-click to reset.
 - Rail width persists separately in `rk:slide-merge:rail-width`; mobile uses a collapsible horizontal slide strip, initially closed.
+- Speaker notes have a draggable top edge, capped at half the editor height. The slide
+    automatically refits as the pane grows or shrinks, leaving room for canvas controls.
+    Up/Down resize, Home/End select minimum/maximum, and double-click resets to 116px.
+    Notes height persists independently in `rk:slide-merge:notes-height`; text is unchanged.
 - At widths up to 900px, a two-row toolbar is docked above the canvas, without a slide-title row.
-    Properties, Library and Notes share one bottom-sheet interaction, closed by default.
+    Properties and Library use bottom sheets. Notes opens a resizable pane below the canvas,
+    reserving space rather than covering the slide. All panels are closed by default.
     Properties shows slide settings for an empty selection or the native object inspector
     for selected objects, including Excalidraw's different phone/tablet inspector layouts.
     Close, backdrop and Escape dismiss the sheet; nested pickers consume Escape first.
