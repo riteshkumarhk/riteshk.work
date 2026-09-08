@@ -1,7 +1,8 @@
 # Slide Merger Lab
 
 Isolated editor experiment at `/studio/slide-merge-lab/`. Production editor,
-published content, private decks, authentication and publishing are untouched.
+published content, private decks and publishing are untouched. The library uses
+the existing owner session through a new, narrowly scoped Worker route.
 
 ## Interaction model
 
@@ -36,6 +37,9 @@ published content, private decks, authentication and publishing are untouched.
 
 ## Build and checks
 
+`node --test slide-library.test.mjs` checks real Worker authentication, size limits,
+revision conflicts, cross-device merges, deletion, in-flight changes and offline reload.
+
 `npm run build:slide-lab` builds both labs into shared assets and scans generated
 JavaScript for Google API key patterns. The engine adapter removes upstream Firebase configuration.
 
@@ -47,6 +51,41 @@ Browser verification covers real rail dragging, keyboard resizing, reload persis
 floating-left inspector geometry, desktop/mobile screenshots, deck operations and rehearsal.
 Background-picker checks cover hex/RGB editing without dismissal, Escape, Undo,
 reload persistence, native fill parity and popup stacking above the toolbar on mobile.
+
+## Roaming library
+
+The native Library is shared across decks and devices signed into the same owner's
+Studio on the same site origin. Browse returns to this lab through the official
+`useHandleLibrary` hook. External imports are restricted to HTTPS `.excalidrawlib`
+files under `libraries.excalidraw.com/libraries/`; native local import/export remains available.
+Only library items are synced, never the current slide, deck or speaker notes.
+Library elements themselves can contain text, links and custom metadata; anything
+deliberately added to Library is included. Preserve applicable third-party licence
+notices and asset-specific terms. Downloading a library contacts its host; reusing
+an already-saved item does not need that catalogue request.
+
+- Dedicated private R2 bucket `rk-slide-libraries`, binding `SLIDE_LIBRARIES`.
+- One object `owner/library.json`; no public route or public bucket URL.
+- `GET /admin/slide-library` returns `{revision, items}`; authenticated `POST`
+    accepts the same envelope. Both require the existing unexpired owner session.
+- R2 conditional writes prevent lost updates. A 409 triggers a fresh read and
+    three-way merge: only local changes/removals override the remote version;
+    unrelated remote additions remain. A stale unchanged item cannot undo a remote
+    deletion. Simultaneous changes to the SAME item use the last successful local edit.
+- 10 MB request limit, 1000 items and 20000 elements. Errors remain visible in the
+    status-bar sync control, which can retry or open the normal Studio sign-in tab.
+- IndexedDB `rk-slide-library-v1` stores the last cloud baseline plus local edits.
+    It survives reload/offline use and retries after edits, reconnection, tab focus,
+    visibility changes, sign-in in another tab or an explicit sync click.
+- This is not live collaboration or end-to-end encryption. The private cache is
+    available to this browser profile, including after sign-out; cloud requests still
+    require sign-in. Localhost and the live site have separate browser caches/sessions.
+- The existing NDA vault and public media bucket are not used or modified.
+
+Worker setup: create `rk-slide-libraries` with public access disabled, then run
+`wrangler deploy` from `worker/` after approval. No new secrets or KV index needed.
+The production slideshow editor has not been replaced; this integration is currently
+active in the merger lab only.
 
 ## Adoption gates
 

@@ -26,6 +26,8 @@
      REPO            (text)    riteshk.work
    ========================================================================== */
 
+import { libraryRoute } from "./slide-library.mjs";
+
 const PROVIDERS = {
   openai:    { base: "https://api.openai.com/v1",                        keyVar: "OPENAI_KEY",    inject: "bearer"  },
   gemini:    { base: "https://generativelanguage.googleapis.com/v1beta", keyVar: "GEMINI_KEY",    inject: "query"   },
@@ -71,6 +73,11 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
 
     const url = new URL(request.url);
+
+    if (url.pathname === "/admin/slide-library") {
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, { ...cors, "Cache-Control": "no-store" });
+      return libraryRoute(request, env.SLIDE_LIBRARIES, cors);
+    }
 
     // ---------- public: a visitor without a code asks for one (rate-limited + honeypot) ----------
     if (url.pathname === "/request-access") {

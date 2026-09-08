@@ -4,6 +4,10 @@ compatibility_date = "2026-07-28"
 workers_dev = true
 preview_urls = false
 
+[[r2_buckets]]
+binding = "SLIDE_LIBRARIES"
+bucket_name = "rk-slide-libraries"
+
 # Private R2 bucket for NDA media (the "vault") — objects are served only through the Worker.
 [[r2_buckets]]
 binding = "VAULT"
