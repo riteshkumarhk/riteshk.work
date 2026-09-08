@@ -610,7 +610,6 @@ function Merger() {
   return <div className={`merge-shell ${resizing ? "is-resizing" : ""} ${notesResize.dragging ? "is-notes-resizing" : ""} ${!editing || notesOpen ? "" : "is-notes-hidden"} ${mobileUI.slides ? "mobile-slides-open" : ""} ${pane && !mobileUI.mobile ? "merge-rail-insert" : ""}`} data-editing={editing} data-slide-view={slideView} data-mobile-panel={mobileUI.mobile ? editing ? mobileUI.panel : "notes" : undefined} style={{ "--slide-pane-width": `${paneWidth}px`, "--notes-height": `${notesResize.height}px` }}>
     <header className="merge-header"><a href="/studio/slide-lab/" title="Back to engine lab" aria-label="Back to engine lab"><Icon name="back" /></a><span className="merge-brand">Slide studio <small>MERGER LAB</small></span>
       <input aria-label="Deck title" value={deck?.title || ""} disabled={busy || !editing} onChange={event => metadata("title", event.target.value, true)} />
-      <Button icon="save" label="Save local deck" disabled={busy || !deck} onClick={() => save().catch(fail)} />
       </header>
     <EditorBar historyRef={setHistoryTarget} status={status === "Saved on this device" && activity.message ? `${activity.message} - saved` : status} busy={busy || present !== null || !!confirm || !!deckDialog} editing={editing} onEditing={switchEditing} slideView={slideView} onView={switchView} onPlay={rehearse} canPlay={!!rehearsal.length} activity={activity} />
     <aside className="merge-slides" aria-label={pane && !mobileUI.mobile ? PANE_LABELS[pane] || "Library" : "Slides"}>
