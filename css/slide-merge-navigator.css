@@ -1,3 +1,4 @@
+.merge-section-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .merge-slide-entry{position:relative;min-width:0}
 .merge-slide-card{position:relative}
 .merge-slide-card .merge-slide{margin:0}
