@@ -28,6 +28,7 @@
 .merge-pane-body :is(.merge-text-choices,.merge-badge-choices,.merge-custom-badge) button:hover { border-color:var(--accent); background:var(--ui-hover); }
 .merge-pane-body .merge-source-controls { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; }
 .merge-pane-body .merge-section-choices { display:grid; grid-template-columns:minmax(0,1fr); padding:0; margin-top:16px; }
+.merge-pane-body .merge-layout-choices { grid-template-columns:repeat(2,minmax(0,1fr)); padding:0; overflow:visible; }
 @media(min-width:901px) {
   .merge-shell .lab-canvas .sidebar { top:80px; height:calc(100% - 80px); }
 }

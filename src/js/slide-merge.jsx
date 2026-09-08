@@ -13,8 +13,7 @@ import { ContentPane, PANE_LABELS } from "./slide-merge-content-pane.jsx";
 import { useSlideLibrary } from "./slide-library.jsx";
 import { CanvasGuides } from "./slide-merge-guides.jsx";
 import { contentSkeleton } from "./slide-merge-inserts.mjs";
-import { SlideNavigator, LayoutDialog, SectionDialog } from "./slide-merge-navigator.jsx";
-import { SectionPicker } from "./slide-merge-section-picker.jsx";
+import { SlideNavigator, SectionDialog } from "./slide-merge-navigator.jsx";
 import { sectionPlan, sectionMediaUrl, sectionPlainText } from "./slide-merge-sections.mjs";
 import { SlideProperties } from "./slide-merge-properties.jsx";
 import { PROPERTY_LAYOUTS, slideSettings, slideOwnsFocus, layoutPlan, transitionMatch } from "./slide-merge-properties.mjs";
@@ -142,8 +141,8 @@ function Merger() {
     if (!api) return;
     return api.onChange((elements, state) => setPane(state.openSidebar?.name === "insert" ? state.openSidebar.tab : state.openSidebar ? "library" : null));
   }, [api]);
-  function openPane(next) {
-    const target = pane === next ? null : next;
+  function openPane(next, toggle = true) {
+    const target = toggle && pane === next ? null : next;
     if (mobileUI.mobile) mobileUI.open(target);
     else api.updateScene({ appState: { openSidebar: target ? { name: target === "library" ? "default" : "insert", tab: target } : null, openMenu: null, openPopup: null }, captureUpdate: CaptureUpdateAction.NEVER });
   }
@@ -409,7 +408,7 @@ function Merger() {
         onPointerMove={event => { if (resize.current) setPaneWidth(slidePaneWidth(resize.current.width + resize.current.x - event.clientX, innerWidth)); }}
         onPointerUp={finishResize} onPointerCancel={event => finishResize(event, true)} onLostPointerCapture={() => { resize.current = null; setResizing(false); }}
         onDoubleClick={() => storePaneWidth(200)} onKeyDown={event => { if (["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) { event.preventDefault(); storePaneWidth(event.key === "Home" ? 200 : paneWidth + (event.key === "ArrowLeft" ? 16 : -16)); } }} />
-      <SlideNavigator deck={deck} thumbnails={thumbnails} busy={busy} choose={choose} modify={modify} add={add} remove={setConfirm} pick={kind => openDeckDialog({kind})} section={id => openDeckDialog({kind:"section",id})} /></aside>
+      <SlideNavigator deck={deck} thumbnails={thumbnails} busy={busy} choose={choose} modify={modify} add={add} remove={setConfirm} pick={kind => openPane(kind, false)} section={id => openDeckDialog({kind:"section",id})} /></aside>
     <section className="merge-editor"><div className="merge-toolbar"><button className="merge-icon merge-mobile-only" aria-label="Toggle slides" title="Slides" aria-expanded={mobileUI.slides} onClick={()=>mobileUI.setSlides(!mobileUI.slides)}><Icon name="slides" /></button><input aria-label="Slide title" value={current?.title || ""} disabled={busy} onChange={event => metadata("title", event.target.value)} /><button className="merge-icon merge-mobile-only" title="Properties" aria-label="Open properties" onClick={()=>mobileUI.open("properties",hasSelection)}><Icon name="properties" /></button><button className="merge-notes-toggle" aria-label="Speaker notes panel" aria-expanded={mobileUI.mobile ? mobileUI.panel === "notes" : notesOpen} aria-controls="merge-speaker-notes" onClick={() => mobileUI.mobile ? mobileUI.open("notes") : setNotesOpen(!notesOpen)}><ToolIcon name="notes" /><span>Notes</span></button></div>
       <main className={`merge-workspace ${hasSelection ? "has-selection" : ""}`} ref={host} onDropCapture={receive} onPasteCapture={receive} onDragOverCapture={event => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.stopPropagation(); } }}>
         <CanvasToolbar api={api} disabled={busy || present !== null || !!confirm || !!deckDialog} onImage={() => input.current.click()}>
@@ -424,7 +423,7 @@ function Merger() {
         <div className="lab-canvas"><CanvasGuides api={api} {...view} guides={settings.guides||[]} onGuides={guides=>commitSettings({guides})} disabled={busy||present!==null||confirm} /><CanvasVideo api={api} /><LabTextColorContext.Provider value={{ api, labels, linked: labels.every(label => label.linked), busy, changeLabelColor: color => { if (color && color !== "unlink" && color !== "transparent") { color = normalizeHex(color); if (!color) return; } const elements = api.getSceneElementsIncludingDeleted(); const targets = selectedLabels(elements, api.getAppState().selectedElementIds); api.updateScene({ elements: labelColorUpdate(elements, targets.map(element => element.id), color), captureUpdate: CaptureUpdateAction.IMMEDIATELY }); } }}>
           <Excalidraw excalidrawAPI={setApi} theme={canvasTheme(api?.getSceneElements() || [],appearance)} onChange={onChange} onLibraryChange={library.onChange} libraryReturnUrl={location.origin + "/studio/slide-merge-lab/"} viewModeEnabled={busy || present !== null || !!confirm || !!deckDialog} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: appearance, currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: sceneBackground() } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed}>
             <MainMenu />
-            <ContentPane pane={pane} busy={busy} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={block => { finishPaneInsert(); addFromSection(block, true); }} />
+            <ContentPane pane={pane} busy={busy} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={block => { finishPaneInsert(); addFromSection(block, true); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={block => { openPane(null, false); addFromSection(block, false); }} />
             {!hasSelection&&current&&<SlideProperties mobileOpen={mobileUI.mobile && mobileUI.panel === "properties"} settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm} onLayout={applyLayout} onBackground={setBackground} onMedia={backgroundMedia} onTransition={transition=>commitSettings({transition})} />}
           </Excalidraw>
         </LabTextColorContext.Provider></div><CornerControls api={api} host={host} disabled={busy || present !== null} />{busy && <div className="lab-busy" role="status">Working</div>}
@@ -433,8 +432,6 @@ function Merger() {
     <footer className="merge-status"><span role="status">{status}</span><button className="merge-library-sync" onClick={library.retry} title={library.status + ". Click to retry or sign in to Studio."}><Icon name="sync" /><span role="status">{library.status}</span></button><span>{selectedIndex + 1} / {deck?.slides.length || 0}</span><span>Local draft</span></footer>
     <input type="file" hidden ref={input} accept="image/png,image/jpeg,image/webp,image/gif" onChange={event => { importImage(event.target.files[0]); event.target.value = ""; }} />
     {present !== null && <Presenter slides={rehearsal} index={present} onIndex={setPresent} onClose={() => { setPresent(null); requestAnimationFrame(fit); }} />}
-    {deckDialog?.kind === "layout" && <LayoutDialog onClose={() => setDeckDialog(null)} onPick={layout => { setDeckDialog(null); add(layout); }} />}
-    {deckDialog?.kind === "source" && <SectionPicker title={deckDialog.intoCurrent ? "Insert section" : "Generate from a section"} onClose={() => setDeckDialog(null)} onPick={block => addFromSection(block, deckDialog.intoCurrent)} />}
     {deckDialog?.kind === "section" && <SectionDialog value={deck.slides.find(slide => slide.id === deckDialog.id)?.section} onClose={() => setDeckDialog(null)} onSave={saveSection} />}
     {confirm && <dialog ref={dialog} className="merge-confirm" onCancel={() => setConfirm(false)}><h2>Delete this slide?</h2><p>{deck.slides.find(slide => slide.id === confirm)?.title}</p><div><button onClick={() => setConfirm(false)}>Cancel</button><button className="is-danger" onClick={() => { setConfirm(false); modify("delete", confirm); }}>Delete slide</button></div></dialog>}
   </div>;

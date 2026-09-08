@@ -43,6 +43,10 @@ the existing owner session through a new, narrowly scoped Worker route.
     ungroup to edit individual objects. This does not create a new slide.
 - Add a slide offers Add blank, Add a layout (nine existing layouts), Generate from a section,
     and Start a section here. Per-slide controls sit below thumbnails, never over the preview.
+- Add a layout and Generate from a section use the same right pane (mobile bottom sheet),
+    not dialogs. Their distinct headings preserve new-slide intent: choosing creates and selects
+    a new slide, then closes the pane. Closing without choosing leaves the deck unchanged.
+    The toolbar's Sections pane still inserts into the current slide.
 - Generate from a section reads the published site or, only when selected, this browser's saved Studio
     draft. Choose a case study and section; this never modifies source content. Locked, encrypted-stub,
     vault and disabled sections are excluded. No vault resolution or decryption runs.
