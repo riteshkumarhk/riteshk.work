@@ -37,6 +37,9 @@ the existing owner session through a new, narrowly scoped Worker route.
     after 600ms idle. At most 2,000 events are retained; text, notes, names, URLs and
     media bytes are omitted. This is a diagnostic summary, not a full replay stream.
 - Canvas first: native compact contextual properties float on the left on desktop.
+- Dropdowns share theme-aware surfaces, spacing, selected rows and line chevrons via
+    customizable selects where supported; other browsers retain native pickers. Layout and
+    Background disclosures use the same line-chevron shape, with open-state rotation.
 - Slides occupy the right rail on desktop, with a resize handle on its left edge.
 - Drag the rail's left edge, use Left/Right arrow keys, or Home/double-click to reset.
 - Rail width persists separately in `rk:slide-merge:rail-width`; mobile uses a collapsible horizontal slide strip, initially closed.
