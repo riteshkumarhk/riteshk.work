@@ -1,3 +1,9 @@
+export function sectionPlainText(value) {
+  const parsed = new DOMParser().parseFromString(String(value ?? ""), "text/html");
+  parsed.querySelectorAll("script,style,iframe,object").forEach(node => node.remove());
+  parsed.querySelectorAll("br,p,div,li").forEach(node => node.append("\n"));
+  return (parsed.body.textContent || "").trim();
+}
 export function availableStudies(data) {
   return (Array.isArray(data?.work) ? data.work : []).filter(work => work && !work.off && !work.locked && !work.encStub && !work.vaultBlock).map(work => ({ id: work.id, title: work.title || "Untitled case study", blocks: (Array.isArray(work.study?.blocks) ? work.study.blocks : []).filter(block => block && !block.off && !block.locked && !block.encStub && !block.vaultBlock) })).filter(work => work.blocks.length);
 }

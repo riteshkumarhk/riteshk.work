@@ -15,7 +15,7 @@ import { CanvasGuides } from "./slide-merge-guides.jsx";
 import { CONTENT_BLOCKS, contentSkeleton } from "./slide-merge-inserts.mjs";
 import { SlideNavigator, LayoutDialog, SectionDialog } from "./slide-merge-navigator.jsx";
 import { SectionPicker } from "./slide-merge-section-picker.jsx";
-import { sectionPlan, sectionMediaUrl } from "./slide-merge-sections.mjs";
+import { sectionPlan, sectionMediaUrl, sectionPlainText } from "./slide-merge-sections.mjs";
 import { SlideProperties } from "./slide-merge-properties.jsx";
 import { PROPERTY_LAYOUTS, slideSettings, slideOwnsFocus, layoutPlan, transitionMatch } from "./slide-merge-properties.mjs";
 import { guideSnap } from "./slide-merge-guide-core.mjs";
@@ -128,6 +128,16 @@ function Merger() {
   const [view, setView] = useState({ grid: false, snap: false, rulers: false, margins: false, thirds: false });
   const [settings,setSettings]=useState({}),[snapGuides,setSnapGuides]=useState(true);
   const host = useRef(null), input = useRef(null), dialog = useRef(null);
+  const sectionSelection = useRef(null);
+  useEffect(() => {
+    if (busy || !api || !sectionSelection.current) return;
+    const frame = requestAnimationFrame(() => {
+      api.updateScene({ appState: sectionSelection.current, captureUpdate: CaptureUpdateAction.NEVER });
+      sectionSelection.current = null;
+      host.current?.querySelector(".excalidraw")?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [busy, api]);
   const resize = useRef(null);
   const [paneWidth, setPaneWidth] = useState(() => {
     try { return slidePaneWidth(localStorage.getItem("rk:slide-merge:rail-width"), innerWidth); } catch { return 200; }
@@ -218,10 +228,9 @@ function Merger() {
   }); }
   function openDeckDialog(value) { mobileUI.open(null); setDeckDialog(value); }
   function saveSection(name) { const id = deckDialog.id; setDeckDialog(null); return run(async () => { await save(); paint(setSlideSection(live.current.deck, id, name)); await save(); }); }
-  function addFromSection(block) { setDeckDialog(null); return run(async () => {
+  function addFromSection(block, intoCurrent = false) { setDeckDialog(null); return run(async () => {
     await save();
-    const plain = value => { const parsed = new DOMParser().parseFromString(String(value ?? ""), "text/html"); parsed.querySelectorAll("script,style,iframe,object").forEach(node => node.remove()); parsed.querySelectorAll("br,p,div,li").forEach(node => node.append("\n")); return (parsed.body.textContent || "").trim(); };
-    const plan = sectionPlan(block, plain, DEFAULT_SLIDE_FONT, crypto.randomUUID());
+    const plan = sectionPlan(block, sectionPlainText, DEFAULT_SLIDE_FONT, crypto.randomUUID());
     const slide = await materialize({ id: crypto.randomUUID(), title: plan.title, notes: plan.notes, fixture: "blank" });
     const additions = [...plan.elements];
     if (plan.media) {
@@ -241,8 +250,17 @@ function Merger() {
     await loadPlatformFonts(additions);
     const skeletons = new Map(additions.map(element => [element.id, element]));
     const elements = restoreElements(convertToExcalidrawElements(additions, { regenerateIds: false }).map(element => element.type === "text" ? { ...element, width: skeletons.get(element.id).width, autoResize: false } : element), null, { repairBindings: true, refreshDimensions: true });
-    slide.scene.elements.push(...elements);
-    paint(insertSlide(live.current.deck, slide)); await mountSlide(slide); await save();
+    if (intoCurrent) {
+      const groupId = crypto.randomUUID();
+      sectionSelection.current = { selectedElementIds: Object.fromEntries(elements.map(element => [element.id, true])), selectedGroupIds: { [groupId]: true } };
+      api.addFiles(Object.values(slide.scene.files));
+      api.setActiveTool({ type: "selection" });
+      api.updateScene({ elements: [...api.getSceneElementsIncludingDeleted(), ...elements.map(element => ({ ...element, groupIds: [groupId] }))], captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+    } else {
+      slide.scene.elements.push(...elements);
+      paint(insertSlide(live.current.deck, slide)); await mountSlide(slide);
+    }
+    await save();
   }); }
   function onChange(elements, state) {
     if (!live.current.ready || live.current.operating) return;
@@ -370,7 +388,7 @@ function Merger() {
         <CanvasToolbar api={api} disabled={busy || present !== null || !!confirm || iconOpen || !!deckDialog} onImage={() => input.current.click()}>
           <div className="merge-tool-group"><button className="merge-tool" title="Icons" aria-label="Icons" disabled={busy} onClick={() => setIconOpen(true)}><ToolIcon name="icons" /></button>
             <button className="merge-tool" title="Open library" aria-label="Open library" disabled={busy} onClick={() => mobileUI.mobile ? mobileUI.open("library") : api.updateScene({ appState: { openSidebar: { name: "default", tab: "library" } }, captureUpdate: CaptureUpdateAction.NEVER })}><Icon name="library" /></button>
-            <ToolMenu label="Content" icon="content" disabled={busy}>{CONTENT_BLOCKS.map(([kind, label]) => <button key={kind} data-close onClick={() => insertContent(kind)}>{label}</button>)}</ToolMenu>
+            <ToolMenu label="Content" icon="content" disabled={busy}>{CONTENT_BLOCKS.map(([kind, label]) => <button key={kind} data-close onClick={() => insertContent(kind)}>{label}</button>)}<hr /><button data-close onClick={() => openDeckDialog({kind:"source",intoCurrent:true})}>Section...</button></ToolMenu>
           </div><div className="merge-tool-group"><ToolMenu label="View" icon="view" disabled={busy}>
             {[["grid", "Grid and snap"], ["snap", "Snap to objects"], ["rulers", "Rulers"], ["margins", "Safe margins"], ["thirds", "Thirds"]].map(([key, label]) => <label className="merge-view-option" key={key}><input type="checkbox" checked={view[key]} onChange={event => changeView(key, event.target.checked)} />{label}</label>)}
             <label className="merge-view-option"><input type="checkbox" checked={snapGuides} onChange={event=>setSnapGuides(event.target.checked)} />Snap to guides</label>
@@ -390,7 +408,7 @@ function Merger() {
     <input type="file" hidden ref={input} accept="image/png,image/jpeg,image/webp,image/gif" onChange={event => { importImage(event.target.files[0]); event.target.value = ""; }} />
     {present !== null && <Presenter slides={rehearsal} index={present} onIndex={setPresent} onClose={() => { setPresent(null); requestAnimationFrame(fit); }} />}
     {deckDialog?.kind === "layout" && <LayoutDialog onClose={() => setDeckDialog(null)} onPick={layout => { setDeckDialog(null); add(layout); }} />}
-    {deckDialog?.kind === "source" && <SectionPicker onClose={() => setDeckDialog(null)} onPick={addFromSection} />}
+    {deckDialog?.kind === "source" && <SectionPicker title={deckDialog.intoCurrent ? "Insert section" : "Generate from a section"} onClose={() => setDeckDialog(null)} onPick={block => addFromSection(block, deckDialog.intoCurrent)} />}
     {deckDialog?.kind === "section" && <SectionDialog value={deck.slides.find(slide => slide.id === deckDialog.id)?.section} onClose={() => setDeckDialog(null)} onSave={saveSection} />}
     {iconOpen && <IconLibrary onClose={() => setIconOpen(false)} onPick={file => { setIconOpen(false); importImage(file, true); }} />}
     {confirm && <dialog ref={dialog} className="merge-confirm" onCancel={() => setConfirm(false)}><h2>Delete this slide?</h2><p>{deck.slides.find(slide => slide.id === confirm)?.title}</p><div><button onClick={() => setConfirm(false)}>Cancel</button><button className="is-danger" onClick={() => { setConfirm(false); modify("delete", confirm); }}>Delete slide</button></div></dialog>}

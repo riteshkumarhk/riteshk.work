@@ -30,13 +30,20 @@ the existing owner session through a new, narrowly scoped Worker route.
 - Hand, Select, Text, Image, Shapes, Arrow, Line and Draw use native engine tools.
 - Icons searches the studio's built-in and published custom icons; insertion retains vector SVG bytes.
 - Content inserts editable text, lists, metrics, quotes, badges and a three-card section starter.
+- Content > Section opens the section picker and inserts into the current slide as a selected group.
+    Existing objects, title, background and speaker notes stay unchanged. Native Undo removes the insertion;
+    ungroup to edit individual objects. This does not create a new slide.
 - Add a slide offers Add blank, Add a layout (nine existing layouts), Generate from a section,
     and Start a section here. Per-slide controls sit below thumbnails, never over the preview.
 - Generate from a section reads the published site or, only when selected, this browser's saved Studio
     draft. Choose a case study and section; this never modifies source content. Locked, encrypted-stub,
     vault and disabled sections are excluded. No vault resolution or decryption runs.
+- Both section entry points share content thumbnails showing converted text and the first supported
+    image/video, with a section name and type. Desktop uses two columns; phones use one. These are
+    previews of the conversion, not screenshots of the original interactive case-study block.
 - Text, statements, metrics, quotes and lists become native editable text. Long body text is excerpted
-    on the slide with full source prose retained in notes. The first direct image/video is copied as
+    on the slide; generating a new slide retains full source prose in notes, while current-slide insertion
+    preserves existing notes. The first direct image/video is copied as
     original image bytes or a hosted video embed. Uploaded media paths use the site's R2 normalization.
     Unsupported/failed media aborts insertion with an error, not a partially generated slide.
 - Notes toggles independently of drawing tools. View groups native grid snapping,
