@@ -23,7 +23,7 @@ function InsertGap({ index, busy, add, section }) {
 export function SlideNavigator({ deck, thumbnails, busy, choose, modify, add, pick, section, remove }) {
   const menu = () => <><button data-close onClick={() => add("blank")}>Add blank</button><button data-close onClick={() => pick("layout")}>Add a layout...</button><button data-close onClick={() => pick("source")}>Generate from a section</button></>;
   return <>
-    <div className="merge-section-head"><h2>Slides <span>{deck?.slides.length || 0}</span></h2><div className="merge-section-actions"><Action icon="section" label="Start a section here" disabled={busy || !deck} onClick={() => section(deck.selected)} /><ToolMenu icon="add" label="Add a slide" disabled={busy || !deck}>{menu()}</ToolMenu></div></div>
+    <div className="merge-section-head"><h2>Slides <span>{deck?.slides.length || 0}</span></h2><div className="merge-navigator-actions"><Action icon="section" label="Start a section here" disabled={busy || !deck} onClick={() => section(deck.selected)} /><ToolMenu icon="add" label="Add a slide" disabled={busy || !deck}>{menu()}</ToolMenu></div></div>
     <div className="merge-slide-list">{deck?.slides.map((slide, index) => <div className="merge-slide-entry" key={slide.id}>
       {slide.section && <button className="merge-section-label" title="Rename or remove section" onClick={() => section(slide.id)} disabled={busy}><ToolIcon name="section" /><span>{slide.section}</span></button>}
       <InsertGap index={index} busy={busy} add={() => add("blank", slide.id)} section={() => section(slide.id)} />
