@@ -51,7 +51,6 @@
   .merge-shell[data-mobile-panel="notes"] .merge-notes { display:block; position:fixed; z-index:21; inset:auto 0 28px; width:100%; height:var(--mobile-panel-height); max-height:var(--mobile-panel-height); margin:0; padding:14px 16px; overflow:auto; overscroll-behavior:contain; border:0; border-radius:0; background:var(--merge-bg); box-shadow:none; }
   .merge-shell[data-mobile-panel="properties"] .App-mobile-menu .Island { display:block; padding:0; box-shadow:none; border:0; }
   .merge-shell[data-mobile-panel="properties"] .selected-shape-actions>.Island { width:100%; max-height:none; padding:0; box-shadow:none; border:0; overflow:visible; }
-  .merge-shell[data-mobile-panel="properties"] .merge-properties-heading { display:none; }
   .merge-shell[data-mobile-panel="properties"] .merge-layout-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .merge-shell[data-mobile-panel="library"] .default-sidebar .sidebar__header { display:none; }
   .merge-shell[data-mobile-panel="library"] .default-sidebar { padding:0 12px; }

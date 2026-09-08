@@ -41,8 +41,8 @@ coverage and components proposed for a future shared design-system update.
     media bytes are omitted. This is a diagnostic summary, not a full replay stream.
 - Canvas first: native compact contextual properties float on the left on desktop.
 - Dropdowns share theme-aware surfaces, spacing, selected rows and line chevrons via
-    customizable selects where supported; other browsers retain native pickers. Layout and
-    Background disclosures use the same line-chevron shape, with open-state rotation.
+    customizable selects where supported; other browsers retain native pickers. Slide properties
+    reuse the native inspector surface, labels and group spacing without collapse controls.
 - Slides occupy the right rail on desktop, with a resize handle on its left edge.
 - Drag the rail's left edge, use Left/Right arrow keys, or Home/double-click to reset.
 - Rail width persists separately in `rk:slide-merge:rail-width`; mobile uses a collapsible horizontal slide strip, initially closed.
@@ -89,7 +89,7 @@ coverage and components proposed for a future shared design-system update.
 - Hand, Select, Text, Shapes, Arrow, Line and Draw use native engine tools. Shapes includes eight
     editable diagram presets: Start / End, Rounded process, Input / Output, Predefined process,
     Database, Connector, Triangle and Hexagon. Multi-part symbols are grouped and support native Undo.
-- Manage layers, above Background in slide properties, opens the shared right panel.
+- Manage layers, in the Actions group of slide properties, opens the shared right panel.
     The list shows front-to-back order with thumbnails, selection, rename, reorder,
     duplicate/delete, hide/show and lock/unlock. Shift/Ctrl/Cmd-click selects multiple layers.
     Group and Ungroup use native grouping, including bound text. Grouping an existing group

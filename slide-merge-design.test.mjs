@@ -17,6 +17,17 @@ function parity(target, targetSelector, sourceSelector, properties) {
   for (const property of properties) assert.equal(actual[property], expected[property], `${targetSelector}: ${property} must match ${sourceSelector}`);
 }
 
+test("Slide properties reuse native inspector groups without collapse controls", () => {
+  const component = read("./src/js/slide-merge-properties.jsx");
+  assert.match(component, /merge-slide-properties Island App-menu__left/);
+  assert.match(component, /className="panelColumn"/);
+  assert.doesNotMatch(component, /setExpanded|aria-expanded|<details|<summary|mobileOpen|merge-background-media/);
+  for (const label of ["Layout", "Background", "Transition in", "Actions"]) assert.ok(component.includes(`<legend>${label}</legend>`));
+  const properties = postcss.parse(read("./css/slide-merge-properties.css"));
+  assert.equal(declarations(properties, ".merge-slide-properties").width, "200px");
+  assert.equal(declarations(properties, ".merge-shell .merge-property-action")["text-transform"], "none");
+});
+
 test("shared dialogs use the actual Studio surface and title contract", () => {
   parity(dialogs, ".merge-deck-dialog", ".pass__box", ["background", "border", "border-radius", "padding", "text-align", "box-shadow"]);
   parity(dialogs, ".merge-deck-dialog h2", ".pass__title", ["font-family", "font-weight", "font-size", "color"]);
