@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { CaptureUpdateAction, exportToSvg, labNewElementWith, useLabActionManager } from "@excalidraw/excalidraw";
-import { ArrowDown, ArrowUp, Check, ChevronsDown, ChevronsUp, Copy, Eye, EyeOff, Image, Layers, LockKeyhole, Pencil, Plus, Trash2, UnlockKeyhole, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronsDown, ChevronsUp, Copy, Eye, EyeOff, Group, Image, Layers, LockKeyhole, Pencil, Plus, Trash2, Ungroup, UnlockKeyhole, X } from "lucide-react";
 import { FRAME_ID } from "./slide-lab-core.mjs";
 import { layerName, layerPropertyChanges, layerRows, layerTargets } from "./slide-merge-layers.mjs";
 import "../../css/slide-merge-layers.css";
@@ -54,6 +54,13 @@ export function LayerPanel({ api, disabled, onClose, onAdd }) {
       const elements = api.getSceneElementsIncludingDeleted();
       const targets = layerTargets(elements, ids);
       const state = { ...api.getAppState(), selectedElementIds: Object.fromEntries([...targets].map(id => [id, true])), selectedGroupIds: {}, editingGroupId: null, editingLinearElement: null, selectedLinearElement: null };
+      if (name === "group" || name === "ungroup") {
+        const groups = new Set(elements.filter(element => targets.has(element.id) && !element.isDeleted).map(element => element.groupIds?.at(-1)).filter(Boolean));
+        for (const element of elements) {
+          if (!element.isDeleted && element.id !== FRAME_ID && element.groupIds?.some(id => groups.has(id))) state.selectedElementIds[element.id] = true;
+        }
+        state.selectedGroupIds = Object.fromEntries([...groups].map(id => [id, true]));
+      }
       const native = manager.actions[name];
       if (!native) throw new Error("Layer action unavailable");
       const result = native.perform(elements, state, null, manager.app);
@@ -77,6 +84,8 @@ export function LayerPanel({ api, disabled, onClose, onAdd }) {
   const activeElements = rows.filter(element => selected.includes(element.id));
   const locked = activeElements.length > 0 && activeElements.every(element => element.customData?.labLayerHidden?.locked ?? element.locked);
   const hidden = activeElements.length > 0 && activeElements.every(element => !!element.customData?.labLayerHidden);
+  const groupUnits = new Set(activeElements.map(element => element.groupIds?.at(-1) || element.containerId || element.id));
+  const canUngroup = activeElements.some(element => element.groupIds?.length);
   return <div ref={root} role="complementary" className="merge-layer-panel" aria-label="Layers" data-prevent-outside-click="true" onKeyDown={event => { event.stopPropagation(); if (event.key === "Escape" && !editing) onClose(); }}>
     <div className="merge-layer-tools" role="toolbar" aria-label="Layer actions">
       <details className="merge-layer-add"><summary title="Add layer" aria-label="Add layer"><Plus size={16} strokeWidth={1.75} /></summary><div>{[["text", "Text"], ["shape", "Shape"], ["media", "Image or video"]].map(([kind, label]) => <button key={kind} disabled={disabled} onClick={event => { event.currentTarget.closest("details").open = false; onAdd(kind); }}>{label}</button>)}</div></details>
@@ -86,6 +95,8 @@ export function LayerPanel({ api, disabled, onClose, onAdd }) {
       <LayerButton icon={locked ? UnlockKeyhole : LockKeyhole} label={locked ? "Unlock selected layers" : "Lock selected layers"} disabled={disabled || !selected.length} onClick={() => commitProperty(selected, "lock", !locked)} />
       <LayerButton icon={Copy} label="Duplicate selected layers" disabled={disabled || !selected.length} onClick={() => action("duplicateSelection", selected)} />
       <LayerButton icon={Trash2} label="Delete selected layers" danger disabled={disabled || !selected.length} onClick={() => action("deleteSelectedElements", selected)} />
+      <LayerButton icon={Group} label="Group selected layers" disabled={disabled || groupUnits.size < 2} onClick={() => action("group", selected)} />
+      <LayerButton icon={Ungroup} label="Ungroup selected layers" disabled={disabled || !canUngroup} onClick={() => action("ungroup", selected)} />
     </div>
     {error && <p role="alert">{error}</p>}
     <ol className="merge-layer-list" aria-label="Slide layers">

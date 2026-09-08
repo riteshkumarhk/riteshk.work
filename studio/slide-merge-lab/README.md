@@ -45,6 +45,9 @@ the existing owner session through a new, narrowly scoped Worker route.
 - Manage layers, above Background in slide properties, opens the shared right panel.
     The list shows front-to-back order with thumbnails, selection, rename, reorder,
     duplicate/delete, hide/show and lock/unlock. Shift/Ctrl/Cmd-click selects multiple layers.
+    Group and Ungroup use native grouping, including bound text. Grouping an existing group
+    with another layer preserves the inner group; Ungroup removes the outer group only.
+    Select any member in the layer list to ungroup its outer group. Both actions support Undo.
     Add offers text, shapes and media. The left native inspector stays available for editing.
     Mobile uses the existing panel sheet. The slide frame is excluded from layer actions.
     Native reorder/duplicate/delete preserve bindings and Undo; hiding retains original opacity
