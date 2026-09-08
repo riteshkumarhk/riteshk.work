@@ -2,6 +2,23 @@ import React, { useEffect, useRef, useState } from "react";
 import { rulerTicks } from "./slide-merge-inserts.mjs";
 import { guidePosition } from "./slide-merge-guide-core.mjs";
 
+export function CanvasBackdrop({ api }) {
+  const [bounds, setBounds] = useState(null);
+  useEffect(() => {
+    if (!api) return;
+    const update = (elements, state) => {
+      const frame = elements.find(element => element.id === "lab-slide" && !element.isDeleted);
+      if (!frame) { setBounds(null); return; }
+      const zoom = state.zoom.value;
+      const next = { left:(frame.x + state.scrollX) * zoom, top:(frame.y + state.scrollY) * zoom, right:(frame.x + frame.width + state.scrollX) * zoom, bottom:(frame.y + frame.height + state.scrollY) * zoom };
+      setBounds(previous => previous && Object.keys(next).every(key => previous[key] === next[key]) ? previous : next);
+    };
+    update(api.getSceneElements(), api.getAppState());
+    return api.onChange(update);
+  }, [api]);
+  return <div className="merge-canvas-backdrop" aria-hidden="true" style={{clipPath:bounds ? `polygon(evenodd,0 0,100% 0,100% 100%,0 100%,0 0,${bounds.left}px ${bounds.top}px,${bounds.right}px ${bounds.top}px,${bounds.right}px ${bounds.bottom}px,${bounds.left}px ${bounds.bottom}px,${bounds.left}px ${bounds.top}px)` : undefined}} />;
+}
+
 export function CanvasGuides({ api, rulers, margins, thirds, guides = [], onGuides, disabled }) {
   const [camera, setCamera] = useState({ zoom: 1, x: 0, y: 0 });
   const root=useRef(null),drag=useRef(null);

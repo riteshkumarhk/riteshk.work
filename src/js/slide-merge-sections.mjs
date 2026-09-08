@@ -4,13 +4,39 @@ export function sectionPlainText(value) {
   parsed.querySelectorAll("br,p,div,li").forEach(node => node.append("\n"));
   return (parsed.body.textContent || "").trim();
 }
-export function availableStudies(data) {
-  return (Array.isArray(data?.work) ? data.work : []).filter(work => work && !work.off && !work.locked && !work.encStub && !work.vaultBlock).map(work => ({ id: work.id, title: work.title || "Untitled case study", blocks: (Array.isArray(work.study?.blocks) ? work.study.blocks : []).filter(block => block && !block.off && !block.locked && !block.encStub && !block.vaultBlock) })).filter(work => work.blocks.length);
+export function availableStudies(data, includeMedia = false) {
+  return (Array.isArray(data?.work) ? data.work : []).filter(work => work && !work.off && !work.locked && !work.encStub && !work.vaultBlock).map(work => ({ id: work.id, title: work.title || "Untitled case study", blocks: (Array.isArray(work.study?.blocks) ? work.study.blocks : []).filter(block => block && !block.off && !block.locked && !block.encStub && !block.vaultBlock), ...(includeMedia ? { media: caseStudyMedia(work) } : {}) })).filter(work => work.blocks.length || work.media?.length);
+}
+export function caseStudyMedia(work) {
+  const files = new Map();
+  function add(source, label, hint = "") {
+    const url = sectionMediaUrl(source);
+    if (!url || files.has(url)) return;
+    if (/^(embed|iframe|frame|youtube|vimeo)$/i.test(hint) || /(?:youtube(?:-nocookie)?\.com|youtu\.be|vimeo\.com)(?:\/|$)/i.test(new URL(url).hostname)) return;
+    const video = /video/i.test(hint) || /\.(mp4|webm|mov|m4v|ogv)(?:$|[?#])/i.test(url);
+    if (!video && !/image|media|src|poster|cover/i.test(hint) && !/\.(png|jpe?g|webp|gif|svg|avif)(?:$|[?#])/i.test(url)) return;
+    files.set(url, { url, kind: video ? "video" : "image", title: String(label || (video ? "Video" : "Image")) });
+  }
+  function visit(value, label = "", key = "") {
+    if (Array.isArray(value)) { value.forEach(item => visit(item, label, key)); return; }
+    if (!value || typeof value !== "object" || value.off || value.locked || value.encStub || value.vaultBlock) return;
+    const title = value.caption || value.alt || value.heading || value.title || value.editorName || label;
+    for (const [field, child] of Object.entries(value)) {
+      if (typeof child === "object") visit(child, title, field);
+      else if (typeof child === "string" && /^(src|url|image|video|poster|cover|coverImage|avatar)$/.test(field)) add(child, title, /^(src|url)$/.test(field) ? value.kind || value.type || field : field);
+      else if (typeof child === "string" && /^(body|desc|html)$/.test(field) && typeof DOMParser !== "undefined") {
+        const parsed = new DOMParser().parseFromString(child, "text/html");
+        parsed.querySelectorAll("img[src],video[src],video source[src]").forEach(node => add(node.getAttribute("src"), node.getAttribute("alt") || title, node.tagName === "IMG" ? "image" : "video"));
+      }
+    }
+  }
+  visit(work);
+  return [...files.values()];
 }
 export function sectionMediaUrl(source) {
   if (typeof source !== "string" || !source.trim()) return null;
   if (/^(vault:|rkenc:)/i.test(source) || /assets\/protected\//i.test(source) || /\.enc($|[?#])/i.test(source)) return null;
-  if (/^data:image\/(png|jpeg|webp|gif);base64,/i.test(source)) return source;
+  if (/^data:(image\/(png|jpeg|webp|gif|svg\+xml|avif)|video\/(mp4|webm|quicktime|ogg));base64,/i.test(source)) return source;
   try {
     const url = new URL(source, "https://riteshk.work/");
     if (url.protocol !== "https:" || url.username || url.password || /(?:^|\/)vault(?:\/|$)/i.test(url.pathname)) return null;

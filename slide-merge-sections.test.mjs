@@ -1,7 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { availableStudies, sectionMediaUrl, sectionPlan } from "./src/js/slide-merge-sections.mjs";
+import { availableStudies, caseStudyMedia, sectionMediaUrl, sectionPlan } from "./src/js/slide-merge-sections.mjs";
 const plain = value => String(value ?? "");
+test("case-study media includes cover, overview and nested media once, excluding private content", () => {
+  const work = { image:"/assets/uploads/cover.svg", study:{skim:{media:[{src:"clip.mp4",kind:"video"}]},blocks:[{items:[{src:"photo.png"},{src:"photo.png"},{src:"secret.png",locked:true}]},{locked:true,items:[{src:"hidden.png"}]},{body:"Text",url:"https://example.com/article"},{src:"/assets/protected/private.png"},{items:[{cells:[{media:{src:"deep.webp"}}]}]}]}};
+  const media = caseStudyMedia(work);
+  assert.deepEqual(media.map(item=>item.kind),["image","video","image","image"]);
+  assert.equal(media[0].url,"https://media.riteshk.work/cover.svg");
+  assert.equal(caseStudyMedia({...work,locked:true}).length,0);
+  assert.equal(availableStudies({work:[{image:"cover.png"}]},true)[0].media.length,1);
+});
 test("section picker excludes private, locked and disabled material", () => {
   const data = {work:[{id:"public",study:{blocks:[{type:"text",body:"Hello"},{locked:true},{encStub:true},{vaultBlock:true},{off:true}]}},{locked:true,study:{blocks:[{body:"secret"}]}}]};
   assert.equal(availableStudies(data).length, 1);
@@ -28,4 +36,9 @@ test("media uses original source URLs and rejects executable or vault URLs", () 
   assert.equal(plan.media.url,"https://riteshk.work/media/original.png");
   assert.equal(plan.elements[0].text,"Screens");
   assert.throws(() => sectionPlan({type:"unknown"}, plain, 5, "empty"), /no supported/);
+});
+test("media inventory excludes web embeds but retains original vector and video URLs", () => {
+  const media=caseStudyMedia({study:{blocks:[{items:[{kind:"frame",src:"https://example.com/embed"},{src:"https://www.youtube.com/embed/123"},{src:"https://youtu.be/123"},{kind:"video",src:"https://media.example.com/original.mov"},{kind:"image",src:"https://media.example.com/original.svg"}]}]}});
+  assert.deepEqual(media.map(item=>item.url),["https://media.example.com/original.mov","https://media.example.com/original.svg"]);
+  assert.deepEqual(media.map(item=>item.kind),["video","image"]);
 });

@@ -6,13 +6,27 @@ import "../../css/slide-merge-navigator.css";
 function Action({ icon, label, ...props }) {
   return <button className={`merge-nav-action ${icon === "trash" ? "is-danger" : ""}`} title={label} aria-label={label} {...props}><ToolIcon name={icon} /></button>;
 }
+function InsertGap({ index, busy, add, section }) {
+  const [open, setOpen] = useState(false), host = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const outside = event => { if (!host.current?.contains(event.target)) setOpen(false); };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, [open]);
+  useEffect(() => { if (busy) setOpen(false); }, [busy]);
+  return <div className="merge-gap" ref={host} onKeyDown={event => { if (event.key === "Escape" && open) { event.preventDefault(); event.stopPropagation(); setOpen(false); host.current.querySelector(".merge-insert-gap").focus(); } }}>
+    <button className="merge-insert-gap" title="Insert here" aria-label={`Insert before slide ${index + 1}`} aria-expanded={open} disabled={busy} onClick={() => setOpen(!open)}><ToolIcon name="add" /></button>
+    {open && <div className="merge-gap-choices" role="group" aria-label="Insert here"><button disabled={busy} onClick={() => { setOpen(false); add(); }}><ToolIcon name="add" />Add slide</button><button disabled={busy} onClick={() => { setOpen(false); section(); }}><ToolIcon name="section" />Start section</button></div>}
+  </div>;
+}
 export function SlideNavigator({ deck, thumbnails, busy, choose, modify, add, pick, section, remove }) {
-  const menu = () => <><button data-close onClick={() => add("blank")}>Add blank</button><button data-close onClick={() => pick("layout")}>Add a layout...</button><button data-close onClick={() => pick("source")}>Generate from a section</button><hr /><button data-close onClick={() => section(deck.selected)}>Start a section here</button></>;
+  const menu = () => <><button data-close onClick={() => add("blank")}>Add blank</button><button data-close onClick={() => pick("layout")}>Add a layout...</button><button data-close onClick={() => pick("source")}>Generate from a section</button></>;
   return <>
-    <div className="merge-section-head"><h2>Slides <span>{deck?.slides.length || 0}</span></h2><ToolMenu icon="add" label="Add a slide" disabled={busy || !deck}>{menu()}</ToolMenu></div>
+    <div className="merge-section-head"><h2>Slides <span>{deck?.slides.length || 0}</span></h2><Action icon="section" label="Start a section here" disabled={busy || !deck} onClick={() => section(deck.selected)} /><ToolMenu icon="add" label="Add a slide" disabled={busy || !deck}>{menu()}</ToolMenu></div>
     <div className="merge-slide-list">{deck?.slides.map((slide, index) => <div className="merge-slide-entry" key={slide.id}>
       {slide.section && <button className="merge-section-label" title="Rename or remove section" onClick={() => section(slide.id)} disabled={busy}><ToolIcon name="section" /><span>{slide.section}</span></button>}
-      <button className="merge-insert-gap" title="Insert blank slide here" aria-label={`Insert slide before ${index + 1}`} disabled={busy} onClick={() => add("blank", slide.id)}><ToolIcon name="add" /></button>
+      <InsertGap index={index} busy={busy} add={() => add("blank", slide.id)} section={() => section(slide.id)} />
       <article className={`merge-slide-card ${deck.selected === slide.id ? "is-active" : ""} ${slide.hidden ? "is-skipped" : ""}`}>
         <button className={`merge-slide ${deck.selected === slide.id ? "is-active" : ""}`} aria-label={`Slide ${index + 1}: ${slide.title}`} aria-current={deck.selected === slide.id ? "true" : undefined} disabled={busy} onClick={() => choose(slide.id)}><span className="merge-thumbnail" aria-hidden="true" dangerouslySetInnerHTML={{ __html: thumbnails[slide.id] || "" }} /><span><small>{String(index + 1).padStart(2, "0")}</small>{slide.title || "Untitled slide"}</span>{slide.hidden && <em className="merge-skipped-label">Skipped</em>}</button>
         <div className="merge-thumb-actions" aria-label={`Actions for slide ${index + 1}`}>
@@ -25,7 +39,6 @@ export function SlideNavigator({ deck, thumbnails, busy, choose, modify, add, pi
         </div>
       </article>
     </div>)}</div>
-    <div className="merge-add-slide"><ToolMenu icon="add" label="Add a slide" caption="Add a slide" disabled={busy || !deck}>{menu()}</ToolMenu></div>
   </>;
 }
 

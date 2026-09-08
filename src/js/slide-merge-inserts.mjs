@@ -1,5 +1,22 @@
 export const SLIDE_LAYOUTS = [["blank", "Blank"], ["title", "Title"], ["columns", "Two columns"], ["flow", "Product flow"]];
 export const CONTENT_BLOCKS = [["body", "Text block"], ["list", "Bulleted list"], ["metric", "Metric"], ["quote", "Quote"], ["section", "Section layout"], ["badge", "Badge"]];
+export const DIAGRAM_SHAPES = [["terminator", "Start / End"], ["rounded", "Rounded process"], ["inputoutput", "Input / Output"], ["subprocess", "Predefined process"], ["database", "Database"], ["connector", "Connector"], ["triangle", "Triangle"], ["hexagon", "Hexagon"]];
+export function diagramSkeleton(kind, prefix) {
+  const common = { x:520, y:300, width:240, height:120, roughness:0, strokeColor:"#27343a", backgroundColor:"transparent", fillStyle:"solid", strokeWidth:2, frameId:"lab-slide", groupIds:[prefix] };
+  const shape = (suffix, type, extra = {}) => ({ ...common, id:`${prefix}-${suffix}`, type, ...extra });
+  const polygon = points => [shape("outline", "line", { points })];
+  switch (kind) {
+    case "terminator": return [shape("outline", "ellipse")];
+    case "rounded": return [shape("outline", "rectangle", { roundness:{type:3} })];
+    case "connector": return [shape("outline", "ellipse", {x:600,y:320,width:80,height:80})];
+    case "inputoutput": return polygon([[30,0],[240,0],[210,120],[0,120],[30,0]]);
+    case "triangle": return polygon([[120,0],[240,120],[0,120],[120,0]]);
+    case "hexagon": return polygon([[40,0],[200,0],[240,60],[200,120],[40,120],[0,60],[40,0]]);
+    case "subprocess": return [shape("outline", "rectangle"), shape("left", "line", {x:540,width:0,points:[[0,0],[0,120]]}), shape("right", "line", {x:740,width:0,points:[[0,0],[0,120]]})];
+    case "database": return [shape("body", "line", {points:[[0,20],...Array.from({length:17},(_,index)=>{const angle=Math.PI-index*Math.PI/16;return [120+120*Math.cos(angle),100+20*Math.sin(angle)];}),[240,20]]}), shape("top", "ellipse", {height:40})];
+    default: throw new Error("Unknown diagram shape");
+  }
+}
 export const BADGE_PRESETS = [
   ["proposed", "Proposed", "#e4e8ef"], ["in-progress", "In progress", "#d9eafa"],
   ["completed", "Completed", "#d8eee2"], ["shipped", "Shipped", "#c9e8df"],

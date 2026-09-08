@@ -17,17 +17,27 @@ the existing owner session through a new, narrowly scoped Worker route.
     Close, backdrop and Escape dismiss the sheet; nested pickers consume Escape first.
     Drawing Line is available in Draw on mobile. Guides and Fit use the actual canvas bounds.
 - Each thumbnail has move up/down, insert above, duplicate, skip/include and confirm-delete controls.
-- Insert blank slides between existing slides or append through Add a slide.
-- Start a section here adds a named navigator divider to the selected slide; click it to rename/remove.
+- Each insertion gap offers Add slide or Start section inline. On phones the choices temporarily
+    occupy the adjacent thumbnail footprint, keeping both actions inside the strip.
+- Start a section here sits beside the top Add a slide icon and adds a named navigator divider
+    to the selected slide; click it to rename/remove. The redundant bottom Add a slide action is removed.
     The divider moves with its slide and is not copied when duplicating a slide.
 - Skipped slides remain editable and saved but are omitted from rehearsal. Rehearsal starts at the
     selected or next included slide, wrapping to the first included slide if needed. All skipped disables Rehearse.
 - Canvas edits use engine undo. Switching slides clears that slide's engine history.
 - Deck autosave uses isolated IndexedDB `rk-slide-merge-lab-v1`, not production storage.
-- Images retain original bytes. Text uses the shared platform-hosted font catalogue.
+- Images retain original bytes. SVG files additionally retain `originalDataURL` because the native
+    engine normalizes its SVG rendering copy. No vector rasterization or media re-encoding occurs.
+    Text uses the shared platform-hosted font catalogue.
 - One studio toolbar replaces the native tool strip, without its tool lock or More menu.
 - The native hamburger is hidden; View > Help opens the native Help dialog.
-- Hand, Select, Text, Image, Shapes, Arrow, Line and Draw use native engine tools.
+- Hand, Select, Text, Shapes, Arrow, Line and Draw use native engine tools. Shapes includes eight
+    editable diagram presets: Start / End, Rounded process, Input / Output, Predefined process,
+    Database, Connector, Triangle and Hexagon. Multi-part symbols are grouped and support native Undo.
+- Media opens the shared pane with the case study's images and direct videos, including covers,
+    overview media and nested section assets. Upload media stays pinned below the scrolling gallery.
+    Upload accepts PNG, JPEG, WebP, GIF, AVIF, SVG, MP4, WebM, MOV and Ogg video. Original uploaded
+    videos persist as data URLs; hosted videos keep their original URL. Playback depends on browser codecs.
 - Icons, Text, Badges, Sections and Library are direct toolbar buttons, sharing the native right
     sidebar slot with only one pane open at a time. The duplicate top-right Library trigger is hidden,
     including its focusable checkbox. Both pane types leave space for the toolbar on compact desktops.
@@ -41,17 +51,23 @@ the existing owner session through a new, narrowly scoped Worker route.
 - Sections opens the site-section picker and inserts into the current slide as a selected group.
     Existing objects, title, background and speaker notes stay unchanged. Native Undo removes the insertion;
     ungroup to edit individual objects. This does not create a new slide.
-- Add a slide offers Add blank, Add a layout (nine existing layouts), Generate from a section,
-    and Start a section here. Per-slide controls sit below thumbnails, never over the preview.
+- Add a slide offers Add blank, Add a layout (nine existing layouts), and Generate from a section.
+    Per-slide controls sit below thumbnails, never over the preview.
 - Add a layout and Generate from a section use the same right pane (mobile bottom sheet),
     not dialogs. Their distinct headings preserve new-slide intent: choosing creates and selects
-    a new slide, then closes the pane. Closing without choosing leaves the deck unchanged.
+    new slides, then closes the pane. Closing without choosing leaves the deck unchanged.
     The toolbar's Sections pane still inserts into the current slide.
-- Generate from a section reads the published site or, only when selected, this browser's saved Studio
-    draft. Choose a case study and section; this never modifies source content. Locked, encrypted-stub,
+- Media and section pickers automatically use this browser's saved Studio draft when present,
+    otherwise the published site. A `?study=<work-id>` handoff fixes the case-study context and removes
+    source controls. The standalone lab shares one remembered study choice, with a compact change action.
+    Production Work-tab navigation is not changed by this isolated lab release.
+- Generate from a section supports one or more selections, Space to toggle, and Clear. Generate creates
+    one slide per selected section in source order, retaining full prose in notes. All sections prepare
+    successfully before any new slide is added; failure preserves selection and leaves the deck unchanged.
+    This never modifies source content. Locked, encrypted-stub,
     vault and disabled sections are excluded. No vault resolution or decryption runs.
 - Both section entry points share content thumbnails showing converted text and the first supported
-    image/video, with a section name and type. Desktop uses two columns; phones use one. These are
+    image/video, with a section name and type. The shared pane uses one column. These are
     previews of the conversion, not screenshots of the original interactive case-study block.
 - Text, statements, metrics, quotes and lists become native editable text. Long body text is excerpted
     on the slide; generating a new slide retains full source prose in notes, while current-slide insertion
@@ -78,6 +94,9 @@ the existing owner session through a new, narrowly scoped Worker route.
     native Undo and isolated local autosave. Reduced motion disables rehearsal transitions.
 - Merger chrome consumes the site's CSS tokens at build time, including native
     inspectors, flyouts and dialogs. Artwork colours remain independent.
+- The editing workspace outside the slide uses the isometric case-study component's exact theme-aware
+    radial gradients. A slide-shaped cutout follows pan and zoom; slide content, thumbnails and rehearsal
+    retain their own backgrounds. The workspace decoration is not stored in the scene.
 - Appearance follows the site's `rk:theme` preference (system by default; day, night,
     or local time when explicitly chosen). OS and cross-tab changes update live.
     Automatic canvas backgrounds, rehearsal, slide thumbnails and section previews use
@@ -97,6 +116,7 @@ JavaScript for Google API key patterns. The engine adapter removes upstream Fire
 text excerpts, original media URLs and R2 path normalization.
 `node --test slide-merge-inserts.test.mjs` checks content starters and ruler coordinates.
 It also checks all badge presets, custom-label limits and slide-local sizing.
+`node --test slide-merge-diagrams.test.mjs` checks native diagram geometry, IDs and grouping.
 `node --test slide-merge-properties.test.mjs` checks layouts, selection ownership,
 transition matching, guide positioning and snapping.
 Browser verification covers real rail dragging, keyboard resizing, reload persistence,

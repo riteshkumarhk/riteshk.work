@@ -93,7 +93,8 @@ export async function originalImage(file) {
   image.src = dataURL;
   await image.decode();
   return { id, dataURL, mimeType: file.type, created: Date.now(), lastRetrieved: Date.now(),
-    width: image.naturalWidth, height: image.naturalHeight, bytes: bytes.byteLength, sha256: id };
+    width: image.naturalWidth, height: image.naturalHeight, bytes: bytes.byteLength, sha256: id,
+    ...(file.type === "image/svg+xml" ? { originalDataURL: dataURL } : {}) };
 }
 
 export function openLabStore() {

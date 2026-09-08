@@ -11,8 +11,8 @@ import { normalizeHex } from "./slide-lab-color.mjs";
 import { CanvasToolbar, ToolMenu, ToolIcon } from "./slide-merge-toolbar.jsx";
 import { ContentPane, PANE_LABELS } from "./slide-merge-content-pane.jsx";
 import { useSlideLibrary } from "./slide-library.jsx";
-import { CanvasGuides } from "./slide-merge-guides.jsx";
-import { contentSkeleton } from "./slide-merge-inserts.mjs";
+import { CanvasGuides, CanvasBackdrop } from "./slide-merge-guides.jsx";
+import { contentSkeleton, diagramSkeleton } from "./slide-merge-inserts.mjs";
 import { SlideNavigator, SectionDialog } from "./slide-merge-navigator.jsx";
 import { sectionPlan, sectionMediaUrl, sectionPlainText } from "./slide-merge-sections.mjs";
 import { SlideProperties } from "./slide-merge-properties.jsx";
@@ -254,14 +254,13 @@ function Merger() {
   }); }
   function openDeckDialog(value) { mobileUI.open(null); setDeckDialog(value); }
   function saveSection(name) { const id = deckDialog.id; setDeckDialog(null); return run(async () => { await save(); paint(setSlideSection(live.current.deck, id, name)); await save(); }); }
-  function addFromSection(block, intoCurrent = false) { setDeckDialog(null); return run(async () => {
-    await save();
+  async function prepareSection(block) {
     const plan = sectionPlan(block, sectionPlainText, DEFAULT_SLIDE_FONT, crypto.randomUUID());
     const slide = await materialize({ id: crypto.randomUUID(), title: plan.title, notes: plan.notes, fixture: "blank" });
     const additions = [...plan.elements];
     if (plan.media) {
       const media = plan.media;
-      const response = await fetch(media.url, { credentials: "omit", signal: AbortSignal.timeout(30000) });
+      const response = await fetch(media.url, { credentials: "omit", cache:"no-store", signal: AbortSignal.timeout(30000) });
       if (!response.ok) throw new Error("Source media could not be loaded; no slide was added");
       if ((response.headers.get("content-type") || "").startsWith("video/")) {
         await response.body?.cancel();
@@ -276,15 +275,29 @@ function Merger() {
     await loadPlatformFonts(additions);
     const skeletons = new Map(additions.map(element => [element.id, element]));
     const elements = restoreElements(convertToExcalidrawElements(additions, { regenerateIds: false }).map(element => element.type === "text" ? { ...element, width: skeletons.get(element.id).width, autoResize: false } : element), null, { repairBindings: true, refreshDimensions: true });
+    return { slide, elements };
+  }
+  function addFromSection(block, intoCurrent = false) { setDeckDialog(null); return run(async () => {
+    await save();
+    const prepared = [];
+    for (const sourceBlock of (intoCurrent ? [block] : Array.isArray(block) ? block : [block])) {
+      prepared.push(await prepareSection(sourceBlock));
+    }
+    if (!prepared.length) return;
     if (intoCurrent) {
+      const { slide, elements } = prepared[0];
       const groupId = crypto.randomUUID();
       sectionSelection.current = { selectedElementIds: Object.fromEntries(elements.map(element => [element.id, true])), selectedGroupIds: { [groupId]: true } };
       api.addFiles(Object.values(slide.scene.files));
       api.setActiveTool({ type: "selection" });
       api.updateScene({ elements: [...api.getSceneElementsIncludingDeleted(), ...elements.map(element => ({ ...element, groupIds: [groupId] }))], captureUpdate: CaptureUpdateAction.IMMEDIATELY });
     } else {
-      slide.scene.elements.push(...elements);
-      paint(insertSlide(live.current.deck, slide)); await mountSlide(slide);
+      const next = prepared.reduce((result, { slide, elements }) => {
+        slide.scene.elements.push(...elements);
+        return insertSlide(result, slide);
+      }, live.current.deck);
+      paint(next); await mountSlide(prepared[prepared.length - 1].slide);
+      openPane(null, false);
     }
     await save();
   }); }
@@ -357,27 +370,51 @@ function Merger() {
       await setBackground({type:"media",name:file.name,mimeType:file.type},original);
     } catch(error){fail(error);}
   }
-  function insertContent(kind, badge) { return run(async () => {
-    const skeleton = contentSkeleton(kind, DEFAULT_SLIDE_FONT, crypto.randomUUID(), badge);
+  function insertContent(kind, badge, diagram = false) { return run(async () => {
+    const skeleton = diagram ? diagramSkeleton(kind, crypto.randomUUID()) : contentSkeleton(kind, DEFAULT_SLIDE_FONT, crypto.randomUUID(), badge);
     await loadPlatformFonts(skeleton);
     const elements = restoreElements(convertToExcalidrawElements(skeleton, { regenerateIds: false }), null, { repairBindings: true });
     api.setActiveTool({ type: "selection" });
     api.updateScene({ elements: [...api.getSceneElementsIncludingDeleted(), ...elements], appState: { selectedElementIds: Object.fromEntries(elements.map(element => [element.id, true])) }, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
     await save();
   }); }
-  function importImage(file, studioIcon = false) { return run(async () => {
-    if (!file || (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) && !(studioIcon && file.type === "image/svg+xml"))) throw new Error("Choose PNG, JPEG, WebP or GIF");
+  function importImage(file, studioIcon = false) { return run(() => insertImage(file, studioIcon)); }
+  async function insertImage(file, studioIcon = false) {
+    if (!file || !/^image\/(png|jpeg|webp|gif|svg\+xml|avif)$/.test(file.type)) throw new Error("Choose PNG, JPEG, WebP, GIF, AVIF or SVG");
     const image = await originalImage(file), width = Math.min(640, image.width);
     const elements=api.getSceneElementsIncludingDeleted(),selected=api.getAppState().selectedElementIds;
     const placeholder=!studioIcon&&elements.find(element=>!element.isDeleted&&!element.locked&&selected[element.id]&&element.customData?.slidePlaceholder?.kind==="media");
     const scale=placeholder?Math.min(placeholder.width/image.width,placeholder.height/image.height):width/image.width;
-    const element = convertToExcalidrawElements([{ type: "image", fileId: image.id, x: placeholder?placeholder.x+(placeholder.width-image.width*scale)/2:160, y: placeholder?placeholder.y+(placeholder.height-image.height*scale)/2:160, width:image.width*scale, height:image.height*scale, scale: [1, 1], frameId: FRAME_ID }])[0];
+    const element = restoreElements(convertToExcalidrawElements([{ type: "image", fileId: image.id, x: placeholder?placeholder.x+(placeholder.width-image.width*scale)/2:160, y: placeholder?placeholder.y+(placeholder.height-image.height*scale)/2:160, width:image.width*scale, height:image.height*scale, scale: [1, 1], frameId: FRAME_ID }]), null, { repairBindings:true })[0];
     api.updateScene({ elements: [...elements.map(item=>item.id===placeholder?.id?changed(item,{isDeleted:true}):item), element], appState: { selectedElementIds: { [element.id]: true } }, captureUpdate: CaptureUpdateAction.IMMEDIATELY }); api.addFiles([image]);
     await save();
-  }); }
+  }
+  function importMedia(source) {
+    if (!source) return;
+    return run(async () => {
+      let file = source, videoUrl;
+      if (source.url) {
+        const url = sectionMediaUrl(source.url);
+        if (!url) throw new Error("This media URL is unavailable");
+        const response = await fetch(url, { credentials:"omit", cache:"no-store", signal:AbortSignal.timeout(30000) });
+        if (!response.ok) throw new Error("Media could not be loaded");
+        if ((response.headers.get("content-type") || "").startsWith("video/")) { await response.body?.cancel(); videoUrl = url; }
+        else file = await response.blob();
+      }
+      if (!videoUrl && /^video\/(mp4|webm|quicktime|ogg)$/.test(file.type)) {
+        videoUrl = await new Promise((resolve,reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); });
+      }
+      if (videoUrl) {
+        const element = restoreElements(convertToExcalidrawElements([{type:"embeddable",id:crypto.randomUUID(),x:320,y:180,width:640,height:360,frameId:FRAME_ID,link:"https://slide-lab.invalid/section-video",customData:{sectionVideo:videoUrl},backgroundColor:"transparent",strokeColor:"transparent"}]), null, { repairBindings:true })[0];
+        api.updateScene({elements:[...api.getSceneElementsIncludingDeleted(),element],appState:{selectedElementIds:{[element.id]:true}},captureUpdate:CaptureUpdateAction.IMMEDIATELY});
+        await save();
+      } else await insertImage(file);
+      finishPaneInsert();
+    });
+  }
   function receive(event) {
     const files = [...(event.clipboardData?.files || event.dataTransfer?.files || [])];
-    if (files.length) { event.preventDefault(); event.stopPropagation(); if (!busy) importImage(files[0]); }
+    if (files.length) { event.preventDefault(); event.stopPropagation(); if (!busy) importMedia(files[0]); }
   }
   useEffect(() => {
     if (!api) return;
@@ -411,7 +448,7 @@ function Merger() {
       <SlideNavigator deck={deck} thumbnails={thumbnails} busy={busy} choose={choose} modify={modify} add={add} remove={setConfirm} pick={kind => openPane(kind, false)} section={id => openDeckDialog({kind:"section",id})} /></aside>
     <section className="merge-editor"><div className="merge-toolbar"><button className="merge-icon merge-mobile-only" aria-label="Toggle slides" title="Slides" aria-expanded={mobileUI.slides} onClick={()=>mobileUI.setSlides(!mobileUI.slides)}><Icon name="slides" /></button><input aria-label="Slide title" value={current?.title || ""} disabled={busy} onChange={event => metadata("title", event.target.value)} /><button className="merge-icon merge-mobile-only" title="Properties" aria-label="Open properties" onClick={()=>mobileUI.open("properties",hasSelection)}><Icon name="properties" /></button><button className="merge-notes-toggle" aria-label="Speaker notes panel" aria-expanded={mobileUI.mobile ? mobileUI.panel === "notes" : notesOpen} aria-controls="merge-speaker-notes" onClick={() => mobileUI.mobile ? mobileUI.open("notes") : setNotesOpen(!notesOpen)}><ToolIcon name="notes" /><span>Notes</span></button></div>
       <main className={`merge-workspace ${hasSelection ? "has-selection" : ""}`} ref={host} onDropCapture={receive} onPasteCapture={receive} onDragOverCapture={event => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.stopPropagation(); } }}>
-        <CanvasToolbar api={api} disabled={busy || present !== null || !!confirm || !!deckDialog} onImage={() => input.current.click()}>
+        <CanvasToolbar api={api} disabled={busy || present !== null || !!confirm || !!deckDialog} onImage={() => openPane("media")} mediaOpen={pane === "media"} onDiagram={kind => insertContent(kind, null, true)}>
           <div className="merge-tool-group">{[["icons","icons"],["text","content"],["badges","badge"],["sections","section"],["library","library"]].map(([name, icon]) => <button key={name} className="merge-tool" title={PANE_LABELS[name]} aria-label={name === "library" ? "Open library" : PANE_LABELS[name]} aria-pressed={pane === name} disabled={busy} onClick={() => openPane(name)}>{name === "library" ? <Icon name={icon} /> : <ToolIcon name={icon} />}</button>)}
           </div><div className="merge-tool-group"><ToolMenu label="View" icon="view" disabled={busy}>
             {[["grid", "Grid and snap"], ["snap", "Snap to objects"], ["rulers", "Rulers"], ["margins", "Safe margins"], ["thirds", "Thirds"]].map(([key, label]) => <label className="merge-view-option" key={key}><input type="checkbox" checked={view[key]} onChange={event => changeView(key, event.target.checked)} />{label}</label>)}
@@ -420,17 +457,17 @@ function Merger() {
             <button data-close onClick={() => api.updateScene({ appState: { openMenu: null, openDialog: { name: "help" } }, captureUpdate: CaptureUpdateAction.NEVER })}>Help</button>
           </ToolMenu></div>
         </CanvasToolbar>
-        <div className="lab-canvas"><CanvasGuides api={api} {...view} guides={settings.guides||[]} onGuides={guides=>commitSettings({guides})} disabled={busy||present!==null||confirm} /><CanvasVideo api={api} /><LabTextColorContext.Provider value={{ api, labels, linked: labels.every(label => label.linked), busy, changeLabelColor: color => { if (color && color !== "unlink" && color !== "transparent") { color = normalizeHex(color); if (!color) return; } const elements = api.getSceneElementsIncludingDeleted(); const targets = selectedLabels(elements, api.getAppState().selectedElementIds); api.updateScene({ elements: labelColorUpdate(elements, targets.map(element => element.id), color), captureUpdate: CaptureUpdateAction.IMMEDIATELY }); } }}>
+        <div className="lab-canvas"><CanvasBackdrop api={api} /><CanvasGuides api={api} {...view} guides={settings.guides||[]} onGuides={guides=>commitSettings({guides})} disabled={busy||present!==null||confirm} /><CanvasVideo api={api} /><LabTextColorContext.Provider value={{ api, labels, linked: labels.every(label => label.linked), busy, changeLabelColor: color => { if (color && color !== "unlink" && color !== "transparent") { color = normalizeHex(color); if (!color) return; } const elements = api.getSceneElementsIncludingDeleted(); const targets = selectedLabels(elements, api.getAppState().selectedElementIds); api.updateScene({ elements: labelColorUpdate(elements, targets.map(element => element.id), color), captureUpdate: CaptureUpdateAction.IMMEDIATELY }); } }}>
           <Excalidraw excalidrawAPI={setApi} theme={canvasTheme(api?.getSceneElements() || [],appearance)} onChange={onChange} onLibraryChange={library.onChange} libraryReturnUrl={location.origin + "/studio/slide-merge-lab/"} viewModeEnabled={busy || present !== null || !!confirm || !!deckDialog} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: appearance, currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: sceneBackground() } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed}>
             <MainMenu />
-            <ContentPane pane={pane} busy={busy} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={block => { finishPaneInsert(); addFromSection(block, true); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={block => { openPane(null, false); addFromSection(block, false); }} />
+            <ContentPane pane={pane} busy={busy} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={block => { finishPaneInsert(); addFromSection(block, true); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={blocks => addFromSection(blocks, false)} onMedia={importMedia} onUpload={() => input.current.click()} />
             {!hasSelection&&current&&<SlideProperties mobileOpen={mobileUI.mobile && mobileUI.panel === "properties"} settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm} onLayout={applyLayout} onBackground={setBackground} onMedia={backgroundMedia} onTransition={transition=>commitSettings({transition})} />}
           </Excalidraw>
         </LabTextColorContext.Provider></div><CornerControls api={api} host={host} disabled={busy || present !== null} />{busy && <div className="lab-busy" role="status">Working</div>}
       </main><label className="merge-notes" id="merge-speaker-notes" hidden={mobileUI.mobile ? mobileUI.panel !== "notes" : !notesOpen}><span>Speaker notes</span><textarea aria-label="Speaker notes" value={current?.notes || ""} disabled={busy} onChange={event => metadata("notes", event.target.value)} /></label></section>
     {mobileUI.mobile && mobileUI.panel && <><button className="merge-sheet-scrim" aria-label="Dismiss panel" tabIndex={-1} onClick={()=>mobileUI.open(null)} /><div className="merge-sheet-head"><strong>{mobileUI.panel === "properties" ? (hasSelection ? "Object properties" : "Slide properties") : PANE_LABELS[mobileUI.panel] || "Speaker notes"}</strong><button className="merge-icon merge-sheet-close" title="Close panel" aria-label="Close panel" onClick={()=>mobileUI.open(null)}><Icon name="close" /></button></div></>}
     <footer className="merge-status"><span role="status">{status}</span><button className="merge-library-sync" onClick={library.retry} title={library.status + ". Click to retry or sign in to Studio."}><Icon name="sync" /><span role="status">{library.status}</span></button><span>{selectedIndex + 1} / {deck?.slides.length || 0}</span><span>Local draft</span></footer>
-    <input type="file" hidden ref={input} accept="image/png,image/jpeg,image/webp,image/gif" onChange={event => { importImage(event.target.files[0]); event.target.value = ""; }} />
+    <input type="file" hidden ref={input} accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml,video/mp4,video/webm,video/quicktime,video/ogg,.svg,.mov" onChange={event => { importMedia(event.target.files[0]); event.target.value = ""; }} />
     {present !== null && <Presenter slides={rehearsal} index={present} onIndex={setPresent} onClose={() => { setPresent(null); requestAnimationFrame(fit); }} />}
     {deckDialog?.kind === "section" && <SectionDialog value={deck.slides.find(slide => slide.id === deckDialog.id)?.section} onClose={() => setDeckDialog(null)} onSave={saveSection} />}
     {confirm && <dialog ref={dialog} className="merge-confirm" onCancel={() => setConfirm(false)}><h2>Delete this slide?</h2><p>{deck.slides.find(slide => slide.id === confirm)?.title}</p><div><button onClick={() => setConfirm(false)}>Cancel</button><button className="is-danger" onClick={() => { setConfirm(false); modify("delete", confirm); }}>Delete slide</button></div></dialog>}
