@@ -2761,7 +2761,8 @@
     function pjSlideTitle(s) {
       var z = (s && s.slots) || {};
       var t = z.title || z.heading || z.quote || z.value || z.label || z.caption || z.kicker || "";
-      return pjPlain(t).slice(0, 60) || (s ? (s.layout || "Slide") : "");
+      if (!t && s && s.layout === "free") { var textBlock = (s.blocks || []).find(function (block) { return block.kind === "text" && pjPlain(block.text).trim(); }); t = textBlock ? textBlock.text : ""; }
+      return pjPlain(t).slice(0, 60) || "Untitled slide";
     }
     function pjNotesHtml(n) { return (n && String(n).trim()) ? pjBodyHtml(n) : '<span class="pjp__pnote-empty">\u2014 No notes for this slide \u2014</span>'; }
     var pjpStage = null;
@@ -2773,8 +2774,10 @@
       if (!slides.length) return;
       var idx = Math.max(0, Math.min(slides.length - 1, opts.start || 0));
       var stage = document.createElement("div");
+      var returnFocus = document.activeElement;
       pjpStage = stage;
       stage.className = "pjp";
+      stage.tabIndex = -1;
       stage.setAttribute("role", "dialog"); stage.setAttribute("aria-modal", "true"); stage.setAttribute("aria-label", "Presentation");
       stage.innerHTML =
         '<div class="pjp__stagewrap"><div class="pjp__frame" data-pjp-frame></div></div>' +
@@ -2790,6 +2793,9 @@
         '<div class="pjp__pnext"><span class="pjp__plabel">Up next</span><div class="pjp__pnext-thumb" data-pjp-nextthumb></div><div class="pjp__pnext-body" data-pjp-next></div></div>' +
         '</div>';
       document.body.appendChild(stage);
+      var inactiveSiblings = Array.prototype.filter.call(document.body.children, function (element) { return element !== stage && !element.inert; });
+      inactiveSiblings.forEach(function (element) { element.inert = true; });
+      stage.focus({ preventScroll: true });
       var frame = stage.querySelector("[data-pjp-frame]"), prog = stage.querySelector("[data-pjp-progress]"), count = stage.querySelector("[data-pjp-count]");
       var notesEl = stage.querySelector("[data-pjp-notes]"), nextEl = stage.querySelector("[data-pjp-next]"), presenting = false;
       var nextThumb = stage.querySelector("[data-pjp-nextthumb]"), timerEl = stage.querySelector("[data-pjp-timer]"), clockEl = stage.querySelector("[data-pjp-clock]"), startT = Date.now(), presenterWin = null;
@@ -2920,8 +2926,17 @@
         var pb = stage.querySelector('[data-pjp="popout"]'); if (pb) pb.classList.add("is-on");
         setTimeout(syncPresenter, 60); syncPresenter();
       }
-      function exit() { clearInterval(clockTimer); if (presenterWin && !presenterWin.closed) { try { presenterWin.removeEventListener("beforeunload", onPresenterClosed); presenterWin.close(); } catch (e) {} } presenterWin = null; document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { stage.remove(); pjpStage = null; }, 240); }
+      function exit() { clearInterval(clockTimer); clearTimeout(transTimer); if (presenterWin && !presenterWin.closed) { try { presenterWin.removeEventListener("beforeunload", onPresenterClosed); presenterWin.close(); } catch (e) {} } presenterWin = null; document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { stage.remove(); pjpStage = null; inactiveSiblings.forEach(function (element) { element.inert = false; }); if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true }); }, 240); }
       function onKey(e) {
+        if (e.key === "Tab" && e.currentTarget === document) {
+          var controls = Array.prototype.filter.call(stage.querySelectorAll('button:not(:disabled), a[href], video[controls], iframe, [tabindex="0"]'), function (element) { return element.getClientRects().length && getComputedStyle(element).visibility !== "hidden" && (!element.closest("[data-pjp-panel]") || presenting); });
+          if (!controls.length) { e.preventDefault(); stage.focus(); return; }
+          var focused = controls.indexOf(document.activeElement);
+          if (focused < 0 || (!e.shiftKey && focused === controls.length - 1) || (e.shiftKey && focused === 0)) { e.preventDefault(); controls[e.shiftKey ? controls.length - 1 : 0].focus(); }
+          return;
+        }
+        if (e.target && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) return;
+        if (e.key === " " && e.target && e.target.closest("button, a, video")) return;
         if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); go(1); }
         else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
         else if (e.key === "Escape") { e.preventDefault(); exit(); }

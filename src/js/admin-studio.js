@@ -545,6 +545,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   function histRestore(idx) {
     if (idx < 0 || idx >= histStack.length) return;
+    clearTimeout(saveTimer);
+    freeSel = null;
     histIndex = idx; histRestoring = true;
     try { data = JSON.parse(histStack[idx]); } catch (e) {}
     histRerender();
@@ -553,7 +555,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     histRestoring = false;
     updateDirtyUI();
   }
-  function histUndo() { if (histIndex > 0) histRestore(histIndex - 1); }
+  function histUndo() { histPush(); if (histIndex > 0) histRestore(histIndex - 1); }
   function histRedo() { if (histIndex < histStack.length - 1) histRestore(histIndex + 1); }
   // Keyboard undo/redo for the whole studio. Inside a text field / rich-text body the browser's own
   // fine-grained undo wins; anywhere else (block moves, toggles, deletes\u2026) we step the data snapshots.
@@ -570,7 +572,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var k = (e.key || "").toLowerCase();
     if (k !== "z" && k !== "y") return;
     if (!document.documentElement.classList.contains("adm-lock")) return;   // studio isn't the active surface
-    if (document.querySelector(".pass, .rbz")) return;                      // a dialog / r\u00e9sum\u00e9 builder owns undo
+    if (document.querySelector(".pass, .rbz, .pjp")) return;
     if (histNativeTarget(e.target)) return;                                 // let the focused field's native undo win
     e.preventDefault();
     if (k === "y" || e.shiftKey) histRedo(); else histUndo();
@@ -578,7 +580,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   function updateHistUI() {
     if (!root) return;
     var dirty = isDirty();
-    var wrap = root.querySelector("[data-hist]"); if (wrap) wrap.hidden = !dirty;   // whole undo/redo cluster hides once you're back at the published baseline
+    var wrap = root.querySelector("[data-hist]"); if (wrap) wrap.hidden = !dirty && histStack.length < 2;
     var u = root.querySelector("[data-undo]"); if (u) u.disabled = histIndex <= 0;
     var r = root.querySelector("[data-redo]"); if (r) r.disabled = histIndex >= histStack.length - 1;
   }
@@ -6413,6 +6415,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         box.style.width = Math.round(w) + "px";
         box.style.height = Math.round(720 * scF) + "px";
         stage.style.transform = "scale(" + scF + ")";
+        stage.style.setProperty("--slide-scale", scF);
         return;
       }
       var sc = box.clientWidth / 1280; if (!sc) return;
@@ -6551,6 +6554,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       '<span class="slides__canvas-count">Slide ' + (sel + 1) + " of " + slides.length + "</span>" +
       (s.hidden ? '<button class="btn btn--ghost slides__canvas-skip" data-act="slide-hide" data-index="' + i + '" data-sindex="' + sel + '">' + IC.eyeoff + " Skipped \u2014 include</button>" : "") +
       '<span class="slides__canvas-right">' +
+      '<button class="btn btn--ghost" data-act="slide-rehearse" data-index="' + i + '" data-sindex="' + sel + '"' + (s.hidden ? ' disabled title="Include this slide to rehearse from here"' : '') + '>' + IC.play + " Rehearse from here</button>" +
       (s.layout === "free" ? '<button class="btn btn--ghost slides__savelay" data-act="slide-savelayout" data-index="' + i + '" data-sindex="' + sel + '" title="Save this arrangement as a reusable layout">' + IC.save + " Save as layout</button>" : "") +
       '<span class="slides__canvas-nav"><button class="iconbtn" data-act="slide-goprev" data-index="' + i + '"' + (sel === 0 ? " disabled" : "") + ' title="Previous slide">' + IC.up + '</button><button class="iconbtn" data-act="slide-gonext" data-index="' + i + '"' + (sel === slides.length - 1 ? " disabled" : "") + ' title="Next slide">' + IC.down + "</button></span></span></div>";
   }
@@ -6624,10 +6628,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var stage = root && root.querySelector("[data-slidestage]");
     var vwrap = root && root.querySelector("[data-slideview-wrap]");
     var active = openStudy >= 0 && l2Tab === "slides" && !!(data.work[openStudy]);
+    if (!active || slideView === "all" || !freeSelOn(openStudy, openSlide)) freeSel = null;
     if (root) root.classList.toggle("is-slidestage", active);
     if (vwrap) vwrap.hidden = !active;
     var _ntb = root && root.querySelector("[data-newtab]");   // in slideshow this button rehearses the deck (contextual)
-    if (_ntb && !_ntb.classList.contains("is-visit")) { _ntb.title = active ? "Rehearse the slideshow" : "Open live preview in a new tab"; _ntb.setAttribute("aria-label", active ? "Rehearse the slideshow" : "Open live preview in a new tab"); }
+    if (_ntb && !_ntb.classList.contains("is-visit")) { _ntb.title = active ? "Rehearse from beginning" : "Open live preview in a new tab"; _ntb.setAttribute("aria-label", _ntb.title); }
     if (!stage) return;
     if (!active) { stage.hidden = true; stage.innerHTML = ""; return; }
     stage.hidden = false;
@@ -6645,6 +6650,8 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     } else {
       stage.innerHTML = slideCanvasPane(openStudy, sel, slides);
     }
+    var canvas = stage.querySelector("[data-freestage]");
+    if (canvas) { canvas.tabIndex = 0; canvas.setAttribute("aria-label", "Slide canvas"); }
     slidePvFit();
   }
   // Shared RIGHT pane (.adm__casestage): the case-study section editor (Story tab) OR the slide
@@ -6666,6 +6673,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!slides0.length) propsBody = '<div class="slides__props-head">Slide</div><div class="slides__props-empty">No slides yet. Use <b>Add a slide</b> or <b>Draft with AI</b> on the left to start building your deck.</div>';
     else { var sel = (openSlide >= 0 && slides0[openSlide]) ? openSlide : 0; propsBody = slidePropsPanel(openStudy, sel, slides0[sel] || {}); }
     stage.innerHTML = '<aside class="slides__props">' + propsBody + "</aside>";
+    stage.setAttribute("aria-label", "Slide inspector");
+    var lockedSelection = freeSelOn(openStudy, openSlide) && freeSel.ids.some(function (index) { return freeSel.blocks[index] && freeSel.blocks[index].lock; });
+    if (lockedSelection) stage.querySelectorAll('[data-act="free-align"], [data-act="free-distribute"], [data-act="free-matchsize"], [data-act="free-fill"]').forEach(function (button) { button.disabled = true; button.title = "Unlock the selection to change its geometry"; });
+    if (lockedSelection && freeSel.ids.length === 1) stage.querySelectorAll('[data-freefield="x"], [data-freefield="y"], [data-freefield="w"], [data-freefield="h"], [data-freefield="rot"], [data-act="free-arlock"]').forEach(function (field) { field.disabled = true; });
   }
   function slidePullPicker(i, k) {
     var w = data.work[i]; if (!w || !w.study) return;
@@ -7042,10 +7053,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   var FREE_HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
   function fnum(v, d) { var n = parseFloat(v); return isFinite(n) ? Math.max(0, Math.min(100, n)) : d; }
   function slideBlocks(i, k) { var s = data.work[i] && data.work[i].study && data.work[i].study.slides && data.work[i].study.slides[k]; return s ? (s.blocks || (s.blocks = [])) : null; }
-  function freeSelOn(i, k) { return !!(freeSel && freeSel.i === i && freeSel.k === k && freeSel.ids && freeSel.ids.length); }
+  function freeSelOn(i, k) { return !!(freeSel && freeSel.i === i && freeSel.k === k && freeSel.blocks === slideBlocks(i, k) && freeSel.ids && freeSel.ids.length); }
   function freeSelHas(idx) { return !!(freeSel && freeSel.ids && freeSel.ids.indexOf(idx) >= 0); }
   function freeSelOne() { return (freeSel && freeSel.ids && freeSel.ids.length === 1) ? freeSel.ids[0] : -1; }
-  function freeSelSet(i, k, ids) { freeSel = { i: i, k: k, ids: ids.slice() }; }
+  function freeSelSet(i, k, ids) { freeSel = { i: i, k: k, ids: ids.slice(), blocks: slideBlocks(i, k) }; }
   // Grouping is an editor-only concept: grouped blocks share a `g` id; render/present ignore it.
   function freeNewGroupId() { return "g" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   function freeExpandToGroups(blocks, ids) {
@@ -7330,11 +7341,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (freeSelOn(i, k)) {
       return '<div class="slides__props-head">Properties</div>' +
         freeSelPanel(i, k) +
-        slideTransRow(i, k, s);
+        freeLayersPanel(i, k) + slideTransRow(i, k, s);
     }
     return '<div class="slides__props-head">Slide</div>' +
       '<div class="fpanel fpanel--slide">' + slideLayoutSection(i, k, s) + slideBgSection(i, k, s) + '</div>' +
-      slideTransRow(i, k, s) +
+      freeLayersPanel(i, k) + slideTransRow(i, k, s) +
       '<div class="af__hint slides__props-tip">Nothing selected. Click an element on the canvas to format it \u2014 or use the toolbar below the slide to add content.</div>';
   }
   function slideTransRow(i, k, s) {
@@ -7464,7 +7475,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   // Position section — X/Y, W/H (with a chain-link aspect toggle for ratio-lockable kinds), rotation + optional corner.
   function freePosSection(i, k, idx, bl, withCorner) {
-    var r = function (v) { return Math.round(v * 10) / 10; };
+    var r = function (v) { return Math.round(v * 1000) / 1000; };
     var xy = '<div class="fgrid2">' + ffield("X", ffnum("x", i, k, idx, r(fnum(bl.x, 8)), ' min="0" max="100" step="0.5"'), "X position (%)") + ffield("Y", ffnum("y", i, k, idx, r(fnum(bl.y, 8)), ' min="0" max="100" step="0.5"'), "Y position (%)") + "</div>";
     var canRatio = bl.kind === "media" || bl.kind === "section" || bl.kind === "shape";
     var wIn = ffield("W", ffnum("w", i, k, idx, r(fnum(bl.w, 40)), ' min="0" max="100" step="0.5"'), "Width (%)");
@@ -7586,10 +7597,14 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (!root) return;
     var stage = root.querySelector('[data-freestage="' + i + ":" + k + '"]');
     if (stage) { stage.innerHTML = freeStageHtml(i, k); slidePvFit(); }
+    var slide = data.work[i] && data.work[i].study && data.work[i].study.slides[k];
+    if (slide) root.querySelectorAll('.slides__navitem[data-sindex="' + k + '"] .slides__thumbpv, .slides__allcard[data-sindex="' + k + '"] .slides__thumbpv').forEach(function (preview) { preview.innerHTML = slideThumbInner(i, slide, k); });
+    slidePvFit();
   }
   function onFreeFieldEdit(t) {
     var bl = freeBlk(t); if (!bl) return;
     var f = t.dataset.freefield;
+    if (bl.lock && /^(x|y|w|h|rot)$/.test(f)) { t.value = bl[f] == null ? "" : bl[f]; return; }
     if (f === "src") bl.src = String(t.value || "").trim();
     else if (f === "rot") { var n = parseFloat(t.value); bl.rot = isFinite(n) ? ((Math.round(n) % 360) + 360) % 360 : 0; }
     else if (f === "strokeW" || f === "radius") { var m = parseFloat(t.value); bl[f] = isFinite(m) ? Math.max(0, m) : 0; }
@@ -7641,10 +7656,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var meta = freeStageMeta(e.target); if (!meta) return;
     var blkEl = e.target.closest && e.target.closest(".sfb[data-fb]"); if (!blkEl) return;
     var idx = +blkEl.getAttribute("data-fb"), bl = (slideBlocks(meta.i, meta.k) || [])[idx];
-    if (!freeEditing && bl && bl.kind === "text" && !bl.lock) { e.preventDefault(); freeStartEdit(meta.i, meta.k, idx); }
+    if (!freeEditing && bl && bl.kind === "text" && !bl.lock) { e.preventDefault(); freeStartEdit(meta.i, meta.k, idx, e); }
   }
   // Inline text editing: double-click a text block to edit it in place (contenteditable) instead of the side panel.
-  function freeStartEdit(i, k, idx) {
+  function freeStartEdit(i, k, idx, point) {
     var blocks = slideBlocks(i, k), bl = blocks && blocks[idx];
     if (!bl || bl.kind !== "text" || bl.lock) return;
     if (freeEditing) freeCommitEdit();
@@ -7659,19 +7674,26 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     tx.addEventListener("blur", freeCommitEdit);
     tx.addEventListener("keydown", freeEditKey);
     tx.focus();
-    try { var rg = document.createRange(); rg.selectNodeContents(tx); var sl = window.getSelection(); sl.removeAllRanges(); sl.addRange(rg); } catch (err) {}
+    try {
+      var range = null;
+      if (point && document.caretPositionFromPoint) { var caret = document.caretPositionFromPoint(point.clientX, point.clientY); if (caret && tx.contains(caret.offsetNode)) { range = document.createRange(); range.setStart(caret.offsetNode, caret.offset); range.collapse(true); } }
+      else if (point && document.caretRangeFromPoint) { var hit = document.caretRangeFromPoint(point.clientX, point.clientY); if (hit && tx.contains(hit.startContainer)) range = hit; }
+      if (!range) { range = document.createRange(); range.selectNodeContents(tx); range.collapse(false); }
+      var selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    } catch (err) {}
   }
   function freeEditKey(e) {
     e.stopPropagation();
     if (e.key === "Escape" || ((e.ctrlKey || e.metaKey) && e.key === "Enter")) { e.preventDefault(); freeCommitEdit(); }
   }
-  function freeCommitEdit() {
+  function freeCommitEdit(refresh) {
     var ed = freeEditing; if (!ed) return; freeEditing = null;
     var tx = ed.el; tx.removeEventListener("blur", freeCommitEdit); tx.removeEventListener("keydown", freeEditKey);
     tx.removeAttribute("contenteditable");
+    tx.closest(".sfb").classList.remove("is-editing");
     var blocks = slideBlocks(ed.i, ed.k), bl = blocks && blocks[ed.idx];
     if (bl) { var html = rtClean(tx.innerHTML).trim(); if (/^(\s|<br\s*\/?>|&nbsp;)*$/i.test(html)) html = ""; bl.text = html; saveDraft(true); }
-    if (openStudy >= 0) renderL2();
+    if (openStudy >= 0 && refresh !== false) renderL2();
   }
   // Right-click context menu on the canvas — mirrors the common block actions at the cursor.
   var freeCtxEl = null;
@@ -7710,7 +7732,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var ids = (freeSelOn(i, k) && freeSel.ids.length) ? freeSel.ids.slice() : (idx >= 0 ? [idx] : []);
     var clone = function (x) { return JSON.parse(JSON.stringify(x)); };
     if (act === "copy") { if (!ids.length) return; freeClipboard = ids.map(function (x) { return blocks[x]; }).filter(Boolean).map(clone); status(freeClipboard.length + (freeClipboard.length === 1 ? " block copied." : " blocks copied."), true); return; }
-    if (act === "cut") { if (!ids.length) return; freeClipboard = ids.map(function (x) { return blocks[x]; }).filter(Boolean).map(clone); ids.slice().sort(function (a, c) { return c - a; }).forEach(function (x) { blocks.splice(x, 1); }); freeSel = null; freeCleanGroups(blocks); saveDraft(true); renderL2(); return; }
+    if (act === "cut") { ids = ids.filter(function (index) { return blocks[index] && !blocks[index].lock; }); if (!ids.length) return; freeClipboard = ids.map(function (x) { return blocks[x]; }).filter(Boolean).map(clone); ids.slice().sort(function (a, c) { return c - a; }).forEach(function (x) { blocks.splice(x, 1); }); freeSel = null; freeCleanGroups(blocks); saveDraft(true); renderL2(); return; }
     if (act === "paste") { if (!freeClipboard || !freeClipboard.length) return; var pa = [], pd = []; freeClipboard.forEach(function (b) { var cp = clone(b); cp.x = Math.min(100, fnum(b.x, 8) + 3); cp.y = Math.min(100, fnum(b.y, 8) + 3); blocks.push(cp); pd.push(cp); pa.push(blocks.length - 1); }); freeReidGroups(pd); freeSelSet(i, k, pa); saveDraft(true); renderL2(); return; }
     if (act === "dup") { if (!ids.length) return; var da = [], dd = []; ids.forEach(function (x) { var b = blocks[x]; if (!b) return; var cp = clone(b); cp.x = Math.min(100, fnum(b.x, 8) + 2); cp.y = Math.min(100, fnum(b.y, 8) + 2); blocks.push(cp); dd.push(cp); da.push(blocks.length - 1); }); freeReidGroups(dd); freeSelSet(i, k, da); saveDraft(true); renderL2(); return; }
     if (act === "del") { if (!ids.length) return; ids.filter(function (x) { return blocks[x] && !blocks[x].lock; }).slice().sort(function (a, c) { return c - a; }).forEach(function (x) { blocks.splice(x, 1); }); freeSel = null; freeCleanGroups(blocks); saveDraft(true); renderL2(); return; }
@@ -7741,7 +7763,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     imgs.forEach(function (f, n) { freeDropImage(meta.i, meta.k, f, xp + n * 3, yp + n * 3); });
   }
   function onFreePaste(e) {
-    if (openStudy < 0 || l2Tab !== "slides" || freeEditing) return;
+    if (openStudy < 0 || l2Tab !== "slides" || slideView === "all" || freeEditing || document.querySelector(".pass, .rbz, .pjp")) return;
     var tag = (e.target && e.target.tagName) || "";
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || (e.target && e.target.isContentEditable)) return;
     var items = e.clipboardData && e.clipboardData.items; if (!items) return;
@@ -7778,10 +7800,28 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     freeCheatEl = el;
     el.addEventListener("click", function (ev) { if (ev.target === el || (ev.target.closest && ev.target.closest(".fcheat__x"))) freeCheatToggle(); });
   }
-  function bindFreeMove() { window.addEventListener("pointermove", onFreeMove); window.addEventListener("pointerup", onFreeUp, { once: true }); }
+  function bindFreeMove() {
+    histPush();
+    freeDrag.original = JSON.parse(JSON.stringify(slideBlocks(freeDrag.i, freeDrag.k) || []));
+    window.addEventListener("pointermove", onFreeMove);
+    window.addEventListener("pointerup", onFreeUp, { once: true });
+    window.addEventListener("pointercancel", freeCancelDrag, { once: true });
+  }
+  function freeCancelDrag() {
+    var drag = freeDrag; if (!drag) return;
+    freeDrag = null;
+    window.removeEventListener("pointermove", onFreeMove);
+    window.removeEventListener("pointerup", onFreeUp);
+    window.removeEventListener("pointercancel", freeCancelDrag);
+    if (drag.raf) cancelAnimationFrame(drag.raf);
+    var blocks = slideBlocks(drag.i, drag.k);
+    if (blocks && drag.original) blocks.splice.apply(blocks, [0, blocks.length].concat(drag.original));
+    freeLastDown = null;
+    renderL2();
+  }
   function onFreeDown(e) {
     if (e.button != null && e.button !== 0) return;
-    if (freeEditing) { if (e.target === freeEditing.el || (freeEditing.el.contains && freeEditing.el.contains(e.target))) return; freeCommitEdit(); return; }
+    if (freeEditing) { if (e.target === freeEditing.el || (freeEditing.el.contains && freeEditing.el.contains(e.target))) return; freeCommitEdit(false); }
     if (e.target.closest("button")) return; // placeholder insert-cluster buttons receive their own clicks (no drag)
     var _rlEl = e.target.closest("[data-fbruler]"), _gdEl = e.target.closest("[data-fbguide]");
     if (_rlEl || _gdEl) { freeGuideStart(_rlEl || _gdEl, e, !!_rlEl); return; }
@@ -7791,16 +7831,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return;
     }
     var i = meta.i, k = meta.k, sw = meta.rect.width || 1, sh = meta.rect.height || 1;
+    meta.stage.focus({ preventScroll: true });
     var handleEl = e.target.closest("[data-fbh]"), rotEl = e.target.closest("[data-fbrot]"), blkEl = e.target.closest(".sfb[data-fb]");
     if (blkEl && handleEl) {
-      var hidx = +blkEl.getAttribute("data-fb"), hbl = (slideBlocks(i, k) || [])[hidx]; if (!hbl) return;
-      var hnd = handleEl.getAttribute("data-fbh"), h0px = (hbl.h != null) ? fnum(hbl.h, 20) / 100 * sh : blkEl.offsetHeight;
+      var hidx = +blkEl.getAttribute("data-fb"), hbl = (slideBlocks(i, k) || [])[hidx]; if (!hbl || hbl.lock) return;
+      var hnd = handleEl.getAttribute("data-fbh"), h0px = (hbl.h != null) ? fnum(hbl.h, 20) / 100 * sh : blkEl.offsetHeight * sh / (meta.stage.offsetHeight || sh);
       freeDrag = { mode: "resize", i: i, k: k, sw: sw, sh: sh, el: blkEl, bl: hbl, handle: hnd, sx: e.clientX, sy: e.clientY, setH: /[ns]/.test(hnd), rot: parseFloat(hbl.rot) || 0, R: { x: fnum(hbl.x, 8) / 100 * sw, y: fnum(hbl.y, 8) / 100 * sh, w: fnum(hbl.w, 40) / 100 * sw, h: h0px }, stage: meta.stage, moved: false };
       if (!freeDrag.rot) { var _rt = freeSnapTargetsPx(meta.stage, meta, hidx, sw, sh, i, k); freeDrag.snapPxX = _rt.x; freeDrag.snapPxY = _rt.y; }
       bindFreeMove(); e.preventDefault(); return;
     }
     if (blkEl && rotEl) {
-      var ridx = +blkEl.getAttribute("data-fb"), rbl = (slideBlocks(i, k) || [])[ridx]; if (!rbl) return;
+      var ridx = +blkEl.getAttribute("data-fb"), rbl = (slideBlocks(i, k) || [])[ridx]; if (!rbl || rbl.lock) return;
       var br = blkEl.getBoundingClientRect(), ccx = br.left + br.width / 2, ccy = br.top + br.height / 2;
       freeDrag = { mode: "rotate", i: i, k: k, el: blkEl, bl: rbl, cx: ccx, cy: ccy, startAng: Math.atan2(e.clientY - ccy, e.clientX - ccx) * 180 / Math.PI, startRot: parseFloat(rbl.rot) || 0, moved: false };
       blkEl.style.willChange = "transform";
@@ -7810,7 +7851,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var midx = +blkEl.getAttribute("data-fb");
       var blocks = slideBlocks(i, k) || [];
       var _mbl = blocks[midx], _now = Date.now();
-      if (freeLastDown && freeLastDown.i === i && freeLastDown.k === k && freeLastDown.idx === midx && (_now - freeLastDown.t) < 450 && _mbl && _mbl.kind === "text" && !_mbl.lock) { freeLastDown = null; e.preventDefault(); freeStartEdit(i, k, midx); return; }
+      if (freeLastDown && freeLastDown.i === i && freeLastDown.k === k && freeLastDown.idx === midx && (_now - freeLastDown.t) < 450 && _mbl && _mbl.kind === "text" && !_mbl.lock) { freeLastDown = null; e.preventDefault(); freeStartEdit(i, k, midx, e); return; }
       freeLastDown = { i: i, k: k, idx: midx, t: _now };
       if (blocks[midx] && blocks[midx].lock && !e.shiftKey) { if (!freeSelHas(midx) || !freeSelOn(i, k)) { freeSelSet(i, k, [midx]); renderL2(); } e.preventDefault(); return; }
       if (e.shiftKey) {
@@ -7819,11 +7860,11 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         var allIn = grp.every(function (x) { return ids.indexOf(x) >= 0; });
         if (allIn) ids = ids.filter(function (x) { return grp.indexOf(x) < 0; });
         else grp.forEach(function (x) { if (ids.indexOf(x) < 0) ids.push(x); });
-        freeSelSet(i, k, ids.length ? ids : grp); renderL2(); return;
+        freeSelSet(i, k, ids); renderL2(); return;
       }
       if (!freeSelHas(midx) || !freeSelOn(i, k)) freeSelSet(i, k, freeExpandToGroups(blocks, [midx]));
       var stageEl = meta.stage;
-      freeDrag = { mode: "move", i: i, k: k, sw: sw, sh: sh, sx: e.clientX, sy: e.clientY, moved: false, altDup: !!(e.altKey && !e.shiftKey), stage: stageEl, usw: stageEl.offsetWidth || sw, ush: stageEl.offsetHeight || sh, items: freeSel.ids.map(function (ix) { var b = blocks[ix]; if (!b) return null; var el = stageEl.querySelector('.sfb[data-fb="' + ix + '"]'); if (el) el.style.willChange = "transform"; return { bl: b, el: el, ox: fnum(b.x, 8), oy: fnum(b.y, 8), nx: fnum(b.x, 8), ny: fnum(b.y, 8), rotTf: (parseFloat(b.rot) ? " rotate(" + (parseFloat(b.rot) || 0) + "deg)" : "") }; }).filter(Boolean) };
+      freeDrag = { mode: "move", i: i, k: k, sw: sw, sh: sh, sx: e.clientX, sy: e.clientY, moved: false, altDup: !!(e.altKey && !e.shiftKey), stage: stageEl, usw: stageEl.offsetWidth || sw, ush: stageEl.offsetHeight || sh, items: freeSel.ids.map(function (ix) { var b = blocks[ix]; if (!b || b.lock) return null; var el = stageEl.querySelector('.sfb[data-fb="' + ix + '"]'); if (el) el.style.willChange = "transform"; return { bl: b, el: el, ox: fnum(b.x, 8), oy: fnum(b.y, 8), nx: fnum(b.x, 8), ny: fnum(b.y, 8), rotTf: (parseFloat(b.rot) ? " rotate(" + (parseFloat(b.rot) || 0) + "deg)" : "") }; }).filter(Boolean) };
       if (freeDrag.items.length === 1) {
         var mel = freeDrag.items[0].el, mr = mel ? mel.getBoundingClientRect() : null;
         freeDrag.mw = mr ? mr.width / sw * 100 : fnum(freeDrag.items[0].bl.w, 40);
@@ -7866,6 +7907,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
         freeSpacing(d.stage, space ? space.bars : null, d.sw, d.sh);
       } else {
         freeGuides(d.stage, null, null); freeSpacing(d.stage, null, d.sw, d.sh);
+        if (d.items.length) {
+          pdx = Math.max(-Math.min.apply(null, d.items.map(function (item) { return item.ox; })), Math.min(100 - Math.max.apply(null, d.items.map(function (item) { return item.ox; })), pdx));
+          pdy = Math.max(-Math.min.apply(null, d.items.map(function (item) { return item.oy; })), Math.min(100 - Math.max.apply(null, d.items.map(function (item) { return item.oy; })), pdy));
+        }
         d.items.forEach(function (it) {
           it.nx = Math.round(Math.max(0, Math.min(100, it.ox + pdx)) * 10) / 10;
           it.ny = Math.round(Math.max(0, Math.min(100, it.oy + pdy)) * 10) / 10;
@@ -7900,8 +7945,10 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   function onFreeUp() {
     window.removeEventListener("pointermove", onFreeMove);
-    var d = freeDrag; freeDrag = null; if (!d) return;
-    if (d.raf) { cancelAnimationFrame(d.raf); d.raf = 0; }
+    window.removeEventListener("pointercancel", freeCancelDrag);
+    var d = freeDrag; if (!d) return;
+    if (d.raf) { cancelAnimationFrame(d.raf); d.raf = 0; freeFrame(); }
+    freeDrag = null;
     if (d.mode === "guide") {
       if (d.creating) { if (d.el && d.el.parentNode) d.el.remove(); if (d.moved && !d.off) { var _ga = freeGuidesGet(d.i)[d.axis]; if (_ga.indexOf(d.pct) < 0) _ga.push(d.pct); } }
       else { var _gg = freeGuidesGet(d.i); if (d.off) _gg[d.axis].splice(d.gi, 1); else if (d.moved) _gg[d.axis][d.gi] = d.pct; if (d.el) d.el.classList.remove("sfb__gd--live", "sfb__gd--del"); }
@@ -7926,9 +7973,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     else renderL2();
   }
   function onFreeKey(e) {
-    if (openStudy < 0 || l2Tab !== "slides") return;
+    if (openStudy < 0 || l2Tab !== "slides" || slideView === "all" || document.querySelector(".pass, .rbz, .pjp")) return;
+    if (e.key === "Escape" && freeDrag) { e.preventDefault(); freeCancelDrag(); return; }
+    if (freeCheatEl) { if (e.key === "Escape") { e.preventDefault(); freeCheatToggle(); } return; }
     var tag = (e.target && e.target.tagName) || "";
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || (e.target && e.target.isContentEditable)) return;
+    if (!e.target.closest || !e.target.closest("[data-freestage]")) return;
     if ((e.ctrlKey || e.metaKey) && (e.key === "v" || e.key === "V")) {
       if (!freeClipboard || !freeClipboard.length) return;
       var pi = openStudy, pk = openSlide, ps = data.work[pi] && data.work[pi].study && data.work[pi].study.slides && data.work[pi].study.slides[pk];
@@ -7946,8 +7996,9 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (e.key === "?" || (e.shiftKey && e.key === "/")) { e.preventDefault(); freeCheatToggle(); return; }
     if (e.key === "Escape" && freeCheatEl) { e.preventDefault(); freeCheatToggle(); return; }
     if (fbl && fbl.length && (e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) { e.preventDefault(); freeSelSet(fpi, fpk, fbl.map(function (_, x) { return x; })); renderL2(); return; }
+    if (e.key === "Tab" && !freeSelOn(fpi, fpk)) return;
     if (fbl && fbl.length && e.key === "Tab") { e.preventDefault(); var cur = (freeSel && freeSelOn(fpi, fpk) && freeSel.ids.length) ? freeSel.ids[freeSel.ids.length - 1] : -1; var nxt = e.shiftKey ? (cur <= 0 ? fbl.length - 1 : cur - 1) : (cur < 0 || cur >= fbl.length - 1 ? 0 : cur + 1); freeSelSet(fpi, fpk, freeExpandToGroups(fbl, [nxt])); renderL2(); return; }
-    if (!freeSel || !freeSel.ids || !freeSel.ids.length) return;
+    if (!freeSelOn(openStudy, openSlide) || !freeSel.ids.length) return;
     var i = freeSel.i, k = freeSel.k, blocks = slideBlocks(i, k) || [];
     if ((e.ctrlKey || e.metaKey) && (e.key === "g" || e.key === "G")) {
       e.preventDefault();
@@ -7956,7 +8007,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       return;
     }
     if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) { e.preventDefault(); freeClipboard = freeSel.ids.map(function (ix) { return blocks[ix]; }).filter(Boolean).map(function (b) { return JSON.parse(JSON.stringify(b)); }); status(freeClipboard.length + (freeClipboard.length === 1 ? " block copied" : " blocks copied") + " \u2014 paste on any slide.", true); return; }
-    if ((e.ctrlKey || e.metaKey) && (e.key === "x" || e.key === "X")) { e.preventDefault(); freeClipboard = freeSel.ids.map(function (ix) { return blocks[ix]; }).filter(Boolean).map(function (b) { return JSON.parse(JSON.stringify(b)); }); freeSel.ids.slice().sort(function (a, b) { return b - a; }).forEach(function (ix) { blocks.splice(ix, 1); }); freeSel = null; freeCleanGroups(blocks); saveDraft(true); renderL2(); status("Cut \u2014 paste on any slide.", true); return; }
+    if ((e.ctrlKey || e.metaKey) && (e.key === "x" || e.key === "X")) { e.preventDefault(); freeCtxRun("cut", i, k, freeSel.ids[0]); return; }
     if (e.key === "Escape") { freeSel = null; renderL2(); return; }
     if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); freeSel.ids.filter(function (ix) { return blocks[ix] && !blocks[ix].lock; }).slice().sort(function (a, b) { return b - a; }).forEach(function (ix) { blocks.splice(ix, 1); }); freeSel = null; freeCleanGroups(blocks); saveDraft(true); renderL2(); return; }
     if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) { e.preventDefault(); var add = [], _dup = []; freeSel.ids.forEach(function (ix) { var b = blocks[ix]; if (!b) return; var cp = JSON.parse(JSON.stringify(b)); cp.x = Math.min(100, fnum(b.x, 8) + 2); cp.y = Math.min(100, fnum(b.y, 8) + 2); blocks.push(cp); _dup.push(cp); add.push(blocks.length - 1); }); freeReidGroups(_dup); if (add.length) freeSelSet(i, k, add); saveDraft(true); renderL2(); return; }
@@ -7979,11 +8030,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       saveDraft(true); renderL2(); status("Opacity " + op + "%", true); return;
     }
     if (/^Arrow/.test(e.key)) {
-      var step = e.shiftKey ? 5 : 0.5, dx = 0, dy = 0;
-      if (e.key === "ArrowLeft") dx = -step; else if (e.key === "ArrowRight") dx = step; else if (e.key === "ArrowUp") dy = -step; else if (e.key === "ArrowDown") dy = step; else return;
+      var step = e.shiftKey ? 10 : 1, dx = 0, dy = 0;
+      if (e.key === "ArrowLeft") dx = -step / 1280 * 100; else if (e.key === "ArrowRight") dx = step / 1280 * 100; else if (e.key === "ArrowUp") dy = -step / 720 * 100; else if (e.key === "ArrowDown") dy = step / 720 * 100; else return;
       e.preventDefault();
-      freeSel.ids.forEach(function (ix) { var b = blocks[ix]; if (!b || b.lock) return; b.x = Math.round(Math.max(0, Math.min(100, fnum(b.x, 8) + dx)) * 10) / 10; b.y = Math.round(Math.max(0, Math.min(100, fnum(b.y, 8) + dy)) * 10) / 10; });
-      saveDraft(); freePvRefresh(i, k); return;
+      histPush();
+      freeSel.ids.forEach(function (ix) { var b = blocks[ix]; if (!b || b.lock) return; b.x = Math.max(0, Math.min(100, fnum(b.x, 8) + dx)); b.y = Math.max(0, Math.min(100, fnum(b.y, 8) + dy)); });
+      saveDraft(true); renderL2(); return;
     }
   }
   function caseEditorHtml(w, i) {
@@ -10349,11 +10401,17 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   function renderL2() {
     if (openStudy < 0 || !data.work[openStudy]) return;
+    var slides = data.work[openStudy].study && data.work[openStudy].study.slides;
+    if (l2Tab === "slides" && slides && slides.length && !slides[openSlide]) openSlide = 0;
+    var canvasFocused = document.activeElement && document.activeElement.closest("[data-freestage]");
+    if (l2Tab !== "slides" || slideView === "all" || !freeSelOn(openStudy, openSlide)) freeSel = null;
     const w = data.work[openStudy];
     l2body.innerHTML = studyEditor(w, openStudy);
     paintL2Tabs();
     renderCaseStage();
     renderSlideStage();
+    var canvas = root.querySelector("[data-freestage]");
+    if (canvas) { canvas.tabIndex = 0; canvas.setAttribute("aria-label", "Slide canvas"); if (canvasFocused) canvas.focus({ preventScroll: true }); }
     if (l2title) l2title.textContent = w.client || w.title || "Case study";
     resolveMediaSizes(l2body);
     slidePvSetup();
@@ -11481,7 +11539,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "slide-remove") { var _srw = data.work[i], srk = +b.dataset.sindex, srs = _srw && _srw.study && _srw.study.slides; if (!srs) return; srs.splice(srk, 1); if (openSlide === srk) openSlide = -1; else if (openSlide > srk) openSlide--; saveDraft(true); renderL2(); return; }
     if (act === "slide-up") { var _suw = data.work[i], suk = +b.dataset.sindex, sus = _suw && _suw.study && _suw.study.slides; if (sus && suk > 0) { var _sut = sus[suk - 1]; sus[suk - 1] = sus[suk]; sus[suk] = _sut; if (openSlide === suk) openSlide = suk - 1; else if (openSlide === suk - 1) openSlide = suk; saveDraft(true); renderL2(); } return; }
     if (act === "slide-down") { var _sdw = data.work[i], sdk = +b.dataset.sindex, sds = _sdw && _sdw.study && _sdw.study.slides; if (sds && sdk < sds.length - 1) { var _sdt = sds[sdk + 1]; sds[sdk + 1] = sds[sdk]; sds[sdk] = _sdt; if (openSlide === sdk) openSlide = sdk + 1; else if (openSlide === sdk + 1) openSlide = sdk; saveDraft(true); renderL2(); } return; }
-    if (act === "slide-dup") { var _spw = data.work[i], spk = +b.dataset.sindex, sps = _spw && _spw.study && _spw.study.slides; if (sps && sps[spk]) { var _spsrc = sps[spk]; if (_spsrc.blocks) { for (var _spmi = 0; _spmi < _spsrc.blocks.length; _spmi++) { if (!_spsrc.blocks[_spmi].mid) _spsrc.blocks[_spmi].mid = "m" + Date.now().toString(36) + _spmi + Math.random().toString(36).slice(2, 5); } } var _spc = JSON.parse(JSON.stringify(_spsrc)); _spc.id = "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); if (_spc.transition == null && _spsrc.transition == null) _spc.transition = "magic"; sps.splice(spk + 1, 0, _spc); openSlide = spk + 1; saveDraft(true); renderL2(); status("Slide duplicated \u2014 set to Magic Move so moving things auto-animates.", true); } return; }
+    if (act === "slide-dup") { var _spw = data.work[i], spk = +b.dataset.sindex, sps = _spw && _spw.study && _spw.study.slides; if (sps && sps[spk]) { var _spsrc = sps[spk]; if (_spsrc.blocks) { for (var _spmi = 0; _spmi < _spsrc.blocks.length; _spmi++) { if (!_spsrc.blocks[_spmi].mid) _spsrc.blocks[_spmi].mid = "m" + Date.now().toString(36) + _spmi + Math.random().toString(36).slice(2, 5); } } var _spc = JSON.parse(JSON.stringify(_spsrc)); _spc.id = "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); delete _spc.act; sps.splice(spk + 1, 0, _spc); openSlide = spk + 1; saveDraft(true); renderL2(); status("Slide duplicated \u2014 transition preserved.", true); } return; }
     if (act === "slide-hide") { var _shw = data.work[i], shk = +b.dataset.sindex, shs = _shw && _shw.study && _shw.study.slides; if (shs && shs[shk]) { if (shs[shk].hidden) delete shs[shk].hidden; else shs[shk].hidden = true; saveDraft(true); renderL2(); status(shs[shk].hidden ? "Slide will be skipped in the deck." : "Slide back in the deck.", true); } return; }
     if (act === "slide-bulk-clear") { slideMulti = null; renderL2(); return; }
     if (act === "slide-bulk-dup") { var _bdw = data.work[i], _bds = _bdw && _bdw.study && _bdw.study.slides; if (!_bds || !slideMultiOn(i)) return; var _bids = slideMulti.ids.slice().sort(function (a, c) { return c - a; }); _bids.forEach(function (kk) { var src = _bds[kk]; if (!src) return; if (src.blocks) src.blocks.forEach(function (bb, mi) { if (!bb.mid) bb.mid = "m" + Date.now().toString(36) + mi + Math.random().toString(36).slice(2, 5); }); var cp = JSON.parse(JSON.stringify(src)); cp.id = "sl" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); delete cp.act; _bds.splice(kk + 1, 0, cp); }); slideMulti = null; saveDraft(true); renderL2(); status(_bids.length + " slides duplicated.", true); return; }
@@ -11514,7 +11572,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     if (act === "free-grid") { freeGrid.on = !freeGrid.on; renderL2(); status(freeGrid.on ? "Layout grid on \u2014 blocks snap to the 12 columns." : "Layout grid off.", true); return; }
     if (act === "free-rulers") { freeRulers.on = !freeRulers.on; renderL2(); status(freeRulers.on ? "Rulers on \u2014 drag out from a ruler to drop a guide; blocks snap to guides & the 10% ticks." : "Rulers off.", true); return; }
     if (act === "free-add-media") { var _fam = slideBlocks(i, +b.dataset.sindex); if (_fam) { _fam.push({ kind: "media", x: 10, y: Math.min(74, 12 + _fam.length * 6), w: 40, src: "" }); freeSelSet(i, +b.dataset.sindex, [_fam.length - 1]); saveDraft(true); renderL2(); } return; }
-    if (act === "free-del") { var _fdk = +b.dataset.sindex, _fd = slideBlocks(i, _fdk); if (_fd) { if (freeSelOn(i, _fdk)) { freeSel.ids.slice().sort(function (a, c) { return c - a; }).forEach(function (ix) { _fd.splice(ix, 1); }); } else if (b.dataset.fbi != null) { _fd.splice(+b.dataset.fbi, 1); } freeSel = null; freeCleanGroups(_fd); saveDraft(true); renderL2(); } return; }
+    if (act === "free-del") { freeCtxRun("del", i, +b.dataset.sindex, b.dataset.fbi == null ? -1 : +b.dataset.fbi); return; }
     if (act === "free-z") { var _zk = +b.dataset.sindex, _zb = slideBlocks(i, _zk), _zi = +b.dataset.fbi, _zd = b.dataset.zdir; if (_zb && _zb[_zi]) { var _zmv = _zb.splice(_zi, 1)[0], _zni; if (_zd === "front") { _zb.push(_zmv); _zni = _zb.length - 1; } else if (_zd === "back") { _zb.unshift(_zmv); _zni = 0; } else if (_zd === "forward") { _zni = Math.min(_zb.length, _zi + 1); _zb.splice(_zni, 0, _zmv); } else { _zni = Math.max(0, _zi - 1); _zb.splice(_zni, 0, _zmv); } freeSelSet(i, _zk, [_zni]); saveDraft(true); renderL2(); } return; }
     if (act === "free-media-upload") { var _fu = slideBlocks(i, +b.dataset.sindex), _fub = _fu && _fu[+b.dataset.fbi]; if (!_fub) return; pickMedia(function (uri) { _fub.src = uri; saveDraft(true); renderL2(); }); return; }
     if (act === "free-align") {

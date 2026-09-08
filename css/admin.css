@@ -3082,12 +3082,12 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .slidefree__stage--ro { pointer-events: none; }
 .slidefree__empty--thumb { font-size: 44px; }
 .slides__canvas { border: 1px solid var(--line-soft); border-radius: 14px; background: var(--bg-2); padding: 1rem 1.1rem 1.1rem; box-shadow: 0 2px 8px -4px rgba(0,0,0,.38); }
-.slides__canvas-head { display: flex; align-items: center; gap: .6rem; margin-bottom: .85rem; }
+.slides__canvas-head { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: .85rem; }
 .slides__canvas-badge { font: 600 .58rem/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--accent); border: 1px solid var(--line-soft); border-radius: 100px; padding: .3rem .62rem; }
 .slides__canvas-count { font-size: .72rem; color: var(--text-faint); }
 .slides__canvas-skip { padding: .3rem .7rem; font-size: .68rem; }
 .slides__canvas-nav { display: flex; gap: .2rem; }
-.slides__canvas-right { margin-left: auto; display: flex; align-items: center; gap: .5rem; }
+.slides__canvas-right { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .slides__savelay { padding: .3rem .7rem; font-size: .68rem; }
 .slides__canvas-empty { line-height: 1.5; }
 .slides__canvas-notes { flex: 0 0 auto; margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--line-soft); max-height: 40%; overflow: auto; }
@@ -3303,6 +3303,8 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 .sfb.is-single .sfb__rot { opacity: 1; }
 .sfb__rot::before { content: ""; position: absolute; left: 50%; top: 100%; width: 2px; height: 14px; margin-left: -1px; background: var(--accent); }
 .sfb__rot:active { cursor: grabbing; }
+.sfb__h, .sfb__rot { scale: calc(1 / var(--slide-scale, 1)); }
+.slidefree__stage:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .sfb__marquee { position: absolute; z-index: 20; border: 1px solid var(--accent); background: rgba(216, 166, 87, .12); pointer-events: none; }
 .slidefree__z { display: flex; gap: .35rem; flex-wrap: wrap; margin-top: .2rem; }
 .slidefree__z .btn { flex: 1 1 auto; padding: .3rem .4rem; font-size: .68rem; display: flex; align-items: center; justify-content: center; }
