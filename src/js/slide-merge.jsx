@@ -18,7 +18,8 @@ import { fitPlaceholder } from "./slide-merge-placeholder-fit.mjs";
 import { contentSkeleton, diagramSkeleton } from "./slide-merge-inserts.mjs";
 import { SlideNavigator, DeckDialog, LayoutNameDialog } from "./slide-merge-navigator.jsx";
 import { captureLayout, instantiateLayout, savedLayoutStore } from "./slide-merge-layouts.mjs";
-import { sectionPlan, sectionMediaUrl, sectionPlainText } from "./slide-merge-sections.mjs";
+import { sectionMediaUrl, sectionPlainText } from "./slide-merge-sections.mjs";
+import { sectionComponentPlan } from "./slide-merge-section-component.mjs";
 import { SlideProperties } from "./slide-merge-properties.jsx";
 import { PROPERTY_LAYOUTS, slideSettings, slideOwnsFocus, layoutPlan, transitionMatch } from "./slide-merge-properties.mjs";
 import { guideSnap } from "./slide-merge-guide-core.mjs";
@@ -77,8 +78,20 @@ function FitSlideControl({ api, host, disabled, onFit, mobile }) {
   }, [api, mobile]);
   return !mobile && slot && createPortal(<button className="ToolIcon_type_button ToolIcon_size_medium zoom-button ToolIcon_type_button--show ToolIcon" type="button" title="Fit slide" aria-label="Fit slide" disabled={disabled} onClick={onFit}><div className="ToolIcon__icon"><Icon name="fit" /></div></button>, slot);
 }
+function SectionComponent({ block, icons }) {
+  const frame = useRef(null);
+  const appearance = useAppearance();
+  const send = () => {
+    const styles = getComputedStyle(document.documentElement);
+    const tokens = Object.fromEntries(["--text", "--text-dim", "--text-faint", "--accent", "--bg", "--bg-2", "--line-soft", "--sans", "--serif", "--mono"].map(key => [key, styles.getPropertyValue(key)]));
+    frame.current?.contentWindow?.postMessage({ type: "rk-section-component", block, icons, tokens, appearance }, location.origin);
+  };
+  useEffect(send, [block, icons, appearance]);
+  return <iframe ref={frame} className="lab-embed" title="Case-study section" src="/studio/slide-lab/native.html?fixture=component" allow="fullscreen; autoplay" allowFullScreen onLoad={send} />;
+}
 function Embed({ element }) {
   if (element.customData?.labLayerHidden) return null;
+  if (element.customData?.sectionComponent) return <SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} />;
   const video = element.customData?.sectionVideo;
   if (video && sectionMediaUrl(video)) return <video className="lab-embed" src={video} controls playsInline preload="metadata" />;
   const kind = element.customData?.fixture;
@@ -94,7 +107,7 @@ function CanvasVideo({api}) {
 }
 function sceneBackground() { return "transparent"; }
 function changed(element, update) { return { ...element, ...update, version: element.version + 1, versionNonce: Math.floor(Math.random()*2147483647), updated: Date.now() }; }
-function validEmbed(link) { return /^https:\/\/slide-lab\.invalid\/(rich|section|video|background|section-video)$/.test(link); }
+function validEmbed(link) { return /^https:\/\/slide-lab\.invalid\/(rich|section|video|background|section-video|section-component)$/.test(link); }
 
 async function materialize(slide) {
   if (slide.scene) return slide;
@@ -398,34 +411,20 @@ function Merger() {
   }
   function saveSection(id, name) { return run(async () => { if (!live.current.editing) return; await save(); paint(setSlideSection(live.current.deck, id, name)); await save(); }); }
   function reorder(id, targetId, kind, edge) { return run(async () => { if (!live.current.editing) return; await save(); paint(reorderSlides(live.current.deck, id, targetId, kind, edge)); await save(); }); }
-  async function prepareSection(block) {
-    const plan = sectionPlan(block, sectionPlainText, DEFAULT_SLIDE_FONT, crypto.randomUUID());
+  async function prepareSection(block, resources) {
+    const plan = sectionComponentPlan(block, sectionPlainText, crypto.randomUUID(), resources);
     const slide = await materialize({ id: crypto.randomUUID(), title: plan.title, notes: plan.notes, fixture: "blank" });
     const additions = [...plan.elements];
-    if (plan.media) {
-      const media = plan.media;
-      const response = await fetch(media.url, { credentials: "omit", cache:"no-store", signal: AbortSignal.timeout(30000) });
-      if (!response.ok) throw new Error("Source media could not be loaded; no slide was added");
-      if ((response.headers.get("content-type") || "").startsWith("video/")) {
-        await response.body?.cancel();
-        additions.push({ type: "embeddable", id: crypto.randomUUID(), x: media.x, y: media.y, width: media.width, height: media.height, frameId: FRAME_ID, link: "https://slide-lab.invalid/section-video", customData: { sectionVideo: media.url }, backgroundColor: "transparent", strokeColor: "transparent" });
-      } else if ((response.headers.get("content-type") || "").startsWith("image/")) {
-        const blob = await response.blob();
-        const image = await originalImage(blob), scale = Math.min(media.width / image.width, media.height / image.height);
-        slide.scene.files[image.id] = image;
-        additions.push({ type: "image", id: crypto.randomUUID(), fileId: image.id, x: media.x + (media.width - image.width * scale) / 2, y: media.y + (media.height - image.height * scale) / 2, width: image.width * scale, height: image.height * scale, scale: [1, 1], frameId: FRAME_ID });
-      } else { await response.body?.cancel(); throw new Error("This section's media is not a direct image or video; no slide was added"); }
-    }
     await loadPlatformFonts(additions);
     const skeletons = new Map(additions.map(element => [element.id, element]));
     const elements = restoreElements(convertToExcalidrawElements(additions, { regenerateIds: false }).map(element => element.type === "text" ? { ...element, width: skeletons.get(element.id).width, autoResize: false } : element), null, { repairBindings: true, refreshDimensions: true });
     return { slide, elements };
   }
-  function addFromSection(block, intoCurrent = false) { setDeckDialog(null); return run(async () => {
+  function addFromSection(block, intoCurrent = false, resources) { setDeckDialog(null); return run(async () => {
     await save();
     const prepared = [];
     for (const sourceBlock of (intoCurrent ? [block] : Array.isArray(block) ? block : [block])) {
-      prepared.push(await prepareSection(sourceBlock));
+      prepared.push(await prepareSection(sourceBlock, resources));
     }
     if (!prepared.length) return;
     if (intoCurrent) {
@@ -660,7 +659,7 @@ function Merger() {
             <MainMenu />
             <DefaultSidebar docked={false} onDock={false} />
             <Footer><button className={`help-icon merge-notes-toggle${notesOpen ? " active" : ""}`} title="Speaker notes" aria-label="Speaker notes panel" aria-expanded={notesOpen} aria-controls="merge-speaker-notes" onClick={() => setNotesOpen(!notesOpen)}><ToolIcon name="notes" /><span>Notes</span></button></Footer>
-            <ContentPane pane={pane} busy={busy} layoutPicker={layoutPicker} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={block => { finishPaneInsert(); addFromSection(block, true); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={blocks => addFromSection(blocks, false)} onMedia={source => importMedia(source, mediaPurpose === "background")} onUpload={() => input.current.click()}>
+            <ContentPane pane={pane} busy={busy} layoutPicker={layoutPicker} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={(block, resources) => { finishPaneInsert(); addFromSection(block, true, resources); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={(blocks, resources) => addFromSection(blocks, false, resources)} onMedia={source => importMedia(source, mediaPurpose === "background")} onUpload={() => input.current.click()}>
               {api && <LayerPanel api={api} disabled={busy||present!==null||confirm||!!deckDialog} onClose={() => openPane(null, false)} onAdd={kind => { if (kind === "media") openPane("media", false); else if (kind === "text") { finishPaneInsert(); insertContent("body"); } else { openPane(null, false); api.setActiveTool({ type:"rectangle" }); } }} />}
             </ContentPane>
             {!hasSelection&&current&&<SlideProperties settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} />}

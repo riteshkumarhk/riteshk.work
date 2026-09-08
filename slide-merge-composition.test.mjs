@@ -21,13 +21,14 @@ async function groundedSpec(source) {
   return composition;
 }
 
-test("catalog exposes only supported eligible sections without media URLs", async () => {
+test("catalog includes generated sections without exposing media URLs or protected content", async () => {
   const source = data();
   source.work[0].study.blocks.push({ type: "text", body: "secret", items: [{ locked: true }] }, { type: "gen", body: "unsupported" });
   const catalog = await compositionCatalog(source, options);
-  assert.equal(catalog.length, 3);
+  assert.equal(catalog.length, 4);
   assert.equal(catalog[2].hasMedia, true);
-  assert.doesNotMatch(JSON.stringify(catalog), /base64|secret|unsupported/);
+  assert.equal(catalog[3].type, "gen");
+  assert.doesNotMatch(JSON.stringify(catalog), /base64|secret/);
   for (const marker of ["locked", "encStub", "vaultBlock", "private", "requiresReview", "confidential"]) {
     const restricted = data(); restricted.work[0][marker] = true;
     assert.equal((await compositionCatalog(restricted, options)).length, 0);
@@ -52,9 +53,9 @@ test("compilation is deterministic, editable and leaves source/spec unchanged", 
   const compiled = await compileComposition(composition, source, options);
   assert.deepEqual(compiled, await compileComposition(composition, source, options));
   assert.deepEqual({ source, composition }, before);
-  assert.equal(compiled.slides[1].elements[0].text, "42%");
-  assert.equal(compiled.slides[2].media.url, source.work[0].study.blocks[2].items[0].src);
-  assert.ok(compiled.slides.flatMap(slide => slide.elements).every(element => element.type === "text" && element.fontFamily === 5 && element.frameId === "lab-slide"));
+  assert.equal(compiled.slides[1].elements[0].customData.sectionComponent.items[0].value, "42%");
+  assert.equal(compiled.slides[2].elements[0].customData.sectionComponent.items[0].src, source.work[0].study.blocks[2].items[0].src);
+  assert.ok(compiled.slides.flatMap(slide => slide.elements).every(element => element.type === "embeddable" && element.frameId === "lab-slide"));
   const ids = compiled.slides.flatMap(slide => slide.elements.map(element => element.id));
   assert.equal(ids.length, new Set(ids).size);
   assert.equal(compiled.slides[0].provenance.workId, "study");
@@ -74,7 +75,7 @@ test("quality warnings retain full notes and flag repeated sources", async () =>
   const composition = await groundedSpec(source); composition.slides.push({ ...composition.slides[0], id: "repeat" });
   const compiled = await compileComposition(composition, source, options);
   assert.equal(compiled.slides[0].notes, source.work[0].study.blocks[0].body);
-  assert.ok(compiled.warnings.some(warning => warning.code === "excerpted-source"));
+  assert.ok(compiled.warnings.some(warning => warning.code === "component-review"));
   assert.ok(compiled.warnings.some(warning => warning.code === "repeated-source"));
 });
 
@@ -87,7 +88,7 @@ test("source edits and reorder invalidate stale model references", async () => {
   await assert.rejects(() => compileComposition(composition, source, options), /unavailable source/);
 });
 
-test("catalog excludes protected URLs and web embeds, retaining original direct media", async () => {
+test("catalog excludes protected URLs while retaining section-owned embeds and direct media", async () => {
   const source = data();
   source.work.unshift(null);
   source.work[1].study.blocks.push(
@@ -96,11 +97,10 @@ test("catalog excludes protected URLs and web embeds, retaining original direct 
     { type: "gallery", heading: "Video", items: [{ src: "https://media.example.com/original.mov" }] }
   );
   const catalog = await compositionCatalog(source, options);
-  assert.deepEqual(catalog.map(item => item.title), ["Context", "Outcome", "The work", "Video"]);
+  assert.deepEqual(catalog.map(item => item.title), ["Context", "Outcome", "The work", "Embed", "Video"]);
   const composition = { version: 1, title: "Video", slides: [{ id: "video", kind: "section", sourceId: catalog.at(-1).sourceId }] };
   const compiled = await compileComposition(composition, source, options);
-  assert.equal(compiled.slides[0].media.kind, "video");
-  assert.equal(compiled.slides[0].media.url, "https://media.example.com/original.mov");
+  assert.equal(compiled.slides[0].elements[0].customData.sectionComponent.items[0].src, "https://media.example.com/original.mov");
 });
 
 test("duplicate source IDs and cyclic content fail closed", async () => {
@@ -110,9 +110,9 @@ test("duplicate source IDs and cyclic content fail closed", async () => {
   await assert.rejects(() => compositionCatalog(cyclic, options), /Cyclic/);
 });
 
-test("layout diagnostics flag long multiline text without deleting source content", async () => {
+test("long multiline content is preserved inside the component for runtime layout", async () => {
   const source = data(); source.work[0].study.blocks[0].body = "Line\n".repeat(90);
   const compiled = await compileComposition(await groundedSpec(source), source, options);
-  assert.ok(compiled.warnings.some(warning => warning.code === "possible-text-overflow"));
+  assert.equal(compiled.slides[0].elements[0].customData.sectionComponent.body, source.work[0].study.blocks[0].body);
   assert.equal(compiled.slides[0].notes, source.work[0].study.blocks[0].body);
 });

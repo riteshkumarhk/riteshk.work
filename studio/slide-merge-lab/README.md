@@ -14,8 +14,9 @@ capability registry. `compositionCatalog(data, { plain, fontFamily })` returns
 eligible section references and short excerpts, without media URLs. A proposal
 contains `{ version: 1, title, slides: [{ id, kind: "section", sourceId }] }`.
 `compileComposition(proposal, data, options)` resolves every reference again and
-returns deterministic editable text skeletons, original image/video references,
-full source notes, provenance and review warnings. Both functions are async.
+returns deterministic whole-section component elements with original nested
+content/media, source notes, referenced custom icons, provenance and review
+warnings. Both functions are async.
 
 References include case-study identity, section position and SHA-256 content
 fingerprints. Changed, moved, missing or protected sources reject the proposal;
@@ -24,13 +25,13 @@ does not mutate a deck, fetch media, contact an AI provider or publish anything.
 Nested protection markers and protected URLs exclude the entire source section.
 
 The first supported capability selects and orders existing sections; it does not
-invent copy, facts, layouts or media. It reuses the current section converter.
-Warnings cover small text, estimated text overflow, excerpts, repeats and
-text-only slides; these are not a substitute for native font measurement or a
-visual review. Output is a scene plan, not a hydrated Excalidraw scene. Later
-integration must resolve original media, measure/render text, show a preview and
-obtain an explicit append/replace decision before applying. Provider/auth/usage
-reuse and Draft With AI controls belong to the next phase.
+invent copy, facts, layouts or media. It shares the manual insertion component
+contract, without a stock-type allowlist. Generated `gen` sections retain their
+complete versioned specs for the existing RKGen renderer and interaction runtime.
+Warnings request component review and identify repeated sources. Output is a
+scene plan, not a hydrated Excalidraw scene. Later AI integration must show a
+preview and obtain an explicit append/replace decision before applying.
+Provider/auth/usage reuse and Draft With AI controls belong to the next phase.
 
 Run `node --test slide-merge-composition.test.mjs slide-merge-sections.test.mjs`.
 
@@ -151,9 +152,10 @@ Run `node --test slide-merge-composition.test.mjs slide-merge-sections.test.mjs`
     Every insert is an independent editable shape with bound text and native Undo. Desktop panes
     stay open for repeated inserts; mobile uses the existing dismissable bottom sheet and closes
     after choosing an item. Picker controls are disabled while an insertion is running.
-- Sections opens the site-section picker and inserts into the current slide as a selected group.
+- Sections opens the site-section picker and inserts into the current slide as a selected component.
     Existing objects, title, background and speaker notes stay unchanged. Native Undo removes the insertion;
-    ungroup to edit individual objects. This does not create a new slide.
+    move and resize the complete component on the canvas. Its internal content stays
+    a case-study component, not separate native text/image shapes. This does not create a new slide.
 - Add a slide offers Add blank, Add a layout, and Generate from a section.
     Per-slide controls sit below thumbnails, never over the preview.
 - Both layout selectors share Stock (nine built-in layouts) and My layouts tabs, including
@@ -187,14 +189,22 @@ Run `node --test slide-merge-composition.test.mjs slide-merge-sections.test.mjs`
     successfully before any new slide is added; failure preserves selection and leaves the deck unchanged.
     This never modifies source content. Locked, encrypted-stub,
     vault and disabled sections are excluded. No vault resolution or decryption runs.
-- Both section entry points share content thumbnails showing converted text and the first supported
-    image/video, with a section name and type. The shared pane uses one column. These are
-    previews of the conversion, not screenshots of the original interactive case-study block.
-- Text, statements, metrics, quotes and lists become native editable text. Long body text is excerpted
-    on the slide; generating a new slide retains full source prose in notes, while current-slide insertion
-    preserves existing notes. The first direct image/video is copied as
-    original image bytes or a hosted video embed. Uploaded media paths use the site's R2 normalization.
-    Unsupported/failed media aborts insertion with an error, not a partially generated slide.
+- Both section entry points preserve a complete source snapshot, including all items,
+    nested cells, media, component settings, generated specs and referenced custom icons.
+    Picker thumbnails remain compact representative previews, not full interactive previews.
+- Section components render through the same `RK.renderStudyBlock` and `RK.enhanceBlocks`
+    APIs used by Studio, with shared case-study styles, typography, R2 media resolution and
+    RKGen runtime. Carousels, comparison controls, workflows, focus views, device mockups,
+    media and generated interactions remain components. No rasterization, source rewriting
+    or media re-encoding occurs. A fixed design-width component fits its canvas box as
+    media loads; its complete snapshot survives save/reload and rehearsal.
+    Protected nested content is rejected rather than silently omitted. Unknown future
+    section types show a renderer-update error rather than an empty successful insertion.
+    New generated specs work when supported by the shared RKGen runtime, not arbitrary code.
+    External embeds and video playback retain their provider/browser permissions and codec
+    requirements. Image zoom requests fullscreen when allowed; otherwise its lightbox stays
+    within the component frame. Existing flattened slides cannot recover omitted source data;
+    reinsert their source section to get the full component.
 - Notes sits beside Help at the bottom right of the canvas and toggles independently of drawing tools.
     Mobile Slides and Properties controls sit at the bottom left. Slide titles remain in the navigator.
     Images and embedded videos share Sharp, Round and Squircle edges with an adjustable corner radius.
