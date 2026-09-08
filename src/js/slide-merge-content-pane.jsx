@@ -20,7 +20,7 @@ function BadgePicker({ onPick }) {
   </>;
 }
 
-export function ContentPane({ pane, busy, onContent, onIcon, onSection, onNewLayout, onNewSection, onMedia, onUpload, layoutPicker, children }) {
+export function ContentPane({ pane, busy, onContent, onIcon, onSection, onNewLayout, onNewSection, onMedia, onUpload, layoutPicker, composition, children }) {
   return <Sidebar name="insert" className="merge-content-sidebar" docked={false}>
     <Sidebar.Header><strong>{PANE_LABELS[pane] || "Insert"}</strong></Sidebar.Header>
     <fieldset className={`merge-pane-body${pane === "layers" ? " merge-pane-body--layers" : ""}`} disabled={busy} aria-label={PANE_LABELS[pane] || "Insert"}>
@@ -31,7 +31,7 @@ export function ContentPane({ pane, busy, onContent, onIcon, onSection, onNewLay
       {pane === "badges" && <BadgePicker onPick={onContent} />}
       {pane === "sections" && <SectionPicker embedded onPick={onSection} />}
       {pane === "layout" && <LayoutDialog embedded {...layoutPicker} disabled={busy} onPick={onNewLayout} />}
-      {pane === "source" && <SectionPicker embedded multiple onPick={onNewSection} />}
+      {pane === "source" && <SectionPicker embedded multiple onPick={onNewSection} composition={composition} />}
     </fieldset>
   </Sidebar>;
 }

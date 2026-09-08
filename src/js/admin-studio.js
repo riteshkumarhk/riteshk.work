@@ -19,6 +19,7 @@ import {
 } from "./admin-core.js";
 import { WORLD_LAND } from "./worldland.js";
 import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsEmbedScore, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand, atsScoreModel } from "./ats-core.js";
+import { draftComposition } from "./slide-merge-ai.mjs";
 
 (function () {
   "use strict";
@@ -14569,7 +14570,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     var temp = opts.temperature != null ? opts.temperature : 0.7;
     var res, j;
     if (p === "anthropic") {
-      res = await fetch(base + "/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: model, max_tokens: maxTokens, temperature: temp, system: system, messages: [{ role: "user", content: user }] }) });
+      res = await fetch(base + "/messages", { method: "POST", signal: opts.signal, headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: model, max_tokens: maxTokens, temperature: temp, system: system, messages: [{ role: "user", content: user }] }) });
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
       (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
@@ -14579,7 +14580,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
       var url = base + "/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key);
       var gb = { contents: [{ role: "user", parts: [{ text: user }] }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: maxTokens, temperature: temp } };
       if (opts.json) gb.generationConfig.responseMimeType = "application/json";
-      res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(gb) });
+      res = await fetch(url, { method: "POST", signal: opts.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify(gb) });
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
       var cand = (j && j.candidates && j.candidates[0]) || {};
@@ -14588,7 +14589,7 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
     }
     var ob = { model: model, messages: [{ role: "system", content: system }, { role: "user", content: user }], temperature: temp, max_tokens: maxTokens };
     if (opts.json) ob.response_format = { type: "json_object" };
-    res = await fetch(base + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify(ob) });
+    res = await fetch(base + "/chat/completions", { method: "POST", signal: opts.signal, headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify(ob) });
     j = await res.json().catch(function () { return null; });
     if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
     (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
@@ -14785,10 +14786,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
   }
   async function aiText(cfg, system, user, opts) {
     opts = opts || {};
+    if (opts.signal) opts.signal.throwIfAborted();
     var candidates = await aiModelCandidates(cfg, "txt");
     if (!candidates.length) throw new Error("No model available \u2014 check your API key.");
     var lastErr = "";
     for (var i = 0; i < candidates.length; i++) {
+      if (opts.signal) opts.signal.throwIfAborted();
       var r = await aiChatOnce(cfg, candidates[i], system, user, opts);
       if (r.ok) return r.text;
       lastErr = r.err;
@@ -17890,5 +17893,12 @@ import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSema
 
 
   /* expose the studio entry so the shell can open it after the gate passes */
-  window.__RKStudio = { open: open };
+  window.__RKStudio = { open: open, draftSlides: async function (catalog, brief, options) {
+    var cfg = aiCfg("txt");
+    if (aiMode() === "cf" && AI_PROXY_PROVIDERS.indexOf(cfg.provider) !== -1 && !aiSess()) throw new Error("Your Cloudflare AI session has expired. Reopen Studio to restore it.");
+    if (!cfg.key) throw new Error("Your Studio AI configuration is not available on this browser origin.");
+    return draftComposition(catalog, brief, function (prompt, signal) {
+      return aiText(cfg, prompt.system, prompt.user, { json: true, maxTokens: 6000, temperature: 0.3, signal: signal });
+    }, options && options.signal);
+  } };
 })();

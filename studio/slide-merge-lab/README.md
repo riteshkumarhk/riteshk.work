@@ -29,9 +29,41 @@ invent copy, facts, layouts or media. It shares the manual insertion component
 contract, without a stock-type allowlist. Generated `gen` sections retain their
 complete versioned specs for the existing RKGen renderer and interaction runtime.
 Warnings request component review and identify repeated sources. Output is a
-scene plan, not a hydrated Excalidraw scene. Later AI integration must show a
-preview and obtain an explicit append/replace decision before applying.
-Provider/auth/usage reuse and Draft With AI controls belong to the next phase.
+scene plan, not a hydrated Excalidraw scene.
+
+### Contextual AI drafting
+
+In the existing Generate from a section pane, select sections and choose Draft
+with AI. It uses that selection and its case-study context directly: no separate
+case-study selector, mandatory brief dialog, sign-in screen or AI settings flow.
+Manual Generate retains its existing behavior.
+
+The request sends only eligible selected-section titles and bounded plain-text
+excerpts to the configured Studio writing provider. Unselected and protected
+sections, media payloads and generated code/specs are not sent to the model.
+The model chooses and orders whole source components, including generated ones;
+it does not create new copy or layouts in this first capability.
+
+The same pane shows a live component review with previous/next, fullscreen,
+reorder and remove controls. Back or closing the pane cancels a pending request.
+Append preserves current slides and notes. Replace requires an explicit warning
+confirmation and is not reversible through canvas Undo. Apply rechecks fresh
+source fingerprints, prepares all slides, and persists the next deck before
+changing the editor. Invalid responses, stale sources and storage errors leave
+the current deck in place. Nothing is published.
+
+The lab lazily loads the existing Studio bundle without opening Studio and calls
+its narrow `draftSlides` operation. Provider configuration, model fallback,
+Cloudflare auth and token accounting stay in the existing helpers. Local-key
+providers do not acquire a new sign-in requirement; Cloudflare retains its real
+session requirement. Configuration is origin-local: localhost cannot read a
+session or keys saved on the production origin. No credentials are copied or
+stored by the lab. The Studio bundle retains its existing Date.now cache policy.
+
+`slide-merge-ai.test.mjs` covers selection boundaries, strict model output,
+cancellation and immutable apply planning. Isolated browser checks use mocked
+provider responses through the actual shared helper, not real credentials or
+paid calls; live model output quality remains an owner acceptance check.
 
 Run `node --test slide-merge-composition.test.mjs slide-merge-sections.test.mjs`.
 

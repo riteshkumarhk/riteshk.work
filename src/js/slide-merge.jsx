@@ -35,6 +35,9 @@ import { ActivityDialog, AllSlides, EditorBar, HistoryControls, useActivity } fr
 import { VisibilityMenu, VisibilityConfirmation } from "./slide-merge-visibility.jsx";
 import { setDeckVisibility } from "./slide-merge-visibility.mjs";
 import { watchStudioTypography } from "./slide-merge-typography.mjs";
+import { compileComposition } from "./slide-merge-composition.mjs";
+import { compositionDeck } from "./slide-merge-ai.mjs";
+import { loadCompositionData } from "./slide-merge-ai-client.mjs";
 import "../../css/slide-merge-controls.css";
 
 function useAppearance() {
@@ -420,6 +423,30 @@ function Merger() {
     const elements = restoreElements(convertToExcalidrawElements(additions, { regenerateIds: false }).map(element => element.type === "text" ? { ...element, width: skeletons.get(element.id).width, autoResize: false } : element), null, { repairBindings: true, refreshDimensions: true });
     return { slide, elements };
   }
+  async function applyAiComposition(proposal, studyId, mode) {
+    if (live.current.operating || !live.current.editing) throw new Error("The editor is busy. Try again.");
+    live.current.operating = true; setBusy(true);
+    try {
+      await save();
+      const source = await loadCompositionData();
+      const selected = { ...source, work: source.work?.filter(study => study.id === studyId) || [] };
+      const compiled = await compileComposition(proposal, selected, { plain: sectionPlainText, fontFamily: DEFAULT_SLIDE_FONT });
+      const slides = [];
+      for (const plan of compiled.slides) {
+        const component = plan.elements[0].customData;
+        const prepared = await prepareSection(component.sectionComponent, { customIcons: component.sectionIcons });
+        prepared.slide.scene.elements.push(...prepared.elements);
+        slides.push(prepared.slide);
+      }
+      const next = compositionDeck(live.current.deck, slides, compiled.title, mode);
+      live.current.queue = live.current.queue.catch(() => {}).then(() => deckStore(next));
+      await live.current.queue;
+      paint(next);
+      await mountSlide(next.slides.find(slide => slide.id === next.selected));
+      setSlideView("current"); setStatus("Saved on this device");
+      activity.note(`AI proposal ${mode === "append" ? "appended" : "replaced deck"}`, "sys");
+    } finally { live.current.operating = false; setBusy(false); }
+  }
   function addFromSection(block, intoCurrent = false, resources) { setDeckDialog(null); return run(async () => {
     await save();
     const prepared = [];
@@ -659,7 +686,7 @@ function Merger() {
             <MainMenu />
             <DefaultSidebar docked={false} onDock={false} />
             <Footer><button className={`help-icon merge-notes-toggle${notesOpen ? " active" : ""}`} title="Speaker notes" aria-label="Speaker notes panel" aria-expanded={notesOpen} aria-controls="merge-speaker-notes" onClick={() => setNotesOpen(!notesOpen)}><ToolIcon name="notes" /><span>Notes</span></button></Footer>
-            <ContentPane pane={pane} busy={busy} layoutPicker={layoutPicker} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={(block, resources) => { finishPaneInsert(); addFromSection(block, true, resources); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={(blocks, resources) => addFromSection(blocks, false, resources)} onMedia={source => importMedia(source, mediaPurpose === "background")} onUpload={() => input.current.click()}>
+            <ContentPane pane={pane} busy={busy} layoutPicker={layoutPicker} composition={{ existingCount: deck?.slides.length || 0, onApply: applyAiComposition, renderPreview: element => <Embed element={element} /> }} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={(block, resources) => { finishPaneInsert(); addFromSection(block, true, resources); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={(blocks, resources) => addFromSection(blocks, false, resources)} onMedia={source => importMedia(source, mediaPurpose === "background")} onUpload={() => input.current.click()}>
               {api && <LayerPanel api={api} disabled={busy||present!==null||confirm||!!deckDialog} onClose={() => openPane(null, false)} onAdd={kind => { if (kind === "media") openPane("media", false); else if (kind === "text") { finishPaneInsert(); insertContent("body"); } else { openPane(null, false); api.setActiveTool({ type:"rectangle" }); } }} />}
             </ContentPane>
             {!hasSelection&&current&&<SlideProperties settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} />}
