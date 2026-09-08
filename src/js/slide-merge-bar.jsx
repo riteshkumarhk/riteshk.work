@@ -61,7 +61,7 @@ export function useActivity(api, live) {
   return { recording, showLog, setShowLog, events, message, note, write, pending, reset, flush, start, stop };
 }
 
-export function EditorBar({ historyRef, status, busy, editing, onEditing, slideView, onView, onPlay, canPlay, activity }) {
+export function EditorBar({ historyRef, status, busy, editing, onEditing, slideView, onView, onPlay, canPlay, activity, children }) {
   const EditingIcon = editing ? Pencil : PencilOff;
   return <div className="merge-editor-bar">
     <div className="merge-bar-state"><div ref={historyRef} className="merge-bar-history" /><span className={status === "Saved on this device" || status.endsWith(" - saved") ? "is-saved" : undefined} role="status" title={status}>{status}</span></div>
@@ -70,7 +70,7 @@ export function EditorBar({ historyRef, status, busy, editing, onEditing, slideV
       <label className="merge-slideview"><Presentation size={15} strokeWidth={1.75} /><select aria-label="Slide view" value={slideView} disabled={busy} onChange={event => onView(event.target.value)}><option value="current">Current slide</option><option value="all">All slides</option></select><svg className="merge-slideview-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></label>
       <button className="merge-bar-play" type="button" title="Rehearse" aria-label="Rehearse" disabled={!canPlay || busy} onClick={onPlay}><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg></button>
     </div>
-    <button type="button" className={`merge-bar-record${activity.recording ? " is-recording" : ""}`} aria-label={activity.recording ? "Stop recording activity log" : "Record activity log"} title={activity.recording ? "Stop activity logging and view log" : "Record activity log"} aria-pressed={activity.recording} onClick={activity.recording ? activity.stop : activity.start}><span className="merge-record-ring" />{activity.recording && <span className="merge-record-text">REC</span>}</button>
+    <div className="merge-bar-actions">{children}<button type="button" className={`merge-bar-record${activity.recording ? " is-recording" : ""}`} aria-label={activity.recording ? "Stop recording activity log" : "Record activity log"} title={activity.recording ? "Stop activity logging and view log" : "Record activity log"} aria-pressed={activity.recording} onClick={activity.recording ? activity.stop : activity.start}><span className="merge-record-ring" />{activity.recording && <span className="merge-record-text">REC</span>}</button></div>
   </div>;
 }
 

@@ -20,7 +20,7 @@ export function ToolIcon({ name }) {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={toolPaths[name]} /></svg>;
 }
 
-export function ToolMenu({ label, icon, children, disabled, active = false, caption }) {
+export function ToolMenu({ label, icon, children, disabled, active = false, caption, showChevron = true }) {
   const details = useRef(null);
   useEffect(() => { if (disabled && details.current) details.current.open = false; }, [disabled]);
   useEffect(() => {
@@ -45,7 +45,7 @@ export function ToolMenu({ label, icon, children, disabled, active = false, capt
       panel.style.top = `${Math.max(8, top)}px`;
     } else panel.hidePopover();
   }}>
-    <summary title={label} aria-label={label} aria-disabled={disabled || undefined} onClick={event => { if (disabled) event.preventDefault(); }}>{React.isValidElement(icon) ? icon : <ToolIcon name={icon} />}{caption && <span>{caption}</span>}<ToolIcon name="chevron" /></summary>
+    <summary title={label} aria-label={label} aria-disabled={disabled || undefined} onClick={event => { if (disabled) event.preventDefault(); }}>{React.isValidElement(icon) ? icon : <ToolIcon name={icon} />}{caption && <span>{caption}</span>}{showChevron && <ToolIcon name="chevron" />}</summary>
     <div className="merge-tool-pop" popover="manual" onClick={event => { if (event.target.closest("button[data-close]")) details.current.open = false; }}>{children}</div>
   </details>;
 }

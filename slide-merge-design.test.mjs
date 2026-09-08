@@ -72,3 +72,16 @@ test("editing and slide-view controls share a stable border-box height", () => {
   assert.equal(shared["box-sizing"], "border-box");
   assert.equal(declarations(bar, ".merge-slideview").padding, "0.55rem");
 });
+
+test("visibility belongs beside recording in the editor toolbar, not the header", () => {
+  const editor = read("./src/js/slide-merge.jsx"), bar = read("./src/js/slide-merge-bar.jsx");
+  assert.match(editor, /<EditorBar\b[^>]*>\s*<VisibilityMenu\b[\s\S]*?<\/EditorBar>/);
+  assert.doesNotMatch(editor.match(/<header className="merge-header">[\s\S]*?<\/header>/)[0], /VisibilityMenu/);
+  assert.match(bar, /<div className="merge-bar-actions">\{children\}<button[^>]*merge-bar-record/);
+  const visibility = postcss.parse(read("./css/slide-merge-visibility.css"));
+  assert.equal(declarations(visibility, ".merge-bar-actions .merge-visibility summary").height, "34px");
+  assert.equal(declarations(visibility, ".merge-bar-actions .merge-visibility summary").width, "40px");
+  assert.equal(declarations(visibility, ".merge-bar-actions .merge-visibility summary>svg").width, "18px");
+  assert.match(read("./src/js/slide-merge-visibility.jsx"), /showChevron=\{false\}/);
+  assert.match(read("./src/js/slide-merge-toolbar.jsx"), /showChevron = true/);
+});

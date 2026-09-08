@@ -9,7 +9,7 @@ export function VisibilityMenu({ deck, disabled, onChange }) {
   const isPublic = deckVisibility(deck) === "public";
   const Icon = isPublic ? Globe : LockKeyhole;
   return <div className="merge-visibility">
-    <ToolMenu label={`Slideshow visibility: ${isPublic ? "public" : "owner-only"} draft`} icon={<Icon size={18} strokeWidth={1.75} aria-hidden="true" />} disabled={disabled}>
+    <ToolMenu label={`Slideshow visibility: ${isPublic ? "public" : "owner-only"} draft`} icon={<Icon size={18} strokeWidth={1.75} aria-hidden="true" />} disabled={disabled} showChevron={false}>
       <div className="merge-visibility-heading">Draft visibility</div>
       <label className="merge-view-option"><input type="checkbox" checked={isPublic} disabled={disabled} onChange={event => onChange(event.target.checked)} />Public slideshow</label>
       <p>{isPublic ? "Public on a future Publish. Nothing has been published from this lab." : "Owner-only publishing intent. This lab draft stays on this device."}</p>
