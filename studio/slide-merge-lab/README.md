@@ -41,7 +41,9 @@ the existing owner session through a new, narrowly scoped Worker route.
 - Icons, Text, Badges, Sections and Library are direct toolbar buttons. On desktop, all insert panels
     replace the Slides list in its existing resizable right rail without changing the canvas width.
     Each uses the Slides header styling, with its title on the left and Close in the Add slide position.
-    Close restores Slides at the same width. Native Library search tabs and docking controls are hidden;
+    Close restores Slides at the same width. The rail edge stays draggable while a panel is open;
+    its native outside-click exemption prevents resizing from dismissing the panel.
+    Native Library search tabs and docking controls are hidden;
     Library content, import and insertion remain native. Mobile retains its existing bottom sheets.
     The duplicate top-right Library trigger is hidden, including its focusable checkbox.
 - Icons searches the studio's built-in and published custom icons; insertion retains vector SVG bytes.
