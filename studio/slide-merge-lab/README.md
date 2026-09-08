@@ -4,6 +4,9 @@ Isolated editor experiment at `/studio/slide-merge-lab/`. Production editor,
 published content, private decks and publishing are untouched. The library uses
 the existing owner session through a new, narrowly scoped Worker route.
 
+See [the design audit](DESIGN-AUDIT.md) for consistency corrections, verification
+coverage and components proposed for a future shared design-system update.
+
 ## Interaction model
 
 - The top status bar follows Studio's outlined controls: native Undo/Redo at left,

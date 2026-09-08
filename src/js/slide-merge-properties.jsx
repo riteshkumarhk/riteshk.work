@@ -11,7 +11,7 @@ export function SlideProperties({ settings, elements, disabled, onLayout, onBack
   const [pickerState,setPickerState]=useState({openPopup:null});
   useEffect(()=>{if(disabled)setPickerState({openPopup:null});},[disabled]);
   return <aside className="merge-slide-properties" aria-label="Slide properties" onKeyDown={event=>event.stopPropagation()}>
-    <button className="merge-properties-heading" aria-label="Slide properties panel" aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}><h2>Slide</h2><span aria-hidden="true">{expanded?"−":"+"}</span></button>
+    <button className="merge-properties-heading" aria-label="Slide properties panel" aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}><h2>Slide</h2><ToolIcon name="chevron" /></button>
     <div hidden={!expanded && !mobileOpen}>
     <details open><summary>Layout</summary><LayoutPicker {...layoutPicker} compact selected={settings.layout} disabled={disabled} onPick={onLayout} /><button className="merge-background-media merge-layout-save" disabled={disabled} onClick={onSaveLayout}><ToolIcon name="save" />Save as layout</button></details>
     <button className="merge-background-media merge-manage-layers" disabled={disabled} onClick={onLayers}><Layers size={18} strokeWidth={1.75} />Manage layers</button>

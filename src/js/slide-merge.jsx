@@ -196,6 +196,16 @@ function Merger() {
   const [settings,setSettings]=useState({}),[snapGuides,setSnapGuides]=useState(true);
   const host = useRef(null), input = useRef(null), dialog = useRef(null);
   const editor = useRef(null);
+  useEffect(() => {
+    if (pane !== "library" || !host.current) return;
+    const labelMenu = () => {
+      const button = host.current.querySelector(".library-menu-dropdown-container > button");
+      if (button) { button.setAttribute("aria-label", "Library actions"); button.title = "Library actions"; }
+    };
+    const observer = new MutationObserver(labelMenu);
+    observer.observe(host.current, { childList:true, subtree:true }); labelMenu();
+    return () => observer.disconnect();
+  }, [pane]);
   const notesResize = useNotesResize(editor);
   useLayoutEffect(() => {
     const shell = host.current?.closest(".merge-shell"), rail = shell?.querySelector(".merge-slides");
@@ -654,7 +664,7 @@ function Merger() {
     {present !== null && <Presenter slides={rehearsal} index={present} onIndex={index => { activity.write("nav", `Rehearsal slide ${index + 1}`); setPresent(index); }} onClose={() => { activity.note("Rehearsal closed", "nav"); setPresent(null); requestAnimationFrame(fit); }} />}
     {["save-layout", "rename-layout"].includes(deckDialog?.kind) && <LayoutNameDialog value={deckDialog.layout?.name} busy={busy} error={layoutSaveError} onClose={() => setDeckDialog(null)} onSave={saveLayout} />}
     {["apply-layout", "delete-layout"].includes(deckDialog?.kind) && <DeckDialog title={deckDialog.kind === "apply-layout" ? "Apply saved layout?" : "Delete saved layout?"} onClose={() => { if (!busy) setDeckDialog(null); }}><p className="merge-layout-dialog-copy">{deckDialog.kind === "apply-layout" ? `Replace this slide's content and background with "${deckDialog.layout.name}"? Speaker notes are kept. You can undo this change.` : `Delete "${deckDialog.layout.name}" from My layouts? Existing slides are not changed.`}</p><footer><button disabled={busy} onClick={() => setDeckDialog(null)}>Cancel</button><button disabled={busy} className={deckDialog.kind === "delete-layout" ? "is-danger" : "merge-dialog-primary"} onClick={() => deckDialog.kind === "delete-layout" ? deleteLayout(deckDialog.layout) : useSavedLayout(deckDialog.layout)}>{deckDialog.kind === "delete-layout" ? "Delete layout" : "Apply layout"}</button></footer></DeckDialog>}
-    {confirm && <dialog ref={dialog} className="merge-confirm" onCancel={() => setConfirm(false)}><h2>Delete this slide?</h2><p>{deck.slides.find(slide => slide.id === confirm)?.title}</p><div><button onClick={() => setConfirm(false)}>Cancel</button><button className="is-danger" onClick={() => { setConfirm(false); modify("delete", confirm); }}>Delete slide</button></div></dialog>}
+    {confirm && <dialog ref={dialog} className="merge-confirm" aria-labelledby="merge-delete-title" onCancel={() => setConfirm(false)}><h2 id="merge-delete-title">Delete this slide?</h2><p>{deck.slides.find(slide => slide.id === confirm)?.title}</p><div><button onClick={() => setConfirm(false)}>Cancel</button><button className="is-danger" onClick={() => { setConfirm(false); modify("delete", confirm); }}>Delete slide</button></div></dialog>}
   </div>;
 }
 createRoot(document.getElementById("root")).render(<Merger />);

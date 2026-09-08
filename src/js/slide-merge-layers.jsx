@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { CaptureUpdateAction, exportToSvg, labNewElementWith, useLabActionManager } from "@excalidraw/excalidraw";
-import { ArrowDown, ArrowUp, Check, ChevronsDown, ChevronsUp, Copy, Eye, EyeOff, Group, Image, Layers, LockKeyhole, Pencil, Plus, Trash2, Ungroup, UnlockKeyhole, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronsDown, ChevronsUp, Copy, Eye, EyeOff, Group, Image, Layers, LockKeyhole, Pencil, Trash2, Ungroup, UnlockKeyhole, X } from "lucide-react";
 import { FRAME_ID } from "./slide-lab-core.mjs";
 import { layerName, layerPropertyChanges, layerRows, layerTargets } from "./slide-merge-layers.mjs";
+import { ToolMenu } from "./slide-merge-toolbar.jsx";
 import "../../css/slide-merge-layers.css";
 
 function LayerButton({ icon: Icon, label, danger, ...props }) {
@@ -88,7 +89,7 @@ export function LayerPanel({ api, disabled, onClose, onAdd }) {
   const canUngroup = activeElements.some(element => element.groupIds?.length);
   return <div ref={root} role="complementary" className="merge-layer-panel" aria-label="Layers" data-prevent-outside-click="true" onKeyDown={event => { event.stopPropagation(); if (event.key === "Escape" && !editing) onClose(); }}>
     <div className="merge-layer-tools" role="toolbar" aria-label="Layer actions">
-      <details className="merge-layer-add"><summary title="Add layer" aria-label="Add layer"><Plus size={16} strokeWidth={1.75} /></summary><div>{[["text", "Text"], ["shape", "Shape"], ["media", "Image or video"]].map(([kind, label]) => <button key={kind} disabled={disabled} onClick={event => { event.currentTarget.closest("details").open = false; onAdd(kind); }}>{label}</button>)}</div></details>
+      <ToolMenu icon="add" label="Add layer" disabled={disabled}>{[["text", "Text"], ["shape", "Shape"], ["media", "Image or video"]].map(([kind, label]) => <button key={kind} data-close disabled={disabled} onClick={() => onAdd(kind)}>{label}</button>)}</ToolMenu>
       <LayerButton icon={ChevronsUp} label="Bring selected to front" disabled={disabled || !selected.length} onClick={() => action("bringToFront", selected)} />
       <LayerButton icon={ChevronsDown} label="Send selected to back" disabled={disabled || !selected.length} onClick={() => action("sendToBack", selected)} />
       <LayerButton icon={hidden ? Eye : EyeOff} label={hidden ? "Show selected layers" : "Hide selected layers"} disabled={disabled || !selected.length} onClick={() => commitProperty(selected, "hide", !hidden)} />

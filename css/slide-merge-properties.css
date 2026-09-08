@@ -1,7 +1,9 @@
 .merge-slide-properties { position:absolute; z-index:6; top:76px; left:16px; width:224px; max-height:calc(100% - 140px); overflow:auto; overscroll-behavior:contain; box-sizing:border-box; padding:12px; border:1px solid var(--line); border-radius:var(--ui-radius); background:var(--bg-elev); color:var(--text); box-shadow:var(--ui-shadow); scrollbar-width:thin; }
 .merge-shell .excalidraw .merge-slide-properties { display:block; }
 .merge-shell .merge-slide-properties h2 { font:500 11px var(--mono); margin:0; }
-.merge-shell .merge-properties-heading { display:flex; justify-content:space-between; align-items:center; width:100%; padding:0; border:0; background:none; color:var(--text); }
+.merge-shell .merge-properties-heading { display:flex; justify-content:space-between; align-items:center; width:100%; min-height:28px; padding:0; border:0; background:none; color:var(--text); cursor:pointer; }
+.merge-properties-heading svg { width:12px;height:12px;color:var(--text-dim);transform:rotate(-90deg); }
+.merge-properties-heading[aria-expanded=true] svg { transform:rotate(0);color:var(--accent); }
 .merge-properties-heading[aria-expanded=true] { margin-bottom:12px; }
 .merge-slide-properties details { border-bottom:1px solid var(--line-soft); padding:0 0 12px; margin-bottom:12px; }
 .merge-slide-properties summary { font-size:12px; font-weight:500; cursor:pointer; margin-bottom:10px; color:var(--text-dim); }

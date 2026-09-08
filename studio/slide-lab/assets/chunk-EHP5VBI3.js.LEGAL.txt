@@ -71,7 +71,6 @@ lucide-react/dist/esm/icons/lock-keyhole-open.mjs:
 lucide-react/dist/esm/icons/lock-keyhole.mjs:
 lucide-react/dist/esm/icons/pencil-off.mjs:
 lucide-react/dist/esm/icons/pencil.mjs:
-lucide-react/dist/esm/icons/plus.mjs:
 lucide-react/dist/esm/icons/presentation.mjs:
 lucide-react/dist/esm/icons/trash-2.mjs:
 lucide-react/dist/esm/icons/ungroup.mjs:

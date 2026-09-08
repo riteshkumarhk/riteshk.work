@@ -21,6 +21,8 @@ html[data-appearance="light"]{color-scheme:light}
 .merge-shell .merge-present { background:var(--bg); color:var(--text); }
 .merge-shell .merge-confirm::backdrop { background:rgba(0,0,0,.65); backdrop-filter:blur(8px); }
 .merge-shell .merge-icon.is-danger:hover,.merge-shell .merge-confirm .is-danger { color:var(--ui-danger); }
+html[data-appearance="light"] { --ui-danger:#b33b42; }
+.merge-shell button.is-danger:hover:not(:disabled),.merge-shell .excalidraw .selected-shape-actions button[aria-label="Delete"]:is(:hover,:focus-visible) { color:var(--ui-danger); }
 .merge-shell .lab-busy { z-index:20; background:color-mix(in srgb,var(--bg) 70%,transparent); color:var(--text); }
 .merge-shell .merge-library-grid button:hover { color:var(--accent); border-color:var(--accent); }
 .merge-shell .merge-view-option:hover { background:var(--ui-hover); border-radius:4px; }
