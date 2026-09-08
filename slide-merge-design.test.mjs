@@ -64,3 +64,11 @@ test("opacity uses the secondary slider token while primary sliders retain gold"
   const secondary = controls.nodes.find(node => node.type === "rule" && node.selector.includes('[data-testid="opacity"]'));
   assert.equal(declarations(controls, secondary.selector)["--color-slider-track"], "var(--ui-slider-secondary)");
 });
+
+test("editing and slide-view controls share a stable border-box height", () => {
+  const bar = postcss.parse(read("./css/slide-merge-bar.css"));
+  const shared = declarations(bar, ".merge-layout-toggle,.merge-slideview");
+  assert.equal(shared.height, "34px");
+  assert.equal(shared["box-sizing"], "border-box");
+  assert.equal(declarations(bar, ".merge-slideview").padding, "0.55rem");
+});

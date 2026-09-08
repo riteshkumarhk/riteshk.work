@@ -26,6 +26,10 @@ accessibility certification or approval to migrate production Studio.
 - Theme native body-level portals, not only descendants of the editor root.
    Help retains shortcuts and a neutral Close button, without external links.
 - New layouts start with editable "My layout", with Save immediately enabled.
+- Editing on/off and Current/All slide controls share a stable 34px height.
+- Help omits frame, laser, native image-import, reset-canvas, native theme-toggle
+   and view-mode shortcuts not supported by the merger workflow. Supported native
+   editing shortcuts remain; this changes documentation, not engine capabilities.
 
 ## Coverage
 

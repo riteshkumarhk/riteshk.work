@@ -25,6 +25,7 @@ export function cornerEnginePlugin() {
       const version = JSON.parse(await readFile("node_modules/@excalidraw/excalidraw/package.json", "utf8")).version;
       if (version !== "0.18.1") throw new Error("Revalidate the Slide Lab color adapter for Excalidraw " + version);
       const edits = [
+        ['  const splitShortcutKeys = shortcuts.map((shortcut) => {', '  if (document.querySelector(".merge-shell") && ["toolBar.frame", "toolBar.laser", "toolBar.image", "buttons.clearReset", "labels.toggleTheme", "labels.viewMode"].some(key => t(key) === label)) return null;\n  const splitShortcutKeys = shortcuts.map((shortcut) => {'],
         ['        /* @__PURE__ */ jsx92(Header, {}),', '        !document.querySelector(".merge-shell") && /* @__PURE__ */ jsx92(Header, {}),'],
         ['        isFullscreen && /* @__PURE__ */ jsx67(\n          "button",\n          {\n            className: "Dialog__close",', '        (isFullscreen || !!document.querySelector(".merge-shell")) && /* @__PURE__ */ jsx67(\n          "button",\n          {\n            className: "Dialog__close",'],
         ['                transform: isVisible ? `rotate(${el.angle}rad)` : "none",', '                transform: isVisible ? `rotate(${el.angle}rad)` : "none",\n                clipPath: el.customData?.labCorners ? `path("${labCornerPath(el)}")` : undefined,\n                "--embeddable-radius": el.customData?.labCorners ? "0px" : undefined,'],
