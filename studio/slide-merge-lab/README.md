@@ -52,6 +52,11 @@ the existing owner session through a new, narrowly scoped Worker route.
     colour, original-byte image/video backgrounds, and None/Fade/Push/Magic Move transitions.
 - Slide background uses the same native fill picker: palette, shades, shared custom
     colours, hex, spectrum, RGB and desktop eyedropper. Colour edits keep the popup open.
+- Eyedropper sampling includes the current decoded frame of direct video embeds and
+    videos inside same-origin lab iframes, even when the player is inactive. It does not
+    seek, play, pause or re-encode media. Cross-origin media requires readable CORS pixels;
+    inaccessible third-party players and undecoded frames cannot be sampled. Player
+    controls are not part of the video frame. Mapping respects scaling and object-fit.
 - Layouts reposition free text/images, preserve grouped/locked objects and bound labels,
     and replace untouched placeholders. Select a media placeholder then use Image to fill it.
 - Drag from the top/left ruler to insert horizontal/vertical guides. Drag to move;
