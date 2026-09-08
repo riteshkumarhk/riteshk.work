@@ -1,6 +1,22 @@
 .merge-shell .excalidraw .sidebar-trigger__label-element:has(.default-sidebar-trigger) { display:none; }
 .merge-shell .merge-content-sidebar { color:var(--text); }
 .merge-content-sidebar .sidebar__header strong { font-size:14px; font-weight:600; }
+.merge-shell .default-sidebar .layer-ui__library { font-family:var(--sans); color:var(--text); --container-padding-y:12px; }
+.merge-shell .default-sidebar .library-menu-items-container__header { color:var(--text-dim); font-family:var(--sans); font-size:12px; font-weight:500; line-height:28px; margin-bottom:12px; padding-right:36px; }
+.merge-shell .default-sidebar .library-menu-items-container__header--excal { margin-top:20px; padding-top:16px; border-top:1px solid var(--line-soft); }
+.merge-shell .default-sidebar .library-menu-items-container__items { margin-bottom:0; }
+.merge-shell .default-sidebar .library-menu-items-container__grid,
+.merge-shell .default-sidebar .library-menu-items-container__row { grid-template-columns:repeat(auto-fit,minmax(55px,1fr)); gap:8px; }
+.merge-shell .default-sidebar .library-menu-items__no-items { color:var(--text-dim); font-size:12px; text-align:left; }
+.merge-shell .default-sidebar .library-menu-items__no-items__label { color:var(--text); font-size:13px; font-weight:500; margin-bottom:8px; }
+.merge-shell .default-sidebar .library-menu-browse-button { min-width:0; height:34px; box-sizing:border-box; border:1px solid var(--line); border-radius:4px; background:transparent; color:var(--text-dim); font-family:var(--sans); font-size:12px; font-weight:500; }
+.merge-shell .default-sidebar .library-menu-browse-button:hover { background:var(--ui-hover); border-color:var(--accent); color:var(--text); }
+.merge-shell .default-sidebar .library-menu-dropdown-container--in-heading { top:12px; }
+.merge-shell .default-sidebar .library-menu-dropdown-container > button { width:28px; height:28px; padding:0; border:1px solid transparent; border-radius:4px; box-shadow:none; background:transparent; color:var(--text-dim); }
+.merge-shell .default-sidebar .library-menu-dropdown-container > button:hover { border-color:var(--line); background:var(--ui-hover); color:var(--text); }
+.merge-shell .default-sidebar .library-menu-dropdown-container > button svg { width:15px; height:15px; }
+.merge-shell .default-sidebar .library-unit__adder { animation:none; background:var(--bg-2); color:var(--text-dim); border:1px solid var(--line); border-radius:4px; }
+.merge-shell .default-sidebar .library-unit:hover .library-unit__adder { border-color:var(--accent); color:var(--accent); }
 .merge-shell .merge-pane-body { display:block; min-width:0; margin:0; padding:12px; border:0; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; }
 .merge-pane-body :is(input,select) { width:100%; min-width:0; box-sizing:border-box; padding:9px 10px; border:1px solid var(--line); border-radius:4px; background:var(--bg-2); color:var(--text); font-size:13px; }
 .merge-pane-body :is(button,input,select) { font-family:var(--sans); }
