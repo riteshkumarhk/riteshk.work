@@ -1,6 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeHex, hexToRgb, rgbToHex, customColorList } from "./src/js/slide-lab-color.mjs";
+import { labelColorUpdate, preserveLabelColors } from "./src/js/slide-lab-core.mjs";
+
+test("native transparent text stays independent and can relink", () => {
+  const elements = [{ id: "shape", type: "rectangle", strokeColor: "#e03131" }, { id: "label", type: "text", containerId: "shape", strokeColor: "#e03131", version: 1 }];
+  const independent = labelColorUpdate(elements, ["label"], "transparent");
+  assert.equal(independent[1].strokeColor, "transparent");
+  const propagated = independent.map(element => ({ ...element, strokeColor: "#123456" }));
+  assert.equal(preserveLabelColors(propagated)[1].strokeColor, "transparent");
+  const linked = labelColorUpdate(independent, ["label"], null);
+  assert.equal(linked[1].strokeColor, "#e03131");
+  assert.equal(linked[1].customData.labTextColor, null);
+});
 
 test("hex and RGB roundtrip, shorthand and channel limits", () => {
   assert.equal(normalizeHex("AbC"), "#aabbcc");

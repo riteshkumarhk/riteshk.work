@@ -16,9 +16,9 @@ The static distribution is committed for branch-based GitHub Pages. The lab is n
 
 ## What Was Verified
 
-Select a shape with bound text to show Text colour in the shape properties, between Background and Fill. Uncheck **Link text to outline** to preserve its current text colour, then use a swatch or six-digit hex value independently of the outline. Rechecking adopts the current outline colour. This remains a text binding: moving/resizing the shape still carries its label. The setting persists in the lab draft and supports undo/redo.
+Select a shape with bound text and open Stroke's expanded colour popup. Its first row is **Link stroke to text**. Uncheck it to preserve the current text colour and reveal Text colour between Background and Fill. Text colour uses the same native swatches and expanded popup as Stroke and Background, including Hex, spectrum, RGB, saved custom colours and the eyedropper. Rechecking the link adopts the current stroke colour and hides the independent Text colour controls. Transparent and shorthand Hex are supported. This remains a text binding: moving/resizing the shape still carries its label. The setting persists in the lab draft and supports undo/redo.
 
-The inline control uses a React portal into the pinned engine's desktop/mobile `.panelColumn`, before its first property fieldset. A scoped MutationObserver reattaches it when the engine replaces the properties panel. Recheck placement, selection dismissal and mobile panel reopening when upgrading Excalidraw; this is an internal DOM integration, not a public engine extension API.
+The pinned build adapter inserts the link control into the native Picker and reuses the engine's ColorPicker inside SelectedShapeActions for text. A lab React context supplies the existing label-colour state and mutation callback. This replaces the previous text-colour DOM portal and separate swatches/Hex UI. Recheck native picker integration and mobile panel reopening when upgrading Excalidraw; these are internal engine integrations, not public extension APIs.
 
 Selected rectangles have Sharp, Round and Squircle controls in Edges, with the radius field and up/down chevrons as the fourth item on the same row. The original corner-and-dots icon family and native button backgrounds are preserved. Type a radius in slide pixels, use the chevrons/arrow keys, or click-hold and drag the value horizontally (Shift adjusts faster). Radius is limited to half the shorter dimension. Other shape types retain native rounding. Settings persist in `customData.labCorners`; a scrub commits as one undoable edit.
 
@@ -33,7 +33,7 @@ The native colour popup includes a `react-colorful` saturation/brightness pad an
 - Native bold/italic text and a case-study section render through the existing slide renderer in same-origin embeds.
 - SVG preview is clipped to a 1280 x 720 frame and its modal owns focus.
 - Desktop and 390 px mobile screenshots, nonblank canvas pixels and horizontal-overflow checks passed.
-- Thirteen lab unit tests and ten production slideshow interaction tests passed. Lab build and browser checks passed: distinct Round/Squircle SVG paths, 1280 x 720 export, reload persistence, and scrub 21 -> 51 -> Undo 21 -> Redo 51. Colour checks cover drag/undo, RGB-Hex synchronization, custom swatch recall, saved colours across reload, inline three-digit RGB layout, and a scrollable mobile popup.
+- Fourteen lab unit tests and ten production slideshow interaction tests passed. Lab build and browser checks passed: distinct Round/Squircle SVG paths, 1280 x 720 export, reload persistence, and scrub 21 -> 51 -> Undo 21 -> Redo 51. Colour checks cover drag/undo, RGB-Hex synchronization, custom swatch recall, saved colours across reload, inline three-digit RGB layout, and a scrollable mobile popup. Text checks cover first-row linking, conditional native picker, independent colour during stroke changes, relink/undo, Transparent and shorthand Hex, and desktop/mobile reload.
 
 ## Adoption Gates Still Open
 

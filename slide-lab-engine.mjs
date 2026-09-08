@@ -13,7 +13,10 @@ export function cornerEnginePlugin() {
       const edits = [
         ['const [customColors] = React4.useState(() => {\n    if (type === "canvasBackground") {\n      return [];\n    }\n    return getMostUsedCustomColors(elements, type, palette2);\n  });', 'const customColors = labUseCustomColors(color, type === "canvasBackground" ? [] : getMostUsedCustomColors(elements, type, palette2), palette2);'],
         ['const handled = colorPickerKeyNavHandler({', 'if (event.target.closest(".lab-rich-color") && event.key !== "Escape" || event.key === "Tab" && event.target.tagName === "INPUT") return;\n        const handled = colorPickerKeyNavHandler({'],
-        ['children: colorInputJSX\n', 'children: jsxs11("div", { className: "lab-color-detail", children: [colorInputJSX, jsx21(LabRichColor, { color, onChange })] })\n']
+        ['children: colorInputJSX\n', 'children: jsxs11("div", { className: "lab-color-detail", children: [colorInputJSX, jsx21(LabRichColor, { color, onChange })] })\n'],
+        ['!!customColors.length && /* @__PURE__ */ jsxs8("div", { children: [', 'jsx16(LabStrokeLink, { type }),\n        !!customColors.length && /* @__PURE__ */ jsxs8("div", { children: ['],
+        ['showFillIcons && renderAction("changeFillStyle"),', 'jsx70(LabTextColorControls, { NativePicker: ColorPicker, palette: DEFAULT_ELEMENT_STROKE_COLOR_PALETTE, topPicks: DEFAULT_ELEMENT_STROKE_PICKS, appState }),\n    showFillIcons && renderAction("changeFillStyle"),'],
+        ['elementStroke: "strokeColor"\n', 'elementStroke: "strokeColor",\n    labText: "strokeColor"\n']
       ];
       for (const [before, after] of edits) {
         if (source.split(before).length !== 2) throw new Error("Excalidraw color adapter anchor changed: " + before.slice(0, 60));
@@ -21,7 +24,7 @@ export function cornerEnginePlugin() {
       }
       source = source.replaceAll('t("colorPicker.mostUsedCustomColors")', '"Custom colors"');
       pickerPatched++;
-      return { contents: `import { LabRichColor, useLabCustomColors as labUseCustomColors } from ${JSON.stringify(resolve("src/js/slide-lab-color-picker.jsx").replaceAll("\\", "/"))};\n` + source, loader: "js", resolveDir: dirname(path) };
+      return { contents: `import { LabRichColor, useLabCustomColors as labUseCustomColors } from ${JSON.stringify(resolve("src/js/slide-lab-color-picker.jsx").replaceAll("\\", "/"))};\nimport { LabStrokeLink, LabTextColorControls } from ${JSON.stringify(resolve("src/js/slide-lab-text-color.jsx").replaceAll("\\", "/"))};\n` + source, loader: "js", resolveDir: dirname(path) };
     });
     build.onLoad({ filter: /excalidraw[\\/]dist[\\/]dev[\\/]chunk-.*\.js$/ }, async ({ path }) => {
       let source = await readFile(path, "utf8");

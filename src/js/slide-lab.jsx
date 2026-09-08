@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { createPortal } from "react-dom";
 import { Excalidraw, MainMenu, convertToExcalidrawElements, restoreElements, exportToSvg, getSceneVersion, CaptureUpdateAction } from "@excalidraw/excalidraw";
 import { FRAME_ID, SCENARIOS, fixtureSkeleton, frameReport, originalImage, packScene, readScene, sha256, writeScene, selectedLabels, labelColorUpdate, preserveLabelColors } from "./slide-lab-core.mjs";
 import { createScreenshot } from "./slide-lab-fixtures.mjs";
 import { CornerControls } from "./slide-lab-corner-controls.jsx";
+import { LabTextColorContext } from "./slide-lab-text-color.jsx";
+import { normalizeHex } from "./slide-lab-color.mjs";
 import "@excalidraw/excalidraw/index.css";
 import "../../css/slide-lab.css";
 
@@ -35,8 +36,6 @@ function Lab() {
   const [preview, setPreview] = useState(null);
   const [view, setView] = useState("canvas");
   const [labelSelection, setLabelSelection] = useState("[]");
-  const [textColor, setTextColor] = useState("#27343a");
-  const [colorSlot, setColorSlot] = useState(null);
   const runtime = useRef({ scenario: "flow", ready: false, timer: null, version: -1, library: [], queue: Promise.resolve(), measuring: false });
   const input = useRef(null);
   const host = useRef(null);
@@ -77,28 +76,14 @@ function Lab() {
   const labels = JSON.parse(labelSelection);
   const linked = labels.every(label => label.linked);
   function changeLabelColor(color) {
-    if (color && color !== "unlink" && !/^#[\da-f]{6}$/i.test(color)) return;
+    if (color && color !== "unlink" && color !== "transparent") {
+      color = normalizeHex(color);
+      if (!color) return;
+    }
     const elements = api.getSceneElementsIncludingDeleted();
     const targets = selectedLabels(elements, api.getAppState().selectedElementIds);
     api.updateScene({ elements: labelColorUpdate(elements, targets.map(element => element.id), color), captureUpdate: CaptureUpdateAction.IMMEDIATELY });
   }
-  useEffect(() => { setTextColor(JSON.parse(labelSelection)[0]?.color || "#27343a"); }, [labelSelection]);
-  useEffect(() => {
-    if (!api) return;
-    const slot = document.createElement("div");
-    slot.className = "lab-color-slot";
-    const place = () => {
-      const panel = host.current.querySelector(".selected-shape-actions .panelColumn, .App-mobile-menu .panelColumn");
-      if (!panel) { slot.remove(); setColorSlot(null); return; }
-      const next = panel.querySelector(":scope > fieldset");
-      if (slot.parentNode !== panel || slot.nextSibling !== next) panel.insertBefore(slot, next);
-      setColorSlot(slot);
-    };
-    const observer = new MutationObserver(place);
-    observer.observe(host.current, { childList: true, subtree: true });
-    place();
-    return () => { observer.disconnect(); slot.remove(); };
-  }, [api]);
   async function load(key, reload = false) {
     setBusy(true);
     try {
@@ -261,6 +246,7 @@ function Lab() {
     <main className="lab-workspace" ref={host} onDropCapture={receiveFiles} onPasteCapture={receiveFiles}
       onDragOverCapture={event => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.stopPropagation(); } }}>
       <div className="lab-canvas" hidden={view !== "canvas"}>
+        <LabTextColorContext.Provider value={{ api, labels, linked, changeLabelColor, busy }}>
         <Excalidraw excalidrawAPI={setApi} onChange={onChange} handleKeyboardGlobally={false} aiEnabled={false} viewModeEnabled={busy || !!preview || view !== "canvas"}
           initialData={{ appState: { viewBackgroundColor: "#f6f7f6", currentItemRoughness: 0, currentItemFontFamily: 2, theme: "light" } }}
           UIOptions={{ tools: { image: false }, canvasActions: { loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, clearCanvas: false } }}
@@ -269,15 +255,10 @@ function Lab() {
           onLibraryChange={items => { runtime.current.library = items; if (runtime.current.ready) save().catch(fail); }}>
           <MainMenu><MainMenu.DefaultItems.ToggleTheme /><MainMenu.DefaultItems.Help /></MainMenu>
         </Excalidraw>
+        </LabTextColorContext.Provider>
       </div>
       {view === "native" && <div className="lab-native"><iframe title="Native slide reference" src="./native.html?preview=1&fixture=all" /></div>}
       <CornerControls api={api} host={host} disabled={busy || !!preview || view !== "canvas"} />
-      {colorSlot && view === "canvas" && labels.length > 0 && !preview && createPortal(<fieldset className="lab-label-color" aria-label="Bound text colour">
-        <legend>Text colour</legend>
-        <label className="lab-color-link"><input type="checkbox" checked={linked} disabled={busy} onChange={event => changeLabelColor(event.target.checked ? null : "unlink")} />Link text to outline</label>
-        {!linked && <><div className="lab-color-swatches">{["#1e1e1e", "#ffffff", "#e03131", "#2f9e44", "#1971c2", "#f08c00"].map(color => <button key={color} title={`Text ${color}`} aria-label={`Text ${color}`} aria-pressed={labels.every(label => label.color === color)} style={{ background: color }} disabled={busy} onClick={() => changeLabelColor(color)} />)}</div>
-          <label className="lab-color-hex">Hex<input aria-label="Text colour hex" value={textColor} maxLength={7} spellCheck={false} disabled={busy} onChange={event => setTextColor(event.target.value)} onBlur={() => { if (/^#[\da-f]{6}$/i.test(textColor)) changeLabelColor(textColor); else setTextColor(labels[0].color); }} onKeyDown={event => { event.stopPropagation(); if (event.key === "Enter") event.currentTarget.blur(); }} /></label></>}
-      </fieldset>, colorSlot)}
       {busy && <div className="lab-busy" role="status">{runtime.current.measuring ? "Measuring" : "Working"}</div>}
     </main>
     <footer className="lab-footer"><span role="status">{status}</span><span>1280 x 720</span><span>Excalidraw 0.18.1</span>

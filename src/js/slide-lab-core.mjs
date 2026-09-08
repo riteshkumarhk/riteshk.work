@@ -147,7 +147,7 @@ export function preserveLabelColors(elements) {
   let changed = false;
   const result = elements.map(element => {
     const color = element.customData?.labTextColor;
-    if (element.isDeleted || element.type !== "text" || !element.containerId || !/^#[\da-f]{6}$/i.test(color || "") || element.strokeColor === color) return element;
+    if (element.isDeleted || element.type !== "text" || !element.containerId || (color !== "transparent" && !/^#[\da-f]{6}$/i.test(color || "")) || element.strokeColor === color) return element;
     changed = true;
     return { ...element, strokeColor: color, version: element.version + 1,
       versionNonce: Math.floor(Math.random() * 2147483647), updated: Date.now() };
