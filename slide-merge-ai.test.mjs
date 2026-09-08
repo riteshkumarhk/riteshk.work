@@ -31,6 +31,16 @@ test("AI proposal rejects malformed output, unsupported fields and invented sour
   for (const value of ["not JSON", JSON.stringify({ ...proposal, publish: true }), JSON.stringify({ ...proposal, slides: [{ ...proposal.slides[0], sourceId: "invented" }] })]) assert.throws(() => parseCompositionResponse(value, catalog));
 });
 
+test("AI proposals accept one JSON fence without relaxing validation", () => {
+  for (const label of ["json", "JSON", ""]) {
+    assert.deepEqual(parseCompositionResponse(` \n\`\`\`${label}\r\n${JSON.stringify(proposal)}\r\n\`\`\`\n`, catalog), proposal);
+  }
+  for (const value of ["not JSON", `Here is your proposal:\n\`\`\`json\n${JSON.stringify(proposal)}\n\`\`\``, "```json\n{}", "```json\n{}\n```\n```json\n{}\n```"])
+    assert.throws(() => parseCompositionResponse(value, catalog), /unreadable proposal/);
+  assert.throws(() => parseCompositionResponse(`\`\`\`json\n${JSON.stringify({ ...proposal, publish: true })}\n\`\`\``, catalog));
+  assert.throws(() => parseCompositionResponse(`\`\`\`json\n${JSON.stringify({ ...proposal, slides: [{ ...proposal.slides[0], sourceId: "invented" }] })}\n\`\`\``, catalog), /outside/);
+});
+
 test("cancelled drafts cannot produce an applicable proposal, including late responses", async () => {
   const controller = new AbortController();
   await assert.rejects(() => draftComposition(catalog, "Brief", async () => { controller.abort(); return JSON.stringify(proposal); }, controller.signal), { name: "AbortError" });

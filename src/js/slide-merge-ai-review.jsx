@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Trash2, Maximize } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Trash2, Maximize, RotateCcw, Square } from "lucide-react";
 import { sectionPlainText } from "./slide-merge-sections.mjs";
 import { compileComposition } from "./slide-merge-composition.mjs";
 import { selectedCompositionCatalog } from "./slide-merge-ai.mjs";
@@ -48,7 +48,7 @@ export function CompositionReview({ data, studyId, blocks, onCancel, onApply, re
   }
   const slide = compiled?.slides[index];
   return <section className="merge-ai" aria-label="AI proposal">
-    <div className="merge-section-actions"><button type="button" disabled={applying} onClick={cancel}>{working ? "Stop" : "Back to sections"}</button></div>
+    <div className="merge-section-actions"><button type="button" disabled={applying} onClick={cancel}>{working ? <Square /> : <ArrowLeft />}{working ? "Stop" : "Back to sections"}</button></div>
     {working ? <p role="status">Drafting slides...</p> : proposal ? <>
       <h3>{proposal.title}</h3>
       <div className="merge-ai-preview" ref={preview} key={slide.id}>{renderPreview(slide.elements[0])}</div>
@@ -67,6 +67,6 @@ export function CompositionReview({ data, studyId, blocks, onCancel, onApply, re
       {replace ? <><p role="alert">Replace all {existingCount} current slides and their notes? Canvas Undo cannot restore them.</p><div className="merge-section-actions"><button disabled={applying} onClick={() => setReplace(false)}>Keep deck</button><button className="is-danger" disabled={applying} onClick={() => apply("replace")}>Replace deck</button></div></> : <div className="merge-section-actions"><button disabled={applying} onClick={() => apply("append")}>{applying ? "Applying..." : "Append slides"}</button><button disabled={applying} onClick={() => setReplace(true)}>Replace...</button></div>}
     </> : null}
     {error && <p role="alert" className="merge-layout-dialog-error">{error}</p>}
-    {!working && !proposal && <div className="merge-section-actions"><button onClick={generate}>Retry</button></div>}
+    {!working && !proposal && <div className="merge-section-actions"><button onClick={generate}><RotateCcw />Retry</button></div>}
   </section>;
 }

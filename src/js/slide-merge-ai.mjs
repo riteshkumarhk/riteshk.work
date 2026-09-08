@@ -26,7 +26,12 @@ export function compositionRequest(catalog, brief) {
 
 export function parseCompositionResponse(text, catalog) {
   if (typeof text !== "string" || text.length > 100000) throw new Error("The AI response was empty or too large. Try again.");
-  const proposal = validateComposition(JSON.parse(text));
+  const response = text.trim();
+  const fenced = /^```(?:json)?\s*\r?\n([\s\S]*?)\r?\n```$/i.exec(response);
+  let parsed;
+  try { parsed = JSON.parse(fenced ? fenced[1] : response); }
+  catch { throw new Error("The AI returned an unreadable proposal. Retry to generate it again."); }
+  const proposal = validateComposition(parsed);
   const ids = new Set(catalog.map(source => source.sourceId));
   if (proposal.slides.some(slide => !ids.has(slide.sourceId))) throw new Error("The AI referenced a section outside the selected case study. Try again.");
   return proposal;

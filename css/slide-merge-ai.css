@@ -13,5 +13,11 @@
 .merge-ai-slidebar span{min-width:3rem;text-align:center;font:11px var(--mono)}
 .merge-ai-caption{font:12px var(--sans);color:var(--text-dim);text-align:center}
 .merge-ai :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.merge-section-actions--ai{flex-wrap:wrap}
-.merge-section-actions--ai button{min-width:0}
+.merge-shell .merge-section-actions{flex-wrap:wrap;gap:6px}
+.merge-shell :is(.merge-section-picker,.merge-ai) .merge-section-actions button{flex:0 0 auto;min-width:0;min-height:34px;height:34px;box-sizing:border-box;padding:0 10px;border-radius:4px;font:500 12px var(--sans);letter-spacing:0;text-transform:none;white-space:nowrap;overflow-wrap:normal;background:var(--bg-2);border-color:var(--line);box-shadow:none}
+.merge-shell :is(.merge-section-picker,.merge-ai) .merge-section-actions button:hover:not(:disabled){transform:none;box-shadow:none;background:var(--ui-hover)}
+.merge-shell .merge-section-actions button svg{flex-shrink:0;width:15px;height:15px;stroke-width:1.75}
+.merge-shell .merge-section-actions--ai{display:grid;grid-template-columns:minmax(0,1fr) 34px}
+.merge-shell .merge-section-actions button.merge-section-clear{width:34px;padding:0}
+.merge-shell .merge-section-actions--ai button:first-child{width:100%;border-color:var(--accent)}
+.merge-shell .merge-section-actions--ai button:last-child{grid-column:1/-1;width:100%}
