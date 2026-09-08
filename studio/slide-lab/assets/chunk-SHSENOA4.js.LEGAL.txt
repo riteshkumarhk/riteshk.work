@@ -63,6 +63,7 @@ lucide-react/dist/esm/icons/chevrons-up.mjs:
 lucide-react/dist/esm/icons/copy.mjs:
 lucide-react/dist/esm/icons/eye-off.mjs:
 lucide-react/dist/esm/icons/eye.mjs:
+lucide-react/dist/esm/icons/grip-vertical.mjs:
 lucide-react/dist/esm/icons/group.mjs:
 lucide-react/dist/esm/icons/image.mjs:
 lucide-react/dist/esm/icons/layers.mjs:

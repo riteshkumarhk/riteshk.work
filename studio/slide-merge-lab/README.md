@@ -16,7 +16,8 @@ the existing owner session through a new, narrowly scoped Worker route.
     24px mobile clearance, capped at native size. Its border and shadow match Studio's
     device preview, without a device selector or size badge. Panning and zooming cannot
     move it out of that fit. Slide-list cards gain a neutral hover/focus highlight with
-    no layout movement; the selected slide keeps its accent.
+    no layout movement; selection fills and outlines the same whole card, including
+    its action row, with the selected accent.
     Wheel down/right and ArrowDown/ArrowRight advance; wheel up/left and
     ArrowUp/ArrowLeft go back. Navigation stops at deck boundaries, includes all slides
     in rail order, and consumes at most one step per wheel gesture (220ms idle resets
@@ -54,8 +55,17 @@ the existing owner session through a new, narrowly scoped Worker route.
 - Each insertion gap offers Add slide or Start section inline. On phones the choices temporarily
     occupy the adjacent thumbnail footprint, keeping both actions inside the strip.
 - Start a section here sits beside the top Add a slide icon and adds a named navigator divider
-    to the selected slide; click it to rename/remove. The redundant bottom Add a slide action is removed.
-    The divider moves with its slide and is not copied when duplicating a slide.
+    to the selected slide. Names are edited inline: Enter or blur applies a nonblank name,
+    Escape cancels, and the Remove section bin removes the grouping without deleting slides.
+    Blank edits leave an existing name unchanged. There is no section dialog.
+- Drag a thumbnail to reorder a slide, or a section's grip to move all slides up to the
+    next section together. A slide dropped into another group joins that section; moving
+    its first slide keeps the heading with the remaining group. Unsectioned opening slides
+    stay before named sections. Empty sections disappear. Hidden slides move with their group.
+    Selection, notes and media are preserved and the order autosaves. Mouse uses a 6px threshold;
+    touch uses a 200ms hold. Keyboard: Space/Enter picks up and drops, arrows move, Escape cancels.
+    Drop markers follow the vertical desktop rail or horizontal mobile strip. Dragging is disabled
+    while naming, busy or Editing off. Duplicate does not copy the section marker.
 - Skipped slides remain editable and saved but are omitted from rehearsal. Rehearsal starts at the
     selected or next included slide, wrapping to the first included slide if needed. All skipped disables Rehearse.
 - Canvas edits use engine undo. Switching to a different slide clears engine history;

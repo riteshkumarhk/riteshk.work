@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { Excalidraw, MainMenu, Footer, DefaultSidebar, CaptureUpdateAction, convertToExcalidrawElements, restoreElements, exportToSvg, getSceneVersion } from "@excalidraw/excalidraw";
-import { createDeck, changeSlides, insertSlide, setSlideSection, presentationSlides, deckStore, slidePaneWidth } from "./slide-merge-core.mjs";
+import { createDeck, changeSlides, insertSlide, setSlideSection, reorderSlides, presentationSlides, deckStore, slidePaneWidth } from "./slide-merge-core.mjs";
 import { FRAME_ID, fixtureSkeleton, packScene, originalImage, selectedLabels, labelColorUpdate, preserveLabelColors } from "./slide-lab-core.mjs";
 import { createScreenshot } from "./slide-lab-fixtures.mjs";
 import { DEFAULT_SLIDE_FONT, platformText, loadPlatformFonts } from "./slide-platform-fonts.mjs";
@@ -16,7 +16,7 @@ import { CanvasGuides, CanvasBackdrop } from "./slide-merge-guides.jsx";
 import { PlaceholderActions } from "./slide-merge-placeholders.jsx";
 import { fitPlaceholder } from "./slide-merge-placeholder-fit.mjs";
 import { contentSkeleton, diagramSkeleton } from "./slide-merge-inserts.mjs";
-import { SlideNavigator, SectionDialog, DeckDialog, LayoutNameDialog } from "./slide-merge-navigator.jsx";
+import { SlideNavigator, DeckDialog, LayoutNameDialog } from "./slide-merge-navigator.jsx";
 import { captureLayout, instantiateLayout, savedLayoutStore } from "./slide-merge-layouts.mjs";
 import { sectionPlan, sectionMediaUrl, sectionPlainText } from "./slide-merge-sections.mjs";
 import { SlideProperties } from "./slide-merge-properties.jsx";
@@ -381,7 +381,8 @@ function Merger() {
     if (layout) openDeckDialog({ kind: "apply-layout", layout });
     else applyLayout(id);
   }
-  function saveSection(name) { const id = deckDialog.id; setDeckDialog(null); return run(async () => { await save(); paint(setSlideSection(live.current.deck, id, name)); await save(); }); }
+  function saveSection(id, name) { return run(async () => { if (!live.current.editing) return; await save(); paint(setSlideSection(live.current.deck, id, name)); await save(); }); }
+  function reorder(id, targetId, kind, edge) { return run(async () => { if (!live.current.editing) return; await save(); paint(reorderSlides(live.current.deck, id, targetId, kind, edge)); await save(); }); }
   async function prepareSection(block) {
     const plan = sectionPlan(block, sectionPlainText, DEFAULT_SLIDE_FONT, crypto.randomUUID());
     const slide = await materialize({ id: crypto.randomUUID(), title: plan.title, notes: plan.notes, fixture: "blank" });
@@ -619,7 +620,7 @@ function Merger() {
         onPointerUp={finishResize} onPointerCancel={event => finishResize(event, true)} onLostPointerCapture={() => { resize.current = null; setResizing(false); }}
         onDoubleClick={() => storePaneWidth(200)} onKeyDown={event => { if (["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) { event.preventDefault(); storePaneWidth(event.key === "Home" ? 200 : paneWidth + (event.key === "ArrowLeft" ? 16 : -16)); } }} />
       {pane && !mobileUI.mobile && <div className="merge-section-head merge-insert-head"><h2>{PANE_LABELS[pane] || "Library"}</h2><button className="merge-nav-action" title="Close panel" aria-label="Close panel" onClick={() => openPane(null, false)}><ToolIcon name="close" /></button></div>}
-      <SlideNavigator deck={deck} thumbnails={thumbnails} busy={busy} editing={editing} choose={choose} modify={modify} add={add} remove={id => { if (live.current.editing) setConfirm(id); }} pick={kind => openPane(kind, false)} section={id => openDeckDialog({kind:"section",id})} /></aside>
+      <SlideNavigator deck={deck} thumbnails={thumbnails} busy={busy} editing={editing} choose={choose} modify={modify} reorder={reorder} add={add} remove={id => { if (live.current.editing) setConfirm(id); }} pick={kind => openPane(kind, false)} section={saveSection} /></aside>
     <section className="merge-editor" ref={editor}>
       <main className={`merge-workspace ${hasSelection ? "has-selection" : ""}`} ref={host} onDropCapture={receive} onPasteCapture={receive} onDragOverCapture={event => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.stopPropagation(); } }}>
         <CanvasToolbar api={api} disabled={busy || present !== null || !!confirm || !!deckDialog} onImage={() => openPane("media")} mediaOpen={pane === "media"} onDiagram={kind => insertContent(kind, null, true)}>
@@ -651,7 +652,6 @@ function Merger() {
     <footer className="merge-status"><span>Local draft</span><button className="merge-library-sync" onClick={library.retry} title={library.status + ". Click to retry or sign in to Studio."}><Icon name="sync" /><span role="status">{library.status}</span></button><span>{selectedIndex + 1} / {deck?.slides.length || 0}</span></footer>
     <input type="file" hidden ref={input} accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml,video/mp4,video/webm,video/quicktime,video/ogg,.svg,.mov" onChange={event => { importMedia(event.target.files[0], mediaPurpose === "background"); event.target.value = ""; }} />
     {present !== null && <Presenter slides={rehearsal} index={present} onIndex={index => { activity.write("nav", `Rehearsal slide ${index + 1}`); setPresent(index); }} onClose={() => { activity.note("Rehearsal closed", "nav"); setPresent(null); requestAnimationFrame(fit); }} />}
-    {deckDialog?.kind === "section" && <SectionDialog value={deck.slides.find(slide => slide.id === deckDialog.id)?.section} onClose={() => setDeckDialog(null)} onSave={saveSection} />}
     {["save-layout", "rename-layout"].includes(deckDialog?.kind) && <LayoutNameDialog value={deckDialog.layout?.name} busy={busy} error={layoutSaveError} onClose={() => setDeckDialog(null)} onSave={saveLayout} />}
     {["apply-layout", "delete-layout"].includes(deckDialog?.kind) && <DeckDialog title={deckDialog.kind === "apply-layout" ? "Apply saved layout?" : "Delete saved layout?"} onClose={() => { if (!busy) setDeckDialog(null); }}><p className="merge-layout-dialog-copy">{deckDialog.kind === "apply-layout" ? `Replace this slide's content and background with "${deckDialog.layout.name}"? Speaker notes are kept. You can undo this change.` : `Delete "${deckDialog.layout.name}" from My layouts? Existing slides are not changed.`}</p><footer><button disabled={busy} onClick={() => setDeckDialog(null)}>Cancel</button><button disabled={busy} className={deckDialog.kind === "delete-layout" ? "is-danger" : "merge-dialog-primary"} onClick={() => deckDialog.kind === "delete-layout" ? deleteLayout(deckDialog.layout) : useSavedLayout(deckDialog.layout)}>{deckDialog.kind === "delete-layout" ? "Delete layout" : "Apply layout"}</button></footer></DeckDialog>}
     {confirm && <dialog ref={dialog} className="merge-confirm" onCancel={() => setConfirm(false)}><h2>Delete this slide?</h2><p>{deck.slides.find(slide => slide.id === confirm)?.title}</p><div><button onClick={() => setConfirm(false)}>Cancel</button><button className="is-danger" onClick={() => { setConfirm(false); modify("delete", confirm); }}>Delete slide</button></div></dialog>}

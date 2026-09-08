@@ -51,10 +51,13 @@ test("skipping preserves editor slides and notes while rehearsal omits hidden sl
   assert.equal(presentationSlides(changeSlides(hidden, "hide", "fidelity")).length, 0);
 });
 
-test("section headings follow their slide, are editable, and are not repeated by duplication", () => {
+test("section headings stay with their group, are editable, and are not repeated by duplication", () => {
   const deck = setSlideSection(createDeck(), "opening", "  Context  ");
   assert.equal(deck.slides[0].section, "Context");
-  assert.equal(changeSlides(deck, "down", "opening").slides[1].section, "Context");
+  const moved = changeSlides(deck, "down", "opening");
+  assert.equal(moved.slides[0].id, "fidelity");
+  assert.equal(moved.slides[0].section, "Context");
+  assert.equal(moved.slides[1].section, undefined);
   assert.equal(changeSlides(deck, "duplicate", "opening", "copy").slides[1].section, undefined);
   assert.equal(setSlideSection(deck, "opening", "").slides[0].section, undefined);
   assert.throws(() => setSlideSection(deck, "missing", "Title"), /not found/);

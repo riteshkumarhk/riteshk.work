@@ -25,7 +25,7 @@ export function changeSlides(deck, action, id, newId) {
     next.slides[index].hidden = !next.slides[index].hidden;
   } else if (action === "up" || action === "down") {
     const target = index + (action === "up" ? -1 : 1);
-    if (target >= 0 && target < next.slides.length) [next.slides[index], next.slides[target]] = [next.slides[target], next.slides[index]];
+    if (target >= 0 && target < next.slides.length) return reorderSlides(deck, id, next.slides[target].id, "slide", action === "up" ? "before" : "after");
   } else throw new Error("Unknown slide action");
   return next;
 }
@@ -43,6 +43,34 @@ export function setSlideSection(deck, id, name) {
   if (!slide) throw new Error("Slide not found");
   if (name.trim()) slide.section = name.trim();
   else delete slide.section;
+  return next;
+}
+export function reorderSlides(deck, id, targetId, kind = "slide", edge = "before") {
+  if (!["slide", "section"].includes(kind) || !["before", "after"].includes(edge)) throw new Error("Invalid reorder operation");
+  const next = structuredClone(deck), groups = [];
+  for (const slide of next.slides) {
+    if (!groups.length || slide.section) groups.push({ name:slide.section || "", slides:[] });
+    groups[groups.length - 1].slides.push(slide);
+  }
+  const source = groups.find(group => group.slides.some(slide => slide.id === id));
+  const target = groups.find(group => group.slides.some(slide => slide.id === targetId));
+  if (!source || !target) throw new Error("Slide not found");
+  if (id === targetId) return next;
+  if (kind === "section") {
+    if (!source.name || source.slides[0].id !== id) throw new Error("Section not found");
+    if (source === target) return next;
+    groups.splice(groups.indexOf(source), 1);
+    const destination = Math.max(groups[0]?.name ? 0 : 1, groups.indexOf(target) + (edge === "after" ? 1 : 0));
+    groups.splice(destination, 0, source);
+  } else {
+    const [slide] = source.slides.splice(source.slides.findIndex(item => item.id === id), 1);
+    target.slides.splice(target.slides.findIndex(item => item.id === targetId) + (edge === "after" ? 1 : 0), 0, slide);
+  }
+  next.slides = groups.flatMap(group => group.slides.map((slide, index) => {
+    delete slide.section;
+    if (!index && group.name) slide.section = group.name;
+    return slide;
+  }));
   return next;
 }
 export function presentationSlides(deck) {
