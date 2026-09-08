@@ -1,4 +1,5 @@
 .merge-slide-properties { position:absolute; z-index:6; top:76px; left:16px; width:224px; max-height:calc(100% - 140px); overflow:auto; overscroll-behavior:contain; box-sizing:border-box; padding:12px; border:1px solid var(--line); border-radius:var(--ui-radius); background:var(--bg-elev); color:var(--text); box-shadow:var(--ui-shadow); scrollbar-width:thin; }
+.merge-shell .excalidraw .merge-slide-properties { display:block; }
 .merge-shell .merge-slide-properties h2 { font:500 11px var(--mono); margin:0; }
 .merge-shell .merge-properties-heading { display:flex; justify-content:space-between; align-items:center; width:100%; padding:0; border:0; background:none; color:var(--text); }
 .merge-properties-heading[aria-expanded=true] { margin-bottom:12px; }
@@ -12,21 +13,12 @@
 .merge-layout-thumb .is-media { border-style:solid; background:var(--ui-selected); border-color:var(--accent-2); }
 .merge-layout-thumb em { position:absolute; inset:0; display:grid; place-items:center; font:9px var(--mono); color:var(--text-dim); }
 .merge-layout-grid [aria-pressed=true] .merge-layout-thumb,.merge-layout-grid button:hover .merge-layout-thumb { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
-.merge-background-swatches { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px; }
-.merge-background-swatches button { width:23px; height:23px; padding:0; border:1px solid var(--line); border-radius:4px; }
-.merge-background-swatches .is-none { background:repeating-linear-gradient(45deg,var(--bg) 0 4px,var(--text-faint) 4px 6px); }
-.merge-background-swatches [aria-pressed=true] { outline:2px solid var(--accent); outline-offset:1px; }
-.merge-background-swatches .merge-custom-color { background:conic-gradient(red,#ff0,#0f0,#0ff,blue,#f0f,red); }
+.merge-slide-properties .merge-slide-color { position:relative; width:100%; height:auto; min-width:0; margin:0 0 10px; padding:0; border:0; background:transparent; }
 .merge-background-media { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; padding:7px 4px; border:1px solid var(--line); border-radius:4px; background:var(--bg-2); color:inherit; font-size:11px!important; }
 .merge-background-file { display:flex; align-items:center; gap:6px; margin-top:8px; font-size:10px; }
 .merge-background-file span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .merge-background-file button { margin-left:auto; color:var(--text-dim); background:none; border:0; }
 .merge-background-file button:hover { color:var(--ui-danger); }
-.merge-background-picker { margin:12px 0; }
-.merge-background-picker .react-colorful { width:100%; height:140px; }
-.merge-background-picker label { display:flex; align-items:center; gap:6px; margin:8px 0; font-size:11px; }
-.merge-background-picker input { width:110px; min-width:0; padding:6px; border:1px solid var(--line); border-radius:4px; color:var(--text); background:var(--bg-2); }
-.merge-background-picker button { width:100%; padding:6px; background:var(--bg-2); color:inherit; border:1px solid var(--line); border-radius:4px; }
 .merge-transition { display:flex; flex-direction:column; gap:8px; font-size:12px; }
 .merge-transition select { width:100%; padding:8px; border:1px solid var(--line); border-radius:4px; color:inherit; background:var(--bg-2); font:inherit; color-scheme:dark; }
 .merge-slide-properties :is(button,summary):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
@@ -44,6 +36,9 @@
 .merge-background-video { display:block; width:100%; height:100%; object-fit:cover; pointer-events:none; }
 .merge-present-engine { width:100%; height:100%; }
 .merge-shell .lab-canvas,.merge-present-engine { position:relative; isolation:isolate; overflow:hidden; }
+.merge-workspace { isolation:isolate; }
+.merge-shell .lab-canvas { isolation:auto; }
+.merge-shell .lab-canvas>.excalidraw { z-index:auto; }
 .merge-video-layer { position:absolute; z-index:0; overflow:hidden; pointer-events:none; }
 .merge-video-layer~.excalidraw { z-index:1; background:transparent!important; }
 @media(max-width:900px) { .merge-slide-properties { top:94px; left:8px; width:216px; max-height:calc(100% - 148px); } }

@@ -22,6 +22,8 @@ published content, private decks, authentication and publishing are untouched.
   object snapping, slide-pixel rulers, safe margins, thirds and Fit slide.
 - Empty selection shows Slide properties: nine layouts, background swatches/custom
     colour, original-byte image/video backgrounds, and None/Fade/Push/Magic Move transitions.
+- Slide background uses the same native fill picker: palette, shades, shared custom
+    colours, hex, spectrum, RGB and desktop eyedropper. Colour edits keep the popup open.
 - Layouts reposition free text/images, preserve grouped/locked objects and bound labels,
     and replace untouched placeholders. Select a media placeholder then use Image to fill it.
 - Drag from the top/left ruler to insert horizontal/vertical guides. Drag to move;
@@ -43,6 +45,8 @@ JavaScript for Google API key patterns. The engine adapter removes upstream Fire
 transition matching, guide positioning and snapping.
 Browser verification covers real rail dragging, keyboard resizing, reload persistence,
 floating-left inspector geometry, desktop/mobile screenshots, deck operations and rehearsal.
+Background-picker checks cover hex/RGB editing without dismissal, Escape, Undo,
+reload persistence, native fill parity and popup stacking above the toolbar on mobile.
 
 ## Adoption gates
 

@@ -242,7 +242,7 @@ function Merger() {
     const restored=restoreElements([...next.filter(element=>element.id!==FRAME_ID),...additions,next.find(element=>element.id===FRAME_ID)],null,{repairBindings:true,refreshDimensions:true});
     commitSettings({layout},restored);await save();
   }); }
-  function setBackground(background,file) { return run(async()=>{
+  function setBackground(background,file) { const apply=async()=>{
     const elements=api.getSceneElementsIncludingDeleted().map(element=>element.customData?.slideBackground?changed(element,{isDeleted:true}):element);
     let additions=[];
     if(background) {
@@ -256,7 +256,7 @@ function Merger() {
       additions=restoreElements(convertToExcalidrawElements([skeleton],{regenerateIds:false}),null,{repairBindings:true});
     }
     commitSettings({background},[...additions,...elements]);if(file&&!file.mimeType.startsWith("video/"))api.addFiles([file]);await save();
-  }); }
+  };return file?run(apply):apply().catch(fail); }
   async function backgroundMedia(file) {
     try {
       if(!/^(image\/(png|jpeg|webp|gif)|video\/(mp4|webm))$/.test(file.type))throw new Error("Choose PNG, JPEG, WebP, GIF, MP4 or WebM");
@@ -330,9 +330,11 @@ function Merger() {
           </ToolMenu></div>
         </CanvasToolbar>
         <CanvasGuides api={api} {...view} guides={settings.guides||[]} onGuides={guides=>commitSettings({guides})} disabled={busy||present!==null||confirm||iconOpen} />
-        {!hasSelection&&current&&<SlideProperties settings={settings} disabled={busy||present!==null||confirm||iconOpen} onLayout={applyLayout} onBackground={setBackground} onMedia={backgroundMedia} onTransition={transition=>commitSettings({transition})} />}
         <div className="lab-canvas"><CanvasVideo api={api} /><LabTextColorContext.Provider value={{ api, labels, linked: labels.every(label => label.linked), busy, changeLabelColor: color => { if (color && color !== "unlink" && color !== "transparent") { color = normalizeHex(color); if (!color) return; } const elements = api.getSceneElementsIncludingDeleted(); const targets = selectedLabels(elements, api.getAppState().selectedElementIds); api.updateScene({ elements: labelColorUpdate(elements, targets.map(element => element.id), color), captureUpdate: CaptureUpdateAction.IMMEDIATELY }); } }}>
-          <Excalidraw excalidrawAPI={setApi} onChange={onChange} viewModeEnabled={busy || present !== null || confirm || iconOpen} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: "light", currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: "#ffffff" } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed}><MainMenu><MainMenu.DefaultItems.Help /></MainMenu></Excalidraw>
+          <Excalidraw excalidrawAPI={setApi} onChange={onChange} viewModeEnabled={busy || present !== null || confirm || iconOpen} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: "light", currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: "#ffffff" } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed}>
+            <MainMenu><MainMenu.DefaultItems.Help /></MainMenu>
+            {!hasSelection&&current&&<SlideProperties settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm||iconOpen} onLayout={applyLayout} onBackground={setBackground} onMedia={backgroundMedia} onTransition={transition=>commitSettings({transition})} />}
+          </Excalidraw>
         </LabTextColorContext.Provider></div><CornerControls api={api} host={host} disabled={busy || present !== null} />{busy && <div className="lab-busy" role="status">Working</div>}
       </main><label className="merge-notes" id="merge-speaker-notes" hidden={!notesOpen}><span>Speaker notes</span><textarea aria-label="Speaker notes" value={current?.notes || ""} disabled={busy} onChange={event => metadata("notes", event.target.value)} /></label></section>
     <footer className="merge-status"><span role="status">{status}</span><span>{selectedIndex + 1} / {deck?.slides.length || 0}</span><span>Local draft</span></footer>
