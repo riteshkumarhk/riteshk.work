@@ -91,7 +91,7 @@ export function validateComposition(value) {
 function planWarnings(plan, slideId) {
   const { width, height } = COMPOSITION_CAPABILITIES.canvas;
   for (const element of plan.elements) {
-    if (element.type !== "embeddable" || ![element.x, element.y, element.width, element.height].every(Number.isFinite)) throw new Error("Invalid section composition element");
+    if (element.type !== "rectangle" || element.link != null || !element.customData?.sectionComponent || ![element.x, element.y, element.width, element.height].every(Number.isFinite)) throw new Error("Invalid section composition element");
     if (element.x < 0 || element.y < 0 || element.x + element.width > width || element.y + element.height > height) throw new Error("Composition element is outside the slide");
   }
   return [{ slideId, code: "component-review", message: "Review the complete component and its interactions at presentation size." }];

@@ -20,6 +20,7 @@ import { SlideNavigator, DeckDialog, LayoutNameDialog } from "./slide-merge-navi
 import { captureLayout, instantiateLayout, savedLayoutStore } from "./slide-merge-layouts.mjs";
 import { sectionMediaUrl, sectionPlainText } from "./slide-merge-sections.mjs";
 import { sectionComponentPlan } from "./slide-merge-section-component.mjs";
+import { nativeSectionElement, nativeSectionLayers } from "./slide-merge-native-sections.mjs";
 import { SlideProperties } from "./slide-merge-properties.jsx";
 import { PROPERTY_LAYOUTS, slideSettings, slideOwnsFocus, layoutPlan, transitionMatch } from "./slide-merge-properties.mjs";
 import { guideSnap } from "./slide-merge-guide-core.mjs";
@@ -90,7 +91,7 @@ function SectionComponent({ block, icons }) {
     frame.current?.contentWindow?.postMessage({ type: "rk-section-component", block, icons, tokens, appearance }, location.origin);
   };
   useEffect(send, [block, icons, appearance]);
-  return <iframe ref={frame} className="lab-embed" title="Case-study section" src="/studio/slide-lab/native.html?fixture=component" allow="fullscreen; autoplay" allowFullScreen onLoad={send} />;
+  return <iframe ref={frame} className="lab-embed lab-section-component" title="Case-study section" src="/studio/slide-lab/native.html?fixture=component" allow="fullscreen; autoplay" allowFullScreen onLoad={send} />;
 }
 function Embed({ element }) {
   if (element.customData?.labLayerHidden) return null;
@@ -101,6 +102,41 @@ function Embed({ element }) {
   return ["rich", "section", "video"].includes(kind) ? <iframe className="lab-embed" title={`Native ${kind}`} src={`/studio/slide-lab/native.html?fixture=${kind}`} /> : null;
 }
 const engineOptions = { tools: { image: false }, canvasActions: { loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, clearCanvas: false, changeViewBackgroundColor: false, toggleTheme: false } };
+function NativeSections({ api, interactive = false }) {
+  const [layers, setLayers] = useState([]);
+  useEffect(() => {
+    if (!api) return;
+    const update = (elements, state) => setLayers(nativeSectionLayers(elements, state));
+    update(api.getSceneElements(), api.getAppState());
+    return api.onChange(update);
+  }, [api]);
+  return <div className={`merge-native-sections${interactive ? " is-interactive" : ""}`}><SectionLayers layers={layers} files={api?.getFiles()} /></div>;
+}
+function SectionForeground({ elements, frame, files, style }) {
+  const [svg, setSvg] = useState("");
+  const appearance = useAppearance();
+  const signature = JSON.stringify([elements, frame]);
+  useEffect(() => {
+    let current = true;
+    if (!elements.length || !frame) { setSvg(""); return; }
+    exportToSvg({ elements: [...elements.map(element => ({ ...element, frameId: frame.id })), frame], files: files || {}, exportingFrame: frame, skipInliningFonts: true, appState: { exportBackground: false, exportWithDarkMode: canvasTheme([...elements, frame], appearance) === "dark" } }).then(svg => { if (current) setSvg(svg.outerHTML); }).catch(() => { if (current) setSvg(""); });
+    return () => { current = false; };
+  }, [signature, files, appearance]);
+  return svg ? <div className="merge-native-foreground" style={style} dangerouslySetInnerHTML={{ __html: svg }} /> : null;
+}
+function SectionLayers({ layers, files }) {
+  return layers.map(({ element, style, clipStyle, foreground, frame, frameStyle }) => <div key={element.id} className="merge-native-clip" style={clipStyle}><div className="merge-native-section" style={style}><SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} /></div><SectionForeground elements={foreground} frame={frame} files={files} style={frameStyle} /></div>);
+}
+function SectionThumbnail({ svg, elements, files }) {
+  const host = useRef(null);
+  const [scale, setScale] = useState(0);
+  useEffect(() => {
+    const observer = new ResizeObserver(([entry]) => setScale(entry.contentRect.width / 1280));
+    observer.observe(host.current);
+    return () => observer.disconnect();
+  }, []);
+  return <span ref={host} className="merge-section-thumbnail" inert=""><span className="merge-section-thumbnail-scene" style={{ transform: `scale(${scale})` }}><span className="merge-section-thumbnail-svg" dangerouslySetInnerHTML={{ __html: svg }} /><SectionLayers layers={nativeSectionLayers(elements, { zoom: { value: 1 }, scrollX: 0, scrollY: 0 })} files={files} /></span></span>;
+}
 function CanvasVideo({api}) {
   const [video,setVideo]=useState(null),[failed,setFailed]=useState(false);
   useEffect(()=>{if(!api)return;const update=(elements,state)=>{const element=elements.find(item=>!item.isDeleted&&!item.customData?.labLayerHidden&&item.customData?.slideBackgroundVideo);const next=element?{src:element.customData.slideBackgroundVideo,x:(state.scrollX+element.x)*state.zoom.value,y:(state.scrollY+element.y)*state.zoom.value,width:element.width*state.zoom.value,height:element.height*state.zoom.value}:null;setVideo(previous=>previous?.src===next?.src&&previous?.x===next?.x&&previous?.y===next?.y&&previous?.width===next?.width&&previous?.height===next?.height?previous:next);};update(api.getSceneElements(),api.getAppState());return api.onChange(update);},[api]);
@@ -113,7 +149,7 @@ function changed(element, update) { return { ...element, ...update, version: ele
 function validEmbed(link) { return /^https:\/\/slide-lab\.invalid\/(rich|section|video|background|section-video|section-component)$/.test(link); }
 
 async function materialize(slide) {
-  if (slide.scene) return slide;
+  if (slide.scene) return { ...slide, scene: { ...slide.scene, elements: slide.scene.elements.map(nativeSectionElement) } };
   const layout = ["title", "columns"].includes(slide.fixture) ? contentSkeleton(slide.fixture, DEFAULT_SLIDE_FONT, crypto.randomUUID()) : null;
   const skeleton = platformText(layout ? [...layout, { ...fixtureSkeleton("flow").at(-1), children: layout.map(element => element.id) }] : slide.fixture === "blank" ? [fixtureSkeleton("flow").at(-1)] : fixtureSkeleton(slide.fixture));
   if (slide.fixture === "blank") skeleton[0].children = [];
@@ -172,7 +208,7 @@ function Presenter({ slides, index, onIndex, onClose }) {
   }, [index]);
   return <div className="merge-present" role="dialog" aria-modal="true" aria-label="Rehearsal">
     <header><strong>{slide.title}</strong><Button icon="close" label="Close rehearsal" onClick={onClose} autoFocus /></header>
-    <div className="merge-present-stage" ref={stage}><div className="merge-present-engine" ref={engine}><CanvasVideo api={api} /><Excalidraw excalidrawAPI={setApi} theme={canvasTheme(slide.scene.elements,appearance)} viewModeEnabled zenModeEnabled aiEnabled={false} handleKeyboardGlobally={false} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed} /></div></div>
+    <div className="merge-present-stage" ref={stage}><div className="merge-present-engine" ref={engine}><CanvasVideo api={api} /><NativeSections api={api} interactive /><Excalidraw excalidrawAPI={setApi} theme={canvasTheme(slide.scene.elements,appearance)} viewModeEnabled zenModeEnabled aiEnabled={false} handleKeyboardGlobally={false} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed} /></div></div>
     <footer><Button icon="back" label="Previous slide" disabled={!index} onClick={() => onIndex(index - 1)} /><span>{index + 1} / {slides.length}</span><Button icon="next" label="Next slide" disabled={index === slides.length - 1} onClick={() => onIndex(index + 1)} /><p>{slide.notes}</p></footer>
   </div>;
 }
@@ -303,7 +339,10 @@ function Merger() {
   }
   async function thumbnail(slide) {
     const svg = await exportToSvg({ elements: slide.scene.elements.filter(element => !element.isDeleted), appState: { ...slide.scene.appState, exportBackground: false, exportWithDarkMode:canvasTheme(slide.scene.elements,document.documentElement.dataset.appearance)==="dark" }, files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true });
-    setThumbnails(previous => ({ ...previous, [slide.id]: svg.outerHTML }));
+    const preview = slide.scene.elements.some(element => element.customData?.sectionComponent && !element.isDeleted)
+      ? <SectionThumbnail svg={svg.outerHTML} elements={slide.scene.elements} files={slide.scene.files} />
+      : <span dangerouslySetInnerHTML={{ __html: svg.outerHTML }} />;
+    setThumbnails(previous => ({ ...previous, [slide.id]: preview }));
   }
   async function save() {
     clearTimeout(live.current.timer); live.current.timer = null; activity.flush(); capture();
@@ -691,6 +730,7 @@ function Merger() {
             </ContentPane>
             {!hasSelection&&current&&<SlideProperties settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} />}
           </Excalidraw>
+          <NativeSections api={api} interactive={!editing && !busy && present === null && !confirm && !deckDialog} />
           {editing && <FitSlideControl api={api} host={host} mobile={mobileUI.mobile} disabled={busy || present !== null || !!confirm || !!deckDialog} onFit={fit} />}
           <PlaceholderActions api={api} disabled={busy || present !== null || !!confirm || !!deckDialog} onInsert={(id, next) => { api.updateScene({appState:{selectedElementIds:{[id]:true}},captureUpdate:CaptureUpdateAction.NEVER});openPane(next, false, id); }} />
         </LabTextColorContext.Provider>{mobileUI.mobile && <div className="merge-mobile-canvas-controls"><button className="merge-icon" aria-label="Toggle slides" title="Slides" aria-expanded={mobileUI.slides} onClick={()=>mobileUI.setSlides(!mobileUI.slides)}><Icon name="slides" /></button><button className="merge-icon" title="Properties" aria-label="Open properties" onClick={()=>mobileUI.open("properties",hasSelection)}><Icon name="properties" /></button><Button icon="fit" label="Fit slide" disabled={busy || present !== null || !!confirm || !!deckDialog} onClick={fit} /><button className="merge-notes-toggle" title="Speaker notes" aria-label="Speaker notes panel" aria-expanded={mobileUI.panel === "notes"} aria-controls="merge-speaker-notes" onClick={() => mobileUI.open(mobileUI.panel === "notes" ? null : "notes")}><ToolIcon name="notes" /><span>Notes</span></button><button className="merge-icon" title="Help" aria-label="Help" onClick={() => api?.updateScene({appState:{openDialog:{name:"help"}},captureUpdate:CaptureUpdateAction.NEVER})}><Icon name="help" /></button></div>}</div><CornerControls api={api} host={host} disabled={busy || present !== null} />{busy && <div className="lab-busy" role="status">Working</div>}

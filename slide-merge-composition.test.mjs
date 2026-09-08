@@ -55,7 +55,7 @@ test("compilation is deterministic, editable and leaves source/spec unchanged", 
   assert.deepEqual({ source, composition }, before);
   assert.equal(compiled.slides[1].elements[0].customData.sectionComponent.items[0].value, "42%");
   assert.equal(compiled.slides[2].elements[0].customData.sectionComponent.items[0].src, source.work[0].study.blocks[2].items[0].src);
-  assert.ok(compiled.slides.flatMap(slide => slide.elements).every(element => element.type === "embeddable" && element.frameId === "lab-slide"));
+  assert.ok(compiled.slides.flatMap(slide => slide.elements).every(element => element.type === "rectangle" && element.link == null && element.frameId === "lab-slide"));
   const ids = compiled.slides.flatMap(slide => slide.elements.map(element => element.id));
   assert.equal(ids.length, new Set(ids).size);
   assert.equal(compiled.slides[0].provenance.workId, "study");

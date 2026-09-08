@@ -97,3 +97,9 @@ test("reviewed original SVG bytes survive separately from the rendering copy", (
   deck.slides[0].scene.files["source-file"].originalDataURL = "https://private.example.com/source.svg";
   assert.throws(()=>publicDeckPayload(deck,{reviewedSources:true}),/original inline bytes/);
 });
+
+test("native sections cannot silently become empty shapes in a public payload", () => {
+  const deck = fixture();
+  deck.slides[0].scene.elements[1] = { id: "section", type: "rectangle", customData: { sectionComponent: { type: "gallery", items: [{ src: "original.png" }] } } };
+  assert.throws(() => publicDeckPayload(deck, { reviewedSources: true }), /public component renderer/);
+});

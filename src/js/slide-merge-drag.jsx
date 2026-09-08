@@ -75,7 +75,7 @@ export function NavigatorDragList({ deck, thumbnails, disabled, reorder, childre
   return <NavigatorDrag.Provider value={{ dragging, destination, disabled, horizontal }}>
     <DndContext sensors={sensors} collisionDetection={args => args.pointerCoordinates ? pointerWithin(args) : closestCenter(args)} onDragStart={startDrag} onDragMove={event => setDestination(dropTarget(event))} onDragOver={event => setDestination(dropTarget(event))} onDragEnd={finishDrag} onDragCancel={() => { setDragging(null); setDestination(null); }}>
       <div ref={list} className={`merge-slide-list ${dragging ? "is-dragging" : ""}`}>{children}</div>
-      {createPortal(<DragOverlay dropAnimation={null} zIndex={10050}>{dragging && <div className="merge-reorder-ghost" style={{ width:dragging.width }}>{dragging.kind === "slide" && <span className="merge-thumbnail" dangerouslySetInnerHTML={{ __html:thumbnails[dragging.slideId] || "" }} />}<span>{dragging.label}</span>{dragging.kind === "section" && <small>{dragging.ids.length} slides</small>}</div>}</DragOverlay>, document.body)}
+      {createPortal(<DragOverlay dropAnimation={null} zIndex={10050}>{dragging && <div className="merge-reorder-ghost" style={{ width:dragging.width }}>{dragging.kind === "slide" && <span className="merge-thumbnail">{thumbnails[dragging.slideId]}</span>}<span>{dragging.label}</span>{dragging.kind === "section" && <small>{dragging.ids.length} slides</small>}</div>}</DragOverlay>, document.body)}
     </DndContext>
   </NavigatorDrag.Provider>;
 }

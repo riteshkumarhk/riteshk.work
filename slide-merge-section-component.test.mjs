@@ -6,7 +6,8 @@ test("inserting a section retains every carousel item and its component configur
   const block = { type: "gallery", heading: "Chrome onboarding", layout: "carousel", items: Array.from({ length: 5 }, (_, index) => ({ src: `original-${index}.png`, caption: `Screen ${index}` })) };
   const plan = sectionComponentPlan(block, String, "insert");
   assert.equal(plan.elements.length, 1);
-  assert.equal(plan.elements[0].type, "embeddable");
+  assert.equal(plan.elements[0].type, "rectangle");
+  assert.equal(plan.elements[0].link, null);
   assert.deepEqual(plan.elements[0].customData.sectionComponent, block);
   assert.notEqual(plan.elements[0].customData.sectionComponent, block);
   block.items.pop();

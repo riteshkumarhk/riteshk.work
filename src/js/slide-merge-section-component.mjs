@@ -21,9 +21,9 @@ export function sectionComponentPlan(block, plain, prefix, resources = {}) {
   return {
     title,
     notes: plain(snapshot.body || snapshot.desc || ""),
-    elements: [{ type: "embeddable", id: `${prefix}-section`, x: 64, y: 36, width: 1152, height: 648,
-      frameId: "lab-slide", link: "https://slide-lab.invalid/section-component",
-      backgroundColor: "transparent", strokeColor: "transparent",
+    elements: [{ type: "rectangle", id: `${prefix}-section`, x: 64, y: 36, width: 1152, height: 648,
+      frameId: "lab-slide", link: null,
+      backgroundColor: "rgba(0, 0, 0, 0)", strokeColor: "transparent", fillStyle: "solid", roughness: 0,
       customData: { sectionComponent: snapshot, sectionIcons: icons } }]
   };
 }
