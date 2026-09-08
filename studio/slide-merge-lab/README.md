@@ -7,6 +7,33 @@ the existing owner session through a new, narrowly scoped Worker route.
 See [the design audit](DESIGN-AUDIT.md) for consistency corrections, verification
 coverage and components proposed for a future shared design-system update.
 
+## AI composition foundation
+
+`src/js/slide-merge-composition.mjs` defines the isolated version-1 contract and
+capability registry. `compositionCatalog(data, { plain, fontFamily })` returns
+eligible section references and short excerpts, without media URLs. A proposal
+contains `{ version: 1, title, slides: [{ id, kind: "section", sourceId }] }`.
+`compileComposition(proposal, data, options)` resolves every reference again and
+returns deterministic editable text skeletons, original image/video references,
+full source notes, provenance and review warnings. Both functions are async.
+
+References include case-study identity, section position and SHA-256 content
+fingerprints. Changed, moved, missing or protected sources reject the proposal;
+unknown fields and capabilities are rejected. Compilation snapshots inputs and
+does not mutate a deck, fetch media, contact an AI provider or publish anything.
+Nested protection markers and protected URLs exclude the entire source section.
+
+The first supported capability selects and orders existing sections; it does not
+invent copy, facts, layouts or media. It reuses the current section converter.
+Warnings cover small text, estimated text overflow, excerpts, repeats and
+text-only slides; these are not a substitute for native font measurement or a
+visual review. Output is a scene plan, not a hydrated Excalidraw scene. Later
+integration must resolve original media, measure/render text, show a preview and
+obtain an explicit append/replace decision before applying. Provider/auth/usage
+reuse and Draft With AI controls belong to the next phase.
+
+Run `node --test slide-merge-composition.test.mjs slide-merge-sections.test.mjs`.
+
 ## Interaction model
 
 - The top status bar follows Studio's outlined controls: native Undo/Redo at left,

@@ -1,0 +1,132 @@
+import { availableStudies, caseStudyMedia, sectionPlan } from "./slide-merge-sections.mjs";
+
+export const COMPOSITION_CAPABILITIES = Object.freeze({
+  version: 1,
+  maxSlides: 24,
+  canvas: Object.freeze({ width: 1280, height: 720 }),
+  kinds: Object.freeze(["section"]),
+  sourceTypes: Object.freeze(["text", "statement", "stmt", "metrics", "voices", "media", "gallery", "mediagrid", "figure", "showpiece"]),
+  output: Object.freeze(["editable-text", "original-image", "direct-video"]),
+  excluded: Object.freeze(["protected-content", "arbitrary-html", "model-media-urls", "model-canvas-code"])
+});
+
+const sourceTypes = new Set(COMPOSITION_CAPABILITIES.sourceTypes);
+const protectedKeys = ["off", "locked", "encStub", "vaultBlock", "protected", "confidential", "private", "requiresReview"];
+
+function containsProtected(value, seen = new WeakSet()) {
+  if (typeof value === "string") return /(?:vault:|rkenc:|assets\/protected\/|\/vault\/|\.enc(?:$|[?#]))/i.test(value);
+  if (!value || typeof value !== "object") return false;
+  if (seen.has(value)) throw new Error("Cyclic composition source");
+  seen.add(value);
+  const blocked = protectedKeys.some(key => !!value[key]) || Object.values(value).some(child => containsProtected(child, seen));
+  seen.delete(value);
+  return blocked;
+}
+
+function record(value, keys, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`);
+  const actual = Object.keys(value);
+  if (actual.length !== keys.length || actual.some(key => !keys.includes(key))) throw new Error(`${label} has unsupported or missing fields`);
+}
+
+function shortText(value, limit, label) {
+  if (typeof value !== "string" || !value.trim() || value.length > limit || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value)) throw new Error(`Invalid ${label}`);
+  return value.trim();
+}
+
+async function eligibleSources(data, plain, fontFamily) {
+  if (typeof plain !== "function") throw new Error("A plain-text converter is required");
+  if (!Number.isInteger(fontFamily) || fontFamily < 1) throw new Error("A valid native font family is required");
+  const sources = new Map();
+  for (const work of availableStudies(data)) {
+    const original = data.work.find(candidate => candidate?.id === work.id);
+    if (!original || protectedKeys.some(key => !!original[key]) || protectedKeys.some(key => !!original.study?.[key])) continue;
+    if (typeof work.id !== "string" || !work.id.trim()) continue;
+    if (data.work.filter(candidate => candidate?.id === work.id).length !== 1) throw new Error("Duplicate case-study source ID");
+    for (const block of work.blocks) {
+      if (!sourceTypes.has(block.type) || containsProtected(block)) continue;
+      const index = original.study.blocks.indexOf(block);
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(block)));
+      const fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+      const sourceId = JSON.stringify([work.id, index, fingerprint]);
+      try {
+        const plan = sectionPlan(block, plain, fontFamily, "preview");
+        if (plan.media) {
+          const asset = caseStudyMedia({ study: { blocks: [block] } }).find(item => item.url === plan.media.url);
+          if (!asset) continue;
+          plan.media.kind = asset.kind;
+        }
+        sources.set(sourceId, { block, workId: work.id, blockIndex: index, plan });
+      } catch (error) {
+        if (!/no supported text or media/.test(error.message)) throw error;
+      }
+    }
+  }
+  return sources;
+}
+
+export async function compositionCatalog(data, { plain, fontFamily } = {}) {
+  const snapshot = structuredClone(data);
+  return [...await eligibleSources(snapshot, plain, fontFamily)].map(([sourceId, source]) => ({
+    sourceId,
+    type: source.block.type,
+    title: plain(source.plan.title),
+    excerpt: source.plan.notes.slice(0, 600),
+    hasMedia: !!source.plan.media
+  }));
+}
+
+export function validateComposition(value) {
+  record(value, ["version", "title", "slides"], "Composition");
+  if (value.version !== COMPOSITION_CAPABILITIES.version) throw new Error("Unsupported composition version");
+  const title = shortText(value.title, 160, "composition title");
+  if (!Array.isArray(value.slides) || !value.slides.length || value.slides.length > COMPOSITION_CAPABILITIES.maxSlides) throw new Error("Composition must contain 1 to 24 slides");
+  const ids = new Set();
+  const slides = value.slides.map(slide => {
+    record(slide, ["id", "kind", "sourceId"], "Slide");
+    const id = shortText(slide.id, 64, "slide ID");
+    if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(id) || ids.has(id)) throw new Error("Slide IDs must be unique safe identifiers");
+    ids.add(id);
+    if (!COMPOSITION_CAPABILITIES.kinds.includes(slide.kind)) throw new Error("Unsupported composition kind");
+    return { id, kind: slide.kind, sourceId: shortText(slide.sourceId, 512, "source ID") };
+  });
+  return { version: value.version, title, slides };
+}
+
+function planWarnings(plan, slideId) {
+  const warnings = [];
+  const { width, height } = COMPOSITION_CAPABILITIES.canvas;
+  for (const element of plan.elements) {
+    if (element.type !== "text" || ![element.x, element.y, element.width, element.fontSize].every(Number.isFinite)) throw new Error("Invalid native composition element");
+    if (element.x < 0 || element.y < 0 || element.x + element.width > width || element.y >= height) throw new Error("Composition element is outside the slide");
+    if (element.fontSize < 20) warnings.push({ slideId, code: "small-text", message: "Review small text at presentation size." });
+    const estimatedLines = element.text.split("\n").reduce((total, line) => total + Math.max(1, Math.ceil(line.length * element.fontSize * .65 / element.width)), 0);
+    if (element.y + estimatedLines * element.fontSize * 1.25 > height) warnings.push({ slideId, code: "possible-text-overflow", message: "Check text fit with the native renderer before applying." });
+  }
+  if (plan.media) {
+    const media = plan.media;
+    if (![media.x, media.y, media.width, media.height].every(Number.isFinite) || media.x < 0 || media.y < 0 || media.width <= 0 || media.height <= 0 || media.x + media.width > width || media.y + media.height > height) throw new Error("Composition media is outside the slide");
+  }
+  if (!plan.media) warnings.push({ slideId, code: "text-only", message: "Consider a visual source for this slide." });
+  if (plan.notes.length > 500) warnings.push({ slideId, code: "excerpted-source", message: "Full source prose is retained in speaker notes." });
+  return warnings;
+}
+
+export async function compileComposition(value, data, { plain, fontFamily } = {}) {
+  const spec = validateComposition(value);
+  const snapshot = structuredClone(data);
+  const sources = await eligibleSources(snapshot, plain, fontFamily);
+  const warnings = [], used = new Set();
+  const slides = spec.slides.map(slide => {
+    const source = sources.get(slide.sourceId);
+    if (!source) throw new Error(`Slide ${slide.id} references an unavailable source`);
+    const plan = sectionPlan(source.block, plain, fontFamily, `composition-${slide.id}`);
+    plan.title = plain(plan.title);
+    if (plan.media) plan.media.kind = source.plan.media.kind;
+    warnings.push(...planWarnings(plan, slide.id));
+    if (used.has(slide.sourceId)) warnings.push({ slideId: slide.id, code: "repeated-source", message: "This source appears more than once." });
+    used.add(slide.sourceId);
+    return { id: slide.id, ...plan, provenance: { workId: source.workId, blockIndex: source.blockIndex, sourceId: slide.sourceId } };
+  });
+  return { version: 1, title: spec.title, slides, warnings };
+}
