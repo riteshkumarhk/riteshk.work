@@ -1,0 +1,7 @@
+.merge-placeholder-layer{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:hidden}
+.merge-placeholder-slot{position:absolute;display:grid;place-items:center;pointer-events:none}
+.merge-placeholder-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(44px,1fr));gap:6px;width:min(234px,calc(100% - 16px));max-height:100%;overflow:auto;pointer-events:auto}
+.merge-shell .merge-placeholder-actions button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;min-height:44px;padding:6px 2px;border:1px solid var(--merge-line);border-radius:6px;background:var(--merge-bg);color:var(--merge-muted);cursor:pointer}
+.merge-shell .merge-placeholder-actions button:hover,.merge-shell .merge-placeholder-actions button:focus-visible{color:var(--merge-text);background:var(--ui-hover);border-color:var(--merge-accent)}
+.merge-placeholder-actions svg{width:16px;height:16px}
+.merge-placeholder-actions span{font:10px var(--sans)}

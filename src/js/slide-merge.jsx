@@ -12,6 +12,8 @@ import { CanvasToolbar, ToolMenu, ToolIcon } from "./slide-merge-toolbar.jsx";
 import { ContentPane, PANE_LABELS } from "./slide-merge-content-pane.jsx";
 import { useSlideLibrary } from "./slide-library.jsx";
 import { CanvasGuides, CanvasBackdrop } from "./slide-merge-guides.jsx";
+import { PlaceholderActions } from "./slide-merge-placeholders.jsx";
+import { fitPlaceholder } from "./slide-merge-placeholder-fit.mjs";
 import { contentSkeleton, diagramSkeleton } from "./slide-merge-inserts.mjs";
 import { SlideNavigator, SectionDialog } from "./slide-merge-navigator.jsx";
 import { sectionPlan, sectionMediaUrl, sectionPlainText } from "./slide-merge-sections.mjs";
@@ -142,7 +144,9 @@ function Merger() {
     if (!api) return;
     return api.onChange((elements, state) => setPane(state.openSidebar?.name === "insert" ? state.openSidebar.tab : state.openSidebar ? "library" : null));
   }, [api]);
-  function openPane(next, toggle = true) {
+  const placeholderTarget = useRef(null);
+  function openPane(next, toggle = true, placeholderId = null) {
+    placeholderTarget.current = placeholderId;
     const target = toggle && pane === next ? null : next;
     if (mobileUI.mobile) mobileUI.open(target);
     else api.updateScene({ appState: { openSidebar: target ? { name: target === "library" ? "default" : "insert", tab: target } : null, openMenu: null, openPopup: null }, captureUpdate: CaptureUpdateAction.NEVER });
@@ -222,6 +226,7 @@ function Merger() {
     api.updateScene({ appState: { zoom: { value: zoom }, scrollX: (left+(width-left-right-1280*zoom)/2)/zoom, scrollY: (height / zoom - 720) / 2 }, captureUpdate: CaptureUpdateAction.NEVER });
   }
   async function mountSlide(slide) {
+    placeholderTarget.current = null;
     live.current.ready = false;
     await loadPlatformFonts(slide.scene.elements);
     api.resetScene();
@@ -291,7 +296,7 @@ function Merger() {
       sectionSelection.current = { selectedElementIds: Object.fromEntries(elements.map(element => [element.id, true])), selectedGroupIds: { [groupId]: true } };
       api.addFiles(Object.values(slide.scene.files));
       api.setActiveTool({ type: "selection" });
-      api.updateScene({ elements: [...api.getSceneElementsIncludingDeleted(), ...elements.map(element => ({ ...element, groupIds: [groupId] }))], captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+      api.updateScene({ elements: insertIntoPlaceholder(elements.map(element => ({ ...element, groupIds: [groupId] }))), captureUpdate: CaptureUpdateAction.IMMEDIATELY });
     } else {
       const next = prepared.reduce((result, { slide, elements }) => {
         slide.scene.elements.push(...elements);
@@ -371,12 +376,18 @@ function Merger() {
       await setBackground({type:"media",name:file.name,mimeType:file.type},original);
     } catch(error){fail(error);}
   }
+  function insertIntoPlaceholder(additions) {
+    const elements = api.getSceneElementsIncludingDeleted();
+    const slot = elements.find(element => element.id === placeholderTarget.current && !element.isDeleted && !element.locked && element.customData?.slidePlaceholder);
+    placeholderTarget.current = null;
+    return [...elements.map(element => element === slot ? changed(element, {isDeleted:true}) : element), ...fitPlaceholder(additions, slot)];
+  }
   function insertContent(kind, badge, diagram = false) { return run(async () => {
     const skeleton = diagram ? diagramSkeleton(kind, crypto.randomUUID()) : contentSkeleton(kind, DEFAULT_SLIDE_FONT, crypto.randomUUID(), badge);
     await loadPlatformFonts(skeleton);
     const elements = restoreElements(convertToExcalidrawElements(skeleton, { regenerateIds: false }), null, { repairBindings: true });
     api.setActiveTool({ type: "selection" });
-    api.updateScene({ elements: [...api.getSceneElementsIncludingDeleted(), ...elements], appState: { selectedElementIds: Object.fromEntries(elements.map(element => [element.id, true])) }, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+    api.updateScene({ elements: insertIntoPlaceholder(elements), appState: { selectedElementIds: Object.fromEntries(elements.map(element => [element.id, true])) }, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
     await save();
   }); }
   function importImage(file, studioIcon = false) { return run(() => insertImage(file, studioIcon)); }
@@ -384,10 +395,10 @@ function Merger() {
     if (!file || !/^image\/(png|jpeg|webp|gif|svg\+xml|avif)$/.test(file.type)) throw new Error("Choose PNG, JPEG, WebP, GIF, AVIF or SVG");
     const image = await originalImage(file), width = Math.min(640, image.width);
     const elements=api.getSceneElementsIncludingDeleted(),selected=api.getAppState().selectedElementIds;
-    const placeholder=!studioIcon&&elements.find(element=>!element.isDeleted&&!element.locked&&selected[element.id]&&element.customData?.slidePlaceholder?.kind==="media");
+    const placeholder=!placeholderTarget.current&&!studioIcon&&elements.find(element=>!element.isDeleted&&!element.locked&&selected[element.id]&&element.customData?.slidePlaceholder?.kind==="media");
     const scale=placeholder?Math.min(placeholder.width/image.width,placeholder.height/image.height):width/image.width;
     const element = restoreElements(convertToExcalidrawElements([{ type: "image", fileId: image.id, x: placeholder?placeholder.x+(placeholder.width-image.width*scale)/2:160, y: placeholder?placeholder.y+(placeholder.height-image.height*scale)/2:160, width:image.width*scale, height:image.height*scale, scale: [1, 1], frameId: FRAME_ID }]), null, { repairBindings:true })[0];
-    api.updateScene({ elements: [...elements.map(item=>item.id===placeholder?.id?changed(item,{isDeleted:true}):item), element], appState: { selectedElementIds: { [element.id]: true } }, captureUpdate: CaptureUpdateAction.IMMEDIATELY }); api.addFiles([image]);
+    api.updateScene({ elements: placeholderTarget.current ? insertIntoPlaceholder([element]) : [...elements.map(item=>item.id===placeholder?.id?changed(item,{isDeleted:true}):item), element], appState: { selectedElementIds: { [element.id]: true } }, captureUpdate: CaptureUpdateAction.IMMEDIATELY }); api.addFiles([image]);
     await save();
   }
   function importMedia(source) {
@@ -407,7 +418,7 @@ function Merger() {
       }
       if (videoUrl) {
         const element = restoreElements(convertToExcalidrawElements([{type:"embeddable",id:crypto.randomUUID(),x:320,y:180,width:640,height:360,frameId:FRAME_ID,link:"https://slide-lab.invalid/section-video",customData:{sectionVideo:videoUrl},backgroundColor:"transparent",strokeColor:"transparent"}]), null, { repairBindings:true })[0];
-        api.updateScene({elements:[...api.getSceneElementsIncludingDeleted(),element],appState:{selectedElementIds:{[element.id]:true}},captureUpdate:CaptureUpdateAction.IMMEDIATELY});
+        api.updateScene({elements:insertIntoPlaceholder([element]),appState:{selectedElementIds:{[element.id]:true}},captureUpdate:CaptureUpdateAction.IMMEDIATELY});
         await save();
       } else await insertImage(file);
       finishPaneInsert();
@@ -465,6 +476,7 @@ function Merger() {
             <ContentPane pane={pane} busy={busy} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={block => { finishPaneInsert(); addFromSection(block, true); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={blocks => addFromSection(blocks, false)} onMedia={importMedia} onUpload={() => input.current.click()} />
             {!hasSelection&&current&&<SlideProperties mobileOpen={mobileUI.mobile && mobileUI.panel === "properties"} settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm} onLayout={applyLayout} onBackground={setBackground} onMedia={backgroundMedia} onTransition={transition=>commitSettings({transition})} />}
           </Excalidraw>
+          <PlaceholderActions api={api} disabled={busy || present !== null || !!confirm || !!deckDialog} onInsert={(id, next) => { api.updateScene({appState:{selectedElementIds:{[id]:true}},captureUpdate:CaptureUpdateAction.NEVER});openPane(next, false, id); }} />
         </LabTextColorContext.Provider>{mobileUI.mobile && <div className="merge-mobile-canvas-controls"><button className="merge-icon" aria-label="Toggle slides" title="Slides" aria-expanded={mobileUI.slides} onClick={()=>mobileUI.setSlides(!mobileUI.slides)}><Icon name="slides" /></button><button className="merge-icon" title="Properties" aria-label="Open properties" onClick={()=>mobileUI.open("properties",hasSelection)}><Icon name="properties" /></button><button className="merge-notes-toggle" title="Speaker notes" aria-label="Speaker notes panel" aria-expanded={mobileUI.panel === "notes"} aria-controls="merge-speaker-notes" onClick={() => mobileUI.open(mobileUI.panel === "notes" ? null : "notes")}><ToolIcon name="notes" /><span>Notes</span></button><button className="merge-icon" title="Help" aria-label="Help" onClick={() => api?.updateScene({appState:{openDialog:{name:"help"}},captureUpdate:CaptureUpdateAction.NEVER})}><Icon name="help" /></button></div>}</div><CornerControls api={api} host={host} disabled={busy || present !== null} />{busy && <div className="lab-busy" role="status">Working</div>}
       </main><label className="merge-notes" id="merge-speaker-notes" hidden={mobileUI.mobile ? mobileUI.panel !== "notes" : !notesOpen}><textarea aria-label="Speaker notes" placeholder="Speaker notes" value={current?.notes || ""} disabled={busy} onChange={event => metadata("notes", event.target.value)} /></label></section>
     {mobileUI.mobile && mobileUI.panel && <><button className="merge-sheet-scrim" aria-label="Dismiss panel" tabIndex={-1} onClick={()=>mobileUI.open(null)} /><div className="merge-sheet-head"><strong>{mobileUI.panel === "properties" ? (hasSelection ? "Object properties" : "Slide properties") : PANE_LABELS[mobileUI.panel] || "Speaker notes"}</strong><button className="merge-icon merge-sheet-close" title="Close panel" aria-label="Close panel" onClick={()=>mobileUI.open(null)}><Icon name="close" /></button></div></>}

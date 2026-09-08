@@ -53,6 +53,10 @@ the existing owner session through a new, narrowly scoped Worker route.
     ungroup to edit individual objects. This does not create a new slide.
 - Add a slide offers Add blank, Add a layout (nine existing layouts), and Generate from a section.
     Per-slide controls sit below thumbnails, never over the preview.
+- Empty media and main-content layout slots show Text, Media, Section and Icon insert buttons.
+    These open the existing pickers and replace only the chosen slot, fitting content within its
+    bounds in one undoable update. Controls follow zoom/pan, wrap on mobile, and stay out of rehearsal.
+    Title and caption text remain directly editable without insert buttons.
 - Add a layout and Generate from a section use the same right pane (mobile bottom sheet),
     not dialogs. Their distinct headings preserve new-slide intent: choosing creates and selects
     new slides, then closes the pane. Closing without choosing leaves the deck unchanged.
