@@ -11,7 +11,7 @@ html[data-appearance="light"]{color-scheme:light}
 .merge-shell :is(button,input,select,textarea,summary):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .merge-shell .merge-brand small,.merge-shell .merge-status,.merge-shell .merge-section-head h2 { font-family:var(--mono); }
 .merge-shell :is(.merge-tool-pop,.merge-canvas-tools,.merge-confirm,.merge-library) { background:var(--bg-elev); color:var(--text); border-color:var(--line); box-shadow:var(--ui-shadow); border-radius:var(--ui-radius); }
-.merge-shell :is(.merge-tool-pop button,.merge-tool,.merge-tool-menu summary,.merge-icon,.merge-notes-toggle,.merge-confirm button) { color:var(--text-dim); border-radius:4px; }
+.merge-shell :is(.merge-tool-pop button,.merge-tool,.merge-tool-menu summary,.merge-icon,.merge-confirm button) { color:var(--text-dim); border-radius:4px; }
 .merge-shell :is(.merge-tool-pop button,.merge-tool,.merge-tool-menu summary,.merge-icon,.merge-confirm button):hover { background:var(--ui-hover); color:var(--text); border-color:var(--line); }
 .merge-shell :is(.merge-tool[aria-pressed=true],.merge-tool-pop button[aria-pressed=true],.merge-tool-menu.is-active summary,.merge-tool-menu[open] summary,.merge-slide.is-active) { background:var(--ui-selected); color:var(--accent); border-color:var(--accent); }
 .merge-shell .merge-rehearse { background:var(--accent); color:var(--bg); }
@@ -30,7 +30,8 @@ html[data-appearance="light"]{color-scheme:light}
 .merge-shell :is(.merge-safe-margin,.merge-guide-x,.merge-guide-y) { border-color:var(--accent); }
 .merge-shell .is-resizing,.merge-shell .merge-resizer:hover { background-color:var(--ui-selected); }
 .merge-shell .merge-thumbnail { border-color:var(--line); }
-.merge-shell .merge-notes-toggle[aria-expanded=true] { color:var(--accent); }
+.merge-shell .merge-notes-toggle[aria-expanded=true] { color:var(--accent); background:var(--ui-selected); }
+.merge-shell .merge-notes-toggle:hover { background:var(--ui-hover); }
 html .excalidraw.excalidraw,html .excalidraw.theme--dark {
   --ui-font:var(--sans); --color-primary:var(--accent); --color-primary-darker:var(--accent-2); --color-primary-darkest:var(--accent-2); --color-primary-light:var(--ui-selected); --color-primary-light-darker:var(--ui-hover); --color-primary-hover:var(--ui-hover);
   --color-surface-high:var(--bg-elev); --color-surface-mid:var(--bg-2); --color-surface-low:var(--bg); --color-surface-lowest:var(--bg); --color-on-surface:var(--text); --color-on-primary-container:var(--accent); --color-surface-primary-container:var(--ui-selected); --color-brand-hover:var(--ui-hover); --color-brand-active:var(--ui-selected);

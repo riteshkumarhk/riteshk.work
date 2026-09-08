@@ -16,12 +16,15 @@
 .merge-tool-pop button:hover { background: var(--ui-hover); }
 .merge-tool-pop button[aria-pressed="true"] { background: var(--ui-selected); color: var(--merge-accent); }
 @media(max-width:900px) { .merge-canvas-tools { top: 8px; max-width: calc(100% - 16px); flex-wrap: wrap; justify-content: center; width: max-content; gap: 4px; padding: 4px; } .merge-tool, .merge-tool-menu summary { height: 30px; } .merge-tool-group { gap: 2px; } .merge-tool-group + .merge-tool-group { padding-left: 4px; } .merge-tool-pop { left: auto; right: 0; } }
-.merge-notes-toggle { display: flex; align-items: center; gap: 8px; background: transparent; border: 1px solid var(--merge-line); color: var(--merge-muted); padding: 6px 10px; border-radius: 4px; }
+.merge-notes-toggle { display: flex; align-items: center; justify-content:center; gap: 8px; background:var(--merge-bg); border:0; color:var(--merge-text); padding:10px; border-radius:6px; box-shadow:0 0 0 1px var(--merge-bg); }
 .merge-notes-toggle[aria-expanded="true"] { color: var(--merge-accent); }
 .merge-shell .merge-editor { grid-template-rows: minmax(0,1fr) 116px; }
 .merge-shell.is-notes-hidden .merge-editor { grid-template-rows: minmax(0,1fr); }
 .merge-shell .excalidraw .footer-center { width:auto; min-width:0; margin-left:auto; margin-right:8px; flex:0 0 auto; }
 .merge-shell .merge-notes-toggle { height:36px; cursor:pointer; }
+.merge-shell .excalidraw .merge-notes-toggle { width:auto; }
+.merge-shell .merge-notes { grid-template-columns:minmax(0,1fr); gap:0; }
+.merge-shell .merge-notes textarea::placeholder { color:var(--text-faint); opacity:1; }
 .merge-shell .merge-notes[hidden] { display: none; }
 .merge-view-option { display: flex; gap: 10px; align-items: center; min-height: 36px; padding: 0 8px; cursor: pointer; }
 .merge-view-option input { appearance: none; flex: 0 0 16px; width: 16px; height: 16px; margin: 0; border: 1px solid var(--merge-muted); border-radius: 4px; background: transparent; display: grid; place-content: center; }
