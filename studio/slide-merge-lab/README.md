@@ -61,6 +61,11 @@ the existing owner session through a new, narrowly scoped Worker route.
     native Undo and isolated local autosave. Reduced motion disables rehearsal transitions.
 - Merger chrome consumes the site's CSS tokens at build time, including native
     inspectors, flyouts and dialogs. Artwork colours remain independent.
+- Appearance follows the site's `rk:theme` preference (system by default; day, night,
+    or local time when explicitly chosen). OS and cross-tab changes update live.
+    Automatic canvas backgrounds, rehearsal, slide thumbnails and section previews use
+    the active site palette. Native dark rendering keeps automatic-slide artwork readable
+    without rewriting objects or media. Explicit slide backgrounds retain authored colours.
 
 ## Build and checks
 

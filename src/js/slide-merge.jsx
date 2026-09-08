@@ -24,6 +24,18 @@ import "../../css/slide-lab.css";
 import "../../css/slide-merge.css";
 import "../../css/slide-merge-theme.css";
 import { useMobilePanels } from "./slide-merge-mobile.jsx";
+import { canvasTheme } from "./slide-merge-appearance.mjs";
+
+function useAppearance() {
+  const [appearance, setAppearance] = useState(() => document.documentElement.dataset.appearance || "dark");
+  useEffect(() => {
+    const update = () => setAppearance(document.documentElement.dataset.appearance || "dark");
+    window.addEventListener("theme:change", update);
+    update();
+    return () => window.removeEventListener("theme:change", update);
+  }, []);
+  return appearance;
+}
 
 const paths = {
   add: "M12 5v14M5 12h14", copy: "M9 9h12v12H9zM15 9V3H3v12h6", trash: "M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7",
@@ -49,7 +61,7 @@ function CanvasVideo({api}) {
   if(!video)return null;
   return <div className="merge-video-layer" style={{left:video.x,top:video.y,width:video.width,height:video.height}}>{failed?<div role="status">Video unavailable in this browser</div>:<video className="merge-background-video" src={video.src} autoPlay muted loop playsInline onError={()=>setFailed(true)} />}</div>;
 }
-function sceneBackground(elements) { return elements.some(element=>!element.isDeleted&&element.customData?.slideBackgroundVideo)?"transparent":"#ffffff"; }
+function sceneBackground() { return "transparent"; }
 function changed(element, update) { return { ...element, ...update, version: element.version + 1, versionNonce: Math.floor(Math.random()*2147483647), updated: Date.now() }; }
 function validEmbed(link) { return /^https:\/\/slide-lab\.invalid\/(rich|section|video|background|section-video)$/.test(link); }
 
@@ -63,11 +75,12 @@ async function materialize(slide) {
   elements = elements.map(element => element.id === FRAME_ID ? { ...element, x: 0, y: 0, width: 1280, height: 720, locked: true, name: slide.title } : element);
   const files = {};
   if (slide.fixture === "compatibility") files["fixture-image"] = { ...await originalImage(await createScreenshot()), id: "fixture-image" };
-  return { ...slide, scene: packScene(elements, files, { viewBackgroundColor: "#ffffff", theme: "light", zoom: { value: 1 }, scrollX: 0, scrollY: 0 }) };
+  return { ...slide, scene: packScene(elements, files, { viewBackgroundColor: sceneBackground(), zoom: { value: 1 }, scrollX: 0, scrollY: 0 }) };
 }
 
 function Presenter({ slides, index, onIndex, onClose }) {
   const [api, setApi] = useState(null);
+  const appearance = useAppearance();
   const stage = useRef(null);
   const previous=useRef(null),engine=useRef(null);
   const slide = slides[index];
@@ -75,7 +88,7 @@ function Presenter({ slides, index, onIndex, onClose }) {
     if (!api) return;
     const scene = slide.scene;
     api.resetScene();
-    api.updateScene({ elements: scene.elements.map(element => element.id === FRAME_ID ? { ...element, name: "" } : element), appState: { ...scene.appState, viewBackgroundColor:sceneBackground(scene.elements), selectedElementIds: {} }, captureUpdate: CaptureUpdateAction.NEVER });
+    api.updateScene({ elements: scene.elements.map(element => element.id === FRAME_ID ? { ...element, name: "" } : element), appState: { ...scene.appState, theme:canvasTheme(scene.elements,appearance), viewBackgroundColor:sceneBackground(scene.elements), selectedElementIds: {} }, captureUpdate: CaptureUpdateAction.NEVER });
     api.addFiles(Object.values(scene.files));
     const old=previous.current;previous.current={slide,index};
     let animationFrame=0,animation=null;
@@ -112,13 +125,14 @@ function Presenter({ slides, index, onIndex, onClose }) {
   }, [index]);
   return <div className="merge-present" role="dialog" aria-modal="true" aria-label="Rehearsal">
     <header><strong>{slide.title}</strong><Button icon="close" label="Close rehearsal" onClick={onClose} autoFocus /></header>
-    <div className="merge-present-stage" ref={stage}><div className="merge-present-engine" ref={engine}><CanvasVideo api={api} /><Excalidraw excalidrawAPI={setApi} viewModeEnabled zenModeEnabled aiEnabled={false} handleKeyboardGlobally={false} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed} /></div></div>
+    <div className="merge-present-stage" ref={stage}><div className="merge-present-engine" ref={engine}><CanvasVideo api={api} /><Excalidraw excalidrawAPI={setApi} theme={canvasTheme(slide.scene.elements,appearance)} viewModeEnabled zenModeEnabled aiEnabled={false} handleKeyboardGlobally={false} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed} /></div></div>
     <footer><Button icon="back" label="Previous slide" disabled={!index} onClick={() => onIndex(index - 1)} /><span>{index + 1} / {slides.length}</span><Button icon="next" label="Next slide" disabled={index === slides.length - 1} onClick={() => onIndex(index + 1)} /><p>{slide.notes}</p></footer>
   </div>;
 }
 
 function Merger() {
   const [api, setApi] = useState(null), [deck, setDeck] = useState(null), [busy, setBusy] = useState(true);
+  const appearance = useAppearance();
   const library = useSlideLibrary(api, !busy);
   const mobileUI = useMobilePanels(api);
   const [status, setStatus] = useState("Loading local draft"), [selection, setSelection] = useState("[]"), [hasSelection, setHasSelection] = useState(false);
@@ -159,6 +173,9 @@ function Merger() {
   const selectedIndex = deck?.slides.findIndex(slide => slide.id === deck.selected) ?? 0;
   const rehearsal = deck ? presentationSlides(deck) : [];
   const labels = JSON.parse(selection);
+  useEffect(() => {
+    live.current.deck?.slides.forEach(slide => thumbnail(slide).catch(fail));
+  }, [appearance]);
   function fail(error) { setStatus(`Not saved: ${error.message}`); }
   function paint(next) { live.current.deck = next; setDeck({ ...next }); }
   function capture() {
@@ -168,7 +185,7 @@ function Merger() {
     slide.scene = packScene(api.getSceneElementsIncludingDeleted(), api.getFiles(), api.getAppState());
   }
   async function thumbnail(slide) {
-    const svg = await exportToSvg({ elements: slide.scene.elements.filter(element => !element.isDeleted), appState: { ...slide.scene.appState, exportBackground: true }, files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true });
+    const svg = await exportToSvg({ elements: slide.scene.elements.filter(element => !element.isDeleted), appState: { ...slide.scene.appState, exportBackground: false, exportWithDarkMode:canvasTheme(slide.scene.elements,document.documentElement.dataset.appearance)==="dark" }, files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true });
     setThumbnails(previous => ({ ...previous, [slide.id]: svg.outerHTML }));
   }
   async function save() {
@@ -198,7 +215,7 @@ function Merger() {
     live.current.ready = false;
     await loadPlatformFonts(slide.scene.elements);
     api.resetScene();
-    api.updateScene({ elements: restoreElements(slide.scene.elements, null, { repairBindings: true }), appState: { ...slide.scene.appState, viewBackgroundColor:sceneBackground(slide.scene.elements), currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, selectedElementIds: {}, gridModeEnabled: view.grid, objectsSnapModeEnabled: view.snap }, captureUpdate: CaptureUpdateAction.NEVER });
+    api.updateScene({ elements: restoreElements(slide.scene.elements, null, { repairBindings: true }), appState: { ...slide.scene.appState, theme:canvasTheme(slide.scene.elements,appearance), viewBackgroundColor:sceneBackground(slide.scene.elements), currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, selectedElementIds: {}, gridModeEnabled: view.grid, objectsSnapModeEnabled: view.snap }, captureUpdate: CaptureUpdateAction.NEVER });
     api.addFiles(Object.values(slide.scene.files));
     api.history.clear(); live.current.version = getSceneVersion(slide.scene.elements); live.current.ready = true;
     setSettings(slideSettings(slide.scene.elements));
@@ -397,7 +414,7 @@ function Merger() {
           </ToolMenu></div>
         </CanvasToolbar>
         <div className="lab-canvas"><CanvasGuides api={api} {...view} guides={settings.guides||[]} onGuides={guides=>commitSettings({guides})} disabled={busy||present!==null||confirm||iconOpen} /><CanvasVideo api={api} /><LabTextColorContext.Provider value={{ api, labels, linked: labels.every(label => label.linked), busy, changeLabelColor: color => { if (color && color !== "unlink" && color !== "transparent") { color = normalizeHex(color); if (!color) return; } const elements = api.getSceneElementsIncludingDeleted(); const targets = selectedLabels(elements, api.getAppState().selectedElementIds); api.updateScene({ elements: labelColorUpdate(elements, targets.map(element => element.id), color), captureUpdate: CaptureUpdateAction.IMMEDIATELY }); } }}>
-          <Excalidraw excalidrawAPI={setApi} onChange={onChange} onLibraryChange={library.onChange} libraryReturnUrl={location.origin + "/studio/slide-merge-lab/"} viewModeEnabled={busy || present !== null || !!confirm || iconOpen || !!deckDialog} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: "light", currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: "#ffffff" } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed}>
+          <Excalidraw excalidrawAPI={setApi} theme={canvasTheme(api?.getSceneElements() || [],appearance)} onChange={onChange} onLibraryChange={library.onChange} libraryReturnUrl={location.origin + "/studio/slide-merge-lab/"} viewModeEnabled={busy || present !== null || !!confirm || iconOpen || !!deckDialog} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: appearance, currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: sceneBackground() } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed}>
             <MainMenu />
             {!hasSelection&&current&&<SlideProperties mobileOpen={mobileUI.mobile && mobileUI.panel === "properties"} settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm||iconOpen} onLayout={applyLayout} onBackground={setBackground} onMedia={backgroundMedia} onTransition={transition=>commitSettings({transition})} />}
           </Excalidraw>

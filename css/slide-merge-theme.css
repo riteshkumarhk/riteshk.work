@@ -1,4 +1,9 @@
 @import "site-tokens.css";
+html[data-appearance="dark"]{color-scheme:dark}
+html[data-appearance="light"]{color-scheme:light}
+.merge-shell .lab-canvas,.merge-shell .merge-present-stage,.merge-shell .merge-thumbnail{background:var(--bg);color-scheme:inherit}
+.merge-shell .merge-section-preview{background:var(--bg);color:var(--text)}
+.merge-shell .merge-section-preview-text{color:var(--text)}
 :root { --ui-danger:#ff7a7a; --ui-success:#74d99f; --ui-shadow:0 18px 44px -18px rgba(0,0,0,.85); --ui-radius:6px; --ui-selected:color-mix(in srgb,var(--accent) 16%,var(--bg-elev)); --ui-hover:color-mix(in srgb,var(--text) 7%,var(--bg-elev)); background:var(--bg); color:var(--text); font-family:var(--sans); }
 .merge-shell { --merge-bg:var(--bg); --merge-line:var(--line); --merge-text:var(--text); --merge-muted:var(--text-dim); --merge-accent:var(--accent); font-family:var(--sans); }
 .merge-shell button,.merge-shell input,.merge-shell select,.merge-shell textarea { font-family:var(--sans); letter-spacing:0; }
@@ -37,7 +42,7 @@ html .excalidraw.excalidraw,html .excalidraw.theme--dark {
   --color-gray-10:var(--bg-2); --color-gray-20:var(--line-soft); --color-gray-30:var(--line); --color-gray-40:var(--text-faint); --color-gray-50:var(--text-dim); --color-gray-60:var(--text-dim); --color-gray-70:var(--text-dim); --color-gray-80:var(--text); --color-gray-85:var(--text); --color-gray-90:var(--text); --color-gray-100:var(--text);
 }
 html .excalidraw :is(.Island,.popover,.Modal__content) { border:1px solid var(--line); border-radius:var(--ui-radius); }
-html .excalidraw :is(input,select,textarea) { color-scheme:dark; }
+html .excalidraw :is(input,select,textarea) { color-scheme:inherit; }
 html .excalidraw .lab-font-tabs button[aria-selected=true] { background:var(--ui-selected); color:var(--accent); }
 html .excalidraw .lab-stroke-link input { accent-color:var(--accent); }
 html .excalidraw .Dialog__title { font-family:var(--sans); color:var(--text); }
