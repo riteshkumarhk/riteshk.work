@@ -30,7 +30,7 @@ function SectionChoice({ block, index, onPick }) {
   </button>;
 }
 
-export function SectionPicker({ title = "Generate from a section", onClose, onPick }) {
+export function SectionPicker({ title = "Generate from a section", onClose, onPick, embedded = false }) {
   const [source, setSource] = useState("published"), [studies, setStudies] = useState([]), [studyId, setStudyId] = useState("");
   const [loading, setLoading] = useState(true), [error, setError] = useState(""), [retry, setRetry] = useState(0);
   useEffect(() => {
@@ -54,9 +54,10 @@ export function SectionPicker({ title = "Generate from a section", onClose, onPi
     return () => controller.abort();
   }, [source, retry]);
   const study = studies.find(item => item.id === studyId);
-  return <DeckDialog title={title} onClose={onClose}>
+  const content = <>
     <div className="merge-source-controls"><label className="merge-dialog-field">Source<select value={source} onChange={event => setSource(event.target.value)}><option value="published">Published site</option><option value="draft">This browser's draft</option></select></label>
     {!!studies.length && <label className="merge-dialog-field">Case study<select value={studyId} onChange={event => setStudyId(event.target.value)}>{studies.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>}</div>
     {loading ? <p className="merge-source-status" role="status">Loading sections...</p> : error ? <div className="merge-source-status" role="alert">{error}<button onClick={() => setRetry(retry + 1)}>Retry</button></div> : !study ? <p className="merge-source-status">No available sections.</p> : <div className="merge-section-choices">{study.blocks.map((block, index) => <SectionChoice key={`${studyId}-${index}`} block={block} index={index} onPick={onPick} />)}</div>}
-  </DeckDialog>;
+  </>;
+  return embedded ? <div className="merge-section-picker">{content}</div> : <DeckDialog title={title} onClose={onClose}>{content}</DeckDialog>;
 }

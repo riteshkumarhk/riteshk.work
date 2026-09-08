@@ -15,14 +15,14 @@ export function useMobilePanels(api) {
   useEffect(() => {
     if (!api || !mobile) return;
     return api.onChange((elements, state) => {
-      if (state.openSidebar) setPanel("library");
-      else setPanel(previous => previous === "library" ? null : previous);
+      if (state.openSidebar) setPanel(state.openSidebar.name === "insert" ? state.openSidebar.tab : "library");
+      else setPanel(previous => ["library", "icons", "text", "badges", "sections"].includes(previous) ? null : previous);
     });
   }, [api, mobile]);
   function open(next, selected = false) {
     setPanel(next);
     api?.updateScene({ appState: {
-      openSidebar: next === "library" ? { name: "default", tab: "library" } : null,
+      openSidebar: next === "library" ? { name: "default", tab: "library" } : ["icons", "text", "badges", "sections"].includes(next) ? { name: "insert", tab: next } : null,
       openMenu: next === "properties" && selected ? "shape" : null,
       openPopup: null
     }, captureUpdate: CaptureUpdateAction.NEVER });
@@ -35,7 +35,7 @@ export function useMobilePanels(api) {
       if (document.querySelector('.color-picker-content, .font-picker-content, .merge-tool-pop:popover-open')) return;
       if (event.key === "Escape") { event.preventDefault(); open(null); }
       if (event.key === "Tab") {
-        const containers = [...document.querySelectorAll('.merge-sheet-head, .merge-slide-properties, .App-mobile-menu, .selected-shape-actions, .default-sidebar, .merge-notes')];
+        const containers = [...document.querySelectorAll('.merge-sheet-head, .merge-slide-properties, .App-mobile-menu, .selected-shape-actions, .default-sidebar, .merge-content-sidebar, .merge-notes')];
         const controls = containers.flatMap(container => [...container.querySelectorAll('button, input, textarea, select, summary, a[href], [tabindex="0"]')]).filter(element => !element.disabled && element.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
         const first = controls[0], last = controls[controls.length - 1];
         if (first && (event.shiftKey ? document.activeElement === first : document.activeElement === last) || !controls.includes(document.activeElement)) {

@@ -28,9 +28,17 @@ the existing owner session through a new, narrowly scoped Worker route.
 - One studio toolbar replaces the native tool strip, without its tool lock or More menu.
 - The native hamburger is hidden; View > Help opens the native Help dialog.
 - Hand, Select, Text, Image, Shapes, Arrow, Line and Draw use native engine tools.
+- Icons, Text, Badges, Sections and Library are direct toolbar buttons, sharing the native right
+    sidebar slot with only one pane open at a time. The duplicate top-right Library trigger is hidden,
+    including its focusable checkbox. Both pane types leave space for the toolbar on compact desktops.
 - Icons searches the studio's built-in and published custom icons; insertion retains vector SVG bytes.
-- Content inserts editable text, lists, metrics, quotes, badges and a three-card section starter.
-- Content > Section opens the section picker and inserts into the current slide as a selected group.
+- Text offers editable text blocks, bulleted lists, metrics, quotes and a three-card section starter.
+- Badges offers Proposed, In progress, Completed, Shipped, Concept, Under review, Released,
+    Work in progress, Planned, On hold, Blocked and Key insight, plus a custom label (40 characters).
+    Every insert is an independent editable shape with bound text and native Undo. Desktop panes
+    stay open for repeated inserts; mobile uses the existing dismissable bottom sheet and closes
+    after choosing an item. Picker controls are disabled while an insertion is running.
+- Sections opens the site-section picker and inserts into the current slide as a selected group.
     Existing objects, title, background and speaker notes stay unchanged. Native Undo removes the insertion;
     ungroup to edit individual objects. This does not create a new slide.
 - Add a slide offers Add blank, Add a layout (nine existing layouts), Generate from a section,
@@ -84,6 +92,7 @@ JavaScript for Google API key patterns. The engine adapter removes upstream Fire
 `node --test slide-merge-sections.test.mjs` checks source privacy filters, conversion, full notes,
 text excerpts, original media URLs and R2 path normalization.
 `node --test slide-merge-inserts.test.mjs` checks content starters and ruler coordinates.
+It also checks all badge presets, custom-label limits and slide-local sizing.
 `node --test slide-merge-properties.test.mjs` checks layouts, selection ownership,
 transition matching, guide positioning and snapping.
 Browser verification covers real rail dragging, keyboard resizing, reload persistence,

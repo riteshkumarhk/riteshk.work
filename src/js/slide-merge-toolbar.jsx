@@ -10,7 +10,7 @@ const toolPaths = {
   rectangle: "M4 4h16v16H4Z", diamond: "m12 3 9 9-9 9-9-9Z", ellipse: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18",
   arrow: "M4 12h16m-6-6 6 6-6 6", line: "M4 18 20 6", freedraw: "m15 4 5 5M3 21l5-1L21 7a2 2 0 0 0-5-5L3 15Z",
   eraser: "m16 3 5 5-12 13H5l-4-4L14 3ZM7 11l6 6M9 21h12", chevron: "m6 9 6 6 6-6",
-  icons: "m12 3 3 6 6 1-4 5 1 6-6-3-6 3 1-6-4-5 6-1Z", content: "M9 6h12M9 12h12M9 18h12M3 6h1M3 12h1M3 18h1",
+  icons: "m12 3 3 6 6 1-4 5 1 6-6-3-6 3 1-6-4-5 6-1Z", content: "M9 6h12M9 12h12M9 18h12M3 6h1M3 12h1M3 18h1", badge: "M20 13l-7 7-10-10V3h7ZM7 7h.01",
   view: "M3 3h18v18H3ZM3 9h18M3 15h18M9 3v18M15 3v18", notes: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8ZM14 2v6h6M8 13h8M8 17h6", add: "M5 12h14M12 5v14"
 };
 export function ToolIcon({ name }) {

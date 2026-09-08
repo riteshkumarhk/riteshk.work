@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 
-export function IconLibrary({ onPick, onClose }) {
+export function IconLibrary({ onPick, onClose, embedded = false }) {
   const dialog = useRef(null), frame = useRef(null);
   const [icons, setIcons] = useState([]), [query, setQuery] = useState(""), [error, setError] = useState(""), [loading, setLoading] = useState(true);
   useEffect(() => {
-    dialog.current.showModal();
+    if (!embedded) dialog.current.showModal();
     let cancelled = false;
     const timeout = setTimeout(() => { if (!cancelled) { setLoading(false); setError("Icon library unavailable. Close and try again."); } }, 15000);
     const load = async () => {
@@ -33,10 +33,11 @@ export function IconLibrary({ onPick, onClose }) {
     onPick(new File([new XMLSerializer().serializeToString(svg)], `${icon.name}.svg`, { type: "image/svg+xml" }));
   }
   const matches = icons.filter(icon => `${icon.name} ${icon.keywords.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase()));
-  return <dialog className="merge-library merge-confirm" ref={dialog} onCancel={onClose} aria-labelledby="merge-icon-title">
-    <h2 id="merge-icon-title">Icons</h2><input autoFocus type="search" aria-label="Search icons" placeholder="Search icons" value={query} onChange={event => setQuery(event.target.value)} />
+  const Wrapper = embedded ? "div" : "dialog";
+  return <Wrapper className={embedded ? "merge-icon-picker" : "merge-library merge-confirm"} ref={dialog} onCancel={onClose} aria-label="Icons">
+    {!embedded && <h2>Icons</h2>}<input autoFocus type="search" aria-label="Search icons" placeholder="Search icons" value={query} onChange={event => setQuery(event.target.value)} />
     <iframe hidden title="Studio icon renderer" ref={frame} />
     {loading ? <p role="status">Loading icons...</p> : error ? <p role="alert">{error}</p> : <div className="merge-library-grid">{matches.map(icon => <button key={icon.name} type="button" title={icon.name} aria-label={`Insert ${icon.name} icon`} onClick={() => pick(icon)}><span dangerouslySetInnerHTML={{ __html: icon.svg }} /><span>{icon.name}</span></button>)}{!matches.length && <p>No icons found</p>}</div>}
-    <footer><button type="button" onClick={onClose}>Close</button></footer>
-  </dialog>;
+    {!embedded && <footer><button type="button" onClick={onClose}>Close</button></footer>}
+  </Wrapper>;
 }
