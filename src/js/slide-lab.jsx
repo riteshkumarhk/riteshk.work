@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Excalidraw, MainMenu, convertToExcalidrawElements, restoreElements, exportToSvg, getSceneVersion, CaptureUpdateAction } from "@excalidraw/excalidraw";
-import { FRAME_ID, SCENARIOS, fixtureSkeleton, frameReport, originalImage, packScene, readScene, sha256, writeScene } from "./slide-lab-core.mjs";
+import { FRAME_ID, SCENARIOS, fixtureSkeleton, frameReport, originalImage, packScene, readScene, sha256, writeScene, selectedLabels, labelColorUpdate, preserveLabelColors } from "./slide-lab-core.mjs";
 import { createScreenshot } from "./slide-lab-fixtures.mjs";
 import "@excalidraw/excalidraw/index.css";
 import "../../css/slide-lab.css";
@@ -32,6 +32,8 @@ function Lab() {
   const [report, setReport] = useState(null);
   const [preview, setPreview] = useState(null);
   const [view, setView] = useState("canvas");
+  const [labelSelection, setLabelSelection] = useState("[]");
+  const [textColor, setTextColor] = useState("#27343a");
   const runtime = useRef({ scenario: "flow", ready: false, timer: null, version: -1, library: [], queue: Promise.resolve(), measuring: false });
   const input = useRef(null);
   const host = useRef(null);
@@ -49,9 +51,19 @@ function Lab() {
     await state.queue;
     setStatus("Saved locally");
   }
-  function onChange(elements) {
+  function onChange(elements, appState) {
     const state = runtime.current;
     if (!state.ready || state.measuring) return;
+    const preserved = preserveLabelColors(elements);
+    if (preserved !== elements) {
+      api.updateScene({ elements: preserved, captureUpdate: CaptureUpdateAction.NEVER });
+      return;
+    }
+    const selection = selectedLabels(elements, appState.selectedElementIds).map(element => ({ id: element.id, color: element.strokeColor, linked: !element.customData?.labTextColor }));
+    setLabelSelection(previous => {
+      const next = JSON.stringify(selection);
+      return previous === next ? previous : next;
+    });
     const version = getSceneVersion(elements);
     if (version === state.version) return;
     state.version = version;
@@ -59,6 +71,15 @@ function Lab() {
     setStatus("Unsaved");
     state.timer = setTimeout(() => save().catch(fail), 700);
   }
+  const labels = JSON.parse(labelSelection);
+  const linked = labels.every(label => label.linked);
+  function changeLabelColor(color) {
+    if (color && color !== "unlink" && !/^#[\da-f]{6}$/i.test(color)) return;
+    const elements = api.getSceneElementsIncludingDeleted();
+    const targets = selectedLabels(elements, api.getAppState().selectedElementIds);
+    api.updateScene({ elements: labelColorUpdate(elements, targets.map(element => element.id), color), captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+  }
+  useEffect(() => { setTextColor(JSON.parse(labelSelection)[0]?.color || "#27343a"); }, [labelSelection]);
   async function load(key, reload = false) {
     setBusy(true);
     try {
@@ -231,6 +252,12 @@ function Lab() {
         </Excalidraw>
       </div>
       {view === "native" && <div className="lab-native"><iframe title="Native slide reference" src="./native.html?preview=1&fixture=all" /></div>}
+      {view === "canvas" && labels.length > 0 && !preview && <section className="lab-label-color" aria-label="Bound text colour">
+        <h2>Text colour</h2>
+        <label className="lab-color-link"><input type="checkbox" checked={linked} disabled={busy} onChange={event => changeLabelColor(event.target.checked ? null : "unlink")} />Link text to outline</label>
+        {!linked && <><div className="lab-color-swatches">{["#1e1e1e", "#ffffff", "#e03131", "#2f9e44", "#1971c2", "#f08c00"].map(color => <button key={color} title={`Text ${color}`} aria-label={`Text ${color}`} aria-pressed={labels.every(label => label.color === color)} style={{ background: color }} disabled={busy} onClick={() => changeLabelColor(color)} />)}</div>
+          <label className="lab-color-hex">Hex<input aria-label="Text colour hex" value={textColor} maxLength={7} spellCheck={false} disabled={busy} onChange={event => setTextColor(event.target.value)} onBlur={() => { if (/^#[\da-f]{6}$/i.test(textColor)) changeLabelColor(textColor); else setTextColor(labels[0].color); }} onKeyDown={event => { event.stopPropagation(); if (event.key === "Enter") event.currentTarget.blur(); }} /></label></>}
+      </section>}
       {busy && <div className="lab-busy" role="status">{runtime.current.measuring ? "Measuring" : "Working"}</div>}
     </main>
     <footer className="lab-footer"><span role="status">{status}</span><span>1280 x 720</span><span>Excalidraw 0.18.1</span>

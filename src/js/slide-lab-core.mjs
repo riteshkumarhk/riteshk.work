@@ -124,3 +124,33 @@ export async function writeScene(key, value) {
     transaction.onabort = transaction.onerror = () => { database.close(); reject(transaction.error); };
   });
 }
+
+export function selectedLabels(elements, selectedIds = {}) {
+  const liveIds = new Set(elements.filter(element => !element.isDeleted && !element.locked).map(element => element.id));
+  return elements.filter(element => !element.isDeleted && !element.locked && element.type === "text" &&
+    element.containerId && liveIds.has(element.containerId) && (selectedIds[element.id] || selectedIds[element.containerId]));
+}
+
+export function labelColorUpdate(elements, labelIds, color) {
+  const targets = new Set(labelIds);
+  const owners = new Map(elements.map(element => [element.id, element]));
+  return elements.map(element => {
+    if (!targets.has(element.id)) return element;
+    const independent = color === "unlink" ? element.strokeColor : color;
+    const strokeColor = independent || owners.get(element.containerId)?.strokeColor || element.strokeColor;
+    return { ...element, strokeColor, customData: { ...element.customData, labTextColor: independent || null },
+      version: element.version + 1, versionNonce: Math.floor(Math.random() * 2147483647), updated: Date.now() };
+  });
+}
+
+export function preserveLabelColors(elements) {
+  let changed = false;
+  const result = elements.map(element => {
+    const color = element.customData?.labTextColor;
+    if (element.isDeleted || element.type !== "text" || !element.containerId || !/^#[\da-f]{6}$/i.test(color || "") || element.strokeColor === color) return element;
+    changed = true;
+    return { ...element, strokeColor: color, version: element.version + 1,
+      versionNonce: Math.floor(Math.random() * 2147483647), updated: Date.now() };
+  });
+  return changed ? result : elements;
+}

@@ -16,6 +16,8 @@ The static distribution is committed for branch-based GitHub Pages. The lab is n
 
 ## What Was Verified
 
+Select a shape with bound text to show Text colour. Uncheck **Link text to outline** to preserve its current text colour, then use a swatch or six-digit hex value independently of the outline. Rechecking adopts the current outline colour. This remains a text binding: moving/resizing the shape still carries its label. The setting persists in the lab draft and supports undo/redo.
+
 - Bound connectors follow a pointer-dragged node; one undo restores its position.
 - Double-click edits a shape's bound label and creates text on empty canvas. Labels can wrap, so compare `originalText` or normalized whitespace rather than display `text` alone.
 - Text and freehand strokes persist across a full page reload.
