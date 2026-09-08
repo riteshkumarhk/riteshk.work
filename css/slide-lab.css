@@ -42,8 +42,8 @@ button:focus-visible { outline: 2px solid #d8a657; outline-offset: 2px; }
 .lab-color-slot:empty { display: none; }
 .excalidraw fieldset[data-lab-corners] { display: none; }
 .lab-corner-slot:empty { display: none; }
-.excalidraw .lab-corners { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 6px; }
-.lab-corner-modes { display: flex; gap: 4px; }
+.excalidraw .lab-corners { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: .5rem; }
+.lab-corner-modes { display: flex; gap: .5rem; }
 .lab-corner-modes button { display: grid; place-items: center; width: 32px; height: 34px; padding: 0; border: 1px solid transparent; border-radius: 6px; color: var(--color-on-surface); background: var(--button-bg, var(--color-surface-mid)); }
 .lab-corner-modes button:hover { background: var(--button-hover-bg); }
 .lab-corner-modes button[aria-pressed=true] { background: var(--color-surface-primary-container); color: var(--color-on-primary-container); }
@@ -53,6 +53,17 @@ button:focus-visible { outline: 2px solid #d8a657; outline-offset: 2px; }
 .lab-radius-steps { display: grid; grid-template-rows: repeat(2, 16px); border-left: 1px solid var(--default-border-color); }
 .lab-radius-steps button { display: grid; place-items: center; width: 18px; padding: 0; background: transparent; color: inherit; border: 0; }
 .lab-radius-steps button:hover { background: var(--color-primary-light); }
+.excalidraw .color-picker-content:has(.lab-rich-color) { max-height: min(calc(100dvh - 64px), calc(var(--radix-popover-content-available-height, 100dvh) - 48px)); overflow-y: auto; overscroll-behavior: contain; }
+.lab-rich-color { margin-top: .75rem; }
+.lab-spectrum { margin: .5rem .5rem 0; }
+.lab-rich-color .react-colorful { width: 100%; height: 146px; }
+.lab-rich-color .react-colorful__saturation { border-radius: 6px 6px 0 0; }
+.lab-rich-color .react-colorful__hue { height: 16px; border-radius: 0 0 6px 6px; }
+.lab-rich-color .react-colorful__pointer { width: 18px; height: 18px; }
+.lab-rgb { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin: .75rem .5rem 0; }
+.lab-rgb label { display: flex; align-items: center; gap: 4px; min-width: 0; font-size: 12px; color: var(--color-on-surface); }
+.lab-rgb input { width: 100%; min-width: 0; padding: 6px 3px; appearance: textfield; color: var(--color-on-surface); background: var(--island-bg-color); border: 1px solid var(--default-border-color); border-radius: 4px; }
+.lab-rgb input::-webkit-inner-spin-button, .lab-rgb input::-webkit-outer-spin-button { appearance: none; margin: 0; }
 .lab-label-color { min-width: 0; color: var(--text-primary-color); }
 .lab-color-link { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .lab-color-link input { accent-color: var(--color-primary); width: 16px; height: 16px; margin: 0; }

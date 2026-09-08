@@ -9,7 +9,7 @@ Open `/studio/slide-lab/` through the site's HTTP server. It has four synthetic 
 ```sh
 npm ci
 npm run build:slide-lab
-node --test slide-lab-corners.test.mjs slide-lab.test.mjs slideshow-interactions.test.cjs
+node --test slide-lab-color.test.mjs slide-lab-corners.test.mjs slide-lab.test.mjs slideshow-interactions.test.cjs
 ```
 
 The static distribution is committed for branch-based GitHub Pages. The lab is not imported by either production entry point. Rebuild the lab after changing its source. Generated license notices and fonts remain alongside the bundle. The complete uncompressed distribution is about 22 MB, including lazy chunks and fonts; this is not the initial network transfer size.
@@ -24,6 +24,8 @@ Selected rectangles have Sharp, Round and Squircle controls in Edges, with the r
 
 Squircle uses `figma-squircle` with 60% continuous-corner smoothing. A version-checked build adapter repackages Excalidraw 0.18.1's readable distribution with production React and minification, replacing only custom rectangle path generation and radius lookup. Canvas and SVG export share the generated path; untouched elements use the original engine path. No installed dependency files are rewritten. The engine's corner hit-testing and connector attachment still use its rounded-rectangle approximation, so exact squircle-corner snapping remains an adoption limitation.
 
+The native colour popup includes a `react-colorful` saturation/brightness pad and hue slider below Hex, plus R/G/B labels inline beside numeric fields. RGB values clamp to 0-255; invalid/empty input resets on blur. The spectrum previews locally during a drag and applies the final colour through the native callback on release (one undo step); keyboard adjustments also work. Existing palette, shades, Hex and eyedropper remain. Custom colors updates immediately, combining recent custom colours with scene colours (five swatches). Recent colours persist in localStorage `rk:slide-lab:custom-colors`, shared between native Stroke/Background popups on this browser only. Presets are excluded and duplicates normalized. The pinned build adapter also extends the native Picker and releases its keyboard navigation for the new controls. On short screens the popup scrolls within Radix's available height. Edges uses native 8 px gaps; Spectrum uses native 8 px heading gap/side insets, with RGB aligned beneath.
+
 - Bound connectors follow a pointer-dragged node; one undo restores its position.
 - Double-click edits a shape's bound label and creates text on empty canvas. Labels can wrap, so compare `originalText` or normalized whitespace rather than display `text` alone.
 - Text and freehand strokes persist across a full page reload.
@@ -31,7 +33,7 @@ Squircle uses `figma-squircle` with 60% continuous-corner smoothing. A version-c
 - Native bold/italic text and a case-study section render through the existing slide renderer in same-origin embeds.
 - SVG preview is clipped to a 1280 x 720 frame and its modal owns focus.
 - Desktop and 390 px mobile screenshots, nonblank canvas pixels and horizontal-overflow checks passed.
-- Eleven lab unit tests and ten production slideshow interaction tests passed. Lab build and browser checks passed: distinct Round/Squircle SVG paths, 1280 x 720 export, reload persistence, and scrub 21 -> 51 -> Undo 21 -> Redo 51.
+- Thirteen lab unit tests and ten production slideshow interaction tests passed. Lab build and browser checks passed: distinct Round/Squircle SVG paths, 1280 x 720 export, reload persistence, and scrub 21 -> 51 -> Undo 21 -> Redo 51. Colour checks cover drag/undo, RGB-Hex synchronization, custom swatch recall, saved colours across reload, inline three-digit RGB layout, and a scrollable mobile popup.
 
 ## Adoption Gates Still Open
 
