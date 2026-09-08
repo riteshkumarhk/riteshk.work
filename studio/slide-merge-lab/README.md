@@ -21,6 +21,7 @@ the existing owner session through a new, narrowly scoped Worker route.
 - Deck autosave uses isolated IndexedDB `rk-slide-merge-lab-v1`, not production storage.
 - Images retain original bytes. Text uses the shared platform-hosted font catalogue.
 - One studio toolbar replaces the native tool strip, without its tool lock or More menu.
+- The native hamburger is hidden; View > Help opens the native Help dialog.
 - Hand, Select, Text, Image, Shapes, Arrow, Line and Draw use native engine tools.
 - Icons searches the studio's built-in and published custom icons; insertion retains vector SVG bytes.
 - Content inserts editable text, lists, metrics, quotes, badges and a three-card section starter.
