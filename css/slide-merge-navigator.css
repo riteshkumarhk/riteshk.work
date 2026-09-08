@@ -2,7 +2,7 @@
 .merge-slide-entry{position:relative;min-width:0}
 .merge-slide-card{position:relative}
 .merge-slide-card .merge-slide{margin:0}
-.merge-thumb-actions{display:flex;justify-content:space-between;height:28px;margin-top:3px;background:var(--merge-bg);opacity:0;pointer-events:none}
+.merge-thumb-actions{display:flex;justify-content:space-between;height:28px;margin-top:3px;background:transparent;opacity:0;pointer-events:none}
 .merge-slide-card:hover .merge-thumb-actions,.merge-slide-card:focus-within .merge-thumb-actions,.merge-slide-card.is-active .merge-thumb-actions{opacity:1;pointer-events:auto}
 .merge-nav-action{display:grid;place-items:center;width:28px;min-width:20px;height:28px;padding:0;border:1px solid transparent;border-radius:4px;color:var(--merge-muted);background:transparent}
 .merge-nav-action:hover{border-color:var(--merge-line);color:var(--merge-text)}
