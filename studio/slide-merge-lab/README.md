@@ -38,9 +38,12 @@ the existing owner session through a new, narrowly scoped Worker route.
     overview media and nested section assets. Upload media stays pinned below the scrolling gallery.
     Upload accepts PNG, JPEG, WebP, GIF, AVIF, SVG, MP4, WebM, MOV and Ogg video. Original uploaded
     videos persist as data URLs; hosted videos keep their original URL. Playback depends on browser codecs.
-- Icons, Text, Badges, Sections and Library are direct toolbar buttons, sharing the native right
-    sidebar slot with only one pane open at a time. The duplicate top-right Library trigger is hidden,
-    including its focusable checkbox. Both pane types leave space for the toolbar on compact desktops.
+- Icons, Text, Badges, Sections and Library are direct toolbar buttons. On desktop, all insert panels
+    replace the Slides list in its existing resizable right rail without changing the canvas width.
+    Each uses the Slides header styling, with its title on the left and Close in the Add slide position.
+    Close restores Slides at the same width. Native Library search tabs and docking controls are hidden;
+    Library content, import and insertion remain native. Mobile retains its existing bottom sheets.
+    The duplicate top-right Library trigger is hidden, including its focusable checkbox.
 - Icons searches the studio's built-in and published custom icons; insertion retains vector SVG bytes.
 - Text offers editable text blocks, bulleted lists, metrics, quotes and a three-card section starter.
 - Badges offers Proposed, In progress, Completed, Shipped, Concept, Under review, Released,

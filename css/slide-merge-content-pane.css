@@ -55,7 +55,17 @@
 [aria-checked="true"]>.merge-section-check { background:var(--accent); border-color:var(--accent); }
 [aria-checked="true"]>.merge-section-check::after { content:""; display:block; width:5px; height:9px; margin:2px 5px; border:solid #27343a; border-width:0 2px 2px 0; transform:rotate(45deg); }
 @media(min-width:901px) {
-  .merge-shell .lab-canvas .sidebar { top:80px; height:calc(100% - 80px); }
+  .merge-shell .lab-canvas .sidebar { --sidebar-bg-color:var(--merge-bg); background:var(--merge-bg); }
+  .merge-shell .lab-canvas .sidebar .merge-section-actions { background:var(--merge-bg); }
+  .merge-shell .lab-canvas .sidebar { position:fixed; left:var(--insert-rail-left); top:calc(var(--insert-rail-top) + 54px); right:auto; bottom:auto; width:var(--insert-rail-width); min-width:0; max-width:none; height:calc(var(--insert-rail-height) - 54px); max-height:none; margin:0; border:0; border-radius:0; box-shadow:none; transform:none; }
+  .merge-rail-insert .merge-slides > :not(.merge-resizer):not(.merge-insert-head) { visibility:hidden; }
+  .merge-shell .merge-insert-head { height:54px; box-sizing:border-box; flex-shrink:0; gap:8px; }
+  .merge-shell .merge-insert-head h2 { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .merge-shell .merge-insert-head .merge-nav-action { flex-shrink:0; width:44px; height:34px; }
+  .merge-shell .lab-canvas .sidebar__header { display:none; }
+  .merge-shell .merge-pane-body { flex:1; min-height:0; }
+  .merge-shell .merge-pane-body .merge-library-grid { grid-template-columns:repeat(auto-fit,minmax(64px,1fr)); }
+  .merge-shell .merge-pane-body .merge-layout-choices { grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); }
 }
 @media(max-width:900px) {
   .merge-shell .excalidraw .merge-content-sidebar { display:block; position:fixed; z-index:21; inset:auto 0 28px; width:100%; height:var(--mobile-panel-height); max-height:var(--mobile-panel-height); margin:0; padding:0; border:0; border-radius:0; background:var(--bg-elev); box-shadow:none; }
