@@ -16,7 +16,7 @@ export function CanvasBackdrop({ api }) {
     update(api.getSceneElements(), api.getAppState());
     return api.onChange(update);
   }, [api]);
-  return <div className="merge-canvas-backdrop" aria-hidden="true" style={{clipPath:bounds ? `polygon(evenodd,0 0,100% 0,100% 100%,0 100%,0 0,${bounds.left}px ${bounds.top}px,${bounds.right}px ${bounds.top}px,${bounds.right}px ${bounds.bottom}px,${bounds.left}px ${bounds.bottom}px,${bounds.left}px ${bounds.top}px)` : undefined}} />;
+  return <><div className="merge-canvas-backdrop" aria-hidden="true" style={{clipPath:bounds ? `polygon(evenodd,0 0,100% 0,100% 100%,0 100%,0 0,${bounds.left}px ${bounds.top}px,${bounds.right}px ${bounds.top}px,${bounds.right}px ${bounds.bottom}px,${bounds.left}px ${bounds.bottom}px,${bounds.left}px ${bounds.top}px)` : undefined}} />{bounds && <div className="merge-view-frame" aria-hidden="true" style={{left:bounds.left,top:bounds.top,width:bounds.right-bounds.left,height:bounds.bottom-bounds.top}} />}</>;
 }
 
 export function CanvasGuides({ api, rulers, margins, thirds, guides = [], onGuides, disabled }) {

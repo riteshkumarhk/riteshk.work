@@ -10,9 +10,13 @@ the existing owner session through a new, narrowly scoped Worker route.
     green monospace saved status, centered Editing toggle and Current/All slides,
     gold play glyph for Rehearse, and the activity-recording ring at right.
 - Editing off hides the insertion toolbar, properties, guides and slide-management
-    controls, plus zoom, Fit, notes and help controls. The notes pane is hidden without
-    discarding its contents or its editing-mode open state. The read-only slide always
-    fits the available canvas; panning and zooming cannot move it out of that fit.
+    controls, plus zoom, Fit, notes-toggle and help buttons. The resizable notes editor
+    remains visible and editable on desktop and phone; its editing-mode open state is
+    preserved. The read-only slide fits inside an elevated frame with 48px desktop or
+    24px mobile clearance, capped at native size. Its border and shadow match Studio's
+    device preview, without a device selector or size badge. Panning and zooming cannot
+    move it out of that fit. Slide-list cards gain a neutral hover/focus highlight with
+    no layout movement; the selected slide keeps its accent.
     Wheel down/right and ArrowDown/ArrowRight advance; wheel up/left and
     ArrowUp/ArrowLeft go back. Navigation stops at deck boundaries, includes all slides
     in rail order, and consumes at most one step per wheel gesture (220ms idle resets

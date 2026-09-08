@@ -36,7 +36,13 @@
 .merge-shell[data-slide-view="all"]>.merge-editor { visibility:hidden;pointer-events:none; }
 .merge-shell[data-editing="false"] :is(.merge-canvas-tools,.merge-slide-properties,.selected-shape-actions,.merge-guides,.merge-slide-actions,.merge-all-actions,.merge-insert-gap,.merge-section-head .merge-nav-action,.merge-section-head .merge-add-menu,.merge-mobile-canvas-controls [aria-label="Open properties"],.merge-all-slides>header>button) { display:none!important; }
 .merge-shell[data-editing="false"] .merge-section-head>div { display:none; }
-.merge-shell[data-editing="false"] :is(.zoom-actions,.help-icon,.merge-notes,.merge-notes-toggle,.merge-mobile-canvas-controls [aria-label="Help"],.merge-mobile-canvas-controls [aria-label="Fit slide"]) { display:none!important; }
+.merge-shell[data-editing="false"] :is(.zoom-actions,.help-icon,.merge-notes-toggle,.merge-mobile-canvas-controls [aria-label="Help"],.merge-mobile-canvas-controls [aria-label="Fit slide"]) { display:none!important; }
+.merge-view-frame { display:none;position:absolute;pointer-events:none;box-sizing:border-box; }
+.merge-shell[data-editing="false"] .merge-view-frame { display:block;z-index:3;border-radius:16px;box-shadow:0 0 0 1px var(--line),0 34px 80px -24px rgba(0,0,0,.75); }
+.merge-shell .merge-slide-card { border-radius:8px;transition:background-color .18s ease,box-shadow .18s ease; }
+.merge-shell .merge-slide-card:hover,.merge-shell .merge-slide-card:focus-within { background:var(--bg-elev);box-shadow:inset 0 0 0 1px var(--line),0 8px 20px -12px rgba(0,0,0,.5); }
+.merge-shell .merge-slide-card.is-active:hover,.merge-shell .merge-slide-card.is-active:focus-within { box-shadow:inset 0 0 0 1px var(--accent),0 8px 20px -12px rgba(0,0,0,.5); }
+@media(prefers-reduced-motion:reduce) { .merge-shell .merge-slide-card { transition:none; } }
 .merge-all-slides { grid-column:1/-1;grid-row:3;min-height:0;overflow:auto;background:var(--merge-bg);padding:20px;z-index:9; }
 .merge-all-slides>header { display:flex;align-items:center;justify-content:space-between;margin-bottom:20px; }
 .merge-all-slides h2 { font-size:16px;margin:0; }.merge-all-slides h2 small { color:var(--merge-muted);font-size:12px;margin-left:8px; }
