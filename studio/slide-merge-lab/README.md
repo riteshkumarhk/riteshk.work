@@ -10,8 +10,15 @@ the existing owner session through a new, narrowly scoped Worker route.
     green monospace saved status, centered Editing toggle and Current/All slides,
     gold play glyph for Rehearse, and the activity-recording ring at right.
 - Editing off hides the insertion toolbar, properties, guides and slide-management
-    controls. The canvas is read-only; slide navigation, Fit, rehearsal and speaker
-    notes remain available. Notes can still be changed and saved. Turning editing
+    controls, plus zoom, Fit, notes and help controls. The notes pane is hidden without
+    discarding its contents or its editing-mode open state. The read-only slide always
+    fits the available canvas; panning and zooming cannot move it out of that fit.
+    Wheel down/right and ArrowDown/ArrowRight advance; wheel up/left and
+    ArrowUp/ArrowLeft go back. Navigation stops at deck boundaries, includes all slides
+    in rail order, and consumes at most one step per wheel gesture (220ms idle resets
+    it). Wheel navigation is scoped to the canvas; the rail and All slides keep normal
+    scrolling. Keyboard navigation defers to fields, separators, dialogs and rehearsal.
+    Slide navigation and rehearsal remain available. Turning editing
     on/off keeps the same engine instance and history. Loading another slide respects
     the current editing toggle rather than the scene's saved view-mode flag.
 - All slides opens a thumbnail sorter with open, move, duplicate, skip and delete

@@ -294,9 +294,12 @@ function Merger() {
     const canvas = host.current.querySelector(".lab-canvas");
     const width = canvas.clientWidth, height = canvas.clientHeight;
     if (!width || !height) return;
-    const left=innerWidth>900&&live.current.editing?280:16,right=innerWidth>900?32:16;
-    const zoom = Math.max(.1, Math.min((width - left - right) / 1280, (height - (innerWidth > 900 ? live.current.editing ? 180 : 48 : 112)) / 720, 1));
-    api.updateScene({ appState: { zoom: { value: zoom }, scrollX: (left+(width-left-right-1280*zoom)/2)/zoom, scrollY: (height / zoom - 720) / 2 }, captureUpdate: CaptureUpdateAction.NEVER });
+    const left=innerWidth>900&&live.current.editing?280:16,right=live.current.editing&&innerWidth>900?32:16;
+    const zoom = Math.max(.01, Math.min((width - left - right) / 1280, (height - (live.current.editing ? innerWidth > 900 ? 180 : 112 : 32)) / 720, live.current.editing ? 1 : Infinity));
+    const scrollX = (left+(width-left-right-1280*zoom)/2)/zoom, scrollY = (height / zoom - 720) / 2;
+    const state = api.getAppState();
+    if (Math.abs(state.zoom.value-zoom)<.00001 && Math.abs(state.scrollX-scrollX)<.01 && Math.abs(state.scrollY-scrollY)<.01) return;
+    api.updateScene({ appState: { zoom: { value: zoom }, scrollX, scrollY }, captureUpdate: CaptureUpdateAction.NEVER });
   }
   async function mountSlide(slide) {
     placeholderTarget.current = null;
@@ -565,10 +568,45 @@ function Merger() {
     return () => { observer.disconnect(); clearTimeout(live.current.timer); document.removeEventListener("visibilitychange", flush); window.removeEventListener("beforeunload", leave); delete window.__slideMerge; };
   }, [api]);
   useEffect(() => { if (confirm) dialog.current.showModal(); }, [confirm]);
+  useEffect(() => {
+    if (!api || editing || slideView !== "current" || present !== null || confirm || deckDialog || activity.showLog) return;
+    const canvas = host.current.querySelector(".lab-canvas");
+    let lastWheel = -Infinity, wheelDistance = 0, wheelUsed = false;
+    const advance = direction => {
+      const currentDeck = live.current.deck;
+      if (!currentDeck || !live.current.ready || live.current.operating) return;
+      const index = currentDeck.slides.findIndex(slide => slide.id === currentDeck.selected);
+      const next = currentDeck.slides[index + direction];
+      if (next) choose(next.id);
+    };
+    const wheel = event => {
+      if (event.target.closest("iframe,video,audio,input,textarea,select,[contenteditable=true]")) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (event.ctrlKey || event.metaKey) return;
+      const now = performance.now();
+      if (now - lastWheel > 220) { wheelUsed = false; wheelDistance = 0; }
+      lastWheel = now;
+      const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+      wheelDistance += delta * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? canvas.clientHeight : 1);
+      if (!wheelUsed && Math.abs(wheelDistance) >= 40) { wheelUsed = true; advance(Math.sign(wheelDistance)); }
+    };
+    const key = event => {
+      if (event.target.closest("input,textarea,select,[contenteditable=true],[role=separator],video,audio,[role=dialog],dialog") || api.getAppState().openDialog) return;
+      const direction = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[event.key];
+      if (!direction && !["+", "=", "-", "0", "?"].includes(event.key)) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (direction && !event.repeat) advance(direction);
+    };
+    canvas.addEventListener("wheel", wheel, { capture: true, passive: false });
+    document.addEventListener("keydown", key, true);
+    fit();
+    return () => { canvas.removeEventListener("wheel", wheel, true); document.removeEventListener("keydown", key, true); };
+  }, [api, editing, slideView, present, confirm, deckDialog, activity.showLog]);
   async function switchView(next) { await run(async () => { await save(); openPane(null, false); setSlideView(next); activity.note(next === "all" ? "All slides" : "Current slide", "nav"); if (next === "all") await Promise.all(live.current.deck.slides.map(thumbnail)); requestAnimationFrame(fit); }); }
   function switchEditing(next) { activity.flush(); openPane(null, false); setEditing(next); api.updateScene({ appState: { selectedElementIds: {}, selectedGroupIds: {}, editingGroupId: null, frameRendering: { enabled: true, name: next, outline: next, clip: true } }, captureUpdate: CaptureUpdateAction.NEVER }); activity.note(next ? "Editing on" : "Editing off", "nav"); requestAnimationFrame(fit); }
   function rehearse() { return run(async () => { await save(); const first = deck.slides.slice(selectedIndex).find(slide => !slide.hidden) || rehearsal[0]; activity.note("Rehearsal started", "nav"); setPresent(rehearsal.findIndex(slide => slide.id === first.id)); }); }
-  return <div className={`merge-shell ${resizing ? "is-resizing" : ""} ${notesResize.dragging ? "is-notes-resizing" : ""} ${notesOpen ? "" : "is-notes-hidden"} ${mobileUI.slides ? "mobile-slides-open" : ""} ${pane && !mobileUI.mobile ? "merge-rail-insert" : ""}`} data-editing={editing} data-slide-view={slideView} data-mobile-panel={mobileUI.mobile ? mobileUI.panel : undefined} style={{ "--slide-pane-width": `${paneWidth}px`, "--notes-height": `${notesResize.height}px` }}>
+  return <div className={`merge-shell ${resizing ? "is-resizing" : ""} ${notesResize.dragging ? "is-notes-resizing" : ""} ${editing && notesOpen ? "" : "is-notes-hidden"} ${mobileUI.slides ? "mobile-slides-open" : ""} ${pane && !mobileUI.mobile ? "merge-rail-insert" : ""}`} data-editing={editing} data-slide-view={slideView} data-mobile-panel={mobileUI.mobile ? mobileUI.panel : undefined} style={{ "--slide-pane-width": `${paneWidth}px`, "--notes-height": `${notesResize.height}px` }}>
     <header className="merge-header"><a href="/studio/slide-lab/" title="Back to engine lab" aria-label="Back to engine lab"><Icon name="back" /></a><span className="merge-brand">Slide studio <small>MERGER LAB</small></span>
       <input aria-label="Deck title" value={deck?.title || ""} disabled={busy || !editing} onChange={event => metadata("title", event.target.value, true)} />
       <Button icon="save" label="Save local deck" disabled={busy || !deck} onClick={() => save().catch(fail)} />
@@ -593,7 +631,7 @@ function Merger() {
           </ToolMenu></div>
         </CanvasToolbar>
         <div className="lab-canvas"><CanvasBackdrop api={api} /><CanvasGuides api={api} {...view} guides={settings.guides||[]} onGuides={guides=>commitSettings({guides})} disabled={busy||present!==null||confirm} /><CanvasVideo api={api} /><LabTextColorContext.Provider value={{ api, labels, linked: labels.every(label => label.linked), busy, changeLabelColor: color => { if (color && color !== "unlink" && color !== "transparent") { color = normalizeHex(color); if (!color) return; } const elements = api.getSceneElementsIncludingDeleted(); const targets = selectedLabels(elements, api.getAppState().selectedElementIds); api.updateScene({ elements: labelColorUpdate(elements, targets.map(element => element.id), color), captureUpdate: CaptureUpdateAction.IMMEDIATELY }); } }}>
-          <Excalidraw excalidrawAPI={setApi} theme={canvasTheme(api?.getSceneElements() || [],appearance)} onChange={onChange} onLibraryChange={library.onChange} libraryReturnUrl={location.origin + "/studio/slide-merge-lab/"} viewModeEnabled={!editing || busy || present !== null || !!confirm || !!deckDialog || slideView === "all"} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: appearance, currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: sceneBackground() } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed}>
+          <Excalidraw excalidrawAPI={setApi} theme={canvasTheme(api?.getSceneElements() || [],appearance)} onChange={onChange} onScrollChange={() => { if (!live.current.editing) fit(); }} onLibraryChange={library.onChange} libraryReturnUrl={location.origin + "/studio/slide-merge-lab/"} viewModeEnabled={!editing || busy || present !== null || !!confirm || !!deckDialog || slideView === "all"} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: appearance, currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: sceneBackground() } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed}>
             <HistoryControls target={historyTarget} activity={activity} disabled={!editing || busy || present !== null || !!confirm || !!deckDialog || slideView === "all"} />
             <MainMenu />
             <DefaultSidebar docked={false} onDock={false} />
@@ -603,7 +641,7 @@ function Merger() {
             </ContentPane>
             {!hasSelection&&current&&<SlideProperties mobileOpen={mobileUI.mobile && mobileUI.panel === "properties"} settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} />}
           </Excalidraw>
-          <FitSlideControl api={api} host={host} mobile={mobileUI.mobile} disabled={busy || present !== null || !!confirm || !!deckDialog} onFit={fit} />
+          {editing && <FitSlideControl api={api} host={host} mobile={mobileUI.mobile} disabled={busy || present !== null || !!confirm || !!deckDialog} onFit={fit} />}
           <PlaceholderActions api={api} disabled={busy || present !== null || !!confirm || !!deckDialog} onInsert={(id, next) => { api.updateScene({appState:{selectedElementIds:{[id]:true}},captureUpdate:CaptureUpdateAction.NEVER});openPane(next, false, id); }} />
         </LabTextColorContext.Provider>{mobileUI.mobile && <div className="merge-mobile-canvas-controls"><button className="merge-icon" aria-label="Toggle slides" title="Slides" aria-expanded={mobileUI.slides} onClick={()=>mobileUI.setSlides(!mobileUI.slides)}><Icon name="slides" /></button><button className="merge-icon" title="Properties" aria-label="Open properties" onClick={()=>mobileUI.open("properties",hasSelection)}><Icon name="properties" /></button><Button icon="fit" label="Fit slide" disabled={busy || present !== null || !!confirm || !!deckDialog} onClick={fit} /><button className="merge-notes-toggle" title="Speaker notes" aria-label="Speaker notes panel" aria-expanded={mobileUI.panel === "notes"} aria-controls="merge-speaker-notes" onClick={() => mobileUI.open(mobileUI.panel === "notes" ? null : "notes")}><ToolIcon name="notes" /><span>Notes</span></button><button className="merge-icon" title="Help" aria-label="Help" onClick={() => api?.updateScene({appState:{openDialog:{name:"help"}},captureUpdate:CaptureUpdateAction.NEVER})}><Icon name="help" /></button></div>}</div><CornerControls api={api} host={host} disabled={busy || present !== null} />{busy && <div className="lab-busy" role="status">Working</div>}
       </main><div className="merge-notes" id="merge-speaker-notes" hidden={mobileUI.mobile ? mobileUI.panel !== "notes" : !notesOpen}><div className="merge-notes-resizer" {...notesResize.handle} /><div className="merge-notes-heading"><strong>Speaker notes</strong><button className="merge-icon" title="Close notes" aria-label="Close notes" onClick={() => mobileUI.open(null)}><Icon name="close" /></button></div><textarea aria-label="Speaker notes" placeholder="Speaker notes" value={current?.notes || ""} disabled={busy} onChange={event => metadata("notes", event.target.value)} /></div></section>
