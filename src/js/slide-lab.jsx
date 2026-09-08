@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Excalidraw, MainMenu, convertToExcalidrawElements, restoreElements, exportToSvg, getSceneVersion, CaptureUpdateAction } from "@excalidraw/excalidraw";
 import { FRAME_ID, SCENARIOS, fixtureSkeleton, frameReport, originalImage, packScene, readScene, sha256, writeScene, selectedLabels, labelColorUpdate, preserveLabelColors } from "./slide-lab-core.mjs";
 import { createScreenshot } from "./slide-lab-fixtures.mjs";
+import { CornerControls } from "./slide-lab-corner-controls.jsx";
 import "@excalidraw/excalidraw/index.css";
 import "../../css/slide-lab.css";
 
@@ -270,6 +271,7 @@ function Lab() {
         </Excalidraw>
       </div>
       {view === "native" && <div className="lab-native"><iframe title="Native slide reference" src="./native.html?preview=1&fixture=all" /></div>}
+      <CornerControls api={api} host={host} disabled={busy || !!preview || view !== "canvas"} />
       {colorSlot && view === "canvas" && labels.length > 0 && !preview && createPortal(<fieldset className="lab-label-color" aria-label="Bound text colour">
         <legend>Text colour</legend>
         <label className="lab-color-link"><input type="checkbox" checked={linked} disabled={busy} onChange={event => changeLabelColor(event.target.checked ? null : "unlink")} />Link text to outline</label>

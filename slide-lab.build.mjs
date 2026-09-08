@@ -1,5 +1,6 @@
 import { build } from "esbuild";
 import { cp, mkdir, rm } from "node:fs/promises";
+import { cornerEnginePlugin } from "./slide-lab-engine.mjs";
 
 await rm("studio/slide-lab/assets", { recursive: true, force: true });
 await build({
@@ -12,6 +13,7 @@ await build({
   splitting: true,
   format: "esm",
   conditions: ["production"],
+  plugins: [cornerEnginePlugin()],
   loader: { ".woff2": "file" },
   minify: true,
   target: ["es2020"],

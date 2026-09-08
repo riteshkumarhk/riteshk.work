@@ -40,6 +40,19 @@ button:focus-visible { outline: 2px solid #d8a657; outline-offset: 2px; }
 .lab-native > iframe { width: 100%; aspect-ratio: 16 / 9; max-height: 100%; border: 0; background: #fff; }
 .lab-embed { border: 0; height: 100%; width: 100%; background: #fff; }
 .lab-color-slot:empty { display: none; }
+.excalidraw fieldset[data-lab-corners] { display: none; }
+.lab-corner-slot:empty { display: none; }
+.excalidraw .lab-corners { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 6px; }
+.lab-corner-modes { display: flex; gap: 4px; }
+.lab-corner-modes button { display: grid; place-items: center; width: 32px; height: 34px; padding: 0; border: 1px solid transparent; border-radius: 6px; color: var(--color-on-surface); background: var(--button-bg, var(--color-surface-mid)); }
+.lab-corner-modes button:hover { background: var(--button-hover-bg); }
+.lab-corner-modes button[aria-pressed=true] { background: var(--color-surface-primary-container); color: var(--color-on-primary-container); }
+.lab-radius { display: flex; align-items: center; min-width: 0; height: 34px; border: 1px solid var(--default-border-color); border-radius: 4px; background: var(--island-bg-color); color: var(--text-primary-color); }
+.lab-radius input { width: 100%; min-width: 0; padding: 5px; color: inherit; border: 0; outline: 0; background: transparent; cursor: ew-resize; touch-action: none; font-size: 13px; }
+.lab-radius:focus-within { outline: 1px solid var(--color-primary); }
+.lab-radius-steps { display: grid; grid-template-rows: repeat(2, 16px); border-left: 1px solid var(--default-border-color); }
+.lab-radius-steps button { display: grid; place-items: center; width: 18px; padding: 0; background: transparent; color: inherit; border: 0; }
+.lab-radius-steps button:hover { background: var(--color-primary-light); }
 .lab-label-color { min-width: 0; color: var(--text-primary-color); }
 .lab-color-link { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .lab-color-link input { accent-color: var(--color-primary); width: 16px; height: 16px; margin: 0; }

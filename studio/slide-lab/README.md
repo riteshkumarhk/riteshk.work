@@ -9,7 +9,7 @@ Open `/studio/slide-lab/` through the site's HTTP server. It has four synthetic 
 ```sh
 npm ci
 npm run build:slide-lab
-node --test slide-lab.test.mjs slideshow-interactions.test.cjs
+node --test slide-lab-corners.test.mjs slide-lab.test.mjs slideshow-interactions.test.cjs
 ```
 
 The static distribution is committed for branch-based GitHub Pages. The lab is not imported by either production entry point. Rebuild the lab after changing its source. Generated license notices and fonts remain alongside the bundle. The complete uncompressed distribution is about 22 MB, including lazy chunks and fonts; this is not the initial network transfer size.
@@ -20,6 +20,10 @@ Select a shape with bound text to show Text colour in the shape properties, betw
 
 The inline control uses a React portal into the pinned engine's desktop/mobile `.panelColumn`, before its first property fieldset. A scoped MutationObserver reattaches it when the engine replaces the properties panel. Recheck placement, selection dismissal and mobile panel reopening when upgrading Excalidraw; this is an internal DOM integration, not a public engine extension API.
 
+Selected rectangles have Sharp, Round and Squircle controls in Edges, with the radius field and up/down chevrons as the fourth item on the same row. The original corner-and-dots icon family and native button backgrounds are preserved. Type a radius in slide pixels, use the chevrons/arrow keys, or click-hold and drag the value horizontally (Shift adjusts faster). Radius is limited to half the shorter dimension. Other shape types retain native rounding. Settings persist in `customData.labCorners`; a scrub commits as one undoable edit.
+
+Squircle uses `figma-squircle` with 60% continuous-corner smoothing. A version-checked build adapter repackages Excalidraw 0.18.1's readable distribution with production React and minification, replacing only custom rectangle path generation and radius lookup. Canvas and SVG export share the generated path; untouched elements use the original engine path. No installed dependency files are rewritten. The engine's corner hit-testing and connector attachment still use its rounded-rectangle approximation, so exact squircle-corner snapping remains an adoption limitation.
+
 - Bound connectors follow a pointer-dragged node; one undo restores its position.
 - Double-click edits a shape's bound label and creates text on empty canvas. Labels can wrap, so compare `originalText` or normalized whitespace rather than display `text` alone.
 - Text and freehand strokes persist across a full page reload.
@@ -27,7 +31,7 @@ The inline control uses a React portal into the pinned engine's desktop/mobile `
 - Native bold/italic text and a case-study section render through the existing slide renderer in same-origin embeds.
 - SVG preview is clipped to a 1280 x 720 frame and its modal owns focus.
 - Desktop and 390 px mobile screenshots, nonblank canvas pixels and horizontal-overflow checks passed.
-- Five lab unit tests and ten production slideshow interaction tests passed; both builds passed.
+- Eleven lab unit tests and ten production slideshow interaction tests passed. Lab build and browser checks passed: distinct Round/Squircle SVG paths, 1280 x 720 export, reload persistence, and scrub 21 -> 51 -> Undo 21 -> Redo 51.
 
 ## Adoption Gates Still Open
 
