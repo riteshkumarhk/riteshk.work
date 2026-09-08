@@ -1,6 +1,7 @@
 import { build } from "esbuild";
 import { cp, mkdir, rm } from "node:fs/promises";
 import { cornerEnginePlugin } from "./slide-lab-engine.mjs";
+import { checkLabAssets } from "./slide-lab-security.mjs";
 
 await rm("studio/slide-lab/assets", { recursive: true, force: true });
 await build({
@@ -23,3 +24,4 @@ await build({
 });
 await mkdir("studio/slide-lab/assets/fonts", { recursive: true });
 await cp("node_modules/@excalidraw/excalidraw/dist/prod/fonts", "studio/slide-lab/assets/fonts", { recursive: true });
+await checkLabAssets("studio/slide-lab/assets");

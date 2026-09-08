@@ -6,6 +6,7 @@ import { createScreenshot } from "./slide-lab-fixtures.mjs";
 import { CornerControls } from "./slide-lab-corner-controls.jsx";
 import { LabTextColorContext } from "./slide-lab-text-color.jsx";
 import { normalizeHex } from "./slide-lab-color.mjs";
+import { DEFAULT_SLIDE_FONT, platformText, loadPlatformFonts } from "./slide-platform-fonts.mjs";
 import "@excalidraw/excalidraw/index.css";
 import "../../css/slide-lab.css";
 
@@ -93,7 +94,9 @@ function Lab() {
       if (stored && stored.version !== 1) throw new Error("Unsupported lab draft version");
       let scene = stored;
       if (!scene) {
-        const elements = convertToExcalidrawElements(fixtureSkeleton(key), { regenerateIds: false });
+        const skeleton = platformText(fixtureSkeleton(key));
+        await loadPlatformFonts(skeleton);
+        const elements = convertToExcalidrawElements(skeleton, { regenerateIds: false });
         const files = {};
         if (key === "compatibility") {
           const original = await originalImage(await createScreenshot());
@@ -101,7 +104,9 @@ function Lab() {
         }
         scene = packScene(elements, files, { viewBackgroundColor: "#f6f7f6", theme: "light", zoom: { value: 0.7 }, scrollX: 0, scrollY: 0 });
       }
-      scene.elements = restoreElements(scene.elements, null, { repairBindings: true }).map(element => element.id === FRAME_ID
+      scene.elements = platformText(scene.elements);
+      await loadPlatformFonts(scene.elements);
+      scene.elements = restoreElements(scene.elements, null, { repairBindings: true, refreshDimensions: true }).map(element => element.id === FRAME_ID
         ? { ...element, x: 0, y: 0, width: 1280, height: 720, angle: 0, locked: true } : element);
       runtime.current.ready = false;
       runtime.current.scenario = key;
@@ -248,7 +253,7 @@ function Lab() {
       <div className="lab-canvas" hidden={view !== "canvas"}>
         <LabTextColorContext.Provider value={{ api, labels, linked, changeLabelColor, busy }}>
         <Excalidraw excalidrawAPI={setApi} onChange={onChange} handleKeyboardGlobally={false} aiEnabled={false} viewModeEnabled={busy || !!preview || view !== "canvas"}
-          initialData={{ appState: { viewBackgroundColor: "#f6f7f6", currentItemRoughness: 0, currentItemFontFamily: 2, theme: "light" } }}
+          initialData={{ appState: { viewBackgroundColor: "#f6f7f6", currentItemRoughness: 0, currentItemFontFamily: DEFAULT_SLIDE_FONT, theme: "light" } }}
           UIOptions={{ tools: { image: false }, canvasActions: { loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, clearCanvas: false } }}
           validateEmbeddable={link => /^https:\/\/slide-lab\.invalid\/(rich|section|video)$/.test(link)}
           renderEmbeddable={element => <NativeEmbed element={element} />}

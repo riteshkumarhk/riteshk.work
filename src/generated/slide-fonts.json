@@ -1,0 +1,1279 @@
+[
+  {
+    "family": "Albert Sans",
+    "id": 59091765,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/78b26c5d5d82248eb13ceeb4e6598b1e4248851f3c8622b12d57571539486816.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/c2fb6fda415c7bf5926c15aa98f759da45cdc5ac4ac6925a72a84db4eb3862a3.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 950,
+      "descender": -250,
+      "lineHeight": 1.2
+    }
+  },
+  {
+    "family": "Anton",
+    "id": 69826217,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/0d17b7880f389deeb6663a52fa4eadc6d9116bdda725f0aa1f3d404fbb7d3d59.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/d0fa07ff63dd60cbc0e2f58e29c802dca2a5ae0276c999f59c6111ab7bbaec3b.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 2048,
+      "ascender": 2409,
+      "descender": -674,
+      "lineHeight": 1.50537109375
+    }
+  },
+  {
+    "family": "Architects Daughter",
+    "id": 124175405,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/4b7ce4464e714bba13a4b67e00995d85a715d35d3d9a409067f910b77824f31d.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/284a3c1856b253a681c180bf5328cae3b94d4aaab702f6385490ec4e1b449df3.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1024,
+      "ascender": 1010,
+      "descender": -413,
+      "lineHeight": 1.3896484375
+    }
+  },
+  {
+    "family": "Archivo",
+    "id": 123563821,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/ff4f17d21930e36d6d93baba663e624cb767afc3feebf7adaebd82242638de05.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 800",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/8f704806dbedeaaeca334b11ec348bc3ac3a439d6431544b3afb54f534ee4967.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 800",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 878,
+      "descender": -210,
+      "lineHeight": 1.2
+    }
+  },
+  {
+    "family": "Baskervville",
+    "id": 120511062,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/1681aaacb5d3a4eb8e8250a8cb40257906bc689cbfdd195e6cb09b074aba22f0.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/60ee0786854562db477ab5a9d4c363e65121a88c46650aee107d7d5010bd3142.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 998,
+      "descender": -295,
+      "lineHeight": 1.293
+    }
+  },
+  {
+    "family": "Bricolage Grotesque",
+    "id": 100107398,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/776f6dcaf03636cd69a5802c94808cc8896c0a66c8e9ce0fe147231b6ee01957.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 800",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/a79fdb52d4a5c76552452f69202add96e287401fff03d3e8c0e38b4dcb5a99cd.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 800",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 930,
+      "descender": -270,
+      "lineHeight": 1.2
+    }
+  },
+  {
+    "family": "Caveat",
+    "id": 140754204,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/f626b95c1efa95cf6b7c9b043d3bbe8862b6abbe5f55a082102f33f7de2fd4f9.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/891951df5e8b5b0f0bc760d31375405e795c666b5add70437de12d4a6482b33f.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 960,
+      "descender": -300,
+      "lineHeight": 1.26
+    }
+  },
+  {
+    "family": "Dancing Script",
+    "id": 209367917,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/35f77ad59c29ee47c90397fc1016a1c75a8313ea5292d64643eeae6a90a75ba2.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/51acdc0e009e1d84cca6b654c4218275d8ee33dd243f3df25f7412a824a78d99.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 920,
+      "descender": -280,
+      "lineHeight": 1.2
+    }
+  },
+  {
+    "family": "DM Mono",
+    "id": 89874933,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/a52e19ebe0398c9c0f8fa28a0c5e9a6bc324f35d9f0881c9aa407d10af447175.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/e1896b13b2b1bb112fac2f9571bd6c40e118746e77a4511edbf43fbb41bf3e1e.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 992,
+      "descender": -310,
+      "lineHeight": 1.302
+    }
+  },
+  {
+    "family": "DM Serif Display",
+    "id": 148710207,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/3af47815d6183efcee27a5717970acfe31153365e9b842e62d30c04e86c0613a.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/fdf61e20fd2c0108e0ea28da4daca0035205b4b7fc031a3974b865b704de160a.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1036,
+      "descender": -335,
+      "lineHeight": 1.371
+    }
+  },
+  {
+    "family": "EB Garamond",
+    "id": 260137257,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/f8d3fa06e20989a938972165406a1b731cdc7fe33ff2b0b6798c75aa63709901.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 800",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/88603384163d301aebd5bd769832a8bfe3c9004ec24178417b9817f0ad32c63b.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 800",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1007,
+      "descender": -298,
+      "lineHeight": 1.305
+    }
+  },
+  {
+    "family": "Epilogue",
+    "id": 104958651,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/8026084714d57bf555eb958d7ec15bd5dc71b75ba79490111711300af524b645.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/943ab208b058dbb0a8b257c02d6d9cfe5932a72c4deea8c77d192111c7c14519.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 2000,
+      "ascender": 1580,
+      "descender": -470,
+      "lineHeight": 1.2
+    }
+  },
+  {
+    "family": "Figtree",
+    "id": 215506358,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/bf7828e2c258cffcfa50a048ee388a36b95bc16b452e8d36fa797635dbe15965.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 800",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/4ba7d3d096695818fe0686be4f1e82c6b05134e18a22260336130335027462dd.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 800",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 950,
+      "descender": -250,
+      "lineHeight": 1.2
+    }
+  },
+  {
+    "family": "Fira Code",
+    "id": 253703984,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/a0599035b56206d09bc1873c2a025c647f8fb5cd7c0921999aeff7435997eb7d.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+2000-2001, U+2004-2008, U+200A, U+23B8-23BD, U+2500-259F"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/801677342d1191c5e964719bbcb5834f5da3c39a00e1e1501f450b1379fcc116.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/771bf4b79a97fc005d12866168bd39d868a9dd3d5903008fe8b796723c8a56f4.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 2000,
+      "ascender": 1980,
+      "descender": -644,
+      "lineHeight": 1.312
+    }
+  },
+  {
+    "family": "Fragment Mono",
+    "id": 258423137,
+    "faces": [
+      {
+        "uri": "https://riteshk.work/fonts/fragmentmono-normal-400-latin-ext.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://riteshk.work/fonts/fragmentmono-normal-400-latin.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 950,
+      "descender": -250,
+      "lineHeight": 1.2
+    }
+  },
+  {
+    "family": "Fraunces",
+    "id": 193916625,
+    "faces": [
+      {
+        "uri": "https://riteshk.work/fonts/fraunces-normal-300600-latin-ext.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 600",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://riteshk.work/fonts/fraunces-normal-300600-latin.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 600",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 2000,
+      "ascender": 1956,
+      "descender": -510,
+      "lineHeight": 1.233
+    }
+  },
+  {
+    "family": "Gambetta",
+    "id": 19675330,
+    "faces": [
+      {
+        "uri": "https://riteshk.work/fonts/gambetta-normal-300700-latin.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 930,
+      "descender": -290,
+      "lineHeight": 1.3
+    }
+  },
+  {
+    "family": "Geist Mono",
+    "id": 120591936,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/5bb66d8319ba1602bb2eb67dce8d79c2b4687be8ce183a0574433e949b3c60ad.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+2000-2001, U+2004-2008, U+200A, U+23B8-23BD, U+2500-259F"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/1a189eb997c3e2ece68373e387afaec9e8617424186c4b1ab3cff7c54ba6223b.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/684ad5b531f81d43c1e8c7038262d5db7cdc1f68006e04d6c7769efa8d33c8cc.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1005,
+      "descender": -295,
+      "lineHeight": 1.3
+    }
+  },
+  {
+    "family": "Gelasio",
+    "id": 18201384,
+    "faces": [
+      {
+        "uri": "https://riteshk.work/fonts/gelasio-normal-400-latin-ext.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://riteshk.work/fonts/gelasio-normal-400-latin.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 2048,
+      "ascender": 1900,
+      "descender": -700,
+      "lineHeight": 1.26953125
+    }
+  },
+  {
+    "family": "General Sans",
+    "id": 208032911,
+    "faces": [
+      {
+        "uri": "https://riteshk.work/fonts/generalsans-normal-200700-latin.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "200 700"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1010,
+      "descender": -240,
+      "lineHeight": 1.35
+    }
+  },
+  {
+    "family": "Hanken Grotesk",
+    "id": 91599475,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/768af2923e0ab1549f1dfba0a5c8ea749c4c01f01d8e77ffaf7fcd12f57a0a24.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 800",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/e9201eddf1d41d0b62253295d869ce3cf65768f7102b797f02c7f8c876b4a9d5.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 800",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1000,
+      "descender": -303,
+      "lineHeight": 1.303
+    }
+  },
+  {
+    "family": "IBM Plex Mono",
+    "id": 170422525,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/6bc0f226a5b7884a8170e3f62c63d7675609d4631bdc5931b5cdab81821f00eb.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1025,
+      "descender": -275,
+      "lineHeight": 1.3
+    }
+  },
+  {
+    "family": "IBM Plex Sans",
+    "id": 255896986,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/d160e20920ae4d6556518d352d3af27a74e9b0de3d8fe17b1c1044fc75aa2f81.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/e2291e842cf5af167122a22881a740c7f2dda7716f1e8cd76680264f4a859470.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1025,
+      "descender": -275,
+      "lineHeight": 1.3
+    }
+  },
+  {
+    "family": "Instrument Serif",
+    "id": 251505573,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/290e6267dd833bf5f899eba4c29ad0a9b09dbe53f6075b18af38057159e1ff20.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/5eb09b5ac0e28b67c2f041c8ba6d244604ca0c0980d65912ab2d47fed84ddc31.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 990,
+      "descender": -310,
+      "lineHeight": 1.3
+    }
+  },
+  {
+    "family": "Inter",
+    "id": 51007043,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 2048,
+      "ascender": 1984,
+      "descender": -494,
+      "lineHeight": 1.2099609375
+    }
+  },
+  {
+    "family": "Inter Tight",
+    "id": 175997033,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/fd9beddaaec644945809da574cf1caf342073c7e4b46a2ea5bd136c8cf1a9eca.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/77fefe8ca19b9f69b5284832c519e0493127c1f091f0a8936884be7721c4e618.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 2048,
+      "ascender": 1984,
+      "descender": -494,
+      "lineHeight": 1.2099609375
+    }
+  },
+  {
+    "family": "JetBrains Mono",
+    "id": 36477690,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/db5ff4db83e580426280e9337a58dc57d3a83784a1b03ad80914651594441d52.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/83c005d49d8a6a50474c73a5a36ac0468076e9c4a29da7bdb14995d80560a5be.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1020,
+      "descender": -300,
+      "lineHeight": 1.32
+    }
+  },
+  {
+    "family": "Kalam",
+    "id": 18205952,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/1099e56781c48f97dc66c8df2039a640ded07742acd4c6f2c9dc6350c3e3f324.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/954410601a823f37e219f7930b7446f86afa15621326a7078d56fb9c910135cb.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1063,
+      "descender": -531,
+      "lineHeight": 1.594
+    }
+  },
+  {
+    "family": "Libre Franklin",
+    "id": 266910593,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/61216d8e3efe8c5a26861f8b92dc9a922645c662da95c37bf787a4a774a5c8d5.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/52e605852c72cc2df1473df1fb7f26a3a0be58e31835bc8f33f29b1918c82cbd.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 966,
+      "descender": -246,
+      "lineHeight": 1.212
+    }
+  },
+  {
+    "family": "Manrope",
+    "id": 234748395,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/3911b66d9f2e005a4b989223405d0e5032619c668597ba467cc76a23c8fffcfb.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 800",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/a30ddcd349703aff7464c34bef3fffdff405ee50c113440d7c8693c02d210972.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 800",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 2000,
+      "ascender": 2132,
+      "descender": -600,
+      "lineHeight": 1.366
+    }
+  },
+  {
+    "family": "Martian Mono",
+    "id": 257899598,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/c26a87eedc388afebc0c6331d99b248196ea64a883322fc519831278ffd169d5.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/d0be3a78a854bcea53a9dc26b6620ba322eaa515ccbd92bb4b6ec20a3c91b291.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1000,
+      "descender": -200,
+      "lineHeight": 1.2
+    }
+  },
+  {
+    "family": "Mulish",
+    "id": 141909913,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/e1ccc8579a0437969464ba8bb1bb5e423306fa16746521d1f05040243b9a7a58.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 800",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/8d1d33d6beea5a722b8f336d79c61c07405949457e37b5e65454c72dc10aba1a.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 800",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1005,
+      "descender": -250,
+      "lineHeight": 1.255
+    }
+  },
+  {
+    "family": "Newsreader",
+    "id": 2625439,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/45683de03de37187604102316c0b42c0cb2d8dc9c4140a20ad471c3148cc1278.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 600",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/6e4f2958c3a7c4a80acde4e5a679abe7e01bc1e30b92be3c7a8b696ef401d101.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 600",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 2000,
+      "ascender": 1470,
+      "descender": -530,
+      "lineHeight": 1.2
+    }
+  },
+  {
+    "family": "Patrick Hand",
+    "id": 76309999,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/c16846bad9501534b8402172c18f87e927146c4e63af2942f1fa8ad8ba7e6e70.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/ac5bc9033b2572bf84d39f7150c1634e37ed16e8dbee632d6d0bceac0bbf0199.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1042,
+      "descender": -312,
+      "lineHeight": 1.354
+    }
+  },
+  {
+    "family": "Plus Jakarta Sans",
+    "id": 89939599,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/38e3b8fd8045048eb311d90170a4429ed2c8f405852dc3d91b5af8452758703f.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 800",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/153fc85b70298beeb1d61a5f723331649e7f23bb77302a66e61cb3e2fbdb5e79.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 800",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1038,
+      "descender": -222,
+      "lineHeight": 1.26
+    }
+  },
+  {
+    "family": "Schibsted Grotesk",
+    "id": 193234418,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/ee9eeb232cc1fe7979dad813a570f4b19f1eb4496daf56c94ec9de63abdb2936.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 900",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/4c8b93f431d462c696e12b9d6a033feb3394d36e66e781357c496b95d8a75e05.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 900",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 2048,
+      "ascender": 2000,
+      "descender": -528,
+      "lineHeight": 1.234375
+    }
+  },
+  {
+    "family": "Shantell Sans",
+    "id": 134261400,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/3b0ecff7fe287e170571e7cdce06da4099bed00e3fba7209a3840a280ffa79e4.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 800",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/f15631aba9746668ad895821c72db5825759fe0bddaa4da1e7ea33d0dc2d5477.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 800",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1020,
+      "descender": -320,
+      "lineHeight": 1.34
+    }
+  },
+  {
+    "family": "Sora",
+    "id": 134008702,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/c163c536f68befd99a83d4f17e8b88030e7f54229688a45c44f70c7149db7385.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 800",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/fa26406eeda9a3c6ec3d9ea8813c3045d6dc755e30c716d5c094e8ef43be5a7f.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 800",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 970,
+      "descender": -290,
+      "lineHeight": 1.26
+    }
+  },
+  {
+    "family": "Space Grotesk",
+    "id": 13598450,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/952dddb45d2f96f71cbf3b7f510b24379afc3c89ea02fcf89d377b45d62c0166.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/0640890476fc1198ab4de571fb658de443c4d85b66466ec09534a8737ab1ce9d.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 984,
+      "descender": -292,
+      "lineHeight": 1.276
+    }
+  },
+  {
+    "family": "Space Mono",
+    "id": 18959513,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/44ad50c760fa8f5b62da3d489edb40adebabaf97988b9b0adbbc3f0be859050a.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/fb4a81a2d0a893e5c38c394a7e716a1cef0b24610a0af49c96f6d529bd66bf2b.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1120,
+      "descender": -361,
+      "lineHeight": 1.481
+    }
+  },
+  {
+    "family": "Spectral",
+    "id": 70608971,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/fc4b2566ccd9714a72c2137f822311cb0131296c83c8ee93848ae6f887969e85.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/cf8daee3b83c1e662196c6e34e444bc41344d54bfeb4fb5351e197de6ce94539.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 1059,
+      "descender": -463,
+      "lineHeight": 1.522
+    }
+  },
+  {
+    "family": "Spline Sans Mono",
+    "id": 104526627,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/0ca9a3989044d1f9b4da1f303cea3c3091f5cb02fe54da04fd51fceaf676ecf9.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/46b7dcafe3e51dbe87be1bafaac3fed7646db1fe0a146647a6ffce3699f2752d.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 700",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 2000,
+      "ascender": 1927,
+      "descender": -473,
+      "lineHeight": 1.2
+    }
+  },
+  {
+    "family": "Switzer",
+    "id": 83442162,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/ddd9595560c35725e00d01667ce9bee519d245620e610844f0dd149df10b5d5f.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 980,
+      "descender": -250,
+      "lineHeight": 1.32
+    }
+  },
+  {
+    "family": "Syne",
+    "id": 196739365,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/83885b130cf2a67bc2fd6175d6f3c2875833552c1762b5943b51335038ae01f2.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 800",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/68b623f0e45b905041b2edb9b2e4f563a505f13db1cd06b5f1946eb2e1f47048.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 800",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 925,
+      "descender": -275,
+      "lineHeight": 1.2
+    }
+  },
+  {
+    "family": "Unbounded",
+    "id": 122563282,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/845e1c9fe2e9a7bfbedfeb447fbeba4bc1b5ecd6246277910ccdaad35a7a532c.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 800",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/22f9b928aa3928a896340422b54d690fbb5875c30eae4c106f029c61f2289fd6.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "400 800",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 995,
+      "descender": -245,
+      "lineHeight": 1.24
+    }
+  },
+  {
+    "family": "Work Sans",
+    "id": 128544868,
+    "faces": [
+      {
+        "uri": "https://media.riteshk.work/2aa17fc7b072e46652e84bbe3dbba9ec57cdea320d89e8c951ed7cf3218c300b.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        }
+      },
+      {
+        "uri": "https://media.riteshk.work/1dd49afc07fb2231b2ff686cbf007725fb2742271bb1f28ebd98f22a0d817343.woff2",
+        "descriptors": {
+          "style": "normal",
+          "weight": "300 700",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      }
+    ],
+    "metrics": {
+      "unitsPerEm": 1000,
+      "ascender": 930,
+      "descender": -243,
+      "lineHeight": 1.2
+    }
+  }
+]

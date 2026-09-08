@@ -1,4 +1,4 @@
-:root { color-scheme: dark; font-family: Assistant, sans-serif; color: #eeeef0; background: #18181b; font-synthesis: none; }
+:root { color-scheme: dark; font-family: Inter, sans-serif; color: #eeeef0; background: #18181b; font-synthesis: none; }
 * { box-sizing: border-box; }
 button, input { font: inherit; }
 button { cursor: pointer; }

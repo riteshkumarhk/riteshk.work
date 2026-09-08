@@ -1,10 +1,21 @@
 import { readFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
+import postcss from "postcss";
+
+export function stripUpstreamFirebase(source) {
+  return source.replace(/VITE_APP_FIREBASE_CONFIG: '(?:[^'\\]|\\.)*'/g, 'VITE_APP_FIREBASE_CONFIG: "{}"');
+}
 
 export function cornerEnginePlugin() {
   let patched = 0;
   let pickerPatched = 0;
   return { name: "lab-corner-geometry", setup(build) {
+    build.onLoad({ filter: /excalidraw[\\/]dist[\\/].*\.css$/ }, async ({ path }) => {
+      const css = postcss.parse(await readFile(path, "utf8"));
+      css.walkAtRules("font-face", rule => rule.remove());
+      css.walkDecls(declaration => { if (declaration.value.includes("Assistant")) declaration.value = declaration.value.replaceAll("Assistant", "Inter"); });
+      return { contents: css.toString(), loader: "css", resolveDir: dirname(path) };
+    });
     build.onResolve({ filter: /^@excalidraw\/excalidraw$/ }, () => ({ path: resolve("node_modules/@excalidraw/excalidraw/dist/dev/index.js") }));
     build.onLoad({ filter: /excalidraw[\\/]dist[\\/]dev[\\/]index\.js$/ }, async ({ path }) => {
       let source = await readFile(path, "utf8");
@@ -23,21 +34,33 @@ export function cornerEnginePlugin() {
         source = source.replace(before, after);
       }
       source = source.replaceAll('t("colorPicker.mostUsedCustomColors")', '"Custom colors"');
+      source = source.replace('value: FONT_FAMILY.Excalifont,\n    icon: FreedrawIcon,\n    text: t("labels.handDrawn")', 'value: FONT_FAMILY.Fraunces,\n    icon: TextIcon,\n    text: "Fraunces"');
+      source = source.replace('value: FONT_FAMILY.Nunito,\n    icon: FontFamilyNormalIcon,\n    text: t("labels.normal")', 'value: FONT_FAMILY.Inter,\n    icon: FontFamilyNormalIcon,\n    text: "Inter"');
+      source = source.replace('value: FONT_FAMILY["Comic Shanns"],\n    icon: FontFamilyCodeIcon,\n    text: t("labels.code")', 'value: FONT_FAMILY["JetBrains Mono"],\n    icon: FontFamilyCodeIcon,\n    text: "JetBrains Mono"');
       pickerPatched++;
       return { contents: `import { LabRichColor, useLabCustomColors as labUseCustomColors } from ${JSON.stringify(resolve("src/js/slide-lab-color-picker.jsx").replaceAll("\\", "/"))};\nimport { LabStrokeLink, LabTextColorControls } from ${JSON.stringify(resolve("src/js/slide-lab-text-color.jsx").replaceAll("\\", "/"))};\n` + source, loader: "js", resolveDir: dirname(path) };
     });
     build.onLoad({ filter: /excalidraw[\\/]dist[\\/]dev[\\/]chunk-.*\.js$/ }, async ({ path }) => {
-      let source = await readFile(path, "utf8");
+      const original = await readFile(path, "utf8");
+      let source = stripUpstreamFirebase(original);
       const radiusAnchor = "var getCornerRadius = (x, element) => {";
-      if (!source.includes(radiusAnchor)) return;
+      if (!source.includes(radiusAnchor)) return source !== original ? { contents: source, loader: "js", resolveDir: dirname(path) } : undefined;
       const version = JSON.parse(await readFile("node_modules/@excalidraw/excalidraw/package.json", "utf8")).version;
       if (version !== "0.18.1") throw new Error("Revalidate the Slide Lab corner adapter for Excalidraw " + version);
       const shapeAnchor = "  embedsValidationStatus\n}) => {\n  switch (element.type) {";
       if (source.split(radiusAnchor).length !== 2 || source.split(shapeAnchor).length !== 2) throw new Error("Excalidraw corner adapter anchors changed");
       source = source.replace(radiusAnchor, radiusAnchor + '\n  if (element.type === "rectangle" && element.customData?.labCorners) return labCornerSettings(element).radius;');
       source = source.replace(shapeAnchor, '  embedsValidationStatus\n}) => {\n  if (element.type === "rectangle" && element.customData?.labCorners) return generator.path(labCornerPath(element), generateRoughOptions(element, true));\n  switch (element.type) {');
+      const fontStart = source.indexOf('    init("Cascadia", ...CascadiaFontFaces);');
+      const fontEnd = source.indexOf('    _Fonts._initialized = true;', fontStart);
+      if (fontStart < 0 || fontEnd < 0) throw new Error("Excalidraw font registry anchor changed");
+      source = source.slice(0, fontStart) + '    for (const font of labFonts) {\n      _Fonts.register.call(fonts, font.family, { metrics: font.metrics }, ...font.faces);\n    }\n    for (const [id, family] of Object.entries(labLegacyFonts)) {\n      const entry = fonts.registered.get(FONT_FAMILY[family]);\n      fonts.registered.set(Number(id), { ...entry, metadata: { ...entry.metadata, fallback: true } });\n    }\n' + source.slice(fontEnd);
+      source = source.replace('var FONT_FAMILY = {', 'var FONT_FAMILY = {\n  ...Object.fromEntries(labFonts.map(font => [font.family, font.id])),');
+      source = source.replace('var DEFAULT_FONT_FAMILY = FONT_FAMILY.Excalifont;', 'var DEFAULT_FONT_FAMILY = FONT_FAMILY.Inter;');
+      source = source.replace('var getFontFamilyFallbacks = (fontFamily) => {', 'var getFontFamilyFallbacks = (fontFamily) => {\n  return [];');
+      source = source.replace('}) => {\n  for (const [fontFamilyString, id] of Object.entries(FONT_FAMILY)) {', '}) => {\n  if (labLegacyFonts[fontFamily]) return labLegacyFonts[fontFamily];\n  for (const [fontFamilyString, id] of Object.entries(FONT_FAMILY)) {');
       patched++;
-      return { contents: `import { cornerPath as labCornerPath, cornerSettings as labCornerSettings } from ${JSON.stringify(resolve("src/js/slide-lab-corners.mjs").replaceAll("\\", "/"))};\n` + source, loader: "js", resolveDir: dirname(path) };
+      return { contents: `import { fonts as labFonts, LEGACY_FONTS as labLegacyFonts } from ${JSON.stringify(resolve("src/js/slide-platform-fonts.mjs").replaceAll("\\", "/"))};\nimport { cornerPath as labCornerPath, cornerSettings as labCornerSettings } from ${JSON.stringify(resolve("src/js/slide-lab-corners.mjs").replaceAll("\\", "/"))};\n` + source, loader: "js", resolveDir: dirname(path) };
     });
     build.onEnd(result => { if (!result.errors.length && (patched !== 1 || pickerPatched !== 1)) return { errors: [{ text: "Expected exactly one Slide Lab corner and color adapter" }] }; });
   } };
