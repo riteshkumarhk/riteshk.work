@@ -16,7 +16,9 @@ The static distribution is committed for branch-based GitHub Pages. The lab is n
 
 ## What Was Verified
 
-Select a shape with bound text to show Text colour. Uncheck **Link text to outline** to preserve its current text colour, then use a swatch or six-digit hex value independently of the outline. Rechecking adopts the current outline colour. This remains a text binding: moving/resizing the shape still carries its label. The setting persists in the lab draft and supports undo/redo.
+Select a shape with bound text to show Text colour in the shape properties, between Background and Fill. Uncheck **Link text to outline** to preserve its current text colour, then use a swatch or six-digit hex value independently of the outline. Rechecking adopts the current outline colour. This remains a text binding: moving/resizing the shape still carries its label. The setting persists in the lab draft and supports undo/redo.
+
+The inline control uses a React portal into the pinned engine's desktop/mobile `.panelColumn`, before its first property fieldset. A scoped MutationObserver reattaches it when the engine replaces the properties panel. Recheck placement, selection dismissal and mobile panel reopening when upgrading Excalidraw; this is an internal DOM integration, not a public engine extension API.
 
 - Bound connectors follow a pointer-dragged node; one undo restores its position.
 - Double-click edits a shape's bound label and creates text on empty canvas. Labels can wrap, so compare `originalText` or normalized whitespace rather than display `text` alone.
