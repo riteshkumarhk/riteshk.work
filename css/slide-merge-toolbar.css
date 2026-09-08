@@ -1,5 +1,9 @@
 .merge-workspace .excalidraw .App-toolbar { display: none; }
 .merge-canvas-tools { position: absolute; z-index: 7; top: 16px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 7px; border: 1px solid var(--merge-line); border-radius: 8px; color: var(--merge-text); background: var(--merge-bg); box-shadow: 0 4px 16px #0002; }
+@media(min-width:901px) {
+	.merge-canvas-tools { left:50vw; width:max-content; max-width:calc(200% - 100vw - 32px); box-sizing:border-box; flex-wrap:wrap; justify-content:center; }
+	.merge-canvas-tools .merge-tool-group { min-width:0;max-width:100%;box-sizing:border-box;flex-wrap:wrap;justify-content:center; }
+}
 .merge-tool-group { display: flex; align-items: center; gap: 4px; }
 .merge-tool-group + .merge-tool-group { border-left: 1px solid var(--merge-line); padding-left: 8px; }
 .merge-tool, .merge-tool-menu summary { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; padding: 0; border: 1px solid transparent; border-radius: 4px; color: inherit; background: transparent; cursor: pointer; }
