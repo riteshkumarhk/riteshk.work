@@ -30,11 +30,11 @@ test("More offers the versioned capture probe and safe test instructions", { ski
     });
     const card = page.locator("[data-presenter-capture-test]");
     await card.waitFor();
-    const link = card.getByRole("link", { name: /Download test app/ });
-    assert.equal(await link.getAttribute("href"), "https://github.com/riteshkumarhk/riteshk.work/releases/download/presenter-capture-probe-v0.1.0/PresenterCaptureProbe.exe");
+    const link = card.getByRole("link", { name: /Download app/ });
+    assert.equal(await link.getAttribute("href"), "https://github.com/riteshkumarhk/riteshk.work/releases/download/studio-presenter-v0.2.0/StudioPresenter.exe");
     assert.equal(await link.getAttribute("rel"), "noopener noreferrer");
     assert.equal(await card.locator("ol li").count(), 5);
-    assert.match(await card.textContent(), /Dummy notes only; not connected to Studio yet/);
+    assert.match(await card.textContent(), /app has its own local profile/);
     assert.match(await card.textContent(), /Do not disable Windows security/);
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 1100 });

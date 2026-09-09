@@ -1,5 +1,15 @@
 
 html.pjp-on { overflow: hidden; }
+.pjp--laser[data-pointer="laser"] .pjp__frame, .pjp--laser[data-pointer="laser"] .pjp__frame * { cursor:none !important; }
+.pjp--laser[data-pointer="control"] .pjp__frame, .pjp--laser[data-pointer="control"] .pjp__frame * { cursor:auto; }
+.pjp__pointer { position:fixed; z-index:20; width:12px; height:12px; margin:-6px 0 0 -6px; border:2px solid #fff; border-radius:50%; background:#ff374b; box-shadow:0 0 0 3px rgba(255,55,75,.25),0 0 12px rgba(255,55,75,.7); pointer-events:none; }
+.pjp__pointer[hidden] { display:none; }
+.pjp__pointer svg { display:none; }
+.pjp__pointer.is-control { width:24px; height:28px; margin:0; border:0; border-radius:0; background:none; box-shadow:none; }
+.pjp__pointer.is-control svg { display:block; width:24px; height:28px; fill:#fff; stroke:#141417; stroke-width:1.5; }
+.pjp--native .pjp__present,.pjp--native .pjp__notesbtn,.pjp--native .pjp__popbtn { display:none !important; }
+.pjp--native .pjp__bar { opacity:0; }
+.pjp--native .pjp__bar:hover,.pjp--native .pjp__bar:focus-within { opacity:1; }
 .pjp { font-family:var(--sans); font-size:16px; line-height:1.5; }
 .pjp,.pjp *,.pp,.pp * { box-sizing:border-box; }
 .pjp :is(.pjp__x,.pjp__notesbtn,.pjp__popbtn) { padding:0; font:inherit; }
@@ -68,9 +78,9 @@ html.pjp-on { overflow: hidden; }
 .pjp__pdot { flex: 1; height: 3px; border-radius: 3px; background: rgba(255, 255, 255, .13); cursor: pointer; transition: background .3s; }
 .pjp__pdot.is-on { background: var(--accent); }
 .pjp__count { flex: none; font-family: var(--mono); font-size: .72rem; letter-spacing: .05em; color: var(--text-dim); min-width: 3.6em; text-align: right; }
-.pjp__edge { position: fixed; top: 0; bottom: 0; width: 12%; min-width: 64px; display: grid; place-items: center; border: 0; background: transparent; color: rgba(255, 255, 255, .32); cursor: pointer; opacity: 0; transition: opacity .25s, color .2s; z-index: 3; }
-.pjp__edge--prev { left: 0; justify-items: start; padding-left: 1rem; }
-.pjp__edge--next { right: 0; justify-items: end; padding-right: 1rem; }
+.pjp__edge { position: fixed; top: 50%; width: 28px; height: 44px; transform:translateY(-50%); padding:0; display: grid; place-items: center; border: 0; background: transparent; color: rgba(255, 255, 255, .32); cursor: pointer; opacity: 0; transition: opacity .25s, color .2s; z-index: 3; }
+.pjp__edge--prev { left: 0; }
+.pjp__edge--next { right: 0; }
 .pjp:hover .pjp__edge { opacity: 1; }
 .pjp__edge:hover { color: #fff; }
 @media (prefers-reduced-motion: reduce) { .pjp, .pjp__frame--in { animation: none; } }

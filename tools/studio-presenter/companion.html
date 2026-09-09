@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Studio Presenter</title>
+<link rel="stylesheet" href="https://riteshk.work/css/styles.css">
+<style>
+:root{--bg:#141417;--text:#ece7e1;--text-dim:#b8b2aa;--accent:#d8a657;--line:rgba(255,255,255,.14)}
+*{box-sizing:border-box;letter-spacing:0}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);cursor:auto}
+body{font:15px var(--sans,"Segoe UI",sans-serif)}.companion{display:flex;flex-direction:column;gap:14px;padding:18px;height:100%}
+header{display:flex;align-items:center;gap:12px;flex:none;font:12px var(--mono,monospace)}.status{color:#80d2a7}.count{margin-left:auto;font-variant-numeric:tabular-nums}
+.preview{flex:none;align-self:center;position:relative;aspect-ratio:16/9;max-width:100%;max-height:52vh;width:100%;background:#000;outline:1px solid var(--line);cursor:none;touch-action:none;overflow:hidden}
+.preview:focus-visible{outline:2px solid var(--accent)}
+.meta{display:flex;gap:12px;align-items:center;flex:none}.timer{font:24px var(--mono,monospace);font-variant-numeric:tabular-nums}.clock{margin-left:auto;color:var(--text-dim);font:13px var(--mono,monospace)}
+button{display:inline-flex;align-items:center;justify-content:center;gap:8px;flex:none;width:38px;height:38px;padding:0;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--text);cursor:pointer}
+button:hover,button:focus-visible{border-color:var(--accent);color:var(--accent)}button:disabled{opacity:.35;cursor:default}svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.notes{flex:1;min-height:50px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;font-size:20px}.footer{display:flex;align-items:center;gap:12px;flex:none;width:100%;max-width:none;margin:0;border-top:1px solid var(--line);padding:12px 0 0;text-align:left}.next{flex:1;min-width:0;color:var(--text-dim);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.next span{display:block;color:var(--accent);font:10px var(--mono,monospace);text-transform:uppercase;margin-bottom:5px}
+@media(max-width:640px){.companion{padding:12px;gap:10px}.notes{font-size:17px}.preview{max-height:44vh}}
+</style>
+</head>
+<body>
+<main class="companion">
+<header><span class="status">Capture exclusion enabled</span><span class="count" id="count"></span></header>
+<div class="preview" id="preview" tabindex="0" role="application" aria-label="Live presentation"></div>
+<div class="meta"><span class="timer" id="timer">0:00</span><button data-command="timer-reset" title="Reset timer" aria-label="Reset timer"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 1 1 2.4 7M3 4v7h7"/></svg></button><span class="clock" id="clock"></span></div>
+<section class="notes" id="notes" aria-label="Speaker notes"></section>
+<footer class="footer"><button id="prev" data-command="prev" title="Previous slide" aria-label="Previous slide"><svg viewBox="0 0 24 24"><path d="M19 12H5m7 7-7-7 7-7"/></svg></button><button id="next" data-command="next" title="Next slide" aria-label="Next slide"><svg viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></svg></button><div class="next"><span>Up next</span><div id="nextTitle"></div></div><button data-command="exit" title="End presentation" aria-label="End presentation"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></svg></button></footer>
+</main>
+<script>
+const bridge = window.chrome.webview;
+const preview = document.getElementById("preview");
+let start = Date.now(), pendingMove = null, frame = 0;
+function send(message) { bridge.postMessage(message); }
+function place() { const rect = preview.getBoundingClientRect(); send({type:"rect",left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom}); }
+new ResizeObserver(place).observe(preview);
+window.addEventListener("resize", place);
+document.addEventListener("click", event => { const button = event.target.closest("[data-command]"); if (button) send({type:"command",command:button.dataset.command}); });
+bridge.addEventListener("message", event => {
+  const state = event.data;
+  if (state.type !== "state") return;
+  document.getElementById("notes").textContent = state.notes || "No notes for this slide.";
+  document.getElementById("count").textContent = (state.index + 1) + " / " + state.total;
+  document.getElementById("nextTitle").textContent = state.nextTitle || "End of deck";
+  document.getElementById("prev").disabled = state.index === 0;
+  document.getElementById("next").disabled = state.index === state.total - 1;
+  preview.style.aspectRatio = state.width + "/" + state.height;
+  preview.style.width = Math.min(preview.parentElement.clientWidth - 36, innerHeight * .52 * state.width / state.height) + "px";
+  start = state.started;
+  place();
+});
+function pointer(event, kind) {
+  const rect = preview.getBoundingClientRect();
+  return {type:"input",kind,x:(event.clientX-rect.left)/rect.width,y:(event.clientY-rect.top)/rect.height,buttons:event.buttons,deltaX:event.deltaX||0,deltaY:event.deltaY||0};
+}
+function flushMove() { if (pendingMove) send(pendingMove); pendingMove = null; frame = 0; }
+preview.addEventListener("pointermove", event => { pendingMove = pointer(event,"mouseMoved"); if (!frame) frame = requestAnimationFrame(flushMove); });
+preview.addEventListener("pointerdown", event => { if(event.button!==0)return; flushMove(); preview.focus(); preview.setPointerCapture(event.pointerId); send(pointer(event,"mousePressed")); });
+preview.addEventListener("pointerup", event => { if(event.button!==0)return; flushMove(); send(pointer(event,"mouseReleased")); preview.releasePointerCapture(event.pointerId); });
+preview.addEventListener("pointercancel", event => { send({...pointer(event,"mouseReleased"),buttons:0}); send({type:"command",command:"pointer-leave"}); });
+preview.addEventListener("pointerleave", () => { flushMove(); send({type:"command",command:"pointer-leave"}); });
+preview.addEventListener("wheel", event => { event.preventDefault(); send(pointer(event,"mouseWheel")); }, {passive:false});
+for (const type of ["keydown","keyup"]) preview.addEventListener(type, event => {
+  if (event.key === "Tab") return;
+  event.preventDefault();
+  send({type:"input",kind:type==="keydown"?"keyDown":"keyUp",key:event.key,code:event.code,keyCode:event.keyCode});
+});
+setInterval(() => { const seconds=Math.max(0,Math.floor((Date.now()-start)/1000)); document.getElementById("timer").textContent=Math.floor(seconds/60)+":"+String(seconds%60).padStart(2,"0"); document.getElementById("clock").textContent=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }, 1000);
+send({type:"ready"});
+</script>
+</body>
+</html>
