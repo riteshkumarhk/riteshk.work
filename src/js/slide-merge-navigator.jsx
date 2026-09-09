@@ -45,7 +45,7 @@ export function SlideNavigator({ deck, thumbnails, busy, editing = true, choose,
         {editing && slide.section && <Action icon="trash" label="Remove section" disabled={busy} onPointerDown={event => event.preventDefault()} onClick={() => { setNaming(null); section(slide.id, ""); }} />}
       </div>}
       {editing && <InsertGap index={index} busy={busy} add={() => add("blank", slide.id)} section={() => setNaming(slide.id)} />}
-      <article className={`merge-slide-card ${deck.selected === slide.id ? "is-active" : ""} ${slide.hidden ? "is-skipped" : ""}`}>
+      <article data-slide-delete-id={slide.id} className={`merge-slide-card ${deck.selected === slide.id ? "is-active" : ""} ${slide.hidden ? "is-skipped" : ""}`}>
         <button {...slideDrag} className={`merge-slide ${deck.selected === slide.id ? "is-active" : ""}`} aria-label={`Slide ${index + 1}: ${slide.title}`} aria-current={deck.selected === slide.id ? "true" : undefined} disabled={busy} onClick={() => choose(slide.id)}><span className="merge-thumbnail" aria-hidden="true">{thumbnails[slide.id]}</span><span><small>{String(index + 1).padStart(2, "0")}</small>{slide.title || "Untitled slide"}</span>{slide.hidden && <em className="merge-skipped-label">Skipped</em>}</button>
         {editing && <div className="merge-thumb-actions" aria-label={`Actions for slide ${index + 1}`}>
           <Action icon="up" label="Move slide up" disabled={busy || index === 0} onClick={() => modify("up", slide.id)} />

@@ -153,7 +153,11 @@ design-system migration. The secondary opacity slider remains unchanged.
     for selected objects, including Excalidraw's different phone/tablet inspector layouts.
     Close, backdrop and Escape dismiss the sheet; nested pickers consume Escape first.
     Drawing Line is available in Draw on mobile. Guides and Fit use the actual canvas bounds.
-- Each thumbnail has move up/down, insert above, duplicate, skip/include and confirm-delete controls.
+- Each thumbnail has move up/down, insert above, duplicate, skip/include and immediate delete controls.
+    Delete on a focused slide card removes that slide in the navigator or All slides,
+    without a confirmation dialog. Focus moves to the remaining selected slide. Text fields
+    and canvas objects keep their own Delete behavior; the final slide cannot be removed.
+    Slide deletion is not part of canvas Undo.
 - Each insertion gap offers Add slide or Start section inline. On phones the choices temporarily
     occupy the adjacent thumbnail footprint, keeping both actions inside the strip.
 - Start a section here sits beside the top Add a slide icon and adds a named navigator divider

@@ -245,7 +245,8 @@ function Merger() {
   const library = useSlideLibrary(api, !busy);
   const mobileUI = useMobilePanels(api);
   const [status, setStatus] = useState("Loading local draft"), [selection, setSelection] = useState("[]"), [hasSelection, setHasSelection] = useState(false);
-  const [thumbnails, setThumbnails] = useState({}), [present, setPresent] = useState(null), [confirm, setConfirm] = useState(false);
+  const [thumbnails, setThumbnails] = useState({}), [present, setPresent] = useState(null);
+  const confirm = false;
   const [pane, setPane] = useState(null), [notesOpen, setNotesOpen] = useState(true);
   const [editing, setEditing] = useState(true), [slideView, setSlideView] = useState("current"), [historyTarget, setHistoryTarget] = useState(null);
   useEffect(() => {
@@ -425,6 +426,23 @@ function Merger() {
     await save(); const next = changeSlides(live.current.deck, action, id, crypto.randomUUID());
     paint(next); await mountSlide(next.slides.find(slide => slide.id === next.selected)); await save();
   }); }
+  async function removeSlide(id) {
+    if (busy || !live.current.editing || present !== null || deckDialog || live.current.deck.slides.length < 2) return;
+    const sorter = slideView === "all";
+    await modify("delete", id);
+    requestAnimationFrame(() => {
+      const selected = live.current.deck.selected;
+      const cards = document.querySelectorAll("[data-slide-delete-id]");
+      [...cards].find(card => card.dataset.slideDeleteId === selected && !!card.closest(".merge-all-slides") === sorter)?.querySelector(".merge-slide, .merge-all-open")?.focus();
+    });
+  }
+  function deleteSlideKey(event) {
+    if (event.key !== "Delete" || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.target.closest("input, textarea, select, [contenteditable], dialog, [role=dialog]")) return;
+    const card = event.target.closest("[data-slide-delete-id]");
+    if (!card) return;
+    event.preventDefault(); event.stopPropagation();
+    removeSlide(card.dataset.slideDeleteId);
+  }
   function add(layout = "blank", beforeId = null) { return run(async () => {
     if (!live.current.editing) return;
     const saved = savedLayouts.find(item => item.id === layout);
@@ -677,7 +695,7 @@ function Merger() {
     return () => { observer.disconnect(); clearTimeout(live.current.timer); document.removeEventListener("visibilitychange", flush); window.removeEventListener("beforeunload", leave); delete window.__slideMerge; };
   }, [api]);
   useEffect(() => {
-    if (!api || editing || slideView !== "current" || present !== null || confirm || deckDialog || activity.showLog) return;
+    if (!api || editing || slideView !== "current" || present !== null || deckDialog || activity.showLog) return;
     const canvas = host.current.querySelector(".lab-canvas");
     let lastWheel = -Infinity, wheelDistance = 0, wheelUsed = false;
     const advance = direction => {
@@ -710,7 +728,7 @@ function Merger() {
     document.addEventListener("keydown", key, true);
     fit();
     return () => { canvas.removeEventListener("wheel", wheel, true); document.removeEventListener("keydown", key, true); };
-  }, [api, editing, slideView, present, confirm, deckDialog, activity.showLog]);
+  }, [api, editing, slideView, present, deckDialog, activity.showLog]);
   async function switchView(next) { await run(async () => { await save(); openPane(null, false); setSlideView(next); activity.note(next === "all" ? "All slides" : "Current slide", "nav"); if (next === "all") await Promise.all(live.current.deck.slides.map(thumbnail)); requestAnimationFrame(fit); }); }
   function switchEditing(next) { activity.flush(); openPane(null, false); setEditing(next); api.updateScene({ appState: { selectedElementIds: {}, selectedGroupIds: {}, editingGroupId: null, frameRendering: { enabled: true, name: next, outline: next, clip: true } }, captureUpdate: CaptureUpdateAction.NEVER }); activity.note(next ? "Editing on" : "Editing off", "nav"); requestAnimationFrame(fit); }
   function rehearse() { return run(async () => { await save(); const first = deck.slides.slice(selectedIndex).find(slide => !slide.hidden) || rehearsal[0]; activity.note("Rehearsal started", "nav"); setPresent(rehearsal.findIndex(slide => slide.id === first.id)); }); }
@@ -718,20 +736,20 @@ function Merger() {
     <header className="merge-header"><a href="/studio/slide-lab/" title="Back to engine lab" aria-label="Back to engine lab"><Icon name="back" /></a><span className="merge-brand">Slide studio <small>MERGER LAB</small></span>
       <input aria-label="Deck title" value={deck?.title || ""} disabled={busy || !editing} onChange={event => metadata("title", event.target.value, true)} />
       </header>
-    <EditorBar historyRef={setHistoryTarget} status={status === "Saved on this device" && activity.message ? `${activity.message} - saved` : status} busy={busy || present !== null || !!confirm || !!deckDialog} editing={editing} onEditing={switchEditing} slideView={slideView} onView={switchView} onPlay={rehearse} canPlay={!!rehearsal.length} activity={activity}>
-      <VisibilityMenu deck={deck} disabled={busy || present !== null || !!confirm || !!deckDialog} onChange={isPublic => { if (isPublic) { openPane(null, false); setDeckDialog({kind:"visibility"}); } else changeVisibility(false); }} />
+    <EditorBar historyRef={setHistoryTarget} status={status === "Saved on this device" && activity.message ? `${activity.message} - saved` : status} busy={busy || present !== null || !!deckDialog} editing={editing} onEditing={switchEditing} slideView={slideView} onView={switchView} onPlay={rehearse} canPlay={!!rehearsal.length} activity={activity}>
+      <VisibilityMenu deck={deck} disabled={busy || present !== null || !!deckDialog} onChange={isPublic => { if (isPublic) { openPane(null, false); setDeckDialog({kind:"visibility"}); } else changeVisibility(false); }} />
     </EditorBar>
-    <aside className="merge-slides" aria-label={pane && !mobileUI.mobile ? PANE_LABELS[pane] || "Library" : "Slides"}>
+    <aside className="merge-slides" onKeyDownCapture={deleteSlideKey} aria-label={pane && !mobileUI.mobile ? PANE_LABELS[pane] || "Library" : "Slides"}>
       <div className="merge-resizer" data-prevent-outside-click role="separator" aria-label="Resize slide navigation" aria-orientation="vertical" aria-valuemin={160} aria-valuemax={slidePaneWidth(360, innerWidth)} aria-valuenow={paneWidth} tabIndex={0} title="Resize slide navigation"
         onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); resize.current = { x: event.clientX, width: paneWidth }; setResizing(true); event.currentTarget.setPointerCapture(event.pointerId); }}
         onPointerMove={event => { if (resize.current) setPaneWidth(slidePaneWidth(resize.current.width + resize.current.x - event.clientX, innerWidth)); }}
         onPointerUp={finishResize} onPointerCancel={event => finishResize(event, true)} onLostPointerCapture={() => { resize.current = null; setResizing(false); }}
         onDoubleClick={() => storePaneWidth(200)} onKeyDown={event => { if (["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) { event.preventDefault(); storePaneWidth(event.key === "Home" ? 200 : paneWidth + (event.key === "ArrowLeft" ? 16 : -16)); } }} />
       {pane && !mobileUI.mobile && <div className="merge-section-head merge-insert-head"><h2>{PANE_LABELS[pane] || "Library"}</h2><button className="merge-nav-action" title="Close panel" aria-label="Close panel" onClick={() => openPane(null, false)}><ToolIcon name="close" /></button></div>}
-      <SlideNavigator deck={deck} thumbnails={thumbnails} busy={busy} editing={editing} choose={choose} modify={modify} reorder={reorder} add={add} remove={id => { if (live.current.editing) setConfirm(id); }} pick={kind => openPane(kind, false)} section={saveSection} /></aside>
+      <SlideNavigator deck={deck} thumbnails={thumbnails} busy={busy} editing={editing} choose={choose} modify={modify} reorder={reorder} add={add} remove={removeSlide} pick={kind => openPane(kind, false)} section={saveSection} /></aside>
     <section className="merge-editor" ref={editor}>
       <main className={`merge-workspace ${hasSelection ? "has-selection" : ""}`} ref={host} onDropCapture={receive} onPasteCapture={receive} onDragOverCapture={event => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.stopPropagation(); } }}>
-        <CanvasToolbar api={api} disabled={busy || present !== null || !!confirm || !!deckDialog} onImage={() => openPane("media")} mediaOpen={pane === "media"} onDiagram={kind => insertContent(kind, null, true)}>
+        <CanvasToolbar api={api} disabled={busy || present !== null || !!deckDialog} onImage={() => openPane("media")} mediaOpen={pane === "media"} onDiagram={kind => insertContent(kind, null, true)}>
           <div className="merge-tool-group">{[["icons","icons"],["text","content"],["badges","badge"],["sections","section"],["library","library"]].map(([name, icon]) => <button key={name} className="merge-tool" title={PANE_LABELS[name]} aria-label={name === "library" ? "Open library" : PANE_LABELS[name]} aria-pressed={pane === name} disabled={busy} onClick={() => openPane(name)}>{name === "library" ? <Icon name={icon} /> : <ToolIcon name={icon} />}</button>)}
           </div><div className="merge-tool-group"><ToolMenu label="View" icon="view" disabled={busy}>
             {[["grid", "Grid and snap"], ["snap", "Snap to objects"], ["rulers", "Rulers"], ["margins", "Safe margins"], ["thirds", "Thirds"]].map(([key, label]) => <label className="merge-view-option" key={key}><input type="checkbox" checked={view[key]} onChange={event => changeView(key, event.target.checked)} />{label}</label>)}
@@ -739,24 +757,24 @@ function Merger() {
             <button data-close onClick={() => {setView({ ...view, margins: false, thirds: false });commitSettings({guides:[]});}}>Clear guides</button>
           </ToolMenu></div>
         </CanvasToolbar>
-        <div className="lab-canvas"><CanvasBackdrop api={api} /><CanvasGuides api={api} {...view} guides={settings.guides||[]} onGuides={guides=>commitSettings({guides})} disabled={busy||present!==null||confirm} /><CanvasVideo api={api} /><LabTextColorContext.Provider value={{ api, labels, linked: labels.every(label => label.linked), busy, changeLabelColor: color => { if (color && color !== "unlink" && color !== "transparent") { color = normalizeHex(color); if (!color) return; } const elements = api.getSceneElementsIncludingDeleted(); const targets = selectedLabels(elements, api.getAppState().selectedElementIds); api.updateScene({ elements: labelColorUpdate(elements, targets.map(element => element.id), color), captureUpdate: CaptureUpdateAction.IMMEDIATELY }); } }}>
-          <Excalidraw excalidrawAPI={setApi} theme={canvasTheme(api?.getSceneElements() || [],appearance)} onChange={onChange} onScrollChange={() => { if (!live.current.editing) fit(); }} onLibraryChange={library.onChange} libraryReturnUrl={location.origin + "/studio/slide-merge-lab/"} viewModeEnabled={!editing || busy || present !== null || !!confirm || !!deckDialog || slideView === "all"} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: appearance, currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: sceneBackground() } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed}>
-            <HistoryControls target={historyTarget} activity={activity} disabled={!editing || busy || present !== null || !!confirm || !!deckDialog || slideView === "all"} />
+        <div className="lab-canvas"><CanvasBackdrop api={api} /><CanvasGuides api={api} {...view} guides={settings.guides||[]} onGuides={guides=>commitSettings({guides})} disabled={busy||present!==null} /><CanvasVideo api={api} /><LabTextColorContext.Provider value={{ api, labels, linked: labels.every(label => label.linked), busy, changeLabelColor: color => { if (color && color !== "unlink" && color !== "transparent") { color = normalizeHex(color); if (!color) return; } const elements = api.getSceneElementsIncludingDeleted(); const targets = selectedLabels(elements, api.getAppState().selectedElementIds); api.updateScene({ elements: labelColorUpdate(elements, targets.map(element => element.id), color), captureUpdate: CaptureUpdateAction.IMMEDIATELY }); } }}>
+          <Excalidraw excalidrawAPI={setApi} theme={canvasTheme(api?.getSceneElements() || [],appearance)} onChange={onChange} onScrollChange={() => { if (!live.current.editing) fit(); }} onLibraryChange={library.onChange} libraryReturnUrl={location.origin + "/studio/slide-merge-lab/"} viewModeEnabled={!editing || busy || present !== null || !!deckDialog || slideView === "all"} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: appearance, currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: sceneBackground() } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed}>
+            <HistoryControls target={historyTarget} activity={activity} disabled={!editing || busy || present !== null || !!deckDialog || slideView === "all"} />
             <MainMenu />
             <DefaultSidebar docked={false} onDock={false} />
             <Footer><button className={`help-icon merge-notes-toggle${notesOpen ? " active" : ""}`} title="Speaker notes" aria-label="Speaker notes panel" aria-expanded={notesOpen} aria-controls="merge-speaker-notes" onClick={() => setNotesOpen(!notesOpen)}><ToolIcon name="notes" /><span>Notes</span></button></Footer>
             <ContentPane pane={pane} busy={busy} layoutPicker={layoutPicker} composition={{ existingCount: deck?.slides.length || 0, onApply: applyAiComposition, renderPreview: plan => <CompositionPreview plan={plan} /> }} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={(block, resources) => { finishPaneInsert(); addFromSection(block, true, resources); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={(blocks, resources) => addFromSection(blocks, false, resources)} onMedia={source => importMedia(source, mediaPurpose === "background")} onUpload={() => input.current.click()}>
-              {api && <LayerPanel api={api} disabled={busy||present!==null||confirm||!!deckDialog} onClose={() => openPane(null, false)} onAdd={kind => { if (kind === "media") openPane("media", false); else if (kind === "text") { finishPaneInsert(); insertContent("body"); } else { openPane(null, false); api.setActiveTool({ type:"rectangle" }); } }} />}
+              {api && <LayerPanel api={api} disabled={busy||present!==null||!!deckDialog} onClose={() => openPane(null, false)} onAdd={kind => { if (kind === "media") openPane("media", false); else if (kind === "text") { finishPaneInsert(); insertContent("body"); } else { openPane(null, false); api.setActiveTool({ type:"rectangle" }); } }} />}
             </ContentPane>
-            {!hasSelection&&current&&<SlideProperties settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} />}
+            {!hasSelection&&current&&<SlideProperties settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} />}
           </Excalidraw>
-          <NativeSections api={api} interactive={!editing && !busy && present === null && !confirm && !deckDialog} />
-          {editing && <FitSlideControl api={api} host={host} mobile={mobileUI.mobile} disabled={busy || present !== null || !!confirm || !!deckDialog} onFit={fit} />}
-          <PlaceholderActions api={api} disabled={busy || present !== null || !!confirm || !!deckDialog} onInsert={(id, next) => { api.updateScene({appState:{selectedElementIds:{[id]:true}},captureUpdate:CaptureUpdateAction.NEVER});openPane(next, false, id); }} />
-        </LabTextColorContext.Provider>{mobileUI.mobile && <div className="merge-mobile-canvas-controls"><button className="merge-icon" aria-label="Toggle slides" title="Slides" aria-expanded={mobileUI.slides} onClick={()=>mobileUI.setSlides(!mobileUI.slides)}><Icon name="slides" /></button><button className="merge-icon" title="Properties" aria-label="Open properties" onClick={()=>mobileUI.open("properties",hasSelection)}><Icon name="properties" /></button><Button icon="fit" label="Fit slide" disabled={busy || present !== null || !!confirm || !!deckDialog} onClick={fit} /><button className="merge-notes-toggle" title="Speaker notes" aria-label="Speaker notes panel" aria-expanded={mobileUI.panel === "notes"} aria-controls="merge-speaker-notes" onClick={() => mobileUI.open(mobileUI.panel === "notes" ? null : "notes")}><ToolIcon name="notes" /><span>Notes</span></button><button className="merge-icon" title="Help" aria-label="Help" onClick={() => api?.updateScene({appState:{openDialog:{name:"help"}},captureUpdate:CaptureUpdateAction.NEVER})}><Icon name="help" /></button></div>}</div><CornerControls api={api} host={host} disabled={busy || present !== null} />{busy && <div className="lab-busy" role="status">Working</div>}
+          <NativeSections api={api} interactive={!editing && !busy && present === null && !deckDialog} />
+          {editing && <FitSlideControl api={api} host={host} mobile={mobileUI.mobile} disabled={busy || present !== null || !!deckDialog} onFit={fit} />}
+          <PlaceholderActions api={api} disabled={busy || present !== null || !!deckDialog} onInsert={(id, next) => { api.updateScene({appState:{selectedElementIds:{[id]:true}},captureUpdate:CaptureUpdateAction.NEVER});openPane(next, false, id); }} />
+        </LabTextColorContext.Provider>{mobileUI.mobile && <div className="merge-mobile-canvas-controls"><button className="merge-icon" aria-label="Toggle slides" title="Slides" aria-expanded={mobileUI.slides} onClick={()=>mobileUI.setSlides(!mobileUI.slides)}><Icon name="slides" /></button><button className="merge-icon" title="Properties" aria-label="Open properties" onClick={()=>mobileUI.open("properties",hasSelection)}><Icon name="properties" /></button><Button icon="fit" label="Fit slide" disabled={busy || present !== null || !!deckDialog} onClick={fit} /><button className="merge-notes-toggle" title="Speaker notes" aria-label="Speaker notes panel" aria-expanded={mobileUI.panel === "notes"} aria-controls="merge-speaker-notes" onClick={() => mobileUI.open(mobileUI.panel === "notes" ? null : "notes")}><ToolIcon name="notes" /><span>Notes</span></button><button className="merge-icon" title="Help" aria-label="Help" onClick={() => api?.updateScene({appState:{openDialog:{name:"help"}},captureUpdate:CaptureUpdateAction.NEVER})}><Icon name="help" /></button></div>}</div><CornerControls api={api} host={host} disabled={busy || present !== null} />{busy && <div className="lab-busy" role="status">Working</div>}
       </main><div className="merge-notes" id="merge-speaker-notes" hidden={editing && (mobileUI.mobile ? mobileUI.panel !== "notes" : !notesOpen)}><div className="merge-notes-resizer" {...notesResize.handle} /><div className="merge-notes-heading"><strong>Speaker notes</strong>{editing && <button className="merge-icon" title="Close notes" aria-label="Close notes" onClick={() => mobileUI.open(null)}><Icon name="close" /></button>}</div><textarea aria-label="Speaker notes" placeholder="Speaker notes" value={current?.notes || ""} disabled={busy} onChange={event => metadata("notes", event.target.value)} /></div></section>
     {mobileUI.mobile && mobileUI.panel && <><button className="merge-sheet-scrim" aria-label="Dismiss panel" tabIndex={-1} onClick={()=>mobileUI.open(null)} /><div className="merge-sheet-head"><strong>{mobileUI.panel === "properties" ? (hasSelection ? "Object properties" : "Slide properties") : PANE_LABELS[mobileUI.panel] || "Speaker notes"}</strong><button className="merge-icon merge-sheet-close" title="Close panel" aria-label="Close panel" onClick={()=>mobileUI.open(null)}><Icon name="close" /></button></div></>}
-    {slideView === "all" && <AllSlides deck={deck} thumbnails={thumbnails} busy={busy} onOpen={async id => { await choose(id); setSlideView("current"); activity.note("Current slide", "nav"); requestAnimationFrame(fit); }} modify={modify} add={add} remove={setConfirm} />}
+    {slideView === "all" && <AllSlides deck={deck} thumbnails={thumbnails} busy={busy} onDeleteKey={deleteSlideKey} onOpen={async id => { await choose(id); setSlideView("current"); activity.note("Current slide", "nav"); requestAnimationFrame(fit); }} modify={modify} add={add} remove={removeSlide} />}
     {activity.showLog && <ActivityDialog activity={activity} />}
     <footer className="merge-status"><span>Local draft</span><button className="merge-library-sync" onClick={library.retry} title={library.status + ". Click to retry or sign in to Studio."}><Icon name="sync" /><span role="status">{library.status}</span></button><span>{selectedIndex + 1} / {deck?.slides.length || 0}</span></footer>
     <input type="file" hidden ref={input} accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml,video/mp4,video/webm,video/quicktime,video/ogg,.svg,.mov" onChange={event => { importMedia(event.target.files[0], mediaPurpose === "background"); event.target.value = ""; }} />
@@ -764,7 +782,6 @@ function Merger() {
     {["save-layout", "rename-layout"].includes(deckDialog?.kind) && <LayoutNameDialog value={deckDialog.layout?.name} busy={busy} error={layoutSaveError} onClose={() => setDeckDialog(null)} onSave={saveLayout} />}
     {deckDialog?.kind === "visibility" && <VisibilityConfirmation onClose={() => setDeckDialog(null)} onConfirm={() => changeVisibility(true)} />}
     {["apply-layout", "delete-layout"].includes(deckDialog?.kind) && <DeckDialog wide={false} title={deckDialog.kind === "apply-layout" ? "Apply saved layout?" : "Delete saved layout?"} onClose={() => { if (!busy) setDeckDialog(null); }}><p className="merge-layout-dialog-copy">{deckDialog.kind === "apply-layout" ? `Replace this slide's content and background with "${deckDialog.layout.name}"? Speaker notes are kept. You can undo this change.` : `Delete "${deckDialog.layout.name}" from My layouts? Existing slides are not changed.`}</p><footer><button disabled={busy} onClick={() => setDeckDialog(null)}>Cancel</button><button disabled={busy} className={deckDialog.kind === "delete-layout" ? "is-danger" : "merge-dialog-primary"} onClick={() => deckDialog.kind === "delete-layout" ? deleteLayout(deckDialog.layout) : useSavedLayout(deckDialog.layout)}>{deckDialog.kind === "delete-layout" ? "Delete layout" : "Apply layout"}</button></footer></DeckDialog>}
-    {confirm && <DeckDialog wide={false} title="Delete this slide?" onClose={() => setConfirm(false)}><p className="merge-dialog-copy">{deck.slides.find(slide => slide.id === confirm)?.title}</p><footer><button onClick={() => setConfirm(false)}>Cancel</button><button className="is-danger" onClick={() => { setConfirm(false); modify("delete", confirm); }}><ToolIcon name="trash" />Delete slide</button></footer></DeckDialog>}
   </div>;
 }
 createRoot(document.getElementById("root")).render(<Merger />);

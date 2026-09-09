@@ -50,11 +50,14 @@ test("labelled commands share Studio button anatomy without converting icon tool
   assert.doesNotMatch(command, /merge-tool-pop|merge-layer-panel|merge-layout-pick|input|slider/);
 });
 
-test("slide delete uses shared dialog, bin icon and safe default focus", () => {
+test("slide delete is direct and keyboard scoped to slide cards", () => {
   const editor = read("./src/js/slide-merge.jsx"), navigator = read("./src/js/slide-merge-navigator.jsx");
   assert.doesNotMatch(editor, /<dialog/);
-  assert.match(editor, /<DeckDialog wide=\{false\} title="Delete this slide\?"/);
-  assert.match(editor, /<ToolIcon name="trash" \/>Delete slide/);
+  assert.doesNotMatch(editor, /Delete this slide\?|setConfirm/);
+  assert.match(editor, /remove=\{removeSlide\}/);
+  assert.match(editor, /event.key !== "Delete" \|\| event.repeat/);
+  assert.match(editor, /event.target.closest\("\[data-slide-delete-id\]"\)/);
+  assert.match(navigator, /data-slide-delete-id=\{slide.id\}/);
   assert.match(navigator, /input:not\(:disabled\), footer button:not\(:disabled\)/);
 });
 
