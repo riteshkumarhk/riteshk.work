@@ -44,6 +44,15 @@ test("mobile modal panels reuse the immersive bottom-sheet surface", () => {
   assert.ok(reduced.nodes.some(rule => rule.nodes?.some(decl => decl.prop === "animation" && decl.value === "none")));
 });
 
+test("empty native phone toolbar leaves no outline behind canvas controls", () => {
+  const sheet = postcss.parse(read("./css/slide-merge-mobile.css"));
+  const mobile = sheet.nodes.find(node => node.type === "atrule" && node.params === "(max-width:900px)");
+  const island = declarations(mobile, ".merge-shell .excalidraw .App-bottom-bar>.Island");
+  assert.equal(island.border, "0");
+  assert.equal(island.background, "none");
+  assert.equal(island["box-shadow"], "none");
+});
+
 test("desktop insert toolbar uses the full canvas width before wrapping", () => {
   const toolbar = postcss.parse(read("./css/slide-merge-toolbar.css"));
   const desktop = toolbar.nodes.find(node => node.type === "atrule" && node.params === "(min-width:901px)");

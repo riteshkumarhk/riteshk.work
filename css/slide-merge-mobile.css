@@ -32,7 +32,7 @@
   .merge-shell .excalidraw .App-bottom-bar { z-index:auto; }
   .merge-shell .excalidraw .layer-ui__wrapper { z-index:auto; }
   .merge-shell .excalidraw .App-menu_top__left>:not(.selected-shape-actions),.merge-shell .excalidraw .layer-ui__wrapper__top-right { display:none; }
-  .merge-shell .excalidraw .App-bottom-bar>.Island { background:none; box-shadow:none; }
+  .merge-shell .excalidraw .App-bottom-bar>.Island { background:none; border:0; box-shadow:none; }
   .merge-shell .merge-slide-properties,.merge-shell .App-mobile-menu,.merge-shell .default-sidebar { scrollbar-width:thin; scrollbar-color:var(--merge-line) transparent; }
   .merge-shell .merge-tool-group:first-child { border-right:1px solid var(--merge-line); padding-right:4px; }
   .merge-shell .merge-tool[aria-label="Line (L)"] { display:none; }
