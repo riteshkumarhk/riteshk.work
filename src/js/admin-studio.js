@@ -8929,6 +8929,19 @@ import { draftComposition } from "./slide-merge-ai.mjs";
       return (
         secHead("More", "Bookings, your phone notifications app, a one-page PDF r\u00e9sum\u00e9, and the browser autofill extension.") +
         bookingsBlock() +
+        '<div class="adm__ext" data-presenter-capture-test>' +
+          '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("doc") + '</span><div><b>Presenter capture test</b><span>Windows 10 (2004+) / 11, x64 - portable, 49 MB</span></div></div>' +
+          '<p class="adm__ext-lead">Check whether your meeting app excludes an always-on-top notes window during whole-screen sharing. <b>Dummy notes only; not connected to Studio yet.</b></p>' +
+          '<div class="imgblk__row"><a class="btn btn--primary" href="https://github.com/riteshkumarhk/riteshk.work/releases/download/presenter-capture-probe-v0.1.0/PresenterCaptureProbe.exe" target="_blank" rel="noopener noreferrer">' + extIcon("dl", 15) + ' Download test app (.exe)</a></div>' +
+          '<ol class="adm__ext-steps">' +
+            '<li>Download on the PC you present from, then open <b>PresenterCaptureProbe.exe</b>. No installation or administrator access is needed.</li>' +
+            '<li>Confirm the green status says <b>Windows capture exclusion enabled (0x11)</b>. If it fails, stop.</li>' +
+            '<li>Start a Teams, Zoom or Meet call and join from another device, or ask another participant to watch. Share your <b>entire display</b>, with the test window over your slides.</li>' +
+            '<li>Click the slides, move and resize the notes window, and try any other display you normally use. You should see the notes; the other participant should see only the content underneath, with <b>no notes and no black rectangle</b>.</li>' +
+            '<li>Check a meeting recording too if you use recordings. Report the meeting app, Windows version and result, then close the test app.</li>' +
+          '</ol>' +
+          '<div class="af__hint">Unsigned development build. Do not disable Windows security to run it; stop and report any block. A green status confirms Windows accepted the setting, not that your meeting app hides it. Do not use real notes until the outgoing feed is verified.</div>' +
+        '</div>' +
         '<div class="adm__ext">' +
           '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("phone") + '</span><div><b>Phone \u2014 requests app</b><span>Approve requests from your phone</span></div></div>' +
           '<p class="adm__ext-lead">First add your phone as a passkey: <b>\u22EF \u2192 Passkeys \u2192 Add a passkey</b>, then pick <b>\u201cUse a phone or tablet\u201d</b> and scan with your phone. Then open <b>riteshk.work/inbox</b> on the phone, verify with that passkey, and Add\u00a0to\u00a0Home\u00a0Screen. Enrolment happens only here in the studio \u2014 the phone can only <i>verify</i>, never create a passkey, so a link alone can never grant access.</p>' +
