@@ -28,6 +28,22 @@ test("Slide properties reuse native inspector groups without collapse controls",
   assert.equal(declarations(properties, ".merge-shell .merge-property-action")["text-transform"], "none");
 });
 
+test("mobile modal panels reuse the immersive bottom-sheet surface", () => {
+  const sheet = postcss.parse(read("./css/slide-merge-mobile.css"));
+  const mobile = sheet.nodes.find(node => node.type === "atrule" && node.params === "(max-width:900px)");
+  const header = declarations(mobile, ".merge-shell .merge-sheet-head");
+  assert.equal(header["border-radius"], "18px18px00");
+  assert.equal(header.background, "var(--bg-elev)");
+  assert.equal(header.bottom, "var(--mobile-panel-height)");
+  assert.equal(header["justify-content"], "center");
+  assert.equal(declarations(mobile, ".merge-sheet-head::before").width, "36px");
+  const body = declarations(mobile, ".merge-shell[data-mobile-panel] .excalidraw :is(.merge-slide-properties,.selected-shape-actions,.App-mobile-menu,.default-sidebar,.merge-content-sidebar)");
+  assert.equal(body.bottom, "0");
+  assert.match(body["padding-bottom"], /safe-area-inset-bottom/);
+  const reduced = sheet.nodes.find(node => node.type === "atrule" && node.params === "(prefers-reduced-motion:reduce)");
+  assert.ok(reduced.nodes.some(rule => rule.nodes?.some(decl => decl.prop === "animation" && decl.value === "none")));
+});
+
 test("desktop insert toolbar uses the full canvas width before wrapping", () => {
   const toolbar = postcss.parse(read("./css/slide-merge-toolbar.css"));
   const desktop = toolbar.nodes.find(node => node.type === "atrule" && node.params === "(min-width:901px)");

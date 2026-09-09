@@ -117,6 +117,10 @@ design-system migration. The secondary opacity slider remains unchanged.
     Library sync appears only at the bottom of the native Library panel, with its existing
     retry/sign-in action. Closing the panel does not stop synchronization. It tracks reusable
     slide objects, not the deck or content draft. Draft/save status remains global.
+    Phone modal panels share the immersive case-study bottom-sheet treatment: rounded
+    top corners, centered title and handle, elevated surface, dimmed blurred backdrop,
+    safe-area padding and reduced-motion-aware entrance. The sheet reaches the bottom
+    edge; backdrop/Close/Escape dismissal remains unchanged. Speaker notes remain inline.
 - Editing off hides the insertion toolbar, properties, guides and slide-management
     controls, plus zoom, Fit, notes-toggle and help buttons. The resizable notes editor
     remains visible and editable on desktop and phone; its editing-mode open state is
