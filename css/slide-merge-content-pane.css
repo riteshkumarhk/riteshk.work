@@ -77,7 +77,7 @@
   .merge-rail-insert .merge-slides > :not(.merge-resizer):not(.merge-insert-head) { visibility:hidden; }
   .merge-shell .merge-insert-head { height:54px; box-sizing:border-box; flex-shrink:0; gap:8px; }
   .merge-shell .merge-insert-head h2 { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .merge-shell .merge-insert-head .merge-nav-action { flex-shrink:0; width:44px; height:34px; }
+  .merge-shell .merge-insert-head .merge-nav-action { flex-shrink:0; width:34px; height:34px; border-radius:50%; }
   .merge-shell .lab-canvas .sidebar__header { display:none; }
   .merge-shell .merge-pane-body { flex:1; min-height:0; }
   .merge-shell .merge-pane-body .merge-library-grid { grid-template-columns:repeat(auto-fit,minmax(64px,1fr)); }
