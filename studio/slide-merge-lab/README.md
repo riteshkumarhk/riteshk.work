@@ -21,7 +21,14 @@ Escape, the P notes overlay, elapsed timer/reset, clock, next-slide preview and
 the separate private presenter window. Navigation and timer reset synchronize
 between windows. Closing the presenter window returns to the audience view;
 End closes both. Share only the audience window to keep speaker notes private.
-Browser popup permissions still apply.
+On supported desktop browsers, the presenter button uses Document Picture-in-Picture:
+the notes window stays above the audience window even when the slides take focus.
+The browser controls its placement and size. Unsupported browsers or denied requests
+fall back to a normal popup, which is not always-on-top. Popup permissions still
+apply; if blocked, allow popups and click again. Closing the slideshow also closes
+the floating window, including when its opening request was still pending.
+Always-on-top is not capture protection: share the slides tab/window rather than
+the whole screen, and verify the meeting application's sharing preview.
 
 The lab retains None, Fade, Push and Magic Move transitions with reduced-motion
 support. Presentation scenes are cloned, editor controls stay hidden on phones,

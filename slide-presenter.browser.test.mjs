@@ -14,6 +14,7 @@ const deckDigest = async page => createHash("sha256").update(await page.evaluate
 test("shared presentation preserves canvas, navigation, private presenter window and cleanup", { skip: !enabled, timeout: 120000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless: true });
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+  await context.addInitScript(() => Object.defineProperty(window, "documentPictureInPicture", { value: undefined, configurable: true }));
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -123,6 +124,10 @@ test("production and experimental players share responsive presentation chrome",
     assert.equal(await production.locator("[data-pjp-count]").textContent(), "2 / 2");
     await production.keyboard.press("Home");
     assert.equal(await production.locator("[data-pjp-count]").textContent(), "1 / 2");
+    await production.locator('[data-pjp="popout"]').click();
+    await production.waitForFunction(() => window.documentPictureInPicture.window?.document.querySelector("[data-pp-count]")?.textContent === "1 / 2");
+    assert.equal(await production.evaluate(() => window.documentPictureInPicture.window.matchMedia("(display-mode: picture-in-picture)").matches), true);
+    await production.evaluate(() => window.documentPictureInPicture.window.close());
     await production.evaluate(() => document.querySelectorAll(".pass").forEach(dialog => dialog.remove()));
     await production.keyboard.press("Escape");
     await production.waitForSelector(".pjp", { state: "detached" });
@@ -209,4 +214,80 @@ test("canvas presentation retains media and all transition modes while skipping 
   } finally {
     await browser.close();
   }
+});
+
+test("native always-on-top presenter survives audience focus and synchronizes controls", { skip: !enabled, timeout: 120000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.goto(baseURL + "/studio/slide-merge-lab/");
+    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    assert.equal(await page.evaluate(() => typeof window.documentPictureInPicture?.requestWindow), "function");
+    await page.getByRole("button", { name: "Rehearse", exact: true }).click();
+    await page.locator('[data-pjp="popout"]').click();
+    await page.waitForFunction(() => window.documentPictureInPicture.window?.document.querySelector("[data-pp-now] svg"));
+    assert.equal(await page.evaluate(() => window.documentPictureInPicture.window.document.documentElement.dataset.presenterWindow), "always-on-top");
+    assert.equal(await page.evaluate(() => window.documentPictureInPicture.window.matchMedia("(display-mode: picture-in-picture)").matches), true);
+    const layout = await page.evaluate(() => {
+      const floating = window.documentPictureInPicture.window;
+      return { width: floating.innerWidth, height: floating.innerHeight, controls: ["[data-pp-notes]", "[data-pp-timer]", '[data-pp="next"]', '[data-pp="exit"]'].map(selector => {
+        const rect = floating.document.querySelector(selector).getBoundingClientRect();
+        return { selector, fits: rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= floating.innerHeight && rect.right <= floating.innerWidth };
+      }) };
+    });
+    assert.equal(layout.controls.every(control => control.fits), true, JSON.stringify(layout));
+    const floatingPage = page.context().pages().find(candidate => candidate !== page);
+    if (floatingPage) await floatingPage.screenshot({ path: join(tmpdir(), "rk-presenter-always-on-top.png") });
+    await page.bringToFront();
+    await page.locator('[data-pjp="next"]').click();
+    await page.waitForFunction(() => window.documentPictureInPicture.window.document.querySelector("[data-pp-count]").textContent === "2 / 2");
+    await page.evaluate(() => window.documentPictureInPicture.window.document.querySelector('[data-pp="prev"]').click());
+    await page.waitForFunction(() => document.querySelector("[data-pjp-count]").textContent === "1 / 2");
+    await page.evaluate(() => window.documentPictureInPicture.window.document.querySelector('[data-pp="timer-reset"]').click());
+    assert.equal(await page.locator("[data-pjp-timer]").textContent(), "0:00");
+    assert.equal(await page.evaluate(() => window.documentPictureInPicture.window.closed), false);
+    await page.evaluate(() => window.documentPictureInPicture.window.close());
+    await page.waitForFunction(() => !document.querySelector(".pjp").classList.contains("pjp--popped"));
+    await page.locator('[data-pjp="popout"]').click();
+    await page.waitForFunction(() => window.documentPictureInPicture.window?.document.querySelector('[data-pp="exit"]'));
+    await page.evaluate(() => window.documentPictureInPicture.window.document.querySelector('[data-pp="exit"]').click());
+    await page.waitForSelector(".pjp", { state: "detached" });
+    assert.equal(await page.evaluate(() => !window.documentPictureInPicture.window || window.documentPictureInPicture.window.closed), true);
+    assert.equal(await page.locator("#root").evaluate(element => element.inert), false);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test("denied and pending floating-window requests recover safely", { skip: !enabled, timeout: 120000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless: true });
+  const page = await browser.newPage({ reducedMotion: "reduce" });
+  try {
+    await page.goto(baseURL + "/studio/slide-merge-lab/");
+    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    await page.evaluate(() => Object.defineProperty(window, "documentPictureInPicture", { configurable: true, value: { requestWindow: () => Promise.reject(new DOMException("Denied", "NotAllowedError")) } }));
+    await page.getByRole("button", { name: "Rehearse", exact: true }).click();
+    const popupPromise = page.waitForEvent("popup");
+    await page.locator('[data-pjp="popout"]').click();
+    const popup = await popupPromise;
+    await popup.waitForSelector("[data-pp-count]");
+    assert.equal(await popup.evaluate(() => document.documentElement.dataset.presenterWindow), "popup");
+    await page.locator('[data-pjp="exit"]').click();
+    await page.waitForSelector(".pjp", { state: "detached" });
+    await page.evaluate(() => {
+      window.__pipAttempts = 0;
+      window.documentPictureInPicture.requestWindow = () => { window.__pipAttempts++; return new Promise(resolve => { window.__resolvePip = resolve; }); };
+    });
+    await page.getByRole("button", { name: "Rehearse", exact: true }).click();
+    await page.locator('[data-pjp="popout"]').click();
+    await page.locator('[data-pjp="popout"]').click();
+    assert.equal(await page.evaluate(() => window.__pipAttempts), 1);
+    await page.locator('[data-pjp="exit"]').click();
+    await page.waitForSelector(".pjp", { state: "detached" });
+    await page.evaluate(() => window.__resolvePip({ close: () => { window.__latePipClosed = true; } }));
+    await page.waitForFunction(() => window.__latePipClosed);
+    assert.equal(await page.locator(".pjp").count(), 0);
+    assert.equal(await page.locator("#root").evaluate(element => element.inert), false);
+  } finally { await browser.close(); }
 });

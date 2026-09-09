@@ -32,7 +32,9 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   var frame = stage.querySelector("[data-pjp-frame]"), prog = stage.querySelector("[data-pjp-progress]"), count = stage.querySelector("[data-pjp-count]");
   var notesEl = stage.querySelector("[data-pjp-notes]"), nextEl = stage.querySelector("[data-pjp-next]"), presenting = false;
   var nextThumb = stage.querySelector("[data-pjp-nextthumb]"), timerEl = stage.querySelector("[data-pjp-timer]"), clockEl = stage.querySelector("[data-pjp-clock]"), startT = Date.now(), presenterWin = null;
-  var exited = false;
+  var exited = false, openingPresenter = false, pipUnavailable = false;
+  var popButton = stage.querySelector('[data-pjp="popout"]');
+  popButton.title = window.documentPictureInPicture ? "Open always-on-top presenter window" : "Open presenter window (always-on-top is unavailable in this browser)";
   function preview(container, slide) {
     if (renderThumbnail) { renderThumbnail(container, slide); return; }
     container.innerHTML = '<div class="slidepv__stage">' + renderPjSlide(slide) + "</div>";
@@ -133,7 +135,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
       '</div><div class="pp__side">' +
       '<div class="pp__lbl">Speaker notes</div><div class="pp__notes" data-pp-notes></div>' +
       '<div class="pp__nextbox"><div class="pp__lbl">Next slide</div><div class="pp__next" data-pp-next></div><div class="pp__nexttitle" data-pp-nexttitle></div></div>' +
-      '<div class="pp__hint">\uD83D\uDD12 Only you see this window. When you screen-share, share the <b>slides window</b> (not your whole screen), or keep this on a second display \u2014 your audience won\u2019t see your notes.</div>' +
+      '<div class="pp__hint">Share the <b>slides tab or window</b>, not your entire screen. Check your meeting preview: screen capture can include these notes.</div>' +
       '</div></div></body></html>';
   }
   function syncPresenter() {
@@ -151,24 +153,46 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     var tv = doc.querySelector("[data-pp-timer]"); if (tv) tv.textContent = fmtDur(Date.now() - startT);
     var ck = doc.querySelector("[data-pp-clock]"); if (ck && clockEl) ck.textContent = clockEl.textContent;
   }
-  function onPresenterClosed() { presenterWin = null; stage.classList.remove("pjp--popped"); var pb = stage.querySelector('[data-pjp="popout"]'); if (pb) pb.classList.remove("is-on"); }
-  function openPresenter() {
+  function onPresenterClosed(event) { if (event && presenterWin && event.currentTarget !== presenterWin) return; presenterWin = null; stage.classList.remove("pjp--popped"); var pb = stage.querySelector('[data-pjp="popout"]'); if (pb) pb.classList.remove("is-on"); }
+  async function openPresenter() {
+    if (exited || openingPresenter) return;
     if (presenterWin && !presenterWin.closed) { presenterWin.focus(); return; }
-    presenterWin = window.open("", "rkPresenter", "width=1060,height=720");
-    if (!presenterWin) return;   // popup blocked — the browser shows its own prompt
-    presenterWin.document.open(); presenterWin.document.write(presenterDocHtml()); presenterWin.document.close();
+    var opened = null, pinned = false;
+    openingPresenter = true;
+    try {
+      if (window.documentPictureInPicture && !pipUnavailable) {
+        try {
+          opened = await window.documentPictureInPicture.requestWindow({ width: 960, height: 720 });
+          pinned = true;
+        } catch (error) {
+          pipUnavailable = true;
+          popButton.title = "Always-on-top unavailable. Click to open a regular presenter window.";
+        }
+      }
+      if (exited) { if (opened) opened.close(); return; }
+      if (!opened) opened = window.open("", "rkPresenter", "width=1060,height=720");
+      if (!opened) { popButton.title = "Presenter window blocked. Allow popups, then click again."; return; }
+      presenterWin = opened;
+    } finally { openingPresenter = false; }
+    var markup = new DOMParser().parseFromString(presenterDocHtml(), "text/html");
+    var presenterDoc = presenterWin.document;
+    presenterDoc.head.replaceChildren.apply(presenterDoc.head, Array.from(markup.head.childNodes).map(function (node) { return presenterDoc.importNode(node, true); }));
+    presenterDoc.body.className = "pp-body";
+    presenterDoc.body.replaceChildren(presenterDoc.importNode(markup.body.firstElementChild, true));
+    presenterDoc.documentElement.dataset.presenterWindow = pinned ? "always-on-top" : "popup";
+    popButton.title = pinned ? "Focus always-on-top presenter window" : "Focus presenter window (not always-on-top)";
     presenterWin.document.addEventListener("click", function (e) {
       var b = e.target.closest("[data-pp]"); if (!b) return;
       var k = b.getAttribute("data-pp");
       if (k === "prev") go(-1); else if (k === "next") go(1); else if (k === "exit") exit(); else if (k === "timer-reset") { startT = Date.now(); tick(); syncPresenter(); }
     });
     presenterWin.addEventListener("keydown", onKey);
-    presenterWin.addEventListener("beforeunload", onPresenterClosed);
+    presenterWin.addEventListener("pagehide", onPresenterClosed);
     stage.classList.add("pjp--popped"); presenting = false; stage.classList.remove("pjp--presenting");
     var pb = stage.querySelector('[data-pjp="popout"]'); if (pb) pb.classList.add("is-on");
     setTimeout(syncPresenter, 60); syncPresenter();
   }
-  function exit() { if (exited) return; exited = true; clearInterval(clockTimer); clearTimeout(transTimer); if (presenterWin && !presenterWin.closed) { try { presenterWin.removeEventListener("beforeunload", onPresenterClosed); presenterWin.close(); } catch (e) {} } presenterWin = null; document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { if (dispose) dispose(); stage.remove(); pjpStage = null; inactiveSiblings.forEach(function (element) { element.inert = false; }); if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true }); if (opts.onClose) opts.onClose(); }, 240); }
+  function exit() { if (exited) return; exited = true; clearInterval(clockTimer); clearTimeout(transTimer); if (presenterWin && !presenterWin.closed) { try { presenterWin.removeEventListener("pagehide", onPresenterClosed); presenterWin.close(); } catch (e) {} } presenterWin = null; document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { if (dispose) dispose(); stage.remove(); pjpStage = null; inactiveSiblings.forEach(function (element) { element.inert = false; }); if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true }); if (opts.onClose) opts.onClose(); }, 240); }
   function onKey(e) {
     if (e.key === "Tab" && e.currentTarget === document) {
       var controls = Array.prototype.filter.call(stage.querySelectorAll('button:not(:disabled), a[href], video[controls], iframe, [tabindex="0"]'), function (element) { return element.getClientRects().length && getComputedStyle(element).visibility !== "hidden" && (!element.closest("[data-pjp-panel]") || presenting); });
