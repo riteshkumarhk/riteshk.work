@@ -109,12 +109,14 @@ design-system migration. The secondary opacity slider remains unchanged.
     and the gold Rehearse glyph grouped at right (also right-aligned on the phone's second row).
     The bottom document-status bar replaces the static Local draft
     label with live save/activity feedback, followed by visibility and activity recording controls.
-    Library sync and slide position stay at the right. Recording retains its red REC state and
+    Slide position stays at the right. Recording retains its red REC state and
     stopping opens the activity log; the visibility menu opens upward from the bottom edge.
-    Compact 24px-high controls fit the original 32px desktop bar; phones use two rows (60px), with sync and slide position
-    on the second row. Feedback takes all remaining width, pushing visibility and recording
-    toward the right-hand sync/count cluster. Long feedback is ellipsized with the full message in its tooltip.
-    This is a slide-lab trial only; the production Studio status bar is unchanged.
+    Compact 24px-high controls fit a single 32px bar on desktop and phones.
+    Feedback takes all remaining width, pushing visibility and recording toward the right-hand count.
+    Long feedback is ellipsized with the full message in its tooltip.
+    Library sync appears only at the bottom of the native Library panel, with its existing
+    retry/sign-in action. Closing the panel does not stop synchronization. It tracks reusable
+    slide objects, not the deck or content draft. Draft/save status remains global.
 - Editing off hides the insertion toolbar, properties, guides and slide-management
     controls, plus zoom, Fit, notes-toggle and help buttons. The resizable notes editor
     remains visible and editable on desktop and phone; its editing-mode open state is

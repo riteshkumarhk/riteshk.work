@@ -9,6 +9,8 @@
 .merge-shell .merge-status .merge-visibility summary>svg { width:14px;height:14px; }
 .merge-shell .merge-status .merge-record-ring { width:10px;height:10px; }
 .merge-status .merge-slide-position { flex-shrink:0; white-space:nowrap; }
+.merge-library-status { flex-shrink:0;margin-top:auto;padding:8px 12px;border-top:1px solid var(--line);color:var(--text-dim); }
+.merge-shell .merge-library-status .merge-library-sync { max-width:100%;font-family:var(--mono); }
 .merge-editor-bar { grid-column:1/-1;grid-row:2;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:.6rem;padding:.38rem .9rem;border-bottom:1px solid var(--line);background:var(--bg-2);min-width:0;z-index:10; }
 .merge-bar-state { display:flex;align-items:center;gap:12px;min-width:0; }
 .merge-save-status { flex:1;min-width:0;font-family:var(--mono);font-size:.62rem;line-height:1.35;color:var(--text-dim);overflow:hidden;white-space:nowrap;text-overflow:ellipsis; }
@@ -64,9 +66,8 @@
 .merge-all-actions { display:flex;justify-content:flex-end;align-items:center;gap:10px;border-top:1px solid var(--merge-line);padding:6px; }.merge-all-actions button { display:grid;place-items:center;min-width:28px;min-height:28px; }.merge-all-actions .is-danger:hover { color:#ff8b8b; }
 .merge-log-actions { padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap; }.merge-log-actions button { display:flex;align-items:center;gap:8px; }.merge-log-text { padding:0 20px 20px;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:60vh;overflow:auto;font-size:12px;line-height:1.6;user-select:text; }
 @media(max-width:900px) {
-  .merge-shell,.merge-shell.mobile-slides-open { grid-template:88px 84px minmax(0,1fr) 60px/minmax(0,1fr); }
-  .merge-shell .merge-status { display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:28px 24px;gap:0 8px;padding:3px 10px; }
-  .merge-status-controls { grid-column:1/-1; }
+  .merge-shell,.merge-shell.mobile-slides-open { grid-template:88px 84px minmax(0,1fr) 32px/minmax(0,1fr); }
+  .merge-shell .merge-status { display:flex;gap:8px;padding:3px 10px; }
   .merge-status-controls .merge-save-status { flex:1; }
   .merge-shell .merge-status .merge-slide-position { display:block; }
   .merge-editor-bar { padding:6px 10px;gap:4px 10px;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:30px 36px; }

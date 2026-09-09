@@ -117,7 +117,7 @@ test("save status, visibility and recording belong in the bottom status bar", ()
   assert.equal(declarations(styles, ".merge-shell .merge-status .merge-visibility summary,.merge-shell .merge-status .merge-bar-record").height, "24px");
   assert.equal(declarations(styles, ".merge-save-status")["text-overflow"], "ellipsis");
   const mobile = styles.nodes.find(node => node.type === "atrule" && node.params === "(max-width:900px)");
-  assert.equal(declarations(mobile, ".merge-shell .merge-status")["grid-template-rows"], "28px24px");
+  assert.equal(declarations(mobile, ".merge-shell .merge-status").display, "flex");
   assert.equal(declarations(mobile, ".merge-shell .merge-status .merge-slide-position").display, "block");
   assert.doesNotMatch(editor.match(/<header className="merge-header">[\s\S]*?<\/header>/)[0], /VisibilityMenu/);
   assert.match(bar, /<div className="merge-bar-actions">\{children\}<button[^>]*merge-bar-record/);
@@ -131,6 +131,14 @@ test("save status, visibility and recording belong in the bottom status bar", ()
 
 test("lab sidebars dismiss from canvas clicks, not editor controls", () => {
   assert.ok(read("./slide-lab-engine.mjs").includes('islandRef.current?.closest(".merge-shell") && !event.target.closest(".excalidraw__canvas")'));
+});
+
+test("library sync belongs only to the native Library panel", () => {
+  const editor = read("./src/js/slide-merge.jsx");
+  assert.match(editor, /<DefaultSidebar[\s\S]*?libraryOpen && <div className="merge-library-status">[\s\S]*?onClick=\{library.retry\}[\s\S]*?<\/DefaultSidebar>/);
+  const footer = editor.slice(editor.indexOf('<footer className="merge-status"'), editor.indexOf('</footer>', editor.indexOf('<footer className="merge-status"')));
+  assert.doesNotMatch(footer, /merge-library-sync|library.status/);
+  assert.match(footer, /StatusControls/);
 });
 
 test("top working controls align right on desktop and mobile", () => {
