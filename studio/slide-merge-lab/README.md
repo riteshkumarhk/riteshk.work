@@ -111,7 +111,8 @@ design-system migration. The secondary opacity slider remains unchanged.
     Library sync and slide position stay at the right. Recording retains its red REC state and
     stopping opens the activity log; the visibility menu opens upward from the bottom edge.
     Compact 24px-high controls fit the original 32px desktop bar; phones use two rows (60px), with sync and slide position
-    on the second row. Long feedback is ellipsized with the full message in its tooltip.
+    on the second row. Feedback takes all remaining width, pushing visibility and recording
+    toward the right-hand sync/count cluster. Long feedback is ellipsized with the full message in its tooltip.
     This is a slide-lab trial only; the production Studio status bar is unchanged.
 - Editing off hides the insertion toolbar, properties, guides and slide-management
     controls, plus zoom, Fit, notes-toggle and help buttons. The resizable notes editor

@@ -133,6 +133,15 @@ test("lab sidebars dismiss from canvas clicks, not editor controls", () => {
   assert.ok(read("./slide-lab-engine.mjs").includes('islandRef.current?.closest(".merge-shell") && !event.target.closest(".excalidraw__canvas")'));
 });
 
+test("footer status fills available space and pushes actions right", () => {
+  const styles = postcss.parse(read("./css/slide-merge-bar.css"));
+  const status = declarations(styles, ".merge-save-status");
+  assert.equal(status.flex, "1");
+  assert.equal(status["min-width"], "0");
+  assert.equal(status["max-width"], undefined);
+  assert.equal(declarations(styles, ".merge-status-controls .merge-bar-actions")["flex-shrink"], "0");
+});
+
 test("menu opening rotates only explicit chevrons, never the visibility icon", () => {
   const theme = postcss.parse(read("./css/slide-merge-theme.css"));
   assert.match(read("./src/js/slide-merge-toolbar.jsx"), /data-tool-icon=\{name\}/);
