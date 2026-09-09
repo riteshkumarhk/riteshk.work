@@ -204,7 +204,7 @@ function PresentationCanvas({ slides, index }) {
     if (!api) return;
     const scene = structuredClone(slide.scene);
     api.resetScene();
-    api.updateScene({ elements: scene.elements.map(element => element.id === FRAME_ID ? { ...element, name: "" } : element), appState: { ...scene.appState, theme:canvasTheme(scene.elements,appearance), viewBackgroundColor:sceneBackground(scene.elements), selectedElementIds: {} }, captureUpdate: CaptureUpdateAction.NEVER });
+    api.updateScene({ elements: scene.elements.map(element => element.id === FRAME_ID ? { ...element, name: "" } : element), appState: { ...scene.appState, viewModeEnabled: true, zenModeEnabled: true, theme:canvasTheme(scene.elements,appearance), viewBackgroundColor:sceneBackground(scene.elements), selectedElementIds: {}, selectedGroupIds: {}, editingGroupId: null }, captureUpdate: CaptureUpdateAction.NEVER });
     api.addFiles(Object.values(scene.files));
     const old=previous.current;previous.current={slide,index};
     let animationFrame=0,animation=null;

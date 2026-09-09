@@ -16,6 +16,12 @@ native sections and original media. No screenshot flattening or media re-encodin
 is used. Hidden slides are skipped and rehearsal starts at the selected visible
 slide, or the next visible slide when the selection is hidden.
 
+Slideshow content is view-only: no shape/text selection, dragging, deletion or
+editing, including input from the live presenter preview. Every scene reset/load
+reasserts view mode and clears selection after applying saved editor state.
+Media playback and embedded case-study consumption controls remain interactive.
+`slide-presenter-readonly.browser.test.mjs` verifies this against the live engine.
+
 Both players share progress navigation, previous/next, Home/End, Space/Page keys,
 Escape, the P notes overlay, elapsed timer/reset, clock, next-slide preview and
 the separate private presenter window. Navigation and timer reset synchronize

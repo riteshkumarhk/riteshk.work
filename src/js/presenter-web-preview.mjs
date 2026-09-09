@@ -154,8 +154,8 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
       canvas = doc.createElement("canvas");
       canvas.tabIndex = 0;
       canvas.setAttribute("aria-label", "Live audience slide controls");
-      canvas.style.cssText = "width:100%;height:100%;display:block;touch-action:none";
-      container.replaceChildren(canvas);
+      canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none";
+      container.appendChild(canvas);
       container.classList.add("pp__now--live");
       for (const type of ["pointerdown", "pointermove", "pointerup"]) canvas.addEventListener(type, forward);
       canvas.addEventListener("pointercancel", release);
