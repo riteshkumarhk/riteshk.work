@@ -1,11 +1,46 @@
 # Slide Merger Lab
 
-Isolated editor experiment at `/studio/slide-merge-lab/`. Production editor,
-published content, private decks and publishing are untouched. The library uses
+Isolated editor experiment at `/studio/slide-merge-lab/`. Published content,
+private decks and publishing are untouched. The library uses
 the existing owner session through a new, narrowly scoped Worker route.
 
 See [the design audit](DESIGN-AUDIT.md) for consistency corrections, verification
 coverage and components proposed for a future shared design-system update.
+
+## Shared presentation mode
+
+Rehearse uses the production Studio presentation controller and styles from
+`src/js/deck-presenter.mjs` and `css/deck-presenter.css`. Production keeps its
+HTML slide renderer; the lab mounts a live, read-only Excalidraw canvas with
+native sections and original media. No screenshot flattening or media re-encoding
+is used. Hidden slides are skipped and rehearsal starts at the selected visible
+slide, or the next visible slide when the selection is hidden.
+
+Both players share progress navigation, previous/next, Home/End, Space/Page keys,
+Escape, the P notes overlay, elapsed timer/reset, clock, next-slide preview and
+the separate private presenter window. Navigation and timer reset synchronize
+between windows. Closing the presenter window returns to the audience view;
+End closes both. Share only the audience window to keep speaker notes private.
+Browser popup permissions still apply.
+
+The lab retains None, Fade, Push and Magic Move transitions with reduced-motion
+support. Presentation scenes are cloned, editor controls stay hidden on phones,
+and canvas pan/zoom stays fitted. Thumbnail previews include embedded content
+and preserve the slide's surface color. The draft is unchanged on exit.
+
+Real-browser regression checks use `playwright-core` with an installed browser:
+
+```powershell
+$env:SLIDE_LAB_URL = 'http://127.0.0.1:5510'
+node --test slide-presenter.browser.test.mjs
+```
+
+The default executable is installed Windows Edge. Set
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE` for another Chromium executable. The suite skips
+when the URL or browser is unavailable. Checks cover desktop/390px/320px chrome
+parity, actual canvas pixels, media playback, transition navigation, hidden slides,
+draft integrity, and real popup navigation/reset/cleanup. Real-device animation
+smoothness and external providers' playback policies remain device-dependent.
 
 ## AI composition foundation
 

@@ -1,3 +1,5 @@
+@import url("./deck-presenter.css?v=1.0");
+
 /* =================================================================
    RITESH KUMAR — Project case study (L2) overlay
    Same dark editorial system as the site (reuses design tokens).
@@ -1036,151 +1038,17 @@ html.lite .pjb { animation: none; }
 @media (max-width: 620px) { .pj__skim-metrics { grid-template-columns: 1fr 1fr; gap: 1.1rem; } }
 
 /* ============ Presentation deck (owner-only slideshow) ============ */
-html.pjp-on { overflow: hidden; }
 .pj__icon--present { display: none; }
 .pj--canpresent .pj__icon--present, .pj--publicdeck .pj__icon--present { display: grid; }
 .pj__icon--present svg { transform: translateX(1px); }
-.pjp { position: fixed; inset: 0; z-index: 12000; background: #08080a; display: grid; place-items: center; animation: pjpIn .28s var(--ease); overflow: hidden; cursor: auto; }
-.pjp--out { animation: pjpOut .22s var(--ease) forwards; }
-@keyframes pjpIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes pjpOut { to { opacity: 0; } }
-.pjp__stagewrap { width: 100vw; height: 100vh; display: grid; place-items: center; }
-.pjp__frame { position: relative; width: min(94vw, calc(94vh * 16 / 9)); height: min(94vh, calc(94vw * 9 / 16)); background: var(--bg, #0a0a0c); overflow: hidden; box-shadow: 0 40px 120px -30px rgba(0, 0, 0, .8); container-type: size; }
 /* PowerPoint-style uniform scaling: in Present mode, size deck text to the SLIDE (the fixed 16:9 frame),
    not the viewport — so proportions stay identical on a 4K screen, a laptop or a projector, and text never
    looks tiny when screen-shared. cqw = 1% of the frame width; values are the design sizes at a 1280px frame. */
-.pjp__frame .pjps { padding: 5.5cqw; }
-.pjp__frame .pjps__kicker { font-size: 1.25cqw; }
-.pjp__frame .pjps__title { font-size: 6.25cqw; }
-.pjp__frame .pjps__sub { font-size: 2.1cqw; }
-.pjp__frame .pjps__prose { font-size: 1.85cqw; }
-.pjp__frame .pjps__metric-v { font-size: 17.5cqw; }
-.pjp__frame .pjps__metric-l { font-size: 2.5cqw; }
-.pjp__frame .pjps__cap { font-size: 1.2cqw; padding: 3cqw 1.7cqw 1.3cqw; }
-.pjp__frame .pjps__quote { font-size: 5.25cqw; }
-.pjp__frame .pjps__attr { font-size: 1.25cqw; }
-.pjp__frame .pjps__secnum { font-size: 2.75cqw; }
-.pjp__frame .pjps--split .pjps__col--text { padding: 4.5cqw; }
-.pjp__frame .pjps__fb--sm { font-size: 1.72cqw; }
-.pjp__frame .pjps__fb--md { font-size: 3.28cqw; }
-.pjp__frame .pjps__fb--lg { font-size: 5.78cqw; }
-.pjp__frame .pjps__fb--kicker { font-size: 1.56cqw; }
-.pjp__frame--in { animation: pjpFrameIn .42s var(--ease); }
-@keyframes pjpFrameIn { from { opacity: 0; transform: translateY(16px) scale(.992); } to { opacity: 1; transform: none; } }
 /* Slide transitions (fade / push). Two slides coexist in the frame during the change; only the
    transitioning elements carry a transition so nothing else animates. Magic Move is driven inline in JS. */
-.pjps--in-fade, .pjps--out-fade, .pjps--in-push, .pjps--out-push { transition: opacity .42s var(--ease), transform .42s var(--ease); will-change: opacity, transform; }
-.pjps--in-fade { opacity: 0; }
-.pjps--in-fade.is-live { opacity: 1; }
-.pjps--out-fade { opacity: 0; }
-.pjps--in-push { transform: translateX(calc(var(--pjd, 1) * 100%)); }
-.pjps--in-push.is-live { transform: translateX(0); }
-.pjps--out-push { transform: translateX(calc(var(--pjd, 1) * -100%)); }
-@media (prefers-reduced-motion: reduce) { .pjps--in-fade, .pjps--out-fade, .pjps--in-push, .pjps--out-push { transition: none; } }
-
-.pjps { position: absolute; inset: 0; display: grid; padding: clamp(2rem, 5vw, 5.5rem); box-sizing: border-box; }
-.pjps__body { align-self: center; max-width: 46ch; }
-.pjps--statement .pjps__body { max-width: 22ch; }
-.pjps__kicker { font-family: var(--mono); text-transform: uppercase; letter-spacing: .14em; color: var(--accent); font-size: clamp(.68rem, 1.3vw, 1rem); margin-bottom: 1.1rem; }
-.pjps__title { font-family: var(--serif); font-weight: 300; font-size: clamp(2rem, 6vw, 5rem); line-height: 1.04; color: var(--text); margin: 0; }
-.pjps__sub { margin: 1.3rem 0 0; font-size: clamp(1rem, 2vw, 1.7rem); color: var(--text-dim); line-height: 1.35; }
-.pjps__prose { font-size: clamp(1rem, 1.7vw, 1.45rem); color: var(--text-dim); line-height: 1.55; }
-.pjps__prose p { margin: 0 0 .7em; } .pjps__prose p:last-child { margin-bottom: 0; }
-.pjps__prose ul { margin: .3em 0; padding-left: 1.2em; } .pjps__prose li { margin: .25em 0; }
-.pjps--text .pjps__title, .pjps--split .pjps__title { margin-bottom: .8rem; }
-.pjps--metric { place-items: center; text-align: center; }
-.pjps--metric .pjps__body { max-width: none; }
-.pjps__metric-v { font-family: var(--serif); font-weight: 300; font-size: clamp(4rem, 17vw, 14rem); color: var(--accent); line-height: .95; }
-.pjps__metric-l { font-size: clamp(1rem, 2.4vw, 2rem); color: var(--text); margin-top: .4rem; }
-.pjps--media { padding: 0; }
-.pjps--media .pjps__media-el, .pjps--media img, .pjps--media video { width: 100%; height: 100%; object-fit: cover; display: block; }
-.pjps__cap { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 3rem 1.7rem 1.3rem; background: linear-gradient(transparent, rgba(0, 0, 0, .72)); color: #fff; font-family: var(--mono); font-size: clamp(.72rem, 1.2vw, .95rem); }
-.pjps--split { grid-template-columns: 1.05fr .95fr; padding: 0; }
-.pjps--split .pjps__col--text { padding: clamp(2rem, 4vw, 4.5rem); align-self: center; }
-.pjps--split .pjps__col--media { position: relative; overflow: hidden; }
-.pjps--split .pjps__media-el, .pjps--split img, .pjps--split video { width: 100%; height: 100%; object-fit: cover; display: block; }
-.pjps__ph { width: 100%; height: 100%; background: linear-gradient(135deg, rgba(216, 166, 87, .12), transparent); }
-
-.pjp__bar { position: fixed; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 1rem; padding: .9rem 1.3rem; z-index: 6; opacity: .3; transition: opacity .3s var(--ease); }
-.pjp:hover .pjp__bar, .pjp__bar:focus-within { opacity: 1; }
-.pjp__x { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid rgba(255, 255, 255, .16); border-radius: 50%; background: rgba(0, 0, 0, .3); color: #d8d3cd; cursor: pointer; transition: border-color .2s, color .2s; }
-.pjp__x:hover { color: #fff; border-color: var(--accent); }
-.pjp__progress { flex: 1; display: flex; gap: 5px; }
-.pjp__pdot { flex: 1; height: 3px; border-radius: 3px; background: rgba(255, 255, 255, .13); cursor: pointer; transition: background .3s; }
-.pjp__pdot.is-on { background: var(--accent); }
-.pjp__count { flex: none; font-family: var(--mono); font-size: .72rem; letter-spacing: .05em; color: var(--text-dim); min-width: 3.6em; text-align: right; }
-.pjp__edge { position: fixed; top: 0; bottom: 0; width: 12%; min-width: 64px; display: grid; place-items: center; border: 0; background: transparent; color: rgba(255, 255, 255, .32); cursor: pointer; opacity: 0; transition: opacity .25s, color .2s; z-index: 3; }
-.pjp__edge--prev { left: 0; justify-items: start; padding-left: 1rem; }
-.pjp__edge--next { right: 0; justify-items: end; padding-right: 1rem; }
-.pjp:hover .pjp__edge { opacity: 1; } .pjp__edge:hover { color: #fff; }
-@media (prefers-reduced-motion: reduce) { .pjp, .pjp__frame--in { animation: none; } }
 
 /* Presentation deck — extra layouts + presenter HUD (increment 4a) */
-.pjps--quote { place-items: center; text-align: center; }
-.pjps--quote .pjps__body { max-width: 28ch; }
-.pjps__quote { font-family: var(--serif); font-weight: 300; font-size: clamp(1.8rem, 4.6vw, 4.2rem); line-height: 1.16; color: var(--text); margin: 0; }
-.pjps__attr { margin-top: 1.5rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: .14em; font-size: clamp(.7rem, 1.3vw, 1rem); color: var(--accent); }
-.pjps--section { place-items: center; text-align: center; }
-.pjps--section .pjps__body { max-width: 24ch; }
-.pjps__secnum { font-family: var(--mono); font-size: clamp(1.1rem, 2.6vw, 2.2rem); color: var(--accent); letter-spacing: .12em; margin-bottom: .7rem; }
-
-.pjp__notesbtn { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid rgba(255, 255, 255, .16); border-radius: 50%; background: rgba(0, 0, 0, .3); color: #d8d3cd; cursor: pointer; transition: border-color .2s, color .2s; }
-.pjp__notesbtn:hover, .pjp--presenting .pjp__notesbtn { color: var(--accent); border-color: var(--accent); }
-.pjp__popbtn { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid rgba(255, 255, 255, .16); border-radius: 50%; background: rgba(0, 0, 0, .3); color: #d8d3cd; cursor: pointer; transition: border-color .2s, color .2s; }
-.pjp__popbtn:hover, .pjp__popbtn.is-on { color: var(--accent); border-color: var(--accent); }
-.pjp--popped .pjp__present { display: none !important; }
-.pjp__present { position: fixed; left: 0; right: 0; bottom: 0; z-index: 4; display: grid; grid-template-columns: 1fr 20rem; gap: 1.6rem; align-items: end; padding: 2.4rem 1.6rem 1.4rem; background: linear-gradient(transparent, rgba(0, 0, 0, .9) 34%); transform: translateY(100%); opacity: 0; transition: transform .3s var(--ease), opacity .3s var(--ease); pointer-events: none; }
-.pjp--presenting .pjp__present { transform: none; opacity: 1; }
-.pjp__plabel { display: block; font-family: var(--mono); text-transform: uppercase; letter-spacing: .16em; font-size: .6rem; color: var(--accent); margin-bottom: .45rem; }
-.pjp__pnotes-body { font-family: var(--sans); font-size: clamp(.9rem, 1.4vw, 1.18rem); line-height: 1.5; color: #ece7e1; max-height: 24vh; overflow: auto; white-space: pre-wrap; }
-.pjp__pnext-body { font-family: var(--serif); font-size: 1.15rem; line-height: 1.3; color: var(--text-dim); }
 /* Presenter meta: elapsed timer + wall clock, and a live thumbnail of the next slide. */
-.pjp__pmeta { grid-column: 1 / -1; display: flex; align-items: center; gap: 1rem; margin-bottom: .1rem; }
-.pjp__ptime { display: flex; align-items: baseline; gap: .4rem; }
-.pjp__ptime-v { font-family: var(--mono); font-size: 1.5rem; font-variant-numeric: tabular-nums; color: #ece7e1; letter-spacing: .01em; }
-.pjp__ptime-l { font-family: var(--mono); text-transform: uppercase; letter-spacing: .14em; font-size: .55rem; color: var(--text-faint); }
-.pjp__ptimereset { font-family: var(--mono); text-transform: uppercase; letter-spacing: .1em; font-size: .58rem; color: #d8d3cd; background: rgba(0, 0, 0, .3); border: 1px solid rgba(255, 255, 255, .16); border-radius: 20px; padding: .3rem .7rem; cursor: pointer; transition: border-color .2s, color .2s; }
-.pjp__ptimereset:hover { color: var(--accent); border-color: var(--accent); }
-.pjp__pclock { margin-left: auto; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: .95rem; color: var(--text-dim); }
-.pjp__pnext-thumb { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--bg, #0a0a0c); border: 1px solid rgba(255, 255, 255, .1); margin-bottom: .5rem; }
-.pjp__pnext-thumb.is-end { display: none; }
-.pjp__pnext-thumb .slidepv__stage { position: absolute; top: 0; left: 0; transform-origin: top left; }
-.pjp__pnext-thumb .slidepv__stage .pjps--free { padding: 0; }
-@media (max-width: 640px) { .pjp__present { grid-template-columns: 1fr; gap: .7rem; padding-top: 1.6rem; } .pjp__pnext { display: none; } }
-@media (prefers-reduced-motion: reduce) { .pjp__present { transition: none; } }
 /* Freeform layout — %-positioned blocks on a blank 16:9 canvas (increment 4c) */
-.pjps--free { position: absolute; inset: 0; padding: 0; display: block; }
-.pjps__fb { position: absolute; box-sizing: border-box; }
-.pjps__bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
-.pjps__bg .pjps__bg-el, .pjps__bg img, .pjps__bg video { width: 100%; height: 100%; object-fit: cover; display: block; }
-.pjps--free > .pjps__fb { z-index: 1; }
-.pjps__fb--text { font-family: var(--serif); color: var(--text); line-height: 1.18; }
-.pjps__fb--sm { font-family: var(--sans); font-weight: 400; font-size: clamp(.85rem, 1.5vw, 1.3rem); line-height: 1.45; color: var(--text-dim); }
-.pjps__fb--md { font-size: clamp(1.3rem, 3vw, 2.6rem); }
-.pjps__fb--lg { font-size: clamp(2rem, 5.4vw, 4.6rem); font-weight: 300; }
-.pjps__fb--kicker { font-family: var(--mono); text-transform: uppercase; letter-spacing: .14em; color: var(--accent); font-size: clamp(.7rem, 1.5vw, 1.15rem); font-weight: 400; line-height: 1.3; }
-.pjps__fb--caption { font-family: var(--sans); color: var(--text-dim); }
-.pjps__fb--aleft { text-align: left; }
-.pjps__fb--acenter { text-align: center; }
-.pjps__fb--aright { text-align: right; }
-.pjps__fb--text p { margin: 0 0 .4em; } .pjps__fb--text p:last-child { margin-bottom: 0; }
-.pjps__fb--media img, .pjps__fb--media video, .pjps__fb--media .pjps__media-el { width: 100%; height: auto; display: block; border-radius: 5px; }
-.pjps__fb--media .pjps__ph { aspect-ratio: 16 / 10; border-radius: 5px; }
 /* Pulled case-study section on a slide: render live at design width, zoom-fit to the box */
-.pjps__fb--section { overflow: visible; height: auto; }
-.pjps__secwrap { width: 1120px; transform-origin: top left; }
-.pjps__secwrap > .pjb { margin: 0; }
-.pjps__fb--boxed { display: flex; flex-direction: column; }
-.pjps__fb--vtop { justify-content: flex-start; }
-.pjps__fb--vmiddle { justify-content: center; }
-.pjps__fb--vbottom { justify-content: flex-end; }
-.pjps__fb--media.pjps__fb--fit { overflow: hidden; }
-.pjps__fb--media.pjps__fb--fit img, .pjps__fb--media.pjps__fb--fit video, .pjps__fb--media.pjps__fb--fit .pjps__media-el { height: 100%; object-fit: cover; }
-.pjps__fb--media.pjps__fb--contain img, .pjps__fb--media.pjps__fb--contain video, .pjps__fb--media.pjps__fb--contain .pjps__media-el { object-fit: contain; }
-.pjps__fb--link { cursor: pointer; }
 /* Freeform shapes + icons (P4) */
-.pjps__fb--shape { box-sizing: border-box; }
-.pjps__fb--line, .pjps__fb--arrow { display: flex; align-items: center; overflow: visible; }
-.pjps__fbln { flex: 1 1 auto; border-radius: 2px; }
-.pjps__fbah { flex: 0 0 auto; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; margin-left: -1px; }
-.pjps__fb--icon svg { width: 100%; height: 100%; display: block; }

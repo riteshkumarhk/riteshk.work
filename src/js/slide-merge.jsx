@@ -37,6 +37,9 @@ import { useNotesResize } from "./slide-merge-notes.jsx";
 import { LayerPanel } from "./slide-merge-layers.jsx";
 import { ActivityDialog, AllSlides, EditorBar, HistoryControls, StatusControls, useActivity } from "./slide-merge-bar.jsx";
 import { VisibilityMenu, VisibilityConfirmation } from "./slide-merge-visibility.jsx";
+import { presentDeckWithRenderer } from "./deck-presenter.mjs";
+import "../../css/deck-presenter.css";
+import "../../css/slide-merge-presenter.css";
 import { setDeckVisibility } from "./slide-merge-visibility.mjs";
 import { watchStudioTypography } from "./slide-merge-typography.mjs";
 import { compileComposition } from "./slide-merge-composition.mjs";
@@ -130,7 +133,7 @@ function SectionForeground({ elements, frame, files, style }) {
 function SectionLayers({ layers, files }) {
   return layers.map(({ element, style, clipStyle, foreground, frame, frameStyle }) => <div key={element.id} className="merge-native-clip" style={clipStyle}><div className="merge-native-section" style={style}><SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} /></div><SectionForeground elements={foreground} frame={frame} files={files} style={frameStyle} /></div>);
 }
-function SectionThumbnail({ svg, elements, files }) {
+function SectionThumbnail({ svg, elements, files, embeds = false }) {
   const host = useRef(null);
   const [scale, setScale] = useState(0);
   useEffect(() => {
@@ -138,7 +141,7 @@ function SectionThumbnail({ svg, elements, files }) {
     observer.observe(host.current);
     return () => observer.disconnect();
   }, []);
-  return <span ref={host} className="merge-section-thumbnail" inert=""><span className="merge-section-thumbnail-scene" style={{ transform: `scale(${scale})` }}><span className="merge-section-thumbnail-svg" dangerouslySetInnerHTML={{ __html: svg }} /><SectionLayers layers={nativeSectionLayers(elements, { zoom: { value: 1 }, scrollX: 0, scrollY: 0 })} files={files} /></span></span>;
+  return <span ref={host} className="merge-section-thumbnail" inert=""><span className="merge-section-thumbnail-scene" style={{ transform: `scale(${scale})` }}><span className="merge-section-thumbnail-svg" dangerouslySetInnerHTML={{ __html: svg }} />{embeds && elements.filter(element => !element.isDeleted && !element.customData?.labLayerHidden && element.type === "embeddable" && validEmbed(element.link)).map(element => <span key={element.id} className="merge-present-embed-preview" style={{ left:element.x, top:element.y, width:element.width, height:element.height, opacity:element.opacity / 100, transform:`rotate(${element.angle}rad)` }}><Embed element={element} /></span>)}<SectionLayers layers={nativeSectionLayers(elements, { zoom: { value: 1 }, scrollX: 0, scrollY: 0 })} files={files} /></span></span>;
 }
 function CanvasVideo({api}) {
   const [video,setVideo]=useState(null),[failed,setFailed]=useState(false);
@@ -188,15 +191,18 @@ function CompositionPreview({ plan }) {
   return error ? <p role="alert">{error}</p> : preview;
 }
 
-function Presenter({ slides, index, onIndex, onClose }) {
+function PresentationCanvas({ slides, index }) {
   const [api, setApi] = useState(null);
   const appearance = useAppearance();
   const stage = useRef(null);
   const previous=useRef(null),engine=useRef(null);
   const slide = slides[index];
+  const fit = () => {
+    if (api && stage.current) api.updateScene({ appState: { zoom: { value: stage.current.clientWidth / 1280 }, scrollX: 0, scrollY: 0 }, captureUpdate: CaptureUpdateAction.NEVER });
+  };
   useEffect(() => {
     if (!api) return;
-    const scene = slide.scene;
+    const scene = structuredClone(slide.scene);
     api.resetScene();
     api.updateScene({ elements: scene.elements.map(element => element.id === FRAME_ID ? { ...element, name: "" } : element), appState: { ...scene.appState, theme:canvasTheme(scene.elements,appearance), viewBackgroundColor:sceneBackground(scene.elements), selectedElementIds: {} }, captureUpdate: CaptureUpdateAction.NEVER });
     api.addFiles(Object.values(scene.files));
@@ -220,24 +226,51 @@ function Presenter({ slides, index, onIndex, onClose }) {
         };animationFrame=requestAnimationFrame(tick);
       } else animation=engine.current.animate(transition==="push"?[{transform:`translateX(${index<old.index?-100:100}%)`},{transform:"translateX(0)"}]:[{opacity:0},{opacity:1}],{duration:520,easing:"cubic-bezier(.16,1,.3,1)"});
     }
-    const fit = () => api.updateScene({ appState: { zoom: { value: stage.current.clientWidth / 1280 }, scrollX: 0, scrollY: 0 }, captureUpdate: CaptureUpdateAction.NEVER });
     const observer = new ResizeObserver(fit); observer.observe(stage.current); fit();
     return () => { observer.disconnect();cancelAnimationFrame(animationFrame);animation?.cancel(); };
   }, [api, slide]);
+  return <div className="merge-present-stage" ref={stage}><div className="merge-present-engine" ref={engine}><CanvasVideo api={api} /><NativeSections api={api} interactive /><Excalidraw excalidrawAPI={setApi} onScrollChange={fit} theme={canvasTheme(slide.scene.elements,appearance)} viewModeEnabled zenModeEnabled aiEnabled={false} handleKeyboardGlobally={false} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed} /></div></div>;
+}
+
+function PresentationThumbnail({ slide }) {
+  const [svg, setSvg] = useState("");
+  const appearance = useAppearance();
   useEffect(() => {
-    const key = event => {
-      if (event.key === "Escape") onClose();
-      else if (["ArrowRight", "ArrowDown", " "].includes(event.key)) { event.preventDefault(); onIndex(Math.min(slides.length - 1, index + 1)); }
-      else if (["ArrowLeft", "ArrowUp"].includes(event.key)) { event.preventDefault(); onIndex(Math.max(0, index - 1)); }
+    let active = true;
+    setSvg("");
+    if (slide) exportToSvg({ elements: slide.scene.elements, files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true, appState: { exportBackground: false, exportWithDarkMode: canvasTheme(slide.scene.elements, appearance) === "dark" } }).then(result => { if (active) setSvg(result.outerHTML); }).catch(() => { if (active) setSvg(""); });
+    return () => { active = false; };
+  }, [slide, appearance]);
+  return slide && svg ? <div className="merge-present-thumbnail" style={{ background:getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() }}><SectionThumbnail svg={svg} elements={slide.scene.elements} files={slide.scene.files} embeds /></div> : null;
+}
+
+function Presenter({ slides, index, onIndex, onClose }) {
+  const callbacks = useRef({ onIndex, onClose });
+  callbacks.current = { onIndex, onClose };
+  useLayoutEffect(() => {
+    const roots = new Map();
+    const mount = (container, content) => {
+      if (!roots.has(container)) roots.set(container, createRoot(container));
+      roots.get(container).render(content);
     };
-    document.addEventListener("keydown", key);
-    return () => document.removeEventListener("keydown", key);
-  }, [index]);
-  return <div className="merge-present" role="dialog" aria-modal="true" aria-label="Rehearsal">
-    <header><strong>{slide.title}</strong><Button icon="close" label="Close rehearsal" onClick={onClose} autoFocus /></header>
-    <div className="merge-present-stage" ref={stage}><div className="merge-present-engine" ref={engine}><CanvasVideo api={api} /><NativeSections api={api} interactive /><Excalidraw excalidrawAPI={setApi} theme={canvasTheme(slide.scene.elements,appearance)} viewModeEnabled zenModeEnabled aiEnabled={false} handleKeyboardGlobally={false} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed} /></div></div>
-    <footer><Button icon="back" label="Previous slide" disabled={!index} onClick={() => onIndex(index - 1)} /><span>{index + 1} / {slides.length}</span><Button icon="next" label="Next slide" disabled={index === slides.length - 1} onClick={() => onIndex(index + 1)} /><p>{slide.notes}</p></footer>
-  </div>;
+    const player = presentDeckWithRenderer({}, { slides, start: index, onClose: () => callbacks.current.onClose() }, {
+      pjSlideTitle: slide => slide.title || "Untitled slide",
+      pjNotesHtml: notes => {
+        const text = document.createElement("div");
+        text.textContent = notes || "";
+        return text.innerHTML || '<span class="pjp__pnote-empty">No notes for this slide</span>';
+      },
+      mountSlide: (frame, slide, nextIndex) => {
+        frame.closest(".pjp").classList.add("pjp--canvas");
+        mount(frame, <PresentationCanvas slides={slides} index={nextIndex} />);
+        callbacks.current.onIndex(nextIndex);
+      },
+      renderThumbnail: (container, slide) => mount(container, <PresentationThumbnail slide={slide} />),
+      dispose: () => { roots.forEach(root => root.unmount()); roots.clear(); }
+    });
+    return () => player?.close();
+  }, []);
+  return null;
 }
 
 function Merger() {

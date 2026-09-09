@@ -12,6 +12,7 @@
     "@excalidraw/excalidraw": "0.18.1",
     "esbuild": "^0.25.12",
     "fontkit": "^2.0.4",
+    "playwright-core": "^1.63.0",
     "postcss": "^8.5.26",
     "react": "18.3.1",
     "react-dom": "18.3.1"

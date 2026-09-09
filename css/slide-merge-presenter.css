@@ -1,0 +1,8 @@
+.pjp--canvas .merge-present-stage { position:absolute; inset:0; width:100%; height:100%; aspect-ratio:auto; background:transparent; }
+.pjp--canvas .merge-present-engine { width:100%; height:100%; }
+.pjp--canvas .merge-present-stage :is(.layer-ui__wrapper,.excalidraw__canvas-label,.App-menu_top,.App-toolbar-container,.App-bottom-bar,.mobile-misc-tools-container) { display:none!important; }
+.merge-present-thumbnail { position:absolute; inset:0; overflow:hidden; }
+.merge-present-embed-preview { position:absolute; display:block; overflow:hidden; background:var(--bg); }
+.pjp--canvas .pjp__pnext-thumb .merge-section-thumbnail,.pp .merge-section-thumbnail { display:block; width:100%; height:100%; }
+.pjp--canvas .pjp__present { pointer-events:none; }
+.pjp--canvas.pjp--presenting .pjp__present :is(button,.pjp__pnotes-body) { pointer-events:auto; }
