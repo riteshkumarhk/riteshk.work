@@ -192,6 +192,8 @@ design-system migration. The secondary opacity slider remains unchanged.
     engine normalizes its SVG rendering copy. No vector rasterization or media re-encoding occurs.
     Text uses the shared platform-hosted font catalogue.
 - One studio toolbar replaces the native tool strip, without its tool lock or More menu.
+    On desktop it is centred in the available canvas, uses its full width with 16px side gutters,
+    and wraps only when the tools cannot fit on one row. Resizing the right rail adjusts that space.
 - The native hamburger is hidden; View > Help opens the native Help dialog.
 - Hand, Select, Text, Shapes, Arrow, Line and Draw use native engine tools. Shapes includes eight
     editable diagram presets: Start / End, Rounded process, Input / Output, Predefined process,

@@ -28,6 +28,16 @@ test("Slide properties reuse native inspector groups without collapse controls",
   assert.equal(declarations(properties, ".merge-shell .merge-property-action")["text-transform"], "none");
 });
 
+test("desktop insert toolbar uses the full canvas width before wrapping", () => {
+  const toolbar = postcss.parse(read("./css/slide-merge-toolbar.css"));
+  const desktop = toolbar.nodes.find(node => node.type === "atrule" && node.params === "(min-width:901px)");
+  const style = declarations(desktop, ".merge-canvas-tools");
+  assert.equal(style.left, "50%");
+  assert.equal(style["max-width"], "calc(100%-32px)");
+  assert.equal(style.width, "max-content");
+  assert.equal(style["flex-wrap"], "wrap");
+});
+
 test("shared dialogs use the actual Studio surface and title contract", () => {
   parity(dialogs, ".merge-deck-dialog", ".pass__box", ["background", "border", "border-radius", "padding", "text-align", "box-shadow"]);
   parity(dialogs, ".merge-deck-dialog h2", ".pass__title", ["font-family", "font-weight", "font-size", "color"]);
