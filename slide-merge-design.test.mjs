@@ -55,7 +55,10 @@ test("slide delete is direct and keyboard scoped to slide cards", () => {
   assert.doesNotMatch(editor, /<dialog/);
   assert.doesNotMatch(editor, /Delete this slide\?|setConfirm/);
   assert.match(editor, /remove=\{removeSlide\}/);
-  assert.match(editor, /event.key !== "Delete" \|\| event.repeat/);
+  assert.match(editor, /!\["Delete", "Backspace"\]\.includes\(event.key\) \|\| event.repeat/);
+  assert.match(editor, /document.activeElement\?\.closest\("\.merge-slide"\)/);
+  assert.match(editor, /trigger\?\.isConnected && document.activeElement === document.body/);
+  assert.match(editor, /React.useLayoutEffect\(\(\) => \{\s*if \(busy\) return;\s*const trigger = selectedSlideFocus.current;/);
   assert.match(editor, /event.target.closest\("\[data-slide-delete-id\]"\)/);
   assert.match(navigator, /data-slide-delete-id=\{slide.id\}/);
   assert.match(navigator, /input:not\(:disabled\), footer button:not\(:disabled\)/);

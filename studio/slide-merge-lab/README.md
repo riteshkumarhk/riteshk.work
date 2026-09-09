@@ -154,9 +154,10 @@ design-system migration. The secondary opacity slider remains unchanged.
     Close, backdrop and Escape dismiss the sheet; nested pickers consume Escape first.
     Drawing Line is available in Draw on mobile. Guides and Fit use the actual canvas bounds.
 - Each thumbnail has move up/down, insert above, duplicate, skip/include and immediate delete controls.
-    Delete on a focused slide card removes that slide in the navigator or All slides,
+    Delete or Backspace on a focused slide card removes that slide in the navigator or All slides,
     without a confirmation dialog. Focus moves to the remaining selected slide. Text fields
-    and canvas objects keep their own Delete behavior; the final slide cannot be removed.
+    and canvas objects keep their own deletion behavior; the final slide cannot be removed.
+    Clicking a thumbnail restores its focus as loading finishes, before the next keypress.
     Slide deletion is not part of canvas Undo.
 - Each insertion gap offers Add slide or Start section inline. On phones the choices temporarily
     occupy the adjacent thumbnail footprint, keeping both actions inside the strip.

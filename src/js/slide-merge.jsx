@@ -420,7 +420,18 @@ function Merger() {
     live.current.operating = true; setBusy(true);
     try { await operation(); } catch (error) { fail(error); } finally { live.current.operating = false; setBusy(false); }
   }
-  async function choose(id) { await run(async () => { await save(); if (id !== live.current.deck.selected) { const next = { ...live.current.deck, selected: id }; paint(next); await mountSlide(next.slides.find(slide => slide.id === id)); await save(); } }); }
+  const selectedSlideFocus = useRef(null);
+  React.useLayoutEffect(() => {
+    if (busy) return;
+    const trigger = selectedSlideFocus.current;
+    selectedSlideFocus.current = null;
+    if (trigger?.isConnected && document.activeElement === document.body) trigger.focus();
+  }, [busy]);
+  async function choose(id) {
+    const trigger = document.activeElement?.closest(".merge-slide");
+    selectedSlideFocus.current = trigger;
+    await run(async () => { await save(); if (id !== live.current.deck.selected) { const next = { ...live.current.deck, selected: id }; paint(next); await mountSlide(next.slides.find(slide => slide.id === id)); await save(); } });
+  }
   function modify(action, id = live.current.deck.selected) { return run(async () => {
     if (!live.current.editing) return;
     await save(); const next = changeSlides(live.current.deck, action, id, crypto.randomUUID());
@@ -437,7 +448,7 @@ function Merger() {
     });
   }
   function deleteSlideKey(event) {
-    if (event.key !== "Delete" || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.target.closest("input, textarea, select, [contenteditable], dialog, [role=dialog]")) return;
+    if (!["Delete", "Backspace"].includes(event.key) || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.target.closest("input, textarea, select, [contenteditable], dialog, [role=dialog]")) return;
     const card = event.target.closest("[data-slide-delete-id]");
     if (!card) return;
     event.preventDefault(); event.stopPropagation();
