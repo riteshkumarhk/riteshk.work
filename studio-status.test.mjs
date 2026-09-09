@@ -29,6 +29,19 @@ test("shared Studio shell separates working controls from bottom document status
   assert.match(source, /s\.title = label/);
 });
 
+test("draft storage is a plain status item in normal and warning states", () => {
+  const meter = declarations(".adm__dmeter");
+  assert.equal(meter.border, "0");
+  assert.equal(meter["border-radius"], "0");
+  assert.equal(meter.background, "transparent");
+  for (const level of ["mid", "hi"]) {
+    const warning = declarations(`.adm__dmeter[data-lvl="${level}"]`);
+    assert.ok(warning.color);
+    assert.equal(warning.background, undefined);
+    assert.equal(warning["border-color"], undefined);
+  }
+});
+
 test("Studio footer is compact and preview controls align right without absolute centering", () => {
   assert.equal(declarations(".adm__statusbar").height, "32px");
   assert.equal(declarations(".adm__statusbar :is(.adm__logs-btn,.adm__dmeter)").height, "24px");

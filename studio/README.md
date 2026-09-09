@@ -7,7 +7,9 @@ and preview-only.
 
 A full-width 32px footer sits below the editing and preview panes across Studio
 tabs and case-study editors. Live status text takes all remaining space, with draft
-storage and activity recording on the right in 24px-high controls. Truncated status
+storage and activity recording on the right in 24px-high items. Draft storage is
+plain text with a status dot, not a pill; amber/red warnings keep the same unframed
+treatment, full-message tooltip, and keyboard focus indicator. Truncated status
 messages retain their full text in a tooltip. Status and recording remain available
 when preview is hidden or unavailable; preview-specific size controls still hide.
 
