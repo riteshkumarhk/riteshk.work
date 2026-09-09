@@ -393,7 +393,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
 
   function status(msg, ok) {
     const s = root && root.querySelector(".adm__status");
-    if (s) { s.textContent = msg; s.classList.toggle("ok", !!ok); }
+    if (s) { s.textContent = msg; s.title = msg; s.classList.toggle("ok", !!ok); }
   }
 
   // The Publish button + the "\u2715" leave-options flyout are contextual: they only
@@ -504,6 +504,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
       s.textContent = t ? ("Published " + narrRelTime(t)) : "All changes published";
       s.classList.add("ok");
     }
+    s.title = s.textContent;
   }
   function closeMorePop() {
     if (!root) return;
@@ -12757,6 +12758,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
     s.classList.toggle("is-pub-caveat", caveat);
     s.classList.toggle("is-pub-error", error);
     s.textContent = label;
+    s.title = label;
     s.classList.toggle("ok", done);
     if (done || caveat) { if (opts.viewUrl) setVisitSite(opts.viewUrl); }   // turn the new-tab button into a "Visit site" CTA
     else if (!error) clearVisitSite();                                       // an in-progress (re)publish drops any prior label
@@ -17367,7 +17369,6 @@ import { draftComposition } from "./slide-merge-ai.mjs";
         "</div>" +
         '<div class="adm__actions">' +
           '<div class="adm__actions-r">' +
-            '<span class="adm__dmeter" data-draftmeter data-lvl="lo" tabindex="0" aria-label="Local draft storage"><span class="adm__dmeter-dot"></span><span class="adm__dmeter-tx" data-draftmeter-tx>Draft 0%</span></span>' +
             '<button class="btn btn--primary adm__publish" data-publish hidden>Publish</button>' +
           '<button class="btn btn--ghost adm__gear" data-opensettings type="button" aria-label="Settings" title="Settings"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>' +
           '<div class="adm__exitwrap" data-exit-wrap>' +
@@ -17381,12 +17382,11 @@ import { draftComposition } from "./slide-merge-ai.mjs";
           "</div>" +
         "</div>" +
       "</header>" +
-      '<div class="adm__statusbar">' +
+      '<div class="adm__workbar">' +
         '<div class="adm__hist" data-hist hidden>' +
           '<button class="adm__hist-btn" data-undo type="button" aria-label="Undo" title="Undo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg></button>' +
           '<button class="adm__hist-btn" data-redo type="button" aria-label="Redo" title="Redo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg></button>' +
         "</div>" +
-        '<span class="adm__status" aria-live="polite">Editing local draft</span>' +
         '<div class="adm__prevgroup" data-prevgroup>' +
         '<button class="adm__bar-prev" data-prevtoggle type="button" aria-label="Show or hide the live preview" title="Hide the live preview" aria-pressed="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="14" y1="4" x2="14" y2="20"/></svg><span class="adm__bar-prev-tx">Live preview</span></button>' +
         '<div class="adm__dev" data-dev-wrap>' +
@@ -17396,7 +17396,6 @@ import { draftComposition } from "./slide-merge-ai.mjs";
         '<div class="adm__dev adm__slideview" data-slideview-wrap hidden><button class="adm__dev-btn" data-slideview-toggle type="button" aria-haspopup="true" aria-expanded="false" title="Slide view"><span class="adm__dev-ic">' + IC.board + '</span><span class="adm__dev-lbl" data-slideview-lbl>Current slide</span><svg class="adm__dev-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="adm__dev-pop" hidden><button class="adm__dev-opt" data-slideview="current" type="button">Current slide</button><button class="adm__dev-opt" data-slideview="all" type="button">All slides</button></div></div>' +
         '<button class="btn btn--ghost adm__newtab" data-newtab type="button" aria-label="Open live preview in a new tab" title="Open live preview in a new tab"><svg class="adm__newtab-ext" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg><svg class="adm__newtab-play" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span class="adm__newtab-tx" hidden></span></button>' +
         "</div>" +
-        '<button class="btn btn--ghost adm__logs-btn" data-act="logs-rec" type="button" aria-pressed="false" aria-label="Record activity log" title="Record a log of your taps &amp; jumps to share"><span class="adm__logs-dot"></span><span class="adm__logs-rec-tx" hidden>REC</span></button>' +
       "</div>" +
       '<div class="adm__main">' +
         '<div class="adm__editor"><div class="adm__body"></div>' +
@@ -17422,6 +17421,11 @@ import { draftComposition } from "./slide-merge-ai.mjs";
         '<div class="adm__rzr" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Drag to resize the right panel" title="Drag to resize \u00b7 double-click to reset"><span class="adm__resizer-grip"></span></div>' +
         '<aside class="adm__casestage" data-casestage hidden aria-label="Section editor"></aside>' +
       "</div>" +
+      '<footer class="adm__statusbar" aria-label="Document status">' +
+        '<span class="adm__status" aria-live="polite" title="Editing local draft">Editing local draft</span>' +
+        '<span class="adm__dmeter" data-draftmeter data-lvl="lo" tabindex="0" aria-label="Local draft storage"><span class="adm__dmeter-dot"></span><span class="adm__dmeter-tx" data-draftmeter-tx>Draft 0%</span></span>' +
+        '<button class="btn btn--ghost adm__logs-btn" data-act="logs-rec" type="button" aria-pressed="false" aria-label="Record activity log" title="Record a log of your taps &amp; jumps to share"><span class="adm__logs-dot"></span><span class="adm__logs-rec-tx" hidden>REC</span></button>' +
+      '</footer>' +
       '<div class="adm__settings" hidden><div class="adm__set-sheet">' +
         '<div class="adm__set-head"><h2>Settings</h2><button class="btn btn--ghost adm__set-x" data-act="settings-close" type="button" aria-label="Close settings">' + IC.close + '</button></div>' +
         '<div class="adm__set-body"><nav class="adm__set-nav" data-set-nav></nav><div class="adm__set-panel" data-set-panel></div></div>' +
