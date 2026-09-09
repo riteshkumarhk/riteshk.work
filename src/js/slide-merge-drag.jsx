@@ -5,7 +5,7 @@ import { DndContext, DragOverlay, MouseSensor, TouchSensor, KeyboardSensor, useS
 
 const NavigatorDrag = createContext(null);
 
-class NavigatorKeyboardSensor extends KeyboardSensor {
+export class NavigatorKeyboardSensor extends KeyboardSensor {
   attach() {
     this.handleStart();
     this.windowListeners.add("resize", this.handleCancel);

@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { CaptureUpdateAction, exportToSvg, labNewElementWith, useLabActionManager } from "@excalidraw/excalidraw";
-import { ArrowDown, ArrowUp, Check, ChevronsDown, ChevronsUp, Copy, Eye, EyeOff, Group, Image, Layers, LockKeyhole, Pencil, Trash2, Ungroup, UnlockKeyhole, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronsDown, ChevronsUp, Copy, Eye, EyeOff, GripVertical, Group, Image, Layers, LockKeyhole, Pencil, Trash2, Ungroup, UnlockKeyhole, X } from "lucide-react";
 import { FRAME_ID } from "./slide-lab-core.mjs";
-import { layerName, layerPropertyChanges, layerRows, layerTargets } from "./slide-merge-layers.mjs";
+import { layerName, layerPropertyChanges, layerRows, layerTargets, reorderLayerElements } from "./slide-merge-layers.mjs";
+import { LayerDragList, LayerDragRow } from "./slide-merge-layer-drag.jsx";
 import { ToolMenu } from "./slide-merge-toolbar.jsx";
 import "../../css/slide-merge-layers.css";
 
@@ -81,6 +82,20 @@ export function LayerPanel({ api, disabled, onClose, onAdd }) {
       setError("");
     } catch { setError("The layer could not be updated."); }
   }
+  function reorder(sourceId, targetId, edge) {
+    if (disabled) return;
+    try {
+      const elements = api.getSceneElementsIncludingDeleted();
+      const state = api.getAppState();
+      let result;
+      const next = reorderLayerElements(elements, sourceId, targetId, edge, (current, name, targets) => {
+        result = manager.actions[name].perform(current, { ...state, selectedElementIds:Object.fromEntries([...targets].map(id => [id,true])), selectedGroupIds:{}, editingGroupId:null }, null, manager.app);
+        return result?.elements;
+      });
+      if (next !== elements) manager.updater({ ...result, elements:next, captureUpdate:CaptureUpdateAction.IMMEDIATELY });
+      setError("");
+    } catch { setError("The layer could not be reordered."); }
+  }
   function saveName(element) { if (name.trim()) commitProperty([element.id], "rename", name); setEditing(null); }
   const activeElements = rows.filter(element => selected.includes(element.id));
   const locked = activeElements.length > 0 && activeElements.every(element => element.customData?.labLayerHidden?.locked ?? element.locked);
@@ -100,13 +115,13 @@ export function LayerPanel({ api, disabled, onClose, onAdd }) {
       <LayerButton icon={Ungroup} label="Ungroup selected layers" disabled={disabled || !canUngroup} onClick={() => action("ungroup", selected)} />
     </div>
     {error && <p role="alert">{error}</p>}
-    <ol className="merge-layer-list" aria-label="Slide layers">
+    <LayerDragList elements={scene.elements} selected={selected} disabled={disabled || !!editing} reorder={reorder} preview={element => <LayerThumbnail element={element} elements={scene.elements} files={files} />}>
       {rows.map((element, index) => {
         const isHidden = !!element.customData?.labLayerHidden, isLocked = element.customData?.labLayerHidden?.locked ?? element.locked;
-        return <li key={element.id} data-layer-id={element.id} className={`${scene.selected[element.id] ? "is-selected" : ""} ${isHidden ? "is-hidden" : ""}`}>
+        return <LayerDragRow key={element.id} element={element} index={index} className={`${scene.selected[element.id] ? "is-selected" : ""} ${isHidden ? "is-hidden" : ""}`}>{dragProps => <>
           <div className="merge-layer-main">
-            <button className="merge-layer-select" disabled={disabled || isHidden} aria-label={`Select layer: ${layerName(element)}`} aria-pressed={!!scene.selected[element.id]} onClick={event => select(element, event.shiftKey || event.ctrlKey || event.metaKey)} onDoubleClick={() => { setEditing(element.id); setName(layerName(element)); }}>
-              <LayerThumbnail element={element} elements={scene.elements} files={files} /><span title={layerName(element)}>{layerName(element)}<small>{element.customData?.slideBackgroundVideo || element.customData?.sectionVideo ? "Video" : element.type}{element.containerId ? " / Bound text" : element.groupIds?.length ? " / Grouped" : ""}</small></span>
+            <button {...dragProps} className="merge-layer-select" disabled={disabled} aria-label={`Select layer: ${layerName(element)}`} aria-pressed={!!scene.selected[element.id]} onClick={event => { if (!isHidden) select(element, event.shiftKey || event.ctrlKey || event.metaKey); }} onDoubleClick={() => { setEditing(element.id); setName(layerName(element)); }}>
+              <GripVertical className="merge-layer-grip" size={12} strokeWidth={1.75} aria-hidden="true" /><LayerThumbnail element={element} elements={scene.elements} files={files} /><span title={layerName(element)}>{layerName(element)}<small>{element.customData?.slideBackgroundVideo || element.customData?.sectionVideo ? "Video" : element.type}{element.containerId ? " / Bound text" : element.groupIds?.length ? " / Grouped" : ""}</small></span>
             </button>
             <LayerButton icon={isHidden ? EyeOff : Eye} label={isHidden ? "Show layer" : "Hide layer"} disabled={disabled} aria-pressed={isHidden} onClick={() => commitProperty([element.id], "hide", !isHidden)} />
             <LayerButton icon={isLocked ? LockKeyhole : UnlockKeyhole} label={isLocked ? "Unlock layer" : "Lock layer"} disabled={disabled} aria-pressed={isLocked} onClick={() => commitProperty([element.id], "lock", !isLocked)} />
@@ -118,9 +133,9 @@ export function LayerPanel({ api, disabled, onClose, onAdd }) {
             <LayerButton icon={Copy} label="Duplicate layer" disabled={disabled} onClick={() => action("duplicateSelection", [element.id])} />
             <LayerButton icon={Trash2} label="Delete layer" danger disabled={disabled} onClick={() => action("deleteSelectedElements", [element.id])} />
           </div>}
-        </li>;
+        </>}</LayerDragRow>;
       })}
       {!rows.length && <li className="merge-layer-empty"><Layers size={22} /><span>No layers</span></li>}
-    </ol>
+    </LayerDragList>
   </div>;
 }

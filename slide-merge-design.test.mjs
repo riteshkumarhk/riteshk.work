@@ -103,6 +103,10 @@ test("visibility belongs beside recording in the editor toolbar, not the header"
   assert.match(read("./src/js/slide-merge-toolbar.jsx"), /showChevron = true/);
 });
 
+test("lab sidebars dismiss from canvas clicks, not editor controls", () => {
+  assert.ok(read("./slide-lab-engine.mjs").includes('islandRef.current?.closest(".merge-shell") && !event.target.closest(".excalidraw__canvas")'));
+});
+
 test("menu opening rotates only explicit chevrons, never the visibility icon", () => {
   const theme = postcss.parse(read("./css/slide-merge-theme.css"));
   assert.match(read("./src/js/slide-merge-toolbar.jsx"), /data-tool-icon=\{name\}/);

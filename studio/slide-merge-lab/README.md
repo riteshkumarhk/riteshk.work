@@ -199,6 +199,13 @@ design-system migration. The secondary opacity slider remains unchanged.
 - Manage layers, in the Actions group of slide properties, opens the shared right panel.
     The list shows front-to-back order with thumbnails, selection, rename, reorder,
     duplicate/delete, hide/show and lock/unlock. Shift/Ctrl/Cmd-click selects multiple layers.
+    Drag a selected row to move the complete selection together, preserving its relative order.
+    Bound labels and group members travel with their associated unit. A drop line marks the
+    destination and the drag preview shows the layer count. Mouse uses a six-pixel threshold;
+    touch uses a 200ms hold. Space/Enter picks up or drops, Up/Down moves, Escape cancels.
+    Each completed reorder is one native Undo step. Hover, focus and selection highlight the
+    whole row and reveal its actions; touch keeps the actions visible. Hidden/locked status
+    indicators remain visible even on unselected rows.
     Group and Ungroup use native grouping, including bound text. Grouping an existing group
     with another layer preserves the inner group; Ungroup removes the outer group only.
     Select any member in the layer list to ungroup its outer group. Both actions support Undo.
@@ -219,6 +226,8 @@ design-system migration. The secondary opacity slider remains unchanged.
     Each uses the Slides header styling, with its title on the left and Close in the Add slide position.
     Close restores Slides at the same width. The rail edge stays draggable while a panel is open;
     its native outside-click exemption prevents resizing from dismissing the panel.
+    In the lab, outside-click dismissal is limited to the canvas. Undo/Redo, notes and other
+    editor controls keep the panel open; explicit Close and mobile sheet dismissal still work.
     Native Library search tabs and docking controls are hidden;
     Library content, import and insertion remain native. Mobile retains its existing bottom sheets.
     Library content uses the site's muted section labels, compact spacing, neutral menu/add controls,
