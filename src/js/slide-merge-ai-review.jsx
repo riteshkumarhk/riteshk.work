@@ -20,7 +20,7 @@ export function CompositionReview({ data, studyId, blocks, onCancel, onApply, re
     try {
       const catalog = await selectedCompositionCatalog(data, studyId, blocks, options);
       pending.signal.throwIfAborted();
-      const brief = "Arrange the selected case-study sections into a concise presentation: context, evidence, decisions and outcomes where available. Keep each section intact and use only the supplied sources.";
+      const brief = "Author a complete presentation from this case-study material: an opening thesis, context and stakes, research or evidence, design decisions, trade-offs, and outcomes where supported. Rewrite and polish the copy, combine related ideas and split dense ideas into multiple slides. Choose the slide count and layout to tell the story. Preserve complete source media and interactive components. Do not invent missing evidence.";
       const result = await requestComposition(catalog, brief, pending.signal);
       const review = await compileComposition(result, data, options);
       pending.signal.throwIfAborted();
@@ -51,14 +51,16 @@ export function CompositionReview({ data, studyId, blocks, onCancel, onApply, re
     <div className="merge-section-actions"><button type="button" disabled={applying} onClick={cancel}>{working ? <Square /> : <ArrowLeft />}{working ? "Stop" : "Back to sections"}</button></div>
     {working ? <p role="status">Drafting slides...</p> : proposal ? <>
       <h3>{proposal.title}</h3>
-      <div className="merge-ai-preview" ref={preview} key={slide.id}>{renderPreview(slide.elements[0])}</div>
+      <div className="merge-ai-preview" ref={preview} key={slide.id}>{renderPreview(slide)}</div>
       <div className="merge-ai-slidebar">
         <button type="button" title="Previous proposal slide" aria-label="Previous proposal slide" disabled={applying || index === 0} onClick={() => setIndex(index - 1)}><ArrowLeft /></button>
         <span aria-live="polite">{index + 1} / {proposal.slides.length}</span>
         <button type="button" title="Next proposal slide" aria-label="Next proposal slide" disabled={applying || index === proposal.slides.length - 1} onClick={() => setIndex(index + 1)}><ArrowRight /></button>
-        <button type="button" title="Fullscreen proposal slide" aria-label="Fullscreen proposal slide" disabled={applying} onClick={() => preview.current?.requestFullscreen().catch(() => setError("Fullscreen is unavailable in this browser."))}><Maximize /></button>
+        <button type="button" title="Fullscreen proposal slide" aria-label="Fullscreen proposal slide" disabled={applying} onClick={() => { if (!preview.current?.requestFullscreen) setError("Fullscreen is unavailable in this browser."); else preview.current.requestFullscreen().catch(() => setError("Fullscreen is unavailable in this browser.")); }}><Maximize /></button>
       </div>
       <p className="merge-ai-caption">{slide.title}</p>
+      {slide.provenance?.sources && <details className="merge-ai-sources"><summary>Sources ({slide.provenance.sources.length})</summary><ul>{slide.provenance.sources.map(source => { const work = data.work.find(item => item.id === source.workId), block = work?.study?.blocks[source.blockIndex]; return <li key={source.sourceId}>{sectionPlainText(block?.heading || block?.nav || block?.editorName || `Section ${source.blockIndex + 1}`)}</li>; })}</ul></details>}
+      {compiled.warnings.filter(warning => warning.slideId === slide.id && warning.code === "factual-review").map(warning => <p className="merge-ai-caption" key={warning.code}>{warning.message}</p>)}
       <div className="merge-ai-slidebar">
         <button type="button" title="Move proposal slide earlier" aria-label="Move proposal slide earlier" disabled={applying || index === 0} onClick={() => move(-1)}><ArrowUp /></button>
         <button type="button" title="Move proposal slide later" aria-label="Move proposal slide later" disabled={applying || index === proposal.slides.length - 1} onClick={() => move(1)}><ArrowDown /></button>

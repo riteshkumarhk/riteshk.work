@@ -1,3 +1,4 @@
+import { NumberField } from "./slide-shared-controls.jsx";
 import React, { useEffect, useRef, useState } from "react";
 import { HexColorPicker } from "react-colorful";
 import { normalizeHex, hexToRgb, rgbToHex, customColorList } from "./slide-lab-color.mjs";
@@ -25,10 +26,24 @@ export function useLabCustomColors(color, sceneColors, palette) {
 }
 
 export function LabRichColor({ color, onChange }) {
+  const root = useRef(null);
   const [draft, setDraft] = useState(normalizeHex(color) || "#ffffff");
   const [channels, setChannels] = useState(() => hexToRgb(draft).map(String));
   const gesture = useRef(null);
   const latest = useRef(draft);
+  useEffect(() => {
+    const content = root.current?.closest(".color-picker-content");
+    const canvas = root.current?.closest(".lab-canvas");
+    const popup = root.current?.closest("[data-radix-popper-content-wrapper]");
+    if (!content || !canvas || !popup) return;
+    const fit = () => { content.style.maxHeight = `${Math.max(80, canvas.getBoundingClientRect().bottom - content.getBoundingClientRect().top - 24)}px`; };
+    const resize = new ResizeObserver(fit);
+    resize.observe(canvas);
+    const position = new MutationObserver(fit);
+    position.observe(popup, { attributes: true, attributeFilter: ["style"] });
+    fit();
+    return () => { resize.disconnect(); position.disconnect(); content.style.removeProperty("max-height"); };
+  }, []);
   useEffect(() => {
     if (gesture.current) return;
     const next = normalizeHex(color) || "#ffffff";
@@ -58,7 +73,7 @@ export function LabRichColor({ color, onChange }) {
       preview(next);
     } else setChannels(hexToRgb(draft).map(String));
   }
-  return <div className="lab-rich-color" onKeyDown={event => {
+  return <div ref={root} className="lab-rich-color" onKeyDown={event => {
     if (event.key === "Escape") { finish(true); return; }
     event.stopPropagation();
   }}>
@@ -71,8 +86,9 @@ export function LabRichColor({ color, onChange }) {
       <HexColorPicker color={draft} onChange={preview} />
     </div>
     <div className="lab-rgb" role="group" aria-label="RGB color">
-      {["R", "G", "B"].map((label, index) => <label key={label}>{label}<input
-        aria-label={{ R: "Red", G: "Green", B: "Blue" }[label]} type="number" min="0" max="255" step="1"
+      {["R", "G", "B"].map((label, index) => <label key={label}>{label}<NumberField
+        aria-label={{ R: "Red", G: "Green", B: "Blue" }[label]} min="0" max="255" step="1"
+        onStep={value => { const next = rgbToHex(channels.map((channel, position) => position === index ? value : channel)); if (next) preview(next); }}
         value={channels[index]} onChange={event => setChannels(previous => previous.map((channel, position) => position === index ? event.target.value : channel))}
         onBlur={commitRgb} onKeyDown={event => {
           if (event.key === "Enter") event.currentTarget.blur();

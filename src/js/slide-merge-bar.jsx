@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useLabActionManager } from "@excalidraw/excalidraw";
 import { ArrowDown, ArrowUp, Copy, Pencil, PencilOff, Presentation, Trash2 } from "lucide-react";
 import { DeckDialog } from "./slide-merge-navigator.jsx";
+import { SelectControl } from "./slide-shared-controls.jsx";
 import { ACTIVITY_CAPABILITIES, activityChanges, activitySnapshot, activityText } from "./slide-merge-activity.mjs";
 import "../../css/slide-merge-bar.css";
 
@@ -67,7 +68,7 @@ export function EditorBar({ historyRef, status, busy, editing, onEditing, slideV
     <div className="merge-bar-state"><div ref={historyRef} className="merge-bar-history" /><span className={status === "Saved on this device" || status.endsWith(" - saved") ? "is-saved" : undefined} role="status" title={status}>{status}</span></div>
     <div className="merge-bar-views">
       <button type="button" className="merge-layout-toggle" disabled={busy} aria-pressed={editing} onClick={() => onEditing(!editing)} title={editing ? "Turn slide editing off" : "Turn slide editing on"}><EditingIcon size={15} strokeWidth={1.75} /><span>{editing ? "Editing on" : "Editing off"}</span></button>
-      <label className="merge-slideview"><Presentation size={15} strokeWidth={1.75} /><select aria-label="Slide view" value={slideView} disabled={busy} onChange={event => onView(event.target.value)}><option value="current">Current slide</option><option value="all">All slides</option></select><svg className="merge-slideview-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></label>
+      <label className="merge-slideview"><Presentation size={15} strokeWidth={1.75} /><SelectControl aria-label="Slide view" value={slideView} disabled={busy} onChange={event => onView(event.target.value)}><option value="current">Current slide</option><option value="all">All slides</option></SelectControl><svg className="merge-slideview-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></label>
       <button className="merge-bar-play" type="button" title="Rehearse" aria-label="Rehearse" disabled={!canPlay || busy} onClick={onPlay}><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg></button>
     </div>
     <div className="merge-bar-actions">{children}<button type="button" className={`merge-bar-record${activity.recording ? " is-recording" : ""}`} aria-label={activity.recording ? "Stop recording activity log" : "Record activity log"} title={activity.recording ? "Stop activity logging and view log" : "Record activity log"} aria-pressed={activity.recording} onClick={activity.recording ? activity.stop : activity.start}><span className="merge-record-ring" />{activity.recording && <span className="merge-record-text">REC</span>}</button></div>

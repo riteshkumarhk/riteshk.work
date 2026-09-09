@@ -35,7 +35,7 @@ function SectionName({ value, onSave, onClose }) {
 export function SlideNavigator({ deck, thumbnails, busy, editing = true, choose, modify, add, pick, section, remove, reorder }) {
   const [naming, setNaming] = useState(null);
   useEffect(() => { if (!editing) setNaming(null); }, [editing]);
-  const menu = () => <><button data-close onClick={() => add("blank")}>Add blank</button><button data-close onClick={() => pick("layout")}>Add a layout...</button><button data-close onClick={() => pick("source")}>Generate from a section</button></>;
+  const menu = () => <><button data-close onClick={() => add("blank")}>Add blank</button><button data-close onClick={() => pick("layout")}>Add a layout...</button><button data-close onClick={() => pick("source")}>Add sections as slides</button><button data-close onClick={() => pick("draft")}>Draft entire deck with AI</button></>;
   return <>
     <div className="merge-section-head"><h2>Slides <span>{deck?.slides.length || 0}</span></h2>{editing && <div className="merge-navigator-actions"><Action icon="section" label="Start a section here" disabled={busy || !deck} onClick={() => setNaming(deck.selected)} /><ToolMenu icon="add" label="Add a slide" disabled={busy || !deck}>{menu()}</ToolMenu></div>}</div>
     <NavigatorDragList deck={deck} thumbnails={thumbnails} disabled={busy || !editing || naming !== null} reorder={reorder}>{deck?.slides.map((slide, index) => <NavigatorDragEntry key={slide.id} slide={slide} index={index}>{({ slideDrag, sectionHandle }) => <>

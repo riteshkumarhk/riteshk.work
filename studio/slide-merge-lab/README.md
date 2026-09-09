@@ -9,13 +9,16 @@ coverage and components proposed for a future shared design-system update.
 
 ## AI composition foundation
 
-`src/js/slide-merge-composition.mjs` defines the isolated version-1 contract and
-capability registry. `compositionCatalog(data, { plain, fontFamily })` returns
-eligible section references and short excerpts, without media URLs. A proposal
-contains `{ version: 1, title, slides: [{ id, kind: "section", sourceId }] }`.
+`src/js/slide-merge-composition.mjs` defines a versioned contract and capability
+registry. `compositionCatalog(data, { plain, fontFamily })` returns eligible
+section references and bounded text evidence, without media URLs. New AI drafts
+use version 2: editable headlines, kickers, body copy and notes, with source IDs
+and intact component references. Five deterministic layouts are supported:
+opening, statement, split, comparison and evidence. Version 1 remains readable
+for legacy section-order proposals but cannot pass as a new authored draft.
 `compileComposition(proposal, data, options)` resolves every reference again and
-returns deterministic whole-section component elements with original nested
-content/media, source notes, referenced custom icons, provenance and review
+returns deterministic text and whole-section component elements with original
+nested content/media, notes, referenced custom icons, provenance and review
 warnings. Both functions are async.
 
 References include case-study identity, section position and SHA-256 content
@@ -24,25 +27,29 @@ unknown fields and capabilities are rejected. Compilation snapshots inputs and
 does not mutate a deck, fetch media, contact an AI provider or publish anything.
 Nested protection markers and protected URLs exclude the entire source section.
 
-The first supported capability selects and orders existing sections; it does not
-invent copy, facts, layouts or media. It shares the manual insertion component
-contract, without a stock-type allowlist. Generated `gen` sections retain their
-complete versioned specs for the existing RKGen renderer and interaction runtime.
-Warnings request component review and identify repeated sources. Output is a
-scene plan, not a hydrated Excalidraw scene.
+Authoring can combine or split source ideas and rewrite presentation copy, but
+must not invent facts, outcomes, metrics or contributions. Every non-text source
+and every text source containing media must remain an intact component at least
+once in the initial proposal. Generated `gen` sections retain complete versioned
+specs for RKGen. Original media is not transformed. Text is measured with loaded
+canvas fonts, wrapped without truncation and reduced no lower than 18px; an
+unreadably dense result fails instead of overflowing. Notes and provenance persist.
+Limits: 24 slides, 8 sources per slide, 120 catalog entries and 48 required
+components per request. Larger cases need selected batches. These are bounded
+authored layouts, not arbitrary AI-generated canvas code.
 
 ### Contextual AI drafting
 
-In the existing Generate from a section pane, select sections and choose Draft
-with AI. It uses that selection and its case-study context directly: no separate
-case-study selector, mandatory brief dialog, sign-in screen or AI settings flow.
-Manual Generate retains its existing behavior.
+In Add a slide, choose Add sections as slides for direct insertion with zero AI
+calls. Select sections there and choose Draft with AI for a selected-source story,
+or choose Draft entire deck with AI to use the entire current case study. No new
+mandatory brief dialog, sign-in screen or AI settings flow is added.
 
-The request sends only eligible selected-section titles and bounded plain-text
-excerpts to the configured Studio writing provider. Unselected and protected
+The request sends eligible source titles and bounded plain-text evidence to the
+configured Studio writing provider. Unselected and protected
 sections, media payloads and generated code/specs are not sent to the model.
-The model chooses and orders whole source components, including generated ones;
-it does not create new copy or layouts in this first capability.
+The model writes source-grounded copy and chooses among the five supported layouts.
+Source IDs are validated, but factual accuracy still requires human review.
 
 The same pane shows a live component review with previous/next, fullscreen,
 reorder and remove controls. Back or closing the pane cancels a pending request.
@@ -54,7 +61,11 @@ the current deck in place. Nothing is published.
 
 The lab lazily loads the existing Studio bundle without opening Studio and calls
 its narrow `draftSlides` operation. Provider configuration, model fallback,
-Cloudflare auth and token accounting stay in the existing helpers. Local-key
+Cloudflare auth and token accounting stay in the existing helpers. A deterministic
+preference list ranks suitable models returned by the configured provider, with
+fallback only for model availability/access errors. Custom endpoints retain their
+explicit configured model. This is a routing heuristic, not a quality benchmark.
+Reasoning models use compatible completion parameters. Local-key
 providers do not acquire a new sign-in requirement; Cloudflare retains its real
 session requirement. Configuration is origin-local: localhost cannot read a
 session or keys saved on the production origin. No credentials are copied or
@@ -65,7 +76,32 @@ cancellation and immutable apply planning. Isolated browser checks use mocked
 provider responses through the actual shared helper, not real credentials or
 paid calls; live model output quality remains an owner acceptance check.
 
-Run `node --test slide-merge-composition.test.mjs slide-merge-sections.test.mjs`.
+Run the `slide-*.test.mjs` suites with Node's test runner. Current release: 146
+tests pass; both lab and shared bundles build. Browser checks cover authored
+editable text/components, model discovery with intercepted responses, desktop
+hover/keyboard previews, 390px tap previews, font/RGB steppers, move/resize/undo,
+multi-object custom-guide snapping and guide save/reload. No real paid model call
+was made; live model quality and real-device motion remain owner review items.
+
+### Shared interactions
+
+Layout, section and media choices have delayed hover/focus previews. Escape,
+outside click and scrolling dismiss them; hovering the preview keeps it open.
+Touch and narrow screens have an explicit preview-eye action. Previews are inert
+and never insert content. Full section previews use the native component renderer.
+
+Snapping runs inside the pinned engine's move/resize/create pipeline, not as a
+post-drag correction. Targets include slide edges/centres, enabled object alignment
+and spacing, the visible grid spacing, 100px ruler ticks, margin/third presets and
+custom guides. Ctrl/Cmd temporarily toggles snapping. Configuration is scoped to
+registered slide frames via WeakMap; ordinary engine documents are unchanged.
+Build-time patch anchors fail closed if Excalidraw changes.
+
+Shared select, numeric-field and tab controls now serve the lab's slide view,
+transition, layout, custom font-size and RGB controls. Numeric buttons use house
+chevrons, clamp to limits, and keep native keyboard input. RGB popup height follows
+the actual canvas bounds, including resized notes. This is not a production-wide
+design-system migration. The secondary opacity slider remains unchanged.
 
 ## Interaction model
 
@@ -188,7 +224,7 @@ Run `node --test slide-merge-composition.test.mjs slide-merge-sections.test.mjs`
     Existing objects, title, background and speaker notes stay unchanged. Native Undo removes the insertion;
     move and resize the complete component on the canvas. Its internal content stays
     a case-study component, not separate native text/image shapes. This does not create a new slide.
-- Add a slide offers Add blank, Add a layout, and Generate from a section.
+- Add a slide offers Add blank, Add a layout, Add sections as slides, and Draft entire deck with AI.
     Per-slide controls sit below thumbnails, never over the preview.
 - Both layout selectors share Stock (nine built-in layouts) and My layouts tabs, including
     keyboard tab navigation. Slide properties > Save as layout names an editable snapshot of
@@ -208,7 +244,7 @@ Run `node --test slide-merge-composition.test.mjs slide-merge-sections.test.mjs`
     These open the existing pickers and replace only the chosen slot, fitting content within its
     bounds in one undoable update. Controls follow zoom/pan, wrap on mobile, and stay out of rehearsal.
     Title and caption text remain directly editable without insert buttons.
-- Add a layout and Generate from a section use the same right pane (mobile bottom sheet),
+- Add a layout and Add sections as slides use the same right pane (mobile bottom sheet),
     not dialogs. Their distinct headings preserve new-slide intent: choosing creates and selects
     new slides, then closes the pane. Closing without choosing leaves the deck unchanged.
     The toolbar's Sections pane still inserts into the current slide.
@@ -216,14 +252,14 @@ Run `node --test slide-merge-composition.test.mjs slide-merge-sections.test.mjs`
     otherwise the published site. A `?study=<work-id>` handoff fixes the case-study context and removes
     source controls. The standalone lab shares one remembered study choice, with a compact change action.
     Production Work-tab navigation is not changed by this isolated lab release.
-- Generate from a section supports one or more selections, Space to toggle, and Clear. Generate creates
+- Add sections as slides supports one or more selections, Space to toggle, and Clear. Add creates
     one slide per selected section in source order, retaining full prose in notes. All sections prepare
     successfully before any new slide is added; failure preserves selection and leaves the deck unchanged.
     This never modifies source content. Locked, encrypted-stub,
     vault and disabled sections are excluded. No vault resolution or decryption runs.
 - Both section entry points preserve a complete source snapshot, including all items,
     nested cells, media, component settings, generated specs and referenced custom icons.
-    Picker thumbnails remain compact representative previews, not full interactive previews.
+    Resting thumbnails are compact; hover/focus or the preview-eye action shows the full component.
 - Section components render through the same `RK.renderStudyBlock` and `RK.enhanceBlocks`
     APIs used by Studio, with shared case-study styles, typography, R2 media resolution and
     RKGen runtime. Carousels, comparison controls, workflows, focus views, device mockups,

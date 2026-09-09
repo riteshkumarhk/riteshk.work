@@ -21,9 +21,11 @@ import { captureLayout, instantiateLayout, savedLayoutStore } from "./slide-merg
 import { sectionMediaUrl, sectionPlainText } from "./slide-merge-sections.mjs";
 import { sectionComponentPlan } from "./slide-merge-section-component.mjs";
 import { nativeSectionElement, nativeSectionLayers } from "./slide-merge-native-sections.mjs";
+import { fitAuthoredText } from "./slide-merge-authoring-fit.mjs";
+import { fonts as authoringFonts } from "./slide-platform-fonts.mjs";
 import { SlideProperties } from "./slide-merge-properties.jsx";
 import { PROPERTY_LAYOUTS, slideSettings, slideOwnsFocus, layoutPlan, transitionMatch } from "./slide-merge-properties.mjs";
-import { guideSnap } from "./slide-merge-guide-core.mjs";
+import { configureSlideSnapping } from "./slide-merge-snapping.mjs";
 import "@excalidraw/excalidraw/index.css";
 import "../../css/slide-lab.css";
 import "../../css/slide-merge.css";
@@ -161,6 +163,30 @@ async function materialize(slide) {
   return { ...slide, scene: packScene(elements, files, { viewBackgroundColor: sceneBackground(), zoom: { value: 1 }, scrollX: 0, scrollY: 0 }) };
 }
 
+async function prepareAuthoredSlide(plan) {
+  const slide = await materialize({ id: crypto.randomUUID(), title: plan.title, notes: plan.notes, fixture: "blank", ...(plan.provenance ? { provenance: structuredClone(plan.provenance) } : {}) });
+  await loadPlatformFonts(plan.elements);
+  const context = document.createElement("canvas").getContext("2d");
+  const fitted = plan.elements.map(element => fitAuthoredText(element, (text, size) => { context.font = `${size}px "${authoringFonts.find(font => font.id === element.fontFamily)?.family || "sans-serif"}"`; return context.measureText(text).width; }));
+  const skeletons = new Map(fitted.map(element => [element.id, element]));
+  const elements = restoreElements(convertToExcalidrawElements(fitted, { regenerateIds: false }).map(element => ({ ...element, frameId: FRAME_ID, ...(element.type === "text" ? { width: skeletons.get(element.id).width, autoResize: false } : {}) })), null, { repairBindings: true, refreshDimensions: true });
+  slide.scene.elements.push(...elements);
+  return slide;
+}
+function CompositionPreview({ plan }) {
+  const [preview, setPreview] = useState(null), [error, setError] = useState("");
+  const appearance = useAppearance();
+  useEffect(() => {
+    let active = true;
+    prepareAuthoredSlide(plan).then(async slide => {
+      const svg = await exportToSvg({ elements: slide.scene.elements, files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true, appState: { exportBackground: false, exportWithDarkMode: canvasTheme(slide.scene.elements, appearance) === "dark" } });
+      if (active) setPreview(<SectionThumbnail svg={svg.outerHTML} elements={slide.scene.elements} files={slide.scene.files} />);
+    }).catch(error => { if (active) setError(error.message); });
+    return () => { active = false; };
+  }, [plan, appearance]);
+  return error ? <p role="alert">{error}</p> : preview;
+}
+
 function Presenter({ slides, index, onIndex, onClose }) {
   const [api, setApi] = useState(null);
   const appearance = useAppearance();
@@ -251,6 +277,10 @@ function Merger() {
     onDelete: layout => openDeckDialog({ kind: "delete-layout", layout }) };
   const [view, setView] = useState({ grid: false, snap: false, rulers: false, margins: false, thirds: false });
   const [settings,setSettings]=useState({}),[snapGuides,setSnapGuides]=useState(true);
+  useEffect(() => {
+    const frame = api?.getSceneElements().find(element => element.id === FRAME_ID);
+    if (frame) configureSlideSnapping(frame, { ...view, gridSize: api.getAppState().gridSize, guidesEnabled: snapGuides, guides: settings.guides || [] });
+  }, [api, view, snapGuides, settings]);
   const host = useRef(null), input = useRef(null);
   const editor = useRef(null);
   useEffect(() => {
@@ -472,10 +502,7 @@ function Merger() {
       const compiled = await compileComposition(proposal, selected, { plain: sectionPlainText, fontFamily: DEFAULT_SLIDE_FONT });
       const slides = [];
       for (const plan of compiled.slides) {
-        const component = plan.elements[0].customData;
-        const prepared = await prepareSection(component.sectionComponent, { customIcons: component.sectionIcons });
-        prepared.slide.scene.elements.push(...prepared.elements);
-        slides.push(prepared.slide);
+        slides.push(await prepareAuthoredSlide(plan));
       }
       const next = compositionDeck(live.current.deck, slides, compiled.title, mode);
       live.current.queue = live.current.queue.catch(() => {}).then(() => deckStore(next));
@@ -518,15 +545,8 @@ function Merger() {
     setHasSelection(!slideOwnsFocus(elements,state));
     const nextSettings=slideSettings(elements);
     setSettings(previous=>previous===nextSettings?previous:nextSettings);
-    if(snapGuides&&state.selectedElementsAreBeingDragged&&!live.current.snapping) {
-      const selected=elements.filter(element=>!element.isDeleted&&!element.locked&&element.id!==FRAME_ID&&state.selectedElementIds[element.id]);
-      const guides=[...(nextSettings.guides||[]),...(view.margins?[{axis:"x",position:64},{axis:"x",position:1216},{axis:"y",position:36},{axis:"y",position:684}]:[]),...(view.thirds?[{axis:"x",position:1280/3},{axis:"x",position:2560/3},{axis:"y",position:240},{axis:"y",position:480}]:[])];
-      if(selected.length&&guides.length) {
-        const left=Math.min(...selected.map(element=>element.x)),top=Math.min(...selected.map(element=>element.y));
-        const delta=guideSnap({x:left,y:top,width:Math.max(...selected.map(element=>element.x+element.width))-left,height:Math.max(...selected.map(element=>element.y+element.height))-top},guides,state.zoom.value);
-        if(delta.x||delta.y) { const ids=new Set(selected.flatMap(element=>[element.id,...(element.boundElements||[]).filter(bound=>bound.type==="text").map(bound=>bound.id)]));live.current.snapping=true;api.updateScene({elements:elements.map(element=>ids.has(element.id)?changed(element,{x:element.x+delta.x,y:element.y+delta.y}):element),captureUpdate:CaptureUpdateAction.NEVER});live.current.snapping=false; }
-      }
-    }
+    const snapFrame = elements.find(element => element.id === FRAME_ID);
+    if (snapFrame) configureSlideSnapping(snapFrame, { ...view, snap: state.objectsSnapModeEnabled, grid: state.gridModeEnabled, gridSize: state.gridSize, guidesEnabled: snapGuides, guides: nextSettings.guides || [] });
     const next = JSON.stringify(selectedLabels(elements, state.selectedElementIds).map(element => ({ id: element.id, color: element.strokeColor, linked: !element.customData?.labTextColor })));
     setSelection(previous => previous === next ? previous : next);
     const version = getSceneVersion(elements);
@@ -725,7 +745,7 @@ function Merger() {
             <MainMenu />
             <DefaultSidebar docked={false} onDock={false} />
             <Footer><button className={`help-icon merge-notes-toggle${notesOpen ? " active" : ""}`} title="Speaker notes" aria-label="Speaker notes panel" aria-expanded={notesOpen} aria-controls="merge-speaker-notes" onClick={() => setNotesOpen(!notesOpen)}><ToolIcon name="notes" /><span>Notes</span></button></Footer>
-            <ContentPane pane={pane} busy={busy} layoutPicker={layoutPicker} composition={{ existingCount: deck?.slides.length || 0, onApply: applyAiComposition, renderPreview: element => <Embed element={element} /> }} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={(block, resources) => { finishPaneInsert(); addFromSection(block, true, resources); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={(blocks, resources) => addFromSection(blocks, false, resources)} onMedia={source => importMedia(source, mediaPurpose === "background")} onUpload={() => input.current.click()}>
+            <ContentPane pane={pane} busy={busy} layoutPicker={layoutPicker} composition={{ existingCount: deck?.slides.length || 0, onApply: applyAiComposition, renderPreview: plan => <CompositionPreview plan={plan} /> }} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={(block, resources) => { finishPaneInsert(); addFromSection(block, true, resources); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={(blocks, resources) => addFromSection(blocks, false, resources)} onMedia={source => importMedia(source, mediaPurpose === "background")} onUpload={() => input.current.click()}>
               {api && <LayerPanel api={api} disabled={busy||present!==null||confirm||!!deckDialog} onClose={() => openPane(null, false)} onAdd={kind => { if (kind === "media") openPane("media", false); else if (kind === "text") { finishPaneInsert(); insertContent("body"); } else { openPane(null, false); api.setActiveTool({ type:"rectangle" }); } }} />}
             </ContentPane>
             {!hasSelection&&current&&<SlideProperties settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||confirm||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} />}

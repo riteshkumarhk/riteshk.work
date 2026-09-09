@@ -4,6 +4,7 @@ import { LabColorPicker, LAB_BACKGROUND_PALETTE } from "@excalidraw/excalidraw";
 import { TRANSITIONS } from "./slide-merge-properties.mjs";
 import { LayoutPicker } from "./slide-merge-layout-picker.jsx";
 import { ToolIcon } from "./slide-merge-toolbar.jsx";
+import { SelectControl } from "./slide-shared-controls.jsx";
 import "../../css/slide-merge-properties.css";
 
 export function SlideProperties({ settings, elements, disabled, onLayout, onBackground, onMedia, onTransition, layoutPicker, onSaveLayout, onLayers }) {
@@ -16,7 +17,7 @@ export function SlideProperties({ settings, elements, disabled, onLayout, onBack
       <button className="merge-property-action" disabled={disabled} onClick={onMedia}><ToolIcon name="image" />{settings.background?.type==="media"?"Replace image or video":"Image or video"}</button>
       {settings.background?.type==="media"&&<div className="merge-background-file"><span>{settings.background.name}</span><button disabled={disabled} title="Remove background media" aria-label="Remove background media" onClick={()=>onBackground(null)}><ToolIcon name="trash" /></button></div>}
     </fieldset>
-    <fieldset disabled={disabled}><legend>Transition in</legend><select className="merge-property-select" aria-label="Transition in" value={settings.transition||"fade"} onChange={event=>onTransition(event.target.value)}>{TRANSITIONS.map(([value,name])=><option key={value} value={value}>{name}</option>)}</select></fieldset>
+    <fieldset disabled={disabled}><legend>Transition in</legend><SelectControl className="merge-property-select" aria-label="Transition in" value={settings.transition||"fade"} onChange={event=>onTransition(event.target.value)}>{TRANSITIONS.map(([value,name])=><option key={value} value={value}>{name}</option>)}</SelectControl></fieldset>
     <fieldset className="merge-property-actions" disabled={disabled}><legend>Actions</legend><button className="merge-property-action" onClick={onSaveLayout}><ToolIcon name="save" />Save as layout</button><button className="merge-property-action" onClick={onLayers}><Layers size={18} strokeWidth={1.75} />Manage layers</button></fieldset>
     </div>
   </aside>;

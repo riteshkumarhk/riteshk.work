@@ -4,6 +4,7 @@ import postcss from "postcss";
 import { patchFontPicker } from "./slide-lab-font-picker.mjs";
 import { patchSelectionBounds } from "./slide-lab-selection-bounds.mjs";
 import { patchTypography } from "./slide-lab-typography.mjs";
+import { patchSlideSnapping } from "./slide-lab-snapping.mjs";
 
 export function stripUpstreamFirebase(source) {
   return source.replace(/VITE_APP_FIREBASE_CONFIG: '(?:[^'\\]|\\.)*'/g, 'VITE_APP_FIREBASE_CONFIG: "{}"');
@@ -65,6 +66,8 @@ export function cornerEnginePlugin() {
       const version = JSON.parse(await readFile("node_modules/@excalidraw/excalidraw/package.json", "utf8")).version;
       if (version !== "0.18.1") throw new Error("Revalidate the Slide Lab corner adapter for Excalidraw " + version);
       source = patchSelectionBounds(source, "handles");
+      source = patchSlideSnapping(source);
+      source = `import { slideReferencePoints as labSlideReferencePoints, isSlideSnappingScene as labIsSlideSnappingScene, slideSnappingEnabled as labSlideSnappingEnabled } from ${JSON.stringify(resolve("src/js/slide-merge-snapping.mjs").replaceAll("\\", "/"))};\n` + source;
       const shapeAnchor = "  embedsValidationStatus\n}) => {\n  switch (element.type) {";
       if (source.split(radiusAnchor).length !== 2 || source.split(shapeAnchor).length !== 2) throw new Error("Excalidraw corner adapter anchors changed");
       source = source.replace(radiusAnchor, radiusAnchor + '\n  if (element.customData?.labCorners) return labCornerSettings(element).radius;');

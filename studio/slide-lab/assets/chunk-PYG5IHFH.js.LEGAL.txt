@@ -60,6 +60,8 @@ lucide-react/dist/esm/icons/arrow-right.mjs:
 lucide-react/dist/esm/icons/arrow-up.mjs:
 lucide-react/dist/esm/icons/book-type.mjs:
 lucide-react/dist/esm/icons/check.mjs:
+lucide-react/dist/esm/icons/chevron-down.mjs:
+lucide-react/dist/esm/icons/chevron-up.mjs:
 lucide-react/dist/esm/icons/chevrons-down.mjs:
 lucide-react/dist/esm/icons/chevrons-up.mjs:
 lucide-react/dist/esm/icons/copy.mjs:

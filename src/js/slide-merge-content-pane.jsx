@@ -7,7 +7,7 @@ import { BADGE_PRESETS, CONTENT_BLOCKS } from "./slide-merge-inserts.mjs";
 import { ToolIcon } from "./slide-merge-toolbar.jsx";
 import "../../css/slide-merge-content-pane.css";
 
-export const PANE_LABELS = { layers: "Layers", media: "Media", icons: "Icons", text: "Text", badges: "Badges", sections: "Sections", library: "Library", layout: "Add a layout", source: "Generate from a section" };
+export const PANE_LABELS = { layers: "Layers", media: "Media", icons: "Icons", text: "Text", badges: "Badges", sections: "Sections", library: "Library", layout: "Add a layout", source: "Add sections as slides", draft: "Draft entire deck" };
 const samples = { body: "A clear idea, grounded in evidence.", list: "First point\nSecond point\nThird point", metric: "42%", quote: '"A useful insight changes the next decision."', section: "Context / Decision / Outcome" };
 
 function BadgePicker({ onPick }) {
@@ -29,9 +29,10 @@ export function ContentPane({ pane, busy, onContent, onIcon, onSection, onNewLay
       {pane === "icons" && <IconLibrary embedded onPick={onIcon} />}
       {pane === "text" && <div className="merge-text-choices">{CONTENT_BLOCKS.filter(([kind]) => kind !== "badge").map(([kind, title]) => <button key={kind} aria-label={`Insert ${title}`} onClick={() => onContent(kind)}><span className={`merge-text-preview merge-text-preview--${kind}`} aria-hidden="true">{samples[kind]}</span><strong>{title}</strong></button>)}</div>}
       {pane === "badges" && <BadgePicker onPick={onContent} />}
-      {pane === "sections" && <SectionPicker embedded onPick={onSection} />}
+      {pane === "sections" && <SectionPicker embedded onPick={onSection} composition={composition} />}
       {pane === "layout" && <LayoutDialog embedded {...layoutPicker} disabled={busy} onPick={onNewLayout} />}
       {pane === "source" && <SectionPicker embedded multiple onPick={onNewSection} composition={composition} />}
+      {pane === "draft" && <SectionPicker embedded multiple onPick={onNewSection} composition={{ ...composition, autoStart: true }} />}
     </fieldset>
   </Sidebar>;
 }

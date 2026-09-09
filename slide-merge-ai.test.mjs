@@ -61,3 +61,18 @@ test("apply planning preserves current content on append and visibility on repla
   assert.throws(() => compositionDeck(deck, slides, "Proposal", "publish"));
   assert.throws(() => compositionDeck(deck, [], "Proposal", "replace"));
 });
+
+test("new authoring cannot silently downgrade to section ordering", async () => {
+  await assert.rejects(() => draftComposition(catalog, "Brief", async () => JSON.stringify(proposal)), /only arranged/);
+  assert.throws(() => compositionRequest(Array.from({ length: 49 }, (_, index) => ({ ...catalog[0], sourceId: `source-${index}` })), "Brief"), /too many intact/);
+});
+
+test("media-free interactive components cannot disappear during authoring", () => {
+  const sources = [{ ...catalog[0], type: "workflow", hasMedia: false }];
+  const authored = { version: 2, title: "Story", slides: [{ id: "argument", kind: "authored", layout: "statement", sourceIds: ["source-a"], headline: "A decision", kicker: "", body: "Evidence", notes: "", components: [] }] };
+  assert.deepEqual(JSON.parse(compositionRequest(sources, "Brief").user).requiredComponents, ["source-a"]);
+  assert.throws(() => parseCompositionResponse(JSON.stringify(authored), sources), /omitted a source component/);
+  authored.slides[0].layout = "split";
+  authored.slides[0].components = ["source-a"];
+  assert.deepEqual(parseCompositionResponse(JSON.stringify(authored), sources), authored);
+});

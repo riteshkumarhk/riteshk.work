@@ -14588,6 +14588,10 @@ import { draftComposition } from "./slide-merge-ai.mjs";
       return { ok: true, text: ((((cand.content && cand.content.parts) || [])).map(function (x) { return x.text || ""; }).join("")).trim() };
     }
     var ob = { model: model, messages: [{ role: "system", content: system }, { role: "user", content: user }], temperature: temp, max_tokens: maxTokens };
+    if (opts.deckAuthoring && p === "openai" && /^(gpt-5|o[134])(?:[.-]|$)/i.test(model)) {
+      delete ob.temperature; delete ob.max_tokens;
+      ob.max_completion_tokens = maxTokens;
+    }
     if (opts.json) ob.response_format = { type: "json_object" };
     res = await fetch(base + "/chat/completions", { method: "POST", signal: opts.signal, headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify(ob) });
     j = await res.json().catch(function () { return null; });
@@ -14787,7 +14791,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
   async function aiText(cfg, system, user, opts) {
     opts = opts || {};
     if (opts.signal) opts.signal.throwIfAborted();
-    var candidates = await aiModelCandidates(cfg, "txt");
+    var candidates = opts.candidates || await aiModelCandidates(cfg, "txt");
     if (!candidates.length) throw new Error("No model available \u2014 check your API key.");
     var lastErr = "";
     for (var i = 0; i < candidates.length; i++) {
@@ -14795,6 +14799,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
       var r = await aiChatOnce(cfg, candidates[i], system, user, opts);
       if (r.ok) return r.text;
       lastErr = r.err;
+      if (opts.deckAuthoring && !([400, 403, 404].includes(r.status) && /model.*(?:not found|not available|does not exist|access|unsupported|deprecat)|(?:unknown|unsupported|unavailable).*model/i.test(r.err || ""))) throw new Error(r.err);
       if (!aiIsModelErr(r)) throw new Error(r.err); // real problem (auth, rate limit, network) \u2014 don't keep trying models
     }
     throw new Error(lastErr || "No usable model for this key.");
@@ -17897,8 +17902,11 @@ import { draftComposition } from "./slide-merge-ai.mjs";
     var cfg = aiCfg("txt");
     if (aiMode() === "cf" && AI_PROXY_PROVIDERS.indexOf(cfg.provider) !== -1 && !aiSess()) throw new Error("Your Cloudflare AI session has expired. Reopen Studio to restore it.");
     if (!cfg.key) throw new Error("Your Studio AI configuration is not available on this browser origin.");
+    var modelRouting = await import("./slide-merge-authoring-models.mjs");
+    var available = cfg.provider === "custom" ? [] : await aiListModels(cfg);
+    var candidates = modelRouting.deckModelCandidates(cfg.provider, available || [], await aiModelCandidates(cfg, "txt"));
     return draftComposition(catalog, brief, function (prompt, signal) {
-      return aiText(cfg, prompt.system, prompt.user, { json: true, maxTokens: 6000, temperature: 0.3, signal: signal });
+      return aiText(cfg, prompt.system, prompt.user, { json: true, maxTokens: 12000, temperature: 0.3, signal: signal, candidates: candidates, deckAuthoring: true });
     }, options && options.signal);
   } };
 })();
