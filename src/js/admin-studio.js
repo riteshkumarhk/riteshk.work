@@ -8941,6 +8941,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
             '<li>Before presenting private notes, verify from another participant during <b>entire-display sharing</b>: only the slides should appear, with no companion and no black rectangle. Recheck recordings and other displays when used.</li>' +
           '</ol>' +
           '<div class="af__hint">Unsigned preview build. Do not disable Windows security to run it; report any block. Capture exclusion passed your Teams probe test, but this integrated app still needs a meeting check. The ordinary browser presenter is not capture-excluded.</div>' +
+          '<p class="adm__ext-lead" data-presenter-web-fallback><b>No app? Use the web presenter.</b> Start Present / Rehearse, open the presenter window, then choose <b>Connect live preview</b>. In Chrome or Edge, select your audience slides tab in the browser picker. In your meeting, share <b>only that audience tab or window</b>, never the notes window or entire screen. The preview supports the laser, slide controls, sections and native media; embedded players such as YouTube must be controlled in the audience window. Without capture permission, notes, navigation and thumbnail previews still work.</p>' +
         '</div>' +
         '<div class="adm__ext">' +
           '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("phone") + '</span><div><b>Phone \u2014 requests app</b><span>Approve requests from your phone</span></div></div>' +

@@ -8,7 +8,7 @@ import { chromium } from "playwright-core";
 const baseURL = process.env.SLIDE_LAB_URL;
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
 
-test("More offers the versioned capture probe and safe test instructions", { skip: !baseURL || !existsSync(executablePath), timeout: 90000 }, async () => {
+test("More offers the native companion and safe web fallback instructions", { skip: !baseURL || !existsSync(executablePath), timeout: 90000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
   try {
@@ -36,6 +36,8 @@ test("More offers the versioned capture probe and safe test instructions", { ski
     assert.equal(await card.locator("ol li").count(), 5);
     assert.match(await card.textContent(), /app has its own local profile/);
     assert.match(await card.textContent(), /Do not disable Windows security/);
+    assert.match(await card.locator("[data-presenter-web-fallback]").textContent(), /only that audience tab or window/);
+    assert.match(await card.locator("[data-presenter-web-fallback]").textContent(), /YouTube must be controlled in the audience window/);
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 1100 });
       await card.scrollIntoViewIfNeeded();

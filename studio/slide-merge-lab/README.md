@@ -30,6 +30,36 @@ the floating window, including when its opening request was still pending.
 Always-on-top is not capture protection: share the slides tab/window rather than
 the whole screen, and verify the meeting application's sharing preview.
 
+### Web live preview (no app required)
+
+Open the presenter window, then choose **Connect live preview**. On supported
+desktop Chrome/Edge, select the audience slides **tab** in the browser's capture
+picker. The companion verifies the tab's per-session Capture Handle and origin
+before displaying anything; other tabs, windows and monitors are rejected.
+This is a local preview permission, separate from your meeting's sharing picker.
+In Teams/Zoom/Meet, share only the audience tab or audience window, never the
+presenter window or entire display. Verify the outgoing feed with a participant.
+
+The preview crops a live tab stream to the slide, including canvas content and
+media, so it reflects one actual audience presentation. Motion shows the laser;
+same-document clicks, section toggles, range controls and scrollable sections
+are forwarded. Native audio/video have play/pause and seek controls. Media audio
+comes from the audience tab; the preview is muted. Original media is not changed
+or saved by this preview. Browser tab-capture encoding may slightly alter preview
+colours or introduce latency; this is not the native app's DWM mirror.
+
+Web security prevents trusted remote input into cross-origin embedded players
+(for example YouTube) or browser-owned controls. Operate those in the audience
+window, or use the native app for its broader input forwarding. This is not full
+native feature parity. Unavailable/denied capture falls back to thumbnails,
+notes and navigation; the ordinary audience slide itself stays interactive.
+Disconnect, stopping browser capture, switching captured identity, closing the
+presenter, and End stop the preview stream. P cannot expose inline notes while
+the separate presenter is open. No native app detection or installation required.
+
+Run `node --test presenter-web.browser.test.mjs` with the local server running
+for real tab-capture pixels/input/PiP and permission/source/lifecycle checks.
+
 The lab retains None, Fade, Push and Magic Move transitions with reduced-motion
 support. Presentation scenes are cloned, editor controls stay hidden on phones,
 and canvas pan/zoom stays fitted. Thumbnail previews include embedded content

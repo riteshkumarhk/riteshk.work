@@ -1,4 +1,5 @@
 import { installPresenterPointer } from "./presenter-pointer.mjs";
+import { installWebPresenterPreview } from "./presenter-web-preview.mjs";
 var pjpStage = null;
 export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, pjSlideTitle, pjNotesHtml, fitSections, enhanceStudyBlocks, mountSlide, renderThumbnail, dispose }) {
   opts = opts || {};
@@ -36,7 +37,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   stage.classList.toggle("pjp--native", nativeHost);
   var notesEl = stage.querySelector("[data-pjp-notes]"), nextEl = stage.querySelector("[data-pjp-next]"), presenting = false;
   var nextThumb = stage.querySelector("[data-pjp-nextthumb]"), timerEl = stage.querySelector("[data-pjp-timer]"), clockEl = stage.querySelector("[data-pjp-clock]"), startT = Date.now(), presenterWin = null;
-  var exited = false, openingPresenter = false, pipUnavailable = false;
+  var exited = false, openingPresenter = false, pipUnavailable = false, webPreview = null;
   var popButton = stage.querySelector('[data-pjp="popout"]');
   popButton.title = window.documentPictureInPicture ? "Open always-on-top presenter window" : "Open presenter window (always-on-top is unavailable in this browser)";
   function preview(container, slide) {
@@ -132,7 +133,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     transTimer = setTimeout(function () { if (oldEl.parentNode) oldEl.remove(); if (newEl.parentNode) { newEl.classList.remove("pjps--in-fade", "pjps--in-push", "is-live"); newEl.style.removeProperty("--pjd"); } }, 520);
   }
   function go(d) { var n = Math.max(0, Math.min(slides.length - 1, idx + d)); if (n === idx) return; idx = n; render(d); }
-  function togglePresent() { if (nativeHost) return; presenting = !presenting; stage.classList.toggle("pjp--presenting", presenting); if (presenting) updateChrome(); }
+  function togglePresent() { if (nativeHost || presenterWin && !presenterWin.closed) return; presenting = !presenting; stage.classList.toggle("pjp--presenting", presenting); if (presenting) updateChrome(); }
   // A second-screen / screen-share-safe presenter view: a SEPARATE window (private) shows notes,
   // timer, current + next slide; the main window stays the clean slides you share. Same-origin, so
   // the main window drives both. Share just the slides WINDOW (or a 2nd display) to keep notes hidden.
@@ -141,7 +142,8 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     var css = "<style>" +
       ".pp-body{margin:0;background:#050506;color:#ece7e1;font-family:var(--sans,Inter,system-ui,sans-serif);height:100vh;overflow:hidden}" +
       ".pp{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;height:100vh;box-sizing:border-box;padding:18px}" +
-      ".pp__main{display:flex;flex-direction:column;min-width:0;gap:14px}" +
+      ".pp__main{display:flex;flex-direction:column;min-width:0;min-height:0;gap:14px;overflow:auto}" +
+      ".pp-body,.pp-body *{cursor:auto}.pp-body button{cursor:pointer}.pp__livebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.pp__livestatus{font-size:.78rem;line-height:1.4;color:#b8b2aa;flex:1;min-width:150px}.pp__media{display:flex;align-items:center;gap:10px}.pp__media[hidden]{display:none}.pp__media input{min-width:0;flex:1;accent-color:var(--accent,#d8a657)}.pp__btn:disabled{opacity:.5;cursor:default}.pp__nowwrap{flex-shrink:0}.pp__now--live{cursor:none}.pp__media svg{display:block}" +
       ".pp__nowwrap{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:var(--bg,#0a0a0c);border:1px solid rgba(255,255,255,.12)}" +
       ".pp__now{position:absolute;inset:0}.pp__now .slidepv__stage{position:absolute;top:0;left:0;transform-origin:top left}.pp__now .slidepv__stage .pjps--free{padding:0}" +
       ".pp__meta{display:flex;align-items:center;gap:14px}.pp__time{display:flex;align-items:baseline;gap:6px;font-family:var(--mono,ui-monospace,monospace)}.pp__time span{font-size:2rem;font-variant-numeric:tabular-nums}.pp__time em{font-style:normal;text-transform:uppercase;letter-spacing:.12em;font-size:.6rem;color:#8a857e}" +
@@ -155,6 +157,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Presenter view \u2014 riteshk.work</title>" + links + css + "</head><body class=\"pp-body\">" +
       '<div class="pp"><div class="pp__main">' +
       '<div class="pp__nowwrap"><div class="pp__now" data-pp-now></div></div>' +
+      '<div class="pp__livebar"><button class="pp__btn" data-pp-live>Connect live preview</button><span class="pp__livestatus" data-pp-status role="status">Select the audience tab for live controls.</span></div>' +
       '<div class="pp__meta"><div class="pp__time"><span data-pp-timer>0:00</span><em>elapsed</em></div><button class="pp__btn" data-pp="timer-reset">Reset</button><span class="pp__clock" data-pp-clock></span><span class="pp__count" data-pp-count></span></div>' +
       '<div class="pp__ctrls"><button class="pp__btn" data-pp="prev">\u2039 Previous</button><button class="pp__btn pp__btn--next" data-pp="next">Next \u203a</button><button class="pp__btn pp__btn--end" data-pp="exit">End</button></div>' +
       '</div><div class="pp__side">' +
@@ -167,7 +170,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     if (!presenterWin || presenterWin.closed) return;
     var doc = presenterWin.document, s = slides[idx];
     var now = doc.querySelector("[data-pp-now]");
-    if (now) preview(now, s);
+    if (now && !webPreview?.live) preview(now, s);
     var nx = doc.querySelector("[data-pp-next]"), nt = doc.querySelector("[data-pp-nexttitle]");
     if (idx < slides.length - 1) {
       if (nx) { nx.style.display = ""; preview(nx, slides[idx + 1]); }
@@ -178,7 +181,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     var tv = doc.querySelector("[data-pp-timer]"); if (tv) tv.textContent = fmtDur(Date.now() - startT);
     var ck = doc.querySelector("[data-pp-clock]"); if (ck && clockEl) ck.textContent = clockEl.textContent;
   }
-  function onPresenterClosed(event) { if (event && presenterWin && event.currentTarget !== presenterWin) return; presenterWin = null; stage.classList.remove("pjp--popped"); var pb = stage.querySelector('[data-pjp="popout"]'); if (pb) pb.classList.remove("is-on"); }
+  function onPresenterClosed(event) { if (event && presenterWin && event.currentTarget !== presenterWin) return; if (webPreview) { webPreview.dispose(); webPreview = null; } presenterWin = null; stage.classList.remove("pjp--popped"); var pb = stage.querySelector('[data-pjp="popout"]'); if (pb) pb.classList.remove("is-on"); }
   async function openPresenter() {
     if (nativeHost) return;
     if (exited || openingPresenter) return;
@@ -206,6 +209,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     presenterDoc.body.className = "pp-body";
     presenterDoc.body.replaceChildren(presenterDoc.importNode(markup.body.firstElementChild, true));
     presenterDoc.documentElement.dataset.presenterWindow = pinned ? "always-on-top" : "popup";
+    webPreview = installWebPresenterPreview({ frame: frame, pointer: pointer, container: presenterDoc.querySelector("[data-pp-now]"), presenterWindow: presenterWin, button: presenterDoc.querySelector("[data-pp-live]"), status: presenterDoc.querySelector("[data-pp-status]"), onDisconnect: syncPresenter });
     popButton.title = pinned ? "Focus always-on-top presenter window" : "Focus presenter window (not always-on-top)";
     presenterWin.document.addEventListener("click", function (e) {
       var b = e.target.closest("[data-pp]"); if (!b) return;
@@ -218,7 +222,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     var pb = stage.querySelector('[data-pjp="popout"]'); if (pb) pb.classList.add("is-on");
     setTimeout(syncPresenter, 60); syncPresenter();
   }
-  function exit() { if (exited) return; exited = true; pointer.dispose(); if (nativeHost) { window.chrome.webview.removeEventListener("message", onNative); window.removeEventListener("resize", syncNative); window.chrome.webview.postMessage({ channel: "rk-presenter", type: "end" }); } clearInterval(clockTimer); clearTimeout(transTimer); if (presenterWin && !presenterWin.closed) { try { presenterWin.removeEventListener("pagehide", onPresenterClosed); presenterWin.close(); } catch (e) {} } presenterWin = null; document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { if (dispose) dispose(); stage.remove(); pjpStage = null; inactiveSiblings.forEach(function (element) { element.inert = false; }); if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true }); if (opts.onClose) opts.onClose(); }, 240); }
+  function exit() { if (exited) return; exited = true; if (webPreview) { webPreview.dispose(); webPreview = null; } pointer.dispose(); if (nativeHost) { window.chrome.webview.removeEventListener("message", onNative); window.removeEventListener("resize", syncNative); window.chrome.webview.postMessage({ channel: "rk-presenter", type: "end" }); } clearInterval(clockTimer); clearTimeout(transTimer); if (presenterWin && !presenterWin.closed) { try { presenterWin.removeEventListener("pagehide", onPresenterClosed); presenterWin.close(); } catch (e) {} } presenterWin = null; document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { if (dispose) dispose(); stage.remove(); pjpStage = null; inactiveSiblings.forEach(function (element) { element.inert = false; }); if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true }); if (opts.onClose) opts.onClose(); }, 240); }
   function onKey(e) {
     if (e.key === "Tab" && e.currentTarget === document) {
       var controls = Array.prototype.filter.call(stage.querySelectorAll('button:not(:disabled), a[href], video[controls], iframe, [tabindex="0"]'), function (element) { return element.getClientRects().length && getComputedStyle(element).visibility !== "hidden" && (!element.closest("[data-pjp-panel]") || presenting); });
