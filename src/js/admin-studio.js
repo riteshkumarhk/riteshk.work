@@ -8932,7 +8932,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
         '<div class="adm__ext" data-presenter-capture-test>' +
           '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("doc") + '</span><div><b>Studio Presenter</b><span>Windows 10 (2004+) / 11, x64 - portable preview release</span></div></div>' +
           '<p class="adm__ext-lead">Your live slides, speaker notes and controls in an always-on-top companion. Point with the laser, play media and interact with sections directly from its live preview.</p>' +
-          '<div class="imgblk__row"><a class="btn btn--primary" href="https://github.com/riteshkumarhk/riteshk.work/releases/download/studio-presenter-v0.2.0/StudioPresenter.exe" target="_blank" rel="noopener noreferrer">' + extIcon("dl", 15) + ' Download app (.exe)</a></div>' +
+          '<div class="imgblk__row"><a class="btn btn--primary" href="https://github.com/riteshkumarhk/riteshk.work/releases/download/studio-presenter-v0.3.0/StudioPresenter.exe" target="_blank" rel="noopener noreferrer">' + extIcon("dl", 15) + ' Download app (.exe)</a></div>' +
           '<ol class="adm__ext-steps">' +
             '<li>Download on your presenting PC and open <b>StudioPresenter.exe</b>. It needs Microsoft Edge WebView2 Runtime, normally already installed on Windows. No separate .NET installation is needed.</li>' +
             '<li>Sign in inside the app. Open your deck in <b>Content Studio</b>, or choose <b>Open &gt; Slide Studio</b>. The app has its own local profile: publish browser edits first, or export and import your Slide Studio deck.</li>' +
@@ -11567,7 +11567,9 @@ import { draftComposition } from "./slide-merge-ai.mjs";
     if (act === "slide-menu") { slideToolbarMenu(b, b.dataset.menu, i); return; }
     if (act === "slide-rehearse") {
       var _rhw = data.work[i]; if (!_rhw || !(window.RK && window.RK.presentDeck)) { status("Reload the studio to rehearse \u2014 the deck player didn\u2019t load."); return; }
-      var _rhopts = {};
+      var _rhopts = { autoStart: true };
+      _rhopts.onSlideEdit = function (slide, key, value) { if (!["notes", "durationMinutes"].includes(key) || !_rhw.study || !_rhw.study.slides || !_rhw.study.slides.includes(slide)) throw new Error("Slide is not editable"); slide[key] = value; if (!saveDraft(true)) throw new Error("Draft storage full"); };
+      _rhopts.onClose = function () { renderL2(); };
       if (b.dataset.sindex != null && _rhw.study && _rhw.study.slides) { var _full = _rhw.study.slides, _tgt = +b.dataset.sindex, _vis = 0; for (var _vi = 0; _vi < _tgt && _vi < _full.length; _vi++) { if (_full[_vi] && !_full[_vi].hidden) _vis++; } _rhopts.start = _vis; }
       window.RK.presentDeck(_rhw, _rhopts);
       return;
@@ -17557,7 +17559,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
     var _newtab = root.querySelector("[data-newtab]");
     if (_newtab) _newtab.addEventListener("click", function () {
       try {
-        if (root.classList.contains("is-slidestage") && openStudy >= 0 && data.work[openStudy] && window.RK && window.RK.presentDeck) { window.RK.presentDeck(data.work[openStudy], {}); return; }   // Slideshow: this button rehearses the deck
+        if (root.classList.contains("is-slidestage") && openStudy >= 0 && data.work[openStudy] && window.RK && window.RK.presentDeck) { var presenterWork = data.work[openStudy]; window.RK.presentDeck(presenterWork, { autoStart:true, onSlideEdit: function (slide, key, value) { if (!["notes", "durationMinutes"].includes(key) || !presenterWork.study?.slides?.includes(slide)) throw new Error("Slide is not editable"); slide[key] = value; if (!saveDraft(true)) throw new Error("Draft storage full"); }, onClose: function () { renderL2(); } }); return; }
         if (newtabVisitUrl) { window.open(newtabVisitUrl, "_blank", "noopener"); return; }   // post-publish "Visit site" -> the live site
         // Flush the in-memory draft so the new tab's ?preview reads the latest edits. If it's too big for
         // localStorage (many not-yet-published images as data URLs), a separate tab can't see it -> say so.

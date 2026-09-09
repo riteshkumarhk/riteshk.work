@@ -15,6 +15,7 @@ test("slideshow content cannot be selected or edited directly or through the liv
   page.on("pageerror", error => errors.push(error.message));
   try {
     await page.addInitScript(() => Object.defineProperty(window, "documentPictureInPicture", { value: undefined, configurable: true }));
+    await page.addInitScript(() => { const capture=navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);let first=true;navigator.mediaDevices.getDisplayMedia=(...args)=>{if(first){first=false;return Promise.reject(new DOMException('Denied','NotAllowedError'));}return capture(...args);}; });
     await page.goto(baseURL + "/studio/slide-merge-lab/");
     await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
     const draft = await page.evaluate(() => JSON.stringify(window.__slideMerge.deck()));
@@ -30,10 +31,9 @@ test("slideshow content cannot be selected or edited directly or through the liv
         return null;
       };
     });
+    const waiting = page.waitForEvent("popup");
     await page.getByRole("button", { name: "Rehearse", exact: true }).click();
     await page.waitForFunction(() => window.readPresentation()?.elements.length > 0);
-    const waiting = page.waitForEvent("popup");
-    await page.getByRole("button", { name: "Open presenter window", exact: true }).click();
     const popup = await waiting;
     await popup.waitForSelector("[data-pp-live]");
     const snapshot = async () => {

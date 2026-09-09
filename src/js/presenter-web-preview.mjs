@@ -1,4 +1,18 @@
-export function installWebPresenterPreview({ frame, pointer, container, presenterWindow, button, status, onDisconnect }) {
+import { presenterIcon } from "./presenter-panel.mjs";
+export function requestPresenterCapture() {
+  const handle = crypto.randomUUID();
+  let cancelled = false, captured = null;
+  const result = (async () => {
+    try {
+      navigator.mediaDevices.setCaptureHandleConfig({ exposeOrigin:true, handle, permittedOrigins:[location.origin] });
+      captured = await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:30,max:30}},audio:false,selfBrowserSurface:'include',surfaceSwitching:'exclude'});
+      if (cancelled) { captured.getTracks().forEach(track=>track.stop()); return { error:new Error('Presentation closed') }; }
+      return { stream:captured };
+    } catch(error) { return {error}; }
+  })();
+  return {handle,result,cancel() { cancelled=true;captured?.getTracks().forEach(track=>track.stop()); }};
+}
+export function installWebPresenterPreview({ frame, pointer, container, presenterWindow, button, status, onDisconnect, captureTicket }) {
   const doc = container.ownerDocument;
   const previewSurface = container.parentElement;
   const localPointer = doc.createElement("div");
@@ -7,10 +21,16 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
   localPointer.hidden = true;
   previewSurface.appendChild(localPointer);
   const mediaDevices = navigator.mediaDevices;
-  const handle = crypto.randomUUID();
+  const handle = captureTicket?.handle || crypto.randomUUID();
   let stream = null, video = null, canvas = null, stopped = false, pending = false, animation = 0;
   let pressed = null, focused = null;
   const supported = !!(mediaDevices?.getDisplayMedia && mediaDevices?.setCaptureHandleConfig);
+  function connection(state, message) {
+    status.dataset.state = state; status.textContent = message;
+    const label = state === "live" ? "Disconnect live preview" : state === "connecting" ? "Connecting live preview" : "Retry live preview connection";
+    button.title = label; button.setAttribute("aria-label", label);
+    button.innerHTML = presenterIcon(state === "live" ? "disconnect" : state === "connecting" ? "connect" : "retry");
+  }
   const controls = doc.createElement("div");
   controls.className = "pp__media";
   controls.hidden = true;
@@ -46,8 +66,7 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     controls.hidden = true;
     container.classList.remove("pp__now--live");
     button.disabled = !supported;
-    button.textContent = "Connect live preview";
-    status.textContent = message;
+    connection("disconnected", message);
     if (!stopped) onDisconnect?.();
   }
   function verified(track) {
@@ -148,10 +167,13 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     if (stream) { stop(); return; }
     pending = true;
     button.disabled = true;
-    status.textContent = "Select the audience slides tab in the browser picker. Your meeting must share only that tab or window.";
+    connection("connecting", "Select the audience tab");
     try {
       mediaDevices.setCaptureHandleConfig({ exposeOrigin: true, handle, permittedOrigins: [location.origin] });
-      const captured = await mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 30 } }, audio: false, selfBrowserSurface: "include", surfaceSwitching: "exclude" });
+      const ticket = captureTicket; captureTicket = null;
+      const result = ticket ? await ticket.result : { stream: await mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 30 } }, audio: false, selfBrowserSurface: "include", surfaceSwitching: "exclude" }) };
+      if (result.error) throw result.error;
+      const captured = result.stream;
       const track = captured.getVideoTracks()[0];
       if (stopped || presenterWindow.closed || !track || !verified(track)) {
         captured.getTracks().forEach(item => item.stop());
@@ -207,8 +229,7 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
           if (media) toggleMedia(media); else focused.closest("button,summary").click();
         }
       });
-      button.textContent = "Disconnect live preview";
-      status.textContent = "Live audience tab connected. Embedded players require direct interaction in the audience window.";
+      connection("live", "Live preview");
       paint();
     } catch (error) {
       if (!stopped) stop(error.name === "NotAllowedError" ? "Capture cancelled or denied. Slides and notes remain available; reconnect when ready." : "Live preview unavailable. Use the audience window for slide interactions.");
@@ -217,9 +238,11 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
   button.addEventListener("click", connect);
   if (!supported) { button.disabled = true; status.textContent = "Pointer connected. Live video preview is unavailable in this browser."; }
   return {
+    connect,
     get live() { return !!stream; },
     dispose() {
       stopped = true;
+      captureTicket?.cancel(); captureTicket = null;
       stop();
       button.removeEventListener("click", connect);
       previewSurface.removeEventListener("pointermove", pointPreview, true);

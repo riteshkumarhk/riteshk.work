@@ -5,7 +5,8 @@
 const presentDeckWithRenderer = window.fixturePresenter;
 const slides=[{title:"First slide",notes:"Private first note",transition:"none"},{title:"Second slide",notes:"Private second note",transition:"none"}];
 window.fixture = { clicks:0, start() {
-  window.presentation = presentDeckWithRenderer({}, {slides}, {
+  window.fixture.slides = slides;
+  window.presentation = presentDeckWithRenderer({}, {slides, onSlideEdit:window.fixture.editable ? (slide,key,value)=>{slide[key]=value;} : null}, {
     renderThumbnail(container,slide){container.textContent=slide?.title||"";},
     renderPjSlide:slide=>`<article class="pjps"><h1>${slide.title}</h1><div class="controls"><button id="action">Interact</button><details><summary id="section">Section</summary><p>Expanded content</p></details><div><video id="media" controls muted></video><button id="play">Play / pause</button></div><input aria-label="Seek" id="seek" type="range" min="0" max="100"><iframe title="Cross-origin control" src="http://localhost:5510/tools/studio-presenter/frame-fixture.html"></iframe></div><div class="swatch" id="swatch"></div></article>`,
     pjDeckSlides:()=>slides,pjSlideTitle:slide=>slide.title,pjNotesHtml:notes=>"<p>"+notes+"</p>",fitSections(){},enhanceStudyBlocks(element){

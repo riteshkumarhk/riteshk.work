@@ -156,10 +156,10 @@ internal sealed class AudienceWindow : Form
         catch (Exception error) { Fail("Microsoft Edge WebView2 Runtime is required. " + error.Message); }
     }
 
-    internal void Command(string command)
+    internal void Command(string command, int? index = null, string? key = null, JsonElement? value = null)
     {
         if (!presenting) return;
-        Browser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { channel = "rk-presenter", command }));
+        Browser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { channel = "rk-presenter", command, index, key, value }));
     }
 
     internal void EndPresentation()
@@ -188,16 +188,17 @@ internal sealed class CompanionWindow : Form
     private readonly Label status = new() { Dock = DockStyle.Fill, Text = "Checking Windows capture exclusion...", ForeColor = Color.White, Padding = new Padding(24) };
     private readonly System.Windows.Forms.Timer watchdog = new() { Interval = 250 };
     private LiveMirror? mirror;
-    private bool ready, faulted;
+    private bool ready, faulted, mirrorSuppressed;
     private string? pendingState;
     private Rectangle previewRect;
     internal bool Protected => !faulted && IsHandleCreated && CaptureProtection.Verify(Handle).Allowed;
     internal bool Concealed => faulted && !Interface.Visible && mirror == null && pendingState == null;
+    internal bool MirrorSuppressed => mirrorSuppressed;
 
     internal CompanionWindow(AudienceWindow audience)
     {
         this.audience = audience;
-        Text = "Studio Presenter - private notes";
+        Text = "Presenter DJ pad";
         TopMost = true;
         ClientSize = new Size(920, 740);
         MinimumSize = new Size(540, 500);
@@ -246,9 +247,24 @@ internal sealed class CompanionWindow : Form
                 using var document = JsonDocument.Parse(eventArgs.WebMessageAsJson);
                 var message = document.RootElement;
                 var type = message.GetProperty("type").GetString();
-                if (type == "ready") { ready = true; if (pendingState != null) UpdateState(pendingState); }
+                if (type == "ready")
+                {
+                    ready = true;
+                    if (pendingState != null) UpdateState(pendingState);
+                    var preferences = await audience.Browser.CoreWebView2.ExecuteScriptAsync("Object.fromEntries(['rk:presenter:split','rk:presenter:notes-size'].map(key=>[key,localStorage.getItem(key)]))");
+                    Interface.CoreWebView2.PostWebMessageAsJson("{\"type\":\"preferences\",\"values\":" + preferences + "}");
+                }
+                else if (type == "preference")
+                {
+                    var key = message.GetProperty("key").GetString();
+                    if (key is not ("rk:presenter:split" or "rk:presenter:notes-size")) return;
+                    if (!double.TryParse(message.GetProperty("value").GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value) || !double.IsFinite(value)) return;
+                    value = key == "rk:presenter:split" ? Math.Clamp(value, 40, 75) : Math.Clamp(value, 14, 32);
+                    await audience.Browser.CoreWebView2.ExecuteScriptAsync("localStorage.setItem(" + JsonSerializer.Serialize(key) + "," + JsonSerializer.Serialize(value.ToString(System.Globalization.CultureInfo.InvariantCulture)) + ")");
+                }
                 else if (type == "rect")
                 {
+                    mirrorSuppressed = message.TryGetProperty("visible", out var visible) && !visible.GetBoolean();
                     var scale = DeviceDpi / 96.0;
                     previewRect = Rectangle.FromLTRB((int)(message.GetProperty("left").GetDouble() * scale), (int)(message.GetProperty("top").GetDouble() * scale), (int)(message.GetProperty("right").GetDouble() * scale), (int)(message.GetProperty("bottom").GetDouble() * scale));
                     PlaceMirror();
@@ -256,7 +272,9 @@ internal sealed class CompanionWindow : Form
                 else if (type == "command")
                 {
                     var command = message.GetProperty("command").GetString();
-                    if (command is "prev" or "next" or "exit" or "timer-reset" or "pointer-leave") audience.Command(command);
+                    if (command is "prev" or "next" or "exit" or "timer-reset" or "timer-pause" or "pointer-leave") audience.Command(command);
+                    else if (command == "jump" && message.TryGetProperty("index", out var target) && target.TryGetInt32(out var index)) audience.Command(command, index);
+                    else if (command == "edit" && message.TryGetProperty("index", out var slide) && slide.TryGetInt32(out var slideIndex) && message.TryGetProperty("key", out var field) && field.GetString() is "notes" or "durationMinutes" && message.TryGetProperty("value", out var value)) audience.Command(command, slideIndex, field.GetString(), value.Clone());
                 }
                 else if (type == "input") await ForwardInput(message.Clone());
             }
@@ -285,7 +303,7 @@ internal sealed class CompanionWindow : Form
         var scale = audience.DeviceDpi / 96.0;
         var source = new Rectangle((int)(audience.SlideLeft * scale), (int)(audience.SlideTop * scale), (int)(audience.ViewportWidth * scale), (int)(audience.ViewportHeight * scale));
         if (previewRect.Width > 0 && source.Width > 0)
-            mirror?.Place(previewRect, !faulted && audience.WindowState != FormWindowState.Minimized, source);
+            mirror?.Place(previewRect, !faulted && !mirrorSuppressed && audience.WindowState != FormWindowState.Minimized, source);
     }
 
     internal async Task ForwardInput(JsonElement message)

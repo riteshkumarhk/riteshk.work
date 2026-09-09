@@ -1,7 +1,9 @@
 import { installPresenterPointer } from "./presenter-pointer.mjs";
-import { installWebPresenterPreview } from "./presenter-web-preview.mjs";
+import { installWebPresenterPreview, requestPresenterCapture } from "./presenter-web-preview.mjs";
+import { createPresenterClock } from "./presenter-clock.mjs";
+import { presenterPanelMarkup, presenterPanelStyles, installPresenterPanel } from "./presenter-panel.mjs";
 var pjpStage = null;
-export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, pjSlideTitle, pjNotesHtml, fitSections, enhanceStudyBlocks, mountSlide, renderThumbnail, dispose }) {
+export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, pjSlideTitle, pjNotesHtml, fitSections, enhanceStudyBlocks, mountSlide, renderThumbnail, thumbnailData, dispose }) {
   opts = opts || {};
   if (!w || pjpStage) return;
   var st = w.study || {};
@@ -37,7 +39,39 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   stage.classList.toggle("pjp--native", nativeHost);
   var notesEl = stage.querySelector("[data-pjp-notes]"), nextEl = stage.querySelector("[data-pjp-next]"), presenting = false;
   var nextThumb = stage.querySelector("[data-pjp-nextthumb]"), timerEl = stage.querySelector("[data-pjp-timer]"), clockEl = stage.querySelector("[data-pjp-clock]"), startT = Date.now(), presenterWin = null;
-  var exited = false, openingPresenter = false, pipUnavailable = false, webPreview = null;
+  var exited = false, openingPresenter = false, pipUnavailable = false, webPreview = null, panel = null;
+  var clock = createPresenterClock(), lastTimedIndex = idx, ownsFullscreen = false, editRevision = 0, launchCapture = null, saveStatus = "";
+  var nativeThumbnails = [];
+  var nativeDocuments = nativeHost && !thumbnailData ? slides.map(function (slide) {
+    var links = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(function (link) { return '<link rel="stylesheet" href="' + link.href + '">'; }).join('');
+    return '<!doctype html><html><head><meta charset="utf-8">' + links + '<style>html,body{margin:0;width:1280px;height:720px;overflow:hidden}body>.pjps{width:1280px;height:720px}</style></head><body>' + renderPjSlide(slide) + '</body></html>';
+  }) : [];
+  var metadata = slides.map(function (slide) { return { notes: slide.notes || "", durationMinutes: Math.max(0, Math.min(240, Number(slide.durationMinutes) || 0)) }; });
+  function currentNotes() { return metadata[idx].notes; }
+  function panelState() { return { index: idx, notes: currentNotes(), durationMinutes: metadata[idx].durationMinutes, saveStatus:saveStatus, slides: slides.map(function (slide, index) { return { title: pjSlideTitle(slide), thumbnail:nativeThumbnails[index], document:nativeDocuments[index] }; }) }; }
+  function pacing() { var budget = metadata[idx].durationMinutes * 60000; return { elapsed: clock.elapsed(), paused: clock.paused, budget: budget, remaining: budget - clock.slideElapsed(), totalBudget: metadata.reduce(function (total, slide) { return total + slide.durationMinutes * 60000; }, 0), format: fmtDur }; }
+  function editSlide(index, key, value) {
+    if (!opts.onSlideEdit || !Number.isInteger(index) || !slides[index] || !["notes", "durationMinutes"].includes(key)) return;
+    if (key === "notes") { if (typeof value !== "string") return; }
+    else { value = Number(value); if (!Number.isFinite(value) || value < 0 || value > 240) return; }
+    metadata[index][key] = value;
+    var revision = ++editRevision;
+    saveStatus = "Saving..."; panel?.saved(saveStatus);
+    Promise.resolve().then(function () { return opts.onSlideEdit(slides[index], key, value); }).then(function () { if (revision === editRevision) { saveStatus = "Saved to deck"; panel?.saved(saveStatus); syncNative(); } }, function () { if (revision === editRevision) { saveStatus = "Not saved. Edit again to retry."; panel?.saved(saveStatus); syncNative(); } });
+    if (notesEl && !nativeHost) notesEl.innerHTML = pjNotesHtml(currentNotes());
+    tick(); syncNative();
+  }
+  async function fullscreen() {
+    if (exited || nativeHost || document.fullscreenElement) return;
+    try { await stage.requestFullscreen(); ownsFullscreen = true; if (exited) await document.exitFullscreen(); }
+    catch (error) { if (panel) panel.saved("Fullscreen unavailable. Use the fullscreen button to retry."); }
+  }
+  function command(action) {
+    if (action === "prev") go(-1); else if (action === "next") go(1); else if (action === "exit") exit();
+    else if (action === "timer-pause") { clock.toggle(); tick(); syncNative(); }
+    else if (action === "timer-reset") { clock.reset(); startT = Date.now(); tick(); syncNative(); }
+    else if (action === "fullscreen") fullscreen();
+  }
   var popButton = stage.querySelector('[data-pjp="popout"]');
   popButton.title = window.documentPictureInPicture ? "Open always-on-top presenter window" : "Open presenter window (always-on-top is unavailable in this browser)";
   function preview(container, slide) {
@@ -47,35 +81,35 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   }
   function pjPad(n) { return (n < 10 ? "0" : "") + n; }
   function fmtDur(ms) { var s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return (h ? h + ":" + pjPad(m) : m) + ":" + pjPad(s % 60); }
-  function tick() { if (presenterWin && presenterWin.closed) onPresenterClosed(); if (timerEl) timerEl.textContent = fmtDur(Date.now() - startT); if (clockEl) { try { clockEl.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch (e) { clockEl.textContent = ""; } } if (presenterWin && !presenterWin.closed) { try { var _pt = presenterWin.document.querySelector("[data-pp-timer]"); if (_pt) _pt.textContent = fmtDur(Date.now() - startT); var _pc = presenterWin.document.querySelector("[data-pp-clock]"); if (_pc && clockEl) _pc.textContent = clockEl.textContent; } catch (e) {} } }
+  function tick() { if (presenterWin && presenterWin.closed) onPresenterClosed(); if (timerEl) timerEl.textContent = fmtDur(clock.elapsed()); if (clockEl) clockEl.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); if (panel) panel.tick(pacing()); if (nativeHost) syncNative(); }
   var clockTimer = setInterval(tick, 1000); tick();
   prog.innerHTML = slides.map(function (_, i) { return '<span class="pjp__pdot" data-pjp-dot="' + i + '"></span>'; }).join("");
   document.documentElement.classList.add("pjp-on");
   var reduceMo = (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches), transTimer = 0;
   function syncNative() {
     if (!nativeHost || exited) return;
-    var parsed = new DOMParser().parseFromString(pjNotesHtml(slides[idx].notes), "text/html");
+    var parsed = new DOMParser().parseFromString(pjNotesHtml(currentNotes()), "text/html");
     parsed.querySelectorAll("br").forEach(function (element) { element.replaceWith("\n"); });
     parsed.querySelectorAll("p,li,div").forEach(function (element) { element.append("\n"); });
     var bounds = frame.getBoundingClientRect();
-    window.chrome.webview.postMessage({ channel: "rk-presenter", type: "state", index: idx, total: slides.length, notes: parsed.body.textContent.trim(), nextTitle: idx + 1 < slides.length ? pjSlideTitle(slides[idx + 1]) : "", started: startT, width: bounds.width, height: bounds.height, left: bounds.left, top: bounds.top });
+    if (!bounds.width || !bounds.height) return;
+    window.chrome.webview.postMessage({ channel: "rk-presenter", type: "state", ...panelState(), notes: opts.onSlideEdit ? currentNotes() : parsed.body.textContent.trim(), editable: !!opts.onSlideEdit, total: slides.length, nextTitle: idx + 1 < slides.length ? pjSlideTitle(slides[idx + 1]) : "", started: startT, elapsed: clock.elapsed(), paused: clock.paused, budget: pacing().budget, remaining: pacing().remaining, totalBudget: pacing().totalBudget, width: bounds.width, height: bounds.height, left: bounds.left, top: bounds.top });
   }
   function onNative(event) {
     var message = event.data;
     if (!message || message.channel !== "rk-presenter") return;
     if (message.command === "pointer") pointer.point(message.x, message.y, true);
     else if (message.command === "pointer-leave") pointer.hide();
-    else if (message.command === "next") go(1);
-    else if (message.command === "prev") go(-1);
-    else if (message.command === "exit") exit();
-    else if (message.command === "timer-reset") { startT = Date.now(); tick(); syncNative(); }
+    else if (message.command === "jump" && Number.isInteger(message.index) && slides[message.index]) { idx = message.index; render(1); }
+    else if (message.command === "edit") editSlide(message.index, message.key, message.value);
+    else command(message.command);
   }
   if (nativeHost) { window.chrome.webview.addEventListener("message", onNative); window.addEventListener("resize", syncNative); }
   function pjSlideTrans(s) { var t = s && s.transition; return (t === "none" || t === "push" || t === "magic") ? t : "fade"; }
   function updateChrome() {
     var s = slides[idx];
     count.textContent = (idx + 1) + " / " + slides.length;
-    if (notesEl && !nativeHost) notesEl.innerHTML = pjNotesHtml(s.notes);
+    if (notesEl && !nativeHost) notesEl.innerHTML = pjNotesHtml(currentNotes());
     if (nextEl) nextEl.textContent = (idx < slides.length - 1) ? pjSlideTitle(slides[idx + 1]) : "End of deck";
     if (nextThumb) {
       if (idx < slides.length - 1) {
@@ -108,6 +142,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     transTimer = setTimeout(function () { if (oldEl.parentNode) oldEl.remove(); moved.forEach(function (m) { m.el.style.transition = ""; m.el.style.transformOrigin = ""; }); [].forEach.call(newEl.querySelectorAll(".pjps--in-fade"), function (el) { el.classList.remove("pjps--in-fade", "is-live"); }); }, 560);
   }
   function render(dir) {
+    if (idx !== lastTimedIndex) { clock.nextSlide(); lastTimedIndex = idx; }
     pointer.hide();
     if (mountSlide) {
       mountSlide(frame, slides[idx], idx);
@@ -138,6 +173,9 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   // timer, current + next slide; the main window stays the clean slides you share. Same-origin, so
   // the main window drives both. Share just the slides WINDOW (or a 2nd display) to keep notes hidden.
   function presenterDocHtml() {
+    return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Presenter DJ pad</title>' + [].slice.call(document.querySelectorAll('link[rel="stylesheet"]')).map(function (link) { return '<link rel="stylesheet" href="' + link.href + '">'; }).join('') + '<style>' + presenterPanelStyles + '</style></head><body class="pp-body">' + presenterPanelMarkup() + '</body></html>';
+  }
+  function legacyPresenterDocHtml() {
     var links = [].slice.call(document.querySelectorAll('link[rel="stylesheet"]')).map(function (l) { return '<link rel="stylesheet" href="' + l.href + '">'; }).join("");
     var css = "<style>" +
       ".pp-body{margin:0;background:#050506;color:#ece7e1;font-family:var(--sans,Inter,system-ui,sans-serif);height:100vh;overflow:hidden}" +
@@ -176,12 +214,9 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
       if (nx) { nx.style.display = ""; preview(nx, slides[idx + 1]); }
       if (nt) nt.textContent = pjSlideTitle(slides[idx + 1]);
     } else { if (nx) { nx.style.display = "none"; if (renderThumbnail) renderThumbnail(nx, null); else nx.innerHTML = ""; } if (nt) nt.textContent = "End of deck"; }
-    var nb = doc.querySelector("[data-pp-notes]"); if (nb) nb.innerHTML = pjNotesHtml(s.notes);
-    var cc = doc.querySelector("[data-pp-count]"); if (cc) cc.textContent = (idx + 1) + " / " + slides.length;
-    var tv = doc.querySelector("[data-pp-timer]"); if (tv) tv.textContent = fmtDur(Date.now() - startT);
-    var ck = doc.querySelector("[data-pp-clock]"); if (ck && clockEl) ck.textContent = clockEl.textContent;
+    if (panel) { panel.update(panelState()); panel.tick(pacing()); }
   }
-  function onPresenterClosed(event) { if (event && presenterWin && event.currentTarget !== presenterWin) return; if (webPreview) { webPreview.dispose(); webPreview = null; } presenterWin = null; stage.classList.remove("pjp--popped"); var pb = stage.querySelector('[data-pjp="popout"]'); if (pb) pb.classList.remove("is-on"); }
+  function onPresenterClosed(event) { if (event && presenterWin && event.currentTarget !== presenterWin) return; panel?.dispose(); panel = null; if (webPreview) { webPreview.dispose(); webPreview = null; } presenterWin = null; stage.classList.remove("pjp--popped"); var pb = stage.querySelector('[data-pjp="popout"]'); if (pb) pb.classList.remove("is-on"); }
   async function openPresenter() {
     if (nativeHost) return;
     if (exited || openingPresenter) return;
@@ -207,22 +242,19 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     var presenterDoc = presenterWin.document;
     presenterDoc.head.replaceChildren.apply(presenterDoc.head, Array.from(markup.head.childNodes).map(function (node) { return presenterDoc.importNode(node, true); }));
     presenterDoc.body.className = "pp-body";
-    presenterDoc.body.replaceChildren(presenterDoc.importNode(markup.body.firstElementChild, true));
+    presenterDoc.body.replaceChildren(...Array.from(markup.body.children).map(function (node) { return presenterDoc.importNode(node, true); }));
     presenterDoc.documentElement.dataset.presenterWindow = pinned ? "always-on-top" : "popup";
-    webPreview = installWebPresenterPreview({ frame: frame, pointer: pointer, container: presenterDoc.querySelector("[data-pp-now]"), presenterWindow: presenterWin, button: presenterDoc.querySelector("[data-pp-live]"), status: presenterDoc.querySelector("[data-pp-status]"), onDisconnect: syncPresenter });
+    webPreview = installWebPresenterPreview({ frame: frame, pointer: pointer, container: presenterDoc.querySelector("[data-pp-now]"), presenterWindow: presenterWin, button: presenterDoc.querySelector("[data-pp-live]"), status: presenterDoc.querySelector("[data-pp-status]"), onDisconnect: syncPresenter, captureTicket:launchCapture });
     popButton.title = pinned ? "Focus always-on-top presenter window" : "Focus presenter window (not always-on-top)";
-    presenterWin.document.addEventListener("click", function (e) {
-      var b = e.target.closest("[data-pp]"); if (!b) return;
-      var k = b.getAttribute("data-pp");
-      if (k === "prev") go(-1); else if (k === "next") go(1); else if (k === "exit") exit(); else if (k === "timer-reset") { startT = Date.now(); tick(); syncPresenter(); }
-    });
+    panel = installPresenterPanel({ doc: presenterDoc, onCommand: command, onEdit: opts.onSlideEdit ? editSlide : null, onJump: function (index) { idx = index; render(1); }, renderThumbnail: function (container, index) { preview(container, slides[index]); }, onResize: function () { if (presenterWin && !exited) syncPresenter(); } });
     presenterWin.addEventListener("keydown", onKey);
     presenterWin.addEventListener("pagehide", onPresenterClosed);
     stage.classList.add("pjp--popped"); presenting = false; stage.classList.remove("pjp--presenting");
     var pb = stage.querySelector('[data-pjp="popout"]'); if (pb) pb.classList.add("is-on");
     setTimeout(syncPresenter, 60); syncPresenter();
+    if (opts.autoStart) webPreview.connect();
   }
-  function exit() { if (exited) return; exited = true; if (webPreview) { webPreview.dispose(); webPreview = null; } pointer.dispose(); if (nativeHost) { window.chrome.webview.removeEventListener("message", onNative); window.removeEventListener("resize", syncNative); window.chrome.webview.postMessage({ channel: "rk-presenter", type: "end" }); } clearInterval(clockTimer); clearTimeout(transTimer); if (presenterWin && !presenterWin.closed) { try { presenterWin.removeEventListener("pagehide", onPresenterClosed); presenterWin.close(); } catch (e) {} } presenterWin = null; document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { if (dispose) dispose(); stage.remove(); pjpStage = null; inactiveSiblings.forEach(function (element) { element.inert = false; }); if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true }); if (opts.onClose) opts.onClose(); }, 240); }
+    function exit() { if (exited) return; exited = true; launchCapture?.cancel(); panel?.dispose(); panel = null; if (ownsFullscreen && document.fullscreenElement === stage) document.exitFullscreen().catch(function () {}); if (webPreview) { webPreview.dispose(); webPreview = null; } pointer.dispose(); if (nativeHost) { window.chrome.webview.removeEventListener("message", onNative); window.removeEventListener("resize", syncNative); window.chrome.webview.postMessage({ channel: "rk-presenter", type: "end" }); } clearInterval(clockTimer); clearTimeout(transTimer); if (presenterWin && !presenterWin.closed) { try { presenterWin.removeEventListener("pagehide", onPresenterClosed); presenterWin.close(); } catch (e) {} } presenterWin = null; document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { if (dispose) dispose(); stage.remove(); pjpStage = null; inactiveSiblings.forEach(function (element) { element.inert = false; }); if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true }); if (opts.onClose) opts.onClose(); }, 240); }
   function onKey(e) {
     if (e.key === "Tab" && e.currentTarget === document) {
       var controls = Array.prototype.filter.call(stage.querySelectorAll('button:not(:disabled), a[href], video[controls], iframe, [tabindex="0"]'), function (element) { return element.getClientRects().length && getComputedStyle(element).visibility !== "hidden" && (!element.closest("[data-pjp-panel]") || presenting); });
@@ -252,10 +284,15 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     var d = e.target.closest("[data-pjp-dot]"); if (d) { var _to = +d.getAttribute("data-pjp-dot"); var _dd = _to > idx ? 1 : -1; idx = _to; render(_dd); return; }
     var b = e.target.closest("[data-pjp]"); if (!b) return;
     var k = b.getAttribute("data-pjp");
-    if (k === "exit") exit(); else if (k === "prev") go(-1); else if (k === "next") go(1); else if (k === "notes") togglePresent(); else if (k === "popout") openPresenter(); else if (k === "timer-reset") { startT = Date.now(); tick(); syncPresenter(); }
+    if (k === "notes") togglePresent(); else if (k === "popout") openPresenter(); else command(k);
   });
   document.addEventListener("keydown", onKey);
   render(1);
+  if (nativeHost && thumbnailData) slides.forEach(function (slide,index) { Promise.resolve(thumbnailData(slide)).then(function (image) { if (!exited) { nativeThumbnails[index] = image; syncNative(); } }).catch(function () {}); });
+  if (!nativeHost && opts.autoStart) {
+    launchCapture = requestPresenterCapture();
+    openPresenter().then(function () { if (!presenterWin) launchCapture?.cancel(); fullscreen(); });
+  }
   return { close: exit };
 }
 

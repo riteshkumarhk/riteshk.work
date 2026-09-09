@@ -83,6 +83,7 @@ lucide-react/dist/esm/icons/presentation.mjs:
 lucide-react/dist/esm/icons/rotate-ccw.mjs:
 lucide-react/dist/esm/icons/sparkles.mjs:
 lucide-react/dist/esm/icons/square.mjs:
+lucide-react/dist/esm/icons/timer.mjs:
 lucide-react/dist/esm/icons/trash-2.mjs:
 lucide-react/dist/esm/icons/ungroup.mjs:
 lucide-react/dist/esm/icons/x.mjs:

@@ -37,7 +37,8 @@ test("real audience tab capture mirrors live pixels and forwards web controls", 
     const { page, popup } = await openFixture(browser);
     await popup.locator("[data-pp-live]").click();
     await popup.waitForSelector("[data-pp-now] canvas", { timeout: 15000 });
-    assert.match(await popup.locator("[data-pp-status]").textContent(), /Live audience tab connected/);
+    assert.equal(await popup.locator("[data-pp-status]").getAttribute("data-state"), "live");
+    assert.equal(await popup.locator("[data-pp-live]").textContent(), "");
     await page.evaluate(() => document.querySelector("#swatch").style.background = "rgb(20, 220, 60)");
     await popup.waitForFunction(() => {
       const canvas = document.querySelector("[data-pp-now] canvas");

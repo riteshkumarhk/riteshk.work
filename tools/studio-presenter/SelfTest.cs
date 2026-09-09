@@ -24,7 +24,7 @@ internal static class SelfTest
         {
             Check(AudienceWindow.Trusted("https://riteshk.work/studio/", false) && !AudienceWindow.Trusted("https://riteshk.work.evil.test/", false) && !AudienceWindow.Trusted("http://127.0.0.1:5510/", false), "Host origin allowlist");
             await Until(async () => await Script(audience.Browser, "!!window.fixture") == "true", "fixture startup");
-            await Script(audience.Browser, "window.fixture.start()");
+            await Script(audience.Browser, "window.fixture.editable=true;window.fixture.start()");
             await Until(async () => audience.Companion?.Interface.CoreWebView2 != null && await Script(audience.Companion.Interface, "document.querySelector('#notes')?.textContent") == "\"Private first note\"", "private notes connected");
             var companion = audience.Companion!;
             Check(companion.Protected && companion.TopMost, "Companion topmost and capture-excluded");
@@ -46,6 +46,12 @@ internal static class SelfTest
             Check(true, "Keyboard input changes live slider without navigating slides");
             await MirrorInput(audience, "#play");
             await Until(async () => await Script(audience.Browser, "document.querySelector('video').paused") == "false", "media play");
+            await Script(companion.Interface, "document.querySelector('[data-pp=timer-pause]').click()");
+            await Until(async () => await Script(companion.Interface, "document.querySelector('[data-pp-elapsed]').textContent") == "\"paused\"", "timer paused");
+            Check(await Script(audience.Browser, "document.querySelector('video').paused") == "false", "Pause freezes clocks without pausing media");
+            await Script(companion.Interface, "document.querySelector('[data-pp=timer-reset]').click()");
+            await Until(async () => await Script(companion.Interface, "document.querySelector('#timer').textContent") == "\"0:00\"", "timer reset");
+            await Script(companion.Interface, "document.querySelector('[data-pp=timer-pause]').click()");
             await MirrorInput(audience, "#play");
             await Until(async () => await Script(audience.Browser, "document.querySelector('video').paused") == "true", "media pause");
             Check(true, "Media play and pause target the single live player");
@@ -55,6 +61,18 @@ internal static class SelfTest
             await Script(companion.Interface, "document.querySelector('[data-command=next]').click()");
             await Until(async () => await Script(companion.Interface, "document.querySelector('#notes').textContent") == "\"Private second note\"", "next notes");
             Check(true, "Slide navigation updates real notes");
+            await Script(companion.Interface, "(()=>{const notes=document.querySelector('#notes');notes.value='Edited native note';notes.dispatchEvent(new Event('input',{bubbles:true}));const minutes=document.querySelector('[data-pp-minutes]');minutes.value='2.5';minutes.dispatchEvent(new Event('input',{bubbles:true}));})()");
+            await Until(async () => await Script(audience.Browser, "window.fixture.slides[1].notes==='Edited native note'&&window.fixture.slides[1].durationMinutes===2.5") == "true", "native metadata saved");
+            Check(true, "Native notes and budget edits reach their deck slide");
+            await Script(companion.Interface, "document.querySelector('[data-pp=overview]').click()");
+            await Until(() => Task.FromResult(companion.MirrorSuppressed), "overview hides mirror");
+            Check(await Script(companion.Interface, "document.querySelector('[data-pp-grid] iframe')?.getAttribute('sandbox')") == "\"\"", "Content thumbnails use script-disabled sandbox frames");
+            await Script(companion.Interface, "document.querySelector('[data-pp-jump=\"0\"]').click()");
+            await Until(async () => !companion.MirrorSuppressed && await Script(companion.Interface, "document.querySelector('#count').textContent") == "\"1 / 2\"", "overview jump");
+            Check(true, "Private overview hides mirror and jumps to selected slide");
+            await Script(companion.Interface, "document.querySelector('[data-pp=notes-smaller]').click();document.querySelector('[data-pp=notes-larger]').click()");
+            await Until(async () => await Script(audience.Browser, "Number(localStorage.getItem('rk:presenter:notes-size'))>=14") == "true", "notes preference persisted");
+            Check(true, "Native notes size persists in the app profile");
             companion.ClientSize = new Size(640, 650);
             await MirrorInput(audience, "#action");
             await Until(async () => await Script(audience.Browser, "window.fixture.clicks") == "2", "resized preview click");

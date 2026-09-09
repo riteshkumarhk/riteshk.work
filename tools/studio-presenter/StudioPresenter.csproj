@@ -5,6 +5,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Version>0.3.0</Version>
     <ApplicationManifest>../presenter-capture-probe/app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
@@ -16,5 +17,8 @@
   </ItemGroup>
   <Target Name="RemoveUnusedWpfReference" BeforeTargets="ResolveAssemblyReferences">
     <ItemGroup><Reference Remove="@(Reference)" Condition="'%(Reference.Filename)' == 'Microsoft.Web.WebView2.Wpf'" /></ItemGroup>
+  </Target>
+  <Target Name="BuildPresenterPanel" BeforeTargets="BeforeBuild">
+    <Exec Command="node &quot;$(MSBuildProjectDirectory)/build.mjs&quot;" />
   </Target>
 </Project>

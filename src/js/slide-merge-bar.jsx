@@ -100,7 +100,7 @@ export function EditorBar({ historyRef, busy, editing, onEditing, slideView, onV
   return <div className="merge-editor-bar">
     <div className="merge-bar-state"><div ref={historyRef} className="merge-bar-history" /></div>
     <div className="merge-bar-views">
-      <button type="button" className="merge-layout-toggle" disabled={busy} aria-pressed={editing} onClick={() => onEditing(!editing)} title={editing ? "Turn slide editing off" : "Turn slide editing on"}><EditingIcon size={15} strokeWidth={1.75} /><span>{editing ? "Editing on" : "Editing off"}</span></button>
+      <button type="button" className="merge-layout-toggle" disabled={busy} aria-pressed={editing} onClick={() => onEditing(!editing)} title={editing ? "Switch to Prepare mode" : "Switch to Editing mode"}><EditingIcon size={15} strokeWidth={1.75} /><span>{editing ? "Editing on" : "Prepare"}</span></button>
       <label className="merge-slideview"><Presentation size={15} strokeWidth={1.75} /><SelectControl aria-label="Slide view" value={slideView} disabled={busy} onChange={event => onView(event.target.value)}><option value="current">Current slide</option><option value="all">All slides</option></SelectControl><svg className="merge-slideview-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></label>
       <button className="merge-bar-play" type="button" title="Rehearse" aria-label="Rehearse" disabled={!canPlay || busy} onClick={onPlay}><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg></button>
     </div>

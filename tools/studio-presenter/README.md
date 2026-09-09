@@ -12,6 +12,16 @@ Portable Windows x64 companion for riteshk.work. Opens Content Studio or Slide S
 
 Unsigned preview build: do not disable Windows security to run it. Report any block. The app does not attach to a presentation already open in another browser. Browser presenter windows remain ordinary, capturable windows.
 
+## Presenter DJ Pad (0.3.0)
+
+The web and Windows presenter share the same panel components and design tokens. The Windows shell remains WinForms/WebView2; this release does not migrate to WinUI 3.
+
+- Rehearse opens the pad automatically. Windows opens a borderless audience window with a live mirror; browsers still require capture approval and may require the fullscreen retry button after opening always-on-top PiP.
+- Pause/resume affects elapsed and per-slide clocks only, never media playback. Reset restarts both clocks. Budgets are optional, do not auto-advance slides, and warn when time runs out.
+- Notes and slide-minute budgets save to the corresponding deck draft when launched from an editor. Slide content remains read-only. Slide Studio's Prepare mode permits these metadata edits, including the timing button on each slide.
+- Click the count for the private thumbnail overview. In Windows the DWM mirror hides while the overview is open. Notes size and pane split persist in the app profile.
+- End closes the pad and exits the audience presentation. Browser capture loss leaves static thumbnails and an explicit reconnect action.
+
 ## Protection and Boundaries
 
 - Uses the same WDA_EXCLUDEFROMCAPTURE (0x11) mechanism as the probe that the owner verified in Teams whole-display sharing. The integrated WebView2 app requires a fresh Teams acceptance check; this is not a universal privacy guarantee.
@@ -23,7 +33,7 @@ Unsigned preview build: do not disable Windows security to run it. Report any bl
 
 ## Build and Check
 
-Requires .NET 10 SDK for development only.
+Requires .NET 10 SDK and Node.js with the repository dependencies installed for development only. The project regenerates the embedded shared panel before every build.
 
 ```powershell
 dotnet build tools/studio-presenter/StudioPresenter.csproj
