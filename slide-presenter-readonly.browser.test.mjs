@@ -32,7 +32,7 @@ test("slideshow content cannot be selected or edited directly or through the liv
       };
     });
     const waiting = page.waitForEvent("popup");
-    await page.getByRole("button", { name: "Rehearse", exact: true }).click();
+    await page.getByRole("button", { name: "Slide Show", exact: true }).click();
     await page.waitForFunction(() => window.readPresentation()?.elements.length > 0);
     const popup = await waiting;
     await popup.waitForSelector("[data-pp-live]");

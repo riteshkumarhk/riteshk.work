@@ -33,7 +33,7 @@ test("built production and canvas players deliver native notes without exposing 
     await lab.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
     await lab.evaluate(() => window.__slideMerge.choose("fidelity"));
     const slides = await lab.evaluate(() => window.__slideMerge.deck().slides.map(slide => ({ layout: "title", slots: { title: slide.title }, notes: slide.notes })));
-    await lab.getByRole("button", { name: "Rehearse", exact: true }).click();
+    await lab.getByRole("button", { name: "Slide Show", exact: true }).click();
     const production = await context.newPage();
     await production.goto(baseURL + "/studio/?devstub");
     await production.waitForFunction(() => !!window.RK?.presentDeck);

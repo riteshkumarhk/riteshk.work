@@ -34,7 +34,7 @@ test("shared presentation preserves canvas, navigation, private presenter window
     await page.goto(baseURL + "/studio/slide-merge-lab/");
     await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
     await page.evaluate(() => window.__slideMerge.choose("fidelity"));
-    await page.getByRole("button", { name: "Rehearse", exact: true }).click();
+    await page.getByRole("button", { name: "Slide Show", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("[data-pjp-count]")?.textContent === "2 / 2");
     await audienceOnly(page);
     const before = await deckDigest(page);
@@ -83,7 +83,7 @@ test("shared presentation preserves canvas, navigation, private presenter window
     await page.waitForSelector(".pjp", { state: "detached" });
     assert.equal(await page.locator("#root").evaluate(element => element.inert), false);
     assert.equal(await deckDigest(page), before, "Presenting must not modify the saved draft");
-    await page.getByRole("button", { name: "Rehearse", exact: true }).click();
+    await page.getByRole("button", { name: "Slide Show", exact: true }).click();
     await page.waitForSelector(".pjp");
     await audienceOnly(page);
     const secondPopupPromise = page.waitForEvent("popup");
@@ -115,7 +115,7 @@ test("production and experimental players share responsive presentation chrome",
   try {
     await lab.goto(baseURL + "/studio/slide-merge-lab/");
     await lab.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
-    await lab.getByRole("button", { name: "Rehearse", exact: true }).click();
+    await lab.getByRole("button", { name: "Slide Show", exact: true }).click();
     await lab.waitForSelector(".pjp");
     await audienceOnly(lab);
     await production.goto(baseURL + "/studio/?devstub");
@@ -188,7 +188,7 @@ test("canvas presentation retains media and all transition modes while skipping 
     });
     await page.reload();
     await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
-    await page.getByRole("button", { name: "Rehearse", exact: true }).click();
+    await page.getByRole("button", { name: "Slide Show", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("[data-pjp-count]")?.textContent === "1 / 5");
     await audienceOnly(page);
     await page.waitForFunction(() => {
@@ -246,7 +246,7 @@ test("native always-on-top presenter survives audience focus and synchronizes co
     await page.goto(baseURL + "/studio/slide-merge-lab/");
     await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
     assert.equal(await page.evaluate(() => typeof window.documentPictureInPicture?.requestWindow), "function");
-    await page.getByRole("button", { name: "Rehearse", exact: true }).click();
+    await page.getByRole("button", { name: "Slide Show", exact: true }).click();
     await page.locator('[data-pjp="popout"]').click();
     await page.waitForFunction(() => window.documentPictureInPicture.window?.document.querySelector("[data-pp-now] svg"));
     assert.equal(await page.evaluate(() => window.documentPictureInPicture.window.document.documentElement.dataset.presenterWindow), "always-on-top");
@@ -290,7 +290,7 @@ test("denied and pending floating-window requests recover safely", { skip: !enab
     await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
     await page.evaluate(() => Object.defineProperty(window, "documentPictureInPicture", { configurable: true, value: { requestWindow: () => Promise.reject(new DOMException("Denied", "NotAllowedError")) } }));
     const popupPromise = page.waitForEvent("popup");
-    await page.getByRole("button", { name: "Rehearse", exact: true }).click();
+    await page.getByRole("button", { name: "Slide Show", exact: true }).click();
     const popup = await popupPromise;
     await popup.waitForSelector("[data-pp-count]");
     assert.equal(await popup.evaluate(() => document.documentElement.dataset.presenterWindow), "popup");
@@ -300,7 +300,7 @@ test("denied and pending floating-window requests recover safely", { skip: !enab
       window.__pipAttempts = 0;
       window.documentPictureInPicture.requestWindow = () => { window.__pipAttempts++; return new Promise(resolve => { window.__resolvePip = resolve; }); };
     });
-    await page.getByRole("button", { name: "Rehearse", exact: true }).click();
+    await page.getByRole("button", { name: "Slide Show", exact: true }).click();
     await page.locator('[data-pjp="popout"]').click();
     await page.locator('[data-pjp="popout"]').click();
     assert.equal(await page.evaluate(() => window.__pipAttempts), 1);

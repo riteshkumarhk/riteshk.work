@@ -6451,7 +6451,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
   }
   function slideEditBody(i, s, k) {
     return freeCanvasHtml(i, k) + freeSelPanel(i, k) + freeLayersPanel(i, k) +
-      '<button type="button" class="btn btn--ghost slides__rehearse1" data-act="slide-rehearse" data-index="' + i + '" data-sindex="' + k + '">' + IC.play + " Rehearse from here</button>";
+      '<button type="button" class="btn btn--ghost slides__rehearse1" data-act="slide-rehearse" data-index="' + i + '" data-sindex="' + k + '">' + IC.play + " Slide Show from here</button>";
   }
   function slideCard(i, s, k, len, open) {
     var lname = slideLayoutName(s.layout), z = s.slots || {};
@@ -6556,7 +6556,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
       '<span class="slides__canvas-count">Slide ' + (sel + 1) + " of " + slides.length + "</span>" +
       (s.hidden ? '<button class="btn btn--ghost slides__canvas-skip" data-act="slide-hide" data-index="' + i + '" data-sindex="' + sel + '">' + IC.eyeoff + " Skipped \u2014 include</button>" : "") +
       '<span class="slides__canvas-right">' +
-      '<button class="btn btn--ghost" data-act="slide-rehearse" data-index="' + i + '" data-sindex="' + sel + '"' + (s.hidden ? ' disabled title="Include this slide to rehearse from here"' : '') + '>' + IC.play + " Rehearse from here</button>" +
+      '<button class="btn btn--ghost" data-act="slide-rehearse" data-index="' + i + '" data-sindex="' + sel + '"' + (s.hidden ? ' disabled title="Include this slide to start Slide Show from here"' : '') + '>' + IC.play + " Slide Show from here</button>" +
       (s.layout === "free" ? '<button class="btn btn--ghost slides__savelay" data-act="slide-savelayout" data-index="' + i + '" data-sindex="' + sel + '" title="Save this arrangement as a reusable layout">' + IC.save + " Save as layout</button>" : "") +
       '<span class="slides__canvas-nav"><button class="iconbtn" data-act="slide-goprev" data-index="' + i + '"' + (sel === 0 ? " disabled" : "") + ' title="Previous slide">' + IC.up + '</button><button class="iconbtn" data-act="slide-gonext" data-index="' + i + '"' + (sel === slides.length - 1 ? " disabled" : "") + ' title="Next slide">' + IC.down + "</button></span></span></div>";
   }
@@ -6634,7 +6634,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
     if (root) root.classList.toggle("is-slidestage", active);
     if (vwrap) vwrap.hidden = !active;
     var _ntb = root && root.querySelector("[data-newtab]");   // in slideshow this button rehearses the deck (contextual)
-    if (_ntb && !_ntb.classList.contains("is-visit")) { _ntb.title = active ? "Rehearse from beginning" : "Open live preview in a new tab"; _ntb.setAttribute("aria-label", _ntb.title); }
+    if (_ntb && !_ntb.classList.contains("is-visit")) { _ntb.title = active ? "Slide Show from beginning" : "Open live preview in a new tab"; _ntb.setAttribute("aria-label", _ntb.title); }
     if (!stage) return;
     if (!active) { stage.hidden = true; stage.innerHTML = ""; return; }
     stage.hidden = false;
@@ -7006,7 +7006,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
       saveDraft(true);
       if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Draft with AI"; }
       if (openStudy === i) renderL2();
-      status("Drafted a " + slides.length + "-slide deck \u2014 reorder, refine or Rehearse it.", true);
+      status("Drafted a " + slides.length + "-slide deck \u2014 reorder, refine or start Slide Show.", true);
     } catch (e) { status("Deck draft failed: " + ((e && e.message) || "error")); if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Draft with AI"; } }
   }
   /* ---------- Freeform slide editor: PowerPoint-style canvas (select / move / resize / rotate) ---------- */
@@ -8936,12 +8936,12 @@ import { draftComposition } from "./slide-merge-ai.mjs";
           '<ol class="adm__ext-steps">' +
             '<li>Download on your presenting PC and open <b>StudioPresenter.exe</b>. It needs Microsoft Edge WebView2 Runtime, normally already installed on Windows. No separate .NET installation is needed.</li>' +
             '<li>Sign in inside the app. Open your deck in <b>Content Studio</b>, or choose <b>Open &gt; Slide Studio</b>. The app has its own local profile: publish browser edits first, or export and import your Slide Studio deck.</li>' +
-            '<li>Choose <b>Present / Rehearse</b>. Slides fill the audience window and the protected notes companion opens automatically. Keep the audience window open and not minimized.</li>' +
+            '<li>Choose <b>Slide Show</b>. Slides fill the audience window and the protected notes companion opens automatically. Keep the audience window open and not minimized.</li>' +
             '<li>Point or click inside the companion preview. The laser appears on the live slides; interactive controls use an arrow. Media, sections, keyboard input, slide navigation and the timer control the same presentation.</li>' +
             '<li>Before presenting private notes, verify from another participant during <b>entire-display sharing</b>: only the slides should appear, with no companion and no black rectangle. Recheck recordings and other displays when used.</li>' +
           '</ol>' +
           '<div class="af__hint">Unsigned preview build. Do not disable Windows security to run it; report any block. Capture exclusion passed your Teams probe test, but this integrated app still needs a meeting check. The ordinary browser presenter is not capture-excluded.</div>' +
-          '<p class="adm__ext-lead" data-presenter-web-fallback><b>No app? Use the web presenter.</b> Start Present / Rehearse, open the presenter window, then choose <b>Connect live preview</b>. In Chrome or Edge, select your audience slides tab in the browser picker. In your meeting, share <b>only that audience tab or window</b>, never the notes window or entire screen. The preview supports the laser, slide controls, sections and native media; embedded players such as YouTube must be controlled in the audience window. Without capture permission, notes, navigation and thumbnail previews still work.</p>' +
+          '<p class="adm__ext-lead" data-presenter-web-fallback><b>No app? Use the web presenter.</b> Start Slide Show and approve the live preview in the browser picker. In Chrome or Edge, select your audience slides tab. Browser permissions may require separate fullscreen or presenter-window actions. In your meeting, share <b>only that audience tab or window</b>, never the notes window or entire screen. The preview supports the laser, slide controls, sections and native media; embedded players such as YouTube must be controlled in the audience window. Without capture permission, notes, navigation and thumbnail previews still work.</p>' +
         '</div>' +
         '<div class="adm__ext">' +
           '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("phone") + '</span><div><b>Phone \u2014 requests app</b><span>Approve requests from your phone</span></div></div>' +
@@ -11566,7 +11566,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
     if (act === "slide-toggle") { if (e.target.closest("button, input, select, textarea, [data-grip]")) return; var _stk = +b.dataset.sindex; openSlide = (openSlide === _stk) ? -1 : _stk; renderL2(); return; }
     if (act === "slide-menu") { slideToolbarMenu(b, b.dataset.menu, i); return; }
     if (act === "slide-rehearse") {
-      var _rhw = data.work[i]; if (!_rhw || !(window.RK && window.RK.presentDeck)) { status("Reload the studio to rehearse \u2014 the deck player didn\u2019t load."); return; }
+      var _rhw = data.work[i]; if (!_rhw || !(window.RK && window.RK.presentDeck)) { status("Reload the studio to start Slide Show \u2014 the deck player didn\u2019t load."); return; }
       var _rhopts = { autoStart: true };
       _rhopts.onSlideEdit = function (slide, key, value) { if (!["notes", "durationMinutes"].includes(key) || !_rhw.study || !_rhw.study.slides || !_rhw.study.slides.includes(slide)) throw new Error("Slide is not editable"); slide[key] = value; if (!saveDraft(true)) throw new Error("Draft storage full"); };
       _rhopts.onClose = function () { renderL2(); };
