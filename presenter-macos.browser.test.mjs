@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright-core';
+import './tools/studio-presenter-macos/build-ui.mjs';
+test('macOS shared DJ pad handles native state and private metadata commands', async () => {
+  const browser=await chromium.launch({executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const page=await browser.newPage({viewport:{width:960,height:720}});
+  try {
+    await page.addInitScript(()=>{window.messages=[];window.webkit={messageHandlers:{presenter:{postMessage:message=>window.messages.push(message)}}};});
+    await page.goto('http://127.0.0.1:5510/tools/studio-presenter-macos/generated/companion.html');
+    await page.waitForFunction(()=>window.messages.some(message=>message.type==='ready'));
+    await page.evaluate(()=>window.receivePresenter({type:'state',index:0,total:2,notes:'Private Mac note',durationMinutes:2,editable:true,elapsed:1000,remaining:119000,budget:120000,totalBudget:180000,paused:false,width:1280,height:720,nextTitle:'Second',slides:[{title:'First',document:'<h1>First slide</h1>'},{title:'Second',document:'<h1>Second slide</h1>'}]}));
+    assert.equal(await page.locator('[data-pp-notes]').inputValue(),'Private Mac note');
+    assert.match(await page.locator('[data-pp-privacy]').textContent(),/Whole-display sharing can expose notes/);
+    await page.locator('[data-pp-notes]').fill('Revised Mac note');
+    await page.locator('[data-pp-minutes]').fill('3.5');
+    await page.getByRole('button',{name:'Pause timer',exact:true}).click();
+    await page.getByRole('button',{name:'Slide overview',exact:true}).click();
+    assert.equal(await page.locator('[data-pp-grid] iframe').first().getAttribute('sandbox'),'');
+    await page.locator('[data-pp-jump="1"]').click();
+    await page.getByRole('button',{name:'Larger notes',exact:true}).click();
+    const messages=await page.evaluate(()=>window.messages);
+    assert.ok(messages.some(message=>message.command==='edit'&&message.index===0&&message.key==='notes'&&message.value==='Revised Mac note'));
+    assert.ok(messages.some(message=>message.command==='edit'&&message.key==='durationMinutes'&&message.value===3.5));
+    assert.ok(messages.some(message=>message.command==='timer-pause'));
+    assert.ok(messages.some(message=>message.command==='jump'&&message.index===1));
+    assert.ok(messages.some(message=>message.type==='preference'&&message.key==='rk:presenter:notes-size'));
+    await page.evaluate(()=>window.receivePresenter({type:'preferences',values:{'rk:presenter:split':'55','rk:presenter:notes-size':'24'}}));
+    assert.equal(await page.locator('.pp').evaluate(element=>element.style.getPropertyValue('--pp-notes-size')),'24px');
+    await page.getByRole('button',{name:'End presentation',exact:true}).click();
+    assert.equal(await page.evaluate(()=>window.messages.at(-1).command),'exit');
+  } finally { await browser.close(); }
+});

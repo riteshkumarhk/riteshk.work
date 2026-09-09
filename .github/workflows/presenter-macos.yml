@@ -1,0 +1,22 @@
+name: macOS Presenter Developer Preview
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: bash tools/studio-presenter-macos/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StudioPresenter-macOS-UNVERIFIED
+          path: tools/studio-presenter-macos/dist/StudioPresenter-macOS-UNVERIFIED.zip
+          retention-days: 14
