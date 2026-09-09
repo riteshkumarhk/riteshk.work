@@ -80,9 +80,7 @@ final class PresenterApp: NSObject, NSApplicationDelegate, WKScriptMessageHandle
         }
         if !audienceWindow.styleMask.contains(.fullScreen) { ownsFullscreen = true; audienceWindow.toggleFullScreen(nil) }
         panel.makeKeyAndOrderFront(nil)
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.snapshot() }
-        }
+        timer = Timer.scheduledTimer(timeInterval: 0.5, target: self, selector: #selector(snapshot), userInfo: nil, repeats: true)
     }
 
     private func send(_ message: [String: Any], to webView: WKWebView, function: String) {
@@ -124,7 +122,7 @@ final class PresenterApp: NSObject, NSApplicationDelegate, WKScriptMessageHandle
         }
     }
 
-    private func snapshot() {
+    @objc private func snapshot() {
         guard active, ready, !snapshotBusy, !audienceWindow.isMiniaturized, let current else { return }
         let rect = NSRect(x: current["left"] as? Double ?? 0, y: current["top"] as? Double ?? 0, width: current["width"] as? Double ?? 0, height: current["height"] as? Double ?? 0).intersection(audience.bounds)
         guard !rect.isEmpty else { return }
@@ -171,7 +169,10 @@ final class PresenterApp: NSObject, NSApplicationDelegate, WKScriptMessageHandle
     }
 }
 
-if CommandLine.arguments.contains("--check-policy") {
+@main
+enum PresenterMain {
+    @MainActor static func main() {
+     if CommandLine.arguments.contains("--check-policy") {
     precondition(trustedAudience(URL(string: "https://riteshk.work/studio/")))
     precondition(!trustedAudience(URL(string: "https://riteshk.work.evil.example/")))
     precondition(!trustedAudience(URL(string: "http://riteshk.work/")))
@@ -183,4 +184,6 @@ if CommandLine.arguments.contains("--check-policy") {
     application.delegate = delegate
     application.setActivationPolicy(.regular)
     application.run()
+     }
+    }
 }
