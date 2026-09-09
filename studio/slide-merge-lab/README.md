@@ -105,9 +105,14 @@ design-system migration. The secondary opacity slider remains unchanged.
 
 ## Interaction model
 
-- The top status bar follows Studio's outlined controls: native Undo/Redo at left,
-    green monospace saved status, centered Editing toggle and Current/All slides,
-    gold play glyph for Rehearse, and the activity-recording ring at right.
+- The top working bar keeps native Undo/Redo at left, centered Editing and Current/All slides,
+    and the gold Rehearse glyph. The bottom document-status bar replaces the static Local draft
+    label with live save/activity feedback, followed by visibility and activity recording controls.
+    Library sync and slide position stay at the right. Recording retains its red REC state and
+    stopping opens the activity log; the visibility menu opens upward from the bottom edge.
+    Compact 24px-high controls fit the original 32px desktop bar; phones use two rows (60px), with sync and slide position
+    on the second row. Long feedback is ellipsized with the full message in its tooltip.
+    This is a slide-lab trial only; the production Studio status bar is unchanged.
 - Editing off hides the insertion toolbar, properties, guides and slide-management
     controls, plus zoom, Fit, notes-toggle and help buttons. The resizable notes editor
     remains visible and editable on desktop and phone; its editing-mode open state is

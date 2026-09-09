@@ -35,7 +35,7 @@ import { useMobilePanels } from "./slide-merge-mobile.jsx";
 import { canvasTheme } from "./slide-merge-appearance.mjs";
 import { useNotesResize } from "./slide-merge-notes.jsx";
 import { LayerPanel } from "./slide-merge-layers.jsx";
-import { ActivityDialog, AllSlides, EditorBar, HistoryControls, useActivity } from "./slide-merge-bar.jsx";
+import { ActivityDialog, AllSlides, EditorBar, HistoryControls, StatusControls, useActivity } from "./slide-merge-bar.jsx";
 import { VisibilityMenu, VisibilityConfirmation } from "./slide-merge-visibility.jsx";
 import { setDeckVisibility } from "./slide-merge-visibility.mjs";
 import { watchStudioTypography } from "./slide-merge-typography.mjs";
@@ -775,9 +775,7 @@ function Merger() {
     <header className="merge-header"><a href="/studio/slide-lab/" title="Back to engine lab" aria-label="Back to engine lab"><Icon name="back" /></a><span className="merge-brand">Slide studio <small>MERGER LAB</small></span>
       <input aria-label="Deck title" value={deck?.title || ""} disabled={busy || !editing} onChange={event => metadata("title", event.target.value, true)} />
       </header>
-    <EditorBar historyRef={setHistoryTarget} status={status === "Saved on this device" && activity.message ? `${activity.message} - saved` : status} busy={busy || present !== null || !!deckDialog} editing={editing} onEditing={switchEditing} slideView={slideView} onView={switchView} onPlay={rehearse} canPlay={!!rehearsal.length} activity={activity}>
-      <VisibilityMenu deck={deck} disabled={busy || present !== null || !!deckDialog} onChange={isPublic => { if (isPublic) { openPane(null, false); setDeckDialog({kind:"visibility"}); } else changeVisibility(false); }} />
-    </EditorBar>
+    <EditorBar historyRef={setHistoryTarget} busy={busy || present !== null || !!deckDialog} editing={editing} onEditing={switchEditing} slideView={slideView} onView={switchView} onPlay={rehearse} canPlay={!!rehearsal.length} />
     <aside className="merge-slides" onKeyDownCapture={deleteSlideKey} aria-label={pane && !mobileUI.mobile ? PANE_LABELS[pane] || "Library" : "Slides"}>
       <div className="merge-resizer" data-prevent-outside-click role="separator" aria-label="Resize slide navigation" aria-orientation="vertical" aria-valuemin={160} aria-valuemax={slidePaneWidth(360, innerWidth)} aria-valuenow={paneWidth} tabIndex={0} title="Resize slide navigation"
         onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); resize.current = { x: event.clientX, width: paneWidth }; setResizing(true); event.currentTarget.setPointerCapture(event.pointerId); }}
@@ -816,7 +814,12 @@ function Merger() {
     {mobileUI.mobile && mobileUI.panel && <><button className="merge-sheet-scrim" aria-label="Dismiss panel" tabIndex={-1} onClick={()=>mobileUI.open(null)} /><div className="merge-sheet-head"><strong>{mobileUI.panel === "properties" ? (hasSelection ? "Object properties" : "Slide properties") : PANE_LABELS[mobileUI.panel] || "Speaker notes"}</strong><button className="merge-icon merge-sheet-close" title="Close panel" aria-label="Close panel" onClick={()=>mobileUI.open(null)}><Icon name="close" /></button></div></>}
     {slideView === "all" && !!deck?.slides.length && <AllSlides deck={deck} thumbnails={thumbnails} busy={busy} onDeleteKey={deleteSlideKey} onOpen={async id => { await choose(id); setSlideView("current"); activity.note("Current slide", "nav"); requestAnimationFrame(fit); }} modify={modify} add={add} remove={removeSlide} />}
     {activity.showLog && <ActivityDialog activity={activity} />}
-    <footer className="merge-status"><span>Local draft</span><button className="merge-library-sync" onClick={library.retry} title={library.status + ". Click to retry or sign in to Studio."}><Icon name="sync" /><span role="status">{library.status}</span></button><span>{selectedIndex + 1} / {deck?.slides.length || 0}</span></footer>
+    <footer className="merge-status" aria-label="Document status">
+      <StatusControls status={status === "Saved on this device" && activity.message ? `${activity.message} - saved` : status} activity={activity}>
+        <VisibilityMenu deck={deck} disabled={busy || present !== null || !!deckDialog} onChange={isPublic => { if (isPublic) { openPane(null, false); setDeckDialog({kind:"visibility"}); } else changeVisibility(false); }} />
+      </StatusControls>
+      <button className="merge-library-sync" onClick={library.retry} title={library.status + ". Click to retry or sign in to Studio."}><Icon name="sync" /><span role="status">{library.status}</span></button><span className="merge-slide-position">{selectedIndex + 1} / {deck?.slides.length || 0}</span>
+    </footer>
     <input type="file" hidden ref={input} accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml,video/mp4,video/webm,video/quicktime,video/ogg,.svg,.mov" onChange={event => { importMedia(event.target.files[0], mediaPurpose === "background"); event.target.value = ""; }} />
     {present !== null && <Presenter slides={rehearsal} index={present} onIndex={index => { activity.write("nav", `Rehearsal slide ${index + 1}`); setPresent(index); }} onClose={() => { activity.note("Rehearsal closed", "nav"); setPresent(null); requestAnimationFrame(fit); }} />}
     {["save-layout", "rename-layout"].includes(deckDialog?.kind) && <LayoutNameDialog value={deckDialog.layout?.name} busy={busy} error={layoutSaveError} onClose={() => setDeckDialog(null)} onSave={saveLayout} />}

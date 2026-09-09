@@ -106,9 +106,19 @@ test("editing and slide-view controls share a stable border-box height", () => {
   assert.equal(declarations(bar, ".merge-slideview").padding, "0.55rem");
 });
 
-test("visibility belongs beside recording in the editor toolbar, not the header", () => {
+test("save status, visibility and recording belong in the bottom status bar", () => {
   const editor = read("./src/js/slide-merge.jsx"), bar = read("./src/js/slide-merge-bar.jsx");
-  assert.match(editor, /<EditorBar\b[^>]*>\s*<VisibilityMenu\b[\s\S]*?<\/EditorBar>/);
+  assert.match(editor, /<footer className="merge-status"[^>]*>\s*<StatusControls\b[^>]*>\s*<VisibilityMenu\b[\s\S]*?<\/StatusControls>/);
+  assert.doesNotMatch(bar.slice(bar.indexOf("export function EditorBar"), bar.indexOf("export function StatusControls")), /role="status"|merge-bar-record|merge-bar-actions/);
+  assert.match(bar, /className=\{`merge-save-status[\s\S]*?role="status" title=\{status\}/);
+  assert.doesNotMatch(editor, /<span>Local draft<\/span>/);
+  const styles = postcss.parse(read("./css/slide-merge-bar.css"));
+  assert.equal(declarations(styles, ".merge-shell")["grid-template-rows"], "64px48pxminmax(0,1fr)32px");
+  assert.equal(declarations(styles, ".merge-shell .merge-status .merge-visibility summary,.merge-shell .merge-status .merge-bar-record").height, "24px");
+  assert.equal(declarations(styles, ".merge-save-status")["text-overflow"], "ellipsis");
+  const mobile = styles.nodes.find(node => node.type === "atrule" && node.params === "(max-width:900px)");
+  assert.equal(declarations(mobile, ".merge-shell .merge-status")["grid-template-rows"], "28px24px");
+  assert.equal(declarations(mobile, ".merge-shell .merge-status .merge-slide-position").display, "block");
   assert.doesNotMatch(editor.match(/<header className="merge-header">[\s\S]*?<\/header>/)[0], /VisibilityMenu/);
   assert.match(bar, /<div className="merge-bar-actions">\{children\}<button[^>]*merge-bar-record/);
   const visibility = postcss.parse(read("./css/slide-merge-visibility.css"));
