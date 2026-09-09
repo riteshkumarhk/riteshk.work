@@ -23,10 +23,17 @@ test("merger deck uses isolated storage and immutable slide operations", () => {
   assert.equal(changeSlides(copy, "delete", "copy").selected, "fidelity");
 });
 
-test("slide deletion keeps a valid selection and cannot remove the last slide", () => {
+test("slide deletion permits an empty deck and insertion selects its first slide", () => {
   const deck = changeSlides(createDeck(), "delete", "fidelity");
   assert.equal(deck.selected, "opening");
-  assert.throws(() => changeSlides(deck, "delete", "opening"), /at least one/);
+  const empty = changeSlides(deck, "delete", "opening");
+  assert.deepEqual(empty.slides, []);
+  assert.equal(empty.selected, null);
+  assert.equal(deck.slides.length, 1);
+  const restored = insertSlide(empty, { id: "first", title: "New slide", scene: null });
+  assert.equal(restored.selected, "first");
+  assert.equal(restored.slides.length, 1);
+  assert.deepEqual(presentationSlides(empty), []);
   assert.throws(() => changeSlides(deck, "duplicate", "opening", "opening"), /Unique/);
   assert.equal(changeSlides(deck, "up", "opening").slides[0].id, "opening");
 });

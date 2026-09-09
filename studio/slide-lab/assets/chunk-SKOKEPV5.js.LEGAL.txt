@@ -72,6 +72,7 @@ lucide-react/dist/esm/icons/grip-vertical.mjs:
 lucide-react/dist/esm/icons/group.mjs:
 lucide-react/dist/esm/icons/image.mjs:
 lucide-react/dist/esm/icons/layers.mjs:
+lucide-react/dist/esm/icons/layout-template.mjs:
 lucide-react/dist/esm/icons/list-x.mjs:
 lucide-react/dist/esm/icons/lock-keyhole-open.mjs:
 lucide-react/dist/esm/icons/lock-keyhole.mjs:

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { LayoutTemplate, Sparkles } from "lucide-react";
 import { ToolMenu, ToolIcon } from "./slide-merge-toolbar.jsx";
 import { LayoutPicker } from "./slide-merge-layout-picker.jsx";
 import { NavigatorDragList, NavigatorDragEntry } from "./slide-merge-drag.jsx";
@@ -32,12 +33,15 @@ function SectionName({ value, onSave, onClose }) {
   }
   return <input ref={input} className="merge-section-name" aria-label="Section name" placeholder="Section name" maxLength={120} value={name} onChange={event => setName(event.target.value)} onBlur={() => finish()} onKeyDown={event => { event.stopPropagation(); if (event.key === "Enter" || event.key === "Escape") { event.preventDefault(); finish(event.key === "Escape"); } }} />;
 }
+export function SlideAddActions({ add, pick, busy }) {
+  return <><button data-close disabled={busy} onClick={() => add("blank")}><ToolIcon name="add" />Add blank</button><button data-close disabled={busy} onClick={() => pick("layout")}><LayoutTemplate size={18} strokeWidth={1.75} />Add a layout...</button><button data-close disabled={busy} onClick={() => pick("source")}><ToolIcon name="section" />Add sections as slides</button><button data-close disabled={busy} onClick={() => pick("draft")}><Sparkles size={18} strokeWidth={1.75} />Draft entire deck with AI</button></>;
+}
 export function SlideNavigator({ deck, thumbnails, busy, editing = true, choose, modify, add, pick, section, remove, reorder }) {
   const [naming, setNaming] = useState(null);
   useEffect(() => { if (!editing) setNaming(null); }, [editing]);
-  const menu = () => <><button data-close onClick={() => add("blank")}>Add blank</button><button data-close onClick={() => pick("layout")}>Add a layout...</button><button data-close onClick={() => pick("source")}>Add sections as slides</button><button data-close onClick={() => pick("draft")}>Draft entire deck with AI</button></>;
+  const menu = () => <SlideAddActions add={add} pick={pick} busy={busy} />;
   return <>
-    <div className="merge-section-head"><h2>Slides <span>{deck?.slides.length || 0}</span></h2>{editing && <div className="merge-navigator-actions"><Action icon="section" label="Start a section here" disabled={busy || !deck} onClick={() => setNaming(deck.selected)} /><ToolMenu icon="add" label="Add a slide" disabled={busy || !deck}>{menu()}</ToolMenu></div>}</div>
+    <div className="merge-section-head"><h2>Slides <span>{deck?.slides.length || 0}</span></h2>{editing && <div className="merge-navigator-actions"><Action icon="section" label="Start a section here" disabled={busy || !deck?.slides.length} onClick={() => setNaming(deck.selected)} /><ToolMenu icon="add" label="Add a slide" disabled={busy || !deck?.slides.length}>{menu()}</ToolMenu></div>}</div>
     <NavigatorDragList deck={deck} thumbnails={thumbnails} disabled={busy || !editing || naming !== null} reorder={reorder}>{deck?.slides.map((slide, index) => <NavigatorDragEntry key={slide.id} slide={slide} index={index}>{({ slideDrag, sectionHandle }) => <>
       {(slide.section || naming === slide.id) && <div className="merge-section-row">
       {editing && slide.section && sectionHandle}
@@ -53,7 +57,7 @@ export function SlideNavigator({ deck, thumbnails, busy, editing = true, choose,
           <Action icon="add" label="Add slide above" disabled={busy} onClick={() => add("blank", slide.id)} />
           <Action icon="copy" label="Duplicate slide" disabled={busy} onClick={() => modify("duplicate", slide.id)} />
           <Action icon={slide.hidden ? "eyeoff" : "eye"} label={slide.hidden ? "Include in rehearsal" : "Skip in rehearsal"} aria-pressed={!!slide.hidden} disabled={busy} onClick={() => modify("hide", slide.id)} />
-          <Action icon="trash" label="Delete slide" disabled={busy || deck.slides.length < 2} onClick={() => remove(slide.id)} />
+          <Action icon="trash" label="Delete slide" disabled={busy} onClick={() => remove(slide.id)} />
         </div>}
       </article>
     </>}</NavigatorDragEntry>)}</NavigatorDragList>

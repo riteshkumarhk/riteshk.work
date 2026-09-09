@@ -18,9 +18,8 @@ export function changeSlides(deck, action, id, newId) {
     delete next.slides[index + 1].section;
     next.selected = newId;
   } else if (action === "delete") {
-    if (next.slides.length === 1) throw new Error("Keep at least one slide");
     next.slides.splice(index, 1);
-    next.selected = next.slides[Math.min(index, next.slides.length - 1)].id;
+    next.selected = next.slides[Math.min(index, next.slides.length - 1)]?.id ?? null;
   } else if (action === "hide") {
     next.slides[index].hidden = !next.slides[index].hidden;
   } else if (action === "up" || action === "down") {

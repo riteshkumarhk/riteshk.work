@@ -102,3 +102,15 @@ test("visibility belongs beside recording in the editor toolbar, not the header"
   assert.match(read("./src/js/slide-merge-visibility.jsx"), /showChevron=\{false\}/);
   assert.match(read("./src/js/slide-merge-toolbar.jsx"), /showChevron = true/);
 });
+
+test("empty decks and history shortcuts share existing action surfaces", () => {
+  const editor = read("./src/js/slide-merge.jsx"), bar = read("./src/js/slide-merge-bar.jsx"), navigator = read("./src/js/slide-merge-navigator.jsx");
+  assert.match(editor, /<section className="merge-empty"/);
+  assert.match(editor, /<SlideAddActions add=\{add\}/);
+  assert.match(navigator, /label="Add a slide" disabled=\{busy \|\| !deck\?\.slides.length\}/);
+  assert.doesNotMatch(editor + navigator + bar, /slides.length < 2|Keep at least one slide/);
+  assert.match(bar, /const current = keyboardState.current/);
+  assert.match(bar, /document.removeEventListener\("keydown", keyboard, true\);\s*\}, \[\]\)/);
+  assert.match(bar, /control.getClientRects\(\).length/);
+  assert.match(bar, /button.click\(\)/);
+});

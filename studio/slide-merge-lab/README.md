@@ -156,9 +156,15 @@ design-system migration. The secondary opacity slider remains unchanged.
 - Each thumbnail has move up/down, insert above, duplicate, skip/include and immediate delete controls.
     Delete or Backspace on a focused slide card removes that slide in the navigator or All slides,
     without a confirmation dialog. Focus moves to the remaining selected slide. Text fields
-    and canvas objects keep their own deletion behavior; the final slide cannot be removed.
+    and canvas objects keep their own deletion behavior. The final slide can also be removed.
     Clicking a thumbnail restores its focus as loading finishes, before the next keypress.
-    Slide deletion is not part of canvas Undo.
+    Empty decks persist across reloads and show Add blank, Add a layout, Add sections as slides,
+    and Draft entire deck with AI directly on the canvas; the Add a slide dropdown is disabled.
+    Undo/Redo buttons and Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y restore/re-delete slides,
+    including the final slide. Deletion history retains up to 20 operations for this editor session;
+    reloading clears history, not the saved deck. Restores include notes, content and media references
+    without overwriting other slides. New edits clear deletion Redo. Native canvas history takes
+    precedence over deletion history; text fields retain their own keyboard Undo.
 - Each insertion gap offers Add slide or Start section inline. On phones the choices temporarily
     occupy the adjacent thumbnail footprint, keeping both actions inside the strip.
 - Start a section here sits beside the top Add a slide icon and adds a named navigator divider

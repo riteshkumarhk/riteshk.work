@@ -7,9 +7,42 @@ import { SelectControl } from "./slide-shared-controls.jsx";
 import { ACTIVITY_CAPABILITIES, activityChanges, activitySnapshot, activityText } from "./slide-merge-activity.mjs";
 import "../../css/slide-merge-bar.css";
 
-export function HistoryControls({ target, disabled, activity }) {
+export function HistoryControls({ target, disabled, canvasDisabled, activity, deletionHistory, onDeletionHistory, api }) {
   const manager = useLabActionManager();
-  return target ? createPortal(<fieldset disabled={disabled} className="merge-history-buttons" onClickCapture={event => { const button = event.target.closest("button"); if (button && !button.matches(":disabled")) { activity.flush(); activity.note(button.getAttribute("aria-label")); } }}>{["undo", "redo"].map(action => <span className="merge-history-action" key={action}>{manager.renderAction(action)}<svg className="merge-history-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{action === "undo" ? <><polyline points="9 14 4 9 9 4" /><path d="M4 9h11a5 5 0 0 1 0 10h-1" /></> : <><polyline points="15 14 20 9 15 4" /><path d="M20 9H9a5 5 0 0 0 0 10h1" /></>}</svg></span>)}</fieldset>, target) : null;
+  const native = useRef({}), [available, setAvailable] = useState({ undo: false, redo: false });
+  const keyboardState = useRef(null);
+  keyboardState.current = { target, disabled, api };
+  useEffect(() => {
+    if (!target) return;
+    const update = () => {
+      const next = Object.fromEntries(["undo", "redo"].map(action => [action, !!native.current[action]?.querySelector("button:not(:disabled)")]));
+      setAvailable(previous => previous.undo === next.undo && previous.redo === next.redo ? previous : next);
+    };
+    const observer = new MutationObserver(update);
+    observer.observe(target, { subtree: true, childList: true, attributes: true, attributeFilter: ["disabled"] }); update();
+    return () => observer.disconnect();
+  }, [target, disabled]);
+  React.useLayoutEffect(() => {
+    const keyboard = event => {
+      const current = keyboardState.current;
+      if (current.disabled || event.defaultPrevented || event.repeat || !(event.ctrlKey || event.metaKey) || event.altKey || current.api?.getAppState().editingTextElement) return;
+      if (event.target.closest?.("input,textarea,select,[contenteditable],dialog,[role=dialog]") || document.querySelector("dialog[open], .pass, .excalidraw .Modal")) return;
+      const key = event.key.toLowerCase();
+      if (!["z", "y"].includes(key)) return;
+      const label = key === "y" || event.shiftKey ? "Redo" : "Undo";
+      const button = [...(current.target?.querySelectorAll(`button[aria-label="${label}"]:not(:disabled)`) || [])].find(control => control.getClientRects().length);
+      if (!button) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      button.click();
+    };
+    document.addEventListener("keydown", keyboard, true);
+    return () => document.removeEventListener("keydown", keyboard, true);
+  }, []);
+  return target ? createPortal(<fieldset disabled={disabled} className="merge-history-buttons" onClickCapture={event => { const button = event.target.closest("button"); if (button && !button.matches(":disabled")) { activity.flush(); activity.note(button.getAttribute("aria-label")); } }}>{["undo", "redo"].map(action => {
+    const useDeck = canvasDisabled || !available[action];
+    const canRestore = action === "undo" ? deletionHistory.canUndo : deletionHistory.canRedo;
+    return <span className="merge-history-action" key={action}><span hidden={useDeck} ref={element => { native.current[action] = element; }}>{manager.renderAction(action)}</span>{useDeck && <button aria-label={action === "undo" ? "Undo" : "Redo"} title={action === "undo" ? "Undo slide deletion" : "Redo slide deletion"} disabled={!canRestore} onClick={() => onDeletionHistory(action)} />}<svg className="merge-history-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{action === "undo" ? <><polyline points="9 14 4 9 9 4" /><path d="M4 9h11a5 5 0 0 1 0 10h-1" /></> : <><polyline points="15 14 20 9 15 4" /><path d="M20 9H9a5 5 0 0 0 0 10h1" /></>}</svg></span>;
+  })}</fieldset>, target) : null;
 }
 
 export function useActivity(api, live) {
@@ -84,6 +117,6 @@ export function ActivityDialog({ activity }) {
 export function AllSlides({ deck, thumbnails, busy, onOpen, modify, add, remove, onDeleteKey }) {
   return <section className="merge-all-slides" aria-label="All slides" onKeyDownCapture={onDeleteKey}><header><h2>All slides <small>{deck?.slides.length || 0}</small></h2><button disabled={busy} onClick={() => add()}>Add slide</button></header><div className="merge-all-grid">{deck?.slides.map((slide, index) => <article key={slide.id} data-slide-delete-id={slide.id} className={deck.selected === slide.id ? "is-current" : ""}>
     <button className="merge-all-open" disabled={busy} onClick={() => onOpen(slide.id)} aria-label={`Open slide ${index + 1}: ${slide.title}`}><span className="merge-thumbnail">{thumbnails[slide.id]}</span><span>{index + 1}. {slide.title}</span>{slide.section && <small>{slide.section}</small>}{slide.hidden && <small>Skipped in rehearsal</small>}</button>
-    <div className="merge-all-actions"><button disabled={busy || !index} title="Move slide earlier" aria-label={`Move slide ${index + 1} earlier`} onClick={() => modify("up", slide.id)}><ArrowUp size={15} /></button><button disabled={busy || index === deck.slides.length - 1} title="Move slide later" aria-label={`Move slide ${index + 1} later`} onClick={() => modify("down", slide.id)}><ArrowDown size={15} /></button><button disabled={busy} title="Duplicate slide" aria-label={`Duplicate slide ${index + 1}`} onClick={() => modify("duplicate", slide.id)}><Copy size={15} /></button><button disabled={busy} onClick={() => modify("hide", slide.id)}>{slide.hidden ? "Include" : "Skip"}</button><button className="is-danger" disabled={busy || deck.slides.length < 2} title="Delete slide" aria-label={`Delete slide ${index + 1}`} onClick={() => remove(slide.id)}><Trash2 size={15} /></button></div>
+    <div className="merge-all-actions"><button disabled={busy || !index} title="Move slide earlier" aria-label={`Move slide ${index + 1} earlier`} onClick={() => modify("up", slide.id)}><ArrowUp size={15} /></button><button disabled={busy || index === deck.slides.length - 1} title="Move slide later" aria-label={`Move slide ${index + 1} later`} onClick={() => modify("down", slide.id)}><ArrowDown size={15} /></button><button disabled={busy} title="Duplicate slide" aria-label={`Duplicate slide ${index + 1}`} onClick={() => modify("duplicate", slide.id)}><Copy size={15} /></button><button disabled={busy} onClick={() => modify("hide", slide.id)}>{slide.hidden ? "Include" : "Skip"}</button><button className="is-danger" disabled={busy} title="Delete slide" aria-label={`Delete slide ${index + 1}`} onClick={() => remove(slide.id)}><Trash2 size={15} /></button></div>
   </article>)}</div></section>;
 }

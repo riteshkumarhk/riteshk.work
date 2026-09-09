@@ -11,7 +11,7 @@
 .merge-history-buttons button { width:30px;height:30px;display:grid;place-items:center;padding:0;background:none;border:1px solid var(--line);border-radius:8px;color:var(--text-dim);cursor:pointer; }
 .merge-history-buttons button svg { visibility:hidden; }
 .merge-history-icon { position:absolute;left:7px;top:7px;pointer-events:none; }
-.merge-history-action:has(button:disabled) .merge-history-icon { opacity:.3; }
+.merge-history-action:has(>button:disabled) .merge-history-icon,.merge-history-action:has(>span:not([hidden]) button:disabled) .merge-history-icon { opacity:.3; }
 .merge-history-action:has(button:hover:not(:disabled)) { color:var(--text); }
 .merge-history-buttons button:hover:not(:disabled) { color:var(--text);border-color:var(--accent); }
 .merge-editor-bar button:disabled { opacity:.35;cursor:default; }

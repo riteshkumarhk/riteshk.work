@@ -1,4 +1,16 @@
 .merge-navigator-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.merge-empty{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;box-sizing:border-box;overflow:auto;background:var(--merge-bg);color:var(--merge-text)}
+.merge-empty h2{margin:0;font:400 24px var(--serif);letter-spacing:0}
+.merge-empty-actions{display:grid;gap:4px;width:min(300px,100%)}
+.merge-empty-actions button{display:flex;align-items:center;gap:12px;min-height:44px;padding:10px 12px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--merge-text);text-align:left;white-space:normal;overflow-wrap:anywhere;letter-spacing:0}
+.merge-empty-actions button svg{flex-shrink:0}
+.merge-empty-actions button:hover:not(:disabled){background:var(--ui-hover);border-color:var(--merge-line)}
+.merge-empty-actions button:focus-visible{outline:2px solid var(--merge-accent);outline-offset:2px}
+.merge-empty-actions button:disabled{opacity:.4}
+.merge-workspace[data-empty="true"] :is(.merge-canvas-tools,.merge-guides,.merge-view-frame,.merge-mobile-canvas-controls,.layer-ui__wrapper__footer,.App-toolbar-container,.App-menu_top){display:none!important}
+.merge-shell .merge-editor:has(.merge-workspace[data-empty="true"]){grid-template-rows:minmax(0,1fr)}
+.merge-shell .merge-editor:has(.merge-workspace[data-empty="true"]) .merge-notes{display:none!important}
+@media(max-width:900px){.merge-shell .merge-workspace[data-empty="true"]{grid-template-rows:minmax(0,1fr)}.merge-workspace[data-empty="true"] .lab-canvas{grid-row:1}}
 .merge-shell .merge-navigator-actions :is(.merge-nav-action,.merge-tool-menu summary){width:44px;min-width:44px;height:34px;box-sizing:border-box;border-radius:4px}
 .merge-shell .merge-navigator-actions :is(.merge-nav-action,.merge-tool-menu summary):hover{background:var(--ui-hover);border-color:var(--merge-line);color:var(--merge-text)}
 .merge-shell .merge-navigator-actions :is(.merge-nav-action,.merge-tool-menu summary):focus-visible{outline:2px solid var(--merge-accent);outline-offset:2px}
