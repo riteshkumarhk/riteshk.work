@@ -17,7 +17,7 @@ const toolPaths = {
   view: "M3 3h18v18H3ZM3 9h18M3 15h18M9 3v18M15 3v18", notes: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8ZM14 2v6h6M8 13h8M8 17h6", add: "M5 12h14M12 5v14"
 };
 export function ToolIcon({ name }) {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={toolPaths[name]} /></svg>;
+  return <svg data-tool-icon={name} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={toolPaths[name]} /></svg>;
 }
 
 export function ToolMenu({ label, icon, children, disabled, active = false, caption, showChevron = true }) {

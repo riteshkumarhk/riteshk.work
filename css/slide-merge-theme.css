@@ -58,8 +58,8 @@ html .excalidraw :is(.Toast,.HintViewer,.excalidraw__embeddable-hint) { backgrou
 .merge-shell { --ui-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8986' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); }
 .merge-shell select { appearance:none;color-scheme:inherit;background-image:var(--ui-chevron);background-position:right 10px center;background-size:12px;background-repeat:no-repeat;padding-right:30px;cursor:pointer; }
 .merge-shell select:disabled { opacity:.4;cursor:default; }
-.merge-shell .merge-tool-menu summary svg:last-child { transition:transform .2s ease;color:var(--text-dim); }
-.merge-shell .merge-tool-menu[open] summary svg:last-child { transform:rotate(180deg);color:var(--accent); }
+.merge-shell .merge-tool-menu summary [data-tool-icon="chevron"] { transition:transform .2s ease;color:var(--text-dim); }
+.merge-shell .merge-tool-menu[open] summary [data-tool-icon="chevron"] { transform:rotate(180deg);color:var(--accent); }
 @supports (appearance:base-select) {
   .merge-shell select,.merge-shell select::picker(select) { appearance:base-select; }
   .merge-shell select { align-items:center;gap:8px;background-image:none;padding-right:10px; }
@@ -75,4 +75,4 @@ html .excalidraw :is(.Toast,.HintViewer,.excalidraw__embeddable-hint) { backgrou
   .merge-shell select option:checked { background:var(--ui-selected);color:var(--text); }
   .merge-shell select option::checkmark { order:-1;color:var(--accent);width:12px; }
 }
-@media(prefers-reduced-motion:reduce) { .merge-shell select::picker-icon,.merge-shell .merge-slide-properties summary::before,.merge-shell .merge-tool-menu summary svg:last-child { transition:none; } }
+@media(prefers-reduced-motion:reduce) { .merge-shell select::picker-icon,.merge-shell .merge-slide-properties summary::before,.merge-shell .merge-tool-menu summary [data-tool-icon="chevron"] { transition:none; } }

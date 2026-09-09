@@ -103,6 +103,15 @@ test("visibility belongs beside recording in the editor toolbar, not the header"
   assert.match(read("./src/js/slide-merge-toolbar.jsx"), /showChevron = true/);
 });
 
+test("menu opening rotates only explicit chevrons, never the visibility icon", () => {
+  const theme = postcss.parse(read("./css/slide-merge-theme.css"));
+  assert.match(read("./src/js/slide-merge-toolbar.jsx"), /data-tool-icon=\{name\}/);
+  assert.equal(declarations(theme, '.merge-shell .merge-tool-menu[open] summary [data-tool-icon="chevron"]').transform, "rotate(180deg)");
+  theme.walkRules(rule => {
+    if (rule.selector.includes("merge-tool-menu")) assert.doesNotMatch(rule.selector, /svg:last-child/);
+  });
+});
+
 test("empty decks and history shortcuts share existing action surfaces", () => {
   const editor = read("./src/js/slide-merge.jsx"), bar = read("./src/js/slide-merge-bar.jsx"), navigator = read("./src/js/slide-merge-navigator.jsx");
   assert.match(editor, /<section className="merge-empty"/);
