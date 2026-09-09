@@ -1,5 +1,11 @@
 export function installWebPresenterPreview({ frame, pointer, container, presenterWindow, button, status, onDisconnect }) {
   const doc = container.ownerDocument;
+  const previewSurface = container.parentElement;
+  const localPointer = doc.createElement("div");
+  localPointer.setAttribute("aria-hidden", "true");
+  localPointer.style.cssText = "position:absolute;width:12px;height:12px;border:2px solid white;border-radius:50%;background:#ff334e;box-shadow:0 0 8px #ff334e;transform:translate(-50%,-50%);pointer-events:none;z-index:2;box-sizing:border-box";
+  localPointer.hidden = true;
+  previewSurface.appendChild(localPointer);
   const mediaDevices = navigator.mediaDevices;
   const handle = crypto.randomUUID();
   let stream = null, video = null, canvas = null, stopped = false, pending = false, animation = 0;
@@ -26,8 +32,9 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     if (pressed?.isConnected) pressed.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true, pointerId: 1, pointerType: "mouse" }));
     pressed = null;
     pointer.hide();
+    localPointer.hidden = true;
   }
-  function stop(message = "Live preview stopped. Reconnect to control the audience tab.") {
+  function stop(message = "Live preview stopped. Pointer remains connected.") {
     release();
     presenterWindow.cancelAnimationFrame(animation);
     if (stream) stream.getTracks().forEach(track => track.stop());
@@ -48,21 +55,32 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     return track.getSettings().displaySurface === "browser" && identity?.handle === handle && identity.origin === location.origin;
   }
   function targetAt(event) {
-    if (!stream || !canvas) return null;
-    const preview = canvas.getBoundingClientRect(), bounds = frame.getBoundingClientRect();
+    if (stopped) return null;
+    const preview = container.getBoundingClientRect(), bounds = frame.getBoundingClientRect();
+    if (!preview.width || !preview.height || !bounds.width || !bounds.height) { release(); return null; }
     const x = bounds.left + Math.max(0, Math.min(1, (event.clientX - preview.left) / preview.width)) * bounds.width;
     const y = bounds.top + Math.max(0, Math.min(1, (event.clientY - preview.top) / preview.height)) * bounds.height;
     const target = document.elementFromPoint(x, y);
-    if (!target || !frame.contains(target)) return null;
+    if (!target || !frame.contains(target)) { release(); return null; }
     pointer.point(x, y, true);
+    const control = !!target.closest('a,button,input,textarea,select,summary,video,audio,[role="button"],[role="slider"],[contenteditable="true"],[data-pjhref],[data-pjjump]');
+    localPointer.hidden = control;
+    const surface = previewSurface.getBoundingClientRect();
+    localPointer.style.left = event.clientX - surface.left - previewSurface.clientLeft + "px";
+    localPointer.style.top = event.clientY - surface.top - previewSurface.clientTop + "px";
+    previewSurface.style.cursor = control ? "pointer" : "none";
+    if (canvas) canvas.style.cursor = control ? "pointer" : "none";
     if (target.closest("iframe")) {
-      canvas.style.cursor = "pointer";
       status.textContent = "Embedded player: use its controls directly in the audience window.";
       return null;
     }
-    canvas.style.cursor = target.closest('a,button,input,textarea,select,summary,video,audio,[role="button"],[role="slider"],[contenteditable="true"],[data-pjhref],[data-pjjump]') ? "pointer" : "none";
     return { target, x, y };
   }
+  function pointPreview(event) { targetAt(event); }
+  function leavePreview() { if (!pressed) release(); }
+  previewSurface.addEventListener("pointermove", pointPreview, true);
+  previewSurface.addEventListener("pointerleave", leavePreview);
+  presenterWindow.addEventListener("blur", release);
   function setRange(target, x) {
     if (!target.matches('input[type="range"]')) return;
     const bounds = target.getBoundingClientRect();
@@ -197,13 +215,18 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     } finally { pending = false; if (!stopped) button.disabled = !supported; }
   }
   button.addEventListener("click", connect);
-  if (!supported) { button.disabled = true; status.textContent = "Live preview needs a supported desktop Chrome or Edge browser. Use the audience window for interactions."; }
+  if (!supported) { button.disabled = true; status.textContent = "Pointer connected. Live video preview is unavailable in this browser."; }
   return {
     get live() { return !!stream; },
     dispose() {
       stopped = true;
       stop();
       button.removeEventListener("click", connect);
+      previewSurface.removeEventListener("pointermove", pointPreview, true);
+      previewSurface.removeEventListener("pointerleave", leavePreview);
+      presenterWindow.removeEventListener("blur", release);
+      localPointer.remove();
+      previewSurface.style.cursor = "";
       controls.remove();
       try { mediaDevices?.setCaptureHandleConfig?.({}); } catch (error) {}
     }

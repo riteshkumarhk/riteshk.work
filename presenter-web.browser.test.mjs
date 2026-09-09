@@ -150,6 +150,20 @@ test("always-on-top web presenter supports real live capture and stops on close"
     await page.click("#start");
     await page.getByRole("button", { name: "Open presenter window", exact: true }).click();
     await page.waitForFunction(() => window.documentPictureInPicture.window?.document.querySelector("[data-pp-live]"), null, { timeout: 6000 });
+    const pointing = await page.evaluate(() => {
+      const presenter = window.documentPictureInPicture.window;
+      const surface = presenter.document.querySelector("[data-pp-now]");
+      const preview = surface.getBoundingClientRect();
+      const frame = document.querySelector("[data-pjp-frame]").getBoundingClientRect();
+      const target = document.querySelector("#swatch").getBoundingClientRect();
+      const x = target.left + target.width / 2, y = target.top + target.height / 2;
+      surface.dispatchEvent(new presenter.PointerEvent("pointermove", { bubbles: true, clientX: preview.left + (x - frame.left) / frame.width * preview.width, clientY: preview.top + (y - frame.top) / frame.height * preview.height }));
+      const pointer = document.querySelector(".pjp__pointer");
+      return { expected: { x, y }, actual: { x: parseFloat(pointer.style.left), y: parseFloat(pointer.style.top) }, hidden: pointer.hidden, capturing: !!presenter.document.querySelector("[data-pp-now] canvas") };
+    });
+    assert.equal(pointing.hidden, false, "PiP pointing must work before connecting capture");
+    assert.equal(pointing.capturing, false);
+    assert.ok(Math.abs(pointing.actual.x - pointing.expected.x) < 1 && Math.abs(pointing.actual.y - pointing.expected.y) < 1);
     await page.evaluate(() => window.documentPictureInPicture.window.document.querySelector("[data-pp-live]").click());
     await page.waitForFunction(() => window.documentPictureInPicture.window.document.querySelector("[data-pp-now] canvas"), null, { timeout: 6000 }).catch(async error => {
       throw new Error(await page.evaluate(() => window.documentPictureInPicture.window.document.querySelector("[data-pp-status]").textContent), { cause: error });

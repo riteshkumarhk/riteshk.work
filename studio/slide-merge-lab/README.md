@@ -38,7 +38,14 @@ the whole screen, and verify the meeting application's sharing preview.
 
 ### Web live preview (no app required)
 
-Open the presenter window, then choose **Connect live preview**. On supported
+Pointing works immediately when the presenter window opens, including from
+Rehearse: hover the current-slide thumbnail to put the laser at the corresponding
+audience-slide position. No capture permission is needed for pointing. Leaving
+the preview hides the laser; notes and presenter controls do not point at slides.
+The thumbnail is still static until live capture is connected, so motion and
+changed section states require the live feed for an accurate visual preview.
+
+For live video and preview interaction, choose **Connect live preview**. On supported
 desktop Chrome/Edge, select the audience slides **tab** in the browser's capture
 picker. The companion verifies the tab's per-session Capture Handle and origin
 before displaying anything; other tabs, windows and monitors are rejected.

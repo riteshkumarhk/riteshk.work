@@ -64,6 +64,20 @@ test("slideshow content cannot be selected or edited directly or through the liv
       await targetPage.keyboard.press("Delete");
       await targetPage.keyboard.type("readonly");
     }
+    const initialFrame = await page.locator("[data-pjp-frame]").boundingBox();
+    const initialPreview = await popup.locator("[data-pp-now]").boundingBox();
+    const previewPoint = {
+      x: initialPreview.x + (positions[0].x - initialFrame.x) / initialFrame.width * initialPreview.width,
+      y: initialPreview.y + (positions[0].y - initialFrame.y) / initialFrame.height * initialPreview.height
+    };
+    await popup.mouse.move(previewPoint.x, previewPoint.y);
+    await page.waitForFunction(() => document.querySelector(".pjp")?.dataset.pointer === "laser");
+    const laser = await page.locator(".pjp__pointer").evaluate(element => ({ x: parseFloat(element.style.left), y: parseFloat(element.style.top), hidden: element.hidden }));
+    assert.equal(laser.hidden, false);
+    assert.ok(Math.abs(laser.x - positions[0].x) < 2 && Math.abs(laser.y - positions[0].y) < 2, "Unconnected thumbnail pointing must map to the audience shape");
+    assert.equal(await popup.locator("[data-pp-now] canvas").count(), 0, "Pointing must not require capture permission");
+    await popup.locator("[data-pp-notes]").hover();
+    assert.equal(await page.locator(".pjp__pointer").isVisible(), false, "Moving onto notes must hide the audience pointer");
     for (const position of positions) await attemptEditing(page, position);
     assert.deepEqual(await snapshot(), before, "Direct slideshow input must not select, edit, delete or move content");
     await popup.locator("[data-pp-live]").click();
