@@ -41,7 +41,7 @@ export function LayerDragList({ elements, selected, disabled, reorder, preview, 
       if (target && !disabled) reorder(dragging?.sourceIds || sourceIds(event.active.id), target.id, target.edge);
     }} accessibility={{ screenReaderInstructions:{ draggable:"Press Space to pick up a layer, Up or Down to move, Space to drop, or Escape to cancel." } }}>
       <ol className="merge-layer-list" aria-label="Slide layers">{children}</ol>
-      {createPortal(<DragOverlay dropAnimation={null} zIndex={10050}>{dragging && <div className="merge-layer-drag-preview" data-prevent-outside-click style={{width:dragging.width}}>{preview(elements.find(element => element.id === dragging.id))}<span>{dragging.ids.size > 1 ? `${dragging.ids.size} layers` : layerName(elements.find(element => element.id === dragging.id))}</span></div>}</DragOverlay>, document.body)}
+      {createPortal(<DragOverlay dropAnimation={null} zIndex={10050}>{dragging && <div className="merge-layer-drag-preview" data-prevent-outside-click style={{width:dragging.width}}>{preview(elements.find(element => element.id === dragging.id))}<span>{dragging.sourceIds.length > 1 ? `${dragging.sourceIds.length} layers` : layerName(elements.find(element => element.id === dragging.id))}</span></div>}</DragOverlay>, document.body)}
     </DndContext>
   </LayerDrag.Provider>;
 }

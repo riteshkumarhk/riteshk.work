@@ -38,6 +38,12 @@ test("desktop insert toolbar uses the full canvas width before wrapping", () => 
   assert.equal(style["flex-wrap"], "wrap");
 });
 
+test("layer drag badge counts selected rows rather than bound companions", () => {
+  const drag = read("./src/js/slide-merge-layer-drag.jsx");
+  assert.ok(drag.includes('`${dragging.sourceIds.length} layers`'));
+  assert.ok(!drag.includes('`${dragging.ids.size} layers`'));
+});
+
 test("shared dialogs use the actual Studio surface and title contract", () => {
   parity(dialogs, ".merge-deck-dialog", ".pass__box", ["background", "border", "border-radius", "padding", "text-align", "box-shadow"]);
   parity(dialogs, ".merge-deck-dialog h2", ".pass__title", ["font-family", "font-weight", "font-size", "color"]);

@@ -203,7 +203,8 @@ design-system migration. The secondary opacity slider remains unchanged.
     duplicate/delete, hide/show and lock/unlock. Shift/Ctrl/Cmd-click selects multiple layers.
     Drag a selected row to move the complete selection together, preserving its relative order.
     Bound labels and group members travel with their associated unit. A drop line marks the
-    destination and the drag preview shows the layer count. Mouse uses a six-pixel threshold;
+    destination and the drag preview counts explicitly selected rows, not attached companions.
+    Mouse uses a six-pixel threshold;
     touch uses a 200ms hold. Space/Enter picks up or drops, Up/Down moves, Escape cancels.
     Each completed reorder is one native Undo step. Hover, focus and selection highlight the
     whole row and reveal its actions; touch keeps the actions visible. Hidden/locked status
