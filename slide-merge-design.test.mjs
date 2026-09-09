@@ -133,6 +133,13 @@ test("lab sidebars dismiss from canvas clicks, not editor controls", () => {
   assert.ok(read("./slide-lab-engine.mjs").includes('islandRef.current?.closest(".merge-shell") && !event.target.closest(".excalidraw__canvas")'));
 });
 
+test("top working controls align right on desktop and mobile", () => {
+  const styles = postcss.parse(read("./css/slide-merge-bar.css"));
+  assert.equal(declarations(styles, ".merge-editor-bar")["grid-template-columns"], "minmax(0,1fr)auto");
+  const mobile = styles.nodes.find(node => node.type === "atrule" && node.params === "(max-width:900px)");
+  assert.equal(declarations(mobile, ".merge-bar-views")["justify-content"], "flex-end");
+});
+
 test("footer status fills available space and pushes actions right", () => {
   const styles = postcss.parse(read("./css/slide-merge-bar.css"));
   const status = declarations(styles, ".merge-save-status");

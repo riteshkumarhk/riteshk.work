@@ -105,8 +105,9 @@ design-system migration. The secondary opacity slider remains unchanged.
 
 ## Interaction model
 
-- The top working bar keeps native Undo/Redo at left, centered Editing and Current/All slides,
-    and the gold Rehearse glyph. The bottom document-status bar replaces the static Local draft
+- The top working bar keeps native Undo/Redo at left, with Editing, Current/All slides,
+    and the gold Rehearse glyph grouped at right (also right-aligned on the phone's second row).
+    The bottom document-status bar replaces the static Local draft
     label with live save/activity feedback, followed by visibility and activity recording controls.
     Library sync and slide position stay at the right. Recording retains its red REC state and
     stopping opens the activity log; the visibility menu opens upward from the bottom edge.
