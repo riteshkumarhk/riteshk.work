@@ -6,7 +6,7 @@ import { mergerThemePlugin } from "./slide-merge-theme.mjs";
 
 await rm("studio/slide-lab/assets", { recursive: true, force: true });
 await build({
-  entryPoints: { app: "src/js/slide-lab.jsx", native: "src/js/slide-lab-native.js", merge: "src/js/slide-merge.jsx" },
+  entryPoints: { app: "src/js/slide-lab.jsx", native: "src/js/slide-lab-native.js", merge: "src/js/slide-merge-lab.jsx", editor: "src/js/slide-merge.jsx" },
   outdir: "studio/slide-lab/assets",
   entryNames: "[name]",
   chunkNames: "chunk-[hash]",

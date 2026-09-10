@@ -20,19 +20,19 @@ function BadgePicker({ onPick }) {
   </>;
 }
 
-export function ContentPane({ pane, busy, onContent, onIcon, onSection, onNewLayout, onNewSection, onMedia, onUpload, onEmbed, layoutPicker, composition, children }) {
+export function ContentPane({ pane, busy, sourceStudyId, onContent, onIcon, onSection, onNewLayout, onNewSection, onMedia, onUpload, onEmbed, layoutPicker, composition, children }) {
   return <Sidebar name="insert" className="merge-content-sidebar" docked={false}>
     <Sidebar.Header><strong>{PANE_LABELS[pane] || "Insert"}</strong></Sidebar.Header>
     <fieldset className={`merge-pane-body${pane === "layers" ? " merge-pane-body--layers" : ""}`} disabled={busy} aria-label={PANE_LABELS[pane] || "Insert"}>
       {pane === "layers" && children}
-      {pane === "media" && <SectionPicker embedded mediaOnly onPick={onMedia} onUpload={onUpload} onEmbed={onEmbed} />}
+      {pane === "media" && <SectionPicker sourceStudyId={sourceStudyId} embedded mediaOnly onPick={onMedia} onUpload={onUpload} onEmbed={onEmbed} />}
       {pane === "icons" && <IconLibrary embedded onPick={onIcon} />}
       {pane === "text" && <div className="merge-text-choices">{CONTENT_BLOCKS.filter(([kind]) => kind !== "badge").map(([kind, title]) => <button key={kind} aria-label={`Insert ${title}`} onClick={() => onContent(kind)}><span className={`merge-text-preview merge-text-preview--${kind}`} aria-hidden="true">{samples[kind]}</span><strong>{title}</strong></button>)}</div>}
       {pane === "badges" && <BadgePicker onPick={onContent} />}
-      {pane === "sections" && <SectionPicker embedded onPick={onSection} composition={composition} />}
+      {pane === "sections" && <SectionPicker sourceStudyId={sourceStudyId} embedded onPick={onSection} composition={composition} />}
       {pane === "layout" && <LayoutDialog embedded {...layoutPicker} disabled={busy} onPick={onNewLayout} />}
-      {pane === "source" && <SectionPicker embedded multiple onPick={onNewSection} composition={composition} />}
-      {pane === "draft" && <SectionPicker embedded multiple onPick={onNewSection} composition={{ ...composition, autoStart: true }} />}
+      {pane === "source" && <SectionPicker sourceStudyId={sourceStudyId} embedded multiple onPick={onNewSection} composition={composition} />}
+      {pane === "draft" && <SectionPicker sourceStudyId={sourceStudyId} embedded multiple onPick={onNewSection} composition={{ ...composition, autoStart: true }} />}
     </fieldset>
   </Sidebar>;
 }

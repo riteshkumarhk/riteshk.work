@@ -7,6 +7,37 @@ the existing owner session through a new, narrowly scoped Worker route.
 See [the design audit](DESIGN-AUDIT.md) for consistency corrections, verification
 coverage and components proposed for a future shared design-system update.
 
+## Content Studio Pilot
+
+Open `/studio/?nativeSlides=1`, sign in normally, and use a project's Slideshow
+entry. The native editor mounts directly inside Content Studio with its navigation,
+case-study title, working toolbar and status footer. There is no lab header or
+whole-editor iframe. The current v0 slides are disposable test data and are not
+converted; the native deck starts empty. The standalone lab draft is unchanged.
+
+The host stores a small `study.nativeDeck` reference. Native scenes, notes and
+original assets are saved per case study in `rk-studio-slide-decks-v1` IndexedDB,
+with revision checks and atomic document/asset writes. This is device-local draft
+storage, not cloud synchronization. A saved native reference reopens in the new
+editor even without the pilot parameter. Other decks retain the existing editor
+until the default switch is approved.
+
+Navigation flushes active text and notes; failed saves keep the editor open.
+Private content backups include the native documents and original assets.
+Selective recovery and project duplication allocate independent native deck IDs.
+Do not clear browser storage without a private content backup.
+
+Publishing is intentionally blocked while the pilot is active or the Studio draft
+contains native deck references. This gate also applies after leaving Slideshow,
+to automatic publishing and to manual JSON publishing. Native audience payloads,
+private/public publishing and the final default switch are the next milestone;
+the visibility control is disabled for the pilot. The published site is unchanged.
+
+Run `node --test slide-studio-deck.test.mjs` with the local server and Windows Edge
+available for storage, recovery, host lifecycle and publish-gate checks. The local
+UI harness uses `/studio/?devstub&nativeSlides=1` and the existing localhost-only
+`__rkDevStudio()` entry; production authentication is not bypassed.
+
 ## Authoring parity update
 
 Speaker notes support bold, italic, bulleted and numbered lists, indentation and

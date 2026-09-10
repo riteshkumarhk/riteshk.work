@@ -20,6 +20,7 @@ import {
 import { WORLD_LAND } from "./worldland.js";
 import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsEmbedScore, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand, atsScoreModel } from "./ats-core.js";
 import { draftComposition } from "./slide-merge-ai.mjs";
+import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeckReference, studioDeckBackup, restoreStudioDeckBackup } from "./slide-studio-deck.mjs";
 
 (function () {
   "use strict";
@@ -36,6 +37,8 @@ import { draftComposition } from "./slide-merge-ai.mjs";
   const L2PREV_KEY = "rk:adm:l2prev"; // remember the L2 live-preview on/off choice
   const PREV_OFF_KEY = "rk:adm:prevoff"; // remember the main live-preview pane show/hide choice
   const PREV_MODE_KEY = "rk:adm:prevmode"; // 3-state workspace layout: split | editor | preview
+  const NATIVE_SLIDE_PILOT = new URLSearchParams(location.search).get("nativeSlides") === "1";
+  let nativeSlideSession = null, nativeSlideReplay = null, nativeSlideNavigation = false;
   var prevLayout = "split";
   const DEFAULT_TRACKS = [
     { title: "Midnight", gen: "midnight" },
@@ -322,7 +325,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
       : ("Local draft \u00b7 " + pct + "% of this browser\u2019s draft storage (~" + fmtMB(draftBytes) + ").\nImages you add stay in the draft until you Publish, which hosts them as files and frees space.");
   }
 
-  function saveDraft(immediate) {
+  function saveDraft(immediate, options = {}) {
     updateDirtyUI();
     clearTimeout(saveTimer);
     const save = () => {
@@ -341,7 +344,8 @@ import { draftComposition } from "./slide-merge-ai.mjs";
         status("\u26a0 Draft too big to auto-save locally \u2014 your images are safe at full quality here. Hit Publish to store them (large ones are hosted as files automatically).");
       }
       updateDraftMeter();
-      histPush();
+      if (options.recordHistory !== false) histPush();
+      else if (histIndex >= 0) histStack[histIndex] = histSnap();
       return ok;
     };
     if (immediate) return save();
@@ -395,12 +399,14 @@ import { draftComposition } from "./slide-merge-ai.mjs";
   function status(msg, ok) {
     const s = root && root.querySelector(".adm__status");
     if (s) { s.textContent = msg; s.title = msg; s.classList.toggle("ok", !!ok); }
+    nativeSlideSession?.editor?.notify(msg);
   }
 
   // The Publish button + the "\u2715" leave-options flyout are contextual: they only
   // appear once the working draft differs from the published site. When we can't be
   // sure (no signature yet), default to "dirty" so publishing is never hidden away.
   function isDirty() {
+    if (nativeSlideSession) return true;
     try {
       if (!window.RK || !window.RK.sig) return true;
       var pub = window.RK.publishedSig || "";
@@ -551,7 +557,14 @@ import { draftComposition } from "./slide-merge-ai.mjs";
     clearTimeout(saveTimer);
     freeSel = null;
     histIndex = idx; histRestoring = true;
-    try { data = JSON.parse(histStack[idx]); } catch (e) {}
+    const nativeReferences = new Map((data.work || []).filter(work => work.study?.nativeDeck).map(work => [work.id, work.study.nativeDeck]));
+    try {
+      data = JSON.parse(histStack[idx]);
+      for (const work of data.work || []) {
+        const current = nativeReferences.get(work.id), restored = work.study?.nativeDeck;
+        if (current && (!restored || restored.id === current.id)) (work.study ||= {}).nativeDeck = clone(current);
+      }
+    } catch (e) {}
     histRerender();
     previewApply();
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(data)); localStorage.setItem(DRAFT_SIG_KEY, (window.RK && window.RK.publishedSig) || ""); } catch (e) {}
@@ -571,6 +584,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
     return false;
   }
   function onUndoKey(e) {
+    if (nativeSlideSession || e.defaultPrevented) return;
     if (e.altKey || !(e.ctrlKey || e.metaKey)) return;
     var k = (e.key || "").toLowerCase();
     if (k !== "z" && k !== "y") return;
@@ -6638,6 +6652,88 @@ import { draftComposition } from "./slide-merge-ai.mjs";
   }
   // RIGHT preview pane becomes the live slide editor (canvas + tools/inspector + presenter notes),
   // or the thumbnail sorter when the status-bar view is "All slides". Called on every renderL2.
+  function nativeSlidesEnabled(work) {
+    return !!work && !work.encWork && !(work.study?.slidesEnc && !work.study?.slides?.length) && (NATIVE_SLIDE_PILOT || !!work.study?.nativeDeck);
+  }
+  function disposeNativeSlides() {
+    const session = nativeSlideSession;
+    if (!session) return;
+    nativeSlideSession = null; session.active = false;
+    session.editor?.dispose();
+    session.styles.forEach(link => link.remove());
+    if (root) {
+      root.classList.remove("is-native-slides");
+      root.querySelectorAll("[data-native-slide-toolbar],[data-native-slide-status]").forEach(slot => { slot.replaceChildren(); slot.hidden = true; });
+    }
+  }
+  function renderNativeSlides(stage, work) {
+    if (nativeSlideSession?.work === work && nativeSlideSession.container.isConnected) return;
+    disposeNativeSlides();
+    const container = document.createElement("div"); container.className = "studio-native-slide-root";
+    const loading = document.createElement("div"); loading.className = "adm__empty"; loading.setAttribute("role", "status"); loading.textContent = "Loading slide editor...";
+    container.append(loading); stage.replaceChildren(container);
+    const toolbar = root.querySelector("[data-native-slide-toolbar]"), statusbar = root.querySelector("[data-native-slide-status]");
+    toolbar.hidden = false; statusbar.hidden = false;
+    const session = { work, container, active: true, styles: [], editor: null, reference: work.study?.nativeDeck || studioDeckReference(work.id) };
+    nativeSlideSession = session;
+    root.classList.add("is-native-slides");
+    const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.0", "/css/slide-studio.css?v=1.0"].map(href => new Promise((resolve, reject) => {
+      const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
+      link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
+      session.styles.push(link); document.head.append(link);
+    }));
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.0";
+    session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
+      if (!current()) return;
+      container.replaceChildren();
+      session.editor = module.mountSlideEditor(container, {
+        caseStudyId: work.id, title: work.title || "Untitled deck", toolbar, statusbar,
+        async load() {
+          if (session.reference.caseStudyId !== work.id) throw new Error("This deck reference belongs to another case study");
+          const saved = await loadStudioDeck(session.reference, { latest: true });
+          if (!current()) throw new Error("The case-study editor session has changed");
+          session.reference = saved.reference;
+          return saved.document;
+        },
+        async save(document) {
+          if (!current()) throw new Error("The case-study editor session has changed");
+          work.study ||= {};
+          if (!work.study.nativeDeck) {
+            work.study.nativeDeck = session.reference;
+            if (!saveDraft(true, { recordHistory: false })) { delete work.study.nativeDeck; throw new Error("The case-study draft reference could not be saved. Free storage and retry."); }
+          }
+          session.reference = await saveStudioDeck(session.reference, document, { isCurrent: current });
+          if (!current()) throw new Error("The case-study editor session has changed");
+          work.study.nativeDeck = { ...session.reference, slideCount: document.slides.length };
+          if (!saveDraft(true, { recordHistory: false })) throw new Error("Slides are recoverable on this device, but the Studio draft reference was not saved. Retry before leaving.");
+        }
+      });
+      await session.editor.ready;
+    }).catch(error => {
+      if (!current()) return;
+      session.loadFailed = true;
+      status(error.message);
+      if (!session.editor) { loading.setAttribute("role", "alert"); loading.textContent = error.message; container.replaceChildren(loading); }
+    });
+  }
+  function nativeSlideClickGate(event) {
+    if (!nativeSlideSession || nativeSlideReplay || event.target.closest(".merge-shell,[data-native-slide-toolbar],[data-native-slide-status]")) return;
+    const trigger = event.target.closest('.adm__tab,[data-l2-back],[data-exit-save],[data-exit-discard],[data-publish],[data-act]');
+    if (!trigger) return;
+    if (trigger.hasAttribute("data-exit-discard")) { disposeNativeSlides(); return; }
+    event.preventDefault(); event.stopImmediatePropagation();
+    if (nativeSlideNavigation) return;
+    const session = nativeSlideSession;
+    nativeSlideNavigation = true;
+    const flush = session.editor && !session.loadFailed ? session.editor.flush() : Promise.resolve();
+    flush.then(() => {
+      if (nativeSlideSession !== session || !trigger.isConnected) return;
+      if (!session.editor || session.loadFailed) disposeNativeSlides();
+      nativeSlideReplay = trigger;
+      try { trigger.click(); } finally { nativeSlideReplay = null; }
+    }).catch(error => status("Not saved: " + error.message)).finally(() => { nativeSlideNavigation = false; });
+  }
   function renderSlideStage() {
     var stage = root && root.querySelector("[data-slidestage]");
     var vwrap = root && root.querySelector("[data-slideview-wrap]");
@@ -6648,6 +6744,13 @@ import { draftComposition } from "./slide-merge-ai.mjs";
     var _ntb = root && root.querySelector("[data-newtab]");   // in slideshow this button rehearses the deck (contextual)
     if (_ntb && !_ntb.classList.contains("is-visit")) { _ntb.title = active ? "Slide Show from beginning" : "Open live preview in a new tab"; _ntb.setAttribute("aria-label", _ntb.title); }
     if (!stage) return;
+    if (active && nativeSlidesEnabled(data.work[openStudy])) {
+      stage.hidden = false;
+      if (vwrap) vwrap.hidden = true;
+      renderNativeSlides(stage, data.work[openStudy]);
+      return;
+    }
+    disposeNativeSlides();
     if (!active) { stage.hidden = true; stage.innerHTML = ""; return; }
     stage.hidden = false;
     var w = data.work[openStudy], st = w.study || {}, slides = st.slides || [];
@@ -6677,7 +6780,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
     var sealed = !!(w && w.study && w.study.slidesEnc && !slides0.length);
     // The far-right pane is the SLIDESHOW inspector only. The case-study section editor moved into
     // the LEFT pane (2-panel: outline rail + section editor | live preview); see studyEditor's story tab.
-    var isSlideProps = !!(w && l2Tab === "slides" && slideView !== "all" && !sealed);   // slide inspector in the current-slide view (even before the first slide)
+    var isSlideProps = !!(w && l2Tab === "slides" && slideView !== "all" && !sealed && !nativeSlidesEnabled(w));   // slide inspector in the current-slide view (even before the first slide)
     var active = isSlideProps;
     if (root) root.classList.toggle("is-casestage", active);
     if (!stage) return;
@@ -8105,7 +8208,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
         '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">' + IC.add + ' Add a section</button></div>' +
         railDeeperCut(w, i) + '</section>';
     }
-    else if (tab === "slides") panel = slidesPanel(w, i);
+    else if (tab === "slides") panel = nativeSlidesEnabled(w) ? "" : slidesPanel(w, i);
     else panel = header + cover; // details (default)
 
     return '<div class="study__panel" data-l2tab-panel="' + tab + '">' +
@@ -8118,7 +8221,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
       return '<div class="study__toggle is-open"><button class="btn study__editbtn is-open" data-act="study-toggle" data-index="' + i + '">' + IC.chevD + ' Close case-study editor</button></div>';
     }
     var preview = n ? '<a class="btn btn--ghost study__previewbtn" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '" title="Open this project page in a new tab">Preview ' + IC.ext + '</a>' : "";
-    var st = w.study || {}, deckN = (st.slides && st.slides.length) || 0, sealedDeck = !!(st.slidesEnc && !deckN);
+    var st = w.study || {}, deckN = st.nativeDeck ? (Number(st.nativeDeck.slideCount) || 0) : (st.slides && st.slides.length) || 0, sealedDeck = !!(st.slidesEnc && !deckN);
     var slidesLbl = deckN ? ("Edit slideshow \u00b7 " + deckN + " slide" + (deckN === 1 ? "" : "s")) : (sealedDeck ? "Edit slideshow" : "Add slideshow");
     var slidesBtn = '<button class="btn btn--ghost study__slidesbtn' + (deckN || sealedDeck ? " is-built" : "") + '" data-act="study-slides" data-index="' + i + '" title="' + (deckN || sealedDeck ? "Edit this project's presentation deck" : "Compose a presentation deck from this project") + '">' + IC.board + " " + slidesLbl + "</button>";
     return '<div class="study__toggle">' +
@@ -10449,6 +10552,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
   }
   function closeL2(opts) {
     opts = opts || {};
+    disposeNativeSlides();
     openStudy = -1;
     openBlock = -1;
     if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
@@ -11712,9 +11816,21 @@ import { draftComposition } from "./slide-merge-ai.mjs";
       copy.hidden = true;           // the copy stays off the live site until the owner is ready
       copy.featured = false;        // copies stay opt-in for the homepage
       if (copy.title && copy.title !== "Project title") copy.title += " (copy)";
-      data.work.splice(i + 1, 0, copy);
-      apply(true); renderBody();
-      status("Case study duplicated \u2014 the copy is Hidden from the site until you\u2019re ready to publish it.", true);
+      const insertCopy = () => {
+        const index = data.work.indexOf(src);
+        if (index < 0) throw new Error("The original case study changed while duplicating it");
+        data.work.splice(index + 1, 0, copy);
+        apply(true); renderBody();
+        status("Case study duplicated \u2014 the copy is Hidden from the site until you\u2019re ready to publish it.", true);
+      };
+      if (src.study?.nativeDeck) {
+        b.disabled = true;
+        loadStudioDeck(src.study.nativeDeck, { latest: true }).then(async saved => {
+          const reference = await saveStudioDeck(studioDeckReference(copy.id), saved.document || { version: 1, title: copy.title || "Untitled deck", selected: null, slides: [] }, { isCurrent: () => data.work.includes(src) });
+          copy.study.nativeDeck = { ...reference, slideCount: saved.document?.slides.length || 0 };
+          insertCopy();
+        }).catch(error => { b.disabled = false; status("Could not duplicate the native deck: " + error.message); });
+      } else insertCopy();
       return;
     }
     if (act === "add") { data[list].unshift(blank(list)); apply(true); renderBody(); const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0; status("Added at the top \u2014 edit it right here.", true); }
@@ -11732,7 +11848,12 @@ import { draftComposition } from "./slide-merge-ai.mjs";
 
   /* ---------- publish / revert ---------- */
   /* ---------- publish ---------- */
+  function slidePublishReady() {
+    try { assertStudioDeckPublishable(data, { activeEditor: !!nativeSlideSession }); return true; }
+    catch (error) { status(error.message); return false; }
+  }
   function publish() {
+    if (!slidePublishReady()) return;
     if (adminSession()) { ghPublish("session"); return; }   // session authorises publishing via the Worker
     const token = localStorage.getItem(GH_TOKEN_KEY);
     if (token) ghPublish(token);
@@ -11872,11 +11993,15 @@ import { draftComposition } from "./slide-merge-ai.mjs";
   }
 
   async function buildPublishJson(token) {
+    assertStudioDeckPublishable(data);
+    if (nativeSlideSession?.editor) await nativeSlideSession.editor.flush();
+    assertStudioDeckPublishable(data);
     const styled = autoStyleLanding(false);
     if (styled) { if (activeTab === "landing") renderBody(); apply(true); }
     // If a deeper-cut section was unlocked but its media is still vaulted, move that media back to
     // public hosting first (so it isn't invisible to logged-out visitors / phones), then clone.
     await deVaultUnlockedForPublish(token);
+    assertStudioDeckPublishable(data);
     const pubData = JSON.parse(JSON.stringify(data));
     // Never publish the admin-key hash — in a public repo it was an offline brute-force target. The
     // Cloudflare Worker is the source of truth for admin auth now (password login + passkeys).
@@ -13011,6 +13136,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
 
   async function ghPublish(token) {
     if (publishing) return;
+    if (!slidePublishReady()) return;
     publishing = true;
     var viaSession = (token === "session");
     // Device-trust: an unverified device (e.g. you just signed in with your phone) must verify + set up
@@ -13158,9 +13284,10 @@ import { draftComposition } from "./slide-merge-ai.mjs";
   // no network, no upload, no clipboard — and it never touches the encryption/publish/grant code.
   // The file holds plaintext locked-section content, so it's sensitive; it does NOT contain your
   // admin key, recovery passphrase or session token (those are never part of the content model).
-  function downloadContentBackup() {
+  async function downloadContentBackup() {
     try {
-      var json = JSON.stringify(data, null, 2);
+      if (nativeSlideSession?.editor) await nativeSlideSession.editor.flush();
+      var json = JSON.stringify(await studioDeckBackup(data), null, 2);
       var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
       var blob = new Blob([json], { type: "application/json" });
       var a = document.createElement("a");
@@ -13169,7 +13296,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function () { try { URL.revokeObjectURL(a.href); } catch (e) {} }, 4000);
       status("Backup saved to this device \u2014 it holds your unlocked content in plain text, so keep it private (don\u2019t commit or share it).", true);
-    } catch (e) { status("Couldn\u2019t create the backup."); }
+    } catch (e) { status("Could not create the backup: " + e.message); }
   }
 
   // ---------- selective recovery: read a downloaded backup, show what's inside, restore only what you tick.
@@ -13249,15 +13376,21 @@ import { draftComposition } from "./slide-merge-ai.mjs";
     modal.querySelector("[data-cancel]").addEventListener("click", close);
     modal.querySelectorAll("[data-bkr-all]").forEach(function (b) { b.addEventListener("click", function () { var g = b.getAttribute("data-bkr-all"); modal.querySelectorAll(g === "work" ? "[data-bkr-work]" : "[data-bkr-sec]").forEach(function (c) { c.checked = true; }); }); });
     modal.querySelectorAll("[data-bkr-none]").forEach(function (b) { b.addEventListener("click", function () { var g = b.getAttribute("data-bkr-none"); modal.querySelectorAll(g === "work" ? "[data-bkr-work]" : "[data-bkr-sec]").forEach(function (c) { c.checked = false; }); }); });
-    modal.querySelector("[data-go]").addEventListener("click", function () {
+    modal.querySelector("[data-go]").addEventListener("click", async function () {
       var selWork = [].slice.call(modal.querySelectorAll("[data-bkr-work]:checked")).map(function (c) { return c.getAttribute("data-bkr-work"); });
       var selSec = [].slice.call(modal.querySelectorAll("[data-bkr-sec]:checked")).map(function (c) { return c.getAttribute("data-bkr-sec"); });
       if (!selWork.length && !selSec.length) { err.textContent = "Pick at least one thing to recover."; return; }
-      close();
-      backupRecover(backup, selWork, selSec);
+      const submit = modal.querySelector("[data-go]"); submit.disabled = true;
+      try { await backupRecover(backup, selWork, selSec); close(); }
+      catch (failure) { err.textContent = failure.message; submit.disabled = false; }
     });
   }
-  function backupRecover(backup, selWork, selSec) {
+  async function backupRecover(backup, selWork, selSec) {
+    if (nativeSlideSession?.editor) await nativeSlideSession.editor.flush();
+    const destination = data;
+    backup = await restoreStudioDeckBackup(backup, selWork || [], { isCurrent: () => data === destination });
+    if (data !== destination) throw new Error("The Studio draft changed during recovery. Reopen the backup and try again.");
+    if (nativeSlideSession) closeL2({ render: false });
     histPush(); // snapshot current content so the whole recovery is one Ctrl+Z away
     var added = 0, replaced = 0;
     if (selWork && selWork.length && Array.isArray(backup.work)) {
@@ -13284,6 +13417,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
   }
 
   async function publishManual() {
+    if (!slidePublishReady()) return;
     let json;
     try { json = await buildPublishJson(); }
     catch (e) { status(e && e.rkEnc ? (e.mixed ? "Unlock the protected sections first, then publish." : "Publish paused \u2014 a protected project\u2019s passphrase wasn\u2019t provided.") : "Couldn\u2019t prepare content to publish."); return; }
@@ -17424,6 +17558,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
         '<div class="adm__dev adm__slideview" data-slideview-wrap hidden><button class="adm__dev-btn" data-slideview-toggle type="button" aria-haspopup="true" aria-expanded="false" title="Slide view"><span class="adm__dev-ic">' + IC.board + '</span><span class="adm__dev-lbl" data-slideview-lbl>Current slide</span><svg class="adm__dev-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="adm__dev-pop" hidden><button class="adm__dev-opt" data-slideview="current" type="button">Current slide</button><button class="adm__dev-opt" data-slideview="all" type="button">All slides</button></div></div>' +
         '<button class="btn btn--ghost adm__newtab" data-newtab type="button" aria-label="Open live preview in a new tab" title="Open live preview in a new tab"><svg class="adm__newtab-ext" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg><svg class="adm__newtab-play" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span class="adm__newtab-tx" hidden></span></button>' +
         "</div>" +
+        '<div data-native-slide-toolbar hidden></div>' +
       "</div>" +
       '<div class="adm__main">' +
         '<div class="adm__editor"><div class="adm__body"></div>' +
@@ -17450,6 +17585,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
         '<aside class="adm__casestage" data-casestage hidden aria-label="Section editor"></aside>' +
       "</div>" +
       '<footer class="adm__statusbar" aria-label="Document status">' +
+        '<div data-native-slide-status hidden></div>' +
         '<span class="adm__status" aria-live="polite" title="Editing local draft">Editing local draft</span>' +
         '<span class="adm__dmeter" data-draftmeter data-lvl="lo" tabindex="0" aria-label="Local draft storage"><span class="adm__dmeter-dot"></span><span class="adm__dmeter-tx" data-draftmeter-tx>Draft 0%</span></span>' +
         '<button class="btn btn--ghost adm__logs-btn" data-act="logs-rec" type="button" aria-pressed="false" aria-label="Record activity log" title="Record a log of your taps &amp; jumps to share"><span class="adm__logs-dot"></span><span class="adm__logs-rec-tx" hidden>REC</span></button>' +
@@ -17493,6 +17629,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
       e.stopPropagation();
     }, { passive: false, capture: true });
 
+    root.addEventListener("click", nativeSlideClickGate, true);
     root.addEventListener("input", onInput);
     root.addEventListener("keydown", onIconKey);
     // Ctrl/\u2318+Z undo, Ctrl+Shift+Z / Ctrl+Y redo \u2014 on document so it fires even when focus fell to <body> after a re-render.
@@ -17790,6 +17927,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
   }
 
   function exit() {
+    disposeNativeSlides();
     autopubStop();
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(data)); } catch (e) {}
     if (window.RK) { window.RK.data = clone(data); try { window.RK.render(data); } catch (e) {} forceReveal(); }

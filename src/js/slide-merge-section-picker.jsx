@@ -42,11 +42,11 @@ function MediaChoice({ media, onPick }) {
   return <HoverPreview label={media.title} preview={() => media.kind === "video" ? <video src={media.url} muted playsInline autoPlay loop /> : <img src={media.url} alt="" />}><button title={media.title} aria-label={`Insert ${media.kind}: ${media.title}`} onClick={() => onPick(media)}><span className="merge-media-preview">{failed ? <ToolIcon name="image" /> : media.kind === "video" ? <video src={media.url} muted playsInline preload="metadata" onError={() => setFailed(true)} /> : <img src={media.url} alt="" loading="lazy" onError={() => setFailed(true)} />}</span><span>{media.title}</span><small>{media.kind === "video" ? "Video" : /\.svg(?:$|[?#])/i.test(media.url) ? "SVG" : "Image"}</small></button></HoverPreview>;
 }
 
-export function SectionPicker({ title = "Generate from a section", onClose, onPick, embedded = false, multiple = false, mediaOnly = false, onUpload, onEmbed, composition }) {
+export function SectionPicker({ title = "Generate from a section", sourceStudyId, onClose, onPick, embedded = false, multiple = false, mediaOnly = false, onUpload, onEmbed, composition }) {
   const [selected, setSelected] = useState([]);
   const [sourceData, setSourceData] = useState(null), [drafting, setDrafting] = useState(false);
   const [resources, setResources] = useState({});
-  const contextId = new URLSearchParams(location.search).get("study");
+  const contextId = sourceStudyId || new URLSearchParams(location.search).get("study");
   const [studies, setStudies] = useState([]), [studyId, setStudyId] = useState("");
   const [loading, setLoading] = useState(true), [error, setError] = useState(""), [retry, setRetry] = useState(0);
   useEffect(() => {

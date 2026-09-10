@@ -31,9 +31,10 @@ export function HistoryControls({ target, disabled, activity, history, pending, 
   })}</fieldset>, target) : null;
 }
 
-export function useActivity(api, live) {
+export function useActivity(api, live, caseStudyId) {
   const [recording, setRecording] = useState(false), [showLog, setShowLog] = useState(false), [message, setMessage] = useState("");
-  const [events, setEvents] = useState(() => { try { return JSON.parse(localStorage.getItem("rk:slide-merge:log") || "[]"); } catch { return []; } });
+  const storageKey = caseStudyId ? `rk:studio:slide-log:${caseStudyId}` : "rk:slide-merge:log";
+  const [events, setEvents] = useState(() => { try { return JSON.parse(localStorage.getItem(storageKey) || "[]"); } catch { return []; } });
   const state = useRef({ recording: false, events: [], baseline: [], slide: null, timer: null, pending: new Set() });
   function write(kind, detail) {
     if (!state.current.recording) return;
@@ -42,7 +43,7 @@ export function useActivity(api, live) {
     if (state.current.events.length > 2000) state.current.events.splice(1, 1);
     const next = [...state.current.events];
     setEvents(next);
-    try { localStorage.setItem("rk:slide-merge:log", JSON.stringify(next)); } catch { setMessage("Activity log is in memory; device storage is full"); }
+    try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { setMessage("Activity log is in memory; device storage is full"); }
   }
   function note(detail, kind = "sys") { setMessage(detail); write(kind, detail); }
   function reset(slide) { clearTimeout(state.current.timer); state.current.baseline = activitySnapshot(slide.scene.elements); state.current.slide = slide.id; }

@@ -486,15 +486,17 @@ test('canvas drag stays one deck-history step through autosave and slide navigat
   try{
     await page.goto(base+'/studio/slide-merge-lab/');
     await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
     const original=await page.evaluate(()=>{const api=window.__slideMerge.api,element=api.getSceneElements().find(element=>element.id==='step-0'),state=api.getAppState(),box=document.querySelector('.lab-canvas').getBoundingClientRect();return {id:element.id,x:element.x,y:element.y,screen:{x:box.left+(element.x+element.width*.4+state.scrollX)*state.zoom.value,y:box.top+(element.y+element.height*.2+state.scrollY)*state.zoom.value}};});
     await page.clock.install();
+    const pointerStart = await page.evaluate(({screen})=>{const state=window.__slideMerge.api.getAppState();return {screen,hit:document.elementFromPoint(screen.x,screen.y)?.outerHTML.slice(0,350),zoom:state.zoom,scrollX:state.scrollX,scrollY:state.scrollY,offsetLeft:state.offsetLeft,offsetTop:state.offsetTop,tool:state.activeTool,viewMode:state.viewModeEnabled};},original);
     await page.mouse.move(original.screen.x,original.screen.y);await page.mouse.down();
     await page.mouse.move(original.screen.x+60,original.screen.y+20,{steps:5});
     await page.clock.runFor(650);
     await page.mouse.move(original.screen.x+110,original.screen.y+40,{steps:5});await page.mouse.up();
     await page.clock.runFor(650);
     const moved=await page.evaluate(id=>{const element=window.__slideMerge.api.getSceneElements().find(element=>element.id===id);return {x:element.x,y:element.y};},original.id);
-    assert.notEqual(moved.x,original.x);
+    assert.notEqual(moved.x,original.x,JSON.stringify({pointerStart,after:await page.evaluate(()=>{const state=window.__slideMerge.api.getAppState();return {selected:state.selectedElementIds,tool:state.activeTool,viewMode:state.viewModeEnabled,zoom:state.zoom,scrollX:state.scrollX,scrollY:state.scrollY,offsetLeft:state.offsetLeft,offsetTop:state.offsetTop};})}));
     await page.locator('.merge-slide').nth(1).click();
     await page.getByRole('button',{name:'Undo',exact:true}).click();
     await page.waitForFunction(id=>window.__slideMerge.deck().selected==='opening'&&window.__slideMerge.api.getSceneElements().some(element=>element.id===id),original.id);
