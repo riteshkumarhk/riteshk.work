@@ -57,6 +57,7 @@ test("real audience tab capture mirrors live pixels and forwards web controls", 
     const swatch = await pointFor(page, popup, "#swatch");
     await popup.mouse.move(swatch.x, swatch.y);
     await page.waitForFunction(() => document.querySelector(".pjp")?.dataset.pointer === "laser");
+    assert.equal(await popup.locator(".pjp__pointer").isHidden(), true, "live pixels must not get a second laser overlay");
     for (const selector of ["#action", "#section", "#play"]) {
       const position = await pointFor(page, popup, selector);
       await popup.mouse.click(position.x, position.y);
@@ -90,6 +91,87 @@ test("real audience tab capture mirrors live pixels and forwards web controls", 
     assert.match(await popup.locator("[data-pp-now]").textContent(), /Second slide/);
     await popup.locator('[data-pp="exit"]').click();
     await page.waitForSelector(".pjp", { state: "detached" });
+  } finally { await browser.close(); }
+});
+
+test("laser glides without overshoot, leaves a bounded fading trail and respects reduced motion", { timeout: 30000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless: true });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "no-preference" });
+  async function pointAt(selector, fraction = 0.5) {
+    const position = await page.locator(selector).evaluate((element, fraction) => {
+      const bounds = element.getBoundingClientRect();
+      return { x: bounds.left + bounds.width * fraction, y: bounds.top + bounds.height / 2 };
+    }, fraction);
+    await page.evaluate(position => document.querySelector(".pjp").dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: position.x, clientY: position.y })), position);
+    return position;
+  }
+  async function laserState() {
+    return page.evaluate(() => {
+      const pointer = document.querySelector(".pjp__pointer"), canvas = pointer.querySelector("canvas");
+      const pixels = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+      let painted = 0, left = canvas.width, right = 0;
+      for (let offset = 3; offset < pixels.length; offset += 4) if (pixels[offset] > 20) {
+        painted++; const column = ((offset - 3) / 4) % canvas.width;
+        left = Math.min(left, column); right = Math.max(right, column);
+      }
+      return { x: parseFloat(pointer.style.left), y: parseFloat(pointer.style.top), hidden: pointer.hidden, painted, trailWidth: painted ? (right - left) / (canvas.width / 160) : 0 };
+    });
+  }
+  try {
+    await page.goto(baseURL + "/tools/studio-presenter/fixture.html");
+    await page.click("#start");
+    await page.locator("#swatch").click({ trial: true });
+    await page.clock.install({ time: new Date("2026-09-10T12:00:00Z") });
+    await page.clock.pauseAt(new Date("2026-09-10T12:00:01Z"));
+    await page.evaluate(() => document.querySelector(".pjp").dispatchEvent(new PointerEvent("pointerleave")));
+    const start = await pointAt("#swatch", 0.1);
+    assert.ok(Math.abs((await laserState()).x - start.x) < 0.01, "entry must be immediate");
+    const target = await pointAt("#swatch", 0.9);
+    assert.ok(Math.abs((await laserState()).x - start.x) < 0.01, "movement should be frame-timed");
+    await page.clock.runFor(32);
+    const moving = await laserState();
+    assert.ok(moving.x > start.x && moving.x < target.x, "easing must approach the target without overshooting");
+    assert.ok(moving.painted > 0 && moving.trailWidth <= 70, "the trail must be visible and short");
+    await page.screenshot({ path: join(tmpdir(), "rk-laser-moving.png") });
+    await page.clock.runFor(400);
+    const settled = await laserState();
+    assert.ok(Math.abs(settled.x - target.x) < 0.1);
+    assert.equal(settled.painted, 0, "the tail must completely disappear at rest");
+    await pointAt("#action");
+    assert.equal((await laserState()).hidden, true, "local controls must retain their native cursor");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const reduced = await pointAt("#swatch", 0.2);
+    await pointAt("#swatch", 0.8);
+    assert.ok((await laserState()).x > reduced.x);
+    assert.equal((await laserState()).painted, 0);
+    await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+    await page.clock.runFor(300);
+    assert.equal((await laserState()).hidden, true);
+    await page.keyboard.press("Escape");
+    await page.clock.runFor(300);
+    assert.equal(await page.locator(".pjp__pointer").count(), 0);
+  } finally { await browser.close(); }
+});
+
+test("DJ thumbnail shares the laser and clears it on navigation without capture", { timeout: 30000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless: true, ignoreDefaultArgs: ["--disable-popup-blocking"] });
+  try {
+    const { page, popup } = await openFixture(browser);
+    const relative = await page.locator("#swatch").evaluate(element => {
+      const bounds = element.getBoundingClientRect(), frame = document.querySelector("[data-pjp-frame]").getBoundingClientRect();
+      return { x: (bounds.left + bounds.width / 2 - frame.left) / frame.width, y: (bounds.top + bounds.height / 2 - frame.top) / frame.height };
+    });
+    const preview = await popup.locator("[data-pp-now]").boundingBox();
+    await popup.mouse.move(preview.x + preview.width * relative.x, preview.y + preview.height * relative.y);
+    await page.waitForFunction(() => document.querySelector(".pjp")?.dataset.pointer === "laser");
+    assert.equal(await popup.locator(".pjp__pointer").isVisible(), true);
+    assert.equal(await popup.locator(".pjp__pointer-trail").count(), 1);
+    assert.match(await popup.locator(".pjp__pointer").evaluate(element => getComputedStyle(element, "::after").backgroundImage), /radial-gradient/);
+    assert.equal(await popup.locator("[data-pp-now] canvas").count(), 0);
+    await popup.evaluate(() => document.querySelector('[data-pp="next"]').click());
+    assert.equal(await page.locator("[data-pjp-count]").textContent(), "2 / 2");
+    assert.equal(await popup.locator(".pjp__pointer").isHidden(), true);
+    assert.equal(await page.locator(".pjp__pointer").isHidden(), true);
   } finally { await browser.close(); }
 });
 

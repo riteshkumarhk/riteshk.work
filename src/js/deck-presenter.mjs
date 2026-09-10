@@ -144,6 +144,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   function render(dir) {
     if (idx !== lastTimedIndex) { clock.nextSlide(); lastTimedIndex = idx; }
     pointer.hide();
+    webPreview?.resetPointer();
     if (mountSlide) {
       mountSlide(frame, slides[idx], idx);
       updateChrome();

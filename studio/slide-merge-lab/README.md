@@ -36,6 +36,15 @@ the floating window, including when its opening request was still pending.
 Always-on-top is not capture protection: share the slides tab/window rather than
 the whole screen, and verify the meeting application's sharing preview.
 
+`Slide Show` automatically requests the DJ pad and live preview. A fully automatic
+browser launch is still blocked: Chromium consumes the same user activation for
+fullscreen and Document Picture-in-Picture, so reversing their order does not
+open both. Screen capture also requires browser consent for each presentation.
+The fullscreen retry is a fallback, not fulfillment of the one-click requirement.
+`presenter-dj.browser.test.mjs` keeps that exact requirement as an explicit TODO
+with normal popup blocking enabled. The native Windows app supports automatic
+borderless audience fullscreen and its live companion without browser capture.
+
 ### Web live preview (no app required)
 
 Pointing works immediately when the presenter window opens, including from
@@ -44,6 +53,13 @@ audience-slide position. No capture permission is needed for pointing. Leaving
 the preview hides the laser; notes and presenter controls do not point at slides.
 The thumbnail is still static until live capture is connected, so motion and
 changed section states require the live feed for an accurate visual preview.
+
+The shared audience and thumbnail laser uses frame-timed, non-overshooting motion,
+a crisp red core and a tapered trail capped at 56 CSS pixels and 140 milliseconds.
+The tail clears at rest; controls retain immediate targeting. Reduced motion
+disables easing and trails. Leaving, changing slides, resizing or closing clears
+the pointer and its animation. Live capture shows the actual audience laser, with
+no second pointer drawn over the captured pixels.
 
 For live video and preview interaction, choose **Connect live preview**. On supported
 desktop Chrome/Edge, select the audience slides **tab** in the browser's capture

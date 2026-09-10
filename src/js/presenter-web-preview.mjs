@@ -1,4 +1,5 @@
 import { presenterIcon } from "./presenter-panel.mjs";
+import { createPresenterLaser } from "./presenter-pointer.mjs";
 export function requestPresenterCapture() {
   const handle = crypto.randomUUID();
   let cancelled = false, captured = null;
@@ -15,11 +16,7 @@ export function requestPresenterCapture() {
 export function installWebPresenterPreview({ frame, pointer, container, presenterWindow, button, status, onDisconnect, captureTicket }) {
   const doc = container.ownerDocument;
   const previewSurface = container.parentElement;
-  const localPointer = doc.createElement("div");
-  localPointer.setAttribute("aria-hidden", "true");
-  localPointer.style.cssText = "position:absolute;width:12px;height:12px;border:2px solid white;border-radius:50%;background:#ff334e;box-shadow:0 0 8px #ff334e;transform:translate(-50%,-50%);pointer-events:none;z-index:2;box-sizing:border-box";
-  localPointer.hidden = true;
-  previewSurface.appendChild(localPointer);
+  const localLaser = createPresenterLaser(previewSurface, true);
   const mediaDevices = navigator.mediaDevices;
   const handle = captureTicket?.handle || crypto.randomUUID();
   let stream = null, video = null, canvas = null, stopped = false, pending = false, animation = 0;
@@ -52,7 +49,7 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     if (pressed?.isConnected) pressed.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true, pointerId: 1, pointerType: "mouse" }));
     pressed = null;
     pointer.hide();
-    localPointer.hidden = true;
+    localLaser.hide();
   }
   function stop(message = "Live preview stopped. Pointer remains connected.") {
     release();
@@ -82,11 +79,10 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     const target = document.elementFromPoint(x, y);
     if (!target || !frame.contains(target)) { release(); return null; }
     pointer.point(x, y, true);
-    const control = !!target.closest('a,button,input,textarea,select,summary,video,audio,[role="button"],[role="slider"],[contenteditable="true"],[data-pjhref],[data-pjjump]');
-    localPointer.hidden = control;
+    const control = !!target.closest('a,button,input,textarea,select,summary,video,audio,iframe,[role="button"],[role="slider"],[contenteditable="true"],[data-pjhref],[data-pjjump]');
     const surface = previewSurface.getBoundingClientRect();
-    localPointer.style.left = event.clientX - surface.left - previewSurface.clientLeft + "px";
-    localPointer.style.top = event.clientY - surface.top - previewSurface.clientTop + "px";
+    if (control || canvas) localLaser.hide();
+    else localLaser.point(event.clientX - surface.left - previewSurface.clientLeft, event.clientY - surface.top - previewSurface.clientTop);
     previewSurface.style.cursor = control ? "pointer" : "none";
     if (canvas) canvas.style.cursor = control ? "pointer" : "none";
     if (target.closest("iframe")) {
@@ -100,6 +96,7 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
   previewSurface.addEventListener("pointermove", pointPreview, true);
   previewSurface.addEventListener("pointerleave", leavePreview);
   presenterWindow.addEventListener("blur", release);
+  presenterWindow.addEventListener("resize", release);
   function setRange(target, x) {
     if (!target.matches('input[type="range"]')) return;
     const bounds = target.getBoundingClientRect();
@@ -196,6 +193,7 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
       canvas.setAttribute("aria-label", "Live audience slide controls");
       canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none";
       container.appendChild(canvas);
+      localLaser.hide();
       container.classList.add("pp__now--live");
       for (const type of ["pointerdown", "pointermove", "pointerup"]) canvas.addEventListener(type, forward);
       canvas.addEventListener("pointercancel", release);
@@ -239,6 +237,7 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
   if (!supported) { button.disabled = true; status.textContent = "Pointer connected. Live video preview is unavailable in this browser."; }
   return {
     connect,
+    resetPointer: release,
     get live() { return !!stream; },
     dispose() {
       stopped = true;
@@ -248,7 +247,8 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
       previewSurface.removeEventListener("pointermove", pointPreview, true);
       previewSurface.removeEventListener("pointerleave", leavePreview);
       presenterWindow.removeEventListener("blur", release);
-      localPointer.remove();
+      presenterWindow.removeEventListener("resize", release);
+      localLaser.dispose();
       previewSurface.style.cursor = "";
       controls.remove();
       try { mediaDevices?.setCaptureHandleConfig?.({}); } catch (error) {}

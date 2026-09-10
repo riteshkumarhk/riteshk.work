@@ -77,6 +77,7 @@ lucide-react/dist/esm/icons/list-x.mjs:
 lucide-react/dist/esm/icons/lock-keyhole-open.mjs:
 lucide-react/dist/esm/icons/lock-keyhole.mjs:
 lucide-react/dist/esm/icons/maximize.mjs:
+lucide-react/dist/esm/icons/message-square-text.mjs:
 lucide-react/dist/esm/icons/pencil-off.mjs:
 lucide-react/dist/esm/icons/pencil.mjs:
 lucide-react/dist/esm/icons/presentation.mjs:
@@ -86,6 +87,7 @@ lucide-react/dist/esm/icons/square.mjs:
 lucide-react/dist/esm/icons/timer.mjs:
 lucide-react/dist/esm/icons/trash-2.mjs:
 lucide-react/dist/esm/icons/ungroup.mjs:
+lucide-react/dist/esm/icons/user-round.mjs:
 lucide-react/dist/esm/icons/x.mjs:
 lucide-react/dist/esm/lucide-react.mjs:
   /**

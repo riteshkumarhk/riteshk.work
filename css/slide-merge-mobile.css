@@ -17,6 +17,7 @@
   .merge-mobile-canvas-controls>button { width:36px; height:36px; pointer-events:auto; background:var(--merge-bg); }
   .merge-mobile-canvas-controls .merge-notes-toggle { margin-left:auto; }
   .merge-shell .excalidraw .footer-center { display:none; }
+  .merge-shell .excalidraw .layer-ui__wrapper__footer { padding-left:152px;bottom:12px;z-index:6; }
   .merge-shell .merge-toolbar { gap:4px; padding:0 8px; }
   .merge-shell .merge-toolbar>input { padding:6px 2px; font-size:12px; }
   .merge-shell .merge-mobile-only { display:inline-flex; align-items:center; justify-content:center; }

@@ -2,11 +2,16 @@
 html.pjp-on { overflow: hidden; }
 .pjp--laser[data-pointer="laser"] .pjp__frame, .pjp--laser[data-pointer="laser"] .pjp__frame * { cursor:none !important; }
 .pjp--laser[data-pointer="control"] .pjp__frame, .pjp--laser[data-pointer="control"] .pjp__frame * { cursor:auto; }
-.pjp__pointer { position:fixed; z-index:20; width:12px; height:12px; margin:-6px 0 0 -6px; border:2px solid #fff; border-radius:50%; background:#ff374b; box-shadow:0 0 0 3px rgba(255,55,75,.25),0 0 12px rgba(255,55,75,.7); pointer-events:none; }
+.pjp__pointer { position:fixed; z-index:20; width:10px; height:10px; margin:-5px 0 0 -5px; pointer-events:none; }
+.pjp__pointer::after { content:""; position:absolute; inset:0; border:1px solid #d51435; border-radius:50%; background:radial-gradient(circle at 42% 38%,#fff 0 15%,#ffd1d8 23%,#ff4b61 48%,#f02244 75%); box-shadow:0 0 0 1px rgba(255,255,255,.7),0 0 8px rgba(255,55,75,.55); }
+.pjp__pointer--preview { position:absolute; z-index:2; }
+.pjp__pointer-trail { position:absolute; left:50%; top:50%; width:160px; height:160px; margin:-80px 0 0 -80px; pointer-events:none; }
 .pjp__pointer[hidden] { display:none; }
 .pjp__pointer svg { display:none; }
 .pjp__pointer.is-control { width:24px; height:28px; margin:0; border:0; border-radius:0; background:none; box-shadow:none; }
+.pjp__pointer.is-control::after,.pjp__pointer.is-control .pjp__pointer-trail { display:none; }
 .pjp__pointer.is-control svg { display:block; width:24px; height:28px; fill:#fff; stroke:#141417; stroke-width:1.5; }
+@media (prefers-reduced-motion: reduce) { .pjp__pointer-trail { display:none; } }
 .pjp--native .pjp__present,.pjp--native .pjp__notesbtn,.pjp--native .pjp__popbtn { display:none !important; }
 .pjp--native .pjp__bar { opacity:0; }
 .pjp--native .pjp__bar:hover,.pjp--native .pjp__bar:focus-within { opacity:1; }

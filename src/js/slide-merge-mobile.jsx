@@ -32,7 +32,12 @@ export function useMobilePanels(api) {
     const trigger = document.activeElement;
     document.querySelector(".merge-sheet-close")?.focus();
     const key = event => {
+      if (api.getAppState().openDialog) return;
       if (document.querySelector('.color-picker-content, .font-picker-content, .merge-tool-pop:popover-open')) return;
+      if (panel === "notes") {
+        if (event.key === "Escape" && !event.target.closest(".merge-time-budget")) { event.preventDefault(); open(null); }
+        return;
+      }
       if (event.key === "Escape") { event.preventDefault(); open(null); }
       if (event.key === "Tab") {
         const containers = [...document.querySelectorAll('.merge-sheet-head, .merge-slide-properties, .App-mobile-menu, .selected-shape-actions, .default-sidebar, .merge-content-sidebar, .merge-notes')];

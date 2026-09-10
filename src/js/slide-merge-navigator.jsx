@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { LayoutTemplate, Sparkles, Timer } from "lucide-react";
+import { LayoutTemplate, Sparkles } from "lucide-react";
 import { ToolMenu, ToolIcon } from "./slide-merge-toolbar.jsx";
 import { LayoutPicker } from "./slide-merge-layout-picker.jsx";
 import { NavigatorDragList, NavigatorDragEntry } from "./slide-merge-drag.jsx";
@@ -36,7 +36,7 @@ function SectionName({ value, onSave, onClose }) {
 export function SlideAddActions({ add, pick, busy }) {
   return <><button data-close disabled={busy} onClick={() => add("blank")}><ToolIcon name="add" />Add blank</button><button data-close disabled={busy} onClick={() => pick("layout")}><LayoutTemplate size={18} strokeWidth={1.75} />Add a layout...</button><button data-close disabled={busy} onClick={() => pick("source")}><ToolIcon name="section" />Add sections as slides</button><button data-close disabled={busy} onClick={() => pick("draft")}><Sparkles size={18} strokeWidth={1.75} />Draft entire deck with AI</button></>;
 }
-export function SlideNavigator({ deck, thumbnails, busy, editing = true, choose, modify, add, pick, section, remove, reorder, onTiming }) {
+export function SlideNavigator({ deck, thumbnails, busy, editing = true, choose, modify, add, pick, section, remove, reorder }) {
   const [naming, setNaming] = useState(null);
   useEffect(() => { if (!editing) setNaming(null); }, [editing]);
   const menu = () => <SlideAddActions add={add} pick={pick} busy={busy} />;
@@ -51,7 +51,6 @@ export function SlideNavigator({ deck, thumbnails, busy, editing = true, choose,
       {editing && <InsertGap index={index} busy={busy} add={() => add("blank", slide.id)} section={() => setNaming(slide.id)} />}
       <article data-slide-delete-id={slide.id} className={`merge-slide-card ${deck.selected === slide.id ? "is-active" : ""} ${slide.hidden ? "is-skipped" : ""}`}>
         <button {...slideDrag} className={`merge-slide ${deck.selected === slide.id ? "is-active" : ""}`} aria-label={`Slide ${index + 1}: ${slide.title}`} aria-current={deck.selected === slide.id ? "true" : undefined} disabled={busy} onClick={() => choose(slide.id)}><span className="merge-thumbnail" aria-hidden="true">{thumbnails[slide.id]}</span><span><small>{String(index + 1).padStart(2, "0")}</small>{slide.title || "Untitled slide"}</span>{slide.hidden && <em className="merge-skipped-label">Skipped</em>}</button>
-        <div className="merge-slide-timing"><button className="merge-nav-action" title="Slide time budget" aria-label={`Time budget for slide ${index + 1}`} disabled={busy} onClick={() => onTiming?.(slide.id)}><Timer size={15} strokeWidth={1.75} /></button>{slide.durationMinutes > 0 && <span>{slide.durationMinutes} min</span>}</div>
         {editing && <div className="merge-thumb-actions" aria-label={`Actions for slide ${index + 1}`}>
           <Action icon="up" label="Move slide up" disabled={busy || index === 0} onClick={() => modify("up", slide.id)} />
           <Action icon="down" label="Move slide down" disabled={busy || index === deck.slides.length - 1} onClick={() => modify("down", slide.id)} />
