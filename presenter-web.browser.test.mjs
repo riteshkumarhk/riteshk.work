@@ -23,10 +23,9 @@ async function openFixture(browser) {
 }
 
 async function pointFor(page, popup, selector) {
-  const relative = await page.locator(selector).evaluate(element => {
-    const bounds = element.getBoundingClientRect(), frame = document.querySelector("[data-pjp-frame]").getBoundingClientRect();
-    return { x: (bounds.left + bounds.width / 2 - frame.left) / frame.width, y: (bounds.top + bounds.height / 2 - frame.top) / frame.height };
-  });
+  const bounds = await (typeof selector === "string" ? page.locator(selector) : selector).boundingBox();
+  const frame = await page.locator("[data-pjp-frame]").evaluate(frame => (document.fullscreenElement && frame.contains(document.fullscreenElement) ? document.fullscreenElement : frame).getBoundingClientRect().toJSON());
+  const relative = { x: (bounds.x + bounds.width / 2 - frame.x) / frame.width, y: (bounds.y + bounds.height / 2 - frame.y) / frame.height };
   const canvas = await popup.locator("[data-pp-now] canvas").boundingBox();
   return { x: canvas.x + canvas.width * relative.x, y: canvas.y + canvas.height * relative.y };
 }
@@ -79,6 +78,12 @@ test("real audience tab capture mirrors live pixels and forwards web controls", 
     await popup.locator('[data-pp="next"]').click();
     assert.equal(await popup.locator("[data-pp-notes]").textContent(), "Private second note");
     assert.equal(await popup.locator("[data-pp-now] canvas").count(), 1);
+    assert.match(await popup.locator("[data-pp-now]").textContent(), /Second slide/, "The fallback thumbnail must track slide changes even while capture is live");
+    await popup.evaluate(() => Object.defineProperty(document.querySelector("video").srcObject.getVideoTracks()[0], "muted", { value: true, configurable: true }));
+    await popup.waitForFunction(() => document.querySelector("[data-pp-now] canvas").style.visibility === "hidden");
+    assert.equal(await popup.locator("[data-pp-now] [data-pp-thumbnail]").isVisible(), true, "Interrupted capture must expose the complete current thumbnail");
+    await popup.evaluate(() => { delete document.querySelector("video").srcObject.getVideoTracks()[0].muted; });
+    await popup.waitForFunction(() => document.querySelector("[data-pp-now] canvas").style.visibility === "visible");
     await page.keyboard.press("p");
     assert.equal(await page.locator(".pjp--presenting").count(), 0);
     await popup.setViewportSize({ width: 1060, height: 720 });
@@ -175,6 +180,178 @@ test("DJ thumbnail shares the laser and clears it on navigation without capture"
   } finally { await browser.close(); }
 });
 
+test("DJ input reaches native section controls while ordinary section content keeps the laser", { timeout: 45000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless: true, ignoreDefaultArgs: ["--disable-popup-blocking"], args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
+  try {
+    const { page, popup } = await openFixture(browser);
+    await page.evaluate(() => {
+      const image = document.createElement("canvas"); image.width = 640; image.height = 360;
+      const context = image.getContext("2d"); context.fillStyle = "#ba284a"; context.fillRect(0, 0, 640, 360);
+      const beforeSrc = image.toDataURL(); context.fillStyle = "#21b69a"; context.fillRect(0, 0, 640, 360);
+      const block = { type: "compare", heading: "A section heading", beforeSrc, afterSrc: image.toDataURL() };
+      const embedded = document.createElement("iframe"); embedded.dataset.section = "compare";
+      embedded.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:0";
+      embedded.onload = () => embedded.contentWindow.postMessage({ type: "rk-section-component", block, appearance: "dark" }, location.origin);
+      embedded.src = "/studio/slide-lab/native.html?fixture=component";
+      document.querySelector("[data-pjp-frame]").replaceChildren(embedded);
+    });
+    const section = page.frameLocator('iframe[data-section="compare"]');
+    await section.locator(".pjb__cmp-base").evaluate(image => image.decode());
+    await popup.locator("[data-pp-live]").click();
+    await popup.locator("[data-pp-now] canvas").waitFor();
+    const audience = await page.locator("[data-pjp-frame]").boundingBox();
+    const preview = await popup.locator("[data-pp-now]").boundingBox();
+    const previewPoint = bounds => ({ x: preview.x + (bounds.x + bounds.width / 2 - audience.x) / audience.width * preview.width, y: preview.y + (bounds.y + bounds.height / 2 - audience.y) / audience.height * preview.height });
+    const heading = previewPoint(await section.locator(".pjb__h").boundingBox());
+    await popup.mouse.move(heading.x, heading.y);
+    assert.equal(await page.locator(".pjp").getAttribute("data-pointer"), "laser", "An iframe's noninteractive text is still laser content");
+    const grip = previewPoint(await section.locator("[data-cmp]").boundingBox());
+    await popup.mouse.move(grip.x, grip.y);
+    assert.equal(await page.locator(".pjp").getAttribute("data-pointer"), "control");
+    await popup.mouse.down(); await popup.mouse.move(grip.x + preview.width * 0.15, grip.y, { steps: 8 }); await popup.mouse.up();
+    assert.ok(await section.locator(".pjb__cmp").evaluate(element => parseFloat(element.style.getPropertyValue("--pos"))) > 60, "DJ drag must change the actual audience comparison");
+    await popup.mouse.move(heading.x, heading.y);
+    assert.equal(await page.locator(".pjp").getAttribute("data-pointer"), "laser");
+    assert.doesNotMatch(await popup.locator("[data-pp-status]").textContent(), /use its controls directly/);
+    await section.locator(".pjb__h").hover();
+    assert.equal(await page.locator(".pjp").getAttribute("data-pointer"), "laser", "Direct audience pointing must also descend into section documents");
+    assert.equal(await section.locator(".pjb__h").evaluate(element => getComputedStyle(element).cursor), "none");
+    await popup.mouse.move(grip.x, grip.y); await popup.mouse.down();
+    await popup.mouse.move(grip.x + 25, grip.y, { steps: 4 });
+    await popup.locator("[data-pp-now] canvas").dispatchEvent("pointercancel", { pointerId: 1, pointerType: "mouse" });
+    const cancelled = await section.locator(".pjb__cmp").evaluate(element => element.style.getPropertyValue("--pos"));
+    await popup.mouse.move(grip.x - 60, grip.y, { steps: 4 });
+    assert.equal(await section.locator(".pjb__cmp").evaluate(element => element.style.getPropertyValue("--pos")), cancelled, "Cancelled gestures must release the section's document-level drag handler");
+    await popup.mouse.up();
+    await page.locator('iframe[data-section="compare"]').evaluate(frame => { frame.style.inset = "15%"; frame.style.width = "70%"; frame.style.height = "70%"; frame.style.transform = "rotate(17deg) scale(0.85)"; });
+    const rotatedGrip = previewPoint(await section.locator("[data-cmp]").boundingBox());
+    await popup.mouse.move(rotatedGrip.x, rotatedGrip.y); await popup.mouse.down();
+    await popup.mouse.move(rotatedGrip.x + 40, rotatedGrip.y + 12, { steps: 6 }); await popup.mouse.up();
+    assert.ok(await section.locator(".pjb__cmp").evaluate(element => parseFloat(element.style.getPropertyValue("--pos"))) > parseFloat(cancelled) + 5, "Rotated and scaled sections must receive coordinates in their own viewport");
+  } finally { await browser.close(); }
+});
+
+test("DJ forwards native gallery, annotation, generated gestures and nested media controls", { timeout: 60000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless: true, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
+  try {
+    const { page, popup } = await openFixture(browser);
+    await page.evaluate(() => {
+      const embedded = document.createElement("iframe"); embedded.id = "section-controls";
+      embedded.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:0";
+      embedded.src = "/studio/slide-lab/native.html?fixture=component";
+      document.querySelector("[data-pjp-frame]").replaceChildren(embedded);
+      const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 360;
+      const context = canvas.getContext("2d"); context.fillStyle = "#25bba0"; context.fillRect(0, 0, 640, 360);
+      window.sectionImage = canvas.toDataURL();
+    });
+    await page.waitForFunction(() => !!document.querySelector("#section-controls").contentWindow.RK?.renderSectionComponent);
+    const section = page.frameLocator("#section-controls");
+    async function render(block) {
+      await page.evaluate(block => {
+        const replace = value => Array.isArray(value) ? value.map(replace) : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, replace(item)])) : value === "$image" ? window.sectionImage : value;
+        document.querySelector("#section-controls").contentWindow.RK.renderSectionComponent({ block: replace(block), appearance: "dark" });
+      }, block);
+      await section.locator(`#stage[data-component-type="${block.type}"]`).waitFor();
+    }
+    async function position(locator) {
+      return pointFor(page, popup, locator);
+    }
+    async function click(locator) { const point = await position(locator); await popup.mouse.click(point.x, point.y); }
+    await render({ type: "gallery", heading: "Gallery content", items: Array.from({ length: 4 }, (_, index) => ({ src: "$image", caption: "Image " + index })) });
+    await popup.locator("[data-pp-live]").click(); await popup.locator("[data-pp-now] canvas").waitFor();
+    await section.locator(".pjb__gallery img").first().evaluate(image => image.decode());
+    await section.locator(".pjb__gallery img").first().click({ trial: true });
+    await click(section.locator(".pjb__gallery img").first());
+    await section.locator(".pjx.is-open").waitFor();
+    await page.waitForFunction(() => !!document.fullscreenElement);
+    const lightboxPoint = await position(section.locator('[data-lz="in"]')), lightboxPreview = await popup.locator("[data-pp-now]").boundingBox();
+    assert.ok(lightboxPoint.x >= lightboxPreview.x && lightboxPoint.x <= lightboxPreview.x + lightboxPreview.width && lightboxPoint.y >= lightboxPreview.y && lightboxPoint.y <= lightboxPreview.y + lightboxPreview.height, JSON.stringify({ point: lightboxPoint, preview: lightboxPreview, audience: await page.evaluate(() => ({ fullscreen: document.fullscreenElement?.tagName, frame: document.querySelector("[data-pjp-frame]").getBoundingClientRect().toJSON() })) }));
+    await click(section.locator('[data-lz="in"]'));
+    await popup.keyboard.press("Escape");
+    assert.equal(await section.locator(".pjx.is-open").count(), 0, "Escape must close the section lightbox without ending the deck");
+    await section.locator(".pjx").waitFor({ state: "hidden" });
+    await page.waitForFunction(() => !document.fullscreenElement);
+    assert.equal(await page.locator(".pjp").count(), 1);
+    await click(section.locator(".pjb__gallery-nav--next"));
+    await page.waitForFunction(() => document.querySelector("#section-controls").contentDocument.querySelector("[data-gallery]").scrollLeft > 10, null, { timeout: 4000 });
+    assert.ok(await section.locator("[data-gallery]").evaluate(gallery => gallery.scrollLeft) > 10);
+    await render({ type: "focus", heading: "Annotation content", src: "$image", sticky: true, annotations: [{ x: 50, y: 50, title: "Actual annotation", body: "The audience's note" }] });
+    await click(section.locator('[data-focus-mark="0"]'));
+    assert.equal(await section.locator('[data-focus-card="0"]').isVisible(), true);
+    await click(section.locator("[data-focus-close]"));
+    assert.equal(await section.locator('[data-focus-card="0"]').isVisible(), false);
+    await click(section.locator('[data-focus-note="0"]'));
+    await popup.keyboard.press("Enter");
+    assert.equal(await section.locator('[data-focus-card="0"]').isVisible(), false, "Native keyboard handlers must receive their own events without duplicate activation");
+    await render({ type: "faq", heading: "Static questions", items: [{ q: "A static question", a: "A static answer" }] });
+    const question = await position(section.locator(".pjb__q")); await popup.mouse.move(question.x, question.y);
+    assert.equal(await page.locator(".pjp").getAttribute("data-pointer"), "laser");
+    await render({ type: "gen", heading: "Interactive generated section", spec: { version: 2, root: { type: "showpiece", children: [{ type: "card", fx: "orbit", style: "width:500px;height:280px;background:#248c79", children: [{ type: "text", text: "Drag, zoom and reset" }] }] } } });
+    const orbit = section.locator('[data-rk-fx="orbit"]'), orbitPosition = await position(orbit), rest = await orbit.evaluate(element => element.style.transform);
+    await popup.mouse.move(orbitPosition.x, orbitPosition.y);
+    assert.equal(await page.locator(".pjp").getAttribute("data-pointer"), "control");
+    await popup.mouse.down(); await popup.mouse.move(orbitPosition.x + 35, orbitPosition.y + 10, { steps: 6 }); await popup.mouse.up();
+    assert.notEqual(await orbit.evaluate(element => element.style.transform), rest);
+    const beforeZoom = await orbit.evaluate(element => element.style.transform);
+    await popup.mouse.wheel(0, -90);
+    await page.waitForFunction(before => document.querySelector("#section-controls").contentDocument.querySelector('[data-rk-fx="orbit"]').style.transform !== before, beforeZoom, { timeout: 4000 });
+    assert.notEqual(await orbit.evaluate(element => element.style.transform), beforeZoom);
+    const reset = await position(orbit); await popup.mouse.dblclick(reset.x, reset.y);
+    assert.equal(await orbit.evaluate(element => element.style.transform), rest);
+    await render({ type: "gen", heading: "Hover effect", spec: { version: 2, root: { type: "showpiece", children: [{ type: "card", fx: "tilt", style: "width:500px;height:280px;background:#248c79", children: [{ type: "text", text: "A hover response" }] }] } } });
+    const tilt = section.locator('[data-rk-fx="tilt"]'), tiltRest = await tilt.evaluate(element => element.style.transform), tiltPoint = await position(tilt);
+    await popup.mouse.move(tiltPoint.x + 25, tiltPoint.y + 10);
+    assert.notEqual(await tilt.evaluate(element => element.style.transform), tiltRest);
+    const away = await position(section.locator(".pjb__h")); await popup.mouse.move(away.x, away.y);
+    assert.equal(await tilt.evaluate(element => element.style.transform), tiltRest, "Hover leave must reach the actual generated effect");
+    await page.route("https://section-media.test/sample.webm", route => route.fulfill({ path: fileURLToPath(new URL("./studio/slide-lab/motion.webm", import.meta.url)), contentType: "video/webm" }));
+    await render({ type: "media", heading: "Native video", items: [{ kind: "video", controls: true, src: "https://section-media.test/sample.webm" }] });
+    await section.locator("video").evaluate(video => { video.muted = true; });
+    await popup.getByRole("button", { name: "Play slide media", exact: true }).click();
+    await page.waitForFunction(() => !document.querySelector("#section-controls").contentDocument.querySelector("video").paused, null, { timeout: 4000 });
+    assert.equal(await section.locator("video").evaluate(video => video.paused), false);
+    await popup.getByRole("button", { name: "Pause slide media", exact: true }).click();
+    assert.equal(await section.locator("video").evaluate(video => video.paused), true);
+    assert.equal(await page.locator("[data-pjp-count]").textContent(), "1 / 2");
+  } finally { await browser.close(); }
+});
+
+test("nested section documents retain control semantics, event realms and scrolling", { timeout: 30000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless: true, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
+  try {
+    const { page, popup } = await openFixture(browser);
+    await page.evaluate(() => {
+      const outer = document.createElement("iframe"); outer.id = "outer"; outer.style.cssText = "position:absolute;left:100px;top:40px;width:800px;height:450px;border:3px solid;transform:rotate(-12deg) scale(.9)";
+      outer.srcdoc = '<!doctype html><body style="margin:0;background:#ddd"><iframe id="inner" style="position:absolute;left:70px;top:55px;width:600px;height:320px;border:5px solid;transform:scale(.9)"></iframe></body>';
+      outer.onload = () => { outer.contentDocument.querySelector("#inner").srcdoc = '<!doctype html><style>body{margin:15px;background:#eee}button,summary{padding:15px}#scroll{width:260px;height:65px;overflow:auto}#scroll>div{width:700px;height:500px;background:#25b598}</style><button id="disabled" disabled>Unavailable</button><button id="action">Nested action</button><details><summary>Details</summary>Expanded</details><input type="range" min="0" max="100" value="20" aria-label="Nested range"><div id="scroll"><div>Scroll this content</div></div>'; };
+      document.querySelector("[data-pjp-frame]").replaceChildren(outer);
+    });
+    const inner = page.frameLocator("#outer").frameLocator("#inner");
+    await inner.locator("#action").evaluate(element => {
+      const view = element.ownerDocument.defaultView;
+      view.actionClicks = 0; view.disabledClicks = 0; view.realmCorrect = true;
+      element.addEventListener("click", event => { view.actionClicks++; view.realmCorrect &&= event instanceof view.MouseEvent; });
+      element.ownerDocument.querySelector("#disabled").addEventListener("click", () => view.disabledClicks++);
+      element.ownerDocument.addEventListener("pointerdown", event => { view.realmCorrect &&= event instanceof view.PointerEvent; });
+      element.ownerDocument.addEventListener("keydown", event => { view.realmCorrect &&= event instanceof view.KeyboardEvent; });
+    });
+    await popup.locator("[data-pp-live]").click(); await popup.locator("[data-pp-now] canvas").waitFor();
+    for (const selector of ["#disabled", "#action", "summary", 'input[type="range"]']) {
+      const point = await pointFor(page, popup, inner.locator(selector)); await popup.mouse.click(point.x, point.y);
+    }
+    const state = await inner.locator("body").evaluate(element => ({ clicks: element.ownerDocument.defaultView.actionClicks, disabled: element.ownerDocument.defaultView.disabledClicks, open: element.querySelector("details").open }));
+    assert.deepEqual(state, { clicks: 1, disabled: 0, open: true });
+    const range = Number(await inner.locator("input").inputValue());
+    await popup.keyboard.press("ArrowRight");
+    assert.equal(Number(await inner.locator("input").inputValue()), range + 1);
+    assert.equal(await inner.locator("body").evaluate(element => element.ownerDocument.defaultView.realmCorrect), true);
+    const scroll = await pointFor(page, popup, inner.locator("#scroll")); await popup.mouse.move(scroll.x, scroll.y); await popup.mouse.wheel(45, 90);
+    await page.waitForFunction(() => document.querySelector("#outer").contentDocument.querySelector("#inner").contentDocument.querySelector("#scroll").scrollTop > 0, null, { timeout: 4000 });
+    assert.ok(await inner.locator("#scroll").evaluate(element => element.scrollLeft > 0 && element.scrollTop > 0));
+    assert.equal(await page.locator("[data-pjp-count]").textContent(), "1 / 2");
+  } finally { await browser.close(); }
+});
+
 test("capture denial preserves notes and thumbnail fallback", { timeout: 30000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless: true });
   try {
@@ -210,6 +387,19 @@ test("wrong capture source and late permission result never enter the preview", 
     await popup.waitForFunction(() => document.querySelector("[data-pp-status]").textContent.includes("not another tab"));
     assert.equal(await page.evaluate(() => window.rejectedStream.getVideoTracks()[0].readyState), "ended");
     assert.equal(await popup.locator("[data-pp-now] canvas").count(), 0);
+    await page.evaluate(() => {
+      const configure = navigator.mediaDevices.setCaptureHandleConfig.bind(navigator.mediaDevices);
+      navigator.mediaDevices.setCaptureHandleConfig = value => { window.captureConfiguration = value; configure(value); };
+      navigator.mediaDevices.getDisplayMedia = async () => {
+        const stream = document.createElement("canvas").captureStream(1), track = stream.getVideoTracks()[0];
+        track.getSettings = () => ({ displaySurface: "browser" });
+        track.getCaptureHandle = () => ({ origin: location.origin, handle: window.captureConfiguration.handle });
+        track.stop(); return stream;
+      };
+    });
+    await popup.locator("[data-pp-live]").click();
+    await popup.waitForFunction(() => document.querySelector("[data-pp-status]").dataset.state === "disconnected");
+    assert.equal(await popup.locator("[data-pp-now] canvas").count(), 0, "An ended track with the correct capture identity must never be accepted");
     await page.evaluate(() => {
       navigator.mediaDevices.getDisplayMedia = () => new Promise(resolve => { window.resolveCapture = resolve; });
     });

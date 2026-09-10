@@ -95,9 +95,10 @@ function SectionComponent({ block, icons }) {
   const frame = useRef(null);
   const appearance = useAppearance();
   const send = () => {
+    if (!frame.current?.contentDocument) return;
     const styles = getComputedStyle(document.documentElement);
     const tokens = Object.fromEntries(["--text", "--text-dim", "--text-faint", "--accent", "--bg", "--bg-2", "--line-soft", "--sans", "--serif", "--mono"].map(key => [key, styles.getPropertyValue(key)]));
-    frame.current?.contentWindow?.postMessage({ type: "rk-section-component", block, icons, tokens, appearance }, location.origin);
+    frame.current?.contentWindow?.RK?.renderSectionComponent?.({ block, icons, tokens, appearance });
   };
   useEffect(send, [block, icons, appearance]);
   return <iframe ref={frame} className="lab-embed lab-section-component" title="Case-study section" src="/studio/slide-lab/native.html?fixture=component" allow="fullscreen; autoplay" allowFullScreen onLoad={send} />;
@@ -266,6 +267,7 @@ function Presenter({ slides, index, onIndex, onClose, onSlideEdit }) {
       },
       renderThumbnail: (container, slide) => mount(container, <PresentationThumbnail slide={slide} />),
       thumbnailData: async slide => { const svg = await exportToSvg({elements:slide.scene.elements,files:slide.scene.files,exportingFrame:slide.scene.elements.find(element=>element.id===FRAME_ID),skipInliningFonts:true,appState:{exportBackground:false}});return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg.outerHTML); },
+      disposePresenter: document => { for (const [container, root] of roots) if (container.ownerDocument === document) { root.unmount(); roots.delete(container); } },
       dispose: () => { roots.forEach(root => root.unmount()); roots.clear(); }
     });
     return () => player?.close();

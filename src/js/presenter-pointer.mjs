@@ -1,3 +1,5 @@
+import { isPresenterInput, observePresentationDocuments, presentationHit, presentationPoint, presentationRootPoint, presentationSurface } from "./presenter-interaction.mjs";
+
 export function createPresenterLaser(container, preview = false) {
   const doc = container.ownerDocument, view = doc.defaultView;
   const element = doc.createElement("div");
@@ -121,24 +123,56 @@ export function createPresenterLaser(container, preview = false) {
 export function installPresenterPointer(stage, frame, remoteInput = false) {
   const doc = stage.ownerDocument, view = doc.defaultView;
   const laser = createPresenterLaser(stage);
+  let fullscreenHost = null, fullscreenLaser = null;
   stage.classList.add("pjp--laser");
-  const interactive = 'a,button,input,textarea,select,summary,video[controls],audio[controls],iframe,[role="button"],[role="slider"],[contenteditable="true"],[data-pjhref],[data-pjjump]';
-  function hide() { laser.hide(); stage.removeAttribute("data-pointer"); }
-  function point(x, y, remote = false) {
-    if (!Number.isFinite(x) || !Number.isFinite(y)) { hide(); return; }
-    const target = doc.elementFromPoint(x, y);
-    if (!target || !frame.contains(target)) { hide(); return; }
-    const control = !!target.closest(interactive);
-    if (control && !remote) laser.hide(); else laser.point(x, y, control);
-    stage.dataset.pointer = control ? "control" : "laser";
+  const documents = new Set();
+  function hide() { laser.hide(); fullscreenLaser?.hide(); stage.removeAttribute("data-pointer"); for (const child of documents) child.documentElement?.removeAttribute("data-rk-presenter-pointer"); }
+  function fullscreenChanged() { hide(); fullscreenLaser?.dispose(); fullscreenLaser = null; fullscreenHost = null; }
+  function pointerLayer() {
+    let host = presentationSurface(frame);
+    if (host === frame) return { laser, document: doc };
+    while (host.tagName === "IFRAME") {
+      let child;
+      try { child = host.contentDocument; } catch { return { laser, document: doc }; }
+      if (!child) return { laser, document: doc };
+      host = child.fullscreenElement || child.documentElement;
+    }
+    if (host !== fullscreenHost) { fullscreenLaser?.dispose(); fullscreenHost = host; fullscreenLaser = createPresenterLaser(host); }
+    return { laser: fullscreenLaser, document: host.ownerDocument };
   }
-  function move(event) { point(event.clientX, event.clientY, remoteInput); }
+  function point(x, y, remote = false) {
+    const hit = presentationHit(frame, x, y);
+    if (!hit) { hide(); return null; }
+    const control = !!hit.control;
+    const layer = pointerLayer(), position = presentationPoint(frame, layer.document, x, y);
+    if (layer.laser !== laser) laser.hide(); else fullscreenLaser?.hide();
+    if (control && !remote || !position) layer.laser.hide(); else layer.laser.point(position.x, position.y, control);
+    stage.dataset.pointer = control ? "control" : "laser";
+    for (const child of documents) child.documentElement.dataset.rkPresenterPointer = control || hit.blocked ? "control" : "laser";
+    return hit;
+  }
+  function move(event) {
+    if (isPresenterInput(event)) return;
+    const owner = event.target?.ownerDocument || doc;
+    const position = presentationRootPoint(frame, owner, event.clientX, event.clientY);
+    if (position) point(position.x, position.y, remoteInput); else hide();
+  }
+  const stopObserving = observePresentationDocuments(frame, child => {
+    if (child === doc) return;
+    documents.add(child);
+    const style = child.createElement("style");
+    style.textContent = 'html[data-rk-presenter-pointer="laser"],html[data-rk-presenter-pointer="laser"] *{cursor:none!important}';
+    child.head.appendChild(style);
+    child.addEventListener("pointermove", move, true);
+    return () => { child.removeEventListener("pointermove", move, true); child.documentElement?.removeAttribute("data-rk-presenter-pointer"); style.remove(); documents.delete(child); if (fullscreenHost?.ownerDocument === child) fullscreenChanged(); };
+  });
   function onVisibility() { if (doc.hidden) hide(); }
   stage.addEventListener("pointermove", move);
   stage.addEventListener("pointerleave", hide);
   view.addEventListener("blur", hide);
   view.addEventListener("resize", hide);
   doc.addEventListener("visibilitychange", onVisibility);
+  doc.addEventListener("fullscreenchange", fullscreenChanged);
   hide();
-  return { point, hide, dispose() { stage.removeEventListener("pointermove", move); stage.removeEventListener("pointerleave", hide); view.removeEventListener("blur", hide); view.removeEventListener("resize", hide); doc.removeEventListener("visibilitychange", onVisibility); hide(); laser.dispose(); stage.classList.remove("pjp--laser"); } };
+  return { point, hide, dispose() { stage.removeEventListener("pointermove", move); stage.removeEventListener("pointerleave", hide); view.removeEventListener("blur", hide); view.removeEventListener("resize", hide); doc.removeEventListener("visibilitychange", onVisibility); doc.removeEventListener("fullscreenchange", fullscreenChanged); fullscreenChanged(); stopObserving(); laser.dispose(); stage.classList.remove("pjp--laser"); } };
 }

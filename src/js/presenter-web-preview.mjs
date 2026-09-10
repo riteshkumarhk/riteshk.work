@@ -1,5 +1,6 @@
 import { presenterIcon } from "./presenter-panel.mjs";
 import { createPresenterLaser } from "./presenter-pointer.mjs";
+import { dispatchPresenterInput, presentationContains, presentationHover, presentationMedia, presentationPoint, presentationSurface } from "./presenter-interaction.mjs";
 export function requestPresenterCapture() {
   const handle = crypto.randomUUID();
   let cancelled = false, captured = null;
@@ -20,7 +21,8 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
   const mediaDevices = navigator.mediaDevices;
   const handle = captureTicket?.handle || crypto.randomUUID();
   let stream = null, video = null, canvas = null, stopped = false, pending = false, animation = 0;
-  let pressed = null, focused = null;
+  let liveFrame = false, detachTrack = null, pendingTicket = null;
+  let pressed = null, focused = null, hovered = null;
   const supported = !!(mediaDevices?.getDisplayMedia && mediaDevices?.setCaptureHandleConfig);
   function connection(state, message) {
     status.dataset.state = state; status.textContent = message;
@@ -34,7 +36,7 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
   controls.innerHTML = '<button type="button" class="pp__btn" aria-label="Play or pause slide media" title="Play or pause slide media"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="m5 3 14 9-14 9Z"/></svg></button><input type="range" min="0" max="100" step="0.1" value="0" aria-label="Seek slide media">';
   container.parentElement.after(controls);
   const playButton = controls.querySelector("button"), seek = controls.querySelector("input");
-  function activeMedia() { return frame.querySelector("video,audio"); }
+  function activeMedia() { return (presentationContains(frame, focused?.target) && focused.target.closest("video,audio")) || presentationMedia(frame); }
   function toggleMedia(media = activeMedia()) {
     if (!media) return;
     if (media.paused) media.play().catch(() => { status.textContent = "Playback blocked. Start this media in the audience window."; });
@@ -46,14 +48,21 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     if (media && Number.isFinite(media.duration)) media.currentTime = Number(seek.value) / 100 * media.duration;
   });
   function release() {
-    if (pressed?.isConnected) pressed.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true, pointerId: 1, pointerType: "mouse" }));
+    const cancelled = pressed;
     pressed = null;
+    if (cancelled && presentationContains(frame, cancelled.target)) dispatchPresenterInput(cancelled.target, "pointercancel", { pointerId: 1, pointerType: "mouse", buttons: 0, clientX: cancelled.x, clientY: cancelled.y });
+    if (canvas && cancelled && canvas.hasPointerCapture(cancelled.pointerId)) canvas.releasePointerCapture(cancelled.pointerId);
+    presentationHover(frame, hovered, null, { pointerId: 1, pointerType: "mouse", buttons: 0 });
+    hovered = null;
     pointer.hide();
     localLaser.hide();
   }
   function stop(message = "Live preview stopped. Pointer remains connected.") {
     release();
+    focused = null;
     presenterWindow.cancelAnimationFrame(animation);
+    detachTrack?.(); detachTrack = null;
+    liveFrame = false;
     if (stream) stream.getTracks().forEach(track => track.stop());
     stream = null;
     if (video) { video.pause(); video.srcObject = null; video.remove(); }
@@ -67,31 +76,34 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     if (!stopped) onDisconnect?.();
   }
   function verified(track) {
-    const identity = track.getCaptureHandle?.();
-    return track.getSettings().displaySurface === "browser" && identity?.handle === handle && identity.origin === location.origin;
+    const identity = track?.getCaptureHandle?.();
+    return track?.readyState === "live" && track.getSettings().displaySurface === "browser" && identity?.handle === handle && identity.origin === location.origin;
+  }
+  function coordinates(event) {
+    const preview = container.getBoundingClientRect(), bounds = presentationSurface(frame).getBoundingClientRect();
+    if (!preview.width || !preview.height || !bounds.width || !bounds.height) return null;
+    return { x: bounds.left + (event.clientX - preview.left) / preview.width * bounds.width, y: bounds.top + (event.clientY - preview.top) / preview.height * bounds.height };
   }
   function targetAt(event) {
     if (stopped) return null;
-    const preview = container.getBoundingClientRect(), bounds = frame.getBoundingClientRect();
-    if (!preview.width || !preview.height || !bounds.width || !bounds.height) { release(); return null; }
-    const x = bounds.left + Math.max(0, Math.min(1, (event.clientX - preview.left) / preview.width)) * bounds.width;
-    const y = bounds.top + Math.max(0, Math.min(1, (event.clientY - preview.top) / preview.height)) * bounds.height;
-    const target = document.elementFromPoint(x, y);
-    if (!target || !frame.contains(target)) { release(); return null; }
-    pointer.point(x, y, true);
-    const control = !!target.closest('a,button,input,textarea,select,summary,video,audio,iframe,[role="button"],[role="slider"],[contenteditable="true"],[data-pjhref],[data-pjjump]');
+    const position = coordinates(event);
+    if (!position) { release(); return null; }
+    const hit = pointer.point(position.x, position.y, true);
+    if (!hit) { if (!pressed) release(); return null; }
+    const control = !!hit.control;
     const surface = previewSurface.getBoundingClientRect();
-    if (control || canvas) localLaser.hide();
+    if (control || liveFrame) localLaser.hide();
     else localLaser.point(event.clientX - surface.left - previewSurface.clientLeft, event.clientY - surface.top - previewSurface.clientTop);
     previewSurface.style.cursor = control ? "pointer" : "none";
     if (canvas) canvas.style.cursor = control ? "pointer" : "none";
-    if (target.closest("iframe")) {
+    if (hit.blocked) {
       status.textContent = "Embedded player: use its controls directly in the audience window.";
-      return null;
+      return hit;
     }
-    return { target, x, y };
+    if (status.textContent.startsWith("Embedded player:")) status.textContent = stream ? "Live preview" : "Pointer connected";
+    return hit;
   }
-  function pointPreview(event) { targetAt(event); }
+  function pointPreview(event) { if (event.target !== canvas) targetAt(event); }
   function leavePreview() { if (!pressed) release(); }
   previewSurface.addEventListener("pointermove", pointPreview, true);
   previewSurface.addEventListener("pointerleave", leavePreview);
@@ -104,52 +116,117 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     let value = min + Math.max(0, Math.min(1, (x - bounds.left) / bounds.width)) * (max - min);
     if (step) value = min + Math.round((value - min) / step) * step;
     target.value = String(Math.max(min, Math.min(max, value)));
-    target.dispatchEvent(new Event("input", { bubbles: true }));
-    target.dispatchEvent(new Event("change", { bubbles: true }));
+    target.dispatchEvent(new target.ownerDocument.defaultView.Event("input", { bubbles: true }));
+    target.dispatchEvent(new target.ownerDocument.defaultView.Event("change", { bubbles: true }));
   }
+  function modifiers(event) { return { ctrlKey: event.ctrlKey, altKey: event.altKey, shiftKey: event.shiftKey, metaKey: event.metaKey }; }
   function forward(event) {
+    if (event.button > 0 && event.type !== "pointermove") return;
     const hit = targetAt(event);
-    if (!hit) { if (event.type === "pointerup") release(); return; }
-    const { target, x, y } = hit;
-    const options = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: event.buttons, pointerId: 1, pointerType: "mouse" };
+    const options = { ...modifiers(event), button: event.type === "pointermove" ? -1 : 0, buttons: event.buttons, pointerId: 1, pointerType: "mouse", isPrimary: true };
+    const actionable = hit && !hit.blocked && !hit.disabled ? hit : null;
+    if (!pressed) { presentationHover(frame, hovered, actionable, options); hovered = actionable; }
     if (event.type === "pointerdown") {
-      if (event.button !== 0) return;
+      if (!actionable) return;
       event.preventDefault();
       canvas.focus();
       canvas.setPointerCapture(event.pointerId);
-      pressed = target;
-      focused = target;
+      pressed = { ...hit, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false, compatibilityMouse: true };
+      focused = hit;
     }
-    (pressed || target).dispatchEvent(new PointerEvent(event.type, options));
-    if (pressed) setRange(pressed, x);
+    const destination = pressed || actionable;
+    if (!destination) return;
+    if (!presentationContains(frame, destination.target)) { release(); return; }
+    const rootPoint = coordinates(event);
+    const position = rootPoint && presentationPoint(frame, destination.document, rootPoint.x, rootPoint.y);
+    if (!position) { release(); return; }
+    Object.assign(options, { clientX: position.x, clientY: position.y });
+    if (pressed) {
+      pressed.x = position.x; pressed.y = position.y;
+      pressed.moved ||= Math.hypot(event.clientX - pressed.startX, event.clientY - pressed.startY) > 4;
+    }
+    const accepted = dispatchPresenterInput(destination.target, event.type, options);
+    if (pressed && event.type === "pointerdown") pressed.compatibilityMouse = accepted;
+    if (!pressed || pressed.compatibilityMouse) dispatchPresenterInput(destination.target, event.type.replace("pointer", "mouse"), { ...options, button: 0 });
+    if (pressed) setRange(pressed.target, position.x);
     if (event.type === "pointerup") {
       const clicked = pressed;
       pressed = null;
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-      if (clicked === target) {
-        if (target.closest("video,audio")) toggleMedia(target.closest("video,audio"));
-        else if (!target.matches('input[type="range"]')) target.dispatchEvent(new MouseEvent("click", options));
+      if (clicked && !clicked.moved && actionable && (clicked.target === hit.target || clicked.control && clicked.control === hit.control)) {
+        if (hit.target.closest("video[controls],audio[controls]")) toggleMedia(hit.target.closest("video,audio"));
+        else if (!hit.target.matches('input[type="range"]')) dispatchPresenterInput(hit.target, "click", { ...options, clientX: hit.x, clientY: hit.y, detail: 1 });
+        canvas?.focus({ preventScroll: true });
       }
+      presentationHover(frame, hovered, actionable, options); hovered = actionable;
     }
+  }
+  function wheel(event) {
+    const hit = targetAt(event);
+    if (!hit || hit.blocked) return;
+    if (!dispatchPresenterInput(hit.target, "wheel", { ...modifiers(event), clientX: hit.x, clientY: hit.y, deltaX: event.deltaX, deltaY: event.deltaY, deltaZ: event.deltaZ, deltaMode: event.deltaMode })) { event.preventDefault(); event.stopPropagation(); return; }
+    for (let scrollable = hit.target; presentationContains(frame, scrollable); scrollable = scrollable.parentElement || scrollable.ownerDocument.defaultView.frameElement) {
+      const style = scrollable.ownerDocument.defaultView.getComputedStyle(scrollable);
+      const factor = event.deltaMode === 1 ? parseFloat(style.lineHeight) || 16 : event.deltaMode === 2 ? scrollable.clientHeight : 1;
+      const horizontal = /auto|scroll/.test(style.overflowX) && scrollable.scrollWidth > scrollable.clientWidth && event.deltaX;
+      const vertical = /auto|scroll/.test(style.overflowY) && scrollable.scrollHeight > scrollable.clientHeight && event.deltaY;
+      if (horizontal || vertical) {
+        event.preventDefault(); event.stopPropagation();
+        scrollable.scrollBy({ top: vertical ? event.deltaY * factor : 0, left: horizontal ? event.deltaX * factor : 0, behavior: "instant" });
+        return;
+      }
+      if (scrollable === frame) break;
+    }
+  }
+  function key(event) {
+    if (!liveFrame || event.target !== canvas && event.target !== doc.body) return;
+    if (!presentationContains(frame, focused?.target)) return;
+    const owner = focused.document;
+    const modal = [...owner.querySelectorAll('[role="dialog"][aria-modal="true"]')].find(element => presentationContains(frame, element) && !element.hidden && element.getClientRects().length && owner.defaultView.getComputedStyle(element).visibility !== "hidden");
+    const target = modal ? modal.contains(owner.activeElement) ? owner.activeElement : modal : focused.control || focused.target;
+    if (target.closest(':disabled,[aria-disabled="true"],[inert]')) return;
+    const accepted = dispatchPresenterInput(target, "keydown", { ...modifiers(event), key: event.key, code: event.code, repeat: event.repeat });
+    let handled = !accepted || !!modal;
+    if (accepted && target.matches('input[type="range"]') && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+      if (event.key === "Home") target.value = target.min || "0";
+      else if (event.key === "End") target.value = target.max || "100";
+      else if (target.step !== "any") target[event.key === "ArrowLeft" || event.key === "ArrowDown" ? "stepDown" : "stepUp"]();
+      target.dispatchEvent(new owner.defaultView.Event("input", { bubbles: true }));
+      target.dispatchEvent(new owner.defaultView.Event("change", { bubbles: true }));
+      handled = true;
+    } else if (accepted && (event.key === " " || event.key === "Enter") && target.matches('button,summary,a[href],input[type="checkbox"],input[type="radio"],video[controls],audio[controls],[role="button"]')) {
+      if (target.matches("video,audio")) toggleMedia(target); else dispatchPresenterInput(target, "click", { detail: 0 });
+      handled = true;
+    }
+    if (handled) { event.preventDefault(); event.stopPropagation(); }
   }
   function paint() {
     if (!stream || !canvas || !video) return;
     const track = stream.getVideoTracks()[0];
     if (!verified(track)) { stop("Preview disconnected: the captured tab changed."); return; }
-    const bounds = frame.getBoundingClientRect();
+    const bounds = presentationSurface(frame).getBoundingClientRect();
     const ratio = video.videoWidth / window.innerWidth;
     const verticalRatio = video.videoHeight / window.innerHeight;
     const width = Math.max(1, Math.round(container.clientWidth * (presenterWindow.devicePixelRatio || 1)));
-    const height = Math.max(1, Math.round(width * bounds.height / bounds.width));
-    container.parentElement.style.aspectRatio = bounds.width + " / " + bounds.height;
+    const height = Math.max(1, Math.round(width * bounds.height / (bounds.width || 1)));
+    if (bounds.width > 0 && bounds.height > 0) container.parentElement.style.aspectRatio = bounds.width + " / " + bounds.height;
     if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
     const context = canvas.getContext("2d");
     context.clearRect(0, 0, width, height);
-    if (!track.muted && video.readyState >= 2 && bounds.width > 0 && bounds.height > 0) {
-      context.drawImage(video, bounds.left * ratio, bounds.top * verticalRatio, bounds.width * ratio, bounds.height * verticalRatio, 0, 0, width, height);
+    const drawable = !track.muted && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0 && bounds.width > 0 && bounds.height > 0;
+    if (drawable) {
+      try { context.drawImage(video, bounds.left * ratio, bounds.top * verticalRatio, bounds.width * ratio, bounds.height * verticalRatio, 0, 0, width, height); }
+      catch { stop("Live frames unavailable. Showing the current slide thumbnail."); return; }
+    }
+    if (drawable !== liveFrame) {
+      if (!drawable) release();
+      liveFrame = drawable;
+      canvas.style.visibility = drawable ? "visible" : "hidden";
+      container.classList.toggle("pp__now--live", drawable);
+      connection("live", drawable ? "Live preview" : "Capture paused. Showing the current slide thumbnail.");
     }
     const media = activeMedia();
-    controls.hidden = !media;
+    controls.hidden = !liveFrame || !media;
     if (media) {
       playButton.setAttribute("aria-label", media.paused ? "Play slide media" : "Pause slide media");
       playButton.title = media.paused ? "Play slide media" : "Pause slide media";
@@ -167,7 +244,7 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     connection("connecting", "Select the audience tab");
     try {
       mediaDevices.setCaptureHandleConfig({ exposeOrigin: true, handle, permittedOrigins: [location.origin] });
-      const ticket = captureTicket; captureTicket = null;
+      const ticket = captureTicket; captureTicket = null; pendingTicket = ticket;
       const result = ticket ? await ticket.result : { stream: await mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 30 } }, audio: false, selfBrowserSurface: "include", surfaceSwitching: "exclude" }) };
       if (result.error) throw result.error;
       const captured = result.stream;
@@ -178,76 +255,58 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
         return;
       }
       stream = captured;
-      track.addEventListener("ended", () => stop());
-      track.addEventListener("capturehandlechange", () => { if (!verified(track)) stop("Preview disconnected: the captured tab changed."); });
+      const ended = () => { if (stream === captured) stop(); };
+      const identityChanged = () => { if (stream === captured && !verified(track)) stop("Preview disconnected: the captured tab changed."); };
+      track.addEventListener("ended", ended);
+      track.addEventListener("capturehandlechange", identityChanged);
+      detachTrack = () => { track.removeEventListener("ended", ended); track.removeEventListener("capturehandlechange", identityChanged); };
       video = doc.createElement("video");
       video.muted = true;
       video.playsInline = true;
       video.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none";
       video.srcObject = stream;
       doc.body.appendChild(video);
-      await video.play();
-      if (stopped || !stream) return;
+      const player = video;
+      await player.play();
+      if (stopped || stream !== captured || video !== player) return;
       canvas = doc.createElement("canvas");
       canvas.tabIndex = 0;
       canvas.setAttribute("aria-label", "Live audience slide controls");
-      canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none";
+      canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;visibility:hidden";
       container.appendChild(canvas);
-      localLaser.hide();
-      container.classList.add("pp__now--live");
       for (const type of ["pointerdown", "pointermove", "pointerup"]) canvas.addEventListener(type, forward);
       canvas.addEventListener("pointercancel", release);
       canvas.addEventListener("pointerleave", () => { if (!pressed) pointer.hide(); });
       canvas.addEventListener("blur", release);
-      canvas.addEventListener("wheel", event => {
+      canvas.addEventListener("wheel", wheel, { passive: false });
+      canvas.addEventListener("dblclick", event => {
         const hit = targetAt(event);
-        if (!hit) return;
-        let scrollable = hit.target;
-        while (scrollable && frame.contains(scrollable)) {
-          if (scrollable.scrollHeight > scrollable.clientHeight && /auto|scroll/.test(getComputedStyle(scrollable).overflowY)) {
-            event.preventDefault();
-            scrollable.scrollBy({ top: event.deltaY, left: event.deltaX, behavior: "instant" });
-            break;
-          }
-          scrollable = scrollable.parentElement;
-        }
-      }, { passive: false });
-      canvas.addEventListener("keydown", event => {
-        if (!focused?.isConnected || !frame.contains(focused)) return;
-        if (focused.matches('input[type="range"]') && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
-          event.preventDefault(); event.stopPropagation();
-          if (event.key === "Home") focused.value = focused.min || "0";
-          else if (event.key === "End") focused.value = focused.max || "100";
-          else if (focused.step !== "any") focused[event.key === "ArrowLeft" || event.key === "ArrowDown" ? "stepDown" : "stepUp"]();
-          focused.dispatchEvent(new Event("input", { bubbles: true }));
-          focused.dispatchEvent(new Event("change", { bubbles: true }));
-        } else if ((event.key === " " || event.key === "Enter") && focused.closest("button,summary,video,audio")) {
-          event.preventDefault(); event.stopPropagation();
-          const media = focused.closest("video,audio");
-          if (media) toggleMedia(media); else focused.closest("button,summary").click();
-        }
+        if (hit && !hit.blocked && !hit.disabled) { event.preventDefault(); dispatchPresenterInput(hit.target, "dblclick", { ...modifiers(event), clientX: hit.x, clientY: hit.y, detail: 2 }); }
       });
-      connection("live", "Live preview");
+      connection("live", "Waiting for audience frames");
       paint();
     } catch (error) {
       if (!stopped) stop(error.name === "NotAllowedError" ? "Capture cancelled or denied. Slides and notes remain available; reconnect when ready." : "Live preview unavailable. Use the audience window for slide interactions.");
-    } finally { pending = false; if (!stopped) button.disabled = !supported; }
+    } finally { pending = false; pendingTicket = null; if (!stopped) button.disabled = !supported; }
   }
   button.addEventListener("click", connect);
+  presenterWindow.addEventListener("keydown", key, true);
   if (!supported) { button.disabled = true; status.textContent = "Pointer connected. Live video preview is unavailable in this browser."; }
   return {
     connect,
-    resetPointer: release,
-    get live() { return !!stream; },
+    resetPointer() { release(); focused = null; },
+    get live() { return liveFrame; },
     dispose() {
       stopped = true;
       captureTicket?.cancel(); captureTicket = null;
+      pendingTicket?.cancel(); pendingTicket = null;
       stop();
       button.removeEventListener("click", connect);
       previewSurface.removeEventListener("pointermove", pointPreview, true);
       previewSurface.removeEventListener("pointerleave", leavePreview);
       presenterWindow.removeEventListener("blur", release);
       presenterWindow.removeEventListener("resize", release);
+      presenterWindow.removeEventListener("keydown", key, true);
       localLaser.dispose();
       previewSurface.style.cursor = "";
       controls.remove();

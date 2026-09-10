@@ -417,6 +417,87 @@ test('canvas drag stays one deck-history step through autosave and slide navigat
   }finally{await browser.close();}
 });
 
+for (const live of [false, true]) test(`native sections remain visible in the DJ pad before capture and after closing and reopening (${live ? 'real capture' : 'denied capture'})`, { timeout:60000 }, async () => {
+  const browser=await chromium.launch({executablePath,headless:true,ignoreDefaultArgs:['--disable-popup-blocking'],args:live?['--window-size=1440,1100','--auto-select-tab-capture-source-by-title=DJ section reopen regression','--auto-accept-this-tab-capture']:[]});
+  const page=await browser.newPage({viewport:{width:1440,height:1000}}), errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  try {
+    await page.addInitScript(live=>{
+      const canvas=document.createElement('canvas');canvas.width=640;canvas.height=360;const context=canvas.getContext('2d');context.fillStyle='#bb294b';context.fillRect(0,0,640,360);const beforeSrc=canvas.toDataURL();context.fillStyle='#20bc99';context.fillRect(0,0,640,360);
+      localStorage.setItem('rk:content:draft',JSON.stringify({work:[{id:'reopen',title:'Reopen section sample',study:{blocks:[{type:'compare',heading:'A complete section',beforeSrc,afterSrc:canvas.toDataURL()}]}}]}));
+      const capture=navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+      window.captureRequests=0;window.captureStreams=[];
+      navigator.mediaDevices.getDisplayMedia=(...args)=>{window.captureRequests++;return live?capture(...args).then(stream=>{window.captureStreams.push(stream);return stream;}):Promise.reject(new DOMException('Denied','NotAllowedError'));};
+    },live);
+    await page.goto(base+'/studio/slide-merge-lab/');
+    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await page.evaluate(()=>{const api=window.__slideMerge.api;api.updateScene({elements:api.getSceneElements().filter(element=>element.type==='frame')});});
+    await page.getByRole('button',{name:'Sections',exact:true}).click();
+    await page.getByRole('button',{name:'Reopen section sample',exact:true}).click();
+    await page.locator('.merge-section-choices button[title="A complete section"]').click();
+    await page.getByRole('button',{name:'Close panel',exact:true}).click();
+    const original=await page.evaluate(()=>JSON.stringify(window.__slideMerge.deck()));
+    await page.evaluate(()=>{document.title='DJ section reopen regression';});
+    await page.getByRole('button',{name:'Slide Show',exact:true}).click();
+    for (let cycle=0;cycle<3;cycle++) {
+      await page.waitForFunction(()=>window.documentPictureInPicture.window?.document.querySelector('[data-pp-notes]'));
+      await page.waitForFunction(()=>{
+        const frame=window.documentPictureInPicture.window?.document.querySelector('[data-pp-now] iframe[title="Case-study section"]');
+        const image=frame?.contentDocument?.querySelector('.pjb__cmp-base');
+        return image?.complete&&image.naturalWidth>0;
+      },null,{timeout:8000});
+      assert.equal(await page.evaluate(()=>window.captureRequests),cycle+1,'Each DJ window must own a fresh capture request, not reuse an ended ticket');
+      if(live){
+        await page.waitForFunction(()=>{
+          const canvas=window.documentPictureInPicture.window?.document.querySelector('[data-pp-now] canvas');
+          if(!canvas||canvas.style.visibility!=='visible')return false;
+          const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;let red=0,green=0;
+          for(let offset=0;offset<pixels.length;offset+=16){if(pixels[offset]>120&&pixels[offset+1]<100&&pixels[offset+2]<130)red++;if(pixels[offset]<90&&pixels[offset+1]>130&&pixels[offset+2]>90)green++;}
+          return red>30&&green>30;
+        },null,{timeout:12000}).catch(async error=>{
+          const popup=page.context().pages().find(candidate=>candidate!==page&&!candidate.isClosed());
+          await popup?.screenshot({path:join(tmpdir(),'rk-dj-section-capture-failure.png')});
+          const diagnostic=await page.evaluate(()=>{const doc=window.documentPictureInPicture.window.document,canvas=doc.querySelector('[data-pp-now] canvas'),video=doc.querySelector('video'),colors=new Map();if(canvas){const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;for(let offset=0;offset<pixels.length;offset+=40){const color=Array.from(pixels.slice(offset,offset+4)).join(',');colors.set(color,(colors.get(color)||0)+1);}}return {status:doc.querySelector('[data-pp-status]').textContent,video:video&&{state:video.readyState,width:video.videoWidth,muted:video.srcObject?.getVideoTracks()[0]?.muted},colors:[...colors].sort((left,right)=>right[1]-left[1]).slice(0,8),frame:document.querySelector('[data-pjp-frame]').getBoundingClientRect().toJSON()};});
+          throw new Error(JSON.stringify({cycle,...diagnostic}),{cause:error});
+        });
+        assert.equal(await page.evaluate(()=>window.captureStreams.at(-1).getVideoTracks()[0].readyState),'live');
+        const popup=page.context().pages().find(candidate=>candidate!==page&&!candidate.isClosed());
+        popup.on('pageerror',error=>errors.push(error.message));
+        const section=page.frameLocator('.pjp iframe.lab-section-component'),before=await section.locator('.pjb__cmp').evaluate(element=>element.style.getPropertyValue('--pos'));
+        const grip=await section.locator('[data-cmp]').boundingBox(),audience=await page.locator('[data-pjp-frame]').boundingBox(),preview=await popup.locator('[data-pp-now]').boundingBox();
+        const point={x:preview.x+(grip.x+grip.width/2-audience.x)/audience.width*preview.width,y:preview.y+(grip.y+grip.height/2-audience.y)/audience.height*preview.height};
+        await popup.mouse.move(point.x,point.y);await popup.mouse.down();await popup.mouse.move(point.x+(cycle%2?-30:30),point.y,{steps:6});await popup.mouse.up();
+        assert.notEqual(await section.locator('.pjb__cmp').evaluate(element=>element.style.getPropertyValue('--pos')),before,'A reopened DJ must still operate the same audience component');
+        if(cycle===2)for(const [width,height] of [[1060,720],[390,844]]){
+          await popup.setViewportSize({width,height});
+          await popup.waitForFunction(()=>{const canvas=document.querySelector('[data-pp-now] canvas');return canvas?.width===Math.round(document.querySelector('[data-pp-now]').clientWidth*devicePixelRatio);});
+          const comparison=await section.locator('.pjb__cmp').boundingBox(),frame=await page.locator('[data-pjp-frame]').boundingBox();
+          const corners=[[0.1,0.1],[0.9,0.1],[0.1,0.9],[0.9,0.9]].map(([horizontal,vertical])=>({x:(comparison.x+comparison.width*horizontal-frame.x)/frame.width,y:(comparison.y+comparison.height*vertical-frame.y)/frame.height,red:horizontal<0.5}));
+          await popup.waitForFunction(corners=>{const canvas=document.querySelector('[data-pp-now] canvas'),context=canvas.getContext('2d');return corners.every(point=>{const [red,green,blue]=context.getImageData(Math.floor(point.x*canvas.width),Math.floor(point.y*canvas.height),1,1).data;return point.red?red>120&&green<100&&blue<130:red<90&&green>130&&blue>90;});},corners,{timeout:8000}).catch(async error=>{
+            const diagnostic=await popup.evaluate(corners=>{const canvas=document.querySelector('[data-pp-now] canvas'),video=document.querySelector('video');return {video:{width:video.videoWidth,height:video.videoHeight},canvas:{width:canvas.width,height:canvas.height,transform:canvas.getContext('2d').getTransform().toJSON()},points:corners.map(point=>({...point,pixel:[...canvas.getContext('2d').getImageData(Math.floor(point.x*canvas.width),Math.floor(point.y*canvas.height),1,1).data]}))};},corners);
+            await popup.screenshot({path:join(tmpdir(),'rk-dj-crop-failure.png')});
+            await popup.evaluate(()=>{document.querySelector('video').style.cssText='position:fixed;inset:0;width:100vw;height:100vh;z-index:9999;object-fit:contain;background:#ffffff';});
+            await popup.screenshot({path:join(tmpdir(),'rk-dj-raw-capture-failure.png')});
+            throw new Error(JSON.stringify({width,height,frame,comparison,...diagnostic}),{cause:error});
+          });
+          await page.screenshot({path:join(tmpdir(),`rk-dj-section-audience-${width}.png`)});
+          assert.equal(await popup.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+          await popup.screenshot({path:join(tmpdir(),`rk-dj-section-reopened-${width}.png`)});
+        }
+      }
+      await page.evaluate(()=>{window.closedThumbnailDocument=window.documentPictureInPicture.window.document;window.documentPictureInPicture.window.close();});
+      await page.waitForFunction(()=>!document.querySelector('.pjp').classList.contains('pjp--popped'));
+      assert.equal(await page.evaluate(()=>window.closedThumbnailDocument.querySelectorAll('.merge-present-thumbnail').length),0,'Closed presenter documents must release their React thumbnail roots');
+      if(live)assert.equal(await page.evaluate(()=>window.captureStreams.every(stream=>stream.getTracks().every(track=>track.readyState==='ended'))),true);
+      if(cycle<2) await page.getByRole('button',{name:'Open presenter window',exact:true}).click();
+    }
+    await page.getByRole('button',{name:'Exit presentation',exact:true}).click();
+    await page.waitForSelector('.pjp',{state:'detached'});
+    assert.equal(await page.evaluate(()=>JSON.stringify(window.__slideMerge.deck())),original);
+    assert.deepEqual(errors,[]);
+  } finally {await browser.close();}
+});
+
 test('Slide Show automatically connects and supports fullscreen retry when browser activation is consumed', {timeout:45000}, async () => {
   const browser=await chromium.launch({executablePath,headless:true,ignoreDefaultArgs:['--disable-popup-blocking'],args:['--auto-select-tab-capture-source-by-title=DJ launch integration','--auto-accept-this-tab-capture']});
   const page=await browser.newPage();

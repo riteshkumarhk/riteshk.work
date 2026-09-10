@@ -110,8 +110,15 @@ presenter window or entire display. Verify the outgoing feed with a participant.
 
 The preview crops a live tab stream to the slide, including canvas content and
 media, so it reflects one actual audience presentation. Motion shows the laser;
-same-document clicks, section toggles, range controls and scrollable sections
-are forwarded. Native audio/video have play/pause and seek controls. Media audio
+same-origin section frames use the same hit-testing and coordinate mapping as
+ordinary slide content, including scaled and rotated section placements. Only
+actual enabled controls change the pointer. Clicks, continuous drag/cancel,
+hover, wheel, double-click and section keyboard handlers are forwarded to the
+audience component, not its thumbnail. Galleries, comparison sliders, image
+annotations and generated effects retain their native behavior. Section
+fullscreen lightboxes update the crop and pointer surface. Native audio/video,
+including media inside accessible section frames, have play/pause and seek
+controls. Media audio
 comes from the audience tab; the preview is muted. Original media is not changed
 or saved by this preview. Browser tab-capture encoding may slightly alter preview
 colours or introduce latency; this is not the native app's DWM mirror.
@@ -122,7 +129,11 @@ window, or use the native app for its broader input forwarding. This is not full
 native feature parity. Unavailable/denied capture falls back to thumbnails,
 notes and navigation; the ordinary audience slide itself stays interactive.
 Disconnect, stopping browser capture, switching captured identity, closing the
-presenter, and End stop the preview stream. P cannot expose inline notes while
+presenter, and End stop the preview stream. Each reopened presenter owns a new
+capture request and fresh thumbnail roots. The complete current thumbnail stays
+mounted underneath live pixels, follows slide navigation, and is shown during
+capture denial or interruption; an ended track is never accepted as live.
+P cannot expose inline notes while
 the separate presenter is open. No native app detection or installation required.
 
 Run `node --test presenter-web.browser.test.mjs` with the local server running

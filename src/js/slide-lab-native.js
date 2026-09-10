@@ -71,18 +71,17 @@ async function render() {
       const images = [...root.querySelectorAll("img[data-zoom],figure.rt__fig img,.pjb__prose img")];
       window.RK.openLbx?.(images.map(item => ({ src: item.currentSrc || item.src, cap: item.dataset.cap, title: item.dataset.title })), images.indexOf(image));
     });
-    window.addEventListener("message", event => {
-      if (event.origin !== location.origin || event.source !== parent || event.data?.type !== "rk-section-component") return;
+    window.RK.renderSectionComponent = data => {
       try {
-        const component = sectionComponentPlan(event.data.block, String, "check", { customIcons: event.data.icons }).elements[0].customData;
+        const component = sectionComponentPlan(data.block, String, "check", { customIcons: data.icons }).elements[0].customData;
         const block = component.sectionComponent;
         if (!window.RK.renderStudyBlock) throw new Error("Section renderer unavailable");
         window.RK.registerIcons?.(component.sectionIcons);
         for (const key of ["--text", "--text-dim", "--text-faint", "--accent", "--bg", "--bg-2", "--line-soft", "--sans", "--serif", "--mono"]) {
-          const value = event.data.tokens?.[key];
+          const value = data.tokens?.[key];
           if (typeof value === "string") document.documentElement.style.setProperty(key, value);
         }
-        document.documentElement.dataset.appearance = event.data.appearance === "light" ? "light" : "dark";
+        document.documentElement.dataset.appearance = data.appearance === "light" ? "light" : "dark";
         const signature = JSON.stringify(component);
         if (signature === rendered) { fitComponent(); return; }
         stage.innerHTML = window.RK.renderStudyBlock(block);
@@ -95,6 +94,10 @@ async function render() {
         rendered = signature;
         fitComponent();
       } catch (error) { stage.textContent = error.message; }
+    };
+    window.addEventListener("message", event => {
+      if (event.origin !== location.origin || event.source !== parent || event.data?.type !== "rk-section-component") return;
+      window.RK.renderSectionComponent(event.data);
     });
     return;
   }

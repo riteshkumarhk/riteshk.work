@@ -1070,7 +1070,7 @@ import { presentDeckWithRenderer } from "./deck-presenter.mjs";
     cmpDrag.style.setProperty("--pos", pct.toFixed(1) + "%");
     if (e.cancelable) e.preventDefault();
   }
-  function cmpEnd() { cmpDrag = null; document.removeEventListener("pointermove", cmpMove); document.removeEventListener("pointerup", cmpEnd); }
+  function cmpEnd() { cmpDrag = null; document.removeEventListener("pointermove", cmpMove); document.removeEventListener("pointerup", cmpEnd); document.removeEventListener("pointercancel", cmpEnd); }
   function emptyStudy(w) {
     var tags = (w.tags || []).map(function (t) { return "<span>" + esc(t) + "</span>"; }).join("");
     return '<section class="pjb pjb--text" style="--i:0">' +
@@ -1474,6 +1474,7 @@ import { presentDeckWithRenderer } from "./deck-presenter.mjs";
       cmpDrag = cmp; cmpMove(e);
       document.addEventListener("pointermove", cmpMove);
       document.addEventListener("pointerup", cmpEnd);
+      document.addEventListener("pointercancel", cmpEnd);
     });
     overlay.addEventListener("click", onOverlayClick);
     overlay.addEventListener("dblclick", function (e) {
@@ -2754,6 +2755,7 @@ import { presentDeckWithRenderer } from "./deck-presenter.mjs";
         cmpDrag = cmp; cmpMove(e);
         document.addEventListener("pointermove", cmpMove);
         document.addEventListener("pointerup", cmpEnd);
+        document.addEventListener("pointercancel", cmpEnd);
       });
       root.addEventListener("click", function (e) {
         var z = e.target.closest("[data-cmp-zoom]"); if (!z) return;
