@@ -11,9 +11,11 @@ test('macOS shared DJ pad handles native state and private metadata commands', a
     await page.waitForFunction(()=>window.messages.some(message=>message.type==='ready'));
     await page.evaluate(()=>window.receivePresenter({type:'state',index:0,total:2,notes:'Private Mac note',durationMinutes:2,editable:true,elapsed:1000,remaining:119000,budget:120000,totalBudget:180000,paused:false,width:1280,height:720,nextTitle:'Second',slides:[{title:'First',document:'<h1>First slide</h1>'},{title:'Second',document:'<h1>Second slide</h1>'}]}));
     assert.equal(await page.locator('[data-pp-notes]').inputValue(),'Private Mac note');
+    assert.equal(await page.locator('[data-pp-minutes]').inputValue(),'02:00');
     assert.match(await page.locator('[data-pp-privacy]').textContent(),/Whole-display sharing can expose notes/);
     await page.locator('[data-pp-notes]').fill('Revised Mac note');
-    await page.locator('[data-pp-minutes]').fill('3.5');
+    await page.locator('[data-pp-minutes]').fill('03:30');
+    await page.locator('[data-pp-minutes]').press('Tab');
     await page.getByRole('button',{name:'Pause timer',exact:true}).click();
     await page.getByRole('button',{name:'Slide overview',exact:true}).click();
     assert.equal(await page.locator('[data-pp-grid] iframe').first().getAttribute('sandbox'),'');
@@ -27,6 +29,17 @@ test('macOS shared DJ pad handles native state and private metadata commands', a
     assert.ok(messages.some(message=>message.type==='preference'&&message.key==='rk:presenter:notes-size'));
     await page.evaluate(()=>window.receivePresenter({type:'preferences',values:{'rk:presenter:split':'55','rk:presenter:notes-size':'24'}}));
     assert.equal(await page.locator('.pp').evaluate(element=>element.style.getPropertyValue('--pp-notes-size')),'24px');
+    await page.getByRole('button',{name:'Reset notes size',exact:true}).click();
+    assert.equal(await page.locator('.pp').evaluate(element=>element.style.getPropertyValue('--pp-notes-size')),'20px');
+    assert.ok(await page.evaluate(()=>window.messages.some(message=>message.type==='preference'&&message.key==='rk:presenter:notes-size'&&message.value==='20')));
+    await page.evaluate(()=>window.receivePresenter({type:'state',index:0,total:1,notes:'Read-only note',durationMinutes:2,editable:false,elapsed:0,remaining:120000,budget:120000,totalBudget:120000,paused:true,width:1280,height:720,slides:[{title:'First'}]}));
+    assert.equal(await page.locator('[data-pp-minutes]').isDisabled(),true);
+    assert.equal(await page.getByRole('button',{name:'Increase slide time',exact:true}).isDisabled(),true);
+    assert.equal(await page.getByRole('button',{name:'Decrease slide time',exact:true}).isDisabled(),true);
+    await page.evaluate(()=>window.receivePresenter({type:'state',index:0,total:1,notes:'Editable note',durationMinutes:240,editable:true,elapsed:0,remaining:14400000,budget:14400000,totalBudget:14400000,paused:true,width:1280,height:720,slides:[{title:'First'}]}));
+    assert.equal(await page.locator('[data-pp-minutes]').inputValue(),'240:00');
+    assert.equal(await page.getByRole('button',{name:'Increase slide time',exact:true}).isDisabled(),true);
+    assert.equal(await page.getByRole('button',{name:'Decrease slide time',exact:true}).isEnabled(),true);
     await page.getByRole('button',{name:'End presentation',exact:true}).click();
     assert.equal(await page.evaluate(()=>window.messages.at(-1).command),'exit');
   } finally { await browser.close(); }

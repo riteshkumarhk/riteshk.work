@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { deckDocumentKey } from './src/js/slide-merge-history.mjs';
 const base = process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510';
 const executablePath = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 test('Rehearse budgets and DJ-pad notes, timing, overview and end persist safely', { timeout:90000 }, async () => {
@@ -13,6 +15,7 @@ test('Rehearse budgets and DJ-pad notes, timing, overview and end persist safely
   const page = await context.newPage(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   try {
+    await page.clock.install();
     await page.goto(base + '/studio/slide-merge-lab/');
     await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle').disabled);
     await page.locator('.merge-layout-toggle').click();
@@ -26,33 +29,101 @@ test('Rehearse budgets and DJ-pad notes, timing, overview and end persist safely
     popup.on('pageerror',error => errors.push(error.message));
     await popup.waitForSelector('[data-pp-notes]');
     assert.equal(await popup.title(),'Presenter DJ pad');
-    assert.equal(await popup.locator('[data-pp-minutes]').inputValue(),'2');
+    assert.equal(await popup.locator('.pp__side > [data-pp-privacy] + .pp__nextbox').count(),1,'Sharing notice belongs at the bottom of speaker notes above Next slide');
+    assert.equal(await popup.locator('.pp__bottomcontrols [data-pp-minutes]').count(),1,'Slide timing belongs on the bottom navigation row');
+    assert.equal(await popup.locator('.pp__main > [data-pp-save]').count(),1,'Fullscreen and save feedback belong at the bottom of the left pane');
+    assert.equal(await popup.locator('.pp__bottomcontrols [data-pp="notes-larger"]').count(),1,'Speaker note zoom belongs at the right of the bottom navigation row');
+    assert.equal(await popup.locator('[data-pp-slide-progress]').count(),1,'Per-slide pacing is separate from navigation progress');
+    assert.equal(await popup.locator('[data-pp-minutes]').inputValue(),'02:00');
+    const timerLayout=await popup.evaluate(()=>{const timer=document.querySelector('[data-pp-timer]').getBoundingClientRect(),label=document.querySelector('[data-pp-elapsed]').getBoundingClientRect(),preview=document.querySelector('.pp__nowwrap').getBoundingClientRect();return {offset:timer.x+timer.width/2-preview.x-preview.width/2,labelAbove:label.bottom<=timer.top};});
+    assert.ok(Math.abs(timerLayout.offset)<1,'Elapsed time must be centered on the slide, not the remaining toolbar space');
+    assert.equal(timerLayout.labelAbove,true);
+    const bottomLayout=await popup.evaluate(()=>{const center=selector=>{const box=document.querySelector(selector).getBoundingClientRect();return box.y+box.height/2;};const main=document.querySelector('.pp__main').getBoundingClientRect(),status=document.querySelector('[data-pp-save]').getBoundingClientRect();return {timing:center('.pp__timefield'),navigation:center('[data-pp="next"]'),notes:center('.pp__noteszoom'),statusGap:main.bottom-status.bottom};});
+    assert.ok(Math.abs(bottomLayout.timing-bottomLayout.navigation)<1&&Math.abs(bottomLayout.notes-bottomLayout.navigation)<1,'Timing, navigation and notes zoom must share one horizontal centerline');
+    assert.ok(Math.abs(bottomLayout.statusGap)<1,'Status stays at the bottom of the left pane');
     await popup.getByRole('button',{name:'Pause timer',exact:true}).click();
     await popup.waitForFunction(() => document.querySelector('[data-pp-elapsed]').textContent === 'paused');
     const elapsed = await popup.locator('[data-pp-timer]').textContent();
-    await page.clock.install();
+    await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
     await page.clock.fastForward(5000);
     assert.equal(await popup.locator('[data-pp-timer]').textContent(),elapsed);
     await popup.getByRole('button',{name:'Reset timer',exact:true}).click();
     assert.equal(await popup.locator('[data-pp-timer]').textContent(),'0:00');
+    assert.equal(await popup.locator('[data-pp-slide-progress]').evaluate(element=>element.value),0);
+    await popup.locator('[data-pp-minutes]').fill('00:10');
+    await popup.locator('[data-pp-minutes]').press('Tab');
+    assert.equal(await page.evaluate(id=>window.__slideMerge.deck().slides.find(slide=>slide.id===id).durationMinutes,first),1/6);
+    await popup.getByRole('button',{name:'Resume timer',exact:true}).click();
+    await page.clock.fastForward(5000);
+    await popup.getByRole('button',{name:'Pause timer',exact:true}).click();
+    assert.deepEqual(await popup.locator('[data-pp-slide-progress]').evaluate(element=>({value:element.value,max:element.max})),{value:5000,max:10000});
+    await page.clock.fastForward(5000);
+    assert.equal(await popup.locator('[data-pp-slide-progress]').evaluate(element=>element.value),5000,'Pause must freeze per-slide pacing');
+    await popup.getByRole('button',{name:'Resume timer',exact:true}).click();
+    await page.clock.fastForward(6000);
+    await popup.getByRole('button',{name:'Pause timer',exact:true}).click();
+    assert.equal(await popup.locator('[data-pp-slide-progress]').evaluate(element=>element.value),10000);
+    assert.equal(await popup.locator('[data-pp-slide-progress]').getAttribute('data-level'),'over');
     await popup.locator('[data-pp-notes]').fill('Notes edited privately during rehearsal');
-    await popup.locator('[data-pp-minutes]').fill('3.5');
+    await popup.locator('[data-pp-minutes]').fill('03:30');
+    await popup.locator('[data-pp-minutes]').press('Tab');
+    await popup.locator('[data-pp-minutes]').fill('03:99');
+    assert.equal(await popup.locator('[data-pp-minutes]').getAttribute('aria-invalid'),'true');
+    await popup.locator('[data-pp-minutes]').press('Tab');
+    assert.equal(await popup.locator('[data-pp-minutes]').inputValue(),'03:30');
+    await popup.locator('[data-pp-minutes]').fill('02:15');
+    await popup.locator('[data-pp-minutes]').press('Escape');
+    assert.equal(await popup.locator('[data-pp-minutes]').inputValue(),'03:30');
+    await popup.getByRole('button',{name:'Increase slide time',exact:true}).click();
+    assert.equal(await popup.locator('[data-pp-minutes]').inputValue(),'03:40');
+    await popup.getByRole('button',{name:'Decrease slide time',exact:true}).click();
+    await popup.locator('[data-pp-minutes]').press('Tab');
+    assert.equal(await popup.locator('[data-pp-minutes]').inputValue(),'03:30');
+    const timeField=await popup.locator('[data-pp-minutes]').boundingBox(),timePoint={x:timeField.x+timeField.width/2,y:timeField.y+timeField.height/2};
+    await popup.mouse.move(timePoint.x,timePoint.y);await popup.mouse.down();await popup.mouse.move(timePoint.x+16,timePoint.y,{steps:4});
+    assert.equal(await popup.locator('[data-pp-minutes]').inputValue(),'03:50','Dragging right adjusts in 10-second increments');
+    assert.equal(await page.evaluate(id=>window.__slideMerge.deck().slides.find(slide=>slide.id===id).durationMinutes,first),3.5,'A drag is not committed until release');
+    await popup.mouse.up();
+    await page.waitForFunction(id=>window.__slideMerge.deck().slides.find(slide=>slide.id===id).durationMinutes===230/60,first);
+    await popup.mouse.move(timePoint.x,timePoint.y);await popup.mouse.down();await popup.mouse.move(timePoint.x-16,timePoint.y,{steps:4});await popup.mouse.up();
+    assert.equal(await popup.locator('[data-pp-minutes]').inputValue(),'03:30');
+    await popup.mouse.move(timePoint.x,timePoint.y);await popup.mouse.down();await popup.mouse.move(timePoint.x+16,timePoint.y,{steps:4});await popup.keyboard.press('Escape');await popup.mouse.up();
+    assert.equal(await popup.locator('[data-pp-minutes]').inputValue(),'03:30','Escape cancels the time drag');
+    await popup.locator('[data-pp-minutes]').press('Shift+ArrowUp');
+    assert.equal(await popup.locator('[data-pp-minutes]').inputValue(),'03:40','Modifier keys do not change the 10-second increment');
+    await popup.locator('[data-pp-minutes]').press('ArrowDown');await popup.locator('[data-pp-minutes]').press('Tab');
     await popup.waitForFunction(() => document.querySelector('[data-pp-save]').textContent === 'Saved to deck');
     await popup.getByRole('button',{name:'Slide overview',exact:true}).click();
     await popup.locator('[data-pp-jump="1"]').click();
     await popup.waitForFunction(() => document.querySelector('[data-pp-count]').textContent === '2 / 2');
+    assert.equal(await popup.locator('[data-pp-minutes]').inputValue(),'00:00');
+    assert.equal(await popup.locator('[data-pp-slide-progress]').evaluate(element=>element.value),0,'Navigation resets the per-slide clock');
+    assert.equal(await popup.getByRole('button',{name:'Decrease slide time',exact:true}).isDisabled(),true);
     await popup.locator('[data-pp-notes]').fill('Second slide private note');
     await popup.locator('[data-pp="prev"]').click();
     assert.equal(await popup.locator('[data-pp-notes]').innerText(),'Notes edited privately during rehearsal');
     await popup.getByRole('button',{name:'Larger notes',exact:true}).click();
+    assert.equal(await popup.locator('[data-pp-notes]').evaluate(element=>getComputedStyle(element).fontSize),'22px');
+    await popup.getByRole('button',{name:'Reset notes size',exact:true}).click();
+    assert.equal(await popup.locator('[data-pp-notes]').evaluate(element=>getComputedStyle(element).fontSize),'20px');
+    assert.equal(await popup.evaluate(()=>localStorage.getItem('rk:presenter:notes-size')),'20');
+    assert.deepEqual(await popup.locator('.pp__speakericon svg').evaluateAll(elements=>elements.map(element=>element.getBoundingClientRect().width)),[16,9]);
     await popup.locator('[data-pp-divider]').focus(); await popup.keyboard.press('ArrowLeft');
     await popup.screenshot({path:join(tmpdir(),'rk-dj-desktop.png')});
     for (const width of [390,320]) {
       await popup.setViewportSize({width,height:844});
+      await page.clock.runFor(100);
+      await popup.waitForFunction(()=>[...document.querySelectorAll('.merge-section-thumbnail')].every(element=>{const scene=element.querySelector('.merge-section-thumbnail-scene');return !scene||Math.abs(scene.getBoundingClientRect().width-element.getBoundingClientRect().width)<2;}));
       assert.equal(await popup.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
+      const mobileLayout=await popup.evaluate(()=>{const rect=selector=>document.querySelector(selector).getBoundingClientRect();const timer=rect('[data-pp-timer]'),preview=rect('.pp__nowwrap'),progress=rect('[data-pp-slide-progress]'),budget=rect('.pp__budget'),zoom=rect('.pp__noteszoom');return {timerOffset:timer.x+timer.width/2-preview.x-preview.width/2,progressWidth:progress.width,previewWidth:preview.width,progressGap:progress.top-preview.bottom,controlsFit:budget.right<zoom.left};});
+      assert.ok(Math.abs(mobileLayout.timerOffset)<1);
+      assert.ok(Math.abs(mobileLayout.progressWidth-mobileLayout.previewWidth)<1);
+      assert.ok(mobileLayout.progressGap>=0&&mobileLayout.progressGap<=4);
+      assert.equal(mobileLayout.controlsFit,true);
       await popup.screenshot({path:join(tmpdir(),`rk-dj-${width}.png`)});
     }
     await popup.getByRole('button',{name:'End presentation',exact:true}).click();
+    await page.clock.runFor(300);
     await page.waitForSelector('.pjp',{state:'detached'});
     assert.equal(popup.isClosed(),true);
     const saved = await page.evaluate(id => window.__slideMerge.deck().slides.find(slide=>slide.id===id),first);
@@ -82,9 +153,24 @@ test('bottom-right Notes and time controls replace slide-list timing and preserv
     await budget().fill('01:30'); await budget().press('Tab');
     assert.equal(await page.evaluate(() => window.__slideMerge.deck().slides[0].durationMinutes),1.5);
     await page.getByRole('button',{name:'Increase slide time',exact:true}).click();
-    assert.equal(await budget().inputValue(),'02:00');
+    assert.equal(await budget().inputValue(),'01:40');
     await budget().press('ArrowDown');
     assert.equal(await budget().inputValue(),'01:30');
+    for(const editing of [true,false]){
+      if(!editing)await page.locator('.merge-layout-toggle').click();
+      assert.equal(await page.locator('.merge-layout-toggle').textContent(),editing?'Editing on':'Rehearse');
+      const bounds=await budget().boundingBox(),point={x:bounds.x+bounds.width/2,y:bounds.y+bounds.height/2};
+      await page.mouse.move(point.x,point.y);await page.mouse.down();await page.mouse.move(point.x+16,point.y,{steps:4});
+      assert.equal(await budget().inputValue(),'01:50',`Time scrubs in ${editing?'Editing':'Rehearse'} mode`);
+      assert.equal(await page.evaluate(()=>window.__slideMerge.deck().slides[0].durationMinutes),1.5);
+      await page.mouse.up();
+      await page.waitForFunction(()=>window.__slideMerge.deck().slides[0].durationMinutes===110/60);
+      await page.mouse.move(point.x,point.y);await page.mouse.down();await page.mouse.move(point.x-16,point.y,{steps:4});await page.mouse.up();
+      assert.equal(await budget().inputValue(),'01:30');
+      await page.mouse.move(point.x,point.y);await page.mouse.down();await page.mouse.move(point.x+16,point.y,{steps:4});await budget().press('Escape');await page.mouse.up();
+      assert.equal(await budget().inputValue(),'01:30','Cancelled time gestures restore the original value');
+    }
+    await page.locator('.merge-layout-toggle').click();
     await budget().fill('01:99');
     assert.equal(await budget().getAttribute('aria-invalid'),'true');
     await budget().press('Tab');
@@ -107,9 +193,11 @@ test('bottom-right Notes and time controls replace slide-list timing and preserv
     assert.equal(await page.locator('#merge-speaker-notes').isHidden(),true);
     assert.ok(closed !== 'none');
     await page.locator('.merge-slide').nth(1).click();
+    await page.waitForFunction(()=>window.__slideMerge.deck().selected==='fidelity'&&!document.querySelector('.merge-layout-toggle').disabled);
     assert.equal(await budget().inputValue(),'00:00');
     await budget().fill('02:05'); await budget().press('Tab');
     await page.locator('.merge-slide').nth(0).click();
+    await page.waitForFunction(()=>window.__slideMerge.deck().selected==='opening'&&!document.querySelector('.merge-layout-toggle').disabled);
     assert.equal(await budget().inputValue(),'01:30');
     await page.evaluate(() => window.__slideMerge.save());
     await page.reload();
@@ -157,7 +245,7 @@ test('bottom-right Notes and time controls replace slide-list timing and preserv
         await page.locator('.HelpDialog').waitFor({state:'detached'});
         assert.equal(await page.locator('#merge-speaker-notes').isVisible(),true, 'Closing Help must not close notes');
         await budget().fill('01:45'); await budget().press('ArrowUp');
-        assert.equal(await budget().inputValue(),'02:15');
+        assert.equal(await budget().inputValue(),'01:55');
         await notes().click();
         assert.equal(await page.locator('#merge-speaker-notes').isHidden(),true);
         const editor = await page.locator('.merge-editor').boundingBox(), workspace = await page.locator('.merge-workspace').boundingBox();
@@ -420,27 +508,64 @@ test('canvas drag stays one deck-history step through autosave and slide navigat
 for (const live of [false, true]) test(`native sections remain visible in the DJ pad before capture and after closing and reopening (${live ? 'real capture' : 'denied capture'})`, { timeout:60000 }, async () => {
   const browser=await chromium.launch({executablePath,headless:true,ignoreDefaultArgs:['--disable-popup-blocking'],args:live?['--window-size=1440,1100','--auto-select-tab-capture-source-by-title=DJ section reopen regression','--auto-accept-this-tab-capture']:[]});
   const page=await browser.newPage({viewport:{width:1440,height:1000}}), errors=[];
+  const published=JSON.parse(readFileSync(new URL('./content.json',import.meta.url),'utf8')).work.flatMap(work=>work.study?.blocks||[]).find(block=>block.type==='compare'&&block.heading==='Solution: Unification');
   page.on('pageerror',error=>errors.push(error.message));
   try {
-    await page.addInitScript(live=>{
+    if(live){
+      const session=await page.context().newCDPSession(page);
+      const {windowId}=await session.send('Browser.getWindowForTarget');
+      await session.send('Browser.setWindowBounds',{windowId,bounds:{width:1440,height:1100}});
+      await session.detach();
+    }
+    await page.addInitScript(({live,published})=>{
       const canvas=document.createElement('canvas');canvas.width=640;canvas.height=360;const context=canvas.getContext('2d');context.fillStyle='#bb294b';context.fillRect(0,0,640,360);const beforeSrc=canvas.toDataURL();context.fillStyle='#20bc99';context.fillRect(0,0,640,360);
-      localStorage.setItem('rk:content:draft',JSON.stringify({work:[{id:'reopen',title:'Reopen section sample',study:{blocks:[{type:'compare',heading:'A complete section',beforeSrc,afterSrc:canvas.toDataURL()}]}}]}));
+      if(!live)localStorage.setItem('rk:theme','night');
+      localStorage.setItem('rk:content:draft',JSON.stringify({work:[{id:'reopen',title:'Reopen section sample',study:{blocks:[live?{type:'compare',heading:'A complete section',beforeSrc,afterSrc:canvas.toDataURL()}:{...published,heading:'A complete section'}]}}]}));
       const capture=navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
       window.captureRequests=0;window.captureStreams=[];
       navigator.mediaDevices.getDisplayMedia=(...args)=>{window.captureRequests++;return live?capture(...args).then(stream=>{window.captureStreams.push(stream);return stream;}):Promise.reject(new DOMException('Denied','NotAllowedError'));};
-    },live);
+    },{live,published});
     await page.goto(base+'/studio/slide-merge-lab/');
     await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    if(!live){
+      await page.evaluate(()=>window.__slideMerge.choose('fidelity'));
+      await page.waitForFunction(()=>window.__slideMerge.deck().selected==='fidelity'&&!document.querySelector('.merge-layout-toggle').disabled);
+    }
     await page.evaluate(()=>{const api=window.__slideMerge.api;api.updateScene({elements:api.getSceneElements().filter(element=>element.type==='frame')});});
     await page.getByRole('button',{name:'Sections',exact:true}).click();
     await page.getByRole('button',{name:'Reopen section sample',exact:true}).click();
     await page.locator('.merge-section-choices button[title="A complete section"]').click();
     await page.getByRole('button',{name:'Close panel',exact:true}).click();
-    const original=await page.evaluate(()=>JSON.stringify(window.__slideMerge.deck()));
+    if(!live){
+      await page.evaluate(()=>window.__slideMerge.choose('opening'));
+      await page.waitForFunction(()=>window.__slideMerge.deck().selected==='opening'&&!document.querySelector('.merge-layout-toggle').disabled);
+      await page.evaluate(()=>window.__slideMerge.save());
+      await page.reload();
+      await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+      await page.locator('.merge-layout-toggle').click();
+      await page.evaluate(()=>window.__slideMerge.save());
+    }
+    const original=deckDocumentKey(await page.evaluate(()=>window.__slideMerge.deck()));
     await page.evaluate(()=>{document.title='DJ section reopen regression';});
     await page.getByRole('button',{name:'Slide Show',exact:true}).click();
     for (let cycle=0;cycle<3;cycle++) {
       await page.waitForFunction(()=>window.documentPictureInPicture.window?.document.querySelector('[data-pp-notes]'));
+      if(!live&&cycle===0)await page.evaluate(()=>window.documentPictureInPicture.window.document.querySelector('[data-pp="next"]').click());
+      await page.waitForFunction(()=>{
+        const section=document.querySelector('.pjp iframe.lab-section-component');
+        const image=section?.contentDocument?.querySelector('.pjb__cmp-base');
+        return image?.complete&&image.naturalWidth>0&&section.getBoundingClientRect().width>0;
+      },null,{timeout:8000});
+      if(!live){
+        await page.waitForFunction(()=>document.querySelector('.pjp .merge-present-engine').getAnimations().every(animation=>animation.playState==='finished'),null,{timeout:2000});
+        const visible=await page.locator('.pjp [data-pjp-frame] iframe.lab-section-component').evaluate(section=>{
+          const bounds=section.getBoundingClientRect();const styles=[];
+          for(let element=section;element;element=element.parentElement){const style=getComputedStyle(element);styles.push({className:element.className,opacity:style.opacity,visibility:style.visibility,display:style.display,clipPath:style.clipPath});}
+          return {width:bounds.width,height:bounds.height,styles};
+        });
+        assert.ok(visible.width>100&&visible.height>100&&visible.styles.every(style=>Number(style.opacity)>0&&style.visibility==='visible'&&style.display!=='none'),JSON.stringify(visible));
+        await page.screenshot({path:join(tmpdir(),`rk-audience-section-navigation-${cycle}.png`)});
+      }
       await page.waitForFunction(()=>{
         const frame=window.documentPictureInPicture.window?.document.querySelector('[data-pp-now] iframe[title="Case-study section"]');
         const image=frame?.contentDocument?.querySelector('.pjb__cmp-base');
@@ -493,7 +618,7 @@ for (const live of [false, true]) test(`native sections remain visible in the DJ
     }
     await page.getByRole('button',{name:'Exit presentation',exact:true}).click();
     await page.waitForSelector('.pjp',{state:'detached'});
-    assert.equal(await page.evaluate(()=>JSON.stringify(window.__slideMerge.deck())),original);
+    assert.equal(deckDocumentKey(await page.evaluate(()=>window.__slideMerge.deck())),original);
     assert.deepEqual(errors,[]);
   } finally {await browser.close();}
 });

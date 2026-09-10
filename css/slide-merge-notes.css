@@ -54,9 +54,12 @@
 .merge-shell .merge-notes-toggle>.merge-notes-chevron { width:14px;height:14px;flex:none;transition:transform .18s var(--ease); }
 .merge-notes-toggle[aria-expanded="false"]>.merge-notes-chevron { transform:rotate(180deg); }
 .merge-shell .merge-time-budget { display:flex;align-items:center;flex:none;gap:8px;height:36px;padding:4px 6px 4px 8px;border:0;border-radius:6px;background:var(--merge-bg);color:var(--merge-text);box-shadow:0 0 0 1px var(--merge-bg);box-sizing:border-box; }
-.merge-time-budget>svg { flex:none;width:18px;height:18px; }
+.merge-time-budget>svg { flex:none;width:18px;height:18px;cursor:ew-resize;touch-action:none; }
 .merge-time-field { display:grid;grid-template-columns:minmax(0,1fr) 16px;width:84px;height:28px;border:1px solid var(--merge-line);border-radius:4px;overflow:hidden;box-sizing:border-box; }
 .merge-time-field:focus-within { border-color:var(--merge-accent);box-shadow:0 0 0 2px var(--ui-selected); }
+.merge-shell .merge-time-budget input { touch-action:pan-y; }
+.merge-time-field[data-scrubbing] { border-color:var(--merge-accent); }
+.merge-shell .merge-time-field[data-scrubbing] input { cursor:ew-resize;user-select:none; }
 .merge-shell .merge-time-budget input { display:block;width:100%;min-width:0;height:26px;margin:0;padding:0 3px 0 7px;border:0;border-radius:0;outline:none;background:transparent;color:inherit;font:400 14px var(--sans);font-variant-numeric:tabular-nums;letter-spacing:0;box-shadow:none;box-sizing:border-box; }
 .merge-shell .merge-time-budget input[aria-invalid="true"] { color:var(--ui-danger); }
 .merge-time-steps { display:grid;grid-template-rows:1fr 1fr;min-height:0; }

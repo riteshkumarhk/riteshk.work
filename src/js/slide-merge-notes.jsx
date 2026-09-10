@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Bold, Italic, IndentDecrease, IndentIncrease, List, ListOrdered, Sparkles, ChevronDown, ChevronUp, MessageSquareText, Timer, UserRound } from "lucide-react";
-import { clampNotesHeight, formatSlideDuration, parseSlideDuration } from "./slide-merge-notes.mjs";
+import { clampNotesHeight, formatSlideDuration, parseSlideDuration, installSlideTimeScrub, SLIDE_TIME_STEP_SECONDS } from "./slide-merge-notes.mjs";
 import { installRichNotes, notesHtml } from "./slide-rich-text.mjs";
 import { improveSlideText } from "./slide-merge-ai-client.mjs";
 import "../../css/slide-merge-notes.css";
@@ -54,6 +54,18 @@ export function NotesControls({ expanded, onToggle, minutes, onTiming, disabled,
 function SlideTimeBudget({ minutes = 0, onChange, disabled }) {
   const [draft, setDraft] = useState(null);
   const initial = useRef(minutes), input = useRef(null);
+  const scrub = useRef(null), latest = useRef({ minutes, onChange });
+  latest.current = { minutes, onChange };
+  useEffect(() => {
+    scrub.current = installSlideTimeScrub(input.current, {
+      handle: input.current.closest('.merge-time-budget'),
+      getValue: () => parseSlideDuration(input.current.value) ?? latest.current.minutes,
+      onPreview: value => setDraft(value === null ? null : formatSlideDuration(value)),
+      onCommit: value => latest.current.onChange(value)
+    });
+    return () => { scrub.current.dispose(); scrub.current = null; };
+  }, []);
+  useEffect(() => { if (disabled) scrub.current?.cancel(); }, [disabled]);
   const value = draft ?? formatSlideDuration(minutes);
   const parsed = parseSlideDuration(value), invalid = parsed === null;
   function change(text) {
@@ -68,7 +80,7 @@ function SlideTimeBudget({ minutes = 0, onChange, disabled }) {
   function key(event) {
     if (["ArrowUp", "ArrowDown", "PageUp", "PageDown"].includes(event.key)) {
       event.preventDefault(); event.stopPropagation();
-      step(({ ArrowUp: 30, ArrowDown: -30, PageUp: 300, PageDown: -300 })[event.key] * (event.shiftKey ? 2 : 1));
+      step(event.key === "ArrowUp" || event.key === "PageUp" ? SLIDE_TIME_STEP_SECONDS : -SLIDE_TIME_STEP_SECONDS);
     } else if (event.key === "Enter" || event.key === "Escape") {
       event.preventDefault(); event.stopPropagation();
       if (event.key === "Escape") onChange(initial.current);
@@ -78,10 +90,10 @@ function SlideTimeBudget({ minutes = 0, onChange, disabled }) {
   return <div className="merge-time-budget" role="group" aria-label="Slide timing">
     <Timer size={18} strokeWidth={1.75} aria-hidden="true" />
     <div className="merge-time-field">
-      <input ref={input} type="text" role="spinbutton" aria-label="Slide time budget" title={invalid ? "Enter a time from 00:00 to 240:00" : "Slide time budget (minutes:seconds)"} aria-valuemin={0} aria-valuemax={14400} aria-valuenow={Math.round(minutes * 60)} aria-valuetext={formatSlideDuration(minutes)} aria-invalid={invalid || undefined} value={value} disabled={disabled} autoComplete="off" spellCheck={false} onFocus={() => { initial.current = minutes; }} onChange={event => change(event.target.value)} onBlur={() => setDraft(null)} onKeyDown={key} />
+      <input ref={input} type="text" role="spinbutton" aria-label="Slide time budget" title={invalid ? "Enter a time from 00:00 to 240:00" : "Slide time budget (MM:SS). Drag to adjust by 10 seconds."} aria-valuemin={0} aria-valuemax={14400} aria-valuenow={Math.round((parsed ?? minutes) * 60)} aria-valuetext={formatSlideDuration(parsed ?? minutes)} aria-invalid={invalid || undefined} value={value} disabled={disabled} autoComplete="off" spellCheck={false} onFocus={() => { initial.current = minutes; }} onChange={event => change(event.target.value)} onBlur={() => setDraft(null)} onKeyDown={key} />
       <span className="merge-time-steps">
-        <button type="button" title="Increase time by 30 seconds" aria-label="Increase slide time" disabled={disabled || (parsed ?? minutes) >= 240} onPointerDown={event => event.preventDefault()} onClick={() => { step(30); input.current.focus(); }}><ChevronUp size={11} strokeWidth={1.75} aria-hidden="true" /></button>
-        <button type="button" title="Decrease time by 30 seconds" aria-label="Decrease slide time" disabled={disabled || (parsed ?? minutes) <= 0} onPointerDown={event => event.preventDefault()} onClick={() => { step(-30); input.current.focus(); }}><ChevronDown size={11} strokeWidth={1.75} aria-hidden="true" /></button>
+        <button type="button" title="Increase time by 10 seconds" aria-label="Increase slide time" disabled={disabled || (parsed ?? minutes) >= 240} onPointerDown={event => event.preventDefault()} onClick={() => { step(SLIDE_TIME_STEP_SECONDS); input.current.focus(); }}><ChevronUp size={11} strokeWidth={1.75} aria-hidden="true" /></button>
+        <button type="button" title="Decrease time by 10 seconds" aria-label="Decrease slide time" disabled={disabled || (parsed ?? minutes) <= 0} onPointerDown={event => event.preventDefault()} onClick={() => { step(-SLIDE_TIME_STEP_SECONDS); input.current.focus(); }}><ChevronDown size={11} strokeWidth={1.75} aria-hidden="true" /></button>
       </span>
     </div>
   </div>;

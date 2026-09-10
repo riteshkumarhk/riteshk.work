@@ -75,6 +75,20 @@ the floating window, including when its opening request was still pending.
 Always-on-top is not capture protection: share the slides tab/window rather than
 the whole screen, and verify the meeting application's sharing preview.
 
+The DJ pad centers elapsed time above the current slide. The slide-time field,
+navigation and note-size controls share the lower row; fullscreen/save feedback
+sits at the bottom of the left pane, and the sharing reminder is above Next slide.
+A thin full-width pacing bar follows the current slide's time budget, pauses with
+the clock, resets on navigation and indicates an overrun without advancing slides.
+
+Slide time uses `MM:SS` in the DJ pad and the editor, including Rehearse mode.
+Drag the value or stopwatch horizontally to adjust in 10-second steps. Steppers
+and arrow/Page keys use the same 10-second increment, including with Shift.
+Dragging previews the value and commits once on release; Escape, pointer
+cancellation or leaving the window cancels the gesture. Clicking without dragging
+still allows typing. Typed times retain their seconds; storage remains in minutes.
+The smaller speaker icon between minus/plus resets notes to the default 20px size.
+
 `Slide Show` automatically requests the DJ pad and live preview. A fully automatic
 browser launch is still blocked: Chromium consumes the same user activation for
 fullscreen and Document Picture-in-Picture, so reversing their order does not

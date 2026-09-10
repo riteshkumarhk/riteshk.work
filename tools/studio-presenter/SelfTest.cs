@@ -61,7 +61,7 @@ internal static class SelfTest
             await Script(companion.Interface, "document.querySelector('[data-command=next]').click()");
             await Until(async () => await Script(companion.Interface, "document.querySelector('#notes').textContent") == "\"Private second note\"", "next notes");
             Check(true, "Slide navigation updates real notes");
-            await Script(companion.Interface, "(()=>{const notes=document.querySelector('#notes');notes.value='Edited native note';notes.dispatchEvent(new Event('input',{bubbles:true}));const minutes=document.querySelector('[data-pp-minutes]');minutes.value='2.5';minutes.dispatchEvent(new Event('input',{bubbles:true}));})()");
+            await Script(companion.Interface, "(()=>{const notes=document.querySelector('#notes');notes.value='Edited native note';notes.dispatchEvent(new Event('input',{bubbles:true}));const minutes=document.querySelector('[data-pp-minutes]');minutes.value='02:30';minutes.dispatchEvent(new Event('input',{bubbles:true}));})()");
             await Until(async () => await Script(audience.Browser, "window.fixture.slides[1].notes==='Edited native note'&&window.fixture.slides[1].durationMinutes===2.5") == "true", "native metadata saved");
             Check(true, "Native notes and budget edits reach their deck slide");
             await Script(companion.Interface, "document.querySelector('[data-pp=overview]').click()");

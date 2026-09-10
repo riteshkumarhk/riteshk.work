@@ -34,7 +34,8 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
   controls.className = "pp__media";
   controls.hidden = true;
   controls.innerHTML = '<button type="button" class="pp__btn" aria-label="Play or pause slide media" title="Play or pause slide media"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="m5 3 14 9-14 9Z"/></svg></button><input type="range" min="0" max="100" step="0.1" value="0" aria-label="Seek slide media">';
-  container.parentElement.after(controls);
+  const bottomControls = container.closest('.pp__workspace')?.querySelector('.pp__bottomcontrols');
+  if (bottomControls) bottomControls.before(controls); else container.parentElement.after(controls);
   const playButton = controls.querySelector("button"), seek = controls.querySelector("input");
   function activeMedia() { return (presentationContains(frame, focused?.target) && focused.target.closest("video,audio")) || presentationMedia(frame); }
   function toggleMedia(media = activeMedia()) {
