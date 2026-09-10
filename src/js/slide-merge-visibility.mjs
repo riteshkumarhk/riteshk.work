@@ -91,6 +91,7 @@ export function publicDeckPayload(deck, { reviewedSources = false } = {}) {
       if (element.type === "text") result.originalText = result.text;
       const custom = element.customData || {}, safe = {};
       if (custom.sectionComponent) throw new Error("Native sections require a public component renderer before export");
+      if (custom.slideEmbed || custom.pendingEmbed) throw new Error("Linked embeds require the reviewed public publishing integration");
       if (custom.labCorners) safe.labCorners = pickScalars(custom.labCorners, ["mode", "radius"]);
       if (typeof custom.labTextColor === "string") safe.labTextColor = custom.labTextColor;
       if (custom.slideBackground === true) safe.slideBackground = true;

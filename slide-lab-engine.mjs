@@ -26,6 +26,8 @@ export function cornerEnginePlugin() {
       const version = JSON.parse(await readFile("node_modules/@excalidraw/excalidraw/package.json", "utf8")).version;
       if (version !== "0.18.1") throw new Error("Revalidate the Slide Lab color adapter for Excalidraw " + version);
       const edits = [
+        ['      options.push(copyText);', '      options.push(copyText);\n      if (document.querySelector(".merge-shell") && !this.state.viewModeEnabled && this.scene.getNonDeletedElements().some(element => element.type === "text" && (this.state.selectedElementIds[element.id] || this.state.selectedElementIds[element.containerId]))) options.push({ name: "labImproveText", trackEvent: false, perform: () => { document.dispatchEvent(new CustomEvent("rk:improve-slide-text")); return false; } });'],
+        ['              let label = "";\n              if (item.label) {', '              let label = actionName === "labImproveText" ? "Improve with AI" : "";\n              if (item.label) {'],
         ['          if (event.target.closest(".sidebar-trigger")) {', '          if (islandRef.current?.closest(".merge-shell") && !event.target.closest(".excalidraw__canvas")) return;\n          if (event.target.closest(".sidebar-trigger")) {'],
         ['  const splitShortcutKeys = shortcuts.map((shortcut) => {', '  if (document.querySelector(".merge-shell") && ["toolBar.frame", "toolBar.laser", "toolBar.image", "buttons.clearReset", "labels.toggleTheme", "labels.viewMode"].some(key => t(key) === label)) return null;\n  const splitShortcutKeys = shortcuts.map((shortcut) => {'],
         ['        /* @__PURE__ */ jsx92(Header, {}),', '        !document.querySelector(".merge-shell") && /* @__PURE__ */ jsx92(Header, {}),'],
@@ -54,7 +56,7 @@ export function cornerEnginePlugin() {
       source = `import { cornerPath as labCornerPath } from ${JSON.stringify(resolve("src/js/slide-lab-corners.mjs").replaceAll("\\", "/"))};\n` + source;
       source = `import { sampleCanvasColor as labSampleCanvasColor } from ${JSON.stringify(resolve("src/js/slide-lab-eyedropper.mjs").replaceAll("\\", "/"))};\n` + source;
       source += '\nexport { ColorPicker as LabColorPicker, DEFAULT_ELEMENT_BACKGROUND_COLOR_PALETTE as LAB_BACKGROUND_PALETTE };\n';
-      source += '\nexport { useExcalidrawActionManager as useLabActionManager, newElementWith as labNewElementWith };\n';
+      source += '\nexport { useExcalidrawActionManager as useLabActionManager, newElementWith as labNewElementWith, Fonts as LabFontRegistry };\n';
       source = `import { FontCategoryTabs as LabFontCategoryTabs } from ${JSON.stringify(resolve("src/js/slide-font-tabs.jsx").replaceAll("\\", "/"))};\nimport { filterFontCategory as labFilterFontCategory } from ${JSON.stringify(resolve("src/js/slide-font-categories.mjs").replaceAll("\\", "/"))};\n` + source;
       pickerPatched++;
       return { contents: `import { LabRichColor, useLabCustomColors as labUseCustomColors } from ${JSON.stringify(resolve("src/js/slide-lab-color-picker.jsx").replaceAll("\\", "/"))};\nimport { LabStrokeLink, LabTextColorControls } from ${JSON.stringify(resolve("src/js/slide-lab-text-color.jsx").replaceAll("\\", "/"))};\n` + source, loader: "js", resolveDir: dirname(path) };

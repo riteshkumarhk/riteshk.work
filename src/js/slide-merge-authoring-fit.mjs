@@ -1,6 +1,6 @@
-export function fitAuthoredText(element, measure) {
+export function fitAuthoredText(element, measure, minimumSize = 18) {
   if (element.type !== "text") return element;
-  for (let size = element.fontSize; size >= 18; size--) {
+  for (let size = element.fontSize; size >= minimumSize; size--) {
     const lines = [];
     for (const paragraph of element.text.split("\n")) {
       let line = "";

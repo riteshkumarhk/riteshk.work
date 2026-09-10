@@ -1,5 +1,28 @@
 .merge-shell .merge-editor { grid-template-rows: minmax(0,1fr) min(var(--notes-height,116px),50%); }
 .merge-shell .merge-notes { position:relative; min-height:0; }
+.merge-rich-notes { display:flex;flex-direction:column;flex:1;min-height:0;gap:5px; }
+.merge-rich-toolbar { display:flex;align-items:center;gap:3px;flex:none; }
+.merge-shell .merge-rich-toolbar button { display:inline-flex;align-items:center;justify-content:center;gap:6px;width:28px;height:26px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--text-dim);cursor:pointer;font:12px var(--sans);letter-spacing:0; }
+.merge-shell .merge-rich-toolbar button:hover:not(:disabled),.merge-shell .merge-rich-toolbar button:focus-visible { color:var(--text);background:var(--ui-hover);outline:1px solid var(--line); }
+.merge-shell .merge-rich-toolbar button[aria-pressed="true"] { color:var(--accent);background:var(--ui-selected); }
+.merge-shell .merge-rich-toolbar .merge-rich-improve { width:auto;padding:0 6px;margin-left:auto; }
+.merge-rich-toolbar button:disabled { opacity:.4;cursor:default; }
+.merge-notes-input { flex:1;min-height:28px;overflow:auto;padding:8px 10px;background:var(--bg-2);color:var(--text);border:1px solid var(--line);border-radius:8px;font:14px/1.5 var(--sans);white-space:pre-wrap;overflow-wrap:anywhere; }
+.merge-notes-input:focus { outline:1px solid var(--accent); }
+.merge-notes-input:empty::before,.merge-notes-input[data-empty="true"]::before { content:attr(data-placeholder);color:var(--text-faint);pointer-events:none; }
+.merge-notes-input :is(p,div) { margin:0 0 .4em; }
+.merge-notes-input :is(ul,ol) { margin:.25em 0;padding-left:1.5em; }
+.merge-notes-input blockquote { margin:.3em 0 .3em 1.5em; }
+.merge-rich-error { color:var(--ui-danger);font:12px var(--sans); }
+.merge-thumbnail-background { position:absolute;inset:0;width:1280px;height:720px;object-fit:cover; }
+.merge-embed-composer { position:absolute;z-index:5;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;align-items:center;gap:8px;box-sizing:border-box;padding:12px;border:1px solid var(--line);background:var(--bg-2);color:var(--text);border-radius:6px; }
+.merge-embed-composer input { flex:1;min-width:70px;width:100px;padding:8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--text);font:14px var(--sans); }
+.merge-embed-composer button { padding:8px 12px;border:1px solid var(--line);border-radius:4px;background:var(--ui-selected);color:var(--text);font:12px var(--sans);cursor:pointer; }
+.merge-embed-composer span { width:100%;color:var(--ui-danger);font:12px var(--sans); }
+.merge-embed-error { display:grid;place-content:center;gap:12px;height:100%;font:16px var(--sans);color:var(--text-dim);background:var(--bg-2); }
+.merge-embed-error a { color:var(--accent);display:flex;align-items:center;gap:8px; }
+.merge-icon-generate { display:flex;gap:8px;position:sticky;bottom:0;padding-top:10px;background:var(--merge-bg); }
+.merge-icon-generate>button { display:flex;align-items:center;justify-content:center;gap:7px;width:100%;min-height:34px;padding:6px 8px;border:1px solid var(--merge-line);border-radius:6px;background:transparent;color:var(--merge-text);font:12px var(--sans);cursor:pointer; }
 .merge-shell .merge-notes textarea { min-height:0; height:100%; box-sizing:border-box; }
 .merge-notes-resizer { position:absolute; z-index:8; top:-6px; left:0; right:0; height:12px; cursor:ns-resize; touch-action:none; outline:none; }
 .merge-notes-resizer::after { content:""; position:absolute; left:50%; top:5px; width:40px; height:3px; transform:translateX(-50%); border-radius:2px; background:var(--merge-muted); opacity:.55; }
@@ -48,6 +71,7 @@
   .merge-shell .merge-mobile-canvas-controls { flex-wrap:wrap;align-items:center; }
   .merge-shell .merge-mobile-presenter-controls>.merge-icon { flex:none;width:36px;height:36px;background:var(--merge-bg); }
   .merge-shell .merge-time-budget input { font-size:16px; }
+  .merge-notes-input,.merge-embed-composer input { font-size:16px; }
   .merge-shell[data-mobile-panel="notes"] .merge-editor { grid-template-rows:minmax(0,1fr) min(var(--notes-height,116px),50%); }
   .merge-shell[data-mobile-panel="notes"] .merge-notes { position:relative; inset:auto; height:auto; max-height:none; padding:0 12px 10px; overflow:visible; border-top:1px solid var(--merge-line); }
   .merge-shell[data-mobile-panel="notes"] .merge-notes-heading { display:flex; align-items:center; justify-content:space-between; flex:0 0 36px; font-size:12px; }

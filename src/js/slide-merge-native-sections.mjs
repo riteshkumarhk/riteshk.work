@@ -7,14 +7,14 @@ export function nativeSectionElement(element) {
 export function nativeSectionLayers(elements, state) {
   const zoom = state.zoom.value;
   const visible = elements.filter(element => !element.isDeleted && !element.customData?.labLayerHidden);
-  return visible.filter(element => element.customData?.sectionComponent).map(element => {
+  return visible.filter(element => element.customData?.sectionComponent || element.customData?.slideEmbed).map(element => {
     const frame = visible.find(frame => frame.id === element.frameId) || visible.find(frame => frame.type === "frame");
     const left = frame ? (frame.x + state.scrollX) * zoom : 0;
     const top = frame ? (frame.y + state.scrollY) * zoom : 0;
     const right = left + (frame?.width || 0) * zoom;
     const bottom = top + (frame?.height || 0) * zoom;
     const rest = visible.slice(visible.indexOf(element) + 1);
-    const next = rest.findIndex(item => item.customData?.sectionComponent);
+    const next = rest.findIndex(item => item.customData?.sectionComponent || item.customData?.slideEmbed);
     return {
       element,
       frame,

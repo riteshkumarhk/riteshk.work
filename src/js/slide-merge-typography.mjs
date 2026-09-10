@@ -1,3 +1,5 @@
+import { studioDraft } from "./slide-studio-source.mjs";
+
 export function typographySystem(data) {
   const typography = data?.typography;
   if (!Array.isArray(typography?.systems) || !typography.systems.length) return null;
@@ -19,7 +21,7 @@ export async function publishedTypography(fetcher, signal) {
   throw failure;
 }
 
-export function applyStudioTypography(system, document) {
+export function applyStudioTypography(system, document, source = "published") {
   if (!system) return;
   function stylesheet(id, href) {
     let link = document.getElementById(id);
@@ -56,7 +58,7 @@ export function applyStudioTypography(system, document) {
   }
   if (system.display?.weight) root.style.setProperty("--serif-weight", String(system.display.weight));
   else root.style.removeProperty("--serif-weight");
-  root.dataset.typographySource = "published";
+  root.dataset.typographySource = source;
   root.dataset.typographySystem = system.id || "custom";
 }
 
@@ -66,13 +68,18 @@ export function watchStudioTypography(window, document) {
     controller?.abort();
     controller = new AbortController();
     const signal = controller.signal;
-    publishedTypography(window.fetch.bind(window), signal).then(system => {
-      if (!signal.aborted) applyStudioTypography(system, document);
+    let draft;
+    try { draft = studioDraft(window); } catch (error) { console.warn(error.message); }
+    const result = draft ? Promise.resolve(typographySystem(draft)) : publishedTypography(window.fetch.bind(window), signal);
+    result.then(system => {
+      if (!signal.aborted) applyStudioTypography(system, document, draft ? "draft" : "published");
     }).catch(error => {
       if (!signal.aborted) console.warn("Studio typography refresh unavailable; keeping the current UI fonts.", error);
     });
   };
   refresh();
   window.addEventListener("focus", refresh);
-  return () => { controller?.abort(); window.removeEventListener("focus", refresh); };
+  window.addEventListener("storage", refresh);
+  window.addEventListener("rk:studio-draft", refresh);
+  return () => { controller?.abort(); window.removeEventListener("focus", refresh); window.removeEventListener("storage", refresh); window.removeEventListener("rk:studio-draft", refresh); };
 }

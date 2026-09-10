@@ -7,6 +7,45 @@ the existing owner session through a new, narrowly scoped Worker route.
 See [the design audit](DESIGN-AUDIT.md) for consistency corrections, verification
 coverage and components proposed for a future shared design-system update.
 
+## Authoring parity update
+
+Speaker notes support bold, italic, bulleted and numbered lists, indentation and
+Improve with AI. The notes placeholder replaces the redundant visible heading.
+Pasted and generated HTML is allowlisted. Web DJ-pad notes render and edit this
+formatting; older native presenter binaries receive readable plain text instead
+of markup. Their existing plain-text note edits remain plain-text replacements.
+
+The Media pane offers Embed link beside Upload media. It inserts an on-slide link
+placeholder; Embed or leaving a valid field commits it. HTTPS image/video,
+YouTube/Vimeo, Figma, PDF, Office and generic iframe links are supported. External
+sites can block framing or require consent/sign-in. The browser's security and
+cross-origin input restrictions still apply; embedding does not bypass them.
+
+The Icons pane reuses Studio's line-icon generator and sanitizer. Generate and add
+saves a unique icon to the Studio draft registry and inserts it into the current
+slide. An insertion retry reuses the generated result. The native selected-text
+context menu now offers Improve with AI. Provider configuration and authentication
+remain in Content Studio; no second AI setup exists in the lab.
+
+Current Studio draft resources take priority over published resources: typography,
+custom icons, source sections, AI settings and saved layouts. Newly configured font
+faces are registered as authored choices with stable IDs; used runtime definitions
+travel with the local deck. Existing slide fonts and geometry are not rewritten.
+Studio layouts appear under My layouts and convert on use; their original records
+remain managed in Content Studio. Native layouts keep their existing local store.
+
+Section-picker cards, navigator thumbnails and presentation use complete component
+layers, including before/after comparison media and live embeds. Video thumbnails
+decode a muted, paused first frame without changing original media bytes. All 22
+current section families have a native-renderer browser check; before/after also
+has picker-to-navigator-to-slideshow interaction coverage.
+
+Publish-toggle parity is deliberately deferred to the merger. New linked embeds
+remain rejected by the incomplete public-export contract rather than silently
+exporting blank shapes. No publishing, vault, or production editor replacement is
+part of this update. AI workflow tests use synthetic provider responses; actual
+model quality and third-party media availability remain owner acceptance checks.
+
 ## Shared presentation mode
 
 Rehearse uses the production Studio presentation controller and styles from
@@ -274,11 +313,12 @@ design-system migration. The secondary opacity slider remains unchanged.
     Clicking a thumbnail restores its focus as loading finishes, before the next keypress.
     Empty decks persist across reloads and show Add blank, Add a layout, Add sections as slides,
     and Draft entire deck with AI directly on the canvas; the Add a slide dropdown is disabled.
-    Undo/Redo buttons and Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y restore/re-delete slides,
-    including the final slide. Deletion history retains up to 20 operations for this editor session;
-    reloading clears history, not the saved deck. Restores include notes, content and media references
-    without overwriting other slides. New edits clear deletion Redo. Native canvas history takes
-    precedence over deletion history; text fields retain their own keyboard Undo.
+    Undo/Redo buttons and Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y use a shared
+    80-step session deck history. It includes canvas edits, slide creation/deletion,
+    duplication, reorder, section names, notes, timing and visibility intent.
+    Selection, camera and engine bookkeeping do not create steps; original media
+    is interned across snapshots. New edits clear Redo; text fields retain their
+    normal editing Undo. Reload clears session history, not the saved deck.
 - Each insertion gap offers Add slide or Start section inline. On phones the choices temporarily
     occupy the adjacent thumbnail footprint, keeping both actions inside the strip.
 - Start a section here sits beside the top Add a slide icon and adds a named navigator divider
@@ -295,9 +335,9 @@ design-system migration. The secondary opacity slider remains unchanged.
     while naming, busy or Editing off. Duplicate does not copy the section marker.
 - Skipped slides remain editable and saved but are omitted from rehearsal. Rehearsal starts at the
     selected or next included slide, wrapping to the first included slide if needed. All skipped disables Rehearse.
-- Canvas edits use engine undo. Switching to a different slide clears engine history;
-    opening the already-current slide from All slides does not. Deck operations and
-    notes do not share the native canvas undo stack yet.
+- Deck history survives slide switches within the editor session and restores the
+    affected slide. The engine's internal history may reset on scene replacement,
+    but it is not the owner of the deck-wide timeline.
 - Selection borders and resize-handle centers use true element/group bounds, matching snap
     guides without the engine's extra selection padding. Mouse/touch hit target sizes remain
     unchanged. This is a guarded adapter for the pinned engine, not a change to slide geometry.
@@ -519,19 +559,16 @@ active in the merger lab only.
 
 ## Adoption gates
 
-This is not a production replacement. Rich HTML, section and video fixtures are
-native-renderer embeds, not fully editable engine objects. SVG thumbnails currently
-show placeholders for those embeds. Video playback depends on browser support.
-Production-deck conversion, full export/thumbnail fidelity, presenter parity,
-private encryption and publishing compatibility remain unimplemented.
-Local drafts do not roam across devices. Real-hardware performance remains a user check.
-Section generation maps content, not a visual clone of the original block. Interactive/nested sections,
-YouTube/web embeds and multi-image galleries do not have full conversion parity. Only the first media
-item/metric/quote is used; hosted video playback and export fidelity retain the existing embed limitations.
-Custom saved production layouts and production deck import are not part of this lab.
-Icons are SVG image objects, not editable individual paths; unpublished studio icons
-are not available. Video-background thumbnails omit playback; video renders beneath
-artwork in the editor and rehearsal. Magic Move matches object IDs, text and image IDs;
-unmatched incoming objects fade in. It is not full production presenter parity.
+This is not a production replacement. Full production-deck conversion, complete
+editable backup/import, owner-only deck encryption and actual publishing remain
+merger work. Local decks do not roam across devices. Native slide text is still
+element-wide formatting, unlike rich speaker notes. Whole section components remain
+interactive components rather than decomposed native text/shape objects.
+Navigator previews contain component/media layers, but SVG/PNG export cannot carry
+interactive video or remote embeds. Icons remain SVG image objects, not editable
+individual paths. Third-party framing and video codec support are browser-dependent.
+Magic Move matches object IDs, text and image IDs; unmatched incoming objects fade in.
+Real hardware, full legacy visual fidelity and integrated meeting-app privacy still
+require owner acceptance; unit tests do not establish those properties.
 Grid snapping is the engine grid rather than the production 12-column layout grid.
 Custom guides persist per slide; preset visibility and notes-panel visibility are session-only.

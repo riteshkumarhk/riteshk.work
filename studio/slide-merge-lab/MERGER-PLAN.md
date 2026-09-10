@@ -2,6 +2,12 @@
 
 Status: proposed for owner review, 2026-09-10. This document authorizes no implementation, migration, publishing or deployment.
 
+Scope update: the owner separately approved preparatory lab authoring improvements
+after the comparison, including rich notes, full-deck history, embeds, icon
+generation, draft resources, saved layouts and component thumbnails. These do not
+authorize the merger itself. Matching the existing production publish-toggle
+behavior is explicitly deferred until the merger's publishing phase.
+
 ## Recommendation
 
 Replace Content Studio's slide-editing surface with the lab's editor, not with a link or iframe to the standalone lab. Content Studio remains the owner of case studies, draft persistence, authentication, publishing and application navigation. Extract the lab's reusable editor and presentation renderer behind an explicit host interface.

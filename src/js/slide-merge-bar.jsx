@@ -1,27 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useLabActionManager } from "@excalidraw/excalidraw";
 import { ArrowDown, ArrowUp, Copy, Pencil, PencilOff, Presentation, Trash2 } from "lucide-react";
 import { DeckDialog } from "./slide-merge-navigator.jsx";
 import { SelectControl } from "./slide-shared-controls.jsx";
 import { ACTIVITY_CAPABILITIES, activityChanges, activitySnapshot, activityText } from "./slide-merge-activity.mjs";
 import "../../css/slide-merge-bar.css";
 
-export function HistoryControls({ target, disabled, canvasDisabled, activity, deletionHistory, onDeletionHistory, api }) {
-  const manager = useLabActionManager();
-  const native = useRef({}), [available, setAvailable] = useState({ undo: false, redo: false });
+export function HistoryControls({ target, disabled, activity, history, pending, onHistory, api }) {
   const keyboardState = useRef(null);
   keyboardState.current = { target, disabled, api };
-  useEffect(() => {
-    if (!target) return;
-    const update = () => {
-      const next = Object.fromEntries(["undo", "redo"].map(action => [action, !!native.current[action]?.querySelector("button:not(:disabled)")]));
-      setAvailable(previous => previous.undo === next.undo && previous.redo === next.redo ? previous : next);
-    };
-    const observer = new MutationObserver(update);
-    observer.observe(target, { subtree: true, childList: true, attributes: true, attributeFilter: ["disabled"] }); update();
-    return () => observer.disconnect();
-  }, [target, disabled]);
   React.useLayoutEffect(() => {
     const keyboard = event => {
       const current = keyboardState.current;
@@ -39,9 +26,8 @@ export function HistoryControls({ target, disabled, canvasDisabled, activity, de
     return () => document.removeEventListener("keydown", keyboard, true);
   }, []);
   return target ? createPortal(<fieldset disabled={disabled} className="merge-history-buttons" onClickCapture={event => { const button = event.target.closest("button"); if (button && !button.matches(":disabled")) { activity.flush(); activity.note(button.getAttribute("aria-label")); } }}>{["undo", "redo"].map(action => {
-    const useDeck = canvasDisabled || !available[action];
-    const canRestore = action === "undo" ? deletionHistory.canUndo : deletionHistory.canRedo;
-    return <span className="merge-history-action" key={action}><span hidden={useDeck} ref={element => { native.current[action] = element; }}>{manager.renderAction(action)}</span>{useDeck && <button aria-label={action === "undo" ? "Undo" : "Redo"} title={action === "undo" ? "Undo slide deletion" : "Redo slide deletion"} disabled={!canRestore} onClick={() => onDeletionHistory(action)} />}<svg className="merge-history-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{action === "undo" ? <><polyline points="9 14 4 9 9 4" /><path d="M4 9h11a5 5 0 0 1 0 10h-1" /></> : <><polyline points="15 14 20 9 15 4" /><path d="M20 9H9a5 5 0 0 0 0 10h1" /></>}</svg></span>;
+    const canRestore = action === "undo" ? history.canUndo || pending : history.canRedo && !pending;
+    return <span className="merge-history-action" key={action}><button type="button" aria-label={action === "undo" ? "Undo" : "Redo"} title={action === "undo" ? "Undo deck change" : "Redo deck change"} disabled={!canRestore} onClick={() => onHistory(action)} /><svg className="merge-history-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{action === "undo" ? <><polyline points="9 14 4 9 9 4" /><path d="M4 9h11a5 5 0 0 1 0 10h-1" /></> : <><polyline points="15 14 20 9 15 4" /><path d="M20 9H9a5 5 0 0 0 0 10h1" /></>}</svg></span>;
   })}</fieldset>, target) : null;
 }
 

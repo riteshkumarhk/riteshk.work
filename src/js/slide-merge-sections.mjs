@@ -23,7 +23,7 @@ export function caseStudyMedia(work) {
     const title = value.caption || value.alt || value.heading || value.title || value.editorName || label;
     for (const [field, child] of Object.entries(value)) {
       if (typeof child === "object") visit(child, title, field);
-      else if (typeof child === "string" && /^(src|url|image|video|poster|cover|coverImage|avatar)$/.test(field)) add(child, title, /^(src|url)$/.test(field) ? value.kind || value.type || field : field);
+      else if (typeof child === "string" && /^(src|url|image|video|poster|cover|coverImage|avatar|beforeSrc|afterSrc|leftImg|rightImg)$/.test(field)) add(child, title, /^(src|url)$/.test(field) ? value.kind || value.type || field : /^(beforeSrc|afterSrc|leftImg|rightImg)$/.test(field) ? "image" : field);
       else if (typeof child === "string" && /^(body|desc|html)$/.test(field) && typeof DOMParser !== "undefined") {
         const parsed = new DOMParser().parseFromString(child, "text/html");
         parsed.querySelectorAll("img[src],video[src],video source[src]").forEach(node => add(node.getAttribute("src"), node.getAttribute("alt") || title, node.tagName === "IMG" ? "image" : "video"));

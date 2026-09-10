@@ -1,12 +1,12 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
-import { Excalidraw, MainMenu, DefaultSidebar, CaptureUpdateAction, convertToExcalidrawElements, restoreElements, exportToSvg, getSceneVersion } from "@excalidraw/excalidraw";
+import { Excalidraw, MainMenu, DefaultSidebar, CaptureUpdateAction, convertToExcalidrawElements, restoreElements, exportToSvg, getSceneVersion, LabFontRegistry, FONT_FAMILY } from "@excalidraw/excalidraw";
 import { createDeck, changeSlides, insertSlide, setSlideSection, reorderSlides, presentationSlides, deckStore, slidePaneWidth } from "./slide-merge-core.mjs";
-import { createSlideDeletionHistory } from "./slide-merge-history.mjs";
+import { createDeckHistory } from "./slide-merge-history.mjs";
 import { FRAME_ID, fixtureSkeleton, packScene, originalImage, selectedLabels, labelColorUpdate, preserveLabelColors } from "./slide-lab-core.mjs";
 import { createScreenshot } from "./slide-lab-fixtures.mjs";
-import { DEFAULT_SLIDE_FONT, platformText, loadPlatformFonts } from "./slide-platform-fonts.mjs";
+import { DEFAULT_SLIDE_FONT, platformText, loadPlatformFonts, registerStudioFonts } from "./slide-platform-fonts.mjs";
 import { LabTextColorContext } from "./slide-lab-text-color.jsx";
 import { CornerControls } from "./slide-lab-corner-controls.jsx";
 import { normalizeHex } from "./slide-lab-color.mjs";
@@ -18,7 +18,8 @@ import { PlaceholderActions } from "./slide-merge-placeholders.jsx";
 import { fitPlaceholder } from "./slide-merge-placeholder-fit.mjs";
 import { contentSkeleton, diagramSkeleton } from "./slide-merge-inserts.mjs";
 import { SlideNavigator, SlideAddActions, DeckDialog, LayoutNameDialog } from "./slide-merge-navigator.jsx";
-import { captureLayout, instantiateLayout, savedLayoutStore } from "./slide-merge-layouts.mjs";
+import { captureLayout, instantiateLayout, savedLayoutStore, studioSavedLayouts, studioLayoutElements } from "./slide-merge-layouts.mjs";
+import { studioSourceData, studioIconRegistry } from "./slide-studio-source.mjs";
 import { sectionMediaUrl, sectionPlainText } from "./slide-merge-sections.mjs";
 import { sectionComponentPlan } from "./slide-merge-section-component.mjs";
 import { nativeSectionElement, nativeSectionLayers } from "./slide-merge-native-sections.mjs";
@@ -33,7 +34,9 @@ import "../../css/slide-merge.css";
 import "../../css/slide-merge-theme.css";
 import { useMobilePanels } from "./slide-merge-mobile.jsx";
 import { canvasTheme } from "./slide-merge-appearance.mjs";
-import { NotesControls, useNotesResize } from "./slide-merge-notes.jsx";
+import { NotesControls, RichNotesEditor, useNotesResize } from "./slide-merge-notes.jsx";
+import { notesHtml } from "./slide-rich-text.mjs";
+import { EmbeddedMedia, EmbedComposer } from "./slide-merge-embeds.jsx";
 import { LayerPanel } from "./slide-merge-layers.jsx";
 import { ActivityDialog, AllSlides, EditorBar, HistoryControls, StatusControls, useActivity } from "./slide-merge-bar.jsx";
 import { VisibilityMenu, VisibilityConfirmation } from "./slide-merge-visibility.jsx";
@@ -41,10 +44,10 @@ import { presentDeckWithRenderer } from "./deck-presenter.mjs";
 import "../../css/deck-presenter.css";
 import "../../css/slide-merge-presenter.css";
 import { setDeckVisibility } from "./slide-merge-visibility.mjs";
-import { watchStudioTypography } from "./slide-merge-typography.mjs";
+import { watchStudioTypography, typographySystem } from "./slide-merge-typography.mjs";
 import { compileComposition } from "./slide-merge-composition.mjs";
 import { compositionDeck } from "./slide-merge-ai.mjs";
-import { loadCompositionData } from "./slide-merge-ai-client.mjs";
+import { loadCompositionData, improveSlideText } from "./slide-merge-ai-client.mjs";
 import "../../css/slide-merge-controls.css";
 
 function useAppearance() {
@@ -99,11 +102,11 @@ function SectionComponent({ block, icons }) {
   useEffect(send, [block, icons, appearance]);
   return <iframe ref={frame} className="lab-embed lab-section-component" title="Case-study section" src="/studio/slide-lab/native.html?fixture=component" allow="fullscreen; autoplay" allowFullScreen onLoad={send} />;
 }
-function Embed({ element }) {
+function Embed({ element, preview = false }) {
   if (element.customData?.labLayerHidden) return null;
   if (element.customData?.sectionComponent) return <SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} />;
   const video = element.customData?.sectionVideo;
-  if (video && sectionMediaUrl(video)) return <video className="lab-embed" src={video} controls playsInline preload="metadata" />;
+  if (video && sectionMediaUrl(video)) return <video className="lab-embed" src={video} controls={!preview} muted={preview} playsInline preload="metadata" onLoadedMetadata={event => { if (preview && event.currentTarget.duration > 0) event.currentTarget.currentTime = Math.min(0.1, event.currentTarget.duration / 2); }} />;
   const kind = element.customData?.fixture;
   return ["rich", "section", "video"].includes(kind) ? <iframe className="lab-embed" title={`Native ${kind}`} src={`/studio/slide-lab/native.html?fixture=${kind}`} /> : null;
 }
@@ -130,10 +133,10 @@ function SectionForeground({ elements, frame, files, style }) {
   }, [signature, files, appearance]);
   return svg ? <div className="merge-native-foreground" style={style} dangerouslySetInnerHTML={{ __html: svg }} /> : null;
 }
-function SectionLayers({ layers, files }) {
-  return layers.map(({ element, style, clipStyle, foreground, frame, frameStyle }) => <div key={element.id} className="merge-native-clip" style={clipStyle}><div className="merge-native-section" style={style}><SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} /></div><SectionForeground elements={foreground} frame={frame} files={files} style={frameStyle} /></div>);
+function SectionLayers({ layers, files, preview = false }) {
+  return layers.map(({ element, style, clipStyle, foreground, frame, frameStyle }) => <div key={element.id} className="merge-native-clip" style={clipStyle}><div className="merge-native-section" style={style}>{element.customData.slideEmbed ? <EmbeddedMedia value={element.customData.slideEmbed.url} preview={preview} /> : <SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} />}</div><SectionForeground elements={foreground} frame={frame} files={files} style={frameStyle} /></div>);
 }
-function SectionThumbnail({ svg, elements, files, embeds = false }) {
+function SectionThumbnail({ svg, elements, files, embeds = true }) {
   const host = useRef(null);
   const [scale, setScale] = useState(0);
   useEffect(() => {
@@ -141,7 +144,7 @@ function SectionThumbnail({ svg, elements, files, embeds = false }) {
     observer.observe(host.current);
     return () => observer.disconnect();
   }, []);
-  return <span ref={host} className="merge-section-thumbnail" inert=""><span className="merge-section-thumbnail-scene" style={{ transform: `scale(${scale})` }}><span className="merge-section-thumbnail-svg" dangerouslySetInnerHTML={{ __html: svg }} />{embeds && elements.filter(element => !element.isDeleted && !element.customData?.labLayerHidden && element.type === "embeddable" && validEmbed(element.link)).map(element => <span key={element.id} className="merge-present-embed-preview" style={{ left:element.x, top:element.y, width:element.width, height:element.height, opacity:element.opacity / 100, transform:`rotate(${element.angle}rad)` }}><Embed element={element} /></span>)}<SectionLayers layers={nativeSectionLayers(elements, { zoom: { value: 1 }, scrollX: 0, scrollY: 0 })} files={files} /></span></span>;
+  return <span ref={host} className="merge-section-thumbnail" inert=""><span className="merge-section-thumbnail-scene" style={{ transform: `scale(${scale})` }}>{embeds && elements.filter(element => !element.isDeleted && !element.customData?.labLayerHidden && element.customData?.slideBackgroundVideo).map(element => <video key={element.id} className="merge-thumbnail-background" src={element.customData.slideBackgroundVideo} muted playsInline preload="metadata" onLoadedMetadata={event => { if (event.currentTarget.duration > 0) event.currentTarget.currentTime = Math.min(0.1, event.currentTarget.duration / 2); }} />)}<span className="merge-section-thumbnail-svg" dangerouslySetInnerHTML={{ __html: svg }} />{embeds && elements.filter(element => !element.isDeleted && !element.customData?.labLayerHidden && element.type === "embeddable" && validEmbed(element.link)).map(element => <span key={element.id} className="merge-present-embed-preview" style={{ left:element.x, top:element.y, width:element.width, height:element.height, opacity:element.opacity / 100, transform:`rotate(${element.angle}rad)` }}><Embed element={element} preview /></span>)}<SectionLayers layers={nativeSectionLayers(elements, { zoom: { value: 1 }, scrollX: 0, scrollY: 0 })} files={files} preview /></span></span>;
 }
 function CanvasVideo({api}) {
   const [video,setVideo]=useState(null),[failed,setFailed]=useState(false);
@@ -255,11 +258,7 @@ function Presenter({ slides, index, onIndex, onClose, onSlideEdit }) {
     };
     const player = presentDeckWithRenderer({}, { slides, start: index, autoStart:true, onSlideEdit: (slide, key, value) => callbacks.current.onSlideEdit(slide.id, key, value), onClose: () => callbacks.current.onClose() }, {
       pjSlideTitle: slide => slide.title || "Untitled slide",
-      pjNotesHtml: notes => {
-        const text = document.createElement("div");
-        text.textContent = notes || "";
-        return text.innerHTML || '<span class="pjp__pnote-empty">No notes for this slide</span>';
-      },
+      pjNotesHtml: notes => notesHtml(notes) || '<span class="pjp__pnote-empty">No notes for this slide</span>',
       mountSlide: (frame, slide, nextIndex) => {
         frame.closest(".pjp").classList.add("pjp--canvas");
         mount(frame, <PresentationCanvas slides={slides} index={nextIndex} />);
@@ -305,10 +304,10 @@ function Merger() {
   const [savedLayouts, setSavedLayouts] = useState([]), [layoutTab, setLayoutTab] = useState("stock");
   const [layoutError, setLayoutError] = useState(""), [layoutSaveError, setLayoutSaveError] = useState("");
   async function refreshLayouts() {
-    try { setSavedLayouts((await savedLayoutStore()).sort((first, second) => second.created - first.created)); setLayoutError(""); }
+    try { const source = await studioSourceData(); await registerStudioFonts(typographySystem(source), LabFontRegistry, FONT_FAMILY); setSavedLayouts([...(await savedLayoutStore()).sort((first, second) => second.created - first.created), ...studioSavedLayouts(source)]); setLayoutError(""); }
     catch { setLayoutError("Saved layouts could not be loaded."); }
   }
-  useEffect(() => { refreshLayouts(); window.addEventListener("focus", refreshLayouts); return () => window.removeEventListener("focus", refreshLayouts); }, []);
+  useEffect(() => { refreshLayouts(); window.addEventListener("focus", refreshLayouts); window.addEventListener("storage", refreshLayouts); window.addEventListener("rk:studio-draft", refreshLayouts); return () => { window.removeEventListener("focus", refreshLayouts); window.removeEventListener("storage", refreshLayouts); window.removeEventListener("rk:studio-draft", refreshLayouts); }; }, []);
   const layoutPicker = { layouts: savedLayouts, tab: layoutTab, onTab: setLayoutTab, error: layoutError, onRetry: refreshLayouts,
     onRename: layout => { setLayoutSaveError(""); openDeckDialog({ kind: "rename-layout", layout }); },
     onDelete: layout => openDeckDialog({ kind: "delete-layout", layout }) };
@@ -373,12 +372,51 @@ function Merger() {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
   const live = useRef({ deck: null, ready: false, timer: null, version: -1, queue: Promise.resolve(), revision: 0, savedRevision: 0 });
-  const deletionHistory = useRef(createSlideDeletionHistory());
-  const [, refreshDeletionHistory] = useState(0);
-  function clearDeletionRedo() {
-    if (!deletionHistory.current.canRedo) return;
-    deletionHistory.current.clearRedo(); refreshDeletionHistory(value => value + 1);
-  }
+  live.current.improveText = () => run(async () => {
+    if (!editing) return;
+    const selected = api.getAppState().selectedElementIds;
+    const scene = api.getSceneElements();
+    const texts = scene.filter(element => element.type === "text" && (selected[element.id] || selected[element.containerId]) && !element.locked && !scene.find(container => container.id === element.containerId)?.locked);
+    if (!texts.length) return;
+    await save();
+    if (texts.length > 12) throw new Error("Select up to 12 text elements to improve at once.");
+    const replacements = new Map();
+    for (const element of texts) {
+      const value = String(await improveSlideText(element.originalText || element.text)).trim();
+      if (!value) throw new Error("AI returned no text. The original is unchanged.");
+      replacements.set(element.id, value);
+    }
+    const context = document.createElement("canvas").getContext("2d");
+    const elements = api.getSceneElementsIncludingDeleted().map(element => {
+      const text = replacements.get(element.id); if (text === undefined) return element;
+      return fitAuthoredText(changed(element, { text, originalText: text, autoResize: false }), (value, size) => { context.font = `${size}px "${authoringFonts.find(font => font.id === element.fontFamily)?.family || "sans-serif"}"`; return context.measureText(value).width; }, Math.min(18, element.fontSize));
+    });
+    api.updateScene({ elements: restoreElements(elements, null, { repairBindings: true, refreshDimensions: true }), captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+    await save();
+  });
+  useEffect(() => { const improve = () => live.current.improveText?.(); document.addEventListener("rk:improve-slide-text", improve); return () => document.removeEventListener("rk:improve-slide-text", improve); }, []);
+  const deckHistory = useRef(createDeckHistory());
+  const [, refreshHistory] = useState(0);
+  useEffect(() => {
+    let scheduled = 0;
+    const begin = event => {
+      if (event.button !== 0 || !editor.current?.contains(event.target) || !live.current.ready || live.current.operating) return;
+      capture();
+      if (deckHistory.current.record(live.current.deck)) refreshHistory(value => value + 1);
+      live.current.gesture = event.pointerId;
+    };
+    const finish = event => {
+      if (live.current.gesture == null || event.pointerId !== undefined && event.pointerId !== live.current.gesture) return;
+      live.current.gesture = null;
+      cancelAnimationFrame(scheduled);
+      scheduled = requestAnimationFrame(() => { if (live.current.ready && !live.current.operating) save().catch(fail); });
+    };
+    document.addEventListener("pointerdown", begin, true);
+    document.addEventListener("pointerup", finish, true);
+    document.addEventListener("pointercancel", finish, true);
+    window.addEventListener("blur", finish);
+    return () => { cancelAnimationFrame(scheduled); document.removeEventListener("pointerdown", begin, true); document.removeEventListener("pointerup", finish, true); document.removeEventListener("pointercancel", finish, true); window.removeEventListener("blur", finish); };
+  }, [api]);
   live.current.editing = editing;
   const activity = useActivity(api, live);
   const current = deck?.slides.find(slide => slide.id === deck.selected);
@@ -391,7 +429,6 @@ function Merger() {
   function fail(error) { activity.write("error", "Editor operation or local save failed"); setStatus(`Not saved: ${error.message}`); }
   function paint(next, restoring = false) {
     const previous = live.current.deck;
-    if (!restoring && previous && previous.slides !== next.slides) clearDeletionRedo();
     if (previous) {
       if (previous.title !== next.title) activity.pending("Changed deck title");
       if (previous.slides.length !== next.slides.length) activity.note(`Slide count ${previous.slides.length} -> ${next.slides.length}`);
@@ -411,18 +448,22 @@ function Merger() {
     const slide = state.deck.slides.find(item => item.id === state.deck.selected);
     if (!slide) return;
     slide.scene = packScene(api.getSceneElementsIncludingDeleted(), api.getFiles(), api.getAppState());
+    const usedFonts = new Set(state.deck.slides.flatMap(slide => slide.scene?.elements.filter(element => element.type === "text").map(element => element.fontFamily) || []));
+    const definitions = authoringFonts.filter(font => font.runtime && usedFonts.has(font.id));
+    if (definitions.length) state.deck.fonts = structuredClone(definitions);
   }
   async function thumbnail(slide) {
     const svg = await exportToSvg({ elements: slide.scene.elements.filter(element => !element.isDeleted), appState: { ...slide.scene.appState, exportBackground: false, exportWithDarkMode:canvasTheme(slide.scene.elements,document.documentElement.dataset.appearance)==="dark" }, files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true });
-    const preview = slide.scene.elements.some(element => element.customData?.sectionComponent && !element.isDeleted)
-      ? <SectionThumbnail svg={svg.outerHTML} elements={slide.scene.elements} files={slide.scene.files} />
-      : <span dangerouslySetInnerHTML={{ __html: svg.outerHTML }} />;
+    const preview = <SectionThumbnail svg={svg.outerHTML} elements={slide.scene.elements} files={slide.scene.files} />;
     setThumbnails(previous => ({ ...previous, [slide.id]: preview }));
   }
-  async function save() {
+  async function save(recordHistory = true) {
     clearTimeout(live.current.timer); live.current.timer = null; activity.flush(); capture();
     if (!live.current.deck) return;
     const snapshot = structuredClone(live.current.deck), revision = live.current.revision;
+    const state = api?.getAppState();
+    if (recordHistory && live.current.gesture == null && !state?.isDragging && !state?.isResizing) { deckHistory.current.record(snapshot); refreshHistory(value => value + 1); }
+    if (!recordHistory) deckHistory.current.acceptCurrent(snapshot);
     live.current.queue = live.current.queue.catch(() => {}).then(() => deckStore(snapshot));
     await live.current.queue;
     live.current.savedRevision = revision;
@@ -431,7 +472,6 @@ function Merger() {
     if (slide?.scene) thumbnail(slide).catch(() => {});
   }
   function schedule() {
-    clearDeletionRedo();
     live.current.revision++; clearTimeout(live.current.timer); setStatus("Saving...");
     live.current.timer = setTimeout(() => save().catch(fail), 500);
   }
@@ -472,7 +512,7 @@ function Merger() {
   async function run(operation) {
     if (live.current.operating) return;
     live.current.operating = true; setBusy(true);
-    try { await operation(); } catch (error) { fail(error); } finally { live.current.operating = false; setBusy(false); }
+    try { return await operation(); } catch (error) { fail(error); } finally { live.current.operating = false; setBusy(false); }
   }
   const selectedSlideFocus = useRef(null);
   React.useLayoutEffect(() => {
@@ -489,17 +529,17 @@ function Merger() {
   function modify(action, id = live.current.deck.selected) { return run(async () => {
     if (!live.current.editing) return;
     await save(); const next = changeSlides(live.current.deck, action, id, crypto.randomUUID());
-    if (action === "delete") { deletionHistory.current.record(live.current.deck, id); refreshDeletionHistory(value => value + 1); }
     paint(next); await mountSlide(next.slides.find(slide => slide.id === next.selected)); await save();
   }); }
-  function restoreDeletion(direction) { return run(async () => {
-    if (!live.current.editing || present !== null || deckDialog) return;
+  function restoreHistory(direction) { return run(async () => {
+    if (present !== null || deckDialog) return;
     await save();
-    const next = deletionHistory.current[direction](live.current.deck);
-    if (next === live.current.deck) return;
+    const next = deckHistory.current[direction]();
+    if (!next) return;
     paint(next, true); await mountSlide(next.slides.find(slide => slide.id === next.selected));
-    refreshDeletionHistory(value => value + 1); await save();
-    activity.note(direction === "undo" ? "Slide deletion undone" : "Slide deletion redone");
+    live.current.revision++; refreshHistory(value => value + 1); await save(false);
+    for (const slide of next.slides) thumbnail(slide).catch(() => {});
+    activity.note(direction === "undo" ? "Deck change undone" : "Deck change redone");
   }); }
   async function removeSlide(id) {
     if (busy || !live.current.editing || present !== null || deckDialog) return;
@@ -526,7 +566,7 @@ function Merger() {
     if (!saved && !stock) throw new Error("This layout is no longer available");
     await save(); const slide = await materialize({ id: crypto.randomUUID(), title: layout === "blank" ? "Untitled slide" : (saved || stock).name, notes: "", fixture: "blank" });
     if (saved) {
-      const instance = instantiateLayout(saved);
+      const instance = await layoutInstance(saved);
       slide.scene.elements = instance.elements.map(element => element.id === FRAME_ID ? { ...element, name: slide.title } : element);
       slide.scene.files = instance.files;
     } else if (layout !== "blank") {
@@ -559,8 +599,28 @@ function Merger() {
   function deleteLayout(layout) { return run(async () => {
     await savedLayoutStore("delete", layout); await refreshLayouts(); setDeckDialog(null); setStatus("Layout deleted");
   }); }
+  async function layoutInstance(layout) {
+    if (layout.source !== "studio") return instantiateLayout(layout);
+    const source = await studioSourceData(), registry = await studioIconRegistry();
+    registry.registerIcons(source.customIcons || {});
+    const styles = getComputedStyle(document.documentElement);
+    const color = value => { const match = /^var\((--[\w-]+)\)$/.exec(value); return match ? styles.getPropertyValue(match[1]).trim() || "#ece7e1" : value; };
+    const font = block => { const role = block.font === "mono" || block.role === "kicker" ? "--mono" : block.font === "serif" ? "--serif" : "--sans"; const family = styles.getPropertyValue(role).split(",")[0].replace(/["']/g, "").trim(); return authoringFonts.find(font => font.family === family)?.id || DEFAULT_SLIDE_FONT; };
+    const skeleton = studioLayoutElements(layout, font, color), files = {};
+    for (const element of skeleton.filter(element => element.type === "image")) {
+      const svg = registry.iconSvg(element.customData.studioLayoutBlock.name || "star");
+      const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
+      root.setAttribute("xmlns", "http://www.w3.org/2000/svg"); root.setAttribute("width", "96"); root.setAttribute("height", "96"); root.setAttribute("color", color(element.customData.studioLayoutBlock.color || "var(--text)"));
+      const file = await originalImage(new File([new XMLSerializer().serializeToString(root)], "layout-icon.svg", { type: "image/svg+xml" }));
+      files[file.id] = file; element.fileId = file.id;
+    }
+    const slots = new Map(skeleton.map(element => [element.id, element]));
+    const elements = restoreElements(convertToExcalidrawElements(skeleton, { regenerateIds: false }).map(element => element.type === "text" ? { ...element, width: slots.get(element.id).width, autoResize: false } : element), null, { repairBindings: true, refreshDimensions: true });
+    const blank = await materialize({ title: layout.name, fixture: "blank" });
+    return instantiateLayout({ ...layout, elements: [...blank.scene.elements, ...elements], files });
+  }
   function useSavedLayout(layout) { return run(async () => {
-    const instance = instantiateLayout(layout);
+    const instance = await layoutInstance(layout);
     await loadPlatformFonts(instance.elements);
     const elements = api.getSceneElementsIncludingDeleted();
     const frame = elements.find(element => element.id === FRAME_ID);
@@ -603,6 +663,7 @@ function Merger() {
       await live.current.queue;
       paint(next);
       await mountSlide(next.slides.find(slide => slide.id === next.selected));
+      await save();
       setSlideView("current"); setStatus("Saved on this device");
       activity.note(`AI proposal ${mode === "append" ? "appended" : "replaced deck"}`, "sys");
     } finally { live.current.operating = false; setBusy(false); }
@@ -718,6 +779,19 @@ function Merger() {
     await save();
   }); }
   function importImage(file, studioIcon = false) { if (!live.current.editing) return; return run(() => insertImage(file, studioIcon)); }
+  function addEmbed() { return run(async () => {
+    await save(); openPane(null, false);
+    const pending = api.getSceneElements().find(element => element.customData?.pendingEmbed);
+    if (pending) { api.updateScene({ appState: { selectedElementIds: { [pending.id]: true } }, captureUpdate: CaptureUpdateAction.NEVER }); requestAnimationFrame(() => document.querySelector('[aria-label="Embed media link"]')?.focus()); return; }
+    const element = restoreElements(convertToExcalidrawElements([{ type: "rectangle", id: crypto.randomUUID(), frameId: FRAME_ID, x: 320, y: 180, width: 640, height: 360, roughness: 0, strokeColor: "#8f8a84", backgroundColor: "transparent", customData: { pendingEmbed: true } }]), null, { repairBindings: true })[0];
+    api.updateScene({ elements: insertIntoPlaceholder([element]), appState: { selectedElementIds: { [element.id]: true }, activeTool: { type: "selection" } }, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+    await save();
+  }); }
+  function commitEmbed(id, url) { return run(async () => {
+    const elements = api.getSceneElementsIncludingDeleted();
+    api.updateScene({ elements: elements.map(element => element.id === id ? changed(element, { strokeColor: "transparent", backgroundColor: "rgba(0, 0, 0, 0)", fillStyle: "solid", customData: { ...element.customData, pendingEmbed: false, slideEmbed: { url } } }) : element), captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+    await save();
+  }); }
   async function insertImage(file, studioIcon = false) {
     if (!file || !/^image\/(png|jpeg|webp|gif|svg\+xml|avif)$/.test(file.type)) throw new Error("Choose PNG, JPEG, WebP, GIF, AVIF or SVG");
     const image = await originalImage(file), width = Math.min(640, image.width);
@@ -727,6 +801,7 @@ function Merger() {
     const element = restoreElements(convertToExcalidrawElements([{ type: "image", fileId: image.id, x: placeholder?placeholder.x+(placeholder.width-image.width*scale)/2:160, y: placeholder?placeholder.y+(placeholder.height-image.height*scale)/2:160, width:image.width*scale, height:image.height*scale, scale: [1, 1], frameId: FRAME_ID }]), null, { repairBindings:true })[0];
     api.updateScene({ elements: placeholderTarget.current ? insertIntoPlaceholder([element]) : [...elements.map(item=>item.id===placeholder?.id?changed(item,{isDeleted:true}):item), element], appState: { selectedElementIds: { [element.id]: true } }, captureUpdate: CaptureUpdateAction.IMMEDIATELY }); api.addFiles([image]);
     await save();
+    return true;
   }
   function importMedia(source, asBackground = false) {
     if (!source || !live.current.editing) return;
@@ -766,6 +841,7 @@ function Merger() {
     run(async () => {
       const stored = await deckStore();
       if (stored && (stored.version !== 1 || !Array.isArray(stored.slides))) throw new Error("Unsupported deck format");
+      if (stored?.fonts) await registerStudioFonts(null, LabFontRegistry, FONT_FAMILY, stored.fonts);
       const next = stored || createDeck(); next.slides = await Promise.all(next.slides.map(materialize));
       if (!next.slides.some(slide => slide.id === next.selected)) next.selected = next.slides[0]?.id ?? null;
       paint(next); await mountSlide(next.slides.find(slide => slide.id === next.selected)); await save();
@@ -842,22 +918,23 @@ function Merger() {
         </CanvasToolbar>
         <div className="lab-canvas"><CanvasBackdrop api={api} /><CanvasGuides api={api} {...view} guides={settings.guides||[]} onGuides={guides=>commitSettings({guides})} disabled={busy||present!==null} /><CanvasVideo api={api} /><LabTextColorContext.Provider value={{ api, labels, linked: labels.every(label => label.linked), busy, changeLabelColor: color => { if (color && color !== "unlink" && color !== "transparent") { color = normalizeHex(color); if (!color) return; } const elements = api.getSceneElementsIncludingDeleted(); const targets = selectedLabels(elements, api.getAppState().selectedElementIds); api.updateScene({ elements: labelColorUpdate(elements, targets.map(element => element.id), color), captureUpdate: CaptureUpdateAction.IMMEDIATELY }); } }}>
           <Excalidraw excalidrawAPI={setApi} theme={canvasTheme(api?.getSceneElements() || [],appearance)} onChange={onChange} onScrollChange={() => { if (!live.current.editing) fit(); }} onLibraryChange={library.onChange} libraryReturnUrl={location.origin + "/studio/slide-merge-lab/"} viewModeEnabled={!current || !editing || busy || present !== null || !!deckDialog || slideView === "all"} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: appearance, currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: sceneBackground() } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed}>
-            <HistoryControls target={historyTarget} api={api} activity={activity} deletionHistory={deletionHistory.current} onDeletionHistory={restoreDeletion} canvasDisabled={!current || slideView === "all"} disabled={!editing || busy || present !== null || !!deckDialog} />
+            <HistoryControls target={historyTarget} api={api} activity={activity} history={deckHistory.current} pending={live.current.revision !== live.current.savedRevision} onHistory={restoreHistory} disabled={busy || present !== null || !!deckDialog} />
             <MainMenu />
             <DefaultSidebar docked={false} onDock={false} onStateChange={state => setLibraryOpen(state?.name === "default" && state?.tab === "library")}>
               {libraryOpen && <div className="merge-library-status"><button className="merge-library-sync" onClick={library.retry} title={library.status + ". Click to retry or sign in to Studio."}><Icon name="sync" /><span role="status">{library.status}</span></button></div>}
             </DefaultSidebar>
-            <ContentPane pane={pane} busy={busy} layoutPicker={layoutPicker} composition={{ existingCount: deck?.slides.length || 0, onApply: applyAiComposition, renderPreview: plan => <CompositionPreview plan={plan} /> }} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => { finishPaneInsert(); importImage(file, true); }} onSection={(block, resources) => { finishPaneInsert(); addFromSection(block, true, resources); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={(blocks, resources) => addFromSection(blocks, false, resources)} onMedia={source => importMedia(source, mediaPurpose === "background")} onUpload={() => input.current.click()}>
+            <ContentPane pane={pane} busy={busy} onEmbed={addEmbed} layoutPicker={layoutPicker} composition={{ existingCount: deck?.slides.length || 0, onApply: applyAiComposition, renderPreview: plan => <CompositionPreview plan={plan} /> }} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => importImage(file, true)} onSection={(block, resources) => { finishPaneInsert(); addFromSection(block, true, resources); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={(blocks, resources) => addFromSection(blocks, false, resources)} onMedia={source => importMedia(source, mediaPurpose === "background")} onUpload={() => input.current.click()}>
               {api && <LayerPanel api={api} disabled={busy||present!==null||!!deckDialog} onClose={() => openPane(null, false)} onAdd={kind => { if (kind === "media") openPane("media", false); else if (kind === "text") { finishPaneInsert(); insertContent("body"); } else { openPane(null, false); api.setActiveTool({ type:"rectangle" }); } }} />}
             </ContentPane>
             {!hasSelection&&current&&<SlideProperties settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} />}
           </Excalidraw>
           <NativeSections api={api} interactive={!editing && !busy && present === null && !deckDialog} />
+          <EmbedComposer api={api} onCommit={commitEmbed} disabled={busy || !editing || present !== null} />
           {deck && !current && <section className="merge-empty" aria-label="Empty deck"><h2>No slides</h2>{editing && <div className="merge-empty-actions"><SlideAddActions add={add} pick={kind => openPane(kind, false)} busy={busy} /></div>}</section>}
           {editing && <FitSlideControl api={api} host={host} mobile={mobileUI.mobile} disabled={busy || present !== null || !!deckDialog} onFit={fit} />}
           <PlaceholderActions api={api} disabled={busy || present !== null || !!deckDialog} onInsert={(id, next) => { api.updateScene({appState:{selectedElementIds:{[id]:true}},captureUpdate:CaptureUpdateAction.NEVER});openPane(next, false, id); }} />
         </LabTextColorContext.Provider>{mobileUI.mobile ? <div className="merge-mobile-canvas-controls"><button className="merge-icon" aria-label="Toggle slides" title="Slides" aria-expanded={mobileUI.slides} onClick={()=>mobileUI.setSlides(!mobileUI.slides)}><Icon name="slides" /></button><button className="merge-icon" title="Properties" aria-label="Open properties" onClick={()=>mobileUI.open("properties",hasSelection)}><Icon name="properties" /></button><Button icon="fit" label="Fit slide" disabled={busy || present !== null || !!deckDialog} onClick={fit} /><div className="merge-mobile-presenter-controls">{notesControls}</div></div> : <div className="merge-canvas-presenter-controls">{notesControls}</div>}</div><CornerControls api={api} host={host} disabled={busy || present !== null} />{busy && <div className="lab-busy" role="status">Working</div>}
-      </main><div className="merge-notes" id="merge-speaker-notes" hidden={editing && (mobileUI.mobile ? mobileUI.panel !== "notes" : !notesOpen)}><div className="merge-notes-resizer" {...notesResize.handle} /><div className="merge-notes-heading"><strong>Speaker notes</strong></div><textarea aria-label="Speaker notes" placeholder="Speaker notes" value={current?.notes || ""} disabled={busy} onChange={event => metadata("notes", event.target.value)} /></div></section>
+      </main><div className="merge-notes" id="merge-speaker-notes" hidden={editing && (mobileUI.mobile ? mobileUI.panel !== "notes" : !notesOpen)}><div className="merge-notes-resizer" {...notesResize.handle} /><RichNotesEditor key={current?.id} value={current?.notes || ""} disabled={busy || !current} onBoundary={() => { capture(); if (live.current.deck) deckHistory.current.record(live.current.deck); }} onChange={value => metadata("notes", value)} /></div></section>
     {mobileUI.mobile && mobileUI.panel && <><button className="merge-sheet-scrim" aria-label="Dismiss panel" tabIndex={-1} onClick={()=>mobileUI.open(null)} /><div className="merge-sheet-head"><strong>{mobileUI.panel === "properties" ? (hasSelection ? "Object properties" : "Slide properties") : PANE_LABELS[mobileUI.panel] || "Speaker notes"}</strong><button className="merge-icon merge-sheet-close" title="Close panel" aria-label="Close panel" onClick={()=>mobileUI.open(null)}><Icon name="close" /></button></div></>}
     {slideView === "all" && !!deck?.slides.length && <AllSlides deck={deck} thumbnails={thumbnails} busy={busy} onDeleteKey={deleteSlideKey} onOpen={async id => { await choose(id); setSlideView("current"); activity.note("Current slide", "nav"); requestAnimationFrame(fit); }} modify={modify} add={add} remove={removeSlide} />}
     {activity.showLog && <ActivityDialog activity={activity} />}

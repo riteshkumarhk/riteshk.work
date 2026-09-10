@@ -1,3 +1,24 @@
+export function studioSavedLayouts(data) {
+  return (Array.isArray(data?.slideLayouts) ? data.slideLayouts : []).filter(layout => layout?.id && Array.isArray(layout.blocks)).map(layout => ({
+    id: `studio:${layout.id}`, name: layout.name || "Studio layout", source: "studio", created: 0, blocks: structuredClone(layout.blocks),
+    slots: layout.blocks.map(block => ({ kind: block.kind === "media" ? "media" : "text", x: block.x ?? 8, y: block.y ?? 8, width: block.w ?? 40, height: block.h ?? 12 }))
+  }));
+}
+
+export function studioLayoutElements(layout, fontFamily, color = value => value) {
+  return layout.blocks.map((block, index) => {
+    const common = { id: `${layout.id}-${index}`, frameId: "lab-slide", x: (block.x ?? 8) * 12.8, y: (block.y ?? 8) * 7.2, width: (block.w ?? 40) * 12.8, height: (block.h ?? 14) * 7.2, angle: (Number(block.rot) || 0) * Math.PI / 180, opacity: block.opacity ?? 100, roughness: 0, strokeWidth: block.strokeW ?? 1, strokeColor: color(block.stroke || block.color || "var(--text)"), backgroundColor: color(block.fill || block.bg || "transparent"), fillStyle: "solid", customData: { studioLayoutBlock: structuredClone(block) } };
+    if (block.kind === "text" || !block.kind) return { ...common, type: "text", text: String(block.text || block.ph || "Text"), fontFamily: typeof fontFamily === "function" ? fontFamily(block) : fontFamily, fontSize: ({ sm: 24, md: 40, lg: 56 })[block.size] || 40, textAlign: block.align || "left", verticalAlign: block.valign || "top", autoResize: false, customData: { ...common.customData, slidePlaceholder: { kind: "text", label: String(block.text || block.ph || "Text"), height: block.h ?? 14 } } };
+    if (block.kind === "media") return { ...common, type: "rectangle", strokeStyle: "dashed", customData: { ...common.customData, slidePlaceholder: { kind: "media", height: block.h ?? 50 } } };
+    if (block.kind === "icon") return { ...common, type: "image", fileId: `${layout.id}-icon-${index}`, scale: [1, 1] };
+    if (block.kind === "shape") {
+      if (["line", "arrow"].includes(block.shape)) return { ...common, type: block.shape, points: [[0, 0], [common.width, common.height]], endArrowhead: block.shape === "arrow" ? "arrow" : null };
+      return { ...common, type: block.shape === "ellipse" ? "ellipse" : "rectangle", customData: { ...common.customData, ...(block.radius ? { labCorners: { mode: "round", radius: block.radius } } : {}) } };
+    }
+    throw new Error(`Unsupported Studio layout block: ${block.kind}`);
+  });
+}
+
 export function captureLayout(name, scene, id = crypto.randomUUID()) {
   const title = name.trim().slice(0, 120);
   if (!title) throw new Error("Give this layout a name");

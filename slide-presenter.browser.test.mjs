@@ -1,16 +1,74 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { chromium } from "playwright-core";
+import { availableStudies } from "./src/js/slide-merge-sections.mjs";
+import { sectionComponentPlan } from "./src/js/slide-merge-section-component.mjs";
 
 const baseURL = process.env.SLIDE_LAB_URL;
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
 const enabled = !!baseURL && existsSync(executablePath);
 const deckDigest = async page => createHash("sha256").update(await page.evaluate(() => JSON.stringify(window.__slideMerge.deck()))).digest("hex");
 const denyCapture = () => { navigator.mediaDevices.getDisplayMedia = () => Promise.reject(new DOMException('Denied', 'NotAllowedError')); };
+
+test("native section renderer displays both before/after images and wires comparison", { skip: !enabled, timeout: 30000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless: true });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  try {
+    await page.goto(baseURL + "/404.html");
+    await page.evaluate(() => {
+      const image = document.createElement("canvas"); image.width = 640; image.height = 360;
+      const context = image.getContext("2d"); context.fillStyle = "#bc294b"; context.fillRect(0, 0, 640, 360);
+      const beforeSrc = image.toDataURL(); context.fillStyle = "#24b597"; context.fillRect(0, 0, 640, 360);
+      window.comparisonSection = { type: "compare", heading: "Before and after", beforeSrc, afterSrc: image.toDataURL(), beforeLabel: "Before", afterLabel: "After" };
+      const frame = document.createElement("iframe"); frame.id = "section-check"; frame.style.cssText = "width:1000px;height:700px;border:0";
+      frame.src = "/studio/slide-lab/native.html?fixture=component";
+      frame.onload = () => frame.contentWindow.postMessage({ type: "rk-section-component", block: window.comparisonSection, appearance: "dark" }, location.origin);
+      document.body.replaceChildren(frame);
+    });
+    const frame = page.frameLocator("#section-check");
+    await frame.locator(".pjb__cmp-base").waitFor();
+    const media = await frame.locator(".pjb__cmp img").evaluateAll(images => images.map(image => ({ loaded: image.complete && image.naturalWidth > 0, height: image.getBoundingClientRect().height, src: image.getAttribute("src") })));
+    assert.equal(media.length, 2);
+    assert.ok(media.every(image => image.loaded && image.height > 20), JSON.stringify(media));
+    await frame.locator(".pjb__cmp").click({ position: { x: 220, y: 100 } });
+    assert.notEqual(await frame.locator(".pjb__cmp").evaluate(element => element.style.getPropertyValue("--pos")), "50%");
+  } finally { await browser.close(); }
+});
+
+test("every section family renders as a complete native component", { skip: !enabled, timeout: 180000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless: true });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const types = ["text", "statement", "metrics", "steps", "media", "split", "faq", "cards", "cloud", "gallery", "figure", "columns", "rows", "compare", "stickies", "voices", "workflow", "mediagrid", "device", "isolayers", "focus", "gen"];
+  const source = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
+  const representatives = new Map();
+  for (const study of availableStudies(source)) for (const block of study.blocks) {
+    try { sectionComponentPlan(block, String, "check", { customIcons: source.customIcons }); if (!representatives.has(block.type)) representatives.set(block.type, block); } catch {}
+  }
+  try {
+    await page.goto(baseURL + "/404.html");
+    const image = await page.evaluate(() => { const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 360; const context = canvas.getContext("2d"); context.fillStyle = "#23a787"; context.fillRect(0, 0, 640, 360); return canvas.toDataURL(); });
+    await page.evaluate(() => { const frame = document.createElement("iframe"); frame.id = "families"; frame.style.cssText = "width:1120px;height:720px;border:0"; frame.src = "/studio/slide-lab/native.html?fixture=component"; document.body.replaceChildren(frame); });
+    const native = page.frameLocator("#families");
+    await native.locator("#stage").waitFor({ state: "attached" });
+    await page.waitForFunction(() => !!document.querySelector("#families").contentWindow.RK?.enhanceBlocks);
+    for (const type of types) {
+      const block = representatives.get(type) || { type, heading: `Sample ${type}`, body: "Complete section content", src: image, beforeSrc: image, afterSrc: image, left: "Before", right: "After", items: [{ title: "Item", heading: "Heading", label: "Label", text: "Content", body: "Details", value: "42%", src: image, q: "Question", a: "Answer", cells: [{ heading: "Cell", body: "Cell content", src: image }] }] };
+      await page.evaluate(({ block, icons }) => document.querySelector("#families").contentWindow.postMessage({ type: "rk-section-component", block, icons, appearance: "dark" }, location.origin), { block, icons: source.customIcons });
+      await native.locator(`#stage[data-component-type="${type}"] .pjb`).waitFor({ state: "attached", timeout: 8000 });
+      const result = await native.locator("#stage").evaluate(stage => ({ type: stage.dataset.componentType, children: stage.querySelector(".pjb").childElementCount, height: stage.getBoundingClientRect().height, text: stage.textContent.slice(0, 100), images: stage.querySelectorAll("img").length }));
+      assert.ok(result.children > 0 && result.height > 0 && Number.isFinite(result.height), JSON.stringify(result));
+      if (type === "compare") {
+        await native.locator(".pjb__cmp-base").evaluate(image => image.decode());
+        assert.ok(await native.locator(".pjb__cmp-base").evaluate(image => image.naturalWidth > 0));
+      }
+    }
+  } finally { await browser.close(); }
+});
+
 async function audienceOnly(page) {
   await page.waitForSelector('.pjp--popped');
   const windows = [];

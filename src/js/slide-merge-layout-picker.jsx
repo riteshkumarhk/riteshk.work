@@ -18,7 +18,7 @@ export function LayoutPicker({ layouts = [], tab = "stock", onTab, selected, dis
           <span className="merge-layout-thumb" aria-hidden="true">{layout.preview ? <img src={layout.preview} alt="" /> : layout.slots?.map((slot, index) => <span key={index} className={slot.kind === "media" ? "is-media" : ""} style={{ left: `${slot.x}%`, top: `${slot.y}%`, width: `${slot.width}%`, height: `${slot.height}%` }} />)}{layout.slots?.length === 0 && <em>Blank</em>}</span>
           <span>{layout.name}</span>
         </button></HoverPreview>
-        {tab === "user" && <div className="merge-layout-actions"><button type="button" disabled={disabled} title={`Rename ${layout.name}`} aria-label={`Rename ${layout.name}`} onClick={() => onRename(layout)}>Rename</button><button type="button" disabled={disabled} className="is-danger" title={`Delete ${layout.name}`} aria-label={`Delete ${layout.name}`} onClick={() => onDelete(layout)}><ToolIcon name="trash" /></button></div>}
+        {tab === "user" && layout.source !== "studio" && <div className="merge-layout-actions"><button type="button" disabled={disabled} title={`Rename ${layout.name}`} aria-label={`Rename ${layout.name}`} onClick={() => onRename(layout)}>Rename</button><button type="button" disabled={disabled} className="is-danger" title={`Delete ${layout.name}`} aria-label={`Delete ${layout.name}`} onClick={() => onDelete(layout)}><ToolIcon name="trash" /></button></div>}
       </div>)}</div>
     </div>
   </div>;

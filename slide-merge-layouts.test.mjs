@@ -1,6 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { captureLayout, instantiateLayout } from "./src/js/slide-merge-layouts.mjs";
+import { captureLayout, instantiateLayout, studioSavedLayouts, studioLayoutElements } from "./src/js/slide-merge-layouts.mjs";
+
+test("Studio layouts retain names, geometry, placeholders and original source records", () => {
+  const data = { slideLayouts: [{ id: "old", name: "My Studio layout", blocks: [{ kind: "text", x: 10, y: 20, w: 80, h: 15, ph: "Title", size: "lg" }, { kind: "media", x: 10, y: 40, w: 80, h: 50 }, { kind: "shape", shape: "rect", fill: "#ff0000", x: 2, y: 3, w: 4, h: 5 }] }] };
+  const before = structuredClone(data), [layout] = studioSavedLayouts(data);
+  const elements = studioLayoutElements(layout, 7);
+  assert.equal(layout.name, "My Studio layout"); assert.equal(layout.source, "studio");
+  assert.equal(elements[0].x, 128); assert.equal(elements[0].y, 144); assert.equal(elements[0].fontFamily, 7);
+  assert.equal(elements[0].text, "Title"); assert.equal(elements[1].customData.slidePlaceholder.kind, "media");
+  assert.equal(elements[2].backgroundColor, "#ff0000");
+  assert.deepEqual(data, before);
+});
 
 const scene = {
   elements: [

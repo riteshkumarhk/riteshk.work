@@ -43,6 +43,7 @@ async function render() {
     const observer = new ResizeObserver(fitComponent);
     observer.observe(stage);
     window.addEventListener("resize", fitComponent);
+    let rendered = "";
     let zoomOpened = false, zoomFullscreen = false;
     const lightboxObserver = new MutationObserver(() => {
       const open = !!document.querySelector(".pjx.is-open");
@@ -82,11 +83,16 @@ async function render() {
           if (typeof value === "string") document.documentElement.style.setProperty(key, value);
         }
         document.documentElement.dataset.appearance = event.data.appearance === "light" ? "light" : "dark";
+        const signature = JSON.stringify(component);
+        if (signature === rendered) { fitComponent(); return; }
         stage.innerHTML = window.RK.renderStudyBlock(block);
         if (!stage.querySelector(".pjb")?.innerHTML.trim()) throw new Error("This section needs a newer case-study renderer");
         stage.querySelectorAll("img").forEach(image => { image.loading = "eager"; image.addEventListener("load", fitComponent, { once: true }); });
-        stage.querySelectorAll("iframe").forEach(frame => { frame.loading = "eager"; frame.allowFullscreen = true; });
+        stage.querySelectorAll("iframe").forEach(frame => { frame.loading = "eager"; frame.allowFullscreen = true; frame.addEventListener("load", fitComponent, { once: true }); });
+        stage.querySelectorAll("video").forEach(video => video.addEventListener("loadedmetadata", fitComponent, { once: true }));
         window.RK.enhanceBlocks?.(stage);
+        stage.dataset.componentType = block.type;
+        rendered = signature;
         fitComponent();
       } catch (error) { stage.textContent = error.message; }
     });

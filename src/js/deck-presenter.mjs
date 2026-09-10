@@ -93,7 +93,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     parsed.querySelectorAll("p,li,div").forEach(function (element) { element.append("\n"); });
     var bounds = frame.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
-    window.chrome.webview.postMessage({ channel: "rk-presenter", type: "state", ...panelState(), notes: opts.onSlideEdit ? currentNotes() : parsed.body.textContent.trim(), editable: !!opts.onSlideEdit, total: slides.length, nextTitle: idx + 1 < slides.length ? pjSlideTitle(slides[idx + 1]) : "", started: startT, elapsed: clock.elapsed(), paused: clock.paused, budget: pacing().budget, remaining: pacing().remaining, totalBudget: pacing().totalBudget, width: bounds.width, height: bounds.height, left: bounds.left, top: bounds.top });
+    window.chrome.webview.postMessage({ channel: "rk-presenter", type: "state", ...panelState(), notes: parsed.body.textContent.trim(), notesHtml: pjNotesHtml(currentNotes()), editable: !!opts.onSlideEdit, total: slides.length, nextTitle: idx + 1 < slides.length ? pjSlideTitle(slides[idx + 1]) : "", started: startT, elapsed: clock.elapsed(), paused: clock.paused, budget: pacing().budget, remaining: pacing().remaining, totalBudget: pacing().totalBudget, width: bounds.width, height: bounds.height, left: bounds.left, top: bounds.top });
   }
   function onNative(event) {
     var message = event.data;
@@ -174,7 +174,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   // timer, current + next slide; the main window stays the clean slides you share. Same-origin, so
   // the main window drives both. Share just the slides WINDOW (or a 2nd display) to keep notes hidden.
   function presenterDocHtml() {
-    return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Presenter DJ pad</title>' + [].slice.call(document.querySelectorAll('link[rel="stylesheet"]')).map(function (link) { return '<link rel="stylesheet" href="' + link.href + '">'; }).join('') + '<style>' + presenterPanelStyles + '</style></head><body class="pp-body">' + presenterPanelMarkup() + '</body></html>';
+    return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Presenter DJ pad</title>' + [].slice.call(document.querySelectorAll('link[rel="stylesheet"]')).map(function (link) { return '<link rel="stylesheet" href="' + link.href + '">'; }).join('') + '<style>' + presenterPanelStyles + '</style></head><body class="pp-body">' + presenterPanelMarkup({ richNotes: true }) + '</body></html>';
   }
   function legacyPresenterDocHtml() {
     var links = [].slice.call(document.querySelectorAll('link[rel="stylesheet"]')).map(function (l) { return '<link rel="stylesheet" href="' + l.href + '">'; }).join("");
