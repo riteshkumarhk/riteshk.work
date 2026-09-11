@@ -14,7 +14,6 @@
 .merge-notes-input :is(ul,ol) { margin:.25em 0;padding-left:1.5em; }
 .merge-notes-input blockquote { margin:.3em 0 .3em 1.5em; }
 .merge-rich-error { color:var(--ui-danger);font:12px var(--sans); }
-.merge-thumbnail-background { position:absolute;inset:0;width:1280px;height:720px;object-fit:cover; }
 .merge-embed-composer { position:absolute;z-index:5;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;align-items:center;gap:8px;box-sizing:border-box;padding:12px;border:1px solid var(--line);background:var(--bg-2);color:var(--text);border-radius:6px; }
 .merge-embed-composer input { flex:1;min-width:70px;width:100px;padding:8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--text);font:14px var(--sans); }
 .merge-embed-composer button { padding:8px 12px;border:1px solid var(--line);border-radius:4px;background:var(--ui-selected);color:var(--text);font:12px var(--sans);cursor:pointer; }

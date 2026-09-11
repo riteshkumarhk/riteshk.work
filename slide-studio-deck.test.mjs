@@ -1,15 +1,30 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { build } from "esbuild";
 import { chromium } from "playwright-core";
+import { rkDecWithSek, rkUnwrapSek } from "./src/js/admin-core.js";
 import { assertStudioDeckPublishable, createStudioDeck, STUDIO_DECK_SCHEMA } from "./src/js/slide-studio-deck.mjs";
 
 test("new production decks are empty and have no demonstration content", () => {
   assert.deepEqual(createStudioDeck("Case-study slides"), { version: 1, title: "Case-study slides", selected: null, slides: [] });
+});
+
+test("slideshow routing defaults to native while preserving unopened legacy protection", () => {
+  const source = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
+  const start = source.indexOf("function nativeSlidesEnabled(work)"), end = source.indexOf("async function saveNativeWork", start);
+  const usesNative = runInNewContext(`(${source.slice(start, end)})`);
+  assert.equal(usesNative({ id: "new-case" }), true);
+  assert.equal(usesNative({ study: { slides: [{ layout: "title" }] } }), true);
+  assert.equal(usesNative({ study: { slidesEnc: { ct: "sealed" } } }), false);
+  assert.equal(usesNative({ study: { slidesEnc: { ct: "sealed" }, slides: [] } }), false);
+  for (const key of ["nativeDeck", "nativeDeckEnc", "nativeDeckPublic"]) assert.equal(usesNative({ study: { [key]: { id: "existing-native-deck" }, slidesEnc: { ct: "sealed-legacy" } } }), true);
+  assert.equal(usesNative({ encWork: true, study: { nativeDeck: { id: "private" } } }), false);
+  assert.equal(usesNative(null), false);
 });
 
 test("native pilot references and inline native scenes stop publishing without changing the draft", () => {
@@ -31,20 +46,25 @@ test("legacy and unopened encrypted decks pass through the pilot guard unchanged
   assert.deepEqual(data, original);
 });
 
-test("the shared publish builder rejects native pilots before uploads or encryption", () => {
+test("the shared publish builder validates native references before preparing owner and audience copies", () => {
   const source = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
-  assert.match(source, /async function buildPublishJson\(token\) \{\s*assertStudioDeckPublishable\(data\);/);
+  assert.match(source, /async function buildPublishJson\(token, publication = \{\}\) \{\s*assertStudioDeckPublishable\(data, \{ supportedNative: true \}\);/);
   for (const entry of ['publish', 'ghPublish', 'publishManual']) assert.match(source, new RegExp('function ' + entry + '\\([^)]*\\) \\{(?:\\s*if \\(publishing\\) return;)?\\s*if \\(!slidePublishReady\\(\\)\\) return;'));
   assert.throws(() => assertStudioDeckPublishable({}, { activeEditor: true }), { name: 'StudioDeckPublishError' });
+  const supported = { work: [{ id: 'case', study: { nativeDeck: { schema: STUDIO_DECK_SCHEMA, version: 1, caseStudyId: 'case', id: 'deck', revision: 1 } } }] };
+  assert.doesNotThrow(() => assertStudioDeckPublishable(supported, { supportedNative: true }));
+  assert.match(source, /prepareStudioPublication\(snapshot/);
 });
 
 test("native deck storage commits original assets and rejects stale or misrouted saves", { timeout: 30000 }, async () => {
   const bundle = await build({ entryPoints: [fileURLToPath(new URL("./src/js/slide-studio-deck.mjs", import.meta.url))], bundle: true, format: "iife", globalName: "StudioDeckStorage", write: false });
+  const recoveryBundle = await build({ entryPoints: [fileURLToPath(new URL("./src/js/studio-draft-recovery.mjs", import.meta.url))], bundle: true, format: "iife", globalName: "StudioRecovery", write: false });
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
   const page = await browser.newPage();
   try {
     await page.goto((process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510") + "/404.html");
     await page.addScriptTag({ content: bundle.outputFiles[0].text });
+    await page.addScriptTag({ content: recoveryBundle.outputFiles[0].text });
     const result = await page.evaluate(async () => {
       const { createStudioDeck, studioDeckReference, saveStudioDeck, loadStudioDeck, studioDeckBackup, restoreStudioDeckBackup } = window.StudioDeckStorage;
       const first = studioDeckReference("case-one"), second = studioDeckReference("case-two");
@@ -63,9 +83,16 @@ test("native deck storage commits original assets and rejects stale or misrouted
       const backup = await studioDeckBackup({ work: [{ id: "case-one", title: "Case", study: { nativeDeck: saved } }, { id: "case-two", study: { nativeDeck: other } }] });
       const recovered = await restoreStudioDeckBackup(JSON.parse(JSON.stringify(backup)), ["case-one"]);
       const recoveredReference = recovered.work[0].study.nativeDeck;
+      const archive = await window.StudioRecovery.archiveStudioDraft(backup, "previous-publish");
+      await window.StudioRecovery.archiveStudioDraft(backup, "previous-publish");
+      await window.StudioRecovery.saveStudioPublishedDraft("published-revision", recovered);
+      const baseline = await window.StudioRecovery.studioPublishedDraft("published-revision");
+      const archived = await window.StudioRecovery.studioDraftRecoveries(archive.id);
+      const archives = await window.StudioRecovery.studioDraftRecoveries();
       const broken = structuredClone(backup); delete broken.nativeDecksBackup;
       try { await restoreStudioDeckBackup(broken, ["case-one"]); } catch (error) { failures.backup = error.message; }
       return { roundtrip: JSON.stringify(restored.document) === original, originalUnchanged: JSON.stringify(document) === original, firstTitle: (await loadStudioDeck(saved)).document.title, latestTitle: (await loadStudioDeck(saved, { latest: true })).document.title, otherTitle: (await loadStudioDeck(other)).document.title, failures, revision: revision.revision,
+        recovery: { count: archives.length, cases: archives[0].cases, roundtrip: JSON.stringify(archived.backup) === JSON.stringify(backup), metadataOnly: !Object.hasOwn(archives[0], "backup"), baseline: JSON.stringify(baseline) === JSON.stringify(recovered), differentRevision: await window.StudioRecovery.studioPublishedDraft("unknown-revision") },
         backup: { documents: backup.nativeDecksBackup.documents.length, newIdentity: recoveredReference.id !== saved.id, title: (await loadStudioDeck(recoveredReference)).document.title, originalMedia: (await loadStudioDeck(recoveredReference)).document.slides[0].scene.files.original.originalDataURL, unchangedOther: recovered.work[1].study.nativeDeck.id === other.id, noEnvelope: !Object.hasOwn(recovered, "nativeDecksBackup") } };
     });
     assert.equal(result.roundtrip, true);
@@ -84,6 +111,290 @@ test("native deck storage commits original assets and rejects stale or misrouted
     assert.equal(result.backup.originalMedia, "data:image/svg+xml;base64,PHN2Zz48dGl0bGU+T3JpZ2luYWw8L3RpdGxlPjwvc3ZnPg==");
     assert.equal(result.backup.unchangedOther, true);
     assert.equal(result.backup.noEnvelope, true);
+    assert.deepEqual(result.recovery, { count: 1, cases: 2, roundtrip: true, metadataOnly: true, baseline: true, differentRevision: null });
+  } finally { await browser.close(); }
+});
+
+test("Studio preserves an older draft through recovery failure, cancel and selective restore", { timeout: 45000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  try {
+    await page.addInitScript(() => localStorage.setItem("rk:dev:stub", "1"));
+    await page.route("**/*", route => {
+      const request = route.request();
+      if (!["127.0.0.1", "localhost"].includes(new URL(request.url()).hostname) && !["GET", "HEAD"].includes(request.method())) return route.abort();
+      return route.continue();
+    });
+    await page.goto((process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510") + "/studio/?devstub");
+    await page.waitForFunction(() => typeof window.__rkDevStudio === "function" && !!window.RK?.data);
+    const original = await page.evaluate(() => {
+      const draft = structuredClone(window.RK.published || window.RK.data);
+      draft.work = [{ id: "recovery-case", title: "Unfinished case study", study: { blocks: [{ type: "statement", body: "Keep this draft" }] } }];
+      const serialized = JSON.stringify(draft);
+      localStorage.setItem("rk:content:draft", serialized); localStorage.setItem("rk:content:draft:sig", "older-published-version");
+      window.recoveryTransaction = IDBDatabase.prototype.transaction;
+      IDBDatabase.prototype.transaction = function (stores, mode, ...options) {
+        if (this.name === "rk-studio-draft-recovery-v1" && mode === "readwrite") throw new DOMException("Test recovery quota", "QuotaExceededError");
+        return window.recoveryTransaction.call(this, stores, mode, ...options);
+      };
+      window.__rkDevStudio(); return serialized;
+    });
+    await page.getByRole("dialog", { name: "Draft recovery paused" }).waitFor();
+    assert.equal(await page.evaluate(() => localStorage.getItem("rk:content:draft")), original);
+    await page.evaluate(() => { IDBDatabase.prototype.transaction = window.recoveryTransaction; document.querySelectorAll(".pass--lock").forEach(dialog => dialog.remove()); });
+    await page.getByRole("button", { name: "Retry", exact: true }).click();
+    await page.locator(".bkr [data-go]").waitFor();
+    assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work.some(work => work.id === "recovery-case")), false);
+    await page.locator(".bkr [data-cancel]").click();
+    await page.locator("[data-opensettings]").click();
+    await page.locator('[data-act="settings-cat"][data-cat="backup"]').click();
+    await page.locator('[data-act="draft-recovery"]').click();
+    await page.getByRole("button", { name: "Review draft", exact: true }).click();
+    await page.locator(".bkr [data-go]").click();
+    await page.waitForSelector(".bkr", { state: "detached" });
+    assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work.find(work => work.id === "recovery-case")?.study.blocks[0].body), "Keep this draft");
+    const archives = await page.evaluate(() => new Promise((resolve, reject) => {
+      const request = indexedDB.open("rk-studio-draft-recovery-v1", 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result, count = database.transaction("drafts", "readonly").objectStore("drafts").count();
+        count.onsuccess = () => { database.close(); resolve(count.result); };
+        count.onerror = () => { database.close(); reject(count.error); };
+      };
+    }));
+    assert.equal(archives, 1);
+    const concurrent = await page.evaluate(async () => {
+      const older = window.__RKStudio.getDraft();
+      localStorage.setItem('rk:content:draft', JSON.stringify(older));
+      localStorage.setItem('rk:content:draft:sig', 'older-again');
+      const newer = structuredClone(older); newer.work[0].title = 'Newer work from another tab';
+      const put = IDBObjectStore.prototype.put;
+      let changed = false;
+      IDBObjectStore.prototype.put = function (...args) {
+        const request = put.apply(this, args);
+        if (!changed && this.transaction.db.name === 'rk-studio-draft-recovery-v1') {
+          changed = true;
+          localStorage.setItem('rk:content:draft', JSON.stringify(newer));
+          localStorage.setItem('rk:content:draft:sig', window.RK.publishedSig);
+        }
+        return request;
+      };
+      try {
+        await window.__RKStudio.open();
+        return { changed, kept: window.__RKStudio.getDraft().work[0].title === newer.work[0].title, stored: localStorage.getItem('rk:content:draft') === JSON.stringify(newer) };
+      } finally { IDBObjectStore.prototype.put = put; }
+    });
+    assert.deepEqual(concurrent, { changed: true, kept: true, stored: true }, 'Archiving an old draft must not erase a newer save from another tab');
+  } finally { await browser.close(); }
+});
+
+test("Studio Publish shares private/public deck, case-section, retry and owner-reopen workflows", { timeout: 120000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce" });
+  const page = await context.newPage(), errors = [], uploads = new Map(), writes = [], publicUploads = [];
+  const base = process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510", passphrase = "synthetic-publish-test-only";
+  let failNext = false, latest, holdWrite = false, releaseWrite;
+  const source = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
+  source.specialViews = []; source.work = [{ id: "publish-case", title: "Shared publishing", client: "Studio", featured: true, study: { blocks: [{ type: "statement", body: "Published section" }] } }];
+  latest = structuredClone(source);
+  const routes = async route => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.pathname.endsWith("/content.json")) return route.fulfill({ contentType: "application/json", body: JSON.stringify(latest) });
+    if (url.pathname.includes("/assets/protected/")) {
+      const assetPath = "/assets/protected/" + url.pathname.split("/assets/protected/")[1];
+      if (request.method() === "PUT") {
+        uploads.set(assetPath, Buffer.from(request.postDataJSON().content, "base64"));
+        return route.fulfill({ status: 201, contentType: "application/json", body: "{}" });
+      }
+      if (uploads.has(assetPath)) return route.fulfill({ contentType: "application/octet-stream", body: uploads.get(assetPath) });
+    }
+    if (url.pathname === "/admin/content") {
+      const value = request.postDataJSON(); writes.push(value);
+      if (failNext) { failNext = false; return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Synthetic publish failure" }) }); }
+      if (holdWrite) { holdWrite = false; await new Promise(resolve => { releaseWrite = resolve; }); }
+      latest = value;
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, git: { ok: true } }) });
+    }
+    if (url.pathname === "/admin/media/put") {
+      publicUploads.push(request.postDataBuffer());
+      return route.fulfill({ contentType: "application/json", body: '{"ok":true}' });
+    }
+    if (url.hostname === "rk-ai-proxy.riteshkumarhk.workers.dev") return route.fulfill({ contentType: "application/json", body: url.pathname.includes("publish") ? '{"enabled":false}' : "{}" });
+    if (!["127.0.0.1", "localhost"].includes(url.hostname) && !["GET", "HEAD"].includes(request.method())) return route.abort();
+    return route.continue();
+  };
+  await context.route("**/*", routes);
+  await context.addInitScript(() => {
+    localStorage.setItem("rk:dev:stub", "1");
+    localStorage.setItem("rk:admin:sess", JSON.stringify({ token: "synthetic-local-test", exp: Date.now() + 3600000 }));
+    localStorage.setItem("rk:trust", JSON.stringify({ token: "synthetic-local-test", exp: Date.now() + 3600000 }));
+    localStorage.setItem("rk:autopub:on", "0");
+    navigator.mediaDevices.getDisplayMedia = () => Promise.reject(new DOMException("Denied in test", "NotAllowedError"));
+  });
+  page.on("pageerror", error => errors.push(error.message));
+  const reopenStudio = async target => {
+    await target.goto(base + "/studio/?devstub&nativeSlides=1");
+    await target.waitForFunction(() => typeof window.__rkDevStudio === "function" && !!window.RK?.data);
+    await target.evaluate(() => window.__rkDevStudio());
+    await target.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+    await target.evaluate(() => document.querySelectorAll(".pass--lock").forEach(dialog => dialog.remove()));
+    await target.locator('.adm__tab[data-tab="work"]').click();
+  };
+  try {
+    await page.goto(base + "/studio/slide-merge-lab/");
+    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    const document = await page.evaluate(() => {
+      const deck = window.__slideMerge.deck(); deck.slides = [deck.slides[0]]; deck.title = "Shared publishing"; deck.slidesPublic = false;
+      deck.slides[0].notes = "PRIVATE INITIAL NOTES";
+      const shape = deck.slides[0].scene.elements.find(element => element.type === "rectangle");
+      const original = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><rect width="200" height="120" fill="#24ba98"/></svg>');
+      deck.slides[0].scene.files = { original: { id: "original", mimeType: "image/svg+xml", dataURL: original, originalDataURL: original, created: 1 } };
+      deck.slides[0].scene.elements.push({ ...shape, id: "original-image", type: "image", fileId: "original", status: "saved", scale: [1, 1], x: 920, y: 480, width: 200, height: 120, boundElements: null, groupIds: [] });
+      const hidden = structuredClone(deck.slides[0]); hidden.id = "hidden-slide"; hidden.title = "HIDDEN SLIDE"; hidden.hidden = true; hidden.notes = "HIDDEN NOTES";
+      deck.slides.push(hidden); return deck;
+    });
+    await reopenStudio(page);
+    const bundle = await build({ entryPoints: [fileURLToPath(new URL("./src/js/slide-studio-deck.mjs", import.meta.url))], bundle: true, format: "iife", globalName: "StudioDeckStorage", write: false });
+    await page.addScriptTag({ content: bundle.outputFiles[0].text });
+    await page.evaluate(async document => {
+      const storage = window.StudioDeckStorage;
+      const reference = await storage.saveStudioDeck(storage.studioDeckReference("publish-case"), document);
+      window.__rkDevEdit("work.0.study.nativeDeck", { ...reference, slideCount: document.slides.length });
+      window.__rkDevEdit("work.0.study.blocks", [{ type: "statement", body: "Visible shared section" }, { type: "statement", body: "UNPUBLISHED CASE SECTION", off: true }]);
+    }, document);
+    await page.locator('[data-act="study-slides"][data-index="0"]').click();
+    await page.waitForFunction(() => document.querySelector(".merge-notes-input")?.textContent === "PRIVATE INITIAL NOTES");
+    await page.locator('.merge-slide').nth(1).click();
+    await page.waitForFunction(() => document.querySelector('.merge-notes-input')?.textContent === 'HIDDEN NOTES');
+    await page.locator('.merge-slide').first().click();
+    await page.waitForFunction(() => document.querySelector('.merge-notes-input')?.textContent === 'PRIVATE INITIAL NOTES');
+    await page.locator(".merge-notes-input").fill("PRIVATE CURRENT NOTES");
+    await page.locator("[data-publish]").click();
+    await page.locator('.pass--lock input[type="password"]').first().fill(passphrase);
+    const confirmation = page.locator(".pass--lock [data-confirm]"); if (await confirmation.count()) await confirmation.fill(passphrase);
+    await page.locator(".pass--lock [data-go]").click();
+    await page.waitForFunction(() => document.querySelector(".adm__statusbar")?.classList.contains("is-pub-done"));
+    assert.equal(writes.length, 1); assert.equal(publicUploads.length, 0, "Private assets must never be uploaded to public hosting");
+    assert.equal(latest.work[0].study.nativeDeckPublic, undefined);
+    assert.doesNotMatch(JSON.stringify(latest), /PRIVATE CURRENT NOTES|UNPUBLISHED CASE SECTION|HIDDEN SLIDE|nativeDeck"/);
+    const privateEnvelope = latest.work[0].study.nativeDeckEnc;
+    const savedOwner = await rkDecWithSek(await rkUnwrapSek(passphrase, privateEnvelope.wraps.owner), privateEnvelope);
+    assert.equal(savedOwner.document.slides[0].notes, "PRIVATE CURRENT NOTES");
+    assert.equal(savedOwner.document.slides.length, 2);
+    assert.match(savedOwner.document.slides[0].scene.files.original.originalDataURL, /^rkenc:/);
+    await page.locator(".merge-visibility summary").click();
+    assert.match(await page.locator(".merge-visibility-status").innerText(), /owner-only/);
+    await page.getByRole("checkbox", { name: "Public slideshow", exact: true }).click();
+    await page.getByRole("button", { name: "Set public draft", exact: true }).click();
+    await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.slidesPublic === true);
+    const previousPublished = JSON.stringify(latest);
+    failNext = true;
+    await page.locator("[data-publish]").click();
+    await page.waitForFunction(() => document.querySelector(".adm__statusbar")?.classList.contains("is-pub-error"));
+    assert.equal(JSON.stringify(latest), previousPublished, "A failed publish must keep the previously live version");
+    assert.equal(await page.locator(".merge-notes-input").innerText(), "PRIVATE CURRENT NOTES");
+    await page.locator("[data-publish]").click();
+    await page.waitForFunction(() => document.querySelector(".adm__statusbar")?.classList.contains("is-pub-done"));
+    assert.equal(latest.work[0].study.nativeDeckPublic.slides.length, 1);
+    assert.ok(publicUploads.some(bytes => bytes.equals(Buffer.from(document.slides[0].scene.files.original.originalDataURL.split(',')[1], 'base64'))), "Public upload must preserve original SVG bytes");
+    assert.doesNotMatch(JSON.stringify(latest.work[0].study.nativeDeckPublic), /PRIVATE|HIDDEN|notes|durationMinutes/);
+    assert.equal(latest.work[0].study.blocks.length, 1);
+    await page.locator('.merge-slide').nth(1).click();
+    await page.waitForFunction(() => document.querySelector('[data-publish]')?.hidden === true, null, { timeout: 5000 }).catch(async error => {
+      const changes = await page.evaluate(async () => {
+        const current = window.__RKStudio.getDraft().work[0].study.nativeDeck, published = window.RK.studioPublished.work[0].study.nativeDeck;
+        const before = await window.StudioDeckStorage.loadStudioDeck(published), after = await window.StudioDeckStorage.loadStudioDeck(current);
+        const differences = [];
+        const scan = (first, second, path = '') => {
+          if (JSON.stringify(first) === JSON.stringify(second)) return;
+          if (first && second && typeof first === 'object' && typeof second === 'object') for (const key of new Set([...Object.keys(first), ...Object.keys(second)])) scan(first[key], second[key], path + '.' + key);
+          else if (!/appState|versionNonce|updated|\.version$|\.selected$/.test(path)) differences.push({ path, before: first, after: second });
+        };
+        scan(before.document, after.document);
+        return { current, published, differences };
+      });
+      throw new Error('Navigation changed published content: ' + JSON.stringify(changes), { cause: error });
+    });
+    assert.match(await page.locator('[data-native-slide-status]').innerText(), /all changes published/);
+    await page.locator('[data-l2-back]').click();
+    await page.waitForSelector('.merge-shell', { state: 'detached' });
+    await page.reload(); await page.waitForFunction(() => typeof window.__rkDevStudio === 'function' && !!window.RK?.data);
+    await page.evaluate(() => window.__rkDevStudio()); await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+    assert.match(await page.locator('.adm__status').innerText(), /Published|All changes published/);
+    const fresh = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    await fresh.route('**/*', routes);
+    await fresh.addInitScript(() => localStorage.setItem('rk:dev:stub', '1'));
+    const newDevice = await fresh.newPage();
+    try {
+      await reopenStudio(newDevice);
+      await newDevice.locator('[data-act="study-slides"][data-index="0"]').click();
+      await newDevice.locator('.pass--lock input[type="password"]').fill(passphrase);
+      assert.equal(await newDevice.locator('.pass--lock [data-confirm]').count(), 0, 'Existing deck protection must not create a new recovery passphrase');
+      await newDevice.locator('.pass--lock [data-go]').click();
+      await newDevice.waitForFunction(() => document.querySelector('.merge-notes-input')?.textContent === 'PRIVATE CURRENT NOTES');
+      assert.equal(await newDevice.evaluate(() => window.__RKStudio.getDraft().work[0].study.blocks[1].body), 'UNPUBLISHED CASE SECTION');
+      await newDevice.locator('.merge-notes-input').fill('Private change on new device');
+      await newDevice.locator('[data-l2-back]').click();
+      await newDevice.waitForSelector('.merge-shell', { state: 'detached' });
+      assert.ok(await newDevice.evaluate(() => window.__RKStudio.getDraft().work[0].study.nativeDeck?.revision > 0));
+    } finally { await fresh.close(); }
+    await page.evaluate(() => document.querySelectorAll('.pass--lock').forEach(dialog => dialog.remove()));
+    await page.locator('.adm__tab[data-tab="work"]').click();
+    await page.locator('[data-act="study-slides"][data-index="0"]').click();
+    await page.waitForFunction(() => !!document.querySelector('.merge-visibility summary') && document.querySelector('.merge-layout-toggle')?.disabled === false);
+    await page.locator('.merge-visibility summary').click();
+    await page.getByRole('checkbox', { name: 'Public slideshow', exact: true }).uncheck();
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.slidesPublic === false);
+    const publishedNotes = await page.locator('.merge-notes-input').innerText();
+    const publicUploadCount = publicUploads.length;
+    holdWrite = true;
+    await page.locator('[data-publish]').click();
+    await page.locator('.pass--lock input[type="password"]').fill(passphrase);
+    await page.locator('.pass--lock [data-go]').click();
+    await page.waitForFunction(() => document.querySelector('.adm__status')?.textContent.includes('Publishing your content'));
+    const newNotes = 'NEWER UNPUBLISHED PRIVATE NOTES';
+    await page.locator('.merge-notes-input').fill(newNotes);
+    await page.locator('.merge-notes-input').press('Tab');
+    assert.ok(releaseWrite, 'The mocked service must be holding the current publication');
+    releaseWrite();
+    await page.waitForFunction(() => document.querySelector('.adm__statusbar')?.classList.contains('is-pub-done'));
+    await page.waitForFunction(() => document.querySelector('[data-native-slide-status]')?.textContent.includes('unpublished'));
+    assert.equal(latest.work[0].study.slidesPublic, false);
+    assert.equal(latest.work[0].study.nativeDeckPublic, undefined);
+    assert.equal(publicUploads.length, publicUploadCount, 'Returning to owner-only must not upload any public deck assets');
+    const privateAgain = latest.work[0].study.nativeDeckEnc;
+    const publishedOwner = await rkDecWithSek(await rkUnwrapSek(passphrase, privateAgain.wraps.owner), privateAgain);
+    assert.equal(publishedOwner.document.slides.find(slide => slide.id === publishedOwner.document.selected).notes, publishedNotes);
+    assert.doesNotMatch(JSON.stringify(publishedOwner), /NEWER UNPUBLISHED PRIVATE NOTES/);
+    assert.equal(await page.locator('.merge-notes-input').innerText(), newNotes);
+    assert.equal(await page.locator('[data-publish]').isVisible(), true);
+    await page.evaluate(() => Object.defineProperty(window, 'documentPictureInPicture', { value: undefined, configurable: true }));
+    for (const mounted of [true, false]) {
+      if (!mounted) { await page.locator('[data-l2-back]').click(); await page.waitForSelector('.merge-shell', { state: 'detached' }); }
+      await page.evaluate(async () => { window.hostPlayer = await window.RK.presentDeck(window.__RKStudio.getDraft().work[0], { autoStart: false }); });
+      const waiting = page.waitForEvent('popup');
+      await page.getByRole('button', { name: 'Open presenter window', exact: true }).click();
+      const presenter = await waiting;
+      const note = mounted ? 'Host presenter with editor' : 'Host presenter without editor';
+      await presenter.locator('[data-pp-notes]').fill(note);
+      await presenter.locator('[data-pp-notes]').press('Tab');
+      await presenter.waitForFunction(() => document.querySelector('[data-pp-save]')?.textContent.includes('Saved to deck'));
+      await presenter.locator('[data-pp="exit"]').click();
+      await page.waitForSelector('.pjp', { state: 'detached' });
+      const savedNote = await page.evaluate(() => new Promise((resolve, reject) => {
+        const reference = window.__RKStudio.getDraft().work[0].study.nativeDeck;
+        const request = indexedDB.open('rk-studio-slide-decks-v1');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const database = request.result, document = database.transaction('documents').objectStore('documents').get([reference.id, reference.revision]);
+          document.onsuccess = () => { database.close(); resolve(document.result.document.slides.find(slide => !slide.hidden).notes); };
+          document.onerror = () => { database.close(); reject(document.error); };
+        };
+      }));
+      assert.equal(savedNote, note);
+    }
+    assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
 
@@ -130,7 +441,7 @@ test("hosted editor loads empty, uses its save adapter and disposes without lab 
   } finally { await browser.close(); }
 });
 
-test("Content Studio pilot keeps native drafts isolated across case switches and reload", { timeout: 60000 }, async () => {
+test("Content Studio opens native slides without a preview flag and preserves case drafts", { timeout: 60000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = [];
@@ -142,7 +453,7 @@ test("Content Studio pilot keeps native drafts isolated across case switches and
       if (!["127.0.0.1", "localhost"].includes(new URL(request.url()).hostname) && !["GET", "HEAD"].includes(request.method())) return route.abort();
       return route.continue();
     });
-    await page.goto((process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510") + "/studio/?devstub&nativeSlides=1");
+    await page.goto((process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510") + "/studio/?devstub");
     await page.waitForFunction(() => typeof window.__rkDevStudio === "function" && !!window.RK?.data);
     await page.evaluate(() => window.__rkDevStudio());
     await page.waitForFunction(() => !!window.__rkDevEdit && document.querySelector(".adm.is-open"));
@@ -208,12 +519,20 @@ test("Content Studio pilot keeps native drafts isolated across case switches and
     await page.locator('.merge-notes-input').press('Tab');
     await page.keyboard.press('Control+z');
     assert.equal(await page.locator('.merge-notes-input').innerText(), 'FIRST PRIVATE NOTE', 'Empty native Undo must not step host history');
-    for (const width of [1440, 390]) {
+    for (const width of [1440, 1060, 1024, 1023, 390]) {
       await page.setViewportSize({ width, height: 1000 });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const geometry = await page.evaluate(() => {
         const shell = document.querySelector('.merge-shell').getBoundingClientRect(), main = document.querySelector('.adm__main').getBoundingClientRect(), bar = document.querySelector('.adm__workbar').getBoundingClientRect(), footer = document.querySelector('.adm__statusbar').getBoundingClientRect();
-        return { shell: shell.toJSON(), main: main.toJSON(), bar: bar.toJSON(), footer: footer.toJSON(), overflow: document.documentElement.scrollWidth > innerWidth };
+        const brand = document.querySelector('.adm__brand').getBoundingClientRect(), tabs = document.querySelector('.adm__tabswrap').getBoundingClientRect(), actions = document.querySelector('.adm__actions').getBoundingClientRect(), nav = document.querySelector('.adm__tabs');
+        return { shell: shell.toJSON(), main: main.toJSON(), bar: bar.toJSON(), footer: footer.toJSON(), overflow: document.documentElement.scrollWidth > innerWidth, brand: brand.toJSON(), tabs: tabs.toJSON(), actions: actions.toJSON(), tabOverflow: nav.scrollWidth - nav.clientWidth > 2, flippers: [...document.querySelectorAll('[data-tabflip]')].map(button => !button.hidden) };
       });
+      if (width >= 1024) {
+        assert.ok(Math.abs((geometry.brand.top + geometry.brand.bottom - geometry.actions.top - geometry.actions.bottom) / 2) < 1, 'Brand and actions must share one row');
+        assert.ok(Math.abs((geometry.tabs.top + geometry.tabs.bottom - geometry.actions.top - geometry.actions.bottom) / 2) < 1, 'Tabs must remain beside the actions');
+        assert.ok(geometry.brand.right <= geometry.tabs.left && geometry.tabs.right <= geometry.actions.left, 'The nav groups must not overlap');
+      } else assert.ok(geometry.tabs.top >= Math.max(geometry.brand.bottom, geometry.actions.bottom), 'Narrow screens keep a separate tabs row');
+      assert.deepEqual(geometry.flippers, [geometry.tabOverflow, geometry.tabOverflow]);
       assert.ok(geometry.shell.height > 400 && geometry.shell.width > width - 50, JSON.stringify(geometry));
       assert.ok(geometry.shell.top >= geometry.bar.bottom && geometry.shell.bottom <= geometry.footer.top + 1, JSON.stringify(geometry));
       assert.ok(geometry.shell.top - geometry.bar.bottom < 80, 'The host title row must not retain the old inspector padding');
@@ -238,9 +557,11 @@ test("Content Studio pilot keeps native drafts isolated across case switches and
     await page.waitForSelector('.merge-shell', { state: 'detached' });
     await page.locator('[data-act="study-slides"][data-index="0"]').click();
     await page.waitForFunction(() => document.querySelector('.merge-notes-input')?.textContent === 'Pending notes must stay open');
-    await page.locator('[data-publish]').click();
-    await page.waitForFunction(() => document.querySelector('[data-native-slide-status]')?.textContent.includes('Publishing is paused'));
-    assert.equal(await page.locator('.pass').count(), 0, 'Native pilot publishing stops before credential or upload workflows');
+    await page.locator('.merge-visibility summary').click();
+    assert.equal(await page.getByRole('checkbox', { name: 'Public slideshow', exact: true }).isChecked(), false);
+    assert.equal(await page.getByRole('checkbox', { name: 'Public slideshow', exact: true }).isEnabled(), true);
+    assert.match(await page.locator('.merge-visibility-status').innerText(), /not published/);
+    await page.keyboard.press('Escape');
     await page.locator('[data-opensettings]').click();
     await page.locator('[data-act="settings-cat"][data-cat="backup"]').click();
     const downloading = page.waitForEvent('download');

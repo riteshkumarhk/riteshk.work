@@ -23,11 +23,11 @@ import { captureLayout, instantiateLayout, savedLayoutStore, studioSavedLayouts,
 import { studioSourceData, studioIconRegistry } from "./slide-studio-source.mjs";
 import { sectionMediaUrl, sectionPlainText } from "./slide-merge-sections.mjs";
 import { sectionComponentPlan } from "./slide-merge-section-component.mjs";
-import { nativeSectionElement, nativeSectionLayers } from "./slide-merge-native-sections.mjs";
+import { nativeSectionElement } from "./slide-merge-native-sections.mjs";
 import { fitAuthoredText } from "./slide-merge-authoring-fit.mjs";
 import { fonts as authoringFonts } from "./slide-platform-fonts.mjs";
 import { SlideProperties } from "./slide-merge-properties.jsx";
-import { PROPERTY_LAYOUTS, slideSettings, slideOwnsFocus, layoutPlan, transitionMatch } from "./slide-merge-properties.mjs";
+import { PROPERTY_LAYOUTS, slideSettings, slideOwnsFocus, layoutPlan } from "./slide-merge-properties.mjs";
 import { configureSlideSnapping } from "./slide-merge-snapping.mjs";
 import "@excalidraw/excalidraw/index.css";
 import "../../css/slide-lab.css";
@@ -36,12 +36,11 @@ import "../../css/slide-merge-theme.css";
 import { useMobilePanels } from "./slide-merge-mobile.jsx";
 import { canvasTheme } from "./slide-merge-appearance.mjs";
 import { NotesControls, RichNotesEditor, useNotesResize } from "./slide-merge-notes.jsx";
-import { notesHtml } from "./slide-rich-text.mjs";
-import { EmbeddedMedia, EmbedComposer } from "./slide-merge-embeds.jsx";
+import { EmbedComposer } from "./slide-merge-embeds.jsx";
 import { LayerPanel } from "./slide-merge-layers.jsx";
 import { ActivityDialog, AllSlides, EditorBar, HistoryControls, StatusControls, useActivity } from "./slide-merge-bar.jsx";
 import { VisibilityMenu, VisibilityConfirmation } from "./slide-merge-visibility.jsx";
-import { presentDeckWithRenderer } from "./deck-presenter.mjs";
+import { Embed as NativeEmbed, NativeSections, SectionThumbnail, CanvasVideo, Presenter, engineOptions, sceneBackground, changed, validEmbed } from "./slide-studio-renderer.jsx";
 import "../../css/deck-presenter.css";
 import "../../css/slide-merge-presenter.css";
 import { setDeckVisibility } from "./slide-merge-visibility.mjs";
@@ -92,72 +91,12 @@ function FitSlideControl({ api, host, disabled, onFit, mobile }) {
   }, [api, mobile]);
   return !mobile && slot && createPortal(<button className="ToolIcon_type_button ToolIcon_size_medium zoom-button ToolIcon_type_button--show ToolIcon" type="button" title="Fit slide" aria-label="Fit slide" disabled={disabled} onClick={onFit}><div className="ToolIcon__icon"><Icon name="fit" /></div></button>, slot);
 }
-function SectionComponent({ block, icons }) {
-  const frame = useRef(null);
-  const appearance = useAppearance();
-  const send = () => {
-    if (!frame.current?.contentDocument) return;
-    const styles = getComputedStyle(document.documentElement);
-    const tokens = Object.fromEntries(["--text", "--text-dim", "--text-faint", "--accent", "--bg", "--bg-2", "--line-soft", "--sans", "--serif", "--mono"].map(key => [key, styles.getPropertyValue(key)]));
-    frame.current?.contentWindow?.RK?.renderSectionComponent?.({ block, icons, tokens, appearance });
-  };
-  useEffect(send, [block, icons, appearance]);
-  return <iframe ref={frame} className="lab-embed lab-section-component" title="Case-study section" src="/studio/slide-lab/native.html?fixture=component" allow="fullscreen; autoplay" allowFullScreen onLoad={send} />;
-}
 function Embed({ element, preview = false }) {
   if (element.customData?.labLayerHidden) return null;
-  if (element.customData?.sectionComponent) return <SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} />;
-  const video = element.customData?.sectionVideo;
-  if (video && sectionMediaUrl(video)) return <video className="lab-embed" src={video} controls={!preview} muted={preview} playsInline preload="metadata" onLoadedMetadata={event => { if (preview && event.currentTarget.duration > 0) event.currentTarget.currentTime = Math.min(0.1, event.currentTarget.duration / 2); }} />;
   const kind = element.customData?.fixture;
-  return ["rich", "section", "video"].includes(kind) ? <iframe className="lab-embed" title={`Native ${kind}`} src={`/studio/slide-lab/native.html?fixture=${kind}`} /> : null;
+  return ["rich", "section", "video"].includes(kind) ? <iframe className="lab-embed" title={`Native ${kind}`} src={`/studio/slide-lab/native.html?fixture=${kind}`} /> : <NativeEmbed element={element} preview={preview} />;
 }
-const engineOptions = { tools: { image: false }, canvasActions: { loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, clearCanvas: false, changeViewBackgroundColor: false, toggleTheme: false } };
-function NativeSections({ api, interactive = false }) {
-  const [layers, setLayers] = useState([]);
-  useEffect(() => {
-    if (!api) return;
-    const update = (elements, state) => setLayers(nativeSectionLayers(elements, state));
-    update(api.getSceneElements(), api.getAppState());
-    return api.onChange(update);
-  }, [api]);
-  return <div className={`merge-native-sections${interactive ? " is-interactive" : ""}`}><SectionLayers layers={layers} files={api?.getFiles()} /></div>;
-}
-function SectionForeground({ elements, frame, files, style }) {
-  const [svg, setSvg] = useState("");
-  const appearance = useAppearance();
-  const signature = JSON.stringify([elements, frame]);
-  useEffect(() => {
-    let current = true;
-    if (!elements.length || !frame) { setSvg(""); return; }
-    exportToSvg({ elements: [...elements.map(element => ({ ...element, frameId: frame.id })), frame], files: files || {}, exportingFrame: frame, skipInliningFonts: true, appState: { exportBackground: false, exportWithDarkMode: canvasTheme([...elements, frame], appearance) === "dark" } }).then(svg => { if (current) setSvg(svg.outerHTML); }).catch(() => { if (current) setSvg(""); });
-    return () => { current = false; };
-  }, [signature, files, appearance]);
-  return svg ? <div className="merge-native-foreground" style={style} dangerouslySetInnerHTML={{ __html: svg }} /> : null;
-}
-function SectionLayers({ layers, files, preview = false }) {
-  return layers.map(({ element, style, clipStyle, foreground, frame, frameStyle }) => <div key={element.id} className="merge-native-clip" style={clipStyle}><div className="merge-native-section" style={style}>{element.customData.slideEmbed ? <EmbeddedMedia value={element.customData.slideEmbed.url} preview={preview} /> : <SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} />}</div><SectionForeground elements={foreground} frame={frame} files={files} style={frameStyle} /></div>);
-}
-function SectionThumbnail({ svg, elements, files, embeds = true }) {
-  const host = useRef(null);
-  const [scale, setScale] = useState(0);
-  useEffect(() => {
-    const observer = new ResizeObserver(([entry]) => setScale(entry.contentRect.width / 1280));
-    observer.observe(host.current);
-    return () => observer.disconnect();
-  }, []);
-  return <span ref={host} className="merge-section-thumbnail" inert=""><span className="merge-section-thumbnail-scene" style={{ transform: `scale(${scale})` }}>{embeds && elements.filter(element => !element.isDeleted && !element.customData?.labLayerHidden && element.customData?.slideBackgroundVideo).map(element => <video key={element.id} className="merge-thumbnail-background" src={element.customData.slideBackgroundVideo} muted playsInline preload="metadata" onLoadedMetadata={event => { if (event.currentTarget.duration > 0) event.currentTarget.currentTime = Math.min(0.1, event.currentTarget.duration / 2); }} />)}<span className="merge-section-thumbnail-svg" dangerouslySetInnerHTML={{ __html: svg }} />{embeds && elements.filter(element => !element.isDeleted && !element.customData?.labLayerHidden && element.type === "embeddable" && validEmbed(element.link)).map(element => <span key={element.id} className="merge-present-embed-preview" style={{ left:element.x, top:element.y, width:element.width, height:element.height, opacity:element.opacity / 100, transform:`rotate(${element.angle}rad)` }}><Embed element={element} preview /></span>)}<SectionLayers layers={nativeSectionLayers(elements, { zoom: { value: 1 }, scrollX: 0, scrollY: 0 })} files={files} preview /></span></span>;
-}
-function CanvasVideo({api}) {
-  const [video,setVideo]=useState(null),[failed,setFailed]=useState(false);
-  useEffect(()=>{if(!api)return;const update=(elements,state)=>{const element=elements.find(item=>!item.isDeleted&&!item.customData?.labLayerHidden&&item.customData?.slideBackgroundVideo);const next=element?{src:element.customData.slideBackgroundVideo,x:(state.scrollX+element.x)*state.zoom.value,y:(state.scrollY+element.y)*state.zoom.value,width:element.width*state.zoom.value,height:element.height*state.zoom.value}:null;setVideo(previous=>previous?.src===next?.src&&previous?.x===next?.x&&previous?.y===next?.y&&previous?.width===next?.width&&previous?.height===next?.height?previous:next);};update(api.getSceneElements(),api.getAppState());return api.onChange(update);},[api]);
-  useEffect(()=>setFailed(false),[video?.src]);
-  if(!video)return null;
-  return <div className="merge-video-layer" style={{left:video.x,top:video.y,width:video.width,height:video.height}}>{failed?<div role="status">Video unavailable in this browser</div>:<video className="merge-background-video" src={video.src} autoPlay muted loop playsInline onError={()=>setFailed(true)} />}</div>;
-}
-function sceneBackground() { return "transparent"; }
-function changed(element, update) { return { ...element, ...update, version: element.version + 1, versionNonce: Math.floor(Math.random()*2147483647), updated: Date.now() }; }
-function validEmbed(link) { return /^https:\/\/slide-lab\.invalid\/(rich|section|video|background|section-video|section-component)$/.test(link); }
+const renderEmbed = (element, preview) => <Embed element={element} preview={preview} />;
 
 async function materialize(slide) {
   if (slide.scene) return { ...slide, scene: { ...slide.scene, elements: slide.scene.elements.map(nativeSectionElement) } };
@@ -189,91 +128,11 @@ function CompositionPreview({ plan }) {
     let active = true;
     prepareAuthoredSlide(plan).then(async slide => {
       const svg = await exportToSvg({ elements: slide.scene.elements, files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true, appState: { exportBackground: false, exportWithDarkMode: canvasTheme(slide.scene.elements, appearance) === "dark" } });
-      if (active) setPreview(<SectionThumbnail svg={svg.outerHTML} elements={slide.scene.elements} files={slide.scene.files} />);
+      if (active) setPreview(<SectionThumbnail svg={svg.outerHTML} elements={slide.scene.elements} files={slide.scene.files} renderEmbed={renderEmbed} />);
     }).catch(error => { if (active) setError(error.message); });
     return () => { active = false; };
   }, [plan, appearance]);
   return error ? <p role="alert">{error}</p> : preview;
-}
-
-function PresentationCanvas({ slides, index }) {
-  const [api, setApi] = useState(null);
-  const appearance = useAppearance();
-  const stage = useRef(null);
-  const previous=useRef(null),engine=useRef(null);
-  const slide = slides[index];
-  const fit = () => {
-    if (api && stage.current) api.updateScene({ appState: { zoom: { value: stage.current.clientWidth / 1280 }, scrollX: 0, scrollY: 0 }, captureUpdate: CaptureUpdateAction.NEVER });
-  };
-  useEffect(() => {
-    if (!api) return;
-    const scene = structuredClone(slide.scene);
-    api.resetScene();
-    api.updateScene({ elements: scene.elements.map(element => element.id === FRAME_ID ? { ...element, name: "" } : element), appState: { ...scene.appState, viewModeEnabled: true, zenModeEnabled: true, theme:canvasTheme(scene.elements,appearance), viewBackgroundColor:sceneBackground(scene.elements), selectedElementIds: {}, selectedGroupIds: {}, editingGroupId: null }, captureUpdate: CaptureUpdateAction.NEVER });
-    api.addFiles(Object.values(scene.files));
-    const old=previous.current;previous.current={slide,index};
-    let animationFrame=0,animation=null;
-    const transition=slideSettings(scene.elements).transition||"fade";
-    if(old&&old.slide.id!==slide.id&&!matchMedia("(prefers-reduced-motion: reduce)").matches&&transition!=="none") {
-      if(transition==="magic") {
-        const matches=transitionMatch(old.slide.scene.elements,scene.elements),start=performance.now();
-        const tick=now=>{
-          const progress=Math.min(1,(now-start)/520),ease=1-Math.pow(1-progress,3);
-          const interpolated=matches.map(match=>{
-            const target=match.next,source=match.previous;
-            const update={};
-            for(const key of ["x","y","width","height","angle","fontSize","opacity"]) if(Number.isFinite(target[key]))update[key]=source&&Number.isFinite(source[key])?source[key]+(target[key]-source[key])*ease:key==="opacity"?target[key]*ease:target[key];
-            if(source?.points?.length===target.points?.length&&target.points)update.points=target.points.map((point,pointIndex)=>point.map((value,axis)=>source.points[pointIndex][axis]+(value-source.points[pointIndex][axis])*ease));
-            return changed(target,update);
-          });
-          api.updateScene({elements:[...interpolated,scene.elements.find(element=>element.id===FRAME_ID)].filter(Boolean),captureUpdate:CaptureUpdateAction.NEVER});
-          if(progress<1)animationFrame=requestAnimationFrame(tick);else api.updateScene({elements:scene.elements,captureUpdate:CaptureUpdateAction.NEVER});
-        };animationFrame=requestAnimationFrame(tick);
-      } else animation=engine.current.animate(transition==="push"?[{transform:`translateX(${index<old.index?-100:100}%)`},{transform:"translateX(0)"}]:[{opacity:0},{opacity:1}],{duration:520,easing:"cubic-bezier(.16,1,.3,1)"});
-    }
-    const observer = new ResizeObserver(fit); observer.observe(stage.current); fit();
-    return () => { observer.disconnect();cancelAnimationFrame(animationFrame);animation?.cancel(); };
-  }, [api, slide]);
-  return <div className="merge-present-stage" ref={stage}><div className="merge-present-engine" ref={engine}><CanvasVideo api={api} /><NativeSections api={api} interactive /><Excalidraw excalidrawAPI={setApi} onScrollChange={fit} theme={canvasTheme(slide.scene.elements,appearance)} viewModeEnabled zenModeEnabled aiEnabled={false} handleKeyboardGlobally={false} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed} /></div></div>;
-}
-
-function PresentationThumbnail({ slide }) {
-  const [svg, setSvg] = useState("");
-  const appearance = useAppearance();
-  useEffect(() => {
-    let active = true;
-    setSvg("");
-    if (slide) exportToSvg({ elements: slide.scene.elements, files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true, appState: { exportBackground: false, exportWithDarkMode: canvasTheme(slide.scene.elements, appearance) === "dark" } }).then(result => { if (active) setSvg(result.outerHTML); }).catch(() => { if (active) setSvg(""); });
-    return () => { active = false; };
-  }, [slide, appearance]);
-  return slide && svg ? <div className="merge-present-thumbnail" style={{ background:getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() }}><SectionThumbnail svg={svg} elements={slide.scene.elements} files={slide.scene.files} embeds /></div> : null;
-}
-
-function Presenter({ slides, index, onIndex, onClose, onSlideEdit }) {
-  const callbacks = useRef({ onIndex, onClose, onSlideEdit });
-  callbacks.current = { onIndex, onClose, onSlideEdit };
-  useLayoutEffect(() => {
-    const roots = new Map();
-    const mount = (container, content) => {
-      if (!roots.has(container)) roots.set(container, createRoot(container));
-      roots.get(container).render(content);
-    };
-    const player = presentDeckWithRenderer({}, { slides, start: index, autoStart:true, onSlideEdit: (slide, key, value) => callbacks.current.onSlideEdit(slide.id, key, value), onClose: () => callbacks.current.onClose() }, {
-      pjSlideTitle: slide => slide.title || "Untitled slide",
-      pjNotesHtml: notes => notesHtml(notes) || '<span class="pjp__pnote-empty">No notes for this slide</span>',
-      mountSlide: (frame, slide, nextIndex) => {
-        frame.closest(".pjp").classList.add("pjp--canvas");
-        mount(frame, <PresentationCanvas slides={slides} index={nextIndex} />);
-        callbacks.current.onIndex(nextIndex);
-      },
-      renderThumbnail: (container, slide) => mount(container, <PresentationThumbnail slide={slide} />),
-      thumbnailData: async slide => { const svg = await exportToSvg({elements:slide.scene.elements,files:slide.scene.files,exportingFrame:slide.scene.elements.find(element=>element.id===FRAME_ID),skipInliningFonts:true,appState:{exportBackground:false}});return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg.outerHTML); },
-      disposePresenter: document => { for (const [container, root] of roots) if (container.ownerDocument === document) { root.unmount(); roots.delete(container); } },
-      dispose: () => { roots.forEach(root => root.unmount()); roots.clear(); }
-    });
-    return () => player?.close();
-  }, []);
-  return null;
 }
 
 function Merger({ integration, controller }) {
@@ -457,7 +316,7 @@ function Merger({ integration, controller }) {
   }
   async function thumbnail(slide) {
     const svg = await exportToSvg({ elements: slide.scene.elements.filter(element => !element.isDeleted), appState: { ...slide.scene.appState, exportBackground: false, exportWithDarkMode:canvasTheme(slide.scene.elements,document.documentElement.dataset.appearance)==="dark" }, files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true });
-    const preview = <SectionThumbnail svg={svg.outerHTML} elements={slide.scene.elements} files={slide.scene.files} />;
+    const preview = <SectionThumbnail svg={svg.outerHTML} elements={slide.scene.elements} files={slide.scene.files} renderEmbed={renderEmbed} />;
     setThumbnails(previous => ({ ...previous, [slide.id]: preview }));
   }
   async function save(recordHistory = true) {
@@ -472,7 +331,7 @@ function Merger({ integration, controller }) {
     await live.current.queue;
     if (!controller.active) return;
     live.current.savedRevision = revision;
-    if (revision === live.current.revision) { setStatus("Saved on this device"); activity.write("sys", "Local draft saved"); }
+    if (revision === live.current.revision) { if (!integration?.isPublishing?.()) setStatus(integration?.savedStatus?.() || "Saved on this device"); activity.write("sys", "Local draft saved"); }
     const slide = snapshot.slides.find(item => item.id === snapshot.selected);
     if (slide?.scene) thumbnail(slide).catch(() => {});
   }
@@ -690,7 +549,7 @@ function Merger({ integration, controller }) {
       paint(next);
       await mountSlide(next.slides.find(slide => slide.id === next.selected));
       await save();
-      setSlideView("current"); setStatus("Saved on this device");
+      setSlideView("current"); setStatus(integration?.savedStatus?.() || "Saved on this device");
       activity.note(`AI proposal ${mode === "append" ? "appended" : "replaced deck"}`, "sys");
     } finally { live.current.operating = false; setBusy(false); }
   }
@@ -877,7 +736,7 @@ function Merger({ integration, controller }) {
         capture();
         live.current.persistedKey = JSON.stringify([deckDocumentKey(next), next.selected]);
         deckHistory.current.reset(next); live.current.savedRevision = live.current.revision;
-        setStatus("Saved on this device");
+        setStatus(integration?.savedStatus?.() || "Saved on this device");
       } else await save();
       next.slides.forEach(slide => thumbnail(slide).catch(() => {}));
       controller.resolve();
@@ -892,6 +751,7 @@ function Merger({ integration, controller }) {
   }, [api]);
   controller.flush = flushEditor;
   controller.snapshot = () => { capture(); return structuredClone(live.current.deck); };
+    controller.editMetadata = presenterMetadata;
   controller.notify = setStatus;
   useEffect(() => {
     if (!api || editing || slideView !== "current" || present !== null || deckDialog || activity.showLog) return;
@@ -933,7 +793,7 @@ function Merger({ integration, controller }) {
   function rehearse() { return run(async () => { await save(); const first = deck.slides.slice(selectedIndex).find(slide => !slide.hidden) || rehearsal[0]; activity.note("Slide show started", "nav"); setPresent(rehearsal.findIndex(slide => slide.id === first.id)); }); }
   const editorBar = <EditorBar historyRef={setHistoryTarget} busy={busy || present !== null || !!deckDialog} editing={editing} onEditing={switchEditing} slideView={slideView} onView={switchView} onPlay={rehearse} canPlay={!!rehearsal.length} />;
   const StatusContainer = integration?.statusbar ? "div" : "footer";
-  const editorStatus = <StatusContainer className="merge-status" aria-label={integration?.statusbar ? undefined : "Document status"}><StatusControls status={status === "Saved on this device" && activity.message ? `${activity.message} - saved` : status} activity={activity}><VisibilityMenu deck={deck} disabled={busy || present !== null || !!deckDialog || !!integration} onChange={isPublic => { if (isPublic) { openPane(null, false); setDeckDialog({kind:"visibility"}); } else changeVisibility(false); }} /></StatusControls><span className="merge-slide-position">{selectedIndex + 1} / {deck?.slides.length || 0}</span></StatusContainer>;
+  const editorStatus = <StatusContainer className="merge-status" aria-label={integration?.statusbar ? undefined : "Document status"}><StatusControls status={status === "Saved on this device" && activity.message ? `${activity.message} - saved` : status} activity={activity}><VisibilityMenu deck={deck} publication={integration ? integration.publication?.() || {} : null} disabled={busy || present !== null || !!deckDialog} onChange={isPublic => { if (isPublic) { openPane(null, false); setDeckDialog({kind:"visibility"}); } else changeVisibility(false); }} /></StatusControls><span className="merge-slide-position">{selectedIndex + 1} / {deck?.slides.length || 0}</span></StatusContainer>;
   const notesControls = <><NotesControls slideId={current?.id} expanded={mobileUI.mobile ? mobileUI.panel === "notes" : notesOpen} onToggle={toggleNotes} minutes={current?.durationMinutes || 0} onTiming={value => metadata("durationMinutes", value)} disabled={busy || !current || present !== null || !!deckDialog} /><button type="button" className="merge-icon help-icon merge-presenter-help" title="Help" aria-label="Help" disabled={busy || present !== null || !!deckDialog} onClick={() => api?.updateScene({appState:{openDialog:{name:"help"}},captureUpdate:CaptureUpdateAction.NEVER})}><Icon name="help" /></button></>;
   return <div className={`merge-shell ${resizing ? "is-resizing" : ""} ${notesResize.dragging ? "is-notes-resizing" : ""} ${!editing || notesOpen ? "" : "is-notes-hidden"} ${mobileUI.slides ? "mobile-slides-open" : ""} ${pane && !mobileUI.mobile ? "merge-rail-insert" : ""}`} data-hosted={integration ? "true" : undefined} data-editing={editing} data-slide-view={slideView} data-mobile-panel={mobileUI.mobile ? editing ? mobileUI.panel : "notes" : undefined} style={{ "--slide-pane-width": `${paneWidth}px`, "--notes-height": `${notesResize.height}px` }}>
     {!integration && <header className="merge-header"><a href="/studio/slide-lab/" title="Back to engine lab" aria-label="Back to engine lab"><Icon name="back" /></a><span className="merge-brand">Slide studio <small>MERGER LAB</small></span>
@@ -982,9 +842,9 @@ function Merger({ integration, controller }) {
     {activity.showLog && <ActivityDialog activity={activity} />}
     {integration?.statusbar ? createPortal(editorStatus, integration.statusbar) : editorStatus}
     <input type="file" hidden ref={input} accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml,video/mp4,video/webm,video/quicktime,video/ogg,.svg,.mov" onChange={event => { importMedia(event.target.files[0], mediaPurpose === "background"); event.target.value = ""; }} />
-    {present !== null && <Presenter slides={rehearsal} index={present} onSlideEdit={presenterMetadata} onIndex={index => { activity.write("nav", `Slide show slide ${index + 1}`); setPresent(index); }} onClose={() => { activity.note("Slide show closed", "nav"); setPresent(null); requestAnimationFrame(fit); }} />}
+    {present !== null && <Presenter slides={rehearsal} index={present} renderEmbed={renderEmbed} onSlideEdit={presenterMetadata} onIndex={index => { activity.write("nav", `Slide show slide ${index + 1}`); setPresent(index); }} onClose={() => { activity.note("Slide show closed", "nav"); setPresent(null); requestAnimationFrame(fit); }} />}
     {["save-layout", "rename-layout"].includes(deckDialog?.kind) && <LayoutNameDialog value={deckDialog.layout?.name} busy={busy} error={layoutSaveError} onClose={() => setDeckDialog(null)} onSave={saveLayout} />}
-    {deckDialog?.kind === "visibility" && <VisibilityConfirmation onClose={() => setDeckDialog(null)} onConfirm={() => changeVisibility(true)} />}
+    {deckDialog?.kind === "visibility" && <VisibilityConfirmation hosted={!!integration} onClose={() => setDeckDialog(null)} onConfirm={() => changeVisibility(true)} />}
     {["apply-layout", "delete-layout"].includes(deckDialog?.kind) && <DeckDialog wide={false} title={deckDialog.kind === "apply-layout" ? "Apply saved layout?" : "Delete saved layout?"} onClose={() => { if (!busy) setDeckDialog(null); }}><p className="merge-layout-dialog-copy">{deckDialog.kind === "apply-layout" ? `Replace this slide's content and background with "${deckDialog.layout.name}"? Speaker notes are kept. You can undo this change.` : `Delete "${deckDialog.layout.name}" from My layouts? Existing slides are not changed.`}</p><footer><button disabled={busy} onClick={() => setDeckDialog(null)}>Cancel</button><button disabled={busy} className={deckDialog.kind === "delete-layout" ? "is-danger" : "merge-dialog-primary"} onClick={() => deckDialog.kind === "delete-layout" ? deleteLayout(deckDialog.layout) : useSavedLayout(deckDialog.layout)}>{deckDialog.kind === "delete-layout" ? "Delete layout" : "Apply layout"}</button></footer></DeckDialog>}
   </div>;
 }
@@ -999,6 +859,7 @@ export function mountSlideEditor(container, integration = null) {
     ready,
     async flush() { await ready; return controller.flush(); },
     snapshot() { return controller.snapshot?.(); },
+      async editMetadata(id, key, value) { await ready; if (!controller.active) throw new Error("The slide editor session is closed"); return controller.editMetadata(id, key, value); },
     notify(message) { controller.notify?.(message); },
     dispose() { if (!controller.active) return; controller.active = false; controller.reject(new Error("The slide editor session is closed")); root.unmount(); }
   };

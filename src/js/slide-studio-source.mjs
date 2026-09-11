@@ -30,7 +30,7 @@ export function studioIconRegistry() {
     const frame = document.createElement("iframe"); frame.hidden = true; frame.title = "Studio resources";
     const timeout = setTimeout(() => { frame.remove(); registryPromise = null; reject(new Error("Studio resources could not be loaded")); }, 15000);
     frame.onload = () => { clearTimeout(timeout); const registry = frame.contentWindow.RK; if (registry?.iconSvg) resolve(registry); else { frame.remove(); registryPromise = null; reject(new Error("Studio icon renderer unavailable")); } };
-    frame.src = "/studio/slide-lab/native.html?fixture=component"; document.body.appendChild(frame);
+    frame.src = "/studio/slide-runtime/component.html?v=1.0"; document.body.appendChild(frame);
   });
   return registryPromise;
 }

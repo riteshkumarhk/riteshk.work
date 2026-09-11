@@ -105,6 +105,14 @@ test("slideshow content cannot be selected or edited directly or through the liv
     await popup.locator('[data-pp="exit"]').click();
     await page.waitForSelector(".pjp", { state: "detached", timeout: 6000 }).catch(error => { throw new Error(JSON.stringify(errors), { cause: error }); });
     assert.deepEqual(errors, []);
-    assert.equal(await page.evaluate(() => JSON.stringify(window.__slideMerge.deck())), draft, "Rehearsal must leave the editable draft intact");
+    const differences = [];
+    const compare = (before, after, path = "deck") => {
+      if (JSON.stringify(before) === JSON.stringify(after)) return;
+      if (before && after && typeof before === "object" && typeof after === "object") {
+        for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) compare(before[key], after[key], `${path}.${key}`);
+      } else differences.push({ path, before, after });
+    };
+    compare(JSON.parse(draft), await page.evaluate(() => window.__slideMerge.deck()));
+    assert.deepEqual(differences, [], "Rehearsal must leave the editable draft intact");
   } finally { await browser.close(); }
 });

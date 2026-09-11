@@ -1137,11 +1137,11 @@ import {
   }
 
   /* ---------- present mode (owner: unlock everything to present) ---------- */
-  function presentDialog() {
-    if (!(window.RK && window.RK.presentAll)) { flash("Present mode isn't ready yet - reload and try again."); return; }
+  function presentDialog(onDone) {
+    if (!(window.RK && window.RK.presentAll)) { flash("Present mode isn't ready yet - reload and try again."); onDone?.(false); return; }
     // Nothing protected? Just show everything unlocked, no passphrase needed.
     if (window.RK.rkHasProtected && !window.RK.rkHasProtected()) {
-      Promise.resolve(window.RK.presentAll("")).then(function (r) { if (r && r.ok) presentArrived(r); });
+      Promise.resolve(window.RK.presentAll("")).then(function (r) { if (onDone) onDone(!!r?.ok); else if (r && r.ok) presentArrived(r); });
       return;
     }
     const modal = document.createElement("div");
@@ -1159,9 +1159,9 @@ import {
     const err = modal.querySelector(".pass__err");
     const goBtn = modal.querySelector("[data-go]");
     inp.focus();
-    const done = function () { modal.remove(); };
-    modal.querySelector("[data-cancel]").addEventListener("click", done);
-    modal.addEventListener("click", function (e) { if (e.target === modal) done(); });
+    const done = function (result) { modal.remove(); onDone?.(result === true); };
+    modal.querySelector("[data-cancel]").addEventListener("click", () => done(false));
+    modal.addEventListener("click", function (e) { if (e.target === modal) done(false); });
     async function submit() {
       const val = inp.value.trim();
       if (!val) { err.textContent = "Enter your recovery passphrase"; return; }
@@ -1176,8 +1176,8 @@ import {
         err.textContent = (res && res.reason === "pass") ? "That passphrase didn't unlock your protected work." : "Couldn't start present mode.";
         return;
       }
-      done();
-      presentArrived(res);
+      done(true);
+      if (!onDone) presentArrived(res);
     }
     goBtn.addEventListener("click", submit);
     modal.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });
@@ -1187,6 +1187,7 @@ import {
     const el = document.getElementById("work");
     if (el && el.scrollIntoView) requestAnimationFrame(function () { try { el.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) {} });
   }
+  afterRender(() => { window.RK.requestOwnerPresentation = () => new Promise(resolve => presentDialog(resolve)); });
 
   /* ---------- tiny toast ---------- */
   let flashTimer = null;

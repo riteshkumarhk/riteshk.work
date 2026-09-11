@@ -7,6 +7,8 @@ import { createHash } from "node:crypto";
 import { chromium } from "playwright-core";
 import { availableStudies } from "./src/js/slide-merge-sections.mjs";
 import { sectionComponentPlan } from "./src/js/slide-merge-section-component.mjs";
+import { publicDeckPayload } from "./src/js/slide-merge-visibility.mjs";
+import { NATIVE_AUDIENCE_SCHEMA } from "./src/js/slide-studio-publication.mjs";
 
 const baseURL = process.env.SLIDE_LAB_URL;
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
@@ -25,7 +27,7 @@ test("native section renderer displays both before/after images and wires compar
       const beforeSrc = image.toDataURL(); context.fillStyle = "#24b597"; context.fillRect(0, 0, 640, 360);
       window.comparisonSection = { type: "compare", heading: "Before and after", beforeSrc, afterSrc: image.toDataURL(), beforeLabel: "Before", afterLabel: "After" };
       const frame = document.createElement("iframe"); frame.id = "section-check"; frame.style.cssText = "width:1000px;height:700px;border:0";
-      frame.src = "/studio/slide-lab/native.html?fixture=component";
+      frame.src = "/studio/slide-runtime/component.html?v=1.0";
       frame.onload = () => frame.contentWindow.postMessage({ type: "rk-section-component", block: window.comparisonSection, appearance: "dark" }, location.origin);
       document.body.replaceChildren(frame);
     });
@@ -51,7 +53,7 @@ test("every section family renders as a complete native component", { skip: !ena
   try {
     await page.goto(baseURL + "/404.html");
     const image = await page.evaluate(() => { const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 360; const context = canvas.getContext("2d"); context.fillStyle = "#23a787"; context.fillRect(0, 0, 640, 360); return canvas.toDataURL(); });
-    await page.evaluate(() => { const frame = document.createElement("iframe"); frame.id = "families"; frame.style.cssText = "width:1120px;height:720px;border:0"; frame.src = "/studio/slide-lab/native.html?fixture=component"; document.body.replaceChildren(frame); });
+    await page.evaluate(() => { const frame = document.createElement("iframe"); frame.id = "families"; frame.style.cssText = "width:1120px;height:720px;border:0"; frame.src = "/studio/slide-runtime/component.html?v=1.0"; document.body.replaceChildren(frame); });
     const native = page.frameLocator("#families");
     await native.locator("#stage").waitFor({ state: "attached" });
     await page.waitForFunction(() => !!document.querySelector("#families").contentWindow.RK?.enhanceBlocks);
@@ -66,6 +68,68 @@ test("every section family renders as a complete native component", { skip: !ena
         assert.ok(await native.locator(".pjb__cmp-base").evaluate(image => image.naturalWidth > 0));
       }
     }
+  } finally { await browser.close(); }
+});
+
+test("website Play uses the published native audience without loading the editor or exposing owner notes", { skip: !enabled, timeout: 60000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce" });
+  const errors = []; page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.addInitScript(denyCapture);
+    await page.goto(baseURL + "/studio/slide-merge-lab/");
+    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    const document = await page.evaluate(() => {
+      const deck = window.__slideMerge.deck();
+      deck.slides = [deck.slides[0]]; deck.slides[0].notes = "OWNER-ONLY NOTES"; deck.slidesPublic = true;
+      const second = structuredClone(deck.slides[0]); second.id = "gallery"; second.title = "Complete public gallery";
+      const shape = second.scene.elements.find(element => element.id === "step-0");
+      const image = window.document.createElement("canvas"); image.width = 640; image.height = 360;
+      const context = image.getContext("2d"); context.fillStyle = "#2caf98"; context.fillRect(0, 0, 640, 360); const first = image.toDataURL();
+      context.fillStyle = "#c84056"; context.fillRect(0, 0, 640, 360);
+      second.scene.elements = [second.scene.elements.find(element => element.id === "lab-slide"), { ...shape, id: "public-gallery", x: 64, y: 36, width: 1152, height: 648, angle: 0, boundElements: null, groupIds: [], strokeColor: "transparent", backgroundColor: "transparent", customData: { sectionComponent: { type: "gallery", heading: "Complete gallery", items: [{ src: first, caption: "First image" }, { src: image.toDataURL(), caption: "Second image" }] } } }];
+      deck.slides.push(second, { id: "skipped", title: "UNPUBLISHED SLIDE", notes: "PRIVATE", hidden: true });
+      return deck;
+    });
+    const audience = { schema: NATIVE_AUDIENCE_SCHEMA, ...publicDeckPayload(document, { production: true, reviewedSources: true }) };
+    const published = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
+    published.work = [{ id: "native-live", title: "Native published presentation", client: "Studio", featured: true, study: { blocks: [{ type: "statement", body: "Published case study" }], slidesPublic: true, nativeDeckPublic: audience, nativeDeckEnc: { ct: "owner-ciphertext", wraps: { owner: "encrypted-key" } } } }];
+    await page.route("**/content.json*", route => route.fulfill({ contentType: "application/json", body: JSON.stringify(published) }));
+    await page.goto(baseURL + "/?work=native-live");
+    await page.locator('.pj.is-open [data-pj="present"]').waitFor();
+    assert.equal(await page.evaluate(() => performance.getEntriesByType("resource").some(entry => entry.name.includes("/audience.js"))), false);
+    const originalStyle = await page.locator("body").evaluate(element => ({ font: getComputedStyle(element).fontFamily, background: getComputedStyle(element).backgroundColor }));
+    await page.locator('.pj.is-open [data-pj="present"]').click();
+    await page.locator(".pjp--canvas .merge-present-stage canvas").first().waitFor({ timeout: 10000 }).catch(async error => {
+      throw new Error("Native playback did not load: " + JSON.stringify({ errors, state: await page.evaluate(() => ({ dialogs: [...document.querySelectorAll('.pass')].map(element => element.innerText), player: !!document.querySelector('.pjp'), resources: performance.getEntriesByType('resource').filter(entry => /audience|woff/.test(entry.name)).map(entry => entry.name) })) }), { cause: error });
+    });
+    await page.waitForFunction(() => document.querySelector("[data-pjp-count]")?.textContent === "1 / 2");
+    assert.equal(await page.evaluate(() => typeof window.__slideMerge), "undefined");
+    assert.equal(await page.locator(".merge-shell").count(), 0);
+    assert.equal(await page.locator(".pjp .layer-ui__wrapper").isVisible(), false);
+    assert.equal(await page.evaluate(() => performance.getEntriesByType("resource").some(entry => entry.name.includes("/assets/editor.js"))), false);
+    assert.doesNotMatch(await page.locator("body").innerText(), /OWNER-ONLY NOTES|UNPUBLISHED SLIDE/);
+    assert.ok(await page.locator(".pjp canvas").evaluateAll(canvases => canvases.some(canvas => { const context = canvas.getContext("2d"); if (!context || !canvas.width || !canvas.height) return false; return context.getImageData(0, 0, canvas.width, canvas.height).data.some((value, index) => index % 4 === 3 && value > 0); })));
+    await page.locator(".pjp").focus(); await page.keyboard.press("ArrowRight");
+    const gallery = page.frameLocator(".pjp iframe.lab-section-component");
+    await gallery.locator('#stage[data-component-type="gallery"] img').first().waitFor();
+    const images = await gallery.locator("#stage img").evaluateAll(async images => { await Promise.all(images.map(image => image.decode())); return images.map(image => image.naturalWidth); });
+    assert.ok(images.length >= 2 && images.every(width => width === 640));
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const bounds = await page.locator(".merge-present-stage").boundingBox();
+      assert.ok(bounds.width > 250 && bounds.x >= -1 && bounds.x + bounds.width <= width + 1);
+      await page.screenshot({ path: join(tmpdir(), `rk-native-published-${width}.png`) });
+    }
+    await page.locator(".pjp").focus(); await page.keyboard.press("Escape");
+    await page.locator(".pjp").waitFor({ state: "detached" });
+    assert.equal(await page.locator("link[data-native-audience]").count(), 0);
+    assert.deepEqual(await page.locator("body").evaluate(element => ({ font: getComputedStyle(element).fontFamily, background: getComputedStyle(element).backgroundColor })), originalStyle);
+    published.work[0].study.slidesPublic = false; delete published.work[0].study.nativeDeckPublic;
+    await page.goto(baseURL + "/?work=native-live"); await page.locator(".pj.is-open").waitFor();
+    assert.equal(await page.locator('.pj [data-pj="present"]').isVisible(), false);
+    assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
 

@@ -1,36 +1,76 @@
 # Slide Studio Merger Plan
 
-Status: approved plan; integrated-preview checkpoint, 2026-09-10.
-Implementation baseline: `89d6ebb00fb57acf07b7cdb49ff011a1bc328432`.
+Status: integration and normal-entry deployment approved, 2026-09-11.
+Released preview baseline: `222bbd1276296cf6add56d8fbd743cd92ea1fd45`.
 The owner approved implementation and confirmed that the existing v0 slides are
 disposable test data. Legacy conversion and rollback copies of those slides are
 not required. New native documents, case-study content and original assets still
 require correct saving, recovery and private/public separation.
 
-The current checkpoint mounts the editor directly in Content Studio behind
-`?nativeSlides=1`. It uses host navigation, title, toolbar and footer slots; the
+The current checkpoint mounts the editor directly from Content Studio's normal
+Add/Edit Slideshow entry, without `?nativeSlides=1`. It uses host navigation,
+title, toolbar and footer slots; the
 standalone lab header is not rendered. Existing v0 decks remain untouched in this
 checkpoint, but the pilot opens an empty native deck rather than converting them.
 New native decks remain available by their saved reference on subsequent visits.
-The default for cases without a native reference is still the old editor unless
-the pilot flag is supplied. Native public publishing and the final default switch
-remain later acceptance checkpoints.
+The local default is the native editor for new and editable decks. Unopened
+encrypted legacy decks retain the existing unlock surface, and whole-project
+access protection remains unchanged. Native publishing and audience routing are
+implemented and tested with intercepted services. The owner approved pushing and
+deploying the integration to review it on their physical GPU-enabled PC. Automated
+tests run on the Windows 11 Cloud PC / Dev Box, not that physical PC. A watched
+walkthrough and physical-device acceptance remain unverified; the code release
+does not authorize publishing any real case-study or deck content.
 
 Implemented foundation: versioned `study.nativeDeck` references, per-case durable
 documents and content-addressed original assets in `rk-studio-slide-decks-v1`,
 revision-conflict rejection, flush-before-navigation, deterministic unmount,
 private backup/selected restore with new deck identities, and independent project
 duplication. A native reference contains schema/version, case-study ID, deck ID,
-revision and slide count; it never contains notes or scene media in localStorage.
-Publish is blocked at the manual, automatic and JSON-building entry points while
-the native pilot is active or its references remain in the draft.
+revision, content hash and slide count; it never contains notes or scene media in
+localStorage. The shared publisher validates references, produces encrypted owner
+copies and separate allowlisted audience copies, and rejects malformed or
+unsupported data rather than silently dropping it.
 
 The editor and web DJ pad are the accepted UI baseline. Rich notes, full-deck
 history, embeds, icon generation, draft resources, saved layouts, complete section
 previews, the final DJ layout and shared 10-second time scrubbing are shipped.
 Do not rebuild them or restart a general design/parity exercise. Production
-persistence and private backup now have pilot implementations; native public
-publishing, supported audience/runtime routing and default cutover remain work.
+persistence, shared recovery, private backups, native publishing and supported
+audience/runtime routing are implemented. Deployment of the normal native-editor
+route is approved; legacy viewing and protected-content unlock remain supported.
+
+## Shared Save And Publish Contract
+
+Decks and case studies use one Studio autosave, Publish, Backup, recovery and
+status experience. A deck remains owner-only by default even when its case study
+is public; only an explicit Public slideshow setting plus successful Publish
+makes its audience copy public. This preserves the previous editor's rule.
+
+The integration adds:
+
+- Immutable publish snapshots and locally cached owner baselines. Edits during
+	publishing remain unpublished; failure leaves the previously live content.
+- Encrypted native owner documents, public audience-only scenes and compatible
+	legacy owner copies. Public notes, timing, skipped/deleted/hidden content and
+	author metadata are excluded. Original native media bytes are retained.
+- Owner-encrypted disabled case-study sections, rather than sending their hidden
+	plaintext to visitors. Disabled sections and hidden projects are excluded from
+	the private-to-public media path.
+- A lazily loaded shared native audience renderer and production section runtime.
+	Website Play, Studio Play and owner Present mode select the correct document.
+- Stale-draft archival, retry and selective recovery through existing Backup UI,
+	including protection against newer saves arriving during archival.
+- One private backup including recoverable owner content and downloadable media.
+	External service embeds remain links. Missing assets fail explicitly.
+- Shared footer feedback and content-based dirty checks; host-presenter notes use
+	the same native save adapter as the editor.
+
+The automated checks use synthetic credentials and intercept external writes;
+they do not prove actual Worker deployment, meeting-app privacy, arbitrary remote
+media availability or simultaneous remote-publisher atomicity. Existing Worker
+services are reused, not deployed or changed. Browser fullscreen/PiP constraints
+remain unchanged. A watched desktop/mobile owner review is still pending.
 
 ## Recommendation
 
@@ -290,6 +330,7 @@ Recommended defaults to approve or revise:
 5. Keep the standalone lab draft, legacy checkpoints and native revisions for rollback; copying a lab deck into a case study is explicit.
 6. Start with the foundation and integrated preview milestone. The later default switch and real publishing require their own acceptance checkpoint. Browser fullscreen/Document PiP restrictions remain disclosed, not described as solved by the merger.
 
-Implementation has been approved. Review the integrated-preview checkpoint before
-the later default switch and real native-deck publication. No real content publish,
-paid AI call, protected-content unlock or Worker deployment is part of this checkpoint.
+The owner approved the integrated editor's normal route and code deployment on
+2026-09-11. The phased plan above records the rollout and acceptance requirements;
+physical-PC review follows deployment. No real content publish, paid AI call,
+protected-content unlock or Worker deployment is part of this code release.

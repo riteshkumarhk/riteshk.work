@@ -1,3 +1,5 @@
+import { deckDocumentKey } from "./slide-merge-history.mjs";
+
 export const STUDIO_DECK_SCHEMA = "rk-studio-native-deck";
 export const STUDIO_DECK_DB = "rk-studio-slide-decks-v1";
 
@@ -63,13 +65,15 @@ async function packedDocument(document) {
 export async function saveStudioDeck(reference, document, { isCurrent = () => true } = {}) {
   validateReference(reference);
   const packed = await packedDocument(document);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(deckDocumentKey(packed.document)));
+  const documentHash = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, "0")).join("");
   if (!isCurrent()) throw new Error("The case-study editor session has changed");
   const database = await openDatabase();
   return new Promise((resolve, reject) => {
     let transaction;
     try { transaction = database.transaction(["heads", "documents", "assets"], "readwrite"); }
     catch (error) { database.close(); reject(error); return; }
-    const next = { ...reference, revision: reference.revision + 1 };
+    const next = { ...reference, revision: reference.revision + 1, documentHash };
     let failure;
     transaction.oncomplete = () => { database.close(); resolve(next); };
     transaction.onerror = transaction.onabort = () => { database.close(); reject(failure || transaction.error || new Error("Slide save was not committed")); };
@@ -118,13 +122,14 @@ export async function loadStudioDeck(reference, { latest = false } = {}) {
 export async function studioDeckBackup(data) {
   const backup = structuredClone(data), documents = [];
   for (const work of backup.work || []) {
-    if (!work.study?.nativeDeck) continue;
-    const reference = work.study.nativeDeck;
+    if (!work.study?.nativeDeck && !work.study?.nativeDeckDocument) continue;
+    const reference = work.study.nativeDeck || studioDeckReference(work.id);
     if (reference.caseStudyId !== work.id) throw new Error("A native deck reference belongs to another case study");
-    const saved = await loadStudioDeck(reference, { latest: true });
+    const saved = work.study.nativeDeckDocument ? { reference, document: work.study.nativeDeckDocument } : await loadStudioDeck(reference, { latest: true });
     const document = saved.document || createStudioDeck(work.title || "Untitled deck");
     documents.push({ reference: saved.reference, document });
     work.study.nativeDeck = { ...saved.reference, slideCount: document.slides.length };
+    delete work.study.nativeDeckDocument;
   }
   if (documents.length) backup.nativeDecksBackup = { version: 1, documents };
   return backup;
@@ -153,19 +158,23 @@ export function createStudioDeck(title = "Untitled deck") {
   return { version: 1, title, selected: null, slides: [] };
 }
 
-export function assertStudioDeckPublishable(data, { activeEditor = false } = {}) {
+export function assertStudioDeckPublishable(data, { activeEditor = false, supportedNative = false } = {}) {
   const reject = () => {
     const error = new Error("This draft contains a native slide-editor preview. Publishing is paused until native deck publishing is supported. The published site has not changed.");
     error.name = "StudioDeckPublishError";
     throw error;
   };
-  if (activeEditor || Object.hasOwn(data || {}, "nativeDecksBackup")) reject();
+  if (activeEditor && !supportedNative || Object.hasOwn(data || {}, "nativeDecksBackup")) reject();
   for (const work of data?.work || []) {
     const study = work?.study;
     if (!study) continue;
+    if (study.nativeDeckDocument) reject();
     const nativeSlides = Array.isArray(study.slides) && study.slides.some(slide => slide?.scene?.elements);
-    if (Object.hasOwn(study, "nativeDeck") || nativeSlides) {
-      reject();
+    if (nativeSlides && !study.nativeDeck) reject();
+    if (Object.hasOwn(study, "nativeDeck")) {
+      if (!supportedNative) reject();
+      try { validateReference(study.nativeDeck); } catch { reject(); }
+      if (study.nativeDeck.caseStudyId !== work.id) reject();
     }
   }
 }

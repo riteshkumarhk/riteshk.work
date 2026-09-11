@@ -3,6 +3,8 @@
    Renders every editable section from content.json (the single
    source of truth). Exposes window.RK for the admin editor.
    ================================================================= */
+import { hasStudioOwnerCopies, restoreStudioOwnerCopies } from "./slide-studio-owner.mjs";
+
 (function () {
   "use strict";
 
@@ -1039,6 +1041,7 @@
     return b.work.some(function (w) {
       if (w.encWork && w.enc && w.enc.wraps && w.enc.wraps.owner) return true;
       var st = w.study;
+      if (hasStudioOwnerCopies(w)) return true;
       return !!(st && ((st.enc && st.enc.wraps && st.enc.wraps.owner) || (st.slidesEnc && st.slidesEnc.wraps && st.slidesEnc.wraps.owner)));
     });
   }
@@ -1061,13 +1064,23 @@
     // Show the working state right away — the decrypt loop below can take a moment.
     showUnlockingBanner("Unlocking\u2026");
     var ids = [], hadProtected = 0, unlocked = 0, passOk = false, hadVault = false;
+    const decryptOwnerCopy = async encrypted => {
+      const key = await rkUnwrapSek(recovery, encrypted.wraps.owner);
+      const value = await rkDecWithSek(key, encrypted);
+      await rkResolveEncImages(value, key);
+      return value;
+    };
     for (var idx = 0; idx < data.work.length; idx++) {
       var w = data.work[idx];
       var wwrap = w.encWork && w.enc && w.enc.wraps && w.enc.wraps.owner;
       if (wwrap) {
         hadProtected++;
-        try { var sek = await rkUnwrapSek(recovery, wwrap); var full = await rkDecWithSek(sek, w); await rkResolveEncImages(full, sek); data.work[idx] = full; rkMarkUnlocked(full.id); ids.push(full.id); unlocked++; passOk = true; } catch (e) {}
+        try { var sek = await rkUnwrapSek(recovery, wwrap); var full = await rkDecWithSek(sek, w); await rkResolveEncImages(full, sek); if (hasStudioOwnerCopies(full)) full = await restoreStudioOwnerCopies(full, decryptOwnerCopy); data.work[idx] = full; rkMarkUnlocked(full.id); ids.push(full.id); unlocked++; passOk = true; } catch (e) {}
         continue;
+      }
+      if (hasStudioOwnerCopies(w)) {
+        hadProtected++;
+        try { w = await restoreStudioOwnerCopies(w, decryptOwnerCopy); data.work[idx] = w; unlocked++; passOk = true; rkMarkUnlocked(w.id); if (ids.indexOf(w.id) === -1) ids.push(w.id); } catch (e) {}
       }
       var st = w.study;
       // Vault-hosted deeper cuts don't decrypt client-side -- they resolve via the owner grant below.
@@ -1082,7 +1095,7 @@
       var dwrap = st && st.slidesEnc && st.slidesEnc.wraps && st.slidesEnc.wraps.owner;
       if (dwrap) {
         hadProtected++;
-        try { var dsek = await rkUnwrapSek(recovery, dwrap); st.slides = await rkDecWithSek(dsek, st.slidesEnc); delete st.slidesEnc; passOk = true; unlocked++; rkMarkUnlocked(w.id); if (ids.indexOf(w.id) === -1) ids.push(w.id); } catch (e) {}
+        try { var dsek = await rkUnwrapSek(recovery, dwrap); st.slides = await rkDecWithSek(dsek, st.slidesEnc); await rkResolveEncImages(st.slides, dsek); delete st.slidesEnc; passOk = true; unlocked++; rkMarkUnlocked(w.id); if (ids.indexOf(w.id) === -1) ids.push(w.id); } catch (e) {}
       }
     }
     if (hadProtected && !passOk) { removeSvBanner(); return { ok: false, reason: "pass" }; }

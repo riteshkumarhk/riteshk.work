@@ -1,4 +1,6 @@
 import { presentDeckWithRenderer } from "./deck-presenter.mjs";
+import { hasNativeDeck, presentStudioDeck, presentationFailure } from "./slide-studio-player.mjs";
+import { nativePublicDeck } from "./slide-studio-publication.mjs";
 
 /* =================================================================
    RITESH KUMAR — Project case study (L2)
@@ -1706,7 +1708,7 @@ import { presentDeckWithRenderer } from "./deck-presenter.mjs";
     if (act) {
       var kind = act.getAttribute("data-pj");
       if (kind === "back" || kind === "close") { e.preventDefault(); closeProject({ push: true }); }
-      else if (kind === "present") { e.preventDefault(); presentDeck(workById(activeId)); }
+      else if (kind === "present") { e.preventDefault(); window.RK?.presentDeck?.(workById(activeId)); }
       else if (kind === "prev") nav(-1);
       else if (kind === "next") nav(1);
       else if (kind === "read") { e.preventDefault(); scrollToCase(); }
@@ -2130,7 +2132,7 @@ import { presentDeckWithRenderer } from "./deck-presenter.mjs";
   }
   function pjIsOwner() { try { return localStorage.getItem("rk:owner") === "1"; } catch (e) { return false; } }
   // A deck the owner marked public ships its slides in the clear, so anyone can play it from the case study.
-  function pjDeckPublic(w) { var st = w && w.study; if (!st || !st.slidesPublic) return false; return !!(st.slides && st.slides.filter(function (s) { return s && !s.hidden; }).length); }
+  function pjDeckPublic(w) { var st = w && w.study; if (!st || !st.slidesPublic) return false; if (hasNativeDeck(w)) return !!nativePublicDeck(w) || !!(PREVIEW && st.nativeDeck && st.nativeDeck.slideCount); return !!(st.slides && st.slides.filter(function (s) { return s && !s.hidden; }).length); }
   function fillContent(w, keepAnchor) {
     var head = overlay.querySelector("[data-crumb]");
     head.innerHTML = '<b>' + esc(w.client || "") + "</b>" + (w.plateTag ? "<span>" + esc(w.plateTag) + "</span>" : "");
@@ -2770,6 +2772,7 @@ import { presentDeckWithRenderer } from "./deck-presenter.mjs";
     }
     function pjNotesHtml(n) { return (n && String(n).trim()) ? pjBodyHtml(n) : '<span class="pjp__pnote-empty">\u2014 No notes for this slide \u2014</span>'; }
     function presentDeck(w, opts) {
+      if (hasNativeDeck(w)) return presentStudioDeck(w, { ...opts, draft: PREVIEW || pjIsOwner() || !!window.__RKStudio?.getDraft?.() }).catch(error => { presentationFailure(error); return null; });
       return presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, pjSlideTitle, pjNotesHtml, fitSections, enhanceStudyBlocks });
     }
 

@@ -7,9 +7,21 @@ the existing owner session through a new, narrowly scoped Worker route.
 See [the design audit](DESIGN-AUDIT.md) for consistency corrections, verification
 coverage and components proposed for a future shared design-system update.
 
-## Content Studio Pilot
+## Content Studio Integration
 
-Open `/studio/?nativeSlides=1`, sign in normally, and use a project's Slideshow
+Release approved, 2026-09-11. The owner approved deploying the shared saving,
+publishing, privacy, playback and recovery integration, including the normal
+Add/Edit Slideshow route. It uses the native editor without a preview flag.
+Validation uses isolated data and intercepted publishing services; no real
+case-study or deck content was published during development.
+
+Development, builds and browser automation run on the Windows 11 Cloud PC / Dev
+Box. Its localhost servers and graphics capabilities are separate from the
+owner's physical GPU-enabled PC. The owner will review the deployed site in that
+PC's browser; this release does not claim a completed watched walkthrough or
+physical-PC GPU and meeting-app acceptance.
+
+Open `/studio/`, sign in normally, and use a project's Add/Edit Slideshow
 entry. The native editor mounts directly inside Content Studio with its navigation,
 case-study title, working toolbar and status footer. There is no lab header or
 whole-editor iframe. The current v0 slides are disposable test data and are not
@@ -19,24 +31,71 @@ The host stores a small `study.nativeDeck` reference. Native scenes, notes and
 original assets are saved per case study in `rk-studio-slide-decks-v1` IndexedDB,
 with revision checks and atomic document/asset writes. This is device-local draft
 storage, not cloud synchronization. A saved native reference reopens in the new
-editor even without the pilot parameter. Other decks retain the existing editor
-until the default switch is approved.
+editor. Unopened encrypted legacy decks retain their existing unlock surface;
+they are never silently replaced with a blank native deck. Whole-project access
+protection is unchanged. Deploying the editor does not publish the owner's drafts.
 
 Navigation flushes active text and notes; failed saves keep the editor open.
 Private content backups include the native documents and original assets.
 Selective recovery and project duplication allocate independent native deck IDs.
 Do not clear browser storage without a private content backup.
 
-Publishing is intentionally blocked while the pilot is active or the Studio draft
-contains native deck references. This gate also applies after leaving Slideshow,
-to automatic publishing and to manual JSON publishing. Native audience payloads,
-private/public publishing and the final default switch are the next milestone;
-the visibility control is disabled for the pilot. The published site is unchanged.
+Decks use the existing Studio Publish action, including automatic and manual
+publishing. They remain owner-only unless Public slideshow is explicitly chosen;
+the visibility change takes effect after Publish succeeds. A public case study
+does not make its deck public. Returning to private removes the public audience
+copy on the next Publish, but cannot recall previously downloaded copies.
+
+The owner editing copy is encrypted with the existing recovery passphrase, with
+original media protected separately where supported by the existing publisher.
+A public audience copy excludes speaker notes, timing budgets, skipped slides,
+deleted or hidden objects and author metadata. Complete eligible sections, embeds,
+video and used fonts remain supported. Protected or signed source links fail
+validation. Unopened encrypted legacy decks remain intact during other publishes.
+
+Website Play lazily loads the read-only audience renderer. Studio Play loads the
+current private draft and saves presenter metadata through the same host adapter.
+Owner Present mode restores encrypted editing copies through its existing unlock
+dialog. Native sections use `/studio/slide-runtime/component.html`, not a demo
+fixture. The standalone lab still retains its own draft and demo bootstrap.
+
+Publication uses a fixed snapshot. Failed writes keep the previous live version;
+edits made during a publish remain unpublished. The shared footer distinguishes
+device saves, unpublished changes, publication and errors. A slide-selection save
+does not count as changed content. Published owner baselines are cached locally,
+but this is not automatic cross-device draft synchronization.
+
+Older local drafts are archived before loading newer published content. Review
+them immediately or later from Settings > Backup > Recover saved drafts. A failed
+archive leaves the original draft untouched, including a newer save arriving
+from another tab. Recovery and publication baselines use the device-local
+`rk-studio-draft-recovery-v1` store.
+
+The same private content backup now includes owner-editing copies and downloadable
+hosted media for case studies and decks. Protected content may request the existing
+recovery passphrase. Missing media fails with an explicit error rather than a
+false complete-backup message. External services such as YouTube and Figma remain
+links; they are not offline archives. Keep backups private and retain the recovery
+passphrase for any protected material.
 
 Run `node --test slide-studio-deck.test.mjs` with the local server and Windows Edge
-available for storage, recovery, host lifecycle and publish-gate checks. The local
+available for storage, recovery, host lifecycle and intercepted publishing checks. The local
 UI harness uses `/studio/?devstub&nativeSlides=1` and the existing localhost-only
 `__rkDevStudio()` entry; production authentication is not bypassed.
+
+Focused integration checks:
+
+```text
+node --test studio-status.test.mjs slide-merge-visibility.test.mjs slide-studio-deck.test.mjs
+node --test slide-presenter.browser.test.mjs
+```
+
+The presenter browser suite requires `SLIDE_LAB_URL` pointing at the local server.
+The public-site test checks a nonblank read-only canvas, complete gallery media,
+desktop/mobile bounds, public/private Play visibility and style cleanup. The
+publish test intercepts every content write, verifies encryption and original
+upload bytes, failure/retry, public-to-private changes, edits during publishing,
+fresh-device owner recovery and presenter note saves with/without the editor.
 
 ## Authoring parity update
 

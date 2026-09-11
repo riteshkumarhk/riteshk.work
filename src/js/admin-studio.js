@@ -21,6 +21,12 @@ import { WORLD_LAND } from "./worldland.js";
 import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsEmbedScore, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand, atsScoreModel } from "./ats-core.js";
 import { draftComposition } from "./slide-merge-ai.mjs";
 import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeckReference, studioDeckBackup, restoreStudioDeckBackup } from "./slide-studio-deck.mjs";
+import { selectStudioDraft, archiveStudioDraft, studioDraftRecoveries, saveStudioPublishedDraft, studioPublishedDraft, studioDraftContent } from "./studio-draft-recovery.mjs";
+import { prepareStudioPublication } from "./slide-studio-publication.mjs";
+import { publicMediaReference } from "./slide-merge-visibility.mjs";
+import { completeStudioBackup } from "./studio-content-backup.mjs";
+import { presentStudioDeck } from "./slide-studio-player.mjs";
+import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
 
 (function () {
   "use strict";
@@ -37,7 +43,6 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
   const L2PREV_KEY = "rk:adm:l2prev"; // remember the L2 live-preview on/off choice
   const PREV_OFF_KEY = "rk:adm:prevoff"; // remember the main live-preview pane show/hide choice
   const PREV_MODE_KEY = "rk:adm:prevmode"; // 3-state workspace layout: split | editor | preview
-  const NATIVE_SLIDE_PILOT = new URLSearchParams(location.search).get("nativeSlides") === "1";
   let nativeSlideSession = null, nativeSlideReplay = null, nativeSlideNavigation = false;
   var prevLayout = "split";
   const DEFAULT_TRACKS = [
@@ -329,6 +334,7 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
     updateDirtyUI();
     clearTimeout(saveTimer);
     const save = () => {
+      saveTimer = null;
       let ok = true;
       const s = JSON.stringify(data);
       draftBytes = s.length;
@@ -406,12 +412,11 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
   // appear once the working draft differs from the published site. When we can't be
   // sure (no signature yet), default to "dirty" so publishing is never hidden away.
   function isDirty() {
-    if (nativeSlideSession) return true;
     try {
       if (!window.RK || !window.RK.sig) return true;
-      var pub = window.RK.publishedSig || "";
+      var pub = window.RK.studioPublishedSig || window.RK.publishedSig || "";
       if (!pub) return true;
-      return window.RK.sig(JSON.stringify(data)) !== pub;
+      return window.RK.sig(JSON.stringify(studioDraftContent(data))) !== pub;
     } catch (e) { return true; }
   }
   function updateDirtyUI() {
@@ -479,7 +484,7 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
     return names;
   }
   function changeSummary() {
-    var pub = (window.RK && (window.RK.published || window.RK.data)) || null;
+    var pub = (window.RK && (window.RK.studioPublished || window.RK.published || window.RK.data)) || null;
     if (!pub) return { count: 0, labels: [] };
     var labels = [], seen = {}, hitSection = {};
     function add(l) { if (l && !seen[l]) { seen[l] = 1; labels.push(l); } }
@@ -502,6 +507,10 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
   function narrate() {
     if (publishing) return;
     var s = root && root.querySelector(".adm__status"); if (!s) return;
+    if (draftFull || lastPublishError) {
+      s.textContent = draftFull ? "Draft not saved on this device. Free storage or download a backup before leaving." : lastPublishError;
+      s.title = s.textContent; s.classList.remove("ok"); nativeSlideSession?.editor?.notify(s.textContent); return;
+    }
     if (isDirty()) {
       var sum = changeSummary();
       s.textContent = sum.count ? (sum.count + " unpublished \u00b7 " + sum.labels.join(", ")) : "Unpublished changes";
@@ -529,7 +538,7 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
   function histSnap() { try { return JSON.stringify(data); } catch (e) { return null; } }
   function histReset() {
     var cur = histSnap() || "{}", pub = null;
-    if (window.RK && window.RK.published) { try { pub = JSON.stringify(window.RK.published); } catch (e) {} }
+    if (window.RK && window.RK.published) { try { pub = JSON.stringify(window.RK.studioPublished || window.RK.published); } catch (e) {} }
     if (pub && pub !== cur) { histStack = [pub, cur]; histIndex = 1; }   // resumed a dirty draft: undo can reach the published baseline
     else { histStack = [cur]; histIndex = 0; }
     updateHistUI();
@@ -6653,7 +6662,49 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
   // RIGHT preview pane becomes the live slide editor (canvas + tools/inspector + presenter notes),
   // or the thumbnail sorter when the status-bar view is "All slides". Called on every renderL2.
   function nativeSlidesEnabled(work) {
-    return !!work && !work.encWork && !(work.study?.slidesEnc && !work.study?.slides?.length) && (NATIVE_SLIDE_PILOT || !!work.study?.nativeDeck);
+    return !!work && !work.encWork && (!!work.study?.nativeDeck || !!work.study?.nativeDeckEnc || !!work.study?.nativeDeckPublic || !(work.study?.slidesEnc && !work.study?.slides?.length));
+  }
+  async function saveNativeWork(session, document, current) {
+    if (!current()) throw new Error("The case-study editor session has changed");
+    const work = session.work;
+    work.study ||= {};
+    if (!work.study.nativeDeck) {
+      work.study.nativeDeck = session.reference;
+      if (!saveDraft(true, { recordHistory: false })) { delete work.study.nativeDeck; throw new Error("The case-study draft reference could not be saved. Free storage and retry."); }
+    }
+    session.reference = await saveStudioDeck(session.reference, document, { isCurrent: current });
+    if (!current()) throw new Error("The case-study editor session has changed");
+    work.study.nativeDeck = { ...session.reference, slideCount: document.slides.length };
+    work.study.slidesPublic = document.slidesPublic === true;
+    if (!saveDraft(true, { recordHistory: false })) throw new Error("Slides are recoverable on this device, but the Studio draft reference was not saved. Retry before leaving.");
+  }
+  async function presentNativeWork(id, options = {}) {
+    const work = data.work.find(item => item.id === id);
+    if (!work || !nativeSlidesEnabled(work)) throw new Error("This case study's slideshow is unavailable");
+    const active = nativeSlideSession?.work === work ? nativeSlideSession : null;
+    const session = active || { work, reference: work.study?.nativeDeck || studioDeckReference(id) };
+    const current = () => root?.classList.contains("is-open") && data.work.includes(work) && (!work.study.nativeDeck || work.study.nativeDeck.id === session.reference.id);
+    let document;
+    if (active?.editor) { await active.editor.flush(); document = active.editor.snapshot(); }
+    else if (work.study.nativeDeck) {
+      const saved = await loadStudioDeck(session.reference, { latest: true }); session.reference = saved.reference; document = saved.document;
+    } else if (work.study.nativeDeckEnc) {
+      const saved = await decryptStudioOwner(work.study.nativeDeckEnc);
+      if (saved?.version !== 1 || saved.caseStudyId !== id) throw new Error("The private deck copy does not belong to this case study");
+      document = saved.document;
+    }
+    if (!current() || !document) throw new Error("The case-study presentation session has changed");
+    let queue = Promise.resolve();
+    return presentStudioDeck(work, { ...options, document, onSlideEdit: (slide, key, value) => {
+      if (!["notes", "durationMinutes"].includes(key) || !document.slides.some(item => item.id === slide.id)) throw new Error("This slide's presenter metadata is not editable");
+      queue = queue.catch(() => {}).then(async () => {
+        if (!current()) throw new Error("The case-study presentation session has changed");
+        if (active?.editor) return active.editor.editMetadata(slide.id, key, value);
+        const target = document.slides.find(item => item.id === slide.id); target[key] = value;
+        await saveNativeWork(session, document, current);
+      });
+      return queue;
+    } });
   }
   function disposeNativeSlides() {
     const session = nativeSlideSession;
@@ -6678,35 +6729,40 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
     nativeSlideSession = session;
     root.classList.add("is-native-slides");
     const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
-    const styles = ["/studio/slide-lab/assets/editor.css?v=1.0", "/css/slide-studio.css?v=1.0"].map(href => new Promise((resolve, reject) => {
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.1", "/css/slide-studio.css?v=1.0"].map(href => new Promise((resolve, reject) => {
       const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.0";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.1";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
       session.editor = module.mountSlideEditor(container, {
         caseStudyId: work.id, title: work.title || "Untitled deck", toolbar, statusbar,
+        isPublishing: () => publishing,
+        savedStatus: () => lastPublishError ? "Saved on this device. " + lastPublishError : isDirty() ? "Saved on this device - unpublished changes" : "Saved on this device - all changes published",
+        publication: () => {
+          const published = window.RK?.published?.work?.find(item => item.id === work.id)?.study;
+          const exists = !!(published?.nativeDeckEnc || published?.nativeDeckPublic || published?.slidesEnc || published?.slides?.length);
+          return { exists, isPublic: !!(published?.slidesPublic && (published.nativeDeckPublic || published.slides?.some(slide => !slide.hidden))) };
+        },
         async load() {
           if (session.reference.caseStudyId !== work.id) throw new Error("This deck reference belongs to another case study");
+          if (!work.study?.nativeDeck && work.study?.nativeDeckEnc) {
+            const saved = await decryptStudioOwner(work.study.nativeDeckEnc);
+            if (!current()) throw new Error("The case-study editor session has changed");
+            if (saved?.version !== 1 || saved.caseStudyId !== work.id || !Array.isArray(saved.document?.slides)) throw new Error("This private deck copy does not belong to the case study");
+            return saved.document;
+          }
+          if (!work.study?.nativeDeck && work.study?.nativeDeckPublic) throw new Error("The private editing copy of this deck is unavailable");
           const saved = await loadStudioDeck(session.reference, { latest: true });
           if (!current()) throw new Error("The case-study editor session has changed");
           session.reference = saved.reference;
           return saved.document;
         },
         async save(document) {
-          if (!current()) throw new Error("The case-study editor session has changed");
-          work.study ||= {};
-          if (!work.study.nativeDeck) {
-            work.study.nativeDeck = session.reference;
-            if (!saveDraft(true, { recordHistory: false })) { delete work.study.nativeDeck; throw new Error("The case-study draft reference could not be saved. Free storage and retry."); }
-          }
-          session.reference = await saveStudioDeck(session.reference, document, { isCurrent: current });
-          if (!current()) throw new Error("The case-study editor session has changed");
-          work.study.nativeDeck = { ...session.reference, slideCount: document.slides.length };
-          if (!saveDraft(true, { recordHistory: false })) throw new Error("Slides are recoverable on this device, but the Studio draft reference was not saved. Retry before leaving.");
+          await saveNativeWork(session, document, current);
         }
       });
       await session.editor.ready;
@@ -7039,7 +7095,7 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
     let sek;
     try { sek = await rkUnwrapSek(recovery, wrap); }
     catch (e) { recoveryPassCache = null; status("That recovery passphrase didn\u2019t unlock the slideshow."); return; }
-    try { w.study.slides = await rkDecWithSek(sek, w.study.slidesEnc); delete w.study.slidesEnc; }
+    try { w.study.slides = await rkDecWithSek(sek, w.study.slidesEnc); await rkResolveEncToDataUri(w.study.slides, sek); delete w.study.slidesEnc; }
     catch (e) { status("Couldn\u2019t decrypt the slideshow."); return; }
     openSlide = -1; saveDraft(true); renderL2();
     status("Slideshow unlocked for editing \u2014 it re-seals on Publish.", true);
@@ -10499,10 +10555,25 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
       previewProject(data.work[openStudy].id, true);
     }, 180);
   }
-  function openL2(i, landOn) {
+  async function openL2(i, landOn) {
     if (!data.work[i]) return;
     if (!data.work[i].study) data.work[i].study = blankStudy();
-    slideMigrateDeckToFree(data.work[i].study);
+    const ownerWork = data.work[i], ownerStudy = ownerWork.study;
+    try {
+      if (ownerStudy.authorSectionsEnc && !ownerStudy.authorSectionsRestored) {
+        const saved = await decryptStudioOwner(ownerStudy.authorSectionsEnc);
+        if (data.work[i] !== ownerWork) return;
+        if (saved?.version !== 1 || saved.caseStudyId !== ownerWork.id || !Array.isArray(saved.blocks)) throw new Error("The private case-study copy is invalid");
+        ownerStudy.blocks = saved.blocks; ownerStudy.authorSectionsRestored = true;
+      }
+      if (landOn === "slides" && ownerStudy.slidesOwnerEnc && !ownerStudy.legacyDeckRestored) {
+        const slides = await decryptStudioOwner(ownerStudy.slidesOwnerEnc);
+        if (data.work[i] !== ownerWork) return;
+        if (!Array.isArray(slides)) throw new Error("The private slideshow copy is invalid");
+        ownerStudy.slides = slides; ownerStudy.legacyDeckRestored = true;
+      }
+    } catch (error) { status(error.message || "Could not unlock this project's editing copy"); return; }
+    if (!nativeSlidesEnabled(ownerWork)) slideMigrateDeckToFree(ownerStudy);
     openStudy = i;
     l2Tab = (landOn === "slides") ? "slides" : studyLandingTab(data.work[i]);
     _l2ScrollY = 0;
@@ -10642,7 +10713,8 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
         '<div class="rkqg__row"><button class="btn btn--primary" data-act="backup-dl">' + IC.save + ' Download content backup</button></div>' +
         '<div class="af__hint">Saves an unencrypted <code>content.json</code> to this device \u2014 keep it private. Handy before big edits.</div>' +
         '<div class="rkqg__row" style="margin-top:1rem"><button class="btn btn--ghost" data-act="backup-restore">' + IC.history + ' Restore from a backup...</button></div>' +
-        '<div class="af__hint">Read a backup file, see everything inside, and pick exactly what to bring back. It loads into the editor to review before you Publish.</div></div>';
+        '<div class="af__hint">Read a backup file, see everything inside, and pick exactly what to bring back. It loads into the editor to review before you Publish.</div>' +
+        '<div class="rkqg__row" style="margin-top:1rem"><button class="btn btn--ghost" data-act="draft-recovery">' + IC.history + ' Recover saved drafts</button></div></div>';
     }
     if (cat === "security") {
       return '<div class="rkqg"><div class="rkqg__head">Passkeys <span class="rkqg__sub">how you sign in</span></div>' +
@@ -11199,6 +11271,7 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
     if (act === "recruiter-toggle") { recruiterToggle(); renderSetPanel(); return; }
     if (act === "backup-dl") { downloadContentBackup(); return; }
     if (act === "backup-restore") { backupPickAndRestore(); return; }
+    if (act === "draft-recovery") { reviewDraftRecoveries().catch(error => status(error.message)); return; }
     if (act === "open-passkeys") { setSub = "passkeys"; renderSetPanel(); return; }
     if (act === "open-publish") { setSub = "publish"; renderSetPanel(); return; }
     if (act === "open-ai") { setSub = "ai"; renderSetPanel(); return; }
@@ -11849,7 +11922,7 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
   /* ---------- publish / revert ---------- */
   /* ---------- publish ---------- */
   function slidePublishReady() {
-    try { assertStudioDeckPublishable(data, { activeEditor: !!nativeSlideSession }); return true; }
+    try { assertStudioDeckPublishable(data, { activeEditor: !!nativeSlideSession, supportedNative: true }); return true; }
     catch (error) { status(error.message); return false; }
   }
   function publish() {
@@ -11950,20 +12023,20 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
   // we move it BACK to public hosting (/assets/uploads) and clear the `vault` flag so the now-public section
   // shows its media to everyone. Operates on the live draft (a permanent one-time move), ATOMIC per section
   // (only swaps refs + clears `vault` if every file re-hosts), and needs your session.
-  async function deVaultUnlockedForPublish(token) {
+  async function deVaultUnlockedForPublish(token, source = data) {
     if (!adminSession()) return;                         // vault fetch + Worker hosting both need the session
-    var works = (data && data.work) || [];
-    var anyVaulted = works.some(function (w) { return w && w.study && Array.isArray(w.study.blocks) && w.study.blocks.some(function (b) { return b && !b.locked && b.vault && !b.vaultBlock && !b.encStub; }); });
+    var works = (source && source.work) || [];
+    var anyVaulted = works.some(function (w) { return w && !w.hidden && !w.encWork && w.study && Array.isArray(w.study.blocks) && w.study.blocks.some(function (b) { return b && !b.off && !b.locked && b.vault && !b.vaultBlock && !b.encStub; }); });
     if (!anyVaulted) return;                              // nothing unlocked-but-vaulted -> zero overhead on normal publishes
     if (typeof pubProgress === "function") pubProgress(50, "Moving unlocked sections back to public hosting\u2026");
     var moved = 0, failed = 0, changed = false;
     for (var wi = 0; wi < works.length; wi++) {
       var w = works[wi];
-      if (!w || !w.study || !Array.isArray(w.study.blocks)) continue;
+      if (!w || w.hidden || w.encWork || !w.study || !Array.isArray(w.study.blocks)) continue;
       var blocks = w.study.blocks;
       for (var bi = 0; bi < blocks.length; bi++) {
         var b = blocks[bi];
-        if (!b || b.locked || !b.vault || b.vaultBlock || b.encStub) continue;   // only UNLOCKED, media-vaulted sections
+        if (!b || b.off || b.locked || !b.vault || b.vaultBlock || b.encStub) continue;   // only UNLOCKED, media-vaulted sections
         var targets = [];
         (function scan(o) {
           if (!o || typeof o !== "object") return;
@@ -11980,7 +12053,7 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
             var blob = await res.blob();
             var web = await hostDataUri("data:" + (blob.type || "application/octet-stream") + ";base64," + bytesToB64(await blob.arrayBuffer()), token, vaultMediaExt(t.key, blob));
             swaps.push({ o: t.o, k: t.k, path: web });
-          } catch (e) { if (e && e.auth) { clearAdminSession(); if (changed) saveDraft(true); return; } ok = false; break; }
+          } catch (e) { if (e && e.auth) throw e; ok = false; break; }
         }
         if (!ok) { failed++; continue; }                 // leave this section vaulted (no worse than now); retry next publish
         swaps.forEach(function (s) { s.o[s.k] = s.path; });
@@ -11988,21 +12061,53 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
         moved++; changed = true;
       }
     }
-    if (changed) saveDraft(true);
+    if (changed && source === data) saveDraft(true);
+    if (failed) throw new Error("Some newly public section media could not be prepared. The published site has not changed.");
     if (moved || failed) status(moved + " unlocked section" + (moved === 1 ? "" : "s") + " moved to public hosting" + (failed ? "; " + failed + " couldn\u2019t move \u2014 media too large, host externally" : "") + ".", !failed);
   }
 
-  async function buildPublishJson(token) {
-    assertStudioDeckPublishable(data);
+  async function encryptStudioOwner(value, token) {
+    const recovery = await ensureRecoveryPass();
+    if (recovery === null) throw { rkEnc: true, cancelled: true };
+    const key = rkNewSek(), snapshot = clone(value);
+    if (token) await encImagesInSubtree(snapshot, key, token);
+    const encrypted = await rkEncWithSek(key, snapshot);
+    return { v: 1, it: RK_KDF_IT, iv: encrypted.iv, ct: encrypted.ct, wraps: { owner: await rkWrapSek(recovery, key) } };
+  }
+  async function decryptStudioOwner(encrypted) {
+    if (!encrypted?.wraps?.owner) throw new Error("The private editing copy has no owner key");
+    const recovery = await ensureRecoveryPass();
+    if (recovery === null) throw new Error("Unlock cancelled; the saved content is unchanged");
+    let key;
+    try { key = await rkUnwrapSek(recovery, encrypted.wraps.owner); }
+    catch { recoveryPassCache = null; throw new Error("That recovery passphrase did not unlock this editing copy"); }
+    const value = await rkDecWithSek(key, encrypted);
+    await rkResolveEncToDataUri(value, key);
+    assertOwnerMediaResolved(value);
+    return value;
+  }
+  function applyHostedReferences(target, swaps) {
+    const replacements = new Map((swaps || []).map(swap => [swap.original, swap.hosted]));
+    const visit = value => {
+      if (!value || typeof value !== "object") return;
+      for (const key of Object.keys(value)) {
+        if (typeof value[key] === "string" && replacements.has(value[key])) value[key] = replacements.get(value[key]);
+        else if (value[key] && typeof value[key] === "object") visit(value[key]);
+      }
+    };
+    visit(target);
+  }
+  async function buildPublishJson(token, publication = {}) {
+    assertStudioDeckPublishable(data, { supportedNative: true });
     if (nativeSlideSession?.editor) await nativeSlideSession.editor.flush();
-    assertStudioDeckPublishable(data);
+    assertStudioDeckPublishable(data, { supportedNative: true });
     const styled = autoStyleLanding(false);
     if (styled) { if (activeTab === "landing") renderBody(); apply(true); }
     // If a deeper-cut section was unlocked but its media is still vaulted, move that media back to
     // public hosting first (so it isn't invisible to logged-out visitors / phones), then clone.
-    await deVaultUnlockedForPublish(token);
-    assertStudioDeckPublishable(data);
-    const pubData = JSON.parse(JSON.stringify(data));
+    const snapshot = clone(data);
+    await deVaultUnlockedForPublish(token, snapshot);
+    const pubData = await prepareStudioPublication(snapshot, { loadDeck: reference => loadStudioDeck(reference), encryptOwner: value => encryptStudioOwner(value, token), reviewedSources: true });
     // Never publish the admin-key hash — in a public repo it was an offline brute-force target. The
     // Cloudflare Worker is the source of truth for admin auth now (password login + passkeys).
     try { delete pubData.adminGate; } catch (e) {}
@@ -12015,6 +12120,11 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
     await loadTicketKeyring();
     await encryptLockedForPublish(pubData, token || null);
     await encryptDecksForPublish(pubData);
+    publication.hosting = token ? await hostEmbeddedImages(token, (count, total) => pubProgress(10 + Math.round(count / Math.max(total, 1) * 40), "Uploading media at original quality - " + count + " of " + total), pubData) : { hosted: 0, failed: [], swaps: [] };
+    publication.swaps = publication.hosting.swaps;
+    applyHostedReferences(snapshot, publication.swaps);
+    publication.owner = snapshot;
+    assertStudioDeckPublishable(pubData);
     await registerVaultGrants(pubData);
     await saveTicketKeyring();
     return JSON.stringify(pubData, null, 2);
@@ -12030,7 +12140,8 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
       if (!w || w.encWork) continue;   // a hidden whole-project is already fully encrypted (incl. its slides)
       var st = w.study;
       if (!st || typeof st !== "object") continue;
-      if (!Array.isArray(st.slides) || !st.slides.length) { if (st.slidesEnc) delete st.slidesEnc; continue; }
+      if (!Array.isArray(st.slides)) continue;
+      if (!st.slides.length) { if (st.slidesEnc) delete st.slidesEnc; continue; }
       if (st.slidesPublic) { if (st.slidesEnc) delete st.slidesEnc; continue; }   // public deck: ship plaintext slides so the case-study Play button works for everyone
       var recovery = await ensureRecoveryPass();
       if (recovery === null) throw { rkEnc: true, cancelled: true };
@@ -12465,6 +12576,7 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
       if (w.enc && w.enc.wraps && w.enc.wraps.owner) return w.enc.wraps.owner;
       var st = w.study;
       if (st && st.enc && st.enc.wraps && st.enc.wraps.owner) return st.enc.wraps.owner;
+      for (const key of ["slidesEnc", "slidesOwnerEnc", "nativeDeckEnc", "authorSectionsEnc"]) if (st?.[key]?.wraps?.owner) return st[key].wraps.owner;
     }
     return null;
   }
@@ -12757,10 +12869,10 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
     return { uri: "data:image/webp;base64," + bytesToB64(webpBytes), ext: "webp" };
   }
 
-  async function hostDataUri(uri, token, extHint) {
+  async function hostDataUri(uri, token, extHint, preserveOriginal = false) {
     // Option B: losslessly convert raster uploads to WebP before hashing/upload (kept only if smaller),
     // so new media stays lean automatically. Best-effort — any failure uploads the original untouched.
-    try { const opt = await optimizeUpload(uri, extHint); if (opt) { uri = opt.uri; extHint = opt.ext; } } catch (e) { /* optimiser unavailable/failed -> original */ }
+    if (!preserveOriginal) try { const opt = await optimizeUpload(uri, extHint); if (opt) { uri = opt.uri; extHint = opt.ext; } } catch (e) { /* optimiser unavailable/failed -> original */ }
     const parts = parseDataUri(uri);
     if (!parts) throw new Error("not a file");
     const rawB64 = parts.base64 ? parts.data : b64(decodeURIComponent(parts.data));
@@ -12805,6 +12917,7 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
   /* ---------- publish progress: driven into the status bar (the single narrator) ---------- */
   let pubCreep = null;
   let pubDismiss = null;   // success-only auto-clear timer
+  let lastPublishError = "";
   let newtabVisitUrl = null, newtabVisitTimer = null;   // post-publish "Visit site" state for the last status-bar button
   function pubBar() { return root && root.querySelector(".adm__statusbar"); }
   // Activity log viewer: reads the ring buffer render.js records (this-device taps / section jumps /
@@ -12897,6 +13010,9 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
   }
   function pubProgress(pct, label, opts) {
     opts = opts || {};
+    if (opts.error) lastPublishError = label || "Publishing failed. Retry to publish again.";
+    else if (opts.done || pct < 100) lastPublishError = "";
+    if (label) nativeSlideSession?.editor?.notify(label);
     if (pubDismiss) { clearTimeout(pubDismiss); pubDismiss = null; }   // a fresh update cancels any pending auto-clear
     const sb = pubBar(), s = root && root.querySelector(".adm__status");
     if (!sb || !s) { status(label, !!opts.done); return; }
@@ -13025,26 +13141,30 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
   // would otherwise stay inline and bloat content.json past GitHub's blob limit ("input too
   // large to process"). ghPublish inspects the returned failures and stops with a precise,
   // fixable message instead of committing a doomed request.
-  async function hostEmbeddedImages(token, onProg) {
+  async function hostEmbeddedImages(token, onProg, source = data) {
     const targets = [];
     // Skip media inside Locked blocks / Hidden projects: it must stay inline so it
     // encrypts with that block/work instead of becoming a public /assets file.
-    (function walk(o, prot, ctx) {
+    (function walk(o, prot, ctx, nativePublic = false) {
       if (!o || typeof o !== "object") return;
-      const p = prot || o.hidden === true || o.locked === true;
+      const p = prot || !nativePublic && (o.hidden === true || o.locked === true);
       const here = (o && (o.title || o.name)) ? String(o.title || o.name) : ctx;
       for (const k in o) {
         const v = o[k];
-        if (typeof v === "string") { if (!p && /^data:(image|video|application)\//i.test(v)) targets.push({ o: o, k: k, ctx: here }); }
-        else if (v && typeof v === "object") walk(v, p, here);
+        if (typeof v === "string") { if (!p && /^data:(image|video|application)\//i.test(v)) targets.push({ o: o, k: k, ctx: here, nativePublic }); }
+        else if (v && typeof v === "object") walk(v, p, here, nativePublic || k === "nativeDeckPublic");
       }
-    })(data, false, "");
+    })(source, false, "");
     const total = targets.length;
-    let done = 0; const failed = [];
+    let done = 0; const failed = [], swaps = [];
     if (onProg && total) onProg(0, total);
     for (const t of targets) {
       const uri = t.o[t.k];
-      try { t.o[t.k] = await hostDataUri(uri, token); }
+      try {
+        const hosted = await hostDataUri(uri, token, undefined, t.nativePublic);
+        t.o[t.k] = t.nativePublic ? publicMediaReference(hosted) : hosted;
+        if (!t.nativePublic) swaps.push({ original: uri, hosted });
+      }
       catch (e) {
         if (e && e.auth) throw e;
         const mm = /^data:([^;,]+)/i.exec(uri); const mime = (mm && mm[1]) || "";
@@ -13056,7 +13176,7 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
       done++;
       if (onProg && total) onProg(done, total);
     }
-    return { hosted: done - failed.length, failed: failed };
+    return { hosted: done - failed.length, failed: failed, swaps };
   }
 
   // Commit content.json via the Git Data API (blob -> tree -> commit -> ref).
@@ -13165,13 +13285,11 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
           publishStepup = { token: _tok, proof: _proof };
         }
       }
-      const hostRes = await hostEmbeddedImages(token, function (n, total) {
-        pubProgress(6 + Math.round((n / Math.max(1, total)) * 40), "Uploading images at full quality \u2014 " + n + " of " + total + "\u2026");
-      });
-      pubProgress(50, "Saving your content to GitHub\u2026");
-      const json = await buildPublishJson(token);
+      const publication = {};
+      const json = await buildPublishJson(token, publication);
+      pubProgress(50, "Saving your content\u2026");
       const jsonBytes = jsonByteLen(json);
-      const fails = (hostRes && hostRes.failed) || [];
+      const fails = publication.hosting?.failed || [];
       const tooLargeFails = fails.filter(function (f) { return f.tooLarge; });
       // An embedded asset that couldn't be hosted stays inline and bloats content.json past
       // GitHub's blob limit. Stop here with a precise, fixable message rather than committing a
@@ -13197,15 +13315,22 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
       const viaR2 = !!adminSession();
       const viewUrl = LIVE_ORIGIN + "/?t=" + Date.now();
       // Finalise the published state: clear the draft, adopt it as the new baseline, reset history.
-      const finalisePublished = function () {
-        localStorage.removeItem(DRAFT_KEY);
-        localStorage.removeItem(DRAFT_SIG_KEY);
+      const finalisePublished = async function () {
+        applyHostedReferences(data, publication.swaps);
         if (viaSession) localStorage.removeItem(GH_TOKEN_KEY); // published via the Worker session — the repo token no longer needs to live in this browser
-        if (window.RK) { window.RK.published = clone(data); if (window.RK.sig) window.RK.publishedSig = window.RK.sig(JSON.stringify(data)); }
+        if (window.RK) {
+          window.RK.published = JSON.parse(json); window.RK.publishedSig = mySig;
+          window.RK.studioPublished = clone(publication.owner);
+          window.RK.studioPublishedSig = window.RK.sig(JSON.stringify(studioDraftContent(publication.owner)));
+        }
+        let saved = true;
+        try { await saveStudioPublishedDraft(mySig, publication.owner); } catch { saved = false; }
+        if (!saveDraft(true, { recordHistory: false })) saved = false;
         try { localStorage.setItem("rk:adm:pubtime", String(Date.now())); } catch (e) {}
         updateDirtyUI();
-        draftBytes = 0; draftFull = false; updateDraftMeter();   // draft cleared -> gauge back to empty
+        updateDraftMeter();
         histReset();
+        return saved;
       };
       if (viaR2) {
         // R2 is the LIVE source the public site reads — writing content.json there makes the site
@@ -13216,8 +13341,8 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
         pubProgress(60, "Publishing your content\u2026");
         var pubRes = await putContentR2(json, token);
         pubStopCreep();
-        finalisePublished();
-        pubProgress(100, "Your site is live and ready to view.", { done: true, viewUrl: viewUrl });
+        const localSaved = await finalisePublished();
+        pubProgress(100, !localSaved ? "Site is live, but the local editing copy could not be saved. Download a backup before leaving." : isDirty() ? "Site is live. Newer edits remain unpublished." : "Your site is live and ready to view.", { done: true, viewUrl: viewUrl });
         // Version history: the Worker now commits content.json to git server-side as part of the R2 write
         // (one auth context - can't desync). If it reported back, just surface any lag; on an older Worker
         // (no git field) fall back to the client mirror - but NEVER swallow its failure again.
@@ -13237,11 +13362,12 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
           throw e1;
         }
       }
-      finalisePublished();
+      const localSaved = await finalisePublished();
       pubProgress(64, "Saved to GitHub. Building your live site\u2026");
       const live = await waitForLive(mySig);
       pubStopCreep();
-      if (live) pubProgress(100, "Your site is live and ready to view.", { done: true, viewUrl: viewUrl });
+      if (!localSaved) pubProgress(100, "Published, but the local editing copy could not be saved. Download a backup before leaving.", { done: true, viewUrl: viewUrl });
+      else if (live) pubProgress(100, isDirty() ? "Site is live. Newer edits remain unpublished." : "Your site is live and ready to view.", { done: true, viewUrl: viewUrl });
       else pubProgress(100, "Published. It can take another minute to appear \u2014 open your site to check.", { done: true, viewUrl: viewUrl });
     } catch (e) {
       pubStopCreep();
@@ -13287,7 +13413,21 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
   async function downloadContentBackup() {
     try {
       if (nativeSlideSession?.editor) await nativeSlideSession.editor.flush();
-      var json = JSON.stringify(await studioDeckBackup(data), null, 2);
+      status("Preparing private content backup...");
+      const backup = await completeStudioBackup(data, {
+        decryptOwner: decryptStudioOwner,
+        readAsset: async reference => {
+          let url = reference;
+          if (/^vault:/i.test(reference)) { url = await vaultSignedUrl(reference.slice(6)); if (!url) throw new Error("A private backup asset could not be accessed. Sign in and retry."); }
+          else url = window.RK?.mediaUrl?.(reference) || reference;
+          const resolved = new URL(url, location.href);
+          if (!["https:", "http:", "data:"].includes(resolved.protocol) || resolved.username || resolved.password) throw new Error("A backup asset has an unsupported address");
+          const response = await fetch(resolved.href, { credentials: "omit", signal: AbortSignal.timeout(30000) });
+          if (!response.ok) throw new Error("A backup asset could not be downloaded (HTTP " + response.status + "). Your content has not changed.");
+          return response.blob();
+        }
+      });
+      var json = JSON.stringify(backup, null, 2);
       var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
       var blob = new Blob([json], { type: "application/json" });
       var a = document.createElement("a");
@@ -13317,6 +13457,36 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
     ["icons", "Custom icons", ["customIcons", "iconKeywords", "iconsRetired"]],
     ["music", "Music", ["music"]]
   ];
+  async function reviewDraftRecoveries() {
+    const records = await studioDraftRecoveries();
+    const trigger = document.activeElement;
+    const modal = document.createElement("div");
+    modal.className = "pass pass--wide bkr";
+    modal.setAttribute("role", "dialog"); modal.setAttribute("aria-modal", "true"); modal.setAttribute("aria-label", "Saved drafts");
+    modal.innerHTML = '<div class="pass__box"><div class="pass__title">Saved drafts</div><div class="bkr__body">' +
+      (records.length ? records.map((record, index) => '<label class="bkr__row"><input type="radio" name="draft-recovery" value="' + escAttr(record.id) + '"' + (index ? '' : ' checked') + ' /><span class="bkr__t">' + escHtml(new Date(record.created).toLocaleString()) + '</span><span class="bkr__meta">' + record.cases + ' case studies</span></label>').join("") : '<div class="bkr__empty">No saved recovery drafts on this device.</div>') +
+      '</div><div class="pass__err" role="alert"></div><div class="pass__actions"><button class="btn btn--ghost" data-cancel>Close</button><button class="btn btn--primary" data-review' + (records.length ? '' : ' disabled') + '>Review draft</button></div></div>';
+    const close = () => { modal.remove(); document.removeEventListener("keydown", onKey); if (trigger?.isConnected) trigger.focus(); };
+    const onKey = event => { if (event.key === "Escape") { event.preventDefault(); close(); } };
+    modal.querySelector("[data-cancel]").onclick = close;
+    modal.addEventListener("click", event => { if (event.target === modal) close(); });
+    modal.querySelector("[data-review]").onclick = async event => {
+      event.currentTarget.disabled = true;
+      try {
+        const record = await studioDraftRecoveries(modal.querySelector("input:checked").value);
+        close(); backupRestoreModal(record.backup, "Saved local draft", record.created);
+      } catch (error) { modal.querySelector(".pass__err").textContent = error.message; modal.querySelector("[data-review]").disabled = false; }
+    };
+    document.body.append(modal); document.addEventListener("keydown", onKey); modal.querySelector("[data-cancel]").focus();
+  }
+  function draftRecoveryFailure(error, retry) {
+    const modal = document.createElement("div"); modal.className = "pass";
+    modal.setAttribute("role", "dialog"); modal.setAttribute("aria-modal", "true"); modal.setAttribute("aria-label", "Draft recovery paused");
+    modal.innerHTML = '<div class="pass__box"><div class="pass__title">Draft recovery paused</div><div class="pass__sub">Your original draft has not been changed.</div><div class="pass__err" role="alert">' + escHtml(error.message) + '</div><div class="pass__actions"><button class="btn btn--ghost" data-close>Close</button><button class="btn btn--primary" data-retry>Retry</button></div></div>';
+    modal.querySelector("[data-close]").onclick = () => { modal.remove(); hostExit(); };
+    modal.querySelector("[data-retry]").onclick = () => { modal.remove(); retry(); };
+    document.body.append(modal); modal.querySelector("[data-close]").focus();
+  }
   function backupUnitSummary(backup, keys) {
     var v = backup[keys[0]];
     if (Array.isArray(v)) return v.length + " item" + (v.length === 1 ? "" : "s");
@@ -17630,6 +17800,11 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
     }, { passive: false, capture: true });
 
     root.addEventListener("click", nativeSlideClickGate, true);
+    window.addEventListener("beforeunload", event => {
+      if (!root.classList.contains("is-open")) return;
+      if (!nativeSlideSession && saveTimer) saveDraft(true);
+      if (draftFull || publishing) { event.preventDefault(); event.returnValue = ""; }
+    });
     root.addEventListener("input", onInput);
     root.addEventListener("keydown", onIconKey);
     // Ctrl/\u2318+Z undo, Ctrl+Shift+Z / Ctrl+Y redo \u2014 on document so it fires even when focus fell to <body> after a re-render.
@@ -17880,23 +18055,27 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
     // Escape no longer dismisses the studio - leave the editor open; exit only via the More menu.
   }
 
-  function open(hostApi) {
+  async function open(hostApi) {
     if (hostApi) __host = hostApi;
-    // Always base the editor on the latest PUBLISHED content. Only resume a saved
-    // draft if it was built on that same published content (matching signature);
-    // otherwise it's stale (content.json changed under it) and is discarded so the
-    // admin never shows outdated modules or republishes over newer content.
     const pub = (window.RK && window.RK.published) ? window.RK.published : (window.RK && window.RK.data);
+    const draftRaw = localStorage.getItem(DRAFT_KEY);
     const draft = readDraft();
     const draftSig = localStorage.getItem(DRAFT_SIG_KEY);
     const pubSig = (window.RK && window.RK.publishedSig) || "";
-    let staleDiscarded = false;
-    if (draft && draftSig && pubSig && draftSig === pubSig) {
-      data = draft;
-    } else {
-      if (draft) { localStorage.removeItem(DRAFT_KEY); localStorage.removeItem(DRAFT_SIG_KEY); staleDiscarded = true; }
-      data = clone(pub);
+    const baseline = await studioPublishedDraft(pubSig).catch(() => null);
+    const unchanged = () => localStorage.getItem(DRAFT_KEY) === draftRaw && localStorage.getItem(DRAFT_SIG_KEY) === draftSig;
+    if (!unchanged()) return open(hostApi);
+    if (window.RK) { window.RK.studioPublished = baseline || clone(pub); window.RK.studioPublishedSig = window.RK.sig(JSON.stringify(studioDraftContent(baseline || pub))); }
+    const selection = selectStudioDraft(baseline || pub, draft, pubSig, draftSig);
+    let recovery;
+    if (selection.recovery) {
+      try {
+        recovery = await archiveStudioDraft(await studioDeckBackup(selection.recovery), draftSig || "");
+        if (!unchanged()) return open(hostApi);
+        localStorage.removeItem(DRAFT_KEY); localStorage.removeItem(DRAFT_SIG_KEY);
+      } catch (error) { draftRecoveryFailure(error, () => open(hostApi)); return; }
     }
+    data = selection.data;
     // Re-register persisted generated icons into the in-session registry so they resolve in the editor
     // (field/flyout/library) after a reload — the in-memory CUSTOM_ICONS is empty on a fresh load.
     try { if (window.RK && window.RK.registerIcons && data && data.customIcons) window.RK.registerIcons(data.customIcons); } catch (e) {}
@@ -17923,13 +18102,16 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
     histReset();
     updateDirtyUI();
     requestAnimationFrame(tabsSync);
-    if (staleDiscarded) status("Loaded the latest published content (an old local draft was discarded).", true);
+    if (recovery) {
+      status("A newer version is published. Your previous draft is saved in Settings > Backup.");
+      backupRestoreModal(recovery.backup, "Previous local draft", recovery.created);
+    }
   }
 
   function exit() {
+    if (!saveDraft(true)) { status("Draft not saved. Download a backup or free storage before leaving Studio."); return; }
     disposeNativeSlides();
     autopubStop();
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(data)); } catch (e) {}
     if (window.RK) { window.RK.data = clone(data); try { window.RK.render(data); } catch (e) {} forceReveal(); }
     if (root) root.classList.remove("is-open");
     document.documentElement.classList.remove("adm-lock");
@@ -18068,7 +18250,7 @@ import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeck
 
 
   /* expose the studio entry so the shell can open it after the gate passes */
-  window.__RKStudio = { open: open, getDraft: function () { return root && root.classList.contains("is-open") ? clone(data) : null; }, addDraftIcon: function (icon) { var name = addGeneratedIcon(icon.name, icon.svg, icon.keywords); if (!saveDraft(true)) throw new Error("Studio draft storage is full"); return name; }, improveText: improveStudioText, generateIcon: async function (description, references, options) { slideAiConfiguration(); if (!String(description || "").trim()) throw new Error("Describe the icon first."); return runIconGen(String(description).slice(0, 1000), references || [], options); }, draftSlides: async function (catalog, brief, options) {
+  window.__RKStudio = { open: open, presentNativeDeck: presentNativeWork, getDraft: function () { return root && root.classList.contains("is-open") ? clone(data) : null; }, addDraftIcon: function (icon) { var name = addGeneratedIcon(icon.name, icon.svg, icon.keywords); if (!saveDraft(true)) throw new Error("Studio draft storage is full"); return name; }, improveText: improveStudioText, generateIcon: async function (description, references, options) { slideAiConfiguration(); if (!String(description || "").trim()) throw new Error("Describe the icon first."); return runIconGen(String(description).slice(0, 1000), references || [], options); }, draftSlides: async function (catalog, brief, options) {
     var cfg = aiCfg("txt");
     if (aiMode() === "cf" && AI_PROXY_PROVIDERS.indexOf(cfg.provider) !== -1 && !aiSess()) throw new Error("Your Cloudflare AI session has expired. Reopen Studio to restore it.");
     if (!cfg.key) throw new Error("Your Studio AI configuration is not available on this browser origin.");

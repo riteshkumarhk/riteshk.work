@@ -1,3 +1,7 @@
+import { embedDescriptor } from "./slide-merge-embeds.mjs";
+import { sectionMediaUrl } from "./slide-merge-sections.mjs";
+import { sectionComponentPlan } from "./slide-merge-section-component.mjs";
+
 export function deckVisibility(deck) {
   return deck?.slidesPublic === true ? "public" : "private";
 }
@@ -49,14 +53,52 @@ function inlineMedia(dataURL, mimeType) {
   return { dataURL, mimeType: match[1] };
 }
 
-export function publicDeckPayload(deck, { reviewedSources = false } = {}) {
+export function publicMediaReference(value) {
+  if (typeof value !== "string") throw new Error("Public media is missing");
+  if (/^data:/i.test(value)) return inlineMedia(value).dataURL;
+  const resolved = sectionMediaUrl(value);
+  if (!resolved) throw new Error("Protected or unsupported media cannot be published");
+  const url = new URL(resolved);
+  for (const key of url.searchParams.keys()) if (/^(?:token|access_token|refresh_token|auth|authorization|password|pass|key|api[_-]?key|secret|ticket|sig|signature|x-amz-.+|x-goog-.+)$/i.test(key)) throw new Error("A private or signed media link cannot be published");
+  return url.href;
+}
+
+export function audienceComponent(value) {
+  if (Array.isArray(value)) return value.map(audienceComponent);
+  if (!value || typeof value !== "object") {
+    if (typeof value === "string" && /(?:[?&](?:token|access_token|password|secret|ticket|sig|signature|x-amz-signature)=)/i.test(value)) throw new Error("A private or signed link cannot be published");
+    if (typeof value === "string" && /^(?:https?:\/\/|\/assets\/uploads\/|assets\/uploads\/)/i.test(value)) return publicMediaReference(value);
+    return value;
+  }
+  const result = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (["notes", "speakerNotes", "durationMinutes", "source", "provenance", "editorName", "editorState", "ownerEmail"].includes(key)) continue;
+    result[key] = audienceComponent(child);
+  }
+  return result;
+}
+
+function publicFonts(deck, slides) {
+  const used = new Set(slides.flatMap(slide => slide.scene.elements.filter(element => element.type === "text").map(element => element.fontFamily)));
+  const fontReference = value => {
+    if (typeof value === "string" && /^data:(?:font\/(?:woff2?|ttf|otf)|application\/(?:font-woff|x-font-ttf|x-font-opentype|vnd\.ms-fontobject|octet-stream));base64,[A-Za-z0-9+/]+={0,2}$/.test(value)) return value;
+    return publicMediaReference(value);
+  };
+  return (deck.fonts || []).filter(font => used.has(font.id)).map(font => ({
+    ...pickScalars(font, ["id", "family", "runtime"]),
+    metrics: pickScalars(font.metrics, ["unitsPerEm", "ascender", "descender", "lineHeight"]),
+    faces: font.faces.map(face => ({ uri: fontReference(face.uri), descriptors: pickScalars(face.descriptors, ["style", "weight", "stretch", "unicodeRange", "display"]) }))
+  }));
+}
+
+export function publicDeckPayload(deck, { reviewedSources = false, production = false } = {}) {
   if (deckVisibility(deck) !== "public") throw new Error("Owner-only draft cannot produce a public payload");
   if (reviewedSources !== true) throw new Error("Review all included content and media before public export");
   const slides = (deck.slides || []).filter(slide => !slide.hidden);
   if (!slides.length) throw new Error("No included slides");
   assertUnprotected(Object.fromEntries(Object.entries(deck).filter(([key]) => key !== "slides")));
   const elementIds = new Map();
-  return { version:1, visibility:"public", title:String(deck.title || ""), slides:slides.map((slide, index) => {
+  const payload = { version:1, visibility:"public", title:String(deck.title || ""), slides:slides.map((slide, index) => {
     const scene = slide.scene;
     if (!scene?.elements) throw new Error("Slide has not been materialized");
     const included = scene.elements.filter(element => !element.isDeleted && !element.customData?.labLayerHidden);
@@ -90,8 +132,18 @@ export function publicDeckPayload(deck, { reviewedSources = false } = {}) {
       result.startBinding = binding(element.startBinding); result.endBinding = binding(element.endBinding);
       if (element.type === "text") result.originalText = result.text;
       const custom = element.customData || {}, safe = {};
-      if (custom.sectionComponent) throw new Error("Native sections require a public component renderer before export");
-      if (custom.slideEmbed || custom.pendingEmbed) throw new Error("Linked embeds require the reviewed public publishing integration");
+      if (custom.sectionComponent) {
+        if (!production) throw new Error("Native sections require a public component renderer before export");
+        const component = sectionComponentPlan(custom.sectionComponent, String, "public", { customIcons: custom.sectionIcons });
+        safe.sectionComponent = audienceComponent(component.elements[0].customData.sectionComponent);
+        safe.sectionIcons = pickScalars(component.elements[0].customData.sectionIcons, Object.keys(component.elements[0].customData.sectionIcons));
+      }
+      if (custom.pendingEmbed) throw new Error("Finish the embedded link before publishing");
+      if (custom.slideEmbed) {
+        if (!production) throw new Error("Linked embeds require the reviewed public publishing integration");
+        const url = publicMediaReference(custom.slideEmbed.url);
+        safe.slideEmbed = { url: embedDescriptor(url).url };
+      }
       if (custom.labCorners) safe.labCorners = pickScalars(custom.labCorners, ["mode", "radius"]);
       if (typeof custom.labTextColor === "string") safe.labTextColor = custom.labTextColor;
       if (custom.slideBackground === true) safe.slideBackground = true;
@@ -99,7 +151,7 @@ export function publicDeckPayload(deck, { reviewedSources = false } = {}) {
         safe.slideSettings = { transition:["none", "fade", "push", "magic"].includes(custom.slideSettings.transition) ? custom.slideSettings.transition : "fade" };
         if (custom.slideSettings.background?.type === "color") safe.slideSettings.background = { type:"color", ...pickScalars(custom.slideSettings.background, ["color"]) };
       }
-      for (const key of ["sectionVideo", "slideBackgroundVideo"]) if (custom[key]) safe[key] = inlineMedia(custom[key]).dataURL;
+      for (const key of ["sectionVideo", "slideBackgroundVideo"]) if (custom[key]) safe[key] = production ? publicMediaReference(custom[key]) : inlineMedia(custom[key]).dataURL;
       if (element.type === "embeddable") {
         if (!safe.sectionVideo) throw new Error("Unsupported public embed; replace it with reviewed native content or inline video");
         result.link = "https://slide-lab.invalid/section-video";
@@ -112,8 +164,10 @@ export function publicDeckPayload(deck, { reviewedSources = false } = {}) {
         if (!fileIds.has(element.fileId)) {
           const id = `file-${fileIds.size}`;
           fileIds.set(element.fileId, id);
-          files[id] = { id, ...inlineMedia(file.dataURL, file.mimeType), created:0 };
-          if (file.originalDataURL) files[id].originalDataURL = inlineMedia(file.originalDataURL, file.mimeType).dataURL;
+          const media = production ? { dataURL: publicMediaReference(file.dataURL), mimeType: file.mimeType } : inlineMedia(file.dataURL, file.mimeType);
+          if (!MEDIA_TYPES.has(media.mimeType)) throw new Error("Unsupported public media type");
+          files[id] = { id, ...media, created:0 };
+          if (file.originalDataURL) files[id].originalDataURL = production ? publicMediaReference(file.originalDataURL) : inlineMedia(file.originalDataURL, file.mimeType).dataURL;
         }
         result.fileId = fileIds.get(element.fileId); result.status = "saved";
       }
@@ -121,4 +175,6 @@ export function publicDeckPayload(deck, { reviewedSources = false } = {}) {
     });
     return { id:`slide-${index}`, title:String(slide.title || ""), scene:{ version:1, elements, files, appState:pickScalars(scene.appState, ["viewBackgroundColor"]) } };
   }) };
+  if (production) { payload.rendererVersion = 1; payload.fonts = publicFonts(deck, payload.slides); }
+  return payload;
 }
