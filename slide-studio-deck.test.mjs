@@ -9,6 +9,7 @@ import { build } from "esbuild";
 import { chromium } from "playwright-core";
 import { rkDecWithSek, rkUnwrapSek } from "./src/js/admin-core.js";
 import { assertStudioDeckPublishable, createStudioDeck, STUDIO_DECK_SCHEMA } from "./src/js/slide-studio-deck.mjs";
+import { AI_AGENT_SYSTEM } from "./src/js/ai-task-agent.mjs";
 
 async function waitForRoutingPolicy(page, key, value) {
   await page.evaluate(() => { window.__routingPolicyProbe = { pending: false, matches: false }; });
@@ -69,11 +70,13 @@ test("the shared publish builder validates native references before preparing ow
   assert.match(source, /prepareStudioPublication\(snapshot/);
 });
 
-for (const { width, exhausted } of [{ width: 1440, exhausted: false }, { width: 390, exhausted: false }, { width: 1440, exhausted: true }]) test("Draft entire deck with AI recovers from deprecated temperature and applies the proposal at " + width + "px" + (exhausted ? " after an explicit output-limit retry" : ""), { timeout: 60000 }, async () => {
+for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, mode: "complete" }, { width: 1440, mode: "exhausted" }, { width: 1440, mode: "invalid-body" }, { width: 390, mode: "cancelled" }]) test("Draft entire deck with AI delegates, checks and streams progress at " + width + "px (" + mode + ")", { timeout: 60000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, hasTouch: width < 600, isMobile: width < 600 });
   const requests = [], errors = [];
-  let exhaustResponse = exhausted;
+  let exhaustResponse = mode === "exhausted", rejectBody = mode === "invalid-body", releaseSpecialist;
+  const specialistGate = new Promise(resolve => { releaseSpecialist = resolve; });
+  const capabilities = { thinking: { supported: true }, structured_outputs: { supported: true }, effort: { supported: true, low: { supported: true }, medium: { supported: true } } };
   const published = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
   published.work = [{ id: "temperature-case", title: "A clearer product flow", client: "Studio test", study: { blocks: [{ type: "text", heading: "A clearer next step", body: "The redesigned flow places the next action beside the relevant content." }] } }];
   page.on("pageerror", error => errors.push(error.message));
@@ -88,11 +91,29 @@ for (const { width, exhausted } of [{ width: 1440, exhausted: false }, { width: 
       if (url.pathname.endsWith("/content.json")) return route.fulfill({ contentType: "application/json", body: JSON.stringify(published) });
       if (url.hostname === "models.dev") return route.fulfill({ contentType: "application/json", body: "{}" });
       if (url.hostname === "api.anthropic.com") {
-        if (url.pathname.endsWith("/models")) return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: [{ id: "studio-creative-a", output_modalities: ["text"], max_input_tokens: 100000, max_tokens: 128000, capabilities: { thinking: { supported: true } } }, { id: "studio-creative-b", output_modalities: ["text"], max_input_tokens: 100000, max_tokens: 16000 }] }) });
+        if (url.pathname.endsWith("/models")) return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: [
+          { id: "studio-creative-a", output_modalities: ["text"], max_input_tokens: 100000, max_tokens: 128000, capabilities, pricing: { input: 2, output: 8 } },
+          { id: "studio-coordinator", output_modalities: ["text"], max_input_tokens: 100000, max_tokens: 8192, capabilities, pricing: { input: 0.1, output: 0.2 } },
+          { id: "studio-evidence", output_modalities: ["text"], max_input_tokens: 100000, max_tokens: 8192, capabilities, pricing: { input: 1, output: 2 } }
+        ] }) });
         if (url.pathname.endsWith("/messages")) {
           const body = request.postDataJSON(); requests.push(body);
-          if (requests.length === 1) return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: { type: "invalid_request_error", message: "`temperature` is deprecated for this model." } }) });
-          const source = JSON.parse(body.messages[0].content).sources[0];
+          if (Object.hasOwn(body, "temperature")) return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: { type: "invalid_request_error", message: "Invalid body" } }) });
+          if (body.system === AI_AGENT_SYSTEM) {
+            const input = JSON.parse(body.messages[0].content), evidence = input.work.find(item => item.kind === "delegate" && item.valid);
+            const action = input.candidate ? { action: "finish", summary: "The draft preserves the source and meets the presentation contract" }
+              : evidence ? { action: "draft", modelRef: input.catalogue.find(item => item.id === "studio-creative-a").ref, task: "creative", instruction: "Use the checked source facts", inputs: [evidence.id], summary: "Writing the deck with the creative model" }
+              : { action: "delegate", modelRef: input.catalogue.find(item => item.id === "studio-evidence").ref, task: "analysis", purpose: "evidence", instruction: "Check the supplied source facts", inputs: [], summary: "Checking the case-study evidence" };
+            return route.fulfill({ contentType: "application/json", body: JSON.stringify({ content: [{ type: "text", text: JSON.stringify(action) }], stop_reason: "end_turn", usage: { input_tokens: 100, output_tokens: 100 } }) });
+          }
+          if (body.model === "studio-evidence") {
+            await specialistGate;
+            return route.fulfill({ contentType: "application/json", body: JSON.stringify({ content: [{ type: "text", text: "PRIVATE SPECIALIST FINDINGS: The supplied case places the next action beside relevant content; do not invent results." }], stop_reason: "end_turn" }) });
+          }
+          if (rejectBody) return route.fulfill({ status: 400, contentType: "application/json", headers: { "request-id": "req-browser-check" }, body: JSON.stringify({ error: { type: "invalid_request_error", message: "Invalid body" } }) });
+          const content = body.messages[0].content;
+          const source = JSON.parse(Array.isArray(content) ? content[0].text : content).sources[0];
+          assert.match(JSON.stringify(content), /PRIVATE SPECIALIST FINDINGS/);
           const proposal = { version: 2, title: "A grounded deck", slides: [{ id: "opening", kind: "authored", layout: "statement", sourceIds: [source.sourceId], headline: "A clearer next step", kicker: "DESIGN DECISION", body: "Place the next action beside the relevant content.", notes: "Discuss the redesigned flow.", components: [] }] };
           const events = [
             { type: "message_start", message: { usage: { input_tokens: 200 } } },
@@ -119,27 +140,48 @@ for (const { width, exhausted } of [{ width: 1440, exhausted: false }, { width: 
     await page.locator('[data-act="study-slides"][data-index="0"]').click();
     await page.locator(".merge-empty-actions").waitFor();
     await page.getByRole("button", { name: "Draft entire deck with AI", exact: true }).click();
-    if (exhausted) {
-      await page.locator('.merge-ai [role="alert"]').filter({ hasText: "output limit before returning answer text" }).waitFor();
-      assert.equal(requests.length, 2, "Do not retry a charged response automatically");
+    await page.getByRole("log", { name: "Agent activity", exact: true }).getByText("Checking the case-study evidence", { exact: true }).waitFor();
+    await page.getByRole("log", { name: "Agent activity", exact: true }).getByText(/studio-evidence/).waitFor();
+    assert.equal(requests.filter(request => request.model === "studio-creative-a").length, 0);
+    assert.equal(await page.getByRole("button", { name: "Append slides", exact: true }).count(), 0);
+    await page.screenshot({ path: join(tmpdir(), "rk-ai-agent-working-" + width + ".png") });
+    if (mode === "cancelled") {
+      await page.getByRole("button", { name: "Stop", exact: true }).click();
+      releaseSpecialist();
+      await page.locator(".merge-ai").waitFor({ state: "detached" });
+      assert.equal(requests.length, 2);
+      assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].study.nativeDeck?.slideCount || 0), 0);
+      return;
+    }
+    releaseSpecialist();
+    if (mode === "exhausted" || mode === "invalid-body") {
+      await page.locator('.merge-ai [role="alert"]').filter({ hasText: mode === "exhausted" ? "output limit before returning answer text" : "rejected the request body (HTTP 400" }).waitFor();
+      assert.equal(requests.length, 4, "Do not retry a charged or generically rejected response automatically");
       const failed = await page.evaluate(() => window.__RKStudio.aiRouting.state());
-      assert.equal(failed.decisions.at(-1).failure, "output-limit");
-      assert.equal(failed.decisions.at(-1).stopReason, "max_tokens");
-      assert.equal(failed.decisions.at(-1).usedOutputTokens, 24000);
+      if (mode === "exhausted") {
+        assert.equal(failed.decisions.at(-1).failure, "output-limit");
+        assert.equal(failed.decisions.at(-1).stopReason, "max_tokens");
+        assert.equal(failed.decisions.at(-1).usedOutputTokens, 24000);
+      } else {
+        assert.equal(failed.decisions.at(-1).httpStatus, 400);
+        assert.equal(failed.decisions.at(-1).errorType, "invalid_request_error");
+        assert.equal(failed.decisions.at(-1).failurePhase, "request");
+      }
       assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].study.nativeDeck?.slideCount || 0), 0);
       assert.equal(await page.getByRole("button", { name: "Append slides", exact: true }).count(), 0);
-      exhaustResponse = false;
+      exhaustResponse = false; rejectBody = false;
       await page.getByRole("button", { name: "Retry", exact: true }).click();
     }
     await page.locator(".merge-ai h3").waitFor();
     assert.equal(await page.locator(".merge-ai h3").innerText(), "A grounded deck");
     assert.equal(await page.locator('.merge-ai [role="alert"]').count(), 0);
-    assert.equal(requests.length, exhausted ? 3 : 2);
-    assert.ok(requests.every(request => request.model === "studio-creative-a"), "Keep the metadata-selected model rather than falling back to another one");
-    assert.ok(requests.every(request => request.stream === true && request.max_tokens === 24000), "Stream the allowance that includes reasoning headroom");
-    assert.equal(requests[0].temperature, 0.3);
-    const expected = structuredClone(requests[0]); delete expected.temperature;
-    assert.deepEqual(requests[1], expected);
+    assert.equal(requests.length, mode === "complete" ? 5 : 9);
+    assert.deepEqual([...new Set(requests.map(request => request.model))], ["studio-coordinator", "studio-evidence", "studio-creative-a"]);
+    assert.ok(requests.filter(request => request.model === "studio-creative-a").every(request => request.stream === true && request.max_tokens === 24000));
+    assert.ok(requests.every(request => !Object.hasOwn(request, "temperature")));
+    assert.ok(requests.filter(request => request.model === "studio-coordinator").every(request => request.output_config?.effort === "low"));
+    await page.locator(".merge-ai-activity > summary").click();
+    await page.getByRole("log", { name: "Agent activity", exact: true }).getByText("Writing the deck with the creative model", { exact: true }).waitFor();
     assert.match(await page.getByLabel("Model selection", { exact: true }).innerText(), /studio-creative-a.*provisional/);
     await page.getByRole("button", { name: "Draft needs work", exact: true }).click();
     await page.getByLabel("Feedback category", { exact: true }).selectOption("design");
@@ -151,12 +193,13 @@ for (const { width, exhausted } of [{ width: 1440, exhausted: false }, { width: 
     assert.deepEqual(overflow, []);
     await page.screenshot({ path: join(tmpdir(), "rk-ai-proposal-" + width + ".png") });
     const routing = await page.evaluate(() => window.__RKStudio.aiRouting.state());
-    assert.equal(routing.decisions.at(-1).task, "creative");
-    assert.equal(routing.decisions.at(-1).stopReason, "end_turn");
-    assert.equal(routing.decisions.at(-1).usedOutputTokens, 12500);
-    assert.equal(routing.decisions.at(-1).thinkingTokens, 11000);
+    const accepted = routing.decisions.find(decision => decision.agentRole === "result");
+    assert.equal(accepted.task, "creative");
+    assert.equal(accepted.stopReason, "end_turn");
+    assert.equal(accepted.usedOutputTokens, 12500);
+    assert.equal(accepted.thinkingTokens, 11000);
     assert.equal(routing.observations.find(item => item.feedbackFor)?.quality, 0.25);
-    assert.doesNotMatch(JSON.stringify(routing), /synthetic-test-key|Place the next action|Discuss the redesigned flow|PRIVATE REASONING SIGNATURE/);
+    assert.doesNotMatch(JSON.stringify(routing), /synthetic-test-key|Place the next action|Discuss the redesigned flow|PRIVATE REASONING SIGNATURE|PRIVATE SPECIALIST FINDINGS/);
     await page.getByRole("button", { name: "Append slides", exact: true }).click();
     await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.nativeDeck?.slideCount === 1);
     await page.locator("[data-l2-back]").click();
@@ -164,9 +207,9 @@ for (const { width, exhausted } of [{ width: 1440, exhausted: false }, { width: 
     const study = await page.evaluate(() => window.__RKStudio.getDraft().work[0].study);
     assert.deepEqual(study.blocks, published.work[0].study.blocks);
     assert.notEqual(study.slidesPublic, true);
-    assert.doesNotMatch(JSON.stringify(study), /aiRouting|modelId|feedbackFor/);
+    assert.doesNotMatch(JSON.stringify(study), /aiRouting|modelId|feedbackFor|agentRole|agentJobId/);
     assert.deepEqual(errors, []);
-  } finally { await browser.close(); }
+  } finally { releaseSpecialist(); await browser.close(); }
 });
 
 test("AI routing settings discover models, require spending consent and keep evidence private", { timeout: 90000 }, async () => {
@@ -199,6 +242,12 @@ test("AI routing settings discover models, require spending consent and keep evi
         }
         if (request.method() === "POST") {
           const body = request.postDataJSON(); requests.push({ provider: url.hostname, body });
+          if (body.system === AI_AGENT_SYSTEM) {
+            const input = JSON.parse(body.messages[0].content);
+            const selected = input.catalogue.find(item => item.id === "fresh-catalogue-entry" && item.evidence.samples >= 3) || input.catalogue[0];
+            const action = input.candidate ? { action: "finish", summary: "The copy meets the requested outcome" } : { action: "draft", modelRef: selected.ref, task: "writing", instruction: "", inputs: [], summary: "Improving the supplied copy" };
+            return route.fulfill({ contentType: "application/json", body: JSON.stringify({ content: [{ type: "text", text: JSON.stringify(action) }], stop_reason: "end_turn" }) });
+          }
           const text = String(body.system || "").startsWith("Complete this small evaluation") ? '{"headline":"Related settings belong together","body":"The team grouped related controls to make settings easier to find."}' : "Refined copy.";
           return route.fulfill({ contentType: "application/json", body: JSON.stringify({ content: [{ type: "text", text }], usage: { input_tokens: 15, output_tokens: 20 } }) });
         }
@@ -222,6 +271,9 @@ test("AI routing settings discover models, require spending consent and keep evi
     await page.getByRole("button", { name: "Open AI settings", exact: true }).click();
     await panel.getByText(/2 accessible models/).waitFor();
     assert.equal(await panel.count(), 1, "Routing has one home inside the full AI settings");
+    assert.equal(await panel.getByText("Agent-led", { exact: true }).count(), 1);
+    assert.equal(await panel.locator("[data-route-task], [data-route-choices], [data-route-evaluate]").count(), 0, "Model/task selection and manual evaluation are not the user workflow");
+    assert.equal(await panel.locator(".airoute__advanced").getAttribute("open"), null);
     assert.equal(requests.length, 0);
     assert.ok(discoveries.every(provider => provider === "api.anthropic.com"));
     assert.equal(await panel.locator('[data-route-policy="autoEvaluate"]').isChecked(), false);
@@ -246,23 +298,20 @@ test("AI routing settings discover models, require spending consent and keep evi
     await panel.getByText(/4 accessible models/).waitFor();
     assert.ok(discoveries.includes("api.openai.com"));
     await panel.locator('[data-route-policy="providers"]').selectOption("selected");
+    await panel.getByText("Diagnostics and evaluation limits", { exact: true }).click();
     await panel.locator('[data-route-policy="evaluationDailyBudget"]').fill("1");
     await panel.locator('[data-route-policy="evaluationDailyBudget"]').press("Tab");
     await waitForRoutingPolicy(page, "evaluationDailyBudget", 1);
-    await panel.getByRole("button", { name: "Evaluate newcomer", exact: true }).click();
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
     assert.equal(requests.length, 0);
-    await panel.getByRole("button", { name: "Evaluate newcomer", exact: true }).click();
-    await page.getByRole("button", { name: "Run paid tests", exact: true }).click();
-    await panel.locator("[data-route-results]").getByText(/3 of 3 checks passed/).waitFor();
+    assert.equal(await page.evaluate(() => window.__RKStudio.improveText("PRIVATE ROUTING COPY", {})), "Refined copy.");
     assert.equal(requests.length, 3);
     const tested = await page.evaluate(() => window.__RKStudio.aiRouting.state());
     assert.equal(tested.decisions.length, 3); assert.ok(tested.observations.every(item => item.quality == null));
-    assert.ok(tested.evaluationReserved > 0 && tested.evaluationReserved < 1);
-    const imported = [{ provider: "anthropic", modelId: "fresh-catalogue-entry", scope: tested.decisions[0].scope, task: "creative", at: Date.now(), quality: 0.98, samples: 6, rubric: "owner-reviewed-decks-v1", prompt: "NEVER STORE IMPORTED CONTENT" }];
+    assert.equal(tested.evaluationReserved, 0, "An agentic task does not silently enable background benchmarks");
+    assert.deepEqual(tested.decisions.map(item => item.agentRole), ["coordinator", "result", "coordinator"]);
+    const imported = [{ provider: "anthropic", modelId: "fresh-catalogue-entry", scope: tested.decisions[0].scope, task: "writing", at: Date.now(), quality: 0.98, samples: 6, rubric: "owner-reviewed-copy-v1", prompt: "NEVER STORE IMPORTED CONTENT" }];
     await panel.locator("[data-route-file]").setInputFiles({ name: "evaluations.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(imported)) });
     await panel.getByText("1 evaluation records imported.", { exact: true }).waitFor();
-    await page.waitForFunction(() => document.querySelector('[data-route-choices] summary')?.textContent.includes("fresh-catalogue-entry / evaluated"));
     await panel.locator('[data-route-policy="autoEvaluate"]').check();
     const darkConfirmation = await page.getByRole("button", { name: "Cancel", exact: true }).evaluate(button => getComputedStyle(button.closest(".pass__box")).backgroundColor);
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -293,8 +342,10 @@ test("AI routing settings discover models, require spending consent and keep evi
     }), "Refined copy.");
     await panel.locator('[data-route-policy="autoEvaluate"]').uncheck();
     await waitForRoutingPolicy(page, "autoEvaluate", false);
-    assert.equal(requests.length, 7);
+    assert.equal(requests.length, 9);
     const saved = await page.evaluate(() => window.__RKStudio.aiRouting.state());
+    assert.equal(saved.decisions.filter(item => item.agentRole === "result").at(-1).modelId, "fresh-catalogue-entry", "The coordinator receives imported task evidence and can choose a new model without human model selection");
+    assert.ok(saved.evaluationReserved > 0 && saved.evaluationReserved < 1);
     assert.doesNotMatch(JSON.stringify(saved), /synthetic-routing-key|PRIVATE ROUTING COPY|Related settings belong|NEVER STORE IMPORTED CONTENT/);
     assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft())), original);
     const routingBundle = await build({ entryPoints: [fileURLToPath(new URL("./src/js/ai-orchestrator.mjs", import.meta.url))], bundle: true, format: "iife", globalName: "RoutingStoreTest", write: false });

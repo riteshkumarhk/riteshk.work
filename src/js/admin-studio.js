@@ -33,6 +33,7 @@ import { AI_TASKS } from "./ai-model-router.mjs";
 import { parseCompositionResponse } from "./slide-merge-ai.mjs";
 import { mountAiRoutingPanel } from "./ai-routing-panel.mjs";
 import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
+import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
 
 (function () {
   "use strict";
@@ -6717,12 +6718,12 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
     nativeSlideSession = session;
     root.classList.add("is-native-slides");
     const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
-    const styles = ["/studio/slide-lab/assets/editor.css?v=1.2", "/css/slide-studio.css?v=1.0"].map(href => new Promise((resolve, reject) => {
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.3", "/css/slide-studio.css?v=1.0"].map(href => new Promise((resolve, reject) => {
       const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.2";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.3";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
@@ -14546,7 +14547,7 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
         advanced = '<div class="af__row"><div class="af"><label class="af__label">Model</label><input type="text" id="aiModel_' + scope + '" value="' + escAttr(model) + '" placeholder="your-model-id" /><div class="af__hint">' + escHtml(modelHint(p)) + '</div></div>' +
           '<div class="af"><label class="af__label">API base URL</label><input type="text" id="aiBase_' + scope + '" value="' + escAttr(base) + '" placeholder="https://\u2026/v1" /></div></div>';
       } else {
-        advanced = '<div class="af__hint aiblk__auto">\u2728 Model &amp; endpoint are chosen automatically \u2014 always the best available for ' + escHtml(providerName(p)) + '.</div>';
+        advanced = '<div class="af__hint aiblk__auto">' + IC.spark + ' Agent-led model selection</div>';
       }
     }
     return '<div class="aiblk"><div class="aiblk__head">' + label + (note ? ' <span>' + note + "</span>" : "") + "</div>" +
@@ -14774,9 +14775,16 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
     } catch (e) { btnIdle(mb, "Modify current"); status("Modify failed: " + e.message); }
   }
   async function aiImage(cfg, prompt, sourceImage) {
-    const result = await aiRunTask(cfg, "image", "", prompt, { images: !!sourceImage, outputTokens: 0, maxTokens: 1 }, async (selected, model) => {
+    let user = prompt;
+    if (sourceImage) {
+      const image = await dataUriParts(sourceImage);
+      if (!image.b64) throw new Error("The source image could not be loaded");
+      user = [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: "data:" + image.mime + ";base64," + image.b64 } }];
+    }
+    const result = await aiRunTask(cfg, "image", "", user, { images: !!sourceImage, outputTokens: 0, maxTokens: 1 }, async (selected, model, step) => {
       if (!["openai", "gemini", "custom"].includes(selected.provider)) return { ok: false, status: 400, err: "Image output is unsupported by this provider adapter" };
-      try { return { ok: true, text: await (selected.provider === "gemini" ? aiImageGemini({ ...selected, model }, prompt, sourceImage) : aiImageOpenAI({ ...selected, model }, prompt, sourceImage)) }; }
+      const requestPrompt = typeof step.user === "string" ? step.user : step.user.filter(part => part.type === "text").map(part => part.text).join("\n\n");
+      try { return { ok: true, text: await (selected.provider === "gemini" ? aiImageGemini({ ...selected, model, signal: step.options.signal }, requestPrompt, sourceImage) : aiImageOpenAI({ ...selected, model, signal: step.options.signal }, requestPrompt, sourceImage)) }; }
       catch (error) { return { ok: false, status: error.status, err: error.message }; }
     });
     return result.text;
@@ -14788,10 +14796,10 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
       const fd = new FormData();
       fd.append("model", cfg.model); fd.append("prompt", prompt);
       fd.append("image", blob, "image.png"); fd.append("n", "1"); fd.append("size", "1024x1024");
-      res = await fetch(cfg.base + "/images/edits", { method: "POST", headers: { Authorization: "Bearer " + cfg.key }, body: fd });
+      res = await fetch(cfg.base + "/images/edits", { method: "POST", headers: { Authorization: "Bearer " + cfg.key }, body: fd, signal: cfg.signal });
     } else {
       const body = { model: cfg.model, prompt: prompt, n: 1, size: "1024x1024" };
-      res = await fetch(cfg.base + "/images/generations", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + cfg.key }, body: JSON.stringify(body) });
+      res = await fetch(cfg.base + "/images/generations", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + cfg.key }, body: JSON.stringify(body), signal: cfg.signal });
     }
     let j; try { j = await res.json(); } catch (e) { throw new Error("HTTP " + res.status); }
     if (!res.ok) { const error = new Error((j && j.error && j.error.message) || ("HTTP " + res.status)); error.status = res.status; throw error; }
@@ -14808,7 +14816,7 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
       if (sp.b64) parts.push({ inlineData: { mimeType: sp.mime, data: sp.b64 } });
     }
     const body = { contents: [{ parts: parts }], generationConfig: { responseModalities: ["TEXT", "IMAGE"] } };
-    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: cfg.signal });
     let j; try { j = await res.json(); } catch (e) { throw new Error("HTTP " + res.status); }
     if (!res.ok) { const error = new Error((j && j.error && j.error.message) || ("HTTP " + res.status)); error.status = res.status; throw error; }
     const cand = (j.candidates && j.candidates[0]) || {};
@@ -14846,6 +14854,7 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
   // ---- model auto-resolution: list what the key can actually use, pick the best, fall back gracefully ----
   const aiCatalog = createAiCatalog();
   const aiOrchestrator = createAiOrchestrator({ catalog: aiCatalog });
+  const aiTaskAgent = createAiTaskAgent({ router: aiOrchestrator });
   let aiLastRoute = null;
   let aiAutomaticEvaluation = null, aiEvaluationResult = null, aiEvaluationError = "";
   const aiEvaluationAttempts = new Map();
@@ -14876,12 +14885,7 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
     return configs;
   }
   function aiTaskOptions(system, user, opts = {}) {
-    const text = typeof user === "string" ? user : Array.isArray(user) ? user.filter(part => part.type === "text").map(part => part.text || "").join("\n") : "";
-    const images = !!opts.images || Array.isArray(user) && user.some(part => part.type === "image" || part.type === "image_url" || part.inlineData || part.inline_data);
-    const imageCount = opts.imageCount ?? (Array.isArray(user) ? user.filter(part => part.type === "image" || part.type === "image_url").length : images ? 1 : 0);
-    const inputTokens = new TextEncoder().encode(String(system || "") + text).length + 1024 + imageCount * 4096;
-    return { ...opts, images, inputTokens, outputTokens: opts.outputTokens ?? opts.maxTokens ?? 4096, structured: opts.json ? "preferred" : false,
-      requirements: JSON.stringify([images, !!opts.json]),
+    return { ...agentRequestOptions(system, user, opts),
       validate: text => {
         if (typeof text !== "string" || !text.trim()) throw new Error("The model returned no usable output. Retry or review its task rating.");
         if (opts.validate) return opts.validate(text);
@@ -14892,7 +14896,8 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
   }
   async function aiRunTask(cfg, task, system, user, opts, invoke) {
     const configs = await aiRoutingConfigs(cfg);
-    const result = await aiOrchestrator.run(configs, task, aiTaskOptions(system, user, opts), invoke);
+    const result = await aiTaskAgent.run(configs, { task, system, user, options: aiTaskOptions(system, user, opts) }, (selected, model, step, receipt) =>
+      step.role === "draft" ? invoke(selected, model, step, receipt) : aiChatOnce(selected, model, step.system, step.user, step.options));
     aiQueueEvaluation(configs, task, opts?.signal);
     return result;
   }
@@ -14937,9 +14942,11 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
     });
   }
   const aiNoTemperature = new Set();
-  async function aiTextRequest(cfg, model, url, headers, body, signal) {
+  async function aiTextRequest(cfg, model, url, headers, body, signal, options = {}) {
     const sampling = cfg.provider === "gemini" ? body.generationConfig : body;
     const cacheKey = JSON.stringify([cfg.provider, cfg.base, model]);
+    if (cfg.provider === "anthropic" && cfg.routingModel?.reasoning === true) delete sampling.temperature;
+    if (cfg.provider === "anthropic" && cfg.routingModel?.effortLevels?.includes(options.effort)) body.output_config = { ...body.output_config, effort: options.effort };
     if (aiNoTemperature.has(cacheKey)) delete sampling.temperature;
     for (let attempt = 0; attempt < 2; attempt++) {
       signal?.throwIfAborted();
@@ -14952,6 +14959,15 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
       delete sampling.temperature;
       aiNoTemperature.add(cacheKey);
     }
+  }
+  function aiProviderFailure(response, payload, phase = "request") {
+    const error = payload?.error, message = typeof error === "string" ? error : error?.message;
+    const errorType = ["invalid_request_error", "authentication_error", "permission_error", "not_found_error", "request_too_large", "rate_limit_error", "api_error", "overloaded_error"].includes(error?.type) ? error.type : "unknown";
+    const requestId = response.headers.get("request-id") || response.headers.get("x-request-id") || "";
+    const detail = typeof message === "string" ? message.slice(0, 500) : "The provider rejected the request";
+    return { ok: false, status: response.status, errorType, phase,
+      requestId: /^[a-zA-Z0-9_-]{1,120}$/.test(requestId) ? requestId : undefined,
+      err: /^invalid body[.!]?$/i.test(detail.trim()) ? "The provider rejected the request body (HTTP " + response.status + ", " + errorType + "). No draft was applied." : detail };
   }
   function aiAnthropicResult(message, status) {
     if (!message || !Array.isArray(message.content)) return { ok: false, status, failure: "invalid-response", err: "The service returned an unreadable Anthropic response. No draft was applied." };
@@ -14976,9 +14992,9 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
     var temp = opts.temperature != null ? opts.temperature : 0.7;
     var res, j;
     if (p === "anthropic") {
-      res = await aiTextRequest(cfg, model, base + "/messages", { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, { model: model, max_tokens: maxTokens, temperature: temp, system: system, messages: [{ role: "user", content: user }] }, opts.signal);
+      res = await aiTextRequest(cfg, model, base + "/messages", { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, { model: model, max_tokens: maxTokens, temperature: temp, system: system, messages: [{ role: "user", content: user }] }, opts.signal, opts);
       j = await res.json().catch(function () { return null; });
-      if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
+      if (!res.ok) return aiProviderFailure(res, j);
       (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(j && aiUsageFromJson(p, j));
       return aiAnthropicResult(j, res.status);
     }
@@ -14988,7 +15004,7 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
       if (opts.json) gb.generationConfig.responseMimeType = "application/json";
       res = await aiTextRequest(cfg, model, url, { "Content-Type": "application/json" }, gb, opts.signal);
       j = await res.json().catch(function () { return null; });
-      if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
+      if (!res.ok) return aiProviderFailure(res, j);
       var cand = (j && j.candidates && j.candidates[0]) || {};
       (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
       return { ok: true, text: ((((cand.content && cand.content.parts) || [])).map(function (x) { return x.text || ""; }).join("")).trim() };
@@ -15001,7 +15017,7 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
     if (opts.json) ob.response_format = { type: "json_object" };
     res = await aiTextRequest(cfg, model, base + "/chat/completions", { "Content-Type": "application/json", Authorization: "Bearer " + key }, ob, opts.signal);
     j = await res.json().catch(function () { return null; });
-    if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
+    if (!res.ok) return aiProviderFailure(res, j);
     (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
     return { ok: true, text: ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim() };
   }
@@ -15028,16 +15044,17 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
       if (p === "openai" && cfg.routingModel?.reasoning === true) { delete body.temperature; delete body.max_tokens; body.max_completion_tokens = maxTokens; }
       if (opts.json) body.response_format = { type: "json_object" };
     }
-    var full = "", uIn = 0, uOut = 0, uSet = false, stopReason = null, messageStopped = false, thinkingTokens;
+    var full = "", uIn = 0, uOut = 0, uSet = false, stopReason = null, messageStopped = false, thinkingTokens, phase = "transport";
     try {
-      var res = await aiTextRequest(cfg, model, url, headers, body, opts.signal);
-      if (!res.ok || !res.body) { var je = await res.json().catch(function () { return null; }); return { ok: false, status: res.status, err: (je && je.error && je.error.message) || ("HTTP " + res.status) }; }
+      var res = await aiTextRequest(cfg, model, url, headers, body, opts.signal, opts);
+      if (!res.ok || !res.body) return aiProviderFailure(res, await res.json().catch(() => null));
+      phase = "stream";
       function push(t) { if (t) { full += t; try { onDelta && onDelta(full, t); } catch (e) {} } }
       if (/application\/json/i.test(res.headers.get("content-type") || "")) {
         var plain = await res.json().catch(() => null);
         if (!plain || typeof plain !== "object") return { ok: false, status: res.status, failure: "invalid-response", err: "The service returned an unreadable AI response. No draft was applied." };
         var usage = aiUsageFromJson(p, plain);
-        if (plain.error) return { ok: false, status: res.status, err: plain.error.message || "The selected model rejected the request" };
+        if (plain.error) return aiProviderFailure(res, plain);
         if (usage) aiUsageRecord(p, model, usage.in, usage.out);
         if (p === "anthropic") {
           const result = aiAnthropicResult(plain, res.status);
@@ -15059,7 +15076,7 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
           var payload = line.slice(5).trim();
           if (!payload || payload === "[DONE]") continue;
           var ev; try { ev = JSON.parse(payload); } catch (e) { continue; }
-          if (ev.error || ev.type === "error") { await reader.cancel(); throw new Error(ev.error?.message || "The model stream failed"); }
+          if (ev.error || ev.type === "error") { await reader.cancel(); return { ...aiProviderFailure(res, ev, "stream"), emitted: full.length > 0 }; }
           if (p === "anthropic") {
             if (ev.type === "content_block_start" && ev.content_block?.type === "text") push(ev.content_block.text);
             if (ev.type === "content_block_delta" && ev.delta && (!ev.delta.type || ev.delta.type === "text_delta") && typeof ev.delta.text === "string") push(ev.delta.text);
@@ -15080,12 +15097,12 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
           usage: uSet ? { output_tokens: uOut, output_tokens_details: { thinking_tokens: thinkingTokens } } : undefined }, res.status);
       }
       return { ok: true, text: full.trim() };
-    } catch (e) { return { ok: false, err: e.message || String(e), emitted: full.length > 0 }; }
+    } catch (e) { return { ok: false, err: e.message || String(e), phase, emitted: full.length > 0 }; }
   }
   // Pick the first working model and stream it (no fallback once tokens have started flowing).
   async function aiTextStream(cfg, system, user, opts, onDelta) {
     opts = opts || {};
-    const result = await aiRunTask(cfg, opts.task || "writing", system, user, opts, (selected, model) => aiStream(selected, model, system, user, opts, onDelta));
+    const result = await aiRunTask(cfg, opts.task || "writing", system, user, opts, (selected, model, step) => aiStream(selected, model, step.system, step.user, step.options, onDelta));
     return result.text;
   }
   // ---- Vision: actually LOOK at case images so the reel features real UI/design, not press screenshots ----
@@ -15106,7 +15123,7 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
     opts = opts || {};
     const user = [{ type: "text", text: prompt }, ...imgs.map(image => ({ type: "image_url", image_url: { url: "data:" + image.mime + ";base64," + image.b64 } }))];
     const request = { ...opts, json: opts.json !== false, maxTokens: opts.maxTokens || 2200, images: true, imageCount: imgs.length };
-    try { return await aiRunTask(cfg, opts.task || "vision", system, user, request, (selected, selectedModel) => aiChatOnce(selected, selectedModel, system, user, request)); }
+    try { return await aiRunTask(cfg, opts.task || "vision", system, user, request, (selected, selectedModel, step) => aiChatOnce(selected, selectedModel, step.system, step.user, step.options)); }
     catch (error) { opts.signal?.throwIfAborted(); return { ok: false, err: error.message, routingHandled: true }; }
   }
   // Conversational vision turn for the whiteboard mock: like aiVisionOnce but returns PLAIN TEXT
@@ -15160,7 +15177,7 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
   }
   async function aiText(cfg, system, user, opts) {
     opts = opts || {};
-    const result = await aiRunTask(cfg, opts.task || (opts.deckAuthoring ? "creative" : "writing"), system, user, opts, (selected, model) => aiChatOnce(selected, model, system, user, opts));
+    const result = await aiRunTask(cfg, opts.task || (opts.deckAuthoring ? "creative" : "writing"), system, user, opts, (selected, model, step) => aiChatOnce(selected, model, step.system, step.user, step.options));
     return result.text;
   }
   // Inline "connect an AI service" dialog, shown from a feature when its key is missing.
@@ -18281,7 +18298,10 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
     if (!cfg.key) throw new Error("Your Studio AI configuration is not available on this browser origin.");
     return draftComposition(catalog, brief, function (prompt, signal) {
       return aiText(cfg, prompt.system, prompt.user, { task: "creative", json: true, maxTokens: 12000, reasoningTokens: 12000, temperature: 0.3, signal: signal, deckAuthoring: true,
-        validate: text => parseCompositionResponse(text, catalog), onRoute: options?.onRoute });
+        validate: text => {
+          const proposal = parseCompositionResponse(text, catalog);
+          if (proposal.version !== 2) throw new Error("The draft only arranged source sections. Author a version 2 editable presentation.");
+        }, onRoute: options?.onRoute, onActivity: options?.onActivity });
     }, options && options.signal);
   } };
   window.__RKStudio.aiRouting = { state: () => aiOrchestrator.state(), feedback: (decisionId, feedback) => aiOrchestrator.feedback(decisionId, feedback) };

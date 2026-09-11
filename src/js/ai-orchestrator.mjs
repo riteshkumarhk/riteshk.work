@@ -60,7 +60,7 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
     await store.update(state => {
       state.decisions = [...state.decisions.filter(item => item.id !== decision.id), decision].slice(-50);
       if (observation) state.observations = [...state.observations, observation].slice(-600);
-      if (decision.status === "success" && !decision.evaluation) {
+      if (decision.status === "success" && !decision.evaluation && (!decision.agentRole || decision.agentRole === "result")) {
         state.incumbents[JSON.stringify([decision.scope, decision.task])] = decision.modelId;
         state.taskIncumbents ||= {};
         state.taskIncumbents[decision.task] = { scope: decision.scope, provider: decision.provider, modelId: decision.modelId };
@@ -90,6 +90,11 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
       const preferred = challenger || incumbent;
       preferred.reasons.push(challenger ? "Task evidence supports selection across connected services" : "Retained the task incumbent across connected services");
       choices.splice(choices.indexOf(preferred), 1); choices.unshift(preferred);
+    }
+    if (options.target) {
+      const target = options.target;
+      const match = choices.find(choice => choice.scope === target.scope && choice.model.provider === target.provider && choice.model.id === target.modelId);
+      choices.splice(0, choices.length, ...(match ? [match] : []));
     }
     if (!choices.length) {
       if (failures.length === configs.length && failures.length) throw failures[0];
@@ -138,6 +143,10 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
         if (maxCost != null && (choice.estimatedCost == null || committed + choice.estimatedCost > maxCost)) break;
         committed += choice.estimatedCost || 0;
         const decision = publicChoice(choice, randomId(), choice.scope, index > 0, now());
+        if (options.agent && /^[a-zA-Z0-9_-]{1,100}$/.test(options.agent.jobId || "") && ["coordinator", "delegate", "draft"].includes(options.agent.role)) {
+          decision.agentJobId = options.agent.jobId; decision.agentRole = options.agent.role;
+          decision.agentStep = Math.max(1, Math.min(16, Number(options.agent.step) || 1));
+        }
         if (previous) decision.reasons.push("Previous attempt with " + previous.modelId + " failed: " + previous.failure);
         await record(decision);
         notify(decision);
@@ -159,6 +168,10 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
         if (options.signal?.aborted) { decision.status = "cancelled"; await record(decision).catch(() => {}); notify(decision); options.signal.throwIfAborted(); }
         const kind = success ? "success" : result?.validationFailed ? "invalid" : aiFailureKind(result);
         decision.status = success ? "success" : "error"; decision.failure = success ? undefined : kind;
+        if (Number.isInteger(result?.status) && result.status >= 100 && result.status <= 599) decision.httpStatus = result.status;
+        if (["request", "stream", "transport"].includes(result?.phase)) decision.failurePhase = result.phase;
+        if (["invalid_request_error", "authentication_error", "permission_error", "not_found_error", "request_too_large", "rate_limit_error", "api_error", "overloaded_error", "unknown"].includes(result?.errorType)) decision.errorType = result.errorType;
+        if (typeof result?.requestId === "string" && /^[a-zA-Z0-9_-]{1,120}$/.test(result.requestId)) decision.requestId = result.requestId;
         if (["end_turn", "max_tokens", "model_context_window_exceeded", "refusal", "stop_sequence", "pause_turn", "tool_use", "unspecified", "unknown"].includes(result?.stopReason)) decision.stopReason = result.stopReason;
         if (Number.isSafeInteger(result?.outputTokens) && result.outputTokens >= 0) decision.usedOutputTokens = result.outputTokens;
         if (Number.isSafeInteger(result?.thinkingTokens) && result.thinkingTokens >= 0 && result.thinkingTokens <= result.outputTokens) decision.thinkingTokens = result.thinkingTokens;
@@ -166,7 +179,8 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
         try {
           await record(decision, { id: randomId(), at: now(), scope: choice.scope, task, provider: choice.model.provider, modelId: choice.model.id,
             status: kind, requirements: options.requirements || "", latencyMs: Math.max(0, now() - start), decisionId: decision.id,
-            stopReason: decision.stopReason, outputTokens: decision.usedOutputTokens, thinkingTokens: decision.thinkingTokens });
+            stopReason: decision.stopReason, outputTokens: decision.usedOutputTokens, thinkingTokens: decision.thinkingTokens,
+            httpStatus: decision.httpStatus, errorType: decision.errorType, failurePhase: decision.failurePhase });
         } catch (failure) {
           decision.historySaved = false;
           decision.reasons.push("Routing history could not be saved; this result cannot receive a stored rating");
@@ -175,15 +189,27 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
         if (success) return { ...result, routing: decision };
         previous = decision;
         lastFailure = new Error(result?.err || "The AI request failed");
+        lastFailure.failure = kind; lastFailure.routing = decision;
         if (!["unavailable", "unsupported"].includes(kind)) throw lastFailure;
       }
       throw lastFailure || new Error("The remaining routing budget cannot cover another model attempt");
+    },
+    async acceptAgentResult(decisionId, jobId) {
+      return store.update(state => {
+        const decision = state.decisions.find(item => item.id === decisionId && item.agentJobId === jobId && item.agentRole === "draft" && item.status === "success");
+        if (!decision) throw new Error("The agent result is no longer in routing history");
+        decision.agentRole = "result";
+        state.incumbents[JSON.stringify([decision.scope, decision.task])] = decision.modelId;
+        state.taskIncumbents ||= {};
+        state.taskIncumbents[decision.task] = { scope: decision.scope, provider: decision.provider, modelId: decision.modelId };
+        return structuredClone(decision);
+      });
     },
     async feedback(decisionId, { quality, accepted = false, reason = "" } = {}) {
       if (quality != null && (!Number.isFinite(quality) || quality < 0 || quality > 1)) throw new Error("Invalid quality feedback");
       if (!["", "accuracy", "clarity", "design", "instructions"].includes(reason)) throw new Error("Invalid feedback category");
       return store.update(state => {
-        const decision = state.decisions.find(item => item.id === decisionId && item.status === "success");
+        const decision = state.decisions.find(item => item.id === decisionId && item.status === "success" && (!item.agentRole || item.agentRole === "result"));
         if (!decision) throw new Error("This completed AI result is no longer in routing history");
         state.observations = state.observations.filter(item => item.feedbackFor !== decisionId);
         state.observations.push({ id: randomId(), at: now(), scope: decision.scope, provider: decision.provider, modelId: decision.modelId, task: decision.task,

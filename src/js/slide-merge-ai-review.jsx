@@ -1,32 +1,49 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Trash2, Maximize, RotateCcw, Square, ThumbsUp, ThumbsDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Trash2, Maximize, RotateCcw, Square, ThumbsUp, ThumbsDown, ChevronRight, Check, LoaderCircle, CircleAlert } from "lucide-react";
 import { sectionPlainText } from "./slide-merge-sections.mjs";
 import { compileComposition } from "./slide-merge-composition.mjs";
 import { selectedCompositionCatalog } from "./slide-merge-ai.mjs";
 import { DEFAULT_SLIDE_FONT } from "./slide-platform-fonts.mjs";
 import { requestComposition, recordCompositionFeedback } from "./slide-merge-ai-client.mjs";
+import { AI_TASKS } from "./ai-model-router.mjs";
 import "../../css/slide-merge-ai.css";
 
 const options = { plain: sectionPlainText, fontFamily: DEFAULT_SLIDE_FONT };
+const activityNames = { coordinator: "Coordinating", delegate: "Specialist work", draft: "Producing the draft", decision: "Next action", complete: "Draft ready" };
 
 export function CompositionReview({ data, studyId, blocks, onCancel, onApply, renderPreview, existingCount }) {
   const [error, setError] = useState(""), [working, setWorking] = useState(true), [applying, setApplying] = useState(false);
   const [proposal, setProposal] = useState(null), [compiled, setCompiled] = useState(null), [index, setIndex] = useState(0), [replace, setReplace] = useState(false);
   const [route, setRoute] = useState(null), [feedback, setFeedback] = useState(""), [ratingBusy, setRatingBusy] = useState(false);
+  const [activity, setActivity] = useState([]);
   const controller = useRef(null), mounted = useRef(true), preview = useRef(null);
   async function generate() {
     controller.current?.abort();
     const pending = new AbortController(); controller.current = pending;
-    setWorking(true); setError(""); setRoute(null); setFeedback("");
+    setWorking(true); setError(""); setRoute(null); setFeedback(""); setActivity([]);
     try {
       const catalog = await selectedCompositionCatalog(data, studyId, blocks, options);
       pending.signal.throwIfAborted();
       const brief = "Author a complete presentation from this case-study material: an opening thesis, context and stakes, research or evidence, design decisions, trade-offs, and outcomes where supported. Rewrite and polish the copy, combine related ideas and split dense ideas into multiple slides. Choose the slide count and layout to tell the story. Preserve complete source media and interactive components. Do not invent missing evidence.";
-      const result = await requestComposition(catalog, brief, pending.signal, { onRoute: decision => { if (mounted.current && controller.current === pending && !pending.signal.aborted) setRoute(decision); } });
+      const result = await requestComposition(catalog, brief, pending.signal, {
+        onRoute: decision => { if (mounted.current && controller.current === pending && !pending.signal.aborted) setRoute(decision); },
+        onActivity: event => {
+          if (!mounted.current || controller.current !== pending || pending.signal.aborted) return;
+          setActivity(previous => {
+            const index = previous.findIndex(item => item.id === event.id);
+            return index < 0 ? [...previous, event].slice(-32) : previous.map((item, position) => position === index ? { ...item, ...event } : item);
+          });
+        }
+      });
       const review = await compileComposition(result, data, options);
       pending.signal.throwIfAborted();
       setProposal(result); setCompiled(review); setIndex(0); setReplace(false);
-    } catch (failure) { if (!pending.signal.aborted) setError(failure.message || "Drafting failed. Try again."); }
+    } catch (failure) {
+      if (!pending.signal.aborted) {
+        setError(failure.message || "Drafting failed. Try again.");
+        setActivity(previous => previous.map(item => item.status === "running" ? { ...item, status: "error" } : item));
+      }
+    }
     finally { if (mounted.current && controller.current === pending) setWorking(false); }
   }
   useEffect(() => { mounted.current = true; generate(); return () => { mounted.current = false; controller.current?.abort(); }; }, []);
@@ -61,8 +78,15 @@ export function CompositionReview({ data, studyId, blocks, onCancel, onApply, re
   const slide = compiled?.slides[index];
   return <section className="merge-ai" aria-label="AI proposal">
     <div className="merge-section-actions"><button type="button" disabled={applying} onClick={cancel}>{working ? <Square /> : <ArrowLeft />}{working ? "Stop" : "Back to sections"}</button></div>
-    {route && <details className="merge-ai-sources" aria-label="Model selection"><summary><ChevronRight aria-hidden="true" /><span>{route.modelName || route.modelId}{" \u00b7 "}{route.confidence}{route.fallback ? " \u00b7 fallback" : ""}</span></summary><ul>{route.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul><p className="merge-ai-caption">{route.provider}{" \u00b7 Creative \u00b7 "}{route.status}</p></details>}
-    {working ? <p role="status">Drafting slides...</p> : proposal ? <>
+    {!!activity.length && <details className="merge-ai-sources merge-ai-activity" open={working || !!error}>
+      <summary><ChevronRight aria-hidden="true" /><span>Agent activity</span></summary>
+      <ol role="log" aria-label="Agent activity" aria-live="polite" aria-relevant="additions text">{activity.map(event => <li key={event.id} data-status={event.status}>
+        <span className="merge-ai-activity-icon" aria-hidden="true">{event.status === "running" ? <LoaderCircle /> : event.status === "error" ? <CircleAlert /> : <Check />}</span>
+        <div><span>{event.summary || activityNames[event.phase] || "Working"}</span>{event.modelId && <small>{event.modelName || event.modelId}{" \u00b7 "}{AI_TASKS[event.task]?.label || event.task}{event.status === "error" ? " \u00b7 failed" : ""}</small>}</div>
+      </li>)}</ol>
+    </details>}
+    {route && <details className="merge-ai-sources" aria-label="Model selection"><summary><ChevronRight aria-hidden="true" /><span>{route.modelName || route.modelId}{" \u00b7 "}{route.confidence}{route.fallback ? " \u00b7 fallback" : ""}</span></summary><ul>{route.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul><p className="merge-ai-caption">{route.provider}{" \u00b7 "}{AI_TASKS[route.task]?.label || route.task}{" \u00b7 "}{route.status}</p>{route.httpStatus && <p className="merge-ai-caption">HTTP {route.httpStatus}{route.errorType ? " / " + route.errorType : ""}{route.failurePhase ? " / " + route.failurePhase : ""}{route.requestId ? " / " + route.requestId : ""}</p>}</details>}
+    {working ? <p role="status">Agent working...</p> : proposal ? <>
       <h3>{proposal.title}</h3>
       <div className="merge-ai-preview" ref={preview} key={slide.id}>{renderPreview(slide)}</div>
       <div className="merge-ai-slidebar">

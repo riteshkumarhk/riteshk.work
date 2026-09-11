@@ -65,6 +65,8 @@ test("deck and general text generation use the shared orchestrator instead of fa
   assert.doesNotMatch(source, /AI_MODEL_RANK|AI_TEXT_FALLBACK|AI_VISION_MODEL|AI_IMG_FALLBACK|AI_DEFAULT_MODEL/);
   assert.doesNotMatch(source, /if \(!parsed\) parsed = csgenParse\(await aiText\(cfg, sys, user, sopts\)\)/);
   assert.doesNotMatch(source, /aiSupportsImages/);
+  const author = source.slice(source.indexOf("draftSlides: async function"));
+  assert.match(author, /const proposal = parseCompositionResponse\(text, catalog\);\s*if \(proposal\.version !== 2\) throw/);
 });
 
 test("multimodal adapters preserve image bytes across providers and use declared reasoning metadata", async () => {
@@ -114,6 +116,40 @@ test("deck AI retries a deprecated temperature on the same model without changin
   assert.equal(requests.length, 3);
   assert.equal(Object.hasOwn(requests[2].body, "temperature"), false, "Remember the selected model's rejected parameter for this session");
   assert.equal(options.temperature, 0.3, "Do not alter the caller's requested settings");
+});
+
+test("discovered Anthropic reasoning models send a minimal body without optional sampling", async () => {
+  const requests = [];
+  const adapters = await textAdapters(async (url, options) => {
+    const body = JSON.parse(options.body); requests.push(body);
+    if (Object.hasOwn(body, "temperature")) return Response.json({ error: { type: "invalid_request_error", message: "Invalid body" } }, { status: 400 });
+    return Response.json({ content: [{ type: "text", text: "A complete answer" }], stop_reason: "end_turn" });
+  });
+  const cfg = { provider: "anthropic", key: "synthetic", base: "https://provider.test", routingModel: { reasoning: true } };
+  for (const operation of ["aiChatOnce", "aiStream"]) {
+    const result = await adapters[operation](cfg, "arbitrary-current-model", "System", "Case", { maxTokens: 12000, temperature: 0.3 });
+    assert.equal(result.ok, true, result.err);
+    assert.equal(result.text, "A complete answer");
+  }
+  assert.equal(requests.length, 2, "Do not send known-incompatible parameters and depend on a retry");
+  assert.ok(requests.every(body => !Object.hasOwn(body, "temperature")));
+});
+
+test("invalid-body errors distinguish HTTP rejection from stream failure without exposing source data", async () => {
+  for (const streamed of [false, true]) {
+    const payload = { error: { type: "invalid_request_error", message: "Invalid body" } };
+    const adapters = await textAdapters(async () => streamed
+      ? new Response("data: " + JSON.stringify(payload) + "\n\n", { headers: { "content-type": "text/event-stream", "request-id": "req-test" } })
+      : Response.json(payload, { status: 400, headers: { "request-id": "req-test" } }));
+    const result = await adapters.aiStream({ provider: "anthropic", key: "PRIVATE KEY", base: "https://provider.test" }, "selected", "System", "PRIVATE PROMPT", {});
+    assert.equal(result.ok, false);
+    assert.equal(result.status, streamed ? 200 : 400);
+    assert.equal(result.phase, streamed ? "stream" : "request");
+    assert.equal(result.errorType, "invalid_request_error");
+    assert.equal(result.requestId, "req-test");
+    assert.match(result.err, /HTTP/);
+    assert.doesNotMatch(JSON.stringify(result), /PRIVATE KEY|PRIVATE PROMPT/);
+  }
 });
 
 test("temperature compatibility preserves OpenAI-compatible and Gemini request formats", async () => {
@@ -288,4 +324,44 @@ test("streamed AI retries temperature only before output and records successful 
   assert.equal(Object.hasOwn(requests[1].body, "temperature"), false);
   assert.equal(requests[1].signal, controller.signal);
   assert.deepEqual(usage, [["anthropic", "restricted", 10, 20]]);
+});
+
+test("agent coordination effort is sent only when the model declares that effort level", async () => {
+  const requests = [], adapters = await textAdapters(async (url, options) => { requests.push(JSON.parse(options.body)); return Response.json({ content: [{ type: "text", text: "Done" }], stop_reason: "end_turn" }); });
+  for (const effortLevels of [["low", "medium"], [], ["high"]]) {
+    await adapters.aiChatOnce({ provider: "anthropic", key: "synthetic", base: "https://provider.test", routingModel: { reasoning: true, effortLevels } }, "arbitrary-model", "System", "Job", { maxTokens: 2048, effort: "low" });
+  }
+  assert.deepEqual(requests[0].output_config, { effort: "low" });
+  assert.equal(requests[1].output_config, undefined);
+  assert.equal(requests[2].output_config, undefined);
+  assert.ok(requests.every(request => !Object.hasOwn(request, "temperature")));
+});
+
+test("one-shot invalid-body errors retain safe HTTP diagnostics on every provider adapter", async () => {
+  const adapters = await textAdapters(async () => Response.json({ error: { type: "invalid_request_error", message: "Invalid body" } }, { status: 400, headers: { "request-id": "req-small" } }));
+  for (const provider of ["anthropic", "openai", "gemini", "custom"]) {
+    const result = await adapters.aiChatOnce({ provider, key: "synthetic", base: "https://provider.test" }, "selected", "System", "Job", { maxTokens: 1000 });
+    assert.equal(result.status, 400);
+    assert.equal(result.errorType, "invalid_request_error");
+    assert.equal(result.phase, "request");
+    assert.equal(result.requestId, "req-small");
+  }
+});
+
+test("image generation uses the agent's guidance and preserves its source image", async () => {
+  const source = await readFile(new URL("./src/js/admin-studio.js", import.meta.url), "utf8"), calls = [], controller = new AbortController();
+  const start = source.indexOf("async function aiImage(cfg"), end = source.indexOf("async function aiImageOpenAI", start);
+  const generate = runInNewContext("(" + source.slice(start, end).trim() + ")", {
+    dataUriParts: async () => ({ mime: "image/png", b64: "AAECAw==" }),
+    aiRunTask: async (config, task, system, user, options, invoke) => {
+      assert.equal(task, "image");
+      assert.equal(user[1].image_url.url, "data:image/png;base64,AAECAw==");
+      return invoke(config, "agent-selected-image-model", { user: [...user, { type: "text", text: "Use the specialist findings" }], options: { signal: controller.signal } });
+    },
+    aiImageOpenAI: async (config, prompt, original) => { calls.push({ config, prompt, original }); return "data:image/png;base64,RESULT"; }
+  });
+  assert.equal(await generate({ provider: "openai" }, "Original prompt", "original.png"), "data:image/png;base64,RESULT");
+  assert.match(calls[0].prompt, /Original prompt[\s\S]*Use the specialist findings/);
+  assert.equal(calls[0].original, "original.png");
+  assert.equal(calls[0].config.signal, controller.signal);
 });

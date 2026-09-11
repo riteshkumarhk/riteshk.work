@@ -66,6 +66,7 @@ lucide-react/dist/esm/icons/chevron-right.mjs:
 lucide-react/dist/esm/icons/chevron-up.mjs:
 lucide-react/dist/esm/icons/chevrons-down.mjs:
 lucide-react/dist/esm/icons/chevrons-up.mjs:
+lucide-react/dist/esm/icons/circle-alert.mjs:
 lucide-react/dist/esm/icons/copy.mjs:
 lucide-react/dist/esm/icons/external-link.mjs:
 lucide-react/dist/esm/icons/eye-off.mjs:
@@ -83,6 +84,7 @@ lucide-react/dist/esm/icons/list-indent-increase.mjs:
 lucide-react/dist/esm/icons/list-ordered.mjs:
 lucide-react/dist/esm/icons/list-x.mjs:
 lucide-react/dist/esm/icons/list.mjs:
+lucide-react/dist/esm/icons/loader-circle.mjs:
 lucide-react/dist/esm/icons/lock-keyhole-open.mjs:
 lucide-react/dist/esm/icons/lock-keyhole.mjs:
 lucide-react/dist/esm/icons/maximize.mjs:

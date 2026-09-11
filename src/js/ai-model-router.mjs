@@ -36,6 +36,7 @@ export function normalizeAiModel(provider, raw, reference = {}) {
     releasedAt: released(raw.created_at || raw.release_date || reference.release_date || raw.created),
     input, output, imageInput: supported(capabilities.image_input) ?? (input ? input.includes("image") : null),
     reasoning: supported(capabilities.thinking) ?? supported(capabilities.reasoning) ?? supported(raw.reasoning) ?? supported(reference.reasoning),
+    effortLevels: supported(capabilities.effort) === true ? ["low", "medium", "high", "xhigh", "max"].filter(level => supported(capabilities.effort[level]) === true) : [],
     structured: supported(capabilities.structured_outputs) ?? supported(raw.structured_output) ?? supported(reference.structured_output),
     contextWindow: positive(raw.context_window || reference.limit?.context),
     maxInputTokens: positive(raw.max_input_tokens || raw.inputTokenLimit || reference.limit?.input),

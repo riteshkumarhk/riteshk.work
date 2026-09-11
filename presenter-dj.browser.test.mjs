@@ -460,6 +460,11 @@ test('real Studio AI service improves notes and sanitizes generated icons withou
     });
     await page.route('https://studio-ai.test/**',route=>{
       const body=route.request().postDataJSON();requests.push(body);
+      if (body.messages[0].content.startsWith("You are Studio's outcome coordinator.")) {
+        const input = JSON.parse(body.messages[1].content);
+        const action = input.candidate ? { action: "finish", summary: "The requested result is ready" } : { action: "draft", modelRef: input.catalogue[0].ref, task: input.job.taskHint, instruction: "", inputs: [], summary: "Producing the requested result" };
+        return route.fulfill({contentType:'application/json',body:JSON.stringify({choices:[{message:{content:JSON.stringify(action)}}]})});
+      }
       const icon=body.messages[0].content.includes('line-icon');
       const content=icon?JSON.stringify({name:'service-mark',svg:'<svg><script>alert(1)</script><image href="https://invalid.test"/><path d="M4 4h16v16H4Z" onclick="alert(1)"/></svg>',keywords:['service','mark']}):'<p><strong>Sharper</strong> notes.</p>';
       return route.fulfill({contentType:'application/json',body:JSON.stringify({choices:[{message:{content}}],usage:{prompt_tokens:10,completion_tokens:10}})});
@@ -475,7 +480,8 @@ test('real Studio AI service improves notes and sanitizes generated icons withou
     await page.getByRole('button',{name:'Insert service-mark icon',exact:true}).waitFor();
     const icon=await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:content:draft')).customIcons['service-mark']);
     assert.match(icon,/<path/);assert.doesNotMatch(icon,/script|image|onclick|href/);
-    assert.equal(requests.length,2);assert.ok(requests.every(request=>request.model==='fixture-model'));
+    assert.equal(requests.length,6);assert.ok(requests.every(request=>request.model==='fixture-model'));
+    assert.equal(requests.filter(request=>!request.messages[0].content.startsWith("You are Studio's outcome coordinator.")).length,2);
     assert.equal(await page.evaluate(()=>window.__slideMerge.api.getSceneElements().filter(element=>element.type==='image').length),1);
   }finally{await browser.close();}
 });

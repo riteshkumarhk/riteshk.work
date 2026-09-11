@@ -97,15 +97,43 @@ publish test intercepts every content write, verifies encryption and original
 upload bytes, failure/retry, public-to-private changes, edits during publishing,
 fresh-device owner recovery and presenter note saves with/without the editor.
 
-## Task-aware AI routing
+## Agent-led AI orchestration
 
 Studio text, analytical, creative, coding, visual-analysis and image-generation
-requests share an orchestrator. Model IDs and families are not preference rules.
+requests share an outcome agent. An AI coordinator reads the job and live model
+facts, chooses a model for each action, and can delegate specialist work, draft,
+inspect results, revise after validation feedback, or finish. There is no fixed
+analysis/writing/review sequence and no user task or model-selection step.
+Model IDs and families are not preference rules.
 Authenticated provider catalogues are refreshed after 15 minutes or with Refresh
 accessible models in Settings > AI. Optional models.dev metadata supplies missing
 capabilities and public prices, cached for 24 hours; that request is anonymous and
 never includes keys, prompts or the owner's selected model. Only IDs returned by
 the configured provider are candidates. An explicit custom model remains pinned.
+
+The coordinator starts on an automatically chosen economical compatible model.
+It receives current capability, pricing, limit, release-date and task-evidence data,
+not a claim that it already knows every newly released model. It selects delegates
+and final models using catalogue references; the host rechecks their eligibility
+before every call. Models cannot supply new endpoints, keys, permissions or tools.
+The agent can use different allowed models for different parts of the job.
+
+Tools are bounded to seven coordinator decisions, twelve model operations, three
+specialist calls, two candidate drafts and eight minutes per job. These are resource
+guards, not a prescribed workflow. The job limit includes coordination, specialists,
+revisions and the final answer. Started operations are conservatively counted at
+their estimated maximum cost. Unknown prices cannot pass a finite job limit.
+Revoking access to other connected services stops further calls to them. Final
+output retains the original host contract; only a validated candidate can be
+accepted by the coordinator. Application and publishing still require the existing
+owner actions. The agent has no browsing, file-execution or publishing tool.
+
+Long coordinator context is explicitly marked as excerpted. Specialists receive
+the complete original source, and final models receive the original contract and
+selected specialist outputs. Those inputs, intermediate drafts and model-written
+progress summaries remain transient, not part of the deck or routing history.
+The proposal pane streams public agent activity, model choices and checks. It does
+not expose raw private chain-of-thought, thinking blocks or signatures.
 
 Known incompatible modalities, insufficient input/context/output limits, missing
 mandatory capabilities and estimated costs above the request limit are excluded.
@@ -114,22 +142,32 @@ models can run provisionally with unknown capabilities, but unknown prices canno
 pass a configured budget. Image pricing is never inferred from text-token prices.
 Metadata is not proof of model access or output quality; actual failures are recorded.
 
-Tasks are declared by their Studio actions, not classified by another paid call.
-Task-specific evidence dominates latency, cost and recency. API success records
+Studio actions supply a task hint and an output contract; the coordinator interprets
+the actual job and chooses the task for each model call. The lower-level router
+supplies evidence-based ordering and hard compatibility/cost checks. The agent's
+explicit per-call choice can differ from that ordering; no preference becomes a
+claim of measured quality merely because the agent chose it. API success records
 reliability, not creative quality. Owner ratings and imported evaluations carry
 their task, endpoint, age and rubric; evidence expires after 90 days and decays
-with age. Accepted deck proposals provide only a weak signal. An established
-model is retained until a challenger has at least three quality samples and a
-better evidence score. The rule also applies across connected providers.
+with age. Accepted deck proposals provide only a weak signal. Coordinator and
+delegate calls are not accepted deliverables or eligible for result-quality ratings.
 
 Selected service is the default routing scope. All connected services requires
-explicit consent and only uses already configured connections. Settings shows
-recent actual selections, confidence, reasons and fallback failures. The deck
+explicit consent and only uses already configured connections. Settings > AI >
+Open AI settings shows automatic orchestration, allowed services and the estimated
+job limit. Optional evidence administration and background-test consent are under
+Diagnostics and evaluation limits. Recent activity shows actual calls, roles,
+confidence and failures. The deck
 proposal also shows its model and accepts useful/needs-work feedback. A provider
 authentication failure, rate limit, service failure, cancellation or partial stream
-does not trigger model hopping. Model unavailability/unsupported requests allow at
-most three model attempts within the same estimated request limit. The existing
-same-model deprecated-temperature compatibility retry is retained.
+does not trigger model hopping. The agent may select another model after a known
+availability/capability rejection, within the same job budget and call limits.
+Invalid candidate contracts can be revised after the coordinator sees validation
+feedback. It does not automatically repeat generically rejected or token-exhausted
+paid requests. Declared Anthropic reasoning models omit optional temperature on
+the first request; the old same-model parameter retry remains for unknown legacy
+capabilities. HTTP status, safe provider error type, stream/request phase and an
+available request ID distinguish a rejected body from a transport failure.
 
 Deck drafting allows 12,000 answer tokens plus up to 12,000 additional output
 tokens for candidates with declared reasoning support. The extra allowance is
@@ -142,8 +180,8 @@ stream termination report their actual failure instead of a generic blank result
 Safe stop reasons and token counts are recorded privately, without response text.
 A charged incomplete response is not retried automatically; Retry is explicit.
 
-Newcomer tests default to disabled, with a zero daily budget. Manual evaluation
-requires cost confirmation; automatic evaluation requires a separate paid-test
+Background newcomer tests default to disabled, with a zero daily budget.
+Automatic evaluation requires a separate paid-test
 opt-in and runs after a supported task succeeds, at most once per task every
 15 minutes in a tab. Each suite has three synthetic trials, at most 512 output
 tokens per trial, and a two-minute timeout per trial. Shared IndexedDB reservations

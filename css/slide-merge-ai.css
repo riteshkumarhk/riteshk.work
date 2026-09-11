@@ -16,6 +16,19 @@
 .merge-ai-sources>summary>svg{flex:0 0 12px;width:12px;height:12px;stroke-width:1.75}
 .merge-ai-sources>summary>span{min-width:0}
 .merge-ai-sources[open]>summary>svg{transform:rotate(90deg)}
+.merge-ai-activity{margin:10px 0 14px}
+.merge-ai-activity ol{list-style:none;padding:0;margin:10px 0;max-height:300px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.merge-ai-activity li{display:grid;grid-template-columns:16px minmax(0,1fr);gap:8px;padding:8px 0;border-bottom:1px solid var(--line-soft);font:12px/1.5 var(--sans);color:var(--text)}
+.merge-ai-activity li>div{min-width:0;overflow-wrap:anywhere}
+.merge-ai-activity small{display:block;margin-top:3px;color:var(--text-dim);font:10px/1.5 var(--mono);letter-spacing:0}
+.merge-ai-activity-icon{display:flex;align-items:flex-start;padding-top:2px;color:var(--text-dim)}
+.merge-ai-activity-icon svg{width:14px;height:14px;stroke-width:1.75}
+.merge-ai-activity [data-status=running] .merge-ai-activity-icon{color:var(--accent)}
+.merge-ai-activity [data-status=running] .merge-ai-activity-icon svg{animation:mergeAgentBusy 1.5s linear infinite}
+.merge-ai-activity [data-status=error] .merge-ai-activity-icon{color:var(--ui-danger)}
+@keyframes mergeAgentBusy{to{transform:rotate(360deg)}}
+@media(max-width:900px){.merge-ai-activity ol{max-height:220px}}
+@media(prefers-reduced-motion:reduce){.merge-ai-activity [data-status=running] .merge-ai-activity-icon svg{animation:none}}
 .merge-shell .merge-ai button.is-danger:hover:not(:disabled){color:var(--ui-danger);border-color:var(--ui-danger)}
 .merge-ai-slidebar button:disabled{opacity:.35}
 .merge-ai-slidebar span{min-width:3rem;text-align:center;font:11px var(--mono)}
