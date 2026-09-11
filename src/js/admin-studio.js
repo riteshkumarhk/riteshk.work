@@ -27,6 +27,12 @@ import { publicMediaReference } from "./slide-merge-visibility.mjs";
 import { completeStudioBackup } from "./studio-content-backup.mjs";
 import { presentStudioDeck } from "./slide-studio-player.mjs";
 import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
+import { createAiCatalog } from "./ai-model-catalog.mjs";
+import { createAiOrchestrator } from "./ai-orchestrator.mjs";
+import { AI_TASKS } from "./ai-model-router.mjs";
+import { parseCompositionResponse } from "./slide-merge-ai.mjs";
+import { mountAiRoutingPanel } from "./ai-routing-panel.mjs";
+import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
 
 (function () {
   "use strict";
@@ -101,21 +107,9 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     ["anthropic", "Anthropic (Claude)"],
     ["custom", "Custom (OpenAI-compatible)"],
   ];
-  const AI_DEFAULT_MODEL = { openai: "gpt-image-1", gemini: "gemini-2.0-flash-preview-image-generation", anthropic: "claude-3-5-sonnet-latest", custom: "" };
-  const AI_TEXT_MODEL = { openai: "gpt-4o", gemini: "gemini-2.0-flash", anthropic: "claude-3-5-sonnet-latest", custom: "" };
-  // Vision-capable models (cheap first) used to LOOK at case images and curate the skim reel.
-  const AI_VISION_MODEL = { openai: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"], gemini: ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"], anthropic: ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest", "claude-3-haiku-20240307"], custom: [] };
   const visionCache = {}; // src -> { type, ux, desc } (session-only, never published)
   const AI_DEFAULT_BASE = { openai: "https://api.openai.com/v1", gemini: "https://generativelanguage.googleapis.com/v1beta", anthropic: "https://api.anthropic.com/v1", custom: "" };
   const AI_IMAGE_PROVIDERS = ["openai", "gemini", "custom"];
-  // Ranked preferences (best first) used to auto-pick the strongest AVAILABLE model per provider.
-  const AI_MODEL_RANK = {
-    openai: { txt: [/^gpt-4o$/, /^gpt-4\.1$/, /^gpt-4o-\d{4}/, /^chatgpt-4o-latest$/, /^gpt-4-turbo$/, /^o3$/, /^o1$/, /^gpt-4o-mini$/, /^gpt-4/], img: [/^gpt-image-1$/, /^dall-e-3$/, /^dall-e-2$/] },
-    anthropic: { txt: [/sonnet-4/, /3-7-sonnet/, /3-5-sonnet-\d{8}$/, /3-5-sonnet/, /opus-4/, /3-opus/, /sonnet/, /haiku/], img: [] },
-    gemini: { txt: [/^gemini-2\.\d-flash$/, /^gemini-2\.\d-pro/, /^gemini-1\.5-pro$/, /^gemini-1\.5-flash$/, /flash$/, /pro$/], img: [/flash.*image/, /imagen/] },
-  };
-  const AI_TEXT_FALLBACK = { openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"], anthropic: ["claude-3-5-sonnet-latest", "claude-3-5-sonnet-20241022", "claude-3-7-sonnet-latest", "claude-sonnet-4-20250514", "claude-3-haiku-20240307"], gemini: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"], custom: [] };
-  const AI_IMG_FALLBACK = { openai: ["gpt-image-1", "dall-e-3", "dall-e-2"], gemini: ["gemini-2.0-flash-preview-image-generation", "imagen-3.0-generate-002"], anthropic: [], custom: [] };
   const SECTION_GALLERY = [
     { type: "text", name: "Text", tag: "Narrative", desc: "A heading, a paragraph and optional bullets \u2014 your everyday storytelling block.", best: "Context \u00b7 problem \u00b7 approach \u00b7 learnings" },
     { type: "statement", name: "Statement", tag: "Pull-quote", desc: "One bold line that stands on its own, with an optional sub-line.", best: "A thesis \u00b7 a principle \u00b7 a takeaway" },
@@ -926,9 +920,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
   function imageryBlock(w, i) {
     const has = !!w.image;
     const cfg = aiCfg("img");
-    const canGen = aiSupportsImages();
-    const aiHint = !aiSupportsImages() ? "This service (Claude) can't generate images \u2014 pick OpenAI or Gemini"
-      : !cfg.key ? "Describe an image \u2014 you'll be asked for a key"
+    const aiHint = !cfg.key ? "Describe an image \u2014 you'll be asked for a key"
       : "Describe an image to generate\u2026";
     const plates = PLATE_THEMES.map(function (t) {
       const th = t[0];
@@ -945,9 +937,9 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       '<div class="af__label" style="margin:.7rem 0 .2rem">Or use an animated placeholder \u2014 no upload, always on-brand</div>' +
       '<div class="imgblk__plates">' + plates + "</div>" +
       itemField("work", i, "plateTag", "Tag on the cover / plate", { hint: "the small label shown on the card & cover, e.g. \u201cFirst Run Experience\u201d" }) +
-      '<div class="imgblk__ai"><input type="text" data-aiprompt="' + i + '" placeholder="' + aiHint + '"' + (canGen ? "" : " disabled") + " />" +
-      '<div class="imgblk__row"><button class="btn btn--auto" data-act="img-generate" data-index="' + i + '"' + (canGen ? "" : " disabled") + ">Generate</button>" +
-      '<button class="btn btn--ghost" data-act="img-modify" data-index="' + i + '"' + (canGen && has ? "" : " disabled") + ">Modify current</button></div>" +
+      '<div class="imgblk__ai"><input type="text" data-aiprompt="' + i + '" placeholder="' + aiHint + '" />' +
+      '<div class="imgblk__row"><button class="btn btn--auto" data-act="img-generate" data-index="' + i + '">Generate</button>' +
+      '<button class="btn btn--ghost" data-act="img-modify" data-index="' + i + '"' + (has ? "" : " disabled") + ">Modify current</button></div>" +
       '<div class="imgblk__hint">Uploads are embedded at full, original quality \u2014 no compression or resizing. For very large images, host them and paste a URL to keep the published file lean.</div></div></div>';
   }
 
@@ -2524,7 +2516,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       var _pages = await atsPdfPages(f);
       var _layout = _pages ? atsParseLayout(_pages) : null;
       var _lflags = _layout ? _layout.flags.map(function (x) { return { label: x.label, note: x.note, status: "fail" }; }) : [];
-      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel, jd, company, atsFactsBlock(_kw, _lflags, _sem)), { json: true, maxTokens: 6000, temperature: 0 }));
+      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel, jd, company, atsFactsBlock(_kw, _lflags, _sem)), { task: "analysis", json: true, maxTokens: 6000, temperature: 0 }));
       if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
       var _blend = atsBlendScore({ keyword: _kw ? _kw.rate : null, semantic: _sem, structure: atsStructFromChecks(res), parse: atsParseScore(_layout), content: +res.score || 0 });
       if (_blend.score != null) { res.score = _blend.score; res.band = _blend.band; res._breakdown = _blend.breakdown; }
@@ -3683,7 +3675,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
         try {
           var level = (atsLast && atsLast.level) || atsLevel, company = (atsLast && atsLast.company) || atsState.company || "", jd = (atsLast && atsLast.jd) || "";
           var _kw = jd ? atsKeywordMatch(text, jd) : null, _sem = jd ? atsSemanticFit(text, jd) : null, _chk = atsModelChecks(working, { level: level, pages: atsRbPages });
-          var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(_kw, _chk.checks, _sem)), { json: true, maxTokens: 6000, temperature: 0 }));
+          var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(_kw, _chk.checks, _sem)), { task: "analysis", json: true, maxTokens: 6000, temperature: 0 }));
           if (res) { var _bl = atsBlendScore({ keyword: _kw ? _kw.rate : null, semantic: _sem, structure: _chk.structureScore, parse: 100, content: +res.score || 0 }); if (_bl.score != null) { res.score = _bl.score; res.band = _bl.band; res._breakdown = _bl.breakdown; } atsLast.res = res; atsLast.text = text; atsLast.kw = _kw; atsLast.sem = _sem; dirty = false; paintSide(); rbSaveWorkspace(false); status("Re-checked \u2014 score updated.", true); }
           else { status("The re-check came back unreadable \u2014 try again."); btnIdle(rc, was2); }
         } catch (er2) { status("Re-check failed: " + ((er2 && er2.message) || er2)); btnIdle(rc, was2); }
@@ -3802,7 +3794,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       if (!text || text.length < 40) throw new Error("Couldn\u2019t read enough r\u00e9sum\u00e9 text to re-check.");
       var level = ctx.level || atsLevel, company = (atsLast && atsLast.company) || atsState.company || "", jd = (atsLast && atsLast.jd != null ? atsLast.jd : atsState.jd) || "";
       var _kw = jd ? atsKeywordMatch(text, jd) : null, _sem = jd ? atsSemanticFit(text, jd) : null;
-      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(_kw, [], _sem)), { json: true, maxTokens: 6000, temperature: 0 }));
+      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(_kw, [], _sem)), { task: "analysis", json: true, maxTokens: 6000, temperature: 0 }));
       if (!res) throw new Error("The check came back unreadable \u2014 try again.");
       var _blv = atsBlendScore({ keyword: _kw ? _kw.rate : null, semantic: _sem, structure: atsStructFromChecks(res), content: +res.score || 0 });
       if (_blv.score != null) { res.score = _blv.score; res.band = _blv.band; res._breakdown = _blv.breakdown; }
@@ -5251,17 +5243,13 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
           (ansTxt ? "\n\nClarifications from the author:" + ansTxt : "") +
           (force ? "\n\nThe author is ready \u2014 INCLUDE the spec now and leave questions empty." : "");
         var ctx = genContext(i), user;
-        if (imgs.length && /^(openai|custom)$/.test(cfg.provider)) user = [{ type: "text", text: userText }].concat(imgs.map(function (u) { return { type: "image_url", image_url: { url: u } }; }));
-        else if (imgs.length && cfg.provider === "anthropic") user = [{ type: "text", text: userText }].concat(imgs.map(function (u) { var c = u.indexOf(","); var mt = u.slice(5, c).split(";")[0]; return c > 0 ? { type: "image", source: { type: "base64", media_type: mt || "image/png", data: u.slice(c + 1) } } : null; }).filter(Boolean));
-        else user = userText + (imgs.length ? "\n\n(Reference image supplied; this provider reads text only, using the brief.)" : "");
-        var sys = genSystem(ctx, imgs.length > 0), sopts = { json: true, maxTokens: 2600, temperature: 0.5 };
+        if (imgs.length) user = [{ type: "text", text: userText }].concat(imgs.map(function (image) { return { type: "image_url", image_url: { url: image } }; }));
+        else user = userText;
+        var sys = genSystem(ctx, imgs.length > 0), sopts = { task: "coding", json: true, maxTokens: 2600, temperature: 0.5 };
         thinkEls = null; var think = { understood: "", rationale: "", confidence: "", building: false };
         renderThinking(think);
-        var raw = null;
-        try { raw = await aiTextStream(cfg, sys, user, sopts, function (fullSoFar) { var pk = streamPeek(fullSoFar); think.understood = pk.understood; think.rationale = pk.rationale; think.confidence = pk.confidence; think.building = pk.building; renderThinking(think); }); }
-        catch (e1) { if (/(auth|unauthor|forbidden|invalid|api key|rate|quota|HTTP 4)/i.test(e1.message || "")) throw e1; raw = null; } // stream failed for a non-auth reason -> fall back below
+        var raw = await aiTextStream(cfg, sys, user, sopts, function (fullSoFar) { var pk = streamPeek(fullSoFar); think.understood = pk.understood; think.rationale = pk.rationale; think.confidence = pk.confidence; think.building = pk.building; renderThinking(think); });
         var parsed = raw ? csgenParse(raw) : null;
-        if (!parsed) parsed = csgenParse(await aiText(cfg, sys, user, sopts)); // provider/proxy didn't stream cleanly -> one-shot
         if (!parsed) throw new Error("The AI didn\u2019t return a valid proposal \u2014 try rephrasing.");
         var env = genEnv(parsed);
         if (env && env.spec) { env.spec.version = 2; var cl = window.RKGen.clean(env.spec); if (!window.RKGen.isEmpty(cl)) curSpec = cl; }
@@ -5420,7 +5408,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
   }
   // Generate one icon (svg + name + up to 10 keywords) in the group's family. Throws on a bad reply.
   async function runIconGen(desc, fam, options) {
-    var parsed = csgenParse(await aiText(aiCfg("txt"), iconGenSystem(fam), desc, { json: true, maxTokens: 700, temperature: 0.5, signal: options && options.signal }));
+    var parsed = csgenParse(await aiText(aiCfg("txt"), iconGenSystem(fam), desc, { task: "coding", json: true, maxTokens: 700, temperature: 0.5, signal: options && options.signal }));
     var svg = sanitizeIconSvg(parsed && parsed.svg);
     if (!svg) throw new Error("That did not come back as a clean line-icon - try rephrasing.");
     var name = iconSlug((parsed && parsed.name) || desc);
@@ -5991,7 +5979,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     // Fully graceful - any failure (no vision model, CORS, error) falls back to text-only silently.
     var visualNote = "", groundedN = 0;
     try {
-      if (g.media && g.media.length && ((AI_VISION_MODEL[cfg.provider] || []).length || (cfg.provider === "custom" && cfg.model))) {
+      if (g.media && g.media.length) {
         status("Looking at the case screens\u2026");
         var enr = await visionEnrich(cfg, g.media.slice(0, 12));
         var vseen = {}, vlines = [];
@@ -6011,7 +5999,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       "\n]}" +
       "\n\nRules: SKIM, don't summarize - each line is a HEADLINE grasped in a second, not a sentence you read. LEAD WITH THE KEY THING and cut connective tissue: 'Condensed identity, intent and destination into one Context Object' -> 'One Context Object for identity, intent & destination'. CONCRETE beats abstract - name the real surface you can see ('a more choices menu', NOT 'context's prominence competed'). Say 'People', not 'Users'. Present tense (stay/remains/see/scales, never stayed/remained). No filler adjectives ('dialog text' not 'dense, unreadable dialog text'). Name things plainly ('reusable framework' beats 'Credential UX architecture'). problem <= 7 words, move <= 9 words, outcome <= 8 words - shorter is better; the caps are the MAX, aim well under. Write moves true to THIS case - never reuse the example's words. FORMATTING: at most ONE [[coined artifact]] across all moves (the example accents only move 1; the others are plain concepts with no accent); zero if nothing is truly coined; never accent a verb phrase. Bold one pivotal word or short list in a single outcome line; never the problem line. Return STRICT JSON {\"beats\":[{\"problem\":\"\",\"move\":\"\",\"outcome\":\"\"}]} only.";
     try {
-      var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 1500, temperature: 0.4, json: true });
+      var out = await aiText(aiCfg("txt"), system, user, { task: "creative", maxTokens: 1500, temperature: 0.4, json: true });
       var j = csgenParse(out);
       var beats = (j && Array.isArray(j.beats) ? j.beats : []).filter(function (b) { return b && (b.problem || b.move || b.outcome); }).slice(0, 3).map(function (b) { return { problem: String(b.problem || "").trim(), move: String(b.move || "").trim(), outcome: String(b.outcome || "").trim() }; });
       if (!beats.length) { status("The AI didn\u2019t return usable key moves \u2014 try again."); if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Generate Key Moves"; } return; }
@@ -6035,7 +6023,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     var system = "You are a senior product-design portfolio editor. Write the ONE-LINE card description shown under a project title on a portfolio homepage: punchy, concrete and specific \u2014 a single sentence a busy hiring manager grasps at a glance. Lead with the substance (what you did and why it mattered), cut throat-clearing and filler, present tense, no trailing ellipsis, no Title Casing, no surrounding quotes. 12\u201320 words. Return ONLY the sentence.";
     var user = "PROJECT: " + (w.title || "Untitled") + (w.client ? " \u2014 " + w.client : "") + "\n\nFULL DESCRIPTION:\n" + src + "\n\nWrite the single punchy card line: 12\u201320 words, one sentence, concrete, lead with what matters, no ellipsis, no quotes. Return only the line.";
     try {
-      var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 120, temperature: 0.5 });
+      var out = await aiText(aiCfg("txt"), system, user, { task: "creative", maxTokens: 120, temperature: 0.5 });
       var line = String(out || "").trim().replace(/\s+/g, " ").replace(/^["'\u201c\u2018\u00ab]+|["'\u201d\u2019\u00bb]+$/g, "").trim();
       if (!line) { status("The AI didn\u2019t return a line \u2014 try again."); if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Generate short card line"; } return; }
       w.cardDesc = line;
@@ -6729,12 +6717,12 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     nativeSlideSession = session;
     root.classList.add("is-native-slides");
     const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
-    const styles = ["/studio/slide-lab/assets/editor.css?v=1.1", "/css/slide-studio.css?v=1.0"].map(href => new Promise((resolve, reject) => {
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.2", "/css/slide-studio.css?v=1.0"].map(href => new Promise((resolve, reject) => {
       const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.1";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.2";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
@@ -7166,7 +7154,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       "\n\nAVAILABLE SECTIONS (pull any by its index number with showcase / media / split):\n" + inventory +
       "\n\nTell THIS case study's story as a slideshow. Open on a cinematic cover (title=the project, kicker=the client, sub=the one-line pitch). PULL every strong artefact section with a showcase slide rather than describing it in words \u2014 that is where the deck earns its credibility \u2014 and keep plain-text slides to a minimum. Include at least one act divider; use a metric if the case has a real number and a quote if it has a real voice. Give the deck rhythm with the occasional dark or accent background behind the cover, dividers and the hero metric. Use as many slides as the story genuinely needs \u2014 skip or merge weak sections, don't pad. End on the outcome/impact and a resonant close. Return STRICT JSON: {\"slides\":[{\"layout\":\"statement\",\"slots\":{\"kicker\":\"\",\"title\":\"\",\"sub\":\"\"},\"notes\":\"\",\"transition\":\"fade\",\"background\":\"dark\"},{\"layout\":\"showcase\",\"slots\":{\"kicker\":\"\",\"title\":\"\",\"section\":0},\"notes\":\"\"}]} \u2014 only the allowed layouts + fields.";
     try {
-      var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 4096, temperature: 0.6, json: true });
+      var out = await aiText(aiCfg("txt"), system, user, { task: "creative", maxTokens: 4096, temperature: 0.6, json: true });
       var j = csgenParse(out);
       var rawSlides = (j && Array.isArray(j.slides)) ? j.slides : [];
       var slides = [];
@@ -8799,7 +8787,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       "\n\nVary the WHOLE personality from every previous system \u2014 a different display face, a different text face, a different mono. Real Google Fonts only." +
       "\n\nReturn STRICT JSON: {\"name\":\"\",\"note\":\"\",\"display\":{\"family\":\"\",\"src\":\"google\",\"css\":\"\",\"stack\":\"\",\"weight\":400},\"text\":{\"family\":\"\",\"src\":\"google\",\"css\":\"\",\"stack\":\"\"},\"mono\":{\"family\":\"\",\"src\":\"google\",\"css\":\"\",\"stack\":\"\"}}";
     try {
-      var out = await aiText(aiCfg("txt"), system, user, { maxTokens: 700, temperature: 0.95, json: true });
+      var out = await aiText(aiCfg("txt"), system, user, { task: "creative", maxTokens: 700, temperature: 0.95, json: true });
       var j = csgenParse(out);
       var d = typeSanRole(j && j.display, "display"), t = typeSanRole(j && j.text, "text"), m = typeSanRole(j && j.mono, "mono");
       if (!d || !t || !m) { status("The AI didn\u2019t return a usable system \u2014 try again."); if (btn) { btn.disabled = false; btn.innerHTML = IC.spark + " Generate a system"; } return; }
@@ -10725,7 +10713,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
         '<div class="rkqg__row"><button class="btn btn--ghost" data-act="open-adminkey">' + LOCK_SVG + ' Change admin key</button></div></div>';
     }
     if (cat === "publish") return launchPanelHtml("Publishing", "Connect GitHub, replace the token, or publish manually.", "open-publish", "Open publishing settings") + autopubPanelHtml();
-    if (cat === "ai") return launchPanelHtml("AI settings", "Connect OpenAI, Gemini or Claude for the Prepare tools \u2014 keys stay in this browser or roam via Cloudflare.", "open-ai", "Open AI settings") + aiUsagePanel();
+    if (cat === "ai") return launchPanelHtml("AI settings", "Connect OpenAI, Gemini or Claude for the Prepare tools \u2014 keys stay in this browser or roam via Cloudflare.", "open-ai", "Open AI settings") + '<section data-ai-routing></section>' + aiUsagePanel();
     return "";
   }
   function autopubPanelHtml() {
@@ -14371,16 +14359,11 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
   }
   function aiSameKey() { return localStorage.getItem("rk:ai:same") === "1"; }
   function aiScope(purpose) { return aiSameKey() ? "all" : (purpose || "img"); }
-  function aiSupportsImages() { return AI_IMAGE_PROVIDERS.indexOf(aiCfg("img").provider) !== -1; }
   function modelHint(p) {
-    return p === "openai" ? "gpt-image-1, dall-e-3, dall-e-2"
-      : p === "gemini" ? "gemini-2.0-flash-preview-image-generation, imagen-3.0-generate-002"
-      : p === "anthropic" ? "claude-3-5-sonnet-latest (no image generation)"
-      : "your model id";
+    return "Optional exact model ID from your provider; leave empty for automatic discovery";
   }
   function aiGet(scope, k) { return localStorage.getItem("rk:ai:" + scope + ":" + k); }
   function providerName(p) { const x = AI_PROVIDERS.find(function (a) { return a[0] === p; }); return x ? x[1] : p; }
-  function bestModel(p, purpose) { return ((purpose === "txt" ? AI_TEXT_MODEL[p] : AI_DEFAULT_MODEL[p]) || "").trim(); }
   function aiSetProvider(scope, p) {
     localStorage.setItem("rk:ai:" + scope + ":provider", p);
     localStorage.removeItem("rk:ai:" + scope + ":model"); // known providers auto-pick the best; custom re-enters it
@@ -14537,7 +14520,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     return {
       purpose: purpose || "img", scope: scope, provider: p, proxied: viaProxy, roaming: roaming,
       key: roaming ? sess : legacyProxy ? px.token : (aiGet(scope, "key") || ""),
-      model: (aiGet(scope, "model") || bestModel(p, purpose) || AI_DEFAULT_MODEL[p] || "").trim(),
+      model: p === "custom" ? (aiGet(scope, "model") || "").trim() : "",
       base: roaming ? (ADMIN_WORKER + "/admin/ai/" + p) : legacyProxy ? (px.url + "/" + p) : (aiGet(scope, "base") || AI_DEFAULT_BASE[p] || "").trim().replace(/\/+$/, ""),
     };
   }
@@ -14613,6 +14596,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     "</div>";
   }
   function aiWireUsage(container, repaint) {
+    aiWireRouting(container);
     var rb = container.querySelector("[data-aiuse-reset]");
     if (!rb) return;
     rb.addEventListener("click", function () {
@@ -14717,15 +14701,15 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     var bodyEl = modal.querySelector(".aiset__body");
     function paint() {
       var same = aiSameKey();
-      var imgOK = aiSupportsImages();
       var mode = aiMode();
       var html = aiModeToggle(mode) +
         '<label class="chk aiblk__same"><input type="checkbox" data-aiset-same' + (same ? " checked" : "") + " /> Use the same service &amp; key for content and image</label>";
       html += same ? aiBlock("all", "AI service", "content + image")
                    : (aiBlock("txt", "Content generation", "text") + aiBlock("img", "Image generation", "imagery"));
       if (mode === "cf") html += aiCfExtras();
-      html += '<div class="af__hint" style="margin:.1rem 0 .2rem">' + (imgOK ? "Image service supports generation." : "Your image service (Claude) can\u2019t generate images \u2014 pick OpenAI or Gemini for imagery.") + "</div>";
+      html += '<section data-ai-routing></section>';
       bodyEl.innerHTML = html;
+      aiWireRouting(bodyEl);
       bodyEl.querySelectorAll("[data-aiscope]").forEach(function (sel) {
         sel.addEventListener("change", function () { aiPersistVisible(modal); aiSetProvider(sel.getAttribute("data-aiscope"), sel.value); paint(); });
       });
@@ -14767,7 +14751,6 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
   async function imgGenerate(i) {
     if (!aiHasKey("img")) { aiKeyModal("img", function () { imgGenerate(i); }); return; }
     const cfg = aiCfg("img");
-    if (!aiSupportsImages()) return status("This service can\u2019t generate images \u2014 pick OpenAI or Gemini.");
     const p = aiPromptFor(i);
     if (!p) return status("Type a prompt to generate an image.");
     const gb = root.querySelector('[data-act="img-generate"][data-index="' + i + '"]'); btnBusy(gb, "Generating\u2026");
@@ -14780,7 +14763,6 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
   async function imgModify(i) {
     if (!aiHasKey("img")) { aiKeyModal("img", function () { imgModify(i); }); return; }
     const cfg = aiCfg("img");
-    if (!aiSupportsImages()) return status("This service can\u2019t generate images \u2014 pick OpenAI or Gemini.");
     const cur = data.work[i].image;
     if (!cur) return status("No current image to modify.");
     const p = aiPromptFor(i);
@@ -14793,11 +14775,12 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     } catch (e) { btnIdle(mb, "Modify current"); status("Modify failed: " + e.message); }
   }
   async function aiImage(cfg, prompt, sourceImage) {
-    if (cfg.provider === "anthropic") throw new Error("Claude can't generate images \u2014 pick OpenAI or Gemini.");
-    const cands = await aiModelCandidates(cfg, "img");
-    const c2 = Object.assign({}, cfg, { model: cands[0] || cfg.model });
-    if (c2.provider === "gemini") return aiImageGemini(c2, prompt, sourceImage);
-    return aiImageOpenAI(c2, prompt, sourceImage);
+    const result = await aiRunTask(cfg, "image", "", prompt, { images: !!sourceImage, outputTokens: 0, maxTokens: 1 }, async (selected, model) => {
+      if (!["openai", "gemini", "custom"].includes(selected.provider)) return { ok: false, status: 400, err: "Image output is unsupported by this provider adapter" };
+      try { return { ok: true, text: await (selected.provider === "gemini" ? aiImageGemini({ ...selected, model }, prompt, sourceImage) : aiImageOpenAI({ ...selected, model }, prompt, sourceImage)) }; }
+      catch (error) { return { ok: false, status: error.status, err: error.message }; }
+    });
+    return result.text;
   }
   async function aiImageOpenAI(cfg, prompt, sourceImage) {
     let res;
@@ -14809,11 +14792,10 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       res = await fetch(cfg.base + "/images/edits", { method: "POST", headers: { Authorization: "Bearer " + cfg.key }, body: fd });
     } else {
       const body = { model: cfg.model, prompt: prompt, n: 1, size: "1024x1024" };
-      if (/^dall-e/.test(cfg.model)) body.response_format = "b64_json";
       res = await fetch(cfg.base + "/images/generations", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + cfg.key }, body: JSON.stringify(body) });
     }
     let j; try { j = await res.json(); } catch (e) { throw new Error("HTTP " + res.status); }
-    if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
+    if (!res.ok) { const error = new Error((j && j.error && j.error.message) || ("HTTP " + res.status)); error.status = res.status; throw error; }
     const d = (j.data && j.data[0]) || {};
     if (d.b64_json) return "data:image/png;base64," + d.b64_json;
     if (d.url) return d.url;
@@ -14829,7 +14811,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     const body = { contents: [{ parts: parts }], generationConfig: { responseModalities: ["TEXT", "IMAGE"] } };
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     let j; try { j = await res.json(); } catch (e) { throw new Error("HTTP " + res.status); }
-    if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
+    if (!res.ok) { const error = new Error((j && j.error && j.error.message) || ("HTTP " + res.status)); error.status = res.status; throw error; }
     const cand = (j.candidates && j.candidates[0]) || {};
     const outParts = (cand.content && cand.content.parts) || [];
     for (var i = 0; i < outParts.length; i++) {
@@ -14863,41 +14845,98 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     return !!cfg.key;
   }
   // ---- model auto-resolution: list what the key can actually use, pick the best, fall back gracefully ----
-  const aiModelsCache = {};
-  async function aiListModels(cfg) {
-    const ck = cfg.provider + "|" + cfg.base;
-    if (aiModelsCache[ck]) return aiModelsCache[ck];
-    let ids = [];
-    try {
-      if (cfg.provider === "anthropic") {
-        const r = await fetch(cfg.base + "/models?limit=1000", { headers: { "x-api-key": cfg.key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" } });
-        const j = await r.json(); ids = ((j && j.data) || []).map(function (m) { return m.id; });
-      } else if (cfg.provider === "gemini") {
-        const r = await fetch(cfg.base + "/models?pageSize=1000&key=" + encodeURIComponent(cfg.key));
-        const j = await r.json(); ids = ((j && j.models) || []).map(function (m) { return String(m.name || "").replace(/^models\//, ""); });
-      } else if (cfg.provider === "openai") {
-        const r = await fetch(cfg.base + "/models", { headers: { Authorization: "Bearer " + cfg.key } });
-        const j = await r.json(); ids = ((j && j.data) || []).map(function (m) { return m.id; });
+  const aiCatalog = createAiCatalog();
+  const aiOrchestrator = createAiOrchestrator({ catalog: aiCatalog });
+  let aiLastRoute = null;
+  let aiAutomaticEvaluation = null, aiEvaluationResult = null, aiEvaluationError = "";
+  const aiEvaluationAttempts = new Map();
+  function aiWireRouting(container) {
+    container.querySelectorAll("[data-ai-routing]").forEach(panel => {
+      if (panel.dataset.mounted) return;
+      panel.dataset.mounted = "true";
+      mountAiRoutingPanel(panel, { router: aiOrchestrator, catalog: aiCatalog, configurations: () => aiRoutingConfigs(aiCfg("txt")),
+        invoke: (config, model, fixture, options) => aiChatOnce(config, model, fixture.system, fixture.user, options),
+        confirm: options => confirmModal({ okClass: "btn--primary", ...options }), escape: escHtml, icons: { refresh: IC.refresh, spark: IC.spark, close: IC.close, upload: IC.publish, chevron: IC.chevD },
+        evaluationState: () => ({ running: !!aiAutomaticEvaluation, result: aiEvaluationResult, error: aiEvaluationError }),
+        stopEvaluation: () => aiAutomaticEvaluation?.abort(), onPolicy: (key, value) => { if (key === "autoEvaluate" && !value) aiAutomaticEvaluation?.abort(); } });
+    });
+  }
+  async function aiRoutingConfigs(cfg) {
+    const state = await aiOrchestrator.state();
+    if (state.policy.providers !== "connected" || cfg.provider === "custom" && cfg.model) return [cfg];
+    const configs = [cfg];
+    if (aiMode() === "cf" && aiSess()) {
+      await new Promise(resolve => aiCfRefresh(resolve));
+      for (const provider of AI_PROXY_PROVIDERS) if (provider !== cfg.provider && aiCfKeys?.[provider]?.set) configs.push({ ...cfg, provider, model: "", key: aiSess(), base: ADMIN_WORKER + "/admin/ai/" + provider, proxied: true, roaming: true });
+    } else {
+      for (const purpose of ["txt", "img"]) {
+        const candidate = aiCfg(purpose);
+        if (candidate.key && !configs.some(item => item.provider === candidate.provider && item.base === candidate.base)) configs.push(candidate);
       }
-    } catch (e) { ids = []; }
-    aiModelsCache[ck] = ids || [];
-    return aiModelsCache[ck];
-  }
-  async function aiModelCandidates(cfg, purpose) {
-    if (cfg.provider === "custom") return cfg.model ? [cfg.model] : [];
-    const list = [];
-    const ids = await aiListModels(cfg);
-    const ranks = (AI_MODEL_RANK[cfg.provider] || {})[purpose] || [];
-    if (ids && ids.length) {
-      ranks.forEach(function (rx) { ids.forEach(function (id) { if (rx.test(id) && list.indexOf(id) === -1) list.push(id); }); });
-      if (purpose === "txt") ids.forEach(function (id) { if (list.indexOf(id) === -1 && !/image|dall|imagen|embed|whisper|tts|audio|moderation|realtime|search|vision/i.test(id)) list.push(id); });
     }
-    (((purpose === "txt" ? AI_TEXT_FALLBACK : AI_IMG_FALLBACK)[cfg.provider]) || []).forEach(function (m) { if (m && list.indexOf(m) === -1) list.push(m); });
-    const def = purpose === "txt" ? AI_TEXT_MODEL[cfg.provider] : AI_DEFAULT_MODEL[cfg.provider];
-    if (def && list.indexOf(def) === -1) list.push(def);
-    return list;
+    return configs;
   }
-  function aiIsModelErr(r) { return r && (r.status === 404 || /model|not[ ._-]?found|does not exist|unknown|deprecat|unsupported/i.test(r.err || "")); }
+  function aiTaskOptions(system, user, opts = {}) {
+    const text = typeof user === "string" ? user : Array.isArray(user) ? user.filter(part => part.type === "text").map(part => part.text || "").join("\n") : "";
+    const images = !!opts.images || Array.isArray(user) && user.some(part => part.type === "image" || part.type === "image_url" || part.inlineData || part.inline_data);
+    const imageCount = opts.imageCount ?? (Array.isArray(user) ? user.filter(part => part.type === "image" || part.type === "image_url").length : images ? 1 : 0);
+    const inputTokens = new TextEncoder().encode(String(system || "") + text).length + 1024 + imageCount * 4096;
+    return { ...opts, images, inputTokens, outputTokens: opts.outputTokens ?? opts.maxTokens ?? 4096, structured: opts.json ? "preferred" : false,
+      requirements: JSON.stringify([images, !!opts.json]),
+      validate: text => {
+        if (typeof text !== "string" || !text.trim()) throw new Error("The model returned no usable output. Retry or review its task rating.");
+        if (opts.validate) return opts.validate(text);
+        if (opts.json && csgenParse(text) == null) throw new Error("The model returned invalid JSON. Retry or review its task rating.");
+      },
+      onRoute: route => { aiLastRoute = route; window.dispatchEvent(new CustomEvent("rk:ai-route", { detail: route })); opts.onRoute?.(route); }
+    };
+  }
+  async function aiRunTask(cfg, task, system, user, opts, invoke) {
+    const configs = await aiRoutingConfigs(cfg);
+    const result = await aiOrchestrator.run(configs, task, aiTaskOptions(system, user, opts), invoke);
+    aiQueueEvaluation(configs, task, opts?.signal);
+    return result;
+  }
+  async function aiQueueEvaluation(configs, task, signal) {
+    if (aiAutomaticEvaluation || signal?.aborted || !aiEvaluationSuite(task) || Date.now() - (aiEvaluationAttempts.get(task) || 0) < 15 * 60000) return;
+    try {
+      const state = await aiOrchestrator.state();
+      if (!state.policy.autoEvaluate || !state.policy.evaluationDailyBudget || aiAutomaticEvaluation || signal?.aborted) return;
+      const pending = new AbortController(); aiAutomaticEvaluation = pending; aiEvaluationError = "";
+      aiEvaluationAttempts.set(task, Date.now());
+      window.dispatchEvent(new Event("rk:ai-evaluation"));
+      try {
+        aiEvaluationResult = await aiOrchestrator.evaluate(configs, task, { automatic: true, signal: signal ? AbortSignal.any([signal, pending.signal]) : pending.signal },
+          (config, model, fixture, options) => aiChatOnce(config, model, fixture.system, fixture.user, options));
+      } catch (failure) { aiEvaluationError = pending.signal.aborted || signal?.aborted ? "Automatic tests stopped." : failure.message; }
+      finally { if (aiAutomaticEvaluation === pending) aiAutomaticEvaluation = null; window.dispatchEvent(new Event("rk:ai-evaluation")); }
+    } catch (failure) { aiEvaluationError = "Automatic tests could not open routing history."; }
+  }
+  function aiIsModelErr(r) { return r && !r.routingHandled && (r.status === 404 || /model|not[ ._-]?found|does not exist|unknown|deprecat|unsupported/i.test(r.err || "")); }
+  function aiPromptContent(provider, value) {
+    const parts = (Array.isArray(value) ? value : [{ type: "text", text: String(value || "") }]).map(part => {
+      if (part.type === "text") return { text: part.text || "" };
+      if (part.type === "image") return { image: "data:" + part.source.media_type + ";base64," + part.source.data };
+      if (part.type === "image_url") return { image: part.image_url.url };
+      const inline = part.inlineData || part.inline_data;
+      if (inline) return { image: "data:" + (inline.mimeType || inline.mime_type) + ";base64," + inline.data };
+      throw new Error("Unsupported AI prompt content type");
+    }).filter(Boolean);
+    if (provider === "gemini") return parts.map(part => {
+      if (!part.image) return { text: part.text };
+      const match = /^data:([^;,]+);base64,(.+)$/.exec(part.image);
+      if (!match) throw new Error("This provider requires inline image data");
+      return { inlineData: { mimeType: match[1], data: match[2] } };
+    });
+    if (!Array.isArray(value)) return String(value || "");
+    return parts.map(part => {
+      if (!part.image) return { type: "text", text: part.text };
+      if (provider !== "anthropic") return { type: "image_url", image_url: { url: part.image } };
+      const match = /^data:([^;,]+);base64,(.+)$/.exec(part.image);
+      if (!match) throw new Error("This provider requires inline image data");
+      return { type: "image", source: { type: "base64", media_type: match[1], data: match[2] } };
+    });
+  }
   const aiNoTemperature = new Set();
   async function aiTextRequest(cfg, model, url, headers, body, signal) {
     const sampling = cfg.provider === "gemini" ? body.generationConfig : body;
@@ -14917,6 +14956,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
   }
   async function aiChatOnce(cfg, model, system, user, opts) {
     var p = cfg.provider, key = cfg.key, base = cfg.base;
+    user = aiPromptContent(p, user);
     var maxTokens = opts.maxTokens || 4096;
     var temp = opts.temperature != null ? opts.temperature : 0.7;
     var res, j;
@@ -14929,7 +14969,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     }
     if (p === "gemini") {
       var url = base + "/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key);
-      var gb = { contents: [{ role: "user", parts: [{ text: user }] }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: maxTokens, temperature: temp } };
+      var gb = { contents: [{ role: "user", parts: user }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: maxTokens, temperature: temp } };
       if (opts.json) gb.generationConfig.responseMimeType = "application/json";
       res = await aiTextRequest(cfg, model, url, { "Content-Type": "application/json" }, gb, opts.signal);
       j = await res.json().catch(function () { return null; });
@@ -14939,7 +14979,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       return { ok: true, text: ((((cand.content && cand.content.parts) || [])).map(function (x) { return x.text || ""; }).join("")).trim() };
     }
     var ob = { model: model, messages: [{ role: "system", content: system }, { role: "user", content: user }], temperature: temp, max_tokens: maxTokens };
-    if (opts.deckAuthoring && p === "openai" && /^(gpt-5|o[134])(?:[.-]|$)/i.test(model)) {
+    if (p === "openai" && cfg.routingModel?.reasoning === true) {
       delete ob.temperature; delete ob.max_tokens;
       ob.max_completion_tokens = maxTokens;
     }
@@ -14954,6 +14994,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
   // as tokens arrive. Same per-provider shapes as aiChatOnce, plus stream:true / :streamGenerateContent.
   async function aiStream(cfg, model, system, user, opts, onDelta) {
     var p = cfg.provider, key = cfg.key, base = cfg.base;
+    user = aiPromptContent(p, user);
     var maxTokens = opts.maxTokens || 4096, temp = opts.temperature != null ? opts.temperature : 0.7;
     var url, headers, body;
     if (p === "anthropic") {
@@ -14963,20 +15004,30 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     } else if (p === "gemini") {
       url = base + "/models/" + encodeURIComponent(model) + ":streamGenerateContent?alt=sse&key=" + encodeURIComponent(key);
       headers = { "Content-Type": "application/json" };
-      body = { contents: [{ role: "user", parts: [{ text: user }] }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: maxTokens, temperature: temp } };
+      body = { contents: [{ role: "user", parts: user }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: maxTokens, temperature: temp } };
       if (opts.json) body.generationConfig.responseMimeType = "application/json";
     } else {
       url = base + "/chat/completions";
       headers = { "Content-Type": "application/json", Authorization: "Bearer " + key };
       body = { model: model, messages: [{ role: "system", content: system }, { role: "user", content: user }], temperature: temp, max_tokens: maxTokens, stream: true, stream_options: { include_usage: true } };
+      if (p === "openai" && cfg.routingModel?.reasoning === true) { delete body.temperature; delete body.max_tokens; body.max_completion_tokens = maxTokens; }
       if (opts.json) body.response_format = { type: "json_object" };
     }
     var full = "", uIn = 0, uOut = 0, uSet = false;
     try {
       var res = await aiTextRequest(cfg, model, url, headers, body, opts.signal);
       if (!res.ok || !res.body) { var je = await res.json().catch(function () { return null; }); return { ok: false, status: res.status, err: (je && je.error && je.error.message) || ("HTTP " + res.status) }; }
-      var reader = res.body.getReader(), dec = new TextDecoder(), buf = "";
       function push(t) { if (t) { full += t; try { onDelta && onDelta(full, t); } catch (e) {} } }
+      if (/application\/json/i.test(res.headers.get("content-type") || "")) {
+        var plain = await res.json(), usage = aiUsageFromJson(p, plain);
+        if (plain.error) return { ok: false, status: res.status, err: plain.error.message || "The selected model rejected the request" };
+        if (p === "anthropic") push((plain.content || []).map(part => part.text || "").join(""));
+        else if (p === "gemini") push((plain.candidates?.[0]?.content?.parts || []).map(part => part.text || "").join(""));
+        else push(plain.choices?.[0]?.message?.content || "");
+        if (usage) aiUsageRecord(p, model, usage.in, usage.out);
+        return { ok: !!full.trim(), text: full.trim(), err: full.trim() ? undefined : "The model returned no usable output" };
+      }
+      var reader = res.body.getReader(), dec = new TextDecoder(), buf = "";
       for (; ;) {
         var chunk = await reader.read();
         if (chunk.done) break;
@@ -14988,6 +15039,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
           var payload = line.slice(5).trim();
           if (!payload || payload === "[DONE]") continue;
           var ev; try { ev = JSON.parse(payload); } catch (e) { continue; }
+          if (ev.error || ev.type === "error") { await reader.cancel(); throw new Error(ev.error?.message || "The model stream failed"); }
           if (p === "anthropic") { if (ev.type === "content_block_delta" && ev.delta && typeof ev.delta.text === "string") push(ev.delta.text); if (ev.type === "message_start" && ev.message && ev.message.usage) { uIn = +ev.message.usage.input_tokens || uIn; uSet = true; } if (ev.usage && ev.usage.output_tokens != null) { uOut = +ev.usage.output_tokens || uOut; uSet = true; } }
           else if (p === "gemini") { var gp = ev.candidates && ev.candidates[0] && ev.candidates[0].content && ev.candidates[0].content.parts; if (gp) for (var gi = 0; gi < gp.length; gi++) if (gp[gi] && typeof gp[gi].text === "string") push(gp[gi].text); if (ev.usageMetadata) { uIn = +ev.usageMetadata.promptTokenCount || uIn; uOut = (+ev.usageMetadata.candidatesTokenCount || 0) + (+ev.usageMetadata.thoughtsTokenCount || 0) || uOut; uSet = true; } }
           else { var d = ev.choices && ev.choices[0] && ev.choices[0].delta; if (d && typeof d.content === "string") push(d.content); if (ev.usage) { uIn = +ev.usage.prompt_tokens || uIn; uOut = +ev.usage.completion_tokens || uOut; uSet = true; } }
@@ -14999,16 +15051,9 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
   }
   // Pick the first working model and stream it (no fallback once tokens have started flowing).
   async function aiTextStream(cfg, system, user, opts, onDelta) {
-    var candidates = await aiModelCandidates(cfg, "txt");
-    if (!candidates.length) throw new Error("No model available \u2014 check your API key.");
-    var lastErr = "";
-    for (var i = 0; i < candidates.length; i++) {
-      var r = await aiStream(cfg, candidates[i], system, user, opts, onDelta);
-      if (r.ok) return r.text;
-      lastErr = r.err;
-      if (r.emitted || !aiIsModelErr(r)) throw new Error(r.err); // real problem, or tokens already shown \u2014 don't retry
-    }
-    throw new Error(lastErr || "No usable model for this key.");
+    opts = opts || {};
+    const result = await aiRunTask(cfg, opts.task || "writing", system, user, opts, (selected, model) => aiStream(selected, model, system, user, opts, onDelta));
+    return result.text;
   }
   // ---- Vision: actually LOOK at case images so the reel features real UI/design, not press screenshots ----
   async function imgToVisionPart(src) {
@@ -15026,80 +15071,21 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
   }
   async function aiVisionOnce(cfg, model, system, prompt, imgs, opts) {
     opts = opts || {};
-    var p = cfg.provider, key = cfg.key, base = cfg.base, res, j;
-    if (p === "anthropic") {
-      var content = [{ type: "text", text: prompt }];
-      imgs.forEach(function (im) { content.push({ type: "image", source: { type: "base64", media_type: im.mime, data: im.b64 } }); });
-      res = await fetch(base + "/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: model, max_tokens: opts.maxTokens || 2000, temperature: opts.temperature != null ? opts.temperature : 1, system: system, messages: [{ role: "user", content: content }] }) });
-      j = await res.json().catch(function () { return null; });
-      if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
-      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
-      return { ok: true, text: (((j && j.content) || []).map(function (b) { return b.text || ""; }).join("")).trim() };
-    }
-    if (p === "gemini") {
-      var parts = [{ text: prompt }];
-      imgs.forEach(function (im) { parts.push({ inline_data: { mime_type: im.mime, data: im.b64 } }); });
-      var gurl = base + "/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key);
-      var gb = { contents: [{ role: "user", parts: parts }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { responseMimeType: "application/json", maxOutputTokens: opts.maxTokens || 2200, temperature: opts.temperature != null ? opts.temperature : undefined } };
-      res = await fetch(gurl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(gb) });
-      j = await res.json().catch(function () { return null; });
-      if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
-      var cand = (j && j.candidates && j.candidates[0]) || {};
-      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
-      return { ok: true, text: (((cand.content && cand.content.parts) || []).map(function (x) { return x.text || ""; }).join("")).trim() };
-    }
-    var msgs = [{ role: "system", content: system }, { role: "user", content: [{ type: "text", text: prompt }].concat(imgs.map(function (im) { return { type: "image_url", image_url: { url: "data:" + im.mime + ";base64," + im.b64 } }; })) }];
-    var ob = { model: model, messages: msgs, max_tokens: opts.maxTokens || 2200, temperature: opts.temperature != null ? opts.temperature : 0, response_format: { type: "json_object" } };
-    res = await fetch(base + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify(ob) });
-    j = await res.json().catch(function () { return null; });
-    if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
-    (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
-    return { ok: true, text: ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim() };
+    const user = [{ type: "text", text: prompt }, ...imgs.map(image => ({ type: "image_url", image_url: { url: "data:" + image.mime + ";base64," + image.b64 } }))];
+    const request = { ...opts, json: opts.json !== false, maxTokens: opts.maxTokens || 2200, images: true, imageCount: imgs.length };
+    try { return await aiRunTask(cfg, opts.task || "vision", system, user, request, (selected, selectedModel) => aiChatOnce(selected, selectedModel, system, user, request)); }
+    catch (error) { opts.signal?.throwIfAborted(); return { ok: false, err: error.message, routingHandled: true }; }
   }
   // Conversational vision turn for the whiteboard mock: like aiVisionOnce but returns PLAIN TEXT
   // (no JSON format) with ONE frame of the candidate's shared screen/camera attached.
   async function wbVisionTurn(cfg, model, system, user, img, opts) {
     opts = opts || {};
-    var p = cfg.provider, key = cfg.key, base = cfg.base, res, j;
-    var maxTok = opts.maxTokens || 500, temp = opts.temperature != null ? opts.temperature : 0.75;
-    if (p === "anthropic") {
-      var content = [{ type: "text", text: user }];
-      if (img) content.push({ type: "image", source: { type: "base64", media_type: img.mime, data: img.b64 } });
-      res = await fetch(base + "/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: model, max_tokens: maxTok, temperature: temp, system: system, messages: [{ role: "user", content: content }] }) });
-      j = await res.json().catch(function () { return null; });
-      if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
-      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
-      return (((j && j.content) || []).map(function (b) { return b.text || ""; }).join("")).trim();
-    }
-    if (p === "gemini") {
-      var parts = [{ text: user }];
-      if (img) parts.push({ inline_data: { mime_type: img.mime, data: img.b64 } });
-      var gurl = base + "/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key);
-      res = await fetch(gurl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: parts }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: maxTok, temperature: temp } }) });
-      j = await res.json().catch(function () { return null; });
-      if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
-      var cand = (j && j.candidates && j.candidates[0]) || {};
-      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
-      return (((cand.content && cand.content.parts) || []).map(function (x) { return x.text || ""; }).join("")).trim();
-    }
-    var uc = [{ type: "text", text: user }];
-    if (img) uc.push({ type: "image_url", image_url: { url: "data:" + img.mime + ";base64," + img.b64 } });
-    res = await fetch(base + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify({ model: model, messages: [{ role: "system", content: system }, { role: "user", content: uc }], max_tokens: maxTok, temperature: temp }) });
-    j = await res.json().catch(function () { return null; });
-    if (!res.ok) throw new Error((j && j.error && j.error.message) || ("HTTP " + res.status));
-    (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
-    return ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim();
+    const result = await aiVisionOnce(cfg, model, system, user, img ? [img] : [], { ...opts, maxTokens: opts.maxTokens || 500, json: false });
+    if (!result.ok) throw new Error(result.err);
+    return result.text;
   }
   async function visionModels(cfg) {
-    if (cfg.provider === "custom") return cfg.model ? [cfg.model] : [];
-    var want = AI_VISION_MODEL[cfg.provider] || [];
-    var ids = await aiListModels(cfg), out = [];
-    if (ids && ids.length) {
-      want.forEach(function (m) { if (ids.indexOf(m) !== -1 && out.indexOf(m) === -1) out.push(m); });
-      ids.forEach(function (id) { if (out.indexOf(id) === -1 && /gpt-4o|gpt-4\.1|gemini.*(flash|pro)|claude-3|sonnet|haiku|vision/i.test(id) && !/audio|realtime|embed|tts|whisper|image|dall|imagen/i.test(id)) out.push(id); });
-    }
-    want.forEach(function (m) { if (out.indexOf(m) === -1) out.push(m); });
-    return out;
+    return (await aiOrchestrator.choices(await aiRoutingConfigs(cfg), "vision", { images: true })).map(choice => choice.model.id);
   }
   var VISION_SYS = "You are a meticulous design-portfolio image classifier with vision. Judge whether each image is a real product/UX artifact worth featuring in a case-study reel, or filler like a press screenshot or logo. Return STRICT JSON only.";
   function visionPrompt(n) {
@@ -15141,19 +15127,8 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
   }
   async function aiText(cfg, system, user, opts) {
     opts = opts || {};
-    if (opts.signal) opts.signal.throwIfAborted();
-    var candidates = opts.candidates || await aiModelCandidates(cfg, "txt");
-    if (!candidates.length) throw new Error("No model available \u2014 check your API key.");
-    var lastErr = "";
-    for (var i = 0; i < candidates.length; i++) {
-      if (opts.signal) opts.signal.throwIfAborted();
-      var r = await aiChatOnce(cfg, candidates[i], system, user, opts);
-      if (r.ok) return r.text;
-      lastErr = r.err;
-      if (opts.deckAuthoring && !([400, 403, 404].includes(r.status) && /model.*(?:not found|not available|does not exist|access|unsupported|deprecat)|(?:unknown|unsupported|unavailable).*model/i.test(r.err || ""))) throw new Error(r.err);
-      if (!aiIsModelErr(r)) throw new Error(r.err); // real problem (auth, rate limit, network) \u2014 don't keep trying models
-    }
-    throw new Error(lastErr || "No usable model for this key.");
+    const result = await aiRunTask(cfg, opts.task || (opts.deckAuthoring ? "creative" : "writing"), system, user, opts, (selected, model) => aiChatOnce(selected, model, system, user, opts));
+    return result.text;
   }
   // Inline "connect an AI service" dialog, shown from a feature when its key is missing.
   // Lets the author pick a provider + key and choose ONE shared key (text + image) or a separate one.
@@ -15392,7 +15367,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
           var vusr = usr + "\n\nThe " + deckImgs.length + " attached image(s) are the deck\u2019s slides/visuals in order \u2014 study them alongside the material above.";
           var r = null;
           for (var vm = 0; vm < vmodels.length; vm++) {
-            r = await aiVisionOnce(cfg, vmodels[vm], vsys, vusr, deckImgs, { maxTokens: 4096, temperature: variant ? 0.9 : 0.6 });
+            r = await aiVisionOnce(cfg, vmodels[vm], vsys, vusr, deckImgs, { task: "creative", maxTokens: 4096, temperature: variant ? 0.9 : 0.6 });
             if (r && r.ok) break;
             if (!aiIsModelErr(r)) break;
           }
@@ -15400,7 +15375,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
           else csgenStatus(i, "Couldn\u2019t read the visuals (" + ((r && r.err) || "no vision model") + ") \u2014 writing from the text & notes\u2026", "run");
         }
       }
-      if (!raw) raw = await aiText(cfg, sys, usr, { json: true, maxTokens: 4096, temperature: variant ? 0.95 : 0.65 });
+      if (!raw) raw = await aiText(cfg, sys, usr, { task: "creative", json: true, maxTokens: 4096, temperature: variant ? 0.95 : 0.65 });
       var obj = csgenParse(raw);
       if (!obj || !Array.isArray(obj.blocks) || !obj.blocks.length) throw new Error("The AI didn\u2019t return usable sections \u2014 try again or add more detail.");
       data.work[i].study = csgenNormalize(obj, w.study);
@@ -15616,7 +15591,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       var brief = modal.querySelector("#laigBrief").value.trim(), tone = modal.querySelector("#laigTone").value;
       var genBtn = modal.querySelector("[data-gen]"); btnBusy(genBtn, "Writing\u2026");
       try {
-        var obj = csgenParse(await aiText(aiCfg("txt"), landingSystem(tone, picks), "BRIEF / CONTEXT:\n" + (brief || "(none \u2014 infer tastefully from a senior product designer profile)") + "\n\nWrite the requested sections as JSON.", { json: true, maxTokens: 2048, temperature: 0.7 }));
+        var obj = csgenParse(await aiText(aiCfg("txt"), landingSystem(tone, picks), "BRIEF / CONTEXT:\n" + (brief || "(none \u2014 infer tastefully from a senior product designer profile)") + "\n\nWrite the requested sections as JSON.", { task: "creative", json: true, maxTokens: 2048, temperature: 0.7 }));
         if (!obj) throw new Error("The AI didn\u2019t return usable copy \u2014 try again.");
         renderReview(obj, picks);
         review.hidden = false; modal.querySelector(".laig").hidden = true; genBtn.hidden = true;
@@ -16232,7 +16207,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
           var html = await aiText(aiCfg("txt"), rkCoverSystem(g.level), rkUser(c.ctx, c.jd, c.resume), { maxTokens: 800, temperature: 0.6 });
           out[kind] = rkRenderCover(iprepSafeHtml(rkCleanHtml(html))); outBox.innerHTML = out[kind];
         } else {
-          var gp = csgenParse(await aiText(aiCfg("txt"), rkGapSystem(g.level), rkUser(c.ctx, c.jd, c.resume), { json: true, maxTokens: 1900, temperature: 0.5 }));
+          var gp = csgenParse(await aiText(aiCfg("txt"), rkGapSystem(g.level), rkUser(c.ctx, c.jd, c.resume), { task: "analysis", json: true, maxTokens: 1900, temperature: 0.5 }));
           if (!gp || (!Array.isArray(gp.strengths) && !Array.isArray(gp.gaps))) throw new Error("Couldn\u2019t analyse that \u2014 try again.");
           out[kind] = rkRenderGap(gp); outBox.innerHTML = out[kind];
         }
@@ -16512,7 +16487,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
           ctx = iprepContext(w, g.scope);
         }
         var jd = await iprepResolveJd(jdEl.value);
-        var obj = csgenParse(await aiText(aiCfg("txt"), iprepSystem(g.level), iprepQUser(ctx, jd, n), { json: true, maxTokens: 2600, temperature: 0.75 }));
+        var obj = csgenParse(await aiText(aiCfg("txt"), iprepSystem(g.level), iprepQUser(ctx, jd, n), { task: "analysis", json: true, maxTokens: 2600, temperature: 0.75 }));
         var raw = obj && Array.isArray(obj.questions) ? obj.questions : (Array.isArray(obj) ? obj : null);
         if (!raw || !raw.length) throw new Error("The AI didn\u2019t return questions \u2014 try again.");
         questions = raw.map(function (q) { return typeof q === "string" ? { q: q } : (q && typeof q.q === "string" ? { q: q.q, category: q.category, why: q.why } : null); }).filter(Boolean);
@@ -16530,7 +16505,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       var ansEl = card.querySelector(".iprep__a");
       var was = btnBusy(btn, "Drafting\u2026"); err.textContent = "";
       try {
-        var html = await aiText(aiCfg("txt"), iprepAnsSystem(g.level), iprepAnsUser(q.q, g.__ctx || (fromAi ? "" : iprepContext(w, g.scope)), g.__jd || ""), { maxTokens: 900, temperature: 0.6 });
+        var html = await aiText(aiCfg("txt"), iprepAnsSystem(g.level), iprepAnsUser(q.q, g.__ctx || (fromAi ? "" : iprepContext(w, g.scope)), g.__jd || ""), { task: "analysis", maxTokens: 900, temperature: 0.6 });
         html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
         ansEl.innerHTML = iprepSafeHtml(html); ansEl.hidden = false;
         q.answer = ansEl.innerHTML; persistSession();
@@ -16969,7 +16944,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       try {
         var own = (ownEl && ownEl.value.trim()) || "";
         if (own) prompt = { prompt: own, context: "", watchfor: [] };
-        else prompt = csgenParse(await aiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { json: true, maxTokens: 700, temperature: 0.9 }));
+        else prompt = csgenParse(await aiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { task: "creative", json: true, maxTokens: 700, temperature: 0.9 }));
         if (!prompt || !prompt.prompt) throw new Error("Couldn\u2019t set a prompt \u2014 try again.");
         sessId = null; transcript = ""; sessTurns = []; sessDraft = ""; sessPlan = null; sessTimer = 0;
         showStage();
@@ -16997,7 +16972,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       stage.innerHTML = wbPromptCard(prompt) + '<div class="wb__loading">Building your game-plan\u2026</div>';
       saveSess();
       try {
-        var plan = csgenParse(await aiText(aiCfg("txt"), wbPlanSystem(st.mins), wbPlanUser(prompt), { json: true, maxTokens: 2000, temperature: 0.6 }));
+        var plan = csgenParse(await aiText(aiCfg("txt"), wbPlanSystem(st.mins), wbPlanUser(prompt), { task: "analysis", json: true, maxTokens: 2000, temperature: 0.6 }));
         sessPlan = plan; saveSess();
         stage.innerHTML = wbPromptCard(prompt) + wbPlanCard(plan, st.mins) + wbDraftCard();
       } catch (e) { stage.innerHTML = wbPromptCard(prompt) + wbDraftCard(); err.textContent = (e && e.message) || "Couldn\u2019t build the plan \u2014 you can still rehearse below."; }
@@ -17264,9 +17239,9 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
           var sFrame = (anyFeed() && wCanSee) ? grabFrame() : null, raw;
           if (sFrame && wModel) {
             try { var vr = await aiVisionOnce(aiCfg("txt"), wModel, wbScoreSystem() + WB_SEE_SCORE, wbScoreUser(prompt, transcript), [sFrame]); if (!vr || !vr.ok) throw new Error((vr && vr.err) || "vision score failed"); raw = vr.text; }
-            catch (e) { raw = await aiText(aiCfg("txt"), wbScoreSystem(), wbScoreUser(prompt, transcript), { json: true, maxTokens: 1400, temperature: 0.4 }); }
+            catch (e) { raw = await aiText(aiCfg("txt"), wbScoreSystem(), wbScoreUser(prompt, transcript), { task: "analysis", json: true, maxTokens: 1400, temperature: 0.4 }); }
           } else {
-            raw = await aiText(aiCfg("txt"), wbScoreSystem(), wbScoreUser(prompt, transcript), { json: true, maxTokens: 1400, temperature: 0.4 });
+            raw = await aiText(aiCfg("txt"), wbScoreSystem(), wbScoreUser(prompt, transcript), { task: "analysis", json: true, maxTokens: 1400, temperature: 0.4 });
           }
           var s = csgenParse(raw);
           var card = document.createElement("div"); card.className = "wb__scorewrap"; card.innerHTML = wbScoreHtml(s); stage.appendChild(card); card.scrollIntoView({ block: "nearest" });
@@ -17281,7 +17256,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       if (np) np.addEventListener("click", async function () {
         btnBusy(np, "New prompt\u2026");
         try {
-          prompt = csgenParse(await aiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { json: true, maxTokens: 700, temperature: 0.95 }));
+          prompt = csgenParse(await aiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { task: "creative", json: true, maxTokens: 700, temperature: 0.95 }));
           transcript = ""; sessTurns = []; sessDraft = ""; sessPlan = null; sessTimer = 0;
           if (st.mode === "coach") await wbRunCoach(); else await wbRunMock(true);
         } catch (e) { err.textContent = (e && e.message) || "Try again."; btnIdle(np, IC.refresh + " New prompt"); }
@@ -17295,7 +17270,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
         if (d.length < 20) { err.textContent = "Jot a few lines of your approach first."; return; }
         err.textContent = ""; btnBusy(crit, "Reading the room\u2026");
         try {
-          var c = csgenParse(await aiText(aiCfg("txt"), wbCritiqueSystem(st.mins), wbCritiqueUser(prompt, d), { json: true, maxTokens: 1500, temperature: 0.55 }));
+          var c = csgenParse(await aiText(aiCfg("txt"), wbCritiqueSystem(st.mins), wbCritiqueUser(prompt, d), { task: "analysis", json: true, maxTokens: 1500, temperature: 0.55 }));
           var out = stage.querySelector(".wb__crit"); if (out) out.innerHTML = wbCritiqueHtml(c);
         } catch (e) { err.textContent = (e && e.message) || "Couldn\u2019t get feedback \u2014 try again."; }
         btnIdle(crit, "Get coaching");
@@ -17595,7 +17570,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       btnBusy(runBtn, "Thinking\u2026");
       try {
         var ctx = storyContext(w); g.__ctx = ctx;
-        var obj = csgenParse(await aiText(aiCfg("txt"), storyThemesSystem(g.tone, storyDurLabel(g.dur)), storyThemesUser(ctx), { json: true, maxTokens: 1500, temperature: 0.8 }));
+        var obj = csgenParse(await aiText(aiCfg("txt"), storyThemesSystem(g.tone, storyDurLabel(g.dur)), storyThemesUser(ctx), { task: "creative", json: true, maxTokens: 1500, temperature: 0.8 }));
         var raw = obj && Array.isArray(obj.themes) ? obj.themes : (Array.isArray(obj) ? obj : null);
         if (!raw || !raw.length) throw new Error("No angles came back \u2014 try again.");
         themes = raw.filter(function (t) { return t && (t.title || t.hook); });
@@ -17613,7 +17588,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       btnBusy(srcBtn, "Scripting\u2026");
       err.textContent = "";
       try {
-        var s = csgenParse(await aiText(aiCfg("txt"), storyTellSystem(g.tone, storyDurLabel(g.dur), STORY_BUDGET[g.dur] || 12), storyTellUser(t, g.__ctx || storyContext(w)), { json: true, maxTokens: 2200, temperature: 0.7 }));
+        var s = csgenParse(await aiText(aiCfg("txt"), storyTellSystem(g.tone, storyDurLabel(g.dur), STORY_BUDGET[g.dur] || 12), storyTellUser(t, g.__ctx || storyContext(w)), { task: "creative", json: true, maxTokens: 2200, temperature: 0.7 }));
         if (!s || (!Array.isArray(s.beats) && !s.opener)) throw new Error("The script didn\u2019t come through \u2014 try again.");
         curTi = idx; taleBox.__script = s; taleBox.__title = t.title || "";
         storyRenderTale(taleBox, s);
@@ -17637,7 +17612,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       var n = g.qrole === "any" ? 10 : 5;
       btnBusy(qgenBtn, "Thinking\u2026"); err.textContent = "";
       try {
-        var obj = csgenParse(await aiText(aiCfg("txt"), storyQSystem(g.tone, g.qrole, n), storyQUser(g.__ctx || storyContext(w), themes[curTi], n), { json: true, maxTokens: 1800, temperature: 0.8 }));
+        var obj = csgenParse(await aiText(aiCfg("txt"), storyQSystem(g.tone, g.qrole, n), storyQUser(g.__ctx || storyContext(w), themes[curTi], n), { task: "analysis", json: true, maxTokens: 1800, temperature: 0.8 }));
         var raw = obj && Array.isArray(obj.questions) ? obj.questions : (Array.isArray(obj) ? obj : null);
         if (!raw || !raw.length) throw new Error("No questions came back \u2014 try again.");
         questionsArr = raw.map(function (q) { return typeof q === "string" ? { q: q } : (q && q.q ? { q: q.q, role: q.role, why: q.why } : null); }).filter(Boolean);
@@ -17654,7 +17629,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
         var aEl = card.querySelector(".story__q-a");
         var was = btnBusy(ab, "Drafting\u2026"); err.textContent = "";
         try {
-          var html = await aiText(aiCfg("txt"), storyQAnsSystem(g.tone, q.role || storyRoleName(g.qrole)), storyQAnsUser(q.q, g.__ctx || storyContext(w), themes[curTi]), { maxTokens: 700, temperature: 0.6 });
+          var html = await aiText(aiCfg("txt"), storyQAnsSystem(g.tone, q.role || storyRoleName(g.qrole)), storyQAnsUser(q.q, g.__ctx || storyContext(w), themes[curTi]), { task: "creative", maxTokens: 700, temperature: 0.6 });
           html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
           aEl.innerHTML = iprepSafeHtml(html); aEl.hidden = false;
           q.answer = aEl.innerHTML; persistSession();
@@ -18271,11 +18246,10 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     var cfg = aiCfg("txt");
     if (aiMode() === "cf" && AI_PROXY_PROVIDERS.indexOf(cfg.provider) !== -1 && !aiSess()) throw new Error("Your Cloudflare AI session has expired. Reopen Studio to restore it.");
     if (!cfg.key) throw new Error("Your Studio AI configuration is not available on this browser origin.");
-    var modelRouting = await import("./slide-merge-authoring-models.mjs");
-    var available = cfg.provider === "custom" ? [] : await aiListModels(cfg);
-    var candidates = modelRouting.deckModelCandidates(cfg.provider, available || [], await aiModelCandidates(cfg, "txt"));
     return draftComposition(catalog, brief, function (prompt, signal) {
-      return aiText(cfg, prompt.system, prompt.user, { json: true, maxTokens: 12000, temperature: 0.3, signal: signal, candidates: candidates, deckAuthoring: true });
+      return aiText(cfg, prompt.system, prompt.user, { task: "creative", json: true, maxTokens: 12000, temperature: 0.3, signal: signal, deckAuthoring: true,
+        validate: text => parseCompositionResponse(text, catalog), onRoute: options?.onRoute });
     }, options && options.signal);
   } };
+  window.__RKStudio.aiRouting = { state: () => aiOrchestrator.state(), feedback: (decisionId, feedback) => aiOrchestrator.feedback(decisionId, feedback) };
 })();

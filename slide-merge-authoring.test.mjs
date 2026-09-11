@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { compositionCatalog, compileComposition, validateComposition } from "./src/js/slide-merge-composition.mjs";
 import { authoringEvidence } from "./src/js/slide-merge-authoring.mjs";
 import { fitAuthoredText } from "./src/js/slide-merge-authoring-fit.mjs";
-import { deckModelCandidates } from "./src/js/slide-merge-authoring-models.mjs";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
+import { transform } from "esbuild";
 
 const options = { plain: String, fontFamily: 2 };
 const data = { work: [{ id: "case", title: "Case", study: { blocks: [{ type: "gallery", heading: "A simpler path", items: [{ src: "original.png", caption: "Two steps instead of five" }] }, { type: "metrics", items: [{ value: "20%", label: "Completion increase" }] }] } }] };
@@ -53,19 +53,40 @@ test("authored text fits without truncation and rejects unreadable overflow", ()
   assert.ok(fitted.fontSize >= 18 && fitted.text.split("\n").length * fitted.fontSize * 1.25 <= element.height);
   assert.throws(() => fitAuthoredText({ ...element, height: 1 }, (text, size) => text.length * size), /too dense/);
 });
-test("deck model routing ranks suitable accessible models without changing custom configuration", () => {
-  assert.deepEqual(deckModelCandidates("anthropic", ["claude-haiku-4", "claude-sonnet-4-5", "claude-opus-4-6"], ["claude-sonnet-4"]), ["claude-opus-4-6", "claude-sonnet-4-5", "claude-haiku-4", "claude-sonnet-4"]);
-  assert.equal(deckModelCandidates("openai", ["gpt-image-1", "gpt-5-mini", "gpt-5.2", "gpt-5.1"], [])[0], "gpt-5.2");
-  assert.deepEqual(deckModelCandidates("custom", ["unrequested"], ["configured"]), ["configured"]);
-});
-
-test("candidate override is scoped to the actual one-shot adapter", async () => {
+test("deck and general text generation use the shared orchestrator instead of family rankings", async () => {
   const source = await readFile(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
+  await transform(source, { loader: "js" });
   const oneShot = source.slice(source.indexOf("async function aiText(cfg"), source.indexOf("function aiKeyModal"));
-  assert.match(oneShot, /opts\.candidates \|\| await aiModelCandidates/);
+  assert.match(oneShot, /aiRunTask/);
   assert.match(oneShot, /opts\.deckAuthoring/);
   const stream = source.slice(source.indexOf("async function aiTextStream"), source.indexOf("async function aiText(cfg"));
-  assert.doesNotMatch(stream, /opts\.candidates/);
+  assert.match(stream, /aiRunTask/);
+  assert.doesNotMatch(source, /deckModelCandidates|slide-merge-authoring-models/);
+  assert.doesNotMatch(source, /AI_MODEL_RANK|AI_TEXT_FALLBACK|AI_VISION_MODEL|AI_IMG_FALLBACK|AI_DEFAULT_MODEL/);
+  assert.doesNotMatch(source, /if \(!parsed\) parsed = csgenParse\(await aiText\(cfg, sys, user, sopts\)\)/);
+  assert.doesNotMatch(source, /aiSupportsImages/);
+});
+
+test("multimodal adapters preserve image bytes across providers and use declared reasoning metadata", async () => {
+  const bodies = [], adapters = await textAdapters(async (url, options) => { bodies.push(JSON.parse(options.body)); return Response.json({ content: [{ text: "Result" }], candidates: [{ content: { parts: [{ text: "Result" }] } }], choices: [{ message: { content: "Result" } }] }); });
+  for (const provider of ["anthropic", "gemini", "openai"]) {
+    const result = await adapters.aiChatOnce({ provider, key: "synthetic", base: "https://provider.test", routingModel: { reasoning: true } }, "arbitrary-new-model", "System", [{ type: "text", text: "Look at this" }, { type: "image_url", image_url: { url: "data:image/png;base64,AAECAw==" } }], { maxTokens: 500, json: true });
+    assert.equal(result.text, "Result");
+  }
+  assert.equal(bodies[0].messages[0].content[1].source.data, "AAECAw==");
+  assert.equal(bodies[1].contents[0].parts[1].inlineData.data, "AAECAw==");
+  assert.equal(bodies[2].messages[1].content[1].image_url.url, "data:image/png;base64,AAECAw==");
+  assert.equal(bodies[2].max_completion_tokens, 500); assert.equal(bodies[2].max_tokens, undefined);
+});
+
+test("streaming accepts a proxy JSON response without another call and surfaces SSE errors after partial output", async () => {
+  let calls = 0;
+  const adapters = await textAdapters(async () => { calls++; return Response.json({ choices: [{ message: { content: "Complete result" } }] }); });
+  const result = await adapters.aiStream({ provider: "custom", key: "synthetic", base: "https://provider.test" }, "selected", "System", "Prompt", {}, () => {});
+  assert.equal(result.text, "Complete result"); assert.equal(calls, 1);
+  const stream = await textAdapters(async () => new Response('data: {"choices":[{"delta":{"content":"Partial"}}]}\n\ndata: {"error":{"message":"Service interrupted"}}\n\n', { headers: { "content-type": "text/event-stream" } }));
+  const failure = await stream.aiStream({ provider: "openai", key: "synthetic", base: "https://provider.test" }, "selected", "System", "Prompt", {}, () => {});
+  assert.equal(failure.ok, false); assert.equal(failure.emitted, true); assert.equal(failure.err, "Service interrupted");
 });
 
 test("deck AI retries a deprecated temperature on the same model without changing the request", async () => {

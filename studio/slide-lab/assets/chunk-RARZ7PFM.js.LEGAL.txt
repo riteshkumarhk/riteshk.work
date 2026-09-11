@@ -62,6 +62,7 @@ lucide-react/dist/esm/icons/bold.mjs:
 lucide-react/dist/esm/icons/book-type.mjs:
 lucide-react/dist/esm/icons/check.mjs:
 lucide-react/dist/esm/icons/chevron-down.mjs:
+lucide-react/dist/esm/icons/chevron-right.mjs:
 lucide-react/dist/esm/icons/chevron-up.mjs:
 lucide-react/dist/esm/icons/chevrons-down.mjs:
 lucide-react/dist/esm/icons/chevrons-up.mjs:
@@ -92,6 +93,8 @@ lucide-react/dist/esm/icons/presentation.mjs:
 lucide-react/dist/esm/icons/rotate-ccw.mjs:
 lucide-react/dist/esm/icons/sparkles.mjs:
 lucide-react/dist/esm/icons/square.mjs:
+lucide-react/dist/esm/icons/thumbs-down.mjs:
+lucide-react/dist/esm/icons/thumbs-up.mjs:
 lucide-react/dist/esm/icons/timer.mjs:
 lucide-react/dist/esm/icons/trash-2.mjs:
 lucide-react/dist/esm/icons/ungroup.mjs:

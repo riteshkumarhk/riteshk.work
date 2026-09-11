@@ -32,7 +32,7 @@ async function openStudioDeck(work, options) {
   const loaded = new Promise((resolve, reject) => { stylesheet.onload = resolve; stylesheet.onerror = () => reject(new Error("Presentation styles could not be loaded")); });
   window.document.head.append(stylesheet);
   try {
-    const entry = "/studio/slide-lab/assets/audience.js?v=1.0";
+    const entry = "/studio/slide-lab/assets/audience.js?v=1.1";
     const [renderer] = await Promise.all([import(entry), loaded]);
     return await renderer.presentNativeDocument(work, document, { ...options, onClose: () => { stylesheet.remove(); options.onClose?.(); } });
   } catch (error) { stylesheet.remove(); throw error; }

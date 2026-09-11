@@ -97,6 +97,73 @@ publish test intercepts every content write, verifies encryption and original
 upload bytes, failure/retry, public-to-private changes, edits during publishing,
 fresh-device owner recovery and presenter note saves with/without the editor.
 
+## Task-aware AI routing
+
+Studio text, analytical, creative, coding, visual-analysis and image-generation
+requests share an orchestrator. Model IDs and families are not preference rules.
+Authenticated provider catalogues are refreshed after 15 minutes or with Refresh
+accessible models in Settings > AI. Optional models.dev metadata supplies missing
+capabilities and public prices, cached for 24 hours; that request is anonymous and
+never includes keys, prompts or the owner's selected model. Only IDs returned by
+the configured provider are candidates. An explicit custom model remains pinned.
+
+Known incompatible modalities, insufficient input/context/output limits, missing
+mandatory capabilities and estimated costs above the request limit are excluded.
+Automatic requests require known output and token-limit metadata. Explicit custom
+models can run provisionally with unknown capabilities, but unknown prices cannot
+pass a configured budget. Image pricing is never inferred from text-token prices.
+Metadata is not proof of model access or output quality; actual failures are recorded.
+
+Tasks are declared by their Studio actions, not classified by another paid call.
+Task-specific evidence dominates latency, cost and recency. API success records
+reliability, not creative quality. Owner ratings and imported evaluations carry
+their task, endpoint, age and rubric; evidence expires after 90 days and decays
+with age. Accepted deck proposals provide only a weak signal. An established
+model is retained until a challenger has at least three quality samples and a
+better evidence score. The rule also applies across connected providers.
+
+Selected service is the default routing scope. All connected services requires
+explicit consent and only uses already configured connections. Settings shows
+recent actual selections, confidence, reasons and fallback failures. The deck
+proposal also shows its model and accepts useful/needs-work feedback. A provider
+authentication failure, rate limit, service failure, cancellation or partial stream
+does not trigger model hopping. Model unavailability/unsupported requests allow at
+most three model attempts within the same estimated request limit. The existing
+same-model deprecated-temperature compatibility retry is retained.
+
+Newcomer tests default to disabled, with a zero daily budget. Manual evaluation
+requires cost confirmation; automatic evaluation requires a separate paid-test
+opt-in and runs after a supported task succeeds, at most once per task every
+15 minutes in a tab. Each suite has three synthetic trials, at most 512 output
+tokens per trial, and a two-minute timeout per trial. Shared IndexedDB reservations
+enforce the UTC daily budget across tabs and cap suites at 30 per day. Started
+trials remain reserved after cancellation; unstarted trials are released once.
+Costs are conservative estimates, not provider-enforced billing caps.
+
+Analytical and coding trials score basic reasoning only. Creative and writing
+trials check structure and constraints; they do not automatically score taste or
+storytelling. Visual/image tasks require owner or imported quality evidence.
+No paid calls or real owner content are used by the automated regression tests.
+Initial model selections remain provisional until relevant evidence exists.
+
+Import evaluations accepts a JSON array of up to 200 records, under 256 KB. Each
+record requires `provider`, exact `modelId`, `scope` (the JSON-encoded array of
+provider and normalized API base URL), `task`, `at` (epoch milliseconds),
+`quality` (0..1), `samples` (1..1000), and a named `rubric`. Reimporting the same
+provider/model/scope/task/rubric/timestamp replaces its record rather than adding
+samples. Unknown fields, prompts and responses are discarded.
+
+Routing settings, the last 50 decisions and up to 600 metadata observations live
+in `rk-ai-orchestrator-v1` IndexedDB on this device and origin. They do not contain
+API keys, case-study text or generated responses and are not included in the deck,
+published content or content backups. Evaluation outputs are available only in
+the current tab for review. No cloud history synchronization or paid-quality
+benchmark claim is made. Full editor-capability expansion and rendered visual
+critique/refinement remain deferred.
+
+Focused checks: `node --test ai-model-router.test.mjs slide-merge-authoring.test.mjs`
+and `node --test --test-name-pattern="AI routing settings|Draft entire deck with AI" slide-studio-deck.test.mjs`.
+
 ## Authoring parity update
 
 Speaker notes support bold, italic, bulleted and numbered lists, indentation and

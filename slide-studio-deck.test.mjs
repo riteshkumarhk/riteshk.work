@@ -10,6 +10,19 @@ import { chromium } from "playwright-core";
 import { rkDecWithSek, rkUnwrapSek } from "./src/js/admin-core.js";
 import { assertStudioDeckPublishable, createStudioDeck, STUDIO_DECK_SCHEMA } from "./src/js/slide-studio-deck.mjs";
 
+async function waitForRoutingPolicy(page, key, value) {
+  await page.evaluate(() => { window.__routingPolicyProbe = { pending: false, matches: false }; });
+  await page.waitForFunction(({ key, value }) => {
+    const probe = window.__routingPolicyProbe;
+    if (!probe.pending) {
+      probe.pending = true;
+      window.__RKStudio.aiRouting.state().then(state => { probe.matches = state.policy[key] === value; probe.pending = false; }, () => { probe.pending = false; });
+    }
+    return probe.matches;
+  }, { key, value });
+  await page.evaluate(() => { delete window.__routingPolicyProbe; });
+}
+
 test("new production decks are empty and have no demonstration content", () => {
   assert.deepEqual(createStudioDeck("Case-study slides"), { version: 1, title: "Case-study slides", selected: null, slides: [] });
 });
@@ -56,9 +69,9 @@ test("the shared publish builder validates native references before preparing ow
   assert.match(source, /prepareStudioPublication\(snapshot/);
 });
 
-test("Draft entire deck with AI recovers from deprecated temperature and applies the proposal", { timeout: 60000 }, async () => {
+for (const width of [1440, 390]) test("Draft entire deck with AI recovers from deprecated temperature and applies the proposal at " + width + "px", { timeout: 60000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, hasTouch: width < 600, isMobile: width < 600 });
   const requests = [], errors = [];
   const published = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
   published.work = [{ id: "temperature-case", title: "A clearer product flow", client: "Studio test", study: { blocks: [{ type: "text", heading: "A clearer next step", body: "The redesigned flow places the next action beside the relevant content." }] } }];
@@ -72,8 +85,9 @@ test("Draft entire deck with AI recovers from deprecated temperature and applies
     await page.route("**/*", async route => {
       const request = route.request(), url = new URL(request.url());
       if (url.pathname.endsWith("/content.json")) return route.fulfill({ contentType: "application/json", body: JSON.stringify(published) });
+      if (url.hostname === "models.dev") return route.fulfill({ contentType: "application/json", body: "{}" });
       if (url.hostname === "api.anthropic.com") {
-        if (url.pathname.endsWith("/models")) return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: [{ id: "claude-opus-4-6" }, { id: "claude-sonnet-4-5" }] }) });
+        if (url.pathname.endsWith("/models")) return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: [{ id: "studio-creative-a", output_modalities: ["text"], max_input_tokens: 100000, max_tokens: 16000, capabilities: { thinking: { supported: true } } }, { id: "studio-creative-b", output_modalities: ["text"], max_input_tokens: 100000, max_tokens: 16000 }] }) });
         if (url.pathname.endsWith("/messages")) {
           const body = request.postDataJSON(); requests.push(body);
           if (requests.length === 1) return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: { type: "invalid_request_error", message: "`temperature` is deprecated for this model." } }) });
@@ -91,6 +105,7 @@ test("Draft entire deck with AI recovers from deprecated temperature and applies
     await page.evaluate(() => window.__rkDevStudio());
     await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
     await page.evaluate(() => document.querySelectorAll(".pass--lock").forEach(dialog => dialog.remove()));
+    await page.setViewportSize({ width, height: 1000 });
     await page.locator('.adm__tab[data-tab="work"]').click();
     await page.locator('[data-act="study-slides"][data-index="0"]').click();
     await page.locator(".merge-empty-actions").waitFor();
@@ -99,10 +114,24 @@ test("Draft entire deck with AI recovers from deprecated temperature and applies
     assert.equal(await page.locator(".merge-ai h3").innerText(), "A grounded deck");
     assert.equal(await page.locator('.merge-ai [role="alert"]').count(), 0);
     assert.equal(requests.length, 2);
-    assert.ok(requests.every(request => request.model === "claude-opus-4-6"), "Keep the chosen model rather than falling back to another one");
+    assert.ok(requests.every(request => request.model === "studio-creative-a"), "Keep the metadata-selected model rather than falling back to another one");
     assert.equal(requests[0].temperature, 0.3);
     const expected = structuredClone(requests[0]); delete expected.temperature;
     assert.deepEqual(requests[1], expected);
+    assert.match(await page.getByLabel("Model selection", { exact: true }).innerText(), /studio-creative-a.*provisional/);
+    await page.getByRole("button", { name: "Draft needs work", exact: true }).click();
+    await page.getByLabel("Feedback category", { exact: true }).selectOption("design");
+    await page.getByText("Feedback saved", { exact: true }).waitFor();
+    const overflow = await page.locator(".merge-ai").evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      return [...element.querySelectorAll("button,select,summary")].filter(control => control.getClientRects().length).map(control => ({ label: control.textContent, left: control.getBoundingClientRect().left, right: control.getBoundingClientRect().right })).filter(control => control.left < bounds.left - 1 || control.right > bounds.right + 1);
+    });
+    assert.deepEqual(overflow, []);
+    await page.screenshot({ path: join(tmpdir(), "rk-ai-proposal-" + width + ".png") });
+    const routing = await page.evaluate(() => window.__RKStudio.aiRouting.state());
+    assert.equal(routing.decisions.at(-1).task, "creative");
+    assert.equal(routing.observations.find(item => item.feedbackFor)?.quality, 0.25);
+    assert.doesNotMatch(JSON.stringify(routing), /synthetic-test-key|Place the next action|Discuss the redesigned flow/);
     await page.getByRole("button", { name: "Append slides", exact: true }).click();
     await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.nativeDeck?.slideCount === 1);
     await page.locator("[data-l2-back]").click();
@@ -110,6 +139,173 @@ test("Draft entire deck with AI recovers from deprecated temperature and applies
     const study = await page.evaluate(() => window.__RKStudio.getDraft().work[0].study);
     assert.deepEqual(study.blocks, published.work[0].study.blocks);
     assert.notEqual(study.slidesPublic, true);
+    assert.doesNotMatch(JSON.stringify(study), /aiRouting|modelId|feedbackFor/);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test("AI routing settings discover models, require spending consent and keep evidence private", { timeout: 90000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const page = await context.newPage();
+  const requests = [], discoveries = [], errors = [], created = new Date(Date.now() - 86400000).toISOString();
+  let includeNewcomer = false;
+  const published = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
+  published.work = [];
+  const metadata = id => ({ id, input_modalities: ["text", "image"], output_modalities: ["text"], max_input_tokens: 100000, max_tokens: 16000,
+    created_at: created, capabilities: { thinking: { supported: true }, structured_outputs: { supported: true } }, pricing: { input: 2, output: 8 } });
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.addInitScript(() => {
+      localStorage.setItem("rk:dev:stub", "1"); localStorage.setItem("rk:ai:mode", "local"); localStorage.setItem("rk:ai:same", "0");
+      for (const [scope, provider] of [["txt", "anthropic"], ["img", "openai"]]) {
+        localStorage.setItem("rk:ai:" + scope + ":provider", provider); localStorage.setItem("rk:ai:" + scope + ":key", "synthetic-routing-key");
+      }
+    });
+    await page.route("**/*", async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.pathname.endsWith("/content.json")) return route.fulfill({ contentType: "application/json", body: JSON.stringify(published) });
+      if (url.hostname === "models.dev") { assert.equal(request.headers().authorization, undefined); return route.fulfill({ contentType: "application/json", body: "{}" }); }
+      if (["api.anthropic.com", "api.openai.com"].includes(url.hostname)) {
+        if (url.pathname.endsWith("/models")) {
+          discoveries.push(url.hostname);
+          const models = url.hostname === "api.openai.com" ? [metadata("connected-model")] : [metadata("baseline-a"), metadata("baseline-b"), ...(includeNewcomer ? [metadata("fresh-catalogue-entry")] : [])];
+          return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: models }) });
+        }
+        if (request.method() === "POST") {
+          const body = request.postDataJSON(); requests.push({ provider: url.hostname, body });
+          const text = String(body.system || "").startsWith("Complete this small evaluation") ? '{"headline":"Related settings belong together","body":"The team grouped related controls to make settings easier to find."}' : "Refined copy.";
+          return route.fulfill({ contentType: "application/json", body: JSON.stringify({ content: [{ type: "text", text }], usage: { input_tokens: 15, output_tokens: 20 } }) });
+        }
+        return route.abort();
+      }
+      if (!["127.0.0.1", "localhost"].includes(url.hostname) && !["GET", "HEAD"].includes(request.method())) return route.abort();
+      return route.continue();
+    });
+    await page.goto((process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510") + "/studio/?devstub");
+    await page.waitForFunction(() => typeof window.__rkDevStudio === "function" && !!window.RK?.data);
+    await page.evaluate(() => window.__rkDevStudio());
+    await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+    await page.evaluate(() => document.querySelectorAll(".pass--lock").forEach(dialog => dialog.remove()));
+    const original = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
+    await page.locator("[data-opensettings]").click();
+    await page.locator('[data-act="settings-cat"][data-cat="ai"]').click();
+    const panel = page.locator("[data-ai-routing]");
+    await panel.getByText(/2 accessible models/).waitFor();
+    assert.equal(requests.length, 0);
+    assert.ok(discoveries.every(provider => provider === "api.anthropic.com"));
+    assert.equal(await panel.locator('[data-route-policy="autoEvaluate"]').isChecked(), false);
+    assert.equal(await panel.locator('[data-route-policy="evaluationDailyBudget"]').inputValue(), "0");
+    assert.equal(await panel.locator('[data-route-import] svg').count(), 1);
+    includeNewcomer = true;
+    await panel.getByRole("button", { name: "Refresh accessible models", exact: true }).click();
+    await panel.getByText(/3 accessible models/).waitFor();
+    await panel.locator('[data-route-policy="maxCost"]').fill("0.00001");
+    await panel.locator('[data-route-policy="maxCost"]').press("Tab");
+    await waitForRoutingPolicy(page, "maxCost", 0.00001);
+    const blocked = await page.evaluate(async () => { try { await window.__RKStudio.improveText("PRIVATE ROUTING COPY", {}); return "unexpected success"; } catch (error) { return error.message; } });
+    assert.match(blocked, /No available model/); assert.equal(requests.length, 0);
+    await panel.locator('[data-route-policy="maxCost"]').fill("");
+    await panel.locator('[data-route-policy="maxCost"]').press("Tab");
+    await waitForRoutingPolicy(page, "maxCost", null);
+    await panel.locator('[data-route-policy="providers"]').selectOption("connected");
+    await page.getByRole("button", { name: "Keep selected", exact: true }).click();
+    assert.equal((await page.evaluate(() => window.__RKStudio.aiRouting.state())).policy.providers, "selected");
+    await panel.locator('[data-route-policy="providers"]').selectOption("connected");
+    await page.getByRole("button", { name: "Allow", exact: true }).click();
+    await panel.getByText(/4 accessible models/).waitFor();
+    assert.ok(discoveries.includes("api.openai.com"));
+    await panel.locator('[data-route-policy="providers"]').selectOption("selected");
+    await panel.locator('[data-route-policy="evaluationDailyBudget"]').fill("1");
+    await panel.locator('[data-route-policy="evaluationDailyBudget"]').press("Tab");
+    await waitForRoutingPolicy(page, "evaluationDailyBudget", 1);
+    await panel.getByRole("button", { name: "Evaluate newcomer", exact: true }).click();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    assert.equal(requests.length, 0);
+    await panel.getByRole("button", { name: "Evaluate newcomer", exact: true }).click();
+    await page.getByRole("button", { name: "Run paid tests", exact: true }).click();
+    await panel.locator("[data-route-results]").getByText(/3 of 3 checks passed/).waitFor();
+    assert.equal(requests.length, 3);
+    const tested = await page.evaluate(() => window.__RKStudio.aiRouting.state());
+    assert.equal(tested.decisions.length, 3); assert.ok(tested.observations.every(item => item.quality == null));
+    assert.ok(tested.evaluationReserved > 0 && tested.evaluationReserved < 1);
+    const imported = [{ provider: "anthropic", modelId: "fresh-catalogue-entry", scope: tested.decisions[0].scope, task: "creative", at: Date.now(), quality: 0.98, samples: 6, rubric: "owner-reviewed-decks-v1", prompt: "NEVER STORE IMPORTED CONTENT" }];
+    await panel.locator("[data-route-file]").setInputFiles({ name: "evaluations.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(imported)) });
+    await panel.getByText("1 evaluation records imported.", { exact: true }).waitFor();
+    await page.waitForFunction(() => document.querySelector('[data-route-choices] summary')?.textContent.includes("fresh-catalogue-entry / evaluated"));
+    await panel.locator('[data-route-policy="autoEvaluate"]').check();
+    const darkConfirmation = await page.getByRole("button", { name: "Cancel", exact: true }).evaluate(button => getComputedStyle(button.closest(".pass__box")).backgroundColor);
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    assert.equal((await page.evaluate(() => window.__RKStudio.aiRouting.state())).policy.autoEvaluate, false);
+    await page.evaluate(() => { document.documentElement.dataset.appearance = "light"; });
+    await panel.locator('[data-route-policy="autoEvaluate"]').check();
+    const lightConfirmation = await page.getByRole("button", { name: "Cancel", exact: true }).evaluate(button => getComputedStyle(button.closest(".pass__box")).backgroundColor);
+    assert.notEqual(lightConfirmation, darkConfirmation);
+    await page.screenshot({ path: join(tmpdir(), "rk-ai-confirmation-light.png") });
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.evaluate(() => { document.documentElement.dataset.appearance = "dark"; });
+    await panel.locator('[data-route-policy="autoEvaluate"]').check();
+    await page.getByRole("button", { name: "Enable tests", exact: true }).click();
+    await waitForRoutingPolicy(page, "autoEvaluate", true);
+    assert.equal(await page.evaluate(async () => {
+      const completed = new Promise(resolve => {
+        const observe = async () => {
+          const state = await window.__RKStudio.aiRouting.state();
+          if (state.decisions.filter(item => item.evaluation && item.task === "writing" && item.status === "success").length === 3) {
+            window.removeEventListener("rk:ai-evaluation", observe); resolve();
+          }
+        };
+        window.addEventListener("rk:ai-evaluation", observe);
+      });
+      const result = await window.__RKStudio.improveText("PRIVATE ROUTING COPY", {});
+      await completed;
+      return result;
+    }), "Refined copy.");
+    await panel.locator('[data-route-policy="autoEvaluate"]').uncheck();
+    await waitForRoutingPolicy(page, "autoEvaluate", false);
+    assert.equal(requests.length, 7);
+    const saved = await page.evaluate(() => window.__RKStudio.aiRouting.state());
+    assert.doesNotMatch(JSON.stringify(saved), /synthetic-routing-key|PRIVATE ROUTING COPY|Related settings belong|NEVER STORE IMPORTED CONTENT/);
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft())), original);
+    const routingBundle = await build({ entryPoints: [fileURLToPath(new URL("./src/js/ai-orchestrator.mjs", import.meta.url))], bundle: true, format: "iife", globalName: "RoutingStoreTest", write: false });
+    const other = await page.context().newPage();
+    try {
+      await other.goto((process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510") + "/404.html");
+      for (const target of [page, other]) await target.addScriptTag({ content: routingBundle.outputFiles[0].text });
+      await page.evaluate(async budget => window.RoutingStoreTest.createAiOrchestrator().configure({ evaluationDailyBudget: budget }), saved.evaluationReserved + 0.03);
+      const reservations = await Promise.allSettled([page.evaluate(() => window.RoutingStoreTest.createAiOrchestrator().reserveEvaluation(0.02)), other.evaluate(() => window.RoutingStoreTest.createAiOrchestrator().reserveEvaluation(0.02))]);
+      assert.equal(reservations.filter(result => result.status === "fulfilled").length, 1);
+      const accepted = reservations.find(result => result.status === "fulfilled").value;
+      assert.equal(await page.evaluate(reservation => window.RoutingStoreTest.createAiOrchestrator().releaseEvaluation(reservation, 0.01), accepted), true);
+      assert.equal(await other.evaluate(reservation => window.RoutingStoreTest.createAiOrchestrator().releaseEvaluation(reservation, 0.01), accepted), false);
+      assert.ok(Math.abs((await page.evaluate(() => window.__RKStudio.aiRouting.state())).evaluationReserved - saved.evaluationReserved - 0.01) < 1e-9);
+    } finally { await other.close(); }
+    const expectedPolicy = (await page.evaluate(() => window.__RKStudio.aiRouting.state())).policy;
+    await page.reload();
+    await page.waitForFunction(() => typeof window.__rkDevStudio === "function" && !!window.RK?.data);
+    await page.evaluate(() => window.__rkDevStudio());
+    await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+    await page.evaluate(() => document.querySelectorAll(".pass--lock").forEach(dialog => dialog.remove()));
+    assert.deepEqual((await page.evaluate(() => window.__RKStudio.aiRouting.state())).policy, expectedPolicy);
+    await page.locator("[data-opensettings]").click();
+    await page.locator('[data-act="settings-cat"][data-cat="ai"]').click();
+    await panel.getByText(/3 accessible models/).waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    assert.equal(await panel.evaluate(element => {
+      const style = getComputedStyle(element), family = style.getPropertyValue("--sans").split(",")[0].replace(/["']/g, "").trim();
+      return style.fontFamily.includes(family) && [...document.fonts].some(face => face.family.replace(/["']/g, "") === family && face.status === "loaded");
+    }), true, "The routing panel must use the loaded Studio body font");
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await panel.locator('[data-route-refresh]').scrollIntoViewIfNeeded();
+      const bounds = await panel.evaluate(element => {
+        const rectangle = element.getBoundingClientRect();
+        return { panel: [rectangle.left, rectangle.right], viewport: innerWidth, overflow: [...element.querySelectorAll('input:not([hidden]),select,button:not([hidden])')].filter(control => control.getClientRects().length).map(control => ({ left: control.getBoundingClientRect().left, right: control.getBoundingClientRect().right, label: control.getAttribute('aria-label') || control.textContent })).filter(control => control.left < rectangle.left - 1 || control.right > rectangle.right + 1) };
+      });
+      assert.ok(bounds.panel[0] >= 0 && bounds.panel[1] <= bounds.viewport + 1, JSON.stringify(bounds));
+      assert.deepEqual(bounds.overflow, []);
+      await page.screenshot({ path: join(tmpdir(), "rk-ai-routing-" + width + ".png") });
+    }
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });

@@ -23,9 +23,14 @@ export async function generateSlideIcon(description, references, signal) {
   if (!studio?.generateIcon) throw new Error("Studio icon generation is unavailable. Reload and try again.");
   return studio.generateIcon(description, references, { signal });
 }
-export async function requestComposition(catalog, brief, signal) {
+export async function requestComposition(catalog, brief, signal, { onRoute } = {}) {
   await studioService();
   signal?.throwIfAborted();
   if (!window.__RKStudio?.draftSlides) throw new Error("Studio AI service is unavailable. Reload and try again.");
-  return window.__RKStudio.draftSlides(catalog, brief, { signal });
+  return window.__RKStudio.draftSlides(catalog, brief, { signal, onRoute });
+}
+export async function recordCompositionFeedback(decisionId, feedback) {
+  const studio = await studioService();
+  if (!studio?.aiRouting?.feedback) throw new Error("AI routing feedback is unavailable. Reload and try again.");
+  return studio.aiRouting.feedback(decisionId, feedback);
 }
