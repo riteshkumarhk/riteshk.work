@@ -1213,6 +1213,7 @@ import { hasStudioOwnerCopies, restoreStudioOwnerCopies } from "./slide-studio-o
     DATA = data;
     window.RK = Object.assign(window.RK || {}, {
       data: data,
+      draftPreview: previewDraft,
       published: published,
       publishedSig: publishedSig,
       sig: sig,

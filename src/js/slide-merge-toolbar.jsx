@@ -20,8 +20,25 @@ export function ToolIcon({ name }) {
   return <svg data-tool-icon={name} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={toolPaths[name]} /></svg>;
 }
 
-export function ToolMenu({ label, icon, children, disabled, active = false, caption, showChevron = true }) {
+export function ToolMenu({ label, icon, children, disabled, active = false, caption, showChevron = true, menuNavigation = false }) {
   const details = useRef(null);
+  const keyboardFocus = useRef(null);
+  const [open, setOpen] = useState(false);
+  function navigate(event) {
+    if (!menuNavigation || disabled) return;
+    const items = [...details.current.querySelectorAll('[role="menuitemradio"]:not(:disabled)')];
+    if (!items.length) return;
+    const summary = details.current.querySelector("summary"), key = event.key;
+    if (event.target === summary && (["ArrowDown", "ArrowUp"].includes(key) || !details.current.open && ["Enter", " "].includes(key))) {
+      event.preventDefault(); event.stopPropagation();
+      if (details.current.open) (items.find(item => item.getAttribute("aria-checked") === "true") || items[0]).focus();
+      else { keyboardFocus.current = key; details.current.open = true; }
+    } else if (items.includes(event.target) && ["ArrowDown", "ArrowUp", "Home", "End"].includes(key)) {
+      event.preventDefault(); event.stopPropagation();
+      const index = items.indexOf(event.target);
+      items[key === "Home" ? 0 : key === "End" ? items.length - 1 : (index + (key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus();
+    } else if (key === "Tab" && details.current.open) { details.current.open = false; summary.focus(); }
+  }
   useEffect(() => { if (disabled && details.current) details.current.open = false; }, [disabled]);
   useEffect(() => {
     const outside = event => { if (!details.current?.contains(event.target)) details.current.open = false; };
@@ -32,7 +49,8 @@ export function ToolMenu({ label, icon, children, disabled, active = false, capt
     window.addEventListener("resize", resize);
     return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape, true); window.removeEventListener("resize", resize); };
   }, []);
-  return <details className={`merge-tool-menu ${active ? "is-active" : ""}`} ref={details} onToggle={event => {
+  return <details className={`merge-tool-menu ${active ? "is-active" : ""}`} ref={details} onKeyDown={navigate} onToggle={event => {
+    setOpen(event.currentTarget.open);
     const panel = details.current.querySelector(".merge-tool-pop");
     if (event.currentTarget.open) {
       document.querySelectorAll("details.merge-tool-menu[open]").forEach(other => { if (other !== details.current) other.open = false; });
@@ -43,10 +61,15 @@ export function ToolMenu({ label, icon, children, disabled, active = false, capt
       const box = panel.getBoundingClientRect(), top = box.height <= below || below >= above ? anchor.bottom + 8 : anchor.top - box.height - 8;
       panel.style.left = `${Math.max(8, Math.min(anchor.left, innerWidth - box.width - 8))}px`;
       panel.style.top = `${Math.max(8, top)}px`;
-    } else panel.hidePopover();
+      if (keyboardFocus.current) {
+        const items = [...panel.querySelectorAll('[role="menuitemradio"]:not(:disabled)')];
+        (items.find(item => item.getAttribute("aria-checked") === "true") || items[keyboardFocus.current === "ArrowUp" ? items.length - 1 : 0])?.focus();
+        keyboardFocus.current = null;
+      }
+    } else { keyboardFocus.current = null; panel.hidePopover(); }
   }}>
-    <summary title={label} aria-label={label} aria-disabled={disabled || undefined} onClick={event => { if (disabled) event.preventDefault(); }}>{React.isValidElement(icon) ? icon : <ToolIcon name={icon} />}{caption && <span>{caption}</span>}{showChevron && <ToolIcon name="chevron" />}</summary>
-    <div className="merge-tool-pop" popover="manual" onClick={event => { if (event.target.closest("button[data-close]")) details.current.open = false; }}>{children}</div>
+    <summary title={label} aria-label={label} aria-haspopup={menuNavigation ? "menu" : undefined} aria-expanded={menuNavigation ? open : undefined} aria-disabled={disabled || undefined} onClick={event => { if (disabled) event.preventDefault(); }}>{React.isValidElement(icon) ? icon : <ToolIcon name={icon} />}{caption && <span>{caption}</span>}{showChevron && <ToolIcon name="chevron" />}</summary>
+    <div className="merge-tool-pop" popover="manual" onClick={event => { if (event.target.closest("button[data-close]")) { details.current.open = false; if (menuNavigation) details.current.querySelector("summary").focus(); } }}>{children}</div>
   </details>;
 }
 

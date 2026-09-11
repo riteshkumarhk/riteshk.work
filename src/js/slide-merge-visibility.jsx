@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Globe, LockKeyhole } from "lucide-react";
+import { Globe, Lock, LockKeyhole, LockOpen } from "lucide-react";
 import { ToolMenu } from "./slide-merge-toolbar.jsx";
 import { DeckDialog } from "./slide-merge-navigator.jsx";
 import { deckVisibility } from "./slide-merge-visibility.mjs";
@@ -7,7 +7,7 @@ import "../../css/slide-merge-visibility.css";
 
 export function VisibilityMenu({ deck, disabled, onChange, publication = null }) {
   const isPublic = deckVisibility(deck) === "public";
-  const Icon = isPublic ? Globe : LockKeyhole;
+  const Icon = publication ? isPublic ? LockOpen : Lock : isPublic ? Globe : LockKeyhole;
   return <div className="merge-visibility">
     <ToolMenu label={`Slideshow visibility: ${isPublic ? "public" : "owner-only"} draft`} icon={<Icon size={18} strokeWidth={1.75} aria-hidden="true" />} disabled={disabled} showChevron={false}>
       <div className="merge-visibility-heading">Draft visibility</div>

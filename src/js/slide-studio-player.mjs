@@ -27,12 +27,12 @@ async function openStudioDeck(work, options) {
   if (!document) throw new Error("This slideshow is owner-only. Open it in Studio or owner Present mode.");
   window.EXCALIDRAW_ASSET_PATH ||= new URL("/studio/slide-lab/assets/", location.href).href;
   const stylesheet = window.document.createElement("link");
-  stylesheet.rel = "stylesheet"; stylesheet.href = "/studio/slide-lab/assets/audience.css?v=1.0";
+  stylesheet.rel = "stylesheet"; stylesheet.href = "/studio/slide-lab/assets/audience.css?v=1.1";
   stylesheet.dataset.nativeAudience = "true";
   const loaded = new Promise((resolve, reject) => { stylesheet.onload = resolve; stylesheet.onerror = () => reject(new Error("Presentation styles could not be loaded")); });
   window.document.head.append(stylesheet);
   try {
-    const entry = "/studio/slide-lab/assets/audience.js?v=1.2";
+    const entry = "/studio/slide-lab/assets/audience.js?v=1.5";
     const [renderer] = await Promise.all([import(entry), loaded]);
     return await renderer.presentNativeDocument(work, document, { ...options, onClose: () => { stylesheet.remove(); options.onClose?.(); } });
   } catch (error) { stylesheet.remove(); throw error; }

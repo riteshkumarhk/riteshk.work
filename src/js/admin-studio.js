@@ -26,6 +26,7 @@ import { prepareStudioPublication } from "./slide-studio-publication.mjs";
 import { publicMediaReference } from "./slide-merge-visibility.mjs";
 import { completeStudioBackup } from "./studio-content-backup.mjs";
 import { presentStudioDeck } from "./slide-studio-player.mjs";
+import { openPresenterTab } from "./presenter-tab.mjs";
 import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
 import { createAiCatalog } from "./ai-model-catalog.mjs";
 import { createAiOrchestrator } from "./ai-orchestrator.mjs";
@@ -34,6 +35,7 @@ import { parseCompositionResponse, compositionRevision, COMPOSITION_RESPONSE_SCH
 import { mountAiRoutingPanel } from "./ai-routing-panel.mjs";
 import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
 import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
+import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs";
 
 (function () {
   "use strict";
@@ -397,10 +399,10 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
   }
   function forceReveal() { forceRevealDoc(document); }
 
-  function status(msg, ok) {
+  function status(msg, ok, fromNative = false) {
     const s = root && root.querySelector(".adm__status");
     if (s) { s.textContent = msg; s.title = msg; s.classList.toggle("ok", !!ok); }
-    nativeSlideSession?.editor?.notify(msg);
+    if (!fromNative) nativeSlideSession?.editor?.notify(msg);
   }
 
   // The Publish button + the "\u2715" leave-options flyout are contextual: they only
@@ -767,6 +769,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     board: svgIco('<path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/>'),
     trash: svgIco('<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>'),
     play: svgIco('<path d="M6 4.5v15a.7.7 0 0 0 1.06.6l12-7.5a.7.7 0 0 0 0-1.2l-12-7.5A.7.7 0 0 0 6 4.5z"/>'),
+    stop: svgIco('<rect x="4" y="4" width="16" height="16" rx="2"/>'),
     slides: svgIco('<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>'),
     group: svgIco('<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="7" height="5" rx="1"/><rect x="10" y="12" width="7" height="5" rx="1"/>'),
     ungroup: svgIco('<rect x="5" y="4" width="8" height="6" rx="1"/><rect x="11" y="14" width="8" height="6" rx="1"/>'),
@@ -2456,18 +2459,30 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     if (!arr.length) return { off: true };
     var prov = "openai";
     try { if (aiGet(aiScope("txt"), "provider") === "gemini") prov = "gemini"; } catch (e) {}   // embeddings follow the text provider (Claude has none → openai)
+    const job = aiSession.begin("analysis", "Semantic comparison");
+    const usageContext = { sessionId: job.sessionId, jobId: job.id, callId: job.id };
+    let completed = false;
     try {
       var r = await fetch(_emUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + _emAuth },
         body: JSON.stringify({ input: arr, provider: prov }),
+        signal: job.signal,
       });
       if (r.status === 501) return { unavailable: true, reason: "no embeddings provider is set up \u2014 Claude has none, so add an OpenAI or Gemini key to your proxy" };   // stable config state, not a transient failure
       if (!r.ok) return { failed: true, reason: r.status === 404 ? "the /embed route isn\u2019t deployed on your proxy yet" : r.status === 401 ? "the access token was rejected" : "the server returned error " + r.status };
       var j = await r.json().catch(function () { return null; });
-      if (j && Array.isArray(j.embeddings) && j.embeddings.length) { try { aiUsageRecord(prov, "embeddings", Math.ceil(arr.join(" ").length / 4), 0); } catch (e) {} return { embeddings: j.embeddings }; }
+      job.signal.throwIfAborted();
+      if (j && Array.isArray(j.embeddings) && j.embeddings.length) {
+        const usage = aiUsageFromJson(prov, j);
+        if (usage) aiUsageRecord(prov, "embeddings", usage.in, usage.out, usageContext);
+        else aiUsageRecord(prov, "embeddings", Math.ceil(arr.join(" ").length / 4), 0, { ...usageContext, estimated: true });
+        completed = true;
+        return { embeddings: j.embeddings };
+      }
       return { failed: true, reason: "no embeddings were returned" };
-    } catch (e) { return { failed: true, reason: "the proxy couldn\u2019t be reached (offline, or CORS isn\u2019t allowing this origin)" }; }
+    } catch (e) { return { failed: true, reason: job.signal.aborted ? "The AI request was cancelled." : "the proxy couldn\u2019t be reached (offline, or CORS isn\u2019t allowing this origin)" }; }
+    finally { aiSession.finish(job.id, job.signal.aborted ? "cancelled" : completed ? "complete" : "error"); }
   }
   async function atsSemNeural(resumeText, jd) {
     if (!String(jd || "").trim() || !String(resumeText || "").trim()) return { off: true };
@@ -6080,19 +6095,66 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
       addBtn +
       "</section>";
   }
-  // Which tab a case study opens on = how far along it is (new -> Generate; details -> Details;
-  // highlights -> Highlights; sections started -> Story).
+  function studyHasSlides(w) {
+    var st = (w && w.study) || {};
+    if (st.nativeDeck) return Number(st.nativeDeck.slideCount) > 0;
+    if (Array.isArray(st.slides)) return st.slides.length > 0;
+    return !!(st.nativeDeckEnc || st.slidesOwnerEnc || st.slidesEnc || st.nativeDeckPublic?.slides?.length);
+  }
+  function studyVisitorUrl(w, slides = false) {
+    const query = new URLSearchParams({ work: w.id, draft: "1" });
+    if (slides) query.set("slideshow", "1");
+    return "/?" + query.toString();
+  }
+  async function openStudyVisitor(i, slides = false) {
+    const work = data.work[i];
+    if (!work || (slides ? !studyHasSlides(work) : !work.study?.blocks?.length)) return;
+    const tab = window.open("about:blank", "_blank");
+    if (!tab) { status("Allow a new tab to open this preview."); return; }
+    try { tab.sessionStorage.removeItem(AI_SESSION_KEY); } catch {}
+    tab.opener = null;
+    try {
+      if (nativeSlideSession?.work === work && nativeSlideSession.editor) await nativeSlideSession.editor.flush();
+      if (!data.work.includes(work)) throw new Error("The project changed before its preview opened.");
+      if (!saveDraft(true)) throw new Error("The current draft could not be saved for preview. Free local storage and try again.");
+      tab.location.replace(studyVisitorUrl(work, slides));
+    } catch (error) { tab.close(); status(error.message || "The preview could not be opened."); }
+  }
+  function openStudyPresentation(i, options = {}) {
+    const work = data.work[i];
+    if (!work || !studyHasSlides(work)) return;
+    if (window.__RK_NATIVE_PRESENTER) return window.RK.presentDeck(work, { ...options, autoStart:true });
+    return openPresenterTab({
+      url: studyVisitorUrl(work, true),
+      prepare: async () => {
+        if (nativeSlideSession?.work === work && nativeSlideSession.editor) await nativeSlideSession.editor.flush();
+        if (!data.work.includes(work)) throw new Error("The project changed before its slideshow opened.");
+        if (!saveDraft(true)) throw new Error("The current draft could not be saved. Free local storage and try again.");
+      },
+      present: (audience, presenterWindow, _prepared, onClose) => {
+        const settings = { ...options, draft:true, autoStart:false, presenterWindow, onClose:() => { options.onClose?.(); onClose(); } };
+        if (work.study?.nativeDeck || work.study?.nativeDeckEnc) return presentNativeWork(work.id, settings, (item, presentation) => audience.RK.presentDeck(item, presentation));
+        return audience.RK.presentDeck(work, { ...settings, onSlideEdit:options.onSlideEdit || ((slide, key, value) => {
+          if (!data.work.includes(work) || !["notes", "durationMinutes"].includes(key) || !work.study?.slides?.includes(slide)) throw new Error("This slide is no longer editable.");
+          slide[key] = value;
+          if (!saveDraft(true)) throw new Error("The speaker notes could not be saved.");
+        }) });
+      },
+      onError: error => status(error.message || "The slideshow could not be opened.")
+    });
+  }
   function studyLandingTab(w) {
     var st = (w && w.study) || {};
+    if (studyHasSlides(w)) return "slides";
     if ((st.blocks || []).length) return "story";
     var sk = st.skim || {};
     var hasHi = ["tagline", "role", "team", "timeline", "scope"].some(function (k) { return st[k] && String(st[k]).trim(); }) ||
+      (sk.hook && String(sk.hook).trim()) || (sk.points && sk.points.length) ||
       (sk.beats && sk.beats.length) || (sk.media && sk.media.length);
     if (hasHi) return "highlights";
-    if ((w.desc && String(w.desc).trim()) || (w.cardDesc && String(w.cardDesc).trim()) || (w.tags && String(w.tags).trim()) || w.image) return "details";
-    return "gen";
+    return "details";
   }
-  var L2_TABS = [["gen", "Generate using AI"], ["details", "Details"], ["highlights", "Highlights"], ["story", "Story"]];
+  var L2_TABS = [["gen", "Generate using AI"], ["details", "Details"], ["highlights", "Highlights"], ["story", "Case study"], ["slides", "Slideshow"]];
   var _lastCaseTab = "story"; // remembers the case-study sub-tab when you flip to Slideshow
   function l2Mode() { return l2Tab === "slides" ? "slides" : "case"; }
   function l2ModeBarHtml() { return l2Mode() === "case" ? l2aiBtn() : ""; }   // just the AI-tools button; the Case study | Slideshow toggle was removed (the deck is entered from the Work-tab card CTA)
@@ -6107,16 +6169,42 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
   }
   function l2TabsHtml() {
     return L2_TABS.map(function (t) {
-      return '<button type="button" class="l2tab' + (l2Tab === t[0] ? " is-on" : "") + '" data-act="l2tab" data-l2tab="' + t[0] + '">' + t[1] + "</button>";
+      return '<button type="button" role="tab" aria-selected="' + (l2Tab === t[0]) + '" tabindex="' + (l2Tab === t[0] ? "0" : "-1") + '" class="l2tab' + (l2Tab === t[0] ? " is-on" : "") + '" data-act="l2tab" data-l2tab="' + t[0] + '">' + t[1] + "</button>";
     }).join("");
+  }
+  function caseVisibilityHtml(work, index) {
+    const isPrivate = !!work.hidden && !work.featured;
+    const label = "Case study visibility: " + (isPrivate ? "private" : "public") + " draft";
+    return '<details class="adm__case-visibility"><summary title="' + label + '" aria-label="' + label + '">' + (isPrivate ? IC.lock : IC.unlock) + '</summary>' +
+      '<div class="adm__dev-pop" popover="manual"><div class="adm__visibility-heading">Draft visibility</div>' +
+      '<label class="chk"><input type="checkbox" data-act="work-hidden" data-index="' + index + '"' + (isPrivate ? " checked" : "") + (work.featured ? " disabled" : "") + '>Private case study</label>' +
+      '<p>' + (work.featured ? "Remove from the homepage before making this case study private." : isPrivate ? "Ticket or recovery pass required after Publish." : "Public after Publish.") + '</p></div></details>';
+  }
+  function paintCaseVisibility() {
+    const host = root && root.querySelector("[data-case-visibility]");
+    if (!host) return;
+    const work = !journeyOpen && openStudy >= 0 && l2Tab !== "slides" ? data.work[openStudy] : null;
+    host.hidden = !work || !!work.encWork;
+    host.innerHTML = host.hidden ? "" : caseVisibilityHtml(work, openStudy);
   }
   function paintL2Tabs() {
     var show = openStudy >= 0 && !journeyOpen;
-    var caseMode = show && l2Mode() === "case";
     var tb = root && root.querySelector("[data-l2tabs]");
-    if (tb) { tb.innerHTML = caseMode ? l2TabsHtml() : ""; tb.hidden = !caseMode; }
+    if (tb) {
+      const focused = tb.contains(document.activeElement);
+      tb.innerHTML = show ? l2TabsHtml() : ""; tb.hidden = !show;
+      if (show) requestAnimationFrame(() => {
+        const selected = tb.querySelector('[aria-selected="true"]');
+        if (!selected || tb.hidden) return;
+        const bounds = tb.getBoundingClientRect(), active = selected.getBoundingClientRect();
+        if (active.right > bounds.right) tb.scrollLeft += active.right - bounds.right;
+        else if (active.left < bounds.left) tb.scrollLeft -= bounds.left - active.left;
+        if (focused) selected.focus({ preventScroll: true });
+      });
+    }
     var mb = root && root.querySelector("[data-l2modebar]");
     if (mb) { mb.innerHTML = show ? l2ModeBarHtml() : ""; mb.hidden = !show; } // Case study | Slideshow tab nav stays in the left bar in both modes
+    paintCaseVisibility();
   }
   // Auto-hide the sticky L2 bar (title + tabs) on scroll down, reveal on scroll up.
   function l2BarScroll() {
@@ -6161,7 +6249,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     if (ic) ic.innerHTML = devIconFor(d);
     var nm = root.querySelector("[data-dev-lbl]");
     if (nm) nm.textContent = isDev ? d.name : "Responsive";
-    root.querySelectorAll(".adm__dev-opt").forEach(function (o) { o.classList.toggle("is-on", o.dataset.dev === previewDevice); });
+    root.querySelectorAll(".adm__dev-opt[data-dev]").forEach(function (o) { o.classList.toggle("is-on", o.dataset.dev === previewDevice); });
     refitDevice();
   }
   // A switch under the Sections title to unlock this study's "Locked" (deeper-cut) sections for editing.
@@ -6667,7 +6755,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     work.study.slidesPublic = document.slidesPublic === true;
     if (!saveDraft(true, { recordHistory: false })) throw new Error("Slides are recoverable on this device, but the Studio draft reference was not saved. Retry before leaving.");
   }
-  async function presentNativeWork(id, options = {}) {
+  async function presentNativeWork(id, options = {}, present = presentStudioDeck) {
     const work = data.work.find(item => item.id === id);
     if (!work || !nativeSlidesEnabled(work)) throw new Error("This case study's slideshow is unavailable");
     const active = nativeSlideSession?.work === work ? nativeSlideSession : null;
@@ -6684,7 +6772,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     }
     if (!current() || !document) throw new Error("The case-study presentation session has changed");
     let queue = Promise.resolve();
-    return presentStudioDeck(work, { ...options, document, onSlideEdit: (slide, key, value) => {
+    return present(work, { ...options, document, onSlideEdit: (slide, key, value) => {
       if (!["notes", "durationMinutes"].includes(key) || !document.slides.some(item => item.id === slide.id)) throw new Error("This slide's presenter metadata is not editable");
       queue = queue.catch(() => {}).then(async () => {
         if (!current()) throw new Error("The case-study presentation session has changed");
@@ -6718,17 +6806,23 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     nativeSlideSession = session;
     root.classList.add("is-native-slides");
     const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
-    const styles = ["/studio/slide-lab/assets/editor.css?v=1.3", "/css/slide-studio.css?v=1.0"].map(href => new Promise((resolve, reject) => {
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.5", "/css/slide-studio.css?v=1.3"].map(href => new Promise((resolve, reject) => {
       const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.4";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.7";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
       session.editor = module.mountSlideEditor(container, {
         caseStudyId: work.id, title: work.title || "Untitled deck", toolbar, statusbar,
+        onStatus: message => {
+          if (!current() || publishing) return;
+          if (message.startsWith("Saved on this device")) narrate();
+          else status(message, false, true);
+        },
+        openPreview: () => openStudyPresentation(data.work.indexOf(work)),
         isPublishing: () => publishing,
         savedStatus: () => lastPublishError ? "Saved on this device. " + lastPublishError : isDirty() ? "Saved on this device - unpublished changes" : "Saved on this device - all changes published",
         publication: () => {
@@ -6763,7 +6857,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     });
   }
   function nativeSlideClickGate(event) {
-    if (!nativeSlideSession || nativeSlideReplay || event.target.closest(".merge-shell,[data-native-slide-toolbar],[data-native-slide-status]")) return;
+    if (!nativeSlideSession || nativeSlideReplay || event.target.closest('.merge-shell,[data-native-slide-toolbar],[data-native-slide-status],[data-act="logs-rec"]')) return;
     const trigger = event.target.closest('.adm__tab,[data-l2-back],[data-exit-save],[data-exit-discard],[data-publish],[data-act]');
     if (!trigger) return;
     if (trigger.hasAttribute("data-exit-discard")) { disposeNativeSlides(); return; }
@@ -6787,7 +6881,12 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     if (root) root.classList.toggle("is-slidestage", active);
     if (vwrap) vwrap.hidden = !active;
     var _ntb = root && root.querySelector("[data-newtab]");   // in slideshow this button rehearses the deck (contextual)
-    if (_ntb && !_ntb.classList.contains("is-visit")) { _ntb.title = active ? "Slide Show from beginning" : "Open live preview in a new tab"; _ntb.setAttribute("aria-label", _ntb.title); }
+    if (_ntb && !_ntb.classList.contains("is-visit")) {
+      const work = openStudy >= 0 ? data.work[openStudy] : null;
+      _ntb.title = active ? "Open slideshow in a new tab" : work ? "Open case study in a new tab" : "Open live preview in a new tab";
+      _ntb.setAttribute("aria-label", _ntb.title);
+      _ntb.disabled = !!work && !(active ? studyHasSlides(work) : work.study?.blocks?.length);
+    }
     if (!stage) return;
     if (active && nativeSlidesEnabled(data.work[openStudy])) {
       stage.hidden = false;
@@ -8265,14 +8364,12 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     if (openStudy === i) {
       return '<div class="study__toggle is-open"><button class="btn study__editbtn is-open" data-act="study-toggle" data-index="' + i + '">' + IC.chevD + ' Close case-study editor</button></div>';
     }
-    var preview = n ? '<a class="btn btn--ghost study__previewbtn" href="/?work=' + encodeURIComponent(w.id) + '&draft" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '" title="Open this project page in a new tab">Preview ' + IC.ext + '</a>' : "";
-    var st = w.study || {}, deckN = st.nativeDeck ? (Number(st.nativeDeck.slideCount) || 0) : (st.slides && st.slides.length) || 0, sealedDeck = !!(st.slidesEnc && !deckN);
-    var slidesLbl = deckN ? ("Edit slideshow \u00b7 " + deckN + " slide" + (deckN === 1 ? "" : "s")) : (sealedDeck ? "Edit slideshow" : "Add slideshow");
-    var slidesBtn = '<button class="btn btn--ghost study__slidesbtn' + (deckN || sealedDeck ? " is-built" : "") + '" data-act="study-slides" data-index="' + i + '" title="' + (deckN || sealedDeck ? "Edit this project's presentation deck" : "Compose a presentation deck from this project") + '">' + IC.board + " " + slidesLbl + "</button>";
+    var preview = n ? '<a class="btn btn--ghost study__previewbtn" href="' + escHtml(studyVisitorUrl(w)) + '" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '" title="Open the current case-study draft in a new tab">Preview ' + IC.ext + '</a>' : "";
+    var slidesBtn = studyHasSlides(w) ? '<a class="btn btn--ghost study__slidesbtn is-built" href="' + escHtml(studyVisitorUrl(w, true)) + '" target="_blank" rel="noopener" data-act="study-slideshow-preview" data-index="' + i + '" title="Open the current slideshow draft in a new tab">' + IC.board + ' Slideshow</a>' : "";
     return '<div class="study__toggle">' +
-      '<button class="btn study__editbtn" data-act="study-toggle" data-index="' + i + '">' + IC.edit + ' Edit case-study page</button>' +
-      slidesBtn +
+      '<button class="btn study__editbtn" data-act="study-toggle" data-index="' + i + '" title="Edit project canvas">' + IC.edit + ' Edit</button>' +
       preview +
+      slidesBtn +
       "</div>";
   }
   function setStudyUnlock(st, phrase) {
@@ -9020,8 +9117,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
         const secText = nSec ? (nSec + " section" + (nSec > 1 ? "s" : "")) : (w.study ? "no sections yet" : "no case study yet");
         const hasTitle = w.title && w.title !== "Project title";
         const titleHtml = hasTitle ? escHtml(w.title) : '<span class="workcard__title-hint">Untitled \u2014 add a title in the case study</span>';
-        const eyeTitle = featd ? "On the homepage - click to remove" : (priv ? "Untick Make private first to feature" : "Feature on the homepage");
-        const privTitle = featd ? "Remove from the homepage first" : "Encrypt this project - it opens only via a ticket or your recovery pass";
+        const eyeTitle = featd ? "On the homepage - click to remove" : (priv ? "Make this case study public in its status bar before featuring it" : "Feature on the homepage");
         html += '<section class="adm__group adm__lsec workcard' + (priv ? " is-private" : "") + (featd ? " is-featured" : "") + '">' +
           '<div class="adm__lsec-head">' +
             '<span class="sortgrip" data-grip data-sortkey="list:work" title="Drag to reorder" aria-label="Drag to reorder" style="position:absolute;left:0;top:0">' + GRIP_SVG + '</span>' +
@@ -9040,9 +9136,6 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
           '<div class="adm__lsec-body">' +
             '<div class="af__row">' + itemField("work", i, "client", "Client") + itemField("work", i, "period", "Period") + '</div>' +
             '<div class="workcard__foot">' +
-              '<label class="chk workcard__private' + (featd ? " is-disabled" : "") + '" title="' + privTitle + '">' +
-                '<input type="checkbox" data-act="work-hidden" data-index="' + i + '"' + (priv ? " checked" : "") + (featd ? " disabled" : "") + ' /> ' +
-                LOCK_SVG + ' Make private: shown only via a ticket</label>' +
               studyToggle(w, i) +
             '</div>' +
           '</div>' +
@@ -10548,6 +10641,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     if (!data.work[i]) return;
     if (!data.work[i].study) data.work[i].study = blankStudy();
     const ownerWork = data.work[i], ownerStudy = ownerWork.study;
+    let targetTab = landOn || studyLandingTab(ownerWork);
     try {
       if (ownerStudy.authorSectionsEnc && !ownerStudy.authorSectionsRestored) {
         const saved = await decryptStudioOwner(ownerStudy.authorSectionsEnc);
@@ -10555,7 +10649,8 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
         if (saved?.version !== 1 || saved.caseStudyId !== ownerWork.id || !Array.isArray(saved.blocks)) throw new Error("The private case-study copy is invalid");
         ownerStudy.blocks = saved.blocks; ownerStudy.authorSectionsRestored = true;
       }
-      if (landOn === "slides" && ownerStudy.slidesOwnerEnc && !ownerStudy.legacyDeckRestored) {
+      if (!landOn) targetTab = studyLandingTab(ownerWork);
+      if (targetTab === "slides" && ownerStudy.slidesOwnerEnc && !ownerStudy.legacyDeckRestored) {
         const slides = await decryptStudioOwner(ownerStudy.slidesOwnerEnc);
         if (data.work[i] !== ownerWork) return;
         if (!Array.isArray(slides)) throw new Error("The private slideshow copy is invalid");
@@ -10564,7 +10659,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     } catch (error) { status(error.message || "Could not unlock this project's editing copy"); return; }
     if (!nativeSlidesEnabled(ownerWork)) slideMigrateDeckToFree(ownerStudy);
     openStudy = i;
-    l2Tab = (landOn === "slides") ? "slides" : studyLandingTab(data.work[i]);
+    l2Tab = targetTab;
     _l2ScrollY = 0;
     openBlock = -1;
     openSlide = -1;
@@ -10615,6 +10710,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     disposeNativeSlides();
     openStudy = -1;
     openBlock = -1;
+    paintL2Tabs();
     if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
     if (root) { root.classList.remove("is-l2"); root.classList.remove("is-preview"); root.classList.remove("is-noprev"); root.classList.remove("is-slidestage"); root.classList.remove("is-casestage"); }
     var _stg = root && root.querySelector("[data-slidestage]"); if (_stg) { _stg.hidden = true; _stg.innerHTML = ""; }
@@ -11077,11 +11173,14 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     } else if (t.dataset.act === "work-hidden") {
       const w = data.work[+t.dataset.index];
       if (!w) return;
+      if (w.featured && t.checked) { t.checked = false; status("Remove this case study from the homepage before making it private."); return; }
       w.hidden = t.checked;
       if (t.checked) w.featured = false;   // Private can't be Public: closes + locks the eye
       saveDraft(true);
       apply(true);
       renderBody();
+      paintCaseVisibility();
+      requestAnimationFrame(() => root.querySelector(".adm__case-visibility summary")?.focus());
     } else if (t.dataset.act === "present") {
       data.path[+t.dataset.index].present = t.checked;
       apply(true);
@@ -11609,6 +11708,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
       return;
     }
     if (act === "study-toggle") { openL2(i); return; }
+    if (act === "study-preview" || act === "study-slideshow-preview") { e.preventDefault(); openStudyVisitor(i, act === "study-slideshow-preview"); return; }
     if (act === "study-slides") { openL2(i, "slides"); return; }
     if (act === "journey-edit") { openJourneyEditor(); return; }
     if (act === "journey-close") { closeJourneyEditor(); return; }
@@ -11749,7 +11849,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
       _rhopts.onSlideEdit = function (slide, key, value) { if (!["notes", "durationMinutes"].includes(key) || !_rhw.study || !_rhw.study.slides || !_rhw.study.slides.includes(slide)) throw new Error("Slide is not editable"); slide[key] = value; if (!saveDraft(true)) throw new Error("Draft storage full"); };
       _rhopts.onClose = function () { renderL2(); };
       if (b.dataset.sindex != null && _rhw.study && _rhw.study.slides) { var _full = _rhw.study.slides, _tgt = +b.dataset.sindex, _vis = 0; for (var _vi = 0; _vi < _tgt && _vi < _full.length; _vi++) { if (_full[_vi] && !_full[_vi].hidden) _vis++; } _rhopts.start = _vis; }
-      window.RK.presentDeck(_rhw, _rhopts);
+      openStudyPresentation(i, _rhopts);
       return;
     }
     if (act === "slide-pull") { slidePullPicker(i, +b.dataset.sindex); return; }
@@ -11869,7 +11969,6 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     if (act === "fa-select") { if (faJustMoved) { faJustMoved = false; return; } faSel = +b.dataset.aindex; faPlacing = false; renderL2(); return; }
     if (act === "fa-remove") { const bl = faBlock(i, +b.dataset.bindex); if (bl && bl.annotations) { bl.annotations.splice(+b.dataset.aindex, 1); if (faSel >= bl.annotations.length) faSel = bl.annotations.length - 1; saveDraft(true); renderL2(); } return; }
     if (act === "fa-focustoggle") { const bl = faBlock(i, +b.dataset.bindex); const a = bl && bl.annotations && bl.annotations[+b.dataset.aindex]; if (a) { if (a.focus) delete a.focus; else a.focus = { shape: "rect", x: 25, y: 25, w: 35, h: 35 }; faSel = +b.dataset.aindex; saveDraft(true); renderL2(); } return; }
-    if (act === "study-preview") { if (saveDraft(true)) status("Opening your current draft in a new tab\u2026"); else { e.preventDefault(); status("Draft too big to preview \u2014 Publish to view the updates."); } return; }
     if (act === "work-dup") {
       const src = data.work[i];
       if (!src || src.encWork) return;
@@ -13640,6 +13739,9 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     // which is itself the confirmation. Drop the draft and go to the published site.
     localStorage.removeItem(DRAFT_KEY);
     localStorage.removeItem(DRAFT_SIG_KEY);
+    aiSessionPanel?.close(false);
+    aiAutomaticEvaluation?.abort();
+    aiSession.end();
     location.href = "/";
   }
 
@@ -14418,7 +14520,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
   function aiUsageSaveLocal(s) { try { localStorage.setItem(AI_USAGE_KEY, JSON.stringify(s)); } catch (e) {} }
   function aiUsageDay() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
   // Record one call's token usage. Writes locally always + schedules a roaming flush.
-  function aiUsageRecord(provider, model, inTok, outTok) {
+  function aiUsageRecord(provider, model, inTok, outTok, context) {
     inTok = Math.max(0, Math.round(+inTok || 0)); outTok = Math.max(0, Math.round(+outTok || 0));
     if (!inTok && !outTok) return;
     provider = String(provider || "other").slice(0, 20); model = String(model || "?").slice(0, 80);
@@ -14427,6 +14529,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     m.in += inTok; m.out += outTok; m.calls += 1;
     var dates = Object.keys(s.days); if (dates.length > 130) { dates.sort(); dates.slice(0, dates.length - 130).forEach(function (x) { delete s.days[x]; }); }
     aiUsageSaveLocal(s); aiUsageScheduleFlush();
+    aiSession.recordUsage(inTok, outTok, context);
   }
   // Pull {in,out} out of any provider's raw JSON response (chat / vision / embed shapes).
   function aiUsageFromJson(provider, j) {
@@ -14784,7 +14887,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     const result = await aiRunTask(cfg, "image", "", user, { images: !!sourceImage, outputTokens: 0, maxTokens: 1 }, async (selected, model, step) => {
       if (!["openai", "gemini", "custom"].includes(selected.provider)) return { ok: false, status: 400, err: "Image output is unsupported by this provider adapter" };
       const requestPrompt = typeof step.user === "string" ? step.user : step.user.filter(part => part.type === "text").map(part => part.text).join("\n\n");
-      try { return { ok: true, text: await (selected.provider === "gemini" ? aiImageGemini({ ...selected, model, signal: step.options.signal }, requestPrompt, sourceImage) : aiImageOpenAI({ ...selected, model, signal: step.options.signal }, requestPrompt, sourceImage)) }; }
+      try { return { ok: true, text: await (selected.provider === "gemini" ? aiImageGemini({ ...selected, model, signal: step.options.signal, usageContext: step.options.usageContext }, requestPrompt, sourceImage) : aiImageOpenAI({ ...selected, model, signal: step.options.signal, usageContext: step.options.usageContext }, requestPrompt, sourceImage)) }; }
       catch (error) { return { ok: false, status: error.status, err: error.message }; }
     });
     return result.text;
@@ -14803,6 +14906,8 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     }
     let j; try { j = await res.json(); } catch (e) { throw new Error("HTTP " + res.status); }
     if (!res.ok) { const error = new Error((j && j.error && j.error.message) || ("HTTP " + res.status)); error.status = res.status; throw error; }
+    const usage = aiUsageFromJson(cfg.provider, j);
+    if (usage) aiUsageRecord(cfg.provider, cfg.model, usage.in, usage.out, cfg.usageContext);
     const d = (j.data && j.data[0]) || {};
     if (d.b64_json) return "data:image/png;base64," + d.b64_json;
     if (d.url) return d.url;
@@ -14819,6 +14924,8 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: cfg.signal });
     let j; try { j = await res.json(); } catch (e) { throw new Error("HTTP " + res.status); }
     if (!res.ok) { const error = new Error((j && j.error && j.error.message) || ("HTTP " + res.status)); error.status = res.status; throw error; }
+    const usage = aiUsageFromJson("gemini", j);
+    if (usage) aiUsageRecord("gemini", cfg.model, usage.in, usage.out, cfg.usageContext);
     const cand = (j.candidates && j.candidates[0]) || {};
     const outParts = (cand.content && cand.content.parts) || [];
     for (var i = 0; i < outParts.length; i++) {
@@ -14855,15 +14962,28 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
   const aiCatalog = createAiCatalog();
   const aiOrchestrator = createAiOrchestrator({ catalog: aiCatalog });
   const aiTaskAgent = createAiTaskAgent({ router: aiOrchestrator });
+  const aiSession = siteAiSession(window);
+  let aiSessionPanel = null;
   let aiLastRoute = null;
   let aiAutomaticEvaluation = null, aiEvaluationResult = null, aiEvaluationError = "";
   const aiEvaluationAttempts = new Map();
+  async function aiEvaluationCall(config, model, fixture, options) {
+    const job = aiSession.begin("analysis", "Model evaluation"), signal = options.signal ? AbortSignal.any([options.signal, job.signal]) : job.signal;
+    aiSession.route(job.id, { id: job.id, agentRole: "evaluation", provider: config.provider, modelId: model, status: "running" });
+    try {
+      const result = await aiChatOnce(config, model, fixture.system, fixture.user, { ...options, signal,
+        usageContext: { sessionId: job.sessionId, jobId: job.id, callId: job.id }, onOutput: text => aiSession.output(job.id, job.id, text) });
+      signal.throwIfAborted();
+      aiSession.finish(job.id, signal.aborted ? "cancelled" : result.ok ? "complete" : "error", result.err);
+      return result;
+    } catch (error) { aiSession.finish(job.id, signal.aborted ? "cancelled" : "error", error.message); throw error; }
+  }
   function aiWireRouting(container) {
     container.querySelectorAll("[data-ai-routing]").forEach(panel => {
       if (panel.dataset.mounted) return;
       panel.dataset.mounted = "true";
       mountAiRoutingPanel(panel, { router: aiOrchestrator, catalog: aiCatalog, configurations: () => aiRoutingConfigs(aiCfg("txt")),
-        invoke: (config, model, fixture, options) => aiChatOnce(config, model, fixture.system, fixture.user, options),
+        invoke: aiEvaluationCall,
         confirm: options => confirmModal({ okClass: "btn--primary", ...options }), escape: escHtml, icons: { refresh: IC.refresh, spark: IC.spark, close: IC.close, upload: IC.publish, chevron: IC.chevD },
         evaluationState: () => ({ running: !!aiAutomaticEvaluation, result: aiEvaluationResult, error: aiEvaluationError }),
         stopEvaluation: () => aiAutomaticEvaluation?.abort(), onPolicy: (key, value) => { if (key === "autoEvaluate" && !value) aiAutomaticEvaluation?.abort(); } });
@@ -14895,23 +15015,47 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     };
   }
   async function aiRunTask(cfg, task, system, user, opts, invoke) {
-    const configs = await aiRoutingConfigs(cfg);
-    const result = await aiTaskAgent.run(configs, { task, system, user, options: aiTaskOptions(system, user, opts) }, (selected, model, step, receipt) =>
-      step.role === "draft" ? invoke(selected, model, step, receipt) : aiChatOnce(selected, model, step.system, step.user, step.options));
-    aiQueueEvaluation(configs, task, opts?.signal);
-    return result;
+    opts = opts || {};
+    const job = aiSession.begin(task, opts.deckAuthoring ? "Draft presentation" : undefined);
+    const signal = opts.signal ? AbortSignal.any([opts.signal, job.signal]) : job.signal;
+    try {
+      const configs = await aiRoutingConfigs(cfg);
+      signal.throwIfAborted();
+      const options = aiTaskOptions(system, user, { ...opts, signal,
+        onRoute: route => { aiSession.route(job.id, route); opts.onRoute?.(route); },
+        onActivity: event => { aiSession.activity(job.id, event); opts.onActivity?.(event); }
+      });
+      const result = await aiTaskAgent.run(configs, { task, system, user, options }, (selected, model, step, receipt) => {
+        const usageContext = { sessionId: job.sessionId, jobId: job.id, callId: receipt.id };
+        const observed = { ...step, options: { ...step.options,
+          usageContext,
+          onUsage: (input, output) => aiSession.recordUsage(input, output, usageContext),
+          onOutput: step.role === "coordinator" || step.task === "image" ? undefined : chunk => aiSession.output(job.id, receipt.id, chunk)
+        } };
+        return step.role === "draft" ? invoke(selected, model, observed, receipt) : aiChatOnce(selected, model, observed.system, observed.user, observed.options);
+      });
+      signal.throwIfAborted();
+      aiSession.finish(job.id, "complete");
+      aiQueueEvaluation(configs, task, signal);
+      return result;
+    } catch (error) {
+      aiSession.finish(job.id, signal.aborted ? "cancelled" : "error", signal.aborted ? "" : error.message);
+      throw error;
+    }
   }
   async function aiQueueEvaluation(configs, task, signal) {
+    const sessionId = aiSession.state().id;
+    if (!sessionId) return;
     if (aiAutomaticEvaluation || signal?.aborted || !aiEvaluationSuite(task) || Date.now() - (aiEvaluationAttempts.get(task) || 0) < 15 * 60000) return;
     try {
       const state = await aiOrchestrator.state();
-      if (!state.policy.autoEvaluate || !state.policy.evaluationDailyBudget || aiAutomaticEvaluation || signal?.aborted) return;
+      if (aiSession.state().id !== sessionId || !state.policy.autoEvaluate || !state.policy.evaluationDailyBudget || aiAutomaticEvaluation || signal?.aborted) return;
       const pending = new AbortController(); aiAutomaticEvaluation = pending; aiEvaluationError = "";
       aiEvaluationAttempts.set(task, Date.now());
       window.dispatchEvent(new Event("rk:ai-evaluation"));
       try {
         aiEvaluationResult = await aiOrchestrator.evaluate(configs, task, { automatic: true, signal: signal ? AbortSignal.any([signal, pending.signal]) : pending.signal },
-          (config, model, fixture, options) => aiChatOnce(config, model, fixture.system, fixture.user, options));
+          aiEvaluationCall);
       } catch (failure) { aiEvaluationError = pending.signal.aborted || signal?.aborted ? "Automatic tests stopped." : failure.message; }
       finally { if (aiAutomaticEvaluation === pending) aiAutomaticEvaluation = null; window.dispatchEvent(new Event("rk:ai-evaluation")); }
     } catch (failure) { aiEvaluationError = "Automatic tests could not open routing history."; }
@@ -14992,7 +15136,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
   async function aiChatOnce(cfg, model, system, user, opts) {
     var p = cfg.provider, key = cfg.key, base = cfg.base;
     var maxTokens = cfg.routingMaxTokens || opts.maxTokens || 4096;
-    if (p === "anthropic" && maxTokens > 21333) return aiStream(cfg, model, system, user, opts);
+    if (typeof opts.onOutput === "function" || p === "anthropic" && maxTokens > 21333) return aiStream(cfg, model, system, user, opts);
     user = aiPromptContent(p, user);
     var temp = opts.temperature != null ? opts.temperature : 0.7;
     var res, j;
@@ -15000,7 +15144,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
       res = await aiTextRequest(cfg, model, base + "/messages", { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, { model: model, max_tokens: maxTokens, temperature: temp, system: system, messages: [{ role: "user", content: user }] }, opts.signal, opts);
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return aiProviderFailure(res, j);
-      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(j && aiUsageFromJson(p, j));
+      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out, opts.usageContext); })(j && aiUsageFromJson(p, j));
       return aiAnthropicResult(j, res.status);
     }
     if (p === "gemini") {
@@ -15011,8 +15155,8 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return aiProviderFailure(res, j);
       var cand = (j && j.candidates && j.candidates[0]) || {};
-      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
-      return { ok: true, text: ((((cand.content && cand.content.parts) || [])).map(function (x) { return x.text || ""; }).join("")).trim() };
+      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out, opts.usageContext); })(aiUsageFromJson(p, j));
+      return { ok: true, text: ((((cand.content && cand.content.parts) || [])).filter(part => !part.thought).map(function (x) { return x.text || ""; }).join("")).trim() };
     }
     var ob = { model: model, messages: [{ role: "system", content: system }, { role: "user", content: user }], temperature: temp, max_tokens: maxTokens };
     if (p === "openai" && cfg.routingModel?.reasoning === true) {
@@ -15023,7 +15167,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     res = await aiTextRequest(cfg, model, base + "/chat/completions", { "Content-Type": "application/json", Authorization: "Bearer " + key }, ob, opts.signal, opts);
     j = await res.json().catch(function () { return null; });
     if (!res.ok) return aiProviderFailure(res, j);
-    (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
+    (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out, opts.usageContext); })(aiUsageFromJson(p, j));
     return { ok: true, text: ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim() };
   }
   // Streaming variant of aiChatOnce: reads the SSE body and calls onDelta(fullSoFar, chunk)
@@ -15049,24 +15193,25 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
       if (p === "openai" && cfg.routingModel?.reasoning === true) { delete body.temperature; delete body.max_tokens; body.max_completion_tokens = maxTokens; }
       if (opts.json) body.response_format = { type: "json_object" };
     }
-    var full = "", uIn = 0, uOut = 0, uSet = false, stopReason = null, messageStopped = false, thinkingTokens, phase = "transport";
+    var full = "", uIn = 0, uOut = 0, uSet = false, usageRecorded = false, stopReason = null, messageStopped = false, thinkingTokens, phase = "transport";
+    function recordUsage() { if (uSet && !usageRecorded) { usageRecorded = true; aiUsageRecord(p, model, uIn, uOut, opts.usageContext); } }
     try {
       var res = await aiTextRequest(cfg, model, url, headers, body, opts.signal, opts);
       if (!res.ok || !res.body) return aiProviderFailure(res, await res.json().catch(() => null));
       phase = "stream";
-      function push(t) { if (t) { full += t; try { onDelta && onDelta(full, t); } catch (e) {} } }
+      function push(t) { if (t) { full += t; try { onDelta && onDelta(full, t); opts.onOutput?.(t); } catch (e) {} } }
       if (/application\/json/i.test(res.headers.get("content-type") || "")) {
         var plain = await res.json().catch(() => null);
         if (!plain || typeof plain !== "object") return { ok: false, status: res.status, failure: "invalid-response", err: "The service returned an unreadable AI response. No draft was applied." };
         var usage = aiUsageFromJson(p, plain);
         if (plain.error) return aiProviderFailure(res, plain);
-        if (usage) aiUsageRecord(p, model, usage.in, usage.out);
+        if (usage) aiUsageRecord(p, model, usage.in, usage.out, opts.usageContext);
         if (p === "anthropic") {
           const result = aiAnthropicResult(plain, res.status);
           if (result.ok) push(result.text);
           return result;
         }
-        if (p === "gemini") push((plain.candidates?.[0]?.content?.parts || []).map(part => part.text || "").join(""));
+        if (p === "gemini") push((plain.candidates?.[0]?.content?.parts || []).filter(part => !part.thought).map(part => part.text || "").join(""));
         else push(plain.choices?.[0]?.message?.content || "");
         return { ok: !!full.trim(), text: full.trim(), err: full.trim() ? undefined : "The model returned no usable output" };
       }
@@ -15085,17 +15230,18 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
           if (p === "anthropic") {
             if (ev.type === "content_block_start" && ev.content_block?.type === "text") push(ev.content_block.text);
             if (ev.type === "content_block_delta" && ev.delta && (!ev.delta.type || ev.delta.type === "text_delta") && typeof ev.delta.text === "string") push(ev.delta.text);
-            if (ev.type === "message_start" && ev.message?.usage) { uIn = +ev.message.usage.input_tokens || uIn; uSet = true; }
+            if (ev.type === "message_start" && ev.message?.usage) { const usage = aiUsageFromJson(p, ev.message); uIn = usage?.in || uIn; uSet = true; }
             if (ev.type === "message_delta" && ev.delta?.stop_reason) stopReason = ev.delta.stop_reason;
             if (ev.type === "message_stop") messageStopped = true;
             if (ev.usage && ev.usage.output_tokens != null) { uOut = +ev.usage.output_tokens || uOut; thinkingTokens = ev.usage.output_tokens_details?.thinking_tokens; uSet = true; }
           }
-          else if (p === "gemini") { var gp = ev.candidates && ev.candidates[0] && ev.candidates[0].content && ev.candidates[0].content.parts; if (gp) for (var gi = 0; gi < gp.length; gi++) if (gp[gi] && typeof gp[gi].text === "string") push(gp[gi].text); if (ev.usageMetadata) { uIn = +ev.usageMetadata.promptTokenCount || uIn; uOut = (+ev.usageMetadata.candidatesTokenCount || 0) + (+ev.usageMetadata.thoughtsTokenCount || 0) || uOut; uSet = true; } }
+          else if (p === "gemini") { var gp = ev.candidates && ev.candidates[0] && ev.candidates[0].content && ev.candidates[0].content.parts; if (gp) for (var gi = 0; gi < gp.length; gi++) if (gp[gi] && !gp[gi].thought && typeof gp[gi].text === "string") push(gp[gi].text); if (ev.usageMetadata) { uIn = +ev.usageMetadata.promptTokenCount || uIn; uOut = (+ev.usageMetadata.candidatesTokenCount || 0) + (+ev.usageMetadata.thoughtsTokenCount || 0) || uOut; uSet = true; } }
           else { var d = ev.choices && ev.choices[0] && ev.choices[0].delta; if (d && typeof d.content === "string") push(d.content); if (ev.usage) { uIn = +ev.usage.prompt_tokens || uIn; uOut = +ev.usage.completion_tokens || uOut; uSet = true; } }
+          if (uSet) { try { opts.onUsage?.(uIn, uOut); } catch {} }
         }
         if (chunk.done) break;
       }
-      if (uSet) aiUsageRecord(p, model, uIn, uOut);
+      recordUsage();
       if (p === "anthropic") {
         if (!messageStopped && !stopReason) return { ok: false, status: res.status, failure: "incomplete-stream", emitted: !!full, err: "The model connection ended before the answer was complete. No draft was applied." };
         return aiAnthropicResult({ content: [{ type: "text", text: full }], stop_reason: stopReason,
@@ -15103,6 +15249,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
       }
       return { ok: true, text: full.trim() };
     } catch (e) { return { ok: false, err: e.message || String(e), phase, emitted: full.length > 0 }; }
+    finally { recordUsage(); }
   }
   // Pick the first working model and stream it (no fallback once tokens have started flowing).
   async function aiTextStream(cfg, system, user, opts, onDelta) {
@@ -17766,6 +17913,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
           '<button class="adm__hist-btn" data-undo type="button" aria-label="Undo" title="Undo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg></button>' +
           '<button class="adm__hist-btn" data-redo type="button" aria-label="Redo" title="Redo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg></button>' +
         "</div>" +
+        '<nav class="l2tabs" data-l2tabs role="tablist" aria-label="Project editor" hidden></nav>' +
         '<div class="adm__prevgroup" data-prevgroup>' +
         '<button class="adm__bar-prev" data-prevtoggle type="button" aria-label="Show or hide the live preview" title="Hide the live preview" aria-pressed="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="14" y1="4" x2="14" y2="20"/></svg><span class="adm__bar-prev-tx">Live preview</span></button>' +
         '<div class="adm__dev" data-dev-wrap>' +
@@ -17786,7 +17934,6 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
                 '<span class="adm__l2-title"></span>' +
                 '<div class="l2modebar" data-l2modebar></div>' +
               "</div>" +
-              '<div class="l2tabs" data-l2tabs></div>' +
             "</div>" +
             '<div class="adm__l2-body"></div>' +
           "</div>" +
@@ -17800,18 +17947,47 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
         "</section>" +
         '<div class="adm__rzr" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Drag to resize the right panel" title="Drag to resize \u00b7 double-click to reset"><span class="adm__resizer-grip"></span></div>' +
         '<aside class="adm__casestage" data-casestage hidden aria-label="Section editor"></aside>' +
+        '<aside class="adm__ai-panel" id="studio-ai-activity" data-ai-session-panel aria-label="AI activity" hidden></aside>' +
       "</div>" +
       '<footer class="adm__statusbar" aria-label="Document status">' +
-        '<div data-native-slide-status hidden></div>' +
         '<span class="adm__status" aria-live="polite" title="Editing local draft">Editing local draft</span>' +
         '<span class="adm__dmeter" data-draftmeter data-lvl="lo" tabindex="0" aria-label="Local draft storage"><span class="adm__dmeter-dot"></span><span class="adm__dmeter-tx" data-draftmeter-tx>Draft 0%</span></span>' +
+        '<div data-case-visibility hidden></div>' +
+        '<div data-native-slide-status hidden></div>' +
         '<button class="btn btn--ghost adm__logs-btn" data-act="logs-rec" type="button" aria-pressed="false" aria-label="Record activity log" title="Record a log of your taps &amp; jumps to share"><span class="adm__logs-dot"></span><span class="adm__logs-rec-tx" hidden>REC</span></button>' +
+        '<button class="adm__ai-counter" data-ai-session-toggle data-ai-state="idle" type="button" aria-label="AI activity: 0 tokens this session" aria-expanded="false" aria-controls="studio-ai-activity"><span class="adm__ai-spark" aria-hidden="true">' + IC.spark + '</span><span data-ai-session-count>0 tokens</span></button>' +
       '</footer>' +
       '<div class="adm__settings" hidden><div class="adm__set-sheet">' +
         '<div class="adm__set-head"><h2>Settings</h2><button class="btn btn--ghost adm__set-x" data-act="settings-close" type="button" aria-label="Close settings">' + IC.close + '</button></div>' +
         '<div class="adm__set-body"><nav class="adm__set-nav" data-set-nav></nav><div class="adm__set-panel" data-set-panel></div></div>' +
       "</div></div>";
     document.body.appendChild(root);
+    root.addEventListener("toggle", event => {
+      const menu = event.target;
+      if (!menu.matches(".adm__case-visibility")) return;
+      const panel = menu.querySelector("[popover]");
+      if (!menu.open) { panel.hidePopover(); return; }
+      panel.showPopover();
+      const anchor = menu.querySelector("summary").getBoundingClientRect(), box = panel.getBoundingClientRect();
+      panel.style.left = Math.max(8, Math.min(anchor.right - box.width, innerWidth - box.width - 8)) + "px";
+      panel.style.top = Math.max(8, anchor.top - box.height - 8) + "px";
+    }, true);
+    root.addEventListener("pointerdown", event => {
+      const menu = root.querySelector(".adm__case-visibility[open]");
+      if (menu && !menu.contains(event.target)) menu.open = false;
+    });
+    root.addEventListener("keydown", event => {
+      const menu = root.querySelector(".adm__case-visibility[open]");
+      if (event.key === "Escape" && menu) { event.preventDefault(); event.stopPropagation(); menu.open = false; menu.querySelector("summary").focus(); }
+    }, true);
+    aiSessionPanel = mountAiSession(root, aiSession, { close: IC.close, stop: IC.stop });
+    root.querySelector("[data-l2tabs]").addEventListener("keydown", event => {
+      const tab = event.target.closest('[role="tab"]');
+      if (!tab || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const tabs = [...tab.parentElement.querySelectorAll('[role="tab"]')], index = tabs.indexOf(tab);
+      const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      event.preventDefault(); tabs[next].click();
+    });
     logsSyncBtn();   // reflect a recording that survived a studio reload
     body = root.querySelector(".adm__body");
     l2 = root.querySelector(".adm__l2");
@@ -17930,7 +18106,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     var _newtab = root.querySelector("[data-newtab]");
     if (_newtab) _newtab.addEventListener("click", function () {
       try {
-        if (root.classList.contains("is-slidestage") && openStudy >= 0 && data.work[openStudy] && window.RK && window.RK.presentDeck) { var presenterWork = data.work[openStudy]; window.RK.presentDeck(presenterWork, { autoStart:true, onSlideEdit: function (slide, key, value) { if (!["notes", "durationMinutes"].includes(key) || !presenterWork.study?.slides?.includes(slide)) throw new Error("Slide is not editable"); slide[key] = value; if (!saveDraft(true)) throw new Error("Draft storage full"); }, onClose: function () { renderL2(); } }); return; }
+        if (openStudy >= 0 && data.work[openStudy]) { if (l2Tab === "slides") openStudyPresentation(openStudy); else openStudyVisitor(openStudy); return; }
         if (newtabVisitUrl) { window.open(newtabVisitUrl, "_blank", "noopener"); return; }   // post-publish "Visit site" -> the live site
         // Flush the in-memory draft so the new tab's ?preview reads the latest edits. If it's too big for
         // localStorage (many not-yet-published images as data URLs), a separate tab can't see it -> say so.
@@ -18123,6 +18299,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
       } catch (error) { draftRecoveryFailure(error, () => open(hostApi)); return; }
     }
     data = selection.data;
+    aiSession.start();
     // Re-register persisted generated icons into the in-session registry so they resolve in the editor
     // (field/flyout/library) after a reload — the in-memory CUSTOM_ICONS is empty on a fresh load.
     try { if (window.RK && window.RK.registerIcons && data && data.customIcons) window.RK.registerIcons(data.customIcons); } catch (e) {}
@@ -18158,6 +18335,9 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
   function exit() {
     if (!saveDraft(true)) { status("Draft not saved. Download a backup or free storage before leaving Studio."); return; }
     disposeNativeSlides();
+    aiSessionPanel?.close(false);
+    aiAutomaticEvaluation?.abort();
+    aiSession.end();
     autopubStop();
     if (window.RK) { window.RK.data = clone(data); try { window.RK.render(data); } catch (e) {} forceReveal(); }
     if (root) root.classList.remove("is-open");

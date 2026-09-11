@@ -19,8 +19,8 @@ async function textAdapters(fetch, usage = []) {
     return { aiChatOnce, aiStream };
   })()`, {
     fetch,
-    aiUsageFromJson: (provider, result) => result.usage ? { in: result.usage.input_tokens, out: result.usage.output_tokens } : null,
-    aiUsageRecord: (...record) => usage.push(record),
+    aiUsageFromJson: runInNewContext(`(${source.slice(source.indexOf("function aiUsageFromJson"), source.indexOf("function aiUsageScheduleFlush")).trim()})`),
+    aiUsageRecord: (provider, model, input, output, context) => usage.push([provider, model, input, output, ...(context ? [context] : [])]),
     TextDecoder
   });
 }
@@ -228,6 +228,33 @@ test("multimodal adapters preserve image bytes across providers and use declared
   assert.equal(bodies[1].contents[0].parts[1].inlineData.data, "AAECAw==");
   assert.equal(bodies[2].messages[1].content[1].image_url.url, "data:image/png;base64,AAECAw==");
   assert.equal(bodies[2].max_completion_tokens, 500); assert.equal(bodies[2].max_tokens, undefined);
+});
+
+test("session output streams only answer text and correlates actual usage with its job", async () => {
+  const usage = [], output = [], usageUpdates = [], context = { sessionId: "session", jobId: "job", callId: "call" };
+  const events = [
+    { type: "message_start", message: { usage: { input_tokens: 10, cache_read_input_tokens: 5, cache_creation_input_tokens: 2 } } },
+    { type: "content_block_delta", delta: { type: "thinking_delta", thinking: "PRIVATE THOUGHT" } },
+    { type: "content_block_delta", delta: { type: "signature_delta", signature: "PRIVATE SIGNATURE" } },
+    { type: "content_block_delta", delta: { type: "text_delta", text: "Answer " } },
+    { type: "content_block_delta", delta: { type: "text_delta", text: "text" } },
+    { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 30 } },
+    { type: "message_stop" }
+  ];
+  const adapters = await textAdapters(async (url, options) => {
+    assert.equal(JSON.parse(options.body).stream, true);
+    return new Response(events.map(event => "data: " + JSON.stringify(event)).join("\n\n"), { headers: { "content-type": "text/event-stream" } });
+  }, usage);
+  const result = await adapters.aiChatOnce({ provider: "anthropic", key: "synthetic", base: "https://provider.test" }, "available", "System", "Source", { maxTokens: 100, onOutput: chunk => output.push(chunk), onUsage: (input, output) => usageUpdates.push([input, output]), usageContext: context });
+  assert.equal(result.text, "Answer text");
+  assert.deepEqual(output, ["Answer ", "text"]);
+  assert.deepEqual(usage, [["anthropic", "available", 17, 30, context]]);
+  assert.deepEqual(usageUpdates[0], [17, 0]);
+  assert.deepEqual(usageUpdates.at(-1), [17, 30]);
+  const gemini = await textAdapters(async () => Response.json({ candidates: [{ content: { parts: [{ thought: true, text: "PRIVATE REASONING" }, { text: "Visible answer" }] } }] }));
+  const answer = await gemini.aiChatOnce({ provider: "gemini", key: "synthetic", base: "https://provider.test" }, "available", "System", "Source", { maxTokens: 100, onOutput: chunk => output.push(chunk) });
+  assert.equal(answer.text, "Visible answer");
+  assert.doesNotMatch(output.join(""), /PRIVATE/);
 });
 
 test("streaming accepts a proxy JSON response without another call and surfaces SSE errors after partial output", async () => {

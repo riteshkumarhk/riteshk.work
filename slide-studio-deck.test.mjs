@@ -12,6 +12,385 @@ import { assertStudioDeckPublishable, createStudioDeck, STUDIO_DECK_SCHEMA } fro
 import { AI_AGENT_SYSTEM } from "./src/js/ai-task-agent.mjs";
 import { COMPOSITION_RESPONSE_SCHEMA } from "./src/js/slide-merge-ai.mjs";
 
+async function openProjectSlides(page, index = 0) {
+  await page.locator('[data-act="study-toggle"][data-index="' + index + '"]').click();
+  const tab = page.locator('[data-l2tab="slides"]');
+  if (await tab.getAttribute("aria-selected") !== "true") await tab.click();
+}
+
+async function openIntegratedFixture(page) {
+  const published = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
+  published.work = [
+    { id: "integrated-case", client: "Studio fixture", title: "Integrated project", study: { blocks: [{ type: "text", heading: "Published heading", body: "Supported source content." }] } },
+    { id: "empty-case", client: "Empty fixture", title: "Empty project", study: { blocks: [] } }
+  ];
+  await page.context().route("**/*", async route => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.pathname.endsWith("/content.json")) return route.fulfill({ contentType: "application/json", body: JSON.stringify(published) });
+    if (url.hostname === "models.dev") return route.fulfill({ contentType: "application/json", body: "{}" });
+    if (url.hostname === "api.anthropic.com") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: [{ id: "session-model", output_modalities: ["text"], max_input_tokens: 100000, max_tokens: 32000, capabilities: { thinking: { supported: true }, structured_outputs: { supported: true } }, pricing: { input: 1, output: 3 } }] }) });
+    if (!["127.0.0.1", "localhost"].includes(url.hostname) && !["GET", "HEAD"].includes(request.method())) return route.abort();
+    return route.continue();
+  });
+  await page.addInitScript(() => { localStorage.setItem("rk:dev:stub", "1"); localStorage.setItem("rk:ai:mode", "local"); localStorage.setItem("rk:ai:same", "0"); localStorage.setItem("rk:ai:txt:provider", "anthropic"); localStorage.setItem("rk:ai:txt:key", "synthetic-session-key"); });
+  await page.goto((process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510") + "/studio/?devstub");
+  await page.waitForFunction(() => typeof window.__rkDevStudio === "function" && !!window.RK?.data);
+  await page.evaluate(() => window.__rkDevStudio());
+  await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+  await page.evaluate(() => document.querySelectorAll(".pass--lock").forEach(dialog => dialog.remove()));
+  await page.locator('.adm__tab[data-tab="work"]').click();
+  return published;
+}
+
+for (const width of [1440, 390]) test("shared status bar keeps independent case-study and slide locks at " + width + "px", { timeout:60000 }, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless:true});
+  const page = await browser.newPage({viewport:{width:1440, height:1000}}), errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  const footerStyle = () => page.locator(".adm__statusbar").evaluate(element => {
+    const style = getComputedStyle(element);
+    return Object.fromEntries(["height", "padding", "gap", "backgroundColor", "borderTop", "fontFamily"].map(key => [key, style[key]]));
+  });
+  const lockStyle = selector => page.locator(selector).evaluate(element => {
+    const style = getComputedStyle(element), icon = getComputedStyle(element.querySelector("svg"));
+    return {...Object.fromEntries(["width", "height", "padding", "borderRadius", "borderWidth", "backgroundColor", "color"].map(key => [key, style[key]])), iconWidth:icon.width, iconHeight:icon.height};
+  });
+  const sharedControlsIntact = async () => {
+    assert.equal(await page.evaluate(() => window.footerControls.every(element => element.isConnected && element.getClientRects().length && getComputedStyle(element).display !== "none")), true);
+    assert.equal(await page.locator('.adm__statusbar [data-act="logs-rec"]').count(), 1);
+    assert.equal(await page.locator(".adm__statusbar .merge-slide-position,.adm__statusbar .merge-save-status,.adm__statusbar .merge-bar-record").count(), 0);
+  };
+  try {
+    await openIntegratedFixture(page);
+    await page.setViewportSize({width, height:1000});
+    assert.equal(await page.locator('.workcard [data-act="work-hidden"]').count(), 0);
+    assert.equal(await page.locator('.adm__statusbar summary').count(), 0);
+    await page.evaluate(() => { window.footerControls = [".adm__statusbar .adm__status", "[data-draftmeter]", ".adm__logs-btn", "[data-ai-session-toggle]"].map(selector => document.querySelector(selector)); });
+    const baseline = await footerStyle();
+    assert.equal(baseline.height, "32px");
+    await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+    const caseLock = page.locator(".adm__case-visibility summary");
+    await caseLock.waitFor();
+    assert.equal(await caseLock.getAttribute("aria-label"), "Case study visibility: public draft");
+    assert.deepEqual(await footerStyle(), baseline);
+    await sharedControlsIntact();
+    const caseStyle = await lockStyle(".adm__case-visibility summary");
+    await page.screenshot({path:join(tmpdir(), `rk-case-status-${width}.png`)});
+    await caseLock.click();
+    const menu = page.locator(".adm__case-visibility [popover]");
+    await menu.waitFor({state:"visible"});
+    const bounds = await menu.boundingBox();
+    assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1 && bounds.y >= 0);
+    await page.screenshot({path:join(tmpdir(), `rk-case-visibility-${width}.png`)});
+    await page.keyboard.press("Escape");
+    assert.equal(await caseLock.evaluate(element => element === document.activeElement), true);
+    await caseLock.click();
+    await page.getByRole("checkbox", {name:"Private case study", exact:true}).click();
+    await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].hidden === true);
+    assert.equal(await caseLock.getAttribute("aria-label"), "Case study visibility: private draft");
+    await page.locator('[data-l2tab="details"]').click();
+    assert.equal(await caseLock.getAttribute("aria-label"), "Case study visibility: private draft");
+    await page.locator('[data-l2-back]').click();
+    assert.equal(await page.locator('.adm__statusbar summary').count(), 0);
+    await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+    assert.equal(await caseLock.getAttribute("aria-label"), "Case study visibility: private draft");
+    await page.locator('[data-act="logs-rec"]').click();
+    assert.equal(await page.locator('[data-act="logs-rec"]').getAttribute("aria-pressed"), "true");
+    await page.locator('[data-l2tab="slides"]').click();
+    await page.locator('.merge-empty-actions').waitFor();
+    const slideLock = page.locator('[data-native-slide-status] .merge-visibility summary');
+    await slideLock.waitFor();
+    assert.match(await slideLock.getAttribute("aria-label"), /owner-only draft/);
+    assert.equal(await slideLock.locator(".lucide-lock").count(), 1);
+    assert.deepEqual(await footerStyle(), baseline);
+    assert.deepEqual(await lockStyle('[data-native-slide-status] .merge-visibility summary'), caseStyle);
+    await sharedControlsIntact();
+    assert.equal(await page.locator('[data-act="logs-rec"]').getAttribute("aria-pressed"), "true");
+    await page.getByRole("button", {name:"Add blank", exact:true}).click();
+    await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.nativeDeck?.slideCount === 1 && document.querySelector('[data-native-slide-status] summary')?.getAttribute('aria-disabled') !== 'true');
+    await slideLock.click();
+    await page.getByRole("checkbox", {name:"Public slideshow", exact:true}).click();
+    await page.getByRole("button", {name:"Cancel", exact:true}).click();
+    assert.equal(await slideLock.locator(".lucide-lock").count(), 1);
+    await slideLock.click();
+    await page.getByRole("checkbox", {name:"Public slideshow", exact:true}).click();
+    await page.getByRole("button", {name:"Set public draft", exact:true}).click();
+    await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.slidesPublic === true);
+    assert.equal(await slideLock.locator(".lucide-lock-open").count(), 1);
+    assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].hidden), true);
+    await slideLock.click();
+    await page.getByRole("checkbox", {name:"Public slideshow", exact:true}).click();
+    await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.slidesPublic === false);
+    await page.keyboard.press("Escape");
+    await page.locator('[data-act="logs-rec"]').click();
+    assert.equal(await page.locator('[data-act="logs-rec"]').getAttribute("aria-pressed"), "false");
+    await page.locator('.pass:visible').last().getByRole("button", {name:"Close", exact:true}).click();
+    await page.screenshot({path:join(tmpdir(), `rk-slides-status-${width}.png`)});
+    await page.locator('[data-l2tab="story"]').click();
+    assert.equal(await caseLock.getAttribute("aria-label"), "Case study visibility: private draft");
+    await caseLock.click();
+    await page.getByRole("checkbox", {name:"Private case study", exact:true}).click();
+    assert.equal(await caseLock.getAttribute("aria-label"), "Case study visibility: public draft");
+    assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].study.slidesPublic), false);
+    assert.deepEqual(await footerStyle(), baseline);
+    await sharedControlsIntact();
+    await page.locator('[data-l2-back]').click();
+    await page.locator('[data-act="feature"][data-index="0"]').click();
+    await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].featured === true);
+    await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+    await page.locator('.merge-shell').waitFor();
+    await page.locator('[data-l2tab="story"]').click();
+    await caseLock.click();
+    assert.equal(await page.getByRole("checkbox", {name:"Private case study", exact:true}).isDisabled(), true);
+    assert.match(await menu.innerText(), /Remove from the homepage/);
+    assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].hidden), false);
+    await page.keyboard.press("Escape");
+    await page.locator('[data-l2-back]').click();
+    await page.locator('.adm__tab[data-tab="landing"]').click();
+    assert.equal(await page.locator('.adm__statusbar summary').count(), 0);
+    assert.deepEqual(await footerStyle(), baseline);
+    await sharedControlsIntact();
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+for (const width of [1440, 390]) test("integrated project tabs and draft visitor previews at " + width + "px", { timeout: 60000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true, ignoreDefaultArgs:["--disable-popup-blocking"] });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } }), page = await context.newPage(), errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    const published = await openIntegratedFixture(page);
+    await page.setViewportSize({ width, height: 1000 });
+    assert.equal(await page.locator('[data-act="study-preview"][data-index="1"]').count(), 0);
+    assert.equal(await page.locator('[data-act="study-slideshow-preview"]').count(), 0);
+    await page.locator('[data-act="study-toggle"][data-index="1"]').click();
+    assert.equal(await page.locator('[data-l2tab="details"]').getAttribute("aria-selected"), "true");
+    await page.locator('[data-l2-back]').click();
+    await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+    assert.equal(await page.locator('[data-l2tab="story"]').getAttribute("aria-selected"), "true");
+    assert.equal(await page.locator('.adm__workbar [role="tab"]').count(), 5);
+    assert.equal(await page.locator('.adm__l2-bar [data-l2tabs]').count(), 0);
+    await page.locator('[data-l2tab="story"]').focus();
+    await page.keyboard.press('ArrowRight');
+    await page.locator('.merge-empty-actions').waitFor();
+    const activeTab = await page.locator('[data-l2tab="slides"]').evaluate(element => { const rect = element.getBoundingClientRect(), parent = element.parentElement.getBoundingClientRect(); return { left: rect.left, right: rect.right, parentLeft: parent.left, parentRight: parent.right, focused: element === document.activeElement }; });
+    assert.ok(activeTab.left >= activeTab.parentLeft - 1 && activeTab.right <= activeTab.parentRight + 1);
+    assert.equal(activeTab.focused, true);
+    await page.getByRole('button', { name: 'Add blank', exact: true }).click();
+    await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.nativeDeck?.slideCount === 1);
+    await page.locator('.merge-shell canvas.excalidraw__canvas.interactive').dblclick();
+    await page.keyboard.type('Draft audience heading');
+    await page.keyboard.press('Escape');
+    if (!await page.getByRole('textbox', { name: 'Speaker notes', exact: true }).isVisible()) await page.getByRole('button', { name: 'Speaker notes panel', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Speaker notes', exact: true }).fill('PRIVATE VISITOR NOTES');
+    await page.getByRole('textbox', { name: 'Speaker notes', exact: true }).blur();
+    assert.equal(await page.locator('[data-l2tab="slides"]').isVisible(), true);
+    assert.equal(await page.getByRole('button', { name: 'Open slideshow in a new tab', exact: true }).isVisible(), true);
+    const controlOrder = await page.locator('[data-native-slide-toolbar] .merge-bar-views').evaluate(element => [...element.children].map(control => control.getBoundingClientRect().x));
+    assert.deepEqual(controlOrder, [...controlOrder].sort((first, second) => first - second));
+    assert.equal(await page.locator('[data-native-slide-toolbar] .merge-bar-play .lucide-play').count(), 1);
+    await page.locator('.merge-host-slideview summary').click();
+    const menuStyle = await page.evaluate(() => {
+      const styles = selector => { const element = document.querySelector(selector), style = getComputedStyle(element); return Object.fromEntries(['backgroundColor','borderColor','borderRadius','padding','boxShadow'].map(key => [key, style[key]])); };
+      const bounds = document.querySelector('.merge-host-slideview .merge-tool-pop').getBoundingClientRect();
+      return { shared:styles('[data-dev-wrap] .adm__dev-pop'), hosted:styles('.merge-host-slideview .merge-tool-pop'), fits:bounds.x >= 0 && bounds.right <= innerWidth && bounds.y >= 0 && bounds.bottom <= innerHeight };
+    });
+    assert.deepEqual(menuStyle.hosted, menuStyle.shared);
+    assert.equal(menuStyle.fits, true);
+    assert.equal(await page.getByRole('menuitemradio', {name:'Current slide', exact:true}).getAttribute('aria-checked'), 'true');
+    await page.screenshot({path:join(tmpdir(), `rk-hosted-slide-menu-${width}.png`)});
+    await page.getByRole('menuitemradio', { name: 'All slides', exact: true }).click();
+    await page.locator('.merge-all-slides').waitFor();
+    await page.locator('.merge-host-slideview summary').press('ArrowDown');
+    await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'menuitemradio' && document.activeElement.textContent === 'All slides');
+    await page.keyboard.press('Home');
+    assert.equal(await page.getByRole('menuitemradio', { name:'Current slide', exact:true }).evaluate(element => element === document.activeElement), true);
+    await page.keyboard.press('Enter');
+    await page.locator('.merge-host-slideview summary').press('ArrowDown');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('.merge-host-slideview summary').evaluate(element => element === document.activeElement), true);
+    assert.equal(await page.locator('.merge-host-slideview details').getAttribute('open'), null);
+    await page.getByRole('button', { name: 'Editing on', exact: true }).click();
+    assert.equal(await page.locator('.merge-shell').getAttribute('data-editing'), 'false');
+    await page.getByRole('button', { name: 'Rehearse', exact: true }).click();
+    await page.locator('[data-l2tab="story"]').click();
+    await page.locator('.merge-shell').waitFor({ state: 'detached' });
+    await page.evaluate(() => window.__rkDevEdit('work.0.study.blocks.0.heading', 'Current private draft heading'));
+    await page.locator('[data-l2-back]').click();
+    assert.equal(await page.locator('[data-act="study-slideshow-preview"][data-index="0"]').count(), 1);
+    const previewOpened = context.waitForEvent('page');
+    await page.locator('[data-act="study-preview"][data-index="0"]').click();
+    const preview = await previewOpened;
+    await preview.waitForURL(/draft=1/);
+    await preview.waitForFunction(() => !!window.RK?.draftPreview && !!document.querySelector('.pj.is-open'));
+    assert.equal(await preview.locator('.adm.is-open').count(), 0);
+    await preview.locator('.pj.is-open').getByRole('heading', { name: /Current Private Draft Heading/i }).waitFor({ state: 'visible' });
+    assert.match(await preview.locator('.pj.is-open').innerText(), /Current Private Draft Heading/i);
+    await preview.close();
+    const slideshowOpened = context.waitForEvent('page');
+    await page.locator('[data-act="study-slideshow-preview"][data-index="0"]').click();
+    const slideshow = await slideshowOpened;
+    await slideshow.waitForURL(/slideshow=1/);
+    await slideshow.locator('.pjp').waitFor({ state: 'visible' });
+    assert.equal(await slideshow.locator('.merge-shell,.adm.is-open').count(), 0);
+    assert.doesNotMatch(await slideshow.locator('.pjp').textContent(), /PRIVATE VISITOR NOTES/);
+    assert.equal(await slideshow.getByRole('button', { name: 'Open presenter window', exact: true }).count(), 0);
+    await slideshow.keyboard.press('p');
+    assert.equal(await slideshow.locator('.pjp--presenting').count(), 0);
+    await slideshow.close();
+    await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+    await page.locator('.merge-shell').waitFor();
+    assert.equal(await page.locator('[data-l2tab="slides"]').getAttribute('aria-selected'), 'true');
+    const toolbarOpened = context.waitForEvent('page');
+    await page.getByRole('button', { name: 'Open slideshow in a new tab', exact: true }).click();
+    const toolbarPreview = await toolbarOpened;
+    await toolbarPreview.setViewportSize({width, height:1000});
+    await toolbarPreview.waitForURL(/slideshow=1/);
+    await toolbarPreview.locator('.pjp').waitFor({ state: 'visible' });
+    const pad = page.frameLocator('[data-presenter-host]');
+    await pad.locator('[data-pp-notes]').waitFor();
+    await page.locator('.pjp-tab[data-ready="true"]').waitFor();
+    assert.equal(context.pages().length, 2);
+    assert.equal(await toolbarPreview.evaluate(() => window.opener), null);
+    assert.equal(await toolbarPreview.locator('[data-pjp-notes]').textContent(), '');
+    assert.doesNotMatch(await toolbarPreview.locator('body').innerText(), /PRIVATE VISITOR NOTES/);
+    assert.equal(await pad.locator('[data-pp-notes]').innerText(), 'PRIVATE VISITOR NOTES');
+    assert.equal(await page.locator('.merge-shell').count(), 1);
+    await pad.locator('[data-pp-now] svg').first().waitFor({state:'attached'});
+    await pad.locator('[data-pp-now] svg').getByText('Draft audience heading', {exact:true}).waitFor({state:'attached'});
+    const background = await toolbarPreview.evaluate(() => ({appearance:document.documentElement.dataset.appearance, color:getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()}));
+    assert.equal(background.appearance, 'dark');
+    assert.equal(background.color, await page.locator('.adm').evaluate(element => getComputedStyle(element).getPropertyValue('--bg').trim()));
+    const padBounds = await pad.locator('.pp').evaluate(element => { const rect = element.getBoundingClientRect(); return {width:rect.width, viewport:innerWidth, overflow:document.documentElement.scrollWidth > innerWidth}; });
+    assert.equal(padBounds.overflow, false);
+    assert.ok(Math.abs(padBounds.width - padBounds.viewport) < 1);
+    await page.screenshot({path:join(tmpdir(), `rk-original-tab-dj-${width}.png`)});
+    assert.ok(await toolbarPreview.locator('.pjp canvas').evaluateAll(canvases => canvases.some(canvas => { const context = canvas.getContext('2d'); return context && canvas.width && canvas.height && context.getImageData(0,0,canvas.width,canvas.height).data.some((value,index) => index % 4 === 3 && value); })));
+    const audienceBounds = await toolbarPreview.locator('.merge-present-stage').boundingBox();
+    assert.ok(audienceBounds.width > 250 && audienceBounds.x >= 0 && audienceBounds.x + audienceBounds.width <= width + 1);
+    await toolbarPreview.screenshot({path:join(tmpdir(), `rk-new-tab-audience-${width}.png`)});
+    await pad.locator('[data-pp-notes]').fill('PRIVATE DJ EDIT');
+    await pad.locator('[data-pp-save]').getByText('Saved to deck', { exact:true }).waitFor();
+    assert.equal(await toolbarPreview.locator('[data-pjp-notes]').textContent(), '');
+    const ended = toolbarPreview.waitForEvent('close');
+    await pad.getByRole('button', { name:'End presentation', exact:true }).click();
+    await ended;
+    await page.locator('.pjp-tab').waitFor({ state:'detached' });
+    assert.equal(toolbarPreview.isClosed(), true);
+    await page.waitForFunction(() => document.activeElement?.matches('.merge-bar-play'));
+    assert.equal(await page.getByRole('button', { name:'Open slideshow in a new tab', exact:true }).evaluate(element => element === document.activeElement), true);
+    if (!await page.getByRole('textbox', { name:'Speaker notes', exact:true }).isVisible()) await page.getByRole('button', { name:'Speaker notes panel', exact:true }).click();
+    assert.equal(await page.getByRole('textbox', { name:'Speaker notes', exact:true }).innerText(), 'PRIVATE DJ EDIT');
+    const reopened = context.waitForEvent('page');
+    await page.getByRole('button', { name:'Open slideshow in a new tab', exact:true }).click();
+    const closingAudience = await reopened;
+    await page.locator('.pjp-tab[data-ready="true"]').waitFor();
+    await closingAudience.close();
+    await page.locator('.pjp-tab').waitFor({ state:'detached' });
+    const state = await page.evaluate(() => ({ study: window.__RKStudio.getDraft().work[0].study, counter: document.querySelector('[data-ai-session-toggle]').getBoundingClientRect().toJSON(), width: innerWidth, overflow: document.documentElement.scrollWidth > innerWidth }));
+    assert.equal(state.study.slidesPublic, false);
+    assert.equal(state.study.nativeDeck.slideCount, 1);
+    assert.equal(state.study.blocks[0].body, published.work[0].study.blocks[0].body);
+    assert.ok(state.counter.width > 0 && state.counter.right <= state.width && state.counter.left >= 0);
+    assert.equal(state.overflow, false);
+    await page.screenshot({ path: join(tmpdir(), 'rk-integrated-tabs-' + width + '.png') });
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test("AI session drawer streams across tabs, survives refresh and resets on explicit exit", { timeout: 90000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } }), page = await context.newPage();
+  try {
+    await page.addInitScript(() => {
+      const fetchOriginal = window.fetch;
+      window.fetch = async (resource, options = {}) => {
+        const url = new URL(typeof resource === 'string' ? resource : resource.url, location.href);
+        if (url.hostname !== 'api.anthropic.com' || !url.pathname.endsWith('/messages')) return fetchOriginal(resource, options);
+        const body = JSON.parse(options.body);
+        if (body.system.startsWith("You are Studio's outcome coordinator.")) {
+          const input = JSON.parse(body.messages[0].content), decision = input.candidate ? { action: 'finish', summary: 'Completed text improvement' } : { action: 'draft', modelRef: input.draftModels[0], task: 'writing', instruction: '', inputs: [], summary: 'Improving the selected text' };
+          return Response.json({ content: [{ type: 'text', text: JSON.stringify({ decision }) }], stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 5 } });
+        }
+        return new Response(new ReadableStream({ start(controller) {
+          const send = event => controller.enqueue(new TextEncoder().encode('data: ' + JSON.stringify(event) + '\n\n'));
+          send({ type: 'message_start', message: { usage: { input_tokens: 100, cache_read_input_tokens: 20 } } });
+          window.__sessionStream = {
+            answer() { send({ type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'PRIVATE REASONING' } }); send({ type: 'content_block_delta', delta: { type: 'text_delta', text: 'Refined private ' } }); },
+            finish() { send({ type: 'content_block_delta', delta: { type: 'text_delta', text: 'answer.' } }); send({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 40 } }); send({ type: 'message_stop' }); controller.close(); }
+          };
+          options.signal?.addEventListener('abort', () => { try { controller.error(new DOMException('Cancelled', 'AbortError')); } catch {} }, { once: true });
+        } }), { headers: { 'content-type': 'text/event-stream' } });
+      };
+    });
+    await openIntegratedFixture(page);
+    await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+    const before = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
+    await page.locator('[data-ai-session-toggle]').click();
+    await page.evaluate(() => { window.__sessionResult = null; window.__RKStudio.improveText('Private input copy', {}).then(text => { window.__sessionResult = text; }, error => { window.__sessionResult = error.message; }); });
+    await page.waitForFunction(() => !!window.__sessionStream);
+    await page.waitForFunction(() => document.querySelector('[data-ai-session-toggle]').dataset.aiState === 'working');
+    await page.waitForFunction(() => document.querySelector('[data-ai-session-count]').textContent === '135 tokens');
+    assert.notEqual(await page.locator('.adm__ai-spark svg').evaluate(element => getComputedStyle(element).animationName), 'none');
+    await page.evaluate(() => window.__sessionStream.answer());
+    await page.waitForFunction(() => document.querySelector('[data-ai-session-toggle]').dataset.aiState === 'answering');
+    await page.getByLabel('Generated output', { exact: true }).filter({ hasText: 'Refined private' }).waitFor();
+    assert.doesNotMatch(await page.locator('[data-ai-session-panel]').innerText(), /PRIVATE REASONING/);
+    await page.locator('[data-l2tab="highlights"]').click();
+    assert.equal(await page.locator('[data-ai-session-panel]').isVisible(), true);
+    await page.locator('[data-l2tab="slides"]').click();
+    await page.locator('.merge-empty-actions').waitFor();
+    assert.equal(await page.locator('[data-ai-session-toggle]').isVisible(), true);
+    assert.equal(await page.locator('[data-ai-session-panel]').isVisible(), true);
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const geometry = await page.locator('[data-ai-session-panel]').evaluate(element => { const rect = element.getBoundingClientRect(); return { left: rect.left, right: rect.right, width: innerWidth, overflow: element.scrollWidth > element.clientWidth }; });
+      assert.ok(geometry.left >= 0 && geometry.right <= geometry.width && !geometry.overflow);
+      await page.screenshot({ path: join(tmpdir(), 'rk-ai-session-answering-' + width + '.png') });
+    }
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    assert.equal(await page.locator('.adm__ai-spark svg').evaluate(element => getComputedStyle(element).animationName), 'none');
+    await page.evaluate(() => window.__sessionStream.finish());
+    await page.waitForFunction(() => window.__sessionResult === 'Refined private answer.');
+    await page.waitForFunction(() => document.querySelector('[data-ai-session-count]').textContent === '190 tokens');
+    assert.equal(await page.evaluate(() => window.__rkAiSession.state().totalTokens), 190);
+    assert.doesNotMatch(await page.evaluate(() => sessionStorage.getItem('rk:ai:admin-session')), /Private input|Refined private|PRIVATE REASONING/);
+    await page.getByRole('button', { name: 'Close AI activity', exact: true }).click();
+    assert.equal(await page.locator('[data-ai-session-toggle]').evaluate(element => element === document.activeElement), true);
+    await page.locator('[data-l2tab="story"]').click();
+    const after = await page.evaluate(() => window.__RKStudio.getDraft());
+    assert.deepEqual(after.work[0].study.blocks, JSON.parse(before).work[0].study.blocks);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.reload();
+    await page.waitForFunction(() => !!window.RK?.data && typeof window.__rkDevStudio === 'function');
+    await page.evaluate(() => window.__rkDevStudio());
+    await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+    await page.evaluate(() => document.querySelectorAll('.pass--lock').forEach(dialog => dialog.remove()));
+    assert.equal(await page.locator('[data-ai-session-count]').innerText(), '190 tokens');
+    assert.deepEqual(await page.evaluate(() => window.__rkAiSession.state().jobs), []);
+    await page.locator('[data-ai-session-toggle]').click();
+    await page.evaluate(() => {
+      window.__sessionStream = null; window.__sessionResult = null;
+      window.__RKStudio.improveText('Cancellation fixture', {}).then(text => { window.__sessionResult = text; }, error => { window.__sessionResult = error.message; });
+    });
+    await page.waitForFunction(() => !!window.__sessionStream);
+    await page.evaluate(() => window.__sessionStream.answer());
+    await page.getByLabel('Generated output', { exact: true }).filter({ hasText: 'Refined private' }).waitFor();
+    await page.getByRole('button', { name: 'Stop AI request', exact: true }).click();
+    await page.waitForFunction(() => window.__rkAiSession.state().jobs.at(-1)?.status === 'cancelled' && window.__sessionResult !== null);
+    assert.equal(await page.evaluate(() => window.__rkAiSession.state().active), 0);
+    await page.waitForFunction(() => document.querySelector('[data-ai-session-count]').textContent === '325 tokens');
+    assert.match(await page.locator('[data-ai-jobs]').innerText(), /Refined private/);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('[data-ai-session-panel]').isVisible(), false);
+    assert.equal(await page.locator('[data-ai-session-toggle]').evaluate(element => element === document.activeElement), true);
+    await page.locator('[data-exit]').click();
+    if (await page.locator('[data-exit-save]').isVisible()) await page.locator('[data-exit-save]').click();
+    await page.waitForFunction(() => !document.querySelector('.adm.is-open'));
+    assert.equal(await page.evaluate(() => sessionStorage.getItem('rk:ai:admin-session')), null);
+    await page.waitForFunction(() => !document.querySelector('[data-ai-jobs]')?.textContent.includes('Refined private'));
+  } finally { await browser.close(); }
+});
+
 async function waitForRoutingPolicy(page, key, value) {
   await page.evaluate(() => { window.__routingPolicyProbe = { pending: false, matches: false }; });
   await page.waitForFunction(({ key, value }) => {
@@ -168,7 +547,7 @@ for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, 
     await page.evaluate(() => document.querySelectorAll(".pass--lock").forEach(dialog => dialog.remove()));
     await page.setViewportSize({ width, height: 1000 });
     await page.locator('.adm__tab[data-tab="work"]').click();
-    await page.locator('[data-act="study-slides"][data-index="0"]').click();
+    await openProjectSlides(page);
     await page.locator(".merge-empty-actions").waitFor();
     await page.getByRole("button", { name: "Draft entire deck with AI", exact: true }).click();
     await page.getByRole("log", { name: "Agent activity", exact: true }).getByText(mode === "summary-fallback" ? "Delegating specialist work" : "Checking the case-study evidence", { exact: true }).waitFor();
@@ -682,7 +1061,7 @@ test("Studio Publish shares private/public deck, case-section, retry and owner-r
       window.__rkDevEdit("work.0.study.nativeDeck", { ...reference, slideCount: document.slides.length });
       window.__rkDevEdit("work.0.study.blocks", [{ type: "statement", body: "Visible shared section" }, { type: "statement", body: "UNPUBLISHED CASE SECTION", off: true }]);
     }, document);
-    await page.locator('[data-act="study-slides"][data-index="0"]').click();
+    await openProjectSlides(page);
     await page.waitForFunction(() => document.querySelector(".merge-notes-input")?.textContent === "PRIVATE INITIAL NOTES");
     await page.locator('.merge-slide').nth(1).click();
     await page.waitForFunction(() => document.querySelector('.merge-notes-input')?.textContent === 'HIDDEN NOTES');
@@ -735,7 +1114,7 @@ test("Studio Publish shares private/public deck, case-section, retry and owner-r
       });
       throw new Error('Navigation changed published content: ' + JSON.stringify(changes), { cause: error });
     });
-    assert.match(await page.locator('[data-native-slide-status]').innerText(), /all changes published/);
+    assert.match(await page.locator('.adm__statusbar .adm__status').innerText(), /Published|All changes published/);
     await page.locator('[data-l2-back]').click();
     await page.waitForSelector('.merge-shell', { state: 'detached' });
     await page.reload(); await page.waitForFunction(() => typeof window.__rkDevStudio === 'function' && !!window.RK?.data);
@@ -747,7 +1126,7 @@ test("Studio Publish shares private/public deck, case-section, retry and owner-r
     const newDevice = await fresh.newPage();
     try {
       await reopenStudio(newDevice);
-      await newDevice.locator('[data-act="study-slides"][data-index="0"]').click();
+      await newDevice.locator('[data-act="study-toggle"][data-index="0"]').click();
       await newDevice.locator('.pass--lock input[type="password"]').fill(passphrase);
       assert.equal(await newDevice.locator('.pass--lock [data-confirm]').count(), 0, 'Existing deck protection must not create a new recovery passphrase');
       await newDevice.locator('.pass--lock [data-go]').click();
@@ -760,7 +1139,7 @@ test("Studio Publish shares private/public deck, case-section, retry and owner-r
     } finally { await fresh.close(); }
     await page.evaluate(() => document.querySelectorAll('.pass--lock').forEach(dialog => dialog.remove()));
     await page.locator('.adm__tab[data-tab="work"]').click();
-    await page.locator('[data-act="study-slides"][data-index="0"]').click();
+    await openProjectSlides(page);
     await page.waitForFunction(() => !!document.querySelector('.merge-visibility summary') && document.querySelector('.merge-layout-toggle')?.disabled === false);
     await page.locator('.merge-visibility summary').click();
     await page.getByRole('checkbox', { name: 'Public slideshow', exact: true }).uncheck();
@@ -779,7 +1158,7 @@ test("Studio Publish shares private/public deck, case-section, retry and owner-r
     assert.ok(releaseWrite, 'The mocked service must be holding the current publication');
     releaseWrite();
     await page.waitForFunction(() => document.querySelector('.adm__statusbar')?.classList.contains('is-pub-done'));
-    await page.waitForFunction(() => document.querySelector('[data-native-slide-status]')?.textContent.includes('unpublished'));
+    await page.waitForFunction(() => document.querySelector('.adm__statusbar .adm__status')?.textContent.includes('unpublished'));
     assert.equal(latest.work[0].study.slidesPublic, false);
     assert.equal(latest.work[0].study.nativeDeckPublic, undefined);
     assert.equal(publicUploads.length, publicUploadCount, 'Returning to owner-only must not upload any public deck assets');
@@ -886,11 +1265,12 @@ test("Content Studio opens native slides without a preview flag and preserves ca
     const hostStyle = await page.locator('.adm__tab[data-tab="work"]').evaluate(element => {
       const style = getComputedStyle(element); return { font: style.fontFamily, fontSize: style.fontSize, radius: style.borderRadius, height: element.getBoundingClientRect().height };
     });
-    await page.locator('[data-act="study-slides"][data-index="0"]').click();
+    await openProjectSlides(page);
     await page.locator(".merge-empty-actions button").first().waitFor();
     assert.equal(await page.locator(".merge-header").count(), 0);
     assert.equal(await page.locator("[data-native-slide-toolbar] .merge-editor-bar:visible").count(), 1);
-    assert.equal(await page.locator("[data-native-slide-status] .merge-status:visible").count(), 1);
+    assert.equal(await page.locator(".adm__statusbar .adm__status:visible").count(), 1);
+    assert.equal(await page.locator("[data-native-slide-status] .merge-visibility:visible").count(), 1);
     assert.equal(await page.getByRole('contentinfo', { name: 'Document status', exact: true }).count(), 1);
     assert.equal(await page.locator(".slides__nav:visible,.slides__props:visible").count(), 0);
     await page.locator(".merge-empty-actions button").first().click();
@@ -899,7 +1279,7 @@ test("Content Studio opens native slides without a preview flag and preserves ca
     await page.keyboard.type('Native canvas content');
     await page.locator('[data-l2-back]').click();
     await page.waitForSelector('.merge-shell', { state: 'detached' });
-    await page.locator('[data-act="study-slides"][data-index="0"]').click();
+    await openProjectSlides(page);
     await page.waitForFunction(() => document.querySelector('.merge-slide-list')?.textContent.includes('Untitled slide'));
     const savedText = await page.evaluate(async () => {
       const reference = window.__RKStudio.getDraft().work[0].study.nativeDeck;
@@ -912,11 +1292,11 @@ test("Content Studio opens native slides without a preview flag and preserves ca
     await page.waitForSelector(".merge-shell", { state: "detached" });
     await page.locator('[data-act="study-toggle"][data-index="0"]').click();
     await page.locator("[data-l2-back]").click();
-    await page.locator('[data-act="study-slides"][data-index="0"]').click();
+    await openProjectSlides(page);
     await page.waitForFunction(() => document.querySelector(".merge-notes-input")?.textContent === "FIRST PRIVATE NOTE");
     await page.locator("[data-l2-back]").click();
     await page.waitForSelector(".merge-shell", { state: "detached" });
-    await page.locator('[data-act="study-slides"][data-index="1"]').click();
+    await openProjectSlides(page, 1);
     await page.locator(".merge-empty-actions button").first().waitFor();
     await page.locator(".merge-empty-actions button").first().click();
     await page.getByRole("textbox", { name: "Speaker notes", exact: true }).fill("SECOND PRIVATE NOTE");
@@ -933,7 +1313,7 @@ test("Content Studio opens native slides without a preview flag and preserves ca
     await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
     await page.evaluate(() => document.querySelectorAll(".pass--lock").forEach(dialog => dialog.remove()));
     await page.locator('.adm__tab[data-tab="work"]').click();
-    await page.locator('[data-act="study-slides"][data-index="0"]').click();
+    await openProjectSlides(page);
     await page.waitForFunction(() => document.querySelector(".merge-notes-input")?.textContent === "FIRST PRIVATE NOTE");
     assert.equal(await page.evaluate(() => typeof window.__slideMerge), "undefined");
     await page.locator('.merge-notes-input').press('Tab');
@@ -969,13 +1349,13 @@ test("Content Studio opens native slides without a preview flag and preserves ca
     });
     await page.getByRole('textbox', { name: 'Speaker notes', exact: true }).fill('Pending notes must stay open');
     await page.locator('[data-l2-back]').click();
-    await page.waitForFunction(() => document.querySelector('[data-native-slide-status]')?.textContent.includes('Not saved'));
+    await page.waitForFunction(() => document.querySelector('.adm__statusbar .adm__status')?.textContent.includes('Not saved'));
     assert.equal(await page.locator('.merge-notes-input').innerText(), 'Pending notes must stay open');
     assert.equal(await page.locator('.merge-shell').count(), 1);
     await page.evaluate(() => { IDBDatabase.prototype.transaction = window.originalDeckTransaction; delete window.originalDeckTransaction; });
     await page.locator('[data-l2-back]').click();
     await page.waitForSelector('.merge-shell', { state: 'detached' });
-    await page.locator('[data-act="study-slides"][data-index="0"]').click();
+    await openProjectSlides(page);
     await page.waitForFunction(() => document.querySelector('.merge-notes-input')?.textContent === 'Pending notes must stay open');
     await page.locator('.merge-visibility summary').click();
     assert.equal(await page.getByRole('checkbox', { name: 'Public slideshow', exact: true }).isChecked(), false);
@@ -1004,7 +1384,7 @@ test("Content Studio opens native slides without a preview flag and preserves ca
     assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].study.nativeDeck.id), references[0].id, 'Undo recovery must restore the previous native deck identity');
     await page.keyboard.press('Control+Shift+z');
     assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].study.nativeDeck.id), recoveredReferences[0].id, 'Redo recovery must reinstate the recovered native deck');
-    await page.locator('[data-act="study-slides"][data-index="0"]').click();
+    await openProjectSlides(page);
     await page.waitForFunction(() => document.querySelector('.merge-notes-input')?.textContent === 'Pending notes must stay open');
     await page.locator('[data-l2-back]').click();
     await page.waitForSelector('.merge-shell', { state: 'detached' });
@@ -1019,8 +1399,8 @@ test("Content Studio opens native slides without a preview flag and preserves ca
     assert.equal(duplicate.owner, duplicate.caseId);
     assert.equal(duplicate.hidden, true);
     await page.evaluate(() => window.__rkDevEdit('work.0.study.nativeDeck', { schema: 'rk-studio-native-deck', version: 1, caseStudyId: 'native-first', id: 'missing-native-deck', revision: 3 }));
-    await page.locator('[data-act="study-slides"][data-index="0"]').click();
-    await page.waitForFunction(() => document.querySelector('[data-native-slide-status]')?.textContent.includes('not available on this device'));
+    await openProjectSlides(page);
+    await page.waitForFunction(() => document.querySelector('.adm__statusbar .adm__status')?.textContent.includes('not available on this device'));
     await page.locator('[data-l2-back]').click();
     await page.waitForSelector('.merge-shell', { state: 'detached', timeout: 4000 });
     assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].study.nativeDeck.id), 'missing-native-deck');

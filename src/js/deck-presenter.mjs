@@ -30,12 +30,13 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     '<div class="pjp__pnotes"><span class="pjp__plabel">Notes</span><div class="pjp__pnotes-body" data-pjp-notes></div></div>' +
     '<div class="pjp__pnext"><span class="pjp__plabel">Up next</span><div class="pjp__pnext-thumb" data-pjp-nextthumb></div><div class="pjp__pnext-body" data-pjp-next></div></div>' +
     '</div>';
+  if (opts.audienceOnly || opts.presenterWindow) stage.querySelectorAll('[data-pjp="notes"],[data-pjp="popout"],[data-pjp-panel]').forEach(element => { element.hidden = true; element.style.display = "none"; });
   document.body.appendChild(stage);
   var inactiveSiblings = Array.prototype.filter.call(document.body.children, function (element) { return element !== stage && !element.inert; });
   inactiveSiblings.forEach(function (element) { element.inert = true; });
   stage.focus({ preventScroll: true });
   var frame = stage.querySelector("[data-pjp-frame]"), prog = stage.querySelector("[data-pjp-progress]"), count = stage.querySelector("[data-pjp-count]");
-  var nativeHost = window.__RK_NATIVE_PRESENTER === true && !!window.chrome?.webview;
+  var nativeHost = !opts.audienceOnly && !opts.presenterWindow && window.__RK_NATIVE_PRESENTER === true && !!window.chrome?.webview;
   var pointer = installPresenterPointer(stage, frame, nativeHost);
   stage.classList.toggle("pjp--native", nativeHost);
   var notesEl = stage.querySelector("[data-pjp-notes]"), nextEl = stage.querySelector("[data-pjp-next]"), presenting = false;
@@ -47,19 +48,19 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     var links = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(function (link) { return '<link rel="stylesheet" href="' + link.href + '">'; }).join('');
     return '<!doctype html><html><head><meta charset="utf-8">' + links + '<style>html,body{margin:0;width:1280px;height:720px;overflow:hidden}body>.pjps{width:1280px;height:720px}</style></head><body>' + renderPjSlide(slide) + '</body></html>';
   }) : [];
-  var metadata = slides.map(function (slide) { return { notes: slide.notes || "", durationMinutes: Math.max(0, Math.min(240, Number(slide.durationMinutes) || 0)) }; });
+  var metadata = slides.map(function (slide) { return { notes: opts.audienceOnly ? "" : slide.notes || "", durationMinutes: opts.audienceOnly ? 0 : Math.max(0, Math.min(240, Number(slide.durationMinutes) || 0)) }; });
   function currentNotes() { return metadata[idx].notes; }
   function panelState() { return { index: idx, notes: currentNotes(), durationMinutes: metadata[idx].durationMinutes, saveStatus:saveStatus, slides: slides.map(function (slide, index) { return { title: pjSlideTitle(slide), thumbnail:nativeThumbnails[index], document:nativeDocuments[index] }; }) }; }
   function pacing() { var budget = metadata[idx].durationMinutes * 60000; return { elapsed: clock.elapsed(), paused: clock.paused, budget: budget, remaining: budget - clock.slideElapsed(), totalBudget: metadata.reduce(function (total, slide) { return total + slide.durationMinutes * 60000; }, 0), format: fmtDur }; }
   function editSlide(index, key, value) {
-    if (!opts.onSlideEdit || !Number.isInteger(index) || !slides[index] || !["notes", "durationMinutes"].includes(key)) return;
+    if (opts.audienceOnly || !opts.onSlideEdit || !Number.isInteger(index) || !slides[index] || !["notes", "durationMinutes"].includes(key)) return;
     if (key === "notes") { if (typeof value !== "string") return; }
     else { value = Number(value); if (!Number.isFinite(value) || value < 0 || value > 240) return; }
     metadata[index][key] = value;
     var revision = ++editRevision;
     saveStatus = "Saving..."; panel?.saved(saveStatus);
     Promise.resolve().then(function () { return opts.onSlideEdit(slides[index], key, value); }).then(function () { if (revision === editRevision) { saveStatus = "Saved to deck"; panel?.saved(saveStatus); syncNative(); } }, function () { if (revision === editRevision) { saveStatus = "Not saved. Edit again to retry."; panel?.saved(saveStatus); syncNative(); } });
-    if (notesEl && !nativeHost) notesEl.innerHTML = pjNotesHtml(currentNotes());
+    if (notesEl && !nativeHost && !opts.presenterWindow) notesEl.innerHTML = pjNotesHtml(currentNotes());
     tick(); syncNative();
   }
   async function fullscreen() {
@@ -117,7 +118,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   function updateChrome() {
     var s = slides[idx];
     count.textContent = (idx + 1) + " / " + slides.length;
-    if (notesEl && !nativeHost) notesEl.innerHTML = pjNotesHtml(currentNotes());
+    if (notesEl && !nativeHost && !opts.presenterWindow) notesEl.innerHTML = pjNotesHtml(currentNotes());
     if (nextEl) nextEl.textContent = (idx < slides.length - 1) ? pjSlideTitle(slides[idx + 1]) : "End of deck";
     if (nextThumb) {
       if (idx < slides.length - 1) {
@@ -177,7 +178,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     transTimer = setTimeout(function () { if (oldEl.parentNode) oldEl.remove(); if (newEl.parentNode) { newEl.classList.remove("pjps--in-fade", "pjps--in-push", "is-live"); newEl.style.removeProperty("--pjd"); } }, 520);
   }
   function go(d) { var n = Math.max(0, Math.min(slides.length - 1, idx + d)); if (n === idx) return; idx = n; render(d); }
-  function togglePresent() { if (nativeHost || presenterWin && !presenterWin.closed) return; presenting = !presenting; stage.classList.toggle("pjp--presenting", presenting); if (presenting) updateChrome(); }
+  function togglePresent() { if (opts.audienceOnly || nativeHost || presenterWin && !presenterWin.closed) return; presenting = !presenting; stage.classList.toggle("pjp--presenting", presenting); if (presenting) updateChrome(); }
   // A second-screen / screen-share-safe presenter view: a SEPARATE window (private) shows notes,
   // timer, current + next slide; the main window stays the clean slides you share. Same-origin, so
   // the main window drives both. Share just the slides WINDOW (or a 2nd display) to keep notes hidden.
@@ -236,17 +237,19 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     presenterDocument = null; presenterWin = null;
     stage.classList.remove("pjp--popped");
     popButton.classList.remove("is-on");
+    if (opts.presenterWindow && !exited) exit();
   }
   async function openPresenter() {
+    if (opts.audienceOnly) return;
     if (nativeHost) return;
     if (exited || openingPresenter) return;
     if (presenterWin && !presenterWin.closed) { presenterWin.focus(); return; }
     if (presenterWin) onPresenterClosed();
-    var opened = null, pinned = false;
+    var opened = opts.presenterWindow || null, pinned = false;
     openingPresenter = true;
-    if (opts.autoStart && !launchCapture) launchCapture = requestPresenterCapture();
+    if (opts.autoStart && !opts.presenterWindow && !launchCapture) launchCapture = requestPresenterCapture();
     try {
-      if (window.documentPictureInPicture && !pipUnavailable) {
+      if (!opened && window.documentPictureInPicture && !pipUnavailable) {
         try {
           opened = await window.documentPictureInPicture.requestWindow({ width: 960, height: 720 });
           pinned = true;
@@ -269,7 +272,12 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     presenterDoc.head.replaceChildren.apply(presenterDoc.head, Array.from(markup.head.childNodes).map(function (node) { return presenterDoc.importNode(node, true); }));
     presenterDoc.body.className = "pp-body";
     presenterDoc.body.replaceChildren(...Array.from(markup.body.children).map(function (node) { return presenterDoc.importNode(node, true); }));
-    presenterDoc.documentElement.dataset.presenterWindow = pinned ? "always-on-top" : "popup";
+    if (opts.presenterWindow) {
+      var ownerRoot = presenterWin.frameElement.ownerDocument.documentElement;
+      var ownerType = ownerRoot.ownerDocument.defaultView.getComputedStyle(ownerRoot);
+      ["--sans", "--mono", "--serif", "--serif-weight", "--card-weight"].forEach(function (name) { presenterDoc.documentElement.style.setProperty(name, ownerType.getPropertyValue(name)); });
+    }
+    presenterDoc.documentElement.dataset.presenterWindow = opts.presenterWindow ? "original-tab" : pinned ? "always-on-top" : "popup";
     var captureTicket = launchCapture; launchCapture = null;
     webPreview = installWebPresenterPreview({ frame: frame, pointer: pointer, container: presenterDoc.querySelector("[data-pp-now]"), presenterWindow: presenterWin, button: presenterDoc.querySelector("[data-pp-live]"), status: presenterDoc.querySelector("[data-pp-status]"), onDisconnect: function () { if (presenterWin === opened) syncPresenter(); }, captureTicket:captureTicket });
     popButton.title = pinned ? "Focus always-on-top presenter window" : "Focus presenter window (not always-on-top)";
@@ -279,9 +287,9 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     stage.classList.add("pjp--popped"); presenting = false; stage.classList.remove("pjp--presenting");
     var pb = stage.querySelector('[data-pjp="popout"]'); if (pb) pb.classList.add("is-on");
     presenterRefresh = setTimeout(syncPresenter, 60); syncPresenter();
-    if (opts.autoStart) webPreview.connect();
+    if (opts.autoStart && !opts.presenterWindow) webPreview.connect();
   }
-    function exit() { if (exited) return; exited = true; launchCapture?.cancel(); launchCapture = null; var closing = presenterWin; onPresenterClosed(); if (ownsFullscreen && document.fullscreenElement === stage) document.exitFullscreen().catch(function () {}); pointer.dispose(); if (nativeHost) { window.chrome.webview.removeEventListener("message", onNative); window.removeEventListener("resize", syncNative); window.chrome.webview.postMessage({ channel: "rk-presenter", type: "end" }); } clearInterval(clockTimer); clearTimeout(transTimer); if (closing && !closing.closed) { try { closing.close(); } catch (e) {} } document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { if (dispose) dispose(); stage.remove(); pjpStage = null; inactiveSiblings.forEach(function (element) { element.inert = false; }); if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true }); if (opts.onClose) opts.onClose(); }, 240); }
+    function exit() { if (exited) return; exited = true; launchCapture?.cancel(); launchCapture = null; var closing = presenterWin; onPresenterClosed(); if (ownsFullscreen && document.fullscreenElement === stage) document.exitFullscreen().catch(function () {}); pointer.dispose(); if (nativeHost) { window.chrome.webview.removeEventListener("message", onNative); window.removeEventListener("resize", syncNative); window.chrome.webview.postMessage({ channel: "rk-presenter", type: "end" }); } clearInterval(clockTimer); clearTimeout(transTimer); if (closing && !closing.closed && !opts.presenterWindow) { try { closing.close(); } catch (e) {} } window.removeEventListener("pagehide", exit); document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { if (dispose) dispose(); stage.remove(); pjpStage = null; inactiveSiblings.forEach(function (element) { element.inert = false; }); if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true }); if (opts.onClose) opts.onClose(); }, 240); }
   function onKey(e) {
     if (isPresenterInput(e)) return;
     if (e.key === "Tab" && e.currentTarget === document) {
@@ -317,9 +325,13 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   document.addEventListener("keydown", onKey);
   render(1);
   if (nativeHost && thumbnailData) slides.forEach(function (slide,index) { Promise.resolve(thumbnailData(slide)).then(function (image) { if (!exited) { nativeThumbnails[index] = image; syncNative(); } }).catch(function () {}); });
-  if (!nativeHost && opts.autoStart) {
+  var ready = Promise.resolve();
+  if (opts.presenterWindow && !opts.audienceOnly) {
+    window.addEventListener("pagehide", exit);
+    ready = openPresenter();
+  } else if (!nativeHost && opts.autoStart) {
     openPresenter().then(fullscreen);
   }
-  return { close: exit };
+  return { close: exit, ready };
 }
 

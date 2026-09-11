@@ -1,6 +1,7 @@
 import { presentDeckWithRenderer } from "./deck-presenter.mjs";
 import { hasNativeDeck, presentStudioDeck, presentationFailure } from "./slide-studio-player.mjs";
 import { nativePublicDeck } from "./slide-studio-publication.mjs";
+import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
 
 /* =================================================================
    RITESH KUMAR — Project case study (L2)
@@ -1708,7 +1709,17 @@ import { nativePublicDeck } from "./slide-studio-publication.mjs";
     if (act) {
       var kind = act.getAttribute("data-pj");
       if (kind === "back" || kind === "close") { e.preventDefault(); closeProject({ push: true }); }
-      else if (kind === "present") { e.preventDefault(); window.RK?.presentDeck?.(workById(activeId)); }
+      else if (kind === "present") {
+        e.preventDefault();
+        const work = workById(activeId);
+        if (pjIsOwner() && !PREVIEW && !window.__RK_NATIVE_PRESENTER) {
+          openPresenterTab({
+            url:"/?" + new URLSearchParams({ work:work.id, slideshow:"1" }),
+            present:(audience, presenterWindow, _prepared, onClose) => audience.RK.presentDeck(work, { presenterWindow, onClose, autoStart:false }),
+            onError:presentationFailure
+          });
+        } else window.RK?.presentDeck?.(work);
+      }
       else if (kind === "prev") nav(-1);
       else if (kind === "next") nav(1);
       else if (kind === "read") { e.preventDefault(); scrollToCase(); }
@@ -2585,11 +2596,16 @@ import { nativePublicDeck } from "./slide-studio-publication.mjs";
     openProject(id, { push: true });
   }
   function initDeepLink() {
+    if (connectPresenterTab(presentationFailure)) return;
     var id = pathWorkId();
     if (!id) return;
     if (!workById(id)) { try { history.replaceState({}, "", "/"); } catch (e) {} return; }
-    try { history.replaceState({ rkWork: id }, "", "/work/" + id); } catch (e) {}
+    var params = new URLSearchParams(location.search), draft = params.has("draft");
+    if (!draft) { try { history.replaceState({ rkWork: id }, "", "/work/" + id); } catch (e) {} }
     openProject(id, { push: false });
+    if (draft && params.get("slideshow") === "1" && window.RK?.draftPreview) {
+      window.RK.presentDeck?.(workById(id), { draft: true, audienceOnly: true, autoStart: false });
+    }
   }
 
   /* ---------- bootstrap ---------- */
@@ -2772,7 +2788,15 @@ import { nativePublicDeck } from "./slide-studio-publication.mjs";
     }
     function pjNotesHtml(n) { return (n && String(n).trim()) ? pjBodyHtml(n) : '<span class="pjp__pnote-empty">\u2014 No notes for this slide \u2014</span>'; }
     function presentDeck(w, opts) {
-      if (hasNativeDeck(w)) return presentStudioDeck(w, { ...opts, draft: PREVIEW || pjIsOwner() || !!window.__RKStudio?.getDraft?.() }).catch(error => { presentationFailure(error); return null; });
+      if (hasNativeDeck(w)) return presentStudioDeck(w, { ...opts, draft: !!(opts?.draft && window.RK?.draftPreview) || PREVIEW || pjIsOwner() || !!window.__RKStudio?.getDraft?.() }).catch(error => { presentationFailure(error); return null; });
+      if (opts?.audienceOnly && opts.draft && !w?.study?.slides?.length && w?.study?.slidesEnc) {
+        return Promise.resolve(window.RK?.requestOwnerPresentation?.()).then(unlocked => {
+          if (!unlocked) return null;
+          const ownerWork = workById(w.id);
+          if (!ownerWork?.study?.slides?.length) throw new Error("The private slideshow is unavailable. Open it in Studio first.");
+          return presentDeckWithRenderer(ownerWork, opts, { renderPjSlide, pjDeckSlides, pjSlideTitle, pjNotesHtml, fitSections, enhanceStudyBlocks });
+        }).catch(error => { presentationFailure(error); return null; });
+      }
       return presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, pjSlideTitle, pjNotesHtml, fitSections, enhanceStudyBlocks });
     }
 

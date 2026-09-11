@@ -133,8 +133,9 @@ test("editing and slide-view controls share a stable border-box height", () => {
 
 test("save status, visibility and recording belong in the bottom status bar", () => {
   const editor = read("./src/js/slide-merge.jsx"), bar = read("./src/js/slide-merge-bar.jsx");
-  assert.match(editor, /const StatusContainer = integration\?\.statusbar \? "div" : "footer"/);
-  assert.match(editor, /<StatusContainer className="merge-status"[^>]*>\s*<StatusControls\b[^>]*>\s*<VisibilityMenu\b[\s\S]*?<\/StatusControls>/);
+  assert.match(editor, /const visibilityControl = <VisibilityMenu\b/);
+  assert.match(editor, /const editorStatus = integration\?\.statusbar \? visibilityControl : <footer className="merge-status"[^>]*><StatusControls\b[^>]*>\{visibilityControl\}<\/StatusControls>/);
+  assert.match(editor, /integration\?\.onStatus\?\.\(status\)/);
   assert.match(editor, /integration\?\.statusbar \? createPortal\(editorStatus, integration.statusbar\) : editorStatus/);
   assert.doesNotMatch(bar.slice(bar.indexOf("export function EditorBar"), bar.indexOf("export function StatusControls")), /role="status"|merge-bar-record|merge-bar-actions/);
   assert.match(bar, /className=\{`merge-save-status[\s\S]*?role="status" title=\{status\}/);
@@ -163,7 +164,7 @@ test("lab sidebars dismiss from canvas clicks, not editor controls", () => {
 test("library sync belongs only to the native Library panel", () => {
   const editor = read("./src/js/slide-merge.jsx");
   assert.match(editor, /<DefaultSidebar[\s\S]*?libraryOpen && <div className="merge-library-status">[\s\S]*?onClick=\{library.retry\}[\s\S]*?<\/DefaultSidebar>/);
-  const footer = editor.slice(editor.indexOf('<StatusContainer className="merge-status"'), editor.indexOf('</StatusContainer>', editor.indexOf('<StatusContainer className="merge-status"')));
+  const footer = editor.slice(editor.indexOf('<footer className="merge-status"'), editor.indexOf('</footer>', editor.indexOf('<footer className="merge-status"')));
   assert.doesNotMatch(footer, /merge-library-sync|library.status/);
   assert.match(footer, /StatusControls/);
 });

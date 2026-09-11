@@ -7,6 +7,102 @@ the existing owner session through a new, narrowly scoped Worker route.
 See [the design audit](DESIGN-AUDIT.md) for consistency corrections, verification
 coverage and components proposed for a future shared design-system update.
 
+## Project Workspace And AI Session
+
+Release approved, 2026-09-12. The owner approved validation and release of the
+shared project editor, session AI panel, two-tab presenter and contextual footer
+visibility controls. This code release does not publish any owner draft content.
+
+The project card's Edit action opens the furthest populated stage: Slideshow,
+Case study, Highlights or Details. An empty native or legacy deck does not count
+as slideshow progress. Generate using AI remains available in the same five-tab
+strip. The shared second row retains those tabs on both editing surfaces; the
+Slideshow tab mounts the native editor with its own Undo/Redo. The right-aligned
+actions follow Editing/Rehearse, Current/All slides, then square Play. The view
+menu uses Studio's device-popup styling, selected state and keyboard navigation.
+Native saves still complete
+before leaving the editor, and failures retain the active editing session.
+
+Preview appears only when case-study sections exist; Slideshow appears only when
+slides exist. Both open the current saved draft in a new tab using the existing
+local draft loader. The URL carries project identity and preview intent, never
+credentials or slide data. The content is available only in the browser holding
+the owner draft or through the existing owner unlock; this is not a public share
+link. The card's new-tab slideshow is audience-only: no presenter notes, timing editing
+or presenter window. It does not publish content or change visibility. Sealed
+legacy decks request the existing unlock rather than substituting generated slides.
+
+Toolbar Play and the owner case-study Present action use a different launch intent:
+one click opens the audience in a new tab and mounts the existing DJ pad over the
+original Studio or case-study tab. The editor stays mounted underneath. Speaker
+notes and timing remain in the DJ view, not the audience DOM; Studio metadata
+edits save through the existing adapter. End closes the audience and restores the
+original view and trigger focus. Closing either tab or navigating away ends the
+connection. Popup, startup and storage failures clean up and report the failure.
+The handoff checks both same-origin and the exact opened window; only project
+identity and launch intent appear in the URL. The cloned AI session is cleared.
+Audience appearance and active typography follow the launching view without
+changing saved theme settings or slide content.
+
+This approved browser arrangement is not a floating or always-on-top DJ window.
+Fullscreen and live tab capture are not requested automatically; live capture
+still requires browser permission and selecting the audience tab. Share only the
+audience tab/window. Native-app and standalone-lab launch behavior is unchanged.
+
+The same 32px status bar remains across Content Studio: shared save/publish status,
+draft storage, activity recording and AI usage. Project editing adds one 28x24px
+visibility lock immediately before Record. Case-study tabs use an open lock for
+public drafts and a closed lock for private drafts; Slideshow uses the same open
+or closed lock for its independent public or owner-only setting. New case studies
+default public and new slideshows default owner-only. Existing saved visibility,
+including private project copies, is never reset when opening a tab.
+
+The card-level Make private checkbox has moved into the case-study lock menu.
+It still controls the existing project privacy field, takes effect on Publish,
+and requires removing a featured project from the homepage before making it
+private. Public slideshow confirmation and source-review safeguards are unchanged.
+Hosted slides contribute only their visibility control, not a second status label,
+slide counter or recorder. Their saving/errors feed the shared status text and
+settled saves use the same unpublished/published narration as the rest of Studio.
+Global activity recording remains usable independently of slide save failures.
+The standalone lab retains its own footer and visibility icon conventions.
+
+The footer's AI sparkle and token count open one shared activity drawer. The
+counter covers actual provider-reported input/output tokens across text, vision,
+image, embedding and explicitly enabled evaluation requests. Coordinator and
+specialist calls are included. Reported cache/reasoning usage is included once;
+providers that do not report usage do not receive invented estimates. Cumulative
+usage updates during streaming are deduplicated by request identity.
+
+The per-tab admin session survives refresh through `rk:ai:admin-session` in
+sessionStorage. Only totals and bounded request-usage metadata are stored there,
+not prompts, credentials, model output, progress summaries or private reasoning.
+Explicit Save & Leave and Discard & Exit reset it and abort active jobs. Visitor
+tabs do not inherit the parent's AI session. Historical usage remains separate.
+The drawer lists jobs, model calls, progress, generated answer text and failures,
+and supports cancellation. Output is transient, capped at 64,000 displayed
+characters per job; completed-job history is limited to 30 items. Refresh clears
+the displayed jobs while retaining session totals. Closing the panel never stops
+a job; Stop does, and late answer chunks cannot revive it.
+
+The icon has distinct working and answering animations, a static reduced-motion
+state, fixed dimensions and accessible status/tooltip text. The drawer remains
+available while moving among project and Studio tabs, without replacing the
+feature's own proposal, apply or publish workflow. Hidden chain-of-thought,
+thinking blocks and signatures are never displayed. Tests use isolated drafts and
+intercepted providers; no paid generation is needed to verify these UI workflows.
+
+Local review: `http://127.0.0.1:5512/studio/` uses a separate demonstration origin.
+The live owner's deck and provider settings are not used as test fixtures.
+
+Release validation passed 162 contract checks, 27 Studio workflows and 28 shared
+presenter checks, plus both builds, the asset security scan and bundle syntax
+checks. Provider and publishing requests use isolated fixtures; no paid generation
+or real content Publish was run. The known unsupported one-click fullscreen plus
+floating-PiP experiment remains excluded; the approved browser arrangement above
+uses the original tab for the DJ pad. Shared-browser attachment was unavailable,
+so these checks do not claim a refreshed live-owner walkthrough.
+
 ## Content Studio Integration
 
 Release approved, 2026-09-11. The owner approved deploying the shared saving,
@@ -21,8 +117,8 @@ owner's physical GPU-enabled PC. The owner will review the deployed site in that
 PC's browser; this release does not claim a completed watched walkthrough or
 physical-PC GPU and meeting-app acceptance.
 
-Open `/studio/`, sign in normally, and use a project's Add/Edit Slideshow
-entry. The native editor mounts directly inside Content Studio with its navigation,
+Open `/studio/`, sign in normally, and use a project's Edit action and Slideshow
+tab. The native editor mounts directly inside Content Studio with its navigation,
 case-study title, working toolbar and status footer. There is no lab header or
 whole-editor iframe. The current v0 slides are disposable test data and are not
 converted; the native deck starts empty. The standalone lab draft is unchanged.
@@ -53,8 +149,10 @@ deleted or hidden objects and author metadata. Complete eligible sections, embed
 video and used fonts remain supported. Protected or signed source links fail
 validation. Unopened encrypted legacy decks remain intact during other publishes.
 
-Website Play lazily loads the read-only audience renderer. Studio Play loads the
-current private draft and saves presenter metadata through the same host adapter.
+Website Play lazily loads the read-only audience renderer. Studio toolbar Play
+opens the draft audience in a new tab with the DJ pad in the original tab; card
+previews remain audience-only. The existing owner presentation API, Studio DJ pad
+and standalone rehearsal still save presenter metadata through the same host adapter.
 Owner Present mode restores encrypted editing copies through its existing unlock
 dialog. Native sections use `/studio/slide-runtime/component.html`, not a demo
 fixture. The standalone lab still retains its own draft and demo bootstrap.

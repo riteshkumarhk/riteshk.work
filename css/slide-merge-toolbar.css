@@ -13,7 +13,7 @@
 .merge-tool-menu { position: relative; }
 .merge-tool-menu summary { list-style: none; width: 44px; gap: 2px; }
 .merge-tool-menu summary::-webkit-details-marker { display: none; }
-.merge-tool-menu summary svg:last-child { width: 10px; height: 10px; }
+.merge-tool-menu summary svg[data-tool-icon="chevron"] { width: 10px; height: 10px; }
 .merge-tool-menu summary[aria-disabled="true"] { opacity: .4; cursor: default; }
 .merge-tool-pop { position: fixed; inset: auto; margin: 0; width: 216px; max-width: calc(100vw - 16px); box-sizing: border-box; padding: 6px; max-height: min(380px, calc(100dvh - 160px)); overflow: auto; background: var(--merge-bg); color: var(--merge-text); border: 1px solid var(--merge-line); border-radius: 6px; box-shadow: 0 12px 32px #0004; }
 .merge-tool-pop button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; text-align: left; background: transparent; color: inherit; border: 0; border-radius: 4px; padding: 8px; cursor: pointer; }

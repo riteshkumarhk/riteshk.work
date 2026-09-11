@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowUp, Copy, Pencil, PencilOff, Presentation, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Pencil, PencilOff, Play, Presentation, Trash2 } from "lucide-react";
 import { DeckDialog } from "./slide-merge-navigator.jsx";
 import { SelectControl } from "./slide-shared-controls.jsx";
+import { ToolMenu } from "./slide-merge-toolbar.jsx";
 import { ACTIVITY_CAPABILITIES, activityChanges, activitySnapshot, activityText } from "./slide-merge-activity.mjs";
 import "../../css/slide-merge-bar.css";
 
@@ -82,14 +83,19 @@ export function useActivity(api, live, caseStudyId) {
   return { recording, showLog, setShowLog, events, message, note, write, pending, reset, flush, start, stop };
 }
 
-export function EditorBar({ historyRef, busy, editing, onEditing, slideView, onView, onPlay, canPlay }) {
+export function EditorBar({ historyRef, busy, editing, onEditing, slideView, onView, onPlay, canPlay, newTab = false }) {
   const EditingIcon = editing ? Pencil : PencilOff;
+  const controls = [
+    <button key="editing" type="button" className="merge-layout-toggle" disabled={busy} aria-label={editing ? "Editing on" : "Rehearse"} aria-pressed={editing} onClick={() => onEditing(!editing)} title={editing ? "Switch to Rehearse mode" : "Switch to Editing mode"}><EditingIcon size={15} strokeWidth={1.75} /><span>{editing ? "Editing on" : "Rehearse"}</span></button>,
+    newTab ? <span key="view" className="merge-host-slideview"><ToolMenu label="Slide view" icon={<Presentation size={15} strokeWidth={1.75} />} caption={slideView === "all" ? "All slides" : "Current slide"} disabled={busy} menuNavigation>
+      <div role="menu" aria-label="Slide view">{[["current", "Current slide"], ["all", "All slides"]].map(([value, label]) => <button key={value} type="button" className={`adm__dev-opt${slideView === value ? " is-on" : ""}`} role="menuitemradio" aria-checked={slideView === value} data-close onClick={() => onView(value)}>{label}</button>)}</div>
+    </ToolMenu></span> : <label key="view" className="merge-slideview"><Presentation size={15} strokeWidth={1.75} /><SelectControl aria-label="Slide view" value={slideView} disabled={busy} onChange={event => onView(event.target.value)}><option value="current">Current slide</option><option value="all">All slides</option></SelectControl><svg className="merge-slideview-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></label>,
+    <button key="play" className="merge-bar-play" type="button" title={newTab ? "Open slideshow in a new tab" : "Slide Show"} aria-label={newTab ? "Open slideshow in a new tab" : "Slide Show"} disabled={!canPlay || busy} onClick={onPlay}><Play size={15} strokeWidth={1.5} fill="currentColor" /></button>
+  ];
   return <div className="merge-editor-bar">
     <div className="merge-bar-state"><div ref={historyRef} className="merge-bar-history" /></div>
     <div className="merge-bar-views">
-      <button type="button" className="merge-layout-toggle" disabled={busy} aria-pressed={editing} onClick={() => onEditing(!editing)} title={editing ? "Switch to Rehearse mode" : "Switch to Editing mode"}><EditingIcon size={15} strokeWidth={1.75} /><span>{editing ? "Editing on" : "Rehearse"}</span></button>
-      <label className="merge-slideview"><Presentation size={15} strokeWidth={1.75} /><SelectControl aria-label="Slide view" value={slideView} disabled={busy} onChange={event => onView(event.target.value)}><option value="current">Current slide</option><option value="all">All slides</option></SelectControl><svg className="merge-slideview-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></label>
-      <button className="merge-bar-play" type="button" title="Slide Show" aria-label="Slide Show" disabled={!canPlay || busy} onClick={onPlay}><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg></button>
+      {controls}
     </div>
   </div>;
 }

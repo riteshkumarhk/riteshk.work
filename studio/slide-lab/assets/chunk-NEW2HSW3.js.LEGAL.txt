@@ -87,10 +87,13 @@ lucide-react/dist/esm/icons/list.mjs:
 lucide-react/dist/esm/icons/loader-circle.mjs:
 lucide-react/dist/esm/icons/lock-keyhole-open.mjs:
 lucide-react/dist/esm/icons/lock-keyhole.mjs:
+lucide-react/dist/esm/icons/lock-open.mjs:
+lucide-react/dist/esm/icons/lock.mjs:
 lucide-react/dist/esm/icons/maximize.mjs:
 lucide-react/dist/esm/icons/message-square-text.mjs:
 lucide-react/dist/esm/icons/pencil-off.mjs:
 lucide-react/dist/esm/icons/pencil.mjs:
+lucide-react/dist/esm/icons/play.mjs:
 lucide-react/dist/esm/icons/presentation.mjs:
 lucide-react/dist/esm/icons/rotate-ccw.mjs:
 lucide-react/dist/esm/icons/sparkles.mjs:

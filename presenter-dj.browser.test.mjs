@@ -7,6 +7,125 @@ import { join } from 'node:path';
 import { deckDocumentKey } from './src/js/slide-merge-history.mjs';
 const base = process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510';
 const executablePath = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+test('DJ pad can use the original tab without exposing notes or opening a second window', { timeout:30000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless:true, ignoreDefaultArgs:['--disable-popup-blocking'] });
+  const context = await browser.newContext({ viewport:{width:1280,height:800}, reducedMotion:'reduce' });
+  const page = await context.newPage(), errors = [];
+  context.on('page', candidate => candidate.on('pageerror', error => errors.push(error.message)));
+  await context.addInitScript(() => { window.captureRequests = 0; navigator.mediaDevices.getDisplayMedia = () => { window.captureRequests++; return Promise.reject(new DOMException('Unexpected capture', 'NotAllowedError')); }; });
+  try {
+    await page.goto(base + '/404.html');
+    await page.evaluate(() => {
+      const frame = document.createElement('iframe'); frame.title = 'Presenter DJ pad'; frame.id = 'presenter-host'; frame.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0';
+      const trigger = document.createElement('button'); trigger.textContent = 'Open audience';
+      trigger.onclick = () => { document.body.append(frame); window.open('/studio/?devstub', '_blank'); };
+      document.body.replaceChildren(trigger);
+    });
+    const pending = page.waitForEvent('popup');
+    await page.getByRole('button', { name:'Open audience', exact:true }).click();
+    const audience = await pending;
+    await audience.waitForFunction(() => !!window.RK?.presentDeck);
+    await audience.evaluate(async () => {
+      const owner = window.opener;
+      window.opener = null;
+      window.testEdits = [];
+      window.testPresentation = window.RK.presentDeck({}, {
+        slides:[{ layout:'title', slots:{title:'First audience slide'}, notes:'PRIVATE FIRST NOTE' }, { layout:'title', slots:{title:'Second audience slide'}, notes:'PRIVATE SECOND NOTE' }],
+        presenterWindow:owner.document.querySelector('#presenter-host').contentWindow,
+        autoStart:true,
+        onSlideEdit:(_slide, key, value) => window.testEdits.push({key, value}),
+        onClose:() => owner.document.querySelector('#presenter-host')?.remove()
+      });
+      await window.testPresentation.ready;
+    });
+    const pad = page.frameLocator('#presenter-host');
+    await pad.locator('[data-pp-notes]').waitFor();
+    assert.equal(await pad.locator('[data-pp-notes]').innerText(), 'PRIVATE FIRST NOTE');
+    assert.doesNotMatch(await audience.locator('body').innerText(), /PRIVATE (FIRST|SECOND) NOTE/);
+    assert.equal(await audience.locator('[data-pjp-notes]').textContent(), '');
+    assert.equal(await audience.locator('[data-pjp="notes"]').isVisible(), false);
+    assert.equal(await audience.evaluate(() => window.captureRequests), 0);
+    assert.equal(context.pages().length, 2);
+    await pad.getByRole('button', { name:'Next slide', exact:true }).click();
+    assert.equal(await audience.locator('[data-pjp-count]').textContent(), '2 / 2');
+    assert.equal(await pad.locator('[data-pp-notes]').innerText(), 'PRIVATE SECOND NOTE');
+    await pad.locator('[data-pp-notes]').fill('PRIVATE EDIT');
+    await pad.locator('[data-pp-save]').getByText('Saved to deck', { exact:true }).waitFor();
+    assert.deepEqual(await audience.evaluate(() => window.testEdits), [{key:'notes', value:'PRIVATE EDIT'}]);
+    assert.equal(await audience.locator('[data-pjp-notes]').textContent(), '');
+    await pad.getByRole('button', { name:'End presentation', exact:true }).click();
+    await page.locator('#presenter-host').waitFor({ state:'detached' });
+    await audience.locator('.pjp').waitFor({ state:'detached' });
+    assert.equal(page.isClosed(), false);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('owner case-study Present keeps the DJ pad in the original tab and handles blocked or closed audiences', { timeout:60000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless:true, ignoreDefaultArgs:['--disable-popup-blocking'] });
+  const context = await browser.newContext({ viewport:{width:1280,height:900}, reducedMotion:'reduce' });
+  const published = JSON.parse(readFileSync(new URL('./content.json', import.meta.url), 'utf8'));
+  published.work = [{ id:'presenter-case', title:'Owner presentation', client:'Studio', study:{ blocks:[{type:'text', heading:'Preserved case study', body:'Original case-study content.'}], slides:[{id:'first', layout:'title', slots:{title:'First audience slide'}, notes:'PRIVATE OWNER FIRST'}, {id:'second', layout:'title', slots:{title:'Second audience slide'}, notes:'PRIVATE OWNER SECOND'}] } }];
+  await context.route('**/content.json*', route => route.fulfill({contentType:'application/json', body:JSON.stringify(published)}));
+  await context.route('**/work/presenter-case', route => route.fulfill({contentType:'text/html', body:readFileSync(new URL('./404.html', import.meta.url), 'utf8')}));
+  await context.addInitScript(() => { localStorage.setItem('rk:owner','1'); window.captureRequests = 0; navigator.mediaDevices.getDisplayMedia = () => { window.captureRequests++; return Promise.reject(new DOMException('Unexpected capture','NotAllowedError')); }; });
+  const page = await context.newPage(), errors = [];
+  context.on('page', candidate => candidate.on('pageerror', error => errors.push(error.message)));
+  page.on('pageerror', error => errors.push(error.message));
+  try {
+    await page.goto(base + '/?work=presenter-case');
+    const play = page.locator('.pj.is-open [data-pj="present"]');
+    await play.waitFor();
+    const before = await page.evaluate(() => JSON.stringify(window.RK.data.work));
+    const opened = page.waitForEvent('popup');
+    await play.click();
+    const audience = await opened;
+    await page.locator('.pjp-tab[data-ready="true"]').waitFor();
+    const pad = page.frameLocator('[data-presenter-host]');
+    assert.equal(context.pages().length, 2);
+    assert.equal(await audience.evaluate(() => window.opener), null);
+    assert.equal(await pad.locator('[data-pp-notes]').innerText(), 'PRIVATE OWNER FIRST');
+    assert.equal(await audience.locator('[data-pjp-notes]').textContent(), '');
+    assert.doesNotMatch(await audience.locator('body').innerText(), /PRIVATE OWNER/);
+    assert.equal(await audience.evaluate(() => window.captureRequests), 0);
+    const typography = await page.evaluate(() => { const frame = document.querySelector('[data-presenter-host]'); return ['--sans','--mono','--serif'].map(name => [getComputedStyle(document.documentElement).getPropertyValue(name).trim(), frame.contentWindow.getComputedStyle(frame.contentDocument.documentElement).getPropertyValue(name).trim()]); });
+    assert.ok(typography.every(([original, presenter]) => original && presenter === original));
+    await pad.getByRole('button', {name:'Next slide', exact:true}).click();
+    assert.equal(await audience.locator('[data-pjp-count]').textContent(), '2 / 2');
+    assert.equal(await pad.locator('[data-pp-notes]').innerText(), 'PRIVATE OWNER SECOND');
+    await pad.locator('[data-pp-now]').hover({position:{x:80,y:60}});
+    await audience.waitForFunction(() => !document.querySelector('.pjp__pointer').hidden);
+    await pad.getByRole('button', {name:'Pause timer', exact:true}).click();
+    assert.equal(await pad.locator('[data-pp-elapsed]').textContent(), 'paused');
+    await pad.getByRole('button', {name:'Slide overview', exact:true}).click();
+    await pad.locator('[data-pp-jump="0"]').click();
+    assert.equal(await audience.locator('[data-pjp-count]').textContent(), '1 / 2');
+    const ended = audience.waitForEvent('close');
+    await pad.getByRole('button', {name:'End presentation', exact:true}).click();
+    await ended;
+    await page.locator('.pjp-tab').waitFor({state:'detached'});
+    await page.waitForFunction(() => document.activeElement?.matches('[data-pj="present"]'));
+    assert.equal(await page.evaluate(() => JSON.stringify(window.RK.data.work)), before);
+    assert.equal(await page.locator('.pj.is-open').count(), 1);
+    const reopened = page.waitForEvent('popup');
+    await play.click();
+    const nextAudience = await reopened;
+    await page.locator('.pjp-tab[data-ready="true"]').waitFor();
+    const leaving = nextAudience.waitForEvent('close');
+    await page.reload();
+    await leaving;
+    assert.equal(await page.locator('.pjp-tab').count(), 0);
+    await play.waitFor();
+    await page.evaluate(() => { window.open = () => null; });
+    await play.click();
+    await page.getByRole('dialog', {name:'Presentation unavailable', exact:true}).waitFor();
+    assert.match(await page.getByRole('dialog', {name:'Presentation unavailable', exact:true}).innerText(), /Allow a new tab/);
+    assert.equal(await page.locator('.pjp-tab').count(), 0);
+    assert.equal(context.pages().length, 1);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
 test('Rehearse budgets and DJ-pad notes, timing, overview and end persist safely', { timeout:90000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless:true });
   const context = await browser.newContext({ viewport:{width:1280,height:800} });
