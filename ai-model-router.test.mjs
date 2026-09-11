@@ -421,6 +421,92 @@ test("the coordinator can draft immediately and revise after real contract valid
   assert.equal(result.agent.drafts, 2);
 });
 
+test("coordinator repair receives the specific contract failure without relaxing model access", async () => {
+  const { orchestrator, config, store } = orchestratorFixture();
+  const agent = createAiTaskAgent({ router: orchestrator, now: () => now });
+  let coordinatorCalls = 0, draftCalls = 0;
+  const result = await agent.run([config], { task: "writing", system: "Answer the question", user: "PRIVATE SOURCE", options: { maxTokens: 1000 } }, async (selected, modelId, step) => {
+    if (step.role === "coordinator") {
+      const input = JSON.parse(step.user); coordinatorCalls++;
+      if (coordinatorCalls === 1) return { ok: true, status: 200, text: JSON.stringify({ action: "draft", modelRef: "not-in-catalogue", task: "writing", instruction: "", inputs: [] }) };
+      if (coordinatorCalls === 2) {
+        assert.match(input.work[0].failure, /selected an unavailable model or task/);
+        return { ok: true, status: 200, text: JSON.stringify({ action: "draft", modelRef: input.catalogue[0].ref, task: "writing", instruction: "", inputs: [] }) };
+      }
+      return { ok: true, status: 200, text: '{"action":"finish"}' };
+    }
+    draftCalls++;
+    assert.notEqual(modelId, "not-in-catalogue");
+    return { ok: true, status: 200, text: "Complete answer" };
+  });
+  assert.equal(result.text, "Complete answer");
+  assert.equal(result.agent.calls, 4);
+  assert.equal(draftCalls, 1);
+  const failed = (await store.read()).decisions.find(decision => decision.status === "error");
+  assert.equal(failed.failurePhase, "validation");
+  assert.equal(failed.httpStatus, undefined);
+});
+
+test("progress summaries are optional display text and never weaken agent action validation", () => {
+  const models = new Map([["m0", {}]]), work = new Set(["work-1"]);
+  const actions = [
+    { action: "delegate", modelRef: "m0", task: "analysis", purpose: "evidence", instruction: "Check the facts", inputs: ["work-1"] },
+    { action: "draft", modelRef: "m0", task: "creative", instruction: "Use the checked facts", inputs: ["work-1"] },
+    { action: "finish" }, { action: "stop", reason: "budget" }
+  ];
+  for (const action of actions) for (const summary of [undefined, null, "", " \n ", 42, { details: "not display text" }, "Verbose progress ".repeat(30)]) {
+    const parsed = parseAgentAction(JSON.stringify({ ...action, summary }), models, work);
+    assert.ok(parsed.summary.length > 0 && parsed.summary.length <= 240);
+    const { summary: display, ...operation } = parsed;
+    assert.deepEqual(operation, action, "Only display text may be normalized");
+  }
+  assert.equal(parseAgentAction(JSON.stringify({ action: "finish", summary: "  Ready\n for review  " }), models, work).summary, "Ready for review");
+  for (const change of [{ modelRef: "not-accessible" }, { task: "made-up" }, { endpoint: "https://other.test" }, { inputs: ["not-produced"] }]) {
+    assert.throws(() => parseAgentAction(JSON.stringify({ ...actions[0], ...change }), models, work));
+  }
+});
+
+test("missing and verbose summaries do not cause coordinator retries or block a completed deck", async () => {
+  const { orchestrator, config, store } = orchestratorFixture();
+  const agent = createAiTaskAgent({ router: orchestrator, now: () => now }), progress = [];
+  let coordinatorCalls = 0;
+  const result = await agent.run([config], { task: "creative", system: "Return a complete deck", user: "PRIVATE SOURCE", options: { maxTokens: 1000, onActivity: event => progress.push(event), validate: text => assert.equal(text, "COMPLETE DECK") } }, async (selected, modelId, step) => {
+    if (step.role === "coordinator") {
+      const input = JSON.parse(step.user); coordinatorCalls++;
+      const action = coordinatorCalls === 1 ? { action: "delegate", modelRef: input.catalogue[0].ref, task: "analysis", purpose: "evidence", instruction: "Check the source", inputs: [] }
+        : coordinatorCalls === 2 ? { action: "draft", modelRef: input.catalogue[0].ref, task: "creative", instruction: "Use the checked facts", inputs: [input.work[0].id], summary: "Long progress summary ".repeat(30) }
+        : { action: "finish", summary: null };
+      return { ok: true, status: 200, text: JSON.stringify(action) };
+    }
+    return { ok: true, status: 200, text: step.role === "delegate" ? "PRIVATE FINDINGS" : "COMPLETE DECK" };
+  });
+  assert.equal(result.text, "COMPLETE DECK");
+  assert.equal(result.agent.calls, 5);
+  assert.equal(coordinatorCalls, 3);
+  assert.deepEqual(progress.filter(event => event.phase === "decision").map(event => event.summary), ["Delegating specialist work", "Producing the draft", "Completing the task"]);
+  assert.ok((await store.read()).decisions.every(decision => decision.status === "success"));
+  assert.doesNotMatch(JSON.stringify(await store.read()), /PRIVATE SOURCE|PRIVATE FINDINGS|Long progress summary/);
+});
+
+test("local validation failure is never labelled as a provider HTTP rejection", async () => {
+  const { orchestrator, config, store } = orchestratorFixture();
+  await assert.rejects(orchestrator.run([config], "analysis", { validate: () => { throw new Error("Invalid action contract"); } }, async () => ({
+    ok: true, status: 200, text: "PRIVATE INVALID ACTION", stopReason: "end_turn", outputTokens: 123, thinkingTokens: 23
+  })), /Invalid action contract/);
+  const decision = (await store.read()).decisions[0];
+  assert.equal(decision.failure, "invalid");
+  assert.equal(decision.failurePhase, "validation");
+  assert.equal(decision.httpStatus, undefined);
+  assert.equal(decision.stopReason, "end_turn");
+  assert.equal(decision.usedOutputTokens, 123);
+  assert.equal(decision.thinkingTokens, 23);
+  assert.match(decision.reasons.join(" "), /Studio response validation failed/);
+  await assert.rejects(orchestrator.run([config], "analysis", {}, async () => ({ ok: false, status: 422, phase: "request", err: "Actual provider rejection" })), /Actual provider rejection/);
+  assert.equal((await store.read()).decisions.at(-1).httpStatus, 422);
+  assert.equal((await store.read()).decisions.at(-1).failurePhase, "request");
+  assert.doesNotMatch(JSON.stringify(await store.read()), /PRIVATE INVALID ACTION/);
+});
+
 test("agent tools cannot invent models, endpoints, credentials, file operations or completed dependencies", () => {
   const models = new Map([["m0", {}]]), work = new Set(["work-1"]);
   const valid = { action: "delegate", modelRef: "m0", task: "analysis", purpose: "evidence", instruction: "Check the facts", inputs: ["work-1"], summary: "Checking evidence" };

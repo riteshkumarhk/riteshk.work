@@ -24,7 +24,6 @@ export function parseAgentAction(text, models, workIds) {
   let action;
   try { action = JSON.parse(fenced ? fenced[1] : text); } catch { throw new Error("The agent action must be JSON"); }
   if (!action || typeof action !== "object" || Array.isArray(action) || !["delegate", "draft", "finish", "stop"].includes(action.action)) throw new Error("Unknown agent action");
-  if (typeof action.summary !== "string" || !action.summary.trim() || action.summary.length > 240) throw new Error("An agent action needs a short progress summary");
   const allowed = action.action === "finish" ? ["action", "summary"] : action.action === "stop" ? ["action", "summary", "reason"] : ["action", "summary", "modelRef", "task", "purpose", "instruction", "inputs"];
   if (Object.keys(action).some(key => !allowed.includes(key))) throw new Error("The agent requested unsupported controls");
   if (action.action === "stop" && !["blocked", "insufficient-evidence", "budget"].includes(action.reason)) throw new Error("Unknown agent stopping reason");
@@ -34,6 +33,10 @@ export function parseAgentAction(text, models, workIds) {
     if (!Array.isArray(action.inputs) || action.inputs.length > 5 || new Set(action.inputs).size !== action.inputs.length || action.inputs.some(id => !workIds.has(id))) throw new Error("The agent referenced unavailable work");
     if (action.action === "delegate" && (!purposes.includes(action.purpose) || action.task === "image")) throw new Error("Unsupported delegated task");
   }
+  const summary = typeof action.summary === "string" ? action.summary.replace(/\s+/g, " ").trim() : "";
+  action.summary = summary && summary.length <= 240 ? summary : {
+    delegate: "Delegating specialist work", draft: "Producing the draft", finish: "Completing the task", stop: "Stopping the task"
+  }[action.action];
   return action;
 }
 
@@ -115,7 +118,7 @@ export function createAiTaskAgent({ router, now = Date.now, randomId = () => cry
           signal.throwIfAborted();
           if (["unavailable", "unsupported"].includes(error.failure)) { work.push({ id: "feedback-" + calls, kind: "availability", valid: false, failure: "The coordinator model is unavailable; continue on another accessible model." }); continue; }
           if (error.failure !== "invalid" || ++coordinatorFailures > 1) throw error;
-          work.push({ id: "feedback-" + calls, kind: "validation", valid: false, failure: "Return one supported JSON action; do not add controls or reference unavailable models/work." });
+          work.push({ id: "feedback-" + calls, kind: "validation", valid: false, failure: error.message + ". Return one supported JSON action using only the supplied model refs and work IDs. For delegate/draft, instruction must be a string and inputs an array (use [] when there are no dependencies). Summary is optional display text." });
           continue;
         }
         notify({ id: "decision-" + calls, phase: "decision", status: "complete", summary: action.summary });

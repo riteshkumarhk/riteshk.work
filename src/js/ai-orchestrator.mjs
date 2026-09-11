@@ -163,13 +163,14 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
         let success = result?.ok === true;
         if (success && options.validate) {
           try { await options.validate(result.text); }
-          catch (error) { success = false; result = { ok: false, status: 422, err: error.message, validationFailed: true }; }
+          catch (error) { success = false; result = { ...result, ok: false, err: error.message, validationFailed: true }; }
         }
         if (options.signal?.aborted) { decision.status = "cancelled"; await record(decision).catch(() => {}); notify(decision); options.signal.throwIfAborted(); }
         const kind = success ? "success" : result?.validationFailed ? "invalid" : aiFailureKind(result);
         decision.status = success ? "success" : "error"; decision.failure = success ? undefined : kind;
-        if (Number.isInteger(result?.status) && result.status >= 100 && result.status <= 599) decision.httpStatus = result.status;
-        if (["request", "stream", "transport"].includes(result?.phase)) decision.failurePhase = result.phase;
+        if (!result?.validationFailed && Number.isInteger(result?.status) && result.status >= 100 && result.status <= 599) decision.httpStatus = result.status;
+        if (result?.validationFailed) { decision.failurePhase = "validation"; decision.reasons.push("Studio response validation failed; the provider request itself succeeded"); }
+        else if (["request", "stream", "transport"].includes(result?.phase)) decision.failurePhase = result.phase;
         if (["invalid_request_error", "authentication_error", "permission_error", "not_found_error", "request_too_large", "rate_limit_error", "api_error", "overloaded_error", "unknown"].includes(result?.errorType)) decision.errorType = result.errorType;
         if (typeof result?.requestId === "string" && /^[a-zA-Z0-9_-]{1,120}$/.test(result.requestId)) decision.requestId = result.requestId;
         if (["end_turn", "max_tokens", "model_context_window_exceeded", "refusal", "stop_sequence", "pause_turn", "tool_use", "unspecified", "unknown"].includes(result?.stopReason)) decision.stopReason = result.stopReason;

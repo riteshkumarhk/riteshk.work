@@ -70,7 +70,7 @@ test("the shared publish builder validates native references before preparing ow
   assert.match(source, /prepareStudioPublication\(snapshot/);
 });
 
-for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, mode: "complete" }, { width: 1440, mode: "exhausted" }, { width: 1440, mode: "invalid-body" }, { width: 390, mode: "cancelled" }]) test("Draft entire deck with AI delegates, checks and streams progress at " + width + "px (" + mode + ")", { timeout: 60000 }, async () => {
+for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, mode: "complete" }, { width: 1440, mode: "summary-fallback" }, { width: 390, mode: "summary-fallback" }, { width: 1440, mode: "exhausted" }, { width: 1440, mode: "invalid-body" }, { width: 390, mode: "cancelled" }]) test("Draft entire deck with AI delegates, checks and streams progress at " + width + "px (" + mode + ")", { timeout: 60000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, hasTouch: width < 600, isMobile: width < 600 });
   const requests = [], errors = [];
@@ -104,6 +104,10 @@ for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, 
             const action = input.candidate ? { action: "finish", summary: "The draft preserves the source and meets the presentation contract" }
               : evidence ? { action: "draft", modelRef: input.catalogue.find(item => item.id === "studio-creative-a").ref, task: "creative", instruction: "Use the checked source facts", inputs: [evidence.id], summary: "Writing the deck with the creative model" }
               : { action: "delegate", modelRef: input.catalogue.find(item => item.id === "studio-evidence").ref, task: "analysis", purpose: "evidence", instruction: "Check the supplied source facts", inputs: [], summary: "Checking the case-study evidence" };
+            if (mode === "summary-fallback") {
+              if (action.action === "delegate") delete action.summary;
+              else action.summary = action.action === "draft" ? "OVERLONG PROGRESS SUMMARY ".repeat(30) : null;
+            }
             return route.fulfill({ contentType: "application/json", body: JSON.stringify({ content: [{ type: "text", text: JSON.stringify(action) }], stop_reason: "end_turn", usage: { input_tokens: 100, output_tokens: 100 } }) });
           }
           if (body.model === "studio-evidence") {
@@ -140,7 +144,7 @@ for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, 
     await page.locator('[data-act="study-slides"][data-index="0"]').click();
     await page.locator(".merge-empty-actions").waitFor();
     await page.getByRole("button", { name: "Draft entire deck with AI", exact: true }).click();
-    await page.getByRole("log", { name: "Agent activity", exact: true }).getByText("Checking the case-study evidence", { exact: true }).waitFor();
+    await page.getByRole("log", { name: "Agent activity", exact: true }).getByText(mode === "summary-fallback" ? "Delegating specialist work" : "Checking the case-study evidence", { exact: true }).waitFor();
     await page.getByRole("log", { name: "Agent activity", exact: true }).getByText(/studio-evidence/).waitFor();
     assert.equal(requests.filter(request => request.model === "studio-creative-a").length, 0);
     assert.equal(await page.getByRole("button", { name: "Append slides", exact: true }).count(), 0);
@@ -175,13 +179,14 @@ for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, 
     await page.locator(".merge-ai h3").waitFor();
     assert.equal(await page.locator(".merge-ai h3").innerText(), "A grounded deck");
     assert.equal(await page.locator('.merge-ai [role="alert"]').count(), 0);
-    assert.equal(requests.length, mode === "complete" ? 5 : 9);
+    assert.equal(requests.length, mode === "exhausted" || mode === "invalid-body" ? 9 : 5);
     assert.deepEqual([...new Set(requests.map(request => request.model))], ["studio-coordinator", "studio-evidence", "studio-creative-a"]);
     assert.ok(requests.filter(request => request.model === "studio-creative-a").every(request => request.stream === true && request.max_tokens === 24000));
     assert.ok(requests.every(request => !Object.hasOwn(request, "temperature")));
     assert.ok(requests.filter(request => request.model === "studio-coordinator").every(request => request.output_config?.effort === "low"));
     await page.locator(".merge-ai-activity > summary").click();
-    await page.getByRole("log", { name: "Agent activity", exact: true }).getByText("Writing the deck with the creative model", { exact: true }).waitFor();
+    await page.getByRole("log", { name: "Agent activity", exact: true }).locator('li[data-status="complete"]').getByText(mode === "summary-fallback" ? "Producing the draft" : "Writing the deck with the creative model", { exact: true }).waitFor();
+    if (mode === "summary-fallback") assert.doesNotMatch(await page.locator(".merge-ai").innerText(), /OVERLONG PROGRESS SUMMARY|HTTP 422|needs a short progress summary/);
     assert.match(await page.getByLabel("Model selection", { exact: true }).innerText(), /studio-creative-a.*provisional/);
     await page.getByRole("button", { name: "Draft needs work", exact: true }).click();
     await page.getByLabel("Feedback category", { exact: true }).selectOption("design");
@@ -193,6 +198,7 @@ for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, 
     assert.deepEqual(overflow, []);
     await page.screenshot({ path: join(tmpdir(), "rk-ai-proposal-" + width + ".png") });
     const routing = await page.evaluate(() => window.__RKStudio.aiRouting.state());
+    if (mode === "summary-fallback") assert.ok(routing.decisions.every(decision => decision.status === "success"), "Cosmetic summaries must never trigger repair requests");
     const accepted = routing.decisions.find(decision => decision.agentRole === "result");
     assert.equal(accepted.task, "creative");
     assert.equal(accepted.stopReason, "end_turn");

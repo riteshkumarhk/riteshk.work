@@ -134,6 +134,10 @@ selected specialist outputs. Those inputs, intermediate drafts and model-written
 progress summaries remain transient, not part of the deck or routing history.
 The proposal pane streams public agent activity, model choices and checks. It does
 not expose raw private chain-of-thought, thinking blocks or signatures.
+Progress summaries are optional display metadata: missing, malformed or oversized
+summaries use a short action label without another model call. Executable actions,
+models, task types and dependencies remain strictly validated. A local contract
+failure sends specific repair feedback and is not labelled as a provider HTTP error.
 
 Known incompatible modalities, insufficient input/context/output limits, missing
 mandatory capabilities and estimated costs above the request limit are excluded.
