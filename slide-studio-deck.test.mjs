@@ -56,6 +56,64 @@ test("the shared publish builder validates native references before preparing ow
   assert.match(source, /prepareStudioPublication\(snapshot/);
 });
 
+test("Draft entire deck with AI recovers from deprecated temperature and applies the proposal", { timeout: 60000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const requests = [], errors = [];
+  const published = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
+  published.work = [{ id: "temperature-case", title: "A clearer product flow", client: "Studio test", study: { blocks: [{ type: "text", heading: "A clearer next step", body: "The redesigned flow places the next action beside the relevant content." }] } }];
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.addInitScript(() => {
+      localStorage.setItem("rk:dev:stub", "1");
+      localStorage.setItem("rk:ai:mode", "local"); localStorage.setItem("rk:ai:same", "0");
+      localStorage.setItem("rk:ai:txt:provider", "anthropic"); localStorage.setItem("rk:ai:txt:key", "synthetic-test-key");
+    });
+    await page.route("**/*", async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.pathname.endsWith("/content.json")) return route.fulfill({ contentType: "application/json", body: JSON.stringify(published) });
+      if (url.hostname === "api.anthropic.com") {
+        if (url.pathname.endsWith("/models")) return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: [{ id: "claude-opus-4-6" }, { id: "claude-sonnet-4-5" }] }) });
+        if (url.pathname.endsWith("/messages")) {
+          const body = request.postDataJSON(); requests.push(body);
+          if (requests.length === 1) return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: { type: "invalid_request_error", message: "`temperature` is deprecated for this model." } }) });
+          const source = JSON.parse(body.messages[0].content).sources[0];
+          const proposal = { version: 2, title: "A grounded deck", slides: [{ id: "opening", kind: "authored", layout: "statement", sourceIds: [source.sourceId], headline: "A clearer next step", kicker: "DESIGN DECISION", body: "Place the next action beside the relevant content.", notes: "Discuss the redesigned flow.", components: [] }] };
+          return route.fulfill({ contentType: "application/json", body: JSON.stringify({ content: [{ type: "text", text: JSON.stringify(proposal) }], usage: { input_tokens: 10, output_tokens: 20 } }) });
+        }
+        return route.abort();
+      }
+      if (!["127.0.0.1", "localhost"].includes(url.hostname) && !["GET", "HEAD"].includes(request.method())) return route.abort();
+      return route.continue();
+    });
+    await page.goto((process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510") + "/studio/?devstub");
+    await page.waitForFunction(() => typeof window.__rkDevStudio === "function" && !!window.RK?.data);
+    await page.evaluate(() => window.__rkDevStudio());
+    await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+    await page.evaluate(() => document.querySelectorAll(".pass--lock").forEach(dialog => dialog.remove()));
+    await page.locator('.adm__tab[data-tab="work"]').click();
+    await page.locator('[data-act="study-slides"][data-index="0"]').click();
+    await page.locator(".merge-empty-actions").waitFor();
+    await page.getByRole("button", { name: "Draft entire deck with AI", exact: true }).click();
+    await page.locator(".merge-ai h3").waitFor();
+    assert.equal(await page.locator(".merge-ai h3").innerText(), "A grounded deck");
+    assert.equal(await page.locator('.merge-ai [role="alert"]').count(), 0);
+    assert.equal(requests.length, 2);
+    assert.ok(requests.every(request => request.model === "claude-opus-4-6"), "Keep the chosen model rather than falling back to another one");
+    assert.equal(requests[0].temperature, 0.3);
+    const expected = structuredClone(requests[0]); delete expected.temperature;
+    assert.deepEqual(requests[1], expected);
+    await page.getByRole("button", { name: "Append slides", exact: true }).click();
+    await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.nativeDeck?.slideCount === 1);
+    await page.locator("[data-l2-back]").click();
+    await page.locator(".merge-shell").waitFor({ state: "detached" });
+    const study = await page.evaluate(() => window.__RKStudio.getDraft().work[0].study);
+    assert.deepEqual(study.blocks, published.work[0].study.blocks);
+    assert.notEqual(study.slidesPublic, true);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
 test("native deck storage commits original assets and rejects stale or misrouted saves", { timeout: 30000 }, async () => {
   const bundle = await build({ entryPoints: [fileURLToPath(new URL("./src/js/slide-studio-deck.mjs", import.meta.url))], bundle: true, format: "iife", globalName: "StudioDeckStorage", write: false });
   const recoveryBundle = await build({ entryPoints: [fileURLToPath(new URL("./src/js/studio-draft-recovery.mjs", import.meta.url))], bundle: true, format: "iife", globalName: "StudioRecovery", write: false });

@@ -14898,13 +14898,30 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     return list;
   }
   function aiIsModelErr(r) { return r && (r.status === 404 || /model|not[ ._-]?found|does not exist|unknown|deprecat|unsupported/i.test(r.err || "")); }
+  const aiNoTemperature = new Set();
+  async function aiTextRequest(cfg, model, url, headers, body, signal) {
+    const sampling = cfg.provider === "gemini" ? body.generationConfig : body;
+    const cacheKey = JSON.stringify([cfg.provider, cfg.base, model]);
+    if (aiNoTemperature.has(cacheKey)) delete sampling.temperature;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      signal?.throwIfAborted();
+      const response = await fetch(url, { method: "POST", headers, signal, body: JSON.stringify(body) });
+      if (attempt || ![400, 422].includes(response.status) || !Object.hasOwn(sampling, "temperature")) return response;
+      const failure = await response.clone().json().catch(() => null);
+      const message = failure?.error?.message || "";
+      const unsupported = /\btemperature\b/i.test(message) && /deprecat|unsupported|not\s+support|does\s+not\s+support|not\s+(?:allowed|accepted|permitted)|only[^.\n]*(?:default|value[^.\n]*1)|cannot[^.\n]*(?:set|specif)/i.test(message);
+      if (!unsupported) return response;
+      delete sampling.temperature;
+      aiNoTemperature.add(cacheKey);
+    }
+  }
   async function aiChatOnce(cfg, model, system, user, opts) {
     var p = cfg.provider, key = cfg.key, base = cfg.base;
     var maxTokens = opts.maxTokens || 4096;
     var temp = opts.temperature != null ? opts.temperature : 0.7;
     var res, j;
     if (p === "anthropic") {
-      res = await fetch(base + "/messages", { method: "POST", signal: opts.signal, headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: model, max_tokens: maxTokens, temperature: temp, system: system, messages: [{ role: "user", content: user }] }) });
+      res = await aiTextRequest(cfg, model, base + "/messages", { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, { model: model, max_tokens: maxTokens, temperature: temp, system: system, messages: [{ role: "user", content: user }] }, opts.signal);
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
       (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
@@ -14914,7 +14931,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       var url = base + "/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key);
       var gb = { contents: [{ role: "user", parts: [{ text: user }] }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: maxTokens, temperature: temp } };
       if (opts.json) gb.generationConfig.responseMimeType = "application/json";
-      res = await fetch(url, { method: "POST", signal: opts.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify(gb) });
+      res = await aiTextRequest(cfg, model, url, { "Content-Type": "application/json" }, gb, opts.signal);
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
       var cand = (j && j.candidates && j.candidates[0]) || {};
@@ -14927,7 +14944,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
       ob.max_completion_tokens = maxTokens;
     }
     if (opts.json) ob.response_format = { type: "json_object" };
-    res = await fetch(base + "/chat/completions", { method: "POST", signal: opts.signal, headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify(ob) });
+    res = await aiTextRequest(cfg, model, base + "/chat/completions", { "Content-Type": "application/json", Authorization: "Bearer " + key }, ob, opts.signal);
     j = await res.json().catch(function () { return null; });
     if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
     (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
@@ -14956,7 +14973,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
     }
     var full = "", uIn = 0, uOut = 0, uSet = false;
     try {
-      var res = await fetch(url, { method: "POST", headers: headers, body: JSON.stringify(body) });
+      var res = await aiTextRequest(cfg, model, url, headers, body, opts.signal);
       if (!res.ok || !res.body) { var je = await res.json().catch(function () { return null; }); return { ok: false, status: res.status, err: (je && je.error && je.error.message) || ("HTTP " + res.status) }; }
       var reader = res.body.getReader(), dec = new TextDecoder(), buf = "";
       function push(t) { if (t) { full += t; try { onDelta && onDelta(full, t); } catch (e) {} } }
