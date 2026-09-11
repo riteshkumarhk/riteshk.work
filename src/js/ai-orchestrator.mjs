@@ -45,6 +45,7 @@ export function aiFailureKind(result) {
   if (status === 401) return "authentication";
   if (status === 429) return "rate-limit";
   if (status >= 500 || !status) return "service";
+  if ([400, 422].includes(status) && /output_config\.format\.schema\b|invalid (?:json )?schema\b|unsupported regex feature\b|schema (?:is too complex|compilation (?:failed|error))/i.test(message)) return "request-format";
   if (status === 404 || status === 403 && /model.*(?:access|permission|available)/i.test(message)) return "unavailable";
   if ([400, 422].includes(status) && /not.support|unsupported|not.available|unknown.model|model.*(?:not.found|retired|deprecated)|invalid.model/i.test(message)) return "unsupported";
   return "request";
@@ -98,6 +99,7 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
     }
     if (!choices.length) {
       if (failures.length === configs.length && failures.length) throw failures[0];
+      if (options.allowEmpty) return { choices, endpoints, state };
       throw new Error("No available model meets this task's capabilities, limits and budget. Refresh models or review AI routing settings.");
     }
     return { choices, endpoints, state };
@@ -143,9 +145,11 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
         if (maxCost != null && (choice.estimatedCost == null || committed + choice.estimatedCost > maxCost)) break;
         committed += choice.estimatedCost || 0;
         const decision = publicChoice(choice, randomId(), choice.scope, index > 0, now());
+        if (choice.model.effortLevels?.includes(options.effort)) decision.effort = options.effort;
         if (options.agent && /^[a-zA-Z0-9_-]{1,100}$/.test(options.agent.jobId || "") && ["coordinator", "delegate", "draft"].includes(options.agent.role)) {
           decision.agentJobId = options.agent.jobId; decision.agentRole = options.agent.role;
           decision.agentStep = Math.max(1, Math.min(16, Number(options.agent.step) || 1));
+          if (options.agent.operation === "revision" && decision.agentRole === "draft") decision.agentOperation = "revision";
         }
         if (previous) decision.reasons.push("Previous attempt with " + previous.modelId + " failed: " + previous.failure);
         await record(decision);
@@ -160,10 +164,14 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
         if (options.signal?.aborted) {
           decision.status = "cancelled"; await record(decision).catch(() => {}); notify(decision); options.signal.throwIfAborted();
         }
-        let success = result?.ok === true;
+        let success = result?.ok === true, validationIssues;
         if (success && options.validate) {
           try { await options.validate(result.text); }
-          catch (error) { success = false; result = { ...result, ok: false, err: error.message, validationFailed: true }; }
+          catch (error) {
+            success = false;
+            validationIssues = error.validationIssues;
+            result = { ...result, ok: false, err: error.message, validationFailed: true };
+          }
         }
         if (options.signal?.aborted) { decision.status = "cancelled"; await record(decision).catch(() => {}); notify(decision); options.signal.throwIfAborted(); }
         const kind = success ? "success" : result?.validationFailed ? "invalid" : aiFailureKind(result);
@@ -181,7 +189,7 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
           await record(decision, { id: randomId(), at: now(), scope: choice.scope, task, provider: choice.model.provider, modelId: choice.model.id,
             status: kind, requirements: options.requirements || "", latencyMs: Math.max(0, now() - start), decisionId: decision.id,
             stopReason: decision.stopReason, outputTokens: decision.usedOutputTokens, thinkingTokens: decision.thinkingTokens,
-            httpStatus: decision.httpStatus, errorType: decision.errorType, failurePhase: decision.failurePhase });
+            httpStatus: decision.httpStatus, errorType: decision.errorType, failurePhase: decision.failurePhase, effort: decision.effort });
         } catch (failure) {
           decision.historySaved = false;
           decision.reasons.push("Routing history could not be saved; this result cannot receive a stored rating");
@@ -191,6 +199,9 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
         previous = decision;
         lastFailure = new Error(result?.err || "The AI request failed");
         lastFailure.failure = kind; lastFailure.routing = decision;
+        if (result?.validationFailed && decision.agentRole === "draft" && typeof options.revision === "function" && typeof result.text === "string" && result.text.length <= 100000) {
+          Object.defineProperties(lastFailure, { responseText: { value: result.text }, validationIssues: { value: Array.isArray(validationIssues) ? validationIssues : [] } });
+        }
         if (!["unavailable", "unsupported"].includes(kind)) throw lastFailure;
       }
       throw lastFailure || new Error("The remaining routing budget cannot cover another model attempt");

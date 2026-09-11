@@ -1,10 +1,10 @@
 import { availableStudies, caseStudyMedia } from "./slide-merge-sections.mjs";
 import { sectionComponentPlan } from "./slide-merge-section-component.mjs";
-import { authoringEvidence, authoredPlan, validateAuthoredSlide } from "./slide-merge-authoring.mjs";
+import { AUTHORING_CONTRACT, authoringEvidence, authoredPlan, validateAuthoredSlide } from "./slide-merge-authoring.mjs";
 
 export const COMPOSITION_CAPABILITIES = Object.freeze({
-  version: 2,
-  maxSlides: 24,
+  version: AUTHORING_CONTRACT.version,
+  maxSlides: AUTHORING_CONTRACT.maxSlides,
   canvas: Object.freeze({ width: 1280, height: 720 }),
   kinds: Object.freeze(["section", "authored"]),
   sourceTypes: "case-study-renderer",
@@ -75,19 +75,33 @@ export async function compositionCatalog(data, { plain, fontFamily } = {}) {
 
 export function validateComposition(value) {
   record(value, ["version", "title", "slides"], "Composition");
-  if (![1, 2].includes(value.version)) throw new Error("Unsupported composition version");
-  const title = shortText(value.title, 160, "composition title");
-  if (!Array.isArray(value.slides) || !value.slides.length || value.slides.length > COMPOSITION_CAPABILITIES.maxSlides) throw new Error("Composition must contain 1 to 24 slides");
-  const ids = new Set();
-  const slides = value.slides.map(slide => {
-    if (value.version === 1) record(slide, ["id", "kind", "sourceId"], "Slide");
-    const id = shortText(slide.id, 64, "slide ID");
-    if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(id) || ids.has(id)) throw new Error("Slide IDs must be unique safe identifiers");
-    ids.add(id);
-    if (value.version === 2) return { ...validateAuthoredSlide(slide), id };
+  if (![1, AUTHORING_CONTRACT.version].includes(value.version)) throw new Error("Unsupported composition version");
+  const ids = new Set(), validationIssues = [];
+  let title;
+  try { title = shortText(value.title, AUTHORING_CONTRACT.maxTitleLength, "composition title"); }
+  catch (error) {
+    if (value.version === 1) throw error;
+    const actual = typeof value.title === "string" ? value.title.length : null;
+    validationIssues.push({ path: ["title"], code: actual != null && actual > AUTHORING_CONTRACT.maxTitleLength ? "text-length" : "text-value",
+      message: error.message, actual, limit: AUTHORING_CONTRACT.maxTitleLength });
+  }
+  if (!Array.isArray(value.slides) || !value.slides.length || value.slides.length > COMPOSITION_CAPABILITIES.maxSlides) throw new Error("Composition must contain 1 to " + COMPOSITION_CAPABILITIES.maxSlides + " slides");
+  const slides = value.slides.map((slide, index) => {
+    try {
+      if (value.version === 1) record(slide, ["id", "kind", "sourceId"], "Slide");
+      const id = shortText(slide?.id, AUTHORING_CONTRACT.maxIdLength, "slide ID");
+      if (!new RegExp(AUTHORING_CONTRACT.idPattern).test(id) || ids.has(id)) throw new Error("Slide IDs must be unique safe identifiers");
+      ids.add(id);
+      if (value.version === AUTHORING_CONTRACT.version) return { ...validateAuthoredSlide(slide), id };
       if (slide.kind !== "section") throw new Error("Unsupported composition kind");
-    return { id, kind: slide.kind, sourceId: shortText(slide.sourceId, 512, "source ID") };
+      return { id, kind: slide.kind, sourceId: shortText(slide.sourceId, AUTHORING_CONTRACT.maxSourceIdLength, "source ID") };
+    } catch (error) {
+      if (value.version === 1) throw error;
+      validationIssues.push(...(error.validationIssues || [{ path: [], code: "slide-structure", message: error.message }]).map(issue => ({ ...issue, path: ["slides", index, ...issue.path] })));
+      return null;
+    }
   });
+  if (validationIssues.length) throw Object.assign(new Error(validationIssues[0].message), { validationIssues });
   return { version: value.version, title, slides };
 }
 

@@ -4,7 +4,8 @@ import { normalizeAiModel, rankAiModels, estimateAiCost } from "./src/js/ai-mode
 import { createAiCatalog, AI_REFERENCE_URL } from "./src/js/ai-model-catalog.mjs";
 import { createAiOrchestrator } from "./src/js/ai-orchestrator.mjs";
 import { aiEvaluationSuite } from "./src/js/ai-model-evaluations.mjs";
-import { createAiTaskAgent, parseAgentAction } from "./src/js/ai-task-agent.mjs";
+import { createAiTaskAgent, parseAgentAction, agentActionSchema, agentRequestOptions } from "./src/js/ai-task-agent.mjs";
+import { COMPOSITION_RESPONSE_SCHEMA, compositionRequest, compositionRevision, parseCompositionResponse } from "./src/js/slide-merge-ai.mjs";
 
 const now = Date.parse("2026-09-11T12:00:00Z");
 const model = (id, extra = {}) => normalizeAiModel("test", { id, input_modalities: ["text", "image"], output_modalities: ["text"], max_input_tokens: 100000, max_tokens: 16000, created_at: "2026-08-01", ...extra });
@@ -296,6 +297,29 @@ test("async validation failures are not successes, and a history quota error doe
   assert.equal(result.routing.historySaved, false);
 });
 
+test("rejected drafts retain opt-in revision input only in a transient non-serializable error", async () => {
+  const { orchestrator, config, store } = orchestratorFixture();
+  const text = "PRIVATE REJECTED ANSWER", routes = [];
+  const issues = [{ path: ["slides", 1, "body"], code: "text-length", actual: 200, limit: 180, message: "Body exceeds its limit" }];
+  for (const role of ["draft", "coordinator", "delegate"]) for (const enabled of [true, false]) {
+    await assert.rejects(orchestrator.run([config], "creative", {
+      agent: { jobId: "revision-job", role, step: 1 }, revision: enabled ? () => null : undefined,
+      onRoute: route => routes.push(route), validate: () => { throw Object.assign(new Error("Invalid authored contract"), { validationIssues: issues }); }
+    }, async () => ({ ok: true, text, stopReason: "end_turn" })), error => {
+      assert.equal(error.failure, "invalid");
+      assert.equal(error.responseText, role === "draft" && enabled ? text : undefined);
+      if (role === "draft" && enabled) assert.deepEqual(error.validationIssues, issues);
+      assert.doesNotMatch(JSON.stringify(error), /PRIVATE REJECTED ANSWER/);
+      return true;
+    });
+  }
+  assert.doesNotMatch(JSON.stringify(routes), /PRIVATE REJECTED ANSWER|Body exceeds its limit/);
+  assert.doesNotMatch(JSON.stringify(await store.read()), /PRIVATE REJECTED ANSWER|Body exceeds its limit/);
+  await assert.rejects(orchestrator.run([config], "creative", { agent: { jobId: "revision-job", role: "draft", step: 1 }, revision: () => null }, async () => ({
+    ok: false, text, failure: "output-limit", stopReason: "max_tokens", err: "Incomplete answer"
+  })), error => { assert.equal(error.responseText, undefined); return true; });
+});
+
 test("importing the same evidence twice cannot manufacture additional samples", async () => {
   const { orchestrator, config, store } = orchestratorFixture();
   const evidence = { provider: "test", modelId: "second", scope: config.base, task: "creative", at: now, samples: 1, quality: 0.95, rubric: "reviewed-fixture-v1" };
@@ -355,6 +379,32 @@ test("provider stop diagnostics stay private and exhausted output never triggers
   assert.doesNotMatch(JSON.stringify(state), /PRIVATE RESPONSE|PRIVATE SIGNATURE/);
 });
 
+test("invalid provider schemas stop immediately without model hopping or masking the exact rejection", async () => {
+  const { orchestrator, config, store } = orchestratorFixture([model("available", { pricing: { input: 0, output: 1 } })]);
+  const agent = createAiTaskAgent({ router: orchestrator, now: () => now });
+  const message = "output_config.format.schema: Unsupported regex feature in pattern field: Cannot apply a range quantifier to this regex.";
+  let calls = 0;
+  await assert.rejects(agent.run([config], { task: "creative", system: "Produce a deck", user: "Private source", options: { maxTokens: 12000, maxCost: 0.02 } }, async (selected, modelId, step) => {
+    calls++;
+    if (step.role === "coordinator") {
+      const input = JSON.parse(step.user);
+      return { ok: true, text: JSON.stringify({ action: "draft", modelRef: input.draftModels[0], task: "creative", instruction: "", inputs: [] }) };
+    }
+    return { ok: false, status: 400, errorType: "invalid_request_error", phase: "request", err: message };
+  }), error => {
+    assert.equal(error.message, message);
+    assert.equal(error.failure, "request-format");
+    return true;
+  });
+  assert.equal(calls, 2);
+  const state = await store.read();
+  assert.equal(state.decisions.at(-1).httpStatus, 400);
+  assert.equal(state.decisions.at(-1).failurePhase, "request");
+  assert.equal(state.decisions.at(-1).failure, "request-format");
+  assert.equal((await orchestrator.choices([config], "creative", { maxTokens: 12000 }))[0].model.id, "available", "An invalid application schema is not evidence that the model is unavailable");
+  assert.doesNotMatch(JSON.stringify(state), /Private source|range quantifier/);
+});
+
 test("agent-selected models still pass hard eligibility and only accepted results establish an incumbent", async () => {
   const { orchestrator, config, store } = orchestratorFixture();
   const target = { provider: config.provider, scope: config.base, modelId: "second" };
@@ -407,7 +457,8 @@ test("the coordinator can draft immediately and revise after real contract valid
   const { orchestrator, config } = orchestratorFixture([model("available", { pricing: { input: 1, output: 1 } })]);
   const agent = createAiTaskAgent({ router: orchestrator, now: () => now });
   let decisions = 0, drafts = 0;
-  const result = await agent.run([config], { task: "writing", system: "Return a complete answer", user: "Source", options: { maxTokens: 1000, validate: text => { if (text !== "VALID") throw new Error("Missing required evidence"); } } }, async (selected, modelId, step) => {
+  const activity = [];
+  const result = await agent.run([config], { task: "writing", system: "Return a complete answer", user: "Source", options: { maxTokens: 1000, onActivity: event => activity.push(event), validate: text => { if (text !== "VALID") throw new Error("Missing required evidence"); } } }, async (selected, modelId, step) => {
     if (step.role === "coordinator") {
       const input = JSON.parse(step.user); decisions++;
       if (decisions === 2) assert.match(input.work[0].failure, /Missing required evidence/);
@@ -419,6 +470,7 @@ test("the coordinator can draft immediately and revise after real contract valid
   assert.equal(result.text, "VALID");
   assert.equal(result.agent.delegates, 0);
   assert.equal(result.agent.drafts, 2);
+  assert.ok(activity.some(event => event.phase === "validation" && event.summary === "Draft validation: Missing required evidence"));
 });
 
 test("coordinator repair receives the specific contract failure without relaxing model access", async () => {
@@ -507,6 +559,237 @@ test("local validation failure is never labelled as a provider HTTP rejection", 
   assert.doesNotMatch(JSON.stringify(await store.read()), /PRIVATE INVALID ACTION/);
 });
 
+test("coordinator schemas constrain the next action without exposing source content or unsupported schema limits", () => {
+  const models = new Map([["m0", {}], ["m1", {}]]), workIds = new Set(["work-1"]);
+  const schema = agentActionSchema(models, workIds);
+  assert.deepEqual(schema.required, ["decision"]);
+  assert.equal(schema.additionalProperties, false);
+  const branches = schema.properties.decision.anyOf;
+  assert.deepEqual(branches.map(branch => branch.properties.action.enum[0]), ["delegate", "draft", "finish", "stop"]);
+  for (const branch of branches) {
+    assert.equal(branch.additionalProperties, false);
+    assert.deepEqual(branch.required, Object.keys(branch.properties));
+    if (branch.properties.modelRef) assert.deepEqual(branch.properties.modelRef.enum, ["m0", "m1"]);
+    if (branch.properties.inputs) assert.deepEqual(branch.properties.inputs.items.enum, ["work-1"]);
+  }
+  assert.doesNotMatch(JSON.stringify(schema), /"(?:maxLength|minLength|maxItems|maximum|minimum)":/);
+  const action = { action: "draft", modelRef: "m1", task: "creative", instruction: "", inputs: ["work-1"], summary: "Drafting the presentation" };
+  assert.deepEqual(parseAgentAction(JSON.stringify({ decision: action }), models, workIds), action);
+  assert.throws(() => parseAgentAction(JSON.stringify({ decision: action, endpoint: "https://other.test" }), models, workIds), /unsupported controls/);
+  assert.throws(() => parseAgentAction(JSON.stringify({ decision: { ...action, modelRef: "invented" } }), models, workIds), /unavailable model/);
+  const plain = agentRequestOptions("System", "Source", { maxTokens: 2048 });
+  const constrained = agentRequestOptions("System", "Source", { maxTokens: 2048, responseSchema: schema });
+  assert.equal(constrained.inputTokens - plain.inputTokens, new TextEncoder().encode(JSON.stringify(schema)).length);
+  assert.equal(constrained.outputTokens, 2048);
+});
+
+test("the coordinator receives a fresh action schema and unwraps its constrained output before delegation", async () => {
+  const { orchestrator, config } = orchestratorFixture();
+  const agent = createAiTaskAgent({ router: orchestrator, now: () => now });
+  let calls = 0;
+  const result = await agent.run([config], { task: "writing", system: "Produce the answer", user: "PRIVATE SOURCE", options: { maxTokens: 1000 } }, async (selected, modelId, step) => {
+    calls++;
+    if (step.role !== "coordinator") return { ok: true, text: "Final answer" };
+    const input = JSON.parse(step.user), schema = step.options.responseSchema;
+    assert.ok(schema.properties.decision.anyOf.length === 4);
+    assert.equal(step.options.maxTokens, 2048);
+    assert.doesNotMatch(JSON.stringify(schema), /PRIVATE SOURCE/);
+    const decision = input.candidate ? { action: "finish", summary: "Ready" } : { action: "draft", modelRef: input.catalogue[0].ref, task: "writing", instruction: "", inputs: [], summary: "Writing" };
+    if (input.candidate) assert.deepEqual(schema.properties.decision.anyOf[1].properties.inputs.items.enum, [input.candidate.id]);
+    return { ok: true, text: JSON.stringify({ decision }) };
+  });
+  assert.equal(calls, 3);
+  assert.equal(result.text, "Final answer");
+});
+
+test("the agent chooses supported effort using real token-exhaustion facts instead of an unconfigured default", async () => {
+  const adaptive = model("adaptive", { pricing: { input: 2, output: 10 }, capabilities: { effort: { supported: true, low: { supported: true }, medium: { supported: true }, high: { supported: true } } } });
+  const { orchestrator, config, store } = orchestratorFixture([adaptive]);
+  await store.update(state => state.observations.push({ id: "prior-exhaustion", at: now - 1000, scope: config.base, provider: config.provider, modelId: "adaptive", task: "creative", status: "output-limit", outputTokens: 24000, thinkingTokens: 20353 }));
+  const agent = createAiTaskAgent({ router: orchestrator, now: () => now });
+  const result = await agent.run([config], { task: "creative", system: "Create the deck", user: "Source", options: { maxTokens: 1000 } }, async (selected, modelId, step) => {
+    if (step.role === "coordinator") {
+      const input = JSON.parse(step.user), available = input.catalogue.find(item => item.id === "adaptive");
+      assert.deepEqual(available.effortLevels, ["low", "medium", "high"]);
+      assert.equal(available.evidence.recentFailures[0].thinkingTokens, 20353);
+      return { ok: true, text: JSON.stringify({ decision: input.candidate ? { action: "finish", summary: "Ready" } : { action: "draft", modelRef: available.ref, task: "creative", effort: "medium", instruction: "", inputs: [], summary: "Producing the deck with room for the answer" } }) };
+    }
+    assert.equal(step.options.effort, "medium");
+    return { ok: true, text: "Complete deck" };
+  });
+  assert.equal(result.routing.effort, "medium");
+  assert.equal((await store.read()).observations.find(item => item.decisionId === result.routing.id).effort, "medium");
+  const references = new Map([["m0", { model: adaptive }]]);
+  const action = { action: "draft", modelRef: "m0", task: "creative", instruction: "", inputs: [] };
+  for (const effort of [undefined, null, "unsupported"]) assert.throws(() => parseAgentAction(JSON.stringify({ ...action, effort }), references, new Set()), /supported effort/);
+});
+
+test("the coordinator cannot nominate a draft model affordable only for a small coordination request", async () => {
+  const { orchestrator, config } = orchestratorFixture([
+    model("economical", { max_tokens: 32000, pricing: { input: 0.1, output: 0.2 } }),
+    model("costly", { max_tokens: 32000, pricing: { input: 10, output: 20 } })
+  ]);
+  const agent = createAiTaskAgent({ router: orchestrator, now: () => now });
+  const result = await agent.run([config], { task: "creative", system: "Produce the result", user: "Source", options: { maxTokens: 12000, maxCost: 0.20 } }, async (selected, modelId, step) => {
+    if (step.role !== "coordinator") { assert.equal(modelId, "economical"); return { ok: true, text: "Complete draft" }; }
+    const input = JSON.parse(step.user), expensive = input.catalogue.find(model => model.id === "costly"), cheap = input.catalogue.find(model => model.id === "economical");
+    assert.ok(expensive, "The model can remain available for inexpensive specialist work");
+    assert.equal(expensive.draftEligible, false);
+    assert.deepEqual(input.draftModels, [cheap.ref]);
+    const draft = step.options.responseSchema.properties.decision.anyOf.find(branch => branch.properties.action.enum[0] === "draft");
+    assert.deepEqual(draft.properties.modelRef.enum, [cheap.ref]);
+    return { ok: true, text: JSON.stringify({ decision: input.candidate ? { action: "finish", summary: "Ready" } : { action: "draft", modelRef: cheap.ref, task: "creative", instruction: "", inputs: [], summary: "Producing an affordable draft" } }) };
+  });
+  assert.equal(result.agent.calls, 3);
+  assert.ok(result.agent.estimatedCost <= 0.20);
+});
+
+test("draft choices reserve both this coordinator call and the final review", async () => {
+  const { orchestrator, config } = orchestratorFixture([
+    model("economical", { max_tokens: 32000, pricing: { input: 0, output: 1 } }),
+    model("expensive-draft", { max_tokens: 32000, pricing: { input: 0, output: 2 } })
+  ]);
+  const agent = createAiTaskAgent({ router: orchestrator, now: () => now });
+  const result = await agent.run([config], { task: "creative", system: "Produce the result", user: "Source", options: { maxTokens: 12000, maxCost: 0.027 } }, async (selected, modelId, step) => {
+    if (step.role !== "coordinator") { assert.equal(modelId, "economical"); return { ok: true, text: "Complete draft" }; }
+    const input = JSON.parse(step.user), cheap = input.catalogue.find(model => model.id === "economical");
+    assert.deepEqual(input.draftModels, input.candidate ? [] : [cheap.ref]);
+    const draft = step.options.responseSchema.properties.decision.anyOf.find(branch => branch.properties.action.enum[0] === "draft");
+    assert.deepEqual(draft?.properties.modelRef.enum, input.candidate ? undefined : [cheap.ref]);
+    return { ok: true, text: JSON.stringify(input.candidate ? { action: "finish", summary: "Ready" } : { action: "draft", modelRef: cheap.ref, task: "creative", instruction: "", inputs: [], summary: "Drafting within the whole-job budget" }) };
+  });
+  assert.equal(result.agent.calls, 3);
+  assert.ok(result.agent.estimatedCost <= 0.027);
+});
+
+test("an unaffordable repair retains the original validation failure without another paid call", async () => {
+  const { orchestrator, config } = orchestratorFixture([model("priced", { max_tokens: 32000, pricing: { input: 0, output: 1 } })]);
+  const agent = createAiTaskAgent({ router: orchestrator, now: () => now });
+  let calls = 0;
+  await assert.rejects(agent.run([config], { task: "creative", system: "Produce the result", user: "Source", options: {
+    maxTokens: 12000, maxCost: 0.017, validate: () => { throw new Error("Missing required evidence"); }
+  } }, async (selected, modelId, step) => {
+    calls++;
+    if (step.role === "draft") return { ok: true, text: "Incomplete draft" };
+    return { ok: true, text: JSON.stringify({ action: "draft", modelRef: JSON.parse(step.user).draftModels[0], task: "creative", instruction: "", inputs: [], summary: "Drafting" }) };
+  }), error => {
+    assert.match(error.message, /budget/i);
+    assert.match(error.message, /Missing required evidence/);
+    return true;
+  });
+  assert.equal(calls, 2);
+});
+
+test("the agent can choose a bounded copy revision when another full draft cannot fit its job budget", async () => {
+  const { orchestrator, config, store } = orchestratorFixture([model("available", { pricing: { input: 0, output: 1 } })]);
+  const agent = createAiTaskAgent({ router: orchestrator, now: () => now });
+  const catalog = [{ sourceId: "source", title: "Evidence", excerpt: "Evidence", evidence: "Keep this fact", type: "text", hasMedia: false }];
+  const candidate = { version: 2, title: "Private candidate", slides: [{ id: "first", kind: "authored", layout: "evidence", sourceIds: ["source"], components: ["source"],
+    headline: "Private headline", kicker: "", body: "A".repeat(200), notes: "Preserve private notes" }] };
+  const before = structuredClone(candidate); let fullDrafts = 0, repairCalls = 0;
+  const result = await agent.run([config], { task: "creative", system: "Produce a valid deck", user: "Private source", options: {
+    maxTokens: 12000, outputTokens: 12000, maxCost: 0.0195, validate: text => parseCompositionResponse(text, catalog), revision: text => compositionRevision(text, catalog)
+  } }, async (selected, modelId, step) => {
+    if (step.role === "coordinator") {
+      const input = JSON.parse(step.user);
+      if (input.candidate) return { ok: true, text: JSON.stringify({ action: "finish", summary: "The revised draft passes the contract" }) };
+      if (input.revision) {
+        assert.deepEqual(input.draftModels, []);
+        assert.equal(input.revision.issues[0].code, "text-length");
+        assert.equal(input.revision.outputTokens, 1024);
+        const branch = step.options.responseSchema.properties.decision.anyOf.find(branch => branch.properties.action.enum[0] === "revise");
+        assert.deepEqual(branch.properties.workId.enum, [input.revision.workId]);
+        return { ok: true, text: JSON.stringify({ action: "revise", workId: input.revision.workId, modelRef: input.revision.models[0], task: "creative", instruction: "", inputs: [], summary: "Rewriting only the oversized body" }) };
+      }
+      return { ok: true, text: JSON.stringify({ action: "draft", modelRef: input.draftModels[0], task: "creative", instruction: "", inputs: [], summary: "Drafting" }) };
+    }
+    if (step.operation === "revision") {
+      repairCalls++;
+      assert.equal(selected.routingMaxTokens, 1024, "Revision cost and wire allowance must not inherit the full draft's 12000 outputTokens");
+      assert.equal(step.options.reasoningTokens, 0);
+      assert.deepEqual(JSON.parse(step.user).fields.map(field => field.ref), ["f0"]);
+      return { ok: true, text: JSON.stringify({ updates: [{ fieldRef: "f0", text: "A concise supported fact." }] }), stopReason: "end_turn" };
+    }
+    fullDrafts++; return { ok: true, text: JSON.stringify(candidate), stopReason: "end_turn" };
+  });
+  const expected = structuredClone(candidate); expected.slides[0].body = "A concise supported fact.";
+  assert.deepEqual(JSON.parse(result.text), expected);
+  assert.deepEqual(candidate, before);
+  assert.equal(fullDrafts, 1); assert.equal(repairCalls, 1);
+  assert.equal(result.agent.calls, 5); assert.equal(result.agent.revisions, 1); assert.equal(result.agent.drafts, 2);
+  assert.ok(result.agent.estimatedCost <= 0.0195);
+  assert.equal(result.routing.agentOperation, "revision");
+  assert.doesNotMatch(JSON.stringify(await store.read()), /Private candidate|Private headline|Preserve private notes|Private source|AAAA/);
+});
+
+test("one bounded revision handles every recorded oversized field in a 21-slide outcome", async () => {
+  const { orchestrator, config, store } = orchestratorFixture([model("available", { reasoning: true, max_tokens: 32000, pricing: { input: 1, output: 5 } })]);
+  const agent = createAiTaskAgent({ router: orchestrator, now: () => now });
+  const catalog = Array.from({ length: 21 }, (_, index) => ({ sourceId: "source-" + index, title: "Source " + index, excerpt: "Supported evidence", evidence: "Supported source evidence. ".repeat(60), type: "gallery", hasMedia: true }));
+  const lengths = new Map([[1, 200], [4, 255], [6, 345], [8, 352], [9, 354], [12, 488], [15, 388], [16, 372], [17, 466], [18, 515]]);
+  const candidate = { version: 2, title: "Private synthetic deck", slides: catalog.map((source, index) => ({ id: "slide-" + index, kind: "authored", layout: index === 15 ? "comparison" : "evidence",
+    sourceIds: index === 15 ? [source.sourceId, catalog[16].sourceId] : [source.sourceId], headline: "Supported headline " + index, kicker: "", body: "A".repeat(lengths.get(index) || 90),
+    notes: "Preserve original notes " + index, components: index === 15 ? [source.sourceId, catalog[16].sourceId] : [source.sourceId] })) };
+  const before = structuredClone(candidate), prompt = compositionRequest(catalog, "Present this case study"), maxCost = 0.5;
+  const result = await agent.run([config], { task: "creative", ...prompt, options: { maxTokens: 12000, outputTokens: 12000, reasoningTokens: 12000, json: true,
+    responseSchema: COMPOSITION_RESPONSE_SCHEMA, maxCost, validate: text => parseCompositionResponse(text, catalog), revision: text => compositionRevision(text, catalog)
+  } }, async (selected, modelId, step) => {
+    if (step.role === "coordinator") {
+      const input = JSON.parse(step.user);
+      if (input.candidate) return { ok: true, text: JSON.stringify({ action: "finish", summary: "The complete revised deck passes validation" }) };
+      if (input.revision) {
+        assert.equal(input.revision.issues.length, 10);
+        assert.deepEqual(input.revision.issues.map(issue => issue.path[1]), [...lengths.keys()]);
+        assert.ok(input.revision.models.length > 0);
+        return { ok: true, text: JSON.stringify({ action: "revise", workId: input.revision.workId, modelRef: input.revision.models[0], task: "creative", instruction: "", inputs: [], summary: "Rewriting all ten rejected captions together" }) };
+      }
+      return { ok: true, text: JSON.stringify({ action: "draft", modelRef: input.draftModels[0], task: "creative", instruction: "", inputs: [], summary: "Drafting" }) };
+    }
+    if (step.operation === "revision") {
+      const fields = JSON.parse(step.user).fields;
+      assert.equal(fields.length, 10);
+      assert.equal(selected.routingMaxTokens, 2408);
+      return { ok: true, text: JSON.stringify({ updates: fields.map(field => ({ fieldRef: field.ref, text: "Concise supported evidence." })) }), stopReason: "end_turn" };
+    }
+    return { ok: true, text: JSON.stringify(candidate), stopReason: "end_turn" };
+  });
+  const revised = parseCompositionResponse(result.text, catalog), expected = structuredClone(candidate);
+  for (const index of lengths.keys()) expected.slides[index].body = "Concise supported evidence.";
+  assert.deepEqual(revised, expected);
+  assert.deepEqual(candidate, before);
+  assert.equal(result.agent.calls, 5); assert.equal(result.agent.revisions, 1);
+  assert.ok(result.agent.estimatedCost <= maxCost);
+  assert.doesNotMatch(JSON.stringify(await store.read()), /Private synthetic deck|Preserve original notes|Supported source evidence|AAAA/);
+});
+
+test("cancellation prevents a late revision from being assembled or accepted", async () => {
+  const { orchestrator, config, store } = orchestratorFixture();
+  const agent = createAiTaskAgent({ router: orchestrator, now: () => now }), controller = new AbortController();
+  let assembled = false, calls = 0;
+  await assert.rejects(agent.run([config], { task: "writing", system: "Return a valid answer", user: "Private source", options: {
+    signal: controller.signal, maxTokens: 1000, validate: () => { throw new Error("Invalid answer"); }, revision: () => ({
+      system: "Revise", user: "Rejected field", issues: [], options: { maxTokens: 100, reasoningTokens: 0, json: true },
+      assemble: text => { assembled = true; return text; }
+    })
+  } }, async (selected, modelId, step) => {
+    calls++;
+    if (step.role === "coordinator") {
+      const input = JSON.parse(step.user);
+      return { ok: true, text: JSON.stringify(input.revision
+        ? { action: "revise", workId: input.revision.workId, modelRef: input.revision.models[0], task: "writing", instruction: "", inputs: [] }
+        : { action: "draft", modelRef: input.draftModels[0], task: "writing", instruction: "", inputs: [] }) };
+    }
+    if (step.operation === "revision") controller.abort();
+    return { ok: true, text: "Late private answer" };
+  }), { name: "AbortError" });
+  assert.equal(calls, 4);
+  assert.equal(assembled, false);
+  const state = await store.read();
+  assert.deepEqual(state.incumbents, {});
+  assert.ok(state.decisions.every(decision => decision.agentRole !== "result"));
+  assert.doesNotMatch(JSON.stringify(state), /Late private answer|Private source|Rejected field/);
+});
+
 test("agent tools cannot invent models, endpoints, credentials, file operations or completed dependencies", () => {
   const models = new Map([["m0", {}]]), work = new Set(["work-1"]);
   const valid = { action: "delegate", modelRef: "m0", task: "analysis", purpose: "evidence", instruction: "Check the facts", inputs: ["work-1"], summary: "Checking evidence" };
@@ -517,7 +800,7 @@ test("agent tools cannot invent models, endpoints, credentials, file operations 
 });
 
 test("the whole agent job includes coordination and delegation in its spending limit", async () => {
-  const { orchestrator, config, store } = orchestratorFixture([model("priced", { pricing: { input: 2, output: 8 } })]);
+  const { orchestrator, config, store } = orchestratorFixture([model("priced", { pricing: { input: 0.1, output: 4 } })]);
   const agent = createAiTaskAgent({ router: orchestrator, now: () => now });
   await orchestrator.configure({ maxCost: 0.05 });
   const charged = new Map(); let actualCalls = 0;

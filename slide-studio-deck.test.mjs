@@ -10,6 +10,7 @@ import { chromium } from "playwright-core";
 import { rkDecWithSek, rkUnwrapSek } from "./src/js/admin-core.js";
 import { assertStudioDeckPublishable, createStudioDeck, STUDIO_DECK_SCHEMA } from "./src/js/slide-studio-deck.mjs";
 import { AI_AGENT_SYSTEM } from "./src/js/ai-task-agent.mjs";
+import { COMPOSITION_RESPONSE_SCHEMA } from "./src/js/slide-merge-ai.mjs";
 
 async function waitForRoutingPolicy(page, key, value) {
   await page.evaluate(() => { window.__routingPolicyProbe = { pending: false, matches: false }; });
@@ -70,10 +71,14 @@ test("the shared publish builder validates native references before preparing ow
   assert.match(source, /prepareStudioPublication\(snapshot/);
 });
 
-for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, mode: "complete" }, { width: 1440, mode: "summary-fallback" }, { width: 390, mode: "summary-fallback" }, { width: 1440, mode: "exhausted" }, { width: 1440, mode: "invalid-body" }, { width: 390, mode: "cancelled" }]) test("Draft entire deck with AI delegates, checks and streams progress at " + width + "px (" + mode + ")", { timeout: 60000 }, async () => {
+for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, mode: "complete" }, { width: 1440, mode: "summary-fallback" }, { width: 390, mode: "summary-fallback" }, { width: 1440, mode: "exhausted" }, { width: 1440, mode: "invalid-body" }, { width: 1440, mode: "schema-error" }, { width: 1440, mode: "invalid-draft" }, { width: 1440, mode: "revision" }, { width: 390, mode: "revision" }, { width: 390, mode: "cancelled" }]) test("Draft entire deck with AI delegates, checks and streams progress at " + width + "px (" + mode + ")", { timeout: 60000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, hasTouch: width < 600, isMobile: width < 600 });
   const requests = [], errors = [];
+  const needsRevision = mode === "revision" || mode === "invalid-draft";
+  const expectedSlideCount = mode === "complete" ? 16 : 1;
+  const finalBody = "Place the next action beside the relevant content.";
+  const schemaFailure = "output_config.format.schema: Unsupported regex feature in pattern field: Cannot apply a range quantifier to this regex.";
   let exhaustResponse = mode === "exhausted", rejectBody = mode === "invalid-body", releaseSpecialist;
   const specialistGate = new Promise(resolve => { releaseSpecialist = resolve; });
   const capabilities = { thinking: { supported: true }, structured_outputs: { supported: true }, effort: { supported: true, low: { supported: true }, medium: { supported: true } } };
@@ -101,24 +106,42 @@ for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, 
           if (Object.hasOwn(body, "temperature")) return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: { type: "invalid_request_error", message: "Invalid body" } }) });
           if (body.system === AI_AGENT_SYSTEM) {
             const input = JSON.parse(body.messages[0].content), evidence = input.work.find(item => item.kind === "delegate" && item.valid);
+            assert.equal(body.output_config?.format?.type, "json_schema", "A capable coordinator must receive an enforced action schema");
+            const schema = body.output_config.format.schema;
+            assert.deepEqual(schema.required, ["decision"]);
+            assert.equal(schema.additionalProperties, false);
+            assert.deepEqual(schema.properties.decision.anyOf[0].properties.modelRef.enum, input.catalogue.map(item => item.ref));
+            assert.deepEqual(schema.properties.decision.anyOf.find(branch => branch.properties.action.enum[0] === "draft")?.properties.modelRef.enum, input.draftModels.length ? input.draftModels : undefined);
+            assert.equal(body.max_tokens, 2048, "The schema must keep coordination bounded without an arbitrary token increase");
             const action = input.candidate ? { action: "finish", summary: "The draft preserves the source and meets the presentation contract" }
-              : evidence ? { action: "draft", modelRef: input.catalogue.find(item => item.id === "studio-creative-a").ref, task: "creative", instruction: "Use the checked source facts", inputs: [evidence.id], summary: "Writing the deck with the creative model" }
-              : { action: "delegate", modelRef: input.catalogue.find(item => item.id === "studio-evidence").ref, task: "analysis", purpose: "evidence", instruction: "Check the supplied source facts", inputs: [], summary: "Checking the case-study evidence" };
+              : input.revision ? { action: "revise", workId: input.revision.workId, modelRef: input.catalogue.find(item => item.id === "studio-creative-a").ref, task: "creative", effort: "medium", instruction: "", inputs: [], summary: "Revising only the rejected body" }
+              : evidence ? { action: "draft", modelRef: input.catalogue.find(item => item.id === "studio-creative-a").ref, task: "creative", effort: "medium", instruction: "Use the checked source facts", inputs: [evidence.id], summary: "Writing the deck with the creative model" }
+              : { action: "delegate", modelRef: input.catalogue.find(item => item.id === "studio-evidence").ref, task: "analysis", effort: "medium", purpose: "evidence", instruction: "Check the supplied source facts", inputs: [], summary: "Checking the case-study evidence" };
             if (mode === "summary-fallback") {
               if (action.action === "delegate") delete action.summary;
               else action.summary = action.action === "draft" ? "OVERLONG PROGRESS SUMMARY ".repeat(30) : null;
             }
-            return route.fulfill({ contentType: "application/json", body: JSON.stringify({ content: [{ type: "text", text: JSON.stringify(action) }], stop_reason: "end_turn", usage: { input_tokens: 100, output_tokens: 100 } }) });
+            return route.fulfill({ contentType: "application/json", body: JSON.stringify({ content: [{ type: "text", text: JSON.stringify({ decision: action }) }], stop_reason: "end_turn", usage: { input_tokens: 100, output_tokens: 100 } }) });
           }
           if (body.model === "studio-evidence") {
             await specialistGate;
             return route.fulfill({ contentType: "application/json", body: JSON.stringify({ content: [{ type: "text", text: "PRIVATE SPECIALIST FINDINGS: The supplied case places the next action beside relevant content; do not invent results." }], stop_reason: "end_turn" }) });
           }
           if (rejectBody) return route.fulfill({ status: 400, contentType: "application/json", headers: { "request-id": "req-browser-check" }, body: JSON.stringify({ error: { type: "invalid_request_error", message: "Invalid body" } }) });
+          if (mode === "schema-error") return route.fulfill({ status: 400, contentType: "application/json", headers: { "request-id": "req-schema-check", "access-control-expose-headers": "request-id" }, body: JSON.stringify({ error: { type: "invalid_request_error", message: schemaFailure } }) });
+          if (body.output_config?.format?.schema?.properties?.updates) {
+            const revision = JSON.parse(body.messages[0].content);
+            assert.deepEqual(revision.fields.map(({ ref, field, maxLength }) => ({ ref, field, maxLength })), [{ ref: "f0", field: "body", maxLength: 180 }]);
+            assert.equal(body.max_tokens, 1024);
+            assert.equal(body.output_config.effort, "medium");
+            return route.fulfill({ contentType: "application/json", body: JSON.stringify({ content: [{ type: "text", text: JSON.stringify({ updates: [{ fieldRef: "f0", text: mode === "invalid-draft" ? "A".repeat(181) : finalBody }] }) }], stop_reason: "end_turn", usage: { input_tokens: 200, output_tokens: 100 } }) });
+          }
           const content = body.messages[0].content;
           const source = JSON.parse(Array.isArray(content) ? content[0].text : content).sources[0];
           assert.match(JSON.stringify(content), /PRIVATE SPECIALIST FINDINGS/);
           const proposal = { version: 2, title: "A grounded deck", slides: [{ id: "opening", kind: "authored", layout: "statement", sourceIds: [source.sourceId], headline: "A clearer next step", kicker: "DESIGN DECISION", body: "Place the next action beside the relevant content.", notes: "Discuss the redesigned flow.", components: [] }] };
+          if (needsRevision) Object.assign(proposal.slides[0], { layout: "evidence", components: [source.sourceId], body: "A".repeat(200) });
+          if (expectedSlideCount > 1) proposal.slides = Array.from({ length: expectedSlideCount }, (_, index) => ({ ...structuredClone(proposal.slides[0]), id: "slide-" + index, headline: "A clearer next step " + (index + 1) }));
           const events = [
             { type: "message_start", message: { usage: { input_tokens: 200 } } },
             { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } },
@@ -138,6 +161,10 @@ for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, 
     await page.waitForFunction(() => typeof window.__rkDevStudio === "function" && !!window.RK?.data);
     await page.evaluate(() => window.__rkDevStudio());
     await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+    await page.evaluate(maxCost => {
+      const draftSlides = window.__RKStudio.draftSlides;
+      window.__RKStudio.draftSlides = (catalog, brief, options = {}) => draftSlides(catalog, brief, { ...options, maxCost: Math.min(maxCost, options.maxCost ?? Infinity) });
+    }, needsRevision ? 0.3 : 0.5);
     await page.evaluate(() => document.querySelectorAll(".pass--lock").forEach(dialog => dialog.remove()));
     await page.setViewportSize({ width, height: 1000 });
     await page.locator('.adm__tab[data-tab="work"]').click();
@@ -158,6 +185,37 @@ for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, 
       return;
     }
     releaseSpecialist();
+    if (mode === "schema-error") {
+      await page.locator('.merge-ai [role="alert"]').filter({ hasText: schemaFailure }).waitFor();
+      assert.equal(requests.length, 4, "An application schema rejection must stop before another coordinator or model request");
+      assert.equal(await page.getByRole("button", { name: "Append slides", exact: true }).count(), 0);
+      const state = await page.evaluate(() => window.__RKStudio.aiRouting.state());
+      assert.equal(state.decisions.at(-1).failure, "request-format");
+      assert.equal(state.decisions.at(-1).failurePhase, "request");
+      assert.equal(state.decisions.at(-1).httpStatus, 400);
+      assert.equal(state.decisions.at(-1).requestId, "req-schema-check");
+      assert.ok(state.decisions.reduce((cost, decision) => cost + decision.estimatedCost, 0) <= 0.5);
+      const study = await page.evaluate(() => window.__RKStudio.getDraft().work[0].study);
+      assert.deepEqual(study.blocks, published.work[0].study.blocks);
+      assert.equal(study.nativeDeck?.slideCount || 0, 0);
+      assert.deepEqual(errors, []);
+      return;
+    }
+    if (mode === "invalid-draft") {
+      await page.locator('.merge-ai [role="alert"]').filter({ hasText: /draft limit.*Last draft validation: Invalid body: 181 characters exceeds the 180-character limit/ }).waitFor();
+      await page.getByRole("log", { name: "Agent activity", exact: true }).getByText("Draft validation: Invalid body: 200 characters exceeds the 180-character limit", { exact: true }).waitFor();
+      assert.equal(requests.length, 6, "Do not call another model after the bounded revision fails the original contract");
+      assert.equal(await page.getByRole("button", { name: "Append slides", exact: true }).count(), 0);
+      const state = await page.evaluate(() => window.__RKStudio.aiRouting.state());
+      assert.equal(state.decisions.at(-1).failurePhase, "validation");
+      assert.ok(state.decisions.reduce((cost, decision) => cost + decision.estimatedCost, 0) <= 0.3);
+      assert.doesNotMatch(JSON.stringify(state), /Invalid body: (200|181)|PRIVATE SPECIALIST FINDINGS/);
+      const study = await page.evaluate(() => window.__RKStudio.getDraft().work[0].study);
+      assert.deepEqual(study.blocks, published.work[0].study.blocks);
+      assert.equal(study.nativeDeck?.slideCount || 0, 0);
+      assert.deepEqual(errors, []);
+      return;
+    }
     if (mode === "exhausted" || mode === "invalid-body") {
       await page.locator('.merge-ai [role="alert"]').filter({ hasText: mode === "exhausted" ? "output limit before returning answer text" : "rejected the request body (HTTP 400" }).waitFor();
       assert.equal(requests.length, 4, "Do not retry a charged or generically rejected response automatically");
@@ -179,9 +237,13 @@ for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, 
     await page.locator(".merge-ai h3").waitFor();
     assert.equal(await page.locator(".merge-ai h3").innerText(), "A grounded deck");
     assert.equal(await page.locator('.merge-ai [role="alert"]').count(), 0);
-    assert.equal(requests.length, mode === "exhausted" || mode === "invalid-body" ? 9 : 5);
+    assert.equal(requests.length, mode === "exhausted" || mode === "invalid-body" ? 9 : mode === "revision" ? 7 : 5);
     assert.deepEqual([...new Set(requests.map(request => request.model))], ["studio-coordinator", "studio-evidence", "studio-creative-a"]);
-    assert.ok(requests.filter(request => request.model === "studio-creative-a").every(request => request.stream === true && request.max_tokens === 24000));
+    const drafts = requests.filter(request => request.model === "studio-creative-a" && !request.output_config?.format?.schema?.properties?.updates);
+    assert.ok(drafts.every(request => request.stream === true && request.max_tokens === 24000));
+    if (mode === "revision") assert.equal(drafts.length, 1, "The bounded revision must not generate a second whole deck");
+    assert.ok(requests.filter(request => request.model === "studio-creative-a").every(request => request.output_config?.effort === "medium"), "The agent's chosen effort must reach the final model");
+    for (const request of drafts) assert.deepEqual(request.output_config?.format, { type: "json_schema", schema: COMPOSITION_RESPONSE_SCHEMA });
     assert.ok(requests.every(request => !Object.hasOwn(request, "temperature")));
     assert.ok(requests.filter(request => request.model === "studio-coordinator").every(request => request.output_config?.effort === "low"));
     await page.locator(".merge-ai-activity > summary").click();
@@ -198,16 +260,26 @@ for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, 
     assert.deepEqual(overflow, []);
     await page.screenshot({ path: join(tmpdir(), "rk-ai-proposal-" + width + ".png") });
     const routing = await page.evaluate(() => window.__RKStudio.aiRouting.state());
+    for (const jobId of new Set(routing.decisions.map(decision => decision.agentJobId))) assert.ok(routing.decisions.filter(decision => decision.agentJobId === jobId).reduce((cost, decision) => cost + decision.estimatedCost, 0) <= 0.5);
     if (mode === "summary-fallback") assert.ok(routing.decisions.every(decision => decision.status === "success"), "Cosmetic summaries must never trigger repair requests");
     const accepted = routing.decisions.find(decision => decision.agentRole === "result");
     assert.equal(accepted.task, "creative");
     assert.equal(accepted.stopReason, "end_turn");
-    assert.equal(accepted.usedOutputTokens, 12500);
-    assert.equal(accepted.thinkingTokens, 11000);
+    assert.equal(accepted.usedOutputTokens, mode === "revision" ? 100 : 12500);
+    assert.equal(accepted.thinkingTokens, mode === "revision" ? undefined : 11000);
+    if (mode === "revision") {
+      assert.equal(accepted.agentOperation, "revision");
+      assert.ok(routing.decisions.reduce((cost, decision) => cost + decision.estimatedCost, 0) <= 0.3);
+      await page.getByRole("log", { name: "Agent activity", exact: true }).getByText("Revising only the rejected body", { exact: true }).waitFor();
+    }
     assert.equal(routing.observations.find(item => item.feedbackFor)?.quality, 0.25);
     assert.doesNotMatch(JSON.stringify(routing), /synthetic-test-key|Place the next action|Discuss the redesigned flow|PRIVATE REASONING SIGNATURE|PRIVATE SPECIALIST FINDINGS/);
     await page.getByRole("button", { name: "Append slides", exact: true }).click();
-    await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.nativeDeck?.slideCount === 1);
+    await page.waitForFunction(count => window.__RKStudio.getDraft().work[0].study.nativeDeck?.slideCount === count, expectedSlideCount);
+    await page.waitForFunction(count => {
+      const thumbnails = [...document.querySelectorAll('.merge-thumbnail')];
+      return thumbnails.length === count && thumbnails.every(thumbnail => thumbnail.querySelector('.merge-section-thumbnail-svg > svg text'));
+    }, expectedSlideCount, { timeout: 10000 });
     await page.locator("[data-l2-back]").click();
     await page.locator(".merge-shell").waitFor({ state: "detached" });
     const study = await page.evaluate(() => window.__RKStudio.getDraft().work[0].study);

@@ -30,7 +30,7 @@ import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
 import { createAiCatalog } from "./ai-model-catalog.mjs";
 import { createAiOrchestrator } from "./ai-orchestrator.mjs";
 import { AI_TASKS } from "./ai-model-router.mjs";
-import { parseCompositionResponse } from "./slide-merge-ai.mjs";
+import { parseCompositionResponse, compositionRevision, COMPOSITION_RESPONSE_SCHEMA } from "./slide-merge-ai.mjs";
 import { mountAiRoutingPanel } from "./ai-routing-panel.mjs";
 import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
 import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
@@ -6723,7 +6723,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.3";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.4";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
@@ -14947,6 +14947,11 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     const cacheKey = JSON.stringify([cfg.provider, cfg.base, model]);
     if (cfg.provider === "anthropic" && cfg.routingModel?.reasoning === true) delete sampling.temperature;
     if (cfg.provider === "anthropic" && cfg.routingModel?.effortLevels?.includes(options.effort)) body.output_config = { ...body.output_config, effort: options.effort };
+    if (cfg.routingModel?.structured === true && options.responseSchema) {
+      if (cfg.provider === "anthropic") body.output_config = { ...body.output_config, format: { type: "json_schema", schema: options.responseSchema } };
+      else if (cfg.provider === "gemini") { sampling.responseMimeType = "application/json"; sampling.responseJsonSchema = options.responseSchema; }
+      else body.response_format = { type: "json_schema", json_schema: { name: "studio_agent_action", strict: true, schema: options.responseSchema } };
+    }
     if (aiNoTemperature.has(cacheKey)) delete sampling.temperature;
     for (let attempt = 0; attempt < 2; attempt++) {
       signal?.throwIfAborted();
@@ -15002,7 +15007,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
       var url = base + "/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key);
       var gb = { contents: [{ role: "user", parts: user }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: maxTokens, temperature: temp } };
       if (opts.json) gb.generationConfig.responseMimeType = "application/json";
-      res = await aiTextRequest(cfg, model, url, { "Content-Type": "application/json" }, gb, opts.signal);
+      res = await aiTextRequest(cfg, model, url, { "Content-Type": "application/json" }, gb, opts.signal, opts);
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return aiProviderFailure(res, j);
       var cand = (j && j.candidates && j.candidates[0]) || {};
@@ -15015,7 +15020,7 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
       ob.max_completion_tokens = maxTokens;
     }
     if (opts.json) ob.response_format = { type: "json_object" };
-    res = await aiTextRequest(cfg, model, base + "/chat/completions", { "Content-Type": "application/json", Authorization: "Bearer " + key }, ob, opts.signal);
+    res = await aiTextRequest(cfg, model, base + "/chat/completions", { "Content-Type": "application/json", Authorization: "Bearer " + key }, ob, opts.signal, opts);
     j = await res.json().catch(function () { return null; });
     if (!res.ok) return aiProviderFailure(res, j);
     (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
@@ -18297,7 +18302,9 @@ import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
     if (aiMode() === "cf" && AI_PROXY_PROVIDERS.indexOf(cfg.provider) !== -1 && !aiSess()) throw new Error("Your Cloudflare AI session has expired. Reopen Studio to restore it.");
     if (!cfg.key) throw new Error("Your Studio AI configuration is not available on this browser origin.");
     return draftComposition(catalog, brief, function (prompt, signal) {
-      return aiText(cfg, prompt.system, prompt.user, { task: "creative", json: true, maxTokens: 12000, reasoningTokens: 12000, temperature: 0.3, signal: signal, deckAuthoring: true,
+      return aiText(cfg, prompt.system, prompt.user, { task: "creative", json: true, maxTokens: 12000, reasoningTokens: 12000, maxCost: options?.maxCost, temperature: 0.3, signal: signal, deckAuthoring: true,
+        responseSchema: COMPOSITION_RESPONSE_SCHEMA,
+        revision: text => compositionRevision(text, catalog, brief),
         validate: text => {
           const proposal = parseCompositionResponse(text, catalog);
           if (proposal.version !== 2) throw new Error("The draft only arranged source sections. Author a version 2 editable presentation.");

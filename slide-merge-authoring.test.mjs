@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { compositionCatalog, compileComposition, validateComposition } from "./src/js/slide-merge-composition.mjs";
-import { authoringEvidence } from "./src/js/slide-merge-authoring.mjs";
+import { authoringEvidence, AUTHORING_LAYOUTS, AUTHORING_CONTRACT, authoredTextRules } from "./src/js/slide-merge-authoring.mjs";
 import { fitAuthoredText } from "./src/js/slide-merge-authoring-fit.mjs";
+import { COMPOSITION_RESPONSE_SCHEMA, compositionRequest, compositionRevision, parseCompositionResponse } from "./src/js/slide-merge-ai.mjs";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { transform } from "esbuild";
@@ -66,7 +67,155 @@ test("deck and general text generation use the shared orchestrator instead of fa
   assert.doesNotMatch(source, /if \(!parsed\) parsed = csgenParse\(await aiText\(cfg, sys, user, sopts\)\)/);
   assert.doesNotMatch(source, /aiSupportsImages/);
   const author = source.slice(source.indexOf("draftSlides: async function"));
+  assert.match(author, /responseSchema: COMPOSITION_RESPONSE_SCHEMA/);
+  assert.match(author, /revision: text => compositionRevision\(text, catalog, brief\)/);
   assert.match(author, /const proposal = parseCompositionResponse\(text, catalog\);\s*if \(proposal\.version !== 2\) throw/);
+});
+
+test("the final deck schema matches the existing authored fields without adding source material to schema metadata", () => {
+  const schema = COMPOSITION_RESPONSE_SCHEMA;
+  assert.deepEqual(schema.required, ["version", "title", "slides"]);
+  assert.equal(schema.additionalProperties, false);
+  assert.deepEqual(schema.properties.version.enum, [2]);
+  for (const slideSchema of schema.properties.slides.items.anyOf) {
+    assert.deepEqual(slideSchema.required, Object.keys(slideSchema.properties));
+    assert.deepEqual(new Set(slideSchema.required), new Set(Object.keys(slide(["source"]))));
+    assert.equal(slideSchema.additionalProperties, false);
+  }
+  assert.doesNotMatch(JSON.stringify(schema), /"(?:maxLength|maxItems|minimum|maximum)":/);
+});
+
+test("host validation enforces every layout body limit without unsupported native length constraints", () => {
+  const items = COMPOSITION_RESPONSE_SCHEMA.properties.slides.items;
+  const branches = items.anyOf || [items];
+  for (const layout of AUTHORING_LAYOUTS) {
+    const matching = branches.filter(branch => branch.properties.layout.enum.includes(layout));
+    assert.equal(matching.length, 1);
+    const field = matching[0].properties.body;
+    const limit = AUTHORING_CONTRACT.layouts[layout].bodyMaxLength;
+    assert.equal(field.pattern, undefined, "The real provider rejects the range-quantifier workaround");
+    assert.equal(field.maxLength, undefined);
+    assert.ok(field.description.includes(String(limit)));
+    const sourceIds = ["first", "second"], expected = { opening: 0, statement: 0, split: 1, comparison: 2, evidence: 1 }[layout];
+    const authored = { ...slide(sourceIds), layout, components: sourceIds.slice(0, expected), body: "A".repeat(limit) };
+    const validate = body => validateComposition({ version: 2, title: "Test", slides: [{ ...authored, body }] });
+    assert.doesNotThrow(() => validate(authored.body));
+    assert.doesNotThrow(() => validate("First line\nSecond line"));
+    assert.throws(() => validate("A".repeat(limit + 1)), { message: `Invalid body: ${limit + 1} characters exceeds the ${limit}-character limit` });
+    if (limit === 180) for (const count of [200, 255, 345, 352, 354, 388, 488, 372, 466, 515]) assert.throws(() => validate("A".repeat(count)), /Invalid body/);
+  }
+});
+
+test("native deck requests avoid the range-quantifier schema rejected by the real provider", async () => {
+  const message = "output_config.format.schema: Unsupported regex feature in pattern field: Cannot apply a range quantifier to this regex.";
+  const requests = [];
+  function hasRangePattern(value) {
+    return value && typeof value === "object" && Object.entries(value).some(([key, child]) =>
+      key === "pattern" && typeof child === "string" && /\{\d+,\d+\}/.test(child) || hasRangePattern(child));
+  }
+  const adapters = await textAdapters(async (url, options) => {
+    const body = JSON.parse(options.body); requests.push(body);
+    const schema = body.output_config?.format?.schema;
+    assert.ok(schema);
+    if (hasRangePattern(schema)) return Response.json({ error: { type: "invalid_request_error", message } }, { status: 400 });
+    return Response.json({ content: [{ type: "text", text: "Complete response" }], stop_reason: "end_turn" });
+  });
+  const config = { provider: "anthropic", base: "https://provider.test", key: "synthetic", routingModel: { reasoning: true, structured: true } };
+  for (const maxTokens of [12000, 24000]) {
+    const result = await adapters.aiChatOnce(config, "catalogue-selected", "System", "Private source", { maxTokens, json: true, responseSchema: COMPOSITION_RESPONSE_SCHEMA });
+    assert.equal(result.ok, true, result.err);
+    assert.equal(result.text, "Complete response");
+  }
+  assert.equal(requests.length, 2, "A schema must work on the initial request, not through an automatic paid retry");
+});
+
+test("the prompt, schema and validator share one authored contract", async () => {
+  const catalog = await compositionCatalog(data, options), prompt = compositionRequest(catalog, "Present the case");
+  assert.ok(prompt.system.includes(JSON.stringify(AUTHORING_CONTRACT)));
+  assert.equal(JSON.parse(prompt.user).limits.sourceIdsPerSlide, AUTHORING_CONTRACT.maxSourcesPerSlide);
+  for (const layout of AUTHORING_LAYOUTS) {
+    const schema = COMPOSITION_RESPONSE_SCHEMA.properties.slides.items.anyOf.find(branch => branch.properties.layout.enum.includes(layout));
+    assert.deepEqual(schema.required, AUTHORING_CONTRACT.slideFields);
+    for (const [field, rule] of Object.entries(authoredTextRules(layout))) assert.ok(schema.properties[field].description.includes(String(rule.maxLength)));
+    assert.ok(schema.properties.components.description.includes(layout + "=" + AUTHORING_CONTRACT.layouts[layout].components));
+  }
+});
+
+test("validation reports all rejected copy fields across slides without retaining their content", () => {
+  const first = { ...slide(["source"]), id: "first", layout: "evidence", body: "A".repeat(200), notes: "PRIVATE RESPONSE " + "B".repeat(3000) };
+  const second = { ...slide(["source"]), id: "second", headline: "C".repeat(111), kicker: "D".repeat(49) };
+  const proposal = { version: 2, title: "Test", slides: [first, second] }, before = structuredClone(proposal);
+  assert.throws(() => validateComposition(proposal), error => {
+    assert.deepEqual(error.validationIssues.map(issue => ({ path: issue.path, code: issue.code, limit: issue.limit })), [
+      { path: ["slides", 0, "body"], code: "text-length", limit: 180 },
+      { path: ["slides", 0, "notes"], code: "text-length", limit: 3000 },
+      { path: ["slides", 1, "headline"], code: "text-length", limit: 110 },
+      { path: ["slides", 1, "kicker"], code: "text-length", limit: 48 }
+    ]);
+    assert.doesNotMatch(JSON.stringify(error.validationIssues), /PRIVATE RESPONSE|AAAA|BBBB|CCCC|DDDD/);
+    return true;
+  });
+  assert.deepEqual(proposal, before);
+});
+
+test("copy revisions preserve the complete candidate and can address only fields rejected by the host", async () => {
+  const catalog = await compositionCatalog(data, options), sourceIds = catalog.map(source => source.sourceId);
+  const proposal = { version: 2, title: "Test", slides: [
+    { ...slide(sourceIds), id: "first", layout: "evidence", body: "PRIVATE COPY " + "A".repeat(200) },
+    { ...slide(sourceIds), id: "second", components: [sourceIds[1]], notes: "B".repeat(3001) }
+  ] };
+  const before = structuredClone(proposal), revision = compositionRevision(JSON.stringify(proposal), catalog);
+  assert.ok(revision);
+  const fields = JSON.parse(revision.user).fields;
+  assert.deepEqual(fields.map(({ ref, field, maxLength }) => ({ ref, field, maxLength })), [
+    { ref: "f0", field: "body", maxLength: 180 }, { ref: "f1", field: "notes", maxLength: 3000 }
+  ]);
+  assert.ok(revision.options.maxTokens < 12000);
+  assert.doesNotMatch(JSON.stringify(revision.options.responseSchema), /PRIVATE COPY|Two steps|sourceId/);
+  const updates = [{ fieldRef: "f0", text: "A simpler path." }, { fieldRef: "f1", text: "Review the supplied evidence." }];
+  const revised = parseCompositionResponse(revision.assemble(JSON.stringify({ updates })), catalog);
+  const expected = structuredClone(proposal); expected.slides[0].body = updates[0].text; expected.slides[1].notes = updates[1].text;
+  assert.deepEqual(revised, expected);
+  assert.deepEqual(proposal, before);
+  assert.equal(compositionRevision(JSON.stringify(revised), catalog), null);
+  for (const value of [{ updates: [] }, { updates: [updates[0], updates[0]] }, { updates: [{ ...updates[0], fieldRef: "__proto__" }, updates[1]] },
+    { updates: [{ ...updates[0], layout: "opening" }, updates[1]] }, { updates, title: "Changed" }]) assert.throws(() => revision.assemble(JSON.stringify(value)));
+  const invalid = revision.assemble(JSON.stringify({ updates: [{ ...updates[0], text: "A".repeat(181) }, updates[1]] }));
+  assert.throws(() => parseCompositionResponse(invalid, catalog), /181.*180/);
+});
+
+test("title and slide copy failures use the same immutable revision contract and original brief", async () => {
+  const catalog = [{ sourceId: "source", title: "Evidence", type: "text", hasMedia: false, excerpt: "Verified source", evidence: "A verified fact" }];
+  const proposal = { version: 2, title: "T".repeat(161), slides: [{ ...slide(["source"]), headline: "H".repeat(111) }] };
+  const before = structuredClone(proposal), brief = "A concise presentation for product leadership";
+  const revision = compositionRevision(JSON.stringify(proposal), catalog, brief);
+  assert.deepEqual(revision.issues.map(issue => issue.path), [["title"], ["slides", 0, "headline"]]);
+  const input = JSON.parse(revision.user);
+  assert.equal(input.brief, brief);
+  assert.deepEqual(input.fields.map(({ ref, field, maxLength }) => ({ ref, field, maxLength })), [
+    { ref: "f0", field: "title", maxLength: 160 }, { ref: "f1", field: "headline", maxLength: 110 }
+  ]);
+  const updated = parseCompositionResponse(revision.assemble(JSON.stringify({ updates: [{ fieldRef: "f0", text: "A concise title" }, { fieldRef: "f1", text: "A verified fact" }] })), catalog);
+  const expected = structuredClone(proposal); expected.title = "A concise title"; expected.slides[0].headline = "A verified fact";
+  assert.deepEqual(updated, expected);
+  assert.deepEqual(proposal, before);
+});
+
+test("copy errors cannot hide structural, unavailable-source or missing-component failures from revision eligibility", async () => {
+  const catalog = await compositionCatalog(data, options), sourceIds = catalog.map(source => source.sourceId);
+  const proposal = { version: 2, title: "Test", slides: [{ ...slide(sourceIds), layout: "evidence", body: "A".repeat(200) }] };
+  assert.throws(() => parseCompositionResponse(JSON.stringify(proposal), catalog), error => {
+    assert.deepEqual(error.validationIssues.map(issue => issue.code), ["text-length", "missing-components"]);
+    return true;
+  });
+  assert.equal(compositionRevision(JSON.stringify(proposal), catalog), null);
+  proposal.slides[0].sourceIds = [sourceIds[0], "invented"];
+  assert.throws(() => parseCompositionResponse(JSON.stringify(proposal), catalog), error => {
+    assert.ok(error.validationIssues.some(issue => issue.code === "source-unavailable"));
+    return true;
+  });
+  assert.equal(compositionRevision(JSON.stringify(proposal), catalog), null);
+  assert.equal(compositionRevision("not-json", catalog), null);
 });
 
 test("multimodal adapters preserve image bytes across providers and use declared reasoning metadata", async () => {
@@ -324,6 +473,49 @@ test("streamed AI retries temperature only before output and records successful 
   assert.equal(Object.hasOwn(requests[1].body, "temperature"), false);
   assert.equal(requests[1].signal, controller.signal);
   assert.deepEqual(usage, [["anthropic", "restricted", 10, 20]]);
+});
+
+test("Anthropic coordinator requests enforce the supplied action schema alongside supported effort", async () => {
+  const requests = [];
+  const schema = { type: "object", properties: { action: { type: "string", enum: ["finish"] } }, required: ["action"], additionalProperties: false };
+  const adapters = await textAdapters(async (url, options) => {
+    requests.push(JSON.parse(options.body));
+    return Response.json({ content: [{ type: "text", text: '{"action":"finish"}' }], stop_reason: "end_turn" });
+  });
+  const config = { provider: "anthropic", key: "synthetic", base: "https://provider.test", routingModel: { structured: true, reasoning: true, effortLevels: ["low"] } };
+  for (const operation of ["aiChatOnce", "aiStream"]) {
+    const result = await adapters[operation](config, "available-model", "Coordinate the job", "Source material", { json: true, maxTokens: 2048, effort: "low", responseSchema: schema });
+    assert.equal(result.ok, true, result.err);
+  }
+  for (const request of requests) {
+    assert.deepEqual(request.output_config, { effort: "low", format: { type: "json_schema", schema } });
+    assert.equal(request.max_tokens, 2048, "Enforce the output contract instead of only increasing the token cap");
+    assert.equal(request.temperature, undefined);
+  }
+});
+
+test("coordinator schemas use provider-specific fields only when structured output is declared", async () => {
+  const schema = { type: "object", properties: { action: { type: "string", enum: ["finish"] } }, required: ["action"], additionalProperties: false };
+  for (const provider of ["anthropic", "openai", "gemini", "custom"]) for (const structured of [true, false, null]) {
+    const requests = [];
+    const adapters = await textAdapters(async (url, options) => {
+      requests.push(JSON.parse(options.body));
+      return Response.json({ content: [{ type: "text", text: '{"action":"finish"}' }], stop_reason: "end_turn", candidates: [{ content: { parts: [{ text: '{"action":"finish"}' }] } }], choices: [{ message: { content: '{"action":"finish"}' } }] });
+    });
+    const config = { provider, key: "synthetic", base: "https://provider.test", routingModel: { structured } };
+    for (const operation of ["aiChatOnce", "aiStream"]) assert.equal((await adapters[operation](config, "available-model", "Coordinate", "Source", { json: true, maxTokens: 2048, responseSchema: schema })).ok, true);
+    for (const request of requests) {
+      if (structured === true) {
+        if (provider === "anthropic") assert.deepEqual(request.output_config.format, { type: "json_schema", schema });
+        else if (provider === "gemini") assert.deepEqual(request.generationConfig.responseJsonSchema, schema);
+        else assert.deepEqual(request.response_format, { type: "json_schema", json_schema: { name: "studio_agent_action", strict: true, schema } });
+      } else {
+        assert.equal(request.output_config?.format, undefined);
+        assert.equal(request.generationConfig?.responseJsonSchema, undefined);
+        assert.notEqual(request.response_format?.type, "json_schema");
+      }
+    }
+  }
 });
 
 test("agent coordination effort is sent only when the model declares that effort level", async () => {

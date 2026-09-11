@@ -288,6 +288,11 @@ function Merger({ integration, controller }) {
   useEffect(() => {
     live.current.deck?.slides.forEach(slide => thumbnail(slide).catch(fail));
   }, [appearance]);
+  useEffect(() => {
+    for (const slide of deck?.slides || []) {
+      if (slide.scene && !thumbnails[slide.id]) thumbnail(slide).catch(() => {});
+    }
+  }, [deck?.slides]);
   function fail(error) { if (!controller.active) return; controller.reject(error); activity.write("error", "Editor operation or local save failed"); setStatus(`Not saved: ${error.message}`); integration?.onError?.(error); }
   function paint(next, restoring = false) {
     const previous = live.current.deck;

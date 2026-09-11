@@ -1,23 +1,58 @@
 import { sectionComponentPlan } from "./slide-merge-section-component.mjs";
 
-export const AUTHORING_LAYOUTS = Object.freeze(["opening", "statement", "split", "comparison", "evidence"]);
+export const AUTHORING_CONTRACT = Object.freeze({
+  version: 2, maxSlides: 24, maxSourcesPerSlide: 8, maxTitleLength: 160, maxIdLength: 64, maxSourceIdLength: 512,
+  idPattern: "^[a-zA-Z][a-zA-Z0-9_-]*$",
+  slideFields: Object.freeze(["id", "kind", "layout", "sourceIds", "headline", "kicker", "body", "notes", "components"]),
+  text: Object.freeze({
+    headline: Object.freeze({ maxLength: 110, required: true }),
+    kicker: Object.freeze({ maxLength: 48, required: false }),
+    notes: Object.freeze({ maxLength: 3000, required: false })
+  }),
+  layouts: Object.freeze({
+    opening: Object.freeze({ components: 0, bodyMaxLength: 600 }),
+    statement: Object.freeze({ components: 0, bodyMaxLength: 600 }),
+    split: Object.freeze({ components: 1, bodyMaxLength: 600 }),
+    comparison: Object.freeze({ components: 2, bodyMaxLength: 180 }),
+    evidence: Object.freeze({ components: 1, bodyMaxLength: 180 })
+  })
+});
+export const AUTHORING_LAYOUTS = Object.freeze(Object.keys(AUTHORING_CONTRACT.layouts));
+
+export function authoredTextRules(layout) {
+  return { headline: AUTHORING_CONTRACT.text.headline, kicker: AUTHORING_CONTRACT.text.kicker,
+    body: { maxLength: AUTHORING_CONTRACT.layouts[layout]?.bodyMaxLength, required: false }, notes: AUTHORING_CONTRACT.text.notes };
+}
 
 function exact(value, keys, label) {
   if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length !== keys.length || Object.keys(value).some(key => !keys.includes(key))) throw new Error(`Invalid ${label} fields`);
 }
 function text(value, limit, label, optional = false) {
-  if (typeof value !== "string" || (!optional && !value.trim()) || value.length > limit || /[<>\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value)) throw new Error(`Invalid ${label}`);
+  if (typeof value === "string" && value.length > limit) throw new Error(`Invalid ${label}: ${value.length} characters exceeds the ${limit}-character limit`);
+  if (typeof value !== "string" || (!optional && !value.trim()) || /[<>\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value)) throw new Error(`Invalid ${label}`);
   return value.trim();
 }
+export function authoredTextIssues(slide) {
+  return Object.entries(authoredTextRules(slide.layout)).flatMap(([field, rule]) => {
+    try { text(slide[field], rule.maxLength, field, !rule.required); return []; }
+    catch (error) {
+      const actual = typeof slide[field] === "string" ? slide[field].length : null;
+      return [{ path: [field], code: actual != null && actual > rule.maxLength ? "text-length" : "text-value", message: error.message, limit: rule.maxLength, actual }];
+    }
+  });
+}
 export function validateAuthoredSlide(slide) {
-  exact(slide, ["id", "kind", "layout", "sourceIds", "headline", "kicker", "body", "notes", "components"], "authored slide");
+  exact(slide, AUTHORING_CONTRACT.slideFields, "authored slide");
   if (slide.kind !== "authored" || !AUTHORING_LAYOUTS.includes(slide.layout)) throw new Error("Unsupported authored layout");
-  if (!Array.isArray(slide.sourceIds) || !slide.sourceIds.length || slide.sourceIds.length > 8 || new Set(slide.sourceIds).size !== slide.sourceIds.length) throw new Error("An authored slide needs 1 to 8 distinct sources");
-  const sourceIds = slide.sourceIds.map(source => text(source, 512, "source ID"));
+  if (!Array.isArray(slide.sourceIds) || !slide.sourceIds.length || slide.sourceIds.length > AUTHORING_CONTRACT.maxSourcesPerSlide || new Set(slide.sourceIds).size !== slide.sourceIds.length) throw new Error("An authored slide needs 1 to " + AUTHORING_CONTRACT.maxSourcesPerSlide + " distinct sources");
+  const sourceIds = slide.sourceIds.map(source => text(source, AUTHORING_CONTRACT.maxSourceIdLength, "source ID"));
   if (!Array.isArray(slide.components) || new Set(slide.components).size !== slide.components.length || slide.components.some(source => !sourceIds.includes(source))) throw new Error("Components must reference this slide's sources");
-  const expected = { opening: 0, statement: 0, split: 1, comparison: 2, evidence: 1 }[slide.layout];
+  const expected = AUTHORING_CONTRACT.layouts[slide.layout].components;
   if (slide.components.length !== expected) throw new Error(`${slide.layout} requires ${expected} intact components`);
-  return { id: slide.id, kind: "authored", layout: slide.layout, sourceIds, headline: text(slide.headline, 110, "headline"), kicker: text(slide.kicker, 48, "kicker", true), body: text(slide.body, slide.layout === "comparison" || slide.layout === "evidence" ? 180 : 600, "body", true), notes: text(slide.notes, 3000, "notes", true), components: [...slide.components] };
+  const validationIssues = authoredTextIssues(slide);
+  if (validationIssues.length) throw Object.assign(new Error(validationIssues[0].message), { validationIssues });
+  const copy = Object.fromEntries(Object.keys(authoredTextRules(slide.layout)).map(field => [field, slide[field].trim()]));
+  return { id: slide.id, kind: "authored", layout: slide.layout, sourceIds, ...copy, components: [...slide.components] };
 }
 
 export function authoringEvidence(block, plain) {

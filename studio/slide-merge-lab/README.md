@@ -118,9 +118,73 @@ and final models using catalogue references; the host rechecks their eligibility
 before every call. Models cannot supply new endpoints, keys, permissions or tools.
 The agent can use different allowed models for different parts of the job.
 
+Coordinator calls use a provider-native JSON action schema when the selected
+model declares structured-output support. The schema allows only the next action
+and catalogue/work references, not a full presentation in the coordinator reply.
+The host still validates every returned action. Schema input bytes are included
+in the job estimate; the coordinator's output allowance is not increased merely
+to accommodate an unconstrained response. Deck drafting also supplies the existing
+authored-v2 shape as a native output schema on capable models. The prompt, schema,
+validator and revision requests share the immutable `AUTHORING_CONTRACT` in
+`src/js/slide-merge-authoring.mjs`, rather than maintaining separate copies of
+layout counts and text limits. Two layout branches describe the body limits:
+180 characters for evidence and comparison, 600 for the other layouts. These
+descriptions guide generation; the host enforces the limits. Do not encode them
+as bounded regex workarounds: the actual provider rejected that schema even though
+the same regex passed JavaScript tests. The wire schema uses supported structure,
+not a claim that every semantic constraint is enforced by the provider.
+Source coverage, layout/component consistency and all text limits still require
+host validation; schema conformance alone does not establish a complete or good
+presentation. Other model calls keep their existing output contracts. A
+caller-supplied job limit can only tighten the saved limit.
+
+Validation collects indexed diagnostics across slides and copy fields, including
+the deck title. Source-reference and required-component checks still run after a
+copy failure, so a length error cannot hide missing material. Diagnostics contain
+paths, error categories and counts, not generated copy. Structural or source errors
+cannot enter the narrow text-revision operation.
+
+For completed answers rejected only on title/headline/kicker/body/notes fields,
+the coordinator can choose `revise` instead of another full `draft`. The host creates
+a bounded work order containing every rejected field, its rules, the original brief
+and cited evidence. The model returns one replacement per opaque field reference.
+Unknown, repeated, missing or extra edits are rejected. Assembly makes a new copy of
+the candidate and cannot change its IDs, layouts, source references, components,
+valid copy or order. The assembled whole answer must pass the original validator
+before the coordinator can finish. Nothing is truncated, automatically applied or
+silently accepted. A still-invalid revision stops at the same two-draft limit.
+
+This capability is opt-in for deck authoring. Rejected answer text is handed to the
+active job only through non-enumerable error properties, not routing events or
+serialized errors; it is not stored in history. Provider failures, refusals and
+exhausted or incomplete answers do not enter this path. Only the accepted full
+candidate receives result feedback, never the field-update response itself.
+An invalid provider schema is a `request-format` failure, not evidence of an
+unavailable model. It stops immediately with the provider's rejection rather than
+triggering a model switch or losing the cause behind a later budget error.
+
+Draft and revision model references are rechecked for their actual operation on
+every turn, not a cheaper coordination request. Their estimates are shown separately;
+an affordable revision can remain available when a whole new draft cannot fit.
+Revision output allowances are calculated from the rejected fields, capped at the
+existing 12,000-answer-token limit, and priced without inheriting a full draft's
+reasoning allowance. The adapter receives exactly that priced output allowance.
+Eligibility reserves the current coordinator request and a bounded final review.
+Supporting instructions and selected work are repriced before the operation runs;
+they cannot consume the review reserve. These reserves are estimates, not charges
+or a promise that a later revision will fit. The original validation reason is
+shown in the activity log and retained in a subsequent budget-stop error.
+
+The coordinator sees advertised effort controls and recent task-specific failures,
+including safe output/thinking token counts. It chooses an advertised effort level
+for each specialist or draft model that supports one; the host rejects invented
+levels. No model identity or family selects an effort setting. A large output
+allowance alone does not guarantee space for the final answer.
+
 Tools are bounded to seven coordinator decisions, twelve model operations, three
-specialist calls, two candidate drafts and eight minutes per job. These are resource
-guards, not a prescribed workflow. The job limit includes coordination, specialists,
+specialist calls, two candidate attempts (full drafts and revisions combined) and
+eight minutes per job. These are resource guards, not a prescribed workflow. The
+job limit includes coordination, specialists,
 revisions and the final answer. Started operations are conservatively counted at
 their estimated maximum cost. Unknown prices cannot pass a finite job limit.
 Revoking access to other connected services stops further calls to them. Final
@@ -130,7 +194,12 @@ owner actions. The agent has no browsing, file-execution or publishing tool.
 
 Long coordinator context is explicitly marked as excerpted. Specialists receive
 the complete original source, and final models receive the original contract and
-selected specialist outputs. Those inputs, intermediate drafts and model-written
+selected specialist outputs. Candidate review excerpts are bounded to 16,000
+serialized UTF-8 bytes, including JSON escapes, so their reservation matches the
+maximum excerpt that can actually be sent. Revisions receive only the rejected
+fields and relevant source evidence, preserving all other fields in memory.
+Cancellation is checked before assembly and acceptance of a late response.
+Those inputs, intermediate drafts and model-written
 progress summaries remain transient, not part of the deck or routing history.
 The proposal pane streams public agent activity, model choices and checks. It does
 not expose raw private chain-of-thought, thinking blocks or signatures.
@@ -216,6 +285,88 @@ critique/refinement remain deferred.
 
 Focused checks: `node --test ai-model-router.test.mjs slide-merge-authoring.test.mjs`
 and `node --test --test-name-pattern="AI routing settings|Draft entire deck with AI" slide-studio-deck.test.mjs`.
+
+Mocked-provider tests establish protocol, safety and UI behavior, not real model
+completion. A watched integration check must use a visibly loaded Studio tab and
+normal owner sign-in. Real provider runs require an explicitly authorized spending
+cap and must leave the result unapplied unless the owner requests otherwise.
+The first two authorized watched runs against the affected case both failed. Native
+action schemas kept their coordinator replies within the existing 2,048-token
+allowance, but the first final request exhausted its output and the second failed
+the host content contract before the remaining budget blocked repair. Neither
+produced a usable proposal; the second run's exact content-validation message was
+not captured. A separately authorized third run made only one coordinator call and
+one draft call, with no rejected model nominations. It completed normally but failed
+host body validation. Its cached response was inspected without another provider
+request: 10 of 21 slides had 200-515 body characters where their layouts allow 180.
+The native schema had described, but not enforced, that bound. A subsequent offline
+regex replay rejected all ten; it did not prove provider grammar compatibility.
+Host length errors now report actual and allowed counts without generated text.
+
+The separately authorized fourth watched run failed before generating an answer.
+Its coordinator chose an eligible draft model, whose API returned HTTP 400:
+`output_config.format.schema: Unsupported regex feature in pattern field: Cannot apply a range quantifier to this regex.`
+The cached error was inspected without another request. The bounded wire regex was
+removed, while the host contract and agent-selected text revisions remain strict.
+New regressions cover the exact schema rejection on one-shot and streaming paths,
+its visible error, and immediate stopping without model hopping.
+
+The fifth separately authorized watched run completed on the real provider: an
+automatically selected coordinator, one draft call and a final coordinator review
+produced a visible 16-slide proposal in about 4 minutes 11 seconds. Its conservative
+reservation was USD0.428821 within the USD0.50 limit, not a billed-total claim. The
+corrected schema was accepted, the draft ended normally, and all 16 slides passed
+the host contract. A read-only audit confirmed all 46 sources cited, all 27 required
+components included, valid text limits and notes on every slide. No revision was
+needed, so real-provider revision behavior and repeatability remain unverified.
+This is one successful watched generation, not a general quality guarantee or a
+deployment. A synthetic 21-slide regression with all ten recorded oversized bodies
+completes with one targeted revision and five total model operations within its
+USD0.50 estimate. Browser regressions cover desktop/phone revision, unchanged source
+material, original-contract rejection of a still-invalid revision, and cancellation.
+These use intercepted providers, not real model output.
+
+After the proposal was appended in the shared editor, unvisited navigator rows had
+blank thumbnails: saving refreshed only the selected slide. Missing-thumbnail
+generation now follows the shared deck slide list, covering bulk insertions without
+requiring individual visits. The existing desktop and phone completion regressions
+append 16 slides and require every thumbnail before any navigation or reopening.
+The desktop check reproduced the failure before the fix and passed afterward.
+For the already-open deck, a normal save/back/reopen restored all 16 previews and
+27 component frames. A saved-document checkpoint verified unchanged identity,
+slide order, notes, elements, media references, content hash and source blocks.
+The automatic append fix is included in this code release.
+
+The browser no longer retains the earlier stream payload, and its temporary copy
+was removed after the original inspection. A new exhaustive audit of that exact
+payload cannot be claimed. The recorded failure lengths are retained as synthetic
+regression facts, not the owner's response content. All five per-run permissions
+are consumed; another real run requires fresh authorization. The test automation
+did not apply or publish the proposal; it was appended separately during review and
+remains private and unpublished. Temporary connection preferences and request guards
+were restored after the test. The thumbnail fix required no additional AI calls.
+
+### Release Acceptance (2026-09-11)
+
+The owner approved releasing the reviewed changes using the existing successful
+watched generation and explicitly declined further paid tests. Final release checks
+passed: 99 contract/routing tests, 12 isolated browser workflows, both builds and
+the shared editor security scan. Studio editor JavaScript is version 1.4 and the
+standalone merger entrypoint is version 1.72; unchanged CSS retains its version.
+
+All 16 saved slides were inspected in the visible browser, including screenshots,
+canvas-pixel checks, authored-text bounds and all 27 native components. Local video
+frames loaded; there were no blank canvases, failed images or component errors.
+Dense or tall preserved source sections remain small in comparison slots and need
+per-deck layout review for presentation legibility. External YouTube playback was
+not tested. This is not a claim of automated visual-design or factual-quality proof.
+
+The original slide selection and editing mode were restored. Notes, media, source
+blocks, element order, text and geometry remained unchanged. Visiting the saved
+deck normalized one native text-element ordering key and its version metadata;
+the stored document hash therefore changed without an authored-content change.
+The deck remains private and unpublished. Repeat generation and the real-provider
+revision path remain explicitly unverified; no further AI job was run for release.
 
 ## Authoring parity update
 

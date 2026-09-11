@@ -116,7 +116,13 @@ export function rankAiModels(models, task = "writing", options = {}) {
     if (requiresImages && model.imageInput === true) reasons.push("Declared image input support");
     if (unknown.length) reasons.push("Unverified: " + unknown.join(", "));
     reasons.push("Release date is a minor signal, not a quality rating");
-    choices.push({ model, task, score, quality, confidence, reasons, estimatedCost, qualitySamples, unknown, outputTokens, reasoningTokens });
+    const recentFailures = history.filter(item => item.task === task && ["output-limit", "context-limit", "invalid"].includes(item.status)).sort((first, second) => second.at - first.at).slice(0, 3).map(item => ({
+      failure: item.status,
+      outputTokens: Number.isSafeInteger(item.outputTokens) && item.outputTokens >= 0 ? item.outputTokens : null,
+      thinkingTokens: Number.isSafeInteger(item.thinkingTokens) && item.thinkingTokens >= 0 && item.thinkingTokens <= item.outputTokens ? item.thinkingTokens : null,
+      effort: ["low", "medium", "high", "xhigh", "max"].includes(item.effort) ? item.effort : null
+    }));
+    choices.push({ model, task, score, quality, confidence, reasons, estimatedCost, qualitySamples, unknown, outputTokens, reasoningTokens, recentFailures });
   }
   choices.sort((first, second) => second.score - first.score || (second.model.releasedAt || 0) - (first.model.releasedAt || 0) || first.model.id.localeCompare(second.model.id));
   const incumbent = choices.find(choice => choice.model.id === options.incumbent);
