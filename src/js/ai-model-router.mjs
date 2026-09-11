@@ -57,10 +57,14 @@ export function rankAiModels(models, task = "writing", options = {}) {
   const profile = Object.hasOwn(AI_TASKS, task) ? AI_TASKS[task] : null;
   if (!profile) throw new Error("Unsupported AI task");
   const now = options.now ?? Date.now(), observations = options.observations || [];
-  const inputTokens = Math.max(0, options.inputTokens || 0), outputTokens = Math.max(0, options.outputTokens || 0);
+  const inputTokens = Math.max(0, options.inputTokens || 0), requestedOutputTokens = Math.max(0, options.outputTokens || 0);
   const requiresImages = !!(profile.images || options.images), choices = [];
   for (const model of models) {
     if (!model?.id || !model.provider) continue;
+    const reasoningTokens = model.reasoning === true ? Math.max(0, Math.min(options.reasoningTokens || 0,
+      (model.maxOutputTokens || requestedOutputTokens) - requestedOutputTokens,
+      model.contextWindow ? model.contextWindow - inputTokens - requestedOutputTokens : Infinity)) : 0;
+    const outputTokens = requestedOutputTokens + reasoningTokens;
     const explicit = model.sources?.includes("configured model");
     if (!model.output && !explicit) continue;
     if (model.output && !model.output.includes(profile.output)) continue;
@@ -106,11 +110,12 @@ export function rankAiModels(models, task = "writing", options = {}) {
     if (accepted) reasons.push(accepted + " accepted results used as a weak signal");
     for (const rubric of new Set(ratings.filter(item => item.rubric).map(item => item.rubric))) reasons.push("Evidence rubric: " + rubric);
     if (model.reasoning && profile.reasoning > 1) reasons.push("Declared reasoning support");
+    if (reasoningTokens) reasons.push("Output allowance: " + outputTokens.toLocaleString("en-US") + " tokens including reasoning headroom");
     if (options.structured && model.structured) reasons.push("Declared structured output support");
     if (requiresImages && model.imageInput === true) reasons.push("Declared image input support");
     if (unknown.length) reasons.push("Unverified: " + unknown.join(", "));
     reasons.push("Release date is a minor signal, not a quality rating");
-    choices.push({ model, task, score, quality, confidence, reasons, estimatedCost, qualitySamples, unknown });
+    choices.push({ model, task, score, quality, confidence, reasons, estimatedCost, qualitySamples, unknown, outputTokens, reasoningTokens });
   }
   choices.sort((first, second) => second.score - first.score || (second.model.releasedAt || 0) - (first.model.releasedAt || 0) || first.model.id.localeCompare(second.model.id));
   const incumbent = choices.find(choice => choice.model.id === options.incumbent);

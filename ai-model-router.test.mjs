@@ -28,6 +28,21 @@ test("capability, context, output and budget requirements filter ineligible mode
   assert.equal(rankAiModels([model("separate-limits", { max_input_tokens: 1000 })], "writing", { inputTokens: 900, outputTokens: 200, now }).length, 1);
 });
 
+test("deck reasoning headroom is included in model limits and the request cost gate", () => {
+  const reasoning = model("discovered-reasoning-model", { reasoning: true, max_tokens: 32000, pricing: { input: 2, output: 8 } });
+  const request = { now, inputTokens: 1000, outputTokens: 12000, reasoningTokens: 12000 };
+  const choice = rankAiModels([reasoning], "creative", request)[0];
+  assert.equal(choice.outputTokens, 24000);
+  assert.equal(choice.estimatedCost, 0.194);
+  assert.equal(rankAiModels([reasoning], "creative", { ...request, maxCost: 0.15 }).length, 0);
+  const smaller = rankAiModels([{ ...reasoning, maxOutputTokens: 16000 }], "creative", request)[0];
+  assert.equal(smaller.outputTokens, 16000);
+  const contextBound = rankAiModels([{ ...reasoning, contextWindow: 21000 }], "creative", request)[0];
+  assert.equal(contextBound.outputTokens, 20000);
+  assert.equal(rankAiModels([{ ...reasoning, reasoning: false }], "creative", request)[0].outputTokens, 12000);
+  assert.equal(rankAiModels([reasoning], "creative", { ...request, reasoningTokens: 0 })[0].outputTokens, 12000);
+});
+
 test("new models enter without a code change but cannot displace an incumbent on recency alone", () => {
   const known = model("established"), newcomer = model("unseen-model", { created_at: "2026-09-10" });
   const fresh = rankAiModels([known, newcomer], "creative", { now, incumbent: "established" });
@@ -302,4 +317,39 @@ test("evaluation grading ignores JSON key order and incomplete tests remain elig
   assert.equal(plan.modelId, "only-model");
   const retry = await orchestrator.evaluate([config], "creative", { approval: plan }, async () => ({ ok: true, text: '{"headline":"A clearer path","body":"Keep related settings together."}' }));
   assert.equal(retry.results.length, 3);
+});
+
+test("the actual adapter receives exactly the output allowance used in routing and cost estimates", async () => {
+  const { orchestrator, config } = orchestratorFixture([model("discovered-reasoning-model", { reasoning: true, max_tokens: 32000, pricing: { input: 2, output: 8 } })]);
+  let called = 0;
+  const result = await orchestrator.run([config], "creative", { inputTokens: 1000, outputTokens: 12000, reasoningTokens: 12000, maxCost: 0.2 }, async (selected, modelId, decision) => {
+    called++;
+    assert.equal(selected.routingMaxTokens, 24000);
+    assert.equal(decision.outputTokens, selected.routingMaxTokens);
+    assert.equal(decision.estimatedCost, 0.194);
+    return { ok: true, text: "Complete deck" };
+  });
+  assert.equal(result.routing.outputTokens, 24000);
+  assert.equal(called, 1);
+  await assert.rejects(orchestrator.run([config], "creative", { inputTokens: 1000, outputTokens: 12000, reasoningTokens: 12000, maxCost: 0.15 }, async () => { called++; return { ok: true }; }), /No available model/);
+  assert.equal(called, 1);
+});
+
+test("provider stop diagnostics stay private and exhausted output never triggers another paid attempt", async () => {
+  const { orchestrator, config, store } = orchestratorFixture();
+  let calls = 0;
+  await assert.rejects(orchestrator.run([config], "creative", {}, async () => {
+    calls++;
+    return { ok: false, status: 200, failure: "output-limit", stopReason: "max_tokens", outputTokens: 12000, thinkingTokens: 12000,
+      err: "The model reached its output limit before returning answer text", content: "PRIVATE RESPONSE", signature: "PRIVATE SIGNATURE" };
+  }), /output limit/);
+  assert.equal(calls, 1);
+  const state = await store.read();
+  assert.equal(state.decisions[0].failure, "output-limit");
+  assert.equal(state.decisions[0].stopReason, "max_tokens");
+  assert.equal(state.decisions[0].usedOutputTokens, 12000);
+  assert.equal(state.decisions[0].thinkingTokens, 12000);
+  assert.equal(state.observations[0].status, "output-limit");
+  assert.match(state.decisions[0].reasons.join(" "), /Provider stop: max_tokens/);
+  assert.doesNotMatch(JSON.stringify(state), /PRIVATE RESPONSE|PRIVATE SIGNATURE/);
 });

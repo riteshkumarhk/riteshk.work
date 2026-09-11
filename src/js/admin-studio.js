@@ -14954,18 +14954,34 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
       aiNoTemperature.add(cacheKey);
     }
   }
+  function aiAnthropicResult(message, status) {
+    if (!message || !Array.isArray(message.content)) return { ok: false, status, failure: "invalid-response", err: "The service returned an unreadable Anthropic response. No draft was applied." };
+    const text = message.content.filter(block => block && (!block.type || block.type === "text")).map(block => typeof block.text === "string" ? block.text : "").join("").trim();
+    const stopReason = ["end_turn", "max_tokens", "model_context_window_exceeded", "refusal", "stop_sequence", "pause_turn", "tool_use"].includes(message.stop_reason) ? message.stop_reason : message.stop_reason == null ? "unspecified" : "unknown";
+    const result = { status, stopReason };
+    const outputTokens = message.usage?.output_tokens, thinkingTokens = message.usage?.output_tokens_details?.thinking_tokens;
+    if (Number.isSafeInteger(outputTokens) && outputTokens >= 0) result.outputTokens = outputTokens;
+    if (Number.isSafeInteger(thinkingTokens) && thinkingTokens >= 0 && thinkingTokens <= outputTokens) result.thinkingTokens = thinkingTokens;
+    if (stopReason === "max_tokens") return { ...result, ok: false, failure: "output-limit", err: "The model reached its output limit " + (text ? "before completing the answer." : "before returning answer text.") + " No draft was applied." };
+    if (stopReason === "model_context_window_exceeded") return { ...result, ok: false, failure: "context-limit", err: "The model reached its context limit before completing the answer. Draft from fewer sections." };
+    if (stopReason === "refusal") return { ...result, ok: false, failure: "refusal", err: "The model declined this request. No draft was applied." };
+    if (["pause_turn", "tool_use", "stop_sequence", "unknown"].includes(stopReason)) return { ...result, ok: false, failure: "incomplete-response", err: "The model stopped before a final answer (" + stopReason + "). No draft was applied." };
+    if (!text) return { ...result, ok: false, failure: "empty-output", err: "The model finished without returning answer text (" + stopReason + "). No draft was applied." };
+    return { ...result, ok: true, text };
+  }
   async function aiChatOnce(cfg, model, system, user, opts) {
     var p = cfg.provider, key = cfg.key, base = cfg.base;
+    var maxTokens = cfg.routingMaxTokens || opts.maxTokens || 4096;
+    if (p === "anthropic" && maxTokens > 21333) return aiStream(cfg, model, system, user, opts);
     user = aiPromptContent(p, user);
-    var maxTokens = opts.maxTokens || 4096;
     var temp = opts.temperature != null ? opts.temperature : 0.7;
     var res, j;
     if (p === "anthropic") {
       res = await aiTextRequest(cfg, model, base + "/messages", { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, { model: model, max_tokens: maxTokens, temperature: temp, system: system, messages: [{ role: "user", content: user }] }, opts.signal);
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return { ok: false, status: res.status, err: (j && j.error && j.error.message) || ("HTTP " + res.status) };
-      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(aiUsageFromJson(p, j));
-      return { ok: true, text: ((((j && j.content) || [])).map(function (b) { return b.text || ""; }).join("")).trim() };
+      (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out); })(j && aiUsageFromJson(p, j));
+      return aiAnthropicResult(j, res.status);
     }
     if (p === "gemini") {
       var url = base + "/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(key);
@@ -14995,7 +15011,7 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
   async function aiStream(cfg, model, system, user, opts, onDelta) {
     var p = cfg.provider, key = cfg.key, base = cfg.base;
     user = aiPromptContent(p, user);
-    var maxTokens = opts.maxTokens || 4096, temp = opts.temperature != null ? opts.temperature : 0.7;
+    var maxTokens = cfg.routingMaxTokens || opts.maxTokens || 4096, temp = opts.temperature != null ? opts.temperature : 0.7;
     var url, headers, body;
     if (p === "anthropic") {
       url = base + "/messages";
@@ -15013,26 +15029,31 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
       if (p === "openai" && cfg.routingModel?.reasoning === true) { delete body.temperature; delete body.max_tokens; body.max_completion_tokens = maxTokens; }
       if (opts.json) body.response_format = { type: "json_object" };
     }
-    var full = "", uIn = 0, uOut = 0, uSet = false;
+    var full = "", uIn = 0, uOut = 0, uSet = false, stopReason = null, messageStopped = false, thinkingTokens;
     try {
       var res = await aiTextRequest(cfg, model, url, headers, body, opts.signal);
       if (!res.ok || !res.body) { var je = await res.json().catch(function () { return null; }); return { ok: false, status: res.status, err: (je && je.error && je.error.message) || ("HTTP " + res.status) }; }
       function push(t) { if (t) { full += t; try { onDelta && onDelta(full, t); } catch (e) {} } }
       if (/application\/json/i.test(res.headers.get("content-type") || "")) {
-        var plain = await res.json(), usage = aiUsageFromJson(p, plain);
+        var plain = await res.json().catch(() => null);
+        if (!plain || typeof plain !== "object") return { ok: false, status: res.status, failure: "invalid-response", err: "The service returned an unreadable AI response. No draft was applied." };
+        var usage = aiUsageFromJson(p, plain);
         if (plain.error) return { ok: false, status: res.status, err: plain.error.message || "The selected model rejected the request" };
-        if (p === "anthropic") push((plain.content || []).map(part => part.text || "").join(""));
-        else if (p === "gemini") push((plain.candidates?.[0]?.content?.parts || []).map(part => part.text || "").join(""));
-        else push(plain.choices?.[0]?.message?.content || "");
         if (usage) aiUsageRecord(p, model, usage.in, usage.out);
+        if (p === "anthropic") {
+          const result = aiAnthropicResult(plain, res.status);
+          if (result.ok) push(result.text);
+          return result;
+        }
+        if (p === "gemini") push((plain.candidates?.[0]?.content?.parts || []).map(part => part.text || "").join(""));
+        else push(plain.choices?.[0]?.message?.content || "");
         return { ok: !!full.trim(), text: full.trim(), err: full.trim() ? undefined : "The model returned no usable output" };
       }
       var reader = res.body.getReader(), dec = new TextDecoder(), buf = "";
       for (; ;) {
         var chunk = await reader.read();
-        if (chunk.done) break;
-        buf += dec.decode(chunk.value, { stream: true });
-        var lines = buf.split("\n"); buf = lines.pop();
+        buf += chunk.done ? dec.decode() : dec.decode(chunk.value, { stream: true });
+        var lines = buf.split("\n"); buf = chunk.done ? "" : lines.pop();
         for (var li = 0; li < lines.length; li++) {
           var line = lines[li].trim();
           if (!line || line.indexOf("data:") !== 0) continue;
@@ -15040,12 +15061,25 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
           if (!payload || payload === "[DONE]") continue;
           var ev; try { ev = JSON.parse(payload); } catch (e) { continue; }
           if (ev.error || ev.type === "error") { await reader.cancel(); throw new Error(ev.error?.message || "The model stream failed"); }
-          if (p === "anthropic") { if (ev.type === "content_block_delta" && ev.delta && typeof ev.delta.text === "string") push(ev.delta.text); if (ev.type === "message_start" && ev.message && ev.message.usage) { uIn = +ev.message.usage.input_tokens || uIn; uSet = true; } if (ev.usage && ev.usage.output_tokens != null) { uOut = +ev.usage.output_tokens || uOut; uSet = true; } }
+          if (p === "anthropic") {
+            if (ev.type === "content_block_start" && ev.content_block?.type === "text") push(ev.content_block.text);
+            if (ev.type === "content_block_delta" && ev.delta && (!ev.delta.type || ev.delta.type === "text_delta") && typeof ev.delta.text === "string") push(ev.delta.text);
+            if (ev.type === "message_start" && ev.message?.usage) { uIn = +ev.message.usage.input_tokens || uIn; uSet = true; }
+            if (ev.type === "message_delta" && ev.delta?.stop_reason) stopReason = ev.delta.stop_reason;
+            if (ev.type === "message_stop") messageStopped = true;
+            if (ev.usage && ev.usage.output_tokens != null) { uOut = +ev.usage.output_tokens || uOut; thinkingTokens = ev.usage.output_tokens_details?.thinking_tokens; uSet = true; }
+          }
           else if (p === "gemini") { var gp = ev.candidates && ev.candidates[0] && ev.candidates[0].content && ev.candidates[0].content.parts; if (gp) for (var gi = 0; gi < gp.length; gi++) if (gp[gi] && typeof gp[gi].text === "string") push(gp[gi].text); if (ev.usageMetadata) { uIn = +ev.usageMetadata.promptTokenCount || uIn; uOut = (+ev.usageMetadata.candidatesTokenCount || 0) + (+ev.usageMetadata.thoughtsTokenCount || 0) || uOut; uSet = true; } }
           else { var d = ev.choices && ev.choices[0] && ev.choices[0].delta; if (d && typeof d.content === "string") push(d.content); if (ev.usage) { uIn = +ev.usage.prompt_tokens || uIn; uOut = +ev.usage.completion_tokens || uOut; uSet = true; } }
         }
+        if (chunk.done) break;
       }
       if (uSet) aiUsageRecord(p, model, uIn, uOut);
+      if (p === "anthropic") {
+        if (!messageStopped && !stopReason) return { ok: false, status: res.status, failure: "incomplete-stream", emitted: !!full, err: "The model connection ended before the answer was complete. No draft was applied." };
+        return aiAnthropicResult({ content: [{ type: "text", text: full }], stop_reason: stopReason,
+          usage: uSet ? { output_tokens: uOut, output_tokens_details: { thinking_tokens: thinkingTokens } } : undefined }, res.status);
+      }
       return { ok: true, text: full.trim() };
     } catch (e) { return { ok: false, err: e.message || String(e), emitted: full.length > 0 }; }
   }
@@ -18247,7 +18281,7 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
     if (aiMode() === "cf" && AI_PROXY_PROVIDERS.indexOf(cfg.provider) !== -1 && !aiSess()) throw new Error("Your Cloudflare AI session has expired. Reopen Studio to restore it.");
     if (!cfg.key) throw new Error("Your Studio AI configuration is not available on this browser origin.");
     return draftComposition(catalog, brief, function (prompt, signal) {
-      return aiText(cfg, prompt.system, prompt.user, { task: "creative", json: true, maxTokens: 12000, temperature: 0.3, signal: signal, deckAuthoring: true,
+      return aiText(cfg, prompt.system, prompt.user, { task: "creative", json: true, maxTokens: 12000, reasoningTokens: 12000, temperature: 0.3, signal: signal, deckAuthoring: true,
         validate: text => parseCompositionResponse(text, catalog), onRoute: options?.onRoute });
     }, options && options.signal);
   } };

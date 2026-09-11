@@ -133,6 +133,100 @@ test("temperature compatibility preserves OpenAI-compatible and Gemini request f
   }
 });
 
+test("Anthropic reasoning-only exhaustion reports its stop reason without exposing reasoning or retrying", async () => {
+  let calls = 0;
+  const usage = [];
+  const adapters = await textAdapters(async () => {
+    calls++;
+    return Response.json({ type: "message", role: "assistant", content: [{ type: "thinking", thinking: "PRIVATE REASONING", signature: "PRIVATE SIGNATURE" }], stop_reason: "max_tokens", usage: { input_tokens: 200, output_tokens: 12000 } });
+  }, usage);
+  const result = await adapters.aiChatOnce({ provider: "anthropic", key: "synthetic", base: "https://provider.test" }, "discovered-reasoning-model", "System", "Case study", { maxTokens: 12000, json: true, deckAuthoring: true });
+  assert.equal(result.ok, false);
+  assert.equal(result.stopReason, "max_tokens");
+  assert.equal(result.failure, "output-limit");
+  assert.match(result.err, /output limit.*before.*(?:answer|text)/i);
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE REASONING|PRIVATE SIGNATURE/);
+  assert.equal(calls, 1);
+  assert.deepEqual(usage, [["anthropic", "discovered-reasoning-model", 200, 12000]]);
+});
+
+test("long Anthropic deck requests stream through hidden reasoning to the complete final answer", async () => {
+  const requests = [], usage = [], encoder = new TextEncoder();
+  const events = [
+    { type: "message_start", message: { usage: { input_tokens: 200 } } },
+    { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "PRIVATE REASONING" } },
+    { type: "content_block_delta", index: 0, delta: { type: "signature_delta", signature: "PRIVATE SIGNATURE" } },
+    { type: "content_block_start", index: 1, content_block: { type: "text", text: "A " } },
+    { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: "complete deck" } },
+    { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 12500, output_tokens_details: { thinking_tokens: 11000 } } },
+    { type: "message_stop" }
+  ];
+  const payload = events.map(event => `data: ${JSON.stringify(event)}`).join("\r\n\r\n");
+  const adapters = await textAdapters(async (url, options) => {
+    requests.push(JSON.parse(options.body));
+    return new Response(new ReadableStream({ start(controller) { for (let offset = 0; offset < payload.length; offset += 19) controller.enqueue(encoder.encode(payload.slice(offset, offset + 19))); controller.close(); } }), { headers: { "content-type": "text/event-stream" } });
+  }, usage);
+  const result = await adapters.aiChatOnce({ provider: "anthropic", key: "synthetic", base: "https://provider.test", routingMaxTokens: 24000 }, "arbitrary-discovered-model", "System", "Case study", { maxTokens: 12000, json: true, deckAuthoring: true });
+  assert.equal(result.ok, true, result.err);
+  assert.equal(result.text, "A complete deck");
+  assert.equal(result.stopReason, "end_turn");
+  assert.equal(result.outputTokens, 12500);
+  assert.equal(result.thinkingTokens, 11000);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].stream, true);
+  assert.equal(requests[0].max_tokens, 24000);
+  assert.equal(requests[0].thinking, undefined, "Do not disable or expose provider reasoning");
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE REASONING|PRIVATE SIGNATURE/);
+  assert.deepEqual(usage, [["anthropic", "arbitrary-discovered-model", 200, 12500]]);
+});
+
+test("Anthropic stop reasons and malformed responses never become usable drafts", async () => {
+  for (const [body, failure] of [
+    [{ content: [{ type: "text", text: '{"partial":true}' }], stop_reason: "max_tokens" }, "output-limit"],
+    [{ content: [], stop_reason: "model_context_window_exceeded" }, "context-limit"],
+    [{ content: [], stop_reason: "refusal" }, "refusal"],
+    [{ content: [], stop_reason: "pause_turn" }, "incomplete-response"],
+    [{ content: [], stop_reason: "end_turn" }, "empty-output"],
+    [{ unexpected: "PRIVATE RESPONSE" }, "invalid-response"]
+  ]) {
+    let calls = 0;
+    const adapters = await textAdapters(async () => { calls++; return Response.json(body); });
+    for (const operation of ["aiChatOnce", "aiStream"]) {
+      const result = await adapters[operation]({ provider: "anthropic", key: "synthetic", base: "https://provider.test" }, "discovered-model", "System", "Case", { maxTokens: 12000 }, () => { throw new Error("Incomplete output must not be displayed"); });
+      assert.equal(result.ok, false);
+      assert.equal(result.failure, failure);
+      assert.doesNotMatch(JSON.stringify(result), /PRIVATE RESPONSE|partial/);
+    }
+    assert.equal(calls, 2, "Exactly one request per operation");
+  }
+});
+
+test("Anthropic stream exhaustion and early EOF are failures, not empty or partial success", async () => {
+  for (const reason of ["max_tokens", null]) {
+    const usage = [], deltas = [];
+    const events = [{ type: "message_start", message: { usage: { input_tokens: 10 } } }, { type: "content_block_delta", delta: { type: "thinking_delta", thinking: "PRIVATE REASONING" } }];
+    if (reason) events.push({ type: "message_delta", delta: { stop_reason: reason }, usage: { output_tokens: 24000, output_tokens_details: { thinking_tokens: 24000 } } });
+    const adapters = await textAdapters(async () => new Response(events.map(event => `data: ${JSON.stringify(event)}`).join("\n\n"), { headers: { "content-type": "text/event-stream" } }), usage);
+    const result = await adapters.aiStream({ provider: "anthropic", key: "synthetic", base: "https://provider.test" }, "discovered-model", "System", "Case", { maxTokens: 24000 }, text => deltas.push(text));
+    assert.equal(result.ok, false);
+    assert.equal(result.failure, reason ? "output-limit" : "incomplete-stream");
+    assert.deepEqual(deltas, []);
+    assert.doesNotMatch(JSON.stringify(result), /PRIVATE REASONING/);
+    if (reason) assert.deepEqual(usage, [["anthropic", "discovered-model", 10, 24000]]);
+  }
+});
+
+test("malformed Anthropic JSON never exposes response fragments in errors", async () => {
+  const adapters = await textAdapters(async () => new Response('{"thinking":"PRIVATE RESPONSE FRAGMENT",', { headers: { "content-type": "application/json" } }));
+  for (const operation of ["aiChatOnce", "aiStream"]) {
+    const result = await adapters[operation]({ provider: "anthropic", key: "synthetic", base: "https://provider.test" }, "discovered-model", "System", "Case", { maxTokens: 12000 });
+    assert.equal(result.ok, false);
+    assert.equal(result.failure, "invalid-response");
+    assert.match(result.err, /unreadable/);
+    assert.doesNotMatch(JSON.stringify(result), /PRIVATE RESPONSE FRAGMENT/);
+  }
+});
+
 test("temperature compatibility never retries unrelated errors or loops on repeated rejection", async () => {
   for (const [status, message, expectedCalls] of [
     [401, "Invalid API key", 1], [403, "Model access denied", 1], [429, "Rate limit exceeded", 1],
@@ -180,7 +274,7 @@ test("streamed AI retries temperature only before output and records successful 
     return new Response([
       { type: "message_start", message: { usage: { input_tokens: 10 } } },
       { type: "content_block_delta", delta: { text: "Generated deck" } },
-      { type: "message_delta", usage: { output_tokens: 20 } }
+      { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 20 } }
     ].map(event => `data: ${JSON.stringify(event)}\n\n`).join(""), { headers: { "Content-Type": "text/event-stream" } });
   }, usage);
   const controller = new AbortController();

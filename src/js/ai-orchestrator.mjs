@@ -41,6 +41,7 @@ export function createAiRoutingStore(indexedDB = globalThis.indexedDB) {
 export function aiFailureKind(result) {
   const status = Number(result?.status), message = String(result?.err || "");
   if (result?.emitted) return "partial-output";
+  if (["output-limit", "context-limit", "refusal", "empty-output", "invalid-response", "incomplete-response", "incomplete-stream"].includes(result?.failure)) return result.failure;
   if (status === 401) return "authentication";
   if (status === 429) return "rate-limit";
   if (status >= 500 || !status) return "service";
@@ -51,7 +52,7 @@ export function aiFailureKind(result) {
 
 function publicChoice(choice, id, scope, fallback, at) {
   return { id, at, scope, task: choice.task, provider: choice.model.provider, modelId: choice.model.id, modelName: choice.model.name,
-    confidence: choice.confidence, reasons: [...choice.reasons], estimatedCost: choice.estimatedCost, fallback, status: "running" };
+    confidence: choice.confidence, reasons: [...choice.reasons], estimatedCost: choice.estimatedCost, outputTokens: choice.outputTokens, fallback, status: "running" };
 }
 
 export function createAiOrchestrator({ catalog = createAiCatalog(), store = createAiRoutingStore(), now = Date.now, randomId = () => crypto.randomUUID() } = {}) {
@@ -142,7 +143,7 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
         notify(decision);
         const start = now();
         let result;
-        try { result = await invoke({ ...selected.endpoints.get(choice.scope), routingModel: choice.model }, choice.model.id, decision); }
+        try { result = await invoke({ ...selected.endpoints.get(choice.scope), routingModel: choice.model, routingMaxTokens: choice.outputTokens || undefined }, choice.model.id, decision); }
         catch (error) {
           decision.status = options.signal?.aborted ? "cancelled" : "error";
           await record(decision).catch(() => {}); notify(decision); throw error;
@@ -158,9 +159,14 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
         if (options.signal?.aborted) { decision.status = "cancelled"; await record(decision).catch(() => {}); notify(decision); options.signal.throwIfAborted(); }
         const kind = success ? "success" : result?.validationFailed ? "invalid" : aiFailureKind(result);
         decision.status = success ? "success" : "error"; decision.failure = success ? undefined : kind;
+        if (["end_turn", "max_tokens", "model_context_window_exceeded", "refusal", "stop_sequence", "pause_turn", "tool_use", "unspecified", "unknown"].includes(result?.stopReason)) decision.stopReason = result.stopReason;
+        if (Number.isSafeInteger(result?.outputTokens) && result.outputTokens >= 0) decision.usedOutputTokens = result.outputTokens;
+        if (Number.isSafeInteger(result?.thinkingTokens) && result.thinkingTokens >= 0 && result.thinkingTokens <= result.outputTokens) decision.thinkingTokens = result.thinkingTokens;
+        if (!success && decision.stopReason) decision.reasons.push("Provider stop: " + decision.stopReason + (decision.usedOutputTokens == null ? "" : "; " + decision.usedOutputTokens.toLocaleString("en-US") + " output tokens used"));
         try {
           await record(decision, { id: randomId(), at: now(), scope: choice.scope, task, provider: choice.model.provider, modelId: choice.model.id,
-            status: kind, requirements: options.requirements || "", latencyMs: Math.max(0, now() - start), decisionId: decision.id });
+            status: kind, requirements: options.requirements || "", latencyMs: Math.max(0, now() - start), decisionId: decision.id,
+            stopReason: decision.stopReason, outputTokens: decision.usedOutputTokens, thinkingTokens: decision.thinkingTokens });
         } catch (failure) {
           decision.historySaved = false;
           decision.reasons.push("Routing history could not be saved; this result cannot receive a stored rating");

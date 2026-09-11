@@ -69,10 +69,11 @@ test("the shared publish builder validates native references before preparing ow
   assert.match(source, /prepareStudioPublication\(snapshot/);
 });
 
-for (const width of [1440, 390]) test("Draft entire deck with AI recovers from deprecated temperature and applies the proposal at " + width + "px", { timeout: 60000 }, async () => {
+for (const { width, exhausted } of [{ width: 1440, exhausted: false }, { width: 390, exhausted: false }, { width: 1440, exhausted: true }]) test("Draft entire deck with AI recovers from deprecated temperature and applies the proposal at " + width + "px" + (exhausted ? " after an explicit output-limit retry" : ""), { timeout: 60000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, hasTouch: width < 600, isMobile: width < 600 });
   const requests = [], errors = [];
+  let exhaustResponse = exhausted;
   const published = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
   published.work = [{ id: "temperature-case", title: "A clearer product flow", client: "Studio test", study: { blocks: [{ type: "text", heading: "A clearer next step", body: "The redesigned flow places the next action beside the relevant content." }] } }];
   page.on("pageerror", error => errors.push(error.message));
@@ -87,13 +88,21 @@ for (const width of [1440, 390]) test("Draft entire deck with AI recovers from d
       if (url.pathname.endsWith("/content.json")) return route.fulfill({ contentType: "application/json", body: JSON.stringify(published) });
       if (url.hostname === "models.dev") return route.fulfill({ contentType: "application/json", body: "{}" });
       if (url.hostname === "api.anthropic.com") {
-        if (url.pathname.endsWith("/models")) return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: [{ id: "studio-creative-a", output_modalities: ["text"], max_input_tokens: 100000, max_tokens: 16000, capabilities: { thinking: { supported: true } } }, { id: "studio-creative-b", output_modalities: ["text"], max_input_tokens: 100000, max_tokens: 16000 }] }) });
+        if (url.pathname.endsWith("/models")) return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: [{ id: "studio-creative-a", output_modalities: ["text"], max_input_tokens: 100000, max_tokens: 128000, capabilities: { thinking: { supported: true } } }, { id: "studio-creative-b", output_modalities: ["text"], max_input_tokens: 100000, max_tokens: 16000 }] }) });
         if (url.pathname.endsWith("/messages")) {
           const body = request.postDataJSON(); requests.push(body);
           if (requests.length === 1) return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: { type: "invalid_request_error", message: "`temperature` is deprecated for this model." } }) });
           const source = JSON.parse(body.messages[0].content).sources[0];
           const proposal = { version: 2, title: "A grounded deck", slides: [{ id: "opening", kind: "authored", layout: "statement", sourceIds: [source.sourceId], headline: "A clearer next step", kicker: "DESIGN DECISION", body: "Place the next action beside the relevant content.", notes: "Discuss the redesigned flow.", components: [] }] };
-          return route.fulfill({ contentType: "application/json", body: JSON.stringify({ content: [{ type: "text", text: JSON.stringify(proposal) }], usage: { input_tokens: 10, output_tokens: 20 } }) });
+          const events = [
+            { type: "message_start", message: { usage: { input_tokens: 200 } } },
+            { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } },
+            { type: "content_block_delta", index: 0, delta: { type: "signature_delta", signature: "PRIVATE REASONING SIGNATURE" } },
+            ...(exhaustResponse ? [] : [{ type: "content_block_start", index: 1, content_block: { type: "text", text: "" } }, { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: JSON.stringify(proposal) } }]),
+            { type: "message_delta", delta: { stop_reason: exhaustResponse ? "max_tokens" : "end_turn" }, usage: { output_tokens: exhaustResponse ? 24000 : 12500, output_tokens_details: { thinking_tokens: exhaustResponse ? 24000 : 11000 } } },
+            { type: "message_stop" }
+          ];
+          return route.fulfill({ contentType: "text/event-stream", body: events.map(event => "data: " + JSON.stringify(event)).join("\n\n") });
         }
         return route.abort();
       }
@@ -110,11 +119,24 @@ for (const width of [1440, 390]) test("Draft entire deck with AI recovers from d
     await page.locator('[data-act="study-slides"][data-index="0"]').click();
     await page.locator(".merge-empty-actions").waitFor();
     await page.getByRole("button", { name: "Draft entire deck with AI", exact: true }).click();
+    if (exhausted) {
+      await page.locator('.merge-ai [role="alert"]').filter({ hasText: "output limit before returning answer text" }).waitFor();
+      assert.equal(requests.length, 2, "Do not retry a charged response automatically");
+      const failed = await page.evaluate(() => window.__RKStudio.aiRouting.state());
+      assert.equal(failed.decisions.at(-1).failure, "output-limit");
+      assert.equal(failed.decisions.at(-1).stopReason, "max_tokens");
+      assert.equal(failed.decisions.at(-1).usedOutputTokens, 24000);
+      assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].study.nativeDeck?.slideCount || 0), 0);
+      assert.equal(await page.getByRole("button", { name: "Append slides", exact: true }).count(), 0);
+      exhaustResponse = false;
+      await page.getByRole("button", { name: "Retry", exact: true }).click();
+    }
     await page.locator(".merge-ai h3").waitFor();
     assert.equal(await page.locator(".merge-ai h3").innerText(), "A grounded deck");
     assert.equal(await page.locator('.merge-ai [role="alert"]').count(), 0);
-    assert.equal(requests.length, 2);
+    assert.equal(requests.length, exhausted ? 3 : 2);
     assert.ok(requests.every(request => request.model === "studio-creative-a"), "Keep the metadata-selected model rather than falling back to another one");
+    assert.ok(requests.every(request => request.stream === true && request.max_tokens === 24000), "Stream the allowance that includes reasoning headroom");
     assert.equal(requests[0].temperature, 0.3);
     const expected = structuredClone(requests[0]); delete expected.temperature;
     assert.deepEqual(requests[1], expected);
@@ -130,8 +152,11 @@ for (const width of [1440, 390]) test("Draft entire deck with AI recovers from d
     await page.screenshot({ path: join(tmpdir(), "rk-ai-proposal-" + width + ".png") });
     const routing = await page.evaluate(() => window.__RKStudio.aiRouting.state());
     assert.equal(routing.decisions.at(-1).task, "creative");
+    assert.equal(routing.decisions.at(-1).stopReason, "end_turn");
+    assert.equal(routing.decisions.at(-1).usedOutputTokens, 12500);
+    assert.equal(routing.decisions.at(-1).thinkingTokens, 11000);
     assert.equal(routing.observations.find(item => item.feedbackFor)?.quality, 0.25);
-    assert.doesNotMatch(JSON.stringify(routing), /synthetic-test-key|Place the next action|Discuss the redesigned flow/);
+    assert.doesNotMatch(JSON.stringify(routing), /synthetic-test-key|Place the next action|Discuss the redesigned flow|PRIVATE REASONING SIGNATURE/);
     await page.getByRole("button", { name: "Append slides", exact: true }).click();
     await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.nativeDeck?.slideCount === 1);
     await page.locator("[data-l2-back]").click();

@@ -131,6 +131,17 @@ does not trigger model hopping. Model unavailability/unsupported requests allow 
 most three model attempts within the same estimated request limit. The existing
 same-model deprecated-temperature compatibility retry is retained.
 
+Deck drafting allows 12,000 answer tokens plus up to 12,000 additional output
+tokens for candidates with declared reasoning support. The extra allowance is
+capped by the model's output/context limits and included in the request cost
+check. It provides headroom, not a guaranteed split between reasoning and text.
+Long Anthropic requests (over 21,333 output tokens) stream to completion before
+the proposal is validated. Reasoning/signatures are never used as slide text.
+Token exhaustion, context exhaustion, refusals, unreadable responses and early
+stream termination report their actual failure instead of a generic blank result.
+Safe stop reasons and token counts are recorded privately, without response text.
+A charged incomplete response is not retried automatically; Retry is explicit.
+
 Newcomer tests default to disabled, with a zero daily budget. Manual evaluation
 requires cost confirmation; automatic evaluation requires a separate paid-test
 opt-in and runs after a supported task succeeds, at most once per task every
