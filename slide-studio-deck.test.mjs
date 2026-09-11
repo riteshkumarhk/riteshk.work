@@ -216,7 +216,12 @@ test("AI routing settings discover models, require spending consent and keep evi
     await page.locator("[data-opensettings]").click();
     await page.locator('[data-act="settings-cat"][data-cat="ai"]').click();
     const panel = page.locator("[data-ai-routing]");
+    assert.equal(await panel.count(), 0, "The AI overview must not duplicate routing settings");
+    assert.equal(await page.locator("[data-aiuse-reset]").count(), 1, "Token usage stays on the overview");
+    assert.equal(discoveries.length, 0, "The overview must not mount a hidden discovery panel");
+    await page.getByRole("button", { name: "Open AI settings", exact: true }).click();
     await panel.getByText(/2 accessible models/).waitFor();
+    assert.equal(await panel.count(), 1, "Routing has one home inside the full AI settings");
     assert.equal(requests.length, 0);
     assert.ok(discoveries.every(provider => provider === "api.anthropic.com"));
     assert.equal(await panel.locator('[data-route-policy="autoEvaluate"]').isChecked(), false);
@@ -306,6 +311,10 @@ test("AI routing settings discover models, require spending consent and keep evi
       assert.ok(Math.abs((await page.evaluate(() => window.__RKStudio.aiRouting.state())).evaluationReserved - saved.evaluationReserved - 0.01) < 1e-9);
     } finally { await other.close(); }
     const expectedPolicy = (await page.evaluate(() => window.__RKStudio.aiRouting.state())).policy;
+    await page.locator('[data-act="set-back"]').click();
+    assert.equal(await panel.count(), 0);
+    assert.equal(await page.locator("[data-aiuse-reset]").count(), 1);
+    assert.deepEqual((await page.evaluate(() => window.__RKStudio.aiRouting.state())).policy, expectedPolicy, "Back must not reset routing settings");
     await page.reload();
     await page.waitForFunction(() => typeof window.__rkDevStudio === "function" && !!window.RK?.data);
     await page.evaluate(() => window.__rkDevStudio());
@@ -314,7 +323,10 @@ test("AI routing settings discover models, require spending consent and keep evi
     assert.deepEqual((await page.evaluate(() => window.__RKStudio.aiRouting.state())).policy, expectedPolicy);
     await page.locator("[data-opensettings]").click();
     await page.locator('[data-act="settings-cat"][data-cat="ai"]').click();
+    assert.equal(await panel.count(), 0);
+    await page.getByRole("button", { name: "Open AI settings", exact: true }).click();
     await panel.getByText(/3 accessible models/).waitFor();
+    assert.equal(await panel.count(), 1);
     await page.evaluate(() => document.fonts.ready);
     assert.equal(await panel.evaluate(element => {
       const style = getComputedStyle(element), family = style.getPropertyValue("--sans").split(",")[0].replace(/["']/g, "").trim();

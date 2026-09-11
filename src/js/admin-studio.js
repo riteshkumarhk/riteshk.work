@@ -10713,7 +10713,7 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
         '<div class="rkqg__row"><button class="btn btn--ghost" data-act="open-adminkey">' + LOCK_SVG + ' Change admin key</button></div></div>';
     }
     if (cat === "publish") return launchPanelHtml("Publishing", "Connect GitHub, replace the token, or publish manually.", "open-publish", "Open publishing settings") + autopubPanelHtml();
-    if (cat === "ai") return launchPanelHtml("AI settings", "Connect OpenAI, Gemini or Claude for the Prepare tools \u2014 keys stay in this browser or roam via Cloudflare.", "open-ai", "Open AI settings") + '<section data-ai-routing></section>' + aiUsagePanel();
+    if (cat === "ai") return launchPanelHtml("AI settings", "Connect OpenAI, Gemini or Claude for the Prepare tools \u2014 keys stay in this browser or roam via Cloudflare.", "open-ai", "Open AI settings") + aiUsagePanel();
     return "";
   }
   function autopubPanelHtml() {
@@ -14596,7 +14596,6 @@ import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
     "</div>";
   }
   function aiWireUsage(container, repaint) {
-    aiWireRouting(container);
     var rb = container.querySelector("[data-aiuse-reset]");
     if (!rb) return;
     rb.addEventListener("click", function () {
