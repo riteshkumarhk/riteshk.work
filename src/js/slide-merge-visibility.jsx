@@ -8,7 +8,7 @@ import "../../css/slide-merge-visibility.css";
 export function VisibilityMenu({ deck, disabled, onChange, publication = null }) {
   const isPublic = deckVisibility(deck) === "public";
   const Icon = publication ? isPublic ? LockOpen : Lock : isPublic ? Globe : LockKeyhole;
-  return <div className="merge-visibility">
+  return <div className="merge-visibility" data-visibility={isPublic ? "public" : "private"}>
     <ToolMenu label={`Slideshow visibility: ${isPublic ? "public" : "owner-only"} draft`} icon={<Icon size={18} strokeWidth={1.75} aria-hidden="true" />} disabled={disabled} showChevron={false}>
       <div className="merge-visibility-heading">Draft visibility</div>
       <label className="merge-view-option"><input type="checkbox" checked={isPublic} disabled={disabled} onChange={event => onChange(event.target.checked)} />Public slideshow</label>

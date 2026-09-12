@@ -752,7 +752,22 @@ for (const width of [1440, 390]) test("shared status bar keeps independent case-
     await page.locator('[data-l2tab="slides"]').click();
     await page.locator('.merge-empty-actions').waitFor();
     const slideLock = page.locator('[data-native-slide-status] .merge-visibility summary');
+    const assertSlideIcon = async locked => {
+      const actual = await slideLock.evaluate(element => {
+        const svg = element.querySelector('svg'), body = svg.querySelector('rect');
+        return {color:getComputedStyle(svg).color, fill:getComputedStyle(body).fill, accent:getComputedStyle(element).getPropertyValue('--accent').trim(), neutral:getComputedStyle(element).color};
+      });
+      if (locked) {
+        const accent = await page.evaluate(value => { const probe = document.createElement('span'); probe.style.color = value; document.body.append(probe); const color = getComputedStyle(probe).color; probe.remove(); return color; }, actual.accent);
+        assert.equal(actual.color, accent);
+        assert.equal(actual.fill, accent);
+      } else {
+        assert.equal(actual.color, actual.neutral);
+        assert.equal(actual.fill, 'none');
+      }
+    };
     await slideLock.waitFor();
+    await assertSlideIcon(true);
     assert.match(await slideLock.getAttribute("aria-label"), /owner-only draft/);
     assert.equal(await slideLock.locator(".lucide-lock").count(), 1);
     assert.deepEqual(await footerStyle(), baseline);
@@ -765,15 +780,19 @@ for (const width of [1440, 390]) test("shared status bar keeps independent case-
     await page.getByRole("checkbox", {name:"Public slideshow", exact:true}).click();
     await page.getByRole("button", {name:"Cancel", exact:true}).click();
     assert.equal(await slideLock.locator(".lucide-lock").count(), 1);
+    await assertSlideIcon(true);
     await slideLock.click();
     await page.getByRole("checkbox", {name:"Public slideshow", exact:true}).click();
     await page.getByRole("button", {name:"Set public draft", exact:true}).click();
     await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.slidesPublic === true);
     assert.equal(await slideLock.locator(".lucide-lock-open").count(), 1);
+    await assertSlideIcon(false);
+    await page.screenshot({path:join(tmpdir(), `rk-slides-unlocked-${width}.png`)});
     assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].hidden), true);
     await slideLock.click();
     await page.getByRole("checkbox", {name:"Public slideshow", exact:true}).click();
     await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.slidesPublic === false);
+    await assertSlideIcon(true);
     await page.keyboard.press("Escape");
     await page.locator('[data-act="logs-rec"]').click();
     assert.equal(await page.locator('[data-act="logs-rec"]').getAttribute("aria-pressed"), "false");

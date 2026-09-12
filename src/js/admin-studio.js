@@ -7006,12 +7006,12 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
     nativeSlideSession = session;
     root.classList.add("is-native-slides");
     const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
-    const styles = ["/studio/slide-lab/assets/editor.css?v=1.5", "/css/slide-studio.css?v=1.4"].map(href => new Promise((resolve, reject) => {
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.6", "/css/slide-studio.css?v=1.4"].map(href => new Promise((resolve, reject) => {
       const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.9";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.10";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
