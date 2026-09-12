@@ -21,6 +21,29 @@ Focused regression check: `node --test studio-status.test.mjs`.
 Build: `npm run build`. Both Studio entry points version the shared admin CSS;
 the Studio JavaScript continues to use its dynamic cache version.
 
+## AI Counter
+
+The footer uses a four-fold continuous ribbon at 18px, with open oval petals
+and an unfilled 1.15px stroke. Idle keeps the folded outline still. Thinking unfolds to a circle and
+back over six seconds; streaming preserves that same morph and adds a
+three-second eased rotation. Reduced motion keeps the ribbon static, and
+completion or cancellation returns it to rest. The SVG includes the resting
+path as a fallback when CSS path morphing is unavailable.
+
+Gold and neutral stroke colors blend over 400ms in both directions, without
+changing opacity. Reduced motion disables this transition as well as the morph
+and rotation.
+
+This mark is specific to the counter; other Studio sparkle icons are unchanged.
+Token accounting, activity, provider routing and cancellation use the existing
+session controller. The focused browser test checks actual path geometry,
+four folds, a circular endpoint, continuous state transitions, stroke bounds,
+desktop/phone layout and the full drawer workflow:
+
+```powershell
+node --test --test-name-pattern="AI session drawer" slide-studio-deck.test.mjs
+```
+
 ## Connected Prepare
 
 The owner approved releasing this checkpoint after the shared preview browser

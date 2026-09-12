@@ -18381,6 +18381,27 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
   }
 
   /* ---------- shell / open / exit ---------- */
+  function aiCounterIcon() {
+    const ribbonPath = depth => {
+      const radius = 9.5 - depth, segments = 96, step = Math.PI * 2 / segments;
+      const point = angle => ({
+        horizontal:12 + radius * Math.sin(angle) - depth * Math.sin(3 * angle),
+        vertical:12 - radius * Math.cos(angle) - depth * Math.cos(3 * angle),
+        tangentHorizontal:radius * Math.cos(angle) - 3 * depth * Math.cos(3 * angle),
+        tangentVertical:radius * Math.sin(angle) + 3 * depth * Math.sin(3 * angle)
+      });
+      const number = value => value.toFixed(4), start = point(0);
+      let path = 'M' + number(start.horizontal) + ' ' + number(start.vertical);
+      for (let index = 0; index < segments; index++) {
+        const from = point(index * step), to = point((index + 1) * step);
+        path += 'C' + [from.horizontal + from.tangentHorizontal * step / 3,from.vertical + from.tangentVertical * step / 3,to.horizontal - to.tangentHorizontal * step / 3,to.vertical - to.tangentVertical * step / 3,to.horizontal,to.vertical].map(number).join(' ');
+      }
+      return path + 'Z';
+    };
+    const rest = ribbonPath(4.1), circle = ribbonPath(0);
+    return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><g class="adm__ai-ribbon-turn"><path d="${rest}" style="--adm-ai-rest:path('${rest}');--adm-ai-circle:path('${circle}')"/></g></svg>`;
+  }
+
   function buildShell() {
     root = document.createElement("div");
     root.className = "adm";
@@ -18454,7 +18475,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
         '<div data-case-visibility hidden></div>' +
         '<div data-native-slide-status hidden></div>' +
         '<button class="btn btn--ghost adm__logs-btn" data-act="logs-rec" type="button" aria-pressed="false" aria-label="Record activity log" title="Record a log of your taps &amp; jumps to share"><span class="adm__logs-dot"></span><span class="adm__logs-rec-tx" hidden>REC</span></button>' +
-        '<button class="adm__ai-counter" data-ai-session-toggle data-ai-state="idle" type="button" aria-label="AI activity: 0 tokens this session" aria-expanded="false" aria-controls="studio-ai-activity"><span class="adm__ai-spark" aria-hidden="true">' + IC.spark + '</span><span data-ai-session-count>0 tokens</span></button>' +
+        '<button class="adm__ai-counter" data-ai-session-toggle data-ai-state="idle" type="button" aria-label="AI activity: 0 tokens this session" aria-expanded="false" aria-controls="studio-ai-activity"><span class="adm__ai-spark" aria-hidden="true">' + aiCounterIcon() + '</span><span data-ai-session-count>0 tokens</span></button>' +
       '</footer>' +
       '<div class="adm__settings" hidden><div class="adm__set-sheet">' +
         '<div class="adm__set-head"><h2>Settings</h2><button class="btn btn--ghost adm__set-x" data-act="settings-close" type="button" aria-label="Close settings">' + IC.close + '</button></div>' +

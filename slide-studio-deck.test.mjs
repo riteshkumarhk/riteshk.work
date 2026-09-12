@@ -923,18 +923,68 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
   const assertIdleSparkle = async () => {
     const rest = await page.locator('.adm__ai-spark svg').evaluate(svg => {
       const paths = [...svg.querySelectorAll('path')], style = getComputedStyle(paths[0]);
-      return {outline:style.d, visiblePaths:paths.filter(path => getComputedStyle(path).display !== 'none').length, fill:style.fill, stroke:style.stroke, transform:style.transform, animations:svg.getAnimations({subtree:true}).length};
+      const length = paths[0].getTotalLength(), points = Array.from({length:384},(_,index) => paths[0].getPointAtLength(length * index / 384));
+      const radii = points.map(point => Math.hypot(point.x - 12,point.y - 12)), topPetal = points.filter(point => point.y < 7);
+      const petalWidth = Math.max(...topPetal.map(point => point.x)) - Math.min(...topPetal.map(point => point.x));
+      const folds = radii.filter((radius,index) => radius > radii[(index + 383) % 384] && radius > radii[(index + 1) % 384]).length;
+      return {outline:style.d,folds,petalWidth,visiblePaths:paths.filter(path => getComputedStyle(path).display !== 'none').length,fill:style.fill,stroke:style.stroke,strokeWidth:style.strokeWidth,transform:style.transform,rotation:getComputedStyle(svg.querySelector('.adm__ai-ribbon-turn')).transform,animations:svg.getAnimations({subtree:true}).length};
     });
     assert.equal(rest.visiblePaths, 1);
-    assert.notEqual(rest.fill, 'none');
-    assert.equal(rest.stroke, 'none');
+    assert.equal(rest.folds,4);
+    assert.ok(rest.petalWidth >= 3.35,'Keep the oval petals wide enough to remain open at counter size');
+    assert.equal((rest.outline.match(/M/g) || []).length,1);
+    assert.equal(rest.fill,'none');
+    assert.notEqual(rest.stroke,'none');
+    assert.equal(rest.strokeWidth,'1.15px');
     assert.equal(rest.transform, 'none');
+    assert.equal(rest.rotation,'none');
     assert.equal(rest.animations, 0);
     return rest.outline;
   };
+  const assertRibbonColorFade = async () => {
+    const fades = await page.locator('[data-ai-session-toggle]').evaluate(async trigger => {
+      const icon = trigger.querySelector('.adm__ai-spark'), path = icon.querySelector('path'), initialExpanded = trigger.getAttribute('aria-expanded'), results = [];
+      const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+      for (const expanded of ['false','true']) {
+        trigger.setAttribute('aria-expanded',expanded);
+        getComputedStyle(icon).color;
+        icon.getAnimations().forEach(animation => animation.finish());
+        await frame();
+        const neutral = getComputedStyle(path).stroke;
+        for (const phase of ['working','idle']) {
+          trigger.dataset.aiState = phase;
+          getComputedStyle(icon).color;
+          const fade = icon.getAnimations().find(animation => animation.transitionProperty === 'color');
+          if (!fade) throw new Error('The ribbon must fade its color when entering ' + phase);
+          const duration = fade.effect.getTiming().duration;
+          fade.pause();
+          const colors = [0,.25,.5,.75,1].map(progress => { fade.currentTime = progress * duration; return getComputedStyle(path).stroke; });
+          results.push({expanded,phase,duration,colors,neutral,opacity:getComputedStyle(path).opacity,easing:getComputedStyle(icon).transitionTimingFunction});
+          fade.finish();
+          await frame();
+        }
+      }
+      trigger.setAttribute('aria-expanded',initialExpanded);
+      getComputedStyle(icon).color;
+      icon.getAnimations().forEach(animation => animation.finish());
+      return results;
+    });
+    for (const fade of fades) {
+      assert.equal(fade.duration,400);
+      assert.equal(new Set(fade.colors).size,5,'Gold and neutral need intermediate stroke colors, not an abrupt switch');
+      assert.equal(fade.opacity,'1','Color fading must not blink or fade out the ribbon itself');
+      assert.equal(fade.easing,'cubic-bezier(0.4, 0, 0.6, 1)');
+      assert.equal(fade.phase === 'working' ? fade.colors[0] : fade.colors.at(-1),fade.neutral);
+    }
+    for (const expanded of ['false','true']) {
+      const pair = fades.filter(fade => fade.expanded === expanded);
+      assert.equal(pair[0].colors.at(-1),pair[1].colors[0],'Fade-out must start at the same gold reached by fade-in');
+    }
+  };
   const sampleMorph = () => page.locator('.adm__ai-spark svg').evaluate(svg => {
-    const path = svg.querySelector('path'), animations = svg.getAnimations({subtree:true});
+    const path = svg.querySelector('path'), turn = svg.querySelector('.adm__ai-ribbon-turn'), animations = svg.getAnimations({subtree:true});
     const morph = animations.find(animation => animation.animationName === 'adm-ai-morph');
+    const rotation = animations.find(animation => animation.animationName === 'adm-ai-turn');
     if (!morph) throw new Error('The active AI icon must animate its outline');
     const duration = morph.effect.getTiming().duration;
     animations.forEach(animation => animation.pause());
@@ -942,13 +992,16 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
       animations.forEach(animation => { animation.currentTime = progress * duration; });
       const box = svg.getBoundingClientRect(), counter = svg.closest('button').getBoundingClientRect(), style = getComputedStyle(path);
       const matrix = path.getScreenCTM(), length = path.getTotalLength(), stroke = style.stroke === 'none' ? 0 : parseFloat(style.strokeWidth) * Math.hypot(matrix.a, matrix.b) / 2;
-      const points = Array.from({length:65}, (_, index) => path.getPointAtLength(length * index / 64).matrixTransform(matrix));
-      return {outline:style.d, length, fill:style.fill, stroke:style.stroke, fillRule:style.fillRule, opacity:style.opacity, transform:style.transform, visiblePaths:[...svg.querySelectorAll('path')].filter(element => getComputedStyle(element).display !== 'none').length, icon:[box.width,box.height], counter:[counter.width,counter.height], contained:points.every(point => point.x - stroke >= box.left && point.x + stroke <= box.right && point.y - stroke >= box.top && point.y + stroke <= box.bottom)};
+      const points = Array.from({length:193}, (_, index) => path.getPointAtLength(length * index / 192).matrixTransform(matrix));
+      return {outline:style.d,length,fill:style.fill,stroke:style.stroke,strokeWidth:style.strokeWidth,opacity:style.opacity,transform:style.transform,rotation:getComputedStyle(turn).transform,visiblePaths:[...svg.querySelectorAll('path')].filter(element => getComputedStyle(element).display !== 'none').length,icon:[box.width,box.height],counter:[counter.width,counter.height],contained:points.every(point => point.x - stroke >= box.left && point.x + stroke <= box.right && point.y - stroke >= box.top && point.y + stroke <= box.bottom)};
     });
-    morph.currentTime = duration * .33;
+    morph.currentTime = duration * .5;
+    const length = path.getTotalLength(), radii = Array.from({length:193},(_,index) => { const point = path.getPointAtLength(length * index / 192); return Math.hypot(point.x - 12,point.y - 12); });
+    const circleDeviation = Math.max(...radii) - Math.min(...radii);
+    morph.currentTime = 0;
     const restingPose = getComputedStyle(path).d;
     animations.forEach(animation => animation.play());
-    return {duration,frames,restingPose};
+    return {duration,frames,restingPose,circleDeviation,rotationDuration:rotation?.effect.getTiming().duration || 0,rotationEasing:rotation?.effect.getKeyframes()[0]?.easing};
   });
   try {
     await page.addInitScript(() => {
@@ -975,6 +1028,7 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
     await openIntegratedFixture(page);
     await page.locator('[data-act="study-toggle"][data-index="0"]').click();
     const before = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
+    await assertRibbonColorFade();
     const idleOutline = await assertIdleSparkle();
     await page.locator('[data-ai-session-toggle]').click();
     await page.evaluate(() => { window.__sessionResult = null; window.__RKStudio.improveText('Private input copy', {}).then(text => { window.__sessionResult = text; }, error => { window.__sessionResult = error.message; }); });
@@ -982,10 +1036,13 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
     await page.waitForFunction(() => document.querySelector('[data-ai-session-toggle]').dataset.aiState === 'working');
     await page.waitForFunction(() => document.querySelector('[data-ai-session-count]').textContent === '135 tokens');
     const workingMorph = await sampleMorph();
-    assert.equal(idleOutline, workingMorph.restingPose, 'Rest must exactly match the single diamond pose of the animation');
+    assert.equal(idleOutline,workingMorph.restingPose,'Rest must exactly match the approved four-fold ribbon');
+    assert.equal(workingMorph.duration,6000);
+    assert.equal(workingMorph.rotationDuration,0);
+    assert.ok(workingMorph.circleDeviation < .005,'The folds must merge into a true circle');
     assert.equal(new Set(workingMorph.frames.map(frame => frame.outline)).size, 6);
-    assert.ok(workingMorph.frames.every(frame => frame.visiblePaths === 1 && frame.stroke === 'none' && frame.fill !== 'none' && frame.fillRule === 'evenodd' && frame.opacity === '1'), 'Use one solid transforming mark, without satellite sparkles or opacity pulsing');
-    assert.ok(new Set(workingMorph.frames.map(frame => frame.transform)).size > 3);
+    assert.ok(workingMorph.frames.every(frame => frame.visiblePaths === 1 && frame.stroke !== 'none' && frame.fill === 'none' && frame.strokeWidth === '1.15px' && frame.opacity === '1'),'Use one unfilled ribbon with constant stroke and opacity');
+    assert.ok(workingMorph.frames.every(frame => frame.transform === 'none' && frame.rotation === 'none'),'Thinking morphs without spinning');
     assert.ok(new Set(workingMorph.frames.map(frame => frame.length.toFixed(2))).size > 3, 'The path geometry must change, not only its scale or opacity');
     assert.ok(workingMorph.frames.every(frame => frame.contained));
     assert.ok(workingMorph.frames.every(frame => JSON.stringify(frame.icon) === '[18,18]'));
@@ -1002,10 +1059,16 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
     await page.locator('[data-act="settings-close"]').click();
     await page.locator('.adm__settings').waitFor({state:'hidden'});
     await page.locator('[data-ai-session-toggle]').click();
-    await page.evaluate(() => window.__sessionStream.answer());
+    await page.evaluate(() => { window.__ribbonMorph = document.querySelector('.adm__ai-spark path').getAnimations()[0]; window.__sessionStream.answer(); });
     await page.waitForFunction(() => document.querySelector('[data-ai-session-toggle]').dataset.aiState === 'answering');
+    assert.equal(await page.evaluate(() => document.querySelector('.adm__ai-spark path').getAnimations()[0] === window.__ribbonMorph),true,'Streaming must not restart the ongoing fold morph');
     const answeringMorph = await sampleMorph();
-    assert.ok(answeringMorph.duration < workingMorph.duration);
+    assert.equal(answeringMorph.duration,workingMorph.duration);
+    assert.equal(answeringMorph.rotationDuration,3000);
+    assert.equal(answeringMorph.rotationEasing,'cubic-bezier(0.42, 0, 0.58, 1)');
+    assert.deepEqual(answeringMorph.frames.map(frame => frame.outline),workingMorph.frames.map(frame => frame.outline));
+    assert.ok(new Set(answeringMorph.frames.map(frame => frame.rotation)).size > 3);
+    assert.ok(answeringMorph.frames.every(frame => frame.transform === 'none' && frame.contained));
     assert.equal(new Set(answeringMorph.frames.map(frame => frame.outline)).size, 6);
     await page.getByLabel('Generated output', { exact: true }).filter({ hasText: 'Refined private' }).waitFor();
     assert.doesNotMatch(await page.locator('[data-ai-session-panel]').innerText(), /PRIVATE REASONING/);
@@ -1039,7 +1102,9 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
       await page.getByLabel('Generated output', {exact:true}).filter({hasText:'Refined private'}).waitFor();
     }
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    assert.ok(await page.locator('.adm__ai-spark svg,.adm__ai-spark svg > path').evaluateAll(elements => elements.every(element => getComputedStyle(element).animationName === 'none')));
+    assert.equal(await page.locator('.adm__ai-spark').evaluate(element => getComputedStyle(element).transitionDuration),'0s');
+    assert.ok(await page.locator('.adm__ai-spark svg,.adm__ai-spark path,.adm__ai-ribbon-turn').evaluateAll(elements => elements.every(element => getComputedStyle(element).animationName === 'none')));
+    assert.equal(await assertIdleSparkle(),idleOutline,'Reduced motion retains the static ribbon even during streaming');
     await page.evaluate(() => window.__sessionStream.finish());
     await page.waitForFunction(() => window.__sessionResult === 'Refined private answer.');
     await page.waitForFunction(() => document.querySelector('[data-ai-session-count]').textContent === '190 tokens');

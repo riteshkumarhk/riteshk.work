@@ -163,14 +163,13 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__ai-counter { display:inline-flex;align-items:center;gap:6px;flex:none;min-width:88px;height:24px;padding:0 6px;border:0;border-radius:4px;background:transparent;color:var(--text-dim);font:11px var(--mono);letter-spacing:0;white-space:nowrap;cursor:pointer; }
 .adm__ai-counter:hover,.adm__ai-counter[aria-expanded="true"] { background:var(--bg-elev);color:var(--text); }
 .adm__ai-counter:focus-visible,.adm__ai-close:focus-visible,.adm__ai-stop:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
-.adm__ai-spark { display:grid;place-items:center;width:18px;height:18px;flex:none; }
-.adm__ai-spark svg { width:18px;height:18px;transform-origin:center; }
-.adm__ai-counter { --adm-ai-cycle:3.6s;--adm-ai-rest:path("M12 1.5C14 5.5 18.5 10 22.5 12C18.5 14 14 18.5 12 22.5C10 18.5 5.5 14 1.5 12C5.5 10 10 5.5 12 1.5ZM12 7C13 9 15 11 17 12C15 13 13 15 12 17C11 15 9 13 7 12C9 11 11 9 12 7Z"); }
-.adm__ai-spark svg > path:first-child { fill:currentColor;fill-rule:evenodd;stroke:none;transform-origin:12px 12px;d:var(--adm-ai-rest); }
-.adm__ai-spark svg > path:nth-child(n+2) { display:none; }
-.adm__ai-counter[data-ai-state="answering"] { --adm-ai-cycle:2.7s; }
+.adm__ai-spark { display:grid;place-items:center;width:18px;height:18px;flex:none;color:inherit;transition:color .4s cubic-bezier(.4,0,.6,1); }
+.adm__ai-spark svg { display:block;width:18px;height:18px; }
+.adm__ai-spark path { fill:none;stroke:currentColor;stroke-width:1.15;stroke-linecap:round;stroke-linejoin:round;d:var(--adm-ai-rest); }
+.adm__ai-ribbon-turn { transform-box:view-box;transform-origin:12px 12px; }
 .adm__ai-counter:is([data-ai-state="working"],[data-ai-state="answering"]) .adm__ai-spark { color:var(--accent); }
-.adm__ai-counter:is([data-ai-state="working"],[data-ai-state="answering"]) .adm__ai-spark svg > path:first-child { animation:adm-ai-morph var(--adm-ai-cycle) cubic-bezier(.65,0,.35,1) infinite; }
+.adm__ai-counter:is([data-ai-state="working"],[data-ai-state="answering"]) .adm__ai-spark path { animation:adm-ai-morph 6s cubic-bezier(.45,0,.55,1) infinite; }
+.adm__ai-counter[data-ai-state="answering"] .adm__ai-ribbon-turn { animation:adm-ai-turn 3s cubic-bezier(.42,0,.58,1) infinite; }
 .adm__main { position:relative; }
 .adm__ai-panel { position:absolute;inset:0 0 0 auto;z-index:45;display:flex;flex-direction:column;width:min(360px,100%);min-width:0;overflow:hidden;border-left:1px solid var(--line);background:var(--bg-2);box-shadow:-12px 0 32px rgba(0,0,0,.22); }
 .adm__ai-panel[hidden] { display:none; }
@@ -191,12 +190,11 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__ai-job [role="alert"]:empty { display:none; }
 .adm__ai-stop[hidden] { display:none; }
 @keyframes adm-ai-morph {
-  0% { d:path("M12 3C21 3 21 3 21 12C21 21 21 21 12 21C3 21 3 21 3 12C3 3 3 3 12 3ZM12 8C16 8 16 8 16 12C16 16 16 16 12 16C8 16 8 16 8 12C8 8 8 8 12 8Z");transform:rotate(0deg); }
-  33% { d:var(--adm-ai-rest);transform:rotate(90deg); }
-  66% { d:path("M12 3C19 3 21 6 21 12C21 16 16 15 12 21C5 21 3 18 3 12C3 8 8 9 12 3ZM12 7C14 7 17 8 17 12C17 14 14 13 12 17C10 17 7 16 7 12C7 10 10 11 12 7Z");transform:rotate(180deg); }
-  100% { d:path("M12 3C21 3 21 3 21 12C21 21 21 21 12 21C3 21 3 21 3 12C3 3 3 3 12 3ZM12 8C16 8 16 8 16 12C16 16 16 16 12 16C8 16 8 16 8 12C8 8 8 8 12 8Z");transform:rotate(360deg); }
+  0%,100% { d:var(--adm-ai-rest); }
+  50% { d:var(--adm-ai-circle); }
 }
-@media(prefers-reduced-motion:reduce) { .adm__ai-counter .adm__ai-spark svg,.adm__ai-counter .adm__ai-spark svg > path { animation:none!important; } }
+@keyframes adm-ai-turn { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .adm__ai-counter .adm__ai-spark { transition:none!important; } .adm__ai-counter .adm__ai-spark path,.adm__ai-counter .adm__ai-ribbon-turn { animation:none!important; } }
 /* publish progress fill + severity tones (the status bar is the single publish narrator) */
 .adm__statusbar::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: var(--accent); opacity: 0; transition: width .3s ease, opacity .3s ease; pointer-events: none; }
 .adm__statusbar.is-publishing::after { width: var(--pub-pct, 0); opacity: .95; }
