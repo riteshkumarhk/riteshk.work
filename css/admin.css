@@ -1392,8 +1392,7 @@ body.adm-lock .cursor { display: none !important; }
 
 /* ---------- case study (L2) authoring ---------- */
 .study__toggle { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
-.study__editbtn { flex: 1; text-align: center; border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.study__editbtn:hover { background: var(--accent); color: #0a0a0a; border-color: var(--accent); }
+.study__editbtn { flex: 1; text-align: center; }
 .study__editbtn.is-open { color: var(--text-dim); border-color: var(--line); font-weight: 400; }
 .study__editbtn.is-open:hover { background: none; color: var(--text); border-color: var(--accent); }
 .study__previewbtn { flex: 0 0 auto; }

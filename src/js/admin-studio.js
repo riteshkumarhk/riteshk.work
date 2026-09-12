@@ -8567,7 +8567,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
     var preview = n ? '<a class="btn btn--ghost study__previewbtn" href="' + escHtml(studyVisitorUrl(w)) + '" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '" title="Open the current case-study draft in a new tab">Preview ' + IC.ext + '</a>' : "";
     var slidesBtn = studyHasSlides(w) ? '<a class="btn btn--ghost study__slidesbtn is-built" href="' + escHtml(studyVisitorUrl(w, true)) + '" target="_blank" rel="noopener" data-act="study-slideshow-preview" data-index="' + i + '" title="Open the current slideshow draft in a new tab">' + IC.board + ' Slideshow</a>' : "";
     return '<div class="study__toggle">' +
-      '<button class="btn study__editbtn" data-act="study-toggle" data-index="' + i + '" title="Edit project canvas">' + IC.edit + ' Edit</button>' +
+      '<button class="btn btn--primary study__editbtn" data-act="study-toggle" data-index="' + i + '" title="Edit project canvas">' + IC.edit + ' Edit</button>' +
       preview +
       slidesBtn +
       "</div>";

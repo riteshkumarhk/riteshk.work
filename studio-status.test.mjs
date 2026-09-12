@@ -79,6 +79,14 @@ test("shared preparation briefs select explicit evidence without changing portfo
   assert.deepEqual(source,before);
 });
 
+test("Work card Edit uses the shared primary variant without overriding its colours", () => {
+  assert.ok(source.includes('class="btn btn--primary study__editbtn"'));
+  assert.deepEqual(declarations('.study__editbtn'), { flex: '1', 'text-align': 'center' });
+  assert.deepEqual(declarations('.study__editbtn:hover'), {});
+  assert.ok(source.includes('class="btn btn--ghost study__previewbtn"'));
+  assert.ok(source.includes('class="btn study__editbtn is-open"'));
+});
+
 test("Edit lands on the furthest populated project stage, not an empty slideshow reference", () => {
   const start = source.indexOf("function studyHasSlides(w)"), end = source.indexOf("var L2_TABS", start);
   const { studyHasSlides, studyLandingTab } = runInNewContext(`(() => { ${source.slice(start, end)} return { studyHasSlides, studyLandingTab }; })()`);

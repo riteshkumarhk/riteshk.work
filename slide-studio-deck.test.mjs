@@ -42,6 +42,40 @@ async function openIntegratedFixture(page) {
   return published;
 }
 
+test("Work card Edit renders as primary and opens the project on desktop and phone", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  try {
+    for (const width of [1440,390]) {
+      const context = await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce'});
+      const page = await context.newPage();
+      await openIntegratedFixture(page);
+      const edit = page.locator('[data-act="study-toggle"][data-index="0"]');
+      const preview = page.locator('[data-act="study-preview"][data-index="0"]');
+      await edit.scrollIntoViewIfNeeded();
+      const before = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
+      for (const state of ['rest','hover','focus']) {
+        if (state === 'hover') await edit.hover();
+        if (state === 'focus') await edit.focus();
+        const style = await edit.evaluate(element => {
+          const computed = getComputedStyle(element), bounds = element.getBoundingClientRect();
+          return {background:computed.backgroundImage,color:computed.color,left:bounds.left,right:bounds.right,width:innerWidth};
+        });
+        assert.match(style.background,/linear-gradient/);
+        assert.equal(style.color,'rgb(36, 26, 9)');
+        assert.ok(style.left >= 0 && style.right <= style.width);
+      }
+      assert.equal(await preview.evaluate(element => getComputedStyle(element).backgroundImage),'none');
+      await page.mouse.move(0,0);
+      await edit.evaluate(element => element.blur());
+      await page.screenshot({path:join(tmpdir(),`rk-work-edit-primary-${width}.png`)});
+      await edit.click();
+      await page.locator('[data-l2tab="story"][aria-selected="true"]').waitFor();
+      assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft())),before);
+      await context.close();
+    }
+  } finally { await browser.close(); }
+});
+
 test("Prepare local test link opens directly and leaves normal sign-in enforced", {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
   const server = process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5512';
