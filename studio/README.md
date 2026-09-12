@@ -23,24 +23,27 @@ the Studio JavaScript continues to use its dynamic cache version.
 
 ## AI Counter
 
-The footer uses a four-fold continuous ribbon at 18px, with open oval petals
-and an unfilled 1.15px stroke. Idle keeps the folded outline still. Thinking unfolds to a circle and
-back over six seconds; streaming preserves that same morph and adds a
-three-second eased rotation. Reduced motion keeps the ribbon static, and
-completion or cancellation returns it to rest. The SVG includes the resting
-path as a fallback when CSS path morphing is unavailable.
+The footer uses the shared living ribbon at 18px with an unfilled 1.5 stroke.
+Rest has four equal folds, an enlarged center diamond, and a fixed orientation.
+Thinking moves between three, four, five, and six folds, varying petal size,
+depth, and timing. Streaming adds damped rotation without restarting the morph.
+Completion or cancellation settles back to the same rest shape and position.
+Reduced motion keeps the rest shape static. The SVG includes that resting path
+as its fallback; animation uses the shared `ai-ribbon.mjs` controller.
 
 Gold and neutral stroke colors blend over 400ms in both directions, without
 changing opacity. Reduced motion disables this transition as well as the morph
 and rotation.
 
-This mark is specific to the counter; other Studio sparkle icons are unchanged.
+AI actions throughout Content Studio and Slide Studio use the same static rest
+mark. Decorative sparkle icons in authored content and icon libraries are unchanged.
 Token accounting, activity, provider routing and cancellation use the existing
 session controller. The focused browser test checks actual path geometry,
-four folds, a circular endpoint, continuous state transitions, stroke bounds,
+variable folds, static actions, continuous state transitions, stroke bounds,
 desktop/phone layout and the full drawer workflow:
 
 ```powershell
+node --test ai-ribbon.test.mjs
 node --test --test-name-pattern="AI session drawer" slide-studio-deck.test.mjs
 ```
 

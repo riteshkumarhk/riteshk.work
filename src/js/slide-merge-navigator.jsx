@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { LayoutTemplate, Sparkles } from "lucide-react";
+import { LayoutTemplate } from "lucide-react";
+import { AiRibbonIcon as Sparkles } from "./ai-ribbon.jsx";
 import { ToolMenu, ToolIcon } from "./slide-merge-toolbar.jsx";
 import { LayoutPicker } from "./slide-merge-layout-picker.jsx";
 import { NavigatorDragList, NavigatorDragEntry } from "./slide-merge-drag.jsx";

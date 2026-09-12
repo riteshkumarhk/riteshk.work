@@ -37,6 +37,7 @@ import { mountAiRoutingPanel } from "./ai-routing-panel.mjs";
 import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
 import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
 import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs";
+import { aiRibbonIcon, mountAiRibbon } from "./ai-ribbon.mjs";
 import { notesHtml } from "./slide-rich-text.mjs";
 import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief.mjs";
 
@@ -759,7 +760,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
     ticket: svgIco('<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v2"/><path d="M13 11v2"/><path d="M13 17v2"/>'),
     shield: svgIco('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>'),
     publish: svgIco('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>'),
-    spark: svgIco('<path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>'),
+    spark: aiRibbonIcon(),
     history: svgIco('<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>'),
     save: svgIco('<path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>'),
     key: svgIco('<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/>'),
@@ -7010,7 +7011,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.8";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.9";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
@@ -7668,7 +7669,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
   // click Text / Media / Section / Icon to fill the placeholder in place (keeps its x/y/w/h).
   function phInsertCluster(i, k, idx) {
     function b(act, ico, lbl) { return '<button type="button" class="sfb__ins-b" data-act="' + act + '" data-index="' + i + '" data-sindex="' + k + '" data-fbi="' + idx + '" title="Insert ' + lbl + '">' + ico + "<span>" + lbl + "</span></button>"; }
-    return '<div class="sfb__insert"><span class="sfb__insert-h">Add content</span><div class="sfb__insert-row">' + b("ph-text", IC.edit, "Text") + b("ph-media", IC.board, "Media") + b("ph-section", IC.slides, "Section") + b("ph-icon", IC.spark, "Icon") + "</div></div>";
+    return '<div class="sfb__insert"><span class="sfb__insert-h">Add content</span><div class="sfb__insert-row">' + b("ph-text", IC.edit, "Text") + b("ph-media", IC.board, "Media") + b("ph-section", IC.slides, "Section") + b("ph-icon", admIcon("spark"), "Icon") + "</div></div>";
   }
   function freeBlockEl(i, k, idx, bl, sel, single) {
     var st = "left:" + fnum(bl.x, 8) + "%;top:" + fnum(bl.y, 8) + "%;width:" + fnum(bl.w, 40) + "%;";
@@ -15183,6 +15184,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
   const aiTaskAgent = createAiTaskAgent({ router: aiOrchestrator });
   const aiSession = siteAiSession(window);
   let aiSessionPanel = null;
+  let aiCounterMotion = null;
   let aiLastRoute = null;
   let aiAutomaticEvaluation = null, aiEvaluationResult = null, aiEvaluationError = "";
   const aiEvaluationAttempts = new Map();
@@ -18382,24 +18384,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
 
   /* ---------- shell / open / exit ---------- */
   function aiCounterIcon() {
-    const ribbonPath = (depth, rounding = 0) => {
-      const radius = 9.5 - depth - rounding, segments = 96, step = Math.PI * 2 / segments;
-      const point = angle => ({
-        horizontal:12 + radius * Math.sin(angle) - depth * Math.sin(3 * angle) - rounding * Math.sin(7 * angle),
-        vertical:12 - radius * Math.cos(angle) - depth * Math.cos(3 * angle) - rounding * Math.cos(7 * angle),
-        tangentHorizontal:radius * Math.cos(angle) - 3 * depth * Math.cos(3 * angle) - 7 * rounding * Math.cos(7 * angle),
-        tangentVertical:radius * Math.sin(angle) + 3 * depth * Math.sin(3 * angle) + 7 * rounding * Math.sin(7 * angle)
-      });
-      const number = value => value.toFixed(4), start = point(0);
-      let path = 'M' + number(start.horizontal) + ' ' + number(start.vertical);
-      for (let index = 0; index < segments; index++) {
-        const from = point(index * step), to = point((index + 1) * step);
-        path += 'C' + [from.horizontal + from.tangentHorizontal * step / 3,from.vertical + from.tangentVertical * step / 3,to.horizontal - to.tangentHorizontal * step / 3,to.vertical - to.tangentVertical * step / 3,to.horizontal,to.vertical].map(number).join(' ');
-      }
-      return path + 'Z';
-    };
-    const rest = ribbonPath(3.5, .8), circle = ribbonPath(0);
-    return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><g class="adm__ai-ribbon-turn"><path d="${rest}" style="--adm-ai-rest:path('${rest}');--adm-ai-circle:path('${circle}')"/></g></svg>`;
+    return aiRibbonIcon();
   }
 
   function buildShell() {
@@ -18847,6 +18832,8 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
     thDismiss(true); // belt-and-suspenders: the ticket nudge must never linger over the editor
     document.documentElement.classList.add("adm-lock");
     document.body.classList.add("adm-lock");
+    aiCounterMotion?.dispose();
+    aiCounterMotion = mountAiRibbon(root.querySelector("[data-ai-session-toggle]"));
     requestAnimationFrame(() => root.classList.add("is-open"));
     if (frame && frame.contentWindow && frame.contentWindow.RK) previewApply();
     autopubSync(); autopubStart();
@@ -18865,6 +18852,8 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
     aiSessionPanel?.close(false);
     aiAutomaticEvaluation?.abort();
     aiSession.end();
+    aiCounterMotion?.dispose();
+    aiCounterMotion = null;
     autopubStop();
     if (window.RK) { window.RK.data = clone(data); try { window.RK.render(data); } catch (e) {} forceReveal(); }
     if (root) root.classList.remove("is-open");

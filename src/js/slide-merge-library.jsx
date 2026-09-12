@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { AiRibbonIcon as Sparkles } from "./ai-ribbon.jsx";
 import { DeckDialog } from "./slide-merge-navigator.jsx";
 import { generateSlideIcon } from "./slide-merge-ai-client.mjs";
 import { studioIconRegistry, studioSourceData, saveGeneratedStudioIcon } from "./slide-studio-source.mjs";

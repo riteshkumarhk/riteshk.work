@@ -96,7 +96,6 @@ lucide-react/dist/esm/icons/pencil.mjs:
 lucide-react/dist/esm/icons/play.mjs:
 lucide-react/dist/esm/icons/presentation.mjs:
 lucide-react/dist/esm/icons/rotate-ccw.mjs:
-lucide-react/dist/esm/icons/sparkles.mjs:
 lucide-react/dist/esm/icons/square.mjs:
 lucide-react/dist/esm/icons/thumbs-down.mjs:
 lucide-react/dist/esm/icons/thumbs-up.mjs:

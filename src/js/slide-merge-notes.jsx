@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Bold, Italic, IndentDecrease, IndentIncrease, List, ListOrdered, Sparkles, ChevronDown, ChevronUp, MessageSquareText, Timer, UserRound } from "lucide-react";
+import { Bold, Italic, IndentDecrease, IndentIncrease, List, ListOrdered, ChevronDown, ChevronUp, MessageSquareText, Timer, UserRound } from "lucide-react";
+import { AiRibbonIcon as Sparkles } from "./ai-ribbon.jsx";
 import { clampNotesHeight, formatSlideDuration, parseSlideDuration, installSlideTimeScrub, SLIDE_TIME_STEP_SECONDS } from "./slide-merge-notes.mjs";
 import { installRichNotes, notesHtml } from "./slide-rich-text.mjs";
 import { improveSlideText } from "./slide-merge-ai-client.mjs";
