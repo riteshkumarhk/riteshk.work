@@ -146,6 +146,7 @@ function Merger({ integration, controller }) {
   const [thumbnails, setThumbnails] = useState({}), [present, setPresent] = useState(null);
   const confirm = false;
   const [pane, setPane] = useState(null), [notesOpen, setNotesOpen] = useState(true);
+  const [draftRequested, setDraftRequested] = useState(false);
   const [editing, setEditing] = useState(true), [slideView, setSlideView] = useState("current"), [historyTarget, setHistoryTarget] = useState(null);
   useEffect(() => {
     if (!api) return;
@@ -759,6 +760,16 @@ function Merger({ integration, controller }) {
   controller.snapshot = () => { capture(); return structuredClone(live.current.deck); };
     controller.editMetadata = presenterMetadata;
   controller.notify = setStatus;
+  controller.draftCaseStudy = () => {
+    if (present !== null || deckDialog) throw new Error("Finish the current editor action before drafting slides.");
+    setDraftRequested(true);
+  };
+  useEffect(() => {
+    if (!draftRequested || busy || !api) return;
+    if (!editing) { switchEditing(true); return; }
+    setDraftRequested(false);
+    openPane("draft", false);
+  }, [draftRequested, busy, api, editing]);
   useEffect(() => {
     if (!api || editing || slideView !== "current" || present !== null || deckDialog || activity.showLog) return;
     const canvas = host.current.querySelector(".lab-canvas");
@@ -867,6 +878,7 @@ export function mountSlideEditor(container, integration = null) {
     snapshot() { return controller.snapshot?.(); },
       async editMetadata(id, key, value) { await ready; if (!controller.active) throw new Error("The slide editor session is closed"); return controller.editMetadata(id, key, value); },
     notify(message) { controller.notify?.(message); },
+    async draftCaseStudy() { await ready; if (!controller.active) throw new Error("The slide editor session is closed"); return controller.draftCaseStudy(); },
     dispose() { if (!controller.active) return; controller.active = false; controller.reject(new Error("The slide editor session is closed")); root.unmount(); }
   };
 }

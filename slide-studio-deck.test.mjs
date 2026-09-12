@@ -42,6 +42,69 @@ async function openIntegratedFixture(page) {
   return published;
 }
 
+for (const width of [1440, 390]) test("AI Options use case content and keep Back in the workbar at " + width + "px", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"}), errors = [], requests = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('request', request => { if (request.method() === 'POST' && request.url().includes('api.anthropic.com')) requests.push(request.url()); });
+  try {
+    await openIntegratedFixture(page);
+    await page.setViewportSize({width,height:1000});
+    const original = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work));
+    assert.equal(await page.locator('[data-l2-back]').isVisible(), false);
+    await page.locator('[data-act="study-toggle"][data-index="1"]').click();
+    await page.getByRole('tab',{name:'AI Options',exact:true}).click();
+    const back = page.locator('[data-l2-back]');
+    assert.equal(await page.locator('[data-l2-back]').count(), 1);
+    assert.equal(await back.evaluate(element => !!element.closest('.adm__workbar')), true);
+    const separator = await back.evaluate(element => { const style = getComputedStyle(element, '::after'); return {width:style.width,height:style.height,pointerEvents:style.pointerEvents,content:style.content}; });
+    assert.deepEqual(separator, {width:'1px',height:'18px',pointerEvents:'none',content:'""'});
+    assert.equal(await page.locator('.adm__l2-bar').isVisible(), false);
+    const controls = page.locator('[data-case-ai-slides] button,[data-case-ai-prepare] button');
+    assert.equal(await controls.count(), 4);
+    assert.ok(await controls.evaluateAll(buttons => buttons.every(button => button.disabled)));
+    assert.equal(await page.getByRole('button',{name:'Generate case study',exact:true}).isEnabled(), true);
+    await page.screenshot({path:join(tmpdir(), `rk-ai-options-empty-${width}.png`)});
+    await page.locator('[data-case-ai-prepare]').scrollIntoViewIfNeeded();
+    await page.screenshot({path:join(tmpdir(), `rk-ai-options-empty-actions-${width}.png`)});
+    await back.click();
+    await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+    await page.getByRole('tab',{name:'AI Options',exact:true}).click();
+    assert.ok(await controls.evaluateAll(buttons => buttons.every(button => !button.disabled)));
+    const geometry = await page.evaluate(() => {
+      const back = document.querySelector('[data-l2-back]').getBoundingClientRect(), undo = document.querySelector('.adm__hist [data-undo]').getBoundingClientRect();
+      return {back:back.toJSON(),undo:undo.toJSON(),overflow:document.documentElement.scrollWidth > innerWidth};
+    });
+    assert.equal(geometry.back.height, 34);
+    assert.ok(geometry.back.right <= geometry.undo.left && Math.abs(geometry.back.y - geometry.undo.y) < 1);
+    assert.equal(geometry.overflow, false);
+    await page.screenshot({path:join(tmpdir(), `rk-ai-options-ready-${width}.png`)});
+    await page.locator('[data-case-ai-prepare]').scrollIntoViewIfNeeded();
+    await page.screenshot({path:join(tmpdir(), `rk-ai-options-ready-actions-${width}.png`)});
+    for (const [action, selector] of [['fbrev','.fbrev-modal'],['iprep','.iprep-modal'],['story','.story-modal']]) {
+      await page.locator('[data-act="case-ai-prepare"][data-prepare="'+action+'"]').click();
+      await page.locator(selector).waitFor();
+      if (action !== 'fbrev') assert.match(await page.locator(selector+' .pass__title').innerText(), /Integrated project/);
+      await page.locator(selector+' [data-cancel]').click();
+      await page.locator(selector).waitFor({state:'detached'});
+    }
+    assert.equal(requests.length, 0, 'Opening preparation tools must not start generation');
+    await page.locator('[data-l2tab="slides"]').click();
+    await page.locator('.merge-empty-actions').waitFor();
+    const slideGeometry = await page.evaluate(() => {
+      const back = document.querySelector('[data-l2-back]').getBoundingClientRect(), history = document.querySelector('[data-native-slide-toolbar] .merge-bar-state').getBoundingClientRect(), main = document.querySelector('.adm__main').getBoundingClientRect(), preview = document.querySelector('.adm__preview').getBoundingClientRect();
+      return {ordered:back.right <= history.left, aligned:Math.abs(back.y-history.y)<2, fullCanvas:Math.abs(main.top-preview.top)<1};
+    });
+    assert.deepEqual(slideGeometry,{ordered:true,aligned:true,fullCanvas:true});
+    assert.deepEqual(await back.evaluate(element => { const style = getComputedStyle(element, '::after'); return {width:style.width,height:style.height,pointerEvents:style.pointerEvents,content:style.content}; }), separator);
+    await back.click();
+    await page.locator('.merge-shell').waitFor({state:'detached'});
+    assert.equal(await back.isVisible(), false);
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work)), original);
+    assert.deepEqual(errors,[]);
+  } finally { await browser.close(); }
+});
+
 for (const width of [1440, 390]) test("shared status bar keeps independent case-study and slide locks at " + width + "px", { timeout:60000 }, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless:true});
   const page = await browser.newPage({viewport:{width:1440, height:1000}}), errors = [];
@@ -299,7 +362,37 @@ for (const width of [1440, 390]) test("integrated project tabs and draft visitor
 
 test("AI session drawer streams across tabs, survives refresh and resets on explicit exit", { timeout: 90000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } }), page = await context.newPage();
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion:"no-preference" }), page = await context.newPage();
+  const assertIdleSparkle = async () => {
+    const rest = await page.locator('.adm__ai-spark svg').evaluate(svg => {
+      const paths = [...svg.querySelectorAll('path')], style = getComputedStyle(paths[0]);
+      return {outline:style.d, visiblePaths:paths.filter(path => getComputedStyle(path).display !== 'none').length, fill:style.fill, stroke:style.stroke, transform:style.transform, animations:svg.getAnimations({subtree:true}).length};
+    });
+    assert.equal(rest.visiblePaths, 1);
+    assert.notEqual(rest.fill, 'none');
+    assert.equal(rest.stroke, 'none');
+    assert.equal(rest.transform, 'none');
+    assert.equal(rest.animations, 0);
+    return rest.outline;
+  };
+  const sampleMorph = () => page.locator('.adm__ai-spark svg').evaluate(svg => {
+    const path = svg.querySelector('path'), animations = svg.getAnimations({subtree:true});
+    const morph = animations.find(animation => animation.animationName === 'adm-ai-morph');
+    if (!morph) throw new Error('The active AI icon must animate its outline');
+    const duration = morph.effect.getTiming().duration;
+    animations.forEach(animation => animation.pause());
+    const frames = [0, .175, .35, .525, .7, .85].map(progress => {
+      animations.forEach(animation => { animation.currentTime = progress * duration; });
+      const box = svg.getBoundingClientRect(), counter = svg.closest('button').getBoundingClientRect(), style = getComputedStyle(path);
+      const matrix = path.getScreenCTM(), length = path.getTotalLength(), stroke = style.stroke === 'none' ? 0 : parseFloat(style.strokeWidth) * Math.hypot(matrix.a, matrix.b) / 2;
+      const points = Array.from({length:65}, (_, index) => path.getPointAtLength(length * index / 64).matrixTransform(matrix));
+      return {outline:style.d, length, fill:style.fill, stroke:style.stroke, fillRule:style.fillRule, opacity:style.opacity, transform:style.transform, visiblePaths:[...svg.querySelectorAll('path')].filter(element => getComputedStyle(element).display !== 'none').length, icon:[box.width,box.height], counter:[counter.width,counter.height], contained:points.every(point => point.x - stroke >= box.left && point.x + stroke <= box.right && point.y - stroke >= box.top && point.y + stroke <= box.bottom)};
+    });
+    morph.currentTime = duration * .33;
+    const restingPose = getComputedStyle(path).d;
+    animations.forEach(animation => animation.play());
+    return {duration,frames,restingPose};
+  });
   try {
     await page.addInitScript(() => {
       const fetchOriginal = window.fetch;
@@ -325,14 +418,38 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
     await openIntegratedFixture(page);
     await page.locator('[data-act="study-toggle"][data-index="0"]').click();
     const before = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
+    const idleOutline = await assertIdleSparkle();
     await page.locator('[data-ai-session-toggle]').click();
     await page.evaluate(() => { window.__sessionResult = null; window.__RKStudio.improveText('Private input copy', {}).then(text => { window.__sessionResult = text; }, error => { window.__sessionResult = error.message; }); });
     await page.waitForFunction(() => !!window.__sessionStream);
     await page.waitForFunction(() => document.querySelector('[data-ai-session-toggle]').dataset.aiState === 'working');
     await page.waitForFunction(() => document.querySelector('[data-ai-session-count]').textContent === '135 tokens');
-    assert.notEqual(await page.locator('.adm__ai-spark svg').evaluate(element => getComputedStyle(element).animationName), 'none');
+    const workingMorph = await sampleMorph();
+    assert.equal(idleOutline, workingMorph.restingPose, 'Rest must exactly match the single diamond pose of the animation');
+    assert.equal(new Set(workingMorph.frames.map(frame => frame.outline)).size, 6);
+    assert.ok(workingMorph.frames.every(frame => frame.visiblePaths === 1 && frame.stroke === 'none' && frame.fill !== 'none' && frame.fillRule === 'evenodd' && frame.opacity === '1'), 'Use one solid transforming mark, without satellite sparkles or opacity pulsing');
+    assert.ok(new Set(workingMorph.frames.map(frame => frame.transform)).size > 3);
+    assert.ok(new Set(workingMorph.frames.map(frame => frame.length.toFixed(2))).size > 3, 'The path geometry must change, not only its scale or opacity');
+    assert.ok(workingMorph.frames.every(frame => frame.contained));
+    assert.ok(workingMorph.frames.every(frame => JSON.stringify(frame.icon) === '[18,18]'));
+    assert.ok(workingMorph.frames.every(frame => JSON.stringify(frame.counter) === JSON.stringify(workingMorph.frames[0].counter)));
+    const runningJob = await page.evaluate(() => window.__rkAiSession.state().jobs.find(job => job.status === 'running').id);
+    await page.getByRole('button', {name:'AI settings', exact:true}).click();
+    await page.locator('.adm__settings.is-open [data-cat="ai"].is-on').waitFor();
+    assert.equal(await page.locator('[data-ai-session-panel]').isVisible(), false);
+    assert.equal(await page.locator('[data-ai-session-toggle]').getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('[data-ai-routing]').count(), 0, 'The shortcut opens the existing AI L1 overview, not a duplicate full settings form');
+    assert.equal(await page.locator('[data-aiuse-reset]').count(), 1);
+    assert.equal(await page.getByRole('button', {name:'Open AI settings', exact:true}).isVisible(), true);
+    assert.equal(await page.evaluate(id => window.__rkAiSession.state().jobs.find(job => job.id === id).status, runningJob), 'running');
+    await page.locator('[data-act="settings-close"]').click();
+    await page.locator('.adm__settings').waitFor({state:'hidden'});
+    await page.locator('[data-ai-session-toggle]').click();
     await page.evaluate(() => window.__sessionStream.answer());
     await page.waitForFunction(() => document.querySelector('[data-ai-session-toggle]').dataset.aiState === 'answering');
+    const answeringMorph = await sampleMorph();
+    assert.ok(answeringMorph.duration < workingMorph.duration);
+    assert.equal(new Set(answeringMorph.frames.map(frame => frame.outline)).size, 6);
     await page.getByLabel('Generated output', { exact: true }).filter({ hasText: 'Refined private' }).waitFor();
     assert.doesNotMatch(await page.locator('[data-ai-session-panel]').innerText(), /PRIVATE REASONING/);
     await page.locator('[data-l2tab="highlights"]').click();
@@ -345,13 +462,32 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
       await page.setViewportSize({ width, height: 1000 });
       const geometry = await page.locator('[data-ai-session-panel]').evaluate(element => { const rect = element.getBoundingClientRect(); return { left: rect.left, right: rect.right, width: innerWidth, overflow: element.scrollWidth > element.clientWidth }; });
       assert.ok(geometry.left >= 0 && geometry.right <= geometry.width && !geometry.overflow);
+      const motion = await sampleMorph();
+      assert.ok(motion.frames.every(frame => frame.contained));
+      assert.ok(motion.frames.every(frame => JSON.stringify(frame.counter) === JSON.stringify(motion.frames[0].counter)));
       await page.screenshot({ path: join(tmpdir(), 'rk-ai-session-answering-' + width + '.png') });
+      await page.getByRole('button', {name:'AI settings', exact:true}).click();
+      await page.locator('.adm__settings.is-open [data-cat="ai"].is-on').waitFor();
+      assert.equal(await page.locator('[data-ai-session-panel]').isVisible(), false);
+      assert.equal(await page.locator('.merge-shell').count(), 1, 'Opening settings must keep the slide editor mounted');
+      assert.equal(await page.locator('[data-ai-session-count]').innerText(), '135 tokens');
+      await page.waitForFunction(() => { const button = document.querySelector('.adm__settings [data-act="open-ai"]'); if (!button) return false; const bounds = button.getBoundingClientRect(); return bounds.x >= 0 && bounds.right <= innerWidth; });
+      const settingsButton = await page.getByRole('button', {name:'Open AI settings', exact:true}).boundingBox();
+      assert.ok(settingsButton.x >= 0 && settingsButton.x + settingsButton.width <= width);
+      await page.locator('.adm__settings').evaluate(async element => { await Promise.all(element.getAnimations({subtree:true}).map(animation => animation.finished.catch(() => {}))); });
+      await page.screenshot({path:join(tmpdir(), 'rk-ai-activity-settings-' + width + '.png')});
+      await page.locator('[data-act="settings-close"]').click();
+      await page.locator('.adm__settings').waitFor({state:'hidden'});
+      await page.locator('[data-ai-session-toggle]').click();
+      await page.getByLabel('Generated output', {exact:true}).filter({hasText:'Refined private'}).waitFor();
     }
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    assert.equal(await page.locator('.adm__ai-spark svg').evaluate(element => getComputedStyle(element).animationName), 'none');
+    assert.ok(await page.locator('.adm__ai-spark svg,.adm__ai-spark svg > path').evaluateAll(elements => elements.every(element => getComputedStyle(element).animationName === 'none')));
     await page.evaluate(() => window.__sessionStream.finish());
     await page.waitForFunction(() => window.__sessionResult === 'Refined private answer.');
     await page.waitForFunction(() => document.querySelector('[data-ai-session-count]').textContent === '190 tokens');
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    assert.equal(await assertIdleSparkle(), idleOutline);
     assert.equal(await page.evaluate(() => window.__rkAiSession.state().totalTokens), 190);
     assert.doesNotMatch(await page.evaluate(() => sessionStorage.getItem('rk:ai:admin-session')), /Private input|Refined private|PRIVATE REASONING/);
     await page.getByRole('button', { name: 'Close AI activity', exact: true }).click();
@@ -379,6 +515,7 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
     await page.waitForFunction(() => window.__rkAiSession.state().jobs.at(-1)?.status === 'cancelled' && window.__sessionResult !== null);
     assert.equal(await page.evaluate(() => window.__rkAiSession.state().active), 0);
     await page.waitForFunction(() => document.querySelector('[data-ai-session-count]').textContent === '325 tokens');
+    assert.equal(await assertIdleSparkle(), idleOutline);
     assert.match(await page.locator('[data-ai-jobs]').innerText(), /Refined private/);
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('[data-ai-session-panel]').isVisible(), false);
@@ -547,9 +684,16 @@ for (const { width, mode } of [{ width: 1440, mode: "complete" }, { width: 390, 
     await page.evaluate(() => document.querySelectorAll(".pass--lock").forEach(dialog => dialog.remove()));
     await page.setViewportSize({ width, height: 1000 });
     await page.locator('.adm__tab[data-tab="work"]').click();
-    await openProjectSlides(page);
-    await page.locator(".merge-empty-actions").waitFor();
-    await page.getByRole("button", { name: "Draft entire deck with AI", exact: true }).click();
+    if (mode === "complete") {
+      await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+      await page.getByRole('tab', {name:'AI Options',exact:true}).click();
+      await page.getByRole('button', {name:'Generate slides',exact:true}).click();
+      await page.locator('.merge-shell').waitFor();
+    } else {
+      await openProjectSlides(page);
+      await page.locator(".merge-empty-actions").waitFor();
+      await page.getByRole("button", { name: "Draft entire deck with AI", exact: true }).click();
+    }
     await page.getByRole("log", { name: "Agent activity", exact: true }).getByText(mode === "summary-fallback" ? "Delegating specialist work" : "Checking the case-study evidence", { exact: true }).waitFor();
     await page.getByRole("log", { name: "Agent activity", exact: true }).getByText(/studio-evidence/).waitFor();
     assert.equal(requests.filter(request => request.model === "studio-creative-a").length, 0);

@@ -20,6 +20,7 @@ import {
 import { WORLD_LAND } from "./worldland.js";
 import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsEmbedScore, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand, atsScoreModel } from "./ats-core.js";
 import { draftComposition } from "./slide-merge-ai.mjs";
+import { availableStudies } from "./slide-merge-sections.mjs";
 import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeckReference, studioDeckBackup, restoreStudioDeckBackup } from "./slide-studio-deck.mjs";
 import { selectStudioDraft, archiveStudioDraft, studioDraftRecoveries, saveStudioPublishedDraft, studioPublishedDraft, studioDraftContent } from "./studio-draft-recovery.mjs";
 import { prepareStudioPublication } from "./slide-studio-publication.mjs";
@@ -603,7 +604,7 @@ import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs"
   function updateHistUI() {
     if (!root) return;
     var dirty = isDirty();
-    var wrap = root.querySelector("[data-hist]"); if (wrap) wrap.hidden = !dirty && histStack.length < 2;
+    var wrap = root.querySelector("[data-hist]"); if (wrap) wrap.hidden = openStudy < 0 && !journeyOpen && !dirty && histStack.length < 2;
     var u = root.querySelector("[data-undo]"); if (u) u.disabled = histIndex <= 0;
     var r = root.querySelector("[data-redo]"); if (r) r.disabled = histIndex >= histStack.length - 1;
   }
@@ -6154,7 +6155,36 @@ import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs"
     if (hasHi) return "highlights";
     return "details";
   }
-  var L2_TABS = [["gen", "Generate using AI"], ["details", "Details"], ["highlights", "Highlights"], ["story", "Case study"], ["slides", "Slideshow"]];
+  var L2_TABS = [["gen", "AI Options"], ["details", "Details"], ["highlights", "Highlights"], ["story", "Case study"], ["slides", "Slideshow"]];
+  function caseAiReady(work) { return availableStudies({ work: work ? [work] : [] }).length > 0; }
+  function caseAiOptions(work, index) {
+    const ready = caseAiReady(work), disabled = ready ? "" : " disabled";
+    return csgenPanel(work, index) +
+      '<section class="csgen" data-case-ai-slides><div class="csgen__head"><span class="csgen__spark">' + IC.spark + '</span> Generate slides with AI</div><div class="csgen__body">' +
+      (!ready ? '<p class="af__hint">Add case-study sections before generating slides.</p>' : '') +
+      '<button class="btn btn--auto" type="button" data-act="case-ai-slides" data-index="' + index + '"' + disabled + '>Generate slides</button></div></section>' +
+      '<section class="csgen" data-case-ai-prepare><div class="csgen__head"><span class="csgen__spark">' + IC.spark + '</span> Prepare with AI</div><div class="csgen__body">' +
+      (!ready ? '<p class="af__hint">Add case-study sections before preparing.</p>' : '') +
+      '<div class="case-ai-prepare">' + [["fbrev", "Review feedback", "Map notes to sections"], ["iprep", "Interview prep", "Likely questions"], ["story", "Design storyteller", "Narrative and script"]].map(([action, title, detail]) => '<button type="button" data-act="case-ai-prepare" data-prepare="' + action + '" data-index="' + index + '"' + disabled + '><strong>' + title + '</strong><span>' + detail + '</span></button>').join('') + '</div></div></section>';
+  }
+  async function caseAiSlides(index, trigger) {
+    const work = data.work[index];
+    if (!caseAiReady(work)) { status("Add case-study sections before generating slides."); return; }
+    if (!nativeSlidesEnabled(work)) return deckAiDraft(index, trigger);
+    if (!saveDraft(true)) { status("Save the current case study before generating slides."); return; }
+    try {
+      trigger.disabled = true;
+      l2Tab = "slides";
+      renderL2();
+      const session = nativeSlideSession;
+      await session?.ready;
+      if (nativeSlideSession !== session || session?.work !== work || l2Tab !== "slides") return;
+      if (!caseAiReady(work)) throw new Error("The case-study source is no longer available.");
+      if (!session.editor || session.loadFailed) throw new Error("The slide editor could not be opened.");
+      await session.editor.draftCaseStudy();
+    } catch (error) { status(error.message || "Could not start slide generation."); }
+    finally { if (trigger.isConnected) trigger.disabled = !caseAiReady(work); }
+  }
   var _lastCaseTab = "story"; // remembers the case-study sub-tab when you flip to Slideshow
   function l2Mode() { return l2Tab === "slides" ? "slides" : "case"; }
   function l2ModeBarHtml() { return l2Mode() === "case" ? l2aiBtn() : ""; }   // just the AI-tools button; the Case study | Slideshow toggle was removed (the deck is entered from the Work-tab card CTA)
@@ -6189,6 +6219,11 @@ import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs"
   }
   function paintL2Tabs() {
     var show = openStudy >= 0 && !journeyOpen;
+    const back = root && root.querySelector("[data-l2-back]");
+    if (back) back.hidden = !show && !journeyOpen;
+    const heading = root && root.querySelector(".adm__l2-bar");
+    if (heading) heading.hidden = !journeyOpen;
+    updateHistUI();
     var tb = root && root.querySelector("[data-l2tabs]");
     if (tb) {
       const focused = tb.contains(document.activeElement);
@@ -6806,12 +6841,12 @@ import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs"
     nativeSlideSession = session;
     root.classList.add("is-native-slides");
     const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
-    const styles = ["/studio/slide-lab/assets/editor.css?v=1.5", "/css/slide-studio.css?v=1.3"].map(href => new Promise((resolve, reject) => {
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.5", "/css/slide-studio.css?v=1.4"].map(href => new Promise((resolve, reject) => {
       const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.7";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.8";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
@@ -8342,7 +8377,7 @@ import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs"
       "</section>";
 
     var panel;
-    if (tab === "gen") panel = csgenPanel(w, i);
+    if (tab === "gen") panel = caseAiOptions(w, i);
     else if (tab === "highlights") panel = storyHeader + keyMoves + overviewMediaBlock(w, i);
     else if (tab === "story") {
       // Classic accordion: a full-width list of sections; click a head to expand its editor inline underneath.
@@ -11637,6 +11672,14 @@ import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs"
     if (act === "csgen-run") { csgenRun(i, false); return; }
     if (act === "csgen-variant") { csgenRun(i, true); return; }
     if (act === "csgen-pdf") { csgenAddPdf(i); return; }
+    if (act === "case-ai-slides") { caseAiSlides(i, b); return; }
+    if (act === "case-ai-prepare") {
+      if (!caseAiReady(data.work[i])) { status("Add case-study sections before preparing."); return; }
+      if (b.dataset.prepare === "fbrev") fbReviewModal(i);
+      else if (b.dataset.prepare === "iprep") iprepModal(i);
+      else if (b.dataset.prepare === "story") storyModal(i);
+      return;
+    }
     if (act === "fbrev-open") { fbReviewModal(i); return; }
     if (act === "iprep-open") { iprepModal(i); return; }
     if (act === "story-open") { storyModal(i); return; }
@@ -17909,6 +17952,7 @@ import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs"
         "</div>" +
       "</header>" +
       '<div class="adm__workbar">' +
+        '<button class="adm__hist-btn adm__workback" data-l2-back type="button" aria-label="Back to projects" title="Back to projects" hidden>' + IC.back + '</button>' +
         '<div class="adm__hist" data-hist hidden>' +
           '<button class="adm__hist-btn" data-undo type="button" aria-label="Undo" title="Undo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg></button>' +
           '<button class="adm__hist-btn" data-redo type="button" aria-label="Redo" title="Redo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg></button>' +
@@ -17928,11 +17972,9 @@ import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs"
       '<div class="adm__main">' +
         '<div class="adm__editor"><div class="adm__body"></div>' +
           '<div class="adm__l2" hidden>' +
-            '<div class="adm__l2-bar">' +
+            '<div class="adm__l2-bar" hidden>' +
               '<div class="adm__l2-barrow">' +
-                '<button class="btn btn--ghost adm__l2-back" data-l2-back aria-label="Back to projects" title="Back to projects">' + IC.back + '</button>' +
                 '<span class="adm__l2-title"></span>' +
-                '<div class="l2modebar" data-l2modebar></div>' +
               "</div>" +
             "</div>" +
             '<div class="adm__l2-body"></div>' +
@@ -17980,7 +18022,14 @@ import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs"
       const menu = root.querySelector(".adm__case-visibility[open]");
       if (event.key === "Escape" && menu) { event.preventDefault(); event.stopPropagation(); menu.open = false; menu.querySelector("summary").focus(); }
     }, true);
-    aiSessionPanel = mountAiSession(root, aiSession, { close: IC.close, stop: IC.stop });
+    aiSessionPanel = mountAiSession(root, aiSession, { close: IC.close, stop: IC.stop, settings: root.querySelector("[data-opensettings]").innerHTML }, {
+      onSettings: () => {
+        closeBarPops();
+        activeSetCat = "ai";
+        openSettings();
+        requestAnimationFrame(() => setNav.querySelector('[data-cat="ai"]')?.focus());
+      }
+    });
     root.querySelector("[data-l2tabs]").addEventListener("keydown", event => {
       const tab = event.target.closest('[role="tab"]');
       if (!tab || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;

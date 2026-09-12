@@ -6,6 +6,7 @@ import postcss from "postcss";
 import { selectStudioDraft, studioDraftContent } from "./src/js/studio-draft-recovery.mjs";
 import { completeStudioBackup } from "./src/js/studio-content-backup.mjs";
 import { AI_SESSION_KEY, createAiSession } from "./src/js/ai-session.mjs";
+import { availableStudies } from "./src/js/slide-merge-sections.mjs";
 
 const source = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
 const styles = postcss.parse(readFileSync(new URL("./css/admin.css", import.meta.url), "utf8"));
@@ -82,7 +83,9 @@ test("shared Studio shell separates working controls from bottom document status
   const shell = source.slice(source.indexOf("function buildShell()"));
   const workbar = shell.slice(shell.indexOf('<div class="adm__workbar">'), shell.indexOf('<div class="adm__main">'));
   const footer = shell.slice(shell.indexOf('<footer class="adm__statusbar"'), shell.indexOf("'</footer>'"));
-  for (const marker of ["data-hist", "data-l2tabs", "data-native-slide-toolbar", "data-prevtoggle", "data-dev-wrap", "data-newtab"]) assert.ok(workbar.includes(marker));
+  for (const marker of ["data-l2-back", "data-hist", "data-l2tabs", "data-native-slide-toolbar", "data-prevtoggle", "data-dev-wrap", "data-newtab"]) assert.ok(workbar.includes(marker));
+  assert.ok(workbar.indexOf('data-l2-back') < workbar.indexOf('data-hist'));
+  assert.equal((shell.match(/data-l2-back aria-label=/g) || []).length, 0);
   for (const marker of ["adm__status\"", "data-draftmeter", 'data-act="logs-rec"']) {
     assert.ok(footer.includes(marker));
     assert.ok(!workbar.includes(marker));
@@ -147,6 +150,7 @@ test("shared backup retains original hosted media and owner content without alte
 
 test("project tabs remain in the shared workbar on the Slideshow surface", () => {
   const tabs = source.slice(source.indexOf("var L2_TABS"), source.indexOf("function l2BarScroll"));
+  assert.match(tabs, /\["gen", "AI Options"\]/);
   assert.match(tabs, /\["story", "Case study"\]/);
   assert.match(tabs, /\["slides", "Slideshow"\]/);
   assert.match(tabs, /tb\.innerHTML = show \? l2TabsHtml\(\) : ""; tb\.hidden = !show/);
@@ -251,4 +255,18 @@ test("case-study privacy lives in the shared footer and preserves saved visibili
   const shell = source.slice(source.indexOf("function buildShell()"));
   assert.ok(shell.indexOf('data-case-visibility') > shell.indexOf('<footer class="adm__statusbar"'));
   assert.ok(shell.indexOf('data-case-visibility') < shell.indexOf('data-act="logs-rec"'));
+});
+
+test("AI Options gate slide generation and preparation on available case-study sections", () => {
+  const start = source.indexOf("function caseAiReady(work)"), end = source.indexOf("async function caseAiSlides", start);
+  const { caseAiReady, caseAiOptions } = runInNewContext(`(() => { ${source.slice(start, end)} return {caseAiReady, caseAiOptions}; })()`, {availableStudies, csgenPanel:() => "CASE_GENERATOR", IC:{spark:""}});
+  for (const work of [{}, {study:{}}, {study:{blocks:[]}}, {study:{blocks:[{type:"text",off:true}]}}, {study:{blocks:[{type:"text",locked:true}]}}, {study:{blocks:[{encStub:true}]}}]) {
+    assert.equal(caseAiReady(work), false);
+    assert.equal((caseAiOptions(work, 0).match(/ disabled/g) || []).length, 4);
+  }
+  const work = {study:{blocks:[{type:"text",body:"Case-study source"}]}};
+  assert.equal(caseAiReady(work), true);
+  const panel = caseAiOptions(work, 2);
+  assert.doesNotMatch(panel, / disabled/);
+  for (const label of ["CASE_GENERATOR", "Generate slides", "Review feedback", "Interview prep", "Design storyteller"]) assert.ok(panel.includes(label));
 });

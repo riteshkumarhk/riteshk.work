@@ -15,13 +15,33 @@ visibility controls. This code release does not publish any owner draft content.
 
 The project card's Edit action opens the furthest populated stage: Slideshow,
 Case study, Highlights or Details. An empty native or legacy deck does not count
-as slideshow progress. Generate using AI remains available in the same five-tab
+as slideshow progress. AI Options remains available in the same five-tab
 strip. The shared second row retains those tabs on both editing surfaces; the
 Slideshow tab mounts the native editor with its own Undo/Redo. The right-aligned
 actions follow Editing/Rehearse, Current/All slides, then square Play. The view
 menu uses Studio's device-popup styling, selected state and keyboard navigation.
 Native saves still complete
 before leaving the editor, and failures retain the active editing session.
+
+Back now sits before Undo/Redo in the shared workbar, separated by a subtle vertical
+line within the existing gap. The project
+title/header row is removed from the editing canvas; identity remains in preview.
+Project history controls keep their disabled state visible when there is nothing
+to undo, and native history uses the same 34px controls. The Journey heading is
+retained separately. No additional footer identity field has been introduced.
+
+AI Options groups Generate case study, Generate slides and Prepare with AI.
+Generate slides and all three preparation actions are disabled until the selected
+case has available sections; disabled or protected-only source sections do not
+qualify. Click-time guards recheck availability. Native Generate slides enters
+the existing whole-case drafting and review pane with the same provider routing,
+cancellation and append/replace safeguards. Preparation uses the existing
+project-scoped review-feedback, interview-prep and design-storyteller dialogs.
+The owner approved release of these follow-ups on 2026-09-12, together with the
+single-shape AI motion, animation-matched resting sparkle and activity-to-settings
+shortcut. Release validation passed all 29 Studio workflows and 52 status, design
+and privacy contracts, both builds and bundle syntax checks. AI and publishing
+services were intercepted in tests; no paid requests or real content Publish ran.
 
 Preview appears only when case-study sections exist; Slideshow appears only when
 slides exist. Both open the current saved draft in a new tab using the existing
@@ -67,7 +87,10 @@ settled saves use the same unpublished/published narration as the rest of Studio
 Global activity recording remains usable independently of slide save failures.
 The standalone lab retains its own footer and visibility icon conventions.
 
-The footer's AI sparkle and token count open one shared activity drawer. The
+The footer's AI sparkle and token count open one shared activity drawer. Its header
+settings button replaces the activity drawer with the existing AI settings L1
+overview. Active requests continue; reopening activity restores their output and
+session token count. Provider settings retain their existing deeper view. The
 counter covers actual provider-reported input/output tokens across text, vision,
 image, embedding and explicitly enabled evaluation requests. Coordinator and
 specialist calls are included. Reported cache/reasoning usage is included once;
@@ -85,8 +108,13 @@ characters per job; completed-job history is limited to 30 items. Refresh clears
 the displayed jobs while retaining session totals. Closing the panel never stops
 a job; Stop does, and late answer chunks cannot revive it.
 
-The icon has distinct working and answering animations, a static reduced-motion
-state, fixed dimensions and accessible status/tooltip text. The drawer remains
+The active icon is one solid geometric mark with a cut-out center. Its entire silhouette
+reshapes and turns while working, with a quicker answering cadence and no separate
+sparkles or opacity pulse. At rest, including after completion or cancellation, it
+holds the animation's single diamond-like sparkle pose, not the multi-sparkle icon.
+Reduced-motion states hold the same pose; dimensions and token
+text remain fixed during the motion. Accessible status and tooltip text
+are retained. The drawer remains
 available while moving among project and Studio tabs, without replacing the
 feature's own proposal, apply or publish workflow. Hidden chain-of-thought,
 thinking blocks and signatures are never displayed. Tests use isolated drafts and
