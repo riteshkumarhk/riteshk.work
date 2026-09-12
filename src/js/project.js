@@ -1712,6 +1712,7 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
       else if (kind === "present") {
         e.preventDefault();
         const work = workById(activeId);
+        if (!(pjIsOwner() && pjHasSavedDeck(work)) && !pjDeckPublic(work)) return;
         if (pjIsOwner() && !PREVIEW && !window.__RK_NATIVE_PRESENTER) {
           openPresenterTab({
             url:"/?" + new URLSearchParams({ work:work.id, slideshow:"1" }),
@@ -2142,13 +2143,24 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
     if (navMode === "mini" && _navItems.length) { try { if (!localStorage.getItem("rk:pj:navpeek")) { localStorage.setItem("rk:pj:navpeek", "1"); overlay.classList.add("pj--navpeek"); setTimeout(function () { overlay.classList.remove("pj--navpeek"); }, 2400); } } catch (e) {} }
   }
   function pjIsOwner() { try { return localStorage.getItem("rk:owner") === "1"; } catch (e) { return false; } }
+  function pjHasSavedDeck(w) {
+    var st = w && w.study;
+    if (!st) return false;
+    if (hasNativeDeck(w)) {
+      if (st.nativeDeckDocument) return !!st.nativeDeckDocument.slides?.some(slide => slide && !slide.hidden);
+      if (st.nativeDeck) return Number(st.nativeDeck.slideCount) > 0;
+      return !!st.nativeDeckEnc || !!nativePublicDeck(w)?.slides?.some(slide => slide && !slide.hidden);
+    }
+    if (Array.isArray(st.slides)) return st.slides.some(slide => slide && !slide.hidden);
+    return !!(st.slidesEnc || st.slidesOwnerEnc);
+  }
   // A deck the owner marked public ships its slides in the clear, so anyone can play it from the case study.
   function pjDeckPublic(w) { var st = w && w.study; if (!st || !st.slidesPublic) return false; if (hasNativeDeck(w)) return !!nativePublicDeck(w) || !!(PREVIEW && st.nativeDeck && st.nativeDeck.slideCount); return !!(st.slides && st.slides.filter(function (s) { return s && !s.hidden; }).length); }
   function fillContent(w, keepAnchor) {
     var head = overlay.querySelector("[data-crumb]");
     head.innerHTML = '<b>' + esc(w.client || "") + "</b>" + (w.plateTag ? "<span>" + esc(w.plateTag) + "</span>" : "");
     applyNav(w);
-    overlay.classList.toggle("pj--canpresent", pjIsOwner());
+    overlay.classList.toggle("pj--canpresent", pjIsOwner() && pjHasSavedDeck(w));
     overlay.classList.toggle("pj--publicdeck", pjDeckPublic(w));
     var contentEl = overlay.querySelector("[data-content]");
     var html = contentHtml(w);
@@ -2642,7 +2654,7 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
     }
     function pjDeckSlides(w, st) {
       if (st && st.slides && st.slides.length) return st.slides.filter(function (s) { return s && !s.hidden; });
-      return pjAutoSlides(w, st);
+      return [];
     }
     function pjMediaHtml(z, cls) { var m = z.media || (z.src ? { src: z.src } : null); return (m && mediaSrc(m)) ? mediaEl(m, cls) : '<div class="pjps__ph"></div>'; }
     function pjFreeBg(s) {

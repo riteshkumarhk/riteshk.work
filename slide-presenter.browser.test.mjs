@@ -16,6 +16,45 @@ const enabled = !!baseURL && existsSync(executablePath);
 const deckDigest = async page => createHash("sha256").update(await page.evaluate(() => JSON.stringify(window.__slideMerge.deck()))).digest("hex");
 const denyCapture = () => { navigator.mediaDevices.getDisplayMedia = () => Promise.reject(new DOMException('Denied', 'NotAllowedError')); };
 
+test("case-study Play requires an authored deck and respects private versus public visibility", { skip: !enabled, timeout: 60000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless: true });
+  try {
+    for (const owner of [false,true]) {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+      const page = await context.newPage();
+      await page.addInitScript(owner => { if (owner) localStorage.setItem('rk:owner','1'); },owner);
+      await page.addInitScript(denyCapture);
+      const published = JSON.parse(readFileSync(new URL('./content.json',import.meta.url),'utf8'));
+      const blocks = [{type:'text',heading:'Case section, not a slide',body:'Original case content'}];
+      published.work = [
+        {id:'none',title:'No authored deck',study:{blocks}},
+        {id:'empty',title:'Empty authored deck',study:{blocks,slides:[],slidesPublic:true}},
+        {id:'private',title:'Private authored deck',study:{blocks,slidesPublic:false,slides:[{layout:'text',slots:{title:'Approved private slide'}}]}},
+        {id:'public',title:'Public authored deck',study:{blocks,slidesPublic:true,slides:[{layout:'text',slots:{title:'Approved public slide'}}]}}
+      ];
+      await page.route('**/content.json*',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(published)}));
+      for (const work of published.work) {
+        await page.goto(baseURL+'/?work='+work.id);
+        await page.locator('.pj.is-open').waitFor();
+        const available = work.id==='public'||owner&&work.id==='private';
+        assert.equal(await page.locator('.pj.is-open [data-pj="present"]').isVisible(),available,`${work.id}, owner=${owner}`);
+        const before = await page.evaluate(()=>JSON.stringify(window.RK.data.work));
+        if (available || ['none','empty'].includes(work.id)) {
+          await page.evaluate(id=>window.RK.presentDeck(window.RK.data.work.find(work=>work.id===id),{audienceOnly:true,autoStart:false}),work.id);
+          assert.equal(await page.locator('.pjp').count(),available?1:0);
+          if (available) {
+            assert.equal(await page.locator('[data-pjp-count]').textContent(),'1 / 1');
+            assert.match(await page.locator('.pjp').innerText(),/Approved (private|public) slide/);
+            await page.locator('[data-pjp="exit"]').click();
+          }
+        }
+        assert.equal(await page.evaluate(()=>JSON.stringify(window.RK.data.work)),before);
+      }
+      await context.close();
+    }
+  } finally { await browser.close(); }
+});
+
 test("native section renderer displays both before/after images and wires comparison", { skip: !enabled, timeout: 30000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless: true });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });

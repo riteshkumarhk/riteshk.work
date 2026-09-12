@@ -17,6 +17,40 @@ function loadFunction(context, name, source = editor, indent = "  ") {
   vm.runInContext(source.slice(start, end), context);
 }
 
+test("case-study playback requires saved slides and never generates a deck", () => {
+  const context = vm.createContext({
+    hasNativeDeck: work => !!(work?.study?.nativeDeck || work?.study?.nativeDeckEnc || work?.study?.nativeDeckPublic || work?.study?.nativeDeckDocument),
+    nativePublicDeck: work => work.study?.slidesPublic ? work.study.nativeDeckPublic : null,
+    PREVIEW: false,
+    pjAutoSlides: () => { throw new Error("Playback must not generate slides"); }
+  });
+  loadFunction(context, "pjHasSavedDeck", player);
+  loadFunction(context, "pjDeckPublic", player);
+  loadFunction(context, "pjDeckSlides", player, "    ");
+  const sections = [{ type: "text", heading: "Not a saved slide" }];
+  for (const study of [{ blocks: sections }, { blocks: sections, slides: [] }, { slides: [{ hidden: true }] }, { nativeDeck: { slideCount: 0 } }]) {
+    assert.equal(context.pjHasSavedDeck({ study }), false);
+    assert.equal(context.pjDeckSlides({ study }, study).length, 0);
+  }
+  for (const deck of [
+    { slides: [{ layout: "text", slots: { title: "Approved" } }] },
+    { nativeDeck: { slideCount: 2 } },
+    { nativeDeckDocument: { slides: [{ id: "approved" }] } },
+    { slidesEnc: { ct: "sealed" } }, { slidesOwnerEnc: { ct: "sealed" } }, { nativeDeckEnc: { ct: "sealed" } }
+  ]) {
+    const work = { study: { ...deck, slidesPublic: false } };
+    assert.equal(context.pjHasSavedDeck(work), true);
+    assert.equal(context.pjDeckPublic(work), false);
+  }
+  const publicWork = { study: { slidesPublic: true, slides: [{ layout: "text" }, { hidden: true }] } };
+  assert.equal(context.pjDeckPublic(publicWork), true);
+  assert.equal(context.pjDeckSlides(publicWork, publicWork.study).length, 1);
+  const nativeWork = { study: { slidesPublic: true, nativeDeckPublic: { slides: [{ id: "published" }] } } };
+  assert.equal(context.pjHasSavedDeck(nativeWork), true);
+  assert.equal(context.pjDeckPublic(nativeWork), true);
+  assert.match(player, /classList\.toggle\("pj--canpresent", pjIsOwner\(\) && pjHasSavedDeck\(w\)\)/);
+});
+
 function fixture() {
   const state = {
     openStudy: 0, openSlide: 0, l2Tab: "slides", slideView: "current",
