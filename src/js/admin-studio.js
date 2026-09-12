@@ -5015,7 +5015,11 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
       (hasLocked ? railDeeperCut(w, i) : "") + "</aside>";
   }
   function blockActionMenu(i, b, j, len) {
-    var items = [
+    var items = (b.encStub || b.vaultBlock) ? [
+      ["add", "Add section above", IC.add],
+      ["up", "Move up", IC.up, undefined, j === 0], ["down", "Move down", IC.down, undefined, j === len - 1],
+      ["unprotect", "Remove protection", IC.unlock]
+    ] : [
       ["rename", "Rename", IC.edit], ["add", "Add section above", IC.add],
       ["up", "Move up", IC.up, undefined, j === 0], ["down", "Move down", IC.down, undefined, j === len - 1],
       ["dup", "Duplicate", IC.dup],
@@ -5024,7 +5028,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
       ["lock", "Locked", b.locked ? IC.lock : IC.unlock, !!b.locked], ["remove", "Remove", IC.trash]
     ];
     return '<details class="study__actions"><summary class="iconbtn" aria-label="Section actions" title="Section actions" aria-haspopup="true" aria-expanded="false">' + svgIco('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>') + '</summary><div class="study__action-menu" popover="manual" role="group" aria-label="Section actions">' + items.map(function (item) {
-      return '<button type="button" data-act="study-block' + item[0] + '" data-index="' + i + '" data-bindex="' + j + '"' + (typeof item[3] === "boolean" ? ' aria-pressed="' + item[3] + '"' : '') + (item[4] ? ' disabled' : '') + '>' + item[2] + '<span>' + item[1] + '</span><span class="study__action-check" aria-hidden="true">' + (item[3] ? IC.check : '') + '</span></button>';
+      return '<button type="button" data-act="' + (item[0] === "unprotect" ? "study-unprotect" : "study-block" + item[0]) + '" data-index="' + i + '" data-bindex="' + j + '"' + (typeof item[3] === "boolean" ? ' aria-pressed="' + item[3] + '"' : '') + (item[4] ? ' disabled' : '') + '>' + item[2] + '<span>' + item[1] + '</span><span class="study__action-check" aria-hidden="true">' + (item[3] ? IC.check : '') + '</span></button>';
     }).join('') + '</div></details>';
   }
   function blockEditor(i, b, j, len, open) {
@@ -5037,7 +5041,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
           '<span class="study__block-badge">Protected</span>' +
           '<span class="study__block-label">' + escHtml(typeName) + ' \u2014 encrypted at rest</span>' +
           '<span class="study__protected-lock" role="img" aria-label="Encrypted section">' + IC.lock + '</span>' +
-          '<span class="study__block-ops"><button class="iconbtn" data-act="study-unprotect" data-index="' + i + '" data-bindex="' + j + '" title="Remove protection" aria-label="Remove protection">' + IC.unlock + '</button></span>' +
+          blockActionMenu(i, b, j, len) +
         '</div>' +
         '<div class="study__enc-note">Its content isn\u2019t in your published file. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
       '</div>';
@@ -5049,7 +5053,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
           '<span class="study__block-badge">Vaulted</span>' +
           '<span class="study__block-label">' + escHtml(typeName) + ' \u2014 stored in your private vault</span>' +
           '<span class="study__protected-lock" role="img" aria-label="Vaulted section">' + IC.lock + '</span>' +
-          '<span class="study__block-ops"><button class="iconbtn" data-act="study-unprotect" data-index="' + i + '" data-bindex="' + j + '" title="Remove protection" aria-label="Remove protection">' + IC.unlock + '</button></span>' +
+          blockActionMenu(i, b, j, len) +
         '</div>' +
         '<div class="study__enc-note">Your content is safe in your private vault \u2014 it just isn\u2019t in the published file, so it looks empty here. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
       '</div>';

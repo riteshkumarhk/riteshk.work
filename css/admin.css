@@ -1554,7 +1554,8 @@ body.adm-lock .cursor { display: none !important; }
   .study-sections .study__block-badge { grid-column:2; grid-row:1; font-size:9px; }
   .study-sections .study__block-label { grid-column:2; grid-row:2; }
   .study-sections .study__block-status { grid-column:3; grid-row:1 / 3; }
-  .study-sections .study__actions,.study-sections .study__protected-lock { grid-column:4; grid-row:1 / 3; }
+  .study-sections .study__actions { grid-column:4; grid-row:1 / 3; }
+  .study-sections .study__protected-lock { grid-column:3; grid-row:1 / 3; }
   .study-sections .study__block-chev,.study-sections .study__block-head--enc .study__block-ops { grid-column:5; grid-row:1 / 3; }
 }
 @media(hover:none),(pointer:coarse) { .study-sections .study__blocks { gap:24px; } .study-sections .study__insert-gap { top:-25px; height:24px; opacity:1; color:var(--text-faint); } .study__actions>summary,.study-sections .study__block-ops { opacity:1; } }

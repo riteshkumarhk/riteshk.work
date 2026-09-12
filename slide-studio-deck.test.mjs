@@ -184,6 +184,7 @@ test("Sections controls preserve names, checked states and protected content", {
       assert.equal(await sealed.locator('[data-act="study-blockremove"]').count(),0);
       assert.equal(await sealed.locator('[data-act="study-unprotect"]').count(),2);
       const sealedBefore = await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks.slice(2)));
+      await sealed.first().locator('summary').click();
       await sealed.first().locator('[data-act="study-unprotect"]').click();
       await page.getByText('Remove section protection?',{exact:true}).waitFor();
       await page.locator('.pass').filter({hasText:'Remove section protection?'}).getByRole('button',{name:'Cancel',exact:true}).click();
@@ -194,6 +195,60 @@ test("Sections controls preserve names, checked states and protected content", {
       await page.reload();
       await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
       assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].editorName),'Custom section name');
+      await context.close();
+    }
+  } finally { await browser.close(); }
+});
+
+test("Sections protected menus move sealed data intact and allow insertion above", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  try {
+    for (const width of [1440,390]) {
+      const context = await browser.newContext({viewport:{width,height:844},hasTouch:width===390,reducedMotion:"reduce"});
+      const page = await context.newPage();
+      const encrypted = {type:"media",locked:true,encStub:true,iv:"original-iv",ct:"original-ciphertext"};
+      const vaulted = {type:"media",locked:true,vaultBlock:"original-vault-reference"};
+      await openIntegratedFixture(page,[encrypted,{type:"text",heading:"Middle"},vaulted]);
+      await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+      await page.locator('[data-l2tab="story"]').click();
+      const rows = page.locator('.study-sections .study__block');
+      const openMenu = async index => {
+        const row = rows.nth(index);
+        await row.locator('summary').click();
+        const menu = row.locator('.study__action-menu:popover-open');
+        await menu.waitFor();
+        assert.deepEqual(await menu.locator('button').evaluateAll(buttons=>buttons.map(button=>button.dataset.act)),['study-blockadd','study-blockup','study-blockdown','study-unprotect']);
+        const bounds = await menu.boundingBox();
+        assert.ok(bounds.x>=0&&bounds.x+bounds.width<=width&&bounds.y>=0&&bounds.y+bounds.height<=844);
+        const lock = await row.locator('.study__protected-lock').boundingBox();
+        const trigger = await row.locator('summary').boundingBox();
+        assert.ok(lock.x+lock.width<=trigger.x,'Lock and More trigger must not overlap');
+        return menu;
+      };
+      let menu = await openMenu(0);
+      assert.equal(await menu.locator('[data-act="study-blockup"]').isDisabled(),true);
+      await menu.locator('[data-act="study-blockdown"]').click();
+      assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[1]),encrypted);
+      menu = await openMenu(1);
+      await menu.locator('[data-act="study-blockup"]').click();
+      menu = await openMenu(2);
+      assert.equal(await menu.locator('[data-act="study-blockdown"]').isDisabled(),true);
+      await menu.locator('[data-act="study-blockup"]').click();
+      assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[1]),vaulted);
+      menu = await openMenu(1);
+      await menu.locator('[data-act="study-blockdown"]').click();
+      menu = await openMenu(2);
+      await page.screenshot({path:join(tmpdir(),`rk-protected-menu-${width}.png`)});
+      await menu.locator('[data-act="study-blockadd"]').click();
+      await page.locator('.secpick [data-pick="cards"]').click();
+      const blocks = await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks);
+      assert.deepEqual(blocks[0],encrypted);
+      assert.equal(blocks[2].type,'cards');
+      assert.deepEqual(blocks[3],vaulted);
+      assert.equal(await page.locator('.study__block--enc input,.study__block--enc textarea').count(),0);
+      await page.reload();
+      await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+      assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks),blocks);
       await context.close();
     }
   } finally { await browser.close(); }
