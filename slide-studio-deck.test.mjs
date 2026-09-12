@@ -98,6 +98,42 @@ test("Sections insertion opens the real picker at the selected gap", {timeout:60
   } finally { await browser.close(); }
 });
 
+test("Sections duplication opens the copy in view for immediate editing", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  try {
+    for (const width of [1440,390]) {
+      const context = await browser.newContext({viewport:{width,height:844},hasTouch:width===390,reducedMotion:"reduce"});
+      const page = await context.newPage();
+      await openIntegratedFixture(page,Array.from({length:18},(_,index)=>({type:"text",heading:"Section "+index,body:"Original content "+index})));
+      await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+      await page.locator('[data-l2tab="story"]').click();
+      for (const expanded of [false,true]) {
+        const rows = page.locator('.study-sections .study__block');
+        const source = rows.nth(16);
+        if (expanded) {
+          await source.locator('.study__block-label').click();
+          await page.waitForFunction(()=>document.querySelectorAll('.study-sections .study__block')[16].classList.contains('is-open'));
+        }
+        await source.locator('summary').click();
+        await source.locator('.study__action-menu [data-act="study-blockdup"]').click();
+        const copy = rows.nth(17);
+        assert.equal(await copy.evaluate(element=>element.classList.contains('is-open')),true);
+        assert.equal(await page.locator('.study-sections .study__block.is-open').count(),1);
+        const heading = copy.locator('input[data-bfield="heading"]');
+        const bounds = await heading.boundingBox();
+        assert.ok(bounds && bounds.y>=0 && bounds.y+bounds.height<=844,'Copy heading must be visible without scrolling');
+        await heading.fill('Edited copy');
+        await heading.blur();
+        const blocks = await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks);
+        assert.equal(blocks[16].heading,'Section 16');
+        assert.equal(blocks[17].heading,'Edited copy');
+        assert.equal(blocks[17].body,blocks[16].body);
+      }
+      await context.close();
+    }
+  } finally { await browser.close(); }
+});
+
 test("Sections controls preserve names, checked states and protected content", {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
   try {
