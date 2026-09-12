@@ -351,8 +351,10 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
         status("\u26a0 Draft too big to auto-save locally \u2014 your images are safe at full quality here. Hit Publish to store them (large ones are hosted as files automatically).");
       }
       updateDraftMeter();
-      if (options.recordHistory !== false) histPush();
-      else if (histIndex >= 0) histStack[histIndex] = histSnap();
+      if (ok || !options.requireSaved) {
+        if (options.recordHistory !== false) histPush();
+        else if (histIndex >= 0) histStack[histIndex] = histSnap();
+      }
       return ok;
     };
     if (immediate) return save();
@@ -4466,13 +4468,70 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
      browsers and auto-scrolls the editor when you drag near an edge. */
   var SORT_ROW_SEL = ".rep__item, .study__block, .card, .cellrow, .adm__lsec, .adm__asec, .slides__navitem, .story__item";
   function sortRowsFor(key) {
+    if (key.indexOf('block:') === 0) {
+      var sectionGrip = root.querySelector('.study-sections [data-grip][data-sortkey="' + key + '"]');
+      if (sectionGrip) return [].slice.call(sectionGrip.closest('.study__blocks').children).filter(function (row) { return row.matches('.study__block'); });
+    }
     return [].slice.call(root.querySelectorAll('[data-grip][data-sortkey="' + key + '"]'))
       .map(function (g) { return g.closest(SORT_ROW_SEL); }).filter(Boolean);
   }
+  var sectionDragPending = null, sectionDragSuppressUntil = 0;
+  function sectionDragClear() {
+    if (sectionDragPending) clearTimeout(sectionDragPending.timer);
+    sectionDragPending = null;
+    document.removeEventListener('pointermove', sectionDragMove, true);
+    document.removeEventListener('pointerup', sectionDragClear, true);
+    document.removeEventListener('pointercancel', sectionDragClear, true);
+    document.removeEventListener('keydown', sectionDragKey, true);
+  }
+  function sectionDragKey(event) {
+    if (event.key !== 'Escape') return;
+    sectionDragClear();
+    if (sortState && sortState.headerDrag) { event.preventDefault(); sortEnd({type:'pointercancel'}); }
+  }
+  function sectionDragActivate(event) {
+    var pending = sectionDragPending;
+    if (!pending || !pending.head.isConnected) { sectionDragClear(); return; }
+    sectionDragClear();
+    clearTimeout(blockRenameTimer);
+    sortBegin(event, pending.grip);
+    if (!sortState) return;
+    sortState.headerDrag = true;
+    sortState.pointerId = pending.pointerId;
+    document.addEventListener('keydown', sectionDragKey, true);
+    document.addEventListener('touchmove', sectionDragTouchMove, {capture:true,passive:false});
+  }
+  function sectionDragTouchMove(event) {
+    if (sortState && sortState.headerDrag) event.preventDefault();
+  }
+  function sectionDragMove(event) {
+    var pending = sectionDragPending;
+    if (!pending || event.pointerId !== pending.pointerId) return;
+    var moved = Math.hypot(event.clientX - pending.x, event.clientY - pending.y);
+    if (pending.touch) { if (moved > 8) sectionDragClear(); }
+    else if (moved >= 6) sectionDragActivate(event);
+  }
   function sortStart(e) {
+    if (sortState || sectionDragPending) return;
     var grip = e.target.closest && e.target.closest("[data-grip]");
+    var head = e.target.closest && e.target.closest('.study-sections .study__block-head');
+    if (!grip && head && !e.target.closest('button,summary,details,input,textarea,select,a,[contenteditable],.is-editing')) {
+      if (!e.isPrimary || e.button !== 0) return;
+      grip = head.querySelector('[data-grip]');
+      if (!grip || sortRowsFor(grip.dataset.sortkey).length < 2) return;
+      sectionDragPending = {head:head,grip:grip,x:e.clientX,y:e.clientY,pointerId:e.pointerId,touch:e.pointerType==='touch',timer:0};
+      if (sectionDragPending.touch) sectionDragPending.timer = setTimeout(function () { sectionDragActivate(e); },350);
+      document.addEventListener('pointermove', sectionDragMove, true);
+      document.addEventListener('pointerup', sectionDragClear, true);
+      document.addEventListener('pointercancel', sectionDragClear, true);
+      document.addEventListener('keydown', sectionDragKey, true);
+      return;
+    }
     if (!grip) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    sortBegin(e, grip);
+  }
+  function sortBegin(e, grip) {
     var key = grip.getAttribute("data-sortkey"); if (!key) return;
     var row = grip.closest(SORT_ROW_SEL); if (!row) return;
     var rows = sortRowsFor(key); if (rows.length < 2) return;
@@ -4503,7 +4562,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
   function sortPreview(idx) {
     try { var fw = frameWin(); if (fw) fw.postMessage({ __rk: "dragBlock", index: idx }, "*"); } catch (e) {}
   }
-  function sortMove(e) { if (!sortState) return; sortState.y = e.clientY; sortMark(e.clientY); }
+  function sortMove(e) { if (!sortState || (sortState.headerDrag && e.pointerId !== sortState.pointerId)) return; if (sortState.headerDrag && e.cancelable) e.preventDefault(); sortState.y = e.clientY; sortMark(e.clientY); }
   function sortLoop() {
     var s = sortState; if (!s) return;
     var el = s.scrollEl;
@@ -4515,9 +4574,14 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
     }
     s.raf = requestAnimationFrame(sortLoop);
   }
-  function sortEnd() {
+  function sortEnd(event) {
     var s = sortState; if (!s) return;
     sortState = null;
+    if (s.headerDrag) {
+      sectionDragSuppressUntil = Date.now() + 400;
+      document.removeEventListener('keydown', sectionDragKey, true);
+      document.removeEventListener('touchmove', sectionDragTouchMove, true);
+    }
     document.removeEventListener("pointermove", sortMove, true);
     document.removeEventListener("pointerup", sortEnd, true);
     document.removeEventListener("pointercancel", sortEnd, true);
@@ -4525,7 +4589,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
     s.rows.forEach(function (r) { r.classList.remove("is-drop-above", "is-drop-below", "is-sortdrag"); });
     document.body.classList.remove("adm-sorting");
     if (s.isBlock) { try { var fw = frameWin(); if (fw) fw.postMessage({ __rk: "dragBlockEnd" }, "*"); } catch (e) {} }
-    if (s.to !== s.from) sortApply(s.key, s.from, s.to);
+    if (s.to !== s.from && !(s.headerDrag && event && event.type === 'pointercancel')) sortApply(s.key, s.from, s.to);
   }
   function sortApply(key, from, to) {
     var p = key.split(":"), arr = null, after = null;
@@ -4667,6 +4731,48 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
     try { var _fw = frameWin(); if (_fw && _fw.RK && _fw.RK.setStudyUnlocked) _fw.RK.setStudyUnlocked(w.id); } catch (e) {}   // reveal the now-unlocked sections in the live preview (translucent veil)
     saveDraft(true); renderL2(); refreshL2Preview();
     status("Protected sections unlocked for editing \u2014 they\u2019ll be re-protected on Publish.", true);
+  }
+  var removingSectionProtection = new WeakSet();
+  async function removeSectionProtection(i, j) {
+    const work = data.work[i], study = work && work.study, sealed = study && study.blocks[j];
+    if (!sealed || (!sealed.encStub && !sealed.vaultBlock) || removingSectionProtection.has(sealed)) return;
+    removingSectionProtection.add(sealed);
+    try {
+      const confirmed = await confirmModal({title:"Remove section protection?",sub:"After you unlock it, this section will no longer require the deeper-cut pass on your next Publish. The case study's own visibility still applies. Nothing is deleted.",cta:"Remove protection"});
+      if (!confirmed) return;
+      let full;
+      if (sealed.vaultBlock) {
+        if (!adminSession()) { status("Sign in to remove protection from this section."); return; }
+        const url = await vaultSignedUrl(sealed.vaultBlock);
+        if (!url) throw new Error("Vault access declined");
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Vault section unavailable");
+        full = await response.json();
+        if (full && typeof full === "object") full.vault = true;
+      } else {
+        const wrap = study.enc && study.enc.wraps && study.enc.wraps.owner;
+        if (!wrap || !sealed.iv || !sealed.ct) throw new Error("Recovery data unavailable");
+        const recovery = await ensureRecoveryPass();
+        if (recovery === null) return;
+        let sek;
+        try { sek = await rkUnwrapSek(recovery, wrap); }
+        catch (error) { recoveryPassCache = null; throw error; }
+        full = await rkDecWithSek(sek, sealed);
+        await rkResolveEncToDataUri(full, sek);
+      }
+      if (!full || typeof full !== "object" || Array.isArray(full) || typeof full.type !== "string" || full.encStub || full.vaultBlock) throw new Error("Invalid section");
+      if (data.work[i] !== work || work.study !== study || !study.blocks.includes(sealed)) { status("The section changed. Try removing protection again."); return; }
+      const position = study.blocks.indexOf(sealed);
+      delete full.locked;
+      study.blocks[position] = full;
+      let saved = false;
+      try { saved = saveDraft(true, {requireSaved:true}); } catch (error) {}
+      if (!saved) { study.blocks[position] = sealed; status("The draft could not be saved. Section protection is unchanged."); return; }
+      openBlock = position;
+      renderL2(); refreshL2Preview();
+      status("Section protection removed in the draft. Publish to apply it to the site.", true);
+    } catch (error) { status("Could not unlock this section. Its protection is unchanged."); }
+    finally { removingSectionProtection.delete(sealed); }
   }
   // Owner-only: turn a hidden encrypted project back into an editable one.
   async function decryptWorkForEdit(i) {
@@ -4873,7 +4979,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
       '<button class="iconbtn" data-act="study-blockdup" data-index="' + i + '" data-bindex="' + j + '" title="Duplicate section" aria-label="Duplicate section">' + IC.dup + "</button>" +
       '<button class="iconbtn study__block-off' + (b.off ? " is-off" : "") + '" data-act="study-blockoff" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.off ? "Hidden \u2014 click to show" : "On \u2014 click to hide") + '">' + (b.off ? IC.eyeoff : IC.eye) + "</button>" +
       '<button class="iconbtn study__block-lock' + (b.locked ? " is-locked" : "") + '" data-act="study-blocklock" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.locked ? "Locked \u2014 click to unlock" : "Lock \u2014 deeper-cut only") + '"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' + (b.locked ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<path d="M8 10.5V6.8a4 4 0 0 1 7.5-1.6"/>') + "</svg></button>" +
-      '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + "</button>" +
+      (isEnc ? '<button class="iconbtn" data-act="study-unprotect" data-index="' + i + '" data-bindex="' + j + '" title="Remove protection" aria-label="Remove protection">' + IC.unlock + '</button>' : '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + '</button>') +
       "</span>";
     return '<div class="story__item' + (active ? " is-active" : "") + (b.off ? " is-off" : "") + (isEnc ? " is-enc" : "") + '" data-act="story-nav" data-index="' + i + '" data-bindex="' + j + '" tabindex="0" role="button" aria-label="Section ' + (j + 1) + '">' +
       '<span class="sortgrip story__item-grip" data-grip data-sortkey="block:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + "</span>" +
@@ -4908,46 +5014,57 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
       '<button class="btn btn--add story__rail-add" data-act="study-pick" data-index="' + i + '">' + IC.add + " Add a section</button>" +
       (hasLocked ? railDeeperCut(w, i) : "") + "</aside>";
   }
+  function blockActionMenu(i, b, j, len) {
+    var items = [
+      ["rename", "Rename", IC.edit], ["add", "Add section above", IC.add],
+      ["up", "Move up", IC.up, undefined, j === 0], ["down", "Move down", IC.down, undefined, j === len - 1],
+      ["dup", "Duplicate", IC.dup],
+      ["sep", "Separator above", b.sep === false ? IC.divoff : IC.divon, b.sep !== false],
+      ["off", "Hidden from site", b.off ? IC.eyeoff : IC.eye, !!b.off],
+      ["lock", "Locked", b.locked ? IC.lock : IC.unlock, !!b.locked], ["remove", "Remove", IC.trash]
+    ];
+    return '<details class="study__actions"><summary class="iconbtn" aria-label="Section actions" title="Section actions" aria-haspopup="true" aria-expanded="false">' + svgIco('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>') + '</summary><div class="study__action-menu" popover="manual" role="group" aria-label="Section actions">' + items.map(function (item) {
+      return '<button type="button" data-act="study-block' + item[0] + '" data-index="' + i + '" data-bindex="' + j + '"' + (typeof item[3] === "boolean" ? ' aria-pressed="' + item[3] + '"' : '') + (item[4] ? ' disabled' : '') + '>' + item[2] + '<span>' + item[1] + '</span><span class="study__action-check" aria-hidden="true">' + (item[3] ? IC.check : '') + '</span></button>';
+    }).join('') + '</div></details>';
+  }
   function blockEditor(i, b, j, len, open) {
     var typeName = studyBlockTypeName(b);
+    var insertGap = j > 0 ? '<button type="button" class="study__insert-gap" data-act="study-blockadd" data-index="' + i + '" data-bindex="' + j + '" title="Add section here" aria-label="Add section before section ' + (j + 1) + '">' + IC.add + '</button>' : '';
     if (b.encStub) {
-      return '<div class="card study__block study__block--enc">' +
+      return '<div class="card study__block study__block--enc">' + insertGap +
         '<div class="study__block-head study__block-head--enc">' +
-          '<span class="study__block-badge">' + LOCK_SVG + ' Protected</span>' +
+          '<span class="sortgrip study__block-grip" data-grip data-sortkey="block:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
+          '<span class="study__block-badge">Protected</span>' +
           '<span class="study__block-label">' + escHtml(typeName) + ' \u2014 encrypted at rest</span>' +
-          '<span class="study__block-ops"><button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + '</button></span>' +
+          '<span class="study__protected-lock" role="img" aria-label="Encrypted section">' + IC.lock + '</span>' +
+          '<span class="study__block-ops"><button class="iconbtn" data-act="study-unprotect" data-index="' + i + '" data-bindex="' + j + '" title="Remove protection" aria-label="Remove protection">' + IC.unlock + '</button></span>' +
         '</div>' +
         '<div class="study__enc-note">Its content isn\u2019t in your published file. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
       '</div>';
     }
     if (b.vaultBlock) {
-      return '<div class="card study__block study__block--enc">' +
+      return '<div class="card study__block study__block--enc">' + insertGap +
         '<div class="study__block-head study__block-head--enc">' +
-          '<span class="study__block-badge">' + LOCK_SVG + ' Vaulted</span>' +
+          '<span class="sortgrip study__block-grip" data-grip data-sortkey="block:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
+          '<span class="study__block-badge">Vaulted</span>' +
           '<span class="study__block-label">' + escHtml(typeName) + ' \u2014 stored in your private vault</span>' +
-          '<span class="study__block-ops"><button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + '</button></span>' +
+          '<span class="study__protected-lock" role="img" aria-label="Vaulted section">' + IC.lock + '</span>' +
+          '<span class="study__block-ops"><button class="iconbtn" data-act="study-unprotect" data-index="' + i + '" data-bindex="' + j + '" title="Remove protection" aria-label="Remove protection">' + IC.unlock + '</button></span>' +
         '</div>' +
         '<div class="study__enc-note">Your content is safe in your private vault \u2014 it just isn\u2019t in the published file, so it looks empty here. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
       '</div>';
     }
     var custom = (typeof b.editorName === "string" && b.editorName.trim()) ? b.editorName.trim() : "";
     var label = studyBlockLabel(b);
-    var head = '<div class="study__block-head" data-act="study-blocktoggle" data-index="' + i + '" data-bindex="' + j + '">' +
+    var sepTool = '<button type="button" class="iconbtn study__block-sep' + (b.sep === false ? ' is-off' : '') + '" data-act="study-blocksep" data-index="' + i + '" data-bindex="' + j + '" title="Separator above" aria-label="Separator above" aria-pressed="' + (b.sep !== false) + '">' + (b.sep === false ? IC.divoff : IC.divon) + '</button>';
+    var offTool = '<button type="button" class="iconbtn study__block-off' + (b.off ? ' is-off' : '') + '" data-act="study-blockoff" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.off ? 'Show section' : 'Hide section') + '" aria-label="' + (b.off ? 'Show section' : 'Hide section') + '">' + (b.off ? IC.eyeoff : IC.eye) + '</button>';
+    var lockTool = '<button type="button" class="iconbtn study__block-lock' + (b.locked ? ' is-locked' : '') + '" data-act="study-blocklock" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.locked ? 'Unlock section' : 'Lock section') + '" aria-label="' + (b.locked ? 'Unlock section' : 'Lock section') + '">' + (b.locked ? IC.lock : IC.unlock) + '</button>';
+    var head = insertGap + '<div class="study__block-head" data-act="study-blocktoggle" data-index="' + i + '" data-bindex="' + j + '">' +
       '<span class="sortgrip study__block-grip" data-grip data-sortkey="block:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
       '<span class="study__block-badge">' + escHtml(typeName) + "</span>" +
-      '<span class="study__block-label' + (custom ? " is-custom" : "") + '" title="Double-click to rename">' + escHtml(label) + "</span>" +
-      '<span class="study__block-ops">' +
-      '<button class="iconbtn" data-act="study-blockadd" data-index="' + i + '" data-bindex="' + j + '" title="Add a section above" aria-label="Add a section above">' + IC.add + '</button>' +
-      '<button class="iconbtn" data-act="study-blockup" data-index="' + i + '" data-bindex="' + j + '"' + (j === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
-      '<button class="iconbtn" data-act="study-blockdown" data-index="' + i + '" data-bindex="' + j + '"' + (j === len - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
-      '<button class="iconbtn" data-act="study-blockdup" data-index="' + i + '" data-bindex="' + j + '" title="Duplicate section" aria-label="Duplicate section">' + IC.dup + '</button>' +
-      '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + '</button>' +
-      "</span>" +
-      '<span class="study__block-toggles">' +
-      '<button class="iconbtn study__block-sep' + (b.sep === false ? " is-off" : "") + '" data-act="study-blocksep" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.sep === false ? "Flowing into the previous section \u2014 click to add a separator line above" : "Separator line above \u2014 click to flow into the previous section") + '" aria-label="Toggle separator line above">' + (b.sep === false ? IC.divoff : IC.divon) + '</button>' +
-      '<button class="iconbtn study__block-off' + (b.off ? " is-off" : "") + '" data-act="study-blockoff" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.off ? "Section hidden from the live site \u2014 click to show" : "Section is on \u2014 click to hide it from the live site") + '" aria-label="' + (b.off ? "Show section" : "Hide section") + '">' + (b.off ? IC.eyeoff : IC.eye) + '</button>' +
-      '<button class="iconbtn study__block-lock' + (b.locked ? " is-locked" : "") + '" data-act="study-blocklock" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.locked ? "Locked \u2014 click to unlock" : "Lock this section \u2014 deeper-cut only") + '" aria-label="' + (b.locked ? "Unlock section" : "Lock section") + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' + (b.locked ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<path d="M8 10.5V6.8a4 4 0 0 1 7.5-1.6"/>') + "</svg></button>" +
-      "</span>" +
+      '<span class="study__block-label' + (custom ? " is-custom" : "") + '" role="button" tabindex="0" aria-expanded="' + !!open + '" title="Double-click to rename">' + escHtml(label) + "</span>" +
+      '<span class="study__block-toggles study__block-status">' + (b.off ? offTool : '') + (b.locked ? lockTool : '') + '</span>' +
+      blockActionMenu(i, b, j, len) +
       '<span class="study__block-chev" aria-hidden="true">' + IC.chev + '</span>' +
       "</div>";
     var common = sfInput(i, j, "nav", "Section label", "Shows in the left nav \u2014 leave blank to hide it there") + sfInput(i, j, "kicker", "Kicker", "small label above the block");
@@ -5000,7 +5117,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
     var hasHeading = /^(text|metrics|steps|media|split|cards|cloud|gallery|mediagrid|device|isolayers|figure|columns|rows|compare|stickies|voices|workflow|focus)$/.test(b.type);
     var sizeCtl = (b.type === "statement") ? sfSelect(i, j, "hsize", "Statement size", [["", "Standard"], ["sm", "Compact \u2014 easier to read"], ["lg", "Large \u2014 display"]], "Shrink it if the standard size feels too big for the copy.") : "";
     return '<div class="card study__block' + (open ? " is-open" : "") + (b.locked ? " is-locked" : "") + (b.off ? " is-off" : "") + '">' + head +
-      '<div class="study__block-body">' + common + body + sizeCtl + "</div></div>";
+      '<div class="study__block-body"><div class="study__block-tools">' + sepTool + offTool + lockTool + '</div>' + common + body + sizeCtl + "</div></div>";
   }
   function smeta(i, field, label, hint, ph) {
     var st = data.work[i].study;
@@ -8547,7 +8664,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
     else if (tab === "story") {
       // Classic accordion: a full-width list of sections; click a head to expand its editor inline underneath.
       var accList = blocks.map(function (bk, bj) { return blockEditor(i, bk, bj, blocks.length, openBlock === bj); }).join("") || '<div class="adm__empty">No sections yet. Add the first one below.</div>';
-      panel = '<section class="l2grp"><div class="l2grp__head">Sections <span>click a section to expand &amp; edit it</span></div>' +
+      panel = '<section class="l2grp study-sections"><div class="l2grp__head">Sections <span>' + blocks.length + '</span></div>' +
         '<div class="study__blocks">' + accList + '</div>' +
         '<div class="study__add"><button class="btn btn--add study__pickbtn" data-act="study-pick" data-index="' + i + '">' + IC.add + ' Add a section</button></div>' +
         railDeeperCut(w, i) + '</section>';
@@ -11433,6 +11550,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
 
   var blockRenameTimer = 0;
   function onDblClick(e) {
+    if (Date.now() < sectionDragSuppressUntil) return;
     var lab = e.target.closest(".study__block-label");
     if (!lab) return;
     var head = lab.closest(".study__block-head");
@@ -11476,6 +11594,10 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
     });
   }
   function onClick(e) {
+    if (Date.now() < sectionDragSuppressUntil && e.detail && e.target.closest('.study-sections .study__block-head') && !e.target.closest('button,summary,details,input')) { e.preventDefault(); return; }
+    if (e.target.closest('.study__actions summary')) return;
+    var sectionMenu = e.target.closest('.study__action-menu');
+    if (sectionMenu && e.target.closest('button[data-act]')) sectionMenu.closest('details').open = false;
     if (e.target && e.target.classList && e.target.classList.contains("adm__settings")) { closeSettings(); return; }
     if (root && !e.target.closest(".hsize")) { var _oh = root.querySelectorAll(".hsize.is-open"); if (_oh.length) _oh.forEach(function (x) { x.classList.remove("is-open"); }); }
     // soft-dismiss the icon-picker flyout (a <details>) on any click outside it — matches the other flyouts
@@ -11975,6 +12097,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
     if (act === "study-pick") { sectionPicker(i); return; }
     if (act === "study-blockadd") { sectionPicker(i, +b.dataset.bindex); return; }
     if (act === "study-decrypt") { decryptStudyForEdit(i); return; }
+    if (act === "study-unprotect") { removeSectionProtection(i, +b.dataset.bindex); return; }
     if (act === "study-unlocktoggle") {
       var _wk = data.work[i]; if (!_wk || !_wk.study) return;
       var _wid = _wk.id, _on = b.getAttribute("aria-checked") === "true";
@@ -12019,6 +12142,12 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
       var _snob = root.querySelector(".study__blocks .study__block.is-open"); if (_snob && _snob.scrollIntoView) _snob.scrollIntoView({ block: "nearest" });
       return;
     }
+    if (act === "study-blockrename") {
+      clearTimeout(blockRenameTimer);
+      var renameHead = root.querySelector('.study__block-head[data-index="' + i + '"][data-bindex="' + b.dataset.bindex + '"]');
+      if (renameHead) startBlockRename(renameHead.querySelector('.study__block-label'), i, +b.dataset.bindex);
+      return;
+    }
     if (act === "study-blocktoggle") {
       if (e.detail > 1) return; // 2nd click of a double-click - let dblclick handle rename
       const j = +b.dataset.bindex;
@@ -12040,7 +12169,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
     }
     if (act === "study-blockup") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j > 0) { [s[j - 1], s[j]] = [s[j], s[j - 1]]; if (openBlock === j) openBlock = j - 1; else if (openBlock === j - 1) openBlock = j; saveDraft(true); renderL2(); } return; }
     if (act === "study-blockdown") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (j < s.length - 1) { [s[j + 1], s[j]] = [s[j], s[j + 1]]; if (openBlock === j) openBlock = j + 1; else if (openBlock === j + 1) openBlock = j; saveDraft(true); renderL2(); } return; }
-    if (act === "study-blockremove") { const j = +b.dataset.bindex; data.work[i].study.blocks.splice(j, 1); if (openBlock === j) openBlock = -1; else if (openBlock > j) openBlock--; saveDraft(true); renderL2(); return; }
+    if (act === "study-blockremove") { const j = +b.dataset.bindex, section = data.work[i].study.blocks[j]; if (section && (section.encStub || section.vaultBlock)) { status("Unlock the protected section before deleting it."); return; } data.work[i].study.blocks.splice(j, 1); if (openBlock === j) openBlock = -1; else if (openBlock > j) openBlock--; saveDraft(true); renderL2(); return; }
     if (act === "study-blockdup") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s.splice(j + 1, 0, JSON.parse(JSON.stringify(s[j]))); openBlock = j + 1; saveDraft(true); renderL2(); status("Section duplicated \u2014 editing the copy.", true); } return; }
     if (act === "study-blocklock") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { s[j].locked = !s[j].locked; saveDraft(true); renderL2(); status(s[j].locked ? "Section locked \u2014 hidden behind the deeper-cut pass." : "Section unlocked.", true); } return; }
     if (act === "study-blocksep") { const s = data.work[i].study.blocks, j = +b.dataset.bindex; if (s[j]) { if (s[j].sep === false) delete s[j].sep; else s[j].sep = false; saveDraft(true); renderL2(); status(s[j].sep === false ? "Divider off \u2014 this section flows into the previous one." : "Divider on \u2014 separator line above.", true); } return; }
@@ -18469,19 +18598,30 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
     document.body.appendChild(root);
     root.addEventListener("toggle", event => {
       const menu = event.target;
-      if (!menu.matches(".adm__case-visibility")) return;
+      if (!menu.matches(".adm__case-visibility,.study__actions")) return;
       const panel = menu.querySelector("[popover]");
+      menu.querySelector('summary').setAttribute('aria-expanded', String(menu.open));
       if (!menu.open) { panel.hidePopover(); return; }
+      root.querySelectorAll('.study__actions[open]').forEach(other => { if (other !== menu) other.open = false; });
       panel.showPopover();
       const anchor = menu.querySelector("summary").getBoundingClientRect(), box = panel.getBoundingClientRect();
       panel.style.left = Math.max(8, Math.min(anchor.right - box.width, innerWidth - box.width - 8)) + "px";
-      panel.style.top = Math.max(8, anchor.top - box.height - 8) + "px";
+      panel.style.top = (menu.matches('.study__actions') ? Math.max(8, Math.min(innerHeight - box.height - 8, anchor.bottom + 6)) : Math.max(8, anchor.top - box.height - 8)) + "px";
     }, true);
     root.addEventListener("pointerdown", event => {
+      root.querySelectorAll('.study__actions[open]').forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
       const menu = root.querySelector(".adm__case-visibility[open]");
       if (menu && !menu.contains(event.target)) menu.open = false;
     });
     root.addEventListener("keydown", event => {
+      const sectionMenu = root.querySelector('.study__actions[open]');
+      if (event.key === 'Escape' && sectionMenu) { event.preventDefault(); event.stopPropagation(); sectionMenu.open = false; sectionMenu.querySelector('summary').focus(); return; }
+      const sectionLabel = event.target.closest('.study__block-label[role="button"]');
+      if (sectionLabel && !event.target.closest('input')) {
+        const head = sectionLabel.closest('.study__block-head');
+        if (event.key === 'F2') { event.preventDefault(); clearTimeout(blockRenameTimer); startBlockRename(sectionLabel, +head.dataset.index, +head.dataset.bindex); return; }
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); sectionLabel.click(); return; }
+      }
       const menu = root.querySelector(".adm__case-visibility[open]");
       if (event.key === "Escape" && menu) { event.preventDefault(); event.stopPropagation(); menu.open = false; menu.querySelector("summary").focus(); }
     }, true);

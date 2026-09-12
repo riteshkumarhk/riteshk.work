@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { build } from "esbuild";
 import { chromium } from "playwright-core";
-import { rkDecWithSek, rkUnwrapSek } from "./src/js/admin-core.js";
+import { rkDecWithSek, rkUnwrapSek, rkNewSek, rkWrapSek, rkEncWithSek } from "./src/js/admin-core.js";
 import { assertStudioDeckPublishable, createStudioDeck, STUDIO_DECK_SCHEMA } from "./src/js/slide-studio-deck.mjs";
 import { AI_AGENT_SYSTEM } from "./src/js/ai-task-agent.mjs";
 import { COMPOSITION_RESPONSE_SCHEMA } from "./src/js/slide-merge-ai.mjs";
@@ -18,10 +18,10 @@ async function openProjectSlides(page, index = 0) {
   if (await tab.getAttribute("aria-selected") !== "true") await tab.click();
 }
 
-async function openIntegratedFixture(page) {
+async function openIntegratedFixture(page, blocks = [{ type: "text", heading: "Published heading", body: "Supported source content." }]) {
   const published = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
   published.work = [
-    { id: "integrated-case", client: "Studio fixture", title: "Integrated project", study: { blocks: [{ type: "text", heading: "Published heading", body: "Supported source content." }] } },
+    { id: "integrated-case", client: "Studio fixture", title: "Integrated project", study: { blocks } },
     { id: "empty-case", client: "Empty fixture", title: "Empty project", study: { blocks: [] } }
   ];
   await page.context().route("**/*", async route => {
@@ -41,6 +41,207 @@ async function openIntegratedFixture(page) {
   await page.locator('.adm__tab[data-tab="work"]').click();
   return published;
 }
+
+test("Sections remove protection requires unlock and preserves sealed data on failure", async () => {
+  const source = readFileSync(new URL('./src/js/admin-studio.js',import.meta.url),'utf8');
+  const start = source.indexOf('  var removingSectionProtection = new WeakSet();');
+  const code = source.slice(start,source.indexOf('  // Owner-only: turn a hidden encrypted project',start));
+  const sek = rkNewSek(), pass = 'synthetic-test-pass', full = {type:'media',locked:true,heading:'Restored',items:[{src:'data:image/png;base64,AA=='}]};
+  const wrap = await rkWrapSek(pass,sek), cipher = await rkEncWithSek(sek,full);
+  for (const scenario of ['cancel','cancel-pass','wrong-pass','legacy','vault','denied','invalid','save-failure','stale']) {
+    const vaulted = ['vault','denied','invalid','stale'].includes(scenario);
+    const sealed = vaulted ? {type:'media',locked:true,vaultBlock:'private-original'} : {type:'media',locked:true,encStub:true,...cipher};
+    const other = {type:'text',heading:'Unchanged'}, study = {blocks:[sealed,other],enc:{wraps:{owner:wrap}}};
+    let saves = 0, fetches = 0;
+    const environment = {data:{work:[{id:'case',study}]},openBlock:-1,recoveryPassCache:null,
+      confirmModal:async()=>scenario!=='cancel',adminSession:()=>scenario!=='denied',
+      ensureRecoveryPass:async()=>scenario==='cancel-pass'?null:scenario==='wrong-pass'?'wrong':pass,
+      vaultSignedUrl:async()=>{if(scenario==='stale')study.blocks.splice(0,1);return 'https://synthetic.invalid/section';},
+      fetch:async()=>{fetches++;return {ok:true,json:async()=>scenario==='invalid'?{encStub:true}:{...structuredClone(full),items:[{src:'vault:original-bytes'}]}};},
+      rkUnwrapSek,rkDecWithSek,rkResolveEncToDataUri:async()=>{},saveDraft:()=>{saves++;return scenario!=='save-failure';},
+      renderL2:()=>{},refreshL2Preview:()=>{},status:()=>{}};
+    const remove = runInNewContext(code+'\nremoveSectionProtection',environment);
+    await remove(0,0);
+    if (scenario==='legacy'||scenario==='vault') {
+      assert.equal(study.blocks[0].locked,undefined);
+      assert.equal(study.blocks[0].heading,'Restored');
+      assert.equal(study.blocks[1],other);
+      assert.equal(study.blocks[0].items[0].src,scenario==='vault'?'vault:original-bytes':full.items[0].src);
+      assert.equal(study.blocks[0].vault,scenario==='vault'?true:undefined);
+      assert.equal(saves,1);
+    } else if (scenario==='stale') { assert.deepEqual(study.blocks,[other]);assert.equal(saves,0); }
+    else { assert.equal(study.blocks[0],sealed);assert.equal(sealed.locked,true);assert.equal(saves,scenario==='save-failure'?1:0); }
+    if (scenario==='cancel'||scenario==='denied') assert.equal(fetches,0);
+  }
+});
+
+test("Sections insertion opens the real picker at the selected gap", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  try {
+    for (const width of [1440,390]) {
+      const context = await browser.newContext({viewport:{width,height:1000},hasTouch:width===390,reducedMotion:"reduce"});
+      const page = await context.newPage();
+      await openIntegratedFixture(page,[{type:"text",heading:"First",body:"Keep first"},{type:"text",heading:"Second",body:"Keep second"}]);
+      await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+      await page.locator('[data-l2tab="story"]').click();
+      const gap = page.locator('.study-sections .study__insert-gap').first();
+      await gap.click();
+      await page.locator('.secpick .pass__title').filter({hasText:"Add a section above"}).waitFor();
+      assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks.map(block=>block.heading)),["First","Second"]);
+      await page.locator('.secpick [data-pick="cards"]').click();
+      const inserted = await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks);
+      assert.deepEqual(inserted.map(block=>block.type),["text","cards","text"]);
+      assert.equal(inserted[0].heading,"First");
+      assert.equal(inserted[2].heading,"Second");
+      await context.close();
+    }
+  } finally { await browser.close(); }
+});
+
+test("Sections controls preserve names, checked states and protected content", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  try {
+    for (const width of [1440,390]) {
+      const context = await browser.newContext({viewport:{width,height:1000},hasTouch:width===390,reducedMotion:"reduce"});
+      const page = await context.newPage();
+      await openIntegratedFixture(page,[{type:"text",heading:"First",body:"Keep content"},{type:"text",heading:"Second",sep:false},{type:"media",locked:true,encStub:true},{type:"text",locked:true,vaultBlock:true}]);
+      await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+      await page.locator('[data-l2tab="story"]').click();
+      const row = page.locator('.study-sections .study__block').first();
+      const label = row.locator('.study__block-label');
+      await label.dblclick();
+      await row.locator('.study__block-rename').fill('Custom section name');
+      await row.locator('.study__block-rename').press('Enter');
+      assert.equal(await label.textContent(),'Custom section name');
+      assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].heading),'First');
+      await label.dblclick();
+      await row.locator('.study__block-rename').fill('Discard this');
+      await row.locator('.study__block-rename').press('Escape');
+      assert.equal(await label.textContent(),'Custom section name');
+      const openMenu = async () => { await row.locator('summary').focus(); await row.locator('summary').press('Enter'); await row.locator('.study__action-menu:popover-open').waitFor(); };
+      for (const [command,initial] of [['sep','true'],['off','false'],['lock','false']]) {
+        await openMenu();
+        const toggle = row.locator('.study__action-menu [data-act="study-block'+command+'"]');
+        assert.equal(await toggle.getAttribute('aria-pressed'),initial);
+        await toggle.click();
+        await openMenu();
+        assert.equal(await toggle.getAttribute('aria-pressed'),initial==='true'?'false':'true');
+        assert.equal(await toggle.locator('.study__action-check svg').count(),initial==='true'?0:1);
+        await page.keyboard.press('Escape');
+        assert.equal(await row.locator('summary').evaluate(element=>element===document.activeElement),true);
+      }
+      const lock = row.locator('.study__block-status .study__block-lock');
+      await page.mouse.move(0,0);
+      assert.equal(await lock.locator('rect').evaluate(element=>getComputedStyle(element).fill),'rgb(216, 166, 87)');
+      await lock.hover();
+      await page.waitForFunction(()=>getComputedStyle(document.querySelector('.study-sections .study__block-status .study__block-lock')).borderTopColor==='rgb(90, 86, 80)');
+      await lock.click();
+      await openMenu();
+      assert.equal(await row.locator('.study__action-menu [data-act="study-blocklock"] rect').evaluate(element=>getComputedStyle(element).fill),'none');
+      const bounds = await row.locator('.study__action-menu').boundingBox();
+      assert.ok(bounds.x>=0&&bounds.x+bounds.width<=width&&bounds.y>=0&&bounds.y+bounds.height<=1000);
+      await page.keyboard.press('Escape');
+      const sealed = page.locator('.study-sections .study__block--enc');
+      assert.equal(await sealed.count(),2);
+      assert.equal(await sealed.locator('input,textarea,.study__block-rename,.study__block-chev').count(),0);
+      assert.equal(await sealed.locator('[data-act="study-decrypt"]').count(),2);
+      assert.equal(await sealed.locator('[data-act="study-blockremove"]').count(),0);
+      assert.equal(await sealed.locator('[data-act="study-unprotect"]').count(),2);
+      const sealedBefore = await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks.slice(2)));
+      await sealed.first().locator('[data-act="study-unprotect"]').click();
+      await page.getByText('Remove section protection?',{exact:true}).waitFor();
+      await page.locator('.pass').filter({hasText:'Remove section protection?'}).getByRole('button',{name:'Cancel',exact:true}).click();
+      assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks.slice(2))),sealedBefore);
+      assert.equal(await sealed.first().locator('[data-act="study-decrypt"]').isEnabled(),true);
+      assert.equal(await sealed.first().locator('.study__protected-lock rect').evaluate(element=>getComputedStyle(element).fill),'rgb(216, 166, 87)');
+      await page.screenshot({path:join(tmpdir(),`rk-sections-${width}.png`)});
+      await page.reload();
+      await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+      assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].editorName),'Custom section name');
+      await context.close();
+    }
+  } finally { await browser.close(); }
+});
+
+test("Sections header dragging respects clicks, editing and protected positions", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  try {
+    const context = await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:"reduce"});
+    const page = await context.newPage();
+    await openIntegratedFixture(page,[{type:"text",heading:"First",body:"Keep"},{type:"media",locked:true,encStub:true},{type:"text",heading:"Third"},{type:"text",heading:"Fourth"}]);
+    await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+    await page.locator('[data-l2tab="story"]').click();
+    const rows = page.locator('.study-sections .study__block');
+    const label = rows.first().locator('.study__block-label');
+    await label.click();
+    await page.waitForFunction(()=>document.querySelector('.study-sections .study__block').classList.contains('is-open'));
+    await rows.first().locator('input[data-bfield="heading"]').click();
+    assert.equal(await page.locator('.is-sortdrag').count(),0);
+    await label.click();
+    await page.waitForFunction(()=>!document.querySelector('.study-sections .study__block').classList.contains('is-open'));
+    const source = await label.boundingBox(), target = await rows.last().boundingBox();
+    await page.mouse.move(source.x+20,source.y+source.height/2);
+    await page.mouse.down();
+    await page.mouse.move(source.x+20,target.y+target.height-2,{steps:12});
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks.map(block=>block.encStub?'Protected':block.heading)),['First','Protected','Third','Fourth']);
+    await page.mouse.move(source.x+20,source.y+source.height/2);
+    await page.mouse.down();
+    await page.mouse.move(source.x+22,source.y+source.height/2+2);
+    assert.equal(await page.locator('.is-sortdrag').count(),0);
+    await page.mouse.move(source.x+20,target.y+target.height-2,{steps:12});
+    assert.equal(await page.locator('.is-sortdrag').count(),1);
+    await page.mouse.up();
+    const blocks = await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks);
+    assert.deepEqual(blocks.map(block=>block.encStub?'Protected':block.heading),['Protected','Third','Fourth','First']);
+    assert.equal(blocks[3].body,'Keep');
+    assert.equal(await page.locator('.study-sections .study__block.is-open').count(),0);
+    const sealedBefore = await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks[0]));
+    const sealedHead = await rows.first().locator('.study__block-label').boundingBox(), end = await rows.last().boundingBox();
+    await page.mouse.move(sealedHead.x+20,sealedHead.y+sealedHead.height/2);
+    await page.mouse.down();
+    await page.mouse.move(sealedHead.x+20,end.y+end.height-2,{steps:12});
+    await page.mouse.up();
+    assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks[3])),sealedBefore);
+    await context.close();
+  } finally { await browser.close(); }
+});
+
+test("Sections touch header hold reorders while swipes scroll", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  try {
+    const context = await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,reducedMotion:"reduce"});
+    const page = await context.newPage();
+    await openIntegratedFixture(page,Array.from({length:14},(_,index)=>({type:"text",heading:"Section "+index,body:"Original content "+index})));
+    await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+    await page.locator('[data-l2tab="story"]').click();
+    const session = await context.newCDPSession(page);
+    const touch = (type,x,y)=>session.send('Input.dispatchTouchEvent',{type,touchPoints:type==='touchEnd'?[]:[{x,y,id:1}]});
+    const rows = page.locator('.study-sections .study__block');
+    await rows.first().scrollIntoViewIfNeeded();
+    let source = await rows.first().locator('.study__block-label').boundingBox();
+    let target = await rows.nth(2).boundingBox();
+    await touch('touchStart',source.x+20,source.y+source.height/2);
+    await page.waitForFunction(()=>document.body.classList.contains('adm-sorting'));
+    await touch('touchMove',source.x+20,target.y+target.height-2);
+    await touch('touchEnd');
+    await page.waitForFunction(()=>!document.body.classList.contains('adm-sorting'));
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks.slice(0,3).map(block=>block.heading)),['Section 1','Section 2','Section 0']);
+    assert.equal(await page.locator('.study-sections .study__block.is-open').count(),0);
+    await rows.nth(4).scrollIntoViewIfNeeded();
+    source = await rows.nth(4).locator('.study__block-label').boundingBox();
+    const before = await page.evaluate(()=>({order:window.__RKStudio.getDraft().work[0].study.blocks.map(block=>block.heading),top:document.querySelector('.adm__editor').scrollTop}));
+    await touch('touchStart',source.x+20,source.y+source.height/2);
+    await touch('touchMove',source.x+20,source.y-30);
+    await touch('touchMove',source.x+20,source.y-100);
+    await touch('touchEnd');
+    await page.waitForFunction(top=>document.querySelector('.adm__editor').scrollTop!==top,before.top);
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks.map(block=>block.heading)),before.order);
+    assert.equal(await page.locator('.is-sortdrag').count(),0);
+    await context.close();
+  } finally { await browser.close(); }
+});
 
 test("Work card Edit renders as primary and opens the project on desktop and phone", {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
