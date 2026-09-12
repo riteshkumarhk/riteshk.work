@@ -1,0 +1,10 @@
+{
+  "name": "Studio Slides Source",
+  "id": "REPLACE_WITH_FIGMA_ASSIGNED_ID",
+  "api": "1.0.0",
+  "editorType": ["slides"],
+  "main": "code.js",
+  "ui": "ui.html",
+  "documentAccess": "dynamic-page",
+  "networkAccess": { "allowedDomains": ["none"] }
+}

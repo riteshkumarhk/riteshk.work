@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Studio Slides Source</title>
+<style>
+:root{color-scheme:dark;--bg:#0c0c0f;--text:#e8e4de;--dim:#aaa49c;--line:#323235;--accent:#dfad58}*{box-sizing:border-box}body{margin:0;padding:20px;background:var(--bg);color:var(--text);font:13px/1.5 "Hanken Grotesk",sans-serif}h1{margin:0;font:500 18px/1.3 "Schibsted Grotesk",sans-serif}p{color:var(--dim);min-height:36px;margin:12px 0;overflow-wrap:anywhere}footer{display:flex;justify-content:flex-end;gap:8px}button,a{border:1px solid var(--line);border-radius:999px;padding:8px 14px;background:transparent;color:var(--text);font:11px/1.3 "Martian Mono",monospace;letter-spacing:0;text-decoration:none;cursor:pointer}button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}#export,#download{background:var(--accent);color:var(--bg)}button:disabled{opacity:.5;cursor:default}[hidden]{display:none}
+</style></head><body><h1>Studio Slides Source</h1><p role="status" id="status">Local export. Developer preview.</p><footer><button id="close">Close</button><button id="export">Export slides</button><a id="download" hidden download="figma-slides.studio.json">Download</a></footer>
+<script>
+const status = document.getElementById('status'), exportButton = document.getElementById('export'), download = document.getElementById('download');
+let objectUrl;
+document.getElementById('close').onclick = () => parent.postMessage({pluginMessage:{type:'close'}}, '*');
+exportButton.onclick = () => { exportButton.disabled = true; status.textContent = 'Reading slides...'; parent.postMessage({pluginMessage:{type:'export'}}, '*'); };
+window.onmessage = event => {
+  if (event.source !== parent || !event.data.pluginMessage) return;
+  const message = event.data.pluginMessage;
+  if (message.type === 'progress') status.textContent = message.text;
+  if (message.type === 'error') { status.textContent = message.text; exportButton.disabled = false; }
+  if (message.type === 'ready') {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(new Blob([JSON.stringify(message.payload)], {type:'application/json'}));
+    download.href = objectUrl; download.hidden = false; exportButton.hidden = true;
+    status.textContent = message.payload.slides.length + ' slides ready. Notes and animations are not included.';
+  }
+};
+window.onpagehide = () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+</script></body></html>

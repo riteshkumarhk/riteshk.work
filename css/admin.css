@@ -1292,6 +1292,33 @@ body.adm-lock .cursor { display: none !important; }
 .csgen__status.is-run { color: var(--accent); }
 .csgen__status.is-ok { color: #7ac77a; }
 .csgen__status.is-err { color: #ff7a7a; }
+.csgen--authoring .chk, .csgen-review .chk { display:flex;align-items:flex-start;gap:8px;font:12px/1.5 var(--sans);text-align:left; }
+.csgen--authoring input[type="checkbox"], .csgen-review input[type="checkbox"] { width:16px;height:16px;flex:0 0 16px;margin:2px 0;accent-color:var(--accent); }
+.csgen-source { display:grid;grid-template-columns:minmax(0,1fr) 32px;gap:8px;padding:12px 0;border-top:1px solid var(--line); }
+.csgen-source > label { overflow-wrap:anywhere; }
+.csgen-source > button { width:32px;height:32px;padding:6px; }
+.csgen-source > button svg { width:18px;height:18px; }
+.csgen-source details { grid-column:1/-1;min-width:0; }
+.csgen-source summary, .csgen-review summary { cursor:pointer;font:12px/1.5 var(--sans);padding:8px 0;color:var(--text-dim); }
+.csgen-source p { font:12px/1.5 var(--sans);overflow-wrap:anywhere; }
+.csgen-source__text { white-space:pre-wrap;max-height:200px;overflow:auto; }
+.csgen-source img { display:block;width:100%;max-height:300px;object-fit:contain; }
+.csgen-review .pass__box { text-align:left; }
+.csgen-review p, .csgen-review li { font:13px/1.55 var(--sans);overflow-wrap:anywhere; }
+.csgen-review__section { padding:16px 0;border-top:1px solid var(--line);min-width:0; }
+.csgen-review__section > .af { display:block;margin-top:12px; }
+.csgen-review__section label.af { display:block;font:12px/1.5 var(--sans);margin-bottom:12px; }
+.csgen-review__section textarea { display:block;width:100%;box-sizing:border-box;resize:vertical; }
+.csgen-review__preview { overflow:hidden;max-height:420px;overflow-y:auto;pointer-events:none;margin:12px 0; }
+.csgen-review__preview .pblk { padding:16px 0; }
+.csgen-review__preview h2, .csgen-review__preview h3 { font-size:22px;line-height:1.25; }
+.csgen-review__preview img, .csgen-review__preview video { max-width:100%; }
+.csgen-review blockquote { margin:8px 0;padding:8px 12px;border-left:2px solid var(--line);font:12px/1.5 var(--sans); }
+.csgen-review select { width:100%; }
+.csgen--authoring .af__row > .af { min-width:0; }
+.csgen__fields { border:0;padding:0;margin:0;min-width:0; }
+.csgen-review__preview .pjb { padding:16px 0;animation:none;opacity:1;transform:none; }
+@media(max-width:600px) { .csgen--authoring .af__row { grid-template-columns:1fr;flex-direction:column; } .csgen-review .pass__box { padding:20px 16px; } .csgen-review__preview h2, .csgen-review__preview h3 { font-size:18px; } }
 .imgblk__plate-name { display: block; font-family: var(--mono); font-size: .58rem; letter-spacing: .02em; color: var(--text-faint); margin-top: .32rem; }
 .imgblk__plate.is-on .imgblk__plate-name { color: var(--accent); }
 .imgblk__ai { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--line); }

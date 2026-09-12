@@ -18,6 +18,58 @@ async function openProjectSlides(page, index = 0) {
   if (await tab.getAttribute("aria-selected") !== "true") await tab.click();
 }
 
+test('case authoring keeps sources private and requires reviewed selective application', {timeout:90000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  try {
+    for (const width of [1440,390]) {
+      const context = await browser.newContext({viewport:{width,height:960}}), page = await context.newPage();
+      await openIntegratedFixture(page);
+      await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+      await page.locator('[data-l2tab="gen"]').click();
+      await page.waitForFunction(()=>!document.querySelector('[data-act="csgen-run"]').disabled);
+      await page.locator('[data-csgen="material"]').fill('We interviewed 12 people.');
+      const studyBefore = await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft().work[0].study));
+      await page.waitForFunction(()=>document.querySelector('[data-csgen-status]').textContent==='Sources saved locally.');
+      await page.evaluate(async()=>{
+        const work=window.__RKStudio.getDraft().work[0];
+        const db=await new Promise(resolve=>{const request=indexedDB.open('rk-case-authoring-v1',1);request.onsuccess=()=>resolve(request.result);});
+        const state=await new Promise(resolve=>{const request=db.transaction('projects').objectStore('projects').get(work.id);request.onsuccess=()=>resolve(request.result);});
+        if (!state) throw new Error('Missing workspace for project ' + work.id);
+        state.proposal={revision:JSON.stringify([work.id,work.title,work.client,work.study||{}]),summary:'Research-led proposal',questions:['What shipped?'],outline:['Research'],entries:[{block:{type:'text',heading:'Research',body:'We interviewed 12 people.'},evidence:[{sourceId:'notes',label:'Author notes',quote:'We interviewed 12 people.'}]}]};
+        await new Promise((resolve,reject)=>{const tx=db.transaction('projects','readwrite');tx.objectStore('projects').put(state,work.id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();
+      });
+      await page.reload();await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+      await page.evaluate(()=>document.querySelectorAll('.pass--lock').forEach(dialog=>dialog.remove()));
+      await page.locator('.adm__tab[data-tab="work"]').click();
+      await page.locator('[data-act="study-toggle"][data-index="0"]').click();await page.locator('[data-l2tab="gen"]').click();
+      await page.locator('[data-act="csgen-review"]').waitFor();
+      assert.equal(await page.locator('[data-csgen="material"]').inputValue(),'We interviewed 12 people.');
+      await page.locator('[data-act="csgen-review"]').click();
+      const dialog=page.locator('.csgen-review');
+      assert.equal(await dialog.locator('pre').count(),0);
+      assert.match(await dialog.locator('.csgen-review__preview').innerText(),/Research/);
+      await dialog.locator('[data-apply]').click();assert.match(await dialog.locator('.pass__err').innerText(),/confirm/);
+      assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft().work[0].study)),studyBefore);
+      await dialog.locator('[data-target="0"]').selectOption('0');
+      await dialog.locator('summary').filter({hasText:'Edit copy'}).click();
+      await dialog.locator('[data-edit="0.heading"]').fill('Reviewed research');
+      await dialog.locator('[data-verified]').check();
+      if (width===1440) {
+        await page.evaluate(()=>{window.caseOriginalSetItem=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key==='rk:content:draft')throw new DOMException('Fixture quota','QuotaExceededError');return window.caseOriginalSetItem.call(this,key,value);};});
+        await dialog.locator('[data-apply]').click();
+        assert.match(await dialog.locator('.pass__err').innerText(),/could not be saved/);
+        assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft().work[0].study)),studyBefore);
+        await page.evaluate(()=>{Storage.prototype.setItem=window.caseOriginalSetItem;});
+      }
+      assert.ok(await dialog.evaluate(element=>{const box=element.querySelector('.pass__box').getBoundingClientRect();return box.left>=0&&box.right<=innerWidth&&element.querySelector('.pass__box').scrollWidth<=box.width+1;}));
+      await page.screenshot({path:join(tmpdir(),'case-authoring-review-'+width+'.png')});
+      await dialog.locator('[data-apply]').click();await dialog.waitFor({state:'detached'});
+      const study=await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study);assert.equal(study.blocks.length,1);assert.equal(study.blocks[0].heading,'Reviewed research');assert.ok(!JSON.stringify(study).includes('sourceId'));
+      await context.close();
+    }
+  } finally { await browser.close(); }
+});
+
 async function openIntegratedFixture(page, blocks = [{ type: "text", heading: "Published heading", body: "Supported source content." }]) {
   const published = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
   published.work = [
@@ -946,7 +998,8 @@ for (const width of [1440, 390]) test("AI Options use case content and keep Back
     const controls = page.locator('[data-case-ai-slides] button,[data-case-ai-prepare] button');
     assert.equal(await controls.count(), 4);
     assert.ok(await controls.evaluateAll(buttons => buttons.every(button => button.disabled)));
-    assert.equal(await page.getByRole('button',{name:'Generate case study',exact:true}).isEnabled(), true);
+    await page.waitForFunction(()=>!document.querySelector('[data-act="csgen-run"]').disabled);
+    assert.equal(await page.getByRole('button',{name:'Draft case study',exact:true}).isEnabled(), true);
     await page.screenshot({path:join(tmpdir(), `rk-ai-options-empty-${width}.png`)});
     await page.locator('[data-case-ai-prepare]').scrollIntoViewIfNeeded();
     await page.screenshot({path:join(tmpdir(), `rk-ai-options-empty-actions-${width}.png`)});
@@ -2515,4 +2568,66 @@ test("Content Studio opens native slides without a preview flag and preserves ca
     assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].study.nativeDeck.id), 'missing-native-deck');
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
+});
+
+test('case authoring imports original source files without AI and generates a grounded proposal', {timeout:60000}, async()=>{
+  const browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:960}});
+    await page.addInitScript(()=>{
+      const original=window.fetch;window.caseModelCalls=0;
+      window.fetch=async(resource,options={})=>{
+        const url=new URL(typeof resource==='string'?resource:resource.url,location.href);
+        if(url.hostname!=='api.anthropic.com'||!url.pathname.endsWith('/messages'))return original(resource,options);
+        window.caseModelCalls++;
+        const request=JSON.parse(options.body);let text;
+        if(request.system.startsWith("You are Studio's outcome coordinator.")){
+          const input=JSON.parse(request.messages[0].content);
+          text=JSON.stringify({decision:input.candidate?{action:'finish',summary:'Validated proposal'}:{action:'draft',modelRef:input.draftModels[0],task:'creative',instruction:'',inputs:[],summary:'Draft from evidence'}});
+        }else text=JSON.stringify({summary:'Grounded draft',outline:['Research'],questions:['What shipped?'],blocks:[{block:{type:'text',heading:'Research',body:'We interviewed 12 people.'},evidence:[{sourceId:'notes',quote:'We interviewed 12 people.'}]}]});
+        return Response.json({content:[{type:'text',text}],stop_reason:'end_turn',usage:{input_tokens:10,output_tokens:5}});
+      };
+    });
+    await openIntegratedFixture(page);await page.locator('[data-act="study-toggle"][data-index="0"]').click();await page.locator('[data-l2tab="gen"]').click();
+    await page.waitForFunction(()=>!document.querySelector('[data-act="csgen-run"]').disabled);
+    const original=await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
+    const filePromise=page.waitForEvent('filechooser');await page.locator('[data-act="csgen-pdf"]').click();
+    await (await filePromise).setFiles({name:'evidence.txt',mimeType:'text/plain',buffer:Buffer.from('Original research source bytes.')});
+    await page.locator('.csgen-source').waitFor();
+    assert.equal(await page.evaluate(()=>window.caseModelCalls),0);
+    const saved=await page.evaluate(async()=>{const db=await new Promise(resolve=>{const request=indexedDB.open('rk-case-authoring-v1',1);request.onsuccess=()=>resolve(request.result);});const state=await new Promise(resolve=>{const request=db.transaction('projects').objectStore('projects').get('integrated-case');request.onsuccess=()=>resolve(request.result);});db.close();return {text:state.sources[0].text,original:await state.files[0].blob.text()};});
+    assert.deepEqual(saved,{text:'Original research source bytes.',original:'Original research source bytes.'});
+    const pdfStream='BT /F1 18 Tf 40 200 Td (We interviewed 12 people.) Tj ET';
+    const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 400] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>','<< /Length '+pdfStream.length+' >>\nstream\n'+pdfStream+'\nendstream'];
+    let pdf='%PDF-1.4\n';const offsets=[0];objects.forEach((object,index)=>{offsets.push(Buffer.byteLength(pdf));pdf+=(index+1)+' 0 obj\n'+object+'\nendobj\n';});const xref=Buffer.byteLength(pdf);pdf+='xref\n0 6\n0000000000 65535 f \n'+offsets.slice(1).map(offset=>String(offset).padStart(10,'0')+' 00000 n \n').join('')+'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF';
+    const pdfChooser=page.waitForEvent('filechooser');await page.locator('[data-act="csgen-pdf"]').click();await (await pdfChooser).setFiles({name:'Figma-export.pdf',mimeType:'application/pdf',buffer:Buffer.from(pdf)});
+    await page.waitForFunction(()=>document.querySelectorAll('.csgen-source').length===2);
+    const pdfSaved=await page.evaluate(async()=>{const db=await new Promise(resolve=>{const request=indexedDB.open('rk-case-authoring-v1',1);request.onsuccess=()=>resolve(request.result);});const state=await new Promise(resolve=>{const request=db.transaction('projects').objectStore('projects').get('integrated-case');request.onsuccess=()=>resolve(request.result);});db.close();return {text:state.sources[1].text,label:state.sources[1].label,image:state.sources[1].images[0].src.slice(0,23),original:await state.files[1].blob.text()};});
+    assert.match(pdfSaved.text,/We interviewed 12 people/);assert.equal(pdfSaved.label,'Figma-export.pdf / Page 1');assert.equal(pdfSaved.image,'data:image/jpeg;base64,/' .slice(0,23));assert.equal(pdfSaved.original,pdf);assert.equal(await page.evaluate(()=>window.caseModelCalls),0);
+    const sourceCode=readFileSync(new URL('./src/js/admin-studio.js',import.meta.url),'utf8');
+    const extract=sourceCode.slice(sourceCode.indexOf('  async function pptxExtract('),sourceCode.indexOf('  function csgenAddPdf('));
+    const slides=await page.evaluate(async extract=>{
+      const xml={
+        'ppt/presentation.xml':'<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst><p:sldId r:id="second"/><p:sldId r:id="first"/></p:sldIdLst></p:presentation>',
+        'ppt/_rels/presentation.xml.rels':'<Relationships><Relationship Id="first" Target="slides/slide1.xml"/><Relationship Id="second" Target="slides/slide2.xml"/></Relationships>',
+        'ppt/slides/slide1.xml':'<root xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:t>Second presented</a:t></root>',
+        'ppt/slides/slide2.xml':'<root xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:t>First presented</a:t></root>',
+        'ppt/slides/_rels/slide2.xml.rels':'<Relationships><Relationship Id="notes" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="../notesSlides/notesSlide7.xml"/></Relationships>',
+        'ppt/notesSlides/notesSlide7.xml':'<root xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:t>Correct first-slide notes</a:t></root>'
+      };
+      const ensureUnzip=async()=>({unzipSync:(_bytes,options)=>Object.fromEntries(Object.entries(xml).filter(([name,text])=>options.filter({name,originalSize:text.length})).map(([name,text])=>[name,new TextEncoder().encode(text)]))});
+      const CASE_LIMITS={sources:80};
+      return await eval('('+extract+')')(new ArrayBuffer(0));
+    },extract);
+    assert.match(slides[0].text,/First presented\nSPEAKER NOTES:\nCorrect first-slide notes/);assert.equal(slides[1].text,'Second presented');assert.equal(slides[0].images.length,0);assert.match(slides[0].warning,/not rendered/);
+    await page.locator('[data-act="csgen-source"]').nth(1).uncheck();
+    await page.locator('[data-csgen="material"]').fill('We interviewed 12 people.');
+    await page.locator('[data-act="csgen-run"]').click();assert.equal(await page.evaluate(()=>window.caseModelCalls),0);
+    await page.locator('[data-csgen="consent"]').check();await page.locator('[data-act="csgen-run"]').click();
+    await page.locator('.csgen-review').waitFor();assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),original);
+    assert.match(await page.locator('.csgen-review__preview').innerText(),/12 people/);
+    assert.ok(await page.evaluate(()=>window.caseModelCalls)>=3);
+    await page.locator('.csgen-review [data-cancel]').click();
+    await page.locator('[data-act="csgen-review"]').click();assert.match(await page.locator('.csgen-review__preview').innerText(),/12 people/);
+  }finally{await browser.close();}
 });
