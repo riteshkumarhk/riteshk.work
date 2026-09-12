@@ -42,6 +42,563 @@ async function openIntegratedFixture(page) {
   return published;
 }
 
+test("Prepare local test link opens directly and leaves normal sign-in enforced", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  const server = process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5512';
+  const published = JSON.parse(readFileSync(new URL('./content.json',import.meta.url),'utf8'));
+  published.work = [{id:'local-gate-fixture',title:'Local test project',study:{blocks:[{type:'text',body:'Public test evidence.'}]}}];
+  try {
+    for (const scenario of [
+      {origin:server,query:'?devstub=1',width:1440,dev:true},
+      {origin:'http://localhost:5512',query:'?devstub=1',width:390,dev:true},
+      {origin:server,query:'',width:1440,dev:false},
+      {origin:'https://riteshk.work',query:'?devstub=1',width:1440,dev:false},
+      {origin:'https://localhost.example.test',query:'?devstub=1',width:1440,dev:false}
+    ]) {
+      const context = await browser.newContext({viewport:{width:scenario.width,height:1000},reducedMotion:'reduce'}), page = await context.newPage(), writes = [];
+      await context.route('**/*',async route => {
+        const request = route.request(), url = new URL(request.url());
+        if (!['GET','HEAD'].includes(request.method())) { writes.push(url.pathname); return route.abort(); }
+        if (url.pathname.endsWith('/content.json')) return route.fulfill({contentType:'application/json',body:JSON.stringify(published)});
+        if (url.origin === scenario.origin) return route.fulfill({response:await route.fetch({url:server + url.pathname + url.search})});
+        return route.abort();
+      });
+      await page.goto(scenario.origin + '/studio/' + scenario.query);
+      if (scenario.dev) {
+        await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+        assert.equal(await page.locator('.pass--lock').count(),0);
+        assert.equal(await page.evaluate(() => window.__RK_DEV),true);
+        assert.equal(new URL(page.url()).searchParams.get('devstub'),'1');
+        await page.locator('.adm__tab[data-tab="ai"]').click();
+        await page.locator('[data-prep-brief]').waitFor();
+        assert.equal(await page.locator('[data-act="prep-open"]').count(),5);
+        await page.reload();
+        await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+        assert.equal(await page.locator('.pass--lock').count(),0);
+        assert.deepEqual(writes,[]);
+      } else {
+        await page.locator('.pass--lock').waitFor();
+        assert.equal(await page.evaluate(() => !!window.__RK_DEV),false);
+        assert.equal(await page.evaluate(() => typeof window.__rkDevStudio),'undefined');
+        assert.equal(await page.locator('.adm.is-open').count(),0);
+      }
+      await context.unrouteAll({behavior:'wait'});
+      await context.close();
+    }
+  } finally { await browser.close(); }
+});
+
+async function installPrepareReplies(page) {
+  await page.addInitScript(() => {
+    const original = window.fetch;
+    window.preparationCalls = [];
+    window.fetch = async (resource, options = {}) => {
+      const url = new URL(typeof resource === 'string' ? resource : resource.url, location.href);
+      if (url.hostname !== 'api.anthropic.com' || !url.pathname.endsWith('/messages')) return original(resource, options);
+      const request = JSON.parse(options.body), system = request.system;
+      let text;
+      if (system.startsWith("You are Studio's outcome coordinator.")) {
+        const input = JSON.parse(request.messages[0].content);
+        text = JSON.stringify({decision:input.candidate ? {action:'finish',summary:'Validated fixture result'} : {action:'draft',modelRef:input.draftModels[0],task:'writing',instruction:'',inputs:[],summary:'Use the selected evidence'}});
+      } else {
+        window.preparationCalls.push({system,user:JSON.stringify(request.messages)});
+        if (system.includes('generate the questions a sharp interviewer')) text = JSON.stringify({questions:[{q:'Which decision changed the outcome?',category:'Decisions',why:'Explain the evidence'}]});
+        else if (system.includes('propose a few DISTINCT')) text = JSON.stringify({themes:[{title:'Evidence led the decision',hook:'A grounded angle',beats:'Context decision outcome'}]});
+        else if (system.includes('Script EXACTLY')) text = JSON.stringify({spine:'Evidence led the decision',opener:'Original source',beats:[{label:'Decision',mins:'5',say:'Explain the evidence',must:'Outcome'}],close:'Lessons',skip:'Details',tip:'Keep it clear'});
+        else if (system.includes('Invent ONE crisp')) text = JSON.stringify({prompt:'A new synthetic exercise',context:'Explicit constraints',watchfor:['Clarity']});
+        else if (system.includes('GAME PLAN')) text = JSON.stringify({clarifiers:['Who needs this?'],phases:[{label:'Frame',mins:'5',move:'Name the goal'}]});
+        else if (system.includes('candidate has drafted')) text = JSON.stringify({verdict:'SAVED_COACHING_FEEDBACK',strong:['A clear user'],gaps:['Name the outcome']});
+        else if (system.includes('panel debriefing')) text = JSON.stringify({scores:[{dim:'Problem framing',score:3,note:'A stated user need'}],overall:'SAVED_MOCK_SCORE',topfix:'Name the success measure'});
+        else if (system.includes('COMPLETE, personalised cover letter')) text = 'Dear Hiring Team,\n\nMy work connects user evidence with clear product decisions. I would bring that approach to your design team.\n\nThank you for considering my application.\n\nSample candidate';
+        else if (system.includes('interview practice coach')) {
+          if (window.deferPracticeReply) { await new Promise(resolve => { window.releasePracticeReply = resolve; }); window.practiceReplyReturned = true; }
+          text = JSON.stringify({verdict:'SPECIFIC_PRACTICE_FEEDBACK',strong:['A clear decision'],gaps:['Explain the trade-off'],evidence:['ORIGINAL_PRACTICE_EVIDENCE','INVENTED_SOURCE_QUOTE'],nextTry:'Name the alternative you rejected.',followup:'What alternative did you reject, and why?'});
+        }
+        else if (system.includes('ATS-optimisation expert')) {
+          if (window.deferAtsReply) { await new Promise(resolve => { window.releaseAtsReply = resolve; }); window.atsReplyReturned = true; }
+          text = JSON.stringify({score:70,band:'Good',summary:'ATS_RECHECK_RESULT',checks:[],fixes:[],keywords:{present:[],missing:[]}});
+        }
+        else text = '<p><strong>Grounded answer.</strong> Keep the original evidence.</p>';
+      }
+      return Response.json({content:[{type:'text',text}],stop_reason:'end_turn',usage:{input_tokens:10,output_tokens:5}});
+    };
+  });
+}
+
+for (const width of [1440,390]) test("Prepare shared brief connects all five tools without replacing their flows at " + width + "px", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"});
+  try {
+    await installPrepareReplies(page); await openIntegratedFixture(page);
+    await page.evaluate(() => {
+      window.__rkDevEdit('work.0.study.blocks',[{type:'text',body:'PERMITTED_PROJECT_EVIDENCE'},{type:'text',locked:true,body:'LOCKED_SECTION_EVIDENCE'}]);
+      window.__rkDevEdit('work.1.hidden',true);
+      window.__rkDevEdit('work.1.study.blocks',[{type:'text',body:'PRIVATE_PROJECT_EVIDENCE'}]);
+    });
+    const before = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.setViewportSize({width,height:1000});
+    assert.equal(await page.locator('[data-prep-brief] details').evaluate(element=>element.open),false);
+    assert.equal(await page.locator('[data-act="prep-open"][data-tool="ats"]').evaluate(element=>element.getBoundingClientRect().bottom < innerHeight),true);
+    await page.screenshot({path:join(tmpdir(),'rk-prep-home-'+width+'.png')});
+    await page.locator('[data-prep-brief] summary').click();
+    await page.getByLabel('Company',{exact:true}).fill('TargetCo');
+    await page.getByLabel('Role',{exact:true}).fill('Product design lead');
+    await page.getByLabel('Job description',{exact:true}).fill('SHARED_JOB_REQUIREMENTS');
+    await page.getByLabel('Target level',{exact:true}).selectOption('leader');
+    await page.getByLabel('Resume evidence',{exact:true}).selectOption('none');
+    await page.getByLabel('Selected projects',{exact:true}).check();
+    await page.locator('[data-prep-project="integrated-case"]').check();
+    await page.locator('[data-prep-project="empty-case"]').check();
+    const brief = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:brief')));
+    assert.ok(brief.id);
+    assert.equal(brief.includePrivate,false);
+    for (const field of ['company','role']) {
+      const style = await page.locator('[data-prep-field="'+field+'"]').evaluate(element => { const computed = getComputedStyle(element), bounds = element.getBoundingClientRect(); return {height:bounds.height,radius:computed.borderRadius,background:computed.backgroundColor,contained:bounds.width <= element.parentElement.clientWidth + 1}; });
+      assert.ok(style.height >= 34);
+      assert.notEqual(style.radius,'0px');
+      assert.notEqual(style.background,'rgb(255, 255, 255)');
+      assert.equal(style.contained,true);
+    }
+    await page.screenshot({path:join(tmpdir(),'rk-prep-shared-brief-'+width+'.png')});
+    for (const tool of ['ats','cl','iprep','story','wb']) {
+      const launcher = page.locator('[data-act="prep-open"][data-tool="'+tool+'"]');
+      await launcher.press('Enter');
+      const modal = page.locator(['ats','cl'].includes(tool) ? '.prep-dialog' : '.'+tool+'-modal');
+      await modal.waitFor();
+      await page.waitForFunction(selector => document.querySelector(selector)?.contains(document.activeElement), ['ats','cl'].includes(tool) ? '.prep-dialog' : '.'+tool+'-modal');
+      assert.equal(await modal.getAttribute('role'),'dialog');
+      assert.equal(await modal.getAttribute('aria-modal'),'true');
+      await modal.evaluate(element => { const controls = [...element.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]')].filter(control=>control.getClientRects().length); controls.at(-1).focus(); });
+      await page.keyboard.press('Tab');
+      assert.equal(await modal.evaluate(element=>element.contains(document.activeElement)),true);
+      await modal.getByRole('button',{name:'Use brief',exact:true}).click();
+      if (tool === 'ats' || tool === 'cl') {
+        assert.equal(await page.evaluate(tool => JSON.parse(localStorage.getItem('rk:prep:draft'))[tool].state.preparationBrief.id,tool),brief.id);
+        assert.equal(await modal.locator('.cl__company').inputValue(),'TargetCo / Product design lead');
+        assert.equal(await modal.locator('.cl__jd').inputValue(),'SHARED_JOB_REQUIREMENTS');
+        assert.equal(await modal.locator('.ats__lvl.is-on').getAttribute('data-lvl'),'leader');
+      } else if (tool === 'iprep') {
+        assert.equal(await modal.locator('#iprepJd').inputValue(),'SHARED_JOB_REQUIREMENTS');
+        assert.equal(await modal.locator('[data-iprep-proj][value="0"]').isChecked(),true);
+        assert.equal(await modal.locator('[data-iprep-proj][value="1"]').isChecked(),false);
+        await modal.locator('[data-iprep-run]').click();
+        await modal.locator('.iprep__q').waitFor();
+        const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep[0]);
+        assert.equal(saved.payload.source.brief.id,brief.id);
+        assert.match(saved.payload.source.text,/PERMITTED_PROJECT_EVIDENCE/);
+        assert.doesNotMatch(saved.payload.source.text,/PRIVATE_PROJECT_EVIDENCE|LOCKED_SECTION_EVIDENCE/);
+      } else if (tool === 'story') {
+        assert.equal(await modal.locator('[data-story-jd-text]').inputValue(),'SHARED_JOB_REQUIREMENTS');
+        assert.equal(await modal.locator('[data-story-tone].is-on').getAttribute('data-story-tone'),'vp');
+        await modal.locator('[data-story-run]').click(); await modal.locator('[data-story-tell="0"]').waitFor();
+        const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).story[0]);
+        assert.equal(saved.payload.source.brief.id,brief.id);
+        assert.doesNotMatch(saved.payload.source.text,/PRIVATE_PROJECT_EVIDENCE|LOCKED_SECTION_EVIDENCE/);
+      } else {
+        assert.equal(await modal.locator('.wb__company').inputValue(),'TargetCo / Product design lead');
+        assert.equal(await modal.locator('.wb__jd').inputValue(),'SHARED_JOB_REQUIREMENTS');
+        assert.equal(await modal.locator('[data-wb-lvl].is-on').getAttribute('data-wb-lvl'),'exec');
+      }
+      if (tool === 'cl') {
+        await modal.locator('[data-act="cl-generate"]').click(); await modal.locator('.cl__letter').waitFor();
+        const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).cl[0]);
+        assert.equal(saved.payload.source.brief.id,brief.id);
+        assert.equal(saved.payload.source.resume,'');
+        assert.match(saved.payload.source.text,/PERMITTED_PROJECT_EVIDENCE/);
+        assert.doesNotMatch(saved.payload.source.text,/PRIVATE_PROJECT_EVIDENCE|LOCKED_SECTION_EVIDENCE/);
+      }
+      assert.equal(await modal.evaluate(element => element.querySelector('.pass__box').scrollWidth > element.querySelector('.pass__box').clientWidth),false);
+      await page.screenshot({path:join(tmpdir(),'rk-prep-connected-'+tool+'-'+width+'.png')});
+      await modal.locator(['ats','cl'].includes(tool) ? '[data-prep-close]' : '[data-cancel]').click();
+      await page.waitForFunction(tool => document.activeElement?.dataset.tool === tool, tool);
+    }
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft())),before);
+  } finally { await browser.close(); }
+});
+
+for (const width of [1440,390]) test("Prepare optional Q&A retains responses, grounding and the default Questions view at " + width + "px", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"}), errors = [];
+  page.on('pageerror',error=>errors.push(error.message));
+  try {
+    await page.clock.install();
+    await page.addInitScript(() => { window.SpeechRecognition = class { constructor() { window.practiceDictation = this; } start() {} stop() { this.onend?.(); } abort() { window.practiceMicAborted = true; } }; });
+    await installPrepareReplies(page); await openIntegratedFixture(page);
+    await page.evaluate(() => window.__rkDevEdit('work.0.study.blocks',[{type:'text',body:'ORIGINAL_PRACTICE_EVIDENCE'}]));
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.setViewportSize({width,height:1000});
+    await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+    await page.locator('#iprepJd').fill('ORIGINAL_PRACTICE_ROLE');
+    await page.locator('[data-iprep-run]').click();
+    await page.locator('.iprep__q').waitFor();
+    assert.equal(await page.getByRole('tab',{name:'Questions',exact:true}).getAttribute('aria-selected'),'true');
+    await page.locator('[data-iprep-ans="0"]').click();
+    await page.locator('.iprep__a strong').waitFor();
+    const suggested = await page.locator('.iprep__a').innerHTML();
+    await page.getByRole('tab',{name:'Practice Q&A',exact:true}).click();
+    assert.equal(await page.locator('.iprep__a').isVisible(),false);
+    await page.locator('[data-practice-feedback]').click();
+    assert.match(await page.locator('.iprep-modal .pass__err').innerText(),/response first/);
+    assert.equal(await page.evaluate(() => window.preparationCalls.filter(call=>call.system.includes('interview practice coach')).length),0);
+    await page.getByRole('button',{name:'Start timer',exact:true}).evaluate(button => { window.practiceTestStart = performance.now(); button.click(); });
+    await page.clock.runFor(2200);
+    const measured = await page.getByRole('button',{name:'Pause timer',exact:true}).evaluate(button => { const elapsed = performance.now() - window.practiceTestStart; button.click(); return elapsed / 1000; });
+    const [minutes,seconds] = (await page.locator('[data-practice-elapsed]').innerText()).split(':').map(Number);
+    assert.ok(measured >= 2 && Math.abs(minutes * 60 + seconds - measured) < 1);
+    await page.getByRole('button',{name:'Dictate response',exact:true}).click();
+    await page.evaluate(() => { const result = [{transcript:'A dictated decision and its outcome.'}]; result.isFinal = true; window.practiceDictation.onresult({resultIndex:0,results:[result]}); });
+    assert.equal(await page.locator('[data-practice-answer]').inputValue(),'A dictated decision and its outcome.');
+    await page.getByRole('button',{name:'Stop dictation',exact:true}).click();
+    await page.locator('[data-practice-answer]').fill('FIRST_PRACTICE_RESPONSE: I changed the decision after considering the user evidence.');
+    await page.evaluate(() => window.__rkDevEdit('work.0.study.blocks',[{type:'text',body:'CHANGED_PRACTICE_EVIDENCE'}]));
+    await page.locator('[data-practice-feedback]').click();
+    await page.locator('.prep-practice > .prep-practice-feedback h4').waitFor();
+    const request = await page.evaluate(() => window.preparationCalls.at(-1).user);
+    assert.match(request,/FIRST_PRACTICE_RESPONSE/);
+    assert.match(request,/ORIGINAL_PRACTICE_EVIDENCE/);
+    assert.match(request,/ORIGINAL_PRACTICE_ROLE/);
+    assert.doesNotMatch(request,/CHANGED_PRACTICE_EVIDENCE/);
+    assert.doesNotMatch(await page.locator('.prep-practice').innerHTML(),/INVENTED_SOURCE_QUOTE/);
+    const first = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep[0]);
+    assert.equal(first.payload.practice.turns[0].attempts.length,1);
+    assert.equal(first.payload.questions[0].answer,suggested);
+    await page.locator('[data-practice-follow]').click();
+    assert.equal(await page.locator('.prep-practice h3').innerText(),'What alternative did you reject, and why?');
+    await page.locator('[data-practice-answer]').fill('An unfinished follow-up response that must survive reopening.');
+    await page.getByRole('button',{name:'Previous question',exact:true}).click();
+    await page.locator('[data-practice-retry]').click();
+    await page.locator('[data-practice-answer]').fill('SECOND_PRACTICE_RESPONSE: I rejected the larger option because it did not fit the user need.');
+    await page.locator('[data-practice-feedback]').click();
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep[0].payload.practice.turns[0].attempts.length === 2);
+    assert.equal(await page.locator('.iprep-modal .pass__box').evaluate(element=>element.scrollWidth > element.clientWidth),false);
+    await page.locator('.prep-practice h3').scrollIntoViewIfNeeded();
+    await page.screenshot({path:join(tmpdir(),'rk-prep-practice-'+width+'.png')});
+    await page.locator('.iprep-modal [data-cancel]').click();
+    await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+    await page.locator('[data-iprep-hist-open="'+first.id+'"]').click();
+    assert.equal(await page.getByRole('tab',{name:'Questions',exact:true}).getAttribute('aria-selected'),'true');
+    assert.equal(await page.locator('.iprep__a').innerHTML(),suggested);
+    await page.getByRole('tab',{name:'Practice Q&A',exact:true}).click();
+    const paused = await page.locator('[data-practice-elapsed]').innerText();
+    await page.clock.runFor(1500);
+    assert.equal(await page.locator('[data-practice-elapsed]').innerText(),paused);
+    await page.getByRole('button',{name:'Next question',exact:true}).click();
+    assert.match(await page.locator('[data-practice-answer]').inputValue(),/unfinished follow-up/);
+    await page.evaluate(() => { window.deferPracticeReply = true; });
+    await page.locator('[data-practice-feedback]').click();
+    await page.waitForFunction(() => typeof window.releasePracticeReply === 'function');
+    await page.locator('.iprep-modal [data-cancel]').click();
+    await page.evaluate(() => window.releasePracticeReply());
+    await page.waitForFunction(() => window.practiceReplyReturned && window.__rkAiSession.state().active === 0);
+    const saved = await page.evaluate(id => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep.find(entry=>entry.id===id),first.id);
+    assert.equal(saved.payload.practice.turns[0].attempts.length,2);
+    assert.equal(saved.payload.practice.turns[1].attempts.length,0);
+    assert.match(saved.payload.practice.turns[1].draft,/unfinished follow-up/);
+    await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+    await page.locator('[data-iprep-hist-open="'+first.id+'"]').click();
+    await page.getByRole('tab',{name:'Practice Q&A',exact:true}).click();
+    await page.locator('[data-iprep-hist-del="'+first.id+'"]').click();
+    await page.locator('.iprep-modal [data-cancel]').click();
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep.length),0);
+    assert.deepEqual(errors,[]);
+  } finally { await browser.close(); }
+});
+
+test("Prepare storage failures keep generated results in memory until retry succeeds", {timeout:30000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"});
+  try {
+    await installPrepareReplies(page); await openIntegratedFixture(page);
+    await page.evaluate(() => { const write = Storage.prototype.setItem; window.prepStorageBlocked = true; Storage.prototype.setItem = function(key,value) { if (window.prepStorageBlocked && key.startsWith('rk:prep:')) throw new DOMException('Storage full','QuotaExceededError'); return write.call(this,key,value); }; });
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+    await page.locator('[data-iprep-run]').click();
+    await page.locator('.iprep__q').waitFor();
+    assert.match(await page.locator('[data-prep-storage]:visible').innerText(), /Not saved on this device/);
+    assert.equal(await page.evaluate(() => localStorage.getItem('rk:prep:hist')), null);
+    await page.locator('.iprep-modal [data-cancel]').click();
+    await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+    await page.locator('[data-iprep-hist-open]').first().click();
+    assert.match(await page.locator('.iprep__q').innerText(), /Which decision/);
+    await page.evaluate(() => { window.prepStorageBlocked = false; });
+    await page.getByRole('button',{name:'Retry save and sync',exact:true}).click();
+    await page.locator('[data-prep-storage]').waitFor({state:'hidden'});
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep[0]);
+    assert.match(saved.payload.questions[0].q, /Which decision/);
+    assert.ok(saved.payload.source.text);
+  } finally { await browser.close(); }
+});
+
+test("Prepare legacy results reconnect to an explicit source copy without regeneration", {timeout:45000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"});
+  try {
+    await installPrepareReplies(page); await openIntegratedFixture(page);
+    const legacy = {iprep:[{id:'legacy-questions',tool:'iprep',at:1,payload:{level:'staff',jd:'SAVED_LEGACY_ROLE',fromAi:true,questions:[{q:'A preserved question',answer:'<p>A preserved answer.</p>'}]}}],story:[{id:'legacy-story',tool:'story',at:1,payload:{tone:'staff',dur:'5',themes:[{title:'A preserved angle'}],cur:{ti:0,title:'A preserved angle',script:{opener:'A preserved opening',beats:[],close:'A preserved close'},questions:[]}}}]};
+    await page.evaluate(legacy => { localStorage.setItem('rk:prep:hist',JSON.stringify(legacy)); window.__rkDevEdit('work.1.study.blocks',[{type:'text',body:'RECONNECTED_EXPLICIT_EVIDENCE'}]); },legacy);
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    for (const [tool,id] of [['iprep','legacy-questions'],['story','legacy-story']]) {
+      await page.locator('[data-act="prep-open"][data-tool="'+tool+'"]').click();
+      await page.locator('[data-'+tool+'-hist-open="'+id+'"]').click();
+      const modal = page.locator('.'+tool+'-modal');
+      await modal.getByRole('button',{name:'Reconnect sources',exact:true}).click();
+      if (tool === 'iprep') { await modal.locator('[data-iprep-proj][value="1"]').check(); await modal.locator('#iprepJd').fill('EXPLICIT_RECONNECT_ROLE'); }
+      else { await modal.locator('.story__pick').selectOption('1'); await modal.locator('[data-story-align]').check(); await modal.locator('[data-story-jd-text]').fill('EXPLICIT_RECONNECT_ROLE'); }
+      await modal.locator('[data-'+tool+'-run]').click();
+      await page.waitForFunction(tool => JSON.parse(localStorage.getItem('rk:prep:hist'))[tool].length === 2,tool);
+      const saved = await page.evaluate(tool => JSON.parse(localStorage.getItem('rk:prep:hist'))[tool],tool);
+      assert.deepEqual(saved.find(entry=>entry.id===id),legacy[tool][0]);
+      assert.equal(saved[0].payload.source.projects[0].id,'empty-case');
+      assert.match(saved[0].payload.source.text,/RECONNECTED_EXPLICIT_EVIDENCE/);
+      assert.equal(saved[0].payload.source.jd,'EXPLICIT_RECONNECT_ROLE');
+      if (tool === 'iprep') assert.deepEqual(saved[0].payload.questions,legacy.iprep[0].payload.questions);
+      else assert.deepEqual(saved[0].payload.cur.script,legacy.story[0].payload.cur.script);
+      await modal.locator('[data-cancel]').click();
+    }
+    assert.equal(await page.evaluate(() => window.preparationCalls.length),0);
+  } finally { await browser.close(); }
+});
+
+test("Prepare saved ATS reviews retain their resume and role and cancel closed rechecks", {timeout:45000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"}), errors = [];
+  page.on('pageerror',error=>errors.push(error.message));
+  try {
+    await installPrepareReplies(page); await openIntegratedFixture(page);
+    await page.evaluate(() => {
+      const text = 'ORIGINAL_ATS_RESUME: Product designer with experience in user research and interaction design.';
+      window.__rkDevEdit('contact.resume','data:text/plain,CHANGED_ATS_RESUME');
+      localStorage.setItem('rk:prep:hist',JSON.stringify({ats:[{id:'saved-ats',tool:'ats',kind:'review',at:1,payload:{state:{mode:'job',jd:'ORIGINAL_ATS_ROLE',company:'OriginalCo'},text,company:'OriginalCo',level:'staff',res:{score:60,checks:[],fixes:[]},source:{version:1,text,jd:'ORIGINAL_ATS_ROLE',projects:[],brief:null}}}]}));
+    });
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
+    await page.locator('[data-act="ats-hist-open"][data-id="saved-ats"]').click();
+    await page.locator('.atsv__savedtext').waitFor();
+    assert.match(await page.locator('.atsv__savedtext').innerText(),/ORIGINAL_ATS_RESUME/);
+    assert.doesNotMatch(await page.locator('.atsv').innerText(),/CHANGED_ATS_RESUME/);
+    await page.locator('[data-atsv-regen]').click();
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('rk:prep:hist')).ats[0].payload.res.summary === 'ATS_RECHECK_RESULT');
+    const request = await page.evaluate(() => window.preparationCalls.at(-1).user);
+    assert.match(request,/ORIGINAL_ATS_RESUME/); assert.match(request,/ORIGINAL_ATS_ROLE/); assert.doesNotMatch(request,/CHANGED_ATS_RESUME/);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).ats[0]);
+    assert.equal(saved.payload.source.jd,'ORIGINAL_ATS_ROLE');
+    await page.evaluate(() => { window.deferAtsReply = true; });
+    await page.locator('[data-atsv-regen]').click();
+    await page.waitForFunction(() => typeof window.releaseAtsReply === 'function');
+    await page.locator('[data-atsv-close]').click();
+    await page.evaluate(() => window.releaseAtsReply());
+    await page.waitForFunction(() => window.atsReplyReturned && window.__rkAiSession.state().active === 0);
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).ats[0].at),saved.at);
+    assert.equal(await page.locator('.prep-dialog').isVisible(),true);
+    assert.deepEqual(errors,[]);
+  } finally { await browser.close(); }
+});
+
+test("Prepare restored letters regenerate from their saved resume and evidence", {timeout:45000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"});
+  try {
+    await installPrepareReplies(page); await openIntegratedFixture(page);
+    await page.evaluate(() => {
+      localStorage.setItem('rk:prep:hist',JSON.stringify({cl:[{id:'original-letter',tool:'cl',at:1,payload:{state:{jd:'ORIGINAL_LETTER_ROLE',company:'OriginalCo',length:'full'},level:'staff',letter:'A preserved original letter.',source:{version:1,text:'ORIGINAL_LETTER_EVIDENCE',jd:'ORIGINAL_LETTER_ROLE',company:'OriginalCo',resume:'ORIGINAL_LETTER_RESUME',projects:[],brief:null}}}]}));
+      window.__rkDevEdit('work.0.study.blocks',[{type:'text',body:'CHANGED_LETTER_EVIDENCE'}]);
+    });
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.locator('[data-act="prep-open"][data-tool="cl"]').click();
+    await page.locator('[data-act="cl-hist-open"][data-id="original-letter"]').click();
+    await page.locator('[data-act="cl-regen"]').click();
+    await page.waitForFunction(() => window.preparationCalls.some(call=>call.system.includes('COMPLETE, personalised cover letter')) && window.__rkAiSession.state().active === 0);
+    const request = await page.evaluate(() => window.preparationCalls.at(-1).user);
+    assert.match(request,/ORIGINAL_LETTER_EVIDENCE/);
+    assert.match(request,/ORIGINAL_LETTER_RESUME/);
+    assert.match(request,/ORIGINAL_LETTER_ROLE/);
+    assert.doesNotMatch(request,/CHANGED_LETTER_EVIDENCE/);
+    const history = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).cl);
+    assert.equal(history.length,2);
+    assert.equal(history.find(entry=>entry.id==='original-letter').payload.letter,'A preserved original letter.');
+    await page.locator('[data-act="cl-length"][data-len="short"]').click();
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:draft')).cl.source.resume),'ORIGINAL_LETTER_RESUME');
+  } finally { await browser.close(); }
+});
+
+test("Prepare restored interviews and stories keep their original evidence and role", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"});
+  try {
+    await installPrepareReplies(page);
+    await openIntegratedFixture(page);
+    await page.evaluate(() => {
+      window.__rkDevEdit('work.0.study.blocks',[{type:'text',body:'OTHER_PROJECT_EVIDENCE'}]);
+      window.__rkDevEdit('work.1.study.blocks',[{type:'text',body:'ORIGINAL_PROJECT_EVIDENCE'}]);
+    });
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+    await page.locator('[data-iprep-proj][value="1"]').check();
+    await page.locator('#iprepJd').fill('ORIGINAL_TARGET_ROLE');
+    await page.locator('[data-iprep-run]').click();
+    await page.locator('.iprep__q').waitFor();
+    const interview = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep[0]);
+    assert.deepEqual(interview.payload.source.projects.map(project => project.id), ['empty-case']);
+    assert.match(interview.payload.source.text, /ORIGINAL_PROJECT_EVIDENCE/);
+    assert.equal(interview.payload.source.jd, 'ORIGINAL_TARGET_ROLE');
+    await page.locator('.iprep-modal [data-cancel]').click();
+    await page.locator('[data-act="prep-open"][data-tool="story"]').click();
+    await page.locator('.story__pick').selectOption('1');
+    await page.locator('[data-story-align]').check();
+    await page.locator('[data-story-jd-text]').fill('ORIGINAL_STORY_ROLE');
+    await page.locator('[data-story-run]').click();
+    await page.locator('[data-story-tell="0"]').click();
+    await page.locator('[data-story-copy]').waitFor();
+    const story = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).story[0]);
+    assert.equal(story.payload.source.projects[0].id, 'empty-case');
+    await page.locator('.story-modal [data-cancel]').click();
+    await page.evaluate(() => {
+      window.__rkDevEdit('work.1.study.blocks',[{type:'text',body:'CHANGED_PROJECT_EVIDENCE'}]);
+      localStorage.setItem('rk:story:jd',JSON.stringify({on:true,text:'OTHER_TARGET_ROLE'}));
+    });
+    await page.reload();
+    await page.waitForFunction(() => typeof window.__rkDevStudio === 'function' && !!window.RK?.data);
+    await page.evaluate(() => window.__rkDevStudio());
+    await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+    await page.evaluate(() => document.querySelectorAll('.pass--lock').forEach(dialog => dialog.remove()));
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+    await page.locator('[data-iprep-hist-open="'+interview.id+'"]').click();
+    assert.match(await page.locator('.iprep-modal [data-prep-source]').innerText(), /Current content has changed/);
+    await page.locator('[data-iprep-ans="0"]').click();
+    await page.locator('.iprep__a strong').waitFor();
+    const answer = await page.evaluate(() => window.preparationCalls.at(-1).user);
+    assert.match(answer, /ORIGINAL_PROJECT_EVIDENCE/);
+    assert.match(answer, /ORIGINAL_TARGET_ROLE/);
+    assert.doesNotMatch(answer, /CHANGED_PROJECT_EVIDENCE|OTHER_PROJECT_EVIDENCE|OTHER_TARGET_ROLE/);
+    await page.locator('.iprep-modal [data-cancel]').click();
+    await page.locator('[data-act="prep-open"][data-tool="story"]').click();
+    await page.locator('[data-story-hist-open="'+story.id+'"]').click();
+    await page.locator('[data-story-regen]').click();
+    await page.waitForFunction(() => window.__rkAiSession.state().active === 0 && window.preparationCalls.some(call => call.system.includes('Script EXACTLY')));
+    const script = await page.evaluate(() => window.preparationCalls.at(-1).user);
+    assert.match(script, /ORIGINAL_PROJECT_EVIDENCE/);
+    assert.match(script, /ORIGINAL_STORY_ROLE/);
+    assert.doesNotMatch(script, /CHANGED_PROJECT_EVIDENCE|OTHER_PROJECT_EVIDENCE|OTHER_TARGET_ROLE/);
+  } finally { await browser.close(); }
+});
+
+test("Prepare Whiteboard keeps feedback, scorecards and prior targets when setup changes", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"});
+  try {
+    await installPrepareReplies(page); await openIntegratedFixture(page);
+    await page.evaluate(() => localStorage.setItem('rk:prep:brief',JSON.stringify({id:'original-role',company:'OriginalCo',role:'Staff designer',jd:'ORIGINAL_WB_ROLE',level:'staff',projectMode:'selected',projectIds:['integrated-case']})));
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    await page.locator('.wb-modal [data-use-prep-brief]').click();
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:wb')).preparationBrief.id),'original-role');
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:wb')).fixedRole),true);
+    await page.locator('.wb__own').fill('Original synthetic exercise');
+    await page.locator('[data-wb-start]').click();
+    await page.locator('.wb__draft').fill('I would first clarify the user need and choose a measurable outcome.');
+    await page.locator('[data-wb-critique]').click();
+    await page.getByText('SAVED_COACHING_FEEDBACK',{exact:true}).waitFor();
+    const coach = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]);
+    await page.locator('[data-wb-newprompt]').click();
+    await page.getByText('A new synthetic exercise',{exact:true}).waitFor();
+    await page.locator('.wb__draft').waitFor();
+    const next = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]);
+    assert.notEqual(next.id,coach.id);
+    await page.locator('.wb-modal [data-cancel]').click();
+    await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    await page.locator('[data-wb-hist-open="'+coach.id+'"]').click();
+    await page.getByText('SAVED_COACHING_FEEDBACK',{exact:true}).waitFor();
+    await page.locator('[data-wb-back]').click();
+    await page.locator('.wb__company').fill('NextCo');
+    await page.locator('.wb__jd').fill('NEXT_WB_ROLE');
+    await page.locator('[data-wb-mode="mock"]').click();
+    await page.locator('.wb-modal [data-cancel]').click();
+    const preserved = await page.evaluate(id => JSON.parse(localStorage.getItem('rk:prep:hist')).wb.find(entry=>entry.id===id),coach.id);
+    assert.equal(preserved.target.company,'OriginalCo / Staff designer');
+    assert.equal(preserved.target.jd,'ORIGINAL_WB_ROLE');
+    assert.equal(preserved.mode,'coach');
+    assert.equal(preserved.critique.verdict,'SAVED_COACHING_FEEDBACK');
+    await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    await page.locator('.wb__own').fill('A mock synthetic exercise');
+    await page.locator('[data-wb-start]').click();
+    await page.locator('.wb__turn--int').waitFor();
+    await page.locator('.wb__msg').fill('I would start with the user need and the outcome.');
+    await page.locator('[data-wb-send]').click();
+    await page.waitForFunction(() => window.__rkAiSession.state().active === 0 && document.querySelectorAll('.wb__turn--int').length === 2);
+    await page.locator('[data-wb-score]').click();
+    await page.getByText('SAVED_MOCK_SCORE',{exact:true}).waitFor();
+    const mock = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]);
+    assert.equal(mock.score.overall,'SAVED_MOCK_SCORE');
+    await page.locator('[data-wb-pause]').click();
+    await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    await page.locator('[data-wb-hist-open="'+mock.id+'"]').click();
+    await page.getByText('SAVED_MOCK_SCORE',{exact:true}).waitFor();
+    assert.match(await page.locator('.wb__chat').innerText(),/I would start with the user need/);
+  } finally { await browser.close(); }
+});
+
+test("Prepare Whiteboard preserves sessions while stopping timers and late capture on exit", {timeout:45000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"});
+  try {
+    await page.clock.install();
+    await openIntegratedFixture(page);
+    await page.evaluate(() => localStorage.setItem('rk:prep:hist', JSON.stringify({wb:[{id:'saved-mock',tool:'wb',at:1,meta:{mode:'mock',mins:'30'},mode:'mock',mins:'30',level:'staff',convo:'text',prompt:{prompt:'Synthetic checkout exercise'},transcript:'CANDIDATE: Start with the goal.',turns:[{who:'you',text:'Start with the goal.'}],timer:900}]})));
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    await page.locator('[data-wb-hist-open="saved-mock"]').click();
+    await page.locator('[data-wb-timer-t]').waitFor();
+    await page.clock.runFor(1200);
+    await page.locator('[data-wb-rail-back]').click();
+    const stopped = await page.locator('[data-wb-timer-t]').textContent();
+    await page.clock.runFor(2100);
+    assert.equal(await page.locator('[data-wb-timer-t]').textContent(), stopped);
+    for (const source of ['screen','camera']) {
+      await page.locator('[data-wb-hist-open="saved-mock"]').click();
+      await page.evaluate(source => { const method = source === 'screen' ? 'getDisplayMedia' : 'getUserMedia'; navigator.mediaDevices[method] = () => new Promise(resolve => { window.lateFeed = resolve; }); }, source);
+      await page.locator('[data-wb-watch="'+source+'"]').click();
+      await page.waitForFunction(() => typeof window.lateFeed === 'function');
+      await page.locator('[data-wb-pause]').click();
+      await page.locator('.wb-modal').waitFor({state:'detached'});
+      await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width=160;canvas.height=90;canvas.getContext('2d').fillRect(0,0,160,90); window.lateStream=canvas.captureStream(1); window.lateFeed(window.lateStream); delete window.lateFeed; });
+      await page.waitForFunction(() => window.lateStream.getTracks().every(track => track.readyState === 'ended'));
+      assert.equal(await page.locator('.wb-modal,.wb__mini').count(), 0);
+      await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    }
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]);
+    assert.equal(saved.transcript, 'CANDIDATE: Start with the goal.');
+    assert.equal(saved.turns.length, 1);
+    assert.ok(saved.timer < 900);
+  } finally { await browser.close(); }
+});
+
+test("Prepare saved answers preserve formatting without executable markup", {timeout:30000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"});
+  try {
+    await openIntegratedFixture(page);
+    await page.evaluate(() => {
+      const answer = '<p onclick=void(0)><strong>Supported answer</strong><br><em>Keep emphasis</em><img src="about:blank" onerror=void(0)></p><ul><li>Evidence</li></ul><a href="java&#x73;cript:void(0)">Link text</a><iframe srcdoc="sample"></iframe><svg onload=void(0)></svg>';
+      localStorage.setItem('rk:prep:hist', JSON.stringify({iprep:[{id:'safe-interview',tool:'iprep',at:1,payload:{level:'staff',fromAi:true,questions:[{q:'A saved question',answer}]}}],story:[{id:'safe-story',tool:'story',at:1,payload:{tone:'staff',dur:'5',themes:[{title:'Saved angle'}],cur:{ti:0,title:'Saved angle',script:{opener:'Saved opening',beats:[]},questions:[{q:'A saved question',answer}]}}}]}));
+    });
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    for (const [tool, history, selector] of [['iprep','safe-interview','.iprep__a'],['story','safe-story','.story__q-a']]) {
+      await page.locator('[data-act="prep-open"][data-tool="'+tool+'"]').click();
+      await page.locator('[data-'+tool+'-hist-open="'+history+'"]').click();
+      const answer = page.locator(selector).first();
+      await answer.waitFor();
+      assert.equal(await answer.locator('strong').innerText(), 'Supported answer');
+      assert.equal(await answer.locator('em').innerText(), 'Keep emphasis');
+      assert.equal(await answer.locator('li').innerText(), 'Evidence');
+      assert.equal(await answer.locator('img,iframe,svg,script,style,a').count(), 0);
+      assert.equal(await answer.locator('*').evaluateAll(elements => elements.some(element => [...element.attributes].some(attribute => /^on|href|src/i.test(attribute.name)))), false);
+      await page.locator('.'+tool+'-modal [data-cancel]').click();
+    }
+  } finally { await browser.close(); }
+});
+
 for (const width of [1440, 390]) test("AI Options use case content and keep Back in the workbar at " + width + "px", {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless:true});
   const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"}), errors = [], requests = [];

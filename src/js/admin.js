@@ -340,7 +340,7 @@ import {
   /* ---------- lazy studio loader: the heavy editor + AI load ONLY after the gate passes ---------- */
   function musSilence() { musResumeOnExit = musPlaying; musStop(); musPlaying = false; musAttract(false); musToastHide(); musSync(); }
   function musRestore() { if (musResumeOnExit) { musResumeOnExit = false; musPlay(); } }
-  let __studioLoading = null;
+  let __studioLoading = null, __studioOpening = null;
   function loadStudio() {
     if (window.__RKStudio) return Promise.resolve();
     if (__studioLoading) return __studioLoading;
@@ -364,16 +364,18 @@ import {
     });
     return __studioLoading;
   }
-  function studioUrlExit() { try { if (window.__STUDIO_PAGE) { location.href = "/"; return; } if (location.pathname === "/studio") history.replaceState({}, "", "/"); } catch (e) {} }
+  function studioUrlExit() { __studioOpening = null; try { if (window.__STUDIO_PAGE) { location.href = "/"; return; } if (location.pathname === "/studio") history.replaceState({}, "", "/"); } catch (e) {} }
   function openStudio() {
-    if (window.innerWidth < ADMIN_MIN) { mobileSignedIn(); return; }   // phone: mute this device; the editor is desktop-only
+    if (__studioOpening) return __studioOpening;
+    if (!RK_DEV && window.innerWidth < ADMIN_MIN) { mobileSignedIn(); return; }   // phone: mute this device; the editor is desktop-only
     try { localStorage.setItem("rk:noanalytics", "1"); } catch (e) {}   // stop counting the owner's own visits in Web Analytics
-    loadStudio().then(function () {
+    __studioOpening = loadStudio().then(async function () {
       if (window.__RKStudio) {
-        window.__RKStudio.open({ musSilence: musSilence, musRestore: musRestore, thDismiss: thDismiss, onExit: studioUrlExit });
-        try { history.replaceState({}, "", "/studio"); } catch (e) {}   // reflect admin mode in the URL, however you entered
+        await window.__RKStudio.open({ musSilence: musSilence, musRestore: musRestore, thDismiss: thDismiss, onExit: studioUrlExit });
+        try { history.replaceState({}, "", RK_DEV ? "/studio/?devstub=1" : "/studio"); } catch (e) {}   // reflect admin mode in the URL, however you entered
       }
-    }).catch(function () { flash("Couldn\u2019t load the editor \u2014 check your connection and try again."); });
+    }).catch(function () { __studioOpening = null; flash("Couldn\u2019t load the editor \u2014 check your connection and try again."); });
+    return __studioOpening;
   }
   /* ---------- control menu (clock flyout) ---------- */
   /* ---------- ambient music player (Web Audio synth, with optional audio files) ---------- */
@@ -1246,7 +1248,7 @@ import {
     if (window.__STUDIO_PAGE) {
       // Dedicated /studio page: no landing to wire — just open the gate.
       try { if (window.RK) window.RK.requestAccess = requestAccessModal; } catch (e) {}
-      setTimeout(gate, 60);
+      setTimeout(RK_DEV ? openStudio : gate, 60);
       return;
     }
     const clock = document.getElementById("clock");

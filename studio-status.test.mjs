@@ -7,6 +7,7 @@ import { selectStudioDraft, studioDraftContent } from "./src/js/studio-draft-rec
 import { completeStudioBackup } from "./src/js/studio-content-backup.mjs";
 import { AI_SESSION_KEY, createAiSession } from "./src/js/ai-session.mjs";
 import { availableStudies } from "./src/js/slide-merge-sections.mjs";
+import { prepareBrief, prepareBriefWorks } from "./src/js/prepare-brief.mjs";
 
 const source = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
 const styles = postcss.parse(readFileSync(new URL("./css/admin.css", import.meta.url), "utf8"));
@@ -17,6 +18,66 @@ function declarations(selector) {
   });
   return result;
 }
+
+test("Prepare sync retries failed writes and keeps deletion tombstones against stale cloud lists", async () => {
+  const values = new Map(), requests = [];
+  let fail = true, holdWrite = false, releaseWrite, remoteId = 'saved', releaseRead;
+  const start = source.indexOf('var PREP_HIST_KEY'), end = source.indexOf('var PREP_TOOLS',start);
+  const store = runInNewContext(`(() => { ${source.slice(start,end)} return {put:prepPut,remove:prepDel,retry:prepRetryStorage,pull:prepCloudPull,list:prepList}; })()`, {
+    Map, Date, Object, JSON, AbortSignal, queueMicrotask, setTimeout, clearTimeout,
+    clone:structuredClone, window:{addEventListener(){}}, document:{querySelectorAll:()=>[]}, adminSession:()=>'test-session', ADMIN_WORKER:'https://worker.test',
+    localStorage:{getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,value)},
+    fetch:async (url,options={}) => { requests.push({url,body:options.body}); if(url.includes('/list?')) return Response.json({items:[{id:remoteId,at:9999999999999}]}); if (url.includes('/get?')) return new Promise(resolve => { releaseRead = entry => resolve(Response.json(entry)); }); if (holdWrite && url.endsWith('/put')) { holdWrite = false; await new Promise(resolve => { releaseWrite = resolve; }); } return new Response('',{status:fail?503:200}); }
+  });
+  store.put('iprep',{id:'saved',tool:'iprep',payload:{questions:[{q:'Preserved question'}]}});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(store.list('iprep').length,1);
+  assert.equal(Object.keys(JSON.parse(values.get('rk:prep:sync'))).length,1);
+  fail=false; await store.retry();
+  assert.equal(Object.keys(JSON.parse(values.get('rk:prep:sync'))).length,0);
+  store.remove('iprep','saved');
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(JSON.parse(values.get('rk:prep:sync'))['iprep/saved'].acknowledged,true);
+  store.pull('iprep',()=>{});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(store.list('iprep').length,0);
+  assert.equal(requests.filter(request=>request.url.includes('/get?')).length,0);
+  holdWrite = true;
+  store.put('iprep',{id:'concurrent',tool:'iprep',payload:{draft:'first'}});
+  await new Promise(resolve=>setImmediate(resolve));
+  store.put('iprep',{id:'concurrent',tool:'iprep',payload:{draft:'latest'}});
+  store.put('story',{id:'next-tool',tool:'story',payload:{draft:'also queued'}});
+  releaseWrite();
+  await new Promise(resolve=>setImmediate(resolve));
+  const writes = requests.filter(request=>request.url.endsWith('/put')).map(request=>JSON.parse(request.body));
+  assert.deepEqual(writes.filter(entry=>entry.id==='concurrent').map(entry=>entry.payload.draft),['first','latest']);
+  assert.ok(writes.some(entry=>entry.id==='next-tool'));
+  assert.equal(Object.values(JSON.parse(values.get('rk:prep:sync'))).filter(item=>!item.acknowledged).length,0);
+  remoteId = 'concurrent'; store.pull('iprep',()=>{});
+  await new Promise(resolve=>setImmediate(resolve));
+  store.remove('iprep','concurrent');
+  await new Promise(resolve=>setImmediate(resolve));
+  releaseRead({id:'concurrent',tool:'iprep',at:9999999999999,payload:{draft:'stale response'}});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(store.list('iprep').length,0);
+});
+
+test("shared preparation briefs select explicit evidence without changing portfolio data", () => {
+  const source = {work:[{id:'first',study:{blocks:[{type:'text',body:'Public evidence'},{type:'text',locked:true,body:'Protected evidence'}]}},{id:'second',hidden:true,study:{blocks:[{type:'text',body:'Private project'}]}},{id:'sealed',encWork:true,study:{blocks:[{body:'Sealed'}]}}]};
+  const before = structuredClone(source), brief = prepareBrief({company:'Example',projectMode:'selected',projectIds:['first','first','second']});
+  assert.deepEqual(brief.projectIds,['first','second']);
+  const selected = prepareBriefWorks(brief,source);
+  assert.deepEqual(selected.map(work=>work.id),['first']);
+  assert.equal(selected[0].study.blocks.length,1);
+  assert.deepEqual(prepareBriefWorks({...brief,includePrivate:true},source).map(work=>work.id),['first','second']);
+  assert.deepEqual(prepareBriefWorks({projectMode:'selected',projectIds:[]},source),[]);
+  const restricted = {...brief,projectIds:['first'],includePrivate:true};
+  assert.deepEqual(prepareBriefWorks(restricted,source,['first','second']).map(work=>work.id),['first']);
+  assert.deepEqual(prepareBriefWorks(restricted,source,['second']),[]);
+  assert.deepEqual(prepareBriefWorks(restricted,source,[]),[]);
+  assert.equal(prepareBrief({level:'invalid'}).level,'staff');
+  assert.deepEqual(source,before);
+});
 
 test("Edit lands on the furthest populated project stage, not an empty slideshow reference", () => {
   const start = source.indexOf("function studyHasSlides(w)"), end = source.indexOf("var L2_TABS", start);
