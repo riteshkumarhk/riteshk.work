@@ -18382,13 +18382,13 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
 
   /* ---------- shell / open / exit ---------- */
   function aiCounterIcon() {
-    const ribbonPath = depth => {
-      const radius = 9.5 - depth, segments = 96, step = Math.PI * 2 / segments;
+    const ribbonPath = (depth, rounding = 0) => {
+      const radius = 9.5 - depth - rounding, segments = 96, step = Math.PI * 2 / segments;
       const point = angle => ({
-        horizontal:12 + radius * Math.sin(angle) - depth * Math.sin(3 * angle),
-        vertical:12 - radius * Math.cos(angle) - depth * Math.cos(3 * angle),
-        tangentHorizontal:radius * Math.cos(angle) - 3 * depth * Math.cos(3 * angle),
-        tangentVertical:radius * Math.sin(angle) + 3 * depth * Math.sin(3 * angle)
+        horizontal:12 + radius * Math.sin(angle) - depth * Math.sin(3 * angle) - rounding * Math.sin(7 * angle),
+        vertical:12 - radius * Math.cos(angle) - depth * Math.cos(3 * angle) - rounding * Math.cos(7 * angle),
+        tangentHorizontal:radius * Math.cos(angle) - 3 * depth * Math.cos(3 * angle) - 7 * rounding * Math.cos(7 * angle),
+        tangentVertical:radius * Math.sin(angle) + 3 * depth * Math.sin(3 * angle) + 7 * rounding * Math.sin(7 * angle)
       });
       const number = value => value.toFixed(4), start = point(0);
       let path = 'M' + number(start.horizontal) + ' ' + number(start.vertical);
@@ -18398,7 +18398,7 @@ import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief
       }
       return path + 'Z';
     };
-    const rest = ribbonPath(4.1), circle = ribbonPath(0);
+    const rest = ribbonPath(3.5, .8), circle = ribbonPath(0);
     return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><g class="adm__ai-ribbon-turn"><path d="${rest}" style="--adm-ai-rest:path('${rest}');--adm-ai-circle:path('${circle}')"/></g></svg>`;
   }
 

@@ -926,12 +926,17 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
       const length = paths[0].getTotalLength(), points = Array.from({length:384},(_,index) => paths[0].getPointAtLength(length * index / 384));
       const radii = points.map(point => Math.hypot(point.x - 12,point.y - 12)), topPetal = points.filter(point => point.y < 7);
       const petalWidth = Math.max(...topPetal.map(point => point.x)) - Math.min(...topPetal.map(point => point.x));
+      const crossing = points.findIndex((point,index) => index > 0 && points[index - 1].x < 12 && point.x >= 12);
+      const beforeCrossing = points[crossing - 1], afterCrossing = points[crossing];
+      const neck = beforeCrossing.y + (afterCrossing.y - beforeCrossing.y) * (12 - beforeCrossing.x) / (afterCrossing.x - beforeCrossing.x);
+      const petalAspect = petalWidth / (neck - Math.min(...topPetal.map(point => point.y)));
       const folds = radii.filter((radius,index) => radius > radii[(index + 383) % 384] && radius > radii[(index + 1) % 384]).length;
-      return {outline:style.d,folds,petalWidth,visiblePaths:paths.filter(path => getComputedStyle(path).display !== 'none').length,fill:style.fill,stroke:style.stroke,strokeWidth:style.strokeWidth,transform:style.transform,rotation:getComputedStyle(svg.querySelector('.adm__ai-ribbon-turn')).transform,animations:svg.getAnimations({subtree:true}).length};
+      return {outline:style.d,folds,petalWidth,petalAspect,visiblePaths:paths.filter(path => getComputedStyle(path).display !== 'none').length,fill:style.fill,stroke:style.stroke,strokeWidth:style.strokeWidth,transform:style.transform,rotation:getComputedStyle(svg.querySelector('.adm__ai-ribbon-turn')).transform,animations:svg.getAnimations({subtree:true}).length};
     });
     assert.equal(rest.visiblePaths, 1);
     assert.equal(rest.folds,4);
     assert.ok(rest.petalWidth >= 3.35,'Keep the oval petals wide enough to remain open at counter size');
+    assert.ok(rest.petalAspect >= .6,'Keep the petals rounded rather than long and narrow');
     assert.equal((rest.outline.match(/M/g) || []).length,1);
     assert.equal(rest.fill,'none');
     assert.notEqual(rest.stroke,'none');
