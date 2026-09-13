@@ -738,6 +738,188 @@ test("Prepare legacy results reconnect to an explicit source copy without regene
   } finally { await browser.close(); }
 });
 
+test('Prepare reopening an ATS review retains only its own loaded original', async () => {
+  const source = readFileSync(new URL('./src/js/admin-studio.js', import.meta.url), 'utf8');
+  const start = source.indexOf('  async function atsHistRestore(id) {');
+  const code = source.slice(start, source.indexOf('  /* ---------- Rebuild the', start));
+  for (const sameReview of [true, false]) {
+    const file = { name: 'original.pdf', originalBytes: 'unchanged' };
+    const payload = { state: { jd: 'Saved role' }, text: 'Saved resume', res: { score: 72 } };
+    const context = { atsLast: { file }, atsvSessId: sameReview ? 'review' : 'other', atsState: {}, atsLevel: 'staff',
+      prepGet: () => ({ kind: 'review', payload }), prepReadSource: () => null,
+      document: { querySelector: () => null }, prepDraftSet() {}, prepRerenderDialog() {}, atsOpenViewer() {} };
+    await runInNewContext(code + '; atsHistRestore("review")', context);
+    assert.equal(context.atsLast.file, sameReview ? file : null);
+    assert.equal(context.atsLast.text, payload.text);
+  }
+});
+
+test('Prepare resume sources reject damaged synced bytes before storage', async () => {
+  const { restoreResumeSource } = await import('./src/js/prepare-resume.mjs');
+  const original = Buffer.from('Original PDF bytes');
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', original)), byte => byte.toString(16).padStart(2, '0')).join('');
+  await assert.rejects(restoreResumeSource({ version: 1, sha256: hash, size: original.length, name: 'resume.pdf', type: 'application/pdf', data: Buffer.from('Different PDF bytes').toString('base64') }), /integrity check/);
+  await assert.rejects(restoreResumeSource({ version: 1, sha256: 'invalid' }), /reference is invalid/);
+});
+
+function preparePdfFixture(text) {
+  const stream = '0.1 0.5 0.4 rg 40 290 520 15 re f 0 g BT /F1 16 Tf 40 240 Td (' + text + ') Tj ET';
+  const objects = ['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 640 360] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>','<< /Length ' + stream.length + ' >>\nstream\n' + stream + '\nendstream'];
+  let pdf = '%PDF-1.4\n'; const offsets = [0];
+  objects.forEach((object,index) => { offsets.push(Buffer.byteLength(pdf)); pdf += (index+1) + ' 0 obj\n' + object + '\nendobj\n'; });
+  const xref = Buffer.byteLength(pdf);
+  pdf += 'xref\n0 6\n0000000000 65535 f \n' + offsets.slice(1).map(offset => String(offset).padStart(10,'0') + ' 00000 n \n').join('') + 'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF';
+  return pdf;
+}
+
+test('Prepare ATS retains the original before AI and preserves history on document-storage failure', {timeout:45000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  try {
+    const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+    const pdf = preparePdfFixture('Original designer resume with research, strategy and measurable product outcomes.');
+    await installPrepareReplies(page);await openIntegratedFixture(page);
+    await page.evaluate(pdf=>{
+      window.__rkDevEdit('contact.resume','data:application/pdf;base64,'+btoa(pdf));
+      localStorage.setItem('rk:prep:hist',JSON.stringify({ats:[{id:'preserve-me',tool:'ats',kind:'workspace',at:1,payload:{rb:{name:'Preserved draft'},design:{accent:'#167d83'}}}]}));
+      window.resumeTransaction=IDBDatabase.prototype.transaction;
+      IDBDatabase.prototype.transaction=function(names,mode,...rest){if(this.name==='rk-prepare-resume-sources-v1'&&mode==='readwrite')throw new DOMException('Synthetic document quota','QuotaExceededError');return window.resumeTransaction.call(this,names,mode,...rest);};
+    },pdf);
+    const before = await page.evaluate(()=>localStorage.getItem('rk:prep:hist'));
+    await page.locator('.adm__tab[data-tab="ai"]').click();await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
+    await page.locator('[data-act="ats-check"]').click();
+    await page.waitForFunction(()=>document.querySelector('.ats__err')?.textContent.includes('Synthetic document quota'));
+    assert.equal(await page.evaluate(()=>window.preparationCalls.length),0);
+    assert.equal(await page.evaluate(()=>localStorage.getItem('rk:prep:hist')),before);
+    await page.evaluate(()=>{IDBDatabase.prototype.transaction=window.resumeTransaction;});
+    await page.locator('[data-act="ats-check"]').click();
+    await page.locator('.atsv__page canvas').waitFor();
+    const entry = await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.kind==='review'));
+    assert.equal(entry.payload.resumeDocumentOrigin,'original');assert.equal(entry.payload.resumeDocument.data,undefined);
+    assert.equal(await page.evaluate(()=>window.preparationCalls.length),1);
+    await page.evaluate(()=>window.__rkDevEdit('contact.resume','data:text/plain,Unrelated replacement'));
+    await page.reload();await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    await page.evaluate(()=>document.querySelectorAll('.pass--lock').forEach(dialog=>dialog.remove()));
+    await page.locator('.adm__tab[data-tab="ai"]').click();await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
+    await page.locator('[data-act="ats-hist-open"][data-id="'+entry.id+'"]').click();await page.locator('.atsv__page canvas').waitFor();
+    assert.equal(await page.locator('[data-atsv-recovered]').count(),0);
+    const stored = await page.evaluate(async hash=>{
+      const database=await new Promise(resolve=>{const request=indexedDB.open('rk-prepare-resume-sources-v1',1);request.onsuccess=()=>resolve(request.result);});
+      const blob=await new Promise(resolve=>{const request=database.transaction('documents').objectStore('documents').get(hash);request.onsuccess=()=>resolve(request.result);});database.close();return blob.text();
+    },entry.payload.resumeDocument.sha256);
+    assert.equal(stored,pdf);
+    assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='preserve-me')),JSON.parse(before).ats[0]);
+    await page.locator('[data-atsv-close]').click();
+    await page.evaluate(({entry,pdf})=>{
+      const history=JSON.parse(localStorage.getItem('rk:prep:hist'));
+      const legacy=structuredClone(entry);legacy.id='legacy-site-copy';delete legacy.payload.resumeDocument;delete legacy.payload.resumeDocumentOrigin;
+      history.ats.push(legacy);localStorage.setItem('rk:prep:hist',JSON.stringify(history));
+      window.__rkDevEdit('contact.resume','data:application/pdf;base64,'+btoa(pdf));
+    },{entry,pdf});
+    await page.locator('.prep-dialog [data-prep-close]').click();
+    await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
+    await page.locator('[data-act="ats-hist-open"][data-id="legacy-site-copy"]').click();
+    await page.locator('[data-atsv-recover="site"]').click();await page.locator('.atsv__page canvas').waitFor();
+    const siteRecovered=await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='legacy-site-copy').payload);
+    assert.equal(siteRecovered.resumeDocument.sha256,entry.payload.resumeDocument.sha256);
+    assert.equal(siteRecovered.resumeDocumentOrigin,'site-match');assert.deepEqual(siteRecovered.res,entry.payload.res);
+  } finally { await browser.close(); }
+});
+
+test('Prepare ATS recovers its PDF canvas, exact source bytes and linked workspace across reload and devices', {timeout:90000}, async () => {
+  const text = 'Original designer resume with research, strategy and measurable product outcomes.';
+  const pdf = preparePdfFixture(text);
+  const review = {id:'source-review',tool:'ats',kind:'review',at:1,payload:{state:{mode:'job',jd:'Saved target role'},text,level:'staff',res:{score:72,fixes:[{point:'Keep this evidence',priority:'low',anchor:{type:'quote',quote:'Original designer'}}]},source:{version:1,text,jd:'Saved target role',projects:[],brief:null}}};
+  const workspace = {id:'source-workspace',tool:'ats',kind:'workspace',at:2,payload:{reviewId:review.id,level:'staff',text,jd:'Saved target role',rb:{name:'Preserved Designer',title:'Staff Designer',contact:{email:'synthetic@example.test',links:[]},summary:'Preserved edited summary.',sections:[{heading:'Experience',kind:'experience',items:[{role:'Lead',org:'Original Org',dates:'2020 - Present',bullets:['Preserved authored achievement.']}]}]},design:{tpl:'classic',size:'a4',accent:'#167d83',font:'inter',density:'normal',layout:'single',canvas:'light',keepWhole:true,margin:'normal'}}};
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const remote = new Map(); let writes = 0;
+  const open = async page => {
+    await page.addInitScript(() => {
+      localStorage.setItem('rk:admin:sess',JSON.stringify({token:'synthetic-prepare-only',exp:Date.now()+3600000}));
+      localStorage.setItem('rk:autopub:on','0');
+    });
+    await page.route('**/admin/prep/**',async route => {
+      const url = new URL(route.request().url());
+      if(url.pathname.endsWith('/put')) { const entry=route.request().postDataJSON();remote.set(entry.id,entry);writes++;return route.fulfill({json:{ok:true}}); }
+      if(url.pathname.endsWith('/list')) return route.fulfill({json:{items:[...remote.values()].map(entry=>({id:entry.id,at:entry.at}))}});
+      if(url.pathname.endsWith('/get')) return route.fulfill({json:remote.get(url.searchParams.get('id')) || {}});
+      return route.abort();
+    });
+    await openIntegratedFixture(page);
+  };
+  const showReview = async page => {
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
+    await page.locator('[data-act="ats-hist-open"][data-id="source-review"]').click();
+  };
+  try {
+    let context = await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'}),page = await context.newPage();
+    await open(page);
+    await page.evaluate(({review,workspace,pdf}) => {
+      localStorage.setItem('rk:prep:hist',JSON.stringify({ats:[review,workspace]}));
+      window.__rkDevEdit('contact.resume','data:application/pdf;base64,'+btoa(pdf.replace('Original designer','Different person!')));
+    },{review,workspace,pdf});
+    await showReview(page);
+    await page.screenshot({path:join(tmpdir(),'rk-ats-recovery-desktop.png')});
+    await page.locator('[data-atsv-recover="site"]').click();
+    await page.waitForFunction(()=>document.querySelector('[data-atsv-source-status]')?.textContent.includes('differs'));
+    assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats),[review,workspace]);
+    let releaseSource;
+    const started = new Promise(resolve=>{
+      page.route('**/delayed-resume.pdf',async route=>{resolve();await new Promise(release=>{releaseSource=release;});await route.fulfill({contentType:'application/pdf',body:Buffer.from(pdf)}).catch(()=>{});});
+    });
+    await page.evaluate(()=>window.__rkDevEdit('contact.resume','/delayed-resume.pdf'));
+    await page.locator('[data-atsv-recover="site"]').click();await started;
+    await page.locator('[data-atsv-close]').click();releaseSource();
+    assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats),[review,workspace]);
+    await page.locator('[data-act="ats-hist-open"][data-id="source-review"]').click();
+    const chooser = page.waitForEvent('filechooser'); await page.locator('[data-atsv-attach]').click();
+    await (await chooser).setFiles({name:'original-layout.pdf',mimeType:'application/pdf',buffer:Buffer.from(pdf)});
+    await page.locator('.atsv__page canvas').waitFor();
+    await page.locator('.atsv__pin').waitFor();
+    await page.waitForFunction(()=>Object.keys(JSON.parse(localStorage.getItem('rk:prep:sync'))).length===0);
+    assert.equal(writes,1);
+    const saved = await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='source-review'));
+    assert.equal(saved.payload.resumeDocument.data,undefined);
+    assert.equal(Buffer.from(remote.get(review.id).payload.resumeDocument.data,'base64').toString(),pdf);
+    assert.deepEqual(saved.payload.res,review.payload.res);
+    assert.deepEqual(saved.payload.source,review.payload.source);
+    assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='source-workspace')),workspace);
+    const pixels = await page.locator('.atsv__page canvas').evaluate(canvas=>{
+      const data=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;let ink=0,green=0;
+      for(let index=0;index<data.length;index+=4){if(data[index]<80&&data[index+1]<80&&data[index+2]<80)ink++;if(data[index+1]>data[index]*2&&data[index+1]>data[index+2])green++;}
+      return {ink,green,width:canvas.width,height:canvas.height};
+    });
+    assert.ok(pixels.ink>100 && pixels.green>1000,JSON.stringify(pixels));
+    await page.screenshot({path:join(tmpdir(),'rk-ats-restored-desktop.png')});
+    await page.reload();await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    await page.evaluate(()=>document.querySelectorAll('.pass--lock').forEach(dialog=>dialog.remove()));
+    await showReview(page);await page.locator('.atsv__pin').waitFor();
+    await page.locator('[data-atsv-continue]').click();
+    await page.locator('[data-rbz-doc]').waitFor();
+    assert.match(await page.locator('[data-rbz-doc]').innerText(),/Preserved edited summary/);
+    const reopened = await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='source-workspace').payload);
+    assert.deepEqual(reopened.rb,workspace.payload.rb);assert.deepEqual(reopened.design,workspace.payload.design);
+    await context.close();
+    context=await browser.newContext({viewport:{width:390,height:844},reducedMotion:'reduce'});page=await context.newPage();
+    await open(page);await showReview(page);await page.locator('.atsv__pin').waitFor();
+    assert.equal(await page.locator('.atsv__nopdf').count(),0);
+    const restored = await page.evaluate(async()=>{
+      const entry=JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='source-review');
+      const database=await new Promise(resolve=>{const request=indexedDB.open('rk-prepare-resume-sources-v1',1);request.onsuccess=()=>resolve(request.result);});
+      const blob=await new Promise(resolve=>{const request=database.transaction('documents').objectStore('documents').get(entry.payload.resumeDocument.sha256);request.onsuccess=()=>resolve(request.result);});database.close();
+      return {text:await blob.text(),reference:entry.payload.resumeDocument,overflow:document.documentElement.scrollWidth>innerWidth};
+    });
+    assert.equal(restored.text,pdf);assert.equal(restored.reference.data,undefined);assert.equal(restored.overflow,false);
+    const controls = await page.locator('.atsv__bar button').evaluateAll(buttons=>buttons.map(button=>{const box=button.getBoundingClientRect();return {left:box.left,right:box.right,top:box.top,bottom:box.bottom};}));
+    assert.ok(controls.every(box=>box.left>=0&&box.right<=390));
+    for(let first=0;first<controls.length;first++)for(let second=first+1;second<controls.length;second++){
+      const left=controls[first],right=controls[second];assert.ok(left.right<=right.left||right.right<=left.left||left.bottom<=right.top||right.bottom<=left.top);
+    }
+    await page.screenshot({path:join(tmpdir(),'rk-ats-restored-mobile.png')});
+    await context.close();
+  } finally { await browser.close(); }
+});
+
 test("Prepare saved ATS reviews retain their resume and role and cancel closed rechecks", {timeout:45000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
   const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"}), errors = [];
@@ -752,6 +934,7 @@ test("Prepare saved ATS reviews retain their resume and role and cancel closed r
     await page.locator('.adm__tab[data-tab="ai"]').click();
     await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
     await page.locator('[data-act="ats-hist-open"][data-id="saved-ats"]').click();
+    await page.locator('.atsv__nopdf summary').click();
     await page.locator('.atsv__savedtext').waitFor();
     assert.match(await page.locator('.atsv__savedtext').innerText(),/ORIGINAL_ATS_RESUME/);
     assert.doesNotMatch(await page.locator('.atsv').innerText(),/CHANGED_ATS_RESUME/);

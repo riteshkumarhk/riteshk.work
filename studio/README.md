@@ -83,8 +83,14 @@ New interview, story, cover-letter and ATS results retain versioned source and
 role snapshots. Regeneration uses those snapshots rather than today's portfolio
 or resume. Older interview/story results can **Reconnect sources** through their
 existing setup, creating a copy without regenerating or overwriting the original.
-Restored ATS reviews show saved text when the original file was not retained;
-they do not pin old findings onto a different current resume. Whiteboard history
+New ATS reviews retain the original file bytes in private IndexedDB before AI
+runs, with SHA-256 references in history and the existing authenticated private
+sync. Restoring a review checks the bytes before rendering its PDF canvas.
+Legacy reviews offer **Attach original PDF** and **Check site resume PDF**;
+recovery requires the saved hash or, for older text-only entries, an exact
+normalized text match. Text-only matches cannot verify the earlier layout and
+are labelled accordingly. Saved text, review results and separately linked
+rebuilt workspaces are preserved; recovery does not run AI. Whiteboard history
 retains its role, coaching feedback, scorecards and separate new-prompt sessions.
 
 Local save failures keep changes in memory with an explicit warning and retry.

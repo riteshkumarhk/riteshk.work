@@ -40,6 +40,7 @@ import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs"
 import { aiRibbonIcon, mountAiRibbon } from "./ai-ribbon.mjs";
 import { notesHtml } from "./slide-rich-text.mjs";
 import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief.mjs";
+import { retainResumeSource, readResumeSource, resumeSourceForSync, restoreResumeSource } from "./prepare-resume.mjs";
 import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResponse, applyCaseProposal, importFigmaSources, caseWorkspace, protectedSection } from "./case-study-authoring.mjs";
 
 (function () {
@@ -2412,7 +2413,9 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         if (item.acknowledged) continue;
         const payload = item.action === "del" ? {tool:item.tool,id:item.id} : prepGet(item.tool, item.id);
         if (payload) {
-          const response = await fetch(ADMIN_WORKER + "/admin/prep/" + item.action, {method:"POST",headers:{Authorization:"Bearer " + session,"Content-Type":"application/json"},body:JSON.stringify(payload),signal:AbortSignal.timeout(20000)});
+          const outgoing = item.action === "put" && item.tool === "ats" && payload.payload?.resumeDocument
+            ? {...payload, payload:{...payload.payload, resumeDocument:await resumeSourceForSync(payload.payload.resumeDocument)}} : payload;
+          const response = await fetch(ADMIN_WORKER + "/admin/prep/" + item.action, {method:"POST",headers:{Authorization:"Bearer " + session,"Content-Type":"application/json"},body:JSON.stringify(outgoing),signal:AbortSignal.timeout(20000)});
           if (!response.ok) throw new Error("Saved on this device. Cloud sync failed (" + response.status + "). Retry when connected.");
         }
         if (prepOutbox[key]?.revision === item.revision) {
@@ -2431,19 +2434,24 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     try {
       fetch(ADMIN_WORKER + "/admin/prep/list?tool=" + encodeURIComponent(tool), { headers: { Authorization: "Bearer " + sess } })
         .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) {
+        .then(async function (d) {
           if (!d || !Array.isArray(d.items)) return;
           var have = {}; prepList(tool).forEach(function (e) { have[e.id] = e.at || 0; });
           var need = d.items.filter(function (it) { return it && it.id && !prepOutbox[tool + "/" + it.id] && (!(it.id in have) || (it.at || 0) > have[it.id]); });
           if (!need.length) return;
-          Promise.all(need.map(function (it) {
+          const loadEntry = function (it) {
             return fetch(ADMIN_WORKER + "/admin/prep/get?tool=" + encodeURIComponent(tool) + "&id=" + encodeURIComponent(it.id), { headers: { Authorization: "Bearer " + sess } })
-              .then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
-          })).then(function (rows) {
-            var changed = false;
-            rows.forEach(function (entry) { if (entry && entry.id && !prepOutbox[tool + "/" + entry.id]) { const current = prepGet(tool, entry.id); if (!current || (entry.at || 0) > (current.at || 0)) { prepPutLocal(tool, entry); changed = true; } } });
-            if (changed && typeof done === "function") { try { done(); } catch (e) {} }
-          });
+              .then(function (r) { return r.ok ? r.json() : null; }).then(async function (entry) {
+                if (tool === "ats" && entry?.payload?.resumeDocument) entry.payload.resumeDocument = await restoreResumeSource(entry.payload.resumeDocument);
+                return entry;
+              }).catch(function () { prepSyncError = "Private history could not be restored. Existing entries are unchanged; reopen Prepare to retry."; prepPaintStorage(); return null; });
+          };
+          const rows = [];
+          if (tool === "ats") { for (const item of need) rows.push(await loadEntry(item)); }
+          else rows.push(...await Promise.all(need.map(loadEntry)));
+          var changed = false;
+          rows.forEach(function (entry) { if (entry && entry.id && !prepOutbox[tool + "/" + entry.id]) { const current = prepGet(tool, entry.id); if (!current || (entry.at || 0) > (current.at || 0)) { prepPutLocal(tool, entry); changed = true; } } });
+          if (changed && typeof done === "function") { try { done(); } catch (e) {} }
         }).catch(function () {});
     } catch (e) {}
   }
@@ -2505,7 +2513,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   var atsNeuralFallbackOk = false; // user OK'd running on the lexical estimate when neural is unreachable (this session)
   function atsUpdateCheckBtn(panel) { if (!panel) return; var has = !!(data.contact && data.contact.resume), srcFile = (atsState.source === "file") || !has, can = srcFile ? !!atsPickedFile : has; var b = panel.querySelector('[data-act="ats-check"]'); if (b) b.disabled = !can; }
   function atsLevelName(l) { return ({ senior: "Senior", staff: "Principal / Staff", leader: "Design leadership" })[l] || l; }
-  async function resumeToFile(url) {
+  async function resumeToFile(url, options = {}) {
     var p = parseDataUri(url);
     if (p) {
       var bytes = p.base64 ? b64ToBytes(p.data) : new TextEncoder().encode(decodeURIComponent(p.data));
@@ -2514,7 +2522,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     var src = isHostedPath(url) ? (hostedBytes[url] || rawUrlFor(url)) : url;
     var pd = parseDataUri(src);
     if (pd) { var b = pd.base64 ? b64ToBytes(pd.data) : new TextEncoder().encode(decodeURIComponent(pd.data)); return new File([b], "resume." + extForMime(pd.mime), { type: pd.mime }); }
-    var res = await fetch(src, { cache: "no-store" });
+    var res = await fetch(src, { cache: "no-store", signal:options.signal });
     if (!res.ok) throw new Error("Couldn\u2019t fetch the r\u00e9sum\u00e9 (" + res.status + ").");
     var blob = await res.blob();
     var clean = String(url).split("?")[0].split("#")[0];
@@ -2660,6 +2668,8 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       var text = ((await fbExtractFile(f)) || "").replace(/\s+/g, " ").trim();
       signal?.throwIfAborted();
       if (text.length < 40) throw new Error("I couldn\u2019t read text from that r\u00e9sum\u00e9. If it\u2019s an image-only or scanned PDF, that\u2019s itself a major ATS red flag \u2014 export a text-based PDF from your design tool or Word.");
+      const resumeDocument = await retainResumeSource(f);
+      signal?.throwIfAborted();
       var jd = "", company = "";
       if (atsState.mode === "job") {
         var jdUrlEl = panel.querySelector(".cl__url"), jdEl = panel.querySelector(".cl__jd"), coEl = panel.querySelector(".cl__company");
@@ -2695,12 +2705,13 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
       var _blend = atsBlendScore({ keyword: _kw ? _kw.rate : null, semantic: _sem, structure: atsStructFromChecks(res), parse: atsParseScore(_layout), content: +res.score || 0 });
       if (_blend.score != null) { res.score = _blend.score; res.band = _blend.band; res._breakdown = _blend.breakdown; }
-      atsLast = { file: f, res: res, level: atsLevel, company: company, text: text, jd: jd, kw: _kw, sem: _sem, semMode: _semMode, layout: _layout, source:prepSourceSnapshot(text,jd,[],atsState.preparationBrief) };
+      atsLast = { file: f, res: res, level: atsLevel, company: company, text: text, jd: jd, kw: _kw, sem: _sem, semMode: _semMode, layout: _layout, source:prepSourceSnapshot(text,jd,[],atsState.preparationBrief), resumeDocument, resumeDocumentOrigin:"original" };
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
       var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
-      var _snap = { state:clone(atsState), level: atsLevel, res: res, company: company, text: text, source:atsLast.source };
+      var _snap = { state:clone(atsState), level: atsLevel, res: res, company: company, text: text, source:atsLast.source, resumeDocument, resumeDocumentOrigin:"original" };
       prepDraftSet("ats", _snap);
       atsvSessId = prepPut("ats", { tool: "ats", kind: "review", title: "R\u00e9sum\u00e9 reviewed", meta: { score: _sc, band: _bd, fit: (company ? company + " fit" : atsLevelName(atsLevel) + " fit") }, payload: _snap }).id;
+      prepDraftSet("ats", {..._snap, reviewId:atsvSessId});
       var _hl = panel.querySelector("[data-ats-hist]"); if (_hl) _hl.innerHTML = atsHistHtml();
       if (out) out.innerHTML = "";
       atsOpenViewer();
@@ -2738,6 +2749,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   }
   async function atsHistRestore(id) {
     var e = prepGet("ats", id); if (!e) return; var p = e.payload || {}, st = p.state || {};
+    const originalFile = atsvSessId === id ? atsLast?.file : null;
     if (e.kind === "workspace" && p.rb) {
       var d = p.design || {};
       atsRbTplId = d.tpl || atsRbTplId; atsRbSizeId = d.size || atsRbSizeId; atsRbAccent = (d.accent != null ? d.accent : atsRbAccent); atsRbFont = d.font || atsRbFont; atsRbDensity = d.density || atsRbDensity; atsRbLayout = d.layout || atsRbLayout; atsRbCanvas = d.canvas || atsRbCanvas; atsRbKeepWhole = (d.keepWhole != null ? d.keepWhole : atsRbKeepWhole); atsRbMargin = d.margin || atsRbMargin;
@@ -2757,8 +2769,8 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     document.querySelector('.prep-dialog .ats')?.closest('.prep-dialog')?.__prepBrief?.restore(source?.brief);
     atsState = { mode: st.mode || "general", source: st.source || (atsState && atsState.source) || "site", jd: source?.jd ?? st.jd ?? "", url: st.url || "", company: st.company || "", preparationBrief:source?.brief || st.preparationBrief || null };
     atsLevel = p.level || atsLevel;
-    atsLast = { file: null, res: p.res, level: atsLevel, company: p.company || "", text: source?.text ?? p.text ?? "", jd: atsState.jd, source, restored:true };
-    prepDraftSet("ats", { ...p, state: atsState, level: atsLevel, res: p.res, company: p.company || "", text: atsLast.text, source });
+    atsLast = { file: originalFile, res: p.res, level: atsLevel, company: p.company || "", text: source?.text ?? p.text ?? "", jd: atsState.jd, source, restored:true, resumeDocument:p.resumeDocument, resumeDocumentOrigin:p.resumeDocumentOrigin };
+    prepDraftSet("ats", { ...p, state: atsState, level: atsLevel, res: p.res, company: p.company || "", text: atsLast.text, source, reviewId:id });
     atsvSessId = id;
     prepRerenderDialog();
     if (p.res) atsOpenViewer();
@@ -3869,7 +3881,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
      some at a section ("section"), some are document-wide ("global"). We render the
      PDF with pdf.js, locate quote/section anchors in the text layer and pin them; the
      qualitative rest lives in an "Overall" rail. Everything degrades gracefully. */
-  var atsLast = (function () { var d = prepDraftGet("ats"); return (d && d.res) ? { file: null, res: d.res, level: d.level || atsLevel, company: d.company || "", text: d.text || "", jd: (d.state && d.state.jd) || "" } : null; })(); // { file, res, level } — restored from the autosaved draft
+  var atsLast = (function () { var d = prepDraftGet("ats"); return (d && d.res) ? { file: null, res: d.res, level: d.level || atsLevel, company: d.company || "", text: d.text || "", jd: (d.state && d.state.jd) || "", source:prepReadSource(d.source), restored:true, resumeDocument:d.resumeDocument, resumeDocumentOrigin:d.resumeDocumentOrigin } : null; })();
   function atsIsPdf(f) { return !!f && (f.type === "application/pdf" || /\.pdf$/i.test(f.name || "")); }
   function atsAnchor(fx) {
     var a = (fx && fx.anchor) || {};
@@ -3960,10 +3972,11 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   }
   function atsvEl(t, c) { var e = document.createElement(t); if (c) e.className = c; return e; }
 
-  var atsvSessId = null; // the review history entry the viewer is showing, so Regenerate updates it in place
+  var atsvSessId = prepDraftGet("ats")?.reviewId || null;
   var atsvActive = null; // { close } of the open review viewer, so the workspace flow can dismiss it (one overlay at a time)
   function atsvCloseActive() { if (atsvActive && atsvActive.close) { try { atsvActive.close(); } catch (e) {} } }
   async function atsvRecheck(ctx) {
+    if (ctx.documentBusy) return;
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { atsvRecheck(ctx); }); return; }
     var btn = ctx.modal.querySelector("[data-atsv-regen]"); if (btn) { btn.disabled = true; btn.classList.add("is-busy"); }
     status("Re-running the ATS check\u2026");
@@ -3984,7 +3997,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
       var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
       const previous = prepGet('ats',ctx.sessionId)?.payload || {};
-      var _snap = { ...previous, state: { ...previous.state, jd, company }, level, res, company, text, source:ctx.review.source || prepSourceSnapshot(text,jd,[],previous.state?.preparationBrief) };
+      var _snap = { ...previous, state: { ...previous.state, jd, company }, level, res, company, text, source:ctx.review.source || prepSourceSnapshot(text,jd,[],previous.state?.preparationBrief), resumeDocument:ctx.review.resumeDocument, resumeDocumentOrigin:ctx.review.resumeDocumentOrigin, reviewId:ctx.sessionId };
       prepDraftSet("ats", _snap);
       ctx.sessionId = atsvSessId = prepPut("ats", { id: ctx.sessionId, tool: "ats", kind: "review", title: "R\u00e9sum\u00e9 reviewed", meta: { score: _sc, band: _bd, fit: (company ? company + " fit" : atsLevelName(level) + " fit") }, payload: _snap }).id;
       var _hl = (root || document).querySelector("[data-ats-hist]"); if (_hl) _hl.innerHTML = atsHistHtml();
@@ -3996,8 +4009,8 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
 
   async function atsOpenViewer() {
     if (!atsLast || !atsLast.res) { status("Run an ATS check first."); return; }
+    atsvCloseActive();
     var res = atsLast.res, file = atsLast.file, level = atsLast.level || atsLevel;
-    if (!file && !atsLast.restored) { var _ru = (data.contact && data.contact.resume) || ""; if (_ru) { try { file = await resumeToFile(_ru); atsLast.file = file; } catch (e) {} } }
     var modal = atsvEl("div", "atsv");
     modal.innerHTML =
       '<div class="atsv__bar">' +
@@ -4018,26 +4031,45 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     document.body.appendChild(modal);
     const lifetime = prepDialogLifetime(modal,'Resume review');
     function onKey(e) { if (e.key === "Escape") close(); }
-    function close() { document.removeEventListener("keydown", onKey); lifetime.dispose(); atsvActive = null; modal.remove(); }
+    function close() {
+      document.removeEventListener("keydown", onKey); lifetime.dispose(); atsvActive = null; modal.remove();
+      ctx?.renderTask?.cancel();
+      (ctx?.pdf || ctx?.loadingTask)?.destroy()?.catch?.(() => {});
+    }
     document.addEventListener("keydown", onKey);
     atsvActive = { close: close };
     modal.addEventListener("click", function (e) { if (e.target === modal || e.target.closest("[data-atsv-close]")) close(); });
 
     var ctx = { modal: modal, res: res, file: file, level: level, scale: 1, pdf: null, pages: [], located: {}, onPage: [], overall: [], lifetime, review:{...atsLast}, sessionId:atsvSessId };
-    if (atsIsPdf(file)) {
-      try { var pdfjs = await ensurePdfJs(); ctx.pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise; }
-      catch (e) { ctx.pdf = null; }
+    if (!file && ctx.review.resumeDocument) {
+      try { file = await readResumeSource(ctx.review.resumeDocument); ctx.file = file; ctx.review.file = file; }
+      catch (error) { ctx.documentError = error.message; }
     }
     if (lifetime.signal.aborted) return;
-    await atsvBuild(ctx, true);
+    if (atsIsPdf(file)) {
+      try {
+        var pdfjs = await ensurePdfJs(), bytes = await file.arrayBuffer();
+        lifetime.signal.throwIfAborted();
+        ctx.loadingTask = pdfjs.getDocument({ data:bytes }); ctx.pdf = await ctx.loadingTask.promise;
+      }
+      catch (e) { ctx.pdf = null; ctx.documentError = "The saved PDF could not be rendered. Its bytes and review are unchanged."; }
+    }
+    if (lifetime.signal.aborted) return;
+    try { await atsvBuild(ctx, true); }
+    catch (error) { if (lifetime.signal.aborted) return; throw error; }
     atsvWire(ctx);
   }
 
   async function atsvBuild(ctx, first) {
     var stage = ctx.modal.querySelector("[data-atsv-stage]");
+    ctx.modal.querySelectorAll("[data-atsv-zoom]").forEach(button => { button.disabled = !ctx.pdf; });
     if (!ctx.pdf) {
-      stage.innerHTML = ctx.review?.restored ? '<div class="atsv__nopdf"><b>Saved resume text</b><span>The original file was not retained. This review keeps its saved text and role.</span><pre class="atsv__savedtext">' + escHtml(ctx.review.text || '') + '</pre></div>' : '<div class="atsv__nopdf"><b>Pins need a text-based PDF résumé.</b><span>Your full review is on the right. Add a text PDF résumé (not a scan or DOCX) to see fixes pinned on the page.</span></div>';
+      stage.innerHTML = '<div class="atsv__nopdf"><b>Resume PDF unavailable</b><span data-atsv-source-status role="status">' + escHtml(ctx.documentError || 'This review has saved text and results. Its rebuilt workspaces are separate and have not been replaced.') + '</span><button class="btn btn--primary" type="button" data-atsv-attach>Attach original PDF</button>' +
+        (ctx.review.resumeDocument && prepSess() ? '<button class="btn btn--ghost" type="button" data-atsv-recover="cloud">Restore synced PDF</button>' : '') +
+        (data.contact?.resume ? '<button class="btn btn--ghost" type="button" data-atsv-recover="site">Check site resume PDF</button>' : '') +
+        '<details><summary>Saved resume text</summary><pre class="atsv__savedtext">' + escHtml(ctx.review.text || '') + '</pre></details></div>';
       if (first) { ctx.onPage = []; ctx.overall = (ctx.res.fixes || []).map(function (f, i) { return i; }); atsvPaintRail(ctx); }
+      atsvUpdatePageNo(ctx);
       return;
     }
     if (first || ctx._needFit) {
@@ -4050,6 +4082,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     ctx.pages = [];
     var pageIdx = [];
     for (var p = 1; p <= ctx.pdf.numPages; p++) {
+      ctx.lifetime.signal.throwIfAborted();
       var page = await ctx.pdf.getPage(p);
       var viewport = page.getViewport({ scale: ctx.scale });
       var wrap = atsvEl("div", "atsv__page"); wrap.style.width = viewport.width + "px"; wrap.style.height = viewport.height + "px"; wrap.dataset.page = p;
@@ -4060,7 +4093,8 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       var cctx = canvas.getContext("2d"); cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       var layer = atsvEl("div", "atsv__layer");
       wrap.appendChild(canvas); wrap.appendChild(layer); stage.appendChild(wrap);
-      await page.render({ canvasContext: cctx, viewport: viewport }).promise;
+      ctx.renderTask = page.render({ canvasContext: cctx, viewport: viewport });
+      await ctx.renderTask.promise;
       var index = await atsPageIndex(page, viewport);
       ctx.pages.push({ pageNum: p, layer: layer, wrap: wrap });
       pageIdx.push({ pageNum: p, H: index.H, map: index.map, rects: index.rects });
@@ -4120,6 +4154,8 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     var tone = score >= 80 ? "good" : score >= 65 ? "ok" : score >= 45 ? "warn" : "bad";
     var fitT = (atsLast && atsLast.company) ? (escHtml(atsLast.company) + " fit") : (escHtml(atsLevelName(level)) + " fit");
     var html = '<div class="atsv__score atsv__score--' + tone + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div><div class="atsv__score-x"><b>' + escHtml(band) + '</b><span>ATS + ' + fitT + '</span>' + (res.summary ? '<p>' + escHtml(res.summary) + '</p>' : '') + '</div></div>';
+    if (ctx.review.resumeDocumentOrigin && ctx.review.resumeDocumentOrigin !== "original") html += '<p class="atsv__empty" data-atsv-recovered>Recovered PDF matches the saved text. The earlier file and layout could not be verified.</p>';
+    html += prepStorageHtml();
     var _ws = atsvSessId ? prepList("ats").filter(function (e2) { return e2.kind === "workspace" && e2.payload && e2.payload.reviewId === atsvSessId; })[0] : null;
     ctx.wsId = _ws ? _ws.id : null;
     if (_ws) html += '<div class="atsv__rebuild"><button class="btn btn--primary" type="button" data-atsv-continue>Continue editing your rebuilt r\u00e9sum\u00e9 \u2192</button><button class="atsv__again" type="button" data-atsv-rebuild>Rebuild again from scratch</button></div>';
@@ -4144,6 +4180,56 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     }
     html += '</div>';
     ctx.modal.querySelector("[data-atsv-rail]").innerHTML = html;
+    prepPaintStorage();
+  }
+
+  async function atsvRecoverDocument(ctx, kind, selectedFile) {
+    if (ctx.documentBusy) return;
+    const signal = ctx.lifetime.signal, entry = prepGet("ats", ctx.sessionId), before = JSON.stringify(entry);
+    const message = ctx.modal.querySelector("[data-atsv-source-status]");
+    let candidatePdf = null;
+    ctx.documentBusy = true;
+    ctx.modal.querySelectorAll("[data-atsv-attach],[data-atsv-recover],[data-atsv-regen]").forEach(button => { button.disabled = true; });
+    try {
+      if (!entry || entry.kind !== "review") throw new Error("Reopen this review from history before attaching a document.");
+      let file = selectedFile;
+      if (kind === "cloud") {
+        const session = prepSess();
+        if (!session) throw new Error("Sign in to restore the private synced document.");
+        const response = await fetch(ADMIN_WORKER + "/admin/prep/get?tool=ats&id=" + encodeURIComponent(ctx.sessionId), {headers:{Authorization:"Bearer " + session},signal});
+        if (!response.ok) throw new Error("The private history could not be reached. Nothing was changed.");
+        const remote = await response.json(), saved = remote?.payload?.resumeDocument;
+        if (!saved || saved.sha256 !== ctx.review.resumeDocument?.sha256) throw new Error("The synced document does not match this review's saved original.");
+        file = await readResumeSource(await restoreResumeSource(saved));
+      } else if (kind === "site") file = await resumeToFile(data.contact?.resume || "", {signal});
+      signal.throwIfAborted();
+      if (!atsIsPdf(file)) throw new Error("Choose a text-based PDF to restore the review canvas.");
+      if (message) message.textContent = "Checking the PDF against this saved review...";
+      const text = String(await fbExtractFile(file)).replace(/\s+/g," ").trim();
+      const originalText = String(ctx.review.source?.text || ctx.review.text || "").replace(/\s+/g," ").trim();
+      if (!originalText || text !== originalText) throw new Error("This PDF's text differs from the saved review. Nothing was replaced; attach the original PDF.");
+      const pdfjs = await ensurePdfJs(), bytes = await file.arrayBuffer();
+      signal.throwIfAborted();
+      ctx.loadingTask = pdfjs.getDocument({data:bytes}); candidatePdf = await ctx.loadingTask.promise;
+      const resumeDocument = await retainResumeSource(file);
+      signal.throwIfAborted();
+      if (ctx.review.resumeDocument && resumeDocument.sha256 !== ctx.review.resumeDocument.sha256) throw new Error("This file differs from the saved original. Its reference and review were kept.");
+      if (JSON.stringify(prepGet("ats",ctx.sessionId)) !== before) throw new Error("This review changed during recovery. Reopen it to keep the newer changes.");
+      const origin = ctx.review.resumeDocumentOrigin || (ctx.review.resumeDocument ? "original" : kind === "site" ? "site-match" : "reattached");
+      const payload = {...entry.payload,resumeDocument,resumeDocumentOrigin:origin};
+      prepPut("ats",{...entry,payload});
+      const draft = prepDraftGet("ats");
+      if (draft?.reviewId === ctx.sessionId) prepDraftSet("ats",{...draft,resumeDocument,resumeDocumentOrigin:origin});
+      Object.assign(ctx.review,{file,resumeDocument,resumeDocumentOrigin:origin});
+      atsLast = ctx.review; ctx.file = file; ctx.pdf = candidatePdf; ctx.documentError = "";
+      await atsvBuild(ctx,true);
+    } catch (error) {
+      if (!signal.aborted && message) message.textContent = error.message || "The document could not be restored. Nothing was replaced.";
+    } finally {
+      if (candidatePdf && candidatePdf !== ctx.pdf) await candidatePdf.destroy();
+      ctx.documentBusy = false;
+      ctx.modal.querySelectorAll("[data-atsv-attach],[data-atsv-recover],[data-atsv-regen]").forEach(button => { button.disabled = false; });
+    }
   }
 
   function atsvActivate(ctx, fi) {
@@ -4161,13 +4247,22 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   function atsvWire(ctx) {
     var modal = ctx.modal, stage = modal.querySelector("[data-atsv-stage]"), rail = modal.querySelector("[data-atsv-rail]");
     rail.addEventListener("click", function (e) {
+      if (e.target.closest("[data-prep-retry]")) { prepRetryStorage(); return; }
       if (e.target.closest("[data-atsv-continue]")) { if (ctx.wsId) atsHistRestore(ctx.wsId); return; }
       if (e.target.closest("[data-atsv-rebuild]")) { atsRebuildOpen(ctx); return; }
       var cp = e.target.closest("[data-atsv-copy]");
       if (cp) { var it = cp.closest(".atsv__item"), code = it && it.querySelector("code"); if (code) { try { navigator.clipboard.writeText(code.textContent); } catch (x) {} cp.textContent = "Copied"; setTimeout(function () { cp.textContent = "Copy"; }, 1200); } return; }
       var item = e.target.closest(".atsv__item"); if (item && item.dataset.fi) atsvFocusPin(ctx, item.dataset.fi);
     });
-    stage.addEventListener("click", function (e) { var pin = e.target.closest(".atsv__pin"); if (pin) atsvFocusPin(ctx, pin.dataset.fi); });
+    stage.addEventListener("click", function (e) {
+      if (e.target.closest("[data-atsv-attach]")) {
+        const input = document.createElement("input"); input.type = "file"; input.accept = ".pdf,application/pdf";
+        input.onchange = () => { if (input.files?.[0]) atsvRecoverDocument(ctx,"file",input.files[0]); }; input.click(); return;
+      }
+      const recovery = e.target.closest("[data-atsv-recover]");
+      if (recovery) { atsvRecoverDocument(ctx,recovery.dataset.atsvRecover); return; }
+      var pin = e.target.closest(".atsv__pin"); if (pin) atsvFocusPin(ctx, pin.dataset.fi);
+    });
     stage.addEventListener("mouseover", function (e) { var t = e.target.closest(".atsv__pin,.atsv__hl"); if (t) atsvActivate(ctx, t.dataset.fi); });
     stage.addEventListener("scroll", function () { atsvUpdatePageNo(ctx); });
     modal.querySelectorAll("[data-atsv-zoom]").forEach(function (b) {
@@ -4175,7 +4270,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         var z = b.dataset.zoom;
         if (z === "fit") ctx._needFit = true;
         else ctx.scale = Math.min(3, Math.max(0.4, ctx.scale * (z === "in" ? 1.2 : 1 / 1.2)));
-        atsvBuild(ctx, false);
+        atsvBuild(ctx, false).catch(error => { if (!ctx.lifetime.signal.aborted) status("PDF zoom failed: " + error.message); });
       });
     });
     var _rg = modal.querySelector("[data-atsv-regen]"); if (_rg) _rg.addEventListener("click", function () { atsvRecheck(ctx); });

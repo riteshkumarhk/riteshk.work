@@ -2698,6 +2698,12 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .atsv__nopdf b { color: var(--text); font-size: .95rem; }
 .atsv__loading { margin: auto; }
 @media (max-width: 900px) {
+  .atsv__bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; }
+  .atsv__ttl { min-width: 0; flex-wrap: wrap; font-size: .9rem; }
+  .atsv__lvl { display: none; }
+  .atsv__mid { position: static; transform: none; justify-self: end; }
+  .atsv__tools { grid-column: 1 / -1; justify-content: flex-end; }
+  .atsv__pageno { margin-right: auto; text-align: left; white-space: nowrap; }
   .atsv__body { flex-direction: column; }
   .atsv__rail { width: auto; border-left: 0; border-top: 1px solid var(--line); max-height: 46%; }
 }
