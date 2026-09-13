@@ -170,6 +170,198 @@
   ],
   "work": [
     {
+      "id": "w1789260842012",
+      "featured": false,
+      "theme": "grid",
+      "plateTag": "Tag",
+      "client": "Microsoft Search & AI",
+      "period": "2019 — 2021",
+      "title": "",
+      "desc": "What you did and the impact.",
+      "tags": [
+        "Tag"
+      ],
+      "image": "",
+      "study": {
+        "tagline": "",
+        "role": "",
+        "team": "",
+        "timeline": "",
+        "scope": "",
+        "cover": "",
+        "unlockHash": "",
+        "blocks": [
+          {
+            "type": "statement",
+            "nav": "Overview",
+            "kicker": "Project",
+            "body": "A framework for surfacing search answers across Microsoft 365 and Bing—not just for what users explicitly asked, but for what they implicitly meant.",
+            "sub": "Microsoft Search & AI · Jan–Apr 2021 · Framework guiding the Shy Answers feature released May 2021",
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "text",
+            "nav": "Context",
+            "kicker": "What are Answers",
+            "heading": "Direct fulfillment, not just links",
+            "body": "Answers in Microsoft Search are a direct response to a user's query, based on semantic understanding. They pull information across M365 canvases and Bing—people cards, files, meetings, acronyms—so users don't have to switch apps. The system supports both natural-language and keyword query patterns.",
+            "list": [
+              "Answers surface across Bing, Office, SharePoint, Outlook, Teams, OneDrive, Cortana, and M365 CoPilot",
+              "They support a rich set of actions and insights, reducing the need to disambiguate and act separately"
+            ],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "text",
+            "nav": "Problem",
+            "kicker": "The limitation",
+            "heading": "Answers only served explicit intent",
+            "body": "The system served users only when an explicit intent was expressed. A query like **\"okr\"** might mean meetings about OKRs, files related to OKRs, the acronym definition, or conversations—but the system picked one interpretation or none. Everything else was dropped.\n\nWorse: the relevance model wasn't always accurate. A user searching \"okr\" to learn the acronym might get a People result instead, with no way to see the acronym answer at all.",
+            "list": [
+              "Brief queries had multiple possible intents, but the system served at most one",
+              "An answer for a predicted intent suppressed other answers from triggering",
+              "Users were required to use specific NL queries or keyword patterns they may not know"
+            ],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "steps",
+            "nav": "Root causes",
+            "kicker": "Diagnosis",
+            "heading": "Three compounding problems",
+            "items": [
+              {
+                "title": "Recognition of intents",
+                "body": "The system relied on trigger keywords to show only high-confidence answers. Users had to express intent in ways the system already recognized—or get nothing useful."
+              },
+              {
+                "title": "No forgiveness",
+                "body": "An answer for a predicted intent (which may be inaccurate) suppressed other answers from triggering. One wrong guess meant missed opportunities for every implicit intent."
+              },
+              {
+                "title": "Inference gap",
+                "body": "The relevance model lacked deep semantic understanding of query patterns, so it couldn't distinguish between multiple valid interpretations of the same short query."
+              }
+            ]
+          },
+          {
+            "type": "statement",
+            "nav": "Insight",
+            "kicker": "The opportunity",
+            "body": "Without changing user behavior, we could identify implicit intents and leverage the whole page to surface answers of varying confidences.",
+            "sub": "Placement and spatial emphasis relative to confidence score. Availability based on user data and context.",
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "text",
+            "nav": "Framework",
+            "kicker": "The design decision",
+            "heading": "Confidence-based placement across the whole page",
+            "body": "The core idea: instead of one answer or nothing, map confidence scores to spatial position and footprint. A high-confidence answer earns a prominent Mainline placement. A medium-confidence answer takes a smaller footprint. A low-confidence answer appears as a lightweight suggestion—visible but not dominant.\n\nThis applied to both single-intent and multi-intent queries. For a query with multiple valid interpretations, each intent could appear at its own confidence level, distributed across the page rather than competing for one slot.",
+            "list": [
+              "Placement and spatial emphasis are relative to the answer's confidence score",
+              "Answers with varying confidences can experiment with position, footprint, and consumption style",
+              "Factors are determined by the canvas itself—Bing, Outlook web, Outlook mobile each have different constraints"
+            ],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "media",
+            "nav": "Canvases",
+            "kicker": "Cross-surface application",
+            "heading": "Framework applied across search endpoints",
+            "items": [
+              {
+                "caption": "Answer placements on Microsoft Search in Bing — whole-page confidence distribution"
+              },
+              {
+                "caption": "Answer placements on Outlook web app"
+              },
+              {
+                "caption": "Answer placements on Outlook mobile app"
+              }
+            ]
+          },
+          {
+            "type": "split",
+            "nav": "Results",
+            "kicker": "What the data showed",
+            "heading": "Engagement up, satisfaction flat",
+            "leftLabel": "High confidence answers",
+            "left": "<ul><li>Over-triggered on certain keywords, suppressing other answers</li><li>No disambiguation to show other possible meanings</li><li>Lacked semantic understanding of query patterns</li></ul>",
+            "leftImg": "",
+            "rightLabel": "Medium / low confidence answers",
+            "right": "<ul><li>Similar-type results split across separate answers without clear logic</li><li>Variety of information spread across results led to clutter</li><li>Answer quality degradation</li></ul>",
+            "rightImg": ""
+          },
+          {
+            "type": "steps",
+            "nav": "Taxonomy",
+            "kicker": "The evolved framework",
+            "heading": "Whole-page taxonomy and placement",
+            "items": [
+              {
+                "title": "Mainline",
+                "body": "Directly answers the user intent or navigates closer to the user's job. The highest-confidence, most prominent position."
+              },
+              {
+                "title": "Context Region / Right Rail",
+                "body": "Shows information supplementary to the entity query. Helps users explore related content, refine intent, or discover follow-up queries. Examples: 'Related Searches', 'People Also Search for'."
+              },
+              {
+                "title": "Entity Pane",
+                "body": "Complements the Mainline area with supplementary information about the dominant entity. Combines high-confidence answers for a person or topic into a unified view."
+              }
+            ]
+          },
+          {
+            "type": "split",
+            "nav": "Guidance",
+            "kicker": "Design principles",
+            "heading": "Using the Context Region effectively",
+            "leftLabel": "Do",
+            "left": "<ul><li>Use the Right Rail to help users disambiguate or discover follow-up queries</li><li>Place People and Topics answers in the Context Region—they complement the SERP well</li><li>Combine high-confidence answers into the Entity Pane for dominant entities (person or topic)</li><li>Keep Context Region content complementary to and in context of the Mainline</li></ul>",
+            "leftImg": "",
+            "rightLabel": "Don't",
+            "right": "<ul><li>Place entity answers in the Context Region if they don't truly complement the SERP</li><li>Let low-confidence answers clutter the page without clear separation logic</li><li>Split similar-type results across separate answers without justification</li></ul>",
+            "rightImg": ""
+          },
+          {
+            "type": "text",
+            "nav": "Process",
+            "kicker": "How we got here",
+            "heading": "Cross-team alignment",
+            "body": "My role was to identify a framework for surfacing a variety of search answers for a search query. This meant working with multiple teams spread across different locations and time zones—driving deep discussions and alignment on principles, building blocks, and the framework itself.\n\nSecondary research informed key decisions. Studies on evolving user mental models showed that right-rail blindness was becoming a problem of the past. The Pinball gaze pattern—a highly non-linear scan behavior—suggested users were ready for answers distributed across the full page, not just stacked in a single column.",
+            "list": [
+              "Published Microsoft Search Answer Principles, building blocks, and framework for use across M365 experiences",
+              "Framework guided the Shy Answers feature released in May 2021"
+            ],
+            "src": "",
+            "caption": ""
+          },
+          {
+            "type": "text",
+            "nav": "Next steps",
+            "kicker": "Way forward",
+            "heading": "Planned experiments",
+            "body": "The framework set up a series of next experiments to test its principles in production.",
+            "list": [
+              "Impact on search usage with low/medium confidence Calendar, Acronym, and Files answers in Outlook Mobile and Outlook Web App",
+              "Acronyms shy answers treatment in Microsoft Search in Bing",
+              "Test design principles for answer position, footprint, and treatment across the whole page for different endpoints"
+            ],
+            "src": "",
+            "caption": ""
+          }
+        ]
+      }
+    },
+    {
       "id": "w1787311876385",
       "featured": true,
       "theme": "grid",
@@ -1401,8 +1593,8 @@
             "type": "media",
             "locked": true,
             "encStub": true,
-            "iv": "Qqdtgm2jUCTyEYNZ",
-            "ct": "h938GdGYT9q0l7B+vG2bkyM95L3QDUgvQShSbZTnqROut5XwVOpARfuKMddVmJrlxkOMTXH5AM75eJTI3v+sMG6ouDdlajiVr7O10XS9zgmyde4UZKIIR3EJM73kdvpC6bnChQ3OoqJ70vlevHd7qUIGKMP/rx0Q5qz3ARQNRdKAtURZcBHZamnwD62EWrt2uOJp4l6qrH0+F6vyniVwaKs0dqnqBe4o6PH/H3EiEBJOm1yHc6YjOBf/2vOGmYnRn8nwLCbihlZ5YMfCNWkMZaMj7v6l93mdmaDsb6nPdO0WuD18fKLDvCQoyy5vjKWbR2HNcS28RN4nhcSTFFqK4OasYlT0Tz9P",
+            "iv": "7zzVdWLFqH7hFv4a",
+            "ct": "gb2DZFBM5l/d/dSMfoS010V+6tjocIHj3X27HqJIzV/jFOtVYcw138amfoOB3bASz3j73YZQdvrloJ33qxCALv/oD38UUFI52IaGEqykN+rybYvlN1aqtoQ6IL5PE+dbzHawsprIseuVuAHt0COfCZAzszqtzXLU8L1BdFD8vtwyz+C4Es3VA2fDtA5y/QbSTFkmZ/Fd98VjWEZYpW69ferdxLQ5zh6ZBntPpjgxiwGPS/jON4I7z4VN/abaxNNzx8nxJ5dTvFynZ+9QwF0/7mcq5pj6/Fh5Mt4N+93D2npTZTJcNNEOl4ZjBMoR+6pt+hJYefF9orLVy3P2Uw1Mg+O5fdEZ9hSk",
             "kicker": "Business Justification",
             "nav": "Business Justification"
           },
@@ -2119,20 +2311,20 @@
           "it": 210000,
           "wraps": {
             "owner": {
-              "salt": "DTgLt5BC5ek8hUmD2i3fvg==",
-              "iv": "58wJKqrcgvUUA39r",
-              "ct": "dXbdXWYdHw/dQ47b99p8mdKjhVLAwaikbhFd1QFelcRii3TfrFWNhzpaIhRW62lR"
+              "salt": "/vdz+RlSfquAKWvTbGnlvA==",
+              "iv": "3A7Z3AqhbIXIsC9l",
+              "ct": "LH5Lb7wImTCzQSwYY85DxEvRPbkA3HhuZBNIutCSq4A75LUGOrcWKsPjiph/cX6z"
             },
             "tickets": {
               "svms2t5b5t": {
-                "salt": "osmjuqdFenjDPiVgJF1oEw==",
-                "iv": "gQVFAp/0qLsXG1Oh",
-                "ct": "YZ6fiI5XNSbbiJv+/xSOnwpUsYlMRAz0UDsaPxISYB26w+sgigC86HL9O9BxgHk6"
+                "salt": "PPiuzkMupxM0CttvSuLkzw==",
+                "iv": "rRXoQJD50n3EVyq2",
+                "ct": "ToB+fYK37eCcVFiaBawjLnSq0apcBqRqFlQfGE0TRaHPOqTNJooQvTcylx4ZcV2M"
               },
               "svmsx4mxop": {
-                "salt": "/fPpjR3HfytJ1l9L14YgCw==",
-                "iv": "4cx80b4+O9x9TBz+",
-                "ct": "XOX/JHskiIqMKHTIoQdxNDy15yvwq//lqhCG2Gd4PyCivwSbtQomUvbyjsxkqUCz"
+                "salt": "ZRBB6IimVQkTyEMQ1tz6NA==",
+                "iv": "V771ghpFQTJhvJ9j",
+                "ct": "I69MYQ8U2W6+RpTZ5W3PX5GN0ZwUaJtBIKoCIeQJgkDHVGMMsq1cCgFNVbiSJVhg"
               }
             }
           }
