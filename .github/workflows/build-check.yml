@@ -27,7 +27,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run deterministic regressions sequentially
+      - name: Install test browser
+        run: |
+          npx playwright-core install --with-deps chromium
+          echo "PLAYWRIGHT_CHROMIUM_EXECUTABLE=$(node -p "require('playwright-core').chromium.executablePath()")" >> "$GITHUB_ENV"
+
+      - name: Run root regressions sequentially
         run: |
           mapfile -t tests < <(find . -maxdepth 1 -type f \( -name '*.test.mjs' -o -name '*.test.cjs' \) ! -name '*.browser.test.mjs' ! -name 'slide-studio-deck.test.mjs' | sort)
           node --test --test-concurrency=1 "${tests[@]}"
@@ -52,9 +57,6 @@ jobs:
             node --check "$f" || { echo "::error::Syntax check failed for $f"; exit 1; }
           done
           echo "OK — all bundles pass node --check."
-
-      - name: Install test browser
-        run: npx playwright-core install --with-deps chromium
 
       - name: Verify authentication and case recovery in browser
         run: |
