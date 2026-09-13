@@ -198,7 +198,8 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__statusbar.is-pub-caveat .adm__status { color: var(--text); }
 .adm__statusbar.is-pub-error .adm__status { color: #ff7a7a; }
 
-.adm__bar-prev.adm__section-access { justify-content:center; width:40px; padding:0; }
+.adm__bar-prev.adm__section-access { justify-content:center; width:auto; padding:.32rem .72rem; letter-spacing:0; }
+.adm__section-access span { width:9ch; text-align:left; }
 .adm__section-access svg { width:15px; height:15px; }
 .adm__bar-prev.adm__section-access[aria-checked="false"] { color:var(--accent); }
 .adm__section-access[aria-checked="false"] rect { fill:currentColor; }

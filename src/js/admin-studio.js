@@ -6779,13 +6779,14 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     const button = root?.querySelector("[data-section-access]"), work = data.work[openStudy];
     if (button) {
       const state = studySectionAccess(work?.id);
+      const caption = state.busy ? "Unlocking" : state.unlocked ? "Unlocked" : "Locked";
       button.hidden = !state.available;
       button.dataset.index = String(openStudy);
       button.setAttribute("aria-checked", String(state.unlocked));
       button.setAttribute("aria-busy", String(state.busy));
       button.title = state.busy ? "Cancel section unlock" : state.unlocked ? "Lock protected sections" : "Unlock protected sections";
-      button.setAttribute("aria-label", button.title);
-      button.innerHTML = state.unlocked ? IC.unlock : IC.lock;
+      button.setAttribute("aria-label", caption + ": " + button.title);
+      button.innerHTML = (state.unlocked ? IC.unlock : IC.lock) + '<span>' + caption + '</span>';
     }
     window.dispatchEvent(new Event("rk:section-access"));
   }
@@ -7373,12 +7374,12 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     nativeSlideSession = session;
     root.classList.add("is-native-slides");
     const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
-    const styles = ["/studio/slide-lab/assets/editor.css?v=1.7", "/css/slide-studio.css?v=1.4"].map(href => new Promise((resolve, reject) => {
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.8", "/css/slide-studio.css?v=1.5"].map(href => new Promise((resolve, reject) => {
       const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.11";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.12";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
@@ -18918,7 +18919,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         "</div>" +
         '<nav class="l2tabs" data-l2tabs role="tablist" aria-label="Project editor" hidden></nav>' +
         '<div class="adm__prevgroup" data-prevgroup>' +
-        '<button class="adm__bar-prev adm__section-access" data-section-access data-act="study-unlocktoggle" type="button" role="switch" aria-checked="false" aria-label="Unlock protected sections" title="Unlock protected sections" hidden>' + IC.lock + '</button>' +
+        '<button class="adm__bar-prev adm__section-access" data-section-access data-act="study-unlocktoggle" type="button" role="switch" aria-checked="false" aria-label="Locked: Unlock protected sections" title="Unlock protected sections" hidden>' + IC.lock + '<span>Locked</span></button>' +
         '<button class="adm__bar-prev" data-prevtoggle type="button" aria-label="Show or hide the live preview" title="Hide the live preview" aria-pressed="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="14" y1="4" x2="14" y2="20"/></svg><span class="adm__bar-prev-tx">Live preview</span></button>' +
         '<div class="adm__dev" data-dev-wrap>' +
           '<button class="adm__dev-btn" data-dev-toggle type="button" aria-haspopup="true" aria-expanded="false" title="Preview size"><span class="adm__dev-ic" data-dev-ic>' + DEV_ICON.responsive + '</span><span class="adm__dev-lbl" data-dev-lbl>Responsive</span><svg class="adm__dev-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +

@@ -175,6 +175,18 @@ test("Studio protected inserts share recovery-gated access across case and slide
   const media = '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#237b70"/></svg>';
   const full = {type:'gallery',locked:true,heading:'Private prototype',kicker:'Private kicker',items:[{src:'vault:synthetic-original',caption:'Private caption'}]};
   const encrypted = {type:'gallery',locked:true,encStub:true,...await rkEncWithSek(sek,full)};
+  const assertAccessLabel = async (control, text, width) => {
+    assert.equal(await control.locator('span').textContent(),text);
+    assert.ok((await control.getAttribute('aria-label')).startsWith(text+':'),'The visible label is included in its accessible name');
+    const bounds = await control.boundingBox();
+    assert.equal(bounds.height,34);
+    assert.ok(bounds.x>=0 && bounds.x+bounds.width<=width,'The labelled access toggle fits the viewport');
+    assert.equal(await control.evaluate(element=>{
+      const label=element.querySelector('span'),box=element.getBoundingClientRect(),labelBox=label.getBoundingClientRect();
+      return element.scrollWidth<=element.clientWidth && labelBox.width>0 && labelBox.left>=box.left && labelBox.right<=box.right && label.scrollWidth<=label.clientWidth;
+    }),true,'The label is visible and unclipped');
+    return bounds.width;
+  };
   try {
     for (const width of [1440,390]) {
       const context = await browser.newContext({viewport:{width,height:1000},reducedMotion:width===1440?'no-preference':'reduce'}), page = await context.newPage();
@@ -218,19 +230,24 @@ test("Studio protected inserts share recovery-gated access across case and slide
       assert.equal(privateReads,0);
       const access = page.locator('[data-native-slide-toolbar] .merge-section-access');
       assert.equal(await access.getAttribute('aria-checked'),'false');
+      const accessWidth = await assertAccessLabel(access,'Locked',width);
       assert.equal(await access.locator('rect').evaluate(element=>getComputedStyle(element).fill),'rgb(216, 166, 87)');
       const accessBox = await access.boundingBox(), editingBox = await page.locator('[data-native-slide-toolbar] [aria-label="Editing on"]').boundingBox();
       assert.ok(accessBox.x+accessBox.width<=editingBox.x);
       await access.click();
       const prompt = page.locator('.pass').filter({has:page.getByText('Recovery passphrase',{exact:true})});
+      await prompt.waitFor();
+      assert.equal(await assertAccessLabel(access,'Unlocking',width),accessWidth);
       await prompt.locator('[data-cancel]').click();
       await page.waitForFunction(()=>document.querySelector('[data-native-slide-toolbar] .merge-section-access')?.getAttribute('aria-busy')==='false');
       assert.equal(await access.getAttribute('aria-checked'),'false');
+      assert.equal(await assertAccessLabel(access,'Locked',width),accessWidth);
       assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[1].encStub),true);
       await access.click();
       await prompt.locator('input[type="password"]').fill(pass);
       await prompt.locator('[data-go]').click();
       await page.waitForFunction(()=>document.querySelector('[data-native-slide-toolbar] .merge-section-access')?.getAttribute('aria-checked')==='true');
+      assert.equal(await assertAccessLabel(access,'Unlocked',width),accessWidth);
       await page.frameLocator('.lab-canvas > .merge-native-sections iframe.lab-section-component').getByText('Private prototype',{exact:true}).waitFor();
       await page.waitForFunction(()=>document.querySelector('.lab-canvas > .merge-native-sections iframe.lab-section-component')?.contentDocument.querySelector('img')?.naturalWidth===640);
       await page.screenshot({path:join(tmpdir(),'rk-protected-insert-'+width+'.png')});
@@ -251,6 +268,7 @@ test("Studio protected inserts share recovery-gated access across case and slide
       await page.locator('.study-sections').waitFor();
       const caseAccess = page.locator('[data-section-access]');
       assert.equal(await caseAccess.getAttribute('aria-checked'),'false');
+      const caseWidth = await assertAccessLabel(caseAccess,'Locked',width);
       assert.equal(await caseAccess.locator('rect').evaluate(element=>getComputedStyle(element).fill),'rgb(216, 166, 87)');
       const previewToggle = page.locator('[data-prevtoggle]');
       await previewToggle.click();
@@ -262,8 +280,10 @@ test("Studio protected inserts share recovery-gated access across case and slide
       assert.ok(caseBox.x+caseBox.width<=splitBox.x);
       await caseAccess.click();
       await page.waitForFunction(()=>document.querySelector('[data-section-access]')?.getAttribute('aria-checked')==='true');
+      assert.equal(await assertAccessLabel(caseAccess,'Unlocked',width),caseWidth);
       assert.equal(await caseAccess.locator('rect').evaluate(element=>getComputedStyle(element).fill),'none');
       assert.equal(await caseAccess.evaluate(element=>getComputedStyle(element).color),'rgb(143, 138, 132)');
+      await page.screenshot({path:join(tmpdir(),'rk-access-case-'+width+'.png')});
       await page.locator('[data-l2tab="slides"]').click();
       await page.frameLocator('.lab-canvas > .merge-native-sections iframe.lab-section-component').getByText('Private prototype',{exact:true}).waitFor();
       const opening = page.waitForEvent('popup');
@@ -324,6 +344,7 @@ test("Studio section recovery preserves navigation, newer edits and failed saves
       await prompt.locator('input[type="password"]').fill(pass);
       await prompt.locator('[data-go]').click();
       await page.waitForFunction(()=>window.syntheticVaultStarted);
+      assert.equal(await page.locator('[data-section-access] span').textContent(),'Unlocking');
       if (scenario==='navigate') {
         await page.locator('[data-l2-back]').click();
         await page.locator('[data-act="study-toggle"][data-index="1"]').click();

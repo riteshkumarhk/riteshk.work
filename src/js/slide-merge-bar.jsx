@@ -93,8 +93,9 @@ function SectionAccessControl({ caseStudyId, disabled }) {
   }, [caseStudyId]);
   if (!state.available || !window.__RKStudio?.toggleSections) return null;
   const Icon = state.unlocked ? LockOpen : Lock;
+  const caption = state.busy ? "Unlocking" : state.unlocked ? "Unlocked" : "Locked";
   const label = state.busy ? "Cancel section unlock" : state.unlocked ? "Lock protected sections" : "Unlock protected sections";
-  return <button type="button" className="merge-layout-toggle merge-section-access" role="switch" aria-checked={state.unlocked} aria-busy={state.busy} aria-label={label} title={label} disabled={disabled && !state.busy} onClick={() => window.__RKStudio.toggleSections(caseStudyId)}><Icon size={15} strokeWidth={1.75} /></button>;
+  return <button type="button" className="merge-layout-toggle merge-section-access" role="switch" aria-checked={state.unlocked} aria-busy={state.busy} aria-label={caption + ": " + label} title={label} disabled={disabled && !state.busy} onClick={() => window.__RKStudio.toggleSections(caseStudyId)}><Icon size={15} strokeWidth={1.75} /><span>{caption}</span></button>;
 }
 
 export function EditorBar({ historyRef, busy, editing, onEditing, slideView, onView, onPlay, canPlay, newTab = false, caseStudyId }) {

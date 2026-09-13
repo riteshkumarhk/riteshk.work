@@ -28,5 +28,5 @@
   .adm.is-native-slides .merge-shell[data-hosted] { grid-template-columns:minmax(0,1fr); }
   [data-native-slide-toolbar] > .merge-editor-bar { grid-template-columns:minmax(0,1fr) auto; }
   [data-native-slide-toolbar] .merge-bar-views { grid-column:2;grid-row:1;gap:6px; }
-  [data-native-slide-toolbar] .merge-layout-toggle span { display:none; }
+  [data-native-slide-toolbar] .merge-layout-toggle:not(.merge-section-access) span { display:none; }
 }
