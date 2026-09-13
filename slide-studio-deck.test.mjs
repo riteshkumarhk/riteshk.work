@@ -299,6 +299,71 @@ test("Studio protected inserts share recovery-gated access across case and slide
   } finally {await browser.close();}
 });
 
+test("Studio section recovery preserves navigation, newer edits and failed saves in the browser", {timeout:90000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const pass = 'synthetic-stale-recovery', wrap = await rkWrapSek(pass,rkNewSek());
+  try {
+    for (const width of [1440,390]) for (const scenario of ['navigate','edit','save-failure']) {
+      const context = await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce'}), page = await context.newPage();
+      const errors = []; page.on('pageerror',error=>errors.push(error.message));
+      await page.addInitScript(()=>{
+        localStorage.setItem('rk:admin:sess',JSON.stringify({token:'synthetic-stale-recovery',exp:Date.now()+3600000}));
+        const originalFetch = window.fetch;
+        window.fetch = function(resource,options) {
+          const address = typeof resource === 'string' ? resource : resource.url;
+          if (!address.includes('/vault/file/stale-section')) return originalFetch.call(this,resource,options);
+          window.syntheticVaultStarted = true;
+          return new Promise(resolve=>{window.releaseSyntheticVault=()=>resolve(new Response(JSON.stringify({type:'text',locked:true,heading:'Recovered private heading',body:'Recovered private body'}),{headers:{'Content-Type':'application/json'}}));});
+        };
+      });
+      await openIntegratedFixture(page,[{type:'text',heading:'Public heading',body:'Original public body'},{type:'text',locked:true,sectionId:'stale-source',vaultBlock:'stale-section'}],{enc:{wraps:{owner:wrap}}});
+      await context.route('**/vault/sign?**',route=>route.fulfill({json:{url:'/vault/file/stale-section'}}));
+      await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+      await page.locator('[data-section-access]').click();
+      const prompt = page.locator('.pass').filter({has:page.getByText('Recovery passphrase',{exact:true})});
+      await prompt.locator('input[type="password"]').fill(pass);
+      await prompt.locator('[data-go]').click();
+      await page.waitForFunction(()=>window.syntheticVaultStarted);
+      if (scenario==='navigate') {
+        await page.locator('[data-l2-back]').click();
+        await page.locator('[data-act="study-toggle"][data-index="1"]').click();
+      } else if (scenario==='edit') {
+        await page.evaluate(()=>window.__rkDevEdit('work.0.study.blocks.0.body','Newer source edit during recovery'));
+      } else {
+        await page.evaluate(()=>{
+          window.originalSetItem=Storage.prototype.setItem;
+          Storage.prototype.setItem=function(key,value){if(key==='rk:content:draft')throw new DOMException('Synthetic quota','QuotaExceededError');return window.originalSetItem.call(this,key,value);};
+        });
+      }
+      const before = await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
+      await page.evaluate(()=>window.releaseSyntheticVault());
+      await page.waitForFunction(()=>!window.__RKStudio.sectionAccess('integrated-case').busy);
+      assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),before,scenario+' at '+width);
+      assert.equal(await page.evaluate(()=>window.__RKStudio.sectionAccess('integrated-case').unlocked),false);
+      assert.equal(await page.locator('input[data-bfield="heading"][value="Recovered private heading"]').count(),0);
+      assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[1].vaultBlock),'stale-section');
+      if (scenario==='save-failure') {
+        assert.match(await page.locator('.adm__statusbar').innerText(),/could not be saved|unchanged/i);
+        await page.evaluate(()=>{Storage.prototype.setItem=window.originalSetItem;});
+      }
+      if (scenario==='navigate') {
+        assert.equal(await page.evaluate(()=>window.__RKStudio.sectionAccess('empty-case').unlocked),false);
+        await page.locator('[data-l2-back]').click();
+        await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+      }
+      await page.evaluate(()=>{window.syntheticVaultStarted=false;});
+      await page.locator('[data-section-access]').click();
+      await page.waitForFunction(()=>window.syntheticVaultStarted);
+      await page.evaluate(()=>window.releaseSyntheticVault());
+      await page.waitForFunction(()=>window.__RKStudio.sectionAccess('integrated-case').unlocked);
+      assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[1].locked),true);
+      assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].body),scenario==='edit'?'Newer source edit during recovery':'Original public body');
+      assert.deepEqual(errors,[]);
+      await context.close();
+    }
+  } finally {await browser.close();}
+});
+
 test("Section Show/hide preserves source media, undo and independent saved instances", {timeout:90000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
   const media = 'data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#237b70"/></svg>').toString('base64');
@@ -1353,6 +1418,29 @@ test('Prepare ATS recovers its PDF canvas, exact source bytes and linked workspa
     const reopened = await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='source-workspace').payload);
     assert.deepEqual(reopened.rb,workspace.payload.rb);assert.deepEqual(reopened.design,workspace.payload.design);
     await page.waitForFunction(()=>document.querySelector('.rbz [data-prep-storage] span')?.textContent==='Saved to Cloudflare.');
+    const pdfRequests = [];
+    await page.route('**/admin/render-pdf',route=>{
+      pdfRequests.push(route.request().postDataJSON());
+      return route.fulfill({contentType:'application/pdf',body:Buffer.from(preparePdfFixture('Synthetic export '+pdfRequests.length))});
+    });
+    const downloadPdf = async()=>{
+      const downloading=page.waitForEvent('download');
+      await page.locator('[data-rbz-dl]').click();
+      const download=await downloading;
+      assert.equal(await download.failure(),null);
+      return readFileSync(await download.path(),'utf8');
+    };
+    const normalPdf=await downloadPdf();
+    assert.equal(await downloadPdf(),normalPdf);
+    assert.equal(pdfRequests.length,1,'An unchanged export may use its confirmed cache');
+    await page.locator('[data-margin="narrow"]').click();
+    const narrowPdf=await downloadPdf();
+    assert.equal(pdfRequests.length,2,'Changed margins must request a fresh PDF');
+    assert.notEqual(pdfRequests[0].html,pdfRequests[1].html);
+    assert.match(normalPdf,/Synthetic export 1/);
+    assert.match(narrowPdf,/Synthetic export 2/);
+    await page.locator('[data-margin="normal"]').click();
+    await page.waitForFunction(()=>document.querySelector('.rbz [data-prep-storage] span')?.textContent==='Saved to Cloudflare.');
     await page.evaluate(()=>{
       const write=Storage.prototype.setItem;
       Storage.prototype.setItem=function(key,value){if(['rk:prep:hist','rk:prep:draft','rk:prep:sync'].includes(key))throw new DOMException('Storage full','QuotaExceededError');return write.call(this,key,value);};
@@ -1448,6 +1536,49 @@ test("Prepare saved ATS reviews retain their resume and role and cancel closed r
     assert.equal(await page.locator('.prep-dialog').isVisible(),true);
     assert.deepEqual(errors,[]);
   } finally { await browser.close(); }
+});
+
+test("Resume canvas reassessment cannot overwrite an edited or closed workspace on desktop", {timeout:90000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  try {
+    for (const scenario of ['edit','close']) {
+      const width = 1440;
+      const context = await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce'}), page = await context.newPage();
+      await installPrepareReplies(page); await openIntegratedFixture(page);
+      await page.evaluate(()=>{
+        const text='Synthetic designer with original research and product outcomes.', res={score:60,summary:'Original assessment',checks:[],fixes:[]};
+        const review={id:'safety-review',tool:'ats',kind:'review',at:1,payload:{state:{mode:'job',jd:'Original target role'},text,level:'staff',res,source:{version:1,text,jd:'Original target role',projects:[],brief:null}}};
+        const workspace={id:'safety-workspace',tool:'ats',kind:'workspace',at:2,payload:{reviewId:review.id,text,jd:'Original target role',level:'staff',res,rb:{name:'Synthetic Designer',title:'Product Designer',contact:{email:'synthetic@example.test',links:[]},summary:'Original workspace summary.',sections:[{heading:'Experience',kind:'experience',items:[{role:'Designer',org:'Synthetic Org',bullets:['Original achievement.']}]}]},design:{tpl:'classic',size:'a4',font:'inter',density:'normal',layout:'single',canvas:'light',keepWhole:true,margin:'normal'}}};
+        localStorage.setItem('rk:prep:hist',JSON.stringify({ats:[review,workspace]}));
+      });
+      await page.locator('.adm__tab[data-tab="ai"]').click();
+      await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
+      await page.locator('[data-act="ats-hist-open"][data-id="safety-review"]').click();
+      await page.locator('[data-atsv-continue]').click();
+      await page.locator('[data-rbz-doc]').waitFor();
+      await page.evaluate(()=>{window.deferAtsReply=true;});
+      await page.locator('[data-rbz-recheck]').click();
+      await page.waitForFunction(()=>typeof window.releaseAtsReply==='function');
+      if (scenario==='edit') {
+        await page.locator('[data-rbz-doc] [data-k="summary"]').fill('Newer summary while assessment is pending.');
+        await page.waitForFunction(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='safety-workspace').payload.rb.summary==='Newer summary while assessment is pending.');
+      } else {
+        await page.locator('[data-rbz-close]').click();
+        await page.locator('.rbz').waitFor({state:'detached'});
+      }
+      const before = await page.evaluate(()=>localStorage.getItem('rk:prep:hist'));
+      await page.evaluate(()=>window.releaseAtsReply());
+      await page.waitForFunction(()=>window.atsReplyReturned && window.__rkAiSession.state().active===0);
+      assert.equal(await page.evaluate(()=>localStorage.getItem('rk:prep:hist')),before,scenario+' at '+width);
+      if (scenario==='edit') {
+        await page.waitForFunction(()=>!document.querySelector('[data-rbz-recheck]').disabled);
+        assert.equal(await page.locator('[data-rbz-doc] [data-k="summary"]').innerText(),'Newer summary while assessment is pending.');
+        assert.match(await page.locator('.adm__statusbar').innerText(),/resume changed|previous assessment is kept/i);
+      } else assert.equal(await page.locator('.rbz').count(),0);
+      assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='safety-review').payload.res.summary),'Original assessment');
+      await context.close();
+    }
+  } finally {await browser.close();}
 });
 
 test("Prepare restored letters regenerate from their saved resume and evidence", {timeout:45000}, async () => {
@@ -3376,7 +3507,7 @@ test("live fallback resume PDF retains all twelve achievements at every density"
     await page.setContent("<!doctype html><title>Synthetic PDF retention check</title>");
     await page.evaluate(() => Object.assign(window, {
       atsRbSize: () => ({ fmt: "a4", w: 210, h: 297 }), atsRbTpl: () => ({ head: "plain" }),
-      RB_FONTS: { sans: { pdf: "helvetica" } }, atsRbFont: "sans", atsRbMarginCfg: () => ({ mm: 14 }),
+      RB_FONTS: { sans: { pdf: "helvetica" } }, atsRbFont: "sans", syntheticMargin: 14, atsRbMarginCfg: () => ({ mm: window.syntheticMargin }),
       atsRbAccentRgb: () => [100, 100, 100], atsRbLayout: "single", atsRbKeepWhole: true,
       RB_ICON_CACHE: {}, rbHex: () => "#000000", RPDF_NL: "\n"
     }));
@@ -3384,7 +3515,8 @@ test("live fallback resume PDF retains all twelve achievements at every density"
     const results = await page.evaluate(async () => {
       const Pdf = await ensureJsPdf(), reader = await ensurePdfJs(), results = [];
       const bullets = Array.from({ length: 12 }, (_, index) => "Retained achievement " + String(index + 1).padStart(2, "0") + ": " + "Original authored detail remains intact. ".repeat(45) + "End of achievement " + (index + 1) + ".");
-      for (const density of [1.08, 1, 0.9, 0.72]) {
+      for (const margin of [8,14,20]) for (const density of [1.08, 1, 0.9, 0.72]) {
+        window.syntheticMargin = margin;
         const output = atsRbBuild(Pdf, { name: "Synthetic validation", sections: [{ kind: "experience", heading: "Experience", items: [{ role: "Designer", bullets }] }] }, { k: density });
         const pdf = await reader.getDocument({ data: new Uint8Array(output.doc.output("arraybuffer")), isEvalSupported: false }).promise;
         const text = [], outside = [];
@@ -3396,7 +3528,8 @@ test("live fallback resume PDF retains all twelve achievements at every density"
           }
         }
         const extracted = text.join(" ").replace(/\s+/g, " ");
-        results.push({ density, pages: pdf.numPages, retained: bullets.filter(bullet => extracted.includes(bullet)).length, outside });
+        const firstPage = await pdf.getPage(1), firstText = await firstPage.getTextContent();
+        results.push({ margin, density, pages: pdf.numPages, retained: bullets.filter(bullet => extracted.includes(bullet)).length, outside, firstTextX: firstText.items.find(item => item.str === 'Synthetic validation').transform[4] });
         await pdf.destroy();
       }
       return results;
@@ -3405,6 +3538,7 @@ test("live fallback resume PDF retains all twelve achievements at every density"
       assert.equal(result.retained, 12, JSON.stringify(result));
       assert.deepEqual(result.outside, [], "Text must stay on a PDF page");
       assert.ok(result.pages > 1, "The fixture must exercise pagination");
+      assert.ok(Math.abs(result.firstTextX-result.margin*72/25.4)<0.1,'The exported PDF must use the selected margin');
     }
   } finally { await browser.close(); }
 });

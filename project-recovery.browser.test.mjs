@@ -65,7 +65,7 @@ test("built sign-in gate retains control after provider failure and cancellation
     await page.locator("[data-passkey]").click();
     await page.waitForFunction(() => /provider|cancel/i.test(document.querySelector(".pass__err").textContent));
     assert.equal(await page.locator("[data-passkey]").isEnabled(), true);
-    await page.locator("[data-passkey]").click();
+    await page.locator("[data-passkey]").dblclick();
     await page.waitForFunction(() => window.providerCalls === 2);
     releaseStatus();
     await page.waitForFunction(() => JSON.parse(localStorage.getItem("rk:authmode") || "null")?.hasRecovery);
@@ -79,6 +79,16 @@ test("built sign-in gate retains control after provider failure and cancellation
     assert.equal(await page.locator(".pass, .adm.is-open").count(), 0);
     assert.equal(await page.evaluate(() => localStorage.getItem("rk:admin:sess")), null);
     assert.equal(await page.evaluate(() => localStorage.getItem("rk:content:draft")), '{"synthetic":"keep this draft"}');
+    await page.locator("#moreBtn").click();
+    await page.locator('[data-open="admin"]').click();
+    await page.locator("[data-passkey]").click();
+    await page.waitForFunction(() => window.providerCalls === 3);
+    await page.evaluate(() => window.finishProvider());
+    await page.locator(".adm.is-open").waitFor();
+    assert.equal(finishes, 1);
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("rk:admin:sess")).token), "synthetic-session");
+    assert.equal(await page.locator(".pass--lock").count(), 0);
+    assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
 
@@ -117,6 +127,25 @@ test("built case study retries protected sections without restarting Figma and r
       assert.equal(await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button").innerText(), "Prototype step 2");
       assert.equal(loads, 2);
       assert.equal(protectedReads, 2);
+      const protectedTools = protectedFrame.locator("..").locator(".pjb__frame-tools");
+      await page.frameLocator('iframe[src*="synthetic-protected"]').getByRole("button").click();
+      await page.context().setOffline(true);
+      await page.waitForFunction(() => document.querySelector('iframe[src*="synthetic-protected"]').parentElement.querySelector("[data-embed-state]").textContent === "Offline");
+      await page.context().setOffline(false);
+      assert.equal(loads, 2, "Reconnection must not reload either prototype");
+      await protectedTools.locator("[data-embed-retry]").click();
+      await page.frameLocator('iframe[src*="synthetic-protected"]').getByRole("button", { name: "Prototype step 1" }).waitFor();
+      assert.equal(loads, 3);
+      assert.equal(await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button").innerText(), "Prototype step 2");
+      assert.equal(await page.evaluate(() => window.keptFrame === document.querySelector('iframe[src*="synthetic-public"]')), true);
+      await page.context().route("https://www.figma.com/proto/synthetic-protected", route => route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Synthetic original</title><p>Original prototype fixture</p>" }));
+      const opening = page.waitForEvent("popup");
+      await protectedTools.getByRole("link", { name: "Open original", exact: true }).click();
+      const original = await opening;
+      await original.waitForLoadState("domcontentloaded");
+      assert.equal(original.url(), "https://www.figma.com/proto/synthetic-protected");
+      assert.equal(await original.evaluate(() => window.opener), null);
+      await original.close();
       await page.evaluate(() => document.fonts.ready);
       assert.equal(await page.locator(".pjb__frame-tools").evaluateAll(elements => elements.every(element => element.scrollWidth <= element.clientWidth + 1)), true);
       await page.screenshot({ path: join(tmpdir(), "rk-built-recovery-" + width + ".png") });
@@ -126,9 +155,107 @@ test("built case study retries protected sections without restarting Figma and r
       await page.locator('.pj [data-pj="close"]').click();
       assert.equal(await page.locator(".pj iframe").count(), 0);
       await page.close();
+      const visitor = await browser.newPage({ viewport: { width, height: 1000 } });
+      const privateRequests = [];
+      await siteFixture(visitor, async (route, url) => {
+        if (url.pathname.startsWith("/vault/")) { privateRequests.push(url.pathname); await route.abort(); return true; }
+        if (url.hostname === "embed.figma.com" || url.hostname === "www.figma.com") { await route.fulfill({ contentType: "text/html", body: "<!doctype html><button>Public prototype</button>" }); return true; }
+        return false;
+      });
+      await visitor.goto(baseURL + "/", { waitUntil: "domcontentloaded" });
+      await visitor.waitForFunction(() => !!window.RK?.openProject);
+      await visitor.evaluate(() => window.RK.openProject("recovery-fixture", { push: false }));
+      await visitor.frameLocator('iframe[src*="synthetic-public"]').getByRole("button").waitFor();
+      assert.equal(await visitor.locator('iframe[src*="synthetic-protected"], a[href*="synthetic-protected"]').count(), 0);
+      assert.equal(await visitor.evaluate(() => window.RK.sectionAccess("recovery-fixture").unlocked), false);
+      assert.deepEqual(privateRequests, []);
+      await visitor.close();
     }
   } finally { await browser.close(); }
 });
+test("built case navigation rejects late protected recovery and allows a fresh retry", { skip: !baseURL, timeout: 45000 }, async () => {
+  const browser = await chromium.launch(launchOptions);
+  try {
+    for (const width of [1440,390]) {
+      const page = await browser.newPage({ viewport: { width, height: 1000 } });
+      await page.addInitScript(() => {
+        sessionStorage.setItem("rk:vault:grant", JSON.stringify({ token: "synthetic-navigation-grant", exp: Date.now() + 60000 }));
+        const originalFetch = window.fetch;
+        window.fetch = function(resource, options) {
+          const address = typeof resource === "string" ? resource : resource.url;
+          if (!address.includes("/vault/file/synthetic-section")) return originalFetch.call(this, resource, options);
+          window.navigationReadStarted = true;
+          return new Promise(resolve => { window.releaseNavigationRead = () => resolve(new Response(JSON.stringify({ type: "text", locked: true, heading: "Late private content", body: "Recovered only in its own case" }), { headers: { "Content-Type": "application/json" } })); });
+        };
+      });
+      await siteFixture(page, async (route, url) => {
+        if (url.pathname === "/vault/sign") { await route.fulfill({ json: { url: "/vault/file/synthetic-section" } }); return true; }
+        if (url.hostname === "embed.figma.com") { await route.fulfill({ contentType: "text/html", body: "<!doctype html><button>Public prototype</button>" }); return true; }
+        return false;
+      });
+      await page.goto(baseURL + "/", { waitUntil: "domcontentloaded" });
+      await page.waitForFunction(() => !!window.RK?.openProject);
+      await page.evaluate(() => window.RK.openProject("recovery-fixture", { push: false }));
+      await page.waitForFunction(() => window.navigationReadStarted);
+      await page.locator('.pj [data-pj="close"]').click();
+      await page.evaluate(() => window.RK.openProject("second-fixture", { push: false }));
+      await page.getByText("Unchanged second project", { exact: true }).waitFor();
+      const before = await page.evaluate(() => JSON.stringify(window.RK.data.work));
+      await page.evaluate(async () => { window.releaseNavigationRead(); await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); });
+      assert.equal(await page.evaluate(() => JSON.stringify(window.RK.data.work)), before);
+      assert.equal(await page.getByText("Late private content", { exact: true }).count(), 0);
+      assert.equal(await page.evaluate(() => window.RK.sectionAccess("second-fixture").unlocked), false);
+      await page.locator('.pj [data-pj="close"]').click();
+      await page.evaluate(() => { window.navigationReadStarted = false; window.RK.openProject("recovery-fixture", { push: false }); });
+      await page.waitForFunction(() => window.navigationReadStarted);
+      await page.evaluate(() => window.releaseNavigationRead());
+      await page.getByText("Late private content", { exact: true }).waitFor();
+      assert.equal(await page.evaluate(() => window.RK.data.work[0].study.blocks[1].locked), true);
+      await page.close();
+    }
+  } finally { await browser.close(); }
+});
+
+test("built protected loading times out visibly and recovers without restarting another embed", { skip: !baseURL, timeout: 45000 }, async () => {
+  const browser = await chromium.launch(launchOptions);
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    await page.addInitScript(() => {
+      sessionStorage.setItem("rk:vault:grant", JSON.stringify({ token: "synthetic-timeout-grant", exp: Date.now() + 3600000 }));
+      const originalFetch = window.fetch;
+      window.fetch = function(resource, options) {
+        const address = typeof resource === "string" ? resource : resource.url;
+        if (!address.includes("/vault/file/synthetic-section")) return originalFetch.call(this, resource, options);
+        window.timeoutReadStarted = true;
+        if (!window.recoverTimeoutRead) return new Promise(() => {});
+        return Promise.resolve(new Response(JSON.stringify({ type: "text", locked: true, heading: "Recovered after timeout", body: "Original content retained" }), { headers: { "Content-Type": "application/json" } }));
+      };
+    });
+    let frameLoads = 0;
+    await siteFixture(page, async (route, url) => {
+      if (url.pathname === "/vault/sign") { await route.fulfill({ json: { url: "/vault/file/synthetic-section" } }); return true; }
+      if (url.hostname === "embed.figma.com" || (url.hostname === "www.figma.com" && url.pathname === "/embed")) { frameLoads++; await route.fulfill({ contentType: "text/html", body: '<!doctype html><button onclick="this.textContent=\'Prototype step 2\'">Prototype step 1</button>' }); return true; }
+      return false;
+    });
+    await page.goto(baseURL + "/", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!window.RK?.openProject);
+    await page.clock.install();
+    await page.evaluate(() => window.RK.openProject("recovery-fixture", { push: false }));
+    await page.waitForFunction(() => window.timeoutReadStarted);
+    await page.locator('iframe[src*="synthetic-public"]').scrollIntoViewIfNeeded();
+    await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button").click();
+    await page.clock.runFor(16000);
+    await page.locator("[data-vault-retry]").waitFor();
+    assert.equal(await page.locator("[data-vault-retry]").isEnabled(), true);
+    assert.equal(await page.evaluate(() => window.RK.data.work[0].study.blocks[1].vaultBlock), "synthetic-section");
+    await page.evaluate(() => { window.recoverTimeoutRead = true; });
+    await page.locator("[data-vault-retry]").click();
+    await page.getByText("Recovered after timeout", { exact: true }).waitFor();
+    assert.equal(frameLoads, 1);
+    assert.equal(await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button").innerText(), "Prototype step 2");
+  } finally { await browser.close(); }
+});
+
 function sourceFunction(name) {
   const start = source.indexOf("  function " + name + "("), firstLine = source.indexOf("\n", start);
   assert.ok(start >= 0);
