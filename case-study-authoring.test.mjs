@@ -46,7 +46,7 @@ test('citations and quantitative claims are checked, not repaired into approval'
   assert.throws(()=>parseCaseResponse('{"blocks":[',sources,current,normalize),/Incomplete/);
   assert.throws(()=>parseCaseResponse(JSON.stringify(response).replace('sourceId":"notes','sourceId":"missing'),sources,current,normalize),/quotation/);
   const invalid=structuredClone(response);invalid.blocks[0].block.body='We achieved 92% growth.';
-  assert.throws(()=>parseCaseResponse(JSON.stringify(invalid),sources,current,normalize),/Section 1: number "92%".*exact supporting source quote/);
+  assert.throws(()=>parseCaseResponse(JSON.stringify(invalid),sources,current,normalize),/Section 1: number "92%".*supporting sourceId\/excerptId/);
   const malformed=structuredClone(response);malformed.blocks[0].block.body={html:'unsafe'};
   assert.throws(()=>parseCaseResponse(JSON.stringify(malformed),sources,current,normalize),/text/);
   const wrongList=structuredClone(response);wrongList.blocks[0].block.list=Array(13).fill('too many');
@@ -64,6 +64,38 @@ test('complete existing artifacts can be reused without rewriting media',()=>{
   const current=work(),sources=caseSources(current,state);sources.find(source=>source.id==='section-1').text='Original gallery';
   const draft={blocks:[{reuseSourceId:'section-1',evidence:[{sourceId:'section-1',quote:'Original gallery'}]}]};
   const proposal=parseCaseResponse(JSON.stringify(draft),sources,current,normalize);assert.deepEqual(proposal.entries[0].block,current.study.blocks[1]);assert.equal(proposal.revision,caseRevision(current));
+});
+test('excerpt citations hydrate exact local evidence without model transcription',()=>{
+  const current=work(),sources=caseSources(current,{material:'Data showed increase in engagement but qualitative results did not showed any improvements in satisfaction.\nWe interviewed 12 people.'});
+  const prompt=caseSourcePrompt(sources),draft={blocks:[{block:{type:'text',body:'Engagement rose, but satisfaction did not improve. We interviewed 12 people.'},evidence:[{sourceId:'notes',excerptId:'e1',quote:'A fabricated replacement quotation.'}]}]};
+  assert.equal(prompt[0].text,undefined);assert.equal(prompt[0].excerpts[0].id,'e1');
+  const parsed=parseCaseResponse(JSON.stringify(draft),sources,current,normalize);
+  assert.equal(parsed.entries[0].evidence[0].quote,prompt[0].excerpts[0].text);
+  assert.match(parsed.entries[0].evidence[0].quote,/did not showed/);
+  assert.ok(!JSON.stringify(parsed).includes('fabricated replacement'));
+  draft.blocks[0].evidence[0].excerptId='e99';
+  assert.throws(()=>parseCaseResponse(JSON.stringify(draft),sources,current,normalize),/Section 1, citation 1: unknown excerptId/);
+  draft.blocks[0].evidence=[{sourceId:'missing',excerptId:'e1'}];
+  assert.throws(()=>parseCaseResponse(JSON.stringify(draft),sources,current,normalize),/unknown source/);
+  draft.blocks[0].evidence=[null];assert.throws(()=>parseCaseResponse(JSON.stringify(draft),sources,current,normalize),/unknown source/);
+  draft.blocks[0].evidence=[{sourceId:'other',excerptId:'e1'}];
+  const other=sources.concat({id:'other',label:'Other',text:'We interviewed 5 people.'});
+  assert.throws(()=>parseCaseResponse(JSON.stringify(draft),other,current,normalize),/number "12"/);
+  draft.blocks[0].evidence=[{sourceId:'notes',quote:'Qualitative results showed improvements in satisfaction.'}];
+  assert.throws(()=>parseCaseResponse(JSON.stringify(draft),sources,current,normalize),/unverified quotation/);
+});
+test('excerpt catalog is deterministic, bounded and does not discard source text',()=>{
+  const text=('Original sentence with 12 participants. ').repeat(300).trim();
+  const sources=[{id:'long',label:'Long source',text},{id:'empty',text:''},{id:'token',text:'x'.repeat(2600)}];
+  const prompt=caseSourcePrompt(sources);
+  assert.deepEqual(caseSourcePrompt(sources),prompt);
+  assert.equal(prompt[0].excerpts.map(excerpt=>excerpt.text).join(' '),text);
+  assert.ok(prompt[0].excerpts.every((excerpt,index)=>excerpt.text.length<=1200&&excerpt.id==='e'+(index+1)));
+  assert.deepEqual(prompt[1].excerpts,[]);
+  assert.equal(prompt[2].excerpts.map(excerpt=>excerpt.text).join(''),sources[2].text);
+  const current=work(),existing=caseSources(current,{includeExisting:true});
+  const draft={blocks:[{reuseSourceId:'section-0',evidence:[{sourceId:'section-0',excerptId:'e1'}]}]};
+  assert.deepEqual(parseCaseResponse(JSON.stringify(draft),existing,current,normalize).entries[0].block,current.study.blocks[0]);
 });
 test('Figma imports use ordered local images and explicitly exclude unsupported notes',()=>{
   const sources=importFigmaSources({schema:'rk-figma-slides-v1',title:'Deck',slides:[{text:'First',image:'data:image/png;base64,AA=='},{text:'Second'}]},'file');

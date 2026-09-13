@@ -2584,7 +2584,10 @@ test('case authoring imports original source files without AI and generates a gr
         if(request.system.startsWith("You are Studio's outcome coordinator.")){
           const input=JSON.parse(request.messages[0].content);
           text=JSON.stringify({decision:input.candidate?{action:'finish',summary:'Validated proposal'}:{action:'draft',modelRef:input.draftModels[0],task:'creative',instruction:'',inputs:[],summary:'Draft from evidence'}});
-        }else text=JSON.stringify({summary:'Grounded draft',outline:['Research'],questions:['What shipped?'],blocks:[{block:{type:'text',heading:'Research',body:'We interviewed 12 people.'},evidence:[{sourceId:'notes',quote:'We interviewed 12 people.'}]}]});
+        }else {
+          if(!request.system.includes('"excerptId":string')||!JSON.stringify(request.messages).includes('excerpts'))throw new Error('Missing excerpt citation contract');
+          text=JSON.stringify({summary:'Grounded draft',outline:['Research'],questions:['What shipped?'],blocks:[{block:{type:'text',heading:'Research',body:'We interviewed 12 people.'},evidence:[{sourceId:'notes',excerptId:'e1'}]}]});
+        }
         return Response.json({content:[{type:'text',text}],stop_reason:'end_turn',usage:{input_tokens:10,output_tokens:5}});
       };
     });
@@ -2626,7 +2629,9 @@ test('case authoring imports original source files without AI and generates a gr
     await page.locator('[data-csgen="consent"]').check();await page.locator('[data-act="csgen-run"]').click();
     await page.locator('.csgen-review').waitFor();assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),original);
     assert.match(await page.locator('.csgen-review__preview').innerText(),/12 people/);
-    assert.ok(await page.evaluate(()=>window.caseModelCalls)>=3);
+    await page.locator('.csgen-review summary').filter({hasText:'Source evidence (1)'}).click();
+    assert.equal(await page.locator('.csgen-review blockquote p').innerText(),'We interviewed 12 people.');
+    assert.equal(await page.evaluate(()=>window.caseModelCalls),3);
     await page.locator('.csgen-review [data-cancel]').click();
     await page.locator('[data-act="csgen-review"]').click();assert.match(await page.locator('.csgen-review__preview').innerText(),/12 people/);
   }finally{await browser.close();}

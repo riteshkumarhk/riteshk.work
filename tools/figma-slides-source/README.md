@@ -7,6 +7,7 @@ AI Options now drafts separate proposals. It never regenerates a study in place.
 - Explicitly approve sending selected sources to the configured AI providers. Importing a file does not call AI. Reference links are text only and are not fetched.
 - Choose a narrative and focus request. Existing visible, unprotected sections are opt-in evidence; complete existing artifacts can be reused intact.
 - Review the native preview, source quotations and evidence gaps. Edit copy, choose sections, and append or update a matching unprotected text/statement section. Other components, media, decks, protection and settings remain intact.
+- New drafts cite numbered source excerpts instead of retyping quotations. Studio resolves each source/excerpt pair against the selected source snapshot and supplies the original text in review. Excerpts are at most 1,200 characters; source text is not duplicated in the prompt. Unknown references and unsupported numbers still fail validation. Older exact-quotation responses remain compatible; mismatched quotations are not accepted through fuzzy matching.
 - Apply saves a draft, not a publication. Changed studies invalidate older proposals. Numbers and source quotations receive deterministic checks; those checks do not prove every claim or causal inference. Author review is required.
 
 ## Figma Slides

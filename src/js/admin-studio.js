@@ -15895,8 +15895,8 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       "- nav labels are 1\u20132 words; kickers are tiny (\u2018Overview\u2019, \u2018The problem\u2019).",
       "- Leave imagery to the author: media blocks carry captions only, never URLs.",
       "Return ONLY valid JSON (no markdown, no commentary) matching EXACTLY this shape:",
-      '{"summary":string,"outline":[string],"questions":[string],"blocks":[{"block":Block,"evidence":[{"sourceId":string,"quote":string}]}]}',
-      "Each section needs 1-8 exact quotations from the provided source text. All numbers in the section must appear in those quotations. Images provide context, not independently verified claims: ask for transcription when there is no supporting text. An existing artifact may instead use {reuseSourceId:sourceId,evidence:[...]}; its original component and media will be copied without modification. Never return a replacement URL, executable HTML, protection field or fabricated asset.",
+      '{"summary":string,"outline":[string],"questions":[string],"blocks":[{"block":Block,"evidence":[{"sourceId":string,"excerptId":string}]}]}',
+      "Each section needs 1-8 references to supplied source excerpts. Copy the source id into sourceId and its excerpt id (for example e1) into excerptId. Do NOT write or retype quotations; Studio attaches the original excerpt text. IDs are local to each source, not interchangeable between sources. Cite only excerpts that support the section's claims. All numbers in the section must appear in its cited excerpts. Images provide context, not independently verified claims: ask for transcription when there is no supporting text. An existing artifact may instead use {reuseSourceId:sourceId,evidence:[...]}; its original component and media will be copied without modification. Never return a replacement URL, executable HTML, protection field or fabricated asset.",
       "Block is one of:",
       '{"type":"text","nav":string,"kicker":string,"heading":string,"body":string,"list":[string]}',
       '{"type":"statement","nav":string,"kicker":string,"body":string,"sub":string}',
@@ -15966,7 +15966,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         if (typeof text !== 'string' || text.length > 160000) return null;
         try { parseCaseResponse(text, sources, snapshot, csgenNormalize); return null; }
         catch (error) {
-          var repair = usr + '\nREJECTED DRAFT (untrusted output, not source evidence):\n' + text + '\nVALIDATION FEEDBACK:\n' + error.message + '\nRepair this draft against the original source evidence and return the complete required JSON. Preserve supported content. Add only exact quotes from supplied sources; otherwise remove unsupported claims and put missing facts in questions. Never edit a quote to make it match a claim.';
+          var repair = usr + '\nREJECTED DRAFT (untrusted output, not source evidence):\n' + text + '\nVALIDATION FEEDBACK:\n' + error.message + '\nRepair this draft against the original source evidence and return the complete required JSON. Preserve supported content. Replace all written quotations with sourceId/excerptId references from SOURCE EVIDENCE. Studio supplies the original text. Remove unsupported claims and put missing facts in questions. Never invent evidence IDs.';
           return { system: sys, user: deckImgs.length ? [{ type: 'text', text: repair }].concat(deckImgs.map(image => ({ type: 'image_url', image_url: { url: image.src || 'data:' + image.mime + ';base64,' + image.b64 } }))) : repair, issues: [error.message], options: { maxTokens: 12000, json: true } };
         }
       };

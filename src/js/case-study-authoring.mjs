@@ -35,8 +35,23 @@ export function caseSources(work, state) {
   return sources;
 }
 
+function sourceExcerpts(source) {
+  let remaining = plain(source.text);
+  const excerpts = [];
+  while (remaining.length) {
+    let end = Math.min(1200, remaining.length);
+    if (end < remaining.length) {
+      const boundary = remaining.lastIndexOf(' ', end);
+      if (boundary > 0) end = boundary;
+    }
+    excerpts.push({ id: 'e' + (excerpts.length + 1), text: remaining.slice(0, end) });
+    remaining = remaining.slice(end).trimStart();
+  }
+  return excerpts;
+}
+
 export function caseSourcePrompt(sources) {
-  return sources.map(source => ({ id: source.id, label: source.label, text: source.text, images: source.images?.length || 0, reusableSection: Number.isInteger(source.sectionIndex) ? source.sectionIndex : null }));
+  return sources.map(source => ({ id: source.id, label: source.label, excerpts: sourceExcerpts(source), images: source.images?.length || 0, reusableSection: Number.isInteger(source.sectionIndex) ? source.sectionIndex : null }));
 }
 
 export function parseCaseResponse(raw, sources, work, normalize) {
@@ -46,11 +61,20 @@ export function parseCaseResponse(raw, sources, work, normalize) {
   catch { throw new Error('Incomplete or invalid response. No sections were applied. Try a smaller draft.'); }
   if (!obj || !Array.isArray(obj.blocks) || !obj.blocks.length || obj.blocks.length > CASE_LIMITS.sections) throw new Error('The proposal must contain 1-24 sections.');
   const sourceMap = new Map(sources.map(source => [source.id, source]));
+  const excerptMaps = new Map(sources.map(source => [source.id, new Map(sourceExcerpts(source).map(excerpt => [excerpt.id, excerpt.text]))]));
   const entries = obj.blocks.map((entry, index) => {
     if (!entry || typeof entry !== 'object' || !Array.isArray(entry.evidence) || !entry.evidence.length || entry.evidence.length > 8) throw new Error('Section ' + (index + 1) + ' needs source evidence.');
-    const evidence = entry.evidence.map(citation => {
-      const source = sourceMap.get(citation.sourceId), quote = plain(citation.quote);
-      if (!source || quote.length < 4 || quote.length > 2000 || !plain(source.text).includes(quote)) throw new Error('Section ' + (index + 1) + ' contains an unverified source quotation.');
+    const evidence = entry.evidence.map((citation, citationIndex) => {
+      const location = 'Section ' + (index + 1) + ', citation ' + (citationIndex + 1);
+      const source = sourceMap.get(citation?.sourceId);
+      if (!source) throw new Error(location + ': unknown source. Choose a sourceId and excerptId from SOURCE EVIDENCE; do not write quotations.');
+      if (citation.excerptId !== undefined) {
+        const quote = excerptMaps.get(source.id).get(citation.excerptId);
+        if (!quote) throw new Error(location + ': unknown excerptId. Use an excerpt ID listed under this source in SOURCE EVIDENCE.');
+        return { sourceId: source.id, label: source.label, excerptId: citation.excerptId, quote };
+      }
+      const quote = plain(citation.quote);
+      if (quote.length < 4 || quote.length > 2000 || !plain(source.text).includes(quote)) throw new Error(location + ': unverified quotation. Replace it with sourceId and excerptId from SOURCE EVIDENCE; Studio supplies the original text.');
       return { sourceId: source.id, label: source.label, quote };
     });
     let block;
@@ -80,7 +104,7 @@ export function parseCaseResponse(raw, sources, work, normalize) {
       const numbers = written.match(/\d+(?:[.,]\d+)*(?:%|\b)/g) || [];
       const citedNumbers = new Set(cited.match(/\d+(?:[.,]\d+)*(?:%|\b)/g) || []);
       const missing = [...new Set(numbers.filter(number => !citedNumbers.has(number)))];
-      if (missing.length) throw new Error('Section ' + (index + 1) + ': number ' + JSON.stringify(missing[0]) + ' is not in its evidence quotes. Cite an exact supporting source quote or remove the unsupported claim. Do not invent evidence.');
+      if (missing.length) throw new Error('Section ' + (index + 1) + ': number ' + JSON.stringify(missing[0]) + ' is not in its evidence quotes. Cite a supporting sourceId/excerptId or remove the unsupported claim. Do not invent evidence.');
     }
     return { block, evidence, reuseSourceId: entry.reuseSourceId || null };
   });
