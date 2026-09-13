@@ -178,6 +178,19 @@ test("Studio protected inserts share recovery-gated access across case and slide
   const assertAccessLabel = async (control, text, width) => {
     assert.equal(await control.locator('span').textContent(),text);
     assert.ok((await control.getAttribute('aria-label')).startsWith(text+':'),'The visible label is included in its accessible name');
+    const icon = control.locator('svg'), iconBounds = await icon.boundingBox();
+    assert.equal(iconBounds.width,18);
+    assert.equal(iconBounds.height,18);
+    assert.equal(await icon.locator('[data-lock-stack]').count(),1);
+    assert.equal(await icon.locator('[data-lock-stack]').evaluate(element=>getComputedStyle(element).fill),'none');
+    assert.deepEqual(await icon.locator('path').evaluateAll(elements=>elements.map(element=>element.getAttribute('d'))),[
+      'M20 12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9',
+      text==='Unlocked'?'M6 9V6a4 4 0 0 1 8 0':'M6 9V6a4 4 0 0 1 8 0v3'
+    ]);
+    assert.equal(await icon.evaluate(element=>[...element.children].every(shape=>{
+      const box=shape.getBBox(),halfStroke=parseFloat(getComputedStyle(shape).strokeWidth)/2;
+      return box.x-halfStroke>=0 && box.y-halfStroke>=0 && box.x+box.width+halfStroke<=24 && box.y+box.height+halfStroke<=24;
+    })),true,'Both lock layers fit inside their icon');
     const bounds = await control.boundingBox();
     assert.equal(bounds.height,34);
     assert.ok(bounds.x>=0 && bounds.x+bounds.width<=width,'The labelled access toggle fits the viewport');
@@ -231,9 +244,11 @@ test("Studio protected inserts share recovery-gated access across case and slide
       const access = page.locator('[data-native-slide-toolbar] .merge-section-access');
       assert.equal(await access.getAttribute('aria-checked'),'false');
       const accessWidth = await assertAccessLabel(access,'Locked',width);
+      assert.equal(await page.locator('.adm__statusbar [data-lock-stack]').count(),0,'The footer keeps its single-lock icon');
       assert.equal(await access.locator('rect').evaluate(element=>getComputedStyle(element).fill),'rgb(216, 166, 87)');
       const accessBox = await access.boundingBox(), editingBox = await page.locator('[data-native-slide-toolbar] [aria-label="Editing on"]').boundingBox();
       assert.ok(accessBox.x+accessBox.width<=editingBox.x);
+      await page.screenshot({path:join(tmpdir(),'rk-access-stack-locked-'+width+'.png')});
       await access.click();
       const prompt = page.locator('.pass').filter({has:page.getByText('Recovery passphrase',{exact:true})});
       await prompt.waitFor();

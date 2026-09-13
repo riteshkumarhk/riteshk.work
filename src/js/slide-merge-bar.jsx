@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowUp, Copy, Lock, LockOpen, Pencil, PencilOff, Play, Presentation, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Icon, Pencil, PencilOff, Play, Presentation, Trash2 } from "lucide-react";
 import { DeckDialog } from "./slide-merge-navigator.jsx";
 import { SelectControl } from "./slide-shared-controls.jsx";
 import { ToolMenu } from "./slide-merge-toolbar.jsx";
@@ -92,10 +92,14 @@ function SectionAccessControl({ caseStudyId, disabled }) {
     return () => window.removeEventListener("rk:section-access", update);
   }, [caseStudyId]);
   if (!state.available || !window.__RKStudio?.toggleSections) return null;
-  const Icon = state.unlocked ? LockOpen : Lock;
+  const iconNode = [
+    ["path", { key: "stack", "data-lock-stack": "", d: "M20 12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9" }],
+    ["rect", { key: "body", x: 3, y: 9, width: 14, height: 10, rx: 2 }],
+    ["path", { key: "shackle", d: state.unlocked ? "M6 9V6a4 4 0 0 1 8 0" : "M6 9V6a4 4 0 0 1 8 0v3" }]
+  ];
   const caption = state.busy ? "Unlocking" : state.unlocked ? "Unlocked" : "Locked";
   const label = state.busy ? "Cancel section unlock" : state.unlocked ? "Lock protected sections" : "Unlock protected sections";
-  return <button type="button" className="merge-layout-toggle merge-section-access" role="switch" aria-checked={state.unlocked} aria-busy={state.busy} aria-label={caption + ": " + label} title={label} disabled={disabled && !state.busy} onClick={() => window.__RKStudio.toggleSections(caseStudyId)}><Icon size={15} strokeWidth={1.75} /><span>{caption}</span></button>;
+  return <button type="button" className="merge-layout-toggle merge-section-access" role="switch" aria-checked={state.unlocked} aria-busy={state.busy} aria-label={caption + ": " + label} title={label} disabled={disabled && !state.busy} onClick={() => window.__RKStudio.toggleSections(caseStudyId)}><Icon iconNode={iconNode} size={18} strokeWidth={1.75} aria-hidden="true" /><span>{caption}</span></button>;
 }
 
 export function EditorBar({ historyRef, busy, editing, onEditing, slideView, onView, onPlay, canPlay, newTab = false, caseStudyId }) {

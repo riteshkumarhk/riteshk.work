@@ -748,6 +748,8 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   // Every chrome icon renders through svgIco so the whole studio reads as one coherent set.
   function svgIco(paths, w) { w = w || 14; return '<svg viewBox="0 0 24 24" width="' + w + '" height="' + w + '" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none">' + paths + '</svg>'; }
   const IC = {
+    sectionsLocked: svgIco('<path data-lock-stack d="M20 12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9"/><rect x="3" y="9" width="14" height="10" rx="2"/><path d="M6 9V6a4 4 0 0 1 8 0v3"/>', 18),
+    sectionsUnlocked: svgIco('<path data-lock-stack d="M20 12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9"/><rect x="3" y="9" width="14" height="10" rx="2"/><path d="M6 9V6a4 4 0 0 1 8 0"/>', 18),
     up: svgIco('<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>'),
     down: svgIco('<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>'),
     close: svgIco('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
@@ -6786,7 +6788,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       button.setAttribute("aria-busy", String(state.busy));
       button.title = state.busy ? "Cancel section unlock" : state.unlocked ? "Lock protected sections" : "Unlock protected sections";
       button.setAttribute("aria-label", caption + ": " + button.title);
-      button.innerHTML = (state.unlocked ? IC.unlock : IC.lock) + '<span>' + caption + '</span>';
+      button.innerHTML = (state.unlocked ? IC.sectionsUnlocked : IC.sectionsLocked) + '<span>' + caption + '</span>';
     }
     window.dispatchEvent(new Event("rk:section-access"));
   }
@@ -7374,12 +7376,12 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     nativeSlideSession = session;
     root.classList.add("is-native-slides");
     const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
-    const styles = ["/studio/slide-lab/assets/editor.css?v=1.8", "/css/slide-studio.css?v=1.5"].map(href => new Promise((resolve, reject) => {
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.9", "/css/slide-studio.css?v=1.5"].map(href => new Promise((resolve, reject) => {
       const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.12";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.13";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
@@ -18919,7 +18921,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         "</div>" +
         '<nav class="l2tabs" data-l2tabs role="tablist" aria-label="Project editor" hidden></nav>' +
         '<div class="adm__prevgroup" data-prevgroup>' +
-        '<button class="adm__bar-prev adm__section-access" data-section-access data-act="study-unlocktoggle" type="button" role="switch" aria-checked="false" aria-label="Locked: Unlock protected sections" title="Unlock protected sections" hidden>' + IC.lock + '<span>Locked</span></button>' +
+        '<button class="adm__bar-prev adm__section-access" data-section-access data-act="study-unlocktoggle" type="button" role="switch" aria-checked="false" aria-label="Locked: Unlock protected sections" title="Unlock protected sections" hidden>' + IC.sectionsLocked + '<span>Locked</span></button>' +
         '<button class="adm__bar-prev" data-prevtoggle type="button" aria-label="Show or hide the live preview" title="Hide the live preview" aria-pressed="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="14" y1="4" x2="14" y2="20"/></svg><span class="adm__bar-prev-tx">Live preview</span></button>' +
         '<div class="adm__dev" data-dev-wrap>' +
           '<button class="adm__dev-btn" data-dev-toggle type="button" aria-haspopup="true" aria-expanded="false" title="Preview size"><span class="adm__dev-ic" data-dev-ic>' + DEV_ICON.responsive + '</span><span class="adm__dev-lbl" data-dev-lbl>Responsive</span><svg class="adm__dev-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
