@@ -1,4 +1,4 @@
-export const CASE_LIMITS = Object.freeze({ sources: 80, characters: 120000, sourceCharacters: 16000, sections: 24, images: 16, fileBytes: 30 * 1024 * 1024, workspaceBytes: 120 * 1024 * 1024 });
+export const CASE_LIMITS = Object.freeze({ sources: 80, characters: 120000, sourceCharacters: 16000, sections: 24, images: 16, fileBytes: 100 * 1024 * 1024, workspaceBytes: 120 * 1024 * 1024 });
 export const CASE_TYPES = ['text', 'statement', 'metrics', 'steps', 'media', 'split', 'faq'];
 const textKeys = new Set(['heading', 'body', 'sub', 'kicker', 'nav', 'title', 'label', 'value', 'caption', 'q', 'a', 'text', 'list', 'left', 'right', 'items', 'cells', 'leftLabel', 'rightLabel']);
 const copy = value => structuredClone(value);

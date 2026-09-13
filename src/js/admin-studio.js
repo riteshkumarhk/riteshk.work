@@ -16086,8 +16086,10 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     if (!unzipSync) throw new Error("the deck reader failed to load");
     var total = 0, count = 0;
     var files = unzipSync(new Uint8Array(buf), { filter: function (file) {
-      if (++count > 4000 || !Number.isFinite(file.originalSize) || file.originalSize > 30000000 || (total += file.originalSize) > 100000000) throw new Error('Deck exceeds expanded size limits. Export a smaller PDF.');
-      return /^ppt\/.+\.(xml|rels)$/.test(file.name);
+      if (++count > 4000) throw new Error('Deck exceeds ZIP entry limits. Export a smaller deck.');
+      if (!/^ppt\/.+\.(xml|rels)$/.test(file.name)) return false;
+      if (!Number.isFinite(file.originalSize) || file.originalSize < 0 || file.originalSize > 30000000 || (total += file.originalSize) > 100000000) throw new Error('Deck exceeds expanded XML size limits. Export a smaller deck.');
+      return true;
     } });
     var dec = new TextDecoder('utf-8'), parser = new DOMParser();
     function xml(path) {
@@ -16128,7 +16130,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       renderL2();
       csgenStatus(i, "Reading " + f.name + "\u2026", "run");
       try {
-        if (f.size > CASE_LIMITS.fileBytes) throw new Error('Files must be 30 MB or smaller.');
+        if (f.size > CASE_LIMITS.fileBytes) throw new Error('Files must be ' + (CASE_LIMITS.fileBytes / 1024 / 1024) + ' MB or smaller.');
         if (g.files.reduce((total, file) => total + (file.blob?.size || 0), f.size) > CASE_LIMITS.workspaceBytes) throw new Error('Original source files exceed the 120 MB workspace limit. Remove unused sources first.');
         var fileId = crypto.randomUUID(), sources = [];
         if (/\.pdf$/i.test(f.name) || f.type === "application/pdf") {

@@ -2,11 +2,38 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
-import { caseSources, caseSourcePrompt, caseRevision, parseCaseResponse, applyCaseProposal, importFigmaSources } from './src/js/case-study-authoring.mjs';
+import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResponse, applyCaseProposal, importFigmaSources } from './src/js/case-study-authoring.mjs';
 const work = () => ({ id:'case', study:{enc:{wraps:{owner:'sealed-key'}},nativeDeck:{id:'deck'},slidesPublic:false,skim:{hook:'Keep'},blocks:[{type:'text',heading:'Original',body:'We interviewed 12 people.',src:'original.webp',editorName:'Custom'}, {type:'gallery',items:[{src:'full-quality.webp'}]}, {type:'media',encStub:true,locked:true,ct:'ciphertext'}]} });
 const normalize = object => ({blocks:structuredClone(object.blocks)});
 const state = {material:'We interviewed 12 people.',includeExisting:true};
 const response = {outline:['Research'],questions:['What shipped?'],blocks:[{block:{type:'text',heading:'Research',body:'We interviewed 12 people.'},evidence:[{sourceId:'notes',quote:'We interviewed 12 people.'}]}]};
+test('source file guard accepts 85 MB and retains file and workspace limits',async()=>{
+  const source=readFileSync(new URL('./src/js/admin-studio.js',import.meta.url),'utf8');
+  const code=source.slice(source.indexOf('  function csgenAddPdf('),source.indexOf('  /* ---------- AI landing formatter'));
+  for(const [size,existing,expected] of [[85,0,'reader reached'],[100,0,'reader reached'],[101,0,'100 MB'],[85,36,'120 MB']]) {
+    const messages=[],input={click(){}},state={files:[{blob:{size:existing*1024*1024}}]};
+    input.files=[{name:'large.pptx',size:size*1024*1024,arrayBuffer:async()=>{throw new Error('reader reached');}}];
+    const context={CASE_LIMITS,data:{work:[{id:'case'}]},document:{createElement:()=>input},crypto:{randomUUID:()=> 'file'},csgenState:()=>state,pptxExtract(){},renderL2(){},csgenStatus:(_,message)=>messages.push(message)};
+    runInNewContext(code,context);context.csgenAddPdf(0);await input.onchange();
+    assert.match(messages.at(-1),new RegExp(expected));assert.equal(state.importing,false);
+  }
+});
+test('PPTX bounds extracted XML without decompressing skipped media',async()=>{
+  const source=readFileSync(new URL('./src/js/admin-studio.js',import.meta.url),'utf8');
+  const code=source.slice(source.indexOf('  async function pptxExtract('),source.indexOf('  function csgenAddPdf('));
+  const context={Uint8Array,ensureUnzip:async()=>({unzipSync:(_bytes,{filter})=>{
+    assert.equal(filter({name:'ppt/media/video.mp4',originalSize:200000000}),false);
+    assert.equal(filter({name:'ppt/slides/slide1.xml',originalSize:1000}),true);
+    assert.throws(()=>filter({name:'ppt/slides/slide2.xml',originalSize:30000001}),/XML size/);
+    for(let index=0;index<3;index++)assert.equal(filter({name:'ppt/slides/slide.xml',originalSize:30000000}),true);
+    assert.throws(()=>filter({name:'ppt/slides/slide.xml',originalSize:10000000}),/XML size/);
+    for(let index=7;index<4000;index++)assert.equal(filter({name:'ppt/media/image.png',originalSize:1}),false);
+    assert.throws(()=>filter({name:'ppt/media/image.png',originalSize:1}),/entry limits/);
+    throw new Error('filter verified');
+  }})};
+  runInNewContext(code,context);
+  await assert.rejects(context.pptxExtract(new ArrayBuffer(0)),/filter verified/);
+});
 test('sources exclude protected content and require real evidence',()=>{
   const sources=caseSources(work(),state);
   assert.equal(sources.length,3); assert.ok(!JSON.stringify(sources).includes('ciphertext'));assert.ok(!JSON.stringify(sources).includes('full-quality.webp'));

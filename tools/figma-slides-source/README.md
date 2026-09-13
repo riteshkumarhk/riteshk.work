@@ -24,7 +24,8 @@ The plugin host and download workflow require real Figma acceptance testing. No 
 
 ## Coverage And Limits
 
-- Up to 80 source pages and 120 MB of original files in one workspace; 16 selected page images and 120,000 text characters per draft; 16,000 text characters per page; 30 MB per file.
+- Up to 80 source pages and 120 MB of original files in one workspace; 16 selected page images and 120,000 text characters per draft; 16,000 text characters per page; 100 MB per file.
+- PPTX imports inspect at most 4,000 ZIP entries and extract only XML/relationship parts, limited to 30 MB per part and 100 MB combined expanded XML. Skipped media is not decompressed or counted against that XML budget.
 - For PDFs and Figma packages, the first 16 pages are selected initially; remaining pages are visible and selectable, never silently discarded. Selecting more than 16 images blocks generation.
 - PPTX presentation relationships determine slide order and speaker-note mapping. Text is extracted; charts, vectors, embedded images and layout are not rendered. Add a PDF for visuals.
 - Original files remain local and unchanged. Analysis images are downsampled and never replace case-study assets.
