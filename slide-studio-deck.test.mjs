@@ -2570,6 +2570,146 @@ test("Content Studio opens native slides without a preview flag and preserves ca
   } finally { await browser.close(); }
 });
 
+for (const publicationRoute of ['live-content', 'direct-git']) test('section lock publishes ciphertext and returns the owner editor to sealed rows: ' + publicationRoute, {timeout:90000}, async()=>{
+  const browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:1000}}),pass='synthetic-section-publish-only';
+    await page.addInitScript(route=>{
+      if (route === 'live-content') {
+        localStorage.setItem('rk:admin:sess',JSON.stringify({token:'synthetic-local-test',exp:Date.now()+3600000}));
+        localStorage.setItem('rk:trust',JSON.stringify({token:'synthetic-local-test',exp:Date.now()+3600000}));
+      } else localStorage.setItem('rk:gh:token','synthetic-direct-git-token');
+      localStorage.setItem('rk:autopub:on','0');
+    },publicationRoute);
+    let latest,pending,fail=true,writes=0,holdWrite,releaseWrite;
+    await page.route('**/*',async route=>{
+      const request=route.request(),url=new URL(request.url());
+      if(url.pathname.endsWith('/content.json') && latest)return route.fulfill({contentType:'application/json',body:JSON.stringify(latest)});
+      if(url.pathname==='/admin/content'){
+        assert.equal(publicationRoute,'live-content');
+        writes++;
+        if(fail)return route.fulfill({status:503,contentType:'application/json',body:'{"error":"Synthetic publish failure"}'});
+        if(holdWrite)await new Promise(resolve=>{releaseWrite=resolve;holdWrite();holdWrite=null;});
+        latest=request.postDataJSON();return route.fulfill({contentType:'application/json',body:'{"ok":true,"git":{"ok":true}}'});
+      }
+      if(url.hostname==='api.github.com'){
+        assert.equal(publicationRoute,'direct-git');
+        let response={sha:'synthetic-object'};
+        if(url.pathname.endsWith('/git/ref/heads/main'))response={object:{sha:'synthetic-head'}};
+        else if(url.pathname.endsWith('/git/commits/synthetic-head'))response={tree:{sha:'synthetic-tree'}};
+        else if(url.pathname.endsWith('/git/blobs'))pending=JSON.parse(Buffer.from(request.postDataJSON().content,'base64').toString('utf8'));
+        else if(url.pathname.endsWith('/git/refs/heads/main')){
+          writes++;
+          if(fail)return route.fulfill({status:503,contentType:'application/json',body:'{"message":"Synthetic publish failure"}'});
+          if(holdWrite)await new Promise(resolve=>{releaseWrite=resolve;holdWrite();holdWrite=null;});
+          latest=pending;
+        }
+        return route.fulfill({contentType:'application/json',body:JSON.stringify(response)});
+      }
+      if(url.pathname.includes('/assets/protected/'))return route.abort();
+      if(url.hostname==='rk-ai-proxy.riteshkumarhk.workers.dev')return route.fulfill({status:url.pathname.includes('/vault/')?503:200,contentType:'application/json',body:url.pathname.includes('publish')?'{"enabled":false}':'{}'});
+      if(!['127.0.0.1','localhost'].includes(url.hostname)&&!['GET','HEAD'].includes(request.method()))return route.abort();
+      return route.fallback();
+    });
+    latest=await openIntegratedFixture(page,[{type:'text',heading:'PRIVATE HEADING',body:'PRIVATE SECTION CONTENT',nav:'Section'}]);
+    latest.specialViews=[];
+    await page.evaluate(()=>window.__rkDevEdit('specialViews',[]));
+    await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+    await page.locator('[data-act="study-blocktoggle"][data-bindex="0"]').click();
+    await page.locator('[data-act="study-blocklock"][data-bindex="0"]:visible').first().click();
+    assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].locked),true);
+    const lockedDraft=await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
+    await page.locator('[data-publish]').click();
+    await page.locator('.pass--lock input[type="password"]').first().fill(pass);
+    const confirmation=page.locator('.pass--lock [data-confirm]');if(await confirmation.count())await confirmation.fill(pass);
+    await page.locator('.pass--lock [data-go]').click();
+    await page.waitForFunction(()=>document.querySelector('.adm__statusbar')?.classList.contains('is-pub-error'));
+    assert.equal(writes,1);assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].body),'PRIVATE SECTION CONTENT');
+    assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),lockedDraft);
+    assert.equal(await page.evaluate(()=>localStorage.getItem('rk:content:draft')),lockedDraft);
+    fail=false;
+    await page.locator('[data-publish]').click();
+    await page.waitForFunction(()=>document.querySelector('.adm__statusbar')?.classList.contains('is-pub-done'));
+    assert.doesNotMatch(JSON.stringify(latest),/PRIVATE HEADING|PRIVATE SECTION CONTENT/);
+    const sealed=latest.work[0].study.blocks[0];assert.equal(sealed.encStub,true);
+    const original=await rkDecWithSek(await rkUnwrapSek(pass,latest.work[0].study.enc.wraps.owner),sealed);
+    assert.equal(original.body,'PRIVATE SECTION CONTENT');
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]),sealed);
+    assert.deepEqual(await page.evaluate(()=>window.RK.studioPublished.work[0].study.blocks[0]),sealed);
+    assert.equal(await page.locator('[data-publish]').isHidden(),true);
+    assert.equal(await page.locator('[data-rtfield="body"]').count(),0);
+    assert.match(await page.locator('.study__block').first().innerText(),/protected|encrypted|Unlock to edit/i);
+    await page.locator('[data-act="study-decrypt"]').first().click();
+    await page.waitForFunction(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].body==='PRIVATE SECTION CONTENT');
+    assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].locked),true);
+    await page.locator('[data-act="study-blocktoggle"][data-bindex="0"]').click();
+    const body=page.locator('[data-rtfield="body"]').first();
+    await body.fill('PRIVATE UPDATED CONTENT');await body.blur();
+    const editedBlock=await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]);
+    assert.match(editedBlock.body,/PRIVATE UPDATED CONTENT/);
+    const writeStarted=new Promise(resolve=>{holdWrite=resolve;});
+    await page.locator('[data-publish]').click();
+    await writeStarted;
+    await body.fill('PRIVATE CONCURRENT CONTENT');await body.blur();
+    const concurrentBlock=await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]);
+    releaseWrite();
+    await page.waitForFunction(()=>document.querySelector('.adm__statusbar')?.classList.contains('is-pub-done'));
+    assert.doesNotMatch(JSON.stringify(latest),/PRIVATE UPDATED CONTENT|PRIVATE CONCURRENT CONTENT/);
+    const committed=latest.work[0].study.blocks[0];
+    assert.deepEqual(await rkDecWithSek(await rkUnwrapSek(pass,latest.work[0].study.enc.wraps.owner),committed),editedBlock);
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]),concurrentBlock);
+    assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:content:draft')).work[0].study.blocks[0]),concurrentBlock);
+    assert.deepEqual(await page.evaluate(()=>window.RK.studioPublished.work[0].study.blocks[0]),committed);
+    assert.equal(await page.locator('[data-publish]').isVisible(),true);
+    await page.locator('[data-publish]').click();
+    await page.waitForFunction(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].encStub===true&&document.querySelector('.adm__statusbar')?.classList.contains('is-pub-done'));
+    assert.doesNotMatch(JSON.stringify(latest),/PRIVATE CONCURRENT CONTENT/);
+    const resealed=latest.work[0].study.blocks[0];
+    const updated=await rkDecWithSek(await rkUnwrapSek(pass,latest.work[0].study.enc.wraps.owner),resealed);
+    assert.deepEqual(updated,concurrentBlock);assert.equal(updated.locked,true);
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]),resealed);
+    await page.reload();await page.waitForFunction(()=>typeof window.__rkDevStudio==='function'&&!!window.RK?.data);
+    await page.evaluate(()=>window.__rkDevStudio());await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]),resealed);
+    assert.equal(await page.locator('[data-publish]').isHidden(),true);
+    assert.equal(writes,4);
+  } finally {await browser.close();}
+});
+
+test('published section resealing preserves slides, disabled blocks and concurrent edits', async()=>{
+  const {resealPublishedSections}=await import('./src/js/slide-studio-publication.mjs');
+  const snapshot={work:[{id:'case',study:{blocks:[{type:'text',body:'Public'},{type:'text',off:true,locked:true,body:'Disabled secret'},{type:'media',locked:true,heading:'Secret',items:[{src:'original.png'}]}],nativeDeck:{id:'keep-deck'},slides:[{notes:'Keep notes'}]}}]};
+  const published={work:[{id:'case',study:{blocks:[{type:'text',body:'Public'},{type:'media',locked:true,encStub:true,iv:'iv',ct:'cipher'}],enc:{wraps:{owner:'owner'}}}}]};
+  const current=structuredClone(snapshot);
+  current.work[0].title='Newer metadata';
+  current.work[0].study.nativeDeck.revision=2;
+  current.work[0].study.slides[0].notes='Newer notes';
+  const preserved=structuredClone(current.work[0]);
+  assert.deepEqual(resealPublishedSections(current,snapshot,published),['case']);
+  assert.deepEqual(current.work[0].study.blocks[2],published.work[0].study.blocks[1]);
+  assert.equal(current.work[0].title,preserved.title);
+  assert.deepEqual(current.work[0].study.nativeDeck,preserved.study.nativeDeck);
+  assert.deepEqual(current.work[0].study.slides,preserved.study.slides);
+  assert.deepEqual(current.work[0].study.blocks[1],snapshot.work[0].study.blocks[1]);
+  assert.deepEqual(current.work[0].study.enc,published.work[0].study.enc);
+  const edited=structuredClone(snapshot);edited.work[0].study.blocks[2].heading='Edited during publish';
+  assert.deepEqual(resealPublishedSections(edited,snapshot,published),[]);assert.equal(edited.work[0].study.blocks[2].heading,'Edited during publish');
+  for (const mutate of [
+    study=>study.blocks.reverse(),
+    study=>study.blocks.push({type:'text',body:'New section'}),
+    study=>{study.blocks[2].locked=false;},
+    study=>{study.enc={wraps:{owner:'newer-recovery'}};}
+  ]) {
+    const concurrent=structuredClone(snapshot);mutate(concurrent.work[0].study);
+    const before=structuredClone(concurrent);
+    assert.deepEqual(resealPublishedSections(concurrent,snapshot,published),[]);
+    assert.deepEqual(concurrent,before);
+  }
+  const failed=structuredClone(snapshot);assert.deepEqual(resealPublishedSections(failed,snapshot,snapshot),[]);assert.deepEqual(failed,snapshot);
+  const vaulted=structuredClone(published);vaulted.work[0].study.blocks[1]={type:'media',locked:true,vaultBlock:'private-key'};
+  const vaultDraft=structuredClone(snapshot);assert.deepEqual(resealPublishedSections(vaultDraft,snapshot,vaulted),['case']);assert.equal(vaultDraft.work[0].study.blocks[2].vaultBlock,'private-key');
+});
+
 test('case authoring imports original source files without AI and generates a grounded proposal', {timeout:60000}, async()=>{
   const browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
   try {

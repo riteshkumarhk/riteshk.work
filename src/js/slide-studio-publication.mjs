@@ -3,6 +3,28 @@ import { createStudioDeck, STUDIO_DECK_SCHEMA } from "./slide-studio-deck.mjs";
 
 export const NATIVE_AUDIENCE_SCHEMA = "rk-native-slide-audience";
 
+export function resealPublishedSections(draft, snapshot, published) {
+  const changed = [];
+  for (const original of snapshot.work || []) {
+    const current = (draft.work || []).find(work => work.id === original.id);
+    const released = (published.work || []).find(work => work.id === original.id);
+    if (!current?.study || !original.study || !released?.study || released.encWork) continue;
+    const blocks = original.study.blocks;
+    if (!Array.isArray(blocks) || JSON.stringify(current.study.blocks) !== JSON.stringify(blocks) || JSON.stringify(current.study.enc) !== JSON.stringify(original.study.enc)) continue;
+    const visible = blocks.map((block, index) => ({ block, index })).filter(({ block }) => !block?.off);
+    if (visible.length !== released.study.blocks?.length) continue;
+    const replacements = visible.filter(({ block }, index) => block?.locked && !block.encStub && !block.vaultBlock && released.study.blocks[index]?.locked && (released.study.blocks[index].encStub || released.study.blocks[index].vaultBlock));
+    if (!replacements.length) continue;
+    for (const { index } of replacements) {
+      const publicIndex = visible.findIndex(entry => entry.index === index);
+      current.study.blocks[index] = structuredClone(released.study.blocks[publicIndex]);
+    }
+    if (released.study.enc) current.study.enc = structuredClone(released.study.enc);
+    changed.push(current.id);
+  }
+  return changed;
+}
+
 export function nativePublicDeck(work) {
   const deck = work?.study?.nativeDeckPublic;
   return !work?.encWork && work?.study?.slidesPublic === true && deck?.schema === NATIVE_AUDIENCE_SCHEMA && deck.version === 1 && deck.rendererVersion === 1 && deck.visibility === "public" && Array.isArray(deck.slides) && deck.slides.length ? deck : null;

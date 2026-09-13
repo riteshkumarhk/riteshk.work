@@ -23,7 +23,7 @@ import { draftComposition } from "./slide-merge-ai.mjs";
 import { availableStudies } from "./slide-merge-sections.mjs";
 import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeckReference, studioDeckBackup, restoreStudioDeckBackup } from "./slide-studio-deck.mjs";
 import { selectStudioDraft, archiveStudioDraft, studioDraftRecoveries, saveStudioPublishedDraft, studioPublishedDraft, studioDraftContent } from "./studio-draft-recovery.mjs";
-import { prepareStudioPublication } from "./slide-studio-publication.mjs";
+import { prepareStudioPublication, resealPublishedSections } from "./slide-studio-publication.mjs";
 import { publicMediaReference } from "./slide-merge-visibility.mjs";
 import { completeStudioBackup } from "./studio-content-backup.mjs";
 import { presentStudioDeck } from "./slide-studio-player.mjs";
@@ -13775,6 +13775,13 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       // Finalise the published state: clear the draft, adopt it as the new baseline, reset history.
       const finalisePublished = async function () {
         applyHostedReferences(data, publication.swaps);
+        const released = JSON.parse(json);
+        const resealed = resealPublishedSections(data, publication.owner, released);
+        resealPublishedSections(publication.owner, clone(publication.owner), released);
+        for (const id of resealed) {
+          delete studyUnlockedForEdit[id];
+          try { frameWin()?.RK?.setStudyLocked?.(id); } catch (e) {}
+        }
         if (viaSession) localStorage.removeItem(GH_TOKEN_KEY); // published via the Worker session — the repo token no longer needs to live in this browser
         if (window.RK) {
           window.RK.published = JSON.parse(json); window.RK.publishedSig = mySig;
@@ -13788,6 +13795,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         updateDirtyUI();
         updateDraftMeter();
         histReset();
+        if (resealed.length) renderL2();
         return saved;
       };
       if (viaR2) {
