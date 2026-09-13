@@ -58,21 +58,23 @@ export async function stepUp(recovery, password) {
 }
 // Log in against the Worker. Returns {ok:true} (session stored), {ok:false,status} (rejected),
 // or {ok:false,network:true} (Worker unreachable / not deployed → caller falls back to the local gate).
-export async function adminLogin(password) {
+export async function adminLogin(password, options = {}) {
   try {
-    const res = await fetch(ADMIN_WORKER + "/admin/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    if (res.status === 200) {
-      const j = await res.json().catch(() => null);
+    const result = await authStage("Password verification", async signal => {
+      const res = await fetch(ADMIN_WORKER + "/admin/login", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }), signal,
+      });
+      return { status: res.status, data: await res.json().catch(() => null) };
+    }, options);
+    options.signal?.throwIfAborted();
+    if (result.status === 200) {
+      const j = result.data;
       if (j && j.token && j.exp) { saveAdminSession(j.token, j.exp); return { ok: true }; }
       return { ok: false, status: 500 };
     }
-    if (res.status === 404) return { ok: false, network: true }; // endpoint not deployed yet → fall back
-    return { ok: false, status: res.status };
-  } catch (e) { return { ok: false, network: true }; }
+    if (result.status === 404) return { ok: false, network: true }; // endpoint not deployed yet → fall back
+    return { ok: false, status: result.status };
+  } catch (e) { if (options.signal?.aborted) throw e; return { ok: false, network: true }; }
 }
 
 /* ---------- passkeys (WebAuthn) — passwordless admin sign-in + publish step-up ----------
@@ -140,20 +142,64 @@ export async function webauthnRegister(label) {
   return await fr.json();
 }
 // Sign in (purpose "login" → stores a session) or step up for publish (purpose "publish" → returns {publishToken,exp}).
-export async function webauthnAuth(purpose) {
-  const br = await fetch(ADMIN_WORKER + "/admin/webauthn/auth/begin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ purpose: purpose || "login" }) });
-  if (!br.ok) throw new Error("Couldn’t start passkey sign-in.");
-  const o = await br.json();
-  const assertion = await navigator.credentials.get({ publicKey: {
+async function authStage(stage, execute, options = {}, timeout = 15000) {
+  const controller = new AbortController(), started = Date.now();
+  const abort = () => controller.abort(options.signal?.reason || new DOMException("Sign-in cancelled.", "AbortError"));
+  let timer, interrupt;
+  const cancelled = new Promise((resolve, reject) => {
+    interrupt = () => reject(controller.signal.reason);
+    controller.signal.addEventListener("abort", interrupt, { once: true });
+  });
+  options.signal?.addEventListener("abort", abort, { once: true });
+  const report = (status, error) => {
+    const detail = { stage, status, duration: Date.now() - started, errorName: error?.name || "", httpStatus: error?.status || 0 };
+    try { options.onStage?.(detail); } catch (ignored) {}
+    try { window.__rklog?.("sys", "Sign-in " + stage + ": " + status + " (" + detail.duration + "ms" + (detail.httpStatus ? ", HTTP " + detail.httpStatus : "") + (detail.errorName ? ", " + detail.errorName : "") + ")"); } catch (ignored) {}
+  };
+  try {
+    if (options.signal?.aborted) abort();
+    timer = setTimeout(() => controller.abort(new DOMException("The sign-in request timed out. Try again when the connection is available.", "TimeoutError")), timeout);
+    const result = await Promise.race([Promise.resolve().then(() => { controller.signal.throwIfAborted(); return execute(controller.signal); }), cancelled]);
+    controller.signal.throwIfAborted();
+    report("complete");
+    return result;
+  } catch (error) {
+    const failure = new Error(error?.name === "NotAllowedError" ? "The passkey request was cancelled or could not be completed by your provider. Try again or choose another enrolled passkey." : (error?.message || "Sign-in could not be completed."));
+    failure.name = error?.name || "Error";
+    failure.stage = stage;
+    failure.status = error?.status;
+    if (failure.name !== "AbortError") failure.message = stage + ": " + failure.message;
+    report("failed", failure);
+    throw failure;
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener("abort", abort);
+    controller.signal.removeEventListener("abort", interrupt);
+  }
+}
+async function authJson(path, init, options, stage) {
+  return authStage(stage, async signal => {
+    const response = await fetch(ADMIN_WORKER + path, { ...init, signal });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || typeof data !== "object") {
+      const error = new Error(data?.error || "The sign-in service could not complete this request.");
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  }, options);
+}
+export async function webauthnAuth(purpose, options = {}) {
+  const o = await authJson("/admin/webauthn/auth/begin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ purpose: purpose || "login" }) }, options, "Challenge");
+  const assertion = await authStage("Passkey provider", signal => navigator.credentials.get({ signal, publicKey: {
     challenge: b64urlToBuf(o.challenge), rpId: o.rpId, timeout: o.timeout || 120000, userVerification: o.userVerification || "preferred",
     allowCredentials: (o.allowCredentials || []).map((c) => ({ type: c.type, id: b64urlToBuf(c.id) })),
-  } });
+  } }), options, 125000);
   if (!assertion) throw new Error("Passkey sign-in was cancelled.");
   const r = assertion.response;
   const body = { id: assertion.id, rawId: bufToB64url(assertion.rawId), type: assertion.type, response: { clientDataJSON: bufToB64url(r.clientDataJSON), authenticatorData: bufToB64url(r.authenticatorData), signature: bufToB64url(r.signature), userHandle: r.userHandle ? bufToB64url(r.userHandle) : null } };
-  const fr = await fetch(ADMIN_WORKER + "/admin/webauthn/auth/finish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (!fr.ok) { const j = await fr.json().catch(() => null); throw new Error((j && j.error) || "Passkey sign-in failed."); }
-  const j = await fr.json();
+  const j = await authJson("/admin/webauthn/auth/finish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, options, "Verification");
+  options.signal?.throwIfAborted();
   if (purpose === "publish") return j; // {publishToken, exp}
   if (j && j.token && j.exp) { saveAdminSession(j.token, j.exp); if (j.trust && j.trustExp) saveDeviceTrust(j.trust, j.trustExp); return { ok: true }; }
   throw new Error("Passkey sign-in didn’t return a session.");
@@ -190,14 +236,14 @@ export async function publishConfig(proof, require) {
 // Cached to localStorage so the gate can render the right mode INSTANTLY (no admin-key flash) on reopen.
 export const AUTHMODE_KEY = "rk:authmode";
 export function cachedAuthMode() { try { return JSON.parse(localStorage.getItem(AUTHMODE_KEY) || "null"); } catch (e) { return null; } }
-export async function authStatus() {
+export async function authStatus(options = {}) {
   try {
-    const r = await fetch(ADMIN_WORKER + "/admin/auth/status");
-    if (!r.ok) return { passwordless: false, hasRecovery: false, passkeys: 0 };
-    const j = await r.json();
+    const j = await authJson("/admin/auth/status", {}, options, "Account status");
+    if (typeof j.passwordless !== "boolean" || typeof j.hasRecovery !== "boolean" || !Number.isInteger(j.passkeys)) throw new Error("Unknown sign-in configuration.");
+    options.signal?.throwIfAborted();
     try { localStorage.setItem(AUTHMODE_KEY, JSON.stringify({ passwordless: !!j.passwordless, hasRecovery: !!j.hasRecovery, passkeys: j.passkeys | 0, hasAdminPass: !!j.hasAdminPass })); } catch (e) {}
     return j;
-  } catch (e) { return { passwordless: false, hasRecovery: false, passkeys: 0 }; }
+  } catch (e) { return { ...(cachedAuthMode() || { passwordless: null, hasRecovery: null, passkeys: null }), unavailable: true }; }
 }
 // Owner-only: turn the passwordless (passkey-only) admin login on/off.
 export async function authConfig(passwordless) {
@@ -207,13 +253,12 @@ export async function authConfig(passwordless) {
   return await r.json();
 }
 // Break-glass sign-in with the recovery passphrase (all passkeys lost). Stores a session on success.
-export async function recoverWithPassphrase(recovery, password) {
-  const proof = await publishProof(recovery);
+export async function recoverWithPassphrase(recovery, password, options = {}) {
+  const proof = await authStage("Recovery proof", () => publishProof(recovery), options);
   const body = { proof: proof };
   if (password) body.password = password;
-  const r = await fetch(ADMIN_WORKER + "/admin/recover", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) { const j = await r.json().catch(() => null); const e = new Error((j && j.error) || "Recovery didn’t work."); e.status = r.status; throw e; }
-  const j = await r.json();
+  const j = await authJson("/admin/recover", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, options, "Recovery verification");
+  options.signal?.throwIfAborted();
   if (j && j.token && j.exp) { saveAdminSession(j.token, j.exp); return { ok: true }; }
   throw new Error("Recovery didn’t return a session.");
 }
@@ -282,33 +327,30 @@ export function vaultGrantToken() {
 }
 // Redeem a curated-view / deeper-cut pass for a scoped vault grant token (best-effort — a pass
 // with no registered grant simply leaves the viewer without vault access, which is fine).
-export async function vaultRedeem(code) {
+export async function vaultRedeem(code, options = {}) {
   const c = String(code == null ? "" : code).trim();
   if (!c) return false;
   try {
-    const res = await fetch(ADMIN_WORKER + "/vault/redeem", {
+    const j = await authJson("/vault/redeem", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code: c }),
-    });
-    if (!res.ok) return false;
-    const j = await res.json().catch(() => null);
+    }, options, "Vault access");
+    options.signal?.throwIfAborted();
     if (j && j.token && j.exp) { try { sessionStorage.setItem(VAULT_GRANT_KEY, JSON.stringify({ token: j.token, exp: j.exp })); } catch (e) {} return true; }
-  } catch (e) {}
+  } catch (e) { if (options.signal?.aborted || options.strict) throw e; }
   return false;
 }
-export async function vaultSignedUrl(key) {
+export async function vaultSignedUrl(key, options = {}) {
   if (!key) return "";
   const sess = adminSession();
   const headers = {};
   if (sess) headers.Authorization = "Bearer " + sess;
-  else { const g = vaultGrantToken(); if (g) headers["X-Vault-Grant"] = g; else return ""; }
+  else { const g = vaultGrantToken(); if (g) headers["X-Vault-Grant"] = g; else { if (options.strict) throw Object.assign(new Error("Access unavailable"), { status: 401 }); return ""; } }
   try {
-    const res = await fetch(ADMIN_WORKER + "/vault/sign?key=" + encodeURIComponent(key), { headers });
-    if (!res.ok) return "";
-    const j = await res.json().catch(() => null);
+    const j = await authJson("/vault/sign?key=" + encodeURIComponent(key), { headers }, options, "Protected link");
     return j && j.url ? ADMIN_WORKER + j.url : "";
-  } catch (e) { return ""; }
+  } catch (e) { if (options.signal?.aborted || options.strict) throw e; return ""; }
 }
 
 export async function sha256(str) {

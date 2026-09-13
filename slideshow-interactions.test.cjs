@@ -17,6 +17,135 @@ function loadFunction(context, name, source = editor, indent = "  ") {
   vm.runInContext(source.slice(start, end), context);
 }
 
+test("project unlock applies only to its original current view", async () => {
+  for (const change of ["none", "navigate", "close", "relock", "replace", "blocks", "edit"]) {
+    const original = { id: "first", title: "Synthetic project", study: { unlockHash: "verified", blocks: [] } };
+    let work = original, release, options;
+    const unlocked = [], rendered = [];
+    const context = vm.createContext({
+      AbortController, activeId: work.id, projectGeneration: 1, projectUnlock: null, vaultResolving: {}, vaultTried: {},
+      workById: () => work, plain: value => value, passModal: value => { options = value; },
+      sha256: () => new Promise(resolve => { release = resolve; }),
+      setUnlocked: id => unlocked.push(id), fillContent: value => rendered.push(value.id)
+    });
+    loadFunction(context, "cancelProjectRequests", player);
+    loadFunction(context, "unlockFlow", player);
+    context.unlockFlow();
+    const result = options.onSubmit("synthetic", { textContent: "" });
+    if (change === "navigate") context.activeId = "second";
+    if (change === "close" || change === "relock") context.cancelProjectRequests();
+    if (change === "replace") work = { ...original, study: { ...original.study } };
+    if (change === "blocks") work.study.blocks = [{ heading: "New content" }];
+    if (change === "edit") work.study.blocks.push({ heading: "New content" });
+    release("verified");
+    assert.equal(await result, change === "none");
+    assert.deepEqual(unlocked, change === "none" ? ["first"] : []);
+    assert.deepEqual(rendered, change === "none" ? ["first"] : []);
+  }
+});
+
+test("cancelled vault unlock does not mutate original protected blocks", async () => {
+  const work = { id: "first", title: "Synthetic project", study: { blocks: [{ locked: true, vaultBlock: "private-pointer" }] } };
+  const original = JSON.stringify(work);
+  let options, release, requested;
+  const context = vm.createContext({
+    AbortController, activeId: work.id, projectGeneration: 1, projectUnlock: null, vaultResolving: {}, vaultTried: {},
+    workById: () => work, plain: value => value, passModal: value => { options = value; },
+    window: { RK: { vaultRedeem: async () => true } },
+    resolveVaultBlocks: async pending => { requested = pending; await new Promise(resolve => { release = resolve; }); pending.study.blocks = [{ locked: true, body: "Private text" }]; return 1; },
+    setUnlocked: () => assert.fail("Cancelled unlock must not update access"), fillContent: () => assert.fail("Cancelled unlock must not render")
+  });
+  loadFunction(context, "cancelProjectRequests", player);
+  loadFunction(context, "unlockFlow", player);
+  context.unlockFlow();
+  const completion = options.onSubmit("synthetic", { textContent: "" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.notEqual(requested.study, work.study);
+  context.cancelProjectRequests();
+  release();
+  assert.equal(await completion, false);
+  assert.equal(JSON.stringify(work), original);
+});
+
+test("protected block loading bounds concurrency and preserves partial success for retry", async () => {
+  const { loadProtectedBlocks } = await import("./src/js/project-recovery.mjs");
+  const blocks = Array.from({ length: 6 }, (_, index) => ({ locked: true, vaultBlock: String(index) }));
+  const before = JSON.stringify(blocks), pending = [];
+  let active = 0, peak = 0;
+  const completion = loadProtectedBlocks(blocks, {
+    sign: async key => "https://synthetic.test/" + key,
+    fetch: async url => { active++; peak = Math.max(peak, active); await new Promise(resolve => pending.push(resolve)); active--; return url.endsWith("/2") ? new Response("", { status: 503 }) : Response.json({ type: "text", body: url.slice(-1) }); }
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(pending.length, 3);
+  pending.splice(0).forEach(resolve => resolve());
+  await new Promise(resolve => setImmediate(resolve));
+  pending.splice(0).forEach(resolve => resolve());
+  const result = await completion;
+  assert.equal(peak, 3);
+  assert.equal(result.resolved, 5);
+  assert.deepEqual(result.failures, [{ index: 2, kind: "server", status: 503 }]);
+  assert.equal(JSON.stringify(blocks), before);
+  let retryCalls = 0;
+  const retried = await loadProtectedBlocks(result.blocks, { sign: async () => "https://synthetic.test/retry", fetch: async () => { retryCalls++; return Response.json({ type: "text", body: "Recovered" }); } });
+  assert.equal(retryCalls, 1);
+  assert.equal(retried.resolved, 1);
+  assert.equal(retried.blocks[2].body, "Recovered");
+  assert.equal(retried.blocks[1], result.blocks[1]);
+});
+
+test("protected loading times out stuck signing and rejects cancelled results", async () => {
+  const { loadProtectedBlocks } = await import("./src/js/project-recovery.mjs");
+  const blocks = [{ locked: true, vaultBlock: "synthetic" }];
+  const timeout = await loadProtectedBlocks(blocks, { sign: () => new Promise(() => {}), timeout: 5 });
+  assert.equal(timeout.failures[0].kind, "timeout");
+  const controller = new AbortController();
+  const cancelled = loadProtectedBlocks(blocks, { signal: controller.signal, sign: () => new Promise(() => {}) });
+  controller.abort();
+  await assert.rejects(cancelled, { name: "AbortError" });
+});
+
+test("automatic protected loading supports explicit retry and rejects revoked access", async () => {
+  const work = { id: "first", study: { blocks: [{ locked: true, vaultBlock: "pointer" }] } };
+  let finish, attempts = 0, authorized = true;
+  const context = vm.createContext({
+    AbortController, activeId: work.id, projectGeneration: 1, projectUnlock: null, workById: () => work,
+    vaultResolving: {}, vaultTried: {}, vaultErrors: {}, viewerAccessKey: () => "synthetic-access", viewerAuthorized: () => authorized,
+    fillContent() {}, setUnlocked() {},
+    resolveVaultBlocks: async pending => { attempts++; await new Promise(resolve => { finish = resolve; }); if (attempts > 1) pending.study.blocks = [{ body: "Protected", locked: true }]; return attempts > 1 ? 1 : 0; }
+  });
+  loadFunction(context, "autoResolveVaultBlocks", player);
+  context.projectUnlock = new AbortController();
+  assert.equal(context.autoResolveVaultBlocks(work), undefined);
+  assert.equal(attempts, 0);
+  context.projectUnlock = null;
+  const first = context.autoResolveVaultBlocks(work); finish(); await first;
+  assert.equal(context.autoResolveVaultBlocks(work), undefined);
+  const retry = context.autoResolveVaultBlocks(work, true);
+  authorized = false;
+  finish(); await retry;
+  assert.equal(attempts, 2);
+  assert.equal(work.study.blocks[0].vaultBlock, "pointer");
+  authorized = true;
+  const changed = context.autoResolveVaultBlocks(work, true);
+  work.study.blocks[0].heading = "Newer edit";
+  finish(); await changed;
+  assert.equal(work.study.blocks[0].vaultBlock, "pointer");
+  assert.equal(work.study.blocks[0].heading, "Newer edit");
+  loadFunction(context, "cancelProjectRequests", player);
+  const navigating = context.autoResolveVaultBlocks(work, true), finishObsolete = finish;
+  context.activeId = "second";
+  context.cancelProjectRequests();
+  assert.equal(context.vaultTried.first, undefined);
+  context.activeId = "first";
+  const reopened = context.autoResolveVaultBlocks(work);
+  assert.ok(reopened);
+  finish(); await reopened;
+  work.study.blocks[0].heading = "Current loaded section";
+  finishObsolete(); await navigating;
+  assert.equal(work.study.blocks[0].heading, "Current loaded section");
+});
+
 test("case-study playback requires saved slides and never generates a deck", () => {
   const context = vm.createContext({
     hasNativeDeck: work => !!(work?.study?.nativeDeck || work?.study?.nativeDeckEnc || work?.study?.nativeDeckPublic || work?.study?.nativeDeckDocument),

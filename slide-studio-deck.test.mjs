@@ -11,6 +11,7 @@ import { rkDecWithSek, rkUnwrapSek, rkNewSek, rkWrapSek, rkEncWithSek } from "./
 import { assertStudioDeckPublishable, createStudioDeck, STUDIO_DECK_SCHEMA } from "./src/js/slide-studio-deck.mjs";
 import { AI_AGENT_SYSTEM } from "./src/js/ai-task-agent.mjs";
 import { COMPOSITION_RESPONSE_SCHEMA } from "./src/js/slide-merge-ai.mjs";
+import { contentRevision } from "./src/js/content-revision.mjs";
 
 async function openProjectSlides(page, index = 0) {
   await page.locator('[data-act="study-toggle"][data-index="' + index + '"]').click();
@@ -2489,11 +2490,13 @@ test("Studio Publish shares private/public deck, case-section, retry and owner-r
       if (uploads.has(assetPath)) return route.fulfill({ contentType: "application/octet-stream", body: uploads.get(assetPath) });
     }
     if (url.pathname === "/admin/content") {
+      if (request.method() === "GET") return route.fulfill({ json: { conditional: true, protocol: 1 } });
+      assert.equal(request.headers()["x-content-base"], await contentRevision(latest));
       const value = request.postDataJSON(); writes.push(value);
       if (failNext) { failNext = false; return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Synthetic publish failure" }) }); }
       if (holdWrite) { holdWrite = false; await new Promise(resolve => { releaseWrite = resolve; }); }
       latest = value;
-      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, git: { ok: true } }) });
+      return route.fulfill({ json: { ok: true, revision: await contentRevision(latest), git: { ok: true } } });
     }
     if (url.pathname === "/admin/media/put") {
       publicUploads.push(request.postDataBuffer());
@@ -2906,16 +2909,20 @@ for (const publicationRoute of ['live-content', 'direct-git']) test('section loc
       if(url.pathname.endsWith('/content.json') && latest)return route.fulfill({contentType:'application/json',body:JSON.stringify(latest)});
       if(url.pathname==='/admin/content'){
         assert.equal(publicationRoute,'live-content');
+        if(request.method()==='GET')return route.fulfill({json:{conditional:true,protocol:1}});
+        assert.equal(request.headers()['x-content-base'],await contentRevision(latest));
         writes++;
         if(fail)return route.fulfill({status:503,contentType:'application/json',body:'{"error":"Synthetic publish failure"}'});
         if(holdWrite)await new Promise(resolve=>{releaseWrite=resolve;holdWrite();holdWrite=null;});
-        latest=request.postDataJSON();return route.fulfill({contentType:'application/json',body:'{"ok":true,"git":{"ok":true}}'});
+        latest=request.postDataJSON();return route.fulfill({json:{ok:true,revision:await contentRevision(latest),git:{ok:true}}});
       }
       if(url.hostname==='api.github.com'){
         assert.equal(publicationRoute,'direct-git');
         let response={sha:'synthetic-object'};
         if(url.pathname.endsWith('/git/ref/heads/main'))response={object:{sha:'synthetic-head'}};
         else if(url.pathname.endsWith('/git/commits/synthetic-head'))response={tree:{sha:'synthetic-tree'}};
+        else if(url.pathname.endsWith('/git/trees/synthetic-tree'))response={tree:[{path:'content.json',type:'blob',sha:'synthetic-content'}]};
+        else if(url.pathname.endsWith('/git/blobs/synthetic-content'))response={encoding:'base64',content:Buffer.from(JSON.stringify(latest)).toString('base64')};
         else if(url.pathname.endsWith('/git/blobs'))pending=JSON.parse(Buffer.from(request.postDataJSON().content,'base64').toString('utf8'));
         else if(url.pathname.endsWith('/git/refs/heads/main')){
           writes++;
@@ -2931,7 +2938,6 @@ for (const publicationRoute of ['live-content', 'direct-git']) test('section loc
       return route.fallback();
     });
     latest=await openIntegratedFixture(page,[{type:'text',heading:'PRIVATE HEADING',body:'PRIVATE SECTION CONTENT',nav:'Section'}]);
-    latest.specialViews=[];
     await page.evaluate(()=>window.__rkDevEdit('specialViews',[]));
     await page.locator('[data-act="study-toggle"][data-index="0"]').click();
     await page.locator('[data-act="study-blocktoggle"][data-bindex="0"]').click();
@@ -2993,6 +2999,92 @@ for (const publicationRoute of ['live-content', 'direct-git']) test('section loc
     assert.equal(await page.locator('[data-publish]').isHidden(),true);
     assert.equal(writes,4);
   } finally {await browser.close();}
+});
+
+test("live fallback resume PDF retains all twelve achievements at every density", { timeout: 60000 }, async () => {
+  const source = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
+  const functions = ["ensureJsPdf", "ensurePdfJs", "atsRbBuild", "rpdfPlain"].map(name => {
+    const start = source.indexOf("  function " + name + "("), end = source.indexOf("\n  }", start) + 4;
+    assert.ok(start >= 0 && end > start);
+    return source.slice(start, end);
+  });
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent("<!doctype html><title>Synthetic PDF retention check</title>");
+    await page.evaluate(() => Object.assign(window, {
+      atsRbSize: () => ({ fmt: "a4", w: 210, h: 297 }), atsRbTpl: () => ({ head: "plain" }),
+      RB_FONTS: { sans: { pdf: "helvetica" } }, atsRbFont: "sans", atsRbMarginCfg: () => ({ mm: 14 }),
+      atsRbAccentRgb: () => [100, 100, 100], atsRbLayout: "single", atsRbKeepWhole: true,
+      RB_ICON_CACHE: {}, rbHex: () => "#000000", RPDF_NL: "\n"
+    }));
+    await page.addScriptTag({ content: functions.join("\n") });
+    const results = await page.evaluate(async () => {
+      const Pdf = await ensureJsPdf(), reader = await ensurePdfJs(), results = [];
+      const bullets = Array.from({ length: 12 }, (_, index) => "Retained achievement " + String(index + 1).padStart(2, "0") + ": " + "Original authored detail remains intact. ".repeat(45) + "End of achievement " + (index + 1) + ".");
+      for (const density of [1.08, 1, 0.9, 0.72]) {
+        const output = atsRbBuild(Pdf, { name: "Synthetic validation", sections: [{ kind: "experience", heading: "Experience", items: [{ role: "Designer", bullets }] }] }, { k: density });
+        const pdf = await reader.getDocument({ data: new Uint8Array(output.doc.output("arraybuffer")), isEvalSupported: false }).promise;
+        const text = [], outside = [];
+        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+          const sheet = await pdf.getPage(pageNumber), viewport = sheet.getViewport({ scale: 1 }), content = await sheet.getTextContent();
+          for (const item of content.items) {
+            text.push(item.str);
+            if (item.str.trim() && (item.transform[5] < 0 || item.transform[5] > viewport.height)) outside.push(item.str);
+          }
+        }
+        const extracted = text.join(" ").replace(/\s+/g, " ");
+        results.push({ density, pages: pdf.numPages, retained: bullets.filter(bullet => extracted.includes(bullet)).length, outside });
+        await pdf.destroy();
+      }
+      return results;
+    });
+    for (const result of results) {
+      assert.equal(result.retained, 12, JSON.stringify(result));
+      assert.deepEqual(result.outside, [], "Text must stay on a PDF page");
+      assert.ok(result.pages > 1, "The fixture must exercise pagination");
+    }
+  } finally { await browser.close(); }
+});
+
+test("Studio stale-tab publication keeps the local draft and newer remote document", { timeout: 45000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    let latest, rejected = 0;
+    await page.addInitScript(() => {
+      localStorage.setItem("rk:admin:sess", JSON.stringify({ token: "synthetic-session", exp: Date.now() + 60000 }));
+      localStorage.setItem("rk:trust", JSON.stringify({ token: "synthetic-trust", exp: Date.now() + 60000 }));
+      localStorage.setItem("rk:autopub:on", "0");
+    });
+    await page.route("**/*", async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.pathname.endsWith("/content.json") && latest) return route.fulfill({ json: latest });
+      if (url.pathname === "/admin/content") {
+        if (request.method() === "GET") return route.fulfill({ json: { conditional: true, protocol: 1 } });
+        assert.notEqual(request.headers()["x-content-base"], await contentRevision(latest));
+        rejected++;
+        return route.fulfill({ status: 412, json: { conflict: true, error: "Published content changed since this draft was opened. Your draft is kept." } });
+      }
+      if (url.hostname === "rk-ai-proxy.riteshkumarhk.workers.dev") return route.fulfill({ json: url.pathname.includes("publish") ? { enabled: false } : {} });
+      if (!["127.0.0.1", "localhost"].includes(url.hostname) && !["GET", "HEAD"].includes(request.method())) return route.abort();
+      return route.fallback();
+    });
+    latest = structuredClone(await openIntegratedFixture(page));
+    const originalRevision = await page.evaluate(() => window.RK.publishedRevision);
+    await page.evaluate(() => { window.__rkDevEdit("specialViews", []); window.__rkDevEdit("work.0.title", "Local unsaved revision"); });
+    const draft = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
+    latest.work[0].title = "Newer remote revision";
+    const remote = JSON.stringify(latest);
+    await page.locator("[data-publish]").click();
+    await page.waitForFunction(() => document.querySelector(".adm__statusbar")?.classList.contains("is-pub-error"));
+    assert.equal(rejected, 1);
+    assert.match(await page.locator(".adm__statusbar").innerText(), /changed since|draft is kept/i);
+    assert.equal(JSON.stringify(latest), remote);
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft())), draft);
+    assert.equal(await page.evaluate(() => localStorage.getItem("rk:content:draft")), draft);
+    assert.equal(await page.evaluate(() => window.RK.publishedRevision), originalRevision);
+  } finally { await browser.close(); }
 });
 
 test('published section resealing preserves slides, disabled blocks and concurrent edits', async()=>{

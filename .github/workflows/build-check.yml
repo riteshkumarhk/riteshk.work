@@ -1,16 +1,18 @@
 name: build-check
 
-# Verifies the committed js/ bundles are exactly what `npm run build` produces,
-# so a stale or hand-edited build can never reach main unnoticed. This is a CHECK
-# only — GitHub Pages deploys from the branch independently, so a red result here
-# never takes the live site down.
-
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   verify-build:
@@ -20,22 +22,29 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Run deterministic regressions sequentially
+        run: |
+          mapfile -t tests < <(find . -maxdepth 1 -type f \( -name '*.test.mjs' -o -name '*.test.cjs' \) ! -name '*.browser.test.mjs' ! -name 'slide-studio-deck.test.mjs' | sort)
+          node --test --test-concurrency=1 "${tests[@]}"
+
       - name: Rebuild bundles
         run: npm run build
 
-      - name: Fail if committed js/ is out of date
+      - name: Rebuild slide bundles
+        run: npm run build:slide-lab
+
+      - name: Fail if committed bundles are out of date
         run: |
-          if [ -n "$(git status --porcelain js/)" ]; then
-            echo "::error::Committed js/ output is stale. Run 'npm run build' locally and commit the result."
-            git --no-pager diff --stat -- js/
+          if [ -n "$(git status --porcelain js/ studio/slide-lab/assets/)" ]; then
+            echo "::error::Committed output is stale. Run both build commands locally and commit the result."
+            git --no-pager diff --stat -- js/ studio/slide-lab/assets/
             exit 1
           fi
-          echo "OK — committed js/ matches a fresh build."
 
       - name: Syntax-check every bundle
         run: |
@@ -43,3 +52,42 @@ jobs:
             node --check "$f" || { echo "::error::Syntax check failed for $f"; exit 1; }
           done
           echo "OK — all bundles pass node --check."
+
+      - name: Install test browser
+        run: npx playwright-core install --with-deps chromium
+
+      - name: Verify authentication and case recovery in browser
+        run: |
+          python3 -m http.server 5510 --bind 127.0.0.1 > "$RUNNER_TEMP/site-test.log" 2>&1 &
+          server=$!
+          trap 'kill "$server"' EXIT
+          export SLIDE_LAB_URL=http://127.0.0.1:5510
+          export PLAYWRIGHT_CHROMIUM_EXECUTABLE="$(node -p "require('playwright-core').chromium.executablePath()")"
+            curl --silent --show-error --fail --retry 5 --retry-delay 1 --retry-connrefused --max-time 2 "$SLIDE_LAB_URL/index.html" > /dev/null
+          node --test --test-concurrency=1 project-recovery.browser.test.mjs slide-studio-deck.test.mjs slide-presenter-readonly.browser.test.mjs
+
+      - name: Prepare tested site artifact
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir "$RUNNER_TEMP/site"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/site"
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy-pages:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: verify-build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy the verified artifact
+        id: deployment
+        uses: actions/deploy-pages@v4

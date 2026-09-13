@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { build } from "esbuild";
 import { libraryRoute, validateLibrary, LIBRARY_LIMIT } from "./worker/slide-library.mjs";
 import { mergeLibrary, createLibrarySync, applyLibrarySnapshot } from "./src/js/slide-library-sync.mjs";
 
@@ -97,7 +98,8 @@ test("offline edits persist and reload without uploading until authenticated", a
 });
 
 test("Worker library gate rejects anonymous, forged and expired sessions before storage", async () => {
-  const source = (await readFile(new URL("./worker/rk-ai-proxy.js", import.meta.url), "utf8")).replace('"./slide-library.mjs"', JSON.stringify(new URL("./worker/slide-library.mjs", import.meta.url).href));
+  const bundle = await build({ entryPoints: ["worker/rk-ai-proxy.js"], bundle: true, write: false, format: "esm", platform: "node" });
+  const source = bundle.outputFiles[0].text;
   const { default: worker } = await import("data:text/javascript;base64," + Buffer.from(source).toString("base64"));
   let reads = 0;
   const env = { SESSION_SECRET: "test-only-secret", ALLOW_ORIGIN: "https://example.test", SLIDE_LIBRARIES: { get: async () => { reads++; return null; } } };

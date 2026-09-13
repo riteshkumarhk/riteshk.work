@@ -214,16 +214,38 @@ import {
     const err = modal.querySelector(".pass__err");
     pass.focus();
 
+    let gateAttempt = null, gateClosed = false, pendingGateStatus = null;
+    const gateStatus = new AbortController();
+    function beginGateAttempt() {
+      if (gateClosed || gateAttempt) return null;
+      gateAttempt = new AbortController();
+      modal.querySelectorAll("[data-passkey],[data-go],[data-reclink]").forEach(button => { button.disabled = true; });
+      err.textContent = "";
+      return gateAttempt;
+    }
+    function currentGateAttempt(attempt) { return !gateClosed && gateAttempt === attempt && !attempt.signal.aborted; }
+    function endGateAttempt(attempt) {
+      if (gateAttempt !== attempt) return;
+      gateAttempt = null;
+      if (!gateClosed) modal.querySelectorAll("[data-passkey],[data-go],[data-reclink]").forEach(button => { button.disabled = false; });
+      if (pendingGateStatus) { const status = pendingGateStatus; pendingGateStatus = null; applyGateStatus(status); }
+    }
+    const leaveGate = () => { const attempt = gateAttempt; attempt?.abort(); endGateAttempt(attempt); gateStatus.abort(); };
+    const done = () => { gateClosed = true; leaveGate(); window.removeEventListener("pagehide", leaveGate); modal.remove(); };
+    window.addEventListener("pagehide", leaveGate);
+
     // Offer passkey sign-in when any are enrolled (and the browser supports it). The password stays
     // as a fallback so a new/unenrolled device is never locked out.
     async function doPasskey() {
-      const pkBtn = modal.querySelector("[data-passkey]");
-      if (pkBtn) pkBtn.disabled = true; err.textContent = "";
-      try { await webauthnAuth("login"); done(); openStudio(); }
-      catch (e) { if (pkBtn) pkBtn.disabled = false; err.textContent = (e && e.message) || "Passkey sign-in didn’t work."; }
+      const attempt = beginGateAttempt();
+      if (!attempt) return;
+      try { await webauthnAuth("login", { signal: attempt.signal }); if (currentGateAttempt(attempt)) { done(); openStudio(); } }
+      catch (e) { if (currentGateAttempt(attempt)) err.textContent = (e && e.message) || "Passkey sign-in didn't work."; }
+      finally { endGateAttempt(attempt); }
     }
     let recovering = false, recovery2fa = false;
     function showRecover() {
+      if (gateClosed || gateAttempt) return;
       recovering = true;
       const pkBtn = modal.querySelector("[data-passkey]"); if (pkBtn) pkBtn.style.display = "none";
       const link = modal.querySelector("[data-reclink]"); if (link) link.style.display = "none";
@@ -271,20 +293,23 @@ import {
       }
       try { if (pass) pass.focus(); } catch (e) {}
     }
+    function applyGateStatus(st) {
+      if (gateClosed || gateStatus.signal.aborted || recovering) return;
+      if (gateAttempt) { pendingGateStatus = st; return; }
+      if (st.unavailable) { if (!err.textContent) err.textContent = "Sign-in settings are temporarily unavailable. Your existing sign-in method is unchanged."; return; }
+      recovery2fa = !!st.hasAdminPass;
+      if (st.passwordless) applyPasskeyOnly(st.hasRecovery);
+      else applyKeyMode(st.passkeys);
+    }
     if (!creating && webauthnSupported()) {
       const cachedAuth = cachedAuthMode();
       recovery2fa = !!(cachedAuth && cachedAuth.hasAdminPass);
       // Instant render from the cached mode (passkey-first when unknown) → no admin-key flash.
       if (!cachedAuth || cachedAuth.passwordless) applyPasskeyOnly(cachedAuth && cachedAuth.hasRecovery);
       else applyKeyMode(cachedAuth.passkeys || 0);
-      authStatus().then((st) => {
-        recovery2fa = !!st.hasAdminPass;
-        if (st.passwordless) applyPasskeyOnly(st.hasRecovery);
-        else applyKeyMode(st.passkeys);
-      }).catch(() => { if (!cachedAuth) applyKeyMode(0); });
+      authStatus({ signal: gateStatus.signal }).then(applyGateStatus).catch(() => {});
     }
 
-    const done = () => modal.remove();
     // On the dedicated /studio page the gate is all there is (e.g. a hard refresh re-prompts it), so Cancel
     // should leave for the public site rather than stranding the owner on a blank editor. From the landing
     // ··· menu (not a studio page) Cancel just closes the dialog.
@@ -293,44 +318,48 @@ import {
     modal.addEventListener("click", (e) => { if (e.target === modal) done(); });
 
     async function submit() {
+      if (gateClosed || gateAttempt) return;
+      if (!recovering && pass.style.display === "none") return doPasskey();
       const val = pass.value;
+      let adminPw = "";
       if (recovering) {
         if (!val) { err.textContent = "Enter your recovery passphrase"; return; }
         const pw2El = modal.querySelector("[data-recpw]");
-        const adminPw = pw2El ? pw2El.value : "";
+        adminPw = pw2El ? pw2El.value : "";
         if (recovery2fa && !adminPw) { err.textContent = "Enter your admin password"; return; }
-        const go = modal.querySelector("[data-go]"); if (go) go.disabled = true; err.textContent = "";
-        try { await recoverWithPassphrase(val, adminPw); done(); openStudio(); }
-        catch (e) { if (go) go.disabled = false; err.textContent = (e && e.message) || "Recovery didn’t work."; }
-        return;
       }
       if (!val) { err.textContent = "Enter your key"; return; }
       if (creating) {
         if (val.length < 4) { err.textContent = "Use at least 4 characters"; return; }
         if (confirm2 && confirm2.value !== val) { err.textContent = "Keys don't match"; return; }
-        localStorage.setItem(HASH_KEY, await sha256(val));
-        try { localStorage.setItem(GATE_KEY, JSON.stringify(await rkGateRecord(val))); } catch (e) {}
-        done(); openStudio();
-        return;
       }
       // Prefer a server login (Cloudflare Worker): a short session — not a repo token in your
       // browser — authorises publishing. If the Worker rejects or is unreachable, fall back to
       // the existing local / published-gate check so you're never locked out.
-      const go = modal.querySelector("[data-go]");
-      if (go) go.disabled = true;
-      const login = await adminLogin(val);
-      if (login.ok) {
-        try { localStorage.setItem(HASH_KEY, await sha256(val)); localStorage.setItem(GATE_KEY, JSON.stringify(await rkGateRecord(val))); } catch (e) {}
-        done(); openStudio();
-        return;
-      }
-      var ok = false;
-      if (publishedGate && await rkGateVerify(val, publishedGate)) ok = true;
-      else if (stored && (await sha256(val)) === stored) ok = true;
-      if (ok) {
-        try { localStorage.setItem(HASH_KEY, await sha256(val)); localStorage.setItem(GATE_KEY, JSON.stringify(await rkGateRecord(val))); } catch (e) {}
-        done(); openStudio();
-      } else { if (go) go.disabled = false; err.textContent = "Incorrect key"; }
+      const attempt = beginGateAttempt();
+      if (!attempt) return;
+      try {
+        if (recovering) await recoverWithPassphrase(val, adminPw, { signal: attempt.signal });
+        else {
+          let ok = creating;
+          if (!creating) {
+            const login = await adminLogin(val, { signal: attempt.signal });
+            if (!currentGateAttempt(attempt)) return;
+            ok = login.ok;
+            if (!ok && publishedGate) ok = await rkGateVerify(val, publishedGate);
+            if (!ok && stored) ok = (await sha256(val)) === stored;
+          }
+          if (!currentGateAttempt(attempt)) return;
+          if (!ok) { err.textContent = "Incorrect key"; return; }
+          try {
+            const hash = await sha256(val), record = await rkGateRecord(val);
+            if (!currentGateAttempt(attempt)) return;
+            try { localStorage.setItem(HASH_KEY, hash); localStorage.setItem(GATE_KEY, JSON.stringify(record)); } catch (e) {}
+          } catch (error) { if (creating) throw error; }
+        }
+        if (currentGateAttempt(attempt)) { done(); openStudio(); }
+      } catch (e) { if (currentGateAttempt(attempt)) err.textContent = e?.message || "Sign-in could not be completed."; }
+      finally { endGateAttempt(attempt); }
     }
     modal.querySelector("[data-go]").addEventListener("click", submit);
     modal.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });

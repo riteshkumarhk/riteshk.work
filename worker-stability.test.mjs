@@ -1,0 +1,335 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { build } from "esbuild";
+import { Miniflare } from "miniflare";
+import { PasskeyChallenges, passkeyChallenge } from "./worker/passkey-challenges.mjs";
+import { contentRevision } from "./src/js/content-revision.mjs";
+import { writeContentRevision } from "./worker/content-publishing.mjs";
+
+const bundled = await build({ entryPoints: ["worker/rk-ai-proxy.js"], bundle: true, write: false, format: "esm", platform: "node", packages: "external" });
+const { default: worker, ContentPublisher } = await import("data:text/javascript;base64," + Buffer.from(bundled.outputFiles[0].text).toString("base64"));
+
+function challengeFixture() {
+  const stores = new Map();
+  const binding = {
+    idFromName: value => value,
+    get(id) {
+      if (!stores.has(id)) {
+        const values = new Map();
+        let queue = Promise.resolve();
+        const storage = {
+          get: async key => structuredClone(values.get(key)), put: async (key, value) => values.set(key, structuredClone(value)),
+          setAlarm: async time => { storage.alarm = time; }, deleteAll: async () => values.clear(),
+          transaction(run) { const result = queue.then(() => run(storage)); queue = result.catch(() => {}); return result; }
+        };
+        stores.set(id, { object: new PasskeyChallenges({ storage }), values, storage });
+      }
+      return { fetch: (url, options) => stores.get(id).object.fetch(new Request(url, options)) };
+    }
+  };
+  return { env: { PASSKEY_CHALLENGES: binding }, stores };
+}
+
+test("transactional passkey challenges allow exactly one concurrent redemption", async () => {
+  const fixture = challengeFixture(), challenge = "a".repeat(43);
+  await passkeyChallenge(fixture.env, "issue", challenge, { type: "auth", purpose: "publish" });
+  const results = await Promise.all(Array.from({ length: 12 }, () => passkeyChallenge(fixture.env, "consume", challenge, { type: "auth" })));
+  assert.equal(results.filter(Boolean).length, 1);
+  assert.equal(results.find(Boolean).purpose, "publish");
+  assert.equal(await passkeyChallenge(fixture.env, "read", challenge, { type: "auth" }), null);
+  assert.equal(await passkeyChallenge(fixture.env, "issue", challenge, { type: "auth" }), null);
+  assert.ok(fixture.stores.get(challenge).storage.alarm > Date.now());
+});
+
+test("challenge expiry and type checks cannot redeem or replace an existing ceremony", async () => {
+  const fixture = challengeFixture(), challenge = "b".repeat(43);
+  await passkeyChallenge(fixture.env, "issue", challenge, { type: "reg" });
+  assert.equal(await passkeyChallenge(fixture.env, "consume", challenge, { type: "auth" }), null);
+  const store = fixture.stores.get(challenge);
+  store.values.get("challenge").exp = Date.now() - 1;
+  assert.equal(await passkeyChallenge(fixture.env, "consume", challenge, { type: "reg" }), null);
+  await store.object.alarm();
+  assert.equal(store.values.size, 0);
+});
+
+test("missing or failed challenge storage fails closed without KV fallback", async () => {
+  await assert.rejects(passkeyChallenge({}, "issue", "a".repeat(43), { type: "auth" }), { status: 503 });
+  const fixture = challengeFixture();
+  fixture.env.PASSKEY_CHALLENGES.get = () => { throw new Error("Offline"); };
+  await assert.rejects(passkeyChallenge(fixture.env, "consume", "a".repeat(43), { type: "auth" }), { status: 503 });
+});
+
+async function signedWorkerFixture() {
+  const { env } = challengeFixture(), values = new Map();
+  Object.assign(env, {
+    SESSION_SECRET: "disposable-test-secret", ALLOW_ORIGIN: "https://synthetic.test", RP_ID: "synthetic.test",
+    VAULT_GRANTS: { get: async (key, format) => { const value = values.get(key); return value ? format === "json" ? JSON.parse(value) : value : null; }, put: async (key, value) => values.set(key, value), list: async () => ({ keys: [] }) }
+  });
+  const keys = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  values.set("wa:cred:synthetic", JSON.stringify({ jwk: await crypto.subtle.exportKey("jwk", keys.publicKey), alg: -257, counter: 0 }));
+  const send = (action, body) => worker.fetch(new Request("https://synthetic.test/admin/webauthn/auth/" + action, { method: "POST", headers: { Origin: "https://synthetic.test", "Content-Type": "application/json" }, body: JSON.stringify(body) }), env);
+  async function assertion(purpose = "login") {
+    const response = await send("begin", { purpose });
+    assert.equal(response.status, 200);
+    const { challenge } = await response.json();
+    const client = Buffer.from(JSON.stringify({ type: "webauthn.get", challenge, origin: "https://synthetic.test" }));
+    const auth = Buffer.concat([Buffer.from(await crypto.subtle.digest("SHA-256", Buffer.from("synthetic.test"))), Buffer.from([1, 0, 0, 0, 0])]);
+    const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", keys.privateKey, Buffer.concat([auth, Buffer.from(await crypto.subtle.digest("SHA-256", client))]));
+    return { id: "synthetic", response: { clientDataJSON: client.toString("base64url"), authenticatorData: auth.toString("base64url"), signature: Buffer.from(signature).toString("base64url") } };
+  }
+  return { env, send, assertion };
+}
+
+test("actual Worker rejects concurrent signed assertion replay and retains valid verification", async () => {
+  const fixture = await signedWorkerFixture();
+  const assertion = await fixture.assertion();
+  const invalid = structuredClone(assertion);
+  invalid.response.signature = Buffer.alloc(256).toString("base64url");
+  assert.equal((await fixture.send("finish", invalid)).status, 401);
+  const responses = await Promise.all(Array.from({ length: 5 }, () => fixture.send("finish", assertion)));
+  assert.equal(responses.filter(response => response.status === 200).length, 1);
+  assert.equal(responses.filter(response => response.status === 400).length, 4);
+  const session = await responses.find(response => response.status === 200).json();
+  assert.ok(session.token && session.trust);
+  const publish = await fixture.send("finish", await fixture.assertion("publish"));
+  const result = await publish.json();
+  assert.ok(result.publishToken);
+  assert.equal(result.token, undefined);
+});
+
+function contentBucket(initial) {
+  let bytes = new TextEncoder().encode(JSON.stringify(initial)), version = 1, writes = 0;
+  return {
+    get: async () => { const snapshot = bytes.slice(), etag = String(version); return { etag, json: async () => JSON.parse(new TextDecoder().decode(snapshot)), arrayBuffer: async () => snapshot.buffer }; },
+    put: async (key, next, options) => { if (options.onlyIf.etagMatches !== String(version)) return null; bytes = new Uint8Array(next); version++; writes++; return { etag: String(version) }; },
+    replace: value => { bytes = new TextEncoder().encode(JSON.stringify(value)); version++; },
+    document: () => JSON.parse(new TextDecoder().decode(bytes)), writes: () => writes
+  };
+}
+
+test("content revisions ignore key order but detect every content change", async () => {
+  assert.equal(await contentRevision({ work: [], name: "first" }), await contentRevision({ name: "first", work: [] }));
+  assert.notEqual(await contentRevision({ work: [], name: "first" }), await contentRevision({ work: [], name: "second" }));
+});
+
+test("conditional publishing rejects stale tabs without replacing newer content", async () => {
+  const baseline = { work: [{ title: "Original" }] }, bucket = contentBucket(baseline), revision = await contentRevision(baseline);
+  const publish = value => writeContentRevision(bucket, new TextEncoder().encode(JSON.stringify(value)), revision);
+  const responses = await Promise.all([publish({ work: [{ title: "Newer" }] }), publish({ work: [{ title: "Older tab" }] })]);
+  assert.deepEqual(responses.map(response => response.status).sort(), [200, 412]);
+  assert.equal(bucket.writes(), 1);
+  const preserved = bucket.document();
+  assert.equal((await publish({ work: [] })).status, 412);
+  assert.deepEqual(bucket.document(), preserved);
+});
+
+test("R2 conditional write catches changes between the baseline check and write", async () => {
+  const baseline = { work: [] }, bucket = contentBucket(baseline);
+  const result = await writeContentRevision(bucket, new TextEncoder().encode(JSON.stringify({ work: [{ title: "Stale" }] })), await contentRevision(baseline), async () => bucket.replace({ work: [{ title: "Concurrent" }] }));
+  assert.equal(result.status, 412);
+  assert.equal(bucket.writes(), 0);
+  assert.equal(bucket.document().work[0].title, "Concurrent");
+});
+
+test("old clients and invalid content fail without any storage mutation", async () => {
+  const bucket = contentBucket({ work: [] }), bytes = new TextEncoder().encode("{}");
+  assert.equal((await writeContentRevision(bucket, bytes, "")).status, 428);
+  assert.equal((await writeContentRevision(bucket, new TextEncoder().encode("null"), "a".repeat(64))).status, 400);
+  assert.equal(bucket.writes(), 0);
+});
+
+test("actual Worker enforces conditional publication and reports mirror state", async () => {
+  const fixture = await signedWorkerFixture();
+  const session = await (await fixture.send("finish", await fixture.assertion())).json();
+  const baseline = { work: [] }, bucket = contentBucket(baseline), values = new Map();
+  let queue = Promise.resolve();
+  const state = {
+    storage: { get: async key => values.get(key), put: async (key, value) => values.set(key, value), delete: async key => values.delete(key), setAlarm: async () => {}, deleteAlarm: async () => {} },
+    blockConcurrencyWhile(run) { const result = queue.then(run); queue = result.catch(() => {}); return result; }
+  };
+  fixture.env.MEDIA = bucket;
+  const publisher = new ContentPublisher(state, fixture.env);
+  fixture.env.CONTENT_PUBLISHER = { idFromName: value => value, get: () => ({ fetch: (url, options) => publisher.fetch(new Request(url, options)) }) };
+  const base = await contentRevision(baseline);
+  const headers = { Origin: "https://synthetic.test", Authorization: "Bearer " + session.token, "X-Device-Trust": session.trust };
+  const publish = revision => worker.fetch(new Request("https://synthetic.test/admin/content", { method: "POST", headers: { ...headers, "X-Content-Base": revision }, body: JSON.stringify({ work: [{ title: "New" }] }) }), fixture.env);
+  const capabilities = await worker.fetch(new Request("https://synthetic.test/admin/content", { headers }), fixture.env);
+  assert.equal((await capabilities.json()).conditional, true);
+  assert.equal((await publish("")).status, 428);
+  const success = await publish(base);
+  const result = await success.json();
+  assert.equal(success.status, 200);
+  assert.equal(result.revision, await contentRevision(bucket.document()));
+  assert.equal(result.git.ok, false);
+  assert.equal(values.get("mirrorPending"), true);
+  assert.equal((await publish(base)).status, 412);
+  assert.equal(bucket.writes(), 1);
+});
+
+function publisherFixture(baseline) {
+  const bucket = contentBucket(baseline), values = new Map(), objects = new Map();
+  let queue = Promise.resolve(), serial = 0, head, patches = 0;
+  const object = value => { const sha = "synthetic-" + ++serial; objects.set(sha, value); return sha; };
+  const replaceGit = content => {
+    const blob = object({ encoding: "base64", content: Buffer.from(JSON.stringify(content)).toString("base64") });
+    const tree = object({ tree: [{ path: "content.json", type: "blob", sha: blob }] });
+    head = object({ tree: { sha: tree }, parents: head ? [head] : [] });
+  };
+  replaceGit(baseline);
+  const fixture = {
+    bucket, values, loseAck: false, failCheckpoint: false, beforePatch: null,
+    state: {
+      storage: {
+        get: async key => structuredClone(values.get(key)),
+        put: async (key, value) => {
+          if (fixture.failCheckpoint && key === "mirrorBase") { fixture.failCheckpoint = false; throw new Error("Synthetic storage interruption"); }
+          if (typeof key === "object") Object.entries(key).forEach(([name, entry]) => values.set(name, structuredClone(entry)));
+          else values.set(key, structuredClone(value));
+        },
+        delete: async key => values.delete(key),
+        setAlarm: async time => { fixture.alarmAt = time; }, deleteAlarm: async () => { fixture.alarmAt = null; }
+      },
+      blockConcurrencyWhile(run) { const result = queue.then(run); queue = result.catch(() => {}); return result; }
+    },
+    fetch: async (url, options = {}) => {
+      assert.match(url, /^https:\/\/api\.github\.com\/repos\/synthetic\/site\/git\//);
+      const suffix = url.split("/git/")[1], method = options.method || "GET";
+      if (method === "GET") return Response.json(suffix === "ref/heads/main" ? { object: { sha: head } } : objects.get(suffix.split("/")[1]));
+      const body = JSON.parse(options.body);
+      if (method === "POST") return Response.json({ sha: object(suffix === "commits" ? { ...body, tree: { sha: body.tree } } : body) });
+      assert.equal(method, "PATCH");
+      assert.equal(body.force, false);
+      if (fixture.beforePatch) await fixture.beforePatch();
+      if (objects.get(body.sha).parents[0] !== head) return Response.json({ message: "Ref changed" }, { status: 422 });
+      head = body.sha;
+      patches++;
+      if (fixture.loseAck) { fixture.loseAck = false; throw new TypeError("Synthetic lost acknowledgement"); }
+      return Response.json({ object: { sha: head } });
+    },
+    gitDocument: () => {
+      const tree = objects.get(objects.get(head).tree.sha), blob = objects.get(tree.tree[0].sha);
+      return JSON.parse(Buffer.from(blob.content, "base64").toString("utf8"));
+    },
+    patches: () => patches, replaceGit,
+    restart: () => { fixture.publisher = new ContentPublisher(fixture.state, { MEDIA: bucket, OWNER: "synthetic", REPO: "site", GH_TOKEN: "disposable" }); },
+    publish: async (document, base) => fixture.publisher.fetch(new Request("https://publisher.test/", { method: "POST", headers: { "X-Content-Base": base }, body: JSON.stringify(document) }))
+  };
+  fixture.restart();
+  return fixture;
+}
+
+test("publication mirror reconciles lost acknowledgements before the next revision", async context => {
+  const baseline = { work: [] }, first = { work: [{ title: "First" }] }, latest = { work: [{ title: "Latest" }] };
+  const fixture = publisherFixture(baseline);
+  context.mock.method(globalThis, "fetch", fixture.fetch);
+  fixture.loseAck = true;
+  const firstResult = await (await fixture.publish(first, await contentRevision(baseline))).json();
+  assert.equal(firstResult.ok, true);
+  assert.equal(firstResult.git.ok, false);
+  assert.deepEqual(fixture.gitDocument(), first);
+  fixture.restart();
+  const latestResult = await (await fixture.publish(latest, firstResult.revision)).json();
+  assert.equal(latestResult.git.ok, true);
+  assert.deepEqual(fixture.bucket.document(), latest);
+  assert.deepEqual(fixture.gitDocument(), latest);
+  assert.equal(fixture.patches(), 2);
+  assert.equal(fixture.values.has("mirrorPending"), false);
+});
+
+test("publication mirror survives a storage interruption after Git accepted the content", async context => {
+  const baseline = { work: [] }, latest = { work: [{ title: "Kept" }] }, fixture = publisherFixture(baseline);
+  context.mock.method(globalThis, "fetch", fixture.fetch);
+  fixture.beforePatch = () => { fixture.failCheckpoint = true; };
+  await assert.rejects(fixture.publish(latest, await contentRevision(baseline)), /storage interruption/);
+  assert.deepEqual(fixture.bucket.document(), latest);
+  assert.deepEqual(fixture.gitDocument(), latest);
+  fixture.beforePatch = null;
+  fixture.restart();
+  await fixture.publisher.alarm();
+  assert.equal(fixture.patches(), 1);
+  assert.equal(fixture.values.get("mirrorBase"), await contentRevision(latest));
+  assert.equal(fixture.values.has("mirrorPending"), false);
+});
+
+test("publication mirror refuses independent edits and bounds background retries", async context => {
+  const baseline = { work: [] }, independent = { work: [{ title: "Independent Git edit" }] }, fixture = publisherFixture(baseline);
+  context.mock.method(globalThis, "fetch", fixture.fetch);
+  fixture.replaceGit(independent);
+  const result = await (await fixture.publish({ work: [{ title: "Live version" }] }, await contentRevision(baseline))).json();
+  assert.equal(result.ok, true);
+  assert.equal(result.git.ok, false);
+  assert.match(result.git.error, /changed independently/);
+  fixture.restart();
+  await fixture.publisher.alarm();
+  await fixture.publisher.alarm();
+  assert.equal(fixture.alarmAt, null);
+  assert.equal(fixture.values.get("mirrorPending"), true);
+  assert.deepEqual(fixture.gitDocument(), independent);
+  assert.equal(fixture.patches(), 0);
+});
+
+test("legacy Git proxy cannot bypass content publication but still accepts protected assets and fonts", async context => {
+  const fixture = await signedWorkerFixture();
+  const session = await (await fixture.send("finish", await fixture.assertion())).json();
+  Object.assign(fixture.env, { OWNER: "synthetic", REPO: "site", GH_TOKEN: "disposable" });
+  const upstream = [];
+  context.mock.method(globalThis, "fetch", async (url, options) => { upstream.push({ url, options }); return Response.json({ sha: "synthetic-asset" }, { status: 201 }); });
+  const send = (method, path) => worker.fetch(new Request("https://synthetic.test/admin/gh/repos/synthetic/site/" + path, {
+    method, headers: { Origin: "https://synthetic.test", Authorization: "Bearer " + session.token, "X-Device-Trust": session.trust },
+    body: JSON.stringify({ content: "c3ludGhldGlj", branch: "main" })
+  }), fixture.env);
+  for (const [method, path] of [["PATCH", "git/refs/heads/main"], ["PUT", "contents/content.json"], ["PUT", "contents/%63ontent.json"], ["POST", "merges"], ["POST", "git/refs"]]) {
+    assert.equal((await send(method, path)).status, 428, method + " " + path);
+  }
+  assert.equal(upstream.length, 0);
+  for (const path of ["contents/assets/protected/synthetic.enc", "contents/assets/uploads/synthetic.png", "contents/fonts/synthetic.woff2"]) {
+    assert.equal((await send("PUT", path)).status, 201);
+  }
+  assert.equal(upstream.length, 3);
+});
+
+test("Cloudflare local runtime persists atomic challenges and conditional publications across restart", { timeout: 45000 }, async () => {
+  const directory = mkdtempSync(join(tmpdir(), "rk-worker-stability-"));
+  const options = {
+    modules: true, script: bundled.outputFiles[0].text, compatibilityDate: "2026-07-14",
+    durableObjects: { PASSKEY_CHALLENGES: { className: "PasskeyChallenges", useSQLite: true }, CONTENT_PUBLISHER: { className: "ContentPublisher", useSQLite: true } },
+    durableObjectsPersist: join(directory, "objects"), r2Buckets: ["MEDIA"], r2Persist: join(directory, "r2"),
+    outboundService: () => { throw new Error("Local validation must not contact an external service"); }
+  };
+  let runtime = new Miniflare(options);
+  try {
+    const challenges = await runtime.getDurableObjectNamespace("PASSKEY_CHALLENGES");
+    const challenge = "runtime".padEnd(43, "a"), object = challenges.get(challenges.idFromName(challenge));
+    const send = action => object.fetch("https://challenge.test/" + action, { method: "POST", body: JSON.stringify({ type: "auth", purpose: "login" }) });
+    assert.equal((await send("issue")).status, 200);
+    const consumed = await Promise.all(Array.from({ length: 16 }, () => send("consume")));
+    assert.equal(consumed.filter(response => response.status === 200).length, 1);
+    assert.equal(consumed.filter(response => response.status === 409).length, 15);
+    const bucket = await runtime.getR2Bucket("MEDIA"), baseline = { work: [] };
+    await bucket.put("content.json", JSON.stringify(baseline));
+    const base = await contentRevision(baseline), publishers = await runtime.getDurableObjectNamespace("CONTENT_PUBLISHER");
+    const publisher = publishers.get(publishers.idFromName("content.json"));
+    const responses = await Promise.all(Array.from({ length: 8 }, (_, index) => publisher.fetch("https://publisher.test/", { method: "POST", headers: { "X-Content-Base": base }, body: JSON.stringify({ work: [{ title: "Concurrent " + index }] }) })));
+    assert.equal(responses.filter(response => response.status === 200).length, 1);
+    assert.equal(responses.filter(response => response.status === 412).length, 7);
+    const result = await responses.find(response => response.status === 200).json();
+    const saved = await (await bucket.get("content.json")).json();
+    assert.equal(result.revision, await contentRevision(saved));
+    await runtime.dispose();
+    runtime = new Miniflare(options);
+    const restartedChallenges = await runtime.getDurableObjectNamespace("PASSKEY_CHALLENGES");
+    assert.equal((await restartedChallenges.get(restartedChallenges.idFromName(challenge)).fetch("https://challenge.test/consume", { method: "POST", body: JSON.stringify({ type: "auth" }) })).status, 409);
+    const restartedBucket = await runtime.getR2Bucket("MEDIA");
+    assert.deepEqual(await (await restartedBucket.get("content.json")).json(), saved);
+    const restartedPublishers = await runtime.getDurableObjectNamespace("CONTENT_PUBLISHER");
+    const stale = await restartedPublishers.get(restartedPublishers.idFromName("content.json")).fetch("https://publisher.test/", { method: "POST", headers: { "X-Content-Base": base }, body: JSON.stringify(baseline) });
+    assert.equal(stale.status, 412);
+    assert.deepEqual(await (await restartedBucket.get("content.json")).json(), saved);
+  } finally {
+    await runtime.dispose();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

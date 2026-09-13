@@ -64,6 +64,60 @@ async function ownerEmail(env) {
   return _svcEmail.s || env.OWNER_EMAIL || _svcEmail.d || "riteshkumarhk@gmail.com";
 }
 
+import { passkeyChallenge } from "./passkey-challenges.mjs";
+import { writeContentRevision } from "./content-publishing.mjs";
+import { contentRevision, gitContentRevision } from "../src/js/content-revision.mjs";
+export { PasskeyChallenges } from "./passkey-challenges.mjs";
+
+export class ContentPublisher {
+  constructor(context, env) { this.context = context; this.env = env; }
+
+  async fetch(request) {
+    if (request.method !== "POST") return new Response(null, { status: 405 });
+    return this.context.blockConcurrencyWhile(async () => {
+      const bytes = new Uint8Array(await request.arrayBuffer()), base = request.headers.get("X-Content-Base");
+      const storage = this.context.storage;
+      const result = await writeContentRevision(this.env.MEDIA, bytes, base, async () => {
+        if (!(await storage.get("mirrorBase"))) await storage.put("mirrorBase", base);
+        await storage.put("mirrorPending", true);
+        await storage.put("mirrorAttempts", 0);
+        await storage.setAlarm(Date.now() + 60000);
+      });
+      if (result.body.ok) result.body.git = await this.mirror(bytes, result.body.revision);
+      return Response.json(result.body, { status: result.status });
+    });
+  }
+
+  async mirror(bytes, revision) {
+    const storage = this.context.storage;
+    const expected = { base: await storage.get("mirrorBase"), attempt: await storage.get("mirrorAttempt"), target: revision };
+    const result = await ghCommitContent(this.env, bytes, "Update content.json via admin", expected, observed => storage.put({ mirrorBase: observed, mirrorAttempt: revision }));
+    if (result.ok) {
+      await storage.put("mirrorBase", revision);
+      await storage.delete("mirrorAttempt");
+      await storage.delete("mirrorPending");
+      await storage.delete("mirrorAttempts");
+      await storage.deleteAlarm();
+    } else {
+      const attempts = (await storage.get("mirrorAttempts") || 0) + 1;
+      await storage.put("mirrorAttempts", attempts);
+      if (attempts < 3) await storage.setAlarm(Date.now() + 60000 * attempts);
+      else await storage.deleteAlarm();
+    }
+    return result;
+  }
+
+  async alarm() {
+    return this.context.blockConcurrencyWhile(async () => {
+      if (!(await this.context.storage.get("mirrorPending"))) return;
+      const current = await this.env.MEDIA.get("content.json");
+      if (!current) return;
+      const bytes = new Uint8Array(await current.arrayBuffer());
+      await this.mirror(bytes, await contentRevision(JSON.parse(new TextDecoder().decode(bytes))));
+    });
+  }
+}
+
 export default {
   async scheduled(event, env, ctx) { ctx.waitUntil(runDigest(env)); },
   async fetch(request, env) {
@@ -348,7 +402,8 @@ export default {
       const _rc = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" });
       if (_rc.keys.length > 0 && !(await verifyTrust(request.headers.get("X-Device-Trust"), env))) return json({ error: "Verify it\u2019s you to add a passkey on this device.", needStepup: true }, 403, cors);
       const challenge = b64urlFromBytes(crypto.getRandomValues(new Uint8Array(32)));
-      await env.VAULT_GRANTS.put("wa:chal:" + challenge, JSON.stringify({ type: "reg", exp: Date.now() + WEBAUTHN_CHALLENGE_TTL_MS }), { expirationTtl: 300 });
+      try { await passkeyChallenge(env, "issue", challenge, { type: "reg" }); }
+      catch (error) { return json({ error: "Passkey challenge service unavailable. Please retry." }, 503, cors); }
       const exclude = [];
       try { const l = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" }); for (const k of l.keys) exclude.push({ type: "public-key", id: k.name.slice(8) }); } catch (e) {}
       return json({
@@ -368,10 +423,8 @@ export default {
         const body = await request.json();
         const cd = JSON.parse(new TextDecoder().decode(b64urlToBytes(body.response.clientDataJSON)));
         if (cd.type !== "webauthn.create") return json({ error: "Bad clientData type" }, 400, cors);
-        const ck = "wa:chal:" + cd.challenge;
-        const chal = await env.VAULT_GRANTS.get(ck, "json");
+        const chal = await passkeyChallenge(env, "read", cd.challenge, { type: "reg" });
         if (!chal || chal.type !== "reg" || chal.exp < Date.now()) return json({ error: "Challenge expired" }, 400, cors);
-        await env.VAULT_GRANTS.delete(ck);
         if (!waOriginOk(cd.origin, env)) return json({ error: "Bad origin" }, 400, cors);
         const att = cborDecode(b64urlToBytes(body.response.attestationObject)).value;
         const p = parseAuthData(att.get("authData"));
@@ -381,17 +434,19 @@ export default {
         if (!p.credId || !p.credPubKey) return json({ error: "No credential" }, 400, cors);
         const parsedKey = coseToJwk(p.credPubKey);
         const credId = b64urlFromBytes(p.credId);
+        if (!(await passkeyChallenge(env, "consume", cd.challenge, { type: "reg" }))) return json({ error: "Challenge expired or already used. Start again." }, 400, cors);
         await env.VAULT_GRANTS.put("wa:cred:" + credId, JSON.stringify({ jwk: parsedKey.jwk, alg: parsedKey.alg, counter: p.signCount, label: String(body.label || "passkey").slice(0, 40), createdAt: Date.now() }));
         const l = await env.VAULT_GRANTS.list({ prefix: "wa:cred:" });
         return json({ ok: true, credId: credId, count: l.keys.length }, 200, cors);
-      } catch (e) { return json({ error: "Registration failed", detail: String((e && e.message) || e) }, 400, cors); }
+      } catch (e) { return json({ error: e?.status === 503 ? "Passkey challenge service unavailable. Please retry." : "Registration failed", detail: String((e && e.message) || e) }, e?.status === 503 ? 503 : 400, cors); }
     }
     if (url.pathname === "/admin/webauthn/auth/begin") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
       if (!env.VAULT_GRANTS) return json({ error: "Passkey store not configured" }, 500, cors);
       let purpose = "login"; try { const b = await request.json(); if (b && b.purpose === "publish") purpose = "publish"; } catch (e) {}
       const challenge = b64urlFromBytes(crypto.getRandomValues(new Uint8Array(32)));
-      await env.VAULT_GRANTS.put("wa:chal:" + challenge, JSON.stringify({ type: "auth", purpose: purpose, exp: Date.now() + WEBAUTHN_CHALLENGE_TTL_MS }), { expirationTtl: 300 });
+      try { await passkeyChallenge(env, "issue", challenge, { type: "auth", purpose: purpose }); }
+      catch (error) { return json({ error: "Passkey challenge service unavailable. Please retry." }, 503, cors); }
       return json({ challenge: challenge, rpId: waRpId(env), timeout: 120000, userVerification: "preferred", allowCredentials: [] }, 200, cors);
     }
     if (url.pathname === "/admin/webauthn/auth/finish") {
@@ -400,10 +455,8 @@ export default {
         const body = await request.json();
         const cd = JSON.parse(new TextDecoder().decode(b64urlToBytes(body.response.clientDataJSON)));
         if (cd.type !== "webauthn.get") return json({ error: "Bad clientData type" }, 400, cors);
-        const ck = "wa:chal:" + cd.challenge;
-        const chal = await env.VAULT_GRANTS.get(ck, "json");
+        const chal = await passkeyChallenge(env, "read", cd.challenge, { type: "auth" });
         if (!chal || chal.type !== "auth" || chal.exp < Date.now()) return json({ error: "Challenge expired" }, 400, cors);
-        await env.VAULT_GRANTS.delete(ck);
         if (!waOriginOk(cd.origin, env)) return json({ error: "Bad origin" }, 400, cors);
         const cred = await env.VAULT_GRANTS.get("wa:cred:" + body.id, "json");
         if (!cred) return json({ error: "Unknown credential" }, 401, cors);
@@ -416,6 +469,7 @@ export default {
         const ok = await waVerifySig(cred.jwk, cred.alg, concatBytes(authData, cdHash), b64urlToBytes(body.response.signature));
         if (!ok) return json({ error: "Bad signature" }, 401, cors);
         if (cred.counter > 0 && p.signCount > 0 && p.signCount <= cred.counter) return json({ error: "Counter regression" }, 401, cors);
+        if (!(await passkeyChallenge(env, "consume", cd.challenge, { type: "auth" }))) return json({ error: "Challenge expired or already used. Start sign-in again." }, 400, cors);
         cred.counter = p.signCount; await env.VAULT_GRANTS.put("wa:cred:" + body.id, JSON.stringify(cred));
         if (chal.purpose === "publish") {
           const exp = Date.now() + PUBLISH_TOKEN_TTL_MS;
@@ -426,7 +480,7 @@ export default {
         // recovery+password step-up), so publishing needs no further verification here.
         const _sess = await issueSession(env), _trust = await issueTrust(env);
         return json({ token: _sess.token, exp: _sess.exp, trust: _trust.trust, trustExp: _trust.exp }, 200, cors);
-      } catch (e) { return json({ error: "Auth failed", detail: String((e && e.message) || e) }, 401, cors); }
+      } catch (e) { return json({ error: e?.status === 503 ? "Passkey challenge service unavailable. Please retry." : "Auth failed", detail: String((e && e.message) || e) }, e?.status === 503 ? 503 : 401, cors); }
     }
     if (url.pathname === "/admin/webauthn/list") {
       if (request.method !== "GET") return json({ error: "Method not allowed" }, 405, cors);
@@ -979,9 +1033,11 @@ export default {
     // as an /admin/gh repo WRITE: session + device-trust + (when enabled) the publish step-up
     // (passkey token = possession, recovery proof = knowledge). A stolen session alone cannot deface.
     if (url.pathname === "/admin/content") {
-      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
+      if (request.method !== "POST" && request.method !== "GET") return json({ error: "Method not allowed" }, 405, cors);
       if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
       if (!env.MEDIA) return json({ error: "Media storage is not configured" }, 500, cors);
+      if (!env.CONTENT_PUBLISHER) return json({ error: "Conditional publishing is not configured" }, 503, cors);
+      if (request.method === "GET") return json({ conditional: true, protocol: 1 }, 200, { ...cors, "Cache-Control": "no-store" });
       // Device-trust: writing the live content requires this device to have passed a step-up once.
       if (env.VAULT_GRANTS && !(await verifyTrust(request.headers.get("X-Device-Trust"), env))) {
         return json({ error: "This device isn\u2019t verified to publish yet.", needStepup: true }, 403, cors);
@@ -998,15 +1054,9 @@ export default {
         const buf = await request.arrayBuffer();
         if (!buf || buf.byteLength === 0) return json({ error: "Empty content" }, 400, cors);
         if (buf.byteLength > 40 * 1024 * 1024) return json({ error: "Content too large" }, 413, cors);
-        // Validate it parses as JSON so a corrupt/truncated publish can never blank the live site.
-        try { JSON.parse(new TextDecoder().decode(buf)); } catch (e) { return json({ error: "Not valid JSON \u2014 nothing written" }, 400, cors); }
-        await env.MEDIA.put("content.json", buf, { httpMetadata: { contentType: "application/json; charset=utf-8" } });
-        // Mirror to git server-side (version history + Pages fallback). Best-effort: R2 already made the
-        // site live, so a git hiccup returns ok:true with git.ok=false rather than failing the publish -
-        // but it's REPORTED to the studio (never silently swallowed like the old client-side mirror).
-        let git = { ok: false, error: "GitHub not configured on the Worker" };
-        if (env.GH_TOKEN && env.OWNER && env.REPO) git = await ghCommitContent(env, new Uint8Array(buf), "Update content.json via admin");
-        return json({ ok: true, size: buf.byteLength, git: git }, 200, cors);
+        const publisher = env.CONTENT_PUBLISHER.get(env.CONTENT_PUBLISHER.idFromName("content.json"));
+        const response = await publisher.fetch("https://publisher.internal/", { method: "POST", headers: { "X-Content-Base": request.headers.get("X-Content-Base") || "" }, body: buf });
+        return json(await response.json(), response.status, { ...cors, "Cache-Control": "no-store" });
       } catch (e) {
         return json({ error: "Content publish failed", detail: String((e && e.message) || e) }, 500, cors);
       }
@@ -1069,6 +1119,13 @@ export default {
         const proof = request.headers.get("X-Publish-Proof") || "";
         const proofHash = proof ? bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(proof))) : "";
         if (!stored || !timingSafeEqual(proofHash, stored)) return json({ error: "Publish needs your recovery passphrase." }, 401, cors);
+      }
+      if (ghMethod !== "GET" && ghMethod !== "HEAD") {
+        let writePath = "";
+        try { writePath = decodeURIComponent(rest.slice(allowed.length)); } catch (error) {}
+        if (ghMethod !== "PUT" || !/^contents\/(?:assets|fonts)\/[a-zA-Z0-9_./-]+$/.test(writePath) || writePath.includes("..")) {
+          return json({ error: "Content publication requires the current revision-protected publisher. Your draft is kept; reopen Studio before publishing." }, 428, cors);
+        }
       }
       const ghBody = (ghMethod === "GET" || ghMethod === "HEAD") ? undefined : await request.arrayBuffer();
 
@@ -1575,7 +1632,7 @@ function corsHeaders(origin, env) {
   return {
     "Access-Control-Allow-Origin": ok ? (origin || allow[0] || "*") : (allow[0] || "null"),
     "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization,Content-Type,x-api-key,anthropic-version,anthropic-dangerous-direct-browser-access,Accept,X-GitHub-Api-Version,X-Vault-Grant,X-Publish-Token,X-Publish-Proof,X-Device-Trust",
+    "Access-Control-Allow-Headers": "Authorization,Content-Type,x-api-key,anthropic-version,anthropic-dangerous-direct-browser-access,Accept,X-GitHub-Api-Version,X-Vault-Grant,X-Publish-Token,X-Publish-Proof,X-Device-Trust,X-Content-Base",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
@@ -1866,16 +1923,14 @@ function aiUsageClean(days) {
   }
   return out;
 }
-// Commit content.json to the repo server-side with the Worker's OWN GH_TOKEN, so the R2 write and the
-// git mirror share ONE auth context and can't desync (the browser no longer needs a step-up token that
-// the R2 write already consumed). blob -> tree -> commit -> ref, with one retry on a fast-forward race.
-async function ghCommitContent(env, bytes, message) {
+async function ghCommitContent(env, bytes, message, expected, recordAttempt) {
   const owner = env.OWNER || "", repo = env.REPO || "", branch = env.BRANCH || "main";
   if (!owner || !repo || !env.GH_TOKEN) return { ok: false, error: "GitHub not configured on the Worker" };
   const base = "https://api.github.com/repos/" + owner + "/" + repo;
   const H = { "Authorization": "token " + env.GH_TOKEN, "Accept": "application/vnd.github+json", "User-Agent": "rk-admin-proxy", "X-GitHub-Api-Version": "2022-11-28" };
+  const signal = AbortSignal.timeout(12000);
   const api = async (u, opts) => {
-    const res = await fetch(u, Object.assign({ headers: H }, opts || {}));
+    const res = await fetch(u, Object.assign({ headers: H, signal }, opts || {}));
     let b = null; try { b = await res.json(); } catch (e) {}
     if (!res.ok) { const er = new Error((b && b.message) || ("HTTP " + res.status)); er.http = res.status; throw er; }
     return b;
@@ -1886,15 +1941,18 @@ async function ghCommitContent(env, bytes, message) {
     const ref = await api(base + "/git/ref/heads/" + branch);
     const head = ref.object.sha;
     const headCommit = await api(base + "/git/commits/" + head);
+    const observed = await gitContentRevision(api, base, headCommit.tree.sha);
+    if (observed === expected.target) return head;
+    if (!observed || (observed !== expected.base && observed !== expected.attempt)) throw new Error("Git content changed independently. The live content is safe; review the mirror conflict.");
+    await recordAttempt(observed);
     const blob = await api(base + "/git/blobs", { method: "POST", body: JSON.stringify({ content: b64, encoding: "base64" }) });
     const tree = await api(base + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: headCommit.tree.sha, tree: [{ path: "content.json", mode: "100644", type: "blob", sha: blob.sha }] }) });
     const commit = await api(base + "/git/commits", { method: "POST", body: JSON.stringify({ message: message, tree: tree.sha, parents: [head] }) });
-    await api(base + "/git/refs/heads/" + branch, { method: "PATCH", body: JSON.stringify({ sha: commit.sha }) });
+    await api(base + "/git/refs/heads/" + branch, { method: "PATCH", body: JSON.stringify({ sha: commit.sha, force: false }) });
     return commit.sha;
   };
   try { return { ok: true, sha: await once() }; }
   catch (e1) {
-    if (e1 && (e1.http === 409 || e1.http === 422)) { try { return { ok: true, sha: await once() }; } catch (e2) { return { ok: false, error: String((e2 && e2.message) || e2) }; } }
     return { ok: false, error: String((e1 && e1.message) || e1) };
   }
 }

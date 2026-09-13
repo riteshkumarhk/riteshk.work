@@ -8,6 +8,7 @@ import { completeStudioBackup } from "./src/js/studio-content-backup.mjs";
 import { AI_SESSION_KEY, createAiSession } from "./src/js/ai-session.mjs";
 import { availableStudies } from "./src/js/slide-merge-sections.mjs";
 import { prepareBrief, prepareBriefWorks } from "./src/js/prepare-brief.mjs";
+import { contentRevision, publicationConflict, gitContentRevision } from "./src/js/content-revision.mjs";
 
 const source = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
 const styles = postcss.parse(readFileSync(new URL("./css/admin.css", import.meta.url), "utf8"));
@@ -19,13 +20,119 @@ function declarations(selector) {
   return result;
 }
 
+function publicationClient(fetch) {
+  const start = source.indexOf("async function ghCommitViaGitData("), end = source.indexOf("function jsonByteLen(", start);
+  return runInNewContext(`(() => { ${source.slice(start, end)} return { putContentR2, ghCommitViaGitData }; })()`, {
+    fetch, contentRevision, publicationConflict, gitContentRevision, AbortSignal,
+    ADMIN_WORKER: "https://worker.test", ghHeaders: () => ({ Authorization: "Bearer synthetic" }),
+    ghApiRoot: () => "https://git.test", GH_OWNER: "owner", GH_REPO: "repo", GH_BRANCH: "main", b64: value => Buffer.from(value).toString("base64")
+  });
+}
+
+test("live resume export preserves every bullet at all density levels", () => {
+  const start = source.indexOf("function atsRbBuild("), end = source.indexOf("\n  }", start) + 4;
+  const render = runInNewContext(`(${source.slice(start, end)})`, {
+    atsRbSize: () => ({ fmt: "a4", w: 210, h: 297 }), atsRbTpl: () => ({ head: "plain" }),
+    RB_FONTS: { sans: { pdf: "helvetica" } }, atsRbFont: "sans", atsRbMarginCfg: () => ({ mm: 14 }),
+    atsRbAccentRgb: () => [100, 100, 100], rpdfPlain: value => String(value || ""), atsRbLayout: "single", atsRbKeepWhole: true, RB_ICON_CACHE: {}, rbHex: () => "#000000"
+  });
+  const bullets = Array.from({ length: 100 }, (_, index) => "Preserved achievement " + index);
+  for (const density of [1.08, 1, 0.9, 0.72]) {
+    const drawn = []; let pages = 1;
+    function Pdf() { return new Proxy({}, { get: (target, key) => key === "splitTextToSize" ? value => [value] : key === "getTextWidth" ? value => value.length : key === "getNumberOfPages" ? () => pages : key === "addPage" ? () => pages++ : key === "text" ? value => drawn.push(...(Array.isArray(value) ? value : [value])) : () => {} }); }
+    render(Pdf, { name: "Synthetic", sections: [{ kind: "experience", heading: "Experience", items: [{ role: "Designer", bullets }] }] }, { k: density, maxBul: 3 });
+    for (const bullet of bullets) assert.equal(drawn.filter(text => text === bullet).length, 1);
+    assert.ok(pages > 1);
+  }
+});
+
+test("live resume PDF cache signature includes margins", () => {
+  const start = source.indexOf("function rbPdfSig()"), end = source.indexOf("\n", start);
+  const context = { working: { name: "Synthetic" }, atsRbTplId: "classic", atsRbSizeId: "a4", atsRbAccent: "", atsRbFont: "inter", atsRbDensity: "normal", atsRbLayout: "single", atsRbKeepWhole: true, atsRbMargin: "normal" };
+  const original = runInNewContext(`${source.slice(start, end)}; rbPdfSig()`, context);
+  const narrow = runInNewContext(`${source.slice(start, end)}; rbPdfSig()`, { ...context, atsRbMargin: "narrow" });
+  assert.notEqual(original, narrow);
+  assert.equal(original, runInNewContext(`${source.slice(start, end)}; rbPdfSig()`, context));
+});
+
+test("live resume recheck cannot save into an edited, closed or different document", async () => {
+  const start = source.indexOf("async function rbRecheck("), end = source.indexOf("\n    function rbSetBadge", start);
+  for (const change of ["none", "edit", "close", "abort", "review", "session", "design", "job"]) {
+    let resolve, calls = 0, saves = 0;
+    const review = { res: { score: 12 }, level: "staff", company: "Example", jd: "" }, working = { name: "Original" };
+    const context = {
+      rbRecheckPending: false, rbLifetime: new AbortController(), modal: { isConnected: true }, atsLast: review, atsRbSessId: "original", working, docEl: {},
+      rbReadEditor: () => context.working, rbDesignSnap: () => ({ margin: context.margin }), margin: "normal", rbToPlainText: value => value.name,
+      atsRbLayout: "single", atsLevel: "staff", atsState: {}, atsRbPages: 1, btnBusy: () => "Check", btnIdle: () => {},
+      atsModelChecks: () => ({ checks: [], structureScore: 90 }), aiCfg: () => ({}), atsSystem: () => "", atsUser: () => "", atsFactsBlock: () => "",
+      csgenParse: value => value, aiText: () => { calls++; return new Promise(done => { resolve = done; }); },
+      atsBlendScore: () => ({ score: 90, band: "Strong" }), dirty: true, paintSide: () => {}, rbSaveWorkspace: () => saves++, status: () => {}
+    };
+    const run = runInNewContext(`(${source.slice(start, end)})`, context);
+    const button = { isConnected: true }, pending = run(button);
+    await run(button);
+    assert.equal(calls, 1);
+    if (change === "edit") context.working = { name: "New edit" };
+    if (change === "close") context.modal.isConnected = false;
+    if (change === "abort") context.rbLifetime.abort();
+    if (change === "review") context.atsLast = { res: { score: 34 } };
+    if (change === "session") context.atsRbSessId = "new-session";
+    if (change === "design") context.margin = "narrow";
+    if (change === "job") review.jd = "New role";
+    resolve({ score: 99 }); await pending;
+    assert.equal(saves, change === "none" ? 1 : 0, change);
+    assert.equal(review.res.score, change === "none" ? 90 : 12, change);
+    assert.equal(context.dirty, change !== "none", change);
+  }
+});
+
+test("Studio publication sends the loaded revision and preserves conflicts without fallback writes", async () => {
+  const requests = [], baseline = await contentRevision({ title: "Loaded" });
+  const client = publicationClient(async (url, options = {}) => {
+    requests.push({ url, options });
+    if (options.method !== "POST") return Response.json({ conditional: true, protocol: 1 });
+    return Response.json({ error: "Another device published. Your draft is kept." }, { status: 412 });
+  });
+  await assert.rejects(client.putContentR2('{"title":"Draft"}', "session", baseline), { conflict: true, http: 412 });
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].options.headers["X-Content-Base"], baseline);
+  assert.equal(requests[1].options.body, '{"title":"Draft"}');
+  const oldRequests = [];
+  const old = publicationClient(async (url, options = {}) => { oldRequests.push(options); return new Response(null, { status: 405 }); });
+  await assert.rejects(old.putContentR2("{}", "session", baseline), /not enabled conflict protection/);
+  assert.equal(oldRequests.length, 1);
+  assert.equal(oldRequests[0].method, undefined);
+});
+
+test("direct Git publication refuses a stale baseline and never blindly retries a ref conflict", async () => {
+  const baseline = { title: "Loaded" }, expected = await contentRevision(baseline), requests = [];
+  let content = { title: "Newer remote" };
+  const client = publicationClient(async (url, options = {}) => {
+    requests.push({ url, options });
+    if (options.method === "PATCH") return Response.json({ message: "Not a fast forward" }, { status: 422 });
+    if (options.method === "POST") return Response.json({ sha: "created" });
+    if (url.includes("/git/ref/")) return Response.json({ object: { sha: "head" } });
+    if (url.includes("/git/commits/")) return Response.json({ tree: { sha: "tree" } });
+    if (url.includes("/git/trees/")) return Response.json({ tree: [{ path: "content.json", type: "blob", sha: "blob" }] });
+    return Response.json({ encoding: "base64", content: Buffer.from(JSON.stringify(content)).toString("base64") });
+  });
+  await assert.rejects(client.ghCommitViaGitData("token", "{}", "Synthetic", expected), { conflict: true });
+  assert.ok(requests.every(request => !request.options.method));
+  requests.length = 0; content = baseline;
+  await assert.rejects(client.ghCommitViaGitData("token", "{}", "Synthetic", expected), { conflict: true });
+  assert.equal(requests.filter(request => request.url.includes("/git/ref/heads/")).length, 1);
+  const updates = requests.filter(request => request.options.method === "PATCH");
+  assert.equal(updates.length, 1);
+  assert.equal(JSON.parse(updates[0].options.body).force, false);
+});
+
 test("Prepare sync retries failed writes and keeps deletion tombstones against stale cloud lists", async () => {
   const values = new Map(), requests = [];
   let fail = true, holdWrite = false, releaseWrite, remoteId = 'saved', releaseRead;
   const start = source.indexOf('var PREP_HIST_KEY'), end = source.indexOf('var PREP_TOOLS',start);
   const store = runInNewContext(`(() => { ${source.slice(start,end)} return {put:prepPut,remove:prepDel,retry:prepRetryStorage,pull:prepCloudPull,list:prepList}; })()`, {
     Map, Date, Object, JSON, AbortSignal, queueMicrotask, setTimeout, clearTimeout,
-    clone:structuredClone, window:{addEventListener(){}}, document:{querySelectorAll:()=>[]}, adminSession:()=>'test-session', ADMIN_WORKER:'https://worker.test',
+    clone:structuredClone, window:{addEventListener(){}}, document:{querySelector:()=>null,querySelectorAll:()=>[]}, adminSession:()=>'test-session', ADMIN_WORKER:'https://worker.test',
     localStorage:{getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,value)},
     fetch:async (url,options={}) => { requests.push({url,body:options.body}); if(url.includes('/list?')) return Response.json({items:[{id:remoteId,at:9999999999999}]}); if (url.includes('/get?')) return new Promise(resolve => { releaseRead = entry => resolve(Response.json(entry)); }); if (holdWrite && url.endsWith('/put')) { holdWrite = false; await new Promise(resolve => { releaseWrite = resolve; }); } return new Response('',{status:fail?503:200}); }
   });

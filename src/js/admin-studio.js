@@ -18,6 +18,7 @@ import {
   webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig, authStatus, authConfig, deviceTrust, deviceTrusted, stepUp, keyringGet, keyringPut
 } from "./admin-core.js";
 import { WORLD_LAND } from "./worldland.js";
+import { contentRevision, publicationConflict, gitContentRevision } from "./content-revision.mjs";
 import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsEmbedScore, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand, atsScoreModel } from "./ats-core.js";
 import { draftComposition } from "./slide-merge-ai.mjs";
 import { availableStudies } from "./slide-merge-sections.mjs";
@@ -144,6 +145,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   ];
 
   let data = null;
+  let publicationBaseRevision = "";
   let activeTab = "insights";
   let openStudy = -1; // index of the work item whose case-study editor is expanded
   let l2Tab = "details"; // active tab in the case-study editor: gen | details | highlights | story | slides
@@ -2901,9 +2903,9 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   var RB_TPL = { classic: { name: "Classic", accent: "#9a6a24", rgb: [154, 106, 36], head: "ruled", sumFF: "Georgia, 'Times New Roman', serif", sumStyle: "italic", pdfSum: "times", pdfSumStyle: "italic" }, modern: { name: "Modern", accent: "#2f6d9a", rgb: [47, 109, 154], head: "bar", sumFF: "Helvetica, Arial, sans-serif", sumStyle: "normal", pdfSum: "helvetica", pdfSumStyle: "normal" }, compact: { name: "Compact", accent: "#585c52", rgb: [88, 92, 82], head: "plain", sumFF: "Helvetica, Arial, sans-serif", sumStyle: "normal", pdfSum: "helvetica", pdfSumStyle: "normal" } };
   var RB_SIZE = { a4: { name: "A4", fmt: "a4", w: 210, h: 297 }, letter: { name: "US Letter", fmt: "letter", w: 215.9, h: 279.4 } };
   var RB_DENS = {
-    airy: { name: "Airy", scale: 1.06, ladder: [{ k: 1.08, maxBul: 7 }, { k: 1.03, maxBul: 6 }, { k: 0.98, maxBul: 5 }, { k: 0.93, maxBul: 5 }, { k: 0.88, maxBul: 4 }, { k: 0.84, maxBul: 4 }, { k: 0.80, maxBul: 3 }] },
-    normal: { name: "Normal", scale: 1.00, ladder: [{ k: 1.00, maxBul: 8 }, { k: 0.96, maxBul: 6 }, { k: 0.92, maxBul: 5 }, { k: 0.88, maxBul: 5 }, { k: 0.84, maxBul: 4 }, { k: 0.80, maxBul: 3 }, { k: 0.76, maxBul: 3 }] },
-    compact: { name: "Compact", scale: 0.90, ladder: [{ k: 0.92, maxBul: 10 }, { k: 0.88, maxBul: 8 }, { k: 0.84, maxBul: 7 }, { k: 0.80, maxBul: 6 }, { k: 0.77, maxBul: 5 }, { k: 0.74, maxBul: 4 }, { k: 0.72, maxBul: 4 }] }
+    airy: { name: "Airy", scale: 1.06, ladder: [{ k: 1.08 }, { k: 1.03 }, { k: 0.98 }, { k: 0.93 }, { k: 0.88 }, { k: 0.84 }, { k: 0.80 }] },
+    normal: { name: "Normal", scale: 1.00, ladder: [{ k: 1.00 }, { k: 0.96 }, { k: 0.92 }, { k: 0.88 }, { k: 0.84 }, { k: 0.80 }, { k: 0.76 }] },
+    compact: { name: "Compact", scale: 0.90, ladder: [{ k: 0.92 }, { k: 0.88 }, { k: 0.84 }, { k: 0.80 }, { k: 0.77 }, { k: 0.74 }, { k: 0.72 }] }
   };
   var RB_ACCENTS = ["#9a6a24", "#2f6d9a", "#585c52", "#7a3b3b", "#3f6b4b", "#454a8c", "#b0561f", "#1c1a17"];
   var RB_LAYOUTS = { single: { name: "Single column" }, sidebar: { name: "Two-column \u00b7 design" }, fullbleed: { name: "Full-bleed header" } };
@@ -2952,9 +2954,9 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   function atsRbAccentHex() { return atsRbAccent || atsRbTpl().accent; }
   function atsRbAccentRgb() { return (atsRbAccent && atsHexRgb(atsRbAccent)) || atsRbTpl().rgb; }
   function atsRbApplyTpl(docEl) { var t = atsRbTpl(), _bodyCss = (RB_FONTS[atsRbFont] || RB_FONTS.sans).css, _mg = atsRbMarginCfg(); docEl.style.setProperty("--rbz-accent", atsRbAccentHex()); docEl.style.setProperty("--rbz-sum-ff", _bodyCss); docEl.style.setProperty("--rbz-sum-style", "normal"); docEl.style.setProperty("--rbz-body-ff", _bodyCss); docEl.style.setProperty("--rbz-scale", atsRbDens().scale || 1); docEl.style.setProperty("--rbz-mt", _mg.et); docEl.style.setProperty("--rbz-mx", _mg.ex); docEl.style.setProperty("--rbz-mb", _mg.eb); docEl.setAttribute("data-head", t.head); docEl.setAttribute("data-layout", atsRbLayout); }
-  // Typeset the structured résumé at a given density (k scales type + spacing; maxBul caps bullets/role).
+  // Typeset the complete resume at a given density; only type and spacing are scaled.
   function atsRbBuild(jsPDF, rb, dens) {
-    var k = dens.k, maxBul = dens.maxBul;
+    var k = dens.k;
     var SZ = atsRbSize(), TPL = atsRbTpl();
     var doc = new jsPDF({ unit: "mm", format: SZ.fmt, compress: true });
     var BODYF = (RB_FONTS[atsRbFont] || RB_FONTS.sans).pdf;
@@ -3024,7 +3026,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       h += (doc.splitTextToSize(P(it.role || ""), CW2).length - 1) * 4.4 * k + 4.6 * k;
       if (it.org) h += 4.4 * k;
       doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k);
-      (it.bullets || []).slice(0, maxBul).forEach(function (bt) { h += doc.splitTextToSize(P(bt), CW2 - 4.5).length * 4 * k + 1.4 * k; });
+      (it.bullets || []).forEach(function (bt) { h += doc.splitTextToSize(P(bt), CW2 - 4.5).length * 4 * k + 1.4 * k; });
       return h + 3 * k;
     }
     function eduH(it) {
@@ -3070,7 +3072,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
           doc.text(_rl, CX, y);
           y += (_rl.length - 1) * 4.4 * k + 4.6 * k;
           if (it.org) { acc(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.4 * k); doc.text(P(it.org), CX, y); y += 4.4 * k; }
-          it.bullets.slice(0, maxBul).forEach(function (bt) {
+          it.bullets.forEach(function (bt) {
             var lines = doc.splitTextToSize(P(bt), CW2 - 4.5);
             if (!_whole) need(lines.length * 4 * k + 1.4 * k);
             acc(); doc.setFont("helvetica", "normal"); doc.setFontSize(8.6 * k); doc.text("\u2013", CX, y);
@@ -3436,6 +3438,9 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   }
   function atsRbShow(built, rb) {
     var working = rbNfkc(rb);
+    var rbLifetime = new AbortController(), rbRecheckPending = false;
+    function rbAbortPending() { rbLifetime.abort(); }
+    window.addEventListener("pagehide", rbAbortPending);
     var curUrl = null, previewing = false, dirty = false, pdfBlobUrl = null, pdfSig = null;
     var rbUndo = [rbClone(working)], rbRedo = [], rbCommitT = null;
     var atsRbPages = (built && built.pages) || 1; // the vector-PDF page count the badge shows; the editor compresses to match it
@@ -3821,7 +3826,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
 
     async function buildFromEdits() { working = rbReadEditor(docEl, working); var b = await atsRbFit(working); atsRbPages = b.pages; schedulePaginate(); return b; }
     function revoke() { if (curUrl) { try { URL.revokeObjectURL(curUrl); } catch (e) {} curUrl = null; } }
-    function rbPdfSig() { return JSON.stringify([working, atsRbTplId, atsRbSizeId, atsRbAccent, atsRbFont, atsRbDensity, atsRbLayout, atsRbKeepWhole]); }
+    function rbPdfSig() { return JSON.stringify([working, atsRbTplId, atsRbSizeId, atsRbAccent, atsRbFont, atsRbDensity, atsRbLayout, atsRbKeepWhole, atsRbMargin]); }
     // Render the exact print HTML to a real PDF via the Cloudflare worker (headless Chrome), cached until
     // the résumé/design changes. Throws on no-session/failure so callers fall back to the jsPDF export.
     async function rbRenderPdf() {
@@ -3846,6 +3851,32 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         throw (ac && ac.signal.aborted) ? new Error("render-timeout") : e;
       } finally { if (to) clearTimeout(to); }
     }
+    async function rbRecheck(button) {
+      if (rbRecheckPending || rbLifetime.signal.aborted || !modal.isConnected || !atsLast) return;
+      working = rbReadEditor(docEl, working);
+      const review = atsLast, sessionId = atsRbSessId, snapshot = JSON.stringify(working), design = JSON.stringify(rbDesignSnap());
+      const text = rbToPlainText(working, atsRbLayout), level = review.level || atsLevel, company = review.company || atsState.company || "", jd = review.jd || "";
+      const inputs = JSON.stringify([review.level, review.company, review.jd]);
+      const current = () => !rbLifetime.signal.aborted && modal.isConnected && atsLast === review && atsRbSessId === sessionId;
+      rbRecheckPending = true;
+      const previous = btnBusy(button, "Checking...");
+      try {
+        const keyword = jd ? atsKeywordMatch(text, jd) : null, semantic = jd ? atsSemanticFit(text, jd) : null;
+        const checks = atsModelChecks(working, { level, pages: atsRbPages });
+        const result = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(keyword, checks.checks, semantic)), { task: "analysis", json: true, maxTokens: 6000, temperature: 0, signal: rbLifetime.signal }));
+        if (!current()) return;
+        if (snapshot !== JSON.stringify(rbReadEditor(docEl, working)) || design !== JSON.stringify(rbDesignSnap()) || inputs !== JSON.stringify([review.level, review.company, review.jd])) {
+          status("The resume changed while checking. The previous assessment is kept; re-check the current version.");
+          return;
+        }
+        if (!result) throw new Error("The re-check came back unreadable. Try again.");
+        const blend = atsBlendScore({ keyword: keyword ? keyword.rate : null, semantic, structure: checks.structureScore, parse: 100, content: +result.score || 0 });
+        if (blend.score != null) { result.score = blend.score; result.band = blend.band; result._breakdown = blend.breakdown; }
+        Object.assign(review, { res: result, text, kw: keyword, sem: semantic });
+        dirty = false; paintSide(); rbSaveWorkspace(false); status("Re-checked: score updated.", true);
+      } catch (error) { if (current()) status("Re-check failed: " + (error?.message || error)); }
+      finally { rbRecheckPending = false; if (button.isConnected) btnIdle(button, previous); }
+    }
     function rbSetBadge(b, t) { var bd = modal.querySelector("[data-rbz-badge]"), tt = modal.querySelector("[data-rbz-title]"); if (bd) bd.textContent = b; if (tt) tt.textContent = t; }
     async function togglePreview(on) {
       var b0 = modal.querySelector("[data-rbz-preview]");
@@ -3857,7 +3888,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         frameEl.src = src; wrapEl.hidden = true; frameEl.hidden = false; previewing = true; modal.classList.add("rbz--preview"); rbSetBadge("PDF", "Résumé preview"); btnIdle(b0, "\u2190 Back to edit");
       } else { frameEl.hidden = true; wrapEl.hidden = false; previewing = false; modal.classList.remove("rbz--preview"); rbSetBadge("EDIT", "Résumé workspace"); b0.textContent = "Preview PDF"; paginate(); }
     }
-    function close() { try { rbFlushSave(); } catch (e) {} clearTimeout(_rbCountT); clearTimeout(rbCommitT); clearTimeout(paginateT); window.removeEventListener("pagehide", rbFlushSave); document.removeEventListener("keydown", onKey); window.removeEventListener("resize", onResize); document.removeEventListener("selectionchange", rbHiField); revoke(); if (pdfBlobUrl) { try { URL.revokeObjectURL(pdfBlobUrl); } catch (e) {} pdfBlobUrl = null; } modal.remove(); }
+    function close() { rbAbortPending(); window.removeEventListener("pagehide", rbAbortPending); try { rbFlushSave(); } catch (e) {} clearTimeout(_rbCountT); clearTimeout(rbCommitT); clearTimeout(paginateT); window.removeEventListener("pagehide", rbFlushSave); document.removeEventListener("keydown", onKey); window.removeEventListener("resize", onResize); document.removeEventListener("selectionchange", rbHiField); revoke(); if (pdfBlobUrl) { try { URL.revokeObjectURL(pdfBlobUrl); } catch (e) {} pdfBlobUrl = null; } modal.remove(); }
     function backToReview() { if (!atsRbReviewId) { close(); return; } atsvSessId = atsRbReviewId; close(); atsOpenViewer(); } // save + leave the workspace, reopen the review it came from
     function onKey(e) {
       if (e.key === "Escape") { if (previewing) togglePreview(false); else if (!/rbz__doc|rbz__/.test((document.activeElement && document.activeElement.className) || "")) close(); return; }
@@ -3910,15 +3941,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       }
       var rc = e.target.closest("[data-rbz-recheck]");
       if (rc) {
-        working = rbReadEditor(docEl, working);
-        var text = rbToPlainText(working, atsRbLayout), was2 = btnBusy(rc, "Checking\u2026");
-        try {
-          var level = (atsLast && atsLast.level) || atsLevel, company = (atsLast && atsLast.company) || atsState.company || "", jd = (atsLast && atsLast.jd) || "";
-          var _kw = jd ? atsKeywordMatch(text, jd) : null, _sem = jd ? atsSemanticFit(text, jd) : null, _chk = atsModelChecks(working, { level: level, pages: atsRbPages });
-          var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(_kw, _chk.checks, _sem)), { task: "analysis", json: true, maxTokens: 6000, temperature: 0 }));
-          if (res) { var _bl = atsBlendScore({ keyword: _kw ? _kw.rate : null, semantic: _sem, structure: _chk.structureScore, parse: 100, content: +res.score || 0 }); if (_bl.score != null) { res.score = _bl.score; res.band = _bl.band; res._breakdown = _bl.breakdown; } atsLast.res = res; atsLast.text = text; atsLast.kw = _kw; atsLast.sem = _sem; dirty = false; paintSide(); rbSaveWorkspace(false); status("Re-checked \u2014 score updated.", true); }
-          else { status("The re-check came back unreadable \u2014 try again."); btnIdle(rc, was2); }
-        } catch (er2) { status("Re-check failed: " + ((er2 && er2.message) || er2)); btnIdle(rc, was2); }
+        await rbRecheck(rc);
         return;
       }
     });
@@ -13783,7 +13806,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
 
   // Commit content.json via the Git Data API (blob -> tree -> commit -> ref).
   // Robust for any size: the Contents API PUT can return HTTP 500 on some content; this path does not.
-  async function ghCommitViaGitData(token, json, message) {
+  async function ghCommitViaGitData(token, json, message, expectedRevision) {
     const repo = ghApiRoot() + "/repos/" + GH_OWNER + "/" + GH_REPO;
     const api = async (url, opts) => {
       const res = await fetch(url, Object.assign({ headers: ghHeaders(token), cache: "no-store" }, opts || {}));
@@ -13795,10 +13818,12 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     const ref = await api(repo + "/git/ref/heads/" + GH_BRANCH);
     const headSha = ref.object.sha;
     const headCommit = await api(repo + "/git/commits/" + headSha);
+    if (!expectedRevision || await gitContentRevision(api, repo, headCommit.tree.sha) !== expectedRevision) throw publicationConflict();
     const blob = await api(repo + "/git/blobs", { method: "POST", body: JSON.stringify({ content: b64(json), encoding: "base64" }) });
     const tree = await api(repo + "/git/trees", { method: "POST", body: JSON.stringify({ base_tree: headCommit.tree.sha, tree: [{ path: "content.json", mode: "100644", type: "blob", sha: blob.sha }] }) });
     const commit = await api(repo + "/git/commits", { method: "POST", body: JSON.stringify({ message: message, tree: tree.sha, parents: [headSha] }) });
-    await api(repo + "/git/refs/heads/" + GH_BRANCH, { method: "PATCH", body: JSON.stringify({ sha: commit.sha }) });
+    try { await api(repo + "/git/refs/heads/" + GH_BRANCH, { method: "PATCH", body: JSON.stringify({ sha: commit.sha, force: false }) }); }
+    catch (error) { if (error.http === 409 || error.http === 422) throw publicationConflict(); throw error; }
     return commit.sha;
   }
 
@@ -13807,9 +13832,14 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   // GitHub -> Pages rebuild. The Worker gates this with the SAME security as a repo write (session +
   // device-trust + publish step-up), so we reuse ghHeaders(token). Errors mirror hostDataUri's shapes
   // (.auth / .http / .network / .tooLarge) so ghPublish's existing catch handles them.
-  async function putContentR2(json, token) {
+  async function putContentR2(json, token, expectedRevision) {
+    if (!expectedRevision) throw publicationConflict("The loaded publication baseline is unavailable. Your draft is kept. Reopen Studio before publishing.");
+    const capability = await fetch(ADMIN_WORKER + "/admin/content", { headers: ghHeaders(token), cache: "no-store", signal: AbortSignal.timeout(15000) });
+    if (capability.status === 401 || capability.status === 403) throw Object.assign(new Error("Your session could not be verified."), { auth: true });
+    const protocol = capability.ok ? await capability.json().catch(() => null) : null;
+    if (!protocol?.conditional || protocol.protocol !== 1) throw new Error("The publishing service has not enabled conflict protection yet. Your draft is kept; no content was written.");
     let r;
-    try { r = await fetch(ADMIN_WORKER + "/admin/content", { method: "POST", headers: ghHeaders(token), body: json }); }
+    try { r = await fetch(ADMIN_WORKER + "/admin/content", { method: "POST", headers: { ...ghHeaders(token), "X-Content-Base": expectedRevision }, body: json, signal: AbortSignal.timeout(45000) }); }
     catch (netErr) { const e = new Error("network"); e.network = 1; throw e; }
     if (r.status === 401 || r.status === 403) {
       const j = await r.json().catch(function () { return {}; });
@@ -13817,11 +13847,14 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     }
     if (!r.ok) {
       const j = await r.json().catch(function () { return {}; });
+      if (r.status === 412 || r.status === 428) throw publicationConflict(j.error || undefined);
       const e = new Error((j && j.error) || ("HTTP " + r.status)); e.http = r.status;
       if (r.status === 413) e.tooLarge = 1;
       throw e;
     }
-    return await r.json().catch(function () { return { ok: true }; });
+    const result = await r.json();
+    if (!result?.ok || result.revision !== await contentRevision(JSON.parse(json))) throw new Error("The publication acknowledgement could not be verified. Your draft is kept; check the live site before retrying.");
+    return result;
   }
 
   function jsonByteLen(s) { try { return new TextEncoder().encode(s).length; } catch (e) { return (s || "").length; } }
@@ -13859,6 +13892,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   async function ghPublish(token) {
     if (publishing) return;
     if (!slidePublishReady()) return;
+    const expectedRevision = publicationBaseRevision;
     publishing = true;
     var viaSession = (token === "session");
     // Device-trust: an unverified device (e.g. you just signed in with your phone) must verify + set up
@@ -13920,6 +13954,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       const finalisePublished = async function () {
         applyHostedReferences(data, publication.swaps);
         const released = JSON.parse(json);
+        publicationBaseRevision = await contentRevision(released);
         const resealed = resealPublishedSections(data, publication.owner, released);
         resealPublishedSections(publication.owner, clone(publication.owner), released);
         for (const id of resealed) {
@@ -13929,6 +13964,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         if (viaSession) localStorage.removeItem(GH_TOKEN_KEY); // published via the Worker session — the repo token no longer needs to live in this browser
         if (window.RK) {
           window.RK.published = JSON.parse(json); window.RK.publishedSig = mySig;
+          window.RK.publishedRevision = publicationBaseRevision;
           window.RK.studioPublished = clone(publication.owner);
           window.RK.studioPublishedSig = window.RK.sig(JSON.stringify(studioDraftContent(publication.owner)));
         }
@@ -13949,24 +13985,20 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         // re-commits on the next publish. This is what stops a slow/flaky tail from masquerading
         // as a failure.
         pubProgress(60, "Publishing your content\u2026");
-        var pubRes = await putContentR2(json, token);
+        var pubRes = await putContentR2(json, token, expectedRevision);
         pubStopCreep();
         const localSaved = await finalisePublished();
         pubProgress(100, !localSaved ? "Site is live, but the local editing copy could not be saved. Download a backup before leaving." : isDirty() ? "Site is live. Newer edits remain unpublished." : "Your site is live and ready to view.", { done: true, viewUrl: viewUrl });
-        // Version history: the Worker now commits content.json to git server-side as part of the R2 write
-        // (one auth context - can't desync). If it reported back, just surface any lag; on an older Worker
-        // (no git field) fall back to the client mirror - but NEVER swallow its failure again.
+        // The server coordinator owns mirror ordering; a browser must never write a competing mirror.
         if (pubRes && pubRes.git) { if (!pubRes.git.ok) status("Live \u2014 but the version-history mirror is lagging (" + (pubRes.git.error || "unknown") + "); it retries on the next publish.", false); }
-        else { ghCommitViaGitData(token, json, "Update content.json via admin").catch(function (e) { status("Live \u2014 version-history mirror failed: " + ((e && e.message) || e), false); }); }
+        else status("Live, but version-history confirmation is unavailable. Your editing copy is kept.", false);
         return;
       }
       // Direct-token mode (no admin session): the git commit IS the live path.
       try {
-        await ghCommitViaGitData(token, json, "Update content.json via admin");
+        await ghCommitViaGitData(token, json, "Update content.json via admin", expectedRevision);
       } catch (e1) {
-        if (e1 && (e1.http === 409 || e1.http === 422)) {
-          await ghCommitViaGitData(token, json, "Update content.json via admin"); // ref/tree conflict: refresh + retry once
-        } else if (e1 && e1.tooLarge) {
+        if (e1 && e1.tooLarge) {
           pubStopCreep(); pubProgress(100, mediaTooLargeMsg(fails, jsonBytes), { error: true }); return;
         } else {
           throw e1;
@@ -13984,6 +14016,10 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       // A ticket code typed this session must survive a failed publish so the next attempt doesn't
       // re-ask for it — persist the recovery keyring best-effort before surfacing the error.
       try { await saveTicketKeyring(); } catch (_) {}
+      if (e?.conflict) {
+        pubProgress(100, e.message, { error: true });
+        return;
+      }
       if (e && e.rkEnc) {
         pubProgress(100, e.mixed
           ? "Unlock this project\u2019s protected sections (enter its pass) before publishing."
@@ -19201,6 +19237,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   async function open(hostApi) {
     if (hostApi) __host = hostApi;
     const pub = (window.RK && window.RK.published) ? window.RK.published : (window.RK && window.RK.data);
+    publicationBaseRevision = window.RK?.publishedRevision || await contentRevision(pub);
     const draftRaw = localStorage.getItem(DRAFT_KEY);
     const draft = readDraft();
     const draftSig = localStorage.getItem(DRAFT_SIG_KEY);

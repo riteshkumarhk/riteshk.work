@@ -4,6 +4,7 @@
    source of truth). Exposes window.RK for the admin editor.
    ================================================================= */
 import { hasStudioOwnerCopies, restoreStudioOwnerCopies } from "./slide-studio-owner.mjs";
+import { contentRevision } from "./content-revision.mjs";
 
 (function () {
   "use strict";
@@ -1199,6 +1200,7 @@ import { hasStudioOwnerCopies, restoreStudioOwnerCopies } from "./slide-studio-o
       return;
     }
     const publishedSig = sig(JSON.stringify(published));
+    const publishedRevision = await contentRevision(published);
 
     // The local draft is a PRIVATE admin working copy. Only render it when
     // explicitly previewing (?draft) or inside the admin live-preview iframe
@@ -1216,6 +1218,7 @@ import { hasStudioOwnerCopies, restoreStudioOwnerCopies } from "./slide-studio-o
       draftPreview: previewDraft,
       published: published,
       publishedSig: publishedSig,
+      publishedRevision: publishedRevision,
       sig: sig,
       render: render,
       md: md,

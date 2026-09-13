@@ -4,6 +4,18 @@ compatibility_date = "2026-07-28"
 workers_dev = true
 preview_urls = false
 
+[[durable_objects.bindings]]
+name = "PASSKEY_CHALLENGES"
+class_name = "PasskeyChallenges"
+
+[[durable_objects.bindings]]
+name = "CONTENT_PUBLISHER"
+class_name = "ContentPublisher"
+
+[[migrations]]
+tag = "stability-challenges-v1"
+new_sqlite_classes = ["PasskeyChallenges", "ContentPublisher"]
+
 [[r2_buckets]]
 binding = "SLIDE_LIBRARIES"
 bucket_name = "rk-slide-libraries"

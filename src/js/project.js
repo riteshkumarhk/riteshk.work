@@ -2,6 +2,8 @@ import { presentDeckWithRenderer } from "./deck-presenter.mjs";
 import { hasNativeDeck, presentStudioDeck, presentationFailure } from "./slide-studio-player.mjs";
 import { nativePublicDeck } from "./slide-studio-publication.mjs";
 import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
+import { loadProtectedBlocks } from "./project-recovery.mjs";
+import { sanitizeRichHtml } from "./rich-html.mjs";
 
 /* =================================================================
    RITESH KUMAR — Project case study (L2)
@@ -43,6 +45,16 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
   }
   var FS_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
   function figmaEmbed(url) { return /embed/i.test(url) && /figma\.com/i.test(url) ? url : ("https://www.figma.com/embed?embed_host=ritesh&url=" + encodeURIComponent(url)); }
+  function figmaOriginalUrl(value) {
+    try {
+      var url = new URL(value);
+      if (url.pathname === "/embed" && url.searchParams.has("url")) url = new URL(url.searchParams.get("url"));
+      if (url.protocol !== "https:" || url.username || url.password || !/^(www\.|embed\.)?figma\.com$/.test(url.hostname)) return "";
+      if (url.hostname === "embed.figma.com") url.hostname = "www.figma.com";
+      url.searchParams.delete("embed-host"); url.searchParams.delete("embed_host");
+      return url.href;
+    } catch (error) { return ""; }
+  }
   function absUrl(u) { try { return new URL(u, location.href).href; } catch (e) { return u; } }
   function officeEmbed(url) { return "https://view.officeapps.live.com/op/embed.aspx?src=" + encodeURIComponent(absUrl(url)); }
   // A YouTube time value ("659", "659s", "10m59s", "1h2m3s") -> whole seconds.
@@ -100,18 +112,19 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
     if (isVideo(url, k)) return "video";
     return "image";
   }
-  function frameEl(src, cls, label, siteFullscreen) {
+  function frameEl(src, cls, label, siteFullscreen, original) {
     var vid = label === "video" ? " pjb__frame--video" : "";
     var fs = siteFullscreen === false ? "" : '<button class="pjb__fs" type="button" data-fs aria-label="Toggle fullscreen \u2014 ' + attr(label) + '" title="Fullscreen">' + FS_SVG + '<span>Fullscreen</span></button>';
-    return '<div class="pjb__frame ' + cls + vid + '">' +
-      '<iframe class="pjb__frame-el" src="' + attr(src) + '" loading="lazy" allow="fullscreen; autoplay; clipboard-read; clipboard-write" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>' +
-      fs + '</div>';
+    var recovery = original ? '<div class="pjb__frame-tools"><span class="pjb__frame-state" data-embed-state role="status">Figma</span><button type="button" class="pjb__frame-action" data-embed-retry title="Reload Figma embed">Retry</button><a class="pjb__frame-action" href="' + attr(original) + '" target="_blank" rel="noopener noreferrer" title="Open original in Figma in a new tab">Open original</a></div>' : "";
+    return '<div class="pjb__frame ' + cls + vid + (original ? ' pjb__frame--recoverable' : '') + '">' +
+      '<iframe class="pjb__frame-el" title="Embedded ' + attr(label) + '" src="' + attr(src) + '" loading="lazy" allow="fullscreen; autoplay; clipboard-read; clipboard-write" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>' +
+      fs + recovery + '</div>';
   }
   function mediaEl(m, cls) {
     var url = mediaUrl(mediaSrc(m));
     if (!url) return "";
     var kind = mediaKind(m);
-    if (kind === "figma") return frameEl(figmaEmbed(url), cls, "prototype", false);
+    if (kind === "figma") return frameEl(figmaEmbed(url), cls, "prototype", false, figmaOriginalUrl(url));
     if (kind === "office") return frameEl(officeEmbed(url), cls, "slideshow");
     if (kind === "pdf") return frameEl(url + (/[#?]/.test(url) ? "" : "#view=FitH"), cls, "PDF");
     if (kind === "embed") return frameEl(ytEmbed(url), cls, /(1drv|onedrive|sharepoint)/i.test(url) ? "slideshow" : "video");
@@ -181,6 +194,13 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
   }
 
   var overlay = null, scroller = null, activeId = null;
+  var projectGeneration = 0, projectUnlock = null;
+  function cancelProjectRequests() {
+    projectGeneration++;
+    if (projectUnlock) projectUnlock.abort();
+    projectUnlock = null;
+    Object.keys(vaultResolving || {}).forEach(function (id) { vaultResolving[id]?.abort(); delete vaultResolving[id]; delete vaultTried[id]; });
+  }
   var returnScrollY = 0, lastFocus = null, spyRaf = 0;
   var previewSelIdx = -1; // admin live-preview: index of the section whose floating action toolbar is shown
   var pvDragIdx = -1;     // admin live-preview: index of the section currently being drag-reordered
@@ -211,11 +231,7 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
       .replace(/url\(\s*(["']?)(\/?assets\/uploads\/[^)"']+)\1\s*\)/gi, function (m, q, p) { return "url(" + q + mediaUrl(p) + q + ")"; });
   }
   function safeHtml(s) {
-    return rewriteAssetUrls(String(s == null ? "" : s)
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
-      .replace(/ on\w+="[^"]*"/gi, "").replace(/ on\w+='[^']*'/gi, "")
-      .replace(/javascript:/gi, ""));
+    return sanitizeRichHtml(s, mediaUrl);
   }
   function prose(body, cls) { if (!body) return ""; return '<div class="pjb__prose' + (cls ? " " + cls : "") + '">' + (isRichHtml(body) ? safeHtml(body) : paras(body)) + "</div>"; }
   function richInline(s) { s = s == null ? "" : String(s); return isRichHtml(s) ? safeHtml(s) : md(s); }
@@ -238,7 +254,7 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
   }
   function isUnlocked(id) { try { return sessionStorage.getItem(UNLOCK_KEY + id) === "1"; } catch (e) { return false; } }
   function setUnlocked(id) { try { var was = sessionStorage.getItem(UNLOCK_KEY + id) === "1"; sessionStorage.setItem(UNLOCK_KEY + id, "1"); if (!was) { try { window.__rkTrack && window.__rkTrack("deepcut_unlock", id); } catch (e) {} } } catch (e) {} }
-  function clearUnlocked(id) { try { sessionStorage.removeItem(UNLOCK_KEY + id); } catch (e) {} }   // owner re-locks the editor preview (does not re-encrypt the draft — Publish does that)
+  function clearUnlocked(id) { if (activeId === id) cancelProjectRequests(); try { sessionStorage.removeItem(UNLOCK_KEY + id); } catch (e) {} }   // owner re-locks the editor preview (does not re-encrypt the draft — Publish does that)
 
   /* ---------- locked-section decryption (envelope) ----------
      Protected blocks ship as ciphertext stubs. A credential (deeper-cut pass or a
@@ -276,14 +292,17 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
     return any;
   }
   // Unlock a study with one credential against a specific key-wrap.
-  async function unlockStudyWithCred(st, credential, wrap) {
+  async function unlockStudyWithCred(st, credential, wrap, options) {
+    options = options || {};
     if (!st || !st.enc || !wrap) return false;
     var sek;
     try { sek = await rkUnwrapSek(credential, wrap); } catch (e) { return false; }
+    options.signal?.throwIfAborted();
     var okDec = await decryptStudyBlocks(st, sek);
+    options.signal?.throwIfAborted();
     // A working deeper-cut pass also redeems a scoped vault grant, so vault-hosted media in this
     // project streams for the pass-holder (best-effort; no-op if no grant is registered).
-    if (okDec) { try { if (window.RK && window.RK.vaultRedeem) await window.RK.vaultRedeem(credential); } catch (e) {} }
+    if (okDec) { try { if (window.RK && window.RK.vaultRedeem) await window.RK.vaultRedeem(credential, options); } catch (e) { options.signal?.throwIfAborted(); } }
     return okDec;
   }
   // ---------- vault-hosted locked sections ----------
@@ -291,25 +310,19 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
   // only a {vaultBlock:"<key>"} pointer + a locked placeholder — zero content (not even ciphertext)
   // in the public repo. Authorised viewers (owner session or a redeemed pass grant) fetch the block
   // over a short-lived signed URL and render it in place; everyone else keeps seeing the gate.
-  async function resolveVaultBlocks(w) {
+  async function resolveVaultBlocks(w, options) {
+    options = options || {};
     var st = w && w.study;
     if (!st || !Array.isArray(st.blocks)) return 0;
     var sign = window.RK && window.RK.vaultSignedUrl;
     if (typeof sign !== "function") return 0;
-    var resolved = 0;
-    for (var i = 0; i < st.blocks.length; i++) {
-      var b = st.blocks[i];
-      if (!b || !b.locked || typeof b.vaultBlock !== "string" || !b.vaultBlock) continue;
-      try {
-        var url = await sign(b.vaultBlock);
-        if (!url) continue;                       // not authorised — leave the pointer, stay gated
-        var res = await fetch(url);
-        if (!res.ok) continue;
-        var full = await res.json();
-        if (full && typeof full === "object" && !Array.isArray(full)) { full.locked = true; st.blocks[i] = full; resolved++; }
-      } catch (e) {}
-    }
-    return resolved;
+    var original = st.blocks;
+    var result = await loadProtectedBlocks(original, { sign: sign, signal: options.signal });
+    options.signal?.throwIfAborted();
+    if (w.study !== st || st.blocks !== original) return 0;
+    st.blocks = result.blocks;
+    if (options.onResult) options.onResult(result);
+    return result.resolved;
   }
   // Best-effort, post-render: if this project has vault-hosted locked sections and the viewer is
   // already authorised (owner, or a pass redeemed earlier this session), fetch them and re-render
@@ -322,20 +335,33 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
     try { var g = JSON.parse(sessionStorage.getItem("rk:vault:grant") || "null"); return !!(g && g.token && g.exp && g.exp > Date.now()); } catch (e) {}
     return false;
   }
-  var vaultResolving = Object.create(null), vaultTried = Object.create(null);
-  function autoResolveVaultBlocks(w) {
+  function viewerAccessKey() { try { return (sessionStorage.getItem("rk:present:active") || "") + ":" + (sessionStorage.getItem("rk:vault:grant") || ""); } catch (e) { return ""; } }
+  var vaultResolving = Object.create(null), vaultTried = Object.create(null), vaultErrors = Object.create(null);
+  function autoResolveVaultBlocks(w, retry) {
     var st = w && w.study;
-    if (!st || !w) return;
+    if (!st || !w || activeId !== w.id) return;
+    if (projectUnlock && !projectUnlock.signal.aborted) return;
     if (!(st.blocks || []).some(function (b) { return b && b.locked && b.vaultBlock; })) return;   // only unresolved pointers (resolution removes them)
     if (!viewerAuthorized()) return;
-    if (vaultResolving[w.id] || vaultTried[w.id]) return;   // a resolve is already in flight, or already attempted this session
-    vaultResolving[w.id] = true;
+    if (vaultResolving[w.id] || (vaultTried[w.id] && !retry)) return;
+    var controller = new AbortController(), generation = projectGeneration, access = viewerAccessKey();
+    var originalBlocks = st.blocks, blockSnapshot = JSON.stringify(originalBlocks);
+    var pending = { ...w, study: JSON.parse(JSON.stringify(st)) }, failures = [];
+    function current() { return !controller.signal.aborted && generation === projectGeneration && activeId === w.id && workById(w.id) === w && w.study === st && viewerAuthorized() && viewerAccessKey() === access; }
+    vaultResolving[w.id] = controller;
+    vaultTried[w.id] = true;
     if (activeId === w.id) fillContent(w);                  // re-render so the vault sections show an "Unlocking…" state instead of the request prompt
-    resolveVaultBlocks(w).then(function (n) {
-      delete vaultResolving[w.id];
-      vaultTried[w.id] = true;
+    return resolveVaultBlocks(pending, { signal: controller.signal, onResult: function (result) { failures = result.failures; } }).then(function (n) {
+      if (!current() || st.blocks !== originalBlocks || JSON.stringify(st.blocks) !== blockSnapshot) return;
+      st.blocks = pending.study.blocks;
+      vaultErrors[w.id] = failures;
       if (n > 0) setUnlocked(w.id);
-      if (activeId === w.id) fillContent(w);                // swap in the unlocked content (or clear the "Unlocking…" state if nothing resolved)
+    }).catch(function (error) {
+      if (current()) vaultErrors[w.id] = [{ kind: "unavailable" }];
+    }).finally(function () {
+      if (vaultResolving[w.id] !== controller) return;
+      delete vaultResolving[w.id];
+      if (current()) fillContent(w);
     });
   }
 
@@ -721,7 +747,12 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
       return kicker(b.kicker || "Deeper cut") +
         (b.heading ? '<h2 class="pjb__h pjb__h--blur">' + md(b.heading) + "</h2>" : "") +
         '<div class="pjb__lock pjb__lock--loading"><span class="pjb__lock-spin" aria-hidden="true"></span>' +
-        '<p class="pjb__lock-txt">Unlocking your access \u2014 decrypting this section\u2026</p></div>';
+        '<p class="pjb__lock-txt" role="status">Loading the protected section...</p></div>';
+    }
+    if (b.vaultBlock && viewerAuthorized() && vaultTried[activeId]) {
+      var failure = (vaultErrors[activeId] || [])[0];
+      var message = failure?.kind === "access" ? "Access to this section could not be verified." : failure?.kind === "timeout" ? "The protected section took too long to respond." : "The protected section is temporarily unavailable.";
+      return kicker(b.kicker || "Deeper cut") + '<div class="pjb__lock"><p class="pjb__lock-txt" role="status">' + message + '</p><button type="button" class="pj__btn" data-vault-retry>Retry loading</button></div>';
     }
     return kicker(b.kicker || "Deeper cut") +
       (b.heading ? '<h2 class="pjb__h pjb__h--blur">' + md(b.heading) + "</h2>" : "") +
@@ -1644,6 +1675,15 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
   }
 
   function onOverlayClick(e) {
+    var vaultRetry = e.target.closest("[data-vault-retry]");
+    if (vaultRetry) { e.preventDefault(); var retryWork = workById(activeId); if (retryWork && viewerAuthorized()) autoResolveVaultBlocks(retryWork, true); return; }
+    var embedRetry = e.target.closest("[data-embed-retry]");
+    if (embedRetry) {
+      e.preventDefault();
+      var retryFrame = embedRetry.closest(".pjb__frame").querySelector("iframe");
+      if (retryFrame && !embedRetry.disabled) { retryFrame.__rkRecovery?.start(); retryFrame.src = retryFrame.getAttribute("src"); }
+      return;
+    }
     var pvBtn = e.target.closest("[data-pjtb]");
     if (pvBtn) {
       e.preventDefault();
@@ -2017,8 +2057,9 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
   var stageCtl = null;
   function destroyStage() { if (stageCtl) { try { stageCtl.destroy(); } catch (e) {} stageCtl = null; } }
   function initStage(scope) {
-    destroyStage();
     var stage = scope.querySelector("[data-stage]");
+    if (stageCtl && stageCtl.stage === stage) return;
+    destroyStage();
     if (!stage) return;
     var count = +stage.getAttribute("data-count") || 0;
     if (count < 2) return;
@@ -2113,7 +2154,7 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
       }, { threshold: [0, 0.3, 0.6] });
       io.observe(main);
     }
-    stageCtl = { destroy: function () { clearTimer(); if (resumeTimer) clearTimeout(resumeTimer); detachVid(); slides.forEach(function (s) { var f = s.querySelector(".pjb__frame-el"); if (f && f.__yt) { try { f.__yt.destroy(); } catch (e) {} f.__yt = null; } }); if (io) { try { io.disconnect(); } catch (e) {} } } };
+    stageCtl = { stage: stage, destroy: function () { clearTimer(); if (resumeTimer) clearTimeout(resumeTimer); detachVid(); slides.forEach(function (s) { var f = s.querySelector(".pjb__frame-el"); if (f && f.__yt) { try { f.__yt.destroy(); } catch (e) {} f.__yt = null; } }); if (io) { try { io.disconnect(); } catch (e) {} } } };
     show(0);
   }
 
@@ -2164,15 +2205,13 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
     overlay.classList.toggle("pj--publicdeck", pjDeckPublic(w));
     var contentEl = overlay.querySelector("[data-content]");
     var html = contentHtml(w);
-    // In the admin live-preview, re-rendering the SAME project on every keystroke
-    // must not tear down embed iframes/videos (reparenting an iframe reloads it —
-    // a distracting flash). Morph the DOM instead, leaving unchanged media in place.
-    if (PREVIEW && contentEl.getAttribute("data-wid") === String(w.id) && contentEl.firstChild) {
+    if (contentEl.getAttribute("data-wid") === String(w.id) && contentEl.firstChild) {
       morphInto(contentEl, html);
     } else {
       contentEl.innerHTML = html;
     }
     contentEl.setAttribute("data-wid", String(w.id));
+    contentEl.querySelectorAll("[data-stage]").forEach(function (stage) { if (!stage.__rkStageTemplate) stage.__rkStageTemplate = stage.outerHTML; });
     var seg = overlay.querySelector("[data-viewseg]");
     if (seg) {
       var hasOverview = !!contentEl.querySelector(".pj__moves");
@@ -2181,8 +2220,10 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
       seg.querySelectorAll(".pj__viewseg-btn").forEach(function (b) { b.classList.toggle("is-active", b.getAttribute("data-view") === "overview"); });
     }
     requestAnimationFrame(function () {
+      if (activeId !== w.id || contentEl.getAttribute("data-wid") !== String(w.id)) return;
       lastSpyId = null;
       updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); graphWire(contentEl); galleryNav(contentEl); initStage(contentEl);
+      hydrateEmbedRecovery(contentEl);
       resolveVaultMedia(contentEl); // swap vault placeholders for signed URLs (authorised viewers only)
       autoResolveVaultBlocks(w);    // fetch vault-hosted locked sections if the viewer is already authorised
       if (window.RKGen && RKGen.hydrate) RKGen.hydrate(contentEl); // wire drag/zoom on generated fx nodes
@@ -2191,9 +2232,39 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
     });
   }
 
+  function hydrateEmbedRecovery(root) {
+    root.querySelectorAll(".pjb__frame--recoverable iframe").forEach(function (frame) {
+      if (frame.__rkRecovery) { frame.__rkRecovery.render(); return; }
+      var wrapper = frame.closest(".pjb__frame"), timer, observer, message = "Figma", busy = false;
+      function render() {
+        var label = wrapper.querySelector("[data-embed-state]"), retry = wrapper.querySelector("[data-embed-retry]");
+        if (label) label.textContent = message;
+        if (retry) retry.disabled = busy;
+      }
+      function state(nextMessage, nextBusy) { clearTimeout(timer); message = nextMessage; busy = nextBusy; render(); }
+      function start() {
+        if (observer) observer.disconnect();
+        if (navigator.onLine === false) { state("Offline", false); return; }
+        state("Waiting for Figma", true);
+        timer = setTimeout(function () { if (frame.isConnected) state("Response unconfirmed", false); }, 15000);
+      }
+      function loaded() { if (observer) observer.disconnect(); state(navigator.onLine === false ? "Offline" : "Figma", false); }
+      function offline() { state("Offline", false); }
+      function online() { state("Response unconfirmed", false); }
+      frame.__rkRecovery = { start: start, render: render, dispose: function () { clearTimeout(timer); if (observer) observer.disconnect(); frame.removeEventListener("load", loaded); window.removeEventListener("offline", offline); window.removeEventListener("online", online); } };
+      frame.addEventListener("load", loaded);
+      window.addEventListener("offline", offline); window.addEventListener("online", online);
+      if (navigator.onLine === false) offline();
+      else if (window.IntersectionObserver) {
+        observer = new IntersectionObserver(function (entries) { if (entries.some(function (entry) { return entry.isIntersecting; })) start(); });
+        observer.observe(frame);
+      } else start();
+    });
+  }
+
   // Minimal DOM morph: update text/attributes in place and add/remove nodes, but
   // leave any <iframe>/<video> whose src is unchanged completely untouched, so the
-  // embed keeps playing and never reloads. Used only for same-project preview refreshes.
+  // embed keeps playing and never reloads during same-project refreshes.
   function morphInto(container, html) {
     var tmp = document.createElement("div");
     tmp.innerHTML = html;
@@ -2205,14 +2276,22 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
     for (var i = 0; i < newKids.length; i++) {
       var n = newKids[i], o = oldKids[i];
       if (!o) { oldParent.appendChild(n); continue; }
-      if (o.nodeType !== n.nodeType || (o.nodeType === 1 && o.nodeName !== n.nodeName)) { oldParent.replaceChild(n, o); continue; }
+      if (o.nodeType !== n.nodeType || (o.nodeType === 1 && (o.nodeName !== n.nodeName || o.getAttribute("data-block") !== n.getAttribute("data-block") || o.id !== n.id))) { disposeEmbedRecovery(o); oldParent.replaceChild(n, o); continue; }
       morphNode(o, n);
     }
-    for (var j = oldKids.length - 1; j >= newKids.length; j--) oldParent.removeChild(oldKids[j]);
+    for (var j = oldKids.length - 1; j >= newKids.length; j--) { disposeEmbedRecovery(oldKids[j]); oldParent.removeChild(oldKids[j]); }
+  }
+  function disposeEmbedRecovery(node) {
+    if (node.__rkRecovery) node.__rkRecovery.dispose();
+    if (node.querySelectorAll) node.querySelectorAll("iframe").forEach(function (frame) { if (frame.__rkRecovery) frame.__rkRecovery.dispose(); });
   }
   function morphNode(o, n) {
     if (o.nodeType === 3 || o.nodeType === 8) { if (o.nodeValue !== n.nodeValue) o.nodeValue = n.nodeValue; return; }
     if (o.nodeType !== 1) return;
+    if (o.hasAttribute("data-stage")) {
+      if (o.__rkStageTemplate === n.outerHTML) return;
+      destroyStage(); disposeEmbedRecovery(o); o.replaceWith(n); return;
+    }
     var tag = o.nodeName;
     // Same embed (identical src) → keep the live node, sync only its other attributes.
     if ((tag === "IFRAME" || tag === "VIDEO") && o.getAttribute("src") === n.getAttribute("src")) { morphAttrs(o, n); return; }
@@ -2471,6 +2550,7 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
       lockBg(true);
       setSiteInert(true);
     }
+    cancelProjectRequests();
     activeId = id;
     if (window.__rklog) window.__rklog("sys", "case opened \u2014 " + id);
     sdbgPlace();
@@ -2489,10 +2569,16 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
 
   function closeProject(opts) {
     opts = opts || {};
+    cancelProjectRequests();
     cancelPin();
     var wasOpen = overlay && overlay.classList.contains("is-open");
     if (wasOpen && window.__rklog) window.__rklog("sys", "case closed");
     destroyStage();
+    if (overlay) {
+      var closedContent = overlay.querySelector("[data-content]");
+      closedContent?.querySelectorAll("iframe").forEach(function (frame) { frame.__rkRecovery?.dispose(); });
+      closedContent?.replaceChildren();
+    }
     if (wasOpen) {
       overlay.classList.remove("is-open");
       lockBg(false);
@@ -2517,34 +2603,50 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
   function unlockFlow() {
     var w = workById(activeId);
     if (!w || !w.study) return;
+    cancelProjectRequests();
+    var attempt = new AbortController(), generation = projectGeneration;
+    projectUnlock = attempt;
     var st = w.study;
+    var originalBlocks = st.blocks, blockSnapshot = JSON.stringify(originalBlocks);
     var passWrap = st.enc && st.enc.wraps && st.enc.wraps.pass;
     var hash = st.unlockHash || "";
+    function current() { return !attempt.signal.aborted && generation === projectGeneration && activeId === w.id && workById(w.id) === w && w.study === st && st.blocks === originalBlocks && JSON.stringify(st.blocks) === blockSnapshot; }
     passModal({
+      signal: attempt.signal,
+      onClose: function () { attempt.abort(); if (projectUnlock === attempt) projectUnlock = null; },
       title: "Unlock the full case study",
       sub: "Enter the pass you were given to reveal the deeper cut.",
       placeholder: "Your pass", cta: "Unlock", password: false,
       requestCtx: "Deeper cut \u2014 " + plain(w.title),
       onSubmit: async function (v, err) {
-        var hasVault = (st.blocks || []).some(function (b) { return b && b.locked && b.vaultBlock; });
+        if (!current()) return false;
+        var pending = { ...w, study: JSON.parse(JSON.stringify(st)) };
+        var hasVault = (pending.study.blocks || []).some(function (b) { return b && b.locked && b.vaultBlock; });
         if (passWrap) {
-          var ok = await unlockStudyWithCred(st, v, passWrap);   // also redeems the vault grant on success
+          var ok = await unlockStudyWithCred(pending.study, v, passWrap, { signal: attempt.signal });   // also redeems the vault grant on success
+          if (!current()) return false;
           if (!ok) { err.textContent = "That pass doesn't match."; return false; }
-          if (hasVault) await resolveVaultBlocks(w);
+          if (hasVault) await resolveVaultBlocks(pending, { signal: attempt.signal });
         } else if (hasVault) {
           var redeemed = false;
-          try { redeemed = (window.RK && window.RK.vaultRedeem) ? await window.RK.vaultRedeem(v) : false; } catch (e) {}
+          try { redeemed = (window.RK && window.RK.vaultRedeem) ? await window.RK.vaultRedeem(v, { signal: attempt.signal, strict: true }) : false; } catch (e) { if (current()) err.textContent = "Access could not be checked. Please retry."; return false; }
+          if (!current()) return false;
           if (!redeemed) { err.textContent = "That pass doesn't match."; return false; }
-          if (!(await resolveVaultBlocks(w))) { err.textContent = "That pass doesn't open this section."; return false; }
+          var resolved = await resolveVaultBlocks(pending, { signal: attempt.signal });
+          if (!current()) return false;
+          if (!resolved) { err.textContent = "The protected section is unavailable. Please retry."; return false; }
         } else {
           if (!hash) { err.textContent = "No deeper cut is set for this project."; return false; }
           var h = await sha256(v.toLowerCase());
+          if (!current()) return false;
           if (h !== hash) { err.textContent = "That pass doesn't match."; return false; }
         }
-        setUnlocked(activeId);
+        if (!current()) return false;
+        if (pending.study.blocks) st.blocks = pending.study.blocks;
+        setUnlocked(w.id);
         fillContent(w);
         var lb = (st.blocks || []).filter(function (b) { return b.locked; })[0];
-        if (lb && lb.nav) requestAnimationFrame(function () { gotoSection("pjs-" + slug(lb.nav, 0)); });
+        if (lb && lb.nav) requestAnimationFrame(function () { if (activeId === w.id && generation === projectGeneration) gotoSection("pjs-" + slug(lb.nav, 0)); });
         return true;
       },
     });
@@ -2572,13 +2674,22 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
     modal.classList.add("pass--lock");
     var inp = modal.querySelector("input"), err = modal.querySelector(".pass__err");
     setTimeout(function () { try { inp.focus(); } catch (e) {} }, 30);
-    var done = function () { modal.remove(); };
+    var closed = false, submitting = false;
+    var done = function () { if (closed) return; closed = true; opts.signal?.removeEventListener("abort", done); if (opts.onClose) opts.onClose(); modal.remove(); };
+    opts.signal?.addEventListener("abort", done, { once: true });
+    if (opts.signal?.aborted) { done(); return; }
     modal.querySelector("[data-cancel]").addEventListener("click", done);
     modal.addEventListener("click", function (e) { if (e.target === modal) done(); });
     function submit() {
+      if (closed || submitting) return;
       var v = inp.value.trim();
       if (!v) { err.textContent = "Enter your pass"; return; }
-      Promise.resolve(opts.onSubmit(v, err)).then(function (ok) { if (ok) done(); });
+      submitting = true;
+      var go = modal.querySelector("[data-go]");
+      go.disabled = true;
+      Promise.resolve().then(function () { if (!closed) return opts.onSubmit(v, err); }).then(function (ok) { if (!closed && ok) done(); })
+        .catch(function (error) { if (!closed && error?.name !== "AbortError") err.textContent = "Access could not be checked. Please retry."; })
+        .finally(function () { submitting = false; if (!closed) go.disabled = false; });
     }
     modal.querySelector("[data-go]").addEventListener("click", submit);
     var reqLink = modal.querySelector("[data-request]");
@@ -2818,6 +2929,7 @@ import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
     // they swap in immediately — no reopen needed.
     document.addEventListener("rk:vaultgrant", function () {
       if (!activeId) return;
+      vaultResolving[activeId]?.abort();
       delete vaultResolving[activeId];
       delete vaultTried[activeId];
       var d = data(); var w = (d && d.work || []).filter(function (x) { return x && x.id === activeId; })[0];

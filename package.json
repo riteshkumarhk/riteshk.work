@@ -12,6 +12,7 @@
     "@excalidraw/excalidraw": "0.18.1",
     "esbuild": "^0.25.12",
     "fontkit": "^2.0.4",
+    "miniflare": "4.20260714.0",
     "playwright-core": "^1.63.0",
     "postcss": "^8.5.26",
     "react": "18.3.1",
@@ -24,10 +25,15 @@
     "@excalidraw/mermaid-to-excalidraw": {
       "nanoid": "5.1.16"
     },
+    "miniflare": {
+      "sharp": "0.35.4",
+      "undici": "7.29.0"
+    },
     "lodash-es": "4.18.1"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
+    "dompurify": "3.4.15",
     "figma-squircle": "1.1.0",
     "lucide-react": "^1.38.0",
     "react-colorful": "5.8.0"
