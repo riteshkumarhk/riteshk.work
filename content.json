@@ -1398,10 +1398,19 @@
             "sep": false
           },
           {
+            "type": "media",
+            "locked": true,
+            "encStub": true,
+            "iv": "Qqdtgm2jUCTyEYNZ",
+            "ct": "h938GdGYT9q0l7B+vG2bkyM95L3QDUgvQShSbZTnqROut5XwVOpARfuKMddVmJrlxkOMTXH5AM75eJTI3v+sMG6ouDdlajiVr7O10XS9zgmyde4UZKIIR3EJM73kdvpC6bnChQ3OoqJ70vlevHd7qUIGKMP/rx0Q5qz3ARQNRdKAtURZcBHZamnwD62EWrt2uOJp4l6qrH0+F6vyniVwaKs0dqnqBe4o6PH/H3EiEBJOm1yHc6YjOBf/2vOGmYnRn8nwLCbihlZ5YMfCNWkMZaMj7v6l93mdmaDsb6nPdO0WuD18fKLDvCQoyy5vjKWbR2HNcS28RN4nhcSTFFqK4OasYlT0Tz9P",
+            "kicker": "Business Justification",
+            "nav": "Business Justification"
+          },
+          {
             "type": "rows",
-            "nav": "Business Justification",
-            "kicker": "Business justification",
-            "heading": "Why two surfaces? ",
+            "nav": "",
+            "kicker": "",
+            "heading": "Why two surfaces?",
             "items": [
               {
                 "label": "Hard surface",
@@ -1433,7 +1442,9 @@
                   }
                 ]
               }
-            ]
+            ],
+            "sep": false,
+            "hsize": "sm"
           },
           {
             "type": "text",
@@ -2108,20 +2119,20 @@
           "it": 210000,
           "wraps": {
             "owner": {
-              "salt": "Hq95/evMjk/YW+bw70D0xw==",
-              "iv": "iw+TPx4O4UxWUCLC",
-              "ct": "jf1hntrJ6Gy21Gb+Ute1BiHFo4AqTqQvHsVkl26K8JabJCtsPQznrsRy1Bp4Qr4P"
+              "salt": "DTgLt5BC5ek8hUmD2i3fvg==",
+              "iv": "58wJKqrcgvUUA39r",
+              "ct": "dXbdXWYdHw/dQ47b99p8mdKjhVLAwaikbhFd1QFelcRii3TfrFWNhzpaIhRW62lR"
             },
             "tickets": {
               "svms2t5b5t": {
-                "salt": "MHB0XRop7gzkoPD+O9ZGwA==",
-                "iv": "YAKUeNqICsG5w3n+",
-                "ct": "04WGsnZ8FghX7EI3mKsYtc9E3n61fNBwzB7NsGtdZZoYtyRE4lSPlAY+tD0wKiNx"
+                "salt": "osmjuqdFenjDPiVgJF1oEw==",
+                "iv": "gQVFAp/0qLsXG1Oh",
+                "ct": "YZ6fiI5XNSbbiJv+/xSOnwpUsYlMRAz0UDsaPxISYB26w+sgigC86HL9O9BxgHk6"
               },
               "svmsx4mxop": {
-                "salt": "Tj2xr3cKh5nIVDstl1HWfg==",
-                "iv": "VsrDLZyZNQ5mcwe9",
-                "ct": "kL8L/XIE7KpDpfzKdj6tREYkmIalJTqZ9qBYjLcs/T9AFPHRPbUsQY5om5gPeUf4"
+                "salt": "/fPpjR3HfytJ1l9L14YgCw==",
+                "iv": "4cx80b4+O9x9TBz+",
+                "ct": "XOX/JHskiIqMKHTIoQdxNDy15yvwq//lqhCG2Gd4PyCivwSbtQomUvbyjsxkqUCz"
               }
             }
           }
