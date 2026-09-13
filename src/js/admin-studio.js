@@ -2264,6 +2264,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
      (R2 VAULT) sync layer via prepCloud* later. No cap; entries are user-deletable. ---------- */
   var PREP_HIST_KEY = "rk:prep:hist", PREP_DRAFT_KEY = "rk:prep:draft";
   const prepPendingWrites = new Map();
+  const prepCloudSaved = new Map(), prepCloudErrors = new Map();
   let prepSyncError = "", prepSyncing = false;
   function prepRead(key) { if (prepPendingWrites.has(key)) return clone(prepPendingWrites.get(key)); try { var o = JSON.parse(localStorage.getItem(key)); return (o && typeof o === "object") ? o : {}; } catch (e) { return {}; } }
   function prepWrite(key, o) {
@@ -2272,9 +2273,20 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   }
   const PREP_SYNC_KEY = "rk:prep:sync";
   let prepOutbox = Object.fromEntries(Object.entries(prepRead(PREP_SYNC_KEY)).filter(([key,item]) => item && ['ats','cl','iprep','story','wb'].includes(item.tool) && typeof item.id === 'string' && item.id.length > 0 && typeof item.revision === 'string' && ['put','del'].includes(item.action) && key === item.tool + '/' + item.id).map(([key,item]) => [key,{tool:item.tool,id:item.id,action:item.action,revision:item.revision,acknowledged:item.action === 'del' && item.acknowledged === true}]));
-  function prepStorageHtml() { return '<div class="prep-storage" data-prep-storage role="status"><span></span><button class="btn btn--ghost" type="button" data-prep-retry>Retry save and sync</button></div>'; }
+  function prepStorageHtml(tool = "", id = "") { return '<div class="prep-storage" data-prep-storage data-prep-tool="' + escAttr(tool) + '" data-prep-id="' + escAttr(id) + '" role="status"><span></span><button class="btn btn--ghost" type="button" data-prep-retry>Retry save and sync</button></div>'; }
   function prepPaintStorage() {
     document.querySelectorAll("[data-prep-storage]").forEach(host => {
+      if (host.dataset.prepTool === "ats") {
+        const id = host.dataset.prepId, key = "ats/" + id, entry = prepGet("ats", id), session = prepSess();
+        const confirmed = entry && prepCloudSaved.get(key)?.session === session && prepCloudSaved.get(key)?.signature === JSON.stringify(entry);
+        const pending = host.dataset.prepDirty === "true" || !!prepOutbox[key] && !prepOutbox[key].acknowledged;
+        const error = prepCloudErrors.get(key) || prepSyncError;
+        host.hidden = false;
+        host.querySelector("span").textContent = !session ? "Not saved to Cloudflare. Sign in to sync this resume." : confirmed && !pending ? "Saved to Cloudflare." + (prepPendingWrites.has(PREP_HIST_KEY) ? " Local copy unavailable." : "") : error ? "Not saved to Cloudflare. Retry before closing." : pending ? "Saving to Cloudflare..." : "Cloud copy not confirmed. Retry save and sync.";
+        host.querySelector("button").hidden = !!session && (confirmed && !pending || pending && !error);
+        host.querySelector("button").disabled = prepSyncing;
+        return;
+      }
       const message = prepPendingWrites.size ? "Not saved on this device. Your changes are kept in this tab; free storage and retry before closing." : prepSyncError || (Object.values(prepOutbox || {}).some(item => !item.acknowledged) && prepSess() ? "Saved on this device. Cloud sync pending." : "");
       host.hidden = !message;
       host.querySelector("span").textContent = message;
@@ -2290,8 +2302,10 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   async function prepRetryStorage() {
     for (const [key, value] of [...prepPendingWrites]) prepWrite(key, value);
     await prepDrainSync(); prepPaintStorage();
+    if (document.querySelector('[data-prep-tool="ats"],.prep-dialog .ats')) prepCloudPull("ats", function () { const list = document.querySelector("[data-ats-hist]"); if (list) list.innerHTML = atsHistHtml(); });
   }
-  window.addEventListener("beforeunload", event => { if (prepPendingWrites.size) { event.preventDefault(); event.returnValue = ""; } });
+  window.addEventListener("beforeunload", event => { if (prepPendingWrites.size || Object.values(prepOutbox).some(item => item.tool === "ats" && !item.acknowledged) || document.querySelector('[data-prep-dirty="true"]')) { event.preventDefault(); event.returnValue = ""; } });
+  window.addEventListener("online", prepRetryStorage);
   function prepId() { return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
   function prepList(tool) { var a = prepRead(PREP_HIST_KEY)[tool] || []; return a.slice().sort(function (x, y) { return (y.at || 0) - (x.at || 0); }); }
   function prepGet(tool, id) { var a = prepRead(PREP_HIST_KEY)[tool] || []; for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
@@ -2400,32 +2414,49 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   }
   function prepQueueSync(tool, id, action) {
     prepOutbox[tool + "/" + id] = { tool, id, action, revision:prepId() };
+    prepCloudErrors.delete(tool + "/" + id);
     prepWrite(PREP_SYNC_KEY, prepOutbox);
     prepDrainSync();
   }
   async function prepDrainSync() {
     const session = prepSess();
-    if (prepSyncing || !session || !ADMIN_WORKER || prepPendingWrites.size) return;
+    if (prepSyncing || !session || !ADMIN_WORKER) return;
     prepSyncing = true; prepSyncError = ""; prepPaintStorage();
     try {
       for (const [key, item] of Object.entries(prepOutbox)) {
         if (prepSess() !== session) break;
         if (item.acknowledged) continue;
-        const payload = item.action === "del" ? {tool:item.tool,id:item.id} : prepGet(item.tool, item.id);
-        if (payload) {
-          const outgoing = item.action === "put" && item.tool === "ats" && payload.payload?.resumeDocument
-            ? {...payload, payload:{...payload.payload, resumeDocument:await resumeSourceForSync(payload.payload.resumeDocument)}} : payload;
-          const response = await fetch(ADMIN_WORKER + "/admin/prep/" + item.action, {method:"POST",headers:{Authorization:"Bearer " + session,"Content-Type":"application/json"},body:JSON.stringify(outgoing),signal:AbortSignal.timeout(20000)});
-          if (!response.ok) throw new Error("Saved on this device. Cloud sync failed (" + response.status + "). Retry when connected.");
-        }
-        if (prepOutbox[key]?.revision === item.revision) {
-          if (item.action === 'del') prepOutbox[key] = {...item, acknowledged:true};
-          else delete prepOutbox[key];
-          if (!prepWrite(PREP_SYNC_KEY, prepOutbox)) break;
+        if (prepPendingWrites.size && item.tool !== "ats") continue;
+        try {
+          prepCloudErrors.delete(key);
+          const payload = item.action === "del" ? {tool:item.tool,id:item.id} : prepGet(item.tool, item.id);
+          if (payload) {
+            const outgoing = item.action === "put" && item.tool === "ats" && payload.payload?.resumeDocument
+              ? {...payload, payload:{...payload.payload, resumeDocument:await resumeSourceForSync(payload.payload.resumeDocument)}} : payload;
+            const response = await fetch(ADMIN_WORKER + "/admin/prep/" + item.action, {method:"POST",headers:{Authorization:"Bearer " + session,"Content-Type":"application/json"},body:JSON.stringify(outgoing),signal:AbortSignal.timeout(20000)});
+            if (!response.ok) throw new Error("Saved on this device. Cloud sync failed (" + response.status + "). Retry when connected.");
+            if (item.tool === "ats") {
+              if ((await response.json()).ok !== true) throw new Error("Cloudflare did not confirm the resume save.");
+              if (item.action === "put") prepCloudSaved.set(key,{session,signature:JSON.stringify(payload)});
+              else prepCloudSaved.delete(key);
+            }
+          }
+          if (prepOutbox[key]?.revision === item.revision) {
+            if (item.action === 'del') prepOutbox[key] = {...item, acknowledged:true};
+            else delete prepOutbox[key];
+            if (!prepWrite(PREP_SYNC_KEY, prepOutbox) && item.tool !== "ats") break;
+          }
+        } catch (error) {
+          if (item.tool !== "ats") throw error;
+          if (prepOutbox[key]?.revision === item.revision) prepCloudErrors.set(key,error.message);
+          prepSyncError = "Cloud sync failed. Retry save and sync before closing.";
         }
       }
     } catch (error) { prepSyncError = error.message.startsWith("Saved on this device.") ? error.message : "Saved on this device. Cloud sync could not connect; retry when online."; }
-    finally { prepSyncing = false; prepPaintStorage(); if (!prepSyncError && !prepPendingWrites.size && prepSess() && Object.values(prepOutbox).some(item => !item.acknowledged)) queueMicrotask(prepDrainSync); }
+    finally {
+      prepSyncing = false; prepPaintStorage();
+      if (prepSess() && Object.entries(prepOutbox).some(([key,item]) => !item.acknowledged && (item.tool === "ats" ? !prepCloudErrors.has(key) : !prepSyncError && !prepPendingWrites.size))) queueMicrotask(prepDrainSync);
+    }
   }
   // Pull a tool's remote entries and merge any new/newer ones into localStorage, then repaint (best-effort).
   function prepCloudPull(tool, done) {
@@ -2435,24 +2466,36 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       fetch(ADMIN_WORKER + "/admin/prep/list?tool=" + encodeURIComponent(tool), { headers: { Authorization: "Bearer " + sess } })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(async function (d) {
-          if (!d || !Array.isArray(d.items)) return;
+          if (!d || !Array.isArray(d.items)) throw new Error("Private history is unavailable.");
+          if (prepSess() !== sess) return;
+          if (tool === "ats") {
+            const remote = new Map(d.items.map(item => [item.id,item]));
+            for (const entry of prepList(tool)) {
+              if (!prepOutbox[tool + "/" + entry.id] && (!remote.has(entry.id) || (entry.at || 0) > (remote.get(entry.id).at || 0))) prepCloudPut(tool,entry);
+            }
+          }
           var have = {}; prepList(tool).forEach(function (e) { have[e.id] = e.at || 0; });
-          var need = d.items.filter(function (it) { return it && it.id && !prepOutbox[tool + "/" + it.id] && (!(it.id in have) || (it.at || 0) > have[it.id]); });
+          var need = d.items.filter(function (it) { return it && it.id && !prepOutbox[tool + "/" + it.id] && (!(it.id in have) || (it.at || 0) > have[it.id] || tool === "ats" && prepCloudSaved.get(tool + "/" + it.id)?.session !== sess); });
           if (!need.length) return;
           const loadEntry = function (it) {
             return fetch(ADMIN_WORKER + "/admin/prep/get?tool=" + encodeURIComponent(tool) + "&id=" + encodeURIComponent(it.id), { headers: { Authorization: "Bearer " + sess } })
               .then(function (r) { return r.ok ? r.json() : null; }).then(async function (entry) {
-                if (tool === "ats" && entry?.payload?.resumeDocument) entry.payload.resumeDocument = await restoreResumeSource(entry.payload.resumeDocument);
+                if (tool === "ats" && entry?.id) {
+                  if (entry.payload?.resumeDocument) entry.payload.resumeDocument = await restoreResumeSource(entry.payload.resumeDocument);
+                  prepCloudSaved.set(tool + "/" + entry.id,{session:sess,signature:JSON.stringify(entry)});
+                }
                 return entry;
               }).catch(function () { prepSyncError = "Private history could not be restored. Existing entries are unchanged; reopen Prepare to retry."; prepPaintStorage(); return null; });
           };
           const rows = [];
           if (tool === "ats") { for (const item of need) rows.push(await loadEntry(item)); }
           else rows.push(...await Promise.all(need.map(loadEntry)));
+          if (prepSess() !== sess) return;
           var changed = false;
           rows.forEach(function (entry) { if (entry && entry.id && !prepOutbox[tool + "/" + entry.id]) { const current = prepGet(tool, entry.id); if (!current || (entry.at || 0) > (current.at || 0)) { prepPutLocal(tool, entry); changed = true; } } });
           if (changed && typeof done === "function") { try { done(); } catch (e) {} }
-        }).catch(function () {});
+          prepPaintStorage();
+        }).catch(function () { if (tool === "ats") { prepSyncError = "Private history could not be reached. Retry save and sync."; prepPaintStorage(); } });
     } catch (e) {}
   }
   // Prepare tab = compact launchers; each tool opens in a dialog (full controls + history rail),
@@ -3424,7 +3467,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
           '<iframe class="rbz__frame" data-rbz-frame title="PDF preview" hidden></iframe>' +
         "</div>" +
         '<aside class="rbz__left" data-rbz-left><div class="rbz__left-h">Design</div><div class="rbz__design" data-rbz-design></div></aside>' +
-      "</div>";
+      "</div>" + prepStorageHtml("ats",atsRbSessId || "");
     // Cache-proof the selection fix: css/admin.css can be stale in the browser HTTP cache, but this
     // module always loads ?v=Date.now(). These de-flex rules make the editing host + text rows plain
     // blocks — a contenteditable built from display:flex items makes Chrome snap drag-selection to the
@@ -3607,10 +3650,14 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       var fit = (atsLast && atsLast.company) ? atsLast.company + " fit" : atsLevelName((atsLast && atsLast.level) || atsLevel) + " fit";
       var saved = prepPut("ats", { id: atsRbSessId, tool: "ats", kind: "workspace", title: "R\u00e9sum\u00e9 workspace", meta: { score: sc, band: bd, fit: fit, edited: !!dirty }, payload: { rb: working, design: rbDesignSnap(), level: (atsLast && atsLast.level) || atsLevel, company: (atsLast && atsLast.company) || "", text: (atsLast && atsLast.text) || "", res: (atsLast && atsLast.res) || null, jd: (atsLast && atsLast.jd) || "", reviewId: atsRbReviewId } });
       atsRbSessId = saved.id;
+      const storage = modal.querySelector("[data-prep-storage]");
+      storage.dataset.prepId = saved.id; delete storage.dataset.prepDirty; prepPaintStorage();
       var hl = (root || document).querySelector("[data-ats-hist]"); if (hl) hl.innerHTML = atsHistHtml();
     }
     var _rbSaveT = null;
-    function rbSaveSoon() { clearTimeout(_rbSaveT); _rbSaveT = setTimeout(function () { rbSaveWorkspace(true); }, 800); }
+    function rbSaveSoon() { modal.querySelector("[data-prep-storage]").dataset.prepDirty = "true"; prepPaintStorage(); clearTimeout(_rbSaveT); _rbSaveT = setTimeout(function () { rbSaveWorkspace(true); }, 350); }
+    function rbFlushSave() { clearTimeout(_rbSaveT); rbSaveWorkspace(true); }
+    window.addEventListener("pagehide", rbFlushSave);
     var _rbCountT = null;
     function rbCountSoon() { clearTimeout(_rbCountT); _rbCountT = setTimeout(function () { if (!previewing) buildFromEdits(); }, 900); } // keep the page count + editor fit fresh as you edit
     function markDirty() { rbSaveSoon(); rbCountSoon(); rbCommit(false); if (!dirty) { dirty = true; paintSide(); } }
@@ -3810,7 +3857,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         frameEl.src = src; wrapEl.hidden = true; frameEl.hidden = false; previewing = true; modal.classList.add("rbz--preview"); rbSetBadge("PDF", "Résumé preview"); btnIdle(b0, "\u2190 Back to edit");
       } else { frameEl.hidden = true; wrapEl.hidden = false; previewing = false; modal.classList.remove("rbz--preview"); rbSetBadge("EDIT", "Résumé workspace"); b0.textContent = "Preview PDF"; paginate(); }
     }
-    function close() { try { rbSaveWorkspace(true); } catch (e) {} document.removeEventListener("keydown", onKey); window.removeEventListener("resize", onResize); document.removeEventListener("selectionchange", rbHiField); revoke(); if (pdfBlobUrl) { try { URL.revokeObjectURL(pdfBlobUrl); } catch (e) {} pdfBlobUrl = null; } modal.remove(); }
+    function close() { try { rbFlushSave(); } catch (e) {} clearTimeout(_rbCountT); clearTimeout(rbCommitT); clearTimeout(paginateT); window.removeEventListener("pagehide", rbFlushSave); document.removeEventListener("keydown", onKey); window.removeEventListener("resize", onResize); document.removeEventListener("selectionchange", rbHiField); revoke(); if (pdfBlobUrl) { try { URL.revokeObjectURL(pdfBlobUrl); } catch (e) {} pdfBlobUrl = null; } modal.remove(); }
     function backToReview() { if (!atsRbReviewId) { close(); return; } atsvSessId = atsRbReviewId; close(); atsOpenViewer(); } // save + leave the workspace, reopen the review it came from
     function onKey(e) {
       if (e.key === "Escape") { if (previewing) togglePreview(false); else if (!/rbz__doc|rbz__/.test((document.activeElement && document.activeElement.className) || "")) close(); return; }
@@ -3822,8 +3869,10 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       }
     }
     document.addEventListener("keydown", onKey);
-    modal.addEventListener("input", function (e) { if (e.target && e.target.matches && e.target.matches("[data-accent-input]")) { atsRbAccent = e.target.value; atsRbApplyTpl(docEl); var cs = modal.querySelector(".rbz__sw--custom"); if (cs) cs.style.background = e.target.value; } });
+    modal.addEventListener("input", function (e) { if (e.target && e.target.matches && e.target.matches("[data-accent-input]")) { atsRbAccent = e.target.value; atsRbApplyTpl(docEl); var cs = modal.querySelector(".rbz__sw--custom"); if (cs) cs.style.background = e.target.value; rbSaveSoon(); } });
     modal.addEventListener("click", async function (e) {
+      if (e.target.closest("[data-prep-retry]")) { rbFlushSave(); prepRetryStorage(); return; }
+      if (e.target.closest("[data-canvas-set],[data-tpl],[data-size],[data-accent],[data-density],[data-font],[data-lay],[data-break],[data-margin]")) rbSaveSoon();
       if (e.target === modal || e.target.closest("[data-rbz-close]")) { close(); return; }
       if (e.target.closest("[data-rbz-back]")) { backToReview(); return; }
       if (e.target.closest("[data-rbz-undo]")) { rbUndoDo(); return; }
@@ -4155,7 +4204,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     var fitT = (atsLast && atsLast.company) ? (escHtml(atsLast.company) + " fit") : (escHtml(atsLevelName(level)) + " fit");
     var html = '<div class="atsv__score atsv__score--' + tone + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div><div class="atsv__score-x"><b>' + escHtml(band) + '</b><span>ATS + ' + fitT + '</span>' + (res.summary ? '<p>' + escHtml(res.summary) + '</p>' : '') + '</div></div>';
     if (ctx.review.resumeDocumentOrigin && ctx.review.resumeDocumentOrigin !== "original") html += '<p class="atsv__empty" data-atsv-recovered>Recovered PDF matches the saved text. The earlier file and layout could not be verified.</p>';
-    html += prepStorageHtml();
+    html += prepStorageHtml("ats",ctx.sessionId || "");
     var _ws = atsvSessId ? prepList("ats").filter(function (e2) { return e2.kind === "workspace" && e2.payload && e2.payload.reviewId === atsvSessId; })[0] : null;
     ctx.wsId = _ws ? _ws.id : null;
     if (_ws) html += '<div class="atsv__rebuild"><button class="btn btn--primary" type="button" data-atsv-continue>Continue editing your rebuilt r\u00e9sum\u00e9 \u2192</button><button class="atsv__again" type="button" data-atsv-rebuild>Rebuild again from scratch</button></div>';

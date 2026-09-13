@@ -738,6 +738,97 @@ test("Prepare legacy results reconnect to an explicit source copy without regene
   } finally { await browser.close(); }
 });
 
+test('Prepare ATS cloud saves survive failed local draft and history writes', async () => {
+  const source = readFileSync(new URL('./src/js/admin-studio.js', import.meta.url), 'utf8');
+  const start = source.indexOf('  async function prepDrainSync() {');
+  const code = source.slice(start, source.indexOf('  // Pull a tool', start));
+  const entries = {
+    review:{id:'review',tool:'ats',payload:{resumeDocument:{sha256:'original'},text:'Original resume'}},
+    workspace:{id:'workspace',tool:'ats',kind:'workspace',payload:{reviewId:'review',rb:{summary:'Edited on canvas'},design:{font:'inter',layout:'single'}}}
+  };
+  const writes = [];
+  const context = {prepSess:()=> 'synthetic', ADMIN_WORKER:'https://private.example.test', prepSyncing:false, prepSyncError:'',
+    prepPendingWrites:new Map([['rk:prep:hist',entries],['rk:prep:draft',{}]]), PREP_SYNC_KEY:'rk:prep:sync',
+    prepOutbox:Object.fromEntries(['review','workspace'].map(id=>['ats/'+id,{tool:'ats',id,action:'put',revision:id}])),
+    prepGet:(tool,id)=>entries[id], prepWrite:()=>false, prepPaintStorage(){}, AbortSignal, prepCloudSaved:new Map(), prepCloudErrors:new Map(),
+    resumeSourceForSync:async reference=>({...reference,data:'original-bytes'}),
+    fetch:async (url,options)=>{writes.push(JSON.parse(options.body));return {ok:true,json:async()=>({ok:true})};},
+    queueMicrotask(){throw new Error('A failed local write must not create a retry loop');}
+  };
+  await runInNewContext(code+'; prepDrainSync()',context);
+  assert.deepEqual(writes.map(entry=>entry.id),['review','workspace']);
+  assert.equal(writes[0].payload.resumeDocument.data,'original-bytes');
+  assert.deepEqual(writes[1],entries.workspace);
+  assert.deepEqual(Object.keys(context.prepOutbox),[]);
+  assert.equal(context.prepPendingWrites.size,2);
+});
+
+test('Prepare ATS cloud acknowledgements keep newer edits and isolate failed source saves', async () => {
+  const source=readFileSync(new URL('./src/js/admin-studio.js',import.meta.url),'utf8');
+  const start=source.indexOf('  async function prepDrainSync() {');
+  const code=source.slice(start,source.indexOf('  // Pull a tool',start));
+  const queued=[],writes=[];
+  const entries={review:{id:'review',tool:'ats',payload:{resumeDocument:{sha256:'source'}}},workspace:{id:'workspace',tool:'ats',payload:{rb:{summary:'First edit'}}}};
+  let first=true;
+  const context={prepSess:()=> 'synthetic',ADMIN_WORKER:'https://private.example.test',prepSyncing:false,prepSyncError:'',
+    prepPendingWrites:new Map(),PREP_SYNC_KEY:'rk:prep:sync',prepCloudSaved:new Map(),prepCloudErrors:new Map(),
+    prepOutbox:Object.fromEntries(['review','workspace'].map(id=>['ats/'+id,{tool:'ats',id,action:'put',revision:id}])),
+    prepGet:(tool,id)=>structuredClone(entries[id]),prepWrite:()=>true,prepPaintStorage(){},AbortSignal,
+    resumeSourceForSync:async()=>{throw new Error('Original file not available locally');},queueMicrotask:callback=>queued.push(callback),
+    fetch:async(url,options)=>{
+      writes.push(JSON.parse(options.body));
+      if(first){first=false;entries.workspace.payload.rb.summary='Newer edit';context.prepOutbox['ats/workspace']={tool:'ats',id:'workspace',action:'put',revision:'newer'};}
+      return {ok:true,json:async()=>({ok:true})};
+    }
+  };
+  await runInNewContext(code+'; prepDrainSync()',context);
+  assert.equal(context.prepOutbox['ats/workspace'].revision,'newer');
+  assert.notEqual(context.prepCloudSaved.get('ats/workspace').signature,JSON.stringify(entries.workspace));
+  assert.equal(context.prepCloudSaved.has('ats/review'),false);
+  assert.equal(queued.length,1);
+  await queued.shift()();
+  assert.deepEqual(writes.map(entry=>entry.payload.rb.summary),['First edit','Newer edit']);
+  assert.equal(context.prepCloudSaved.get('ats/workspace').signature,JSON.stringify(entries.workspace));
+  assert.deepEqual(Object.keys(context.prepOutbox),['ats/review']);
+  assert.equal(queued.length,0);
+  context.resumeSourceForSync=async reference=>({...reference,data:'source-bytes'});
+  context.fetch=async()=>({ok:true,json:async()=>({ok:false})});
+  await context.prepDrainSync();
+  assert.equal(context.prepCloudSaved.has('ats/review'),false);
+  assert.ok(context.prepOutbox['ats/review']);
+});
+
+test('Prepare ATS backfill preserves newer cloud entries and deletion markers', async () => {
+  const source=readFileSync(new URL('./src/js/admin-studio.js',import.meta.url),'utf8');
+  const start=source.indexOf('  function prepCloudPull(tool, done) {');
+  const code=source.slice(start,source.indexOf('  // Prepare tab =',start));
+  const local=new Map([
+    ['local-only',{id:'local-only',tool:'ats',at:1,payload:{rb:{summary:'Only local'}}}],
+    ['newer-cloud',{id:'newer-cloud',tool:'ats',at:1,payload:{rb:{summary:'Stale local'}}}],
+    ['newer-local',{id:'newer-local',tool:'ats',at:3,payload:{rb:{summary:'Current local'}}}]
+  ]);
+  const remote=new Map([
+    ['newer-cloud',{id:'newer-cloud',tool:'ats',at:2,payload:{rb:{summary:'Current cloud'}}}],
+    ['newer-local',{id:'newer-local',tool:'ats',at:1,payload:{rb:{summary:'Stale cloud'}}}],
+    ['deleted',{id:'deleted',tool:'ats',at:4,payload:{rb:{summary:'Deleted entry'}}}]
+  ]);
+  const uploads=[],reads=[];
+  await new Promise((resolve,reject)=>{
+    const context={prepSess:()=> 'synthetic',ADMIN_WORKER:'https://private.example.test',prepDrainSync(){},prepSyncError:'',prepPaintStorage(){},
+      prepCloudSaved:new Map(),prepOutbox:{'ats/deleted':{tool:'ats',id:'deleted',action:'del',acknowledged:true}},
+      prepList:()=>[...local.values()],prepGet:(tool,id)=>local.get(id),prepPutLocal:(tool,entry)=>local.set(entry.id,entry),
+      prepCloudPut:(tool,entry)=>{uploads.push(structuredClone(entry));context.prepOutbox['ats/'+entry.id]={tool,id:entry.id,action:'put'};},
+      fetch:async url=>{const parsed=new URL(url);if(parsed.pathname.endsWith('/list'))return {ok:true,json:async()=>({items:[...remote.values()].map(({id,at})=>({id,at}))})};const id=parsed.searchParams.get('id');reads.push(id);return {ok:true,json:async()=>structuredClone(remote.get(id))};},
+      done:resolve
+    };
+    try {runInNewContext(code+'; prepCloudPull("ats",done)',context);}catch(error){reject(error);}
+  });
+  assert.deepEqual(uploads.map(entry=>entry.id).sort(),['local-only','newer-local']);
+  assert.deepEqual(reads,['newer-cloud']);
+  assert.deepEqual(local.get('newer-cloud'),remote.get('newer-cloud'));
+  assert.equal(local.has('deleted'),false);
+});
+
 test('Prepare reopening an ATS review retains only its own loaded original', async () => {
   const source = readFileSync(new URL('./src/js/admin-studio.js', import.meta.url), 'utf8');
   const start = source.indexOf('  async function atsHistRestore(id) {');
@@ -831,7 +922,7 @@ test('Prepare ATS recovers its PDF canvas, exact source bytes and linked workspa
   const review = {id:'source-review',tool:'ats',kind:'review',at:1,payload:{state:{mode:'job',jd:'Saved target role'},text,level:'staff',res:{score:72,fixes:[{point:'Keep this evidence',priority:'low',anchor:{type:'quote',quote:'Original designer'}}]},source:{version:1,text,jd:'Saved target role',projects:[],brief:null}}};
   const workspace = {id:'source-workspace',tool:'ats',kind:'workspace',at:2,payload:{reviewId:review.id,level:'staff',text,jd:'Saved target role',rb:{name:'Preserved Designer',title:'Staff Designer',contact:{email:'synthetic@example.test',links:[]},summary:'Preserved edited summary.',sections:[{heading:'Experience',kind:'experience',items:[{role:'Lead',org:'Original Org',dates:'2020 - Present',bullets:['Preserved authored achievement.']}]}]},design:{tpl:'classic',size:'a4',accent:'#167d83',font:'inter',density:'normal',layout:'single',canvas:'light',keepWhole:true,margin:'normal'}}};
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
-  const remote = new Map(); let writes = 0;
+  const remote = new Map(); let writes = 0, failWorkspaceSave = false;
   const open = async page => {
     await page.addInitScript(() => {
       localStorage.setItem('rk:admin:sess',JSON.stringify({token:'synthetic-prepare-only',exp:Date.now()+3600000}));
@@ -839,7 +930,7 @@ test('Prepare ATS recovers its PDF canvas, exact source bytes and linked workspa
     });
     await page.route('**/admin/prep/**',async route => {
       const url = new URL(route.request().url());
-      if(url.pathname.endsWith('/put')) { const entry=route.request().postDataJSON();remote.set(entry.id,entry);writes++;return route.fulfill({json:{ok:true}}); }
+      if(url.pathname.endsWith('/put')) { const entry=route.request().postDataJSON();if(failWorkspaceSave&&entry.kind==='workspace')return route.fulfill({status:503,json:{error:'Unavailable'}});remote.set(entry.id,entry);writes++;return route.fulfill({json:{ok:true}}); }
       if(url.pathname.endsWith('/list')) return route.fulfill({json:{items:[...remote.values()].map(entry=>({id:entry.id,at:entry.at}))}});
       if(url.pathname.endsWith('/get')) return route.fulfill({json:remote.get(url.searchParams.get('id')) || {}});
       return route.abort();
@@ -859,6 +950,10 @@ test('Prepare ATS recovers its PDF canvas, exact source bytes and linked workspa
       window.__rkDevEdit('contact.resume','data:application/pdf;base64,'+btoa(pdf.replace('Original designer','Different person!')));
     },{review,workspace,pdf});
     await showReview(page);
+    await page.waitForFunction(()=>Object.keys(JSON.parse(localStorage.getItem('rk:prep:sync'))).length===0);
+    assert.deepEqual(remote.get(workspace.id),workspace);
+    assert.deepEqual(remote.get(review.id),review);
+    const writesBeforeRecovery = writes;
     await page.screenshot({path:join(tmpdir(),'rk-ats-recovery-desktop.png')});
     await page.locator('[data-atsv-recover="site"]').click();
     await page.waitForFunction(()=>document.querySelector('[data-atsv-source-status]')?.textContent.includes('differs'));
@@ -877,7 +972,7 @@ test('Prepare ATS recovers its PDF canvas, exact source bytes and linked workspa
     await page.locator('.atsv__page canvas').waitFor();
     await page.locator('.atsv__pin').waitFor();
     await page.waitForFunction(()=>Object.keys(JSON.parse(localStorage.getItem('rk:prep:sync'))).length===0);
-    assert.equal(writes,1);
+    assert.equal(writes,writesBeforeRecovery+1);
     const saved = await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='source-review'));
     assert.equal(saved.payload.resumeDocument.data,undefined);
     assert.equal(Buffer.from(remote.get(review.id).payload.resumeDocument.data,'base64').toString(),pdf);
@@ -899,6 +994,33 @@ test('Prepare ATS recovers its PDF canvas, exact source bytes and linked workspa
     assert.match(await page.locator('[data-rbz-doc]').innerText(),/Preserved edited summary/);
     const reopened = await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='source-workspace').payload);
     assert.deepEqual(reopened.rb,workspace.payload.rb);assert.deepEqual(reopened.design,workspace.payload.design);
+    await page.waitForFunction(()=>document.querySelector('.rbz [data-prep-storage] span')?.textContent==='Saved to Cloudflare.');
+    await page.evaluate(()=>{
+      const write=Storage.prototype.setItem;
+      Storage.prototype.setItem=function(key,value){if(['rk:prep:hist','rk:prep:draft','rk:prep:sync'].includes(key))throw new DOMException('Storage full','QuotaExceededError');return write.call(this,key,value);};
+    });
+    failWorkspaceSave = true;
+    await page.locator('[data-rbz-doc] [data-k="summary"]').evaluate(element=>{element.textContent='Edited canvas survives a draft crash.';element.dispatchEvent(new InputEvent('input',{bubbles:true}));});
+    await page.locator('[data-density="compact"]').click();
+    await page.waitForFunction(()=>document.querySelector('.rbz [data-prep-storage] span')?.textContent.includes('Not saved to Cloudflare'));
+    assert.equal(remote.get(workspace.id).payload.rb.summary,workspace.payload.rb.summary);
+    assert.equal(remote.get(workspace.id).payload.design.density,workspace.payload.design.density);
+    const blocked = await page.evaluate(()=>{const event=new Event('beforeunload',{cancelable:true});window.dispatchEvent(event);return event.defaultPrevented;});
+    assert.equal(blocked,true);
+    await page.screenshot({path:join(tmpdir(),'rk-ats-cloud-failed-desktop.png')});
+    failWorkspaceSave = false;
+    await page.locator('.rbz [data-prep-retry]').click();
+    await page.waitForFunction(()=>document.querySelector('.rbz [data-prep-storage] span')?.textContent==='Saved to Cloudflare. Local copy unavailable.');
+    await page.locator('[data-margin="narrow"]').click();
+    await page.waitForFunction(()=>document.querySelector('.rbz [data-prep-storage] span')?.textContent==='Saved to Cloudflare. Local copy unavailable.');
+    const cloudWorkspace=structuredClone(remote.get(workspace.id));
+    assert.equal(cloudWorkspace.payload.rb.summary,'Edited canvas survives a draft crash.');
+    assert.equal(cloudWorkspace.payload.design.density,'compact');
+    assert.equal(cloudWorkspace.payload.design.margin,'narrow');
+    assert.equal(cloudWorkspace.payload.design.accent,workspace.payload.design.accent);
+    assert.equal(cloudWorkspace.payload.reviewId,review.id);
+    assert.equal(Buffer.from(remote.get(review.id).payload.resumeDocument.data,'base64').toString(),pdf);
+    await page.screenshot({path:join(tmpdir(),'rk-ats-cloud-saved-desktop.png')});
     await context.close();
     context=await browser.newContext({viewport:{width:390,height:844},reducedMotion:'reduce'});page=await context.newPage();
     await open(page);await showReview(page);await page.locator('.atsv__pin').waitFor();
@@ -916,6 +1038,20 @@ test('Prepare ATS recovers its PDF canvas, exact source bytes and linked workspa
       const left=controls[first],right=controls[second];assert.ok(left.right<=right.left||right.right<=left.left||left.bottom<=right.top||right.bottom<=left.top);
     }
     await page.screenshot({path:join(tmpdir(),'rk-ats-restored-mobile.png')});
+    await page.locator('[data-atsv-continue]').click();
+    await page.locator('[data-rbz-doc]').waitFor();
+    await page.waitForFunction(()=>document.querySelector('.rbz [data-prep-storage] span')?.textContent==='Saved to Cloudflare.');
+    assert.match(await page.locator('[data-rbz-doc]').innerText(),/Edited canvas survives a draft crash/);
+    const recoveredWorkspace=await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='source-workspace').payload);
+    assert.deepEqual(recoveredWorkspace.rb,cloudWorkspace.payload.rb);assert.deepEqual(recoveredWorkspace.design,cloudWorkspace.payload.design);
+    const storageBox=await page.locator('.rbz > [data-prep-storage]').boundingBox();
+    assert.ok(storageBox.width>0&&storageBox.x>=0&&storageBox.x+storageBox.width<=390&&storageBox.y+storageBox.height<=844);
+    const toolbar=await page.locator('.rbz__bar button').evaluateAll(buttons=>buttons.filter(button=>button.getClientRects().length).map(button=>{const box=button.getBoundingClientRect();return {left:box.left,right:box.right,top:box.top,bottom:box.bottom};}));
+    assert.ok(toolbar.every(box=>box.left>=0&&box.right<=390));
+    for(let first=0;first<toolbar.length;first++)for(let second=first+1;second<toolbar.length;second++){
+      const left=toolbar[first],right=toolbar[second];assert.ok(left.right<=right.left||right.right<=left.left||left.bottom<=right.top||right.bottom<=left.top);
+    }
+    await page.screenshot({path:join(tmpdir(),'rk-ats-cloud-restored-mobile.png')});
     await context.close();
   } finally { await browser.close(); }
 });

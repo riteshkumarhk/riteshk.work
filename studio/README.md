@@ -93,10 +93,20 @@ are labelled accordingly. Saved text, review results and separately linked
 rebuilt workspaces are preserved; recovery does not run AI. Whiteboard history
 retains its role, coaching feedback, scorecards and separate new-prompt sessions.
 
+ATS source files, review results and rebuilt canvas content/design settings save
+to the owner-only Cloudflare R2 history, independently of the site draft. The
+canvas autosaves text and design changes; **Saved to Cloudflare** appears only
+after the server confirms the current version. Failed local history/draft writes
+do not block ATS cloud saves. Opening ATS also uploads older local-only history
+after checking the remote list, without replacing newer cloud entries. A fresh
+signed-in browser can restore the source and editable workspace from Cloudflare.
+Pending, failed or signed-out saves are not crash-safe: keep the tab open until
+cloud confirmation. Originals absent from legacy history still need reattachment.
+
 Local save failures keep changes in memory with an explicit warning and retry.
 Do not close the tab until retry succeeds. Authenticated cloud writes use an
 outbox; retries retain newer edits, and deletion tombstones reject stale pulls.
-This is not a backup or a guarantee against losing an abruptly terminated tab.
+Unsynced changes are not guaranteed to survive an abruptly terminated tab.
 Closing a supported Prepare dialog cancels its active requests; Whiteboard also
 stops its timer and capture resources on setup/close and rejects late permission
 results. Existing answer formatting uses the shared HTML allowlist.
