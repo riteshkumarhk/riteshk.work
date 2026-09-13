@@ -793,7 +793,10 @@ test("Prepare local test link opens directly and leaves normal sign-in enforced"
         const request = route.request(), url = new URL(request.url());
         if (!['GET','HEAD'].includes(request.method())) { writes.push(url.pathname); return route.abort(); }
         if (url.pathname.endsWith('/content.json')) return route.fulfill({contentType:'application/json',body:JSON.stringify(published)});
-        if (url.origin === scenario.origin) return route.fulfill({response:await route.fetch({url:server + url.pathname + url.search})});
+        if (url.origin === scenario.origin) {
+          const asset = new URL('.' + url.pathname + (url.pathname.endsWith('/') ? 'index.html' : ''), import.meta.url);
+          return route.fulfill({path:fileURLToPath(asset)});
+        }
         return route.abort();
       });
       await page.goto(scenario.origin + '/studio/' + scenario.query);
