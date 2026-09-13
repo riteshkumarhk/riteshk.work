@@ -169,6 +169,48 @@ test("Protected section references survive legacy encryption and old vault recov
   assert.equal(restored.blocks[0].locked,true);
 });
 
+async function assertOpenShackle(icon, stacked = false) {
+  const shape = await icon.evaluate(element => {
+    const body = element.querySelector('rect').getBBox(), shackle = element.querySelector('path[d^="M13 "]');
+    const start = shackle.getPointAtLength(0), tip = shackle.getPointAtLength(shackle.getTotalLength());
+    return {body:{x:body.x,y:body.y,width:body.width},start:{x:start.x,y:start.y},tip:{x:tip.x,y:tip.y},stroke:parseFloat(getComputedStyle(shackle).strokeWidth),fill:getComputedStyle(shackle).fill,contained:[...element.children].every(part=>{
+      const bounds=part.getBBox(),halfStroke=parseFloat(getComputedStyle(part).strokeWidth)/2;
+      return bounds.x-halfStroke>=0 && bounds.y-halfStroke>=0 && bounds.x+bounds.width+halfStroke<=24 && bounds.y+bounds.height+halfStroke<=24;
+    })};
+  });
+  assert.deepEqual(shape.body,{x:3,y:stacked?9:11,width:14});
+  assert.deepEqual(shape.start,{x:13,y:shape.body.y});
+  assert.deepEqual(shape.tip,{x:21,y:stacked?7:8});
+  assert.ok(shape.tip.x-shape.body.x-shape.body.width-shape.stroke>=2,'The open tip clears the body even including stroke width');
+  assert.ok(shape.body.y-shape.tip.y>=2,'The open tip is visibly above the body');
+  assert.equal(shape.fill,'none');
+  assert.equal(shape.contained,true,'The swung-open arm is not clipped');
+}
+
+test("Native toolbar and Layers share the clearly open lock", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000}}), errors = [];
+  page.on('pageerror',error=>errors.push(error.message));
+  try {
+    const base = process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5537';
+    await page.goto(base+'/studio/slide-lab/');
+    const native = page.locator('.excalidraw .lucide-lock-keyhole-open').first();
+    await native.waitFor({state:'visible'});
+    await assertOpenShackle(native);
+    await page.screenshot({path:join(tmpdir(),'rk-open-lock-native-1440.png')});
+    await page.goto(base+'/studio/slide-merge-lab/');
+    await page.waitForFunction(()=>!!window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    const before = await page.evaluate(()=>JSON.stringify(window.__slideMerge.deck()));
+    await page.getByRole('button',{name:'Manage layers',exact:true}).click();
+    const layer = page.getByRole('button',{name:'Lock layer',exact:true}).first();
+    await assertOpenShackle(layer.locator('svg'));
+    assert.equal(await layer.locator('circle').getAttribute('cx'),'10');
+    assert.equal(await page.evaluate(()=>JSON.stringify(window.__slideMerge.deck())),before);
+    await page.screenshot({path:join(tmpdir(),'rk-open-lock-layers-1440.png')});
+    assert.deepEqual(errors,[]);
+  } finally { await browser.close(); }
+});
+
 test("Studio protected inserts share recovery-gated access across case and slideshow", {timeout:90000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
   const pass = 'synthetic-section-recovery', sek = rkNewSek(), wrap = await rkWrapSek(pass,sek);
@@ -183,9 +225,10 @@ test("Studio protected inserts share recovery-gated access across case and slide
     assert.equal(iconBounds.height,18);
     assert.equal(await icon.locator('[data-lock-stack]').count(),1);
     assert.equal(await icon.locator('[data-lock-stack]').evaluate(element=>getComputedStyle(element).fill),'none');
+    if (text==='Unlocked') await assertOpenShackle(icon,true);
     assert.deepEqual(await icon.locator('path').evaluateAll(elements=>elements.map(element=>element.getAttribute('d'))),[
       'M20 12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9',
-      text==='Unlocked'?'M6 9V6a4 4 0 0 1 8 0':'M6 9V6a4 4 0 0 1 8 0v3'
+      text==='Unlocked'?'M13 9V6a4 4 0 0 1 8 0v1':'M6 9V6a4 4 0 0 1 8 0v3'
     ]);
     assert.equal(await icon.evaluate(element=>[...element.children].every(shape=>{
       const box=shape.getBBox(),halfStroke=parseFloat(getComputedStyle(shape).strokeWidth)/2;
@@ -298,6 +341,10 @@ test("Studio protected inserts share recovery-gated access across case and slide
       assert.equal(await assertAccessLabel(caseAccess,'Unlocked',width),caseWidth);
       assert.equal(await caseAccess.locator('rect').evaluate(element=>getComputedStyle(element).fill),'none');
       assert.equal(await caseAccess.evaluate(element=>getComputedStyle(element).color),'rgb(143, 138, 132)');
+      const publicSectionHead = page.locator('.study-sections .study__block-head[data-bindex="0"]');
+      for (let toggles=0; toggles<3 && !await publicSectionHead.isVisible(); toggles++) await previewToggle.click();
+      await publicSectionHead.click();
+      await assertOpenShackle(page.locator('.study__block-lock:not(.is-locked):visible svg').first());
       await page.screenshot({path:join(tmpdir(),'rk-access-case-'+width+'.png')});
       await page.locator('[data-l2tab="slides"]').click();
       await page.frameLocator('.lab-canvas > .merge-native-sections iframe.lab-section-component').getByText('Private prototype',{exact:true}).waitFor();
@@ -1914,6 +1961,7 @@ for (const width of [1440, 390]) test("shared status bar keeps independent case-
     const caseLock = page.locator(".adm__case-visibility summary");
     await caseLock.waitFor();
     assert.equal(await caseLock.getAttribute("aria-label"), "Case study visibility: public draft");
+    await assertOpenShackle(caseLock.locator('svg'));
     assert.deepEqual(await footerStyle(), baseline);
     await sharedControlsIntact();
     const caseStyle = await lockStyle(".adm__case-visibility summary");
@@ -1953,6 +2001,7 @@ for (const width of [1440, 390]) test("shared status bar keeps independent case-
       } else {
         assert.equal(actual.color, actual.neutral);
         assert.equal(actual.fill, 'none');
+        await assertOpenShackle(slideLock.locator('svg'));
       }
     };
     await slideLock.waitFor();

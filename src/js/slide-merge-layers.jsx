@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { CaptureUpdateAction, exportToSvg, labNewElementWith, useLabActionManager } from "@excalidraw/excalidraw";
-import { ArrowDown, ArrowUp, Check, ChevronsDown, ChevronsUp, Copy, Eye, EyeOff, GripVertical, Group, Image, Layers, LockKeyhole, Pencil, Trash2, Ungroup, UnlockKeyhole, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronsDown, ChevronsUp, Copy, Eye, EyeOff, GripVertical, Group, Image, Layers, LockKeyhole, Pencil, Trash2, Ungroup, X } from "lucide-react";
 import { FRAME_ID } from "./slide-lab-core.mjs";
 import { layerName, layerPropertyChanges, layerRows, layerTargets, reorderLayerElements } from "./slide-merge-layers.mjs";
 import { LayerDragList, LayerDragRow } from "./slide-merge-layer-drag.jsx";
 import { ToolMenu } from "./slide-merge-toolbar.jsx";
+import { OpenLockIcon } from "./slide-shared-controls.jsx";
 import "../../css/slide-merge-layers.css";
+
+function UnlockKeyhole(props) { return <OpenLockIcon {...props} keyhole />; }
 
 function LayerButton({ icon: Icon, label, danger, ...props }) {
   return <button type="button" className={danger ? "is-danger" : undefined} title={label} aria-label={label} {...props}><Icon size={15} strokeWidth={1.75} /></button>;

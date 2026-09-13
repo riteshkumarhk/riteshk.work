@@ -749,7 +749,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   function svgIco(paths, w) { w = w || 14; return '<svg viewBox="0 0 24 24" width="' + w + '" height="' + w + '" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none">' + paths + '</svg>'; }
   const IC = {
     sectionsLocked: svgIco('<path data-lock-stack d="M20 12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9"/><rect x="3" y="9" width="14" height="10" rx="2"/><path d="M6 9V6a4 4 0 0 1 8 0v3"/>', 18),
-    sectionsUnlocked: svgIco('<path data-lock-stack d="M20 12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9"/><rect x="3" y="9" width="14" height="10" rx="2"/><path d="M6 9V6a4 4 0 0 1 8 0"/>', 18),
+    sectionsUnlocked: svgIco('<path data-lock-stack d="M20 12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9"/><rect x="3" y="9" width="14" height="10" rx="2"/><path d="M13 9V6a4 4 0 0 1 8 0v1"/>', 18),
     up: svgIco('<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>'),
     down: svgIco('<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>'),
     close: svgIco('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
@@ -801,7 +801,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     distH: svgIco('<path d="M4 5v14"/><path d="M20 5v14"/><rect x="10" y="8" width="4" height="8" rx="1"/>', 16),
     distV: svgIco('<path d="M5 4h14"/><path d="M5 20h14"/><rect x="8" y="10" width="8" height="4" rx="1"/>', 16),
     lock: svgIco('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', 15),
-    unlock: svgIco('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>', 15),
+    unlock: svgIco('<rect x="3" y="11" width="14" height="11" rx="2"/><path d="M13 11V6a4 4 0 0 1 8 0v2"/>', 15),
     link: svgIco('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>', 15),
     angle: svgIco('<path d="M3 21V5a1 1 0 0 1 1-1h16"/><path d="M3 17a10 10 0 0 1 10-10"/>', 13),
     corner: svgIco('<path d="M4 20V9a5 5 0 0 1 5-5h11"/>', 13),
@@ -5179,7 +5179,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       '<button class="iconbtn" data-act="study-blockadd" data-index="' + i + '" data-bindex="' + j + '" title="Add a section above" aria-label="Add a section above">' + IC.add + "</button>" +
       '<button class="iconbtn" data-act="study-blockdup" data-index="' + i + '" data-bindex="' + j + '" title="Duplicate section" aria-label="Duplicate section">' + IC.dup + "</button>" +
       '<button class="iconbtn study__block-off' + (b.off ? " is-off" : "") + '" data-act="study-blockoff" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.off ? "Hidden \u2014 click to show" : "On \u2014 click to hide") + '">' + (b.off ? IC.eyeoff : IC.eye) + "</button>" +
-      '<button class="iconbtn study__block-lock' + (b.locked ? " is-locked" : "") + '" data-act="study-blocklock" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.locked ? "Locked \u2014 click to unlock" : "Lock \u2014 deeper-cut only") + '"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' + (b.locked ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<path d="M8 10.5V6.8a4 4 0 0 1 7.5-1.6"/>') + "</svg></button>" +
+      '<button class="iconbtn study__block-lock' + (b.locked ? " is-locked" : "") + '" data-act="study-blocklock" data-index="' + i + '" data-bindex="' + j + '" title="' + (b.locked ? "Locked \u2014 click to unlock" : "Lock \u2014 deeper-cut only") + '"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (b.locked ? '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>' : '<rect x="3" y="11" width="14" height="11" rx="2"/><path d="M13 11V6a4 4 0 0 1 8 0v2"/>') + "</svg></button>" +
       (isEnc ? '<button class="iconbtn" data-act="study-unprotect" data-index="' + i + '" data-bindex="' + j + '" title="Remove protection" aria-label="Remove protection">' + IC.unlock + '</button>' : '<button class="iconbtn iconbtn--danger" data-act="study-blockremove" data-index="' + i + '" data-bindex="' + j + '" title="Remove">' + IC.trash + '</button>') +
       "</span>";
     return '<div class="story__item' + (active ? " is-active" : "") + (b.off ? " is-off" : "") + (isEnc ? " is-enc" : "") + '" data-act="story-nav" data-index="' + i + '" data-bindex="' + j + '" tabindex="0" role="button" aria-label="Section ' + (j + 1) + '">' +
@@ -7381,7 +7381,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.13";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.14";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();

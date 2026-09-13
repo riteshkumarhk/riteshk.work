@@ -95,7 +95,7 @@ function SectionAccessControl({ caseStudyId, disabled }) {
   const iconNode = [
     ["path", { key: "stack", "data-lock-stack": "", d: "M20 12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9" }],
     ["rect", { key: "body", x: 3, y: 9, width: 14, height: 10, rx: 2 }],
-    ["path", { key: "shackle", d: state.unlocked ? "M6 9V6a4 4 0 0 1 8 0" : "M6 9V6a4 4 0 0 1 8 0v3" }]
+    ["path", { key: "shackle", d: state.unlocked ? "M13 9V6a4 4 0 0 1 8 0v1" : "M6 9V6a4 4 0 0 1 8 0v3" }]
   ];
   const caption = state.busy ? "Unlocking" : state.unlocked ? "Unlocked" : "Locked";
   const label = state.busy ? "Cancel section unlock" : state.unlocked ? "Lock protected sections" : "Unlock protected sections";

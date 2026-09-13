@@ -13,6 +13,7 @@ export function stripUpstreamFirebase(source) {
 export function cornerEnginePlugin() {
   let patched = 0;
   let pickerPatched = 0;
+  let unlockedPatched = 0;
   return { name: "lab-corner-geometry", setup(build) {
     build.onLoad({ filter: /excalidraw[\\/]dist[\\/].*\.css$/ }, async ({ path }) => {
       const css = postcss.parse(await readFile(path, "utf8"));
@@ -64,6 +65,13 @@ export function cornerEnginePlugin() {
     build.onLoad({ filter: /excalidraw[\\/]dist[\\/]dev[\\/]chunk-.*\.js$/ }, async ({ path }) => {
       const original = await readFile(path, "utf8");
       let source = stripUpstreamFirebase(original);
+      const unlockAnchor = "var UnlockedIcon = createIcon(";
+      if (source.includes(unlockAnchor)) {
+        const start = source.indexOf(unlockAnchor), end = source.indexOf("var LockedIcon = createIcon(", start);
+        if (source.split(unlockAnchor).length !== 2 || end < 0) throw new Error("Excalidraw unlocked icon anchor changed");
+        source = `import { OpenLockIcon as LabOpenLockIcon } from ${JSON.stringify(resolve("src/js/slide-shared-controls.jsx").replaceAll("\\", "/"))};\n` + source.slice(0, start) + 'var UnlockedIcon = jsx(LabOpenLockIcon, { keyhole: true, size: 20, strokeWidth: 1.75, "aria-hidden": true });\n' + source.slice(end);
+        unlockedPatched++;
+      }
       const radiusAnchor = "var getCornerRadius = (x, element) => {";
       if (!source.includes(radiusAnchor)) return source !== original ? { contents: source, loader: "js", resolveDir: dirname(path) } : undefined;
       const version = JSON.parse(await readFile("node_modules/@excalidraw/excalidraw/package.json", "utf8")).version;
@@ -94,6 +102,6 @@ export function cornerEnginePlugin() {
       patched++;
       return { contents: `import { fonts as labFonts, LEGACY_FONTS as labLegacyFonts } from ${JSON.stringify(resolve("src/js/slide-platform-fonts.mjs").replaceAll("\\", "/"))};\nimport { cornerPath as labCornerPath, cornerSettings as labCornerSettings } from ${JSON.stringify(resolve("src/js/slide-lab-corners.mjs").replaceAll("\\", "/"))};\n` + source, loader: "js", resolveDir: dirname(path) };
     });
-    build.onEnd(result => { if (!result.errors.length && (patched !== 1 || pickerPatched !== 1)) return { errors: [{ text: "Expected exactly one Slide Lab corner and color adapter" }] }; });
+    build.onEnd(result => { if (!result.errors.length && (patched !== 1 || pickerPatched !== 1 || unlockedPatched !== 1)) return { errors: [{ text: "Expected exactly one Slide Lab corner, color and unlocked icon adapter" }] }; });
   } };
 }

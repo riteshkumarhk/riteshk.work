@@ -1,6 +1,14 @@
 import React, { useRef } from "react";
-import { ChevronUp, ChevronDown } from "lucide-react";
+import { ChevronUp, ChevronDown, Icon } from "lucide-react";
 import "../../css/slide-shared-controls.css";
+
+export function OpenLockIcon({ keyhole = false, ...props }) {
+  return <Icon {...props} className={keyhole ? "lucide-lock-keyhole-open" : "lucide-lock-open"} iconNode={[
+    ["rect", { key: "body", x: 3, y: 11, width: 14, height: 11, rx: 2 }],
+    ["path", { key: "shackle", d: "M13 11V6a4 4 0 0 1 8 0v2" }],
+    ...(keyhole ? [["circle", { key: "keyhole", cx: 10, cy: 16, r: 1 }], ["path", { key: "keyhole-stem", d: "M10 17v2" }]] : [])
+  ]} />;
+}
 
 export function SelectControl({ className = "", children, ...props }) {
   return <select {...props} className={`slide-select ${className}`}>{children}</select>;

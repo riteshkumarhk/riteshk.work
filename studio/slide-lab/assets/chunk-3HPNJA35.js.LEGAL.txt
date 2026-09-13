@@ -1,9 +1,9 @@
 Bundled license information:
 
-scheduler/cjs/scheduler.production.min.js:
+react/cjs/react.production.min.js:
   /**
    * @license React
-   * scheduler.production.min.js
+   * react.production.min.js
    *
    * Copyright (c) Facebook, Inc. and its affiliates.
    *
@@ -11,34 +11,12 @@ scheduler/cjs/scheduler.production.min.js:
    * LICENSE file in the root directory of this source tree.
    */
 
-react-dom/cjs/react-dom.production.min.js:
+react/cjs/react-jsx-runtime.production.min.js:
   /**
    * @license React
-   * react-dom.production.min.js
+   * react-jsx-runtime.production.min.js
    *
    * Copyright (c) Facebook, Inc. and its affiliates.
-   *
-   * This source code is licensed under the MIT license found in the
-   * LICENSE file in the root directory of this source tree.
-   */
-
-use-sync-external-store/cjs/use-sync-external-store-shim.production.js:
-  /**
-   * @license React
-   * use-sync-external-store-shim.production.js
-   *
-   * Copyright (c) Meta Platforms, Inc. and affiliates.
-   *
-   * This source code is licensed under the MIT license found in the
-   * LICENSE file in the root directory of this source tree.
-   */
-
-use-sync-external-store/cjs/use-sync-external-store-shim/with-selector.production.js:
-  /**
-   * @license React
-   * use-sync-external-store-shim/with-selector.production.js
-   *
-   * Copyright (c) Meta Platforms, Inc. and affiliates.
    *
    * This source code is licensed under the MIT license found in the
    * LICENSE file in the root directory of this source tree.
@@ -85,9 +63,7 @@ lucide-react/dist/esm/icons/list-ordered.mjs:
 lucide-react/dist/esm/icons/list-x.mjs:
 lucide-react/dist/esm/icons/list.mjs:
 lucide-react/dist/esm/icons/loader-circle.mjs:
-lucide-react/dist/esm/icons/lock-keyhole-open.mjs:
 lucide-react/dist/esm/icons/lock-keyhole.mjs:
-lucide-react/dist/esm/icons/lock-open.mjs:
 lucide-react/dist/esm/icons/lock.mjs:
 lucide-react/dist/esm/icons/maximize.mjs:
 lucide-react/dist/esm/icons/message-square-text.mjs:
@@ -111,3 +87,6 @@ lucide-react/dist/esm/lucide-react.mjs:
    * This source code is licensed under the ISC license.
    * See the LICENSE file in the root directory of this source tree.
    */
+
+pako/dist/pako.esm.mjs:
+  /*! pako 2.0.3 https://github.com/nodeca/pako @license (MIT AND Zlib) */
