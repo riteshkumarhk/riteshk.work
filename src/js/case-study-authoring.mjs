@@ -79,7 +79,8 @@ export function parseCaseResponse(raw, sources, work, normalize) {
       const cited = evidence.map(item => item.quote).join(' ');
       const numbers = written.match(/\d+(?:[.,]\d+)*(?:%|\b)/g) || [];
       const citedNumbers = new Set(cited.match(/\d+(?:[.,]\d+)*(?:%|\b)/g) || []);
-      if (numbers.some(number => !citedNumbers.has(number))) throw new Error('A number in section ' + (index + 1) + ' is absent from its cited evidence.');
+      const missing = [...new Set(numbers.filter(number => !citedNumbers.has(number)))];
+      if (missing.length) throw new Error('Section ' + (index + 1) + ': number ' + JSON.stringify(missing[0]) + ' is not in its evidence quotes. Cite an exact supporting source quote or remove the unsupported claim. Do not invent evidence.');
     }
     return { block, evidence, reuseSourceId: entry.reuseSourceId || null };
   });

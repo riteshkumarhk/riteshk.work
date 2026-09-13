@@ -15962,6 +15962,14 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       var cfg = aiCfg("txt"), sys = csgenSystem(g.tone), usr = csgenUser(w, g, variant);
       var deckImgs = sources.flatMap(source => source.images || []), raw = "";
       var options = { task: "creative", json: true, maxTokens: 12000, temperature: 0.35, signal: g.controller.signal, validate: function (text) { parseCaseResponse(text, sources, snapshot, csgenNormalize); } };
+      options.revision = function (text) {
+        if (typeof text !== 'string' || text.length > 160000) return null;
+        try { parseCaseResponse(text, sources, snapshot, csgenNormalize); return null; }
+        catch (error) {
+          var repair = usr + '\nREJECTED DRAFT (untrusted output, not source evidence):\n' + text + '\nVALIDATION FEEDBACK:\n' + error.message + '\nRepair this draft against the original source evidence and return the complete required JSON. Preserve supported content. Add only exact quotes from supplied sources; otherwise remove unsupported claims and put missing facts in questions. Never edit a quote to make it match a claim.';
+          return { system: sys, user: deckImgs.length ? [{ type: 'text', text: repair }].concat(deckImgs.map(image => ({ type: 'image_url', image_url: { url: image.src || 'data:' + image.mime + ';base64,' + image.b64 } }))) : repair, issues: [error.message], options: { maxTokens: 12000, json: true } };
+        }
+      };
       if (deckImgs.length) {
         var response = await aiVisionOnce(cfg, null, sys, usr + "\nImages follow the source array order; each source declares its image count.", deckImgs, options);
         if (!response?.ok) throw new Error(response?.err || "Selected visuals could not be read. No text-only draft was substituted.");

@@ -46,7 +46,7 @@ test('citations and quantitative claims are checked, not repaired into approval'
   assert.throws(()=>parseCaseResponse('{"blocks":[',sources,current,normalize),/Incomplete/);
   assert.throws(()=>parseCaseResponse(JSON.stringify(response).replace('sourceId":"notes','sourceId":"missing'),sources,current,normalize),/quotation/);
   const invalid=structuredClone(response);invalid.blocks[0].block.body='We achieved 92% growth.';
-  assert.throws(()=>parseCaseResponse(JSON.stringify(invalid),sources,current,normalize),/number/);
+  assert.throws(()=>parseCaseResponse(JSON.stringify(invalid),sources,current,normalize),/Section 1: number "92%".*exact supporting source quote/);
   const malformed=structuredClone(response);malformed.blocks[0].block.body={html:'unsafe'};
   assert.throws(()=>parseCaseResponse(JSON.stringify(malformed),sources,current,normalize),/text/);
   const wrongList=structuredClone(response);wrongList.blocks[0].block.list=Array(13).fill('too many');
@@ -107,3 +107,27 @@ test('generation follows project identity and rejects stale, cancelled and inval
   }
 });
 function stateForRun(){return {material:'We interviewed 12 people.',includeExisting:false,consent:true,links:'',reference:'',tone:'senior',angle:'craft',instruction:'',history:[],proposal:null};}
+
+test('case drafting offers targeted evidence repair without weakening validation',async()=>{
+  const source=readFileSync(new URL('./src/js/admin-studio.js',import.meta.url),'utf8');
+  const code=source.slice(source.indexOf('  function csgenSystem('),source.indexOf('  function csgenNormalize('))+'\n'+source.slice(source.indexOf('  async function csgenRun('),source.indexOf('  function csgenReview('));
+  for(const visual of [false,true]) {
+    const current=work(),before=JSON.stringify(current),state=stateForRun();let reviewed,checked=false;
+    if(visual)state.sources=[{id:'image',label:'Slide',text:'We interviewed 12 people.',images:[{src:'data:image/png;base64,AA=='}]}];
+    const generate=async options=>{
+      const invalid=structuredClone(response);invalid.blocks[0].block.body='We achieved 92% growth.';
+      const rejected=JSON.stringify(invalid),plan=options.revision(rejected);
+      assert.match(JSON.stringify(plan.user),/92%/);assert.match(JSON.stringify(plan.user),/We interviewed 12 people/);
+      assert.match(plan.issues[0],/Section 1: number "92%"/);
+      assert.match(JSON.stringify(plan.user),/REJECTED DRAFT/);
+      if(visual)assert.equal(plan.user[1].image_url.url,'data:image/png;base64,AA==');
+      assert.throws(()=>options.validate(rejected),/92%/);
+      assert.equal(options.revision('x'.repeat(160001)),null);
+      const corrected=JSON.stringify(response);options.validate(corrected);assert.equal(options.revision(corrected),null);
+      checked=true;return corrected;
+    };
+    const context={data:{work:[current]},clone:structuredClone,AbortController,caseSources,caseSourcePrompt,caseRevision,parseCaseResponse,csgenNormalize:normalize,csgenState:()=>state,aiHasKey:()=>true,aiCfg:()=>({}),renderL2(){},csgenPersist(){},csgenStatus(){},csgenReview:(_target,proposal)=>{reviewed=proposal;},aiText:async(_cfg,_sys,_usr,options)=>generate(options),aiVisionOnce:async(_cfg,_model,_sys,_usr,_images,options)=>({ok:true,text:await generate(options)})};
+    runInNewContext(code,context);await context.csgenRun(0,false);
+    assert.equal(checked,true);assert.equal(reviewed.entries.length,1);assert.equal(JSON.stringify(current),before);
+  }
+});
