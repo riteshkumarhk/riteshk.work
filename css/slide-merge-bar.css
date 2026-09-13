@@ -30,6 +30,9 @@
 .merge-layout-toggle,.merge-slideview { display:inline-flex;align-items:center;box-sizing:border-box;height:34px;border:1px solid var(--line);border-radius:100px;background:transparent;color:var(--text-dim);cursor:pointer; }
 .merge-shell .merge-layout-toggle { gap:.42rem;padding:.32rem .72rem;font-family:var(--mono);font-size:.6rem;text-transform:uppercase; }
 .merge-layout-toggle[aria-pressed="false"] { color:var(--text-faint);border-style:dashed; }
+.merge-editor-bar .merge-section-access { justify-content:center;flex:0 0 40px;width:40px;padding:0;color:var(--accent); }
+.merge-section-access[aria-checked="false"] rect { fill:currentColor; }
+.merge-editor-bar .merge-section-access[aria-checked="true"] { color:var(--text-dim); }
 .merge-slideview { position:relative;gap:.34rem;padding:0 .55rem; }
 .merge-shell .merge-slideview select { appearance:none;color:inherit;background:transparent;border:0;outline:none;font-size:.72rem;max-width:132px;padding:0 16px 0 0;cursor:pointer; }
 .merge-slideview select option { background:var(--bg-elev);color:var(--text); }

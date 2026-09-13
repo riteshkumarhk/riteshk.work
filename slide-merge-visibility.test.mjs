@@ -233,3 +233,15 @@ test("disabled sections and hidden projects never move their private media to pu
   await prepare("synthetic-test");
   assert.deepEqual(data, before);
 });
+
+test("public slides retain protected references without copying private snapshots or runtime URLs", () => {
+  const deck = fixture(), reference = {version:1,caseStudyId:'case',sectionId:'section-stable'};
+  deck.slides[0].scene.elements.push({id:'protected-insert',type:'rectangle',customData:{sectionReference:reference,sectionTextVisibility:{heading:false,caption:false,extra:'PRIVATE'},runtimeMedia:['https://private.example.com/vault/media?sig=SECRET'],sectionIcons:{secret:'PRIVATE'}}});
+  const payload = publicDeckPayload(deck,{reviewedSources:true,production:true});
+  const element = payload.slides[0].scene.elements.find(item=>item.customData.sectionReference);
+  assert.deepEqual(element.customData,{sectionReference:reference,sectionTextVisibility:{heading:false,caption:false}});
+  assert.doesNotMatch(JSON.stringify(payload),/SECRET|runtimeMedia|sectionIcons|PRIVATE/);
+  assert.throws(()=>publicDeckPayload(deck,{reviewedSources:true}),/public component renderer/);
+  deck.slides[0].scene.elements.at(-1).customData.sectionComponent={type:'text',body:'Private snapshot'};
+  assert.throws(()=>publicDeckPayload(deck,{reviewedSources:true,production:true}),/snapshots/);
+});

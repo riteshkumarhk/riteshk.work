@@ -20,6 +20,15 @@ function declarations(selector) {
   return result;
 }
 
+test("Studio progress stays above the status bar without intercepting controls", () => {
+  const progress = declarations(".adm__statusbar::after");
+  assert.equal(progress.top, "-2px");
+  assert.equal(progress.bottom, undefined);
+  assert.equal(progress.height, "2px");
+  assert.equal(progress["pointer-events"], "none");
+  assert.equal(declarations(".adm__statusbar.is-publishing::after").width, "var(--pub-pct, 0)");
+});
+
 function publicationClient(fetch) {
   const start = source.indexOf("async function ghCommitViaGitData("), end = source.indexOf("function jsonByteLen(", start);
   return runInNewContext(`(() => { ${source.slice(start, end)} return { putContentR2, ghCommitViaGitData }; })()`, {

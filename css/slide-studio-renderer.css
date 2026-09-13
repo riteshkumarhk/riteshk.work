@@ -1,3 +1,8 @@
+.merge-section-locked { display:grid;place-content:center;justify-items:center;gap:10px;box-sizing:border-box;width:100%;height:100%;padding:12px;border:1px dashed var(--line);background:var(--bg-2);color:var(--text-dim);font:12px var(--sans);text-align:center;overflow:hidden; }
+.merge-section-locked>svg { color:var(--accent); }
+.merge-section-locked>svg rect { fill:currentColor; }
+.merge-section-locked>button { max-width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:100px;background:transparent;color:var(--text);font:11px var(--mono);cursor:pointer; }
+.merge-section-locked>button:hover,.merge-section-locked>button:focus-visible { border-color:var(--accent); }
 .lab-embed { border:0; height:100%; width:100%; background:#fff; }
 .lab-embed.lab-section-component { display:block; background:transparent; color-scheme:normal; }
 .merge-native-sections { position:absolute; inset:0; z-index:1; overflow:hidden; pointer-events:none; }

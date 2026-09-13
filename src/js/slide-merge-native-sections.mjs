@@ -1,5 +1,5 @@
 export function nativeSectionElement(element) {
-  if (!element.customData?.sectionComponent) return element;
+  if (!element.customData?.sectionComponent && !element.customData?.sectionReference) return element;
   if (element.type === "rectangle" && element.link == null && element.backgroundColor === "rgba(0, 0, 0, 0)") return element;
   return { ...element, type: "rectangle", link: null, backgroundColor: "rgba(0, 0, 0, 0)", strokeColor: "transparent", fillStyle: "solid", roughness: 0 };
 }
@@ -7,14 +7,14 @@ export function nativeSectionElement(element) {
 export function nativeSectionLayers(elements, state) {
   const zoom = state.zoom.value;
   const visible = elements.filter(element => !element.isDeleted && !element.customData?.labLayerHidden);
-  return visible.filter(element => element.customData?.sectionComponent || element.customData?.slideEmbed).map(element => {
+  return visible.filter(element => element.customData?.sectionComponent || element.customData?.sectionReference || element.customData?.slideEmbed).map(element => {
     const frame = visible.find(frame => frame.id === element.frameId) || visible.find(frame => frame.type === "frame");
     const left = frame ? (frame.x + state.scrollX) * zoom : 0;
     const top = frame ? (frame.y + state.scrollY) * zoom : 0;
     const right = left + (frame?.width || 0) * zoom;
     const bottom = top + (frame?.height || 0) * zoom;
     const rest = visible.slice(visible.indexOf(element) + 1);
-    const next = rest.findIndex(item => item.customData?.sectionComponent || item.customData?.slideEmbed);
+    const next = rest.findIndex(item => item.customData?.sectionComponent || item.customData?.sectionReference || item.customData?.slideEmbed);
     return {
       element,
       frame,

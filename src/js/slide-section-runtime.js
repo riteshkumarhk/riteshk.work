@@ -1,9 +1,34 @@
-import { sectionComponentPlan } from "./slide-merge-section-component.mjs";
+import { sectionComponentPlan, sectionTextVisibility } from "./slide-merge-section-component.mjs";
 import { watchStudioTypography } from "./slide-merge-typography.mjs";
 import { sectionMediaUrl } from "./slide-merge-sections.mjs";
 
+export function applySectionTextVisibility(stage, value) {
+  const visibility = sectionTextVisibility(value);
+  stage.querySelectorAll('[data-section-text-hidden]').forEach(element => element.removeAttribute('data-section-text-hidden'));
+  const hide = element => element.setAttribute('data-section-text-hidden','');
+  for (const [key,selector] of [['heading','.pjb__h'],['kicker','.pjb__kicker'],['caption','figcaption']]) {
+    if (visibility[key] === false) stage.querySelectorAll(selector).forEach(hide);
+  }
+  if (visibility.description !== false) return;
+  const media = 'figure,img,video,iframe,svg,figcaption';
+  function hideProse(container) {
+    for (const node of [...container.childNodes]) {
+      if (node.nodeType === 3 && node.textContent.trim()) {
+        const span = stage.ownerDocument.createElement('span');
+        node.replaceWith(span);span.append(node);hide(span);
+      } else if (node.nodeType === 1 && !node.matches(media)) {
+        if (node.querySelector(media)) hideProse(node); else hide(node);
+      }
+    }
+  }
+  stage.querySelectorAll('.pjb__prose,.pjb__sub,.pjb__cloud-desc,.pjb__quote').forEach(element => {
+    if (element.querySelector(media)) hideProse(element); else hide(element);
+  });
+}
+
 export function mountSectionRuntime(stage) {
-  window.RK.mediaUrl = source => sectionMediaUrl(source) || "";
+  let runtimeMedia = {};
+  window.RK.mediaUrl = source => runtimeMedia[source] || sectionMediaUrl(source) || "";
   const stopTypography = watchStudioTypography(window, document);
   const fit = () => {
     const height = Math.max(1, stage.scrollHeight, stage.offsetHeight);
@@ -52,14 +77,21 @@ export function mountSectionRuntime(stage) {
         if (typeof data.tokens?.[key] === "string") document.documentElement.style.setProperty(key, data.tokens[key]);
       }
       document.documentElement.dataset.appearance = data.appearance === "light" ? "light" : "dark";
-      const signature = JSON.stringify(component);
-      if (signature === rendered) { fit(); return; }
+      runtimeMedia = {};
+      for (const [token,value] of Object.entries(data.media || {})) {
+        if (!/^https:\/\/slide-lab\.invalid\/session-media\/\d+$/.test(token) || typeof value !== 'string') continue;
+        const url = new URL(value);
+        if (!url.username && !url.password && (url.protocol === 'https:' || (url.protocol === 'blob:' && url.origin === location.origin))) runtimeMedia[token] = value;
+      }
+      const signature = JSON.stringify([component,runtimeMedia]);
+      if (signature === rendered) { applySectionTextVisibility(stage,data.textVisibility);fit();return; }
       stage.innerHTML = window.RK.renderStudyBlock(component.sectionComponent);
       if (!stage.querySelector(".pjb")?.innerHTML.trim()) throw new Error("This section needs a newer case-study renderer");
       stage.querySelectorAll("img").forEach(image => { image.loading = "eager"; image.addEventListener("load", fit, { once: true }); });
       stage.querySelectorAll("iframe").forEach(frame => { frame.loading = "eager"; frame.allowFullscreen = true; frame.addEventListener("load", fit, { once: true }); });
       stage.querySelectorAll("video").forEach(video => video.addEventListener("loadedmetadata", fit, { once: true }));
       window.RK.enhanceBlocks?.(stage);
+      applySectionTextVisibility(stage,data.textVisibility);
       stage.dataset.componentType = component.sectionComponent.type;
       rendered = signature; fit();
     } catch (error) { stage.textContent = error.message; }

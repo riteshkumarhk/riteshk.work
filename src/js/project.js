@@ -4,6 +4,8 @@ import { nativePublicDeck } from "./slide-studio-publication.mjs";
 import { openPresenterTab, connectPresenterTab } from "./presenter-tab.mjs";
 import { loadProtectedBlocks } from "./project-recovery.mjs";
 import { sanitizeRichHtml } from "./rich-html.mjs";
+import { normalizeSectionReference } from "./slide-merge-section-component.mjs";
+import { connectSectionAccess } from "./slide-studio-source.mjs";
 
 /* =================================================================
    RITESH KUMAR — Project case study (L2)
@@ -253,8 +255,21 @@ import { sanitizeRichHtml } from "./rich-html.mjs";
     return Array.prototype.map.call(new Uint8Array(b), function (x) { return x.toString(16).padStart(2, "0"); }).join("");
   }
   function isUnlocked(id) { try { return sessionStorage.getItem(UNLOCK_KEY + id) === "1"; } catch (e) { return false; } }
-  function setUnlocked(id) { try { var was = sessionStorage.getItem(UNLOCK_KEY + id) === "1"; sessionStorage.setItem(UNLOCK_KEY + id, "1"); if (!was) { try { window.__rkTrack && window.__rkTrack("deepcut_unlock", id); } catch (e) {} } } catch (e) {} }
-  function clearUnlocked(id) { if (activeId === id) cancelProjectRequests(); try { sessionStorage.removeItem(UNLOCK_KEY + id); } catch (e) {} }   // owner re-locks the editor preview (does not re-encrypt the draft — Publish does that)
+  function setUnlocked(id) { try { var was = sessionStorage.getItem(UNLOCK_KEY + id) === "1"; sessionStorage.setItem(UNLOCK_KEY + id, "1"); if (!was) { try { window.__rkTrack && window.__rkTrack("deepcut_unlock", id); } catch (e) {} } } catch (e) {} window.dispatchEvent(new Event("rk:section-access")); }
+  function clearUnlocked(id) { if (activeId === id) cancelProjectRequests(); try { sessionStorage.removeItem(UNLOCK_KEY + id); } catch (e) {} window.dispatchEvent(new Event("rk:section-access")); }   // owner re-locks the editor preview (does not re-encrypt the draft — Publish does that)
+  function sectionAccess(id) {
+    const work = workById(id);
+    return { available: !!work?.study?.blocks?.some(block => block && (block.locked || block.encStub || block.vaultBlock)), unlocked: !!work && !work.encWork && isUnlocked(id), busy: false };
+  }
+  function resolveSection(reference) {
+    const source = normalizeSectionReference(reference);
+    if (!source) return null;
+    const work = workById(source.caseStudyId);
+    if (!work || work.encWork || work.off) return null;
+    const block = work.study?.blocks?.find(item => item.sectionId === source.sectionId);
+    if (!block || block.off || block.encStub || block.vaultBlock || ((block.locked || work.locked) && !isUnlocked(work.id))) return null;
+    return { block: structuredClone(block), icons: structuredClone(data()?.customIcons || {}), sign: window.RK?.vaultSignedUrl };
+  }
 
   /* ---------- locked-section decryption (envelope) ----------
      Protected blocks ship as ciphertext stubs. A credential (deeper-cut pass or a
@@ -284,7 +299,7 @@ import { sanitizeRichHtml } from "./rich-html.mjs";
     for (var i = 0; i < out.length; i++) {
       var b = out[i];
       if (b && b.encStub && b.iv && b.ct) {
-        try { out[i] = await rkDecWithSek(sekBytes, b); any = true; }
+        try { out[i] = { ...await rkDecWithSek(sekBytes, b), locked: true }; if (b.sectionId) out[i].sectionId = b.sectionId; any = true; }
         catch (e) { return false; }
       }
     }
@@ -321,6 +336,7 @@ import { sanitizeRichHtml } from "./rich-html.mjs";
     options.signal?.throwIfAborted();
     if (w.study !== st || st.blocks !== original) return 0;
     st.blocks = result.blocks;
+    window.dispatchEvent(new Event("rk:section-access"));
     if (options.onResult) options.onResult(result);
     return result.resolved;
   }
@@ -1756,7 +1772,16 @@ import { sanitizeRichHtml } from "./rich-html.mjs";
         if (pjIsOwner() && !PREVIEW && !window.__RK_NATIVE_PRESENTER) {
           openPresenterTab({
             url:"/?" + new URLSearchParams({ work:work.id, slideshow:"1" }),
-            present:(audience, presenterWindow, _prepared, onClose) => audience.RK.presentDeck(work, { presenterWindow, onClose, autoStart:false }),
+            present:async (audience, presenterWindow, _prepared, onClose) => {
+              const document = work.study?.nativeDeckDocument || nativePublicDeck(work);
+              const ids = [work.id, ...(document?.slides || []).flatMap(slide => (slide.scene?.elements || []).map(element => element.customData?.sectionReference?.caseStudyId).filter(Boolean))];
+              const disconnect = connectSectionAccess(audience, ids);
+              try {
+                const player = await audience.RK.presentDeck(work, { presenterWindow, onClose:() => { disconnect(); onClose(); }, autoStart:false });
+                if (!player) disconnect();
+                return player;
+              } catch (error) { disconnect(); throw error; }
+            },
             onError:presentationFailure
           });
         } else window.RK?.presentDeck?.(work);
@@ -2924,6 +2949,7 @@ import { sanitizeRichHtml } from "./rich-html.mjs";
     }
 
     if (window.RK) { window.RK.openProject = openProject; window.RK.closeProject = closeProject; window.RK.iconSvg = iconSvg; window.RK.iconNames = iconNamesAll; window.RK.registerIcons = registerIcons; window.RK.unregisterIcons = unregisterIcons; window.RK.setStudyUnlocked = setUnlocked; window.RK.setStudyLocked = clearUnlocked; window.RK.decryptStudyBlocks = decryptStudyBlocks; window.RK.unlockStudyWithCred = unlockStudyWithCred; window.RK.openLbx = openLbx; window.RK.presentDeck = presentDeck; window.RK.renderDeckSlide = function (s) { return renderPjSlide(s || {}); }; window.RK.deckAutoSlides = function (w) { return pjAutoSlides(w, (w && w.study) || {}); }; window.RK.deckSlideFromBlock = function (b) { return b ? pjBlockToSlide(b) : null; }; window.RK.resolveWorkVault = function (w) { return resolveVaultBlocks(w); }; window.RK.renderStudyBlock = renderStudyBlockInner; window.RK.fitSections = fitSections; window.RK.enhanceBlocks = enhanceStudyBlocks; window.RK.freeConnector = freeConnectorSvg; }
+    if (window.RK) { window.RK.sectionAccess = sectionAccess; window.RK.resolveSection = resolveSection; }
     // A fresh vault grant just arrived (Present mode's owner grant, or a recruiter link). If a case
     // study is open, drop its "already tried" latch and re-resolve its vault-hosted deeper cuts so
     // they swap in immediately — no reopen needed.

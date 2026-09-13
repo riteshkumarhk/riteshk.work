@@ -35,3 +35,13 @@ test("foreground objects remain in scene order between native sections", () => {
   const layers = nativeSectionLayers([section, label, { ...section, id: "second" }, top], { zoom: { value: 1 }, scrollX: 0, scrollY: 0 });
   assert.deepEqual(layers.map(layer => layer.foreground.map(element => element.id)), [["label"], ["top"]]);
 });
+
+test("protected references use the same geometry, clipping and scene order without plaintext", () => {
+  const reference = {version:1,caseStudyId:'case',sectionId:'section-stable'};
+  const element = nativeSectionElement({id:'private',type:'embeddable',x:20,y:30,width:500,height:280,angle:0,customData:{sectionReference:reference}});
+  const layers = nativeSectionLayers([element,{id:'label',type:'text'},{...element,id:'second'}],{zoom:{value:1},scrollX:0,scrollY:0});
+  assert.equal(element.type,'rectangle');
+  assert.equal(layers.length,2);
+  assert.deepEqual(layers[0].foreground.map(item=>item.id),['label']);
+  assert.deepEqual(layers[0].element.customData,{sectionReference:reference});
+});

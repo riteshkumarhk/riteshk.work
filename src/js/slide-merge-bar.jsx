@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowUp, Copy, Pencil, PencilOff, Play, Presentation, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Lock, LockOpen, Pencil, PencilOff, Play, Presentation, Trash2 } from "lucide-react";
 import { DeckDialog } from "./slide-merge-navigator.jsx";
 import { SelectControl } from "./slide-shared-controls.jsx";
 import { ToolMenu } from "./slide-merge-toolbar.jsx";
 import { ACTIVITY_CAPABILITIES, activityChanges, activitySnapshot, activityText } from "./slide-merge-activity.mjs";
+import { sectionAccessState } from "./slide-studio-source.mjs";
 import "../../css/slide-merge-bar.css";
 
 export function HistoryControls({ target, disabled, activity, history, pending, onHistory, api }) {
@@ -83,9 +84,23 @@ export function useActivity(api, live, caseStudyId) {
   return { recording, showLog, setShowLog, events, message, note, write, pending, reset, flush, start, stop };
 }
 
-export function EditorBar({ historyRef, busy, editing, onEditing, slideView, onView, onPlay, canPlay, newTab = false }) {
+function SectionAccessControl({ caseStudyId, disabled }) {
+  const [state, setState] = useState(() => sectionAccessState(caseStudyId));
+  useEffect(() => {
+    const update = () => setState(sectionAccessState(caseStudyId));
+    window.addEventListener("rk:section-access", update); update();
+    return () => window.removeEventListener("rk:section-access", update);
+  }, [caseStudyId]);
+  if (!state.available || !window.__RKStudio?.toggleSections) return null;
+  const Icon = state.unlocked ? LockOpen : Lock;
+  const label = state.busy ? "Cancel section unlock" : state.unlocked ? "Lock protected sections" : "Unlock protected sections";
+  return <button type="button" className="merge-layout-toggle merge-section-access" role="switch" aria-checked={state.unlocked} aria-busy={state.busy} aria-label={label} title={label} disabled={disabled && !state.busy} onClick={() => window.__RKStudio.toggleSections(caseStudyId)}><Icon size={15} strokeWidth={1.75} /></button>;
+}
+
+export function EditorBar({ historyRef, busy, editing, onEditing, slideView, onView, onPlay, canPlay, newTab = false, caseStudyId }) {
   const EditingIcon = editing ? Pencil : PencilOff;
   const controls = [
+    caseStudyId && <SectionAccessControl key="sections" caseStudyId={caseStudyId} disabled={busy} />,
     <button key="editing" type="button" className="merge-layout-toggle" disabled={busy} aria-label={editing ? "Editing on" : "Rehearse"} aria-pressed={editing} onClick={() => onEditing(!editing)} title={editing ? "Switch to Rehearse mode" : "Switch to Editing mode"}><EditingIcon size={15} strokeWidth={1.75} /><span>{editing ? "Editing on" : "Rehearse"}</span></button>,
     newTab ? <span key="view" className="merge-host-slideview"><ToolMenu label="Slide view" icon={<Presentation size={15} strokeWidth={1.75} />} caption={slideView === "all" ? "All slides" : "Current slide"} disabled={busy} menuNavigation>
       <div role="menu" aria-label="Slide view">{[["current", "Current slide"], ["all", "All slides"]].map(([value, label]) => <button key={value} type="button" className={`adm__dev-opt${slideView === value ? " is-on" : ""}`} role="menuitemradio" aria-checked={slideView === value} data-close onClick={() => onView(value)}>{label}</button>)}</div>

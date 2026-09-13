@@ -4,8 +4,8 @@ export function sectionPlainText(value) {
   parsed.querySelectorAll("br,p,div,li").forEach(node => node.append("\n"));
   return (parsed.body.textContent || "").trim();
 }
-export function availableStudies(data, includeMedia = false) {
-  return (Array.isArray(data?.work) ? data.work : []).filter(work => work && !work.off && !work.locked && !work.encStub && !work.vaultBlock).map(work => ({ id: work.id, title: work.title || "Untitled case study", blocks: (Array.isArray(work.study?.blocks) ? work.study.blocks : []).filter(block => block && !block.off && !block.locked && !block.encStub && !block.vaultBlock), ...(includeMedia ? { media: caseStudyMedia(work) } : {}) })).filter(work => work.blocks.length || work.media?.length);
+export function availableStudies(data, includeMedia = false, includeProtected = false) {
+  return (Array.isArray(data?.work) ? data.work : []).filter(work => work && !work.off && !work.locked && !work.encWork && !work.encStub && !work.vaultBlock).map(work => ({ id: work.id, title: work.title || "Untitled case study", blocks: (Array.isArray(work.study?.blocks) ? work.study.blocks : []).filter(block => block && !block.off && (includeProtected || (!block.locked && !block.encStub && !block.vaultBlock))), ...(includeMedia ? { media: caseStudyMedia(work) } : {}) })).filter(work => work.blocks.length || work.media?.length);
 }
 export function caseStudyMedia(work) {
   const files = new Map();

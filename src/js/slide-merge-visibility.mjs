@@ -1,6 +1,7 @@
 import { embedDescriptor } from "./slide-merge-embeds.mjs";
 import { sectionMediaUrl } from "./slide-merge-sections.mjs";
-import { sectionComponentPlan } from "./slide-merge-section-component.mjs";
+import { normalizeSectionReference, sectionComponentPlan } from "./slide-merge-section-component.mjs";
+import { sectionTextVisibility } from "./slide-merge-section-component.mjs";
 
 export function deckVisibility(deck) {
   return deck?.slidesPublic === true ? "public" : "private";
@@ -132,11 +133,21 @@ export function publicDeckPayload(deck, { reviewedSources = false, production = 
       result.startBinding = binding(element.startBinding); result.endBinding = binding(element.endBinding);
       if (element.type === "text") result.originalText = result.text;
       const custom = element.customData || {}, safe = {};
+      if (custom.sectionReference) {
+        if (!production) throw new Error("Protected references require the public component renderer");
+        const reference = normalizeSectionReference(custom.sectionReference);
+        if (!reference || custom.sectionComponent) throw new Error("Protected references must not contain section snapshots");
+        safe.sectionReference = reference;
+      }
       if (custom.sectionComponent) {
         if (!production) throw new Error("Native sections require a public component renderer before export");
         const component = sectionComponentPlan(custom.sectionComponent, String, "public", { customIcons: custom.sectionIcons });
         safe.sectionComponent = audienceComponent(component.elements[0].customData.sectionComponent);
         safe.sectionIcons = pickScalars(component.elements[0].customData.sectionIcons, Object.keys(component.elements[0].customData.sectionIcons));
+      }
+      if (safe.sectionReference || safe.sectionComponent) {
+        const visibility = sectionTextVisibility(custom.sectionTextVisibility);
+        if (Object.keys(visibility).length) safe.sectionTextVisibility = visibility;
       }
       if (custom.pendingEmbed) throw new Error("Finish the embedded link before publishing");
       if (custom.slideEmbed) {

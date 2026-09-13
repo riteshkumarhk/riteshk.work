@@ -41,6 +41,7 @@ export async function loadProtectedBlocks(blocks, { sign, fetch: request = globa
         }, signal, timeout);
         signal?.throwIfAborted();
         result[index] = { ...full, locked: true };
+        if (block.sectionId) result[index].sectionId = block.sectionId;
         resolved++;
       } catch (error) {
         signal?.throwIfAborted();

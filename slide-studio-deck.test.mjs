@@ -12,6 +12,8 @@ import { assertStudioDeckPublishable, createStudioDeck, STUDIO_DECK_SCHEMA } fro
 import { AI_AGENT_SYSTEM } from "./src/js/ai-task-agent.mjs";
 import { COMPOSITION_RESPONSE_SCHEMA } from "./src/js/slide-merge-ai.mjs";
 import { contentRevision } from "./src/js/content-revision.mjs";
+import { loadProtectedBlocks } from "./src/js/project-recovery.mjs";
+import { normalizeSectionReference } from "./src/js/slide-merge-section-component.mjs";
 
 async function openProjectSlides(page, index = 0) {
   await page.locator('[data-act="study-toggle"][data-index="' + index + '"]').click();
@@ -71,10 +73,10 @@ test('case authoring keeps sources private and requires reviewed selective appli
   } finally { await browser.close(); }
 });
 
-async function openIntegratedFixture(page, blocks = [{ type: "text", heading: "Published heading", body: "Supported source content." }]) {
+async function openIntegratedFixture(page, blocks = [{ type: "text", heading: "Published heading", body: "Supported source content." }], studyFields = {}) {
   const published = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
   published.work = [
-    { id: "integrated-case", client: "Studio fixture", title: "Integrated project", study: { blocks } },
+    { id: "integrated-case", client: "Studio fixture", title: "Integrated project", study: { ...studyFields, blocks } },
     { id: "empty-case", client: "Empty fixture", title: "Empty project", study: { blocks: [] } }
   ];
   await page.context().route("**/*", async route => {
@@ -94,6 +96,361 @@ async function openIntegratedFixture(page, blocks = [{ type: "text", heading: "P
   await page.locator('.adm__tab[data-tab="work"]').click();
   return published;
 }
+
+test("Audience section references require actual recovered content and react to relocking", () => {
+  const source = readFileSync(new URL('./src/js/project.js',import.meta.url),'utf8');
+  const start = source.indexOf('  function isUnlocked('), end = source.indexOf('  /* ---------- locked-section decryption',start);
+  const values = new Map(), events = [];
+  const work = {id:'case',study:{blocks:[{type:'text',sectionId:'stable',locked:true,body:'Private source'}]}};
+  const api = runInNewContext(source.slice(start,end)+';({setUnlocked,clearUnlocked,sectionAccess,resolveSection})',{
+    normalizeSectionReference,structuredClone,Event,UNLOCK_KEY:'test:',activeId:null,
+    sessionStorage:{getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},
+    workById:id=>id===work.id?work:null,data:()=>({work:[work]}),window:{RK:{},dispatchEvent:event=>events.push(event.type)}
+  });
+  const reference = {version:1,caseStudyId:'case',sectionId:'stable'};
+  assert.equal(api.resolveSection(reference),null);
+  api.setUnlocked('case');
+  const visible = api.resolveSection(reference);
+  assert.equal(visible.block.body,'Private source');
+  visible.block.body='Not the source';
+  assert.equal(work.study.blocks[0].body,'Private source');
+  work.study.blocks[0].encStub=true;
+  assert.equal(api.resolveSection(reference),null);
+  delete work.study.blocks[0].encStub;
+  api.clearUnlocked('case');
+  assert.equal(api.resolveSection(reference),null);
+  assert.deepEqual(events,['rk:section-access','rk:section-access']);
+  delete work.study.blocks[0].locked;
+  assert.equal(api.resolveSection(reference).block.body,'Private source','Removing protection keeps existing references usable');
+});
+
+test("Ticket and Present-mode access notify existing section views after recovery and relock", async () => {
+  const source = readFileSync(new URL('./src/js/render.js',import.meta.url),'utf8');
+  const values = new Map(), events = [];
+  const work = {id:'ticket-case',study:{blocks:[{type:'text',locked:true,body:'Recovered source'}]}};
+  const environment = {
+    Event,RK_UNLOCK_PREFIX:'unlock:',RK_PRESENT_IDS:'present-ids',RK_PRESENT_ACTIVE:'present-active',DRAFT_KEY:'draft',
+    sessionStorage:{getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},
+    localStorage:{getItem:()=>null},baseData:()=>({work:[work]}),hasStudioOwnerCopies:()=>false,
+    window:{RK:{},dispatchEvent:event=>events.push({type:event.type,data:environment.window.RK.data,unlocked:values.get('unlock:ticket-case')})},
+    showUnlockingBanner(){},showPresentBanner(){},render(){},revealAll(){},DATA:null,presentActive:false
+  };
+  const markStart = source.indexOf('  function rkMarkUnlocked('), markEnd = source.indexOf('  async function rkDecryptStudyBlocks(',markStart);
+  const presentStart = source.indexOf('  async function presentAll('), presentEnd = source.indexOf('  function exitPresent()',presentStart);
+  const api = runInNewContext(source.slice(markStart,markEnd)+source.slice(presentStart,presentEnd)+';({rkMarkUnlocked,presentAll,rkClearPresent})',environment);
+  api.rkMarkUnlocked('ticket-case');
+  assert.equal(events.at(-1).unlocked,'1');
+  assert.equal((await api.presentAll('synthetic-recovery')).ok,true);
+  assert.equal(events.at(-1).data.work[0].study.blocks[0].body,'Recovered source');
+  values.set('present-ids',JSON.stringify(['ticket-case']));
+  api.rkClearPresent();
+  assert.equal(events.at(-1).unlocked,undefined);
+  assert.ok(events.every(event=>event.type==='rk:section-access'));
+});
+
+test("Protected section references survive legacy encryption and old vault recovery", async () => {
+  const full = {type:'text',body:'Private original',sectionId:'old-body-id'}, sek = rkNewSek();
+  const stub = {type:'text',locked:true,encStub:true,sectionId:'stable-reference',...await rkEncWithSek(sek,full)};
+  for (const [file,name,endMarker] of [
+    ['project.js','decryptStudyBlocks','  // Unlock a study'],
+    ['render.js','rkDecryptStudyBlocks','  // A server-minted']
+  ]) {
+    const source = readFileSync(new URL('./src/js/'+file,import.meta.url),'utf8');
+    const start = source.indexOf('async function '+name+'('), end = source.indexOf(endMarker,start);
+    const decrypt = runInNewContext('('+source.slice(start,end)+')',{rkDecWithSek,rkResolveEncImages:async()=>{}});
+    const study = {blocks:[structuredClone(stub)]};
+    assert.equal(await decrypt(study,sek),true);
+    assert.equal(study.blocks[0].sectionId,'stable-reference');
+    assert.equal(study.blocks[0].locked,true);
+  }
+  const restored = await loadProtectedBlocks([{type:'text',locked:true,vaultBlock:'old-vault-body',sectionId:'stable-reference'}],{sign:async()=> 'https://example.test/vault',fetch:async()=>({ok:true,json:async()=>structuredClone(full)})});
+  assert.equal(restored.blocks[0].sectionId,'stable-reference');
+  assert.equal(restored.blocks[0].body,'Private original');
+  assert.equal(restored.blocks[0].locked,true);
+});
+
+test("Studio protected inserts share recovery-gated access across case and slideshow", {timeout:90000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const pass = 'synthetic-section-recovery', sek = rkNewSek(), wrap = await rkWrapSek(pass,sek);
+  const media = '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#237b70"/></svg>';
+  const full = {type:'gallery',locked:true,heading:'Private prototype',kicker:'Private kicker',items:[{src:'vault:synthetic-original',caption:'Private caption'}]};
+  const encrypted = {type:'gallery',locked:true,encStub:true,...await rkEncWithSek(sek,full)};
+  try {
+    for (const width of [1440,390]) {
+      const context = await browser.newContext({viewport:{width,height:1000},reducedMotion:width===1440?'no-preference':'reduce'}), page = await context.newPage();
+      const errors = [];page.on('pageerror',error=>errors.push(error.message));
+      await page.addInitScript(()=>localStorage.setItem('rk:admin:sess',JSON.stringify({token:'synthetic-section-test',exp:Date.now()+3600000})));
+      await openIntegratedFixture(page,[{type:'text',heading:'Public section',body:'Public source'},encrypted],{enc:{wraps:{owner:wrap}}});
+      const progress = await page.locator('.adm__statusbar').evaluate(element => {
+        const style = getComputedStyle(element,'::after');
+        return {top:style.top,height:style.height,pointerEvents:style.pointerEvents};
+      });
+      assert.deepEqual(progress,{top:'-2px',height:'2px',pointerEvents:'none'});
+      const draftBeforeSimulation = await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
+      await page.evaluate(()=>{window.progressSimulation=window.__rkPubSim('recoverable');});
+      await page.waitForFunction(()=>parseFloat(document.querySelector('.adm__statusbar').style.getPropertyValue('--pub-pct'))>=50);
+      const activeProgress = await page.locator('.adm__statusbar').evaluate(element=>{
+        const style=getComputedStyle(element,'::after'),box=element.getBoundingClientRect();
+        return {opacity:style.opacity,color:style.backgroundColor,width:parseFloat(style.width),top:box.top+parseFloat(style.top),bottom:box.top+parseFloat(style.top)+parseFloat(style.height),barTop:box.top};
+      });
+      assert.ok(Number(activeProgress.opacity)>=0.9,'The active progress line is visible');
+      assert.equal(activeProgress.color,'rgb(216, 166, 87)');
+      assert.ok(activeProgress.width>0 && activeProgress.top>=0 && activeProgress.bottom<=activeProgress.barTop);
+      await page.screenshot({path:join(tmpdir(),'rk-studio-progress-'+width+'.png')});
+      await page.evaluate(()=>window.progressSimulation);
+      assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),draftBeforeSimulation);
+      let privateReads = 0;
+      await context.route('**/vault/**',route=> {
+        const url = new URL(route.request().url());
+        if (url.pathname === '/vault/sign') return route.fulfill({json:{url:'/vault/file/synthetic-original?sig=synthetic-only'}});
+        if (url.pathname === '/vault/file/synthetic-original') { privateReads++; return route.fulfill({contentType:'image/svg+xml',body:media}); }
+        return route.abort();
+      });
+      await openProjectSlides(page);
+      await page.locator('.merge-empty-actions button').first().click();
+      await page.getByRole('button',{name:'Sections',exact:true}).click();
+      const choice = page.locator('.merge-section-choices button').filter({hasText:'Protected section'});
+      await choice.waitFor();
+      assert.equal(await choice.isEnabled(),true);
+      assert.doesNotMatch(await page.locator('.merge-section-choices').innerText(),/Private prototype|Private caption/);
+      await choice.click();
+      await page.locator('.lab-canvas > .merge-native-sections .merge-section-locked').waitFor();
+      assert.equal(privateReads,0);
+      const access = page.locator('[data-native-slide-toolbar] .merge-section-access');
+      assert.equal(await access.getAttribute('aria-checked'),'false');
+      assert.equal(await access.locator('rect').evaluate(element=>getComputedStyle(element).fill),'rgb(216, 166, 87)');
+      const accessBox = await access.boundingBox(), editingBox = await page.locator('[data-native-slide-toolbar] [aria-label="Editing on"]').boundingBox();
+      assert.ok(accessBox.x+accessBox.width<=editingBox.x);
+      await access.click();
+      const prompt = page.locator('.pass').filter({has:page.getByText('Recovery passphrase',{exact:true})});
+      await prompt.locator('[data-cancel]').click();
+      await page.waitForFunction(()=>document.querySelector('[data-native-slide-toolbar] .merge-section-access')?.getAttribute('aria-busy')==='false');
+      assert.equal(await access.getAttribute('aria-checked'),'false');
+      assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[1].encStub),true);
+      await access.click();
+      await prompt.locator('input[type="password"]').fill(pass);
+      await prompt.locator('[data-go]').click();
+      await page.waitForFunction(()=>document.querySelector('[data-native-slide-toolbar] .merge-section-access')?.getAttribute('aria-checked')==='true');
+      await page.frameLocator('.lab-canvas > .merge-native-sections iframe.lab-section-component').getByText('Private prototype',{exact:true}).waitFor();
+      await page.waitForFunction(()=>document.querySelector('.lab-canvas > .merge-native-sections iframe.lab-section-component')?.contentDocument.querySelector('img')?.naturalWidth===640);
+      await page.screenshot({path:join(tmpdir(),'rk-protected-insert-'+width+'.png')});
+      const closePanel = page.getByRole('button',{name:'Close panel',exact:true});
+      if (await closePanel.isVisible()) await closePanel.click();
+      const protectedBounds = await page.locator('.lab-canvas > .merge-native-sections iframe.lab-section-component').boundingBox();
+      await page.mouse.click(protectedBounds.x+8,protectedBounds.y+8,{button:'right'});
+      await page.getByText('Show/hide',{exact:true}).click();
+      const visibility = page.getByRole('menu',{name:'Show/hide',exact:true});
+      assert.deepEqual(await visibility.getByRole('menuitemcheckbox').allTextContents(),['Heading','Kicker','Caption']);
+      await visibility.getByRole('menuitemcheckbox',{name:'Caption',exact:true}).click();
+      await page.frameLocator('.lab-canvas > .merge-native-sections iframe.lab-section-component').getByText('Private caption',{exact:true}).waitFor({state:'hidden'});
+      await page.keyboard.press('Escape');
+      await access.click();
+      await page.locator('.lab-canvas > .merge-native-sections .merge-section-locked').waitFor();
+      assert.equal(await page.locator('.lab-canvas > .merge-native-sections iframe.lab-section-component').count(),0);
+      await page.locator('[data-l2tab="story"]').click();
+      await page.locator('.study-sections').waitFor();
+      const caseAccess = page.locator('[data-section-access]');
+      assert.equal(await caseAccess.getAttribute('aria-checked'),'false');
+      assert.equal(await caseAccess.locator('rect').evaluate(element=>getComputedStyle(element).fill),'rgb(216, 166, 87)');
+      const previewToggle = page.locator('[data-prevtoggle]');
+      await previewToggle.click();
+      assert.equal(await caseAccess.locator('rect').evaluate(element=>getComputedStyle(element).fill),'rgb(216, 166, 87)');
+      await previewToggle.click();
+      assert.equal(await page.locator('.study-sections input[data-bfield="heading"][value="Private prototype"]').count(),0);
+      assert.equal(await page.locator('.study-sections .study__block--enc').count(),1);
+      const caseBox = await caseAccess.boundingBox(), splitBox = await page.locator('[data-prevtoggle]').boundingBox();
+      assert.ok(caseBox.x+caseBox.width<=splitBox.x);
+      await caseAccess.click();
+      await page.waitForFunction(()=>document.querySelector('[data-section-access]')?.getAttribute('aria-checked')==='true');
+      assert.equal(await caseAccess.locator('rect').evaluate(element=>getComputedStyle(element).fill),'none');
+      assert.equal(await caseAccess.evaluate(element=>getComputedStyle(element).color),'rgb(143, 138, 132)');
+      await page.locator('[data-l2tab="slides"]').click();
+      await page.frameLocator('.lab-canvas > .merge-native-sections iframe.lab-section-component').getByText('Private prototype',{exact:true}).waitFor();
+      const opening = page.waitForEvent('popup');
+      await page.locator('[data-native-slide-toolbar] .merge-bar-play').click();
+      const audience = await opening;
+      audience.on('pageerror',error=>errors.push(error.message));
+      await audience.frameLocator('.merge-present-stage iframe.lab-section-component').getByText('Private prototype',{exact:true}).waitFor();
+      await audience.waitForFunction(()=>document.querySelector('.merge-present-stage iframe.lab-section-component')?.contentDocument.querySelector('img')?.naturalWidth===640);
+      assert.equal(await audience.frameLocator('.merge-present-stage iframe.lab-section-component').getByText('Private caption',{exact:true}).isHidden(),true);
+      await page.evaluate(()=>window.__RKStudio.toggleSections('integrated-case'));
+      await audience.locator('.merge-present-stage .merge-section-locked').waitFor();
+      assert.equal(await audience.locator('.merge-present-stage iframe.lab-section-component').count(),0);
+      await page.evaluate(()=>window.__RKStudio.unlockSections('integrated-case'));
+      await audience.frameLocator('.merge-present-stage iframe.lab-section-component').getByText('Private prototype',{exact:true}).waitFor();
+      assert.equal(await audience.frameLocator('.merge-present-stage iframe.lab-section-component').getByText('Private caption',{exact:true}).isHidden(),true);
+      await audience.screenshot({path:join(tmpdir(),'rk-protected-audience-'+width+'.png')});
+      await page.frameLocator('dialog.pjp-tab iframe').locator('[data-pp="exit"]').click();
+      await page.locator('dialog.pjp-tab').waitFor({state:'detached'});
+      await page.locator('[data-l2-back]').click();
+      const saved = await page.evaluate(async()=>{
+        const reference=window.__RKStudio.getDraft().work[0].study.nativeDeck;
+        const database=await new Promise((resolve,reject)=>{const request=indexedDB.open('rk-studio-slide-decks-v1');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
+        try{return await new Promise((resolve,reject)=>{const request=database.transaction('documents').objectStore('documents').get([reference.id,reference.revision]);request.onsuccess=()=>resolve(request.result.document);request.onerror=()=>reject(request.error);});}finally{database.close();}
+      });
+      const component=saved.slides[0].scene.elements.find(element=>element.customData?.sectionReference);
+      assert.equal(component.customData.sectionReference.caseStudyId,'integrated-case');
+      assert.deepEqual(component.customData.sectionTextVisibility,{caption:false});
+      assert.doesNotMatch(JSON.stringify(saved),/Private prototype|Private caption|Private kicker|base64,|synthetic-original|synthetic-only|sectionComponent/);
+      assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[1].locked),true);
+      assert.deepEqual(errors,[]);
+      await context.close();
+    }
+  } finally {await browser.close();}
+});
+
+test("Section Show/hide preserves source media, undo and independent saved instances", {timeout:90000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const media = 'data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#237b70"/></svg>').toString('base64');
+  const source = {type:'text',heading:'Instance heading',kicker:'Instance kicker',body:'<p>Original description</p><figure><img src="'+media+'"><figcaption>Original caption</figcaption></figure>'};
+  try {
+    for (const width of [1440,390]) {
+      const context = await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce'}), page = await context.newPage();
+      const errors = [];page.on('pageerror',error=>errors.push(error.message));
+      await openIntegratedFixture(page,[source]);
+      await openProjectSlides(page);
+      await page.locator('.merge-empty-actions button').first().click();
+      await page.getByRole('button',{name:'Sections',exact:true}).click();
+      await page.locator('.merge-section-choices button').filter({hasText:'Instance heading'}).click();
+      const closePanel = page.getByRole('button',{name:'Close panel',exact:true});
+      if (await closePanel.isVisible()) await closePanel.click();
+      const frame = page.frameLocator('.lab-canvas > .merge-native-sections iframe.lab-section-component');
+      await frame.getByText('Instance heading',{exact:true}).waitFor();
+      await frame.locator('img').evaluate(image=>{window.retainedImage=image;});
+      const bounds = await page.locator('.lab-canvas > .merge-native-sections iframe.lab-section-component').boundingBox();
+      await page.mouse.click(bounds.x+8,bounds.y+8,{button:'right'});
+      await page.getByText('Show/hide',{exact:true}).click();
+      const menu = page.getByRole('menu',{name:'Show/hide',exact:true});
+      await menu.waitFor();
+      assert.deepEqual(await menu.getByRole('menuitemcheckbox').allTextContents(),['Heading','Kicker','Description','Caption']);
+      for (const label of ['Heading','Kicker','Description','Caption']) {
+        const item = menu.getByRole('menuitemcheckbox',{name:label,exact:true});
+        assert.equal(await item.getAttribute('aria-checked'),'true');
+        await item.click();
+        await page.waitForFunction(label=>[...document.querySelectorAll('.merge-section-visibility button')].find(button=>button.textContent===label)?.getAttribute('aria-checked')==='false',label);
+      }
+      assert.equal(await frame.getByText('Instance heading',{exact:true}).isHidden(),true);
+      assert.equal(await frame.getByText('Instance kicker',{exact:true}).isHidden(),true);
+      assert.equal(await frame.getByText('Original description',{exact:true}).isHidden(),true);
+      assert.equal(await frame.getByText('Original caption',{exact:true}).isHidden(),true);
+      assert.equal(await frame.locator('img').isVisible(),true);
+      assert.equal(await frame.locator('img').evaluate(image=>image===window.retainedImage),true);
+      const menuBox = await menu.boundingBox();
+      assert.ok(menuBox.x>=0 && menuBox.x+menuBox.width<=width+1 && menuBox.y>=0 && menuBox.y+menuBox.height<=1001);
+      assert.ok(menuBox.y>=bounds.y-8,'Show/hide stays beside the selected section, not the viewport corner');
+      await page.screenshot({path:join(tmpdir(),'rk-section-visibility-'+width+'.png')});
+      await page.keyboard.press('Escape');
+      await page.getByRole('button',{name:'Undo',exact:true}).click();
+      await frame.getByText('Original caption',{exact:true}).waitFor({state:'visible'});
+      await page.getByRole('button',{name:'Redo',exact:true}).click();
+      await frame.getByText('Original caption',{exact:true}).waitFor({state:'hidden'});
+      assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks),[source]);
+      await page.locator('[data-l2-back]').click();
+      await page.reload();
+      await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+      await page.evaluate(()=>document.querySelectorAll('.pass--lock').forEach(dialog=>dialog.remove()));
+      await page.locator('.adm__tab[data-tab="work"]').click();
+      await openProjectSlides(page);
+      await frame.locator('.pjb__h').waitFor({state:'attached'});
+      assert.equal(await frame.getByText('Instance heading',{exact:true}).isHidden(),true);
+      await page.getByRole('button',{name:'Sections',exact:true}).click();
+      await page.locator('.merge-section-choices button').filter({hasText:'Instance heading'}).click();
+      const frames = page.locator('.lab-canvas > .merge-native-sections iframe.lab-section-component');
+      await frames.nth(1).waitFor();
+      await page.frameLocator('.lab-canvas > .merge-native-sections iframe.lab-section-component').nth(1).getByText('Instance heading',{exact:true}).waitFor();
+      assert.equal(await page.frameLocator('.lab-canvas > .merge-native-sections iframe.lab-section-component').nth(0).getByText('Instance heading',{exact:true}).isHidden(),true);
+      await page.locator('[data-l2-back]').click();
+      const saved = await page.evaluate(async()=>{
+        const reference=window.__RKStudio.getDraft().work[0].study.nativeDeck;
+        const database=await new Promise((resolve,reject)=>{const request=indexedDB.open('rk-studio-slide-decks-v1');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
+        try{return await new Promise((resolve,reject)=>{const request=database.transaction('documents').objectStore('documents').get([reference.id,reference.revision]);request.onsuccess=()=>resolve(request.result.document);request.onerror=()=>reject(request.error);});}finally{database.close();}
+      });
+      const instances = saved.slides[0].scene.elements.filter(element=>element.customData?.sectionComponent);
+      assert.equal(instances.length,2);
+      assert.deepEqual(instances[0].customData.sectionTextVisibility,{heading:false,kicker:false,description:false,caption:false});
+      assert.equal(instances[1].customData.sectionTextVisibility,undefined);
+      for (const instance of instances) assert.deepEqual(instance.customData.sectionComponent,source);
+      assert.deepEqual(errors,[]);
+      await context.close();
+    }
+  } finally {await browser.close();}
+});
+
+test("Sections protected headers keep More before an actionable lock and consistent reassurance", () => {
+  const source = readFileSync(new URL('./src/js/admin-studio.js',import.meta.url),'utf8');
+  const start = source.indexOf('  function blockActionMenu('), end = source.indexOf('  function smeta(',start);
+  const render = runInNewContext(source.slice(start,end)+'\nblockEditor', {
+    studyBlockTypeName: block => block.type, escHtml: String, GRIP_SVG: '',
+    IC: new Proxy({}, { get: () => '' }), svgIco: markup => markup
+  });
+  for (const block of [{type:'media',encStub:true},{type:'gallery',vaultBlock:'private-reference'}]) {
+    const html = render(0,block,0,1,false);
+    assert.ok(html.indexOf('class="study__actions"') < html.indexOf('class="iconbtn study__protected-lock"'));
+    assert.match(html, /<button[^>]*study__protected-lock[^>]*data-act="study-decrypt"[^>]*aria-label="Unlock section"/);
+    assert.match(html, /Your content is safe and protected/);
+    assert.doesNotMatch(html, /isn.t in your published file|study__block-chev/);
+  }
+});
+
+test("Protected section identity survives encrypted and vault publication without exposing content", async () => {
+  const source = readFileSync(new URL('./src/js/admin-studio.js',import.meta.url),'utf8');
+  const block = {type:'text',sectionId:'section-stable',locked:true,heading:'Private heading',body:'Private source'};
+  const encryptedStart = source.indexOf('  function makeStub(');
+  const makeStub = runInNewContext(source.slice(encryptedStart,source.indexOf('  // Destructive-action confirm',encryptedStart))+'\nmakeStub',{rkEncWithSek});
+  const sek = rkNewSek(), encrypted = await makeStub(sek,block);
+  assert.equal(encrypted.sectionId,block.sectionId);
+  assert.deepEqual(await rkDecWithSek(sek,encrypted),block);
+  assert.doesNotMatch(JSON.stringify(encrypted),/Private heading|Private source/);
+  const vaultStart = source.indexOf('  async function vaultBlockPointer(');
+  const makePointer = runInNewContext(source.slice(vaultStart,source.indexOf('  async function encryptLockedForPublish(',vaultStart))+'\nvaultBlockPointer',{Blob,vaultBlockKeys:{},vaultUpload:async ()=>'opaque-key'});
+  const vaulted = await makePointer('case',block);
+  assert.equal(vaulted.sectionId,block.sectionId);
+  assert.equal(vaulted.vaultBlock,'opaque-key');
+  assert.doesNotMatch(JSON.stringify(vaulted),/Private heading|Private source/);
+});
+
+test("Studio global section unlock verifies recovery and rejects stale or unsaved results", async () => {
+  const source = readFileSync(new URL('./src/js/admin-studio.js',import.meta.url),'utf8');
+  const start = source.indexOf('  var studyUnlockRequests = new Map();');
+  const code = source.slice(start,source.indexOf('  var removingSectionProtection',start));
+  const sek = rkNewSek(), pass = 'synthetic-recovery', wrap = await rkWrapSek(pass,sek);
+  const encrypted = await rkEncWithSek(sek,{type:'text',heading:'Private heading',body:'Preserved source'});
+  for (const scenario of ['success','cancel','wrong','navigate','edit','save-failure','vault-failure','relock']) {
+    const sealed = scenario==='vault-failure' ? {type:'text',locked:true,sectionId:'stable',vaultBlock:'opaque'} : {type:'text',locked:true,sectionId:'stable',encStub:true,...encrypted};
+    const blocks = [sealed], work = {id:'case',study:{blocks,enc:{wraps:{owner:wrap}}}};
+    let prompts = 0, saves = 0, unlocked = false, release;
+    const environment = {
+      data:{work:[work]},openStudy:0,root:{classList:{contains:()=>true}},AbortController,
+      window:{addEventListener(){},removeEventListener(){}},paintStudyAccess(){},
+      ensureRecoveryPass:()=>{prompts++;return new Promise(resolve=>{release=resolve;});},
+      rkUnwrapSek,rkDecWithSek,rkResolveEncToDataUri:async()=>{},loadProtectedBlocks,
+      adminSession:()=>true,vaultSignedUrl:async()=>null,fetch:async()=>{throw new Error('Unexpected fetch');},
+      saveDraft:()=>{saves++;return scenario!=='save-failure';},setStudyContentAccess:()=>{unlocked=true;},
+      renderL2(){},refreshL2Preview(){},status(){},recoveryPassCache:null
+    };
+    const api = runInNewContext(code+'\n({unlock:decryptStudyForEdit,requests:studyUnlockRequests})',environment);
+    const pending = api.unlock(0), repeated = api.unlock(0);
+    assert.equal(prompts,1);
+    if (scenario==='navigate') environment.openStudy=1;
+    if (scenario==='edit') sealed.editorName='Newer user edit';
+    if (scenario==='relock') api.requests.get('case').controller.abort();
+    release(scenario==='cancel'?null:scenario==='wrong'?'incorrect':pass);
+    assert.equal(await pending,scenario==='success');
+    await repeated;
+    assert.equal(api.requests.size,0);
+    assert.equal(unlocked,scenario==='success');
+    if (scenario==='success') {
+      assert.equal(work.study.blocks[0].sectionId,'stable');
+      assert.equal(work.study.blocks[0].locked,true);
+      assert.equal(work.study.blocks[0].body,'Preserved source');
+      assert.equal(saves,1);
+    } else {
+      assert.equal(work.study.blocks,blocks);
+      assert.equal(work.study.blocks[0],sealed);
+      assert.equal(saves,scenario==='save-failure'?1:0);
+    }
+  }
+});
 
 test("Sections remove protection requires unlock and preserves sealed data on failure", async () => {
   const source = readFileSync(new URL('./src/js/admin-studio.js',import.meta.url),'utf8');
@@ -208,7 +565,7 @@ test("Sections controls preserve names, checked states and protected content", {
       await row.locator('.study__block-rename').press('Escape');
       assert.equal(await label.textContent(),'Custom section name');
       const openMenu = async () => { await row.locator('summary').focus(); await row.locator('summary').press('Enter'); await row.locator('.study__action-menu:popover-open').waitFor(); };
-      for (const [command,initial] of [['sep','true'],['off','false'],['lock','false']]) {
+      for (const [command,initial] of [['sep','true'],['off','false']]) {
         await openMenu();
         const toggle = row.locator('.study__action-menu [data-act="study-block'+command+'"]');
         assert.equal(await toggle.getAttribute('aria-pressed'),initial);
@@ -219,30 +576,27 @@ test("Sections controls preserve names, checked states and protected content", {
         await page.keyboard.press('Escape');
         assert.equal(await row.locator('summary').evaluate(element=>element===document.activeElement),true);
       }
-      const lock = row.locator('.study__block-status .study__block-lock');
-      await page.mouse.move(0,0);
-      assert.equal(await lock.locator('rect').evaluate(element=>getComputedStyle(element).fill),'rgb(216, 166, 87)');
-      await lock.hover();
-      await page.waitForFunction(()=>getComputedStyle(document.querySelector('.study-sections .study__block-status .study__block-lock')).borderTopColor==='rgb(90, 86, 80)');
-      await lock.click();
       await openMenu();
       assert.equal(await row.locator('.study__action-menu [data-act="study-blocklock"] rect').evaluate(element=>getComputedStyle(element).fill),'none');
       const bounds = await row.locator('.study__action-menu').boundingBox();
       assert.ok(bounds.x>=0&&bounds.x+bounds.width<=width&&bounds.y>=0&&bounds.y+bounds.height<=1000);
-      await page.keyboard.press('Escape');
+      await row.locator('.study__action-menu [data-act="study-blocklock"]').click();
+      await row.locator('.study__protected-lock').waitFor();
+      assert.equal(await row.locator('.study__protected-lock rect').evaluate(element=>getComputedStyle(element).fill),'rgb(216, 166, 87)');
+      assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].body),'Keep content');
       const sealed = page.locator('.study-sections .study__block--enc');
-      assert.equal(await sealed.count(),2);
+      assert.equal(await sealed.count(),3);
       assert.equal(await sealed.locator('input,textarea,.study__block-rename,.study__block-chev').count(),0);
-      assert.equal(await sealed.locator('[data-act="study-decrypt"]').count(),2);
+      assert.equal(await sealed.locator('[data-act="study-decrypt"]').count(),6);
       assert.equal(await sealed.locator('[data-act="study-blockremove"]').count(),0);
-      assert.equal(await sealed.locator('[data-act="study-unprotect"]').count(),2);
+      assert.equal(await sealed.locator('[data-act="study-unprotect"]').count(),3);
       const sealedBefore = await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks.slice(2)));
       await sealed.first().locator('summary').click();
       await sealed.first().locator('[data-act="study-unprotect"]').click();
       await page.getByText('Remove section protection?',{exact:true}).waitFor();
       await page.locator('.pass').filter({hasText:'Remove section protection?'}).getByRole('button',{name:'Cancel',exact:true}).click();
       assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks.slice(2))),sealedBefore);
-      assert.equal(await sealed.first().locator('[data-act="study-decrypt"]').isEnabled(),true);
+      assert.equal(await sealed.first().locator('[data-act="study-decrypt"]').first().isEnabled(),true);
       assert.equal(await sealed.first().locator('.study__protected-lock rect').evaluate(element=>getComputedStyle(element).fill),'rgb(216, 166, 87)');
       await page.screenshot({path:join(tmpdir(),`rk-sections-${width}.png`)});
       await page.reload();
@@ -275,7 +629,7 @@ test("Sections protected menus move sealed data intact and allow insertion above
         assert.ok(bounds.x>=0&&bounds.x+bounds.width<=width&&bounds.y>=0&&bounds.y+bounds.height<=844);
         const lock = await row.locator('.study__protected-lock').boundingBox();
         const trigger = await row.locator('summary').boundingBox();
-        assert.ok(lock.x+lock.width<=trigger.x,'Lock and More trigger must not overlap');
+        assert.ok(trigger.x+trigger.width<=lock.x,'More stays before the lock in the chevron position');
         return menu;
       };
       let menu = await openMenu(0);
@@ -2945,10 +3299,15 @@ for (const publicationRoute of ['live-content', 'direct-git']) test('section loc
     assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].locked),true);
     const lockedDraft=await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
     await page.locator('[data-publish]').click();
-    await page.locator('.pass--lock input[type="password"]').first().fill(pass);
-    const confirmation=page.locator('.pass--lock [data-confirm]');if(await confirmation.count())await confirmation.fill(pass);
-    await page.locator('.pass--lock [data-go]').click();
-    await page.waitForFunction(()=>document.querySelector('.adm__statusbar')?.classList.contains('is-pub-error'));
+    const recovery=page.locator('.pass--lock').filter({has:page.getByText('Set a recovery passphrase',{exact:true})});
+    await recovery.locator('input[type="password"]').first().fill(pass);
+    await recovery.locator('[data-confirm]').fill(pass);
+    assert.deepEqual(await recovery.locator('input[type="password"]').evaluateAll(inputs=>inputs.map(input=>input.value)),[pass,pass]);
+    await recovery.locator('[data-go]').click();
+    await page.waitForFunction(()=>document.querySelector('.adm__statusbar')?.classList.contains('is-pub-error')).catch(async error=>{
+      const state=await page.evaluate(()=>({status:document.querySelector('.adm__statusbar')?.innerText,dialogs:[...document.querySelectorAll('.pass__title,.pass__err')].map(element=>element.textContent)}));
+      throw new Error(JSON.stringify({route:publicationRoute,writes,...state}),{cause:error});
+    });
     assert.equal(writes,1);assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].body),'PRIVATE SECTION CONTENT');
     assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),lockedDraft);
     assert.equal(await page.evaluate(()=>localStorage.getItem('rk:content:draft')),lockedDraft);

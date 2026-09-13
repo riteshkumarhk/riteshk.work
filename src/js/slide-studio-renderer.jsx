@@ -9,6 +9,9 @@ import { canvasTheme } from "./slide-merge-appearance.mjs";
 import { slideSettings, transitionMatch } from "./slide-merge-properties.mjs";
 import { notesHtml } from "./slide-rich-text.mjs";
 import { presentDeckWithRenderer } from "./deck-presenter.mjs";
+import { resolvedSectionSource, sectionRuntimeData } from "./slide-studio-source.mjs";
+import { sectionTextFields, sectionTextVisibility } from "./slide-merge-section-component.mjs";
+import { Check, Lock } from "lucide-react";
 import "../../css/slide-studio-renderer.css";
 
 function useAppearance() {
@@ -21,21 +24,39 @@ function useAppearance() {
   return appearance;
 }
 
-export function SectionComponent({ block, icons }) {
+export function SectionComponent({ block, icons, reference, textVisibility, preview = false }) {
   const frame = useRef(null), appearance = useAppearance();
+  const [revision, refresh] = useState(0), [runtime, setRuntime] = useState(null);
+  useEffect(() => {
+    const update = () => refresh(value => value + 1);
+    window.addEventListener("rk:section-access", update);
+    window.addEventListener("rk:studio-draft", update);
+    return () => { window.removeEventListener("rk:section-access", update); window.removeEventListener("rk:studio-draft", update); };
+  }, []);
+  const source = reference ? resolvedSectionSource(reference) : {block,icons};
+  const sourceSignature = JSON.stringify([reference,source?.block,source?.icons]);
+  useEffect(() => {
+    if (!reference || !source) { setRuntime(null); return; }
+    const controller = new AbortController();
+    sectionRuntimeData(source,controller.signal).then(data => { if (!controller.signal.aborted) setRuntime({signature:sourceSignature,data}); }).catch(error => { if (!controller.signal.aborted) setRuntime({signature:sourceSignature,error:error.message}); });
+    return () => controller.abort();
+  }, [sourceSignature,revision]);
+  const visible = reference ? source && runtime?.signature === sourceSignature ? runtime.data : null : source;
+  const signature = JSON.stringify([visible,textVisibility]);
   const send = () => {
-    if (!frame.current?.contentDocument) return;
+    if (!frame.current?.contentDocument || !visible?.block) return;
     const styles = getComputedStyle(document.documentElement);
     const tokens = Object.fromEntries(["--text", "--text-dim", "--text-faint", "--accent", "--bg", "--bg-2", "--line-soft", "--sans", "--serif", "--mono"].map(key => [key, styles.getPropertyValue(key)]));
-    frame.current.contentWindow?.RK?.renderSectionComponent?.({ block, icons, tokens, appearance });
+    frame.current.contentWindow?.RK?.renderSectionComponent?.({ ...visible, textVisibility:sectionTextVisibility(textVisibility), tokens, appearance });
   };
-  useEffect(send, [block, icons, appearance]);
-  return <iframe ref={frame} className="lab-embed lab-section-component" title="Case-study section" src="/studio/slide-runtime/component.html?v=1.0" allow="fullscreen; autoplay" allowFullScreen onLoad={send} />;
+  useEffect(send, [signature, appearance]);
+  if (!visible?.block) return <div className="merge-section-locked" aria-label="Protected section"><Lock size={24} strokeWidth={1.75} /><span>{source && runtime?.error ? 'Protected media unavailable' : 'Protected section'}</span>{!preview && source && runtime?.error ? <button type="button" onClick={() => refresh(value => value + 1)}>Retry</button> : !preview && !source && reference && window.__RKStudio?.sectionAccess?.(reference.caseStudyId)?.active && <button type="button" onClick={() => window.__RKStudio.unlockSections(reference.caseStudyId)}>Unlock section</button>}</div>;
+  return <iframe ref={frame} className="lab-embed lab-section-component" title="Case-study section" src="/studio/slide-runtime/component.html?v=1.1" allow="fullscreen; autoplay" allowFullScreen onLoad={send} />;
 }
 
 export function Embed({ element, preview = false }) {
   if (element.customData?.labLayerHidden) return null;
-  if (element.customData?.sectionComponent) return <SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} />;
+  if (element.customData?.sectionComponent || element.customData?.sectionReference) return <SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} reference={element.customData.sectionReference} textVisibility={element.customData.sectionTextVisibility} preview={preview} />;
   const video = element.customData?.sectionVideo;
   return video && sectionMediaUrl(video) ? <video className="lab-embed" src={video} controls={!preview} muted={preview} playsInline preload="metadata" onLoadedMetadata={event => { if (preview && event.currentTarget.duration > 0) event.currentTarget.currentTime = Math.min(0.1, event.currentTarget.duration / 2); }} /> : null;
 }
@@ -69,7 +90,67 @@ function SectionForeground({ elements, frame, files, style }) {
 }
 
 function SectionLayers({ layers, files, preview = false }) {
-  return layers.map(({ element, style, clipStyle, foreground, frame, frameStyle }) => <div key={element.id} className="merge-native-clip" style={clipStyle}><div className="merge-native-section" style={style}>{element.customData.slideEmbed ? <EmbeddedMedia value={element.customData.slideEmbed.url} preview={preview} /> : <SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} />}</div><SectionForeground elements={foreground} frame={frame} files={files} style={frameStyle} /></div>);
+  return layers.map(({ element, style, clipStyle, foreground, frame, frameStyle }) => <div key={element.id} className="merge-native-clip" style={clipStyle}><div className="merge-native-section" style={style}>{element.customData.slideEmbed ? <EmbeddedMedia value={element.customData.slideEmbed.url} preview={preview} /> : <SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} reference={element.customData.sectionReference} textVisibility={element.customData.sectionTextVisibility} preview={preview} />}</div><SectionForeground elements={foreground} frame={frame} files={files} style={frameStyle} /></div>);
+}
+
+export function SectionVisibilityMenu({ api, host, disabled }) {
+  const [menu,setMenu] = useState(null), [,refresh] = useState(0), panel = useRef(null);
+  const origin = useRef({left:8,top:8});
+  const close = restore => { setMenu(null); if (restore) host.current?.querySelector('.excalidraw')?.focus(); };
+  useEffect(() => {
+    if (!api || disabled) { setMenu(null); return; }
+    const open = event => {
+      const element = api.getSceneElements().find(item => item.id === event.detail?.id);
+      if (!element || !(element.customData?.sectionComponent || element.customData?.sectionReference)) return;
+      setMenu({id:element.id,left:event.detail.left ?? origin.current.left,top:event.detail.top ?? origin.current.top});
+    };
+    const anchor = event => { origin.current = {left:event.clientX,top:event.clientY}; };
+    const workspace = host.current;
+    workspace?.addEventListener('contextmenu',anchor,true);
+    const update = () => refresh(value => value + 1);
+    document.addEventListener('rk:section-visibility',open);
+    window.addEventListener('rk:section-access',update);
+    const unsubscribe = api.onChange((elements,state) => {
+      setMenu(current => current && (!state.selectedElementIds[current.id] || !elements.some(element => element.id === current.id && !element.isDeleted)) ? null : current);
+      update();
+    });
+    return () => { document.removeEventListener('rk:section-visibility',open);window.removeEventListener('rk:section-access',update);workspace?.removeEventListener('contextmenu',anchor,true);unsubscribe(); };
+  }, [api,disabled]);
+  useLayoutEffect(() => {
+    if (!menu || !panel.current) return;
+    const element = panel.current;
+    element.showPopover();
+    const box = element.getBoundingClientRect();
+    element.style.left = Math.max(8,Math.min(menu.left,innerWidth-box.width-8))+'px';
+    element.style.top = Math.max(8,Math.min(menu.top,innerHeight-box.height-8))+'px';
+    element.querySelector('button')?.focus();
+    const outside = event => { if (!element.contains(event.target)) close(false); };
+    const resize = () => close(false);
+    document.addEventListener('pointerdown',outside,true);window.addEventListener('resize',resize);
+    return () => { element.hidePopover();document.removeEventListener('pointerdown',outside,true);window.removeEventListener('resize',resize); };
+  }, [menu]);
+  if (!menu) return null;
+  const element = api.getSceneElements().find(item => item.id === menu.id);
+  const custom = element?.customData || {}, source = custom.sectionReference ? resolvedSectionSource(custom.sectionReference)?.block : custom.sectionComponent;
+  const fields = sectionTextFields(source), visibility = sectionTextVisibility(custom.sectionTextVisibility);
+  function toggle(key) {
+    const current = api.getSceneElementsIncludingDeleted().find(item => item.id === menu.id);
+    if (!current || current.isDeleted) return close(false);
+    const flags = sectionTextVisibility(current.customData.sectionTextVisibility);
+    if (flags[key] === false) delete flags[key]; else flags[key] = false;
+    api.updateScene({elements:api.getSceneElementsIncludingDeleted().map(item => item.id === current.id ? changed(item,{customData:{...item.customData,sectionTextVisibility:flags}}) : item),captureUpdate:CaptureUpdateAction.IMMEDIATELY});
+  }
+  function navigate(event) {
+    if (event.key === 'Escape' || event.key === 'Tab') {event.preventDefault();event.stopPropagation();close(true);return;}
+    if (!['ArrowDown','ArrowUp','Home','End'].includes(event.key)) return;
+    event.preventDefault();event.stopPropagation();
+    const items = [...panel.current.querySelectorAll('button')], index = items.indexOf(document.activeElement);
+    items[event.key === 'Home' ? 0 : event.key === 'End' ? items.length-1 : (index+(event.key === 'ArrowDown'?1:-1)+items.length)%items.length]?.focus();
+  }
+  return <div ref={panel} popover="manual" className="merge-tool-pop merge-section-visibility" role="menu" aria-label="Show/hide" onKeyDown={navigate} data-prevent-outside-click>
+    {fields.map(({key,label}) => <button type="button" key={key} role="menuitemcheckbox" aria-checked={visibility[key] !== false} onClick={() => toggle(key)}><Check size={16} strokeWidth={1.75} style={{visibility:visibility[key] === false?'hidden':'visible'}} />{label}</button>)}
+    {!fields.length && <span role="status">{source?'No text fields':'Protected section'}</span>}
+  </div>;
 }
 
 export function SectionThumbnail({ svg, elements, files, embeds = true, renderEmbed }) {

@@ -884,11 +884,11 @@ import { contentRevision } from "./content-revision.mjs";
       } catch (e) { /* leave as rkenc: */ }
     }
   }
-  function rkMarkUnlocked(id) { try { sessionStorage.setItem(RK_UNLOCK_PREFIX + id, "1"); } catch (e) {} }
+  function rkMarkUnlocked(id) { try { sessionStorage.setItem(RK_UNLOCK_PREFIX + id, "1"); } catch (e) {} window.dispatchEvent(new Event("rk:section-access")); }
   async function rkDecryptStudyBlocks(st, sek) {
     if (!st || !Array.isArray(st.blocks)) return false;
     var out = st.blocks.slice(), any = false;
-    for (var i = 0; i < out.length; i++) { var b = out[i]; if (b && b.encStub && b.iv && b.ct) { try { out[i] = await rkDecWithSek(sek, b); await rkResolveEncImages(out[i], sek); any = true; } catch (e) { return false; } } }
+    for (var i = 0; i < out.length; i++) { var b = out[i]; if (b && b.encStub && b.iv && b.ct) { try { out[i] = { ...await rkDecWithSek(sek, b), locked: true }; if (b.sectionId) out[i].sectionId = b.sectionId; await rkResolveEncImages(out[i], sek); any = true; } catch (e) { return false; } } }
     if (any) st.blocks = out;
     return any;
   }
@@ -1123,6 +1123,7 @@ import { contentRevision } from "./content-revision.mjs";
       } catch (e) {}
     }
     showPresentBanner();
+    window.dispatchEvent(new Event("rk:section-access"));
     return { ok: true, unlocked: unlocked, total: data.work.length };
   }
   function rkClearPresent() {
@@ -1131,6 +1132,7 @@ import { contentRevision } from "./content-revision.mjs";
       (ids || []).forEach(function (id) { sessionStorage.removeItem(RK_UNLOCK_PREFIX + id); });
     } catch (e) {}
     try { sessionStorage.removeItem(RK_PRESENT_IDS); sessionStorage.removeItem(RK_PRESENT_ACTIVE); } catch (e) {}
+    window.dispatchEvent(new Event("rk:section-access"));
   }
   function exitPresent() { rkClearPresent(); location.reload(); }
   function showPresentBanner() {

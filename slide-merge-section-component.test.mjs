@@ -1,6 +1,32 @@
+import { sectionTextFields, sectionTextVisibility } from "./src/js/slide-merge-section-component.mjs";
+test('section visibility exposes present text roles and stores only explicit hidden flags', () => {
+  const block = {type:'gallery',heading:'Title',kicker:'Context',items:[{src:'image.png',caption:'Caption'}]}, before = structuredClone(block);
+  assert.deepEqual(sectionTextFields(block).map(field=>field.key),['heading','kicker','caption']);
+  assert.deepEqual(sectionTextFields({...block,body:'Description'}).map(field=>field.key),['heading','kicker','description','caption']);
+  assert.deepEqual(sectionTextFields({encStub:true,heading:'Not an unlocked field'}),[]);
+  assert.deepEqual(sectionTextVisibility({heading:false,kicker:true,caption:'false',description:false,private:'secret'}),{heading:false,description:false});
+  assert.deepEqual(block,before);
+});
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sectionComponentPlan } from "./src/js/slide-merge-section-component.mjs";
+import { normalizeSectionReference, sectionComponentPlan } from "./src/js/slide-merge-section-component.mjs";
+
+test("protected inserts persist only a bounded source reference, never decrypted content", () => {
+  const reference = { version: 1, caseStudyId: "private-case", sectionId: "section-123", secret: "never-copy-this" };
+  for (const block of [{type:"gallery",locked:true,vaultBlock:"private-vault-key"},{type:"text",locked:true,heading:"Private heading",body:"Private prose",items:[{src:"vault:private-original"}]}]) {
+    const before = structuredClone(block);
+    const plan = sectionComponentPlan(block, String, "protected", {sectionReference:reference,customIcons:{private:"secret-svg"}});
+    assert.equal(plan.title, "Protected section");
+    assert.equal(plan.notes, "");
+    assert.deepEqual(plan.elements[0].customData, {sectionReference:{version:1,caseStudyId:"private-case",sectionId:"section-123"}});
+    assert.doesNotMatch(JSON.stringify(plan), /Private heading|Private prose|vault:|private-vault-key|secret-svg|never-copy-this/);
+    assert.deepEqual(block, before);
+  }
+  for (const invalid of [{}, {...reference,version:2}, {...reference,sectionId:"../vault/key"}, {...reference,caseStudyId:""}]) {
+    assert.equal(normalizeSectionReference(invalid), null);
+    assert.throws(() => sectionComponentPlan({type:"text",locked:true},String,"invalid",{sectionReference:invalid}), /not available/);
+  }
+});
 
 test("inserting a section retains every carousel item and its component configuration", () => {
   const block = { type: "gallery", heading: "Chrome onboarding", layout: "carousel", items: Array.from({ length: 5 }, (_, index) => ({ src: `original-${index}.png`, caption: `Screen ${index}` })) };

@@ -22,6 +22,9 @@ import { contentRevision, publicationConflict, gitContentRevision } from "./cont
 import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsEmbedScore, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand, atsScoreModel } from "./ats-core.js";
 import { draftComposition } from "./slide-merge-ai.mjs";
 import { availableStudies } from "./slide-merge-sections.mjs";
+import { normalizeSectionReference } from "./slide-merge-section-component.mjs";
+import { connectSectionAccess } from "./slide-studio-source.mjs";
+import { loadProtectedBlocks } from "./project-recovery.mjs";
 import { assertStudioDeckPublishable, loadStudioDeck, saveStudioDeck, studioDeckReference, studioDeckBackup, restoreStudioDeckBackup } from "./slide-studio-deck.mjs";
 import { selectStudioDraft, archiveStudioDraft, studioDraftRecoveries, saveStudioPublishedDraft, studioPublishedDraft, studioDraftContent } from "./studio-draft-recovery.mjs";
 import { prepareStudioPublication, resealPublishedSections } from "./slide-studio-publication.mjs";
@@ -4856,54 +4859,79 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";
   }
 
-  // Owner-only: turn a project's encrypted stubs back into editable plaintext using
-  // the recovery passphrase. On Publish they are re-encrypted automatically.
+  var studyUnlockRequests = new Map();
   async function decryptStudyForEdit(i) {
-    const w = data.work[i]; if (!w || !w.study) return;
-    const st = w.study;
-    const wrap = st.enc && st.enc.wraps && st.enc.wraps.owner;
-    const hasVault = (st.blocks || []).some(function (b) { return b && b.locked && b.vaultBlock; });
-    if (!wrap && !hasVault) { status("This project has no protected sections to unlock."); return; }
-    // 1) Restore vault-hosted sections: fetch their plain JSON with your session and re-flag them vault
-    //    so they re-vault on Publish (content.json keeps shipping only a pointer).
-    if (hasVault) {
-      if (!adminSession()) { status("Sign in to edit this project\u2019s vault-hosted sections."); return; }
+    const work = data.work[i], study = work && work.study;
+    if (!study) return false;
+    if (studyUnlockRequests.has(work.id)) return studyUnlockRequests.get(work.id).promise;
+    const blocks = study.blocks || [], snapshot = JSON.stringify(blocks), context = openStudy;
+    const controller = new AbortController(), signal = controller.signal;
+    const current = () => !signal.aborted && root?.classList.contains("is-open") && openStudy === context && data.work[i] === work && work.study === study && study.blocks === blocks && JSON.stringify(blocks) === snapshot;
+    const request = { controller, context, promise: null };
+    studyUnlockRequests.set(work.id, request);
+    const cancel = () => controller.abort();
+    window.addEventListener("pagehide", cancel, { once: true });
+    paintStudyAccess();
+    request.promise = (async () => {
       try {
-        const out = st.blocks.slice();
-        for (let k = 0; k < out.length; k++) {
-          const bk = out[k];
-          if (bk && bk.locked && bk.vaultBlock) {
-            const url = await vaultSignedUrl(bk.vaultBlock);
-            if (!url) { status("The vault declined \u2014 sign in again to edit these sections."); return; }
-            const full = await (await fetch(url)).json();
-            if (full && typeof full === "object") { full.locked = true; full.vault = true; out[k] = full; }
+        const recovery = await ensureRecoveryPass();
+        if (recovery === null || !current()) return false;
+        const wrap = study.enc?.wraps?.owner;
+        let sek;
+        if (wrap) {
+          try { sek = await rkUnwrapSek(recovery, wrap); }
+          catch (error) { recoveryPassCache = null; throw new Error("That recovery passphrase did not unlock this project."); }
+        }
+        if (!current()) return false;
+        const hasVault = blocks.some(block => block?.locked && block.vaultBlock);
+        if (hasVault && !adminSession()) throw new Error("Sign in to unlock this project's vault-hosted sections.");
+        const restored = await loadProtectedBlocks(blocks, { sign: vaultSignedUrl, fetch, signal });
+        if (restored.failures.length) throw new Error("Some protected sections could not be loaded. Your sections are unchanged; retry the unlock.");
+        const output = restored.blocks;
+        for (let index = 0; index < output.length; index++) {
+          const sealed = blocks[index];
+          if (sealed?.encStub) {
+            if (!sek || !sealed.iv || !sealed.ct) throw new Error("This section's recovery data is unavailable.");
+            output[index] = await rkDecWithSek(sek, sealed);
+            await rkResolveEncToDataUri(output[index], sek);
+          }
+          if (sealed?.encStub || sealed?.vaultBlock) {
+            const full = output[index];
+            if (!full || typeof full !== "object" || Array.isArray(full) || typeof full.type !== "string" || full.encStub || full.vaultBlock) throw new Error("A protected section returned invalid content.");
+            full.locked = true;
+            if (sealed.vaultBlock) full.vault = true;
+            if (sealed.sectionId) full.sectionId = sealed.sectionId;
           }
         }
-        st.blocks = out;
-      } catch (e) { status("Couldn\u2019t fetch the vault-hosted sections."); return; }
-    }
-    // 2) Decrypt any legacy .enc sections with the recovery passphrase.
-    if (wrap) {
-      const recovery = await ensureRecoveryPass();
-      if (recovery === null) return;
-      let sek;
-      try { sek = await rkUnwrapSek(recovery, wrap); }
-      catch (e) { recoveryPassCache = null; status("That recovery passphrase didn\u2019t unlock this project."); return; }
-      try {
-        const out = st.blocks.slice();
-        for (let k = 0; k < out.length; k++) { const bk = out[k]; if (bk && bk.encStub && bk.iv && bk.ct) { out[k] = await rkDecWithSek(sek, bk); await rkResolveEncToDataUri(out[k], sek); } }
-        st.blocks = out;
-      } catch (e) { status("Couldn\u2019t decrypt the protected sections."); return; }
-    }
-    studyUnlockedForEdit[w.id] = true;
-    try { var _fw = frameWin(); if (_fw && _fw.RK && _fw.RK.setStudyUnlocked) _fw.RK.setStudyUnlocked(w.id); } catch (e) {}   // reveal the now-unlocked sections in the live preview (translucent veil)
-    saveDraft(true); renderL2(); refreshL2Preview();
-    status("Protected sections unlocked for editing \u2014 they\u2019ll be re-protected on Publish.", true);
+        if (!current()) return false;
+        study.blocks = output;
+        let saved = false;
+        try { saved = saveDraft(true, { requireSaved: true }); } catch (error) {}
+        if (!saved) { study.blocks = blocks; throw new Error("The draft could not be saved. Protected sections are unchanged."); }
+        setStudyContentAccess(work, true);
+        renderL2(); refreshL2Preview();
+        status("Protected sections unlocked for this session. Their saved protection is unchanged.", true);
+        return true;
+      } catch (error) {
+        if (!signal.aborted && data.work[i] === work && openStudy === context) status(error.message || "Could not unlock the protected sections.");
+        return false;
+      } finally {
+        window.removeEventListener("pagehide", cancel);
+        if (studyUnlockRequests.get(work.id) === request) studyUnlockRequests.delete(work.id);
+        paintStudyAccess();
+      }
+    })();
+    return request.promise;
+  }
+  function cancelStudyUnlocks() {
+    studyUnlockRequests.forEach(request => {
+      if (!root?.classList.contains("is-open") || request.context !== openStudy) request.controller.abort();
+    });
   }
   var removingSectionProtection = new WeakSet();
   async function removeSectionProtection(i, j) {
     const work = data.work[i], study = work && work.study, sealed = study && study.blocks[j];
-    if (!sealed || (!sealed.encStub && !sealed.vaultBlock) || removingSectionProtection.has(sealed)) return;
+    if (!sealed || (!sealed.encStub && !sealed.vaultBlock && !sealed.locked) || removingSectionProtection.has(sealed)) return;
     removingSectionProtection.add(sealed);
     try {
       const confirmed = await confirmModal({title:"Remove section protection?",sub:"After you unlock it, this section will no longer require the deeper-cut pass on your next Publish. The case study's own visibility still applies. Nothing is deleted.",cta:"Remove protection"});
@@ -4917,7 +4945,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         if (!response.ok) throw new Error("Vault section unavailable");
         full = await response.json();
         if (full && typeof full === "object") full.vault = true;
-      } else {
+      } else if (sealed.encStub) {
         const wrap = study.enc && study.enc.wraps && study.enc.wraps.owner;
         if (!wrap || !sealed.iv || !sealed.ct) throw new Error("Recovery data unavailable");
         const recovery = await ensureRecoveryPass();
@@ -4927,8 +4955,12 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         catch (error) { recoveryPassCache = null; throw error; }
         full = await rkDecWithSek(sek, sealed);
         await rkResolveEncToDataUri(full, sek);
+      } else {
+        if (await ensureRecoveryPass() === null) return;
+        full = clone(sealed);
       }
       if (!full || typeof full !== "object" || Array.isArray(full) || typeof full.type !== "string" || full.encStub || full.vaultBlock) throw new Error("Invalid section");
+      if (sealed.sectionId) full.sectionId = sealed.sectionId;
       if (data.work[i] !== work || work.study !== study || !study.blocks.includes(sealed)) { status("The section changed. Try removing protection again."); return; }
       const position = study.blocks.indexOf(sealed);
       delete full.locked;
@@ -4954,8 +4986,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     try { const sek = await rkUnwrapSek(recovery, wrap); full = await rkDecWithSek(sek, stub); await rkResolveEncToDataUri(full, sek); }
     catch (e) { recoveryPassCache = null; status("That recovery passphrase didn\u2019t unlock this project."); return; }
     data.work[i] = full;
-    if (full && full.id) studyUnlockedForEdit[full.id] = true;
-    try { var _fw = frameWin(); if (_fw && _fw.RK && _fw.RK.setStudyUnlocked && full && full.id) _fw.RK.setStudyUnlocked(full.id); } catch (e) {}   // reveal the now-unlocked sections when this project is opened in the preview
+    if (full && full.id) setStudyContentAccess(full, true);
     saveDraft(true); renderBody();
     status("Hidden project unlocked for editing \u2014 it re-encrypts on Publish.", true);
   }
@@ -5182,8 +5213,8 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       '<button class="btn btn--add story__rail-add" data-act="study-pick" data-index="' + i + '">' + IC.add + " Add a section</button>" +
       (hasLocked ? railDeeperCut(w, i) : "") + "</aside>";
   }
-  function blockActionMenu(i, b, j, len) {
-    var items = (b.encStub || b.vaultBlock) ? [
+  function blockActionMenu(i, b, j, len, concealed) {
+    var items = (b.encStub || b.vaultBlock || concealed) ? [
       ["add", "Add section above", IC.add],
       ["up", "Move up", IC.up, undefined, j === 0], ["down", "Move down", IC.down, undefined, j === len - 1],
       ["unprotect", "Remove protection", IC.unlock]
@@ -5202,28 +5233,17 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   function blockEditor(i, b, j, len, open) {
     var typeName = studyBlockTypeName(b);
     var insertGap = j > 0 ? '<button type="button" class="study__insert-gap" data-act="study-blockadd" data-index="' + i + '" data-bindex="' + j + '" title="Add section here" aria-label="Add section before section ' + (j + 1) + '">' + IC.add + '</button>' : '';
-    if (b.encStub) {
+    var concealed = !!b.locked && !studySectionAccess(data.work[i]?.id).unlocked;
+    if (b.encStub || b.vaultBlock || concealed) {
       return '<div class="card study__block study__block--enc">' + insertGap +
         '<div class="study__block-head study__block-head--enc">' +
           '<span class="sortgrip study__block-grip" data-grip data-sortkey="block:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
-          '<span class="study__block-badge">Protected</span>' +
-          '<span class="study__block-label">' + escHtml(typeName) + ' \u2014 encrypted at rest</span>' +
-          '<span class="study__protected-lock" role="img" aria-label="Encrypted section">' + IC.lock + '</span>' +
-          blockActionMenu(i, b, j, len) +
+          '<span class="study__block-badge">' + (b.vaultBlock ? 'Vaulted' : 'Protected') + '</span>' +
+          '<span class="study__block-label">' + escHtml(typeName) + (b.vaultBlock ? ' \u2014 stored in your private vault' : b.encStub ? ' \u2014 encrypted at rest' : ' \u2014 protected content') + '</span>' +
+          blockActionMenu(i, b, j, len, concealed) +
+          '<button type="button" class="iconbtn study__protected-lock" data-act="study-decrypt" data-index="' + i + '" data-bindex="' + j + '" title="Unlock section" aria-label="Unlock section">' + IC.lock + '</button>' +
         '</div>' +
-        '<div class="study__enc-note">Its content isn\u2019t in your published file. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
-      '</div>';
-    }
-    if (b.vaultBlock) {
-      return '<div class="card study__block study__block--enc">' + insertGap +
-        '<div class="study__block-head study__block-head--enc">' +
-          '<span class="sortgrip study__block-grip" data-grip data-sortkey="block:' + i + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
-          '<span class="study__block-badge">Vaulted</span>' +
-          '<span class="study__block-label">' + escHtml(typeName) + ' \u2014 stored in your private vault</span>' +
-          '<span class="study__protected-lock" role="img" aria-label="Vaulted section">' + IC.lock + '</span>' +
-          blockActionMenu(i, b, j, len) +
-        '</div>' +
-        '<div class="study__enc-note">Your content is safe in your private vault \u2014 it just isn\u2019t in the published file, so it looks empty here. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '">Unlock to edit</button></div>' +
+        '<div class="study__enc-note">Your content is safe and protected \u2014 unlock it to view and edit this section. <button class="btn btn--ghost" data-act="study-decrypt" data-index="' + i + '" data-bindex="' + j + '">Unlock to edit</button></div>' +
       '</div>';
     }
     var custom = (typeof b.editorName === "string" && b.editorName.trim()) ? b.editorName.trim() : "";
@@ -6588,7 +6608,15 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       },
       present: (audience, presenterWindow, _prepared, onClose) => {
         const settings = { ...options, draft:true, autoStart:false, presenterWindow, onClose:() => { options.onClose?.(); onClose(); } };
-        if (work.study?.nativeDeck || work.study?.nativeDeckEnc) return presentNativeWork(work.id, settings, (item, presentation) => audience.RK.presentDeck(item, presentation));
+        if (work.study?.nativeDeck || work.study?.nativeDeckEnc) return presentNativeWork(work.id, settings, async (item, presentation) => {
+          const ids = [work.id, ...presentation.document.slides.flatMap(slide => slide.scene.elements.map(element => element.customData?.sectionReference?.caseStudyId).filter(Boolean))];
+          const disconnect = connectSectionAccess(audience, ids);
+          try {
+            const player = await audience.RK.presentDeck(item, { ...presentation, onClose:() => { disconnect(); presentation.onClose?.(); } });
+            if (!player) disconnect();
+            return player;
+          } catch (error) { disconnect(); throw error; }
+        });
         return audience.RK.presentDeck(work, { ...settings, onSlideEdit:options.onSlideEdit || ((slide, key, value) => {
           if (!data.work.includes(work) || !["notes", "durationMinutes"].includes(key) || !work.study?.slides?.includes(slide)) throw new Error("This slide is no longer editable.");
           slide[key] = value;
@@ -6694,6 +6722,8 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     var mb = root && root.querySelector("[data-l2modebar]");
     if (mb) { mb.innerHTML = show ? l2ModeBarHtml() : ""; mb.hidden = !show; } // Case study | Slideshow tab nav stays in the left bar in both modes
     paintCaseVisibility();
+    cancelStudyUnlocks();
+    paintStudyAccess();
   }
   // Auto-hide the sticky L2 bar (title + tabs) on scroll down, reveal on scroll up.
   function l2BarScroll() {
@@ -6741,18 +6771,66 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     root.querySelectorAll(".adm__dev-opt[data-dev]").forEach(function (o) { o.classList.toggle("is-on", o.dataset.dev === previewDevice); });
     refitDevice();
   }
-  // A switch under the Sections title to unlock this study's "Locked" (deeper-cut) sections for editing.
-  // OFF = they render like a visitor sees (opaque gate in the preview); ON = unlocked (enter the encryption
-  // key if they're still sealed) so their content shows under a translucent veil. Re-protected on Publish.
-  function lockSwitchHtml(w, i) {
-    var on = !!studyUnlockedForEdit[w.id];
-    var n = (w.study.blocks || []).filter(function (b) { return b && b.locked; }).length;
-    var lockIco = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>';
-    return '<div class="l2lock' + (on ? " is-on" : "") + '">' +
-      '<span class="l2lock__tx"><b>' + lockIco + n + ' locked section' + (n === 1 ? "" : "s") + '</b>' +
-      '<span>' + (on ? "Unlocked \u2014 their content shows in the preview; re-protected on Publish." : "Hidden like a visitor sees. Flip on to unlock &amp; edit them.") + '</span></span>' +
-      '<button type="button" class="rksw" role="switch" aria-checked="' + (on ? "true" : "false") + '" data-act="study-unlocktoggle" data-index="' + i + '" aria-label="Unlock locked sections for editing"><span class="rksw__knob"></span></button>' +
-      "</div>";
+  function studySectionAccess(id) {
+    const work = root?.classList.contains("is-open") && data.work.find(item => item.id === id);
+    return { active: !!work, available: !!work?.study?.blocks?.some(block => block && (block.locked || block.encStub || block.vaultBlock)), unlocked: !!work && !!studyUnlockedForEdit[id], busy: studyUnlockRequests.has(id) };
+  }
+  function paintStudyAccess() {
+    const button = root?.querySelector("[data-section-access]"), work = data.work[openStudy];
+    if (button) {
+      const state = studySectionAccess(work?.id);
+      button.hidden = !state.available;
+      button.dataset.index = String(openStudy);
+      button.setAttribute("aria-checked", String(state.unlocked));
+      button.setAttribute("aria-busy", String(state.busy));
+      button.title = state.busy ? "Cancel section unlock" : state.unlocked ? "Lock protected sections" : "Unlock protected sections";
+      button.setAttribute("aria-label", button.title);
+      button.innerHTML = state.unlocked ? IC.unlock : IC.lock;
+    }
+    window.dispatchEvent(new Event("rk:section-access"));
+  }
+  function setStudyContentAccess(work, unlocked) {
+    if (!unlocked) studyUnlockRequests.get(work.id)?.controller.abort();
+    studyUnlockedForEdit[work.id] = unlocked;
+    try { const preview = frameWin(); preview?.RK?.[unlocked ? "setStudyUnlocked" : "setStudyLocked"]?.(work.id); } catch (error) {}
+    paintStudyAccess();
+  }
+  async function toggleStudyContentAccess(i) {
+    const work = data.work[i];
+    if (!work?.study) return false;
+    if (studyUnlockedForEdit[work.id] || studyUnlockRequests.has(work.id)) {
+      setStudyContentAccess(work, false);
+      openBlock = -1;
+      renderL2(); refreshL2Preview();
+      return false;
+    }
+    return decryptStudyForEdit(i);
+  }
+  function prepareSectionReferences(id) {
+    const work = root?.classList.contains("is-open") && data.work.find(item => item.id === id);
+    if (!work?.study || work.encWork) throw new Error("Open this case study in Studio first.");
+    const changed = [];
+    for (const block of work.study.blocks || []) {
+      if (!block || !(block.locked || block.encStub || block.vaultBlock) || normalizeSectionReference({version:1,caseStudyId:id,sectionId:block.sectionId})) continue;
+      changed.push({ block, previous: block.sectionId });
+      block.sectionId = crypto.randomUUID();
+    }
+    if (changed.length) {
+      let saved = false;
+      try { saved = saveDraft(true, { requireSaved: true, recordHistory: false }); } catch (error) {}
+      if (!saved) {
+        changed.forEach(({block,previous}) => { if (previous === undefined) delete block.sectionId; else block.sectionId = previous; });
+        throw new Error("The section references could not be saved. Free storage and retry.");
+      }
+    }
+    return clone(data);
+  }
+  function resolveStudioSection(reference) {
+    const source = normalizeSectionReference(reference);
+    if (!source || !studySectionAccess(source.caseStudyId).active) return null;
+    const block = data.work.find(work => work.id === source.caseStudyId)?.study?.blocks?.find(item => item.sectionId === source.sectionId);
+    if (!block || block.off || block.encStub || block.vaultBlock || (block.locked && !studySectionAccess(source.caseStudyId).unlocked)) return null;
+    return { block: clone(block), icons: clone(data.customIcons || {}), sign: vaultSignedUrl };
   }
   /* ---------- Slideshow (owner-only presentation deck) ---------- */
   var SLIDE_LAYOUTS = [
@@ -7295,12 +7373,12 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     nativeSlideSession = session;
     root.classList.add("is-native-slides");
     const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
-    const styles = ["/studio/slide-lab/assets/editor.css?v=1.6", "/css/slide-studio.css?v=1.4"].map(href => new Promise((resolve, reject) => {
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.7", "/css/slide-studio.css?v=1.4"].map(href => new Promise((resolve, reject) => {
       const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.10";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.11";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
@@ -12272,44 +12350,24 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     if (act === "jlogo-clear") { var jlcc = journeyData().chapters[+b.dataset.jc]; if (jlcc) { jlcc.logo = ""; saveDraft(true); renderJourneyEditor(); } return; }
     if (act === "study-pick") { sectionPicker(i); return; }
     if (act === "study-blockadd") { sectionPicker(i, +b.dataset.bindex); return; }
-    if (act === "study-decrypt") { decryptStudyForEdit(i); return; }
-    if (act === "study-unprotect") { removeSectionProtection(i, +b.dataset.bindex); return; }
-    if (act === "study-unlocktoggle") {
-      var _wk = data.work[i]; if (!_wk || !_wk.study) return;
-      var _wid = _wk.id, _on = b.getAttribute("aria-checked") === "true";
-      if (!_on) {
-        // turning ON: if any locked section is still sealed, run the key-prompt decrypt flow (it sets the
-        // switch + preview flags and re-renders on success); otherwise just reveal the already-plaintext ones.
-        var _sealed = (_wk.study.blocks || []).some(function (bl) { return bl && bl.locked && (bl.encStub || bl.vaultBlock); });
-        if (_sealed) { decryptStudyForEdit(i); return; }
-        studyUnlockedForEdit[_wid] = true;
-        try { var _fw = frameWin(); if (_fw && _fw.RK && _fw.RK.setStudyUnlocked) _fw.RK.setStudyUnlocked(_wid); } catch (e) {}
-      } else {
-        // turning OFF: re-lock the editor preview (draft keeps its content; it re-encrypts on Publish).
-        studyUnlockedForEdit[_wid] = false;
-        try { var _fw2 = frameWin(); if (_fw2 && _fw2.RK && _fw2.RK.setStudyLocked) _fw2.RK.setStudyLocked(_wid); } catch (e) {}
-      }
-      renderL2(); refreshL2Preview();
+    if (act === "study-decrypt") {
+      const section = +b.dataset.bindex;
+      decryptStudyForEdit(i).then(unlocked => {
+        if (unlocked && openStudy === i && l2Tab === "story" && Number.isInteger(section)) { openBlock = section; renderL2(); }
+      });
       return;
     }
+    if (act === "study-unprotect") { removeSectionProtection(i, +b.dataset.bindex); return; }
+    if (act === "study-unlocktoggle") { toggleStudyContentAccess(i); return; }
     if (act === "work-decrypt") { decryptWorkForEdit(i); return; }
     if (act === "story-thumbs") { storyThumbs = !storyThumbs; try { localStorage.setItem("rk:story:thumbs", storyThumbs ? "1" : "0"); } catch (e) {} renderL2(); return; }
     if (act === "story-locked") {
-      storyLocked = !storyLocked;
-      try { localStorage.setItem("rk:story:locked", storyLocked ? "1" : "0"); } catch (e) {}
-      var _slw = data.work[i];
-      if (_slw && _slw.study) {
-        var _slid = _slw.id;
-        if (storyLocked) {
-          if ((_slw.study.blocks || []).some(function (bl) { return bl && bl.locked && (bl.encStub || bl.vaultBlock); })) { decryptStudyForEdit(i); return; }
-          studyUnlockedForEdit[_slid] = true;
-          try { var _slf = frameWin(); if (_slf && _slf.RK && _slf.RK.setStudyUnlocked) _slf.RK.setStudyUnlocked(_slid); } catch (e) {}
-        } else {
-          studyUnlockedForEdit[_slid] = false;
-          try { var _slf2 = frameWin(); if (_slf2 && _slf2.RK && _slf2.RK.setStudyLocked) _slf2.RK.setStudyLocked(_slid); } catch (e) {}
-        }
-      }
-      renderL2(); return;
+      toggleStudyContentAccess(i).then(unlocked => {
+        storyLocked = unlocked;
+        try { localStorage.setItem("rk:story:locked", storyLocked ? "1" : "0"); } catch (error) {}
+        renderL2();
+      });
+      return;
     }
     if (act === "story-nav") {
       if (e.target.closest("button, [data-grip]")) return;
@@ -12350,7 +12408,9 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       const blocks = data.work[i].study.blocks, index = +b.dataset.bindex;
       if (blocks[index]) {
         clearTimeout(blockRenameTimer);
-        blocks.splice(index + 1, 0, JSON.parse(JSON.stringify(blocks[index])));
+        const copy = clone(blocks[index]);
+        if (copy.sectionId) copy.sectionId = crypto.randomUUID();
+        blocks.splice(index + 1, 0, copy);
         openBlock = index + 1;
         saveDraft(true); renderL2();
         const copyHead = root.querySelector('.study__block.is-open .study__block-head');
@@ -12933,6 +12993,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       (function scan(o) { if (!o || typeof o !== "object") return; for (var kk in o) { var v = o[kk]; if (typeof v === "string") { var m = /^vault:(.+)$/i.exec(v); if (m && m[1].indexOf("/") === -1) keys.push(m[1]); } else if (v && typeof v === "object") scan(v); } })(block);
       vaultBlockKeys[workId] = (vaultBlockKeys[workId] || []).concat(keys);
       var ptr = { type: block.type, locked: true, vaultBlock: key };
+      if (block.sectionId) ptr.sectionId = block.sectionId;
       if (block.nav) ptr.nav = block.nav;
       if (block.kicker) ptr.kicker = block.kicker;
       if (block.sep === false) ptr.sep = false;
@@ -13126,6 +13187,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   function makeStub(sek, block) {
     return rkEncWithSek(sek, block).then(function (e) {
       var stub = { type: block.type, locked: true, encStub: true, iv: e.iv, ct: e.ct };
+      if (block.sectionId) stub.sectionId = block.sectionId;
       if (block.kicker) stub.kicker = block.kicker;
       if (block.nav) stub.nav = block.nav;               // keep nav so the locked section still appears in the contents
       if (block.sep === false) stub.sep = false;
@@ -13172,7 +13234,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       document.body.appendChild(modal);
       modal.classList.add("pass--lock");
       var inp = modal.querySelector("input"), cf = modal.querySelector("[data-confirm]"), err = modal.querySelector(".pass__err");
-      setTimeout(function () { try { inp.focus(); } catch (e) {} }, 30);
+      setTimeout(function () { try { if (modal.isConnected && !modal.contains(document.activeElement)) inp.focus(); } catch (e) {} }, 30);
       var closed = false;
       function finish(v) { if (closed) return; closed = true; modal.remove(); resolve(v); }
       modal.querySelector("[data-cancel]").addEventListener("click", function () { finish(null); });
@@ -13961,6 +14023,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
           delete studyUnlockedForEdit[id];
           try { frameWin()?.RK?.setStudyLocked?.(id); } catch (e) {}
         }
+        if (resealed.length) paintStudyAccess();
         if (viaSession) localStorage.removeItem(GH_TOKEN_KEY); // published via the Worker session — the repo token no longer needs to live in this browser
         if (window.RK) {
           window.RK.published = JSON.parse(json); window.RK.publishedSig = mySig;
@@ -18855,6 +18918,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         "</div>" +
         '<nav class="l2tabs" data-l2tabs role="tablist" aria-label="Project editor" hidden></nav>' +
         '<div class="adm__prevgroup" data-prevgroup>' +
+        '<button class="adm__bar-prev adm__section-access" data-section-access data-act="study-unlocktoggle" type="button" role="switch" aria-checked="false" aria-label="Unlock protected sections" title="Unlock protected sections" hidden>' + IC.lock + '</button>' +
         '<button class="adm__bar-prev" data-prevtoggle type="button" aria-label="Show or hide the live preview" title="Hide the live preview" aria-pressed="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="14" y1="4" x2="14" y2="20"/></svg><span class="adm__bar-prev-tx">Live preview</span></button>' +
         '<div class="adm__dev" data-dev-wrap>' +
           '<button class="adm__dev-btn" data-dev-toggle type="button" aria-haspopup="true" aria-expanded="false" title="Preview size"><span class="adm__dev-ic" data-dev-ic>' + DEV_ICON.responsive + '</span><span class="adm__dev-lbl" data-dev-lbl>Responsive</span><svg class="adm__dev-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
@@ -19302,6 +19366,8 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     autopubStop();
     if (window.RK) { window.RK.data = clone(data); try { window.RK.render(data); } catch (e) {} forceReveal(); }
     if (root) root.classList.remove("is-open");
+    cancelStudyUnlocks();
+    paintStudyAccess();
     document.documentElement.classList.remove("adm-lock");
     document.body.classList.remove("adm-lock");
     musRestore(); // bring the music back if it was on before
@@ -19452,5 +19518,10 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         }, onRoute: options?.onRoute, onActivity: options?.onActivity });
     }, options && options.signal);
   } };
+  window.__RKStudio.sectionAccess = studySectionAccess;
+  window.__RKStudio.prepareSectionReferences = prepareSectionReferences;
+  window.__RKStudio.resolveSection = resolveStudioSection;
+  window.__RKStudio.toggleSections = id => toggleStudyContentAccess(data.work.findIndex(work => work.id === id));
+  window.__RKStudio.unlockSections = id => decryptStudyForEdit(data.work.findIndex(work => work.id === id));
   window.__RKStudio.aiRouting = { state: () => aiOrchestrator.state(), feedback: (decisionId, feedback) => aiOrchestrator.feedback(decisionId, feedback) };
 })();
