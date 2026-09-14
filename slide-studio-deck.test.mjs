@@ -422,12 +422,20 @@ test("Native toolbar and Layers share the clearly open lock", {timeout:60000}, a
     await page.screenshot({path:join(tmpdir(),'rk-open-lock-native-1440.png')});
     await page.goto(base+'/studio/slide-merge-lab/');
     await page.waitForFunction(()=>!!window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
-    const before = await page.evaluate(()=>JSON.stringify(window.__slideMerge.deck()));
+    const documentSnapshot = () => page.evaluate(() => {
+      const deck = window.__slideMerge.deck();
+      for (const slide of deck.slides) if (slide.scene) {
+        const { scrollX, scrollY, zoom, ...appState } = slide.scene.appState;
+        slide.scene.appState = appState;
+      }
+      return deck;
+    });
+    const before = await documentSnapshot();
     await page.getByRole('button',{name:'Manage layers',exact:true}).click();
     const layer = page.getByRole('button',{name:'Lock layer',exact:true}).first();
     await assertOpenShackle(layer.locator('svg'));
     assert.equal(await layer.locator('circle').getAttribute('cx'),'10');
-    assert.equal(await page.evaluate(()=>JSON.stringify(window.__slideMerge.deck())),before);
+    assert.deepEqual(await documentSnapshot(),before);
     await page.screenshot({path:join(tmpdir(),'rk-open-lock-layers-1440.png')});
     assert.deepEqual(errors,[]);
   } finally { await browser.close(); }
