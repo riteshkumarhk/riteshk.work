@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Layers } from "lucide-react";
+import { Layers, Palette } from "lucide-react";
 import { LabColorPicker, LAB_BACKGROUND_PALETTE } from "@excalidraw/excalidraw";
 import { TRANSITIONS } from "./slide-merge-properties.mjs";
 import { LayoutPicker } from "./slide-merge-layout-picker.jsx";
 import { ToolIcon } from "./slide-merge-toolbar.jsx";
 import { SelectControl } from "./slide-shared-controls.jsx";
-import { COVER_FIELDS, coverValues } from "./slide-merge-cover.mjs";
+import { COVER_FIELDS, coverValues, coverPalette } from "./slide-merge-cover.mjs";
 import "../../css/slide-merge-properties.css";
 
 function CoverField({ field: [key, label, maxLength], value, onChange }) {
@@ -18,12 +18,15 @@ function CoverColor({ name, color, elements, onChange }) {
   const [state, setState] = useState({ openPopup: null });
   return <fieldset className="merge-slide-color"><legend>{name}</legend><LabColorPicker type="elementBackground" label={name} color={color} elements={elements} palette={LAB_BACKGROUND_PALETTE} appState={state} updateData={setState} onChange={value => { if (/^#[0-9a-f]{6}$/i.test(value)) onChange(value); }} /></fieldset>;
 }
+function CoverMedia({ kind, label, value, onChange, onMedia }) {
+  return <div className="merge-cover-media"><button className="merge-property-action" onClick={() => onMedia(kind)}><ToolIcon name="image" />{value ? `Replace ${label.toLowerCase()}` : `Upload ${label.toLowerCase()}`}</button>{value && <div className="merge-background-file"><span title={value.name}>{value.name}</span><button type="button" title={`Remove ${label.toLowerCase()}`} aria-label={`Remove ${label.toLowerCase()}`} onClick={() => onChange({ [kind]: null })}><ToolIcon name="trash" /></button></div>}</div>;
+}
 function CoverProperties({ value, elements, disabled, onChange, onMedia }) {
   const cover = coverValues(value);
   return <>
-    <fieldset disabled={disabled}><legend>Cover</legend>{COVER_FIELDS.map(field => <CoverField key={field[0]} field={field} value={cover[field[0]]} onChange={onChange} />)}</fieldset>
-    <fieldset disabled={disabled}><legend>Media</legend>{[["image", "Hero image"], ["logo", "Logo"]].map(([key, label]) => <div key={key} className="merge-cover-media"><button className="merge-property-action" onClick={() => onMedia(key)}><ToolIcon name="image" />{cover[key] ? `Replace ${label.toLowerCase()}` : label}</button>{cover[key] && <div className="merge-background-file"><span title={cover[key].name}>{cover[key].name}</span><button type="button" title={`Remove ${label.toLowerCase()}`} aria-label={`Remove ${label.toLowerCase()}`} onClick={() => onChange({ [key]: null })}><ToolIcon name="trash" /></button></div>}</div>)}</fieldset>
-    <fieldset disabled={disabled}><legend>Colours</legend>{[["background", "Cover background"], ["rail", "Brand rail"], ["panel", "Image frame"], ["text", "Title colour"], ["muted", "Body colour"]].map(([key, name]) => <CoverColor key={key} name={name} color={cover[key]} elements={elements} onChange={color => onChange({ [key]: color })} />)}</fieldset>
+    <fieldset disabled={disabled}><legend>Cover</legend>{COVER_FIELDS.map(field => <React.Fragment key={field[0]}><CoverField field={field} value={cover[field[0]]} onChange={onChange} />{field[0] === "client" && <CoverMedia kind="logo" label="Brand logo" value={cover.logo} onChange={onChange} onMedia={onMedia} />}</React.Fragment>)}</fieldset>
+    <fieldset disabled={disabled}><legend>Media</legend><CoverMedia kind="image" label="Hero image" value={cover.image} onChange={onChange} onMedia={onMedia} /></fieldset>
+    <fieldset disabled={disabled}><legend>Colours</legend><button className="merge-property-action" onClick={event => onChange(coverPalette(getComputedStyle(event.currentTarget.closest(".merge-shell"))))}><Palette size={18} strokeWidth={1.75} />Use site colours</button>{[["background", "Cover background"], ["rail", "Brand rail"], ["panel", "Image frame"], ["text", "Title colour"], ["muted", "Body colour"]].map(([key, name]) => <CoverColor key={key} name={name} color={cover[key]} elements={elements} onChange={color => onChange({ [key]: color })} />)}</fieldset>
   </>;
 }
 export function SlideProperties({ settings, elements, disabled, onLayout, onBackground, onMedia, onTransition, layoutPicker, onSaveLayout, onLayers, onCover, onCoverMedia }) {

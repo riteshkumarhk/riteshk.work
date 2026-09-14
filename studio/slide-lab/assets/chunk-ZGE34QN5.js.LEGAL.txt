@@ -67,6 +67,7 @@ lucide-react/dist/esm/icons/lock-keyhole.mjs:
 lucide-react/dist/esm/icons/lock.mjs:
 lucide-react/dist/esm/icons/maximize.mjs:
 lucide-react/dist/esm/icons/message-square-text.mjs:
+lucide-react/dist/esm/icons/palette.mjs:
 lucide-react/dist/esm/icons/pencil-off.mjs:
 lucide-react/dist/esm/icons/pencil.mjs:
 lucide-react/dist/esm/icons/play.mjs:

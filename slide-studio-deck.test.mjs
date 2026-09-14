@@ -22,11 +22,49 @@ async function openProjectSlides(page, index = 0) {
   if (await tab.getAttribute("aria-selected") !== "true") await tab.click();
 }
 
+async function assertCoverSitePalette(page) {
+  const result = await page.evaluate(async () => {
+    const styles = getComputedStyle(document.querySelector('.merge-shell'));
+    let elements = window.__slideMerge?.api.getSceneElements();
+    if (!elements) {
+      const reference = window.__RKStudio.getDraft().work[0].study.nativeDeck;
+      const database = await new Promise((resolve, reject) => { const request = indexedDB.open('rk-studio-slide-decks-v1'); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+      try {
+        const saved = await new Promise((resolve, reject) => { const request = database.transaction('documents').objectStore('documents').get([reference.id, reference.revision]); request.onsuccess = () => resolve(request.result.document); request.onerror = () => reject(request.error); });
+        elements = saved.slides[0].scene.elements;
+      } finally { database.close(); }
+    }
+    const cover = elements.find(element => element.id === 'lab-slide').customData.slideSettings.cover;
+    const tokens = { background: '--bg', rail: '--bg-2', panel: '--bg-elev', text: '--text', muted: '--text-dim' };
+    const expected = Object.fromEntries(Object.entries(tokens).map(([key, token]) => [key, styles.getPropertyValue(token).trim().toLowerCase()]));
+    const actual = Object.fromEntries(Object.keys(tokens).map(key => [key, cover[key].toLowerCase()]));
+    const painted = Object.fromEntries([['background', 'background'], ['rail', 'rail'], ['panel', 'media-panel'], ['text', 'title']].map(([key, role]) => {
+      const element = elements.find(element => element.customData?.slideCover === role);
+      return [key, (element.type === 'text' ? element.strokeColor : element.backgroundColor).toLowerCase()];
+    }));
+    return { expected, actual, painted };
+  });
+  assert.deepEqual(result.actual, result.expected, 'Cover snapshots the active site tokens');
+  for (const [key, color] of Object.entries(result.painted)) assert.equal(color, result.expected[key], 'Native ' + key + ' uses the token');
+  return result.actual;
+}
+
+async function assertCoverPixel(page, position, expected) {
+  await page.waitForFunction(({ position, expected }) => {
+    const state = window.__slideMerge.api.getAppState(), canvas = document.querySelector('.excalidraw__canvas.static'), box = canvas.getBoundingClientRect();
+    const positionX = (position[0] + state.scrollX) * state.zoom.value * canvas.width / box.width;
+    const positionY = (position[1] + state.scrollY) * state.zoom.value * canvas.height / box.height;
+    const pixel = [...canvas.getContext('2d').getImageData(Math.floor(positionX), Math.floor(positionY), 1, 1).data].slice(0, 3);
+    return pixel.every((channel, index) => channel === expected[index]);
+  }, { position, expected });
+}
+
 test("fixed cover edits from the left inspector preserve media, other slides and history", { timeout: 90000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   try {
+    await page.addInitScript(() => localStorage.setItem('rk:theme', 'day'));
     await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5541') + '/studio/slide-merge-lab/');
     await page.waitForFunction(() => !!window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
     const before = await page.evaluate(async () => { await window.__slideMerge.save(); return window.__slideMerge.deck(); });
@@ -34,12 +72,31 @@ test("fixed cover edits from the left inspector preserve media, other slides and
     await page.getByRole('button', { name: 'Add cover', exact: true }).click();
     const title = page.getByLabel('Cover title', { exact: true });
     await title.waitFor();
+    const initialPalette = await assertCoverSitePalette(page);
+    await assertCoverPixel(page, [400, 660], [242, 238, 230]);
     await title.fill('Reinventing Edge Onboarding Journey');
     await page.getByLabel('Cover client', { exact: true }).fill('Microsoft AI');
-    await page.getByLabel('Cover brand initials', { exact: true }).fill('MAI');
+    assert.equal(await page.getByLabel('Cover brand initials', { exact: true }).count(), 0);
+    const logoData = await page.evaluate(() => {
+      const canvas = document.createElement('canvas'); canvas.width = 240; canvas.height = 120;
+      const context = canvas.getContext('2d'); context.fillStyle = '#d8a657'; context.fillRect(0, 0, 240, 120);
+      return canvas.toDataURL('image/png');
+    });
+    await page.getByRole('button', { name: 'Upload brand logo', exact: true }).click();
+    await page.locator('.merge-shell > input[type="file"]').setInputFiles({ name: 'brand-original.png', mimeType: 'image/png', buffer: Buffer.from(logoData.split(',')[1], 'base64') });
+    await page.getByRole('button', { name: 'Replace brand logo', exact: true }).waitFor();
+    await assertCoverPixel(page, [68, 61], [216, 166, 87]);
     await page.getByLabel('Cover status', { exact: true }).fill('In development');
     await page.getByLabel('Cover duration', { exact: true }).fill('2025 - Current');
-    await page.getByLabel('Cover team', { exact: true }).fill('1 designer\n1 product manager\n3 engineers\n1 content designer\nData Science\nPrivacy');
+    const team = page.getByLabel('Cover team', { exact: true });
+    const teammates = ['1 designer', '1 product manager', '3 engineers', '1 contenet designer', 'Data Science', 'Privacy'];
+    await team.fill(teammates.join(', '));
+    assert.equal(await team.getAttribute('aria-invalid'), 'false');
+    assert.equal(await team.evaluate(element => getComputedStyle(element).whiteSpace), 'pre-wrap');
+    assert.ok(await team.evaluate(element => element.scrollWidth <= element.clientWidth + 1));
+    const chips = await page.evaluate(() => window.__slideMerge.api.getSceneElements().filter(element => /^team-(?:box-)?\d+$/.test(element.customData?.slideCover || '')).map(element => ({ type: element.type, text: element.text })));
+    assert.deepEqual(chips.filter(element => element.type === 'text').map(element => element.text), teammates);
+    assert.equal(chips.filter(element => element.type === 'rectangle').length, teammates.length);
     await page.getByLabel('Cover role description', { exact: true }).fill('Led onboarding vision, growth strategy, concept development, executive storytelling, product alignment, and final UX design');
     await page.getByLabel('Cover footnote', { exact: true }).fill('First Run Experience targeted for user activation, personalization, and retention on new Windows devices');
     const imageData = await page.evaluate(() => {
@@ -48,7 +105,7 @@ test("fixed cover edits from the left inspector preserve media, other slides and
       context.fillStyle = '#1678a0'; context.fillRect(600, 250, 400, 400);
       return canvas.toDataURL('image/png');
     });
-    await page.getByRole('button', { name: 'Hero image', exact: true }).click();
+    await page.getByRole('button', { name: 'Upload hero image', exact: true }).click();
     await page.locator('.merge-shell > input[type="file"]').setInputFiles({ name: 'cover-original.png', mimeType: 'image/png', buffer: Buffer.from(imageData.split(',')[1], 'base64') });
     await page.getByRole('button', { name: 'Replace hero image', exact: true }).waitFor();
     await page.evaluate(() => window.__slideMerge.save());
@@ -59,6 +116,10 @@ test("fixed cover edits from the left inspector preserve media, other slides and
     assert.equal(result.deck.slides.length, before.slides.length + 1);
     assert.equal(result.cover.title, 'Reinventing Edge Onboarding Journey');
     assert.equal(result.files[result.cover.image.fileId].dataURL, imageData, 'Original image bytes survive cover cropping');
+    assert.equal(result.files[result.cover.logo.fileId].dataURL, logoData, 'Original logo bytes survive containment');
+    const logo = result.elements.find(element => element.customData?.slideCover === 'logo');
+    assert.equal(logo.width / logo.height, 2);
+    assert.ok(logo.width <= 54 && logo.height <= 54);
     assert.equal(result.theme, 'light', 'Authored cover colours are not inverted by the dark UI');
     assert.ok(result.elements.filter(element => element.customData?.slideCover).every(element => element.locked));
     for (const slide of before.slides) assert.deepEqual(result.deck.slides.find(item => item.id === slide.id).scene.elements, slide.scene.elements);
@@ -66,7 +127,9 @@ test("fixed cover edits from the left inspector preserve media, other slides and
     const published = publicDeckPayload(setDeckVisibility({ ...result.deck, slides: result.deck.slides.filter(slide => slide.id === coverId) }, 'public'), { reviewedSources: true, production: true });
     assert.equal(published.slides[0].scene.elements.find(element => element.id === 'lab-slide').customData.slideSettings.cover, undefined, 'Public audience gets visible objects, not duplicate editor fields');
     assert.ok(published.slides[0].scene.elements.some(element => element.type === 'text' && element.text === result.cover.title));
-    assert.equal(Object.values(published.slides[0].scene.files)[0].dataURL, imageData);
+    const publicImages = published.slides[0].scene.elements.filter(element => element.type === 'image');
+    assert.equal(published.slides[0].scene.files[publicImages.find(element => element.crop).fileId].dataURL, imageData);
+    assert.equal(published.slides[0].scene.files[publicImages.find(element => !element.crop).fileId].dataURL, logoData);
     assert.equal(await title.evaluate(element => getComputedStyle(element).whiteSpace), 'pre-wrap');
     assert.ok(await title.evaluate(element => element.scrollWidth <= element.clientWidth + 1), 'Long title wraps inside the left panel');
     await page.waitForFunction(() => {
@@ -82,6 +145,10 @@ test("fixed cover edits from the left inspector preserve media, other slides and
     const panelBox = await inspector.boundingBox();
     assert.ok(panelBox.x < 300 && panelBox.width <= 216, 'Cover uses the existing left inspector');
     await page.screenshot({ path: join(tmpdir(), 'rk-fixed-cover-1440.png') });
+    await page.getByRole('button', { name: 'Remove brand logo', exact: true }).click();
+    assert.equal(await page.evaluate(() => window.__slideMerge.api.getSceneElements().some(element => element.customData?.slideCover === 'logo')), false);
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.getByRole('button', { name: 'Replace brand logo', exact: true }).waitFor();
     await title.fill('Independent cover edit');
     await page.getByRole('button', { name: 'Undo', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('[aria-label="Cover title"]')?.value === 'Reinventing Edge Onboarding Journey');
@@ -95,12 +162,25 @@ test("fixed cover edits from the left inspector preserve media, other slides and
     await title.waitFor();
     assert.equal(await title.inputValue(), 'Duplicate only');
     assert.equal(await page.evaluate(() => { const api = window.__slideMerge.api; const image = api.getSceneElements().find(element => element.customData?.slideCover === 'image'); return api.getFiles()[image.fileId].dataURL; }), imageData);
+    assert.equal(await page.evaluate(() => { const api = window.__slideMerge.api; const logo = api.getSceneElements().find(element => element.customData?.slideCover === 'logo'); return api.getFiles()[logo.fileId].dataURL; }), logoData);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Open properties', exact: true }).click();
     await title.waitFor({ state: 'visible' });
     assert.ok(await inspector.evaluate(element => { const box = element.getBoundingClientRect(); return box.left >= 0 && box.right <= innerWidth + 1 && element.scrollWidth <= element.clientWidth + 1; }));
     await page.getByLabel('Cover role description', { exact: true }).fill('Mobile field edit');
     await page.screenshot({ path: join(tmpdir(), 'rk-fixed-cover-390.png') });
+    await page.getByRole('button', { name: 'Replace brand logo', exact: true }).click();
+    await page.locator('.merge-shell > input[type="file"]').setInputFiles({ name: 'replacement-logo.png', mimeType: 'image/png', buffer: Buffer.from(imageData.split(',')[1], 'base64') });
+    await page.getByRole('button', { name: 'Replace brand logo', exact: true }).waitFor();
+    assert.equal(await page.evaluate(() => { const logo = window.__slideMerge.api.getSceneElements().find(element => element.customData?.slideCover === 'logo'); return logo.width / logo.height; }), 1600 / 900);
+    await page.evaluate(() => window.__theme.set('night'));
+    const preserved = await page.evaluate(() => window.__slideMerge.api.getSceneElements().find(element => element.id === 'lab-slide').customData.slideSettings.cover);
+    for (const [key, color] of Object.entries(initialPalette)) assert.equal(preserved[key].toLowerCase(), color, 'Changing UI theme preserves authored colours');
+    await page.getByRole('button', { name: 'Use site colours', exact: true }).click();
+    const darkPalette = await assertCoverSitePalette(page);
+    assert.notEqual(darkPalette.background, initialPalette.background);
+    await assertCoverPixel(page, [400, 660], [8, 8, 10]);
+    await page.screenshot({ path: join(tmpdir(), 'rk-fixed-cover-dark-390.png') });
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
@@ -124,6 +204,7 @@ test("fixed cover fields persist in hosted Studio without changing case content"
       if (width === 390) await page.getByRole('button', { name: 'Open properties', exact: true }).click();
       assert.equal(await title.inputValue(), 'A field-driven cover');
       assert.equal(await page.getByLabel('Cover status', { exact: true }).inputValue(), 'In development');
+      await assertCoverSitePalette(page);
       assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks)), original);
       assert.ok(await title.evaluate(element => { const box = element.getBoundingClientRect(); return box.left >= 0 && box.right <= innerWidth; }));
       await page.screenshot({ path: join(tmpdir(), 'rk-hosted-cover-' + width + '.png') });

@@ -2,7 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { PROPERTY_LAYOUTS, layoutPlan, slideOwnsFocus, transitionMatch, isEmptyPlaceholder } from "./src/js/slide-merge-properties.mjs";
 import { guidePosition, guideSnap } from "./src/js/slide-merge-guide-core.mjs";
-import { coverSkeleton, coverValues } from "./src/js/slide-merge-cover.mjs";
+import { COVER_FIELDS, COVER_DEFAULTS, coverPalette, coverSkeleton, coverValues } from "./src/js/slide-merge-cover.mjs";
+test("new covers resolve site colour tokens without overwriting saved palettes", () => {
+  const tokens = { "--bg": " #f2eee6 ", "--bg-2": "#eae5db", "--bg-elev": "#e2dcd0", "--text": "#1b1915", "--text-dim": "#5c5850" };
+  const palette = coverPalette({ getPropertyValue: token => tokens[token] });
+  assert.deepEqual(palette, { background: "#f2eee6", rail: "#eae5db", panel: "#e2dcd0", text: "#1b1915", muted: "#5c5850" });
+  const saved = coverValues({ ...palette, background: "#735d4d", rail: "#302319" });
+  assert.equal(coverValues(saved).background, "#735d4d");
+  assert.equal(coverValues(saved).rail, "#302319");
+  assert.equal(coverPalette({ getPropertyValue: () => "" }).background, COVER_DEFAULTS.background);
+});
 test("fixed cover fields preserve geometry, originals and independent instances", () => {
   const source = { title: "Reinventing Edge Onboarding Journey", client: "Microsoft AI", mark: "MAI", status: "In development", duration: "2025 - Current", team: "1 designer\n1 product manager\n3 engineers\n1 content designer\nData Science\nPrivacy", role: "Led onboarding vision", footnote: "First Run Experience", image: { fileId: "original", width: 1600, height: 900, name: "original.png" } };
   const before = structuredClone(source), first = coverSkeleton(source, 123, "one"), second = coverSkeleton({ ...source, title: "Another project" }, 123, "two");
@@ -17,8 +26,15 @@ test("fixed cover fields preserve geometry, originals and independent instances"
   assert.equal(first.filter(element => /^team-\d/.test(element.customData.slideCover)).length, 6);
   assert.equal(coverSkeleton({ ...source, team: source.team.replaceAll('\n', ', ') }, 123).filter(element => /^team-\d/.test(element.customData.slideCover)).length, 6);
   assert.equal(coverSkeleton({}, 123).some(element => element.type === "image"), false);
-  assert.equal(coverValues({ background: "url(https://invalid)", image: { fileId: "bad", width: 0, height: 3 } }).background, "#735d4d");
+  assert.equal(coverValues({ background: "url(https://invalid)", image: { fileId: "bad", width: 0, height: 3 } }).background, COVER_DEFAULTS.background);
   assert.equal(coverValues({ image: { fileId: "bad", width: 0, height: 3 } }).image, undefined);
+  assert.equal(COVER_FIELDS.some(([key]) => key === "mark"), false);
+  const withLogo = coverSkeleton({ ...source, logo: { fileId: "logo-original", width: 240, height: 120, name: "brand.png" } }, 123);
+  const logo = withLogo.find(element => element.customData.slideCover === "logo");
+  assert.equal(logo.fileId, "logo-original");
+  assert.equal(logo.width / logo.height, 2);
+  assert.ok(logo.width <= 54 && logo.height <= 54);
+  assert.equal(withLogo.some(element => element.customData.slideCover === "mark"), false);
 });
 test("nine layouts preserve real content, locks and groups; placeholders do not accumulate", () => {
   assert.equal(PROPERTY_LAYOUTS.length,9);

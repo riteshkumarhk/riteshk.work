@@ -28,7 +28,7 @@ import { fitAuthoredText } from "./slide-merge-authoring-fit.mjs";
 import { fonts as authoringFonts } from "./slide-platform-fonts.mjs";
 import { SlideProperties } from "./slide-merge-properties.jsx";
 import { PROPERTY_LAYOUTS, slideSettings, slideOwnsFocus, layoutPlan } from "./slide-merge-properties.mjs";
-import { coverValues, coverSkeleton } from "./slide-merge-cover.mjs";
+import { coverValues, coverSkeleton, coverPalette } from "./slide-merge-cover.mjs";
 import { configureSlideSnapping } from "./slide-merge-snapping.mjs";
 import "@excalidraw/excalidraw/index.css";
 import "../../css/slide-lab.css";
@@ -470,7 +470,8 @@ function Merger({ integration, controller }) {
     if (layout === "cover") {
       const styles = getComputedStyle(document.documentElement);
       const font = role => authoringFonts.find(item => item.family === styles.getPropertyValue(role).split(",")[0].replace(/["']/g, "").trim())?.id || DEFAULT_SLIDE_FONT;
-      const cover = coverValues({ title: integration?.title || "Project title", fontFamily: font("--sans"), titleFont: font("--serif") });
+      const palette = coverPalette(getComputedStyle(document.querySelector(".merge-shell") || document.documentElement));
+      const cover = coverValues({ ...palette, title: integration?.title || "Project title", fontFamily: font("--sans"), titleFont: font("--serif") });
       await loadPlatformFonts(coverSkeleton(cover, cover.fontFamily));
       slide.scene.elements = [...slide.scene.elements.map(element => ({ ...element, customData: { ...element.customData, slideSettings: { layout: "cover", transition: "fade", cover } } })), ...coverElements(cover)];
     } else if (saved) {
@@ -749,7 +750,7 @@ function Merger({ integration, controller }) {
         if (videoUrl || !/^image\/(png|jpeg|webp|gif|svg\+xml|avif)$/.test(file.type)) throw new Error("Choose an image for this cover field.");
         const image = await originalImage(file), elements = api.getSceneElementsIncludingDeleted(), previous = slideSettings(elements).cover;
         if (!previous) throw new Error("Select a cover slide first.");
-        const cover = coverValues({ ...previous, [purpose === "cover-logo" ? "logo" : "image"]: { fileId: image.id, width: image.width, height: image.height, name: source.name || source.title || "Cover image" } });
+        const cover = coverValues({ ...previous, ...(purpose === "cover-logo" ? { mark: "" } : {}), [purpose === "cover-logo" ? "logo" : "image"]: { fileId: image.id, width: image.width, height: image.height, name: source.name || source.title || "Cover image" } });
         const additions = coverElements(cover);
         commitSettings({ cover }, [...elements.filter(element => element.customData?.slideCover).map(element => changed(element, { isDeleted: true })), ...additions, ...elements.filter(element => !element.customData?.slideCover)]);
         api.addFiles([image]);

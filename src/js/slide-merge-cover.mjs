@@ -1,5 +1,5 @@
 export const COVER_FIELDS = [
-  ["title", "Title", 160], ["client", "Client", 60], ["mark", "Brand initials", 8],
+  ["title", "Title", 160], ["client", "Client", 60],
   ["status", "Status", 40], ["duration", "Duration", 60],
   ["team", "Team", 240], ["roleLabel", "Role heading", 40],
   ["role", "Role description", 500], ["footnote", "Footnote", 240]
@@ -7,11 +7,18 @@ export const COVER_FIELDS = [
 export const COVER_DEFAULTS = Object.freeze({
   title: "Project title", client: "Client", mark: "", status: "", duration: "",
   team: "", roleLabel: "My role", role: "", footnote: "",
-  background: "#735d4d", rail: "#302319", panel: "#af9d87", text: "#ffffff", muted: "#e0d8d1"
+  background: "#08080a", rail: "#0d0d10", panel: "#111116", text: "#ece7e1", muted: "#8f8a84"
 });
+export function coverPalette(styles) {
+  return Object.fromEntries(Object.entries({ background: "--bg", rail: "--bg-2", panel: "--bg-elev", text: "--text", muted: "--text-dim" }).map(([key, token]) => {
+    const value = styles.getPropertyValue(token).trim();
+    return [key, /^#[0-9a-f]{6}$/i.test(value) ? value : COVER_DEFAULTS[key]];
+  }));
+}
 export function coverValues(value = {}) {
   const result = { ...COVER_DEFAULTS };
   for (const [key] of COVER_FIELDS) if (typeof value[key] === "string") result[key] = value[key];
+  if (typeof value.mark === "string") result.mark = value.mark;
   for (const key of ["background", "rail", "panel", "text", "muted"])
     if (/^#[0-9a-f]{6}$/i.test(value[key])) result[key] = value[key];
   for (const key of ["fontFamily", "titleFont"]) if (Number.isInteger(value[key])) result[key] = value[key];
