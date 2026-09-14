@@ -1,7 +1,7 @@
 /* Riteshk Requests — service worker.
    Caches the app shell for a fast, offline-tolerant launch (API calls to the Worker always pass
    straight through, never cached) + handles Web Push ("push" + "notificationclick"). */
-const CACHE = "rk-inbox-v21";
+const CACHE = "rk-inbox-v22";
 const SHELL = [
   "/inbox/",
   "/inbox/index.html",
@@ -112,9 +112,13 @@ self.addEventListener("notificationclick", (e) => {
     if (a.url && a.url.indexOf(a.ep) !== -1) {
       e.waitUntil(
         fetch(a.url, { method: "POST" })
-          .then((r) => r.text().catch(() => ""))
+          .then(async (response) => {
+            const message = await response.text().catch(() => "");
+            if (!response.ok) throw new Error(message || "The server could not complete this action.");
+            return message;
+          })
           .then((msg) => self.registration.showNotification(a.ok, { body: String(msg || "Done.").slice(0, 140), icon: "/inbox/icon-192.png", badge: "/inbox/icon-192.png", tag: "rk-act-done" }))
-          .catch(() => self.registration.showNotification("Couldn\u2019t reach the server", { body: "Open the app and try again.", icon: "/inbox/icon-192.png", badge: "/inbox/icon-192.png", tag: "rk-act-done" }))
+          .catch(error => self.registration.showNotification("Action not completed", { body: String(error.message || "Open the app and try again.").slice(0, 140), icon: "/inbox/icon-192.png", badge: "/inbox/icon-192.png", tag: "rk-act-done" }))
       );
       return;
     }

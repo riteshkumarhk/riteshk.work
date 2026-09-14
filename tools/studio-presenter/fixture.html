@@ -3,12 +3,13 @@
 <style>:root{--sans:"Segoe UI";--serif:Georgia;--mono:Consolas;--text:#fff;--bg:#14334a;--ease:ease}.pjps{background:#14334a;padding:30px!important;display:block}.controls{display:flex;gap:20px;align-items:start}button,summary{padding:12px}video{width:200px;height:112px}iframe{width:240px;height:130px;background:white}.swatch{height:100px;background:#de4554;margin-top:20px}input{width:150px}</style></head>
 <body><button id="start">Present</button><script src="fixture.bundle.js"></script><script>
 const presentDeckWithRenderer = window.fixturePresenter;
+const frameLocation = new URL(location.origin); frameLocation.hostname = location.hostname === "localhost" ? "127.0.0.1" : "localhost";
 const slides=[{title:"First slide",notes:"Private first note",transition:"none"},{title:"Second slide",notes:"Private second note",transition:"none"}];
 window.fixture = { clicks:0, start() {
   window.fixture.slides = slides;
   window.presentation = presentDeckWithRenderer({}, {slides, onSlideEdit:window.fixture.editable ? (slide,key,value)=>{slide[key]=value;} : null}, {
     renderThumbnail(container,slide){container.textContent=slide?.title||"";},
-    renderPjSlide:slide=>`<article class="pjps"><h1>${slide.title}</h1><div class="controls"><button id="action">Interact</button><details><summary id="section">Section</summary><p>Expanded content</p></details><div><video id="media" controls muted></video><button id="play">Play / pause</button></div><input aria-label="Seek" id="seek" type="range" min="0" max="100"><iframe title="Cross-origin control" src="http://localhost:5510/tools/studio-presenter/frame-fixture.html"></iframe></div><div class="swatch" id="swatch"></div></article>`,
+    renderPjSlide:slide=>`<article class="pjps"><h1>${slide.title}</h1><div class="controls"><button id="action">Interact</button><details><summary id="section">Section</summary><p>Expanded content</p></details><div><video id="media" controls muted></video><button id="play">Play / pause</button></div><input aria-label="Seek" id="seek" type="range" min="0" max="100"><iframe title="Cross-origin control" src="${frameLocation.origin}/tools/studio-presenter/frame-fixture.html"></iframe></div><div class="swatch" id="swatch"></div></article>`,
     pjDeckSlides:()=>slides,pjSlideTitle:slide=>slide.title,pjNotesHtml:notes=>"<p>"+notes+"</p>",fitSections(){},enhanceStudyBlocks(element){
       element.querySelector("#action").onclick=()=>{window.fixture.clicks++;element.querySelector("#action").textContent="Clicked "+window.fixture.clicks;};
       const canvas=document.createElement("canvas");canvas.width=200;canvas.height=112;
@@ -19,5 +20,5 @@ window.fixture = { clicks:0, start() {
   });
 }};
 document.getElementById("start").onclick=window.fixture.start;
-window.addEventListener("message",event=>{if(event.origin==="http://localhost:5510"&&event.data==="embedded-clicked")window.fixture.embeddedClicked=true;});
+window.addEventListener("message",event=>{if(event.origin===frameLocation.origin&&event.data==="embedded-clicked")window.fixture.embeddedClicked=true;});
 </script></body></html>

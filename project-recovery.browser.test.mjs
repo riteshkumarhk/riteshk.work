@@ -10,6 +10,68 @@ const source = readFileSync(new URL("./src/js/project.js", import.meta.url), "ut
 const baseURL = process.env.SLIDE_LAB_URL;
 const launchOptions = { ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE } : process.platform === "win32" ? { executablePath: "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" } : {}), headless: true };
 
+test("browser test guard blocks live services but permits explicit mocks", { skip: !process.execArgv.some(argument => argument.includes("browser-test-guard")) }, async () => {
+  const browser = await chromium.launch(launchOptions);
+  try {
+    const page = await browser.newPage();
+    for (const host of ["rk-ai-proxy.riteshkumarhk.workers.dev", "api.openai.com", "api.anthropic.com", "generativelanguage.googleapis.com"]) {
+      await assert.rejects(page.goto("https://" + host + "/synthetic-network-guard", { timeout: 10000 }), /ERR_NAME_NOT_RESOLVED/);
+    }
+    await page.route("https://api.anthropic.com/synthetic-mock", route => route.fulfill({ contentType: "application/json", body: '{"fixture":true}' }));
+    const response = await page.goto("https://api.anthropic.com/synthetic-mock");
+    assert.deepEqual(await response.json(), { fixture: true });
+  } finally { await browser.close(); }
+});
+
+test("Studio and Journey reject executable rich text while preserving prose and images", async () => {
+  const browser = await chromium.launch(launchOptions);
+  try {
+    const page = await browser.newPage();
+    await page.route("**/*", route => route.abort());
+    await page.setContent('<div id="fixture"></div>');
+    const cleaner = await build({ entryPoints: ["src/js/rich-html.mjs"], bundle: true, write: false, format: "iife", globalName: "AuditRichHtml" });
+    await page.addScriptTag({ content: cleaner.outputFiles[0].text });
+    const studio = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
+    const start = studio.indexOf("  function rtClean(html) {"), end = studio.indexOf("  function richArea(", start);
+    await page.addScriptTag({ content: "const sanitizeRichHtml = AuditRichHtml.sanitizeRichHtml;" + studio.slice(start, end) });
+    const markup = '<p style="text-align:center"><strong>Keep formatting</strong></p><figure class="rt__fig"><img src="/assets/uploads/fixture.png" onerror=window.auditMarker=1></figure><svg onload=window.auditMarker=1></svg><a href="jav&#97;script:window.auditMarker=1">Unsafe link</a>';
+    const result = await page.evaluate(html => {
+      window.auditMarker = 0;
+      const host = document.querySelector("#fixture"); host.innerHTML = rtClean(html);
+      return { handlers: host.querySelectorAll("[onerror], [onload], svg, script").length, title: host.querySelector("strong").textContent, align: host.querySelector("p").style.textAlign, image: host.querySelector("img").getAttribute("src"), link: host.querySelector("a").getAttribute("href") };
+    }, markup);
+    assert.deepEqual(result, { handlers: 0, title: "Keep formatting", align: "center", image: "/assets/uploads/fixture.png", link: null });
+    const journey = await build({ entryPoints: ["src/js/journey.js"], bundle: true, write: false, format: "iife" });
+    await page.evaluate(html => { window.RK = { data: { journey: { enabled: true, chapters: [{ name: "Fixture", entries: [{ title: "Entry", body: html }] }] }, work: [] } }; }, markup);
+    await page.addScriptTag({ content: journey.outputFiles[0].text });
+    await page.evaluate(() => window.RK.openJourney());
+    assert.equal(await page.locator(".jrn__prose strong").textContent(), "Keep formatting");
+    assert.equal(await page.locator(".jrn__prose img").count(), 1);
+    assert.equal(await page.locator(".jrn__prose [onerror], .jrn__prose [onload]").count(), 0);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await page.evaluate(() => window.auditMarker), 0);
+  } finally { await browser.close(); }
+});
+
+test("Studio preview messages require the expected frame and origin", async () => {
+  const { runInNewContext } = await import("node:vm");
+  const studio = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
+  const start = studio.indexOf('    window.addEventListener("message", function (e) {');
+  const end = studio.indexOf("\n    });", start) + 8;
+  const preview = {}, calls = [];
+  let handler, opened = true;
+  runInNewContext(studio.slice(start, end), { window: { addEventListener: (type, callback) => { handler = callback; } }, location: { origin: "https://synthetic.test" }, frame: { contentWindow: preview }, root: { classList: { contains: () => opened } }, previewBlockAct: (...args) => calls.push(args) });
+  const data = { __rk: "blockAct", act: "del", index: 0 };
+  handler({ origin: "https://untrusted.test", source: preview, data });
+  handler({ origin: "https://synthetic.test", source: {}, data });
+  assert.equal(calls.length, 0);
+  handler({ origin: "https://synthetic.test", source: preview, data });
+  assert.deepEqual(calls, [["del", 0]]);
+  opened = false;
+  handler({ origin: "https://synthetic.test", source: preview, data });
+  assert.equal(calls.length, 1);
+});
+
 async function siteFixture(page, routeRequest) {
   const published = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
   published.work = [
@@ -29,6 +91,49 @@ async function siteFixture(page, routeRequest) {
   });
   return published;
 }
+
+test("built Studio refuses foreign draft commands and preserves trusted preview actions", { skip: !baseURL, timeout: 60000 }, async () => {
+  const browser = await chromium.launch(launchOptions);
+  const studio = await build({ entryPoints: ["src/js/admin-studio.js"], bundle: true, write: false, format: "iife" });
+  try {
+    for (const width of [1440, 390]) {
+      const page = await browser.newPage({ viewport: { width, height: 1000 } });
+      const published = await siteFixture(page, async (route, url) => {
+        if (url.pathname === "/js/admin-studio.js") { await route.fulfill({ contentType: "text/javascript", body: studio.outputFiles[0].text }); return true; }
+        if (url.hostname === "untrusted.test") { await route.fulfill({ contentType: "text/html", body: '<!doctype html><script>parent.postMessage({__rk:"blockAct",act:"del",index:0},"*");parent.postMessage({fixtureDone:true},"*");</script>' }); return true; }
+        return false;
+      });
+      published.work[0].study.blocks = [{ type: "text", heading: "Keep", body: '<p><strong>Safe prose</strong><img src="/fixture-missing.png" onerror=window.securityMarker=1></p>' }, { type: "text", heading: "Second", body: "Unchanged" }, { type: "text", heading: "Sealed", locked: true, vaultBlock: "fixture-protected" }];
+      await page.addInitScript(() => { localStorage.setItem("rk:dev:stub", "1"); window.securityMarker = 0; });
+      await page.goto(baseURL + "/studio/?devstub=1");
+      await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+      await page.locator('.adm__tab[data-tab="work"]').click();
+      await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+      const before = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks));
+      await page.evaluate(() => new Promise(resolve => {
+        const onMessage = event => { if (event.origin === "https://untrusted.test" && event.data.fixtureDone) { removeEventListener("message", onMessage); resolve(); } };
+        addEventListener("message", onMessage);
+        const frame = document.createElement("iframe"); frame.src = "https://untrusted.test/"; document.body.append(frame);
+      }));
+      assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks)), before);
+      assert.equal(await page.evaluate(() => window.securityMarker), 0);
+      await page.waitForFunction(() => !!document.querySelector(".adm__frame")?.contentWindow?.RK);
+      const trusted = async data => {
+        const preview = await page.locator(".adm__frame").elementHandle();
+        const frame = await preview.contentFrame();
+        await frame.evaluate(message => parent.postMessage(message, location.origin), data);
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      };
+      await trusted({ __rk: "blockAct", act: "del", index: 2 });
+      assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks)), before);
+      await trusted({ __rk: "blockAct", act: "dup", index: 0 });
+      await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.blocks.length === 4);
+      assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].study.blocks[1].heading), "Keep");
+      await page.screenshot({ path: join(tmpdir(), "rk-security-studio-" + width + ".png") });
+      await page.close();
+    }
+  } finally { await browser.close(); }
+});
 
 test("built sign-in gate retains control after provider failure and cancellation", { skip: !baseURL, timeout: 45000 }, async () => {
   const browser = await chromium.launch(launchOptions);

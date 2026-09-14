@@ -18,6 +18,7 @@ import {
   webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig, authStatus, authConfig, deviceTrust, deviceTrusted, stepUp, keyringGet, keyringPut
 } from "./admin-core.js";
 import { WORLD_LAND } from "./worldland.js";
+import { sanitizeRichHtml } from "./rich-html.mjs";
 import { contentRevision, publicationConflict, gitContentRevision } from "./content-revision.mjs";
 import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsEmbedScore, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand, atsScoreModel } from "./ats-core.js";
 import { draftComposition } from "./slide-merge-ai.mjs";
@@ -1740,7 +1741,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     v = v == null ? "" : String(v);
     if (!v) return "";
     var html = isRtHtml(v) ? v : v.split(/\n\n+/).map(function (p) { return "<p>" + rtInlineMd(escForRt(p)).replace(/\n/g, "<br>") + "</p>"; }).join("");
-    return rtHostImgsForEdit(html);
+    return rtHostImgsForEdit(rtClean(html));
   }
   // In the editor, hosted /assets/uploads images must display via a URL that works locally
   // (in-memory bytes or the raw GitHub URL) — the bare path 404s on the dev server and collapses
@@ -1758,11 +1759,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     } catch (e) { return html; }
   }
   function rtClean(html) {
-    return String(html == null ? "" : html)
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
-      .replace(/ on\w+="[^"]*"/gi, "").replace(/ on\w+='[^']*'/gi, "")
-      .replace(/javascript:/gi, "").replace(/&nbsp;/g, " ");
+    return sanitizeRichHtml(html).replace(/&nbsp;/g, " ");
   }
   function richArea(attrs, value) {
     return '<div class="rt__area" contenteditable="true" spellcheck="true" data-ph="Write here\u2026 use the bar above to format" ' + attrs + ">" + richInit(value) + "</div>";
@@ -1902,6 +1899,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   }
   // Replace the whole area in an UNDOABLE way so native Ctrl+Z and the Undo button restore the previous content.
   function rtSetHtml(area, html) {
+    html = rtClean(html);
     area.focus();
     try {
       var sel = window.getSelection();
@@ -11523,7 +11521,8 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   function previewBlockAct(act, j) {
     if (openStudy < 0 || !data.work[openStudy] || !data.work[openStudy].study) return;
     var i = openStudy, s = data.work[i].study.blocks;
-    if (!Array.isArray(s) || !(j >= 0 && j < s.length)) return;
+    if (!Array.isArray(s) || !Number.isInteger(j) || !(j >= 0 && j < s.length)) return;
+    if ((s[j].encStub || s[j].vaultBlock) && !["up", "down"].includes(act)) return;
     if (act === "add") { openBlock = j; sectionPicker(i, j); return; }
     if (act === "up") { if (j <= 0) return; var a = s[j - 1]; s[j - 1] = s[j]; s[j] = a; openBlock = j - 1; }
     else if (act === "down") { if (j >= s.length - 1) return; var c = s[j + 1]; s[j + 1] = s[j]; s[j] = c; openBlock = j + 1; }
@@ -11539,7 +11538,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   function previewBlockMove(from, to) {
     if (openStudy < 0 || !data.work[openStudy] || !data.work[openStudy].study) return;
     var s = data.work[openStudy].study.blocks;
-    if (!Array.isArray(s) || from < 0 || from >= s.length) return;
+    if (!Array.isArray(s) || !Number.isInteger(from) || !Number.isInteger(to) || from < 0 || from >= s.length) return;
     var it = s.splice(from, 1)[0];
     if (to > from) to--;
     to = Math.max(0, Math.min(s.length, to));
@@ -11550,6 +11549,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   }
   // Live-preview drag-to-reorder: move an item within a block's flat items array (posted by an item grip).
   function previewItemMove(block, from, to) {
+    if (![block, from, to].every(Number.isInteger)) return;
     if (openStudy < 0 || !data.work[openStudy] || !data.work[openStudy].study) return;
     var s = data.work[openStudy].study.blocks;
     var b = s && s[block];
@@ -19340,6 +19340,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     frame.addEventListener("load", previewApply);
     document.addEventListener("keydown", onKey);
     window.addEventListener("message", function (e) {
+      if (e.origin !== location.origin || !frame || e.source !== frame.contentWindow || !root.classList.contains("is-open")) return;
       var d = e.data;
       if (!d || !d.__rk) return;
       if (d.__rk === "selectBlock" && typeof d.index === "number") selectPreviewBlock(d.index);

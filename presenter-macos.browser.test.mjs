@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
 import './tools/studio-presenter-macos/build-ui.mjs';
 test('macOS shared DJ pad handles native state and private metadata commands', async () => {
-  const browser=await chromium.launch({executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || (process.platform === 'win32' ? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' : chromium.executablePath()),headless:true});
   const page=await browser.newPage({viewport:{width:960,height:720}});
   try {
     await page.addInitScript(()=>{window.messages=[];window.webkit={messageHandlers:{presenter:{postMessage:message=>window.messages.push(message)}}};});
-    await page.goto('http://127.0.0.1:5510/tools/studio-presenter-macos/generated/companion.html');
+    await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510') + '/tools/studio-presenter-macos/generated/companion.html');
     await page.waitForFunction(()=>window.messages.some(message=>message.type==='ready'));
     await page.evaluate(()=>window.receivePresenter({type:'state',index:0,total:2,notes:'Private Mac note',durationMinutes:2,editable:true,elapsed:1000,remaining:119000,budget:120000,totalBudget:180000,paused:false,width:1280,height:720,nextTitle:'Second',slides:[{title:'First',document:'<h1>First slide</h1>'},{title:'Second',document:'<h1>Second slide</h1>'}]}));
     assert.equal(await page.locator('[data-pp-notes]').inputValue(),'Private Mac note');

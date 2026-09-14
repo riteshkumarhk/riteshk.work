@@ -28,6 +28,7 @@
 
 import { libraryRoute } from "./slide-library.mjs";
 import { releaseChecksRoute } from "./release-checks.mjs";
+import { readOperationalState, updateOperationalState } from "./operational-state.mjs";
 
 const PROVIDERS = {
   openai:    { base: "https://api.openai.com/v1",                        keyVar: "OPENAI_KEY",    inject: "bearer"  },
@@ -204,29 +205,31 @@ export default {
 
     // ---------- one-tap "Allow" from the notification: auto-send the Full-access link (signed capability link) ----------
     if (url.pathname === "/req/allow") {
+      if (request.method !== "POST") return new Response("Method not allowed", { status: 405, headers: cors });
       const _id = url.searchParams.get("id") || "", _t = url.searchParams.get("t") || "";
-      const _reply = (s) => new Response(s, { status: 200, headers: Object.assign({ "Content-Type": "text/plain; charset=utf-8" }, cors) });
+      const _reply = (s, status = 200) => new Response(s, { status, headers: Object.assign({ "Content-Type": "text/plain; charset=utf-8" }, cors) });
       if (!_id || !_t || !env.VAULT_GRANTS) return new Response("Bad request", { status: 400, headers: cors });
       if (!timingSafeEqual(_t, await hmac(env.SESSION_SECRET || "", "reqallow." + _id))) return new Response("Invalid or expired link", { status: 403, headers: cors });
       const rec = await env.VAULT_GRANTS.get(_id, "json");
       if (!rec || !rec.email) return _reply("Already handled \u2014 nothing to send.");
       const qg = await env.VAULT_GRANTS.get("quickgrant:full", "json");
-      if (!qg || !qg.code) return _reply("No Full-access quick-grant is set up yet. Open the studio, mark a special view as Full access, then tap Allow again.");
-      if (qg.enabled === false) return _reply("One-tap Allow is turned off. Turn it back on in the studio, then tap Allow again.");
-      if (qg.expiresAt && Date.now() > qg.expiresAt) return _reply("Your Full-access link has expired. Refresh it in the studio, then tap Allow again.");
+      if (!qg || !qg.code) return _reply("No Full-access quick-grant is set up yet. Open the studio, mark a special view as Full access, then tap Allow again.", 409);
+      if (qg.enabled === false) return _reply("One-tap Allow is turned off. Turn it back on in the studio, then tap Allow again.", 409);
+      if (qg.expiresAt && Date.now() > qg.expiresAt) return _reply("Your Full-access link has expired. Refresh it in the studio, then tap Allow again.", 403);
       const who = String(rec.name || "there"), me = await ownerEmail(env);
       const minted = await mintAccessLink(env, { email: rec.email, name: rec.name, company: rec.company, reqId: _id });
       const mail = fullAccessEmail(env, minted.link, who, 15);
       const sent = await sendEmail(env, { to: rec.email, subject: mail.subject, html: mail.html, text: mail.text, replyTo: me, bcc: me });
-      if (!sent.ok) return _reply("Couldn\u2019t send the email (" + (sent.status || "no email service") + "). Check the Resend setup, then tap Allow again.");
+      if (!sent.ok) return _reply("Couldn\u2019t send the email (" + (sent.status || "no email service") + "). Check the Resend setup, then tap Allow again.", 502);
       try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
       return _reply("Sent full access to " + rec.email + ". \u2713");
     }
 
     // ---------- one-tap "Cancel" from the notification: email a polite decline (Reply-To you) + dismiss ----------
     if (url.pathname === "/req/cancel") {
+      if (request.method !== "POST") return new Response("Method not allowed", { status: 405, headers: cors });
       const _id = url.searchParams.get("id") || "", _t = url.searchParams.get("t") || "";
-      const _reply = (s) => new Response(s, { status: 200, headers: Object.assign({ "Content-Type": "text/plain; charset=utf-8" }, cors) });
+      const _reply = (s, status = 200) => new Response(s, { status, headers: Object.assign({ "Content-Type": "text/plain; charset=utf-8" }, cors) });
       if (!_id || !_t || !env.VAULT_GRANTS) return new Response("Bad request", { status: 400, headers: cors });
       if (!timingSafeEqual(_t, await hmac(env.SESSION_SECRET || "", "reqcancel." + _id))) return new Response("Invalid or expired link", { status: 403, headers: cors });
       const rec = await env.VAULT_GRANTS.get(_id, "json");
@@ -235,7 +238,7 @@ export default {
       const html = "<p>Hi " + emailEsc(who) + ",</p><p>Thanks for reaching out about my work. I\u2019m not able to share access right now \u2014 feel free to reply here and we can talk.</p><p>\u2014 Ritesh Kumar</p>";
       const text = "Hi " + who + ",\n\nThanks for reaching out about my work. I'm not able to share access right now \u2014 feel free to reply here and we can talk.\n\n\u2014 Ritesh Kumar";
       const sent = await sendEmail(env, { to: rec.email, subject: "About your access request \u2014 Ritesh Kumar", html, text, replyTo: me });
-      if (!sent.ok) return _reply("Couldn\u2019t send the note (" + (sent.status || "no email service") + "). Dismiss it in the studio instead, or check the Resend setup.");
+      if (!sent.ok) return _reply("Couldn\u2019t send the note (" + (sent.status || "no email service") + "). Dismiss it in the studio instead, or check the Resend setup.", 502);
       try { await env.VAULT_GRANTS.delete(_id); } catch (e) {}
       return _reply("Sent a cancellation note to " + rec.email + " (replies come to you). \u2713");
     }
@@ -294,13 +297,13 @@ export default {
     if (url.pathname === "/cal/accept" || url.pathname === "/cal/decline") {
       if (request.method !== "POST") return new Response("Method not allowed", { status: 405, headers: cors });
       const _uid = url.searchParams.get("uid") || "", _t = url.searchParams.get("t") || "";
-      const _reply = (s) => new Response(s, { status: 200, headers: Object.assign({ "Content-Type": "text/plain; charset=utf-8" }, cors) });
+      const _reply = (s, status = 200) => new Response(s, { status, headers: Object.assign({ "Content-Type": "text/plain; charset=utf-8" }, cors) });
       const isAccept = url.pathname === "/cal/accept";
       if (!_uid || !_t) return new Response("Bad request", { status: 400, headers: cors });
       const expTok = await hmac(env.SESSION_SECRET || "", (isAccept ? "calaccept." : "caldecline.") + _uid);
       if (!timingSafeEqual(_t, expTok)) return new Response("Invalid or expired link", { status: 403, headers: cors });
       const r = await calBookingAction(env, _uid, isAccept ? "confirm" : "decline");
-      if (!r.ok) return _reply((isAccept ? "Couldn\u2019t accept" : "Couldn\u2019t decline") + " (" + (r.msg || ("Cal.com said " + r.status)) + "). Open Cal.com to do it manually.");
+      if (!r.ok) return _reply((isAccept ? "Couldn\u2019t accept" : "Couldn\u2019t decline") + " (" + (r.msg || ("Cal.com said " + r.status)) + "). Open Cal.com to do it manually.", 502);
       try { await env.VAULT_GRANTS.delete("book:" + _uid); } catch (e) {}
       return _reply(isAccept ? "Accepted \u2014 it\u2019s on your calendar. \u2713" : "Declined. \u2713");
     }
@@ -952,13 +955,10 @@ export default {
     // allowlist keep it abuse-resistant. Never errors the caller (analytics must never break a page).
     if (url.pathname === "/event") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
-      if (!env.VAULT_GRANTS) return json({ ok: true }, 200, cors);
+      if (!env.VAULT) return json({ ok: true }, 200, cors);
       const oOK = !!origin && corsHeaders(origin, env)["Access-Control-Allow-Origin"] === origin;
       if (!oOK) return json({ ok: true }, 200, cors);                       // drop cross-site + origin-less (curl/bot) beacons
       const evIp = request.headers.get("CF-Connecting-IP") || "0";
-      const evRl = "rl:ev:" + evIp;
-      const evN = parseInt((await env.VAULT_GRANTS.get(evRl)) || "0", 10) || 0;
-      if (evN >= 120) return json({ ok: true }, 200, cors);                  // silently cap floods
       try {
         const b = await request.json();
         const t = String((b && b.t) || "").trim();
@@ -968,8 +968,8 @@ export default {
         const country = (request.cf && request.cf.country) || "";
         const uaInfo = parseUA(request.headers.get("User-Agent"));
         const size = normSize(b && b.s);
-        await env.VAULT_GRANTS.put(evRl, String(evN + 1), { expirationTtl: 3600 });
-        await recordEvent(env, t, id, country, uaInfo, size);
+        const rateKey = await hmac(env.SESSION_SECRET || "", "event-rate:" + evIp);
+        await recordEvent(env, t, id, country, uaInfo, size, rateKey);
         return json({ ok: true }, 200, cors);
       } catch (e) { return json({ ok: true }, 200, cors); }
     }
@@ -1394,27 +1394,37 @@ export default {
     }
     // Roaming AI token-usage ledger: each device PUTs its own cumulative day-map under its device id
     // (idempotent overwrite, so retries never double-count); GET returns every device bucket and the
-    // studio sums them for a cross-device total. Owner-session-gated; stored in VAULT_GRANTS ("ai:usage").
+    // studio sums them for a cross-device total. Owner-session-gated; conditionally saved in private R2.
     if (url.pathname === "/admin/ai/usage") {
       if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, cors);
-      if (!env.VAULT_GRANTS) return json({ error: "Usage store not configured" }, 503, cors);
-      if (request.method === "GET") return json({ ok: true, usage: (await env.VAULT_GRANTS.get("ai:usage", "json")) || { v: 1, devices: {} } }, 200, cors);
+      if (!env.VAULT) return json({ error: "Usage store not configured" }, 503, cors);
+      if (request.method === "GET") {
+        try { return json({ ok: true, usage: await readOperationalState(env, "usage", { v: 1, devices: {} }) }, 200, cors); }
+        catch { return json({ error: "Usage history unavailable" }, 503, cors); }
+      }
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
       let b; try { b = await request.json(); } catch (e) { return json({ error: "Bad JSON" }, 400, cors); }
-      const store = (await env.VAULT_GRANTS.get("ai:usage", "json")) || { v: 1, devices: {} };
-      if (!store.devices) store.devices = {};
-      if (b && b.reset) {
-        if (b.device) delete store.devices[String(b.device).slice(0, 64)]; else store.devices = {};
-        await env.VAULT_GRANTS.put("ai:usage", JSON.stringify(store));
-        return json({ ok: true, usage: store }, 200, cors);
-      }
       const dev = String((b && b.device) || "").slice(0, 64);
-      if (!dev) return json({ error: "device required" }, 400, cors);
-      store.devices[dev] = { updated: Date.now(), days: aiUsageClean(b && b.days) };
-      const cutoff = Date.now() - 180 * 24 * 3600 * 1000; // forget devices silent for 180 days
-      for (const k of Object.keys(store.devices)) if (((store.devices[k] && store.devices[k].updated) || 0) < cutoff) delete store.devices[k];
-      await env.VAULT_GRANTS.put("ai:usage", JSON.stringify(store));
-      return json({ ok: true, usage: store }, 200, cors);
+      if ((!b?.reset || dev) && (!/^[a-zA-Z0-9_-]+$/.test(dev) || ["__proto__", "constructor", "prototype"].includes(dev))) return json({ error: "Valid device required" }, 400, cors);
+      try {
+        const incoming = aiUsageClean(b?.days);
+        const store = await updateOperationalState(env, "usage", { v: 1, devices: {} }, value => {
+          value.devices ||= {};
+          if (b?.reset) { if (dev) delete value.devices[dev]; else value.devices = {}; return; }
+          const days = aiUsageClean(value.devices[dev]?.days);
+          for (const [day, providers] of Object.entries(incoming)) for (const [provider, models] of Object.entries(providers)) for (const [model, usage] of Object.entries(models)) {
+            days[day] ||= {}; days[day][provider] ||= {};
+            const prior = days[day][provider][model] || {};
+            days[day][provider][model] = { in: Math.max(prior.in || 0, usage.in), out: Math.max(prior.out || 0, usage.out), calls: Math.max(prior.calls || 0, usage.calls) };
+          }
+          const clean = aiUsageClean(days);
+          if (JSON.stringify(value.devices[dev]?.days) === JSON.stringify(clean)) return false;
+          value.devices[dev] = { updated: Date.now(), days: clean };
+          const cutoff = Date.now() - 180 * 86400000;
+          for (const key of Object.keys(value.devices)) if ((value.devices[key]?.updated || 0) < cutoff) delete value.devices[key];
+        });
+        return json({ ok: true, usage: store }, 200, cors);
+      } catch { return json({ error: "Usage could not be saved; local history is unchanged" }, 503, cors); }
     }
     if (url.pathname.indexOf("/admin/ai/") === 0) {
       // the session may arrive wherever a provider key would (bearer / x-api-key / ?key=), so the studio's
@@ -1552,10 +1562,20 @@ function normSize(s) {
   if (w < 200 || w > 8000 || h < 200 || h > 8000) return "";
   return w + "x" + h;
 }
-async function recordEvent(env, t, id, country, ua, size) {
-  let agg = null;
-  try { agg = await env.VAULT_GRANTS.get("ev:agg", "json"); } catch (e) {}
-  if (!agg || typeof agg !== "object") agg = { v: 1, days: {}, targets: {}, recent: [] };
+async function recordEvent(env, t, id, country, ua, size, rateKey) {
+  return updateOperationalState(env, "analytics", { v: 1, days: {}, targets: {}, recent: [] }, agg => {
+    if (rateKey) {
+      const now = Date.now();
+      agg.limits ||= {};
+      for (const key of Object.keys(agg.limits)) if (agg.limits[key].expires <= now) delete agg.limits[key];
+      const limit = agg.limits[rateKey] || { count: 0, expires: now + 3600000 };
+      if (limit.count >= 120) return false;
+      limit.count++; agg.limits[rateKey] = limit;
+    }
+    accumulateEvent(agg, t, id, country, ua, size);
+  });
+}
+function accumulateEvent(agg, t, id, country, ua, size) {
   if (!agg.days) agg.days = {};
   if (!agg.targets) agg.targets = {};
   if (!agg.recent) agg.recent = [];
@@ -1580,11 +1600,10 @@ async function recordEvent(env, t, id, country, ua, size) {
   }
   const cutoff = Date.now() - 95 * 864e5;
   for (const k of Object.keys(agg.days)) { if (new Date(k + "T00:00:00Z").getTime() < cutoff) delete agg.days[k]; }
-  try { await env.VAULT_GRANTS.put("ev:agg", JSON.stringify(agg)); } catch (e) {}
 }
 async function readInsights(env, days) {
   let agg = null;
-  try { agg = await env.VAULT_GRANTS.get("ev:agg", "json"); } catch (e) {}
+  try { agg = await readOperationalState(env, "analytics", null); } catch (e) {}
   if (!agg) return { total: 0, pageviews: 0, types: {}, targets: {}, geo: {}, devices: {}, browsers: {}, os: {}, series: [], recent: [] };
   const since = Date.now() - days * 864e5;
   const series = [], types = {}, geo = {}, devices = {}, browsers = {}, osv = {}, sizes = {};
@@ -1837,8 +1856,8 @@ async function calBookingAction(env, uid, action) {
 }
 async function issueSession(env) {
   const exp = Date.now() + SESSION_TTL_MS;
-  const payload = b64urlFromStr(JSON.stringify({ exp }));
-  const sig = await hmac(env.SESSION_SECRET || "", payload);
+  const payload = b64urlFromStr(JSON.stringify({ scope: "admin-session", exp }));
+  const sig = await hmac(env.SESSION_SECRET || "", "session." + payload);
   return { token: payload + "." + sig, exp };
 }
 // Device-trust token: a long-lived, HMAC-signed marker that THIS device passed a 2-factor step-up.
@@ -1863,14 +1882,17 @@ async function verifyTrust(token, env) {
 }
 async function verifySession(token, env) {
   if (!token || !env.SESSION_SECRET) return false;
-  const dot = token.indexOf(".");
-  if (dot < 1) return false;
-  const payload = token.slice(0, dot), sig = token.slice(dot + 1);
-  const expect = await hmac(env.SESSION_SECRET, payload);
-  if (!timingSafeEqual(sig, expect)) return false;
   try {
+    const parts = token.split(".");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
+    const [payload, sig] = parts;
     const obj = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload)));
-    return !!(obj && obj.exp && obj.exp > Date.now());
+    if (!obj || Array.isArray(obj) || !Number.isSafeInteger(obj.exp) || obj.exp <= Date.now() || obj.exp > Date.now() + SESSION_TTL_MS) return false;
+    const keys = Object.keys(obj);
+    const current = keys.length === 2 && obj.scope === "admin-session";
+    const legacy = keys.length === 1 && keys[0] === "exp";
+    if (!current && !legacy) return false;
+    return timingSafeEqual(sig, await hmac(env.SESSION_SECRET, (current ? "session." : "") + payload));
   } catch (e) { return false; }
 }
 

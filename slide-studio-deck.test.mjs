@@ -3958,6 +3958,7 @@ for (const publicationRoute of ['live-content', 'direct-git']) test('section loc
     await page.evaluate(()=>window.__rkDevEdit('specialViews',[]));
     await page.locator('[data-act="study-toggle"][data-index="0"]').click();
     await page.locator('[data-act="study-blocktoggle"][data-bindex="0"]').click();
+    await page.locator('[data-rtfield="body"]').first().waitFor({state:'visible'});
     await page.locator('[data-act="study-blocklock"][data-bindex="0"]:visible').first().click();
     assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].locked),true);
     const lockedDraft=await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
@@ -3989,8 +3990,10 @@ for (const publicationRoute of ['live-content', 'direct-git']) test('section loc
     await page.locator('[data-act="study-decrypt"]').first().click();
     await page.waitForFunction(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].body==='PRIVATE SECTION CONTENT');
     assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].locked),true);
-    await page.locator('[data-act="study-blocktoggle"][data-bindex="0"]').click();
     const body=page.locator('[data-rtfield="body"]').first();
+    await body.waitFor({state:'attached'});
+    if(!await body.isVisible())await page.locator('[data-act="study-blocktoggle"][data-bindex="0"]').click();
+    await body.waitFor({state:'visible'});
     await body.fill('PRIVATE UPDATED CONTENT');await body.blur();
     const editedBlock=await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]);
     assert.match(editedBlock.body,/PRIVATE UPDATED CONTENT/);

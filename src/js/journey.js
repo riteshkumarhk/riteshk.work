@@ -7,6 +7,8 @@
    { period, title, body, workId, layout, images:[{src,caption}] } ] }] }.
    Mirrors the case-study overlay (js/project.js) patterns; theme-aware.
    ========================================================================== */
+import { sanitizeRichHtml } from "./rich-html.mjs";
+
 (function () {
   "use strict";
   var PREVIEW = new URLSearchParams(location.search).has("preview");
@@ -25,19 +27,8 @@
   function hasContent() { var j = journey(); return !!(j && j.enabled && activeChapters().length); }
   function workById(id) { var d = data(); return d && (d.work || []).filter(function (w) { return w && w.id === id; })[0]; }
 
-  // Inline media inside rich-text bodies is raw HTML the resolver never saw; rewrite any legacy
-  // /assets/uploads ref through mediaUrl so it resolves to R2 (matches project.js).
-  function rewriteAssetUrls(html) {
-    return String(html)
-      .replace(/((?:src|href|poster)\s*=\s*)(["'])(\/?assets\/uploads\/[^"']+)\2/gi, function (m, pre, q, p) { return pre + q + mediaUrl(p) + q; })
-      .replace(/url\(\s*(["']?)(\/?assets\/uploads\/[^)"']+)\1\s*\)/gi, function (m, q, p) { return "url(" + q + mediaUrl(p) + q + ")"; });
-  }
   function safeHtml(s) {
-    return rewriteAssetUrls(String(s == null ? "" : s)
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
-      .replace(/ on\w+="[^"]*"/gi, "").replace(/ on\w+='[^']*'/gi, "")
-      .replace(/javascript:/gi, ""));
+    return sanitizeRichHtml(s, mediaUrl);
   }
   function isRichHtml(s) { return /<(p|ul|ol|li|strong|em|b|i|s|strike|br|div|span|figure|img|blockquote|h[1-6])\b/i.test(s || ""); }
   function prose(body) {

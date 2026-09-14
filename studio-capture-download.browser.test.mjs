@@ -14,6 +14,7 @@ test("More offers the native companion and safe web fallback instructions", { sk
   try {
     await page.route("**/*", route => {
       const request = route.request();
+      if (new URL(request.url()).hostname.endsWith('.workers.dev')) return route.abort();
       if (!request.url().startsWith(baseURL) && !["GET", "HEAD"].includes(request.method())) return route.abort();
       return route.continue();
     });
@@ -31,7 +32,7 @@ test("More offers the native companion and safe web fallback instructions", { sk
     const card = page.locator("[data-presenter-capture-test]");
     await card.waitFor();
     const link = card.getByRole("link", { name: /Download app/ });
-    assert.equal(await link.getAttribute("href"), "https://github.com/riteshkumarhk/riteshk.work/releases/download/studio-presenter-v0.2.0/StudioPresenter.exe");
+    assert.equal(await link.getAttribute("href"), "https://github.com/riteshkumarhk/riteshk.work/releases/download/studio-presenter-v0.3.0/StudioPresenter.exe");
     assert.equal(await link.getAttribute("rel"), "noopener noreferrer");
     assert.equal(await card.locator("ol li").count(), 5);
     assert.match(await card.textContent(), /app has its own local profile/);

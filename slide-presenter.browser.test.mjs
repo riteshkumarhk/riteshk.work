@@ -265,7 +265,6 @@ test("production and experimental players share responsive presentation chrome",
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
   const lab = await context.newPage();
     await context.addInitScript(denyCapture);
-  const production = await context.newPage();
   const chrome = page => page.evaluate(() => {
     const properties = ["width", "height", "padding", "borderRadius", "backgroundColor", "fontFamily", "fontSize", "display"];
     return Object.fromEntries([".pjp__frame", ".pjp__bar", ".pjp__x", ".pjp__progress", ".pjp__count", ".pjp__notesbtn", ".pjp__popbtn", ".pjp__present"].map(selector => {
@@ -274,11 +273,13 @@ test("production and experimental players share responsive presentation chrome",
     }));
   });
   try {
+    await lab.bringToFront();
     await lab.goto(baseURL + "/studio/slide-merge-lab/");
     await lab.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
     await lab.getByRole("button", { name: "Slide Show", exact: true }).click();
     await lab.waitForSelector(".pjp");
     await audienceOnly(lab);
+    const production = await context.newPage();
     await production.goto(baseURL + "/studio/?devstub");
     await production.waitForFunction(() => !!window.RK?.presentDeck);
     const sample = await lab.evaluate(() => window.__slideMerge.deck().slides.map(slide => ({ layout: "title", slots: { title: slide.title }, notes: slide.notes })));

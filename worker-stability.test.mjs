@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { build } from "esbuild";
@@ -8,6 +9,7 @@ import { Miniflare } from "miniflare";
 import { PasskeyChallenges, passkeyChallenge } from "./worker/passkey-challenges.mjs";
 import { contentRevision } from "./src/js/content-revision.mjs";
 import { writeContentRevision } from "./worker/content-publishing.mjs";
+import { readOperationalState, updateOperationalState } from "./worker/operational-state.mjs";
 
 const bundled = await build({ entryPoints: ["worker/rk-ai-proxy.js"], bundle: true, write: false, format: "esm", platform: "node", packages: "external" });
 const { default: worker, ContentPublisher } = await import("data:text/javascript;base64," + Buffer.from(bundled.outputFiles[0].text).toString("base64"));
@@ -106,6 +108,139 @@ test("release checklist requires a scoped, user-verified owner passkey and rejec
   assert.equal((await request(access.checklistToken + "x")).status, 401);
   fixture.values.delete("wa:cred:synthetic");
   assert.equal((await request(access.checklistToken)).status, 401);
+});
+
+test("admin sessions reject visitor, publish, trust and malformed tokens without breaking legacy owner sessions", async () => {
+  const fixture = await signedWorkerFixture();
+  const login = await (await fixture.send("finish", await fixture.assertion())).json();
+  const request = (path, token, body) => worker.fetch(new Request("https://synthetic.test" + path, {
+    method: body ? "POST" : "GET", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined
+  }), fixture.env);
+  assert.equal((await request("/admin/keyring", login.token)).status, 200);
+  assert.equal((await request("/vault/grant", login.token, { code: "limited-fixture", keys: ["allowed.png"] })).status, 200);
+  const grant = await (await request("/vault/redeem", "", { code: "limited-fixture" })).json();
+  const publish = await (await fixture.send("finish", await fixture.assertion("publish"))).json();
+  const checklist = await (await fixture.send("finish", await fixture.assertion("release-checks", 5))).json();
+  const signingKey = await crypto.subtle.importKey("raw", Buffer.from(fixture.env.SESSION_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sign = async (claim, prefix = "") => {
+    const payload = Buffer.from(JSON.stringify(claim)).toString("base64url");
+    return payload + "." + Buffer.from(await crypto.subtle.sign("HMAC", signingKey, Buffer.from(prefix + payload))).toString("base64url");
+  };
+  const exp = Date.now() + 60000;
+  assert.equal((await request("/admin/keyring", await sign({ exp }))).status, 200);
+  const rejected = [grant.token, publish.publishToken, checklist.checklistToken, login.trust, login.token + ".extra", login.token + "x",
+    await sign({ exp: String(exp) }), await sign({ exp, g: "visitor" }), await sign({ exp, pub: 1 }), await sign({ exp: Date.now() - 1 }),
+    await sign({ exp: Date.now() + 30 * 86400000 }), await sign({ exp, scope: "admin-session" }), await sign({ exp, scope: "admin-session", g: "visitor" }, "session.")];
+  for (const token of rejected) {
+    assert.equal((await request("/admin/keyring", token)).status, 401);
+    assert.equal((await request("/admin/publish/config", token, { proof: "must-not-save", require: false })).status, 401);
+  }
+  assert.equal(fixture.values.has("cfg:publishproof"), false);
+  assert.equal((await request("/vault/sign?key=allowed.png", grant.token)).status, 401);
+  assert.equal((await worker.fetch(new Request("https://synthetic.test/vault/sign?key=allowed.png", { headers: { "X-Vault-Grant": grant.token } }), fixture.env)).status, 200);
+});
+
+test("existing pass codes and visitor tokens retain media access but never become owner sessions", async () => {
+  const fixture = await signedWorkerFixture();
+  const signingKey = await crypto.subtle.importKey("raw", Buffer.from(fixture.env.SESSION_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sign = async value => Buffer.from(await crypto.subtle.sign("HMAC", signingKey, Buffer.from(value))).toString("base64url");
+  const grantId = await sign("grant:existing-pass"), exp = Date.now() + 3600000;
+  fixture.values.set("g:" + grantId, JSON.stringify({ keys: ["allowed.png"], exp }));
+  const payload = Buffer.from(JSON.stringify({ g: grantId, exp })).toString("base64url");
+  const existingToken = payload + "." + await sign(payload);
+  const before = [...fixture.values];
+  const redeemed = await worker.fetch(new Request("https://synthetic.test/vault/redeem", { method: "POST", body: JSON.stringify({ code: "existing-pass" }) }), fixture.env);
+  const { token } = await redeemed.json();
+  assert.equal(redeemed.status, 200);
+  assert.deepEqual([...fixture.values], before);
+  for (const visitorToken of [existingToken, token]) {
+    const media = await worker.fetch(new Request("https://synthetic.test/vault/sign?key=allowed.png", { headers: { "X-Vault-Grant": visitorToken } }), fixture.env);
+    assert.equal(media.status, 200);
+    const denied = await worker.fetch(new Request("https://synthetic.test/admin/keyring", { headers: { Authorization: "Bearer " + visitorToken } }), fixture.env);
+    assert.equal(denied.status, 401);
+  }
+});
+
+test("inbox notifications report rejected HTTP actions as failures and retain successful feedback", async () => {
+  for (const status of [200, 403, 500]) {
+    const handlers = {}, shown = [];
+    let completion;
+    runInNewContext(readFileSync("inbox/sw.js", "utf8"), { self: { addEventListener: (name, callback) => { handlers[name] = callback; }, registration: { showNotification: async (title, options) => shown.push({ title, body: options.body }) } }, fetch: async () => new Response(status === 200 ? "Sent" : "Not sent", { status }), URL });
+    handlers.notificationclick({ action: "allow", notification: { data: { allow: "https://synthetic.test/req/allow" }, close() {} }, waitUntil: promise => { completion = promise; } });
+    await completion;
+    assert.equal(shown.length, 1);
+    assert.equal(shown[0].title.startsWith("Access sent"), status === 200);
+    assert.equal(shown[0].body, status === 200 ? "Sent" : "Not sent");
+  }
+});
+
+test("one-tap access uses failure statuses and rejects GET without changing requests", async () => {
+  const fixture = await signedWorkerFixture(), id = "req:fixture";
+  fixture.values.set(id, JSON.stringify({ email: "synthetic@example.test" }));
+  const key = await crypto.subtle.importKey("raw", Buffer.from(fixture.env.SESSION_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const token = Buffer.from(await crypto.subtle.sign("HMAC", key, Buffer.from("reqallow." + id))).toString("base64url");
+  const url = "https://synthetic.test/req/allow?id=" + encodeURIComponent(id) + "&t=" + token;
+  assert.equal((await worker.fetch(new Request(url), fixture.env)).status, 405);
+  for (const [grant, status] of [[null, 409], [{ code: "fixture", enabled: false }, 409], [{ code: "fixture", expiresAt: Date.now() - 1 }, 403]]) {
+    if (grant) fixture.values.set("quickgrant:full", JSON.stringify(grant));
+    const response = await worker.fetch(new Request(url, { method: "POST" }), fixture.env);
+    assert.equal(response.status, status);
+    assert.equal(fixture.values.has(id), true);
+  }
+});
+
+function operationalBucket() {
+  const records = new Map();
+  let serial = 0;
+  return {
+    records, writes: () => serial,
+    async get(key) { const record = records.get(key); return record ? { etag: record.etag, json: async () => JSON.parse(record.body) } : null; },
+    async put(key, body, options) {
+      const current = records.get(key);
+      if (options.onlyIf.etagMatches ? current?.etag !== options.onlyIf.etagMatches : !!current) return null;
+      const etag = String(++serial); records.set(key, { body, etag }); return { etag };
+    }
+  };
+}
+
+test("private operational state migrates KV history without writes or lost concurrent changes", async () => {
+  const bucket = operationalBucket();
+  const env = { VAULT: bucket, VAULT_GRANTS: { get: async () => ({ count: 7 }), put: () => assert.fail("KV writes forbidden") } };
+  await Promise.all(Array.from({ length: 6 }, () => updateOperationalState(env, "analytics", {}, value => { value.count++; })));
+  assert.equal((await readOperationalState(env, "analytics", {})).count, 13);
+  const writes = bucket.writes();
+  await updateOperationalState(env, "analytics", {}, () => false);
+  assert.equal(bucket.writes(), writes);
+  await assert.rejects(updateOperationalState({ ...env, VAULT: { get: async () => { throw new Error("Offline"); } } }, "analytics", {}, () => {}), /Offline/);
+  await assert.rejects(updateOperationalState({ ...env, VAULT: { get: bucket.get, put: async () => null } }, "analytics", {}, () => {}), /busy/);
+});
+
+test("analytics and roaming usage avoid KV writes, retain history and merge concurrent devices", async () => {
+  const fixture = await signedWorkerFixture();
+  const session = await (await fixture.send("finish", await fixture.assertion())).json();
+  const bucket = operationalBucket(), day = new Date().toISOString().slice(0, 10);
+  fixture.env.VAULT = bucket;
+  fixture.values.set("ev:agg", JSON.stringify({ v: 1, days: { [day]: { pv: 4, types: {}, geo: {}, dev: {}, brow: {}, os: {} } }, targets: {}, recent: [] }));
+  fixture.values.set("ai:usage", JSON.stringify({ v: 1, devices: { legacy: { updated: Date.now(), days: {} } } }));
+  const legacy = [...fixture.values];
+  fixture.env.VAULT_GRANTS.put = () => assert.fail("Operational requests must not write KV");
+  const send = (path, body) => worker.fetch(new Request("https://synthetic.test" + path, { method: body ? "POST" : "GET", headers: { Origin: "https://synthetic.test", Authorization: "Bearer " + session.token, "CF-Connecting-IP": "192.0.2.1" }, body: body ? JSON.stringify(body) : undefined }), fixture.env);
+  await Promise.all(Array.from({ length: 5 }, () => send("/event", { t: "pageview" })));
+  for (let index = 5; index < 125; index++) assert.equal((await send("/event", { t: "pageview" })).status, 200);
+  const insights = await (await send("/admin/insights")).json();
+  assert.equal(insights.events.pageviews, 124);
+  const days = amount => ({ [day]: { openai: { fixture: { in: amount, out: 3, calls: 1 } } } });
+  const responses = await Promise.all([send("/admin/ai/usage", { device: "first", days: days(10) }), send("/admin/ai/usage", { device: "second", days: days(20) })]);
+  assert.ok(responses.every(response => response.status === 200));
+  await send("/admin/ai/usage", { device: "first", days: days(1) });
+  const usage = (await (await send("/admin/ai/usage")).json()).usage;
+  assert.equal(usage.devices.first.days[day].openai.fixture.in, 10);
+  assert.equal(usage.devices.second.days[day].openai.fixture.in, 20);
+  assert.ok(usage.devices.legacy);
+  assert.deepEqual([...fixture.values], legacy);
+  const reset = await (await send("/admin/ai/usage", { reset: true, device: "first" })).json();
+  assert.equal(reset.usage.devices.first, undefined);
+  assert.ok(reset.usage.devices.second);
 });
 
 test("actual Worker rejects concurrent signed assertion replay and retains valid verification", async () => {
@@ -321,7 +456,7 @@ test("Cloudflare local runtime persists atomic challenges and conditional public
   const options = {
     modules: true, script: bundled.outputFiles[0].text, compatibilityDate: "2026-07-14",
     durableObjects: { PASSKEY_CHALLENGES: { className: "PasskeyChallenges", useSQLite: true }, CONTENT_PUBLISHER: { className: "ContentPublisher", useSQLite: true } },
-    durableObjectsPersist: join(directory, "objects"), r2Buckets: ["MEDIA"], r2Persist: join(directory, "r2"),
+    durableObjectsPersist: join(directory, "objects"), r2Buckets: ["MEDIA", "VAULT"], r2Persist: join(directory, "r2"),
     outboundService: () => { throw new Error("Local validation must not contact an external service"); }
   };
   let runtime = new Miniflare(options);
@@ -343,12 +478,16 @@ test("Cloudflare local runtime persists atomic challenges and conditional public
     const result = await responses.find(response => response.status === 200).json();
     const saved = await (await bucket.get("content.json")).json();
     assert.equal(result.revision, await contentRevision(saved));
+    const operations = { VAULT: await runtime.getR2Bucket("VAULT"), VAULT_GRANTS: { get: async () => ({ count: 2 }) } };
+    await Promise.all(Array.from({ length: 4 }, () => updateOperationalState(operations, "analytics", {}, value => { value.count++; })));
+    assert.equal((await readOperationalState(operations, "analytics", {})).count, 6);
     await runtime.dispose();
     runtime = new Miniflare(options);
     const restartedChallenges = await runtime.getDurableObjectNamespace("PASSKEY_CHALLENGES");
     assert.equal((await restartedChallenges.get(restartedChallenges.idFromName(challenge)).fetch("https://challenge.test/consume", { method: "POST", body: JSON.stringify({ type: "auth" }) })).status, 409);
     const restartedBucket = await runtime.getR2Bucket("MEDIA");
     assert.deepEqual(await (await restartedBucket.get("content.json")).json(), saved);
+    assert.equal((await readOperationalState({ VAULT: await runtime.getR2Bucket("VAULT") }, "analytics", {})).count, 6);
     const restartedPublishers = await runtime.getDurableObjectNamespace("CONTENT_PUBLISHER");
     const stale = await restartedPublishers.get(restartedPublishers.idFromName("content.json")).fetch("https://publisher.test/", { method: "POST", headers: { "X-Content-Base": base }, body: JSON.stringify(baseline) });
     assert.equal(stale.status, 412);

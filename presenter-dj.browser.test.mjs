@@ -609,10 +609,20 @@ test('canvas drag stays one deck-history step through autosave and slide navigat
   const browser=await chromium.launch({executablePath,headless:true});
   const page=await browser.newPage({viewport:{width:1440,height:1000}});
   try{
+    await page.bringToFront();
     await page.goto(base+'/studio/slide-merge-lab/');
     await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
-    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-    const original=await page.evaluate(()=>{const api=window.__slideMerge.api,element=api.getSceneElements().find(element=>element.id==='step-0'),state=api.getAppState(),box=document.querySelector('.lab-canvas').getBoundingClientRect();return {id:element.id,x:element.x,y:element.y,screen:{x:box.left+(element.x+element.width*.4+state.scrollX)*state.zoom.value,y:box.top+(element.y+element.height*.2+state.scrollY)*state.zoom.value}};});
+    const ready=await page.waitForFunction(()=>{
+      const api=window.__slideMerge.api,element=api.getSceneElements().find(element=>element.id==='step-0'),state=api.getAppState(),box=document.querySelector('.lab-canvas').getBoundingClientRect();
+      if(Math.abs(state.offsetLeft-box.left)>1||Math.abs(state.offsetTop-box.top)>1)return false;
+      const screen={x:state.offsetLeft+(element.x+element.width*.4+state.scrollX)*state.zoom.value,y:state.offsetTop+(element.y+element.height*.2+state.scrollY)*state.zoom.value};
+      return document.elementFromPoint(screen.x,screen.y)?.tagName==='CANVAS'?{id:element.id,x:element.x,y:element.y,screen}:false;
+    }).catch(async error=>{
+      const state=await page.evaluate(()=>({visibility:document.visibilityState,canvas:document.querySelector('.lab-canvas')?.getBoundingClientRect().toJSON(),app:window.__slideMerge.api.getAppState(),status:document.querySelector('.merge-status')?.textContent}));
+      throw new Error(JSON.stringify({visibility:state.visibility,canvas:state.canvas,offsetLeft:state.app.offsetLeft,offsetTop:state.app.offsetTop,zoom:state.app.zoom,scrollX:state.app.scrollX,scrollY:state.app.scrollY,status:state.status}),{cause:error});
+    });
+    const original=await ready.jsonValue();
+    await ready.dispose();
     await page.clock.install();
     const pointerStart = await page.evaluate(({screen})=>{const state=window.__slideMerge.api.getAppState();return {screen,hit:document.elementFromPoint(screen.x,screen.y)?.outerHTML.slice(0,350),zoom:state.zoom,scrollX:state.scrollX,scrollY:state.scrollY,offsetLeft:state.offsetLeft,offsetTop:state.offsetTop,tool:state.activeTool,viewMode:state.viewModeEnabled};},original);
     await page.mouse.move(original.screen.x,original.screen.y);await page.mouse.down();
@@ -757,6 +767,7 @@ test('Slide Show automatically connects and supports fullscreen retry when brows
     await page.goto(base+'/studio/slide-merge-lab/');
     await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
     await page.evaluate(()=>{document.title='DJ launch integration';});
+    await page.bringToFront();
     await page.getByRole('button',{name:'Slide Show',exact:true}).click();
     await page.waitForFunction(()=>window.documentPictureInPicture.window?.document.querySelector('[data-pp-status]')?.dataset.state==='live',null,{timeout:12000}).catch(async error=>{
       const diagnostic=await page.evaluate(()=>({title:document.title,pip:!!window.documentPictureInPicture.window,status:window.documentPictureInPicture.window?.document.querySelector('[data-pp-status]')?.outerHTML,notice:window.documentPictureInPicture.window?.document.querySelector('[data-pp-save]')?.textContent,fullscreen:!!document.fullscreenElement,activation:navigator.userActivation.isActive}));
