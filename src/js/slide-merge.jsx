@@ -169,9 +169,14 @@ function Merger({ integration, controller }) {
     return api.onChange((elements, state) => setPane(state.openSidebar?.name === "insert" ? state.openSidebar.tab : state.openSidebar ? "library" : null));
   }, [api]);
   const placeholderTarget = useRef(null);
+  const embedTarget = useRef(null);
   const [mediaPurpose, setMediaPurpose] = useState("insert");
   function openPane(next, toggle = true, placeholderId = null, purpose = "insert") {
     if (!editing && next) return;
+    if (next === "media") {
+      const selected = api.getSceneElements().filter(element => api.getAppState().selectedElementIds[element.id]);
+      embedTarget.current = selected.length === 1 && selected[0].customData?.slideEmbed && !selected[0].locked ? selected[0].id : null;
+    }
     setMediaPurpose(purpose);
     placeholderTarget.current = placeholderId;
     const target = toggle && pane === next ? null : next;
@@ -773,14 +778,33 @@ function Merger({ integration, controller }) {
   function addEmbed() { return run(async () => {
     await save(); openPane(null, false);
     const pending = api.getSceneElements().find(element => element.customData?.pendingEmbed);
-    if (pending) { api.updateScene({ appState: { selectedElementIds: { [pending.id]: true } }, captureUpdate: CaptureUpdateAction.NEVER }); requestAnimationFrame(() => document.querySelector('[aria-label="Embed media link"]')?.focus()); return; }
+    if (pending) { api.updateScene({ appState: { selectedElementIds: { [pending.id]: true } }, captureUpdate: CaptureUpdateAction.NEVER }); requestAnimationFrame(() => document.querySelector('[aria-label="Embed media link or code"]')?.focus()); return; }
+    const selected = api.getSceneElements().filter(element => embedTarget.current ? element.id === embedTarget.current : api.getAppState().selectedElementIds[element.id]);
+    embedTarget.current = null;
+    if (selected.length === 1 && selected[0].customData?.slideEmbed && !selected[0].locked) {
+      api.updateScene({ elements: api.getSceneElementsIncludingDeleted().map(element => element.id === selected[0].id ? changed(element, { customData: { ...element.customData, pendingEmbed: true } }) : element), appState: { selectedElementIds: { [selected[0].id]: true } }, captureUpdate: CaptureUpdateAction.NEVER });
+      return;
+    }
     const element = restoreElements(convertToExcalidrawElements([{ type: "rectangle", id: crypto.randomUUID(), frameId: FRAME_ID, x: 320, y: 180, width: 640, height: 360, roughness: 0, strokeColor: "#8f8a84", backgroundColor: "transparent", customData: { pendingEmbed: true } }]), null, { repairBindings: true })[0];
     api.updateScene({ elements: insertIntoPlaceholder([element]), appState: { selectedElementIds: { [element.id]: true }, activeTool: { type: "selection" } }, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
     await save();
   }); }
-  function commitEmbed(id, url) { return run(async () => {
+  function commitEmbed(id, url, aspectRatio) { return run(async () => {
     const elements = api.getSceneElementsIncludingDeleted();
-    api.updateScene({ elements: elements.map(element => element.id === id ? changed(element, { strokeColor: "transparent", backgroundColor: "rgba(0, 0, 0, 0)", fillStyle: "solid", customData: { ...element.customData, pendingEmbed: false, slideEmbed: { url } } }) : element), captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+    sectionSelection.current = { selectedElementIds: { [id]: true }, selectedGroupIds: {} };
+    const [ratioWidth, ratioHeight] = String(aspectRatio || "").split("/").map(Number), ratio = ratioWidth / ratioHeight;
+    api.updateScene({ elements: elements.map(element => {
+      if (element.id !== id) return element;
+      const width = ratio >= 0.25 && ratio <= 4 ? Math.min(element.width, element.height * ratio) : element.width;
+      const height = ratio >= 0.25 && ratio <= 4 ? width / ratio : element.height;
+      return changed(element, { x: element.x + (element.width - width) / 2, y: element.y + (element.height - height) / 2, width, height, strokeColor: "transparent", backgroundColor: "rgba(0, 0, 0, 0)", fillStyle: "solid", customData: { ...element.customData, pendingEmbed: false, slideEmbed: { url } } });
+    }), captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+    await save();
+  }); }
+  function cancelEmbed(id) { return run(async () => {
+    const existing = api.getSceneElements().find(element => element.id === id)?.customData?.slideEmbed;
+    if (existing) sectionSelection.current = { selectedElementIds: { [id]: true }, selectedGroupIds: {} };
+    api.updateScene({ elements: api.getSceneElementsIncludingDeleted().map(element => element.id === id ? changed(element, element.customData?.slideEmbed ? { customData: { ...element.customData, pendingEmbed: false } } : { isDeleted: true }) : element), appState: { selectedElementIds: existing ? { [id]: true } : {} }, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
     await save();
   }); }
   async function insertImage(file, studioIcon = false) {
@@ -971,7 +995,7 @@ function Merger({ integration, controller }) {
           </Excalidraw>
           <NativeSections api={api} interactive={!editing && !busy && present === null && !deckDialog} depthHover={!busy && present === null && !deckDialog} />
           <SectionVisibilityMenu api={api} host={host} disabled={busy || !editing || present !== null || !!deckDialog} />
-          <EmbedComposer api={api} onCommit={commitEmbed} disabled={busy || !editing || present !== null} />
+          <EmbedComposer api={api} onCommit={commitEmbed} onCancel={cancelEmbed} disabled={busy || !editing || present !== null} />
           {deck && !current && <section className="merge-empty" aria-label="Empty deck"><h2>No slides</h2>{editing && <div className="merge-empty-actions"><SlideAddActions add={add} pick={kind => openPane(kind, false)} busy={busy} /></div>}</section>}
           {editing && <FitSlideControl api={api} host={host} mobile={mobileUI.mobile} disabled={busy || present !== null || !!deckDialog} onFit={fit} />}
           <PlaceholderActions api={api} disabled={busy || present !== null || !!deckDialog} onInsert={(id, next) => { api.updateScene({appState:{selectedElementIds:{[id]:true}},captureUpdate:CaptureUpdateAction.NEVER});openPane(next, false, id); }} />

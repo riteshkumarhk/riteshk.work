@@ -15,7 +15,8 @@
 .merge-notes-input blockquote { margin:.3em 0 .3em 1.5em; }
 .merge-rich-error { color:var(--ui-danger);font:12px var(--sans); }
 .merge-embed-composer { position:absolute;z-index:5;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;align-items:center;gap:8px;box-sizing:border-box;padding:12px;border:1px solid var(--line);background:var(--bg-2);color:var(--text);border-radius:6px; }
-.merge-embed-composer input { flex:1;min-width:70px;width:100px;padding:8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--text);font:14px var(--sans); }
+.merge-embed-composer textarea { flex:1;min-width:70px;width:100px;max-height:120px;padding:8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--text);font:14px var(--sans);resize:vertical; }
+.merge-embed-composer select { max-width:100%;padding:6px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--text);font:12px var(--sans); }
 .merge-embed-composer button { padding:8px 12px;border:1px solid var(--line);border-radius:4px;background:var(--ui-selected);color:var(--text);font:12px var(--sans);cursor:pointer; }
 .merge-embed-composer span { width:100%;color:var(--ui-danger);font:12px var(--sans); }
 .merge-embed-error { display:grid;place-content:center;gap:12px;height:100%;font:16px var(--sans);color:var(--text-dim);background:var(--bg-2); }
@@ -73,7 +74,7 @@
   .merge-shell .merge-mobile-canvas-controls { flex-wrap:wrap;align-items:center; }
   .merge-shell .merge-mobile-presenter-controls>.merge-icon { flex:none;width:36px;height:36px;background:var(--merge-bg); }
   .merge-shell .merge-time-budget input { font-size:16px; }
-  .merge-notes-input,.merge-embed-composer input { font-size:16px; }
+  .merge-notes-input,.merge-embed-composer textarea { font-size:16px; }
   .merge-shell[data-mobile-panel="notes"] .merge-editor { grid-template-rows:minmax(0,1fr) min(var(--notes-height,116px),50%); }
   .merge-shell[data-mobile-panel="notes"] .merge-notes { position:relative; inset:auto; height:auto; max-height:none; padding:0 12px 10px; overflow:visible; border-top:1px solid var(--merge-line); }
   .merge-shell[data-mobile-panel="notes"] .merge-notes-heading { display:flex; align-items:center; justify-content:space-between; flex:0 0 36px; font-size:12px; }

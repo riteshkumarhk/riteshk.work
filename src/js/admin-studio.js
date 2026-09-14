@@ -4570,7 +4570,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     if (kind === "mediacells") return cellsEditor(i, j, k, it, true);
     if (kind === "media") {
       var v = it[key] || "";
-      return '<div class="af"><label class="af__label">' + label + '</label><input type="text" ' + da + ' value="' + escAttr(v) + '" placeholder="Paste a URL\u2026" />' +
+      return '<div class="af"><label class="af__label">' + label + '</label>' + embedInput(v, da, da.replace('data-ifield="' + key + '"', 'data-ifield="embedRatio"'), it.embedRatio) +
         '<div class="imgblk__row"><button class="btn btn--ghost" data-act="item-upload" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">Upload\u2026</button>' +
         (v ? '<button class="btn btn--ghost" data-act="item-clear" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-ifield="' + key + '">Remove</button>' : "") + mediaSizeTag(v) + "</div></div>";
     }
@@ -4838,7 +4838,8 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     var rows = it.cells.map(function (cell, c) {
       var img = cell.src || "";
       var textFields = '<div class="af"><label class="af__label">Heading</label><input type="text" data-cell="' + i + '" data-cbindex="' + j + '" data-citem="' + k + '" data-ccell="' + c + '" data-cfield="heading" value="' + escAttr(cell.heading || "") + '" /></div>' + richCell(i, j, k, c, "body", "Body");
-      var mediaField = '<div class="af"><label class="af__label">' + (mediaFirst ? "Image / video / embed URL" : "Image (optional)") + '</label><input type="text" data-cell="' + i + '" data-cbindex="' + j + '" data-citem="' + k + '" data-ccell="' + c + '" data-cfield="src" value="' + escAttr(img) + '" placeholder="Paste a URL\u2026" />' +
+      var cellAttrs = 'data-cell="' + i + '" data-cbindex="' + j + '" data-citem="' + k + '" data-ccell="' + c + '"';
+      var mediaField = '<div class="af"><label class="af__label">Media URL or embed code</label>' + embedInput(img, cellAttrs + ' data-cfield="src"', cellAttrs + ' data-cfield="embedRatio"', cell.embedRatio) +
         '<div class="imgblk__row"><button class="btn btn--ghost" data-act="cell-upload" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '">Upload\u2026</button>' +
         (img ? '<button class="btn btn--ghost" data-act="cell-clear" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '">Remove</button>' : "") + mediaSizeTag(img) + "</div></div>";
       return '<div class="cellrow"><div class="cellrow__bar">' +
@@ -4854,9 +4855,16 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       : '<span class="af__hint">Up to 5 cells per column.</span>';
     return '<div class="cells">' + rows + '<div class="cells__foot">' + foot + "</div></div>";
   }
+  function embedInput(value, attributes, ratioAttributes, ratio) {
+    var options = [["", "Auto"], ["16/9", "16:9"], ["3/2", "3:2"], ["4/3", "4:3"], ["1/1", "Square"], ["4/5", "4:5"], ["9/16", "9:16"]];
+    return '<textarea ' + attributes + ' data-embed-input rows="3" maxlength="100000" spellcheck="false" aria-label="Media URL or embed code" placeholder="URL or embed code">' + escHtml(value) + '</textarea>' +
+      '<div class="af__row"><label class="af__label">Aspect ratio</label><select ' + ratioAttributes + ' aria-label="Embed aspect ratio">' + options.map(function (option) { return '<option value="' + option[0] + '"' + ((ratio || "") === option[0] ? " selected" : "") + '>' + option[1] + '</option>'; }).join("") + '</select></div>';
+  }
   function mediaInputBlock(i, j, field, label, hint) {
     var b = data.work[i].study.blocks[j]; var v = b[field] || "";
-    return '<div class="af"><label class="af__label">' + label + '</label><input type="text" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '" value="' + escAttr(v) + '" placeholder="Paste a URL\u2026" />' +
+    var attributes = 'data-sblock="' + i + '" data-bindex="' + j + '"';
+    var input = b.type === "figure" ? embedInput(v, attributes + ' data-bfield="' + field + '"', attributes + ' data-bfield="embedRatio"', b.embedRatio) : '<input type="text" ' + attributes + ' data-bfield="' + field + '" value="' + escAttr(v) + '" placeholder="Paste a URL\u2026" />';
+    return '<div class="af"><label class="af__label">' + (b.type === "figure" ? "Media URL or embed code" : label) + '</label>' + input +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="bfield-upload" data-index="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '">Upload\u2026</button>' +
       (v ? '<button class="btn btn--ghost" data-act="bfield-clear" data-index="' + i + '" data-bindex="' + j + '" data-bfield="' + field + '">Remove</button>' : "") + mediaSizeTag(v) + "</div>" +
       (hint ? '<div class="af__hint">' + escHtml(hint) + "</div>" : "") + "</div>";

@@ -537,6 +537,8 @@ html[data-appearance="light"] .pjb__gallery-nav:hover { background: rgba(247, 24
 .pjb__mediacol-media { aspect-ratio: 4 / 3; overflow: hidden; border-radius: 6px; background: var(--bg-2); margin-bottom: 1rem; }
 .pjb__mediacol-media .pjb__media-el { display: block; width: 100%; height: 100%; object-fit: contain; }
 .pjb__mediacol-media .pjb__frame { height: 100%; aspect-ratio: auto; }
+.pjb__mediacol-media:has([data-general-embed]) { aspect-ratio:auto; }
+.pjb__mediacol-media [data-general-embed] { height:auto; }
 .pjb__mediacol-heading { font-family: var(--serif); font-weight: 300; font-size: 1.35rem; line-height: 1.25; letter-spacing: 0; color: var(--text); margin: 0 0 .55rem; }
 .pjb__mediacol .pjb__prose { font-size: .98rem; }
 @media (max-width: 900px) { .pjb__mediacols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

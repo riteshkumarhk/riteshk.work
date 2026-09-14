@@ -439,6 +439,7 @@ test('embed links, text improvement and generated draft icons integrate with sli
   const errors=[]; page.on('pageerror',error=>errors.push(error.message));
   try {
     await page.addInitScript(() => {
+      if (window !== window.top) return;
       localStorage.setItem('rk:content:draft',JSON.stringify({work:[],customIcons:{'draft-only':'<circle cx="12" cy="12" r="8"/>'},slideLayouts:[{id:'saved-studio',name:'Studio saved title',blocks:[{kind:'text',ph:'Legacy title',x:10,y:20,w:80,size:'lg'}]}],typography:{active:'draft',systems:[{id:'draft',display:{stack:'"Hanken Grotesk", sans-serif'},text:{stack:'"Hanken Grotesk", sans-serif'},mono:{stack:'"Martian Mono", monospace'}}]}}));
       window.__RKStudio = { draftSlides() {}, improveText: async () => 'Improved selected copy', generateIcon: async () => ({name:'generated-mark',svg:'<path d="M4 4h16v16H4Z"/>',keywords:['generated','mark']}) };
     });
@@ -448,16 +449,42 @@ test('embed links, text improvement and generated draft icons integrate with sli
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.typographySource),'draft');
     await page.getByRole('button',{name:'Media',exact:true}).click();
     await page.getByRole('button',{name:'Embed link',exact:true}).click();
-    await page.getByRole('textbox',{name:'Embed media link',exact:true}).fill('https://youtu.be/dQw4w9WgXcQ');
+    await page.getByRole('textbox',{name:'Embed media link or code',exact:true}).fill('https://youtu.be/dQw4w9WgXcQ');
     await page.getByRole('button',{name:'Embed',exact:true}).click();
     await page.waitForFunction(()=>window.__slideMerge.api.getSceneElements().some(element=>element.customData?.slideEmbed));
     await page.locator('.merge-slide-card.is-active iframe[title="YouTube video"]').waitFor({state:'attached'});
     assert.equal(await page.locator('.merge-workspace iframe[title="YouTube video"]').count(),1);
     await page.getByRole('button',{name:'Undo',exact:true}).click();
-    await page.getByRole('textbox',{name:'Embed media link',exact:true}).waitFor();
-    await page.getByRole('textbox',{name:'Embed media link',exact:true}).fill('https://youtu.be/dQw4w9WgXcQ');
+    await page.getByRole('textbox',{name:'Embed media link or code',exact:true}).waitFor();
+    await page.getByRole('textbox',{name:'Embed media link or code',exact:true}).fill('https://youtu.be/dQw4w9WgXcQ');
     await page.locator('.merge-brand').click();
     await page.waitForFunction(()=>window.__slideMerge.api.getSceneElements().some(element=>element.customData?.slideEmbed));
+    const savedEmbed = await page.evaluate(()=>{
+      const api=window.__slideMerge.api,element=api.getSceneElements().find(element=>element.customData?.slideEmbed);
+      api.updateScene({appState:{selectedElementIds:{[element.id]:true}}});
+      return {id:element.id,url:element.customData.slideEmbed.url,width:element.width,height:element.height};
+    });
+    await page.getByRole('button',{name:'Media',exact:true}).click();
+    await page.getByRole('button',{name:'Embed link',exact:true}).click();
+    await page.waitForFunction(value=>document.querySelector('[aria-label="Embed media link or code"]')?.value===value,savedEmbed.url);
+    assert.equal(await page.getByRole('textbox',{name:'Embed media link or code',exact:true}).inputValue(),savedEmbed.url);
+    await page.getByRole('textbox',{name:'Embed media link or code',exact:true}).fill('<div>Unsaved widget</div>');
+    await page.getByRole('button',{name:'Cancel embed editing',exact:true}).click();
+    await page.waitForFunction(()=>!window.__slideMerge.api.getSceneElements().some(element=>element.customData?.pendingEmbed));
+    assert.equal(await page.evaluate(id=>window.__slideMerge.api.getSceneElements().find(element=>element.id===id).customData.slideEmbed.url,savedEmbed.id),savedEmbed.url);
+    await page.waitForFunction(id=>window.__slideMerge.api.getAppState().selectedElementIds[id],savedEmbed.id);
+    await page.getByRole('button',{name:'Media',exact:true}).click();
+    await page.getByRole('button',{name:'Embed link',exact:true}).click();
+    const savedWidget = '<div id="saved-widget">Saved slide widget</div>\n<script>try{parent.document.body.dataset.compromised="true"}catch(error){document.querySelector("#saved-widget").dataset.isolated="true"}</script>';
+    await page.getByRole('textbox',{name:'Embed media link or code',exact:true}).fill(savedWidget);
+    await page.getByRole('button',{name:'Update embed',exact:true}).click();
+    await page.waitForFunction(()=>!window.__slideMerge.api.getSceneElements().some(element=>element.customData?.pendingEmbed));
+    assert.deepEqual(await page.evaluate(id=>{const element=window.__slideMerge.api.getSceneElements().find(element=>element.id===id);return {width:element.width,height:element.height};},savedEmbed.id),{width:savedEmbed.width,height:savedEmbed.height});
+    await page.frameLocator('.merge-workspace iframe[title="Embedded widget"]').locator('#saved-widget[data-isolated="true"]').waitFor();
+    assert.equal(await page.locator('body').getAttribute('data-compromised'),null);
+    await page.reload();
+    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    assert.equal(await page.evaluate(id=>window.__slideMerge.api.getSceneElements().find(element=>element.id===id).customData.slideEmbed.url,savedEmbed.id),savedWidget);
     await page.getByRole('button',{name:'Icons',exact:true}).click();
     await page.getByRole('button',{name:'Insert draft-only icon',exact:true}).waitFor();
     await page.getByRole('button',{name:'Generate an icon',exact:true}).click();
@@ -563,7 +590,7 @@ test('video navigator previews decode actual frames and compact notes and embed 
       const toggle=page.getByRole('button',{name:'Speaker notes panel',exact:true});if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();
       for(const control of await page.locator('.merge-rich-toolbar button').all()){const box=await control.boundingBox();assert.ok(box.x>=0&&box.x+box.width<=width,`notes control at ${width}`);}
       await page.getByRole('button',{name:'Media',exact:true}).click();await page.getByRole('button',{name:'Embed link',exact:true}).click();
-      const field=page.getByRole('textbox',{name:'Embed media link',exact:true});await field.fill('https://example.com/embed');
+      const field=page.getByRole('textbox',{name:'Embed media link or code',exact:true});await field.fill('https://example.com/embed');
       const box=await page.locator('.merge-embed-composer').boundingBox();assert.ok(box.x>=0&&box.x+box.width<=width,`embed control at ${width}`);
       await page.screenshot({path:join(tmpdir(),`rk-authoring-mobile-${width}.png`)});
       await field.fill('');await page.locator('.merge-brand').click();await page.getByRole('button',{name:'Undo',exact:true}).click();

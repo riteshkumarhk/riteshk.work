@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { availableStudies, caseStudyMedia, sectionMediaUrl, sectionPlan } from "./src/js/slide-merge-sections.mjs";
-import { embedDescriptor } from "./src/js/slide-merge-embeds.mjs";
+import { embedDescriptor, embedAspectRatio } from "./src/js/slide-merge-embeds.mjs";
 import { connectSectionAccess, sectionRuntimeData, studioSectionSources } from "./src/js/slide-studio-source.mjs";
 import { sectionComponentPlan } from "./src/js/slide-merge-section-component.mjs";
 const plain = value => String(value ?? "");
@@ -91,11 +91,27 @@ test("comparison and split media are available without losing either source", ()
 });
 
 test("embedded links normalize supported providers and reject unsafe schemes", () => {
+  for (const url of ['https://localhost/widget','https://127.0.0.1/widget','https://192.168.1.1/widget','https://10.0.0.1/widget']) assert.throws(()=>embedDescriptor(url), /public HTTPS/);
+  assert.equal(embedDescriptor('https://platform.twitter.com/embed/Tweet.html?id=20').trusted,true);
+  assert.equal(embedDescriptor('https://datawrapper.dwcdn.net/example/1/').title,'Interactive chart');
+  assert.equal(embedDescriptor('https://datawrapper.dwcdn.net.evil.test/example/1/').trusted,false);
+  assert.equal(embedAspectRatio('9/16'), '9/16');
+  assert.equal(embedAspectRatio('1;position:fixed/1'), '3/2');
+  assert.equal(embedDescriptor('https://www.youtube.com/embed/dQw4w9WgXcQ?start=120&controls=0').src, 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=120&controls=0');
+  assert.equal(embedDescriptor('https://www.figma.com/embed?url=https%3A%2F%2Fwww.figma.com%2Fdesign%2Fexample').src, 'https://www.figma.com/embed?url=https%3A%2F%2Fwww.figma.com%2Fdesign%2Fexample');
+  assert.equal(embedDescriptor('https://www.linkedin.com/embed/feed/update/urn:li:share:12345').src, 'https://www.linkedin.com/embed/feed/update/urn:li:share:12345');
   assert.equal(embedDescriptor("https://youtu.be/dQw4w9WgXcQ").src,"https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ");
   assert.equal(embedDescriptor("https://vimeo.com/12345").src,"https://player.vimeo.com/video/12345");
   assert.equal(embedDescriptor("https://example.com/video.mp4").kind,"video");
   assert.equal(embedDescriptor("https://example.com/image.png").kind,"image");
   assert.equal(embedDescriptor("https://example.com/document.pdf").title,"PDF document");
+  assert.equal(embedDescriptor("https://example.com/podcast.mp3").kind,"audio");
+  assert.equal(embedDescriptor("https://x.com/example/status/12345?s=20").src,"https://platform.twitter.com/embed/Tweet.html?id=12345");
+  assert.equal(embedDescriptor("https://www.instagram.com/p/ABC_123/").src,"https://www.instagram.com/p/ABC_123/embed/");
+  assert.equal(embedDescriptor("https://www.tiktok.com/@example/video/123456").src,"https://www.tiktok.com/player/v1/123456");
+  assert.equal(embedDescriptor("https://open.spotify.com/track/ABC123").src,"https://open.spotify.com/embed/track/ABC123");
+  assert.match(embedDescriptor("https://www.linkedin.com/posts/example_activity-123456-test").src,/urn:li:activity:123456$/);
+  assert.equal(embedDescriptor("https://x.com.evil.test/example/status/12345").title,"Embedded content");
   for (const value of ["javascript:alert(1)","data:text/html,test","file:///test","http://example.com","https://user:password@example.com","not a URL"]) assert.throws(()=>embedDescriptor(value));
 });
 test("section inserts opt into locked references without widening media or default AI sources", async () => {

@@ -5,10 +5,132 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright-core";
 import { build } from "esbuild";
+import { createServer } from "node:http";
 
 const source = readFileSync(new URL("./src/js/project.js", import.meta.url), "utf8");
 const baseURL = process.env.SLIDE_LAB_URL;
 const launchOptions = { ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE } : process.platform === "win32" ? { executablePath: "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" } : {}), headless: true };
+
+const statcounterSnippet = '<div id="desktop-browser-ww-monthly-202508-202608" width="600" height="400" style="width:600px; height: 400px;"></div><!-- You may change the values of width and height above to resize the chart --><p>Source: <a href="https://gs.statcounter.com/browser-market-share/desktop/worldwide">StatCounter Global Stats - Browser Market Share</a></p><script type="text/javascript" src="https://www.statcounter.com/js/fusioncharts.js"></script><script type="text/javascript" src="https://gs.statcounter.com/chart.php?desktop-browser-ww-monthly-202508-202608&chartWidth=600"></script>';
+
+test("shared HTML embeds run widgets in an opaque sandbox without parent access", async () => {
+  const bundle = await build({ entryPoints: ["src/js/project.js"], bundle: true, write: false, format: "iife" });
+  const received = [];
+  const server = createServer((request, response) => {
+    if (request.url === '/') { response.setHeader('Content-Type','text/html'); response.end('<div id="fixture"></div>'); return; }
+    if (request.url === '/favicon.ico') { response.statusCode=204; response.end(); return; }
+    received.push(request.url);
+    response.setHeader('Content-Type', 'text/javascript');
+    if (request.url === '/library.js') response.end('window.providerLibrary = true;');
+    else if (request.url === '/chart.js') response.end('document.querySelector("div").textContent=window.providerLibrary?"Chart fixture rendered":"Missing library";try{parent.document.body.dataset.compromised="true"}catch(error){document.body.dataset.isolated="true"}');
+    else { response.statusCode = 404; response.end(); }
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const fixtureOrigin = 'http://127.0.0.1:' + server.address().port;
+  const browser = await chromium.launch(launchOptions);
+  try {
+    const page = await browser.newPage();
+    const requested = [], messages = [];
+    page.on('console', message => messages.push(message.text()));
+    await page.context().route('**/*', route => {
+      requested.push(route.request().url());
+      if (route.request().url().startsWith(fixtureOrigin + '/')) return route.continue();
+      return route.abort();
+    });
+    await page.goto(fixtureOrigin);
+    await page.evaluate(() => { window.RK = {}; window.__siteRendered = true; });
+    await page.addScriptTag({ content: bundle.outputFiles[0].text });
+    const srcDoc = await page.evaluate(snippet => {
+      const template = document.createElement('template');
+      template.innerHTML = window.RK.renderStudyBlock({type:'figure',heading:'Growth metrics',src:snippet+'<script>try{parent.compromised=true}catch(error){document.body.dataset.scriptIsolated="true"}</script><img src="javascript:alert(1)" onerror="parent.compromised=true">'});
+      const iframe = template.content.querySelector('iframe');
+      const result = iframe.getAttribute('srcdoc');
+      iframe.removeAttribute('srcdoc');
+      document.querySelector('#fixture').append(template.content);
+      return result;
+    }, statcounterSnippet.replace('https://www.statcounter.com/js/fusioncharts.js','https://example.test/library.js'));
+    const frame = page.frameLocator('[data-general-embed] iframe');
+    await frame.locator('body').evaluate(() => true);
+    await page.locator('[data-general-embed] iframe').evaluate((element, {value,origin}) => {
+      const documentCopy = new DOMParser().parseFromString(value,'text/html');
+      documentCopy.querySelector('meta[http-equiv]').content = documentCopy.querySelector('meta[http-equiv]').content.replace('script-src https:', 'script-src https: ' + origin);
+      const scripts = documentCopy.querySelectorAll('script[src]');
+      scripts[0].src = origin + '/library.js'; scripts[1].src = origin + '/chart.js';
+      element.srcdoc = '<!doctype html>' + documentCopy.documentElement.outerHTML;
+    }, {value:srcDoc,origin:fixtureOrigin});
+    await frame.getByText('Chart fixture rendered', { exact: true }).waitFor({ timeout: 5000 }).catch(async error => {
+      throw new Error(error.message + '\n' + JSON.stringify({requested,messages,html:await page.locator('#fixture').innerHTML(),frames:await Promise.all(page.frames().map(async child=>({url:child.url(),text:await child.locator('body').innerText()})))}));
+    });
+    assert.equal(await frame.locator('body').getAttribute('data-isolated'), 'true');
+    assert.equal(await page.locator('body').getAttribute('data-compromised'), null);
+    assert.equal(await frame.locator('body').getAttribute('data-script-isolated'), 'true');
+    assert.equal(await page.locator('[data-general-embed] iframe').getAttribute('sandbox'), 'allow-scripts allow-presentation');
+    assert.equal(await page.locator('[data-general-embed] iframe').getAttribute('credentialless'), '');
+    assert.equal(await frame.locator('script').count(), 3);
+    assert.equal(await frame.locator('[src^="javascript:"],[onerror]').count(), 0);
+    assert.equal(await page.locator('[data-general-embed] a').getAttribute('href'), 'https://gs.statcounter.com/#desktop-browser-ww-monthly-202508-202608');
+    assert.deepEqual(received,['/library.js','/chart.js']);
+    assert.equal(await page.evaluate(value => window.RK.renderStudyBlock({type:'figure',src:value}).includes('srcdoc='),statcounterSnippet.replace('id="desktop-browser', 'id="other-browser')), false);
+  } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
+});
+
+test("shared embeds preserve source, sandbox, sizing, retry and public export boundaries", async () => {
+  const bundle = await build({ stdin: { contents: 'import React from "react";import{createRoot}from"react-dom/client";import{EmbeddedMedia,EmbedComposer}from"./src/js/slide-merge-embeds.jsx";import{embedDescriptor}from"./src/js/slide-merge-embeds.mjs";import{publicEmbedSource,audienceComponent}from"./src/js/slide-merge-visibility.mjs";window.embedTest={embedDescriptor,publicEmbedSource,audienceComponent};const root=createRoot(document.querySelector("#react"));window.renderEmbed=value=>root.render(<EmbeddedMedia value={value}/>);window.composeEmbed=()=>{const element={id:"embed",width:640,height:360,x:0,y:0,customData:{pendingEmbed:true}};const state={width:900,height:650,scrollX:0,scrollY:0,zoom:{value:1},selectedElementIds:{embed:true}};const api={getSceneElements:()=>[element],getAppState:()=>state,onChange:()=>()=>{}};root.render(<EmbedComposer api={api} onCommit={(...value)=>window.committed=value}/>);};', resolveDir: process.cwd(), loader: 'jsx' }, bundle: true, write: false, format: 'iife' });
+  const projectBundle = await build({ entryPoints: ['src/js/project.js'], bundle: true, write: false, format: 'iife' });
+  const browser = await chromium.launch(launchOptions);
+  try {
+    const page = await browser.newPage({viewport:{width:1440,height:1000}});
+    await page.route('**/*', route => route.abort());
+    await page.setContent('<style>:root{--sans:sans-serif;--bg-2:#111;--text:#eee;--line:#555}body{margin:0}#react{width:100%;max-width:600px;height:400px}#case{max-width:900px}</style><div id="react"></div><div id="case"></div>');
+    await page.addStyleTag({content:readFileSync(new URL('./css/slide-studio-renderer.css',import.meta.url),'utf8') + readFileSync(new URL('./css/slide-merge-notes.css',import.meta.url),'utf8') + readFileSync(new URL('./css/project.css',import.meta.url),'utf8')});
+    await page.evaluate(()=>{window.RK={};window.__siteRendered=true;});
+    await page.addScriptTag({content:projectBundle.outputFiles[0].text});
+    await page.addScriptTag({content:bundle.outputFiles[0].text});
+    const widget = '<div id="widget">Widget ready</div><a href="https://example.com/source">Source</a><script>window.count=0;try{parent.localStorage.getItem("owner")}catch(error){document.querySelector("#widget").dataset.isolated="true"}</script>';
+    const validation = await page.evaluate(({widget,statcounterSnippet})=>{
+      const {embedDescriptor,publicEmbedSource,audienceComponent}=window.embedTest;
+      const rejected=['<iframe src="https://example.com/a?&#116;oken=private"></iframe>','<iframe src="https://example.com/view?url=https%3A%2F%2Fexample.com%2Fa%3Fsig%3Dprivate"></iframe>','<script>const apiKey="private"</script>','<iframe src="https://example.com/vault/private"></iframe>'].map(value=>{try{publicEmbedSource(value);return false}catch{return true}});
+      const chart=embedDescriptor(statcounterSnippet), ordinary=embedDescriptor(widget);
+      return {rejected,source:publicEmbedSource(widget),component:audienceComponent({type:'figure',src:widget}).src,chartEval:chart.srcDoc.includes("'unsafe-eval'"),ordinaryEval:ordinary.srcDoc.includes("'unsafe-eval'"),social:embedDescriptor('<blockquote class="twitter-tweet"><a href="https://x.com/example/status/12345">Post</a></blockquote><script src="https://platform.twitter.com/widgets.js"></script>').src};
+    },{widget,statcounterSnippet});
+    assert.deepEqual(validation,{rejected:[true,true,true,true],source:widget,component:widget,chartEval:true,ordinaryEval:false,social:'https://platform.twitter.com/embed/Tweet.html?id=12345'});
+    const nativeMedia = await page.evaluate(()=>['image','video'].map(kind=>{
+      const src='https://example.com/original.'+(kind==='image'?'png':'mp4'),template=document.createElement('template');
+      template.innerHTML=RK.renderStudyBlock({type:'figure',src:'<iframe src="'+src+'"></iframe>',controls:true});
+      const media=template.content.querySelector(kind==='image'?'img':'video');
+      return {kind,src:media?.getAttribute('src'),controls:kind==='video'?media?.hasAttribute('controls'):true};
+    }));
+    assert.deepEqual(nativeMedia,[{kind:'image',src:'https://example.com/original.png',controls:true},{kind:'video',src:'https://example.com/original.mp4#t=0.1',controls:true}]);
+    await page.evaluate(value=>window.renderEmbed(value),widget);
+    await page.frameLocator('#react iframe').locator('#widget[data-isolated="true"]').waitFor();
+    await page.frameLocator('#react iframe').locator('#widget').evaluate(element=>element.textContent='Changed');
+    await page.getByRole('button',{name:'Reload embedded content',exact:true}).click();
+    await page.frameLocator('#react iframe').getByText('Widget ready',{exact:true}).waitFor();
+    assert.equal(await page.locator('#react a').getAttribute('href'),'https://example.com/source');
+    await page.evaluate(value=>{document.querySelector('#case').innerHTML=RK.renderStudyBlock({type:'mediacolumns',heading:'Original nearby text',items:[{cells:[{src:value,embedRatio:'9/16'}]}]});RK.enhanceBlocks(document.querySelector('#case'));},widget);
+    await page.evaluate(code=>{window.morphEmbedFixture=new Function('container','html','var RUNTIME_CLASS=/^is-/;'+code+';morphInto(container,html);');},['morphInto','morphChildren','morphNode','morphAttrs','mergeClass','disposeEmbedRecovery'].map(sourceFunction).join('\n'));
+    await page.frameLocator('#case iframe').locator('#widget').evaluate(element=>element.textContent='Running widget state');
+    await page.evaluate(value=>{window.originalWidgetFrame=document.querySelector('#case iframe');window.morphEmbedFixture(document.querySelector('#case'),RK.renderStudyBlock({type:'mediacolumns',heading:'Edited nearby text',items:[{cells:[{src:value,embedRatio:'9/16'}]}]}));},widget);
+    assert.equal(await page.evaluate(()=>window.originalWidgetFrame===document.querySelector('#case iframe')),true);
+    assert.equal(await page.frameLocator('#case iframe').locator('#widget').innerText(),'Running widget state');
+    await page.evaluate(value=>window.morphEmbedFixture(document.querySelector('#case'),RK.renderStudyBlock({type:'mediacolumns',heading:'Edited nearby text',items:[{cells:[{src:value,embedRatio:'9/16'}]}]})),widget.replace('Widget ready','Updated source'));
+    await page.frameLocator('#case iframe').getByText('Updated source',{exact:true}).waitFor();
+    for (const width of [1440,390]) {
+      await page.setViewportSize({width,height:1000});
+      const bounds=await page.locator('#case [data-general-embed]').evaluate(element=>{const rect=element.getBoundingClientRect();return {ratio:rect.width/rect.height,overflow:document.documentElement.scrollWidth>innerWidth};});
+      assert.ok(Math.abs(bounds.ratio-9/16)<0.02);assert.equal(bounds.overflow,false);
+    }
+    await page.evaluate(()=>window.renderEmbed('https://example.com/audio.mp3'));
+    await page.locator('#react audio[controls]').waitFor();
+    await page.evaluate(()=>window.renderEmbed('javascript:alert(1)'));
+    await page.getByText('Use an HTTPS link without credentials.',{exact:true}).waitFor();
+    await page.evaluate(()=>window.composeEmbed());
+    await page.getByRole('textbox',{name:'Embed media link or code'}).fill(widget);
+    await page.getByRole('combobox',{name:'Embed aspect ratio'}).selectOption('9/16');
+    await page.getByRole('button',{name:'Embed',exact:true}).click();
+    assert.deepEqual(await page.evaluate(()=>window.committed),['embed',widget,'9/16']);
+  } finally {await browser.close();}
+});
 
 test("Media columns preserves nested cells, sketch hierarchy and responsive media", async () => {
   const bundle = await build({ entryPoints: ["src/js/project.js"], bundle: true, write: false, format: "iife" });
@@ -152,7 +274,10 @@ test("Media columns Studio adds, reorders and persists nested cells", { skip: !b
         await page.locator('[data-cell="0"][data-citem="' + column + '"][data-ccell="0"][data-cfield="heading"]').fill('Column ' + (column + 1));
         await page.locator('[data-cell="0"][data-citem="' + column + '"][data-ccell="0"][data-cfield="src"]').fill('/assets/uploads/original-' + column + '.png');
       }
-      assert.deepEqual(await page.locator('.cellrow').first().locator('[data-cfield]').evaluateAll(inputs => inputs.map(input => input.dataset.cfield)), ['src', 'heading']);
+      assert.deepEqual(await page.locator('.cellrow').first().locator('[data-cfield]').evaluateAll(inputs => inputs.map(input => input.dataset.cfield)), ['src', 'embedRatio', 'heading']);
+      const embedSource = '<div>Saved widget</div>\n<script>document.body.dataset.ready="true"</script>';
+      await page.locator('[data-cell="0"][data-citem="2"][data-ccell="0"][data-cfield="src"]').fill(embedSource);
+      await page.locator('[data-cell="0"][data-citem="2"][data-ccell="0"][data-cfield="embedRatio"]').selectOption('9/16');
       await action('cell-add', 0).click();
       await page.locator('[data-cell="0"][data-citem="0"][data-ccell="1"][data-cfield="heading"]').fill('Second cell');
       await action('cell-up', 0, 1).click();
@@ -165,6 +290,8 @@ test("Media columns Studio adds, reorders and persists nested cells", { skip: !b
       assert.equal(draft.type, 'mediacolumns');
       assert.equal(draft.items.length, 3);
       assert.equal(draft.items[1].cells[1].src, '/assets/uploads/original-0.png');
+      assert.equal(draft.items[2].cells[0].src, embedSource);
+      assert.equal(draft.items[2].cells[0].embedRatio, '9/16');
       await page.screenshot({ path: join(tmpdir(), 'rk-media-columns-editor-' + width + '.png') });
       await page.reload();
       await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
@@ -173,7 +300,7 @@ test("Media columns Studio adds, reorders and persists nested cells", { skip: !b
       await page.locator('[data-act="study-pick"]').last().click();
       await page.locator('[data-pick="columns"]').click();
       await page.locator('[data-act="item-add"][data-bindex="1"]').click();
-      assert.deepEqual(await page.locator('[data-cell="0"][data-cbindex="1"][data-cfield]').evaluateAll(inputs => inputs.map(input => input.dataset.cfield)), ['heading', 'src']);
+      assert.deepEqual(await page.locator('[data-cell="0"][data-cbindex="1"][data-cfield]').evaluateAll(inputs => inputs.map(input => input.dataset.cfield)), ['heading', 'src', 'embedRatio']);
       await page.close();
     }
   } finally { await browser.close(); }

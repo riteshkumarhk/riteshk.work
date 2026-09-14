@@ -65,6 +65,27 @@ export function publicMediaReference(value) {
   return url.href;
 }
 
+export function publicEmbedSource(value) {
+  const text = String(value || "").trim();
+  if (!text.startsWith("<")) return embedDescriptor(publicMediaReference(text)).url;
+  embedDescriptor(text);
+  if (/(?:vault:|rkenc:|assets\/protected\/|\/vault\/)/i.test(text)) throw new Error("Protected embed content cannot be published");
+  if (/(?:[?&](?:amp;)?|["'])(?:token|access_token|refresh_token|authorization|password|pass|key|api[_-]?key|secret|ticket|sig|signature|x-amz-[\w-]+|x-goog-[\w-]+)["']?\s*[:=]/i.test(text)) throw new Error("Private credentials or signed links cannot be published in embed code");
+  if (/\b(?:api[_-]?key|access_token|refresh_token|authorization|password|secret)\s*[:=]/i.test(text)) throw new Error("Private credentials cannot be published in embed code");
+  const template = document.createElement("template");
+  template.innerHTML = text;
+  function checkUrl(value, depth = 0) {
+    const url = new URL(publicMediaReference(value));
+    if (depth < 4) for (const nested of url.searchParams.values()) if (/^https:\/\//i.test(nested)) checkUrl(nested, depth + 1);
+  }
+  template.content.querySelectorAll("*").forEach(element => {
+    for (const attribute of element.attributes) if (/^(?:src|href|poster|cite|data-src|data-href)$/.test(attribute.name) && attribute.value) checkUrl(attribute.value);
+    for (const match of (element.getAttribute("style") || "").matchAll(/https:\/\/[^\s"'<>\)]+/g)) checkUrl(match[0]);
+  });
+  for (const script of template.content.querySelectorAll("script,style")) for (const match of script.textContent.matchAll(/https:\/\/[^\s"'<>\)]+/g)) checkUrl(match[0]);
+  return text;
+}
+
 export function audienceComponent(value) {
   if (Array.isArray(value)) return value.map(audienceComponent);
   if (!value || typeof value !== "object") {
@@ -75,7 +96,7 @@ export function audienceComponent(value) {
   const result = {};
   for (const [key, child] of Object.entries(value)) {
     if (["notes", "speakerNotes", "durationMinutes", "source", "provenance", "editorName", "editorState", "ownerEmail"].includes(key)) continue;
-    result[key] = audienceComponent(child);
+    result[key] = ["src", "image"].includes(key) && typeof child === "string" && child.trim().startsWith("<") ? publicEmbedSource(child) : audienceComponent(child);
   }
   return result;
 }
@@ -167,8 +188,7 @@ export function publicDeckPayload(deck, { reviewedSources = false, production = 
       if (custom.pendingEmbed) throw new Error("Finish the embedded link before publishing");
       if (custom.slideEmbed) {
         if (!production) throw new Error("Linked embeds require the reviewed public publishing integration");
-        const url = publicMediaReference(custom.slideEmbed.url);
-        safe.slideEmbed = { url: embedDescriptor(url).url };
+        safe.slideEmbed = { url: publicEmbedSource(custom.slideEmbed.url) };
       }
       if (custom.labCorners) safe.labCorners = pickScalars(custom.labCorners, ["mode", "radius", "topLeftCornerRadius", "topRightCornerRadius", "bottomRightCornerRadius", "bottomLeftCornerRadius"]);
       if (typeof custom.labTextColor === "string") safe.labTextColor = custom.labTextColor;

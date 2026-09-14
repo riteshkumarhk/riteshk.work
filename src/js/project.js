@@ -6,6 +6,7 @@ import { loadProtectedBlocks } from "./project-recovery.mjs";
 import { sanitizeRichHtml } from "./rich-html.mjs";
 import { normalizeSectionReference } from "./slide-merge-section-component.mjs";
 import { connectSectionAccess } from "./slide-studio-source.mjs";
+import { embedDescriptor, embedAspectRatio, EMBED_SANDBOX } from "./slide-merge-embeds.mjs";
 
 /* =================================================================
    RITESH KUMAR — Project case study (L2)
@@ -123,6 +124,8 @@ import { connectSectionAccess } from "./slide-studio-source.mjs";
       fs + recovery + '</div>';
   }
   function mediaEl(m, cls) {
+    var embedded = sharedEmbed(m, cls);
+    if (embedded) return embedded;
     var url = mediaUrl(mediaSrc(m));
     if (!url) return "";
     var kind = mediaKind(m);
@@ -145,6 +148,26 @@ import { connectSectionAccess } from "./slide-studio-source.mjs";
     var cap = attr(m.caption || "");
     var isrc = vk ? ' data-vault="' + attr(vk) + '"' : ' src="' + attr(url) + '"';
     return '<img class="' + cls + '"' + isrc + ' alt="' + cap + '" data-cap="' + cap + '"' + (m.title ? ' data-title="' + attr(m.title) + '"' : "") + ' data-zoom loading="lazy" />';
+  }
+  function sharedEmbed(media, cls) {
+    var raw = media && (media.src || media.image);
+    if (typeof raw !== "string") return "";
+    raw = raw.trim();
+    var snippet = raw.charAt(0) === "<";
+    if (!snippet && /(?:^https:\/\/slide-lab\.invalid\/session-media\/|\/vault\/|assets\/protected\/|[?&](?:sig|signature|token|access_token|x-amz-[^=]+|x-goog-[^=]+)=)/i.test(raw)) return "";
+    if (!snippet && (!/^https:\/\//i.test(raw) || /^(image|gif|video|figma|pdf|office)$/.test(media.kind || "") || (mediaKind(media) !== "image" && media.kind !== "embed"))) return "";
+    var descriptor;
+    try { descriptor = embedDescriptor(raw); }
+    catch (error) { return snippet ? '<div class="pjb__prose" role="status">' + esc(error.message) + '</div>' : ""; }
+    if (descriptor.kind === "image" || descriptor.kind === "video") return snippet ? mediaEl(Object.assign({}, media, { src: descriptor.src, kind: descriptor.kind }), cls) : "";
+    if (descriptor.kind === "audio") return '<audio class="' + cls + '" src="' + attr(descriptor.src) + '" controls preload="metadata" style="width:100%"></audio>';
+    if (snippet && descriptor.kind === "frame" && /figma\.com/.test(descriptor.src)) {
+      return frameEl(descriptor.src, cls, "prototype", false, figmaOriginalUrl(descriptor.sourceUrl));
+    }
+    var source = descriptor.sourceUrl || (!snippet ? descriptor.url : "");
+    var link = source ? '<a class="pjb__frame-action" href="' + attr(source) + '" target="_blank" rel="noopener noreferrer">' + (descriptor.title.indexOf("StatCounter") === 0 ? "Source: StatCounter" : "Open source") + '</a>' : "";
+    var sandbox = descriptor.trusted ? "allow-scripts allow-same-origin allow-forms allow-presentation" : EMBED_SANDBOX;
+    return '<div class="pjb__frame pjb__frame--recoverable ' + cls + '" data-general-embed="' + attr(descriptor.title) + '" style="aspect-ratio:' + embedAspectRatio(media.embedRatio, embedAspectRatio(descriptor.aspectRatio)) + '"><iframe class="pjb__frame-el" title="' + attr(descriptor.title) + '" sandbox="' + sandbox + '" credentialless' + (descriptor.srcDoc ? ' srcdoc="' + attr(descriptor.srcDoc) + '"' : ' src="' + attr(descriptor.src) + '"') + ' loading="lazy" allow="fullscreen; autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="no-referrer"></iframe><div class="pjb__frame-tools"><span class="pjb__frame-state" data-embed-state role="status">External content</span><button type="button" class="pjb__frame-action" data-embed-retry title="Reload embedded content">Retry</button>' + link + '</div></div>';
   }
   // Resolve any vault placeholders inside a freshly-rendered subtree to short-lived signed URLs.
   // window.RK.vaultSignedUrl (from the admin bundle) returns "" for a viewer without an owner
@@ -2271,7 +2294,7 @@ import { connectSectionAccess } from "./slide-studio-source.mjs";
   function hydrateEmbedRecovery(root) {
     root.querySelectorAll(".pjb__frame--recoverable iframe").forEach(function (frame) {
       if (frame.__rkRecovery) { frame.__rkRecovery.render(); return; }
-      var wrapper = frame.closest(".pjb__frame"), timer, observer, message = "Figma", busy = false;
+      var wrapper = frame.closest(".pjb__frame"), timer, observer, general = wrapper.hasAttribute("data-general-embed"), message = general ? "External content" : "Figma", busy = false;
       function render() {
         var label = wrapper.querySelector("[data-embed-state]"), retry = wrapper.querySelector("[data-embed-retry]");
         if (label) label.textContent = message;
@@ -2281,14 +2304,18 @@ import { connectSectionAccess } from "./slide-studio-source.mjs";
       function start() {
         if (observer) observer.disconnect();
         if (navigator.onLine === false) { state("Offline", false); return; }
-        state("Waiting for Figma", true);
+        state(general ? "Loading embed" : "Waiting for Figma", true);
         timer = setTimeout(function () { if (frame.isConnected) state("Response unconfirmed", false); }, 15000);
       }
-      function loaded() { if (observer) observer.disconnect(); state(navigator.onLine === false ? "Offline" : "Figma", false); }
+      function loaded() { if (observer) observer.disconnect(); state(navigator.onLine === false ? "Offline" : (general ? "External content" : "Figma"), false); }
       function offline() { state("Offline", false); }
       function online() { state("Response unconfirmed", false); }
       frame.__rkRecovery = { start: start, render: render, dispose: function () { clearTimeout(timer); if (observer) observer.disconnect(); frame.removeEventListener("load", loaded); window.removeEventListener("offline", offline); window.removeEventListener("online", online); } };
       frame.addEventListener("load", loaded);
+      if (general) wrapper.querySelector("[data-embed-retry]").addEventListener("click", function (event) {
+        event.stopPropagation(); start();
+        if (frame.hasAttribute("srcdoc")) frame.srcdoc = frame.getAttribute("srcdoc"); else frame.src = frame.getAttribute("src");
+      });
       window.addEventListener("offline", offline); window.addEventListener("online", online);
       if (navigator.onLine === false) offline();
       else if (window.IntersectionObserver) {
@@ -2913,6 +2940,7 @@ import { connectSectionAccess } from "./slide-studio-source.mjs";
     }
     function enhanceStudyBlocks(root) {
       if (!root) return;
+      hydrateEmbedRecovery(root);
       try { normalizeGalleries(root); } catch (e) {}
       try { galleryNav(root); } catch (e) {}
       try { isoEnhance(root); } catch (e) {}
