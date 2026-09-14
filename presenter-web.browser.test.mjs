@@ -320,6 +320,9 @@ test("nested section documents retain control semantics, event realms and scroll
   const browser = await chromium.launch({ executablePath, headless: true, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
   try {
     const { page, popup } = await openFixture(browser);
+    page.setDefaultTimeout(8000);
+    popup.setDefaultTimeout(8000);
+    await page.bringToFront();
     await page.evaluate(() => {
       const outer = document.createElement("iframe"); outer.id = "outer"; outer.style.cssText = "position:absolute;left:100px;top:40px;width:800px;height:450px;border:3px solid;transform:rotate(-12deg) scale(.9)";
       outer.srcdoc = '<!doctype html><body style="margin:0;background:#ddd"><iframe id="inner" style="position:absolute;left:70px;top:55px;width:600px;height:320px;border:5px solid;transform:scale(.9)"></iframe></body>';
@@ -335,7 +338,11 @@ test("nested section documents retain control semantics, event realms and scroll
       element.ownerDocument.addEventListener("pointerdown", event => { view.realmCorrect &&= event instanceof view.PointerEvent; });
       element.ownerDocument.addEventListener("keydown", event => { view.realmCorrect &&= event instanceof view.KeyboardEvent; });
     });
-    await popup.locator("[data-pp-live]").click(); await popup.locator("[data-pp-now] canvas").waitFor();
+    await popup.bringToFront();
+    await popup.locator("[data-pp-live]").click();
+    await popup.locator("[data-pp-now] canvas").waitFor().catch(async error => {
+      throw new Error(await popup.locator('[data-pp-status]').innerText(), { cause: error });
+    });
     for (const selector of ["#disabled", "#action", "summary", 'input[type="range"]']) {
       const point = await pointFor(page, popup, inner.locator(selector)); await popup.mouse.click(point.x, point.y);
     }

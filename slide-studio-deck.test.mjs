@@ -3680,7 +3680,12 @@ test("Studio Publish shares private/public deck, case-section, retry and owner-r
       await presenter.locator('[data-pp-notes]').fill(note);
       await presenter.locator('[data-pp-notes]').press('Tab');
       await presenter.waitForFunction(() => document.querySelector('[data-pp-save]')?.textContent.includes('Saved to deck'));
-      await presenter.locator('[data-pp="exit"]').click();
+      await Promise.all([
+        presenter.waitForEvent('close'),
+        presenter.locator('[data-pp="exit"]').click().catch(error => {
+          if (!presenter.isClosed() || !/Target page, context or browser has been closed/.test(error.message)) throw error;
+        })
+      ]);
       await page.waitForSelector('.pjp', { state: 'detached' });
       const savedNote = await page.evaluate(() => new Promise((resolve, reject) => {
         const reference = window.__RKStudio.getDraft().work[0].study.nativeDeck;
