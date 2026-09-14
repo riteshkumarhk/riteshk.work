@@ -1,6 +1,56 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sampleCanvasColor } from "./src/js/slide-lab-eyedropper.mjs";
+import { openScreenEyeDropper, sampleCanvasColor, screenColorForCanvas } from "./src/js/slide-lab-eyedropper.mjs";
+
+test("screen colours preserve visible slide backgrounds and account for dark canvas filters", context => {
+  context.mock.method(globalThis, "getComputedStyle", element => element.style);
+  const canvas = { style: { filter: "none" } };
+  assert.equal(screenColorForCanvas("#a1b2c3", canvas), "#a1b2c3");
+  canvas.style.filter = "invert(0.93) hue-rotate(180deg)";
+  assert.equal(screenColorForCanvas("#ededed", canvas), "#000000");
+  assert.equal(screenColorForCanvas("#ededed", canvas, true), "#ededed");
+});
+
+test("screen eyedropper opens immediately and applies only a valid selected screen pixel", async () => {
+  const selected = [];
+  let opened = false;
+  const cancel = openScreenEyeDropper({ onSelect: color => selected.push(color), onCancel: () => assert.fail("unexpected cancel") }, {
+    EyeDropper: class { open({ signal }) { opened = true; assert.equal(signal.aborted, false); return Promise.resolve({ sRGBHex: "#A1B2C3" }); } }
+  });
+  assert.equal(opened, true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(selected, ["#a1b2c3"]);
+  cancel();
+});
+
+test("screen eyedropper ignores late completion after cleanup and preserves unsupported fallback", async () => {
+  let resolvePick, signal;
+  const callbacks = { onSelect: () => assert.fail("late colour applied"), onCancel: () => assert.fail("late cancel") };
+  assert.equal(openScreenEyeDropper(callbacks, {}), null);
+  const cancel = openScreenEyeDropper(callbacks, {
+    EyeDropper: class { open(options) { signal = options.signal; return new Promise(resolve => { resolvePick = resolve; }); } }
+  });
+  cancel();
+  assert.equal(signal.aborted, true);
+  resolvePick({ sRGBHex: "#112233" });
+  await new Promise(resolve => setImmediate(resolve));
+});
+
+test("screen eyedropper cancellation and denial never change colour", async () => {
+  for (const name of ["AbortError", "NotAllowedError", "InvalidStateError", "InvalidResult"]) {
+    let cancelled = 0, errors = 0;
+    openScreenEyeDropper({ onSelect: () => assert.fail("failed pick applied"), onCancel: () => cancelled++, onError: () => errors++ }, {
+      EyeDropper: class { open() {
+        if (name === "InvalidResult") return Promise.resolve({ sRGBHex: "transparent" });
+        if (name === "InvalidStateError") throw new DOMException("Unavailable", name);
+        return Promise.reject(new DOMException("Cancelled", name));
+      } }
+    });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(cancelled, 1);
+    assert.equal(errors, name === "AbortError" ? 0 : 1);
+  }
+});
 
 test("eyedropper uses bitmap scale, visible filter and opaque backdrop", context => {
   const draws = [];

@@ -1,5 +1,31 @@
 import { videoAtPoint, drawVideoPixel, authoredVideoColor } from "./slide-lab-video-sample.mjs";
 
+export function openScreenEyeDropper({ onSelect, onCancel, onError }, scope = globalThis) {
+  if (typeof scope.EyeDropper !== "function") return null;
+  const controller = new AbortController();
+  const fail = error => {
+    if (controller.signal.aborted) return;
+    if (error?.name !== "AbortError") onError?.(error);
+    onCancel();
+  };
+  try {
+    new scope.EyeDropper().open({ signal: controller.signal }).then(result => {
+      if (controller.signal.aborted) return;
+      if (!/^#[0-9a-f]{6}$/i.test(result?.sRGBHex)) throw new Error("Invalid screen colour");
+      onSelect(result.sRGBHex.toLowerCase());
+    }).catch(fail);
+  } catch (error) {
+    fail(error);
+  }
+  return () => controller.abort();
+}
+
+export function screenColorForCanvas(color, canvas, visible = false) {
+  if (visible || !canvas) return color;
+  const channels = color.slice(1).match(/../g).map(channel => parseInt(channel, 16));
+  return "#" + authoredVideoColor(channels, getComputedStyle(canvas).filter).map(channel => channel.toString(16).padStart(2, "0")).join("");
+}
+
 export function sampleCanvasColor(canvas, clientX, clientY, visible = false) {
   const rect = canvas.getBoundingClientRect();
   if (!rect.width || !rect.height) return null;

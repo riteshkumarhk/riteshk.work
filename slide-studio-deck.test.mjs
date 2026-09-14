@@ -21,6 +21,117 @@ async function openProjectSlides(page, index = 0) {
   if (await tab.getAttribute("aria-selected") !== "true") await tab.click();
 }
 
+test("slide eyedropper samples screen results over inserted sections and outside the canvas", { timeout: 90000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  try {
+    const published = JSON.parse(readFileSync(new URL('./content.json', import.meta.url), 'utf8'));
+    published.work = [{ id: 'colour-source', title: 'Colour source', study: { blocks: [{ type: 'text', heading: 'Inserted colour section', body: 'Original section remains unchanged.' }] } }];
+    await page.route('**/content.json', route => route.fulfill({ json: published }));
+    await page.addInitScript(() => {
+      window.screenPicks = [];
+      window.EyeDropper = class { open({ signal }) {
+        return new Promise((resolve, reject) => {
+          const pick = { resolve, reject, signal, active: navigator.userActivation.isActive };
+          window.screenPicks.push(pick);
+          signal.addEventListener('abort', () => reject(new DOMException('Cancelled', 'AbortError')), { once: true });
+        });
+      } };
+    });
+    await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5541') + '/studio/slide-merge-lab/');
+    await page.waitForFunction(() => !!window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    await page.getByRole('button', { name: 'Sections', exact: true }).click();
+    await page.locator('.merge-study-choices button').filter({ hasText: 'Colour source' }).click();
+    await page.locator('.merge-section-choices button').filter({ hasText: 'Inserted colour section' }).click();
+    const section = page.locator('.lab-canvas > .merge-native-sections .merge-native-section').first();
+    await section.waitFor();
+    const original = await page.evaluate(() => JSON.stringify(window.__slideMerge.api.getSceneElements().find(element => element.customData?.sectionComponent)));
+    await section.evaluate(element => { element.style.background = '#237b70'; });
+    await page.evaluate(() => {
+      const api = window.__slideMerge.api;
+      const shape = api.getSceneElements().find(element => element.type === 'rectangle' && !element.locked);
+      window.pickTarget = shape.id;
+      api.updateScene({ appState: { selectedElementIds: { [shape.id]: true }, theme: 'light' } });
+    });
+    await page.locator('.selected-shape-actions button[aria-label="Stroke"]').click();
+    await page.locator('.excalidraw-eye-dropper-trigger').click();
+    await page.waitForFunction(() => window.screenPicks.length === 1);
+    assert.equal(await page.evaluate(() => window.screenPicks[0].active), true, 'Native open retains user activation');
+    assert.equal(await page.locator('.excalidraw-eye-dropper-preview').count(), 0, 'Canvas-only sampler is not layered over the screen');
+    const sectionBox = await section.boundingBox();
+    const screenPixel = async (x, y) => page.evaluate(async ({ png, x, y }) => {
+      const image = new Image(); image.src = 'data:image/png;base64,' + png; await image.decode();
+      const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+      const context = canvas.getContext('2d'); context.drawImage(image, x, y, 1, 1, 0, 0, 1, 1);
+      return '#' + [...context.getImageData(0, 0, 1, 1).data].slice(0, 3).map(channel => channel.toString(16).padStart(2, '0')).join('');
+    }, { png: (await page.screenshot()).toString('base64'), x: Math.floor(x), y: Math.floor(y) });
+    const sampled = await screenPixel(sectionBox.x + sectionBox.width - 12, sectionBox.y + 12);
+    assert.equal(sampled, '#237b70', 'Inserted section has a distinct visible pixel');
+    await page.evaluate(color => window.screenPicks.at(-1).resolve({ sRGBHex: color }), sampled);
+    await page.waitForFunction(color => window.__slideMerge.api.getSceneElements().find(element => element.id === window.pickTarget).strokeColor === color, sampled);
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__slideMerge.api.getSceneElements().find(element => element.customData?.sectionComponent))), original);
+    await page.locator('.excalidraw-eye-dropper-trigger').click();
+    await page.waitForFunction(() => window.screenPicks.length === 2);
+    await page.evaluate(() => window.screenPicks.at(-1).reject(new DOMException('Escape', 'AbortError')));
+    await page.waitForFunction(() => window.screenPicks.at(-1).signal.aborted);
+    assert.equal(await page.evaluate(() => window.__slideMerge.api.getSceneElements().find(element => element.id === window.pickTarget).strokeColor), sampled);
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: {} } }));
+    await page.locator('.merge-slide-color button[aria-label="Background"]').click();
+    await page.locator('.excalidraw-eye-dropper-trigger').click();
+    await page.waitForFunction(() => window.screenPicks.length === 3);
+    await page.locator('header').evaluate(element => { element.style.backgroundColor = '#d8a657'; });
+    const outside = await screenPixel(1400, 20);
+    assert.equal(outside, '#d8a657', 'Sample the rendered header outside the canvas');
+    await page.evaluate(color => window.screenPicks.at(-1).resolve({ sRGBHex: color }), outside);
+    await page.waitForFunction(() => window.__slideMerge.api.getSceneElements().find(element => element.customData?.slideSettings)?.customData.slideSettings.background?.color === '#d8a657');
+    await page.screenshot({ path: join(tmpdir(), 'rk-screen-eyedropper-1440.png') });
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.waitForFunction(() => window.__slideMerge.api.getSceneElements().find(element => element.customData?.slideSettings)?.customData.slideSettings.background?.color !== '#d8a657');
+    await page.getByRole('button', { name: 'Redo', exact: true }).click();
+    await page.waitForFunction(() => window.__slideMerge.api.getSceneElements().find(element => element.customData?.slideSettings)?.customData.slideSettings.background?.color === '#d8a657');
+    await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { [window.pickTarget]: true } } }));
+    await page.locator('.selected-shape-actions button[aria-label="Background"]').click();
+    await page.locator('.excalidraw-eye-dropper-trigger').click();
+    await page.waitForFunction(() => window.screenPicks.length === 4);
+    await page.evaluate(() => window.screenPicks.at(-1).resolve({ sRGBHex: '#c84b65' }));
+    await page.waitForFunction(() => window.__slideMerge.api.getSceneElements().find(element => element.id === window.pickTarget).backgroundColor === '#c84b65');
+    await page.locator('.excalidraw-eye-dropper-trigger').click();
+    await page.waitForFunction(() => window.screenPicks.length === 5);
+    await page.evaluate(() => window.screenPicks.at(-1).reject(new DOMException('Denied', 'NotAllowedError')));
+    await page.getByText('Screen colour picking is unavailable.', { exact: false }).waitFor();
+    assert.equal(await page.evaluate(() => window.__slideMerge.api.getSceneElements().find(element => element.id === window.pickTarget).backgroundColor), '#c84b65');
+    await page.locator('.excalidraw-eye-dropper-trigger').click();
+    await page.waitForFunction(() => window.screenPicks.length === 6);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.screenPicks.at(-1).signal.aborted);
+    await page.evaluate(() => window.screenPicks.at(-1).resolve({ sRGBHex: '#ff0000' }));
+    assert.equal(await page.evaluate(() => window.__slideMerge.api.getSceneElements().find(element => element.id === window.pickTarget).backgroundColor), '#c84b65');
+    await page.evaluate(() => {
+      const api = window.__slideMerge.api, text = api.getSceneElements().find(element => element.type === 'text' && !element.containerId && !element.locked);
+      window.pickText = text.id;
+      api.updateScene({ appState: { selectedElementIds: { [text.id]: true } } });
+    });
+    await page.locator('.selected-shape-actions button[aria-label="Stroke"]').click();
+    await page.locator('.excalidraw-eye-dropper-trigger').click();
+    await page.waitForFunction(() => window.screenPicks.length === 7);
+    await page.evaluate(() => window.screenPicks.at(-1).resolve({ sRGBHex: '#375a7f' }));
+    await page.waitForFunction(() => window.__slideMerge.api.getSceneElements().find(element => element.id === window.pickText).strokeColor === '#375a7f');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => { window.EyeDropper = undefined; });
+    await page.locator('.selected-shape-actions button[aria-label="Stroke"]').click();
+    await page.locator('.excalidraw-eye-dropper-trigger').click();
+    await page.locator('.excalidraw-eye-dropper-preview').waitFor();
+    await page.keyboard.press('Escape');
+    await page.locator('.excalidraw-eye-dropper-preview').waitFor({ state: 'detached' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: join(tmpdir(), 'rk-screen-eyedropper-390.png') });
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
 test('case authoring keeps sources private and requires reviewed selective application', {timeout:90000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
   try {
