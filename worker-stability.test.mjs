@@ -71,17 +71,42 @@ async function signedWorkerFixture() {
   const keys = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
   values.set("wa:cred:synthetic", JSON.stringify({ jwk: await crypto.subtle.exportKey("jwk", keys.publicKey), alg: -257, counter: 0 }));
   const send = (action, body) => worker.fetch(new Request("https://synthetic.test/admin/webauthn/auth/" + action, { method: "POST", headers: { Origin: "https://synthetic.test", "Content-Type": "application/json" }, body: JSON.stringify(body) }), env);
-  async function assertion(purpose = "login") {
+  async function assertion(purpose = "login", flags = 1) {
     const response = await send("begin", { purpose });
     assert.equal(response.status, 200);
     const { challenge } = await response.json();
     const client = Buffer.from(JSON.stringify({ type: "webauthn.get", challenge, origin: "https://synthetic.test" }));
-    const auth = Buffer.concat([Buffer.from(await crypto.subtle.digest("SHA-256", Buffer.from("synthetic.test"))), Buffer.from([1, 0, 0, 0, 0])]);
+    const auth = Buffer.concat([Buffer.from(await crypto.subtle.digest("SHA-256", Buffer.from("synthetic.test"))), Buffer.from([flags, 0, 0, 0, 0])]);
     const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", keys.privateKey, Buffer.concat([auth, Buffer.from(await crypto.subtle.digest("SHA-256", client))]));
     return { id: "synthetic", response: { clientDataJSON: client.toString("base64url"), authenticatorData: auth.toString("base64url"), signature: Buffer.from(signature).toString("base64url") } };
   }
-  return { env, send, assertion };
+  return { env, send, assertion, values };
 }
+
+test("release checklist requires a scoped, user-verified owner passkey and rejects other tokens", async () => {
+  const fixture = await signedWorkerFixture();
+  const request = (token = "", origin = "https://synthetic.test", path = "/admin/release-checks") => worker.fetch(new Request("https://synthetic.test" + path, { headers: { Origin: origin, Authorization: "Bearer " + token } }), fixture.env);
+  assert.equal((await request()).status, 401);
+  const login = await (await fixture.send("finish", await fixture.assertion())).json();
+  assert.equal((await request(login.token)).status, 401);
+  const publish = await (await fixture.send("finish", await fixture.assertion("publish"))).json();
+  assert.equal((await request(publish.publishToken)).status, 401);
+  assert.equal((await fixture.send("finish", await fixture.assertion("release-checks"))).status, 401);
+  const begin = await (await fixture.send("begin", { purpose: "release-checks" })).json();
+  assert.equal(begin.userVerification, "required");
+  const signed = await fixture.send("finish", await fixture.assertion("release-checks", 5));
+  const access = await signed.json();
+  assert.ok(access.checklistToken);
+  assert.equal(access.token, undefined);
+  assert.equal(access.trust, undefined);
+  assert.equal(signed.headers.get("Cache-Control"), "no-store");
+  assert.equal((await request(access.checklistToken)).status, 503);
+  assert.equal((await request(access.checklistToken, "https://other.test")).status, 403);
+  assert.equal((await request(access.checklistToken, "https://synthetic.test", "/admin/content")).status, 401);
+  assert.equal((await request(access.checklistToken + "x")).status, 401);
+  fixture.values.delete("wa:cred:synthetic");
+  assert.equal((await request(access.checklistToken)).status, 401);
+});
 
 test("actual Worker rejects concurrent signed assertion replay and retains valid verification", async () => {
   const fixture = await signedWorkerFixture();

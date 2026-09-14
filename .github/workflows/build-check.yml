@@ -66,7 +66,7 @@ jobs:
           export SLIDE_LAB_URL=http://127.0.0.1:5510
           export PLAYWRIGHT_CHROMIUM_EXECUTABLE="$(node -p "require('playwright-core').chromium.executablePath()")"
             curl --silent --show-error --fail --retry 5 --retry-delay 1 --retry-connrefused --max-time 2 "$SLIDE_LAB_URL/index.html" > /dev/null
-          node --test --test-concurrency=1 project-recovery.browser.test.mjs slide-studio-deck.test.mjs slide-presenter-readonly.browser.test.mjs
+          node --test --test-concurrency=1 project-recovery.browser.test.mjs slide-studio-deck.test.mjs slide-presenter-readonly.browser.test.mjs release-checks.browser.test.mjs
 
       - name: Prepare tested site artifact
         if: github.event_name != 'pull_request'

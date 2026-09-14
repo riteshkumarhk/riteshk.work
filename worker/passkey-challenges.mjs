@@ -7,7 +7,7 @@ export class PasskeyChallenges {
     const input = await request.json();
     if (action === "/issue") {
       if (!["auth", "reg"].includes(input.type)) return new Response(null, { status: 400 });
-      const record = { type: input.type, purpose: input.purpose === "publish" ? "publish" : "login", exp: Date.now() + 300000 };
+      const record = { type: input.type, purpose: ["publish", "release-checks"].includes(input.purpose) ? input.purpose : "login", exp: Date.now() + 300000 };
       const issued = await this.storage.transaction(async transaction => {
         if (await transaction.get("challenge")) return false;
         await transaction.put("challenge", record);

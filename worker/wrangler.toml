@@ -20,6 +20,10 @@ new_sqlite_classes = ["PasskeyChallenges", "ContentPublisher"]
 binding = "SLIDE_LIBRARIES"
 bucket_name = "rk-slide-libraries"
 
+[[r2_buckets]]
+binding = "RELEASE_CHECKS"
+bucket_name = "rk-release-checks"
+
 # Private R2 bucket for NDA media (the "vault") — objects are served only through the Worker.
 [[r2_buckets]]
 binding = "VAULT"

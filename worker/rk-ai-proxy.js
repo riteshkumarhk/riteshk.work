@@ -27,6 +27,7 @@
    ========================================================================== */
 
 import { libraryRoute } from "./slide-library.mjs";
+import { releaseChecksRoute } from "./release-checks.mjs";
 
 const PROVIDERS = {
   openai:    { base: "https://api.openai.com/v1",                        keyVar: "OPENAI_KEY",    inject: "bearer"  },
@@ -127,6 +128,13 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
 
     const url = new URL(request.url);
+
+    if (url.pathname === "/admin/release-checks" || url.pathname.startsWith("/admin/release-checks/")) {
+      const headers = { ...cors, "Cache-Control": "no-store", "Vary": "Origin" };
+      if (!origin || !waOriginOk(origin, env)) return json({ error: "Origin not allowed" }, 403, headers);
+      if (!(await verifyChecklistSession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Sign in with your owner passkey." }, 401, headers);
+      return releaseChecksRoute(request, env.RELEASE_CHECKS, headers);
+    }
 
     if (url.pathname === "/admin/slide-library") {
       if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, { ...cors, "Cache-Control": "no-store" });
@@ -443,11 +451,11 @@ export default {
     if (url.pathname === "/admin/webauthn/auth/begin") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
       if (!env.VAULT_GRANTS) return json({ error: "Passkey store not configured" }, 500, cors);
-      let purpose = "login"; try { const b = await request.json(); if (b && b.purpose === "publish") purpose = "publish"; } catch (e) {}
+      let purpose = "login"; try { const b = await request.json(); if (b && ["publish", "release-checks"].includes(b.purpose)) purpose = b.purpose; } catch (e) {}
       const challenge = b64urlFromBytes(crypto.getRandomValues(new Uint8Array(32)));
       try { await passkeyChallenge(env, "issue", challenge, { type: "auth", purpose: purpose }); }
       catch (error) { return json({ error: "Passkey challenge service unavailable. Please retry." }, 503, cors); }
-      return json({ challenge: challenge, rpId: waRpId(env), timeout: 120000, userVerification: "preferred", allowCredentials: [] }, 200, cors);
+      return json({ challenge: challenge, rpId: waRpId(env), timeout: 120000, userVerification: purpose === "release-checks" ? "required" : "preferred", allowCredentials: [] }, 200, cors);
     }
     if (url.pathname === "/admin/webauthn/auth/finish") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
@@ -465,12 +473,18 @@ export default {
         const rpHash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(waRpId(env))));
         if (!bytesEq(p.rpIdHash, rpHash)) return json({ error: "RP mismatch" }, 400, cors);
         if (!(p.flags & 0x01)) return json({ error: "User not present" }, 400, cors);
+        if (chal.purpose === "release-checks" && !(p.flags & 0x04)) return json({ error: "Passkey user verification required" }, 401, cors);
         const cdHash = new Uint8Array(await crypto.subtle.digest("SHA-256", b64urlToBytes(body.response.clientDataJSON)));
         const ok = await waVerifySig(cred.jwk, cred.alg, concatBytes(authData, cdHash), b64urlToBytes(body.response.signature));
         if (!ok) return json({ error: "Bad signature" }, 401, cors);
         if (cred.counter > 0 && p.signCount > 0 && p.signCount <= cred.counter) return json({ error: "Counter regression" }, 401, cors);
         if (!(await passkeyChallenge(env, "consume", cd.challenge, { type: "auth" }))) return json({ error: "Challenge expired or already used. Start sign-in again." }, 400, cors);
         cred.counter = p.signCount; await env.VAULT_GRANTS.put("wa:cred:" + body.id, JSON.stringify(cred));
+        if (chal.purpose === "release-checks") {
+          const exp = Date.now() + 60 * 60 * 1000;
+          const payload = b64urlFromStr(JSON.stringify({ scope: "release-checks", credential: body.id, exp }));
+          return json({ checklistToken: payload + "." + await hmac(env.SESSION_SECRET || "", "release-checks." + payload), exp }, 200, { ...cors, "Cache-Control": "no-store" });
+        }
         if (chal.purpose === "publish") {
           const exp = Date.now() + PUBLISH_TOKEN_TTL_MS;
           const payload = b64urlFromStr(JSON.stringify({ pub: 1, exp: exp }));
@@ -1858,6 +1872,16 @@ async function verifySession(token, env) {
     const obj = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload)));
     return !!(obj && obj.exp && obj.exp > Date.now());
   } catch (e) { return false; }
+}
+
+async function verifyChecklistSession(token, env) {
+  if (!token || !env.SESSION_SECRET || !env.VAULT_GRANTS) return false;
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 2 || !timingSafeEqual(parts[1], await hmac(env.SESSION_SECRET, "release-checks." + parts[0]))) return false;
+    const claim = JSON.parse(new TextDecoder().decode(b64urlToBytes(parts[0])));
+    return claim.scope === "release-checks" && Number.isFinite(claim.exp) && claim.exp > Date.now() && typeof claim.credential === "string" && !!(await env.VAULT_GRANTS.get("wa:cred:" + claim.credential));
+  } catch { return false; }
 }
 
 /* ---------- AI provider keys: AES-GCM encrypted-at-rest in KV, owner-session-gated (roaming) ---------- */

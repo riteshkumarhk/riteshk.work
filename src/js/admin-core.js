@@ -200,7 +200,7 @@ export async function webauthnAuth(purpose, options = {}) {
   const body = { id: assertion.id, rawId: bufToB64url(assertion.rawId), type: assertion.type, response: { clientDataJSON: bufToB64url(r.clientDataJSON), authenticatorData: bufToB64url(r.authenticatorData), signature: bufToB64url(r.signature), userHandle: r.userHandle ? bufToB64url(r.userHandle) : null } };
   const j = await authJson("/admin/webauthn/auth/finish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, options, "Verification");
   options.signal?.throwIfAborted();
-  if (purpose === "publish") return j; // {publishToken, exp}
+  if (purpose === "publish" || purpose === "release-checks") return j;
   if (j && j.token && j.exp) { saveAdminSession(j.token, j.exp); if (j.trust && j.trustExp) saveDeviceTrust(j.trust, j.trustExp); return { ok: true }; }
   throw new Error("Passkey sign-in didn’t return a session.");
 }
