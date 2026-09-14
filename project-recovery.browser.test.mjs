@@ -436,7 +436,9 @@ test("built case study retries protected sections without restarting Figma and r
       await page.evaluate(() => window.RK.openProject("recovery-fixture", { push: false }));
       const publicFrame = page.locator('iframe[src*="synthetic-public"]');
       await publicFrame.scrollIntoViewIfNeeded();
+      await page.locator('.pj').evaluate(async element=>{await Promise.all(element.getAnimations({subtree:true}).filter(animation=>Number.isFinite(animation.effect.getComputedTiming().endTime)).map(animation=>animation.finished.catch(()=>{})));});
       await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button").click();
+      await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button",{name:"Prototype step 2",exact:true}).waitFor();
       await page.evaluate(() => { window.keptFrame = document.querySelector('iframe[src*="synthetic-public"]'); });
       await page.locator("[data-vault-retry]").click();
       const protectedFrame = page.locator('iframe[src*="synthetic-protected"]');
@@ -563,6 +565,7 @@ test("built protected loading times out visibly and recovers without restarting 
     await page.waitForFunction(() => window.timeoutReadStarted);
     await page.locator('iframe[src*="synthetic-public"]').scrollIntoViewIfNeeded();
     await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button").click();
+    await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button",{name:"Prototype step 2",exact:true}).waitFor();
     await page.clock.runFor(16000);
     await page.locator("[data-vault-retry]").waitFor();
     assert.equal(await page.locator("[data-vault-retry]").isEnabled(), true);
