@@ -1398,6 +1398,7 @@ test("Prepare local test link opens directly and leaves normal sign-in enforced"
         await page.locator('.adm__tab[data-tab="ai"]').click();
         await page.locator('[data-prep-brief]').waitFor();
         assert.equal(await page.locator('[data-act="prep-open"]').count(),5);
+        await page.waitForLoadState('networkidle');
         await page.reload();
         await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
         assert.equal(await page.locator('.pass--lock').count(),0);
@@ -1408,6 +1409,7 @@ test("Prepare local test link opens directly and leaves normal sign-in enforced"
         assert.equal(await page.evaluate(() => typeof window.__rkDevStudio),'undefined');
         assert.equal(await page.locator('.adm.is-open').count(),0);
       }
+      await page.waitForLoadState('networkidle');
       await context.unrouteAll({behavior:'wait'});
       await context.close();
     }
