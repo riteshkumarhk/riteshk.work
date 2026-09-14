@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deckDocumentKey } from './src/js/slide-merge-history.mjs';
 const base = process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510';
-const executablePath = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || (process.platform === 'win32' ? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' : chromium.executablePath());
 test('DJ pad can use the original tab without exposing notes or opening a second window', { timeout:30000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless:true, ignoreDefaultArgs:['--disable-popup-blocking'] });
   const context = await browser.newContext({ viewport:{width:1280,height:800}, reducedMotion:'reduce' });
