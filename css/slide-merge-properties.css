@@ -1,3 +1,12 @@
+.merge-shell .excalidraw input.merge-cover-crop { appearance: none; width: 100%; height: 24px; margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.merge-shell .merge-cover-crop::-webkit-slider-runnable-track { height: 3px; border-radius: 3px; background: linear-gradient(var(--accent),var(--accent)) left center / var(--fill) 100% no-repeat,var(--line); }
+.merge-shell .merge-cover-crop::-moz-range-track { height: 3px; border-radius: 3px; background: var(--line); }
+.merge-shell .merge-cover-crop::-moz-range-progress { height: 3px; background: var(--accent); }
+.merge-shell .merge-cover-crop::-webkit-slider-thumb { appearance: none; width: 13px; height: 13px; margin-top: -5px; border-radius: 50%; background: var(--text); }
+.merge-shell .merge-cover-crop::-moz-range-thumb { width: 13px; height: 13px; border: 0; border-radius: 50%; background: var(--text); }
+.merge-shell .merge-cover-crop:focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
+.merge-cover-visibility { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.merge-cover-overrides > summary { cursor: pointer; padding: 6px 0; color: var(--text-dim); }
 .merge-slide-properties { position:absolute; z-index:6; top:76px; left:16px; width:200px; max-height:calc(100% - 140px); overflow:auto; overscroll-behavior:contain; box-sizing:border-box; color:var(--text); scrollbar-width:thin; }
 .merge-shell .excalidraw .merge-slide-properties { display:block; }
 .merge-shell .merge-slide-properties .panelColumn { width:100%; }

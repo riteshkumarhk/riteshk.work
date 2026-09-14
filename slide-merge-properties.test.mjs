@@ -2,7 +2,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { PROPERTY_LAYOUTS, layoutPlan, slideOwnsFocus, transitionMatch, isEmptyPlaceholder } from "./src/js/slide-merge-properties.mjs";
 import { guidePosition, guideSnap } from "./src/js/slide-merge-guide-core.mjs";
-import { COVER_FIELDS, COVER_DEFAULTS, coverPalette, coverSkeleton, coverValues } from "./src/js/slide-merge-cover.mjs";
+import { COVER_FIELDS, COVER_DEFAULTS, coverPalette, coverSkeleton, coverValues, projectCoverData, linkedCoverValues } from "./src/js/slide-merge-cover.mjs";
+test("linked cover sources use period, explicit status and scope without inferring or migrating dates", () => {
+  const work = { id: "project", title: "Title", client: "Client", period: "2025 - Present", image: "original.png", brandLogo: "logo.png", study: { timeline: "2023 - 2024", team: "Design, Engineering", role: "Lead", scope: "Activation" } };
+  const before = structuredClone(work), source = projectCoverData(work);
+  assert.equal(source.status, "");
+  assert.equal(source.duration, work.period);
+  assert.equal(source.footnote, work.study.scope);
+  assert.equal(source.image, work.image);
+  assert.equal(source.logo, work.brandLogo);
+  const cover = linkedCoverValues({ title: "Slide override", source: { caseStudyId: work.id, overrides: ["title"] }, background: "#123456" }, { ...source, status: "Launched" });
+  assert.equal(cover.title, "Slide override");
+  assert.equal(cover.status, "Launched");
+  assert.equal(cover.background, "#123456");
+  assert.deepEqual(work, before);
+});
 test("new covers resolve site colour tokens without overwriting saved palettes", () => {
   const tokens = { "--bg": " #f2eee6 ", "--bg-2": "#eae5db", "--bg-elev": "#e2dcd0", "--text": "#1b1915", "--text-dim": "#5c5850" };
   const palette = coverPalette({ getPropertyValue: token => tokens[token] });
@@ -79,4 +93,16 @@ test("guide snapping uses edges/centres and a screen-pixel tolerance", () => {
   assert.deepEqual(guideSnap(bounds,[{axis:"x",position:203},{axis:"y",position:198}],1),{x:3,y:-2});
   assert.deepEqual(guideSnap(bounds,[{axis:"x",position:207}],1),{x:0,y:0});
   assert.deepEqual(guideSnap(bounds,[{axis:"x",position:207}],.5),{x:7,y:0});
+});
+test("linked cover visibility, crop and depth preserve originals and strip source metadata from rendered objects", () => {
+  const cover = { title: "Original", team: "Design, Engineering", role: "Lead", duration: "2025", source: { caseStudyId: "owner", overrides: [] }, hidden: ["team", "role", "duration"], image: { fileId: "original", width: 1600, height: 900 }, crop: { x: 100, y: 0 }, depth: { fileId: "depth", source: "private-source", strength: .04, focus: .4, softness: .01, zoom: 1.1 } };
+  const before = structuredClone(cover), elements = coverSkeleton(cover, 123);
+  const image = elements.find(element => element.type === "image");
+  assert.equal(elements.some(element => /^(team-|role|duration)/.test(element.customData.slideCover)), false);
+  assert.ok(Math.abs(image.crop.x - (1600 - image.crop.width)) < 1e-9);
+  assert.equal(image.crop.y, 0);
+  assert.deepEqual(image.customData.slideDepth, { fileId: "depth", strength: .04, softness: .01, focus: .4, zoom: 1.1 });
+  assert.equal(coverSkeleton({ ...cover, motion: false }, 123).some(element => element.customData.slideDepth), false);
+  assert.equal(coverSkeleton({ ...cover, source: { ...cover.source, overrides: ["image"] } }, 123).some(element => element.customData.slideDepth), false);
+  assert.deepEqual(cover, before);
 });

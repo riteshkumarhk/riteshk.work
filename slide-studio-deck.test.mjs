@@ -190,26 +190,136 @@ test("fixed cover fields persist in hosted Studio without changing case content"
   try {
     for (const width of [1440, 390]) {
       const page = await browser.newPage({ viewport: { width, height: 960 } });
-      await openIntegratedFixture(page);
+      const errors = []; page.on('pageerror', error => errors.push(error.message));
+      await openIntegratedFixture(page, undefined, { timeline: '2023 - 2024', team: '1 Lead designer, 2 junior designers to work on high fidelity mocks, 1 Product Manager, 1 Engineer, 1 System Architect', role: 'Lead', scope: 'Activation' });
       const original = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks));
-      await openProjectSlides(page);
+      await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+      await page.locator('[data-l2tab="highlights"]').click();
+      await page.getByLabel('Current status', { exact: true }).selectOption('Launched');
+      assert.equal(await page.locator('[data-sfield="timeline"]').count(), 0);
+      await page.locator('[data-l2tab="details"]').click();
+      const logo = await page.evaluate(() => {
+        const canvas = document.createElement('canvas'); canvas.width = 80; canvas.height = 40;
+        canvas.getContext('2d').fillRect(0, 0, 80, 40); return canvas.toDataURL();
+      });
+      const chooser = page.waitForEvent('filechooser');
+      await page.getByRole('button', { name: 'Upload logo', exact: true }).click();
+      await (await chooser).setFiles({ name: 'logo.png', mimeType: 'image/png', buffer: Buffer.from(logo.split(',')[1], 'base64') });
+      await page.locator('.adm__brand-logo').waitFor();
+      assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].brandLogo), logo);
+      await page.route('https://logo.fixture/original.png', route => route.fulfill({ contentType: 'image/png', headers: { 'access-control-allow-origin': '*' }, body: Buffer.from(logo.split(',')[1], 'base64') }));
+      await page.getByLabel('Image URL', { exact: true }).fill('https://logo.fixture/original.png');
+      await page.getByRole('button', { name: 'Fetch link', exact: true }).click();
+      await page.waitForFunction(() => !document.querySelector('[data-act="brand-logo-fetch"]').disabled);
+      assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].brandLogo), logo);
+      await page.getByLabel('Image URL', { exact: true }).fill('javascript:alert(1)');
+      await page.getByRole('button', { name: 'Fetch link', exact: true }).click();
+      assert.match(await page.locator('[data-brand-logo-error]').textContent(), /HTTPS/);
+      assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].brandLogo), logo);
+      await page.locator('[data-l2tab="slides"]').click();
       await page.getByRole('button', { name: 'Add cover', exact: true }).click();
       const title = page.getByLabel('Cover title', { exact: true });
+      await page.locator('.merge-cover-overrides > summary').click();
+      assert.equal(await title.inputValue(), 'Integrated project');
+      assert.equal(await page.getByLabel('Cover status', { exact: true }).inputValue(), 'Launched');
+      assert.equal(await page.getByLabel('Cover footnote', { exact: true }).inputValue(), 'Activation');
       await title.fill('A field-driven cover');
-      await page.getByLabel('Cover status', { exact: true }).fill('In development');
       await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.nativeDeck?.slideCount === 1);
+      await page.locator('.merge-slide-properties').getByRole('button', { name: 'Highlights', exact: true }).click();
+      await page.getByLabel('Current status', { exact: true }).selectOption('custom');
+      await page.getByLabel('Custom current status', { exact: true }).fill('Beta - live');
+      await page.locator('[data-l2tab="slides"]').click();
+      if (width === 390) await page.getByRole('button', { name: 'Open properties', exact: true }).click();
+      await page.locator('.merge-cover-overrides > summary').click();
+      assert.equal(await title.inputValue(), 'A field-driven cover');
+      assert.equal(await page.getByLabel('Cover status', { exact: true }).inputValue(), 'Beta - live');
       if (width === 390) await page.getByRole('button', { name: 'Close panel', exact: true }).click();
       await page.locator('[data-l2-back]').click();
       await openProjectSlides(page);
       if (width === 390) await page.getByRole('button', { name: 'Open properties', exact: true }).click();
+      await page.locator('.merge-cover-overrides > summary').click();
       assert.equal(await title.inputValue(), 'A field-driven cover');
-      assert.equal(await page.getByLabel('Cover status', { exact: true }).inputValue(), 'In development');
+      assert.equal(await page.getByLabel('Cover status', { exact: true }).inputValue(), 'Beta - live');
+      assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].study.timeline), '2023 - 2024');
       await assertCoverSitePalette(page);
       assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks)), original);
       assert.ok(await title.evaluate(element => { const box = element.getBoundingClientRect(); return box.left >= 0 && box.right <= innerWidth; }));
       await page.screenshot({ path: join(tmpdir(), 'rk-hosted-cover-' + width + '.png') });
+      assert.deepEqual(errors, []);
       await page.close();
     }
+  } finally { await browser.close(); }
+});
+
+test("linked cover depth renders saved originals and degrades to static media", { timeout: 90000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true, args: ['--enable-unsafe-swiftshader'] });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'no-preference' }), errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  try {
+    const media = await page.evaluate(() => {
+      const canvas = document.createElement('canvas'); canvas.width = 800; canvas.height = 600;
+      const context = canvas.getContext('2d');
+      for (let index = 0; index < 16; index++) { context.fillStyle = index % 2 ? '#d8a657' : '#1678a0'; context.fillRect(index * 50, 0, 50, 600); }
+      const image = canvas.toDataURL();
+      const gradient = context.createLinearGradient(0, 0, 800, 600); gradient.addColorStop(0, '#111'); gradient.addColorStop(1, '#eee'); context.fillStyle = gradient; context.fillRect(0, 0, 800, 600);
+      return { image, depth: canvas.toDataURL() };
+    });
+    await openIntegratedFixture(page, undefined, { role: 'Lead', scope: 'Activation' }, { image: media.image, period: '2025 - Present', depth: { on: true, map: media.depth, strength: .08, softness: .014, focus: .5, zoom: 1.1 } });
+    await page.evaluate(() => history.replaceState(null, '', location.pathname + '?devstub=1&depth'));
+    await openProjectSlides(page);
+    await page.getByRole('button', { name: 'Add cover', exact: true }).click();
+    await page.getByLabel('Depth in playback', { exact: true }).waitFor();
+    await page.locator('.merge-cover-overrides > summary').click();
+    assert.equal(await page.getByLabel('Cover duration', { exact: true }).inputValue(), '2025 - Present');
+    await page.locator('.merge-cover-overrides > summary').click();
+    await page.getByRole('button', { name: 'Editing on', exact: true }).click();
+    const overlay = page.locator('.lab-canvas > .merge-native-sections .merge-cover-depth');
+    await overlay.locator('canvas').waitFor();
+    await overlay.hover({ position: { x: 50, y: 50 } });
+    await page.waitForFunction(() => document.querySelector('.merge-cover-depth canvas')?.classList.contains('is-on'));
+    const first = await overlay.screenshot();
+    const bounds = await overlay.boundingBox();
+    await page.mouse.move(bounds.x + bounds.width - 25, bounds.y + bounds.height - 25, { steps: 15 });
+    const second = await overlay.screenshot();
+    assert.notDeepEqual(first, second, 'Pointer depth changes actual rendered pixels');
+    const sample = await overlay.evaluate(element => new Promise(resolve => requestAnimationFrame(() => {
+      const canvas = element.querySelector('canvas'), gl = canvas.getContext('webgl2'), pixel = new Uint8Array(4);
+      gl.readPixels(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel); resolve([...pixel]);
+    })));
+    assert.ok(sample.slice(0, 3).some(channel => channel > 20), 'Depth canvas is nonblank');
+    await page.screenshot({ path: join(tmpdir(), 'rk-linked-cover-depth-1440.png') });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await overlay.locator('canvas').waitFor({ state: 'detached' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: join(tmpdir(), 'rk-linked-cover-static-390.png') });
+    await page.getByRole('button', { name: 'Rehearse', exact: true }).click();
+    await page.getByRole('button', { name: 'Open properties', exact: true }).click();
+    await page.getByLabel('Show team', { exact: true }).uncheck();
+    await page.getByLabel('Cover crop x', { exact: true }).press('End');
+    assert.equal(await page.getByLabel('Cover crop x', { exact: true }).inputValue(), '100');
+    await page.getByRole('button', { name: 'Close panel', exact: true }).click();
+    await page.locator('[data-l2-back]').click();
+    await page.locator('.merge-shell').waitFor({ state: 'detached' });
+    const saved = await page.evaluate(async () => {
+      const reference = window.__RKStudio.getDraft().work[0].study.nativeDeck;
+      const database = await new Promise(resolve => { const request = indexedDB.open('rk-studio-slide-decks-v1'); request.onsuccess = () => resolve(request.result); });
+      try {
+        const transaction = database.transaction(['documents', 'assets']);
+        const document = await new Promise(resolve => { const request = transaction.objectStore('documents').get([reference.id, reference.revision]); request.onsuccess = () => resolve(request.result.document); });
+        await Promise.all(document.slides.flatMap(slide => Object.entries(slide.scene.files).map(([id, key]) => new Promise(resolve => { const request = transaction.objectStore('assets').get(key); request.onsuccess = () => { slide.scene.files[id] = request.result; resolve(); }; }))));
+        return document;
+      } finally { database.close(); }
+    });
+    const scene = saved.slides[0].scene, cover = scene.elements.find(element => element.id === 'lab-slide').customData.slideSettings.cover;
+    assert.equal(scene.files[cover.image.fileId].dataURL, media.image);
+    assert.equal(scene.files[cover.depth.fileId].dataURL, media.depth);
+    assert.equal(cover.crop.x, 100);
+    assert.ok(cover.hidden.includes('team'));
+    const audience = publicDeckPayload(setDeckVisibility(saved, 'public'), { reviewedSources: true });
+    const publicImage = audience.slides[0].scene.elements.find(element => element.customData?.slideDepth);
+    assert.equal(audience.slides[0].scene.files[publicImage.customData.slideDepth.fileId].dataURL, media.depth);
+    assert.equal(JSON.stringify(audience).includes('integrated-case'), false);
+    assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
 
@@ -376,10 +486,10 @@ test('case authoring keeps sources private and requires reviewed selective appli
   } finally { await browser.close(); }
 });
 
-async function openIntegratedFixture(page, blocks = [{ type: "text", heading: "Published heading", body: "Supported source content." }], studyFields = {}) {
+async function openIntegratedFixture(page, blocks = [{ type: "text", heading: "Published heading", body: "Supported source content." }], studyFields = {}, workFields = {}) {
   const published = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
   published.work = [
-    { id: "integrated-case", client: "Studio fixture", title: "Integrated project", study: { ...studyFields, blocks } },
+    { id: "integrated-case", client: "Studio fixture", title: "Integrated project", ...workFields, study: { ...studyFields, blocks } },
     { id: "empty-case", client: "Empty fixture", title: "Empty project", study: { blocks: [] } }
   ];
   await page.context().route("**/*", async route => {

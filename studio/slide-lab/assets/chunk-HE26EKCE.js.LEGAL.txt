@@ -72,12 +72,14 @@ lucide-react/dist/esm/icons/pencil-off.mjs:
 lucide-react/dist/esm/icons/pencil.mjs:
 lucide-react/dist/esm/icons/play.mjs:
 lucide-react/dist/esm/icons/presentation.mjs:
+lucide-react/dist/esm/icons/refresh-cw.mjs:
 lucide-react/dist/esm/icons/rotate-ccw.mjs:
 lucide-react/dist/esm/icons/square.mjs:
 lucide-react/dist/esm/icons/thumbs-down.mjs:
 lucide-react/dist/esm/icons/thumbs-up.mjs:
 lucide-react/dist/esm/icons/timer.mjs:
 lucide-react/dist/esm/icons/trash-2.mjs:
+lucide-react/dist/esm/icons/undo-2.mjs:
 lucide-react/dist/esm/icons/ungroup.mjs:
 lucide-react/dist/esm/icons/user-round.mjs:
 lucide-react/dist/esm/icons/x.mjs:

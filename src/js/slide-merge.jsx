@@ -28,7 +28,7 @@ import { fitAuthoredText } from "./slide-merge-authoring-fit.mjs";
 import { fonts as authoringFonts } from "./slide-platform-fonts.mjs";
 import { SlideProperties } from "./slide-merge-properties.jsx";
 import { PROPERTY_LAYOUTS, slideSettings, slideOwnsFocus, layoutPlan } from "./slide-merge-properties.mjs";
-import { coverValues, coverSkeleton, coverPalette } from "./slide-merge-cover.mjs";
+import { coverValues, coverSkeleton, coverPalette, linkedCoverValues, COVER_SOURCE_FIELDS } from "./slide-merge-cover.mjs";
 import { configureSlideSnapping } from "./slide-merge-snapping.mjs";
 import "@excalidraw/excalidraw/index.css";
 import "../../css/slide-lab.css";
@@ -138,10 +138,15 @@ function CompositionPreview({ plan }) {
 
 function coverElements(cover) {
   const context = document.createElement("canvas").getContext("2d");
-  const fitted = coverSkeleton(cover, cover.fontFamily || DEFAULT_SLIDE_FONT, crypto.randomUUID()).map(element => fitAuthoredText(element, (text, size) => {
-    context.font = `${size}px "${authoringFonts.find(font => font.id === element.fontFamily)?.family || "sans-serif"}"`;
-    return context.measureText(text).width;
-  }, Math.min(element.fontSize || 18, element.customData.slideCover === "footnote" ? 7 : 10)));
+  const fitted = coverSkeleton(cover, cover.fontFamily || DEFAULT_SLIDE_FONT, crypto.randomUUID()).map(element => {
+    const role = element.customData.slideCover, minimum = role === "footnote" ? 7 : role.startsWith("team-") ? 9 : 10;
+    try {
+      return fitAuthoredText(element, (text, size) => {
+        context.font = `${size}px "${authoringFonts.find(font => font.id === element.fontFamily)?.family || "sans-serif"}"`;
+        return context.measureText(text).width;
+      }, Math.min(element.fontSize || 18, minimum));
+    } catch (error) { throw new Error(`Cover ${role.startsWith("team-") ? "team" : role}: ${error.message}`); }
+  });
   const slots = new Map(fitted.map(element => [element.id, element]));
   return restoreElements(convertToExcalidrawElements(fitted, { regenerateIds: false }).map(element => element.type === "text" ? { ...element, width: slots.get(element.id).width, originalText: slots.get(element.id).text, autoResize: false } : element), null, { repairBindings: true, refreshDimensions: true });
 }
@@ -187,6 +192,7 @@ function Merger({ integration, controller }) {
     onDelete: layout => openDeckDialog({ kind: "delete-layout", layout }) };
   const [view, setView] = useState({ grid: false, snap: false, rulers: false, margins: false, thirds: false });
   const [settings,setSettings]=useState({}),[snapGuides,setSnapGuides]=useState(true);
+  const [coverSourceError, setCoverSourceError] = useState("");
   useEffect(() => {
     const frame = api?.getSceneElements().find(element => element.id === FRAME_ID);
     if (frame) configureSlideSnapping(frame, { ...view, gridSize: api.getAppState().gridSize, guidesEnabled: snapGuides, guides: settings.guides || [] });
@@ -471,7 +477,11 @@ function Merger({ integration, controller }) {
       const styles = getComputedStyle(document.documentElement);
       const font = role => authoringFonts.find(item => item.family === styles.getPropertyValue(role).split(",")[0].replace(/["']/g, "").trim())?.id || DEFAULT_SLIDE_FONT;
       const palette = coverPalette(getComputedStyle(document.querySelector(".merge-shell") || document.documentElement));
-      const cover = coverValues({ ...palette, title: integration?.title || "Project title", fontFamily: font("--sans"), titleFont: font("--serif") });
+      let cover = coverValues({ ...palette, title: integration?.title || "Project title", fontFamily: font("--sans"), titleFont: font("--serif") });
+      if (integration?.coverSource) {
+        const resolved = await resolveCoverSource(cover, slide.scene.files);
+        cover = resolved.cover; slide.scene.files = resolved.files;
+      }
       await loadPlatformFonts(coverSkeleton(cover, cover.fontFamily));
       slide.scene.elements = [...slide.scene.elements.map(element => ({ ...element, customData: { ...element.customData, slideSettings: { layout: "cover", transition: "fade", cover } } })), ...coverElements(cover)];
     } else if (saved) {
@@ -648,20 +658,73 @@ function Merger({ integration, controller }) {
     api.updateScene({elements:next,appState:{selectedElementIds:{},viewBackgroundColor:sceneBackground(next)},captureUpdate:CaptureUpdateAction.IMMEDIATELY});
     setSettings(nextSettings);setHasSelection(false);schedule();
   }
+  async function resolveCoverSource(previous, files) {
+    const source = integration.coverSource(), fingerprint = JSON.stringify(source);
+    if (previous.source && previous.source.caseStudyId !== source.caseStudyId) throw new Error("This cover belongs to another project.");
+    const merged = linkedCoverValues(previous, source), nextFiles = { ...files };
+    for (const key of ["image", "logo"]) {
+      if (merged.source.overrides.includes(key)) continue;
+      if (!source[key]) { delete merged[key]; continue; }
+      if (previous[key]?.source === source[key] && nextFiles[previous[key].fileId]) { merged[key] = previous[key]; continue; }
+      const url = sectionMediaUrl(source[key]);
+      if (!url) throw new Error(`The project ${key} URL is unavailable.`);
+      const response = await fetch(url, { credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw new Error(`The project ${key} could not be loaded. Retry from the cover controls.`);
+      const blob = await response.blob();
+      if (!/^image\//.test(blob.type)) throw new Error(`Choose an image for the project ${key}.`);
+      const image = await originalImage(blob);
+      nextFiles[image.id] = image;
+      merged[key] = { fileId: image.id, width: image.width, height: image.height, name: key === "logo" ? "Project brand logo" : "Project cover image", source: source[key] };
+    }
+    delete merged.depth;
+    if (source.depth?.on !== false && !source.depth?.noMap && source.depth?.map && merged.image && !merged.source.overrides.includes("image")) {
+      if (previous.depth?.source === source.depth.map && nextFiles[previous.depth.fileId]) merged.depth = { ...source.depth, fileId: previous.depth.fileId, source: source.depth.map };
+      else try {
+        const url = sectionMediaUrl(source.depth.map);
+        if (url) {
+          const response = await fetch(url, { credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(8000) });
+          if (response.ok) {
+            const blob = await response.blob();
+            if (/^image\//.test(blob.type)) {
+              const image = await originalImage(blob); nextFiles[image.id] = image;
+              merged.depth = { ...source.depth, fileId: image.id, source: source.depth.map };
+            }
+          }
+        }
+      } catch {}
+    }
+    if (!controller.active || fingerprint !== JSON.stringify(integration.coverSource())) throw new Error("Project details changed while the cover was loading. Retry the update.");
+    const cover = coverValues(merged);
+    await loadPlatformFonts(coverSkeleton(cover, cover.fontFamily || DEFAULT_SLIDE_FONT));
+    return { cover, files: nextFiles };
+  }
+  function replaceCoverElements(elements, cover) {
+    const originals = new Map(elements.filter(element => element.customData?.slideCover && !element.isDeleted).map(element => [element.customData.slideCover, element]));
+    const additions = coverElements(cover).map(element => {
+      const original = originals.get(element.customData.slideCover);
+      return original ? changed(original, { ...element, id: original.id, isDeleted: false }) : element;
+    });
+    const ids = new Set(additions.map(element => element.id));
+    return [...additions, ...elements.filter(element => element.customData?.slideCover && !ids.has(element.id)).map(element => element.isDeleted ? element : changed(element, { isDeleted: true })), ...elements.filter(element => !element.customData?.slideCover)];
+  }
+  function refreshCoverSource(reset) { return run(async () => {
+    try {
+      const elements = api.getSceneElementsIncludingDeleted(), previous = slideSettings(elements).cover;
+      if (!previous) return;
+      const source = previous.source ? { ...previous.source, overrides: previous.source.overrides.filter(key => key !== reset) } : undefined;
+      const resolved = await resolveCoverSource({ ...previous, source }, api.getFiles());
+      commitSettings({ cover: resolved.cover }, replaceCoverElements(elements, resolved.cover));
+      api.addFiles(Object.values(resolved.files)); await save(); setCoverSourceError("");
+    } catch (error) { setCoverSourceError(error.message); }
+  }); }
   function updateCover(update) {
     if (!live.current.editing || live.current.operating || !live.current.ready) return "The editor is busy.";
     try {
       const elements = api.getSceneElementsIncludingDeleted(), previous = slideSettings(elements).cover;
       if (!previous) return "Select a cover slide first.";
-      const cover = coverValues({ ...previous, ...update });
-      const originals = new Map(elements.filter(element => element.customData?.slideCover).map(element => [element.customData.slideCover, element]));
-      const additions = coverElements(cover).map(element => {
-        const original = originals.get(element.customData.slideCover);
-        return original ? changed(original, { ...element, id: original.id, isDeleted: false }) : element;
-      });
-      const keys = new Set(additions.map(element => element.customData.slideCover));
-      const removed = elements.filter(element => element.customData?.slideCover && !keys.has(element.customData.slideCover)).map(element => element.isDeleted ? element : changed(element, { isDeleted: true }));
-      commitSettings({ cover }, [...additions, ...removed, ...elements.filter(element => !element.customData?.slideCover)]);
+      const source = previous.source ? { ...previous.source, overrides: [...new Set([...previous.source.overrides, ...COVER_SOURCE_FIELDS.filter(key => Object.hasOwn(update, key))])] } : undefined;
+      const cover = coverValues({ ...previous, ...update, source });
+      commitSettings({ cover }, replaceCoverElements(elements, cover));
       return "";
     } catch (error) { return error.message; }
   }
@@ -750,7 +813,8 @@ function Merger({ integration, controller }) {
         if (videoUrl || !/^image\/(png|jpeg|webp|gif|svg\+xml|avif)$/.test(file.type)) throw new Error("Choose an image for this cover field.");
         const image = await originalImage(file), elements = api.getSceneElementsIncludingDeleted(), previous = slideSettings(elements).cover;
         if (!previous) throw new Error("Select a cover slide first.");
-        const cover = coverValues({ ...previous, ...(purpose === "cover-logo" ? { mark: "" } : {}), [purpose === "cover-logo" ? "logo" : "image"]: { fileId: image.id, width: image.width, height: image.height, name: source.name || source.title || "Cover image" } });
+        const key = purpose === "cover-logo" ? "logo" : "image";
+        const cover = coverValues({ ...previous, ...(key === "logo" ? { mark: "" } : {}), ...(previous.source ? { source: { ...previous.source, overrides: [...new Set([...previous.source.overrides, key])] } } : {}), [key]: { fileId: image.id, width: image.width, height: image.height, name: source.name || source.title || "Cover image" } });
         const additions = coverElements(cover);
         commitSettings({ cover }, [...elements.filter(element => element.customData?.slideCover).map(element => changed(element, { isDeleted: true })), ...additions, ...elements.filter(element => !element.customData?.slideCover)]);
         api.addFiles([image]);
@@ -780,13 +844,26 @@ function Merger({ integration, controller }) {
       if (stored && (stored.version !== 1 || !Array.isArray(stored.slides))) throw new Error("Unsupported deck format");
       if (stored?.fonts) await registerStudioFonts(null, LabFontRegistry, FONT_FAMILY, stored.fonts);
       const next = stored ? structuredClone(stored) : integration ? createStudioDeck(integration.title) : createDeck(); next.slides = await Promise.all(next.slides.map(materialize));
+      let refreshed = false;
+      if (integration?.coverSource) for (const slide of next.slides) {
+        const previous = slideSettings(slide.scene.elements).cover;
+        if (!previous?.source) continue;
+        try {
+          const resolved = await resolveCoverSource(previous, slide.scene.files);
+          if (JSON.stringify(resolved.cover) === JSON.stringify(previous)) continue;
+          const elements = replaceCoverElements(slide.scene.elements, resolved.cover);
+          slide.scene.elements = elements.map(element => element.id === FRAME_ID ? changed(element, { customData: { ...element.customData, slideSettings: { ...slideSettings(elements), cover: resolved.cover } } }) : element);
+          slide.scene.files = resolved.files; refreshed = true;
+        } catch (error) { setCoverSourceError(error.message); }
+      }
       if (!active || !controller.active) return;
       if (!next.slides.some(slide => slide.id === next.selected)) next.selected = next.slides[0]?.id ?? null;
       paint(next); await mountSlide(next.slides.find(slide => slide.id === next.selected));
       if (integration) {
         capture();
-        live.current.persistedKey = JSON.stringify([deckDocumentKey(next), next.selected]);
+        live.current.persistedKey = refreshed ? null : JSON.stringify([deckDocumentKey(next), next.selected]);
         deckHistory.current.reset(next); live.current.savedRevision = live.current.revision;
+        if (refreshed) await save(false);
         setStatus(integration?.savedStatus?.() || "Saved on this device");
       } else await save();
       next.slides.forEach(slide => thumbnail(slide).catch(() => {}));
@@ -889,7 +966,7 @@ function Merger({ integration, controller }) {
             <ContentPane pane={pane} busy={busy} sourceStudyId={integration?.caseStudyId} onEmbed={addEmbed} layoutPicker={layoutPicker} composition={{ existingCount: deck?.slides.length || 0, onApply: applyAiComposition, renderPreview: plan => <CompositionPreview plan={plan} /> }} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => importImage(file, true)} onSection={(block, resources) => { finishPaneInsert(); addFromSection(block, true, resources); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={(blocks, resources) => addFromSection(blocks, false, resources)} onMedia={source => importMedia(source, mediaPurpose)} onUpload={() => input.current.click()}>
               {api && <LayerPanel api={api} disabled={busy||present!==null||!!deckDialog} onClose={() => openPane(null, false)} onAdd={kind => { if (kind === "media") openPane("media", false); else if (kind === "text") { finishPaneInsert(); insertContent("body"); } else { openPane(null, false); api.setActiveTool({ type:"rectangle" }); } }} />}
             </ContentPane>
-            {!hasSelection&&current&&<SlideProperties key={current.id} settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onCover={updateCover} onCoverMedia={key => openPane("media", false, null, `cover-${key}`)} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} />}
+            {!hasSelection&&current&&<SlideProperties key={current.id} settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onCover={updateCover} onCoverMedia={key => openPane("media", false, null, `cover-${key}`)} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} coverSource={!!integration?.coverSource} onCoverSource={refreshCoverSource} onEditCoverSource={tab=>integration.editCoverSource(tab).catch(fail)} coverSourceError={coverSourceError} />}
           </Excalidraw>
           <NativeSections api={api} interactive={!editing && !busy && present === null && !deckDialog} />
           <SectionVisibilityMenu api={api} host={host} disabled={busy || !editing || present !== null || !!deckDialog} />

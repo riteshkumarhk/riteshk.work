@@ -1045,7 +1045,7 @@ import { connectSectionAccess } from "./slide-studio-source.mjs";
 
   /* ---------- hero + shell content ---------- */
   function metaGrid(st, period) {
-    var rows = [["Role", st.role], ["Team", st.team], ["Timeline", st.timeline || period], ["Scope", st.scope]]
+    var rows = [["Role", st.role], ["Team", st.team], ["Current status", st.status], ["Scope", st.scope]]
       .filter(function (r) { return r[1]; });
     if (!rows.length) return "";
     return '<dl class="pj__meta">' + rows.map(function (r) {

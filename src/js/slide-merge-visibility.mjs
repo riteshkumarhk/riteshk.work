@@ -2,6 +2,7 @@ import { embedDescriptor } from "./slide-merge-embeds.mjs";
 import { sectionMediaUrl } from "./slide-merge-sections.mjs";
 import { normalizeSectionReference, sectionComponentPlan } from "./slide-merge-section-component.mjs";
 import { sectionTextVisibility } from "./slide-merge-section-component.mjs";
+import { coverDepth } from "./slide-merge-cover.mjs";
 
 export function deckVisibility(deck) {
   return deck?.slidesPublic === true ? "public" : "private";
@@ -112,6 +113,20 @@ export function publicDeckPayload(deck, { reviewedSources = false, production = 
     if (!frame) throw new Error("Slide frame is missing");
     ids.set(frame.id, "lab-slide");
     const files = {}, fileIds = new Map(), groups = new Map();
+    function includeFile(fileId) {
+      const file = scene.files?.[fileId];
+      if (!file) throw new Error("Public image bytes are missing");
+      assertUnprotected(file);
+      if (!fileIds.has(fileId)) {
+        const id = `file-${fileIds.size}`;
+        fileIds.set(fileId, id);
+        const media = production ? { dataURL: publicMediaReference(file.dataURL), mimeType: file.mimeType } : inlineMedia(file.dataURL, file.mimeType);
+        if (!MEDIA_TYPES.has(media.mimeType)) throw new Error("Unsupported public media type");
+        files[id] = { id, ...media, created: 0 };
+        if (file.originalDataURL) files[id].originalDataURL = production ? publicMediaReference(file.originalDataURL) : inlineMedia(file.originalDataURL, file.mimeType).dataURL;
+      }
+      return fileIds.get(fileId);
+    }
     function binding(value) {
       if (!value || !ids.has(value.elementId)) return null;
       const result = { ...pickScalars(value, ["focus", "gap"]), elementId:ids.get(value.elementId) };
@@ -169,18 +184,12 @@ export function publicDeckPayload(deck, { reviewedSources = false, production = 
       }
       result.customData = safe;
       if (element.type === "image") {
-        const file = scene.files?.[element.fileId];
-        if (!file) throw new Error("Public image bytes are missing");
-        assertUnprotected(file);
-        if (!fileIds.has(element.fileId)) {
-          const id = `file-${fileIds.size}`;
-          fileIds.set(element.fileId, id);
-          const media = production ? { dataURL: publicMediaReference(file.dataURL), mimeType: file.mimeType } : inlineMedia(file.dataURL, file.mimeType);
-          if (!MEDIA_TYPES.has(media.mimeType)) throw new Error("Unsupported public media type");
-          files[id] = { id, ...media, created:0 };
-          if (file.originalDataURL) files[id].originalDataURL = production ? publicMediaReference(file.originalDataURL) : inlineMedia(file.originalDataURL, file.mimeType).dataURL;
+        result.fileId = includeFile(element.fileId); result.status = "saved";
+        const depth = coverDepth(custom.slideDepth);
+        if (depth) {
+          if (!scene.files?.[depth.fileId]?.mimeType?.startsWith("image/")) throw new Error("Depth map image bytes are missing");
+          safe.slideDepth = { ...depth, fileId: includeFile(depth.fileId) };
         }
-        result.fileId = fileIds.get(element.fileId); result.status = "saved";
       }
       return result;
     });

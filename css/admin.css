@@ -6,6 +6,8 @@
 .nav__time { cursor: pointer; transition: color .3s; }
 .nav__time:hover { color: var(--accent); }
 
+.adm__brand-logo { display: block; width: 120px; height: 80px; object-fit: contain; margin-bottom: 12px; }
+
 /* ---------- passphrase modal ---------- */
 .pass {
   position: fixed; inset: 0; z-index: 10001; display: grid; place-items: center;

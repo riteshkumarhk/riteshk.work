@@ -42,10 +42,10 @@ const VERT =
 const FRAG =
   "#version 300 es\nprecision highp float;in vec2 vUv;out vec4 o;" +
   "uniform sampler2D uColor;uniform sampler2D uDepth;uniform vec2 uPointer;" +
-  "uniform float uStrength,uFocus,uZoom,uImgA,uBoxA,uSoft;" +
+  "uniform float uStrength,uFocus,uZoom,uImgA,uBoxA,uSoft,uHasCrop;uniform vec4 uCrop;" +
   "vec2 fitCover(vec2 uv){float ia=uImgA,ba=uBoxA;vec2 s=vec2(1.0);if(ia>ba)s.x=ba/ia;else s.y=ia/ba;return (uv-0.5)*s+0.5;}" +
   "float dsample(vec2 uv){if(uSoft<0.0006)return texture(uDepth,uv).r;float d=texture(uDepth,uv).r*0.28;for(int i=0;i<8;i++){float a=0.7853982*float(i);vec2 o2=vec2(cos(a),sin(a))*uSoft;d+=texture(uDepth,uv+o2).r*0.09;}return d;}" +
-  "void main(){vec2 st=vec2(vUv.x,1.0-vUv.y);vec2 base=fitCover(st);vec2 z=(base-0.5)/uZoom+0.5;" +
+  "void main(){vec2 st=vec2(vUv.x,1.0-vUv.y);vec2 base=mix(fitCover(st),uCrop.xy+st*uCrop.zw,uHasCrop);vec2 z=(base-0.5)/uZoom+0.5;" +
   "float d=dsample(z);float rel=d-uFocus;vec2 off=uPointer*uStrength*rel;" +
   "vec3 col=texture(uColor,z+off).rgb;o=vec4(col,1.0);}";
 
@@ -145,13 +145,24 @@ function readSettings(media) {
   };
 }
 
-function attach(media, img, depthImg, ctx) {
+export function mountSlideDepth(media, imageUrl, depthUrl, settings) {
+  const motion = matchMedia("(prefers-reduced-motion: reduce)");
+  if (motion.matches || !gpuOk() && !new URLSearchParams(location.search).has("depth")) return () => {};
+  let active = true, dispose = null;
+  const images = [imageUrl, depthUrl].map(url => { const image = new Image(); image.crossOrigin = "anonymous"; image.src = url; return image; });
+  Promise.all(images.map(image => image.decode())).then(() => { if (active) dispose = attach(media, images[0], images[1], null, settings); }).catch(() => {});
+  const stop = () => { active = false; dispose?.(); dispose = null; };
+  motion.addEventListener("change", stop);
+  return () => { stop(); motion.removeEventListener("change", stop); images.forEach(image => { image.src = ""; }); };
+}
+
+function attach(media, img, depthImg, ctx, slideSettings = null) {
   const gyro = !!(ctx && ctx.gyro);
   // Always mount over the frame (16:10). Mobile shows the whole scene (zoomed out) and dollies the
   // zoom on scroll; desktop rests at 1.40 and dollies out on hover.
   const mount = media;
   const box = media;                                   // the canvas fills - and is measured against - the frame
-  const REST = gyro ? MOBILE_ZOOM_OUT : DEFAULTS.zoomRest;
+  const REST = slideSettings ? 1 : gyro ? MOBILE_ZOOM_OUT : DEFAULTS.zoomRest;
 
   const canvas = document.createElement("canvas");
   canvas.className = "case__depth";
@@ -197,7 +208,7 @@ function attach(media, img, depthImg, ctx) {
       if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { gl = null; return false; }
       gl.useProgram(prog);
       U = {};
-      ["uColor", "uDepth", "uPointer", "uStrength", "uFocus", "uZoom", "uImgA", "uBoxA", "uSoft"].forEach((n) => { U[n] = gl.getUniformLocation(prog, n); });
+      ["uColor", "uDepth", "uPointer", "uStrength", "uFocus", "uZoom", "uImgA", "uBoxA", "uSoft", "uHasCrop", "uCrop"].forEach((n) => { U[n] = gl.getUniformLocation(prog, n); });
       gl.uniform1i(U.uColor, 0); gl.uniform1i(U.uDepth, 1);
       gl.bindVertexArray(gl.createVertexArray());
       colorTex = makeTex(0, img);
@@ -218,7 +229,7 @@ function attach(media, img, depthImg, ctx) {
     if (!gl) return;
     cur.x += (target.x - cur.x) * 0.09;
     cur.y += (target.y - cur.y) * 0.09;
-    const s = readSettings(media);
+    const s = slideSettings ? { ...slideSettings, zoomHover: slideSettings.zoom } : readSettings(media);
     let zoomTarget, panY = 0;
     if (gyro) {
       // Scroll drives the dolly: zoomed OUT (whole scene) when the card is centred, easing IN as it
@@ -237,6 +248,9 @@ function attach(media, img, depthImg, ctx) {
     gl.uniform2f(U.uPointer, cur.x, clamp(cur.y + panY, -1, 1));
     gl.uniform1f(U.uStrength, s.strength);
     gl.uniform1f(U.uSoft, s.softness);
+    const crop = slideSettings?.crop;
+    gl.uniform1f(U.uHasCrop, crop ? 1 : 0);
+    gl.uniform4f(U.uCrop, crop ? crop.x / img.naturalWidth : 0, crop ? crop.y / img.naturalHeight : 0, crop ? crop.width / img.naturalWidth : 1, crop ? crop.height / img.naturalHeight : 1);
     gl.uniform1f(U.uFocus, s.focus);
     gl.uniform1f(U.uZoom, zoomCur);
     gl.uniform1f(U.uImgA, img.naturalWidth / img.naturalHeight);
@@ -269,17 +283,23 @@ function attach(media, img, depthImg, ctx) {
   const controller = { el: media, isActive: () => active, wake, setTilt(x, y) { target.x = x; target.y = y; wake(); }, activate, deactivate };
   media.__depthCtrl = controller;
 
+  const events = new AbortController();
   if (gyro) {
     ctx.observe(controller);                             // IntersectionObserver activates it while in view
   } else {
-    media.addEventListener("pointerenter", () => activate(true));
-    media.addEventListener("pointerleave", deactivate);
+    media.addEventListener("pointerenter", () => activate(true), { signal: events.signal });
+    media.addEventListener("pointerleave", deactivate, { signal: events.signal });
     media.addEventListener("pointermove", (e) => {
       const r = media.getBoundingClientRect();
       target.x = ((e.clientX - r.left) / r.width) * 2 - 1;
       target.y = -(((e.clientY - r.top) / r.height) * 2 - 1);
-    });
+    }, { signal: events.signal });
   }
+  return () => {
+    events.abort(); active = false; cancelAnimationFrame(raf); raf = 0;
+    if (gl) { gl.deleteTexture(colorTex); gl.deleteTexture(depthTex); gl.deleteProgram(prog); gl.getExtension("WEBGL_lose_context")?.loseContext(); gl = null; }
+    canvas.remove(); media.classList.remove("is-depth"); delete media.__depthCtrl;
+  };
 }
 
 // One device-orientation controller shared by every gyro cover: it tilts the pointer from the

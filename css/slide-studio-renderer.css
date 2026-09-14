@@ -1,3 +1,7 @@
+.merge-cover-depth { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.merge-cover-depth > .case__depth { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; transition: opacity 180ms ease; }
+.merge-cover-depth > .case__depth.is-on { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .merge-cover-depth > .case__depth { display: none; } }
 .merge-section-locked { display:grid;place-content:center;justify-items:center;gap:10px;box-sizing:border-box;width:100%;height:100%;padding:12px;border:1px dashed var(--line);background:var(--bg-2);color:var(--text-dim);font:12px var(--sans);text-align:center;overflow:hidden; }
 .merge-section-locked>svg { color:var(--accent); }
 .merge-section-locked>svg rect { fill:currentColor; }

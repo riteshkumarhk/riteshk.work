@@ -245,3 +245,20 @@ test("public slides retain protected references without copying private snapshot
   deck.slides[0].scene.elements.at(-1).customData.sectionComponent={type:'text',body:'Private snapshot'};
   assert.throws(()=>publicDeckPayload(deck,{reviewedSources:true,production:true}),/snapshots/);
 });
+test("public cover depth remaps original image bytes without project links or override metadata", () => {
+  const deck = fixture(), scene = deck.slides[0].scene;
+  scene.elements[0].customData.slideSettings.cover = { source: { caseStudyId: "PRIVATE", overrides: ["title"] }, depth: { source: "PRIVATE" } };
+  scene.elements[2].customData = { slideDepth: { fileId: "private-depth", strength: .04, focus: .4, softness: .01, zoom: 1.1, source: "PRIVATE" } };
+  scene.files["private-depth"] = { mimeType: "image/png", dataURL: "data:image/png;base64,BAUG", source: "PRIVATE" };
+  const before = structuredClone(deck), result = publicDeckPayload(deck, { reviewedSources: true }).slides[0].scene;
+  const depth = result.elements[2].customData.slideDepth;
+  assert.equal(result.files[depth.fileId].dataURL, scene.files["private-depth"].dataURL);
+  assert.equal(depth.strength, .04);
+  assert.equal(JSON.stringify(result).includes("PRIVATE"), false);
+  assert.equal(JSON.stringify(result).includes("private-depth"), false);
+  assert.deepEqual(deck, before);
+  scene.files["private-depth"].protected = true;
+  assert.throws(() => publicDeckPayload(deck, { reviewedSources: true }), /Protected/);
+  delete scene.files["private-depth"];
+  assert.throws(() => publicDeckPayload(deck, { reviewedSources: true }), /Depth map/);
+});

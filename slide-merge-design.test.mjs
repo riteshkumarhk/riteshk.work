@@ -21,7 +21,9 @@ test("Slide properties reuse native inspector groups without collapse controls",
   const component = read("./src/js/slide-merge-properties.jsx");
   assert.match(component, /merge-slide-properties Island App-menu__left/);
   assert.match(component, /className="panelColumn"/);
-  assert.doesNotMatch(component, /setExpanded|aria-expanded|<details|<summary|mobileOpen|merge-background-media/);
+  assert.doesNotMatch(component.slice(component.indexOf("export function SlideProperties")), /setExpanded|aria-expanded|<details|<summary|mobileOpen|merge-background-media/);
+  assert.equal((component.match(/<details/g) || []).length, 1);
+  assert.match(component, /<details className="merge-cover-overrides"><summary>Custom content<\/summary>/);
   for (const label of ["Layout", "Background", "Transition in", "Actions"]) assert.ok(component.includes(`<legend>${label}</legend>`));
   const properties = postcss.parse(read("./css/slide-merge-properties.css"));
   assert.equal(declarations(properties, ".merge-slide-properties").width, "200px");

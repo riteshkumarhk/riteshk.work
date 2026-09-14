@@ -7,6 +7,27 @@ the existing owner session through a new, narrowly scoped Worker route.
 See [the design audit](DESIGN-AUDIT.md) for consistency corrections, verification
 coverage and components proposed for a future shared design-system update.
 
+## Linked Project Covers
+
+New covers in hosted Studio read title, client, card Period, Highlights role/team,
+Current status and Scope directly from the project. Scope supplies the footnote.
+Current status is optional and never inferred from dates; existing Timeline values
+are retained without migration, and the card Period remains unchanged.
+Details owns the brand logo, with original-file upload or direct HTTPS image fetch.
+
+Linked covers refresh when reopening the editor, not during presentation. Their
+inspector provides source navigation, visibility, crop and optional per-slide
+overrides with individual reset actions. Old independent covers stay independent
+unless the owner selects Use project content. Failed source loading retains the
+last valid cover and provides an explicit retry.
+
+The project image and available depth map are retained as original deck assets.
+Rehearse and audience playback reuse the site's pointer-depth renderer and saved
+numeric settings. Reduced motion, unavailable GPU/WebGL or map-loading failure
+leave the native image visible. Thumbnails and exports remain static. Slides have
+no scroll-driven depth; touch devices without pointer movement keep the static
+image. Public exports remap depth file IDs and strip project links/override data.
+
 ## Project Workspace And AI Session
 
 Release approved, 2026-09-12. The owner approved validation and release of the

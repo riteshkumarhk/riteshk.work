@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Layers, Palette } from "lucide-react";
+import { Layers, Palette, Pencil, RefreshCw, Undo2 } from "lucide-react";
 import { LabColorPicker, LAB_BACKGROUND_PALETTE } from "@excalidraw/excalidraw";
 import { TRANSITIONS } from "./slide-merge-properties.mjs";
 import { LayoutPicker } from "./slide-merge-layout-picker.jsx";
@@ -21,20 +21,25 @@ function CoverColor({ name, color, elements, onChange }) {
 function CoverMedia({ kind, label, value, onChange, onMedia }) {
   return <div className="merge-cover-media"><button className="merge-property-action" onClick={() => onMedia(kind)}><ToolIcon name="image" />{value ? `Replace ${label.toLowerCase()}` : `Upload ${label.toLowerCase()}`}</button>{value && <div className="merge-background-file"><span title={value.name}>{value.name}</span><button type="button" title={`Remove ${label.toLowerCase()}`} aria-label={`Remove ${label.toLowerCase()}`} onClick={() => onChange({ [kind]: null })}><ToolIcon name="trash" /></button></div>}</div>;
 }
-function CoverProperties({ value, elements, disabled, onChange, onMedia }) {
+function CoverProperties({ value, elements, disabled, onChange, onMedia, source, onSource, onEditSource, sourceError }) {
   const cover = coverValues(value);
+  const fields = <>{COVER_FIELDS.map(field => <React.Fragment key={field[0]}><CoverField field={field} value={cover[field[0]]} onChange={onChange} />{cover.source?.overrides.includes(field[0]) && <button className="merge-property-action" onClick={() => onSource(field[0])}><Undo2 size={18} />Reset {field[1].toLowerCase()}</button>}{field[0] === "client" && <CoverMedia kind="logo" label="Brand logo" value={cover.logo} onChange={onChange} onMedia={onMedia} />}</React.Fragment>)}<CoverMedia kind="image" label="Hero image" value={cover.image} onChange={onChange} onMedia={onMedia} />{["image", "logo"].filter(key => cover.source?.overrides.includes(key)).map(key => <button key={key} className="merge-property-action" onClick={() => onSource(key)}><Undo2 size={18} />Reset {key}</button>)}</>;
   return <>
-    <fieldset disabled={disabled}><legend>Cover</legend>{COVER_FIELDS.map(field => <React.Fragment key={field[0]}><CoverField field={field} value={cover[field[0]]} onChange={onChange} />{field[0] === "client" && <CoverMedia kind="logo" label="Brand logo" value={cover.logo} onChange={onChange} onMedia={onMedia} />}</React.Fragment>)}</fieldset>
-    <fieldset disabled={disabled}><legend>Media</legend><CoverMedia kind="image" label="Hero image" value={cover.image} onChange={onChange} onMedia={onMedia} /></fieldset>
+    {source && <fieldset disabled={disabled}><legend>Project</legend><button className="merge-property-action" onClick={() => onEditSource("details")}><Pencil size={18} />Details</button><button className="merge-property-action" onClick={() => onEditSource("highlights")}><Pencil size={18} />Highlights</button><button className="merge-property-action" onClick={() => onSource()}><RefreshCw size={18} />{cover.source ? "Refresh linked cover" : "Use project content"}</button>{sourceError && <span className="merge-cover-error" role="alert">{sourceError}</span>}</fieldset>}
+    {cover.source ? <>
+      <fieldset disabled={disabled}><legend>Visible content</legend>{[["title", "Title"], ["client", "Client"], ["status", "Status"], ["duration", "Period"], ["team", "Team"], ["role", "My role"], ["footnote", "Scope"], ["image", "Cover image"], ["logo", "Brand logo"]].map(([key, label]) => <label className="merge-cover-visibility" key={key}><input type="checkbox" aria-label={`Show ${label.toLowerCase()}`} checked={!cover.hidden.includes(key)} onChange={event => onChange({ hidden: event.target.checked ? cover.hidden.filter(item => item !== key) : [...cover.hidden, key] })} />{label}</label>)}</fieldset>
+      <fieldset disabled={disabled}><legend>Slide overrides</legend><details className="merge-cover-overrides"><summary>Custom content</summary>{fields}</details></fieldset>
+    </> : <fieldset disabled={disabled}><legend>Cover</legend>{fields}</fieldset>}
+    {cover.image && <fieldset disabled={disabled}><legend>Image crop</legend>{["x", "y"].map(axis => <label className="merge-cover-field" key={axis}><span>{axis === "x" ? "Horizontal" : "Vertical"}</span><input className="merge-cover-crop" type="range" style={{ "--fill": `${cover.crop[axis]}%` }} aria-label={`Cover crop ${axis}`} min="0" max="100" value={cover.crop[axis]} onChange={event => onChange({ crop: { ...cover.crop, [axis]: +event.target.value } })} /></label>)}{cover.depth && <label className="merge-cover-visibility"><input type="checkbox" checked={cover.motion} onChange={event => onChange({ motion: event.target.checked })} />Depth in playback</label>}</fieldset>}
     <fieldset disabled={disabled}><legend>Colours</legend><button className="merge-property-action" onClick={event => onChange(coverPalette(getComputedStyle(event.currentTarget.closest(".merge-shell"))))}><Palette size={18} strokeWidth={1.75} />Use site colours</button>{[["background", "Cover background"], ["rail", "Brand rail"], ["panel", "Image frame"], ["text", "Title colour"], ["muted", "Body colour"]].map(([key, name]) => <CoverColor key={key} name={name} color={cover[key]} elements={elements} onChange={color => onChange({ [key]: color })} />)}</fieldset>
   </>;
 }
-export function SlideProperties({ settings, elements, disabled, onLayout, onBackground, onMedia, onTransition, layoutPicker, onSaveLayout, onLayers, onCover, onCoverMedia }) {
+export function SlideProperties({ settings, elements, disabled, onLayout, onBackground, onMedia, onTransition, layoutPicker, onSaveLayout, onLayers, onCover, onCoverMedia, coverSource, onCoverSource, onEditCoverSource, coverSourceError }) {
   const [pickerState,setPickerState]=useState({openPopup:null});
   useEffect(()=>{if(disabled)setPickerState({openPopup:null});},[disabled]);
   return <aside className="merge-slide-properties Island App-menu__left" style={{"--padding":2}} aria-label="Slide properties" onKeyDown={event=>event.stopPropagation()}>
     <div className="panelColumn">
-    {settings.cover ? <CoverProperties value={settings.cover} elements={elements} disabled={disabled} onChange={onCover} onMedia={onCoverMedia} /> : <>
+    {settings.cover ? <CoverProperties value={settings.cover} elements={elements} disabled={disabled} onChange={onCover} onMedia={onCoverMedia} source={coverSource} onSource={onCoverSource} onEditSource={onEditCoverSource} sourceError={coverSourceError} /> : <>
     <fieldset disabled={disabled}><legend>Layout</legend><LayoutPicker {...layoutPicker} compact selected={settings.layout} disabled={disabled} onPick={onLayout} /></fieldset>
     <fieldset className="merge-slide-color" disabled={disabled}><legend>Background</legend><LabColorPicker type="elementBackground" label="Background" color={settings.background?.color||"transparent"} elements={elements} palette={LAB_BACKGROUND_PALETTE} appState={pickerState} updateData={setPickerState} onChange={color=>onBackground(color==="transparent"?null:{type:"color",color})} />
       <button className="merge-property-action" disabled={disabled} onClick={onMedia}><ToolIcon name="image" />{settings.background?.type==="media"?"Replace image or video":"Image or video"}</button>

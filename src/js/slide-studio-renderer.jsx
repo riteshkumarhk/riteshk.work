@@ -12,6 +12,8 @@ import { presentDeckWithRenderer } from "./deck-presenter.mjs";
 import { resolvedSectionSource, sectionRuntimeData } from "./slide-studio-source.mjs";
 import { sectionTextFields, sectionTextVisibility } from "./slide-merge-section-component.mjs";
 import { Check, Lock } from "lucide-react";
+import { mountSlideDepth } from "./depth.js";
+import { coverDepth } from "./slide-merge-cover.mjs";
 import "../../css/slide-studio-renderer.css";
 
 function useAppearance() {
@@ -74,7 +76,18 @@ export function NativeSections({ api, interactive = false }) {
     update(api.getSceneElements(), api.getAppState());
     return api.onChange(update);
   }, [api]);
-  return <div className={`merge-native-sections${interactive ? " is-interactive" : ""}`}><SectionLayers layers={layers} files={api?.getFiles()} /></div>;
+  return <div className={`merge-native-sections${interactive ? " is-interactive" : ""}`}><SectionLayers layers={layers.filter(layer => interactive || !layer.element.customData?.slideDepth)} files={api?.getFiles()} /></div>;
+}
+
+function DepthImage({ element, files }) {
+  const host = useRef(null), depth = coverDepth(element.customData.slideDepth);
+  const imageUrl = files?.[element.fileId]?.dataURL, depthUrl = files?.[depth?.fileId]?.dataURL;
+  const signature = JSON.stringify([depth, element.crop]);
+  useEffect(() => {
+    if (!imageUrl || !depthUrl || !depth) return;
+    return mountSlideDepth(host.current, imageUrl, depthUrl, { ...depth, crop: element.crop });
+  }, [imageUrl, depthUrl, signature]);
+  return <div ref={host} className="merge-cover-depth" aria-hidden="true" />;
 }
 
 function SectionForeground({ elements, frame, files, style }) {
@@ -90,7 +103,7 @@ function SectionForeground({ elements, frame, files, style }) {
 }
 
 function SectionLayers({ layers, files, preview = false }) {
-  return layers.map(({ element, style, clipStyle, foreground, frame, frameStyle }) => <div key={element.id} className="merge-native-clip" style={clipStyle}><div className="merge-native-section" style={style}>{element.customData.slideEmbed ? <EmbeddedMedia value={element.customData.slideEmbed.url} preview={preview} /> : <SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} reference={element.customData.sectionReference} textVisibility={element.customData.sectionTextVisibility} preview={preview} />}</div><SectionForeground elements={foreground} frame={frame} files={files} style={frameStyle} /></div>);
+  return layers.filter(layer => !preview || !layer.element.customData?.slideDepth).map(({ element, style, clipStyle, foreground, frame, frameStyle }) => <div key={element.id} className="merge-native-clip" style={clipStyle}><div className="merge-native-section" style={style}>{element.customData.slideDepth ? <DepthImage element={element} files={files} /> : element.customData.slideEmbed ? <EmbeddedMedia value={element.customData.slideEmbed.url} preview={preview} /> : <SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} reference={element.customData.sectionReference} textVisibility={element.customData.sectionTextVisibility} preview={preview} />}</div><SectionForeground elements={foreground} frame={frame} files={files} style={frameStyle} /></div>);
 }
 
 export function SectionVisibilityMenu({ api, host, disabled }) {

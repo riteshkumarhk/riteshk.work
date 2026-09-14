@@ -22,6 +22,7 @@ import { contentRevision, publicationConflict, gitContentRevision } from "./cont
 import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsEmbedScore, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand, atsScoreModel } from "./ats-core.js";
 import { draftComposition } from "./slide-merge-ai.mjs";
 import { availableStudies } from "./slide-merge-sections.mjs";
+import { projectCoverData } from "./slide-merge-cover.mjs";
 import { normalizeSectionReference } from "./slide-merge-section-component.mjs";
 import { connectSectionAccess } from "./slide-studio-source.mjs";
 import { loadProtectedBlocks } from "./project-recovery.mjs";
@@ -1611,7 +1612,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
 
   /* ---------- case study (L2) authoring ---------- */
   function blankStudy() {
-    return { tagline: "", role: "", team: "", timeline: "", scope: "", cover: "", unlockHash: "", blocks: [] };
+    return { tagline: "", role: "", team: "", status: "", scope: "", cover: "", unlockHash: "", blocks: [] };
   }
   function blankBlock(type) {
     switch (type) {
@@ -6633,7 +6634,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     if (studyHasSlides(w)) return "slides";
     if ((st.blocks || []).length) return "story";
     var sk = st.skim || {};
-    var hasHi = ["tagline", "role", "team", "timeline", "scope"].some(function (k) { return st[k] && String(st[k]).trim(); }) ||
+    var hasHi = ["tagline", "role", "team", "status", "scope"].some(function (k) { return st[k] && String(st[k]).trim(); }) ||
       (sk.hook && String(sk.hook).trim()) || (sk.points && sk.points.length) ||
       (sk.beats && sk.beats.length) || (sk.media && sk.media.length);
     if (hasHi) return "highlights";
@@ -7376,17 +7377,29 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     nativeSlideSession = session;
     root.classList.add("is-native-slides");
     const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
-    const styles = ["/studio/slide-lab/assets/editor.css?v=1.10", "/css/slide-studio.css?v=1.5"].map(href => new Promise((resolve, reject) => {
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.11", "/css/slide-studio.css?v=1.5"].map(href => new Promise((resolve, reject) => {
       const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.17";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.18";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
       session.editor = module.mountSlideEditor(container, {
         caseStudyId: work.id, title: work.title || "Untitled deck", toolbar, statusbar,
+        coverSource: () => {
+          if (!current()) throw new Error("The case-study editor session has changed");
+          const source = projectCoverData(work);
+          for (const key of ["image", "logo"]) if (source[key]) source[key] = previewSrc(source[key]);
+          if (source.depth) source.depth.map = depthMapUrl(work);
+          return source;
+        },
+        editCoverSource: async tab => {
+          await session.editor.flush();
+          if (!current()) return;
+          l2Tab = tab === "highlights" ? "highlights" : "details"; renderL2();
+        },
         onStatus: message => {
           if (!current() || publishing) return;
           if (message.startsWith("Saved on this device")) narrate();
@@ -8878,6 +8891,13 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     return '<section class="l2grp"><div class="l2grp__head">Section editor <span>\u2014 pick one on the left</span></div>' +
       '<div class="study__blocks study__blocks--single">' + list + "</div></section>";
   }
+  var PROJECT_STATUSES = ["", "In development", "Launched", "Completed", "On hold"];
+  function statusField(w, i) {
+    var value = w.study.status || "", custom = !PROJECT_STATUSES.includes(value);
+    return '<div class="af"><label class="af__label" for="project-status-' + i + '">Current status</label><select id="project-status-' + i + '" data-project-status="' + i + '">' +
+      PROJECT_STATUSES.concat("custom").map(function (item) { return '<option value="' + escAttr(item) + '"' + ((custom ? item === "custom" : item === value) ? ' selected' : '') + '>' + escHtml(item === "custom" ? "Custom" : item || "Not set") + '</option>'; }).join('') +
+      '</select><input type="text" aria-label="Custom current status" data-study="' + i + '" data-sfield="status" maxlength="40" value="' + escAttr(value) + '"' + (custom ? '' : ' hidden') + ' /></div>';
+  }
   function studyEditor(w, i) {
     var st = w.study;
     var blocks = st.blocks || (st.blocks = []);
@@ -8893,13 +8913,19 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       '<span class="adm__auto-note">Reads your Description above and writes one punchy line for the homepage card \u2014 it drops into the box so you can edit it, then Publish.</span></div>' +
       itemField("work", i, "tags", "Tags", { hint: "comma-separated" }) +
       "</section>";
+    var logo = '<section class="l2grp"><div class="l2grp__head">Brand logo</div>' +
+      (w.brandLogo ? '<img class="adm__brand-logo" src="' + escAttr(previewSrc(w.brandLogo)) + '" alt="Brand logo" />' : '') +
+      '<div class="af"><label class="af__label" for="brand-logo-url-' + i + '">Image URL</label><input type="text" id="brand-logo-url-' + i + '" data-brand-logo-url="' + i + '" value="" /></div>' +
+      '<div class="imgblk__row"><button type="button" class="btn btn--ghost" data-act="brand-logo-upload" data-index="' + i + '">' + IC.publish + ' Upload logo</button>' +
+      '<button type="button" class="btn btn--ghost" data-act="brand-logo-fetch" data-index="' + i + '">' + IC.link + ' Fetch link</button>' +
+      (w.brandLogo ? '<button type="button" class="btn btn--ghost" data-act="brand-logo-remove" data-index="' + i + '">' + IC.trash + ' Remove logo</button>' : '') + '</div><div class="af__hint" data-brand-logo-error="' + i + '" role="alert"></div></section>';
     var cover = '<section class="l2grp"><div class="l2grp__head">Cover image <span>\u2014 the homepage thumbnail &amp; case hero</span></div>' +
       imageryBlock(w, i) + "</section>";
 
     // ---- Highlights: story header + key moves + slides ----
     var storyHeader = '<section class="l2grp"><div class="l2grp__head">Story header</div>' +
       smeta(i, "tagline", "Tagline", "one line under the title") +
-      '<div class="af__row">' + smeta(i, "role", "Role") + smeta(i, "timeline", "Timeline", "Optional \u2014 leave blank to reuse the Period shown on the home card.", w.period || "") + "</div>" +
+      '<div class="af__row">' + smeta(i, "role", "Role") + statusField(w, i) + "</div>" +
       '<div class="af__row">' + smeta(i, "team", "Team") + smeta(i, "scope", "Scope") + "</div>" +
       "</section>";
     var kbeats = (st.skim && st.skim.beats && st.skim.beats.length) ? st.skim.beats : null;
@@ -8923,7 +8949,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         railDeeperCut(w, i) + '</section>';
     }
     else if (tab === "slides") panel = nativeSlidesEnabled(w) ? "" : slidesPanel(w, i);
-    else panel = header + cover; // details (default)
+    else panel = header + logo + cover; // details (default)
 
     return '<div class="study__panel" data-l2tab-panel="' + tab + '">' +
       panel +
@@ -8964,13 +8990,6 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       var empty = !((sk.hook || "").trim()) && !(sk.points && sk.points.length) && !(sk.beats && sk.beats.length) && !(sk.visuals && sk.visuals.length) && !sk.generatedAt;
       if (empty) delete w.study.skim;
       saveDraft(); refreshL2Preview(); return;
-    }
-    // Timeline is a year range — auto-swap any typed hyphen for the site's em dash
-    // ("2023 - 2024" -> "2023 — 2024"). It's a 1:1 character swap, so the caret stays put.
-    if (f === "timeline" && t.value.indexOf("-") !== -1) {
-      var caret = t.selectionStart;
-      t.value = t.value.replace(/-/g, "\u2014");
-      try { t.setSelectionRange(caret, caret); } catch (e) {}
     }
     w.study[f] = t.value;
     saveDraft();
@@ -11641,6 +11660,14 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   function onChange(e) {
     if (e.target.matches('[data-prep-field],[data-prep-project]')) { prepBriefEdit(e.target); return; }
     const t = e.target;
+    if (t.dataset.projectStatus !== undefined) {
+      const work = data.work[+t.dataset.projectStatus]; if (!work?.study) return;
+      const input = t.parentElement.querySelector('[data-sfield="status"]');
+      input.hidden = t.value !== "custom";
+      if (t.value === "custom") { input.value = ""; input.focus(); }
+      else input.value = t.value;
+      work.study.status = input.value; saveDraft(); refreshL2Preview(); return;
+    }
     if (t.dataset.worklayout !== undefined) { data.workLayout = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.cardarrange !== undefined) { data.cardArrange = t.value; saveDraft(true); apply(true); return; }
     if (t.dataset.slidelayout !== undefined) {
@@ -12087,6 +12114,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     }
     if (act === "plate-sample") { data.work[i].theme = b.dataset.theme; data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Motion placeholder applied.", true); return; }
     if (act === "img-clear") { data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Image removed."); return; }
+    if (act.startsWith("brand-logo-")) { editBrandLogo(act, i, b); return; }
     if (act === "img-upload") {
       var uploadWork = data.work[i];
       if (!uploadWork) return;
@@ -14370,6 +14398,33 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
   }
 
   /* ---------- imagery + AI ---------- */
+  const brandLogoOps = new WeakMap();
+  async function editBrandLogo(action, index, button) {
+    const work = data.work[index]; if (!work) return;
+    const operation = (brandLogoOps.get(work) || 0) + 1; brandLogoOps.set(work, operation);
+    const current = () => root?.isConnected && data?.work?.includes(work) && brandLogoOps.get(work) === operation;
+    const accept = uri => { if (!current()) return; work.brandLogo = uri; apply(true); if (openStudy === data.work.indexOf(work) && l2Tab === "details") renderL2(); };
+    if (action === "brand-logo-remove") { accept(""); return; }
+    if (action === "brand-logo-upload") { pickImage(accept); return; }
+    const field = root.querySelector('[data-brand-logo-url="' + index + '"]');
+    const error = root.querySelector('[data-brand-logo-error="' + index + '"]');
+    try {
+      error.textContent = ""; button.disabled = true;
+      const url = new URL(field.value.trim());
+      if (url.protocol !== "https:" || url.username || url.password) throw new Error("Use a direct HTTPS image URL.");
+      const response = await fetch(url.href, { credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw new Error("The logo could not be fetched. Upload the image instead.");
+      const blob = await response.blob();
+      if (!/^image\/(png|jpeg|webp|gif|svg\+xml|avif)$/.test(blob.type) || blob.size > 20 * 1024 * 1024) throw new Error("Choose an image up to 20 MB.");
+      const preview = URL.createObjectURL(blob);
+      try { const image = new Image(); image.src = preview; await image.decode(); } finally { URL.revokeObjectURL(preview); }
+      if (!current()) return;
+      const uri = await fileToDataUri(blob);
+      accept(uri);
+      hostUploaded(uri, blob, accept);
+    } catch (failure) { if (current()) { error.textContent = failure.message || "The logo could not be fetched. Upload it instead."; status(error.textContent); } }
+    finally { button.disabled = false; }
+  }
   function pickImage(cb, settled) {
     const inp = document.createElement("input");
     inp.type = "file"; inp.accept = "image/*";
