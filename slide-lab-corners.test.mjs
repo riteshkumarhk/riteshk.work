@@ -35,6 +35,13 @@ test("radius clamps, zero and sharp corners, and serialized settings remain vali
   assert.equal(shape.customData.labCorners, undefined);
 });
 test("selection supports bound labels but excludes locked and non-rectangular shapes", () => {
+  const cropped = { ...shape, customData: { labCorners: { mode: "squircle", radius: 24, topRightCornerRadius: 0, bottomRightCornerRadius: 0, bottomLeftCornerRadius: 0 } } };
+  const path = cornerPath(cropped);
+  assert.match(path, /200 0/);
+  assert.match(path, /200 100/);
+  assert.match(path, /0 100/);
+  assert.notEqual(path, cornerPath({ ...cropped, customData: { labCorners: { mode: "squircle", radius: 24 } } }));
+  assert.equal(cornerPath(JSON.parse(JSON.stringify(cropped))), path);
   const scene = [shape, { id: "label", type: "text", containerId: "box" }, { ...shape, id: "locked", locked: true }, { ...shape, id: "diamond", type: "diamond" }];
   assert.deepEqual(selectedRectangles(scene, { label: true, locked: true, diamond: true }).map(element => element.id), ["box"]);
   assert.equal(cornerUpdate(scene, ["locked"], "round", 12)[2], scene[2]);

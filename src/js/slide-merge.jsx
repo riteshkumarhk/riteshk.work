@@ -138,13 +138,14 @@ function CompositionPreview({ plan }) {
 
 function coverElements(cover) {
   const context = document.createElement("canvas").getContext("2d");
-  const fitted = coverSkeleton(cover, cover.fontFamily || DEFAULT_SLIDE_FONT, crypto.randomUUID()).map(element => {
-    const role = element.customData.slideCover, minimum = role === "footnote" ? 7 : role.startsWith("team-") ? 9 : 10;
+  const measure = (text, size, family = cover.fontFamily || DEFAULT_SLIDE_FONT) => {
+    context.font = `${size}px "${authoringFonts.find(font => font.id === family)?.family || "sans-serif"}"`;
+    return context.measureText(text).width;
+  };
+  const fitted = coverSkeleton(cover, cover.fontFamily || DEFAULT_SLIDE_FONT, crypto.randomUUID(), measure).map(element => {
+    const role = element.customData.slideCover, minimum = role === "footnote" ? 7 : role.startsWith("team-") ? 14 : 10;
     try {
-      return fitAuthoredText(element, (text, size) => {
-        context.font = `${size}px "${authoringFonts.find(font => font.id === element.fontFamily)?.family || "sans-serif"}"`;
-        return context.measureText(text).width;
-      }, Math.min(element.fontSize || 18, minimum));
+      return fitAuthoredText(element, (text, size) => measure(text, size, element.fontFamily), Math.min(element.fontSize || 18, minimum));
     } catch (error) { throw new Error(`Cover ${role.startsWith("team-") ? "team" : role}: ${error.message}`); }
   });
   const slots = new Map(fitted.map(element => [element.id, element]));
@@ -968,7 +969,7 @@ function Merger({ integration, controller }) {
             </ContentPane>
             {!hasSelection&&current&&<SlideProperties key={current.id} settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onCover={updateCover} onCoverMedia={key => openPane("media", false, null, `cover-${key}`)} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} coverSource={!!integration?.coverSource} onCoverSource={refreshCoverSource} onEditCoverSource={tab=>integration.editCoverSource(tab).catch(fail)} coverSourceError={coverSourceError} />}
           </Excalidraw>
-          <NativeSections api={api} interactive={!editing && !busy && present === null && !deckDialog} />
+          <NativeSections api={api} interactive={!editing && !busy && present === null && !deckDialog} depthHover={!busy && present === null && !deckDialog} />
           <SectionVisibilityMenu api={api} host={host} disabled={busy || !editing || present !== null || !!deckDialog} />
           <EmbedComposer api={api} onCommit={commitEmbed} disabled={busy || !editing || present !== null} />
           {deck && !current && <section className="merge-empty" aria-label="Empty deck"><h2>No slides</h2>{editing && <div className="merge-empty-actions"><SlideAddActions add={add} pick={kind => openPane(kind, false)} busy={busy} /></div>}</section>}

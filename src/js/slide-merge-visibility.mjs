@@ -170,7 +170,7 @@ export function publicDeckPayload(deck, { reviewedSources = false, production = 
         const url = publicMediaReference(custom.slideEmbed.url);
         safe.slideEmbed = { url: embedDescriptor(url).url };
       }
-      if (custom.labCorners) safe.labCorners = pickScalars(custom.labCorners, ["mode", "radius"]);
+      if (custom.labCorners) safe.labCorners = pickScalars(custom.labCorners, ["mode", "radius", "topLeftCornerRadius", "topRightCornerRadius", "bottomRightCornerRadius", "bottomLeftCornerRadius"]);
       if (typeof custom.labTextColor === "string") safe.labTextColor = custom.labTextColor;
       if (custom.slideBackground === true) safe.slideBackground = true;
       if (custom.slideSettings) {

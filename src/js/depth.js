@@ -145,18 +145,18 @@ function readSettings(media) {
   };
 }
 
-export function mountSlideDepth(media, imageUrl, depthUrl, settings) {
+export function mountSlideDepth(media, imageUrl, depthUrl, settings, pointerSurface = null) {
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   if (motion.matches || !gpuOk() && !new URLSearchParams(location.search).has("depth")) return () => {};
   let active = true, dispose = null;
   const images = [imageUrl, depthUrl].map(url => { const image = new Image(); image.crossOrigin = "anonymous"; image.src = url; return image; });
-  Promise.all(images.map(image => image.decode())).then(() => { if (active) dispose = attach(media, images[0], images[1], null, settings); }).catch(() => {});
+  Promise.all(images.map(image => image.decode())).then(() => { if (active) dispose = attach(media, images[0], images[1], null, settings, pointerSurface); }).catch(() => {});
   const stop = () => { active = false; dispose?.(); dispose = null; };
   motion.addEventListener("change", stop);
   return () => { stop(); motion.removeEventListener("change", stop); images.forEach(image => { image.src = ""; }); };
 }
 
-function attach(media, img, depthImg, ctx, slideSettings = null) {
+function attach(media, img, depthImg, ctx, slideSettings = null, pointerSurface = null) {
   const gyro = !!(ctx && ctx.gyro);
   // Always mount over the frame (16:10). Mobile shows the whole scene (zoomed out) and dollies the
   // zoom on scroll; desktop rests at 1.40 and dollies out on hover.
@@ -286,6 +286,17 @@ function attach(media, img, depthImg, ctx, slideSettings = null) {
   const events = new AbortController();
   if (gyro) {
     ctx.observe(controller);                             // IntersectionObserver activates it while in view
+  } else if (pointerSurface) {
+    pointerSurface.addEventListener("pointermove", event => {
+      const bounds = media.getBoundingClientRect();
+      const inside = !event.buttons && event.target.tagName === "CANVAS" && event.clientX >= bounds.left && event.clientX <= bounds.right && event.clientY >= bounds.top && event.clientY <= bounds.bottom;
+      if (!inside) { if (active) deactivate(); return; }
+      target.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+      target.y = -(((event.clientY - bounds.top) / bounds.height) * 2 - 1);
+      if (!active) activate(true);
+    }, { signal: events.signal });
+    pointerSurface.addEventListener("pointerdown", deactivate, { signal: events.signal });
+    pointerSurface.addEventListener("pointerleave", deactivate, { signal: events.signal });
   } else {
     media.addEventListener("pointerenter", () => activate(true), { signal: events.signal });
     media.addEventListener("pointerleave", deactivate, { signal: events.signal });

@@ -39,7 +39,7 @@ export function coverDepth(value) {
   return result;
 }
 export function coverValues(value = {}) {
-  const result = { ...COVER_DEFAULTS };
+  const result = { ...COVER_DEFAULTS, layoutVersion: 3 };
   for (const [key] of COVER_FIELDS) if (typeof value[key] === "string") result[key] = value[key];
   if (typeof value.mark === "string") result.mark = value.mark;
   for (const key of ["background", "rail", "panel", "text", "muted"])
@@ -55,42 +55,58 @@ export function coverValues(value = {}) {
   if (coverDepth(value.depth)) result.depth = { ...coverDepth(value.depth), ...(typeof value.depth.source === "string" ? { source: value.depth.source } : {}) };
   return result;
 }
-export function coverSkeleton(value, fontFamily, prefix = "cover") {
+export function coverSkeleton(value, fontFamily, prefix = "cover", measureText = (text, size) => text.length * size * .55) {
   const cover = coverValues(value);
+  const inset = 48, contentX = 136 + inset, contentWidth = 529 - inset - contentX;
   const common = { frameId: "lab-slide", locked: true, roughness: 0, strokeWidth: 0, strokeColor: "transparent", fillStyle: "solid" };
   const shape = (key, x, y, width, height, color, extra = {}) => ({ ...common, id: `${prefix}-${key}`, type: "rectangle", x, y, width, height, backgroundColor: color, customData: { slideCover: key }, ...extra });
   const label = (key, value, x, y, width, height, fontSize, extra = {}) => ({ ...common, id: `${prefix}-${key}`, type: "text", x, y, width, height, text: value, originalText: value, fontSize, fontFamily, strokeColor: cover.text, backgroundColor: "transparent", lineHeight: 1.15, autoResize: false, customData: { slideCover: key, authoredFit: { width, height } }, ...extra });
   const elements = [shape("background", 0, 0, 1280, 720, cover.background, { customData: { slideCover: "background", slideBackground: true } }), shape("rail", 0, 0, 136, 720, cover.rail)];
   if (cover.logo) {
-    const scale = Math.min(54 / cover.logo.width, 54 / cover.logo.height), width = cover.logo.width * scale, height = cover.logo.height * scale;
-    elements.push({ ...common, id: `${prefix}-logo`, type: "image", x: 68 - width / 2, y: 61 - height / 2, width, height, fileId: cover.logo.fileId, scale: [1, 1], customData: { slideCover: "logo" } });
-  } else if (cover.mark) elements.push(shape("mark-box", 53, 43, 36, 36, cover.panel, { opacity: 25, roundness: { type: 3 } }), label("mark", cover.mark, 55, 54, 32, 14, 11, { textAlign: "center" }));
-  if (cover.client) elements.push(label("client", cover.client, -48, 570, 240, 36, 30, { angle: -Math.PI / 2 }));
-  let badgeX = 171;
+    const scale = Math.min(40 / cover.logo.width, 54 / cover.logo.height), width = cover.logo.width * scale, height = cover.logo.height * scale;
+    elements.push({ ...common, id: `${prefix}-logo`, type: "image", x: 68 - width / 2, y: inset, width, height, fileId: cover.logo.fileId, scale: [1, 1], customData: { slideCover: "logo" } });
+  } else if (cover.mark) elements.push(shape("mark-box", 50, inset, 36, 36, cover.panel, { opacity: 25, roundness: { type: 3 } }), label("mark", cover.mark, 52, inset + 11, 32, 14, 11, { textAlign: "center" }));
+  if (cover.client) elements.push(label("client", cover.client, -52, 534, 240, 36, 30, { angle: -Math.PI / 2 }));
+  let badgeX = contentX;
   for (const [key, content] of [["status", cover.status], ["duration", cover.duration && `Duration: ${cover.duration}`]]) {
     if (!content) continue;
     const width = Math.min(key === "status" ? 230 : 440, Math.max(120, content.length * 9 + 24));
-    elements.push(shape(`${key}-box`, badgeX, 47, width, 36, cover.panel, { opacity: 45, roundness: { type: 3 } }), label(key, content, badgeX + 9, 55, width - 18, 22, 18, { strokeColor: cover.muted }));
+    elements.push(shape(`${key}-box`, badgeX, inset, width, 36, cover.panel, { opacity: 45, roundness: { type: 3 }, customData: { slideCover: `${key}-box`, labCorners: { mode: "round", radius: 18 } } }), label(key, content, badgeX + 12, inset + 7, width - 24, 22, 18, { strokeColor: cover.muted }));
     badgeX += width + 16;
   }
-  elements.push(label("title", cover.title, 171, 110, 1069, 91, 60, { fontFamily: cover.titleFont || fontFamily }));
+  elements.push(label("title", cover.title, contentX, 110, 1280 - inset - contentX, 91, 60, { fontFamily: cover.titleFont || fontFamily }));
   const team = cover.team.split(/\r?\n|,/).map(item => item.trim()).filter(Boolean);
   if (team.length > 8) throw new Error("A cover supports up to eight team entries.");
-  const teamRowHeight = Math.min(40, 120 / Math.max(1, Math.ceil(team.length / 2)));
-  for (const [index, item] of team.entries()) {
-    const column = index % 2, row = Math.floor(index / 2), width = column ? 164 : 130, position = 173 + (column ? 136 : 0);
-    elements.push(shape(`team-box-${index}`, position, 242 + row * teamRowHeight, width, teamRowHeight - 4, cover.panel, { opacity: 45, roundness: { type: 3 } }), label(`team-${index}`, item, position + 10, 246 + row * teamRowHeight, width - 20, teamRowHeight - 12, 16, { strokeColor: cover.muted }));
+  const segments = [], chipFont = 14, chipPadding = 10, chipHeight = 28, chipGap = 6;
+  for (const item of team) {
+    let line = "";
+    for (const word of item.split(/\s+/)) {
+      if (measureText(word, chipFont) > contentWidth - chipPadding * 2) throw new Error("A team word is too long for a cover chip.");
+      const next = line ? `${line} ${word}` : word;
+      if (line && measureText(next, chipFont) > contentWidth - chipPadding * 2) { segments.push(line); line = word; }
+      else line = next;
+    }
+    if (line) segments.push(line);
   }
+  let chipX = contentX, chipY = 242;
+  for (const [index, item] of segments.entries()) {
+    const width = Math.ceil(measureText(item, chipFont)) + chipPadding * 2;
+    if (chipX + width > contentX + contentWidth) { chipX = contentX; chipY += chipHeight + chipGap; }
+    if (chipY + chipHeight > 480) throw new Error("Team chips exceed the cover's available rows.");
+    elements.push(shape(`team-box-${index}`, chipX, chipY, width, chipHeight, cover.panel, { opacity: 45, roundness: { type: 3 }, customData: { slideCover: `team-box-${index}`, labCorners: { mode: "round", radius: chipHeight / 2 } } }), label(`team-${index}`, item, chipX + chipPadding, chipY + 5, width - chipPadding * 2, 18, chipFont, { strokeColor: cover.muted }));
+    chipX += width + chipGap;
+  }
+  const roleY = Math.max(378, segments.length ? chipY + chipHeight + 32 : 378);
   if (cover.role) {
-    if (cover.roleLabel) elements.push(label("role-heading", cover.roleLabel, 182, 378, 309, 25, 18, { strokeColor: cover.muted }));
-    elements.push(label("role", cover.role, 182, 410, 309, 208, 18, { strokeColor: cover.muted }));
+    if (cover.roleLabel) elements.push(label("role-heading", cover.roleLabel, contentX, roleY, contentWidth, 25, 18, { strokeColor: cover.muted }));
+    elements.push(label("role", cover.role, contentX, roleY + 32, contentWidth, 618 - roleY - 32, 18, { strokeColor: cover.muted }));
   }
-  if (cover.footnote) elements.push(label("footnote", cover.footnote, 182, 682, 309, 30, 9, { strokeColor: cover.muted }));
-  elements.push(shape("media-panel", 529, 217, 751, 503, cover.panel, { roundness: { type: 3 }, customData: { slideCover: "media-panel", labCorners: { mode: "round", radius: 12 } } }));
+  if (cover.footnote) elements.push(label("footnote", cover.footnote, contentX, 720 - inset - 30, contentWidth, 30, 9, { strokeColor: cover.muted }));
+  elements.push(shape("media-panel", 529, 217, 751, 503, cover.panel, { roundness: { type: 3 }, customData: { slideCover: "media-panel", labCorners: { mode: "squircle", radius: 32, topRightCornerRadius: 0, bottomRightCornerRadius: 0, bottomLeftCornerRadius: 0 } } }));
   if (cover.image) {
-    const width = 714, height = 466, scale = Math.max(width / cover.image.width, height / cover.image.height);
+    const width = 1280 - 529 - inset, height = 720 - 217 - inset, scale = Math.max(width / cover.image.width, height / cover.image.height);
     const cropWidth = width / scale, cropHeight = height / scale;
-    elements.push({ ...common, id: `${prefix}-image`, type: "image", x: 566, y: 254, width, height, fileId: cover.image.fileId, scale: [1, 1], customData: { slideCover: "image", ...(cover.motion && cover.depth && !cover.source?.overrides.includes("image") ? { slideDepth: coverDepth(cover.depth) } : {}) }, crop: { x: (cover.image.width - cropWidth) * cover.crop.x / 100, y: (cover.image.height - cropHeight) * cover.crop.y / 100, width: cropWidth, height: cropHeight, naturalWidth: cover.image.width, naturalHeight: cover.image.height } });
+    elements.push({ ...common, id: `${prefix}-image`, type: "image", x: 529 + inset, y: 217 + inset, width, height, fileId: cover.image.fileId, scale: [1, 1], customData: { slideCover: "image", labCorners: { mode: "squircle", radius: 24, topRightCornerRadius: 0, bottomRightCornerRadius: 0, bottomLeftCornerRadius: 0 }, ...(cover.motion && cover.depth && !cover.source?.overrides.includes("image") ? { slideDepth: coverDepth(cover.depth) } : {}) }, crop: { x: (cover.image.width - cropWidth) * cover.crop.x / 100, y: (cover.image.height - cropHeight) * cover.crop.y / 100, width: cropWidth, height: cropHeight, naturalWidth: cover.image.width, naturalHeight: cover.image.height } });
   }
   return elements.filter(element => {
     const role = element.customData.slideCover;

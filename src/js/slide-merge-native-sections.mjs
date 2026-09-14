@@ -1,3 +1,5 @@
+import { cornerPath } from "./slide-lab-corners.mjs";
+
 export function nativeSectionElement(element) {
   if (!element.customData?.sectionComponent && !element.customData?.sectionReference) return element;
   if (element.type === "rectangle" && element.link == null && element.backgroundColor === "rgba(0, 0, 0, 0)") return element;
@@ -15,6 +17,7 @@ export function nativeSectionLayers(elements, state) {
     const bottom = top + (frame?.height || 0) * zoom;
     const rest = visible.slice(visible.indexOf(element) + 1);
     const next = rest.findIndex(item => item.customData?.sectionComponent || item.customData?.sectionReference || item.customData?.slideEmbed || item.customData?.slideDepth);
+    const corners = element.customData?.slideDepth && element.customData.labCorners;
     return {
       element,
       frame,
@@ -26,6 +29,7 @@ export function nativeSectionLayers(elements, state) {
         top: (element.y + state.scrollY) * zoom,
         width: element.width * zoom,
         height: element.height * zoom,
+        ...(corners ? { clipPath: `path("${cornerPath({ ...element, width: element.width * zoom, height: element.height * zoom, customData: { labCorners: Object.fromEntries(Object.entries(corners).map(([key, value]) => [key, typeof value === "number" ? value * zoom : value])) } })}")` } : {}),
         transform: `rotate(${element.angle || 0}rad)`,
         opacity: (element.opacity ?? 100) / 100
       }

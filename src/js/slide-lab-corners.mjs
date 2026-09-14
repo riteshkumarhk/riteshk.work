@@ -32,7 +32,11 @@ export function cornerUpdate(elements, ids, mode, radius) {
 }
 
 export function cornerPath(element) {
-  const { mode, radius } = cornerSettings(element);
-  return getSvgPath({ width: element.width, height: element.height, cornerRadius: radius,
+  const { mode, radius, limit } = cornerSettings(element), corners = {};
+  for (const key of ["topLeftCornerRadius", "topRightCornerRadius", "bottomRightCornerRadius", "bottomLeftCornerRadius"]) {
+    const value = element.customData?.labCorners?.[key];
+    if (Number.isFinite(value)) corners[key] = mode === "sharp" ? 0 : Math.min(limit, Math.max(0, value));
+  }
+  return getSvgPath({ width: element.width, height: element.height, cornerRadius: radius, ...corners,
     cornerSmoothing: mode === "squircle" ? 0.6 : 0, preserveSmoothing: true });
 }

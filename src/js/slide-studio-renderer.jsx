@@ -68,7 +68,7 @@ export function sceneBackground() { return "transparent"; }
 export function changed(element, update) { return { ...element, ...update, version: element.version + 1, versionNonce: Math.floor(Math.random() * 2147483647), updated: Date.now() }; }
 export function validEmbed(link) { return /^https:\/\/slide-lab\.invalid\/(rich|section|video|background|section-video|section-component)$/.test(link); }
 
-export function NativeSections({ api, interactive = false }) {
+export function NativeSections({ api, interactive = false, depthHover = false }) {
   const [layers, setLayers] = useState([]);
   useEffect(() => {
     if (!api) return;
@@ -76,17 +76,17 @@ export function NativeSections({ api, interactive = false }) {
     update(api.getSceneElements(), api.getAppState());
     return api.onChange(update);
   }, [api]);
-  return <div className={`merge-native-sections${interactive ? " is-interactive" : ""}`}><SectionLayers layers={layers.filter(layer => interactive || !layer.element.customData?.slideDepth)} files={api?.getFiles()} /></div>;
+  return <div className={`merge-native-sections${interactive ? " is-interactive" : ""}`}><SectionLayers layers={layers.filter(layer => interactive || depthHover || !layer.element.customData?.slideDepth)} files={api?.getFiles()} editorHover={!interactive && depthHover} /></div>;
 }
 
-function DepthImage({ element, files }) {
+function DepthImage({ element, files, editorHover }) {
   const host = useRef(null), depth = coverDepth(element.customData.slideDepth);
   const imageUrl = files?.[element.fileId]?.dataURL, depthUrl = files?.[depth?.fileId]?.dataURL;
   const signature = JSON.stringify([depth, element.crop]);
   useEffect(() => {
     if (!imageUrl || !depthUrl || !depth) return;
-    return mountSlideDepth(host.current, imageUrl, depthUrl, { ...depth, crop: element.crop });
-  }, [imageUrl, depthUrl, signature]);
+    return mountSlideDepth(host.current, imageUrl, depthUrl, { ...depth, crop: element.crop }, editorHover ? host.current.closest(".lab-canvas") : null);
+  }, [imageUrl, depthUrl, signature, editorHover]);
   return <div ref={host} className="merge-cover-depth" aria-hidden="true" />;
 }
 
@@ -102,8 +102,8 @@ function SectionForeground({ elements, frame, files, style }) {
   return svg ? <div className="merge-native-foreground" style={style} dangerouslySetInnerHTML={{ __html: svg }} /> : null;
 }
 
-function SectionLayers({ layers, files, preview = false }) {
-  return layers.filter(layer => !preview || !layer.element.customData?.slideDepth).map(({ element, style, clipStyle, foreground, frame, frameStyle }) => <div key={element.id} className="merge-native-clip" style={clipStyle}><div className="merge-native-section" style={style}>{element.customData.slideDepth ? <DepthImage element={element} files={files} /> : element.customData.slideEmbed ? <EmbeddedMedia value={element.customData.slideEmbed.url} preview={preview} /> : <SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} reference={element.customData.sectionReference} textVisibility={element.customData.sectionTextVisibility} preview={preview} />}</div><SectionForeground elements={foreground} frame={frame} files={files} style={frameStyle} /></div>);
+function SectionLayers({ layers, files, preview = false, editorHover = false }) {
+  return layers.filter(layer => !preview || !layer.element.customData?.slideDepth).map(({ element, style, clipStyle, foreground, frame, frameStyle }) => <div key={element.id} className="merge-native-clip" style={clipStyle}><div className="merge-native-section" style={style}>{element.customData.slideDepth ? <DepthImage element={element} files={files} editorHover={editorHover} /> : element.customData.slideEmbed ? <EmbeddedMedia value={element.customData.slideEmbed.url} preview={preview} /> : <SectionComponent block={element.customData.sectionComponent} icons={element.customData.sectionIcons} reference={element.customData.sectionReference} textVisibility={element.customData.sectionTextVisibility} preview={preview} />}</div><SectionForeground elements={foreground} frame={frame} files={files} style={frameStyle} /></div>);
 }
 
 export function SectionVisibilityMenu({ api, host, disabled }) {

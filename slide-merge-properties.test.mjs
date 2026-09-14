@@ -50,7 +50,37 @@ test("fixed cover fields preserve geometry, originals and independent instances"
   assert.ok(logo.width <= 54 && logo.height <= 54);
   assert.equal(withLogo.some(element => element.customData.slideCover === "mark"), false);
 });
-test("nine layouts preserve real content, locks and groups; placeholders do not accumulate", () => {
+  test("cover insets, cropped squircle and flowing pills preserve readable source text", () => {
+    const team = "1 Lead designer, 2 junior designers to work on high fidelity mocks, 1 Product Manager, 1 Engineer, 1 System Architect";
+    const elements = coverSkeleton({ title: "Title", client: "Client", status: "Launched", team, role: "Lead", footnote: "Scope", image: { fileId: "original", width: 1600, height: 900 } }, 123);
+    const role = key => elements.find(element => element.customData.slideCover === key);
+    assert.equal(role("status-box").y, 48);
+    assert.equal(role("title").x - role("rail").width, 48);
+    assert.equal(1280 - role("title").x - role("title").width, 48);
+    assert.equal(720 - role("footnote").y - role("footnote").height, 48);
+    assert.equal(role("footnote").x, role("title").x);
+    assert.equal(role("role").x, role("title").x);
+    assert.equal(role("image").x - role("media-panel").x, 48);
+    assert.equal(role("image").y - role("media-panel").y, 48);
+    assert.equal(role("image").x + role("image").width, 1280);
+    assert.equal(role("image").y + role("image").height, 720);
+    assert.deepEqual(role("media-panel").customData.labCorners, { mode: "squircle", radius: 32, topRightCornerRadius: 0, bottomRightCornerRadius: 0, bottomLeftCornerRadius: 0 });
+    assert.equal(role("media-panel").x + role("media-panel").width, 1280);
+    assert.equal(role("media-panel").y + role("media-panel").height, 720);
+    const chips = elements.filter(element => /^team-\d+$/.test(element.customData.slideCover));
+    assert.equal(chips.map(element => element.text).join(" "), team.replaceAll(",", ""));
+    assert.ok(chips.length > team.split(",").length, "Long entries continue in another chip");
+    for (const chip of chips) {
+      const box = role(chip.customData.slideCover.replace("team-", "team-box-"));
+      assert.equal(chip.fontSize, 14);
+      assert.equal(chip.text.includes("\n"), false);
+      assert.equal(box.customData.labCorners.radius, box.height / 2);
+      assert.ok(box.x >= 184 && box.x + box.width <= 481);
+      assert.ok(box.y + box.height + 32 <= role("role-heading").y);
+    }
+    assert.ok(role("role").y + role("role").height + 24 <= role("footnote").y);
+  });
+  test("nine layouts preserve real content, locks and groups; placeholders do not accumulate", () => {
   assert.equal(PROPERTY_LAYOUTS.length,9);
   const source = [{id:"text",type:"text",text:"Keep me",x:2,y:3,width:100,height:20}, {id:"locked",type:"text",locked:true,text:"Stay"}, {id:"group",type:"text",groupIds:["group"]}, {id:"bound",type:"text",containerId:"shape"}];
   for (const layout of PROPERTY_LAYOUTS) {
