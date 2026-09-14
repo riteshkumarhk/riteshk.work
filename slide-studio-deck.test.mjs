@@ -14,12 +14,123 @@ import { COMPOSITION_RESPONSE_SCHEMA } from "./src/js/slide-merge-ai.mjs";
 import { contentRevision } from "./src/js/content-revision.mjs";
 import { loadProtectedBlocks } from "./src/js/project-recovery.mjs";
 import { normalizeSectionReference } from "./src/js/slide-merge-section-component.mjs";
+import { publicDeckPayload, setDeckVisibility } from "./src/js/slide-merge-visibility.mjs";
 
 async function openProjectSlides(page, index = 0) {
   await page.locator('[data-act="study-toggle"][data-index="' + index + '"]').click();
   const tab = page.locator('[data-l2tab="slides"]');
   if (await tab.getAttribute("aria-selected") !== "true") await tab.click();
 }
+
+test("fixed cover edits from the left inspector preserve media, other slides and history", { timeout: 90000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  try {
+    await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5541') + '/studio/slide-merge-lab/');
+    await page.waitForFunction(() => !!window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    const before = await page.evaluate(async () => { await window.__slideMerge.save(); return window.__slideMerge.deck(); });
+    await page.locator('summary[aria-label="Add a slide"]').click();
+    await page.getByRole('button', { name: 'Add cover', exact: true }).click();
+    const title = page.getByLabel('Cover title', { exact: true });
+    await title.waitFor();
+    await title.fill('Reinventing Edge Onboarding Journey');
+    await page.getByLabel('Cover client', { exact: true }).fill('Microsoft AI');
+    await page.getByLabel('Cover brand initials', { exact: true }).fill('MAI');
+    await page.getByLabel('Cover status', { exact: true }).fill('In development');
+    await page.getByLabel('Cover duration', { exact: true }).fill('2025 - Current');
+    await page.getByLabel('Cover team', { exact: true }).fill('1 designer\n1 product manager\n3 engineers\n1 content designer\nData Science\nPrivacy');
+    await page.getByLabel('Cover role description', { exact: true }).fill('Led onboarding vision, growth strategy, concept development, executive storytelling, product alignment, and final UX design');
+    await page.getByLabel('Cover footnote', { exact: true }).fill('First Run Experience targeted for user activation, personalization, and retention on new Windows devices');
+    const imageData = await page.evaluate(() => {
+      const canvas = document.createElement('canvas'); canvas.width = 1600; canvas.height = 900;
+      const context = canvas.getContext('2d'); context.fillStyle = '#bdeaf4'; context.fillRect(0, 0, 1600, 900);
+      context.fillStyle = '#1678a0'; context.fillRect(600, 250, 400, 400);
+      return canvas.toDataURL('image/png');
+    });
+    await page.getByRole('button', { name: 'Hero image', exact: true }).click();
+    await page.locator('.merge-shell > input[type="file"]').setInputFiles({ name: 'cover-original.png', mimeType: 'image/png', buffer: Buffer.from(imageData.split(',')[1], 'base64') });
+    await page.getByRole('button', { name: 'Replace hero image', exact: true }).waitFor();
+    await page.evaluate(() => window.__slideMerge.save());
+    const result = await page.evaluate(() => {
+      const api = window.__slideMerge.api, elements = api.getSceneElements(), frame = elements.find(element => element.id === 'lab-slide');
+      return { deck: window.__slideMerge.deck(), elements, cover: frame.customData.slideSettings.cover, files: api.getFiles(), theme: api.getAppState().theme };
+    });
+    assert.equal(result.deck.slides.length, before.slides.length + 1);
+    assert.equal(result.cover.title, 'Reinventing Edge Onboarding Journey');
+    assert.equal(result.files[result.cover.image.fileId].dataURL, imageData, 'Original image bytes survive cover cropping');
+    assert.equal(result.theme, 'light', 'Authored cover colours are not inverted by the dark UI');
+    assert.ok(result.elements.filter(element => element.customData?.slideCover).every(element => element.locked));
+    for (const slide of before.slides) assert.deepEqual(result.deck.slides.find(item => item.id === slide.id).scene.elements, slide.scene.elements);
+    const coverId = result.deck.selected;
+    const published = publicDeckPayload(setDeckVisibility({ ...result.deck, slides: result.deck.slides.filter(slide => slide.id === coverId) }, 'public'), { reviewedSources: true, production: true });
+    assert.equal(published.slides[0].scene.elements.find(element => element.id === 'lab-slide').customData.slideSettings.cover, undefined, 'Public audience gets visible objects, not duplicate editor fields');
+    assert.ok(published.slides[0].scene.elements.some(element => element.type === 'text' && element.text === result.cover.title));
+    assert.equal(Object.values(published.slides[0].scene.files)[0].dataURL, imageData);
+    assert.equal(await title.evaluate(element => getComputedStyle(element).whiteSpace), 'pre-wrap');
+    assert.ok(await title.evaluate(element => element.scrollWidth <= element.clientWidth + 1), 'Long title wraps inside the left panel');
+    await page.waitForFunction(() => {
+      const api = window.__slideMerge.api, state = api.getAppState(), image = api.getSceneElements().find(element => element.customData?.slideCover === 'image');
+      const canvas = document.querySelector('.excalidraw__canvas.static'), box = canvas.getBoundingClientRect();
+      const positionX = (image.x + image.width / 2 + state.scrollX) * state.zoom.value * canvas.width / box.width;
+      const positionY = (image.y + image.height / 2 + state.scrollY) * state.zoom.value * canvas.height / box.height;
+      const pixel = canvas.getContext('2d').getImageData(Math.floor(positionX), Math.floor(positionY), 1, 1).data;
+      return pixel[0] === 22 && pixel[1] === 120 && pixel[2] === 160;
+    });
+    const inspector = page.getByRole('complementary', { name: 'Slide properties', exact: true });
+    await inspector.evaluate(element => { element.scrollTop = 0; });
+    const panelBox = await inspector.boundingBox();
+    assert.ok(panelBox.x < 300 && panelBox.width <= 216, 'Cover uses the existing left inspector');
+    await page.screenshot({ path: join(tmpdir(), 'rk-fixed-cover-1440.png') });
+    await title.fill('Independent cover edit');
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('[aria-label="Cover title"]')?.value === 'Reinventing Edge Onboarding Journey');
+    await page.getByRole('button', { name: 'Redo', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('[aria-label="Cover title"]')?.value === 'Independent cover edit');
+    await page.locator('.merge-slide-card.is-active').getByRole('button', { name: 'Duplicate slide', exact: true }).click();
+    await title.fill('Duplicate only');
+    await page.evaluate(() => window.__slideMerge.save());
+    assert.equal(await page.evaluate(id => window.__slideMerge.deck().slides.find(slide => slide.id === id).scene.elements.find(element => element.id === 'lab-slide').customData.slideSettings.cover.title, coverId), 'Independent cover edit');
+    await page.reload();
+    await title.waitFor();
+    assert.equal(await title.inputValue(), 'Duplicate only');
+    assert.equal(await page.evaluate(() => { const api = window.__slideMerge.api; const image = api.getSceneElements().find(element => element.customData?.slideCover === 'image'); return api.getFiles()[image.fileId].dataURL; }), imageData);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Open properties', exact: true }).click();
+    await title.waitFor({ state: 'visible' });
+    assert.ok(await inspector.evaluate(element => { const box = element.getBoundingClientRect(); return box.left >= 0 && box.right <= innerWidth + 1 && element.scrollWidth <= element.clientWidth + 1; }));
+    await page.getByLabel('Cover role description', { exact: true }).fill('Mobile field edit');
+    await page.screenshot({ path: join(tmpdir(), 'rk-fixed-cover-390.png') });
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test("fixed cover fields persist in hosted Studio without changing case content", { timeout: 90000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  try {
+    for (const width of [1440, 390]) {
+      const page = await browser.newPage({ viewport: { width, height: 960 } });
+      await openIntegratedFixture(page);
+      const original = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks));
+      await openProjectSlides(page);
+      await page.getByRole('button', { name: 'Add cover', exact: true }).click();
+      const title = page.getByLabel('Cover title', { exact: true });
+      await title.fill('A field-driven cover');
+      await page.getByLabel('Cover status', { exact: true }).fill('In development');
+      await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.nativeDeck?.slideCount === 1);
+      if (width === 390) await page.getByRole('button', { name: 'Close panel', exact: true }).click();
+      await page.locator('[data-l2-back]').click();
+      await openProjectSlides(page);
+      if (width === 390) await page.getByRole('button', { name: 'Open properties', exact: true }).click();
+      assert.equal(await title.inputValue(), 'A field-driven cover');
+      assert.equal(await page.getByLabel('Cover status', { exact: true }).inputValue(), 'In development');
+      assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks)), original);
+      assert.ok(await title.evaluate(element => { const box = element.getBoundingClientRect(); return box.left >= 0 && box.right <= innerWidth; }));
+      await page.screenshot({ path: join(tmpdir(), 'rk-hosted-cover-' + width + '.png') });
+      await page.close();
+    }
+  } finally { await browser.close(); }
+});
 
 test("slide eyedropper samples screen results over inserted sections and outside the canvas", { timeout: 90000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });

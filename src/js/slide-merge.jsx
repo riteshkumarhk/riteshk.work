@@ -28,6 +28,7 @@ import { fitAuthoredText } from "./slide-merge-authoring-fit.mjs";
 import { fonts as authoringFonts } from "./slide-platform-fonts.mjs";
 import { SlideProperties } from "./slide-merge-properties.jsx";
 import { PROPERTY_LAYOUTS, slideSettings, slideOwnsFocus, layoutPlan } from "./slide-merge-properties.mjs";
+import { coverValues, coverSkeleton } from "./slide-merge-cover.mjs";
 import { configureSlideSnapping } from "./slide-merge-snapping.mjs";
 import "@excalidraw/excalidraw/index.css";
 import "../../css/slide-lab.css";
@@ -135,6 +136,15 @@ function CompositionPreview({ plan }) {
   return error ? <p role="alert">{error}</p> : preview;
 }
 
+function coverElements(cover) {
+  const context = document.createElement("canvas").getContext("2d");
+  const fitted = coverSkeleton(cover, cover.fontFamily || DEFAULT_SLIDE_FONT, crypto.randomUUID()).map(element => fitAuthoredText(element, (text, size) => {
+    context.font = `${size}px "${authoringFonts.find(font => font.id === element.fontFamily)?.family || "sans-serif"}"`;
+    return context.measureText(text).width;
+  }, Math.min(element.fontSize || 18, element.customData.slideCover === "footnote" ? 7 : 10)));
+  const slots = new Map(fitted.map(element => [element.id, element]));
+  return restoreElements(convertToExcalidrawElements(fitted, { regenerateIds: false }).map(element => element.type === "text" ? { ...element, width: slots.get(element.id).width, originalText: slots.get(element.id).text, autoResize: false } : element), null, { repairBindings: true, refreshDimensions: true });
+}
 function Merger({ integration, controller }) {
   const [api, setApi] = useState(null), [deck, setDeck] = useState(null), [busy, setBusy] = useState(true);
   const appearance = useAppearance();
@@ -455,9 +465,15 @@ function Merger({ integration, controller }) {
     if (!live.current.editing) return;
     const saved = savedLayouts.find(item => item.id === layout);
     const stock = PROPERTY_LAYOUTS.find(item => item.id === layout);
-    if (!saved && !stock) throw new Error("This layout is no longer available");
-    await save(); const slide = await materialize({ id: crypto.randomUUID(), title: layout === "blank" ? "Untitled slide" : (saved || stock).name, notes: "", fixture: "blank" });
-    if (saved) {
+    if (!saved && !stock && layout !== "cover") throw new Error("This layout is no longer available");
+    await save(); const slide = await materialize({ id: crypto.randomUUID(), title: layout === "cover" ? "Cover" : layout === "blank" ? "Untitled slide" : (saved || stock).name, notes: "", fixture: "blank" });
+    if (layout === "cover") {
+      const styles = getComputedStyle(document.documentElement);
+      const font = role => authoringFonts.find(item => item.family === styles.getPropertyValue(role).split(",")[0].replace(/["']/g, "").trim())?.id || DEFAULT_SLIDE_FONT;
+      const cover = coverValues({ title: integration?.title || "Project title", fontFamily: font("--sans"), titleFont: font("--serif") });
+      await loadPlatformFonts(coverSkeleton(cover, cover.fontFamily));
+      slide.scene.elements = [...slide.scene.elements.map(element => ({ ...element, customData: { ...element.customData, slideSettings: { layout: "cover", transition: "fade", cover } } })), ...coverElements(cover)];
+    } else if (saved) {
       const instance = await layoutInstance(saved);
       slide.scene.elements = instance.elements.map(element => element.id === FRAME_ID ? { ...element, name: slide.title } : element);
       slide.scene.files = instance.files;
@@ -470,6 +486,7 @@ function Merger({ integration, controller }) {
     }
     const next = insertSlide(live.current.deck, slide, beforeId);
     paint(next); await mountSlide(slide); await save();
+    if (layout === "cover") { openPane(null, false); if (mobileUI.mobile) mobileUI.open("properties"); }
   }); }
   function openDeckDialog(value) { if (!live.current.editing) return; mobileUI.open(null); setDeckDialog(value); }
   function saveLayout(name) { return run(async () => {
@@ -630,6 +647,23 @@ function Merger({ integration, controller }) {
     api.updateScene({elements:next,appState:{selectedElementIds:{},viewBackgroundColor:sceneBackground(next)},captureUpdate:CaptureUpdateAction.IMMEDIATELY});
     setSettings(nextSettings);setHasSelection(false);schedule();
   }
+  function updateCover(update) {
+    if (!live.current.editing || live.current.operating || !live.current.ready) return "The editor is busy.";
+    try {
+      const elements = api.getSceneElementsIncludingDeleted(), previous = slideSettings(elements).cover;
+      if (!previous) return "Select a cover slide first.";
+      const cover = coverValues({ ...previous, ...update });
+      const originals = new Map(elements.filter(element => element.customData?.slideCover).map(element => [element.customData.slideCover, element]));
+      const additions = coverElements(cover).map(element => {
+        const original = originals.get(element.customData.slideCover);
+        return original ? changed(original, { ...element, id: original.id, isDeleted: false }) : element;
+      });
+      const keys = new Set(additions.map(element => element.customData.slideCover));
+      const removed = elements.filter(element => element.customData?.slideCover && !keys.has(element.customData.slideCover)).map(element => element.isDeleted ? element : changed(element, { isDeleted: true }));
+      commitSettings({ cover }, [...additions, ...removed, ...elements.filter(element => !element.customData?.slideCover)]);
+      return "";
+    } catch (error) { return error.message; }
+  }
   function applyLayout(layout) { return run(async()=>{
     const elements=api.getSceneElementsIncludingDeleted(),plan=layoutPlan(elements,layout,DEFAULT_SLIDE_FONT,crypto.randomUUID());
     await loadPlatformFonts(plan.additions);
@@ -695,7 +729,7 @@ function Merger({ integration, controller }) {
     await save();
     return true;
   }
-  function importMedia(source, asBackground = false) {
+  function importMedia(source, purpose = "insert") {
     if (!source || !live.current.editing) return;
     return run(async () => {
       let file = source, videoUrl, videoMime;
@@ -711,7 +745,16 @@ function Merger({ integration, controller }) {
         videoMime = file.type;
         videoUrl = await new Promise((resolve,reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); });
       }
-      if (asBackground) {
+      if (purpose === "cover-image" || purpose === "cover-logo") {
+        if (videoUrl || !/^image\/(png|jpeg|webp|gif|svg\+xml|avif)$/.test(file.type)) throw new Error("Choose an image for this cover field.");
+        const image = await originalImage(file), elements = api.getSceneElementsIncludingDeleted(), previous = slideSettings(elements).cover;
+        if (!previous) throw new Error("Select a cover slide first.");
+        const cover = coverValues({ ...previous, [purpose === "cover-logo" ? "logo" : "image"]: { fileId: image.id, width: image.width, height: image.height, name: source.name || source.title || "Cover image" } });
+        const additions = coverElements(cover);
+        commitSettings({ cover }, [...elements.filter(element => element.customData?.slideCover).map(element => changed(element, { isDeleted: true })), ...additions, ...elements.filter(element => !element.customData?.slideCover)]);
+        api.addFiles([image]);
+        await save(); openPane(null, false); if (mobileUI.mobile) mobileUI.open("properties"); requestAnimationFrame(fit);
+      } else if (purpose === "background") {
         if (!videoUrl && !/^image\/(png|jpeg|webp|gif|svg\+xml|avif)$/.test(file.type)) throw new Error("Choose an image or video supported by Media");
         const original = videoUrl ? { id: crypto.randomUUID(), mimeType: videoMime, dataURL: videoUrl } : await originalImage(file);
         await applyBackground({ type: "media", name: source.name || source.title || (videoUrl ? "Video" : "Image"), mimeType: original.mimeType }, original);
@@ -720,7 +763,7 @@ function Merger({ integration, controller }) {
         api.updateScene({elements:insertIntoPlaceholder([element]),appState:{selectedElementIds:{[element.id]:true}},captureUpdate:CaptureUpdateAction.IMMEDIATELY});
         await save();
       } else await insertImage(file);
-      finishPaneInsert();
+      if (!purpose.startsWith("cover-")) finishPaneInsert();
     });
   }
   function receive(event) {
@@ -842,10 +885,10 @@ function Merger({ integration, controller }) {
             <DefaultSidebar docked={false} onDock={false} onStateChange={state => setLibraryOpen(state?.name === "default" && state?.tab === "library")}>
               {libraryOpen && <div className="merge-library-status"><button className="merge-library-sync" onClick={library.retry} title={library.status + ". Click to retry or sign in to Studio."}><Icon name="sync" /><span role="status">{library.status}</span></button></div>}
             </DefaultSidebar>
-            <ContentPane pane={pane} busy={busy} sourceStudyId={integration?.caseStudyId} onEmbed={addEmbed} layoutPicker={layoutPicker} composition={{ existingCount: deck?.slides.length || 0, onApply: applyAiComposition, renderPreview: plan => <CompositionPreview plan={plan} /> }} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => importImage(file, true)} onSection={(block, resources) => { finishPaneInsert(); addFromSection(block, true, resources); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={(blocks, resources) => addFromSection(blocks, false, resources)} onMedia={source => importMedia(source, mediaPurpose === "background")} onUpload={() => input.current.click()}>
+            <ContentPane pane={pane} busy={busy} sourceStudyId={integration?.caseStudyId} onEmbed={addEmbed} layoutPicker={layoutPicker} composition={{ existingCount: deck?.slides.length || 0, onApply: applyAiComposition, renderPreview: plan => <CompositionPreview plan={plan} /> }} onContent={(kind, badge) => { finishPaneInsert(); insertContent(kind, badge); }} onIcon={file => importImage(file, true)} onSection={(block, resources) => { finishPaneInsert(); addFromSection(block, true, resources); }} onNewLayout={layout => { openPane(null, false); add(layout); }} onNewSection={(blocks, resources) => addFromSection(blocks, false, resources)} onMedia={source => importMedia(source, mediaPurpose)} onUpload={() => input.current.click()}>
               {api && <LayerPanel api={api} disabled={busy||present!==null||!!deckDialog} onClose={() => openPane(null, false)} onAdd={kind => { if (kind === "media") openPane("media", false); else if (kind === "text") { finishPaneInsert(); insertContent("body"); } else { openPane(null, false); api.setActiveTool({ type:"rectangle" }); } }} />}
             </ContentPane>
-            {!hasSelection&&current&&<SlideProperties settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} />}
+            {!hasSelection&&current&&<SlideProperties key={current.id} settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onCover={updateCover} onCoverMedia={key => openPane("media", false, null, `cover-${key}`)} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} />}
           </Excalidraw>
           <NativeSections api={api} interactive={!editing && !busy && present === null && !deckDialog} />
           <SectionVisibilityMenu api={api} host={host} disabled={busy || !editing || present !== null || !!deckDialog} />
@@ -859,7 +902,7 @@ function Merger({ integration, controller }) {
     {slideView === "all" && !!deck?.slides.length && <AllSlides deck={deck} thumbnails={thumbnails} busy={busy} onDeleteKey={deleteSlideKey} onOpen={async id => { await choose(id); setSlideView("current"); activity.note("Current slide", "nav"); requestAnimationFrame(fit); }} modify={modify} add={add} remove={removeSlide} />}
     {activity.showLog && <ActivityDialog activity={activity} />}
     {integration?.statusbar ? createPortal(editorStatus, integration.statusbar) : editorStatus}
-    <input type="file" hidden ref={input} accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml,video/mp4,video/webm,video/quicktime,video/ogg,.svg,.mov" onChange={event => { importMedia(event.target.files[0], mediaPurpose === "background"); event.target.value = ""; }} />
+    <input type="file" hidden ref={input} accept={mediaPurpose.startsWith("cover-") ? "image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml,.svg" : "image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml,video/mp4,video/webm,video/quicktime,video/ogg,.svg,.mov"} onChange={event => { importMedia(event.target.files[0], mediaPurpose); event.target.value = ""; }} />
     {present !== null && <Presenter slides={rehearsal} index={present} renderEmbed={renderEmbed} onSlideEdit={presenterMetadata} onIndex={index => { activity.write("nav", `Slide show slide ${index + 1}`); setPresent(index); }} onClose={() => { activity.note("Slide show closed", "nav"); setPresent(null); requestAnimationFrame(fit); }} />}
     {["save-layout", "rename-layout"].includes(deckDialog?.kind) && <LayoutNameDialog value={deckDialog.layout?.name} busy={busy} error={layoutSaveError} onClose={() => setDeckDialog(null)} onSave={saveLayout} />}
     {deckDialog?.kind === "visibility" && <VisibilityConfirmation hosted={!!integration} onClose={() => setDeckDialog(null)} onConfirm={() => changeVisibility(true)} />}

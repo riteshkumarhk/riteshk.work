@@ -1,6 +1,13 @@
 .merge-slide-properties { position:absolute; z-index:6; top:76px; left:16px; width:200px; max-height:calc(100% - 140px); overflow:auto; overscroll-behavior:contain; box-sizing:border-box; color:var(--text); scrollbar-width:thin; }
 .merge-shell .excalidraw .merge-slide-properties { display:block; }
 .merge-shell .merge-slide-properties .panelColumn { width:100%; }
+.merge-cover-field { display:flex; flex-direction:column; gap:5px; margin-top:10px; font:400 12px var(--sans); }
+.merge-shell .merge-cover-field :is(input[type="text"],textarea) { box-sizing:border-box; width:100%; min-width:0; min-height:32px; padding:7px 8px; border:1px solid var(--input-border-color); border-radius:var(--border-radius-md); background:var(--input-bg-color); color:var(--text); font:400 12px/1.4 var(--sans); letter-spacing:0; }
+.merge-shell .excalidraw .merge-cover-field textarea { resize:vertical; white-space:pre-wrap; overflow-wrap:anywhere; }
+.merge-cover-field :is(input,textarea):focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.merge-cover-error { color:var(--ui-danger); overflow-wrap:anywhere; }
+.merge-cover-media+.merge-cover-media { margin-top:8px; }
+.merge-slide-properties fieldset fieldset.merge-slide-color { margin-top:12px; }
 .merge-shell .merge-property-action { display:flex; align-items:center; justify-content:flex-start; gap:8px; width:100%; min-height:32px; padding:6px 8px; border:1px solid transparent; border-radius:var(--border-radius-md); background:var(--button-bg); color:var(--button-color); font:400 12px var(--sans); text-transform:none; }
 .merge-shell .merge-property-action:hover:not(:disabled) { background:var(--button-hover-bg); }
 .merge-property-action svg { flex:none; }

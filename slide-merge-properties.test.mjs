@@ -2,6 +2,24 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { PROPERTY_LAYOUTS, layoutPlan, slideOwnsFocus, transitionMatch, isEmptyPlaceholder } from "./src/js/slide-merge-properties.mjs";
 import { guidePosition, guideSnap } from "./src/js/slide-merge-guide-core.mjs";
+import { coverSkeleton, coverValues } from "./src/js/slide-merge-cover.mjs";
+test("fixed cover fields preserve geometry, originals and independent instances", () => {
+  const source = { title: "Reinventing Edge Onboarding Journey", client: "Microsoft AI", mark: "MAI", status: "In development", duration: "2025 - Current", team: "1 designer\n1 product manager\n3 engineers\n1 content designer\nData Science\nPrivacy", role: "Led onboarding vision", footnote: "First Run Experience", image: { fileId: "original", width: 1600, height: 900, name: "original.png" } };
+  const before = structuredClone(source), first = coverSkeleton(source, 123, "one"), second = coverSkeleton({ ...source, title: "Another project" }, 123, "two");
+  assert.deepEqual(source, before);
+  assert.ok(first.every(element => element.locked && element.frameId === "lab-slide" && element.customData.slideCover));
+  assert.deepEqual(first.map(({ x, y, width, height }) => ({ x, y, width, height })), second.map(({ x, y, width, height }) => ({ x, y, width, height })));
+  assert.ok(first.every(element => !second.some(other => other.id === element.id)));
+  assert.equal(first.find(element => element.customData.slideCover === "title").text, source.title);
+  const image = first.find(element => element.type === "image");
+  assert.equal(image.fileId, "original");
+  assert.equal(image.crop.width / image.crop.height, image.width / image.height);
+  assert.equal(first.filter(element => /^team-\d/.test(element.customData.slideCover)).length, 6);
+  assert.equal(coverSkeleton({ ...source, team: source.team.replaceAll('\n', ', ') }, 123).filter(element => /^team-\d/.test(element.customData.slideCover)).length, 6);
+  assert.equal(coverSkeleton({}, 123).some(element => element.type === "image"), false);
+  assert.equal(coverValues({ background: "url(https://invalid)", image: { fileId: "bad", width: 0, height: 3 } }).background, "#735d4d");
+  assert.equal(coverValues({ image: { fileId: "bad", width: 0, height: 3 } }).image, undefined);
+});
 test("nine layouts preserve real content, locks and groups; placeholders do not accumulate", () => {
   assert.equal(PROPERTY_LAYOUTS.length,9);
   const source = [{id:"text",type:"text",text:"Keep me",x:2,y:3,width:100,height:20}, {id:"locked",type:"text",locked:true,text:"Stay"}, {id:"group",type:"text",groupIds:["group"]}, {id:"bound",type:"text",containerId:"shape"}];
