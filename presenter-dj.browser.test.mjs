@@ -324,6 +324,10 @@ test('bottom-right Notes and time controls replace slide-list timing and preserv
     assert.equal(await budget().inputValue(),'01:30');
     for (const width of [1440,901,880,760,390,320]) {
       await page.setViewportSize({width,height:900});
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      await notes().waitFor({state:'visible'});
+      await page.locator('.merge-time-budget:visible').waitFor({state:'visible'});
+      await page.getByRole('button',{name:'Help',exact:true}).waitFor({state:'visible'});
       const noteBox = await notes().boundingBox(), timeBox = await page.locator('.merge-time-budget:visible').boundingBox(), helpBox = await page.getByRole('button',{name:'Help',exact:true}).boundingBox();
       assert.ok(noteBox.x + noteBox.width <= timeBox.x, `Notes precedes time at ${width}`);
       assert.ok(timeBox.x + timeBox.width <= helpBox.x + 1, `Time precedes Help at ${width}`);
