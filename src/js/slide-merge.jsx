@@ -485,8 +485,9 @@ function Merger({ integration, controller }) {
       const palette = coverPalette(getComputedStyle(document.querySelector(".merge-shell") || document.documentElement));
       let cover = coverValues({ ...palette, title: integration?.title || "Project title", fontFamily: font("--sans"), titleFont: font("--serif") });
       if (integration?.coverSource) {
-        const resolved = await resolveCoverSource(cover, slide.scene.files);
+        const resolved = await resolveCoverSource(cover, slide.scene.files, true);
         cover = resolved.cover; slide.scene.files = resolved.files;
+        setCoverSourceError(resolved.warning);
       }
       await loadPlatformFonts(coverSkeleton(cover, cover.fontFamily));
       slide.scene.elements = [...slide.scene.elements.map(element => ({ ...element, customData: { ...element.customData, slideSettings: { layout: "cover", transition: "fade", cover } } })), ...coverElements(cover)];
@@ -664,23 +665,29 @@ function Merger({ integration, controller }) {
     api.updateScene({elements:next,appState:{selectedElementIds:{},viewBackgroundColor:sceneBackground(next)},captureUpdate:CaptureUpdateAction.IMMEDIATELY});
     setSettings(nextSettings);setHasSelection(false);schedule();
   }
-  async function resolveCoverSource(previous, files) {
+  async function resolveCoverSource(previous, files, allowMissingMedia = false) {
     const source = integration.coverSource(), fingerprint = JSON.stringify(source);
     if (previous.source && previous.source.caseStudyId !== source.caseStudyId) throw new Error("This cover belongs to another project.");
-    const merged = linkedCoverValues(previous, source), nextFiles = { ...files };
+    const merged = linkedCoverValues(previous, source), nextFiles = { ...files }, warnings = [];
     for (const key of ["image", "logo"]) {
       if (merged.source.overrides.includes(key)) continue;
       if (!source[key]) { delete merged[key]; continue; }
       if (previous[key]?.source === source[key] && nextFiles[previous[key].fileId]) { merged[key] = previous[key]; continue; }
-      const url = sectionMediaUrl(source[key]);
-      if (!url) throw new Error(`The project ${key} URL is unavailable.`);
-      const response = await fetch(url, { credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(15000) });
-      if (!response.ok) throw new Error(`The project ${key} could not be loaded. Retry from the cover controls.`);
-      const blob = await response.blob();
-      if (!/^image\//.test(blob.type)) throw new Error(`Choose an image for the project ${key}.`);
-      const image = await originalImage(blob);
-      nextFiles[image.id] = image;
-      merged[key] = { fileId: image.id, width: image.width, height: image.height, name: key === "logo" ? "Project brand logo" : "Project cover image", source: source[key] };
+      try {
+        const url = sectionMediaUrl(source[key]);
+        if (!url) throw new Error(`The project ${key} URL is unavailable.`);
+        const response = await fetch(url, { credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(15000) });
+        if (!response.ok) throw new Error(`The project ${key} could not be loaded.`);
+        const blob = await response.blob();
+        if (!/^image\//.test(blob.type)) throw new Error(`Choose an image for the project ${key}.`);
+        const image = await originalImage(blob);
+        nextFiles[image.id] = image;
+        merged[key] = { fileId: image.id, width: image.width, height: image.height, name: key === "logo" ? "Project brand logo" : "Project cover image", source: source[key] };
+      } catch (error) {
+        if (!allowMissingMedia) throw error;
+        delete merged[key];
+        warnings.push(`The project ${key} could not be loaded.`);
+      }
     }
     delete merged.depth;
     if (source.depth?.on !== false && !source.depth?.noMap && source.depth?.map && merged.image && !merged.source.overrides.includes("image")) {
@@ -702,7 +709,7 @@ function Merger({ integration, controller }) {
     if (!controller.active || fingerprint !== JSON.stringify(integration.coverSource())) throw new Error("Project details changed while the cover was loading. Retry the update.");
     const cover = coverValues(merged);
     await loadPlatformFonts(coverSkeleton(cover, cover.fontFamily || DEFAULT_SLIDE_FONT));
-    return { cover, files: nextFiles };
+    return { cover, files: nextFiles, warning: warnings.length ? warnings.join(" ") + " Use Refresh linked cover to retry." : "" };
   }
   function replaceCoverElements(elements, cover) {
     const originals = new Map(elements.filter(element => element.customData?.slideCover && !element.isDeleted).map(element => [element.customData.slideCover, element]));

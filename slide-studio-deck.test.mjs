@@ -262,6 +262,39 @@ test("fixed cover fields persist in hosted Studio without changing case content"
   } finally { await browser.close(); }
 });
 
+test("empty hosted deck adds a cover when project media fails and retries without losing edits", { timeout: 60000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
+    let available = false;
+    await openIntegratedFixture(page, undefined, { role: 'Product designer', team: 'Designer, Engineer' }, { image: 'https://cover.fixture/original.png' });
+    const original = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work[0]));
+    const image = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 120; canvas.height = 80; canvas.getContext('2d').fillRect(0, 0, 120, 80); return canvas.toDataURL(); });
+    await page.context().route('https://cover.fixture/original.png', route => available ? route.fulfill({ contentType: 'image/png', headers: { 'access-control-allow-origin': '*' }, body: Buffer.from(image.split(',')[1], 'base64') }) : route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, body: 'Unavailable' }));
+    await openProjectSlides(page);
+    await page.getByRole('button', { name: 'Add cover', exact: true }).click();
+    await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.nativeDeck?.slideCount === 1, null, { timeout: 10000 });
+    await page.getByRole('button', { name: 'Refresh linked cover', exact: true }).waitFor();
+    assert.match(await page.locator('.merge-cover-error').textContent(), /image.*could not be loaded/i);
+    await page.locator('.merge-cover-overrides > summary').click();
+    await page.getByLabel('Cover title', { exact: true }).fill('Retain this cover edit');
+    available = true;
+    await page.getByRole('button', { name: 'Refresh linked cover', exact: true }).click();
+    await page.waitForFunction(() => !document.querySelector('.merge-cover-error'));
+    assert.equal(await page.locator('.merge-cover-error').count(), 0);
+    assert.equal(await page.getByLabel('Cover title', { exact: true }).inputValue(), 'Retain this cover edit');
+    await page.locator('.merge-cover-overrides').getByRole('button', { name: 'Replace hero image', exact: true }).waitFor();
+    await page.locator('[data-l2-back]').click();
+    await openProjectSlides(page);
+    await page.locator('.merge-cover-overrides > summary').click();
+    assert.equal(await page.getByLabel('Cover title', { exact: true }).inputValue(), 'Retain this cover edit');
+    const work = await page.evaluate(() => window.__RKStudio.getDraft().work[0]);
+    assert.deepEqual(work.study.blocks, JSON.parse(original).study.blocks);
+    assert.equal(work.image, JSON.parse(original).image);
+    assert.equal(work.study.nativeDeck.slideCount, 1);
+  } finally { await browser.close(); }
+});
+
 test("linked cover depth renders saved originals and degrades to static media", { timeout: 90000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true, args: ['--enable-unsafe-swiftshader'] });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'no-preference' }), errors = [];
