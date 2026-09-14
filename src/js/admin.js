@@ -111,6 +111,7 @@ import {
     { type: "isolayers", name: "Isometric layers", tag: "3D", desc: "Stack screens or UI layers into a soft isometric explosion with depth — the showpiece. One stack per section, up to 12 layers.", best: "Design systems · UI teardown · flows" },
     { type: "figure", name: "Figure", tag: "Image + text", desc: "A visual beside a short write-up \u2014 image left or right.", best: "A decision explained next to its screen" },
     { type: "columns", name: "Columns", tag: "Text table", desc: "Multiple columns of titled text \u2014 add a heading or image to any column.", best: "Overview + What I did \u00b7 feature columns" },
+    { type: "mediacolumns", name: "Media columns", tag: "Visuals", desc: "Labelled columns with stacked media, heading and body cells.", best: "Visual stories \u00b7 feature breakdowns \u00b7 process" },
     { type: "rows", name: "Rows", tag: "Text table", desc: "Stacked rows of titled cells \u2014 a labelled row header with cells side by side.", best: "Comparisons \u00b7 phased breakdowns \u00b7 matrices" },
     { type: "compare", name: "Before / after slider", tag: "Compare", desc: "Two images overlaid with a divider you drag to reveal before vs after.", best: "Redesigns \u00b7 visual transformations" },
     { type: "stickies", name: "Sticky notes", tag: "Research", desc: "Staggered note cards \u2014 each with a label, heading, body and image, with a gentle hover lift.", best: "Research methods \u00b7 findings \u00b7 inspiration" },

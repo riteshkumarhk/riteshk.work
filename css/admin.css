@@ -1908,6 +1908,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .secprev--columns .sp__coln b { font-family: var(--mono); font-size: .46rem; letter-spacing: .06em; color: var(--accent); margin-bottom: .1rem; }
 .secprev--columns .sp__coln i { display: block; height: 3px; border-radius: 2px; background: var(--line); }
 .secprev--columns .sp__coln i:last-child { width: 70%; }
+.secprev--mediacolumns .sp__ffr { display: block; width: 100%; aspect-ratio: 4 / 3; border: 1px solid var(--line); border-radius: 3px; background: var(--bg-2); }
 .secprev--rows { flex-direction: column; gap: .3rem; align-items: stretch; justify-content: center; }
 .secprev--rows .sp__row { display: flex; align-items: center; gap: .4rem; }
 .secprev--rows .sp__row b { flex: 0 0 32%; font-family: var(--mono); font-size: .44rem; letter-spacing: .05em; color: var(--accent); }

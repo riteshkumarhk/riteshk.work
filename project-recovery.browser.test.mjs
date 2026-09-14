@@ -10,6 +10,40 @@ const source = readFileSync(new URL("./src/js/project.js", import.meta.url), "ut
 const baseURL = process.env.SLIDE_LAB_URL;
 const launchOptions = { ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE } : process.platform === "win32" ? { executablePath: "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" } : {}), headless: true };
 
+test("Media columns preserves nested cells, sketch hierarchy and responsive media", async () => {
+  const bundle = await build({ entryPoints: ["src/js/project.js"], bundle: true, write: false, format: "iife" });
+  const browser = await chromium.launch(launchOptions);
+  try {
+    const page = await browser.newPage();
+    await page.route("**/*", route => route.abort());
+    await page.setContent('<div id="fixture" class="pj__body"></div>');
+    await page.addStyleTag({ content: ':root{--mono:monospace;--serif:serif;--sans:sans-serif;--accent:#d8a657}*{box-sizing:border-box}body{margin:0}#fixture{width:100%;max-width:1120px;padding:24px}' });
+    await page.addStyleTag({ content: readFileSync(new URL("./css/project.css", import.meta.url), "utf8") });
+    await page.evaluate(() => { window.RK = {}; window.__siteRendered = true; });
+    await page.addScriptTag({ content: bundle.outputFiles[0].text });
+    const block = { type: "mediacolumns", nav: "Visual process", kicker: "The process", heading: "A compact visual story", items: [1, 2, 3, 4].map(number => ({ label: "0" + number, cells: [{ src: "/assets/original-" + number + ".png", heading: "Column " + number, body: '<p><strong>Editable prose</strong><img src="/safe.png" onerror="window.unsafe=1"></p>' }, { heading: "More detail", body: "A second independent cell" }] })) };
+    const result = await page.evaluate(value => { const before = JSON.stringify(value); document.querySelector('#fixture').innerHTML = window.RK.renderStudyBlock(value); return before === JSON.stringify(value); }, block);
+    assert.equal(result, true);
+    assert.equal(await page.locator('.pjb__kicker').textContent(), block.kicker);
+    assert.equal(await page.locator('.pjb__h').textContent(), block.heading);
+    assert.equal(await page.locator('.pjb__mediacol').count(), 4);
+    assert.equal(await page.locator('.pjb__mediacol-cell').count(), 8);
+    assert.deepEqual(await page.locator('.pjb__mediacol').first().evaluate(element => [...element.children].map(child => child.className)), ['pjb__mediacol-label', 'pjb__mediacol-cell', 'pjb__mediacol-cell']);
+    assert.deepEqual(await page.locator('.pjb__mediacol-cell').first().evaluate(element => [...element.children].map(child => child.className)), ['pjb__mediacol-media', 'pjb__mediacol-heading', 'pjb__prose']);
+    assert.equal(await page.locator('.pjb__mediacol-media img').first().getAttribute('src'), block.items[0].cells[0].src);
+    assert.equal(await page.locator('.pjb__prose [onerror]').count(), 0);
+    for (const [width, columns] of [[1440, 3], [800, 2], [390, 1]]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const state = await page.locator('.pjb__mediacols').evaluate(element => ({ columns: getComputedStyle(element).gridTemplateColumns.split(' ').length, overflow: document.documentElement.scrollWidth > innerWidth, color: getComputedStyle(element.querySelector('.pjb__mediacol-label')).color, fit: getComputedStyle(element.querySelector('.pjb__mediacol-media img')).objectFit }));
+      assert.deepEqual(state, { columns, overflow: false, color: 'rgb(216, 166, 87)', fit: 'contain' });
+    }
+    await page.evaluate(() => { document.querySelector('#fixture').innerHTML = window.RK.renderStudyBlock({ type: 'mediacolumns', items: [{ label: '<script>bad</script>', cells: [{ src: 'vault:kept-private', kind: 'video', controls: true }] }, { cells: [] }] }); });
+    assert.equal(await page.locator('video[data-vault="kept-private"][controls]').count(), 1);
+    assert.equal(await page.locator('.pjb__mediacol-label').textContent(), '<script>bad</script>');
+    assert.equal(await page.locator('.pjb__mediacol').count(), 2);
+  } finally { await browser.close(); }
+});
+
 test("browser test guard blocks live services but permits explicit mocks", { skip: !process.execArgv.some(argument => argument.includes("browser-test-guard")) }, async () => {
   const browser = await chromium.launch(launchOptions);
   try {
@@ -91,6 +125,59 @@ async function siteFixture(page, routeRequest) {
   });
   return published;
 }
+
+test("Media columns Studio adds, reorders and persists nested cells", { skip: !baseURL, timeout: 90000 }, async () => {
+  const browser = await chromium.launch(launchOptions);
+  try {
+    for (const width of [1440, 390]) {
+      const page = await browser.newPage({ viewport: { width, height: 1000 } });
+      page.setDefaultTimeout(15000);
+      const published = await siteFixture(page, async () => false);
+      published.work[0].study.blocks = [];
+      await page.addInitScript(() => localStorage.setItem('rk:dev:stub', '1'));
+      await page.goto(baseURL + '/studio/?devstub=1');
+      await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+      const open = async () => {
+        await page.locator('.adm__tab[data-tab="work"]').click();
+        await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+        await page.locator('[data-l2tab="story"]').click();
+      };
+      await open();
+      await page.locator('[data-act="study-pick"]').last().click();
+      await page.locator('[data-pick="mediacolumns"]').click();
+      const action = (name, column = null, cell = null) => page.locator('[data-act="' + name + '"][data-bindex="0"]' + (column === null ? '' : '[data-iindex="' + column + '"]') + (cell === null ? '' : '[data-cindex="' + cell + '"]'));
+      for (const column of [0, 1, 2]) {
+        await action('item-add').click();
+        await page.locator('[data-sitem="0"][data-iindex="' + column + '"][data-ifield="label"]').fill('0' + (column + 1));
+        await page.locator('[data-cell="0"][data-citem="' + column + '"][data-ccell="0"][data-cfield="heading"]').fill('Column ' + (column + 1));
+        await page.locator('[data-cell="0"][data-citem="' + column + '"][data-ccell="0"][data-cfield="src"]').fill('/assets/uploads/original-' + column + '.png');
+      }
+      assert.deepEqual(await page.locator('.cellrow').first().locator('[data-cfield]').evaluateAll(inputs => inputs.map(input => input.dataset.cfield)), ['src', 'heading']);
+      await action('cell-add', 0).click();
+      await page.locator('[data-cell="0"][data-citem="0"][data-ccell="1"][data-cfield="heading"]').fill('Second cell');
+      await action('cell-up', 0, 1).click();
+      assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].study.blocks[0].items[0].cells[0].heading), 'Second cell');
+      await action('item-down', 0).click();
+      assert.equal(await page.evaluate(() => window.__RKStudio.getDraft().work[0].study.blocks[0].items[1].cells.length), 2);
+      await action('cell-add', 1).click();
+      await action('cell-remove', 1, 2).click();
+      const draft = await page.evaluate(() => window.__RKStudio.getDraft().work[0].study.blocks[0]);
+      assert.equal(draft.type, 'mediacolumns');
+      assert.equal(draft.items.length, 3);
+      assert.equal(draft.items[1].cells[1].src, '/assets/uploads/original-0.png');
+      await page.screenshot({ path: join(tmpdir(), 'rk-media-columns-editor-' + width + '.png') });
+      await page.reload();
+      await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+      assert.deepEqual(await page.evaluate(() => window.__RKStudio.getDraft().work[0].study.blocks[0]), draft);
+      await open();
+      await page.locator('[data-act="study-pick"]').last().click();
+      await page.locator('[data-pick="columns"]').click();
+      await page.locator('[data-act="item-add"][data-bindex="1"]').click();
+      assert.deepEqual(await page.locator('[data-cell="0"][data-cbindex="1"][data-cfield]').evaluateAll(inputs => inputs.map(input => input.dataset.cfield)), ['heading', 'src']);
+      await page.close();
+    }
+  } finally { await browser.close(); }
+});
 
 test("built Studio refuses foreign draft commands and preserves trusted preview actions", { skip: !baseURL, timeout: 60000 }, async () => {
   const browser = await chromium.launch(launchOptions);

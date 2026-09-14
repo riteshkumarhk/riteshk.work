@@ -723,6 +723,17 @@ import { connectSectionAccess } from "./slide-studio-source.mjs";
     }).join("");
     return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__rows' + (hasLabels ? "" : " pjb__rows--nolabel") + '">' + rows + "</div>";
   }
+  function mediaColumnsBlock(b) {
+    var columns = (b.items || []).map(function (column) {
+      var cells = (column.cells || []).map(function (cell) {
+        var media = mediaSrc(cell) ? '<div class="pjb__mediacol-media">' + mediaEl(cell, "pjb__media-el") + "</div>" : "";
+        var title = cell.heading ? '<h3 class="pjb__mediacol-heading">' + md(cell.heading) + "</h3>" : "";
+        return '<div class="pjb__mediacol-cell">' + media + title + prose(cell.body) + "</div>";
+      }).join("");
+      return '<div class="pjb__mediacol">' + (column.label ? '<div class="pjb__mediacol-label">' + esc(column.label) + "</div>" : "") + cells + "</div>";
+    }).join("");
+    return kicker(b.kicker) + heading(b.heading) + '<div class="pjb__mediacols">' + columns + "</div>";
+  }
   function compareBlock(b) {
     var note = prose(b.body, "pjb__cmp-note");
     if (!mediaSrc({ src: b.beforeSrc }) || !mediaSrc({ src: b.afterSrc })) {
@@ -1015,7 +1026,7 @@ import { connectSectionAccess } from "./slide-studio-source.mjs";
     text: textBlock, statement: stmtBlock, metrics: metricsBlock,
     steps: stepsBlock, media: mediaBlock, split: splitBlock, faq: faqBlock,
     cards: cardsBlock, cloud: cloudBlock, gallery: galleryBlock, figure: figureBlock,
-    columns: columnsBlock, rows: rowsBlock, compare: compareBlock, stickies: stickiesBlock, voices: voicesBlock,
+    columns: columnsBlock, rows: rowsBlock, mediacolumns: mediaColumnsBlock, compare: compareBlock, stickies: stickiesBlock, voices: voicesBlock,
     workflow: workflowBlock, mediagrid: mediagridBlock, device: deviceBlock, isolayers: isolayersBlock, focus: focusBlock,
     gen: genBlock,
   };

@@ -5,6 +5,14 @@ import { embedDescriptor } from "./src/js/slide-merge-embeds.mjs";
 import { connectSectionAccess, sectionRuntimeData, studioSectionSources } from "./src/js/slide-studio-source.mjs";
 import { sectionComponentPlan } from "./src/js/slide-merge-section-component.mjs";
 const plain = value => String(value ?? "");
+test('Media columns inserts retain all nested cells and original media', () => {
+  const block = {type:'mediacolumns',nav:'Visual story',kicker:'Process',heading:'Decisions',items:[{label:'01',cells:[{src:'/assets/uploads/first.png',heading:'First',body:'Context'},{src:'/assets/uploads/second.png',heading:'Second',body:'Detail'}]},{label:'02',cells:[{src:'/assets/uploads/third.png'}]}]};
+  const plan = sectionComponentPlan(block,plain,'media-columns');
+  assert.deepEqual(plan.elements[0].customData.sectionComponent,block);
+  plan.elements[0].customData.sectionComponent.items[0].cells[0].heading = 'Independent';
+  assert.equal(block.items[0].cells[0].heading,'First');
+  assert.deepEqual(caseStudyMedia({study:{blocks:[block]}}).map(item=>item.url),['https://media.riteshk.work/first.png','https://media.riteshk.work/second.png','https://media.riteshk.work/third.png']);
+});
 test('protected runtime media is temporary, validated and cancellable', async () => {
   const block = {type:'gallery',locked:true,items:[{src:'vault:private-original',caption:'Original'}]}, before = structuredClone(block);
   const signed = [];

@@ -142,6 +142,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     { type: "isolayers", name: "Isometric layers", tag: "3D", desc: "Stack screens or UI layers into a soft isometric explosion with depth — the showpiece. One stack per section, up to 12 layers.", best: "Design systems · UI teardown · flows" },
     { type: "figure", name: "Figure", tag: "Image + text", desc: "A visual beside a short write-up \u2014 image left or right.", best: "A decision explained next to its screen" },
     { type: "columns", name: "Columns", tag: "Text table", desc: "Multiple columns of titled text \u2014 add a heading or image to any column.", best: "Overview + What I did \u00b7 feature columns" },
+    { type: "mediacolumns", name: "Media columns", tag: "Visuals", desc: "Labelled columns with stacked media, heading and body cells.", best: "Visual stories \u00b7 feature breakdowns \u00b7 process" },
     { type: "rows", name: "Rows", tag: "Text table", desc: "Stacked rows of titled cells \u2014 a labelled row header with cells side by side.", best: "Comparisons \u00b7 phased breakdowns \u00b7 matrices" },
     { type: "compare", name: "Before / after slider", tag: "Compare", desc: "Two images overlaid with a divider you drag to reveal before vs after.", best: "Redesigns \u00b7 visual transformations" },
     { type: "stickies", name: "Sticky notes", tag: "Research", desc: "Staggered note cards \u2014 each with a label, heading, body and image, with a gentle hover lift.", best: "Research methods \u00b7 findings \u00b7 inspiration" },
@@ -1632,6 +1633,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       case "isolayers": return { type: "isolayers", nav: "", kicker: "", heading: "", mode: "stack", dir: "topR", distance: "40", depth: "14", parallax: false, transparency: "", items: [] };
       case "figure": return { type: "figure", nav: "", kicker: "", heading: "", body: "", src: "", caption: "", flip: false };
       case "columns": return { type: "columns", nav: "", kicker: "", heading: "", items: [] };
+      case "mediacolumns": return { type: "mediacolumns", nav: "", kicker: "", heading: "", items: [] };
       case "rows": return { type: "rows", nav: "", kicker: "", heading: "", items: [] };
       case "compare": return { type: "compare", nav: "", kicker: "", heading: "", beforeSrc: "", afterSrc: "", beforeLabel: "Before", afterLabel: "After", body: "" };
       case "stickies": return { type: "stickies", nav: "", kicker: "", heading: "", stickySize: "natural", items: [] };
@@ -4400,6 +4402,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     isolayers: { title: "Layers", one: "Layer", add: "Add layer", fields: [["src", "Image / PNG URL", "media"], ["heightColor", "Height colour", "isohc"], ["depth", "Depth override", "select", [["", "Match block"], ["0", "Flat"], ["4", "Super slim"], ["8", "Slim"], ["14", "Medium"], ["22", "Thick"], ["34", "Extra"]]]] },
     cards: { title: "Cards", one: "Card", add: "Add card", fields: [["title", "Title", "input"], ["body", "Body", "rich"], ["icon", "Icon", "icon"], ["src", "Image (optional \u2014 replaces the icon)", "media"]] },
     columns: { title: "Columns", one: "Column", add: "Add column", fields: [["label", "Label (optional)", "input"], ["cells", "Cells", "cells"]] },
+    mediacolumns: { title: "Columns", one: "Column", add: "Add column", fields: [["label", "Label (optional)", "input"], ["cells", "Cells", "mediacells"]] },
     rows: { title: "Rows", one: "Row", add: "Add row", fields: [["label", "Row label (optional)", "input"], ["cells", "Cells", "cells"]] },
     stickies: { title: "Notes", one: "Note", add: "Add note", fields: [["label", "Label (e.g. 01)", "input"], ["heading", "Heading", "input"], ["body", "Body", "rich"], ["src", "Image (optional)", "media"]] },
     cloud: { title: "Concept cloud", one: "Chip", add: "Add chip", fields: [["text", "Text", "input"], ["_r", "", "row", [["icon", "Icon", "icon"], ["imp", "Importance", "select", [["high", "High — darkest"], ["mid", "Mid"], ["low", "Low — lightest"]]]]]] },
@@ -4461,7 +4464,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       case "media": case "gallery": case "mediagrid": case "device": return { src: "", caption: "" };
       case "cards": return { title: "", body: "", icon: "", src: "" };
       case "cloud": return { text: "", icon: "", imp: "mid" };
-      case "columns": return { label: "", cells: [{ heading: "", body: "", src: "" }] };
+      case "columns": case "mediacolumns": return { label: "", cells: [{ heading: "", body: "", src: "" }] };
       case "rows": return { label: "", cells: [{ heading: "", body: "", src: "" }] };
       case "stickies": return { label: "", heading: "", body: "", src: "" };
       case "voices": return { side: "left", heading: "", body: "", cite: "" };
@@ -4564,6 +4567,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
       return '<div class="af"><label class="af__label">' + label + '</label><select ' + da + ">" + opts + "</select></div>";
     }
     if (kind === "cells") return cellsEditor(i, j, k, it);
+    if (kind === "mediacells") return cellsEditor(i, j, k, it, true);
     if (kind === "media") {
       var v = it[key] || "";
       return '<div class="af"><label class="af__label">' + label + '</label><input type="text" ' + da + ' value="' + escAttr(v) + '" placeholder="Paste a URL\u2026" />' +
@@ -4829,23 +4833,21 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     saveDraft(); refreshL2Preview();
   }
   // A column can hold up to 5 stacked cells, each with a heading, rich body and image.
-  function cellsEditor(i, j, k, it) {
+  function cellsEditor(i, j, k, it, mediaFirst) {
     if (!Array.isArray(it.cells) || !it.cells.length) { it.cells = [{ heading: it.heading || "", body: it.body || "", src: it.src || "" }]; delete it.heading; delete it.body; delete it.src; }
     var rows = it.cells.map(function (cell, c) {
       var img = cell.src || "";
+      var textFields = '<div class="af"><label class="af__label">Heading</label><input type="text" data-cell="' + i + '" data-cbindex="' + j + '" data-citem="' + k + '" data-ccell="' + c + '" data-cfield="heading" value="' + escAttr(cell.heading || "") + '" /></div>' + richCell(i, j, k, c, "body", "Body");
+      var mediaField = '<div class="af"><label class="af__label">' + (mediaFirst ? "Image / video / embed URL" : "Image (optional)") + '</label><input type="text" data-cell="' + i + '" data-cbindex="' + j + '" data-citem="' + k + '" data-ccell="' + c + '" data-cfield="src" value="' + escAttr(img) + '" placeholder="Paste a URL\u2026" />' +
+        '<div class="imgblk__row"><button class="btn btn--ghost" data-act="cell-upload" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '">Upload\u2026</button>' +
+        (img ? '<button class="btn btn--ghost" data-act="cell-clear" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '">Remove</button>' : "") + mediaSizeTag(img) + "</div></div>";
       return '<div class="cellrow"><div class="cellrow__bar">' +
         '<span class="sortgrip" data-grip data-sortkey="cell:' + i + ':' + j + ':' + k + '" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span>' +
         '<span class="cellrow__n">Cell ' + (c + 1) + '</span><span class="rep__ops">' +
         '<button class="iconbtn" data-act="cell-up" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '"' + (c === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
         '<button class="iconbtn" data-act="cell-down" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '"' + (c === it.cells.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
         '<button class="iconbtn iconbtn--danger" data-act="cell-remove" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '" title="Remove">' + IC.trash + '</button>' +
-        "</span></div>" +
-        '<div class="af"><label class="af__label">Heading</label><input type="text" data-cell="' + i + '" data-cbindex="' + j + '" data-citem="' + k + '" data-ccell="' + c + '" data-cfield="heading" value="' + escAttr(cell.heading || "") + '" /></div>' +
-        richCell(i, j, k, c, "body", "Body") +
-        '<div class="af"><label class="af__label">Image (optional)</label><input type="text" data-cell="' + i + '" data-cbindex="' + j + '" data-citem="' + k + '" data-ccell="' + c + '" data-cfield="src" value="' + escAttr(img) + '" placeholder="Paste a URL\u2026" />' +
-        '<div class="imgblk__row"><button class="btn btn--ghost" data-act="cell-upload" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '">Upload\u2026</button>' +
-        (img ? '<button class="btn btn--ghost" data-act="cell-clear" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '" data-cindex="' + c + '">Remove</button>' : "") + mediaSizeTag(img) +
-        "</div></div></div>";
+        "</span></div>" + (mediaFirst ? mediaField + textFields : textFields + mediaField) + "</div>";
     }).join("");
     var foot = it.cells.length < 5
       ? '<button class="btn btn--add rep__add" data-act="cell-add" data-index="' + i + '" data-bindex="' + j + '" data-iindex="' + k + '">+ Add cell</button>'
@@ -5132,7 +5134,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     if (wasDraw) renderL2(); else refreshL2Preview();
   }
 
-  var STUDY_TYPE_NAMES = { text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", rows: "Rows", compare: "Before / after slider", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices", isolayers: "Isometric layers", focus: "Focus & annotate", gen: "Generated" };
+  var STUDY_TYPE_NAMES = { text: "Text", statement: "Statement", metrics: "Metrics", steps: "Steps", media: "Media", split: "Before / after", faq: "FAQ", cards: "Cards", gallery: "Gallery", mediagrid: "Media grid", figure: "Figure", columns: "Columns", mediacolumns: "Media columns", rows: "Rows", compare: "Before / after slider", stickies: "Sticky notes", voices: "Voices", workflow: "Workflow", device: "Devices", isolayers: "Isometric layers", focus: "Focus & annotate", gen: "Generated" };
   function studyBlockTypeName(b) { return STUDY_TYPE_NAMES[b.type] || b.type; }
   function studyBlockLabel(b) {
     var custom = (typeof b.editorName === "string" && b.editorName.trim()) ? b.editorName.trim() : "";
@@ -5300,14 +5302,14 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         '<div class="af__hint">One stack per section (max 12 layers), added bottom \u2192 top \u2014 the last layer sits on top. Depth follows each image\u2019s shape, so rounded/transparent PNGs get soft rounded depth. Each layer has an optional <em>Depth override</em> to make just that layer thicker or flatter than the block default. Turn on <em>Parallax</em> and the layers start stacked and fan out to your chosen distance as you scroll the section to the centre of the screen. The height colour auto-derives from each image (or set one \u2014 eyedropper included). Double-click the stack on the live page to open every layer full-screen.</div>';
     }
     else if (b.type === "figure") body = sfInput(i, j, "heading", "Heading") + richBlock(i, j, "body", "Body") + mediaInputBlock(i, j, "src", "Image / video / embed URL") + sfInput(i, j, "caption", "Caption") + '<label class="chk" style="margin-top:.2rem"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="flip"' + (b.flip ? " checked" : "") + " /> Image on the left</label>";
-    else if (b.type === "columns" || b.type === "rows") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
+    else if (b.type === "columns" || b.type === "rows" || b.type === "mediacolumns") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
     else if (b.type === "workflow") { var wfCycle = b.flow === "cycle"; var stepOpts = (b.items || []).map(function (it, k) { var t = it && it.label ? String(it.label).split("//")[0].trim() : ""; return [String(k + 1), (k + 1) + (t ? ". " + t.slice(0, 22) : "")]; }); if (!stepOpts.length) stepOpts = [["1", "1"]]; var loopCtl = wfCycle ? ('<div class="af__row">' + sfSelect(i, j, "loopFrom", "Loop from step", stepOpts, "") + sfSelect(i, j, "loopTo", "Loop to step", stepOpts, "") + "</div>") : ""; body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "flow", "Layout", [["linear", "Linear \u2014 left to right"], ["loop", "Loop \u2014 a repeating cycle"], ["cycle", "Cycle \u2014 loop a range of steps"]], "How the steps connect.") + loopCtl + itemRepeater(i, j, b) + sfInput(i, j, "caption", "Caption") + '<div class="af__hint">' + (wfCycle ? "Cycle keeps the steps in a line and arcs a return loop over the range you pick. Leave it at the full span for a classic \u201cthe whole thing repeats\u201d cycle, or narrow it (e.g. 2 \u2192 3) to loop just those steps." : "Steps flow left to right with arrows. Split a step with <b>//</b> to fork into parallel branches that merge back \u2014 e.g. <em>Design // Eng // Legal</em>.") + "</div>"; }
     else if (b.type === "stickies") body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "stickySize", "Note size", [["natural", "Natural \u2014 physical sticky shape (squarish)"], ["uniform", "Uniform \u2014 all notes match the tallest"], ["none", "None \u2014 each note fits its content"]], "Uniform gives every note the tallest note\u2019s height; natural keeps a squarish physical-sticky shape; none lets each note size to its content.") + itemRepeater(i, j, b) + '<div class="af__hint">Cards stagger up and down automatically and lift on hover. Give each a short label (e.g. 01), a heading, a line or two, and an optional image.</div>';
     else if (b.type === "voices") body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "mode", "Style", [["verbatim", "Verbatim \u2014 sharp quote bubble"], ["thought", "Thought \u2014 soft bubble"], ["chat", "Chat \u2014 a two-way conversation"]], "Verbatim is a sharp quote bubble, thought a soft one, chat the tighter two-way style. Each voice can sit left or right below.") + sfSelect(i, j, "vsize", "Verbatim heading size", [["", "Standard"], ["lg", "Large"]]) + itemRepeater(i, j, b) + '<div class="af__hint">Side puts each bubble on the left or right \u2014 in Chat, the sides alternate automatically until you set them yourself. Heading only shows on Verbatim. Attribution is the small label under the bubble (e.g. \u201cWhat clients actually said\u201d).</div>';
     else if (b.type === "compare") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + mediaInputBlock(i, j, "beforeSrc", "Before image") + mediaInputBlock(i, j, "afterSrc", "After image") + "</div>" + '<div class="af__row">' + sfInput(i, j, "beforeLabel", "Before label") + sfInput(i, j, "afterLabel", "After label") + "</div>" + richBlock(i, j, "body", "Description below \u2014 what changed", "Both images should be the same size. Visitors drag the divider to compare.");
     else if (b.type === "focus") body = sfInput(i, j, "heading", "Heading") + mediaInputBlock(i, j, "src", "Image to annotate") + focusAnnEditor(i, j, b) + '<label class="chk"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="sticky"' + (b.sticky ? " checked" : "") + ' /> Show annotations as a pill list below the image (number + title, or the description if there\u2019s no title) \u2014 clicking a pill or marker opens its flyout and highlights the matching pill. Full-screen keeps its own list.</label>' + sfInput(i, j, "caption", "Caption");
     else if (b.type === "gen") body = genEditor(i, j, b);
-    var hasHeading = /^(text|metrics|steps|media|split|cards|cloud|gallery|mediagrid|device|isolayers|figure|columns|rows|compare|stickies|voices|workflow|focus)$/.test(b.type);
+    var hasHeading = /^(text|metrics|steps|media|split|cards|cloud|gallery|mediagrid|device|isolayers|figure|columns|mediacolumns|rows|compare|stickies|voices|workflow|focus)$/.test(b.type);
     var sizeCtl = (b.type === "statement") ? sfSelect(i, j, "hsize", "Statement size", [["", "Standard"], ["sm", "Compact \u2014 easier to read"], ["lg", "Large \u2014 display"]], "Shrink it if the standard size feels too big for the copy.") : "";
     return '<div class="card study__block' + (open ? " is-open" : "") + (b.locked ? " is-locked" : "") + (b.off ? " is-off" : "") + '">' + head +
       '<div class="study__block-body"><div class="study__block-tools">' + sepTool + offTool + lockTool + '</div>' + common + body + sizeCtl + "</div></div>";
@@ -5346,6 +5348,8 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
         return '<span class="secprev secprev--figure"><span class="sp__ffr">\u25a4</span><span class="sp__ftx"><b>Heading</b><i></i><i></i><i></i></span></span>';
       case "columns":
         return '<span class="secprev secprev--columns"><span class="sp__coln"><b>OVERVIEW</b><i></i><i></i><i></i></span><span class="sp__coln"><b>WHAT I DID</b><i></i><i></i></span></span>';
+      case "mediacolumns":
+        return '<span class="secprev secprev--columns secprev--mediacolumns">' + ["01", "02", "03"].map(function (label) { return '<span class="sp__coln"><b>' + label + '</b><span class="sp__ffr"></span><i></i><i></i></span>'; }).join("") + '</span>';
       case "rows":
         return '<span class="secprev secprev--rows"><span class="sp__row"><b>PHASE 1</b><span class="sp__rowcells"><i></i><i></i></span></span><span class="sp__row"><b>PHASE 2</b><span class="sp__rowcells"><i></i><i></i></span></span><span class="sp__row"><b>PHASE 3</b><span class="sp__rowcells"><i></i><i></i></span></span></span>';
       case "compare":
