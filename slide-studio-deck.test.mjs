@@ -5,6 +5,7 @@ import { runInNewContext } from "node:vm";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createServer } from "node:http";
 import { build } from "esbuild";
 import { chromium } from "playwright-core";
 import { rkDecWithSek, rkUnwrapSek, rkNewSek, rkWrapSek, rkEncWithSek } from "./src/js/admin-core.js";
@@ -260,6 +261,49 @@ test("fixed cover fields persist in hosted Studio without changing case content"
       await page.close();
     }
   } finally { await browser.close(); }
+});
+
+test("cover byte fetches recover from a cached image response without CORS headers", { timeout: 30000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  const server = createServer(), requests = [];
+  try {
+    const page = await browser.newPage();
+    await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5541') + '/studio/slide-runtime/component.html');
+    const compiled = await build({ stdin:{ contents:'export { fetchCoverMedia } from "./src/js/slide-merge-cover.mjs"; export { originalImage } from "./src/js/slide-lab-core.mjs";', resolveDir:fileURLToPath(new URL('.', import.meta.url)) }, bundle:true, write:false, format:'iife', globalName:'coverCacheTest' });
+    await page.addScriptTag({ content:compiled.outputFiles[0].text });
+    const original = await page.evaluate(() => { const canvas=document.createElement('canvas');canvas.width=120;canvas.height=80;const context=canvas.getContext('2d');context.fillStyle='#1678a0';context.fillRect(0,0,120,80);return canvas.toDataURL(); });
+    server.on('request', (request, response) => {
+      requests.push(request.headers.origin || null);
+      response.setHeader('Content-Type', 'image/png');
+      response.setHeader('Cache-Control', 'public, max-age=3600');
+      if (request.headers.origin) response.setHeader('Access-Control-Allow-Origin', '*');
+      response.end(Buffer.from(original.split(',')[1], 'base64'));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    const result = await page.evaluate(async url => {
+      const image = new Image(); image.src=url; await image.decode();
+      let cachedError = '';
+      try { await fetch(url, { credentials:'omit', referrerPolicy:'no-referrer' }); }
+      catch (error) { cachedError=error.name+': '+error.message; }
+      const { fetchCoverMedia, originalImage } = window.coverCacheTest;
+      const restored = [];
+      for (const timeout of [15000, 8000]) {
+        const response = await fetchCoverMedia(url, timeout);
+        restored.push(await originalImage(await response.blob()));
+      }
+      return { cachedError, restored };
+    }, 'http://127.0.0.1:'+server.address().port+'/original.png');
+    assert.equal(result.cachedError, 'TypeError: Failed to fetch');
+    assert.deepEqual(requests, [null, new URL(page.url()).origin, new URL(page.url()).origin]);
+    for (const image of result.restored) {
+      assert.equal(image.dataURL, original);
+      assert.equal(image.width, 120); assert.equal(image.height, 80);
+      assert.equal(image.bytes, Buffer.from(original.split(',')[1], 'base64').length);
+    }
+  } finally {
+    await browser.close();
+    if (server.listening) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+  }
 });
 
 test("empty hosted deck adds a cover when project media fails and retries without losing edits", { timeout: 60000 }, async () => {

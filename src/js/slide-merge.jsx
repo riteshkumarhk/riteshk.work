@@ -28,7 +28,7 @@ import { fitAuthoredText } from "./slide-merge-authoring-fit.mjs";
 import { fonts as authoringFonts } from "./slide-platform-fonts.mjs";
 import { SlideProperties } from "./slide-merge-properties.jsx";
 import { PROPERTY_LAYOUTS, slideSettings, slideOwnsFocus, layoutPlan } from "./slide-merge-properties.mjs";
-import { coverValues, coverSkeleton, coverPalette, linkedCoverValues, COVER_SOURCE_FIELDS } from "./slide-merge-cover.mjs";
+import { coverValues, coverSkeleton, coverPalette, linkedCoverValues, fetchCoverMedia, COVER_SOURCE_FIELDS } from "./slide-merge-cover.mjs";
 import { configureSlideSnapping } from "./slide-merge-snapping.mjs";
 import "@excalidraw/excalidraw/index.css";
 import "../../css/slide-lab.css";
@@ -676,7 +676,7 @@ function Merger({ integration, controller }) {
       try {
         const url = sectionMediaUrl(source[key]);
         if (!url) throw new Error(`The project ${key} URL is unavailable.`);
-        const response = await fetch(url, { credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(15000) });
+        const response = await fetchCoverMedia(url);
         if (!response.ok) throw new Error(`The project ${key} could not be loaded.`);
         const blob = await response.blob();
         if (!/^image\//.test(blob.type)) throw new Error(`Choose an image for the project ${key}.`);
@@ -695,7 +695,7 @@ function Merger({ integration, controller }) {
       else try {
         const url = sectionMediaUrl(source.depth.map);
         if (url) {
-          const response = await fetch(url, { credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(8000) });
+          const response = await fetchCoverMedia(url, 8000);
           if (response.ok) {
             const blob = await response.blob();
             if (/^image\//.test(blob.type)) {

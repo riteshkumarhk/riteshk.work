@@ -10,6 +10,9 @@ export const COVER_DEFAULTS = Object.freeze({
   background: "#08080a", rail: "#0d0d10", panel: "#111116", text: "#ece7e1", muted: "#8f8a84"
 });
 export const COVER_SOURCE_FIELDS = ["title", "client", "status", "duration", "team", "role", "footnote", "image", "logo"];
+export function fetchCoverMedia(url, timeout = 15000) {
+  return fetch(url, { cache: "reload", credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(timeout) });
+}
 export function projectCoverData(work) {
   const study = work.study || {};
   return {
