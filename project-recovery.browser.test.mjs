@@ -252,7 +252,7 @@ async function siteFixture(page, routeRequest) {
 test('Workflow visitor keeps complete graphs inline on phones and preserves the React view during preview updates', {skip:!baseURL,timeout:90000}, async()=>{
   const browser=await chromium.launch(launchOptions);
   try{
-    const page=await browser.newPage({viewport:{width:1440,height:960},hasTouch:true});
+    const page=await browser.newPage({viewport:{width:1440,height:960},hasTouch:true,reducedMotion:'no-preference'});
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await siteFixture(page,async()=>false);
     await page.goto(baseURL+'/');
@@ -291,8 +291,9 @@ test('Workflow visitor keeps complete graphs inline on phones and preserves the 
     for(const width of [390,320]){
       await page.setViewportSize({width,height:844});
       await page.locator('.wf-inline-scroll').waitFor();
+      const nextPosition=await page.locator('.wf-inline-scroll').evaluate(element=>Math.min(element.scrollLeft+285,element.scrollWidth-element.clientWidth));
       await page.getByRole('button',{name:'Next part of diagram',exact:true}).click();
-      await page.waitForFunction(()=>document.querySelector('.wf-inline-scroll').scrollLeft>100);
+      await page.waitForFunction(expected=>document.querySelector('.wf-inline-scroll').scrollLeft===expected,nextPosition);
       const scroll=await page.locator('.wf-inline-scroll').evaluate(element=>element.scrollLeft);
       await page.getByRole('button',{name:'Fit diagram',exact:true}).click();
       await page.waitForFunction(()=>{

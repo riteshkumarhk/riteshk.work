@@ -4,6 +4,11 @@ import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {flowNode,flowEdge,normalizeFlow,graphFromWorkflow,workflowItems} from './src/js/workflow-core.mjs';
 
+test('Workflow fallback styles do not invalidate the shared presenter import',()=>{
+  const stylesheet=readFileSync(new URL('./css/project.css',import.meta.url),'utf8');
+  assert.match(stylesheet,/^\s*@import url\("\.\/deck-presenter\.css\?v=[^"]+"\);/);
+});
+
 test('legacy forks merge into subsequent steps and retain notes without mutating source',()=>{
   const block={type:'workflow',items:[{label:'Setup',note:'Original note'},{label:'Edge // Chrome'},{label:'Browse'}],caption:'Unchanged',locked:true};
   const before=structuredClone(block),graph=graphFromWorkflow(block);
