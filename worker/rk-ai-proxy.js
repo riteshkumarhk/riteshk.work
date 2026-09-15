@@ -1263,7 +1263,7 @@ export default {
         const seen = {}, merged = [];
         for (const k of prior.concat(incoming)) { if (typeof k === "string" && k && !seen[k]) { seen[k] = 1; merged.push(k); } }
         const capped = merged.slice(-500);
-        try { await env.VAULT_GRANTS.put("vaultkeys:" + wid, JSON.stringify(capped)); kn++; } catch (e) {}
+        try { if (JSON.stringify(prior) !== JSON.stringify(capped)) await env.VAULT_GRANTS.put("vaultkeys:" + wid, JSON.stringify(capped)); kn++; } catch (e) {}
       }
       return json({ ok: true, count: kn }, 200, cors);
     }

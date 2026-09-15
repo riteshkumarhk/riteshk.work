@@ -50,6 +50,7 @@ import { retainResumeSource, readResumeSource, resumeSourceForSync, restoreResum
 import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResponse, applyCaseProposal, importFigmaSources, caseWorkspace, protectedSection } from "./case-study-authoring.mjs";
 import { graphFromWorkflow, workflowItems } from "./workflow-core.mjs";
 import { loadWorkflow } from "./workflow-loader.mjs";
+import { createRefreshGate } from "./studio-refresh.mjs";
 
 (function () {
   "use strict";
@@ -10105,14 +10106,22 @@ import { loadWorkflow } from "./workflow-loader.mjs";
     try { localStorage.setItem("rk:book:seen", String(Math.max(mx, Date.now()))); } catch (e) {}
     bookLastNew = 0; updateBookBadge(); if (activeTab === "autofill") renderBody();
   }
-  async function loadBookings() {
-    var sess = adminSession(); if (!sess || bookLoading) return;
+  const refreshBookings = createRefreshGate(async (sess, isCurrent) => {
     bookLoading = true; if (activeTab === "autofill" && !bookLoaded) renderBody();
     try {
       var r = await fetch(ADMIN_WORKER + "/admin/bookings", { headers: { Authorization: "Bearer " + sess } });
-      if (r.ok) { bookCache = (await r.json()).bookings || []; bookLoaded = true; }
-    } catch (e) {}
-    bookLoading = false; updateBookBadge(); if (activeTab === "autofill") renderBody();
+      if (!r.ok) return false;
+      var result = await r.json();
+      if (!isCurrent() || sess !== adminSession()) return false;
+      bookCache = result.bookings || []; bookLoaded = true;
+      return true;
+    } finally {
+      if (isCurrent() && sess === adminSession()) { bookLoading = false; updateBookBadge(); if (activeTab === "autofill") renderBody(); }
+    }
+  });
+  function loadBookings(force = true) {
+    var sess = adminSession(); if (!sess) return Promise.resolve(false);
+    return refreshBookings(sess, { force });
   }
   async function bookDo(uid, action, btn) {
     var b = null; for (var i = 0; i < bookCache.length; i++) if (bookCache[i].uid === uid) { b = bookCache[i]; break; }
@@ -10131,6 +10140,7 @@ import { loadWorkflow } from "./workflow-loader.mjs";
         bookCache = bookCache.filter(function (x) { return x.uid !== uid; });
         status(action === "accept" ? "Accepted \u2014 it\u2019s on your calendar \u2713" : action === "decline" ? "Declined \u2713" : "Dismissed");
         updateBookBadge(); if (activeTab === "autofill") renderBody();
+        loadBookings();
       } else { status("Couldn\u2019t " + action + " \u2014 try again, or open it in Cal.com."); if (activeTab === "autofill") renderBody(); }
     } catch (e) { status("Couldn\u2019t " + action + " \u2014 check your connection."); if (activeTab === "autofill") renderBody(); }
   }
@@ -10422,15 +10432,30 @@ import { loadWorkflow } from "./workflow-loader.mjs";
     return secHead("Special Views", "One place for who sees your work \u2014 approve incoming requests, mint scoped <code>/?k=</code> links, and build reusable ticketed views for specific audiences.") +
       '<div class="rkinbox">' + head + '<div data-accbody>' + inner + "</div></div>";
   }
-  async function loadAccessData() {
+  const refreshAccessRequests = createRefreshGate(async (key, isCurrent) => {
+    const [sess, declined] = JSON.parse(key);
+    const response = await fetch(ADMIN_WORKER + "/admin/requests?status=" + (declined ? "declined" : "pending"), { headers: { Authorization: "Bearer " + sess } });
+    if (!response.ok) return false;
+    const result = await response.json();
+    if (!isCurrent() || sess !== adminSession() || declined !== accShowDeclined) return false;
+    accReqCache = result.requests || [];
+    return true;
+  });
+  const refreshAccessGrants = createRefreshGate(async (sess, isCurrent) => {
+    const response = await fetch(ADMIN_WORKER + "/admin/access", { headers: { Authorization: "Bearer " + sess } });
+    if (!response.ok) return false;
+    const result = await response.json();
+    if (!isCurrent() || sess !== adminSession()) return false;
+    accGrantCache = result.grants || [];
+    return true;
+  });
+  var accessRefreshGeneration = 0;
+  async function loadAccessData(force = true, includeGrants = true) {
     var sess = adminSession(); if (!sess) return;
+    const generation = ++accessRefreshGeneration;
     accLoading = true; if (activeTab === "special") renderBody();
-    try {
-      var rq = await fetch(ADMIN_WORKER + "/admin/requests?status=" + (accShowDeclined ? "declined" : "pending"), { headers: { Authorization: "Bearer " + sess } });
-      if (rq.ok) accReqCache = (await rq.json()).requests || [];
-      var rg = await fetch(ADMIN_WORKER + "/admin/access", { headers: { Authorization: "Bearer " + sess } });
-      if (rg.ok) accGrantCache = (await rg.json()).grants || [];
-    } catch (e) {}
+    await Promise.all([refreshAccessRequests(JSON.stringify([sess, accShowDeclined]), { force }), includeGrants ? refreshAccessGrants(sess, { force }) : Promise.resolve(true)]);
+    if (generation !== accessRefreshGeneration || sess !== adminSession()) return;
     accLoading = false; accSyncBadges(); if (activeTab === "special") renderBody();
   }
 
@@ -12041,14 +12066,14 @@ import { loadWorkflow } from "./workflow-loader.mjs";
     if (act === "acc-req-decline") {
       var _did = b.dataset.id; b.disabled = true;
       fetch(ADMIN_WORKER + "/admin/requests/decline", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ id: _did }) })
-        .then(function (r) { if (!r.ok) throw 0; accReqCache = accReqCache.filter(function (x) { return x.id !== _did; }); accSyncBadges(); renderBody(); status("Declined \u2014 a polite note was sent.", true); })
+        .then(function (r) { if (!r.ok) throw 0; accReqCache = accReqCache.filter(function (x) { return x.id !== _did; }); accSyncBadges(); renderBody(); status("Declined \u2014 a polite note was sent.", true); loadAccessData(); })
         .catch(function () { b.disabled = false; status("Couldn\u2019t decline \u2014 try again.", false); });
       return;
     }
     if (act === "acc-req-delete") {
       var _xid = b.dataset.id; b.disabled = true;
       fetch(ADMIN_WORKER + "/admin/requests/delete", { method: "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" }, body: JSON.stringify({ id: _xid }) })
-        .then(function () { accReqCache = accReqCache.filter(function (x) { return x.id !== _xid; }); renderBody(); status("Deleted.", true); })
+        .then(function () { accReqCache = accReqCache.filter(function (x) { return x.id !== _xid; }); renderBody(); status("Deleted.", true); loadAccessData(); })
         .catch(function () { b.disabled = false; status("Couldn\u2019t delete \u2014 try again.", false); });
       return;
     }
@@ -19167,7 +19192,7 @@ import { loadWorkflow } from "./workflow-loader.mjs";
     // Paste into a rich-text body as plain text (no foreign colours/fonts).
     root.addEventListener("paste", onRtPaste);
     root.querySelectorAll(".adm__tab").forEach((t) =>
-      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); if (activeTab === "special") { loadAccessData(); loadQuickGrant(); } if (activeTab === "autofill") { loadBookings(); bookMarkSeen(); } try { t.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {} tabsSync(); })
+      t.addEventListener("click", () => { if (openStudy >= 0) closeL2({ render: false }); if (journeyOpen) closeJourneyEditor({ render: false }); activeTab = t.dataset.tab; renderBody(); if (activeTab === "special") { loadAccessData(false); loadQuickGrant(); } if (activeTab === "autofill") { loadBookings(false); bookMarkSeen(); } try { t.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {} tabsSync(); })
     );
     // tab-strip overflow flippers (\u2039 \u203A)
     root.querySelectorAll("[data-tabflip]").forEach((b) => b.addEventListener("click", () => tabScroll(+b.dataset.tabflip)));
@@ -19431,11 +19456,11 @@ import { loadWorkflow } from "./workflow-loader.mjs";
     if (body) body.hidden = false;
     renderBody();
     loadQuickGrant(); // prefetch the one-tap Full-access quick-grant status
-    loadAccessData(); // prefetch requests + grants for the merged Special Views tab
-    loadBookings(); // prefetch Cal.com bookings so the More-tab badge shows a count on open
+    loadAccessData(false, false);
+    loadBookings(false);
     // Live-ish: when the owner returns to this tab while the studio is open, re-check pending so a request
     // that arrived meanwhile shows up (and the badge pulses). Gated on adm-lock so it never runs when closed.
-    if (!accVisBound) { accVisBound = true; document.addEventListener("visibilitychange", function () { if (!document.hidden && document.documentElement.classList.contains("adm-lock") && adminSession()) { loadAccessData(); loadBookings(); } }); }
+    if (!accVisBound) { accVisBound = true; document.addEventListener("visibilitychange", function () { if (!document.hidden && document.documentElement.classList.contains("adm-lock") && adminSession()) { loadAccessData(false, activeTab === "special"); loadBookings(false); } }); }
     musSilence(); // silence the ambient music while editing
     thDismiss(true); // belt-and-suspenders: the ticket nudge must never linger over the editor
     document.documentElement.classList.add("adm-lock");

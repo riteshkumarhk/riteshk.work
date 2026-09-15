@@ -23,14 +23,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Install test browser
-        run: |
-          npx playwright-core install --with-deps chromium
-          echo "PLAYWRIGHT_CHROMIUM_EXECUTABLE=$(node -p "require('playwright-core').chromium.executablePath()")" >> "$GITHUB_ENV"
 
       - name: Run root regressions sequentially
         run: |
@@ -58,30 +54,69 @@ jobs:
           done
           echo "OK — all bundles pass node --check."
 
-      - name: Verify authentication and case recovery in browser
-        run: |
-          python3 -m http.server 5510 --bind 127.0.0.1 > "$RUNNER_TEMP/site-test.log" 2>&1 &
-          server=$!
-          trap 'kill "$server"' EXIT
-          export SLIDE_LAB_URL=http://127.0.0.1:5510
-          export PLAYWRIGHT_CHROMIUM_EXECUTABLE="$(node -p "require('playwright-core').chromium.executablePath()")"
-            curl --silent --show-error --fail --retry 5 --retry-delay 1 --retry-connrefused --max-time 2 "$SLIDE_LAB_URL/index.html" > /dev/null
-          node --import ./tools/browser-test-guard.mjs --test --test-concurrency=1 project-recovery.browser.test.mjs slide-studio-deck.test.mjs slide-presenter-readonly.browser.test.mjs release-checks.browser.test.mjs presenter-dj.browser.test.mjs presenter-macos.browser.test.mjs presenter-native.browser.test.mjs presenter-web.browser.test.mjs slide-presenter.browser.test.mjs studio-capture-download.browser.test.mjs
-
       - name: Prepare tested site artifact
-        if: github.event_name != 'pull_request'
         run: |
           mkdir "$RUNNER_TEMP/site"
-          git archive HEAD | tar -x -C "$RUNNER_TEMP/site"
+          git archive --format=tar HEAD > "$RUNNER_TEMP/tested-source.tar"
+          tar -xf "$RUNNER_TEMP/tested-source.tar" -C "$RUNNER_TEMP/site"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tested-source
+          path: ${{ runner.temp }}/tested-source.tar
+          retention-days: 1
 
       - uses: actions/upload-pages-artifact@v3
         if: github.event_name != 'pull_request'
         with:
           path: ${{ runner.temp }}/site
 
+  browser-checks:
+    needs: verify-build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [authoring, sections, recovery]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tested-source
+
+      - name: Extract verified source and bundles
+        run: tar -xf tested-source.tar
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
+
+      - name: Install test browser
+        run: npx playwright-core install --with-deps chromium
+
+      - name: Run required browser shard
+        env:
+          BROWSER_SHARD: ${{ matrix.shard }}
+        run: |
+          python3 -m http.server 5510 --bind 127.0.0.1 > "$RUNNER_TEMP/site-test.log" 2>&1 &
+          server=$!
+          trap 'kill "$server"' EXIT
+          export SLIDE_LAB_URL=http://127.0.0.1:5510
+          export PLAYWRIGHT_CHROMIUM_EXECUTABLE="$(node -p "require('playwright-core').chromium.executablePath()")"
+          curl --silent --show-error --fail --retry 5 --retry-delay 1 --retry-connrefused --max-time 2 "$SLIDE_LAB_URL/index.html" > /dev/null
+          node tools/browser-shards.mjs "$BROWSER_SHARD"
+
   deploy-pages:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: verify-build
+    needs: [verify-build, browser-checks]
     runs-on: ubuntu-latest
     permissions:
       pages: write

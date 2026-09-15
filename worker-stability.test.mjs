@@ -85,6 +85,24 @@ async function signedWorkerFixture() {
   return { env, send, assertion, values };
 }
 
+test("vault index publishing skips unchanged writes while retaining historical keys and response counts", async () => {
+  const fixture = await signedWorkerFixture();
+  const login = await (await fixture.send("finish", await fixture.assertion())).json();
+  fixture.values.set("vaultkeys:example", JSON.stringify(["old.png", "current.png"]));
+  const writes = [], put = fixture.env.VAULT_GRANTS.put;
+  fixture.env.VAULT_GRANTS.put = async (key, value) => { writes.push(key); return put(key, value); };
+  const publish = map => worker.fetch(new Request("https://synthetic.test/admin/vault/keycache", {
+    method: "POST", headers: { Authorization: "Bearer " + login.token, "Content-Type": "application/json" }, body: JSON.stringify({ map })
+  }), fixture.env);
+  assert.deepEqual(await (await publish({ example: ["current.png"] })).json(), { ok: true, count: 1 });
+  assert.deepEqual(writes, []);
+  assert.deepEqual(await (await publish({ example: ["new.png"], empty: [] })).json(), { ok: true, count: 2 });
+  assert.deepEqual(writes, ["vaultkeys:example"]);
+  assert.deepEqual(JSON.parse(fixture.values.get("vaultkeys:example")), ["old.png", "current.png", "new.png"]);
+  await publish({ example: ["new.png", "current.png"] });
+  assert.deepEqual(writes, ["vaultkeys:example"]);
+});
+
 test("release checklist requires a scoped, user-verified owner passkey and rejects other tokens", async () => {
   const fixture = await signedWorkerFixture();
   const request = (token = "", origin = "https://synthetic.test", path = "/admin/release-checks") => worker.fetch(new Request("https://synthetic.test" + path, { headers: { Origin: origin, Authorization: "Bearer " + token } }), fixture.env);

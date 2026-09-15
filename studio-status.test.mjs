@@ -9,6 +9,7 @@ import { AI_SESSION_KEY, createAiSession } from "./src/js/ai-session.mjs";
 import { availableStudies } from "./src/js/slide-merge-sections.mjs";
 import { prepareBrief, prepareBriefWorks } from "./src/js/prepare-brief.mjs";
 import { contentRevision, publicationConflict, gitContentRevision } from "./src/js/content-revision.mjs";
+import { createRefreshGate } from "./src/js/studio-refresh.mjs";
 
 const source = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
 const styles = postcss.parse(readFileSync(new URL("./css/admin.css", import.meta.url), "utf8"));
@@ -19,6 +20,75 @@ function declarations(selector) {
   });
   return result;
 }
+
+test("Studio refresh coalesces automatic reads, expires freshness and retries failures", async () => {
+  let clock = 0, calls = 0, fail = false;
+  const refresh = createRefreshGate(async () => { calls++; if (fail) throw new Error("Offline"); return true; }, { now: () => clock });
+  await Promise.all([refresh("owner"), refresh("owner"), refresh("owner")]);
+  assert.equal(calls, 1);
+  clock = 59999; await refresh("owner"); assert.equal(calls, 1);
+  clock = 60000; await refresh("owner"); assert.equal(calls, 2);
+  await refresh("owner", { force: true }); assert.equal(calls, 3);
+  fail = true; await refresh("owner", { force: true });
+  fail = false; await refresh("owner"); assert.equal(calls, 5);
+  await refresh("other-owner"); assert.equal(calls, 6);
+});
+
+test("Studio refresh queues one post-mutation read and never replays an old session", async () => {
+  const requests = [];
+  const refresh = createRefreshGate(key => new Promise(resolve => requests.push({ key, resolve })));
+  const initial = refresh("owner"); await Promise.resolve();
+  const forced = refresh("owner", { force: true });
+  assert.equal(refresh("owner", { force: true }), forced);
+  requests[0].resolve(true); await initial; await Promise.resolve();
+  assert.equal(requests.length, 2); requests[1].resolve(true); await forced;
+  const old = refresh("owner", { force: true }); await Promise.resolve();
+  const replay = refresh("owner", { force: true });
+  const replacement = refresh("new-owner"); await Promise.resolve();
+  requests[2].resolve(true); requests[3].resolve(true);
+  await Promise.all([old, replay, replacement]);
+  assert.equal(requests.length, 4);
+});
+
+test("Studio list loaders reject old filters and sessions and refetch after an in-flight mutation", async () => {
+  const requests = [], context = {
+    createRefreshGate, ADMIN_WORKER: 'https://synthetic.test', session: 'owner',
+    adminSession: () => context.session, activeTab: 'work', renderBody: () => {}, accSyncBadges: () => {}, updateBookBadge: () => {},
+    accReqCache: [], accGrantCache: [], accShowDeclined: false, accLoading: false, bookCache: [], bookLoading: false, bookLoaded: false,
+    fetch: url => new Promise(resolve => requests.push({ url, resolve }))
+  };
+  const bookings = source.slice(source.indexOf('  const refreshBookings ='), source.indexOf('  async function bookDo('));
+  const access = source.slice(source.indexOf('  const refreshAccessRequests ='), source.indexOf('  // Foldable curation dialog'));
+  const loaders = runInNewContext(`(() => { ${bookings}\n${access}\nreturn { loadBookings, loadAccessData }; })()`, context);
+  const pending = loaders.loadAccessData(false, false); await Promise.resolve();
+  context.accShowDeclined = true;
+  const declined = loaders.loadAccessData(false, false); await Promise.resolve();
+  context.accShowDeclined = false;
+  const latest = loaders.loadAccessData(false, false); await Promise.resolve();
+  requests[2].resolve(Response.json({ requests: ['current'] })); await latest;
+  requests[0].resolve(Response.json({ requests: ['old pending'] }));
+  requests[1].resolve(Response.json({ requests: ['old declined'] }));
+  await Promise.all([pending, declined]);
+  assert.deepEqual(context.accReqCache, ['current']);
+  const old = loaders.loadBookings(false); await Promise.resolve();
+  context.session = 'new-owner';
+  const replacement = loaders.loadBookings(false); await Promise.resolve();
+  requests[4].resolve(Response.json({ bookings: ['new owner'] })); await replacement;
+  requests[3].resolve(Response.json({ bookings: ['old owner'] })); await old;
+  assert.deepEqual(context.bookCache, ['new owner']);
+  const initial = loaders.loadBookings(); await Promise.resolve();
+  const forced = loaders.loadBookings();
+  requests[5].resolve(Response.json({ bookings: ['before mutation'] })); await initial; await Promise.resolve();
+  assert.equal(requests.length, 7);
+  requests[6].resolve(Response.json({ bookings: ['after mutation'] })); await forced;
+  assert.deepEqual(context.bookCache, ['after mutation']);
+  const failed = loaders.loadBookings(); await Promise.resolve();
+  requests[7].resolve(new Response(null, { status: 503 })); await failed;
+  assert.equal(context.bookLoading, false);
+  const retry = loaders.loadBookings(false); await Promise.resolve();
+  requests[8].resolve(Response.json({ bookings: ['retry'] })); await retry;
+  assert.deepEqual(context.bookCache, ['retry']);
+});
 
 test("Studio progress stays above the status bar without intercepting controls", () => {
   const progress = declarations(".adm__statusbar::after");

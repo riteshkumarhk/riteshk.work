@@ -249,6 +249,48 @@ async function siteFixture(page, routeRequest) {
   return published;
 }
 
+test('Studio automatic refresh reduces list requests without suppressing explicit refresh or expiry', {skip:!baseURL,timeout:60000}, async()=>{
+  const browser = await chromium.launch(launchOptions);
+  try {
+    const page = await browser.newPage({viewport:{width:1440,height:1000}}), counts = {requests:0,access:0,bookings:0};
+    await siteFixture(page, async (route, url) => {
+      if (!url.pathname.startsWith('/admin/')) return false;
+      const kind = url.pathname.slice('/admin/'.length);
+      if (Object.hasOwn(counts, kind)) counts[kind]++;
+      await route.fulfill({json:kind==='requests'?{requests:[]}:kind==='access'?{grants:[]}:kind==='bookings'?{bookings:[]}:{}});
+      return true;
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem('rk:dev:stub','1');
+      localStorage.setItem('rk:admin:sess',JSON.stringify({token:'synthetic-list-test',exp:Date.now()+3600000}));
+      window.refreshClock = Date.now(); Date.now = () => window.refreshClock;
+    });
+    const initialBookings = page.waitForResponse(response=>response.url().endsWith('/admin/bookings'));
+    await page.goto(baseURL+'/studio/?devstub=1');
+    await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    await initialBookings;
+    const settle = () => page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    await settle();
+    assert.deepEqual(counts,{requests:1,access:0,bookings:1});
+    const before = await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
+    await page.evaluate(()=>{for(let index=0;index<10;index++)document.dispatchEvent(new Event('visibilitychange'));});
+    await settle();
+    assert.deepEqual(counts,{requests:1,access:0,bookings:1});
+    const grants = page.waitForResponse(response=>response.url().endsWith('/admin/access'));
+    await page.locator('.adm__tab[data-tab="special"]').click(); await grants; await settle();
+    assert.deepEqual(counts,{requests:1,access:1,bookings:1});
+    await page.locator('.adm__tab[data-tab="autofill"]').click();
+    const manual = page.waitForResponse(response=>response.url().endsWith('/admin/bookings'));
+    await page.locator('[data-act="book-refresh"]').click(); await manual; await settle();
+    assert.deepEqual(counts,{requests:1,access:1,bookings:2});
+    const expired = page.waitForResponse(response=>response.url().endsWith('/admin/bookings'));
+    await page.evaluate(()=>{window.refreshClock+=60001;document.dispatchEvent(new Event('visibilitychange'));});
+    await expired; await settle();
+    assert.deepEqual(counts,{requests:2,access:1,bookings:3});
+    assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),before);
+  } finally { await browser.close(); }
+});
+
 test('Workflow visitor keeps complete graphs inline on phones and preserves the React view during preview updates', {skip:!baseURL,timeout:90000}, async()=>{
   const browser=await chromium.launch(launchOptions);
   try{
