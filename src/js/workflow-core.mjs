@@ -1,26 +1,64 @@
 export const FLOW_NODE_WIDTH = 150;
 export const FLOW_NODE_HEIGHT = 92;
 
-export function snapFlowPosition(id, position, nodes, tolerance = 6) {
+export const FLOW_GRID_SIZE = 22;
+const flowSize = node => ({x:node.measured?.width || FLOW_NODE_WIDTH,y:node.measured?.height || FLOW_NODE_HEIGHT});
+
+export function snapFlowPosition(id, position, nodes, tolerance = 6, grid = 0) {
   const moving = nodes.find(node => node.id === id);
   if (!moving) return {position, guides:[]};
-  const size = node => ({x:node.measured?.width || FLOW_NODE_WIDTH,y:node.measured?.height || FLOW_NODE_HEIGHT});
-  const movingSize = size(moving), snapped = {...position}, guides = [];
+  const movingSize = flowSize(moving), snapped = {...position}, guides = [];
+  const anchors = nodes.filter(node => node.id !== id && !node.dragging && !node.hidden);
   for (const axis of ['x','y']) {
     const across = axis === 'x' ? 'y' : 'x';
     let nearest;
-    for (const node of nodes) {
-      if (node.id === id || node.dragging || node.hidden) continue;
-      const nodeSize = size(node);
+    for (const node of anchors) {
+      const nodeSize = flowSize(node);
       for (const fraction of [0,.5,1]) {
         const line = node.position[axis] + nodeSize[axis] * fraction;
         const delta = line - (position[axis] + movingSize[axis] * fraction);
-        if (Math.abs(delta) <= tolerance && (!nearest || Math.abs(delta) < Math.abs(nearest.delta))) nearest = {delta,axis,line,position:line-movingSize[axis]*fraction,start:Math.min(position[across],node.position[across])-16,end:Math.max(position[across]+movingSize[across],node.position[across]+nodeSize[across])+16};
+        if (Math.abs(delta) <= tolerance && (!nearest || Math.abs(delta) < Math.abs(nearest.delta))) nearest = {kind:'alignment',delta,axis,line,position:line-movingSize[axis]*fraction,start:Math.min(position[across],node.position[across])-16,end:Math.max(position[across]+movingSize[across],node.position[across]+nodeSize[across])+16};
+      }
+    }
+    const lane = anchors.filter(node => node.position[across] < position[across]+movingSize[across] && node.position[across]+flowSize(node)[across] > position[across]).sort((first,second) => first.position[axis]-second.position[axis]);
+    for (let index = 0; index < lane.length-1; index++) {
+      const first = lane[index], second = lane[index+1], firstSize = flowSize(first), secondSize = flowSize(second);
+      if (first.position[across] >= second.position[across]+secondSize[across] || second.position[across] >= first.position[across]+firstSize[across]) continue;
+      const firstStart = first.position[axis], firstEnd = firstStart+firstSize[axis], secondStart = second.position[axis], secondEnd = secondStart+secondSize[axis], gap = secondStart-firstEnd;
+      if (gap < 0) continue;
+      const candidates = [
+        {position:secondEnd+gap,segments:[[firstEnd,secondStart],[secondEnd,secondEnd+gap]]},
+        {position:firstStart-gap-movingSize[axis],segments:[[firstStart-gap,firstStart],[firstEnd,secondStart]]}
+      ];
+      if (gap >= movingSize[axis]) {
+        const middle = firstEnd+(gap-movingSize[axis])/2;
+        candidates.push({position:middle,segments:[[firstEnd,middle],[middle+movingSize[axis],secondStart]]});
+      }
+      for (const candidate of candidates) {
+        const delta = candidate.position-position[axis];
+        if (Math.abs(delta) > tolerance || nearest && Math.abs(delta) > Math.abs(nearest.delta)) continue;
+        nearest = {...candidate,kind:'spacing',axis,delta,line:Math.max(position[across]+movingSize[across],first.position[across]+firstSize[across],second.position[across]+secondSize[across])+18};
       }
     }
     if (nearest) { snapped[axis] = nearest.position; guides.push(nearest); }
+    else if (grid > 0) snapped[axis] = Math.round(position[axis]/grid)*grid;
   }
   return {position:snapped,guides};
+}
+
+export function snapFlowChanges(changes, nodes, tolerance = 6, grid = FLOW_GRID_SIZE) {
+  const positions = new Map(changes.filter(change => change.position).map(change => [change.id,change.position]));
+  const moving = nodes.filter(node => positions.has(node.id));
+  if (!moving.length) return {changes,guides:[]};
+  const bounds = {};
+  for (const axis of ['x','y']) {
+    bounds[axis] = Math.min(...moving.map(node => positions.get(node.id)[axis]));
+    bounds[axis === 'x' ? 'width' : 'height'] = Math.max(...moving.map(node => positions.get(node.id)[axis]+flowSize(node)[axis]))-bounds[axis];
+  }
+  const group = {id:moving[0].id,position:{x:bounds.x,y:bounds.y},measured:{width:bounds.width,height:bounds.height}};
+  const result = snapFlowPosition(group.id,group.position,[group,...nodes.filter(node => !positions.has(node.id))],tolerance,grid);
+  const delta = {x:result.position.x-bounds.x,y:result.position.y-bounds.y};
+  return {changes:changes.map(change => change.position ? {...change,position:{x:change.position.x===bounds.x?result.position.x:change.position.x+delta.x,y:change.position.y===bounds.y?result.position.y:change.position.y+delta.y}} : change),guides:result.guides};
 }
 
 export function flowCurve(source, target, sourcePort = 'r', targetPort = 'l', offsets, self = false) {

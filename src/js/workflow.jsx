@@ -1,8 +1,8 @@
 import React,{useEffect,useRef,useState,useReducer,useId} from 'react';
 import {createRoot} from 'react-dom/client';
-import {ReactFlow,ReactFlowProvider,Handle,Position,ConnectionMode,MarkerType,MiniMap,Background,BackgroundVariant,BaseEdge,EdgeLabelRenderer,ViewportPortal,getSmoothStepPath,getViewportForBounds,applyNodeChanges,addEdge,reconnectEdge,useReactFlow,useStore} from '@xyflow/react';
+import {ReactFlow,ReactFlowProvider,Handle,Position,ConnectionMode,SelectionMode,MarkerType,MiniMap,Background,BackgroundVariant,BaseEdge,EdgeLabelRenderer,ViewportPortal,getSmoothStepPath,getViewportForBounds,applyNodeChanges,addEdge,reconnectEdge,useReactFlow,useStore} from '@xyflow/react';
 import {Monitor,Smartphone,MousePointer2,Maximize2,ZoomIn,ZoomOut,LocateFixed,Scan,X,ChevronLeft,ChevronRight,Plus,Undo2,Redo2,Trash2,Link,Magnet,RotateCcw} from 'lucide-react';
-import {FLOW_NODE_WIDTH,FLOW_NODE_HEIGHT,flowNode,flowEdge,normalizeFlow,graphFromWorkflow,snapFlowPosition,flowCurve} from './workflow-core.mjs';
+import {FLOW_NODE_WIDTH,FLOW_NODE_HEIGHT,FLOW_GRID_SIZE,flowNode,flowEdge,normalizeFlow,graphFromWorkflow,snapFlowChanges,flowCurve} from './workflow-core.mjs';
 import '@xyflow/react/dist/style.css';
 import '../../css/workflow.css';
 
@@ -80,24 +80,38 @@ function GraphControls({canvas,start}){
     <IconButton label="Readable size" onClick={()=>flow.setViewport(start,{duration:motion()})}><LocateFixed size={18}/></IconButton>
   </div>;
 }
+function selectionIds(selection){
+  return {nodes:new Set(selection?.type==='node'?[selection.id]:selection?.nodeIds||[]),edges:new Set(selection?.type==='edge'?[selection.id]:selection?.edgeIds||[])};
+}
 function Diagram({doc,mode='web',selection,setSelection,change,checkpoint,flowRef,onTitleFocus,inlineFit=false,snapping=true}){
   const editor=mode==='editor',inline=mode==='inline',canvas=useRef(null),api=useRef(null),[guides,setGuides]=useState([]),bypassSnap=useRef(false),measurements=useRef(new Map());
+  const [spacePan,setSpacePan]=useState(false);
   const outlineId=useId();
+  useEffect(()=>{
+    if(!editor)return;
+    const reset=()=>setSpacePan(false);
+    const down=event=>{if(event.code!=='Space'||!canvas.current?.contains(event.target)||event.target.closest('input,textarea,select,button,[contenteditable]'))return;event.preventDefault();setSpacePan(true);};
+    const up=event=>{if(event.code==='Space')reset();};
+    document.addEventListener('keydown',down,true);document.addEventListener('keyup',up,true);window.addEventListener('blur',reset);document.addEventListener('visibilitychange',reset);
+    return()=>{document.removeEventListener('keydown',down,true);document.removeEventListener('keyup',up,true);window.removeEventListener('blur',reset);document.removeEventListener('visibilitychange',reset);};
+  },[editor]);
+  const selectedIds=selectionIds(selection);
+  const selectChanges=(changes,kind)=>{const edits=changes.filter(item=>item.type==='select');if(!editor||!edits.length)return;setSelection(current=>{const next=selectionIds(current);edits.forEach(item=>item.selected?next[kind].add(item.id):next[kind].delete(item.id));const nodeIds=[...next.nodes],edgeIds=[...next.edges];return nodeIds.length+edgeIds.length===0?null:nodeIds.length===1&&!edgeIds.length?{type:'node',id:nodeIds[0]}:edgeIds.length===1&&!nodeIds.length?{type:'edge',id:edgeIds[0]}:{type:'multiple',nodeIds,edgeIds};});};
   const minX=Math.min(0,...doc.nodes.map(node=>node.position.x)),maxX=Math.max(300,...doc.nodes.map(node=>node.position.x+FLOW_NODE_WIDTH));
   const start={x:24-minX*.92,y:26-(doc.nodes[0]?.position.y||0)*.92,zoom:.92};
   const selected=selection?.type==='node'?selection.id:null;
   const neighbors=new Set(selected?doc.edges.filter(edge=>edge.source===selected||edge.target===selected).flatMap(edge=>[edge.source,edge.target]):[]);
-  const nodes=doc.nodes.map(node=>({...node,type:'step',width:FLOW_NODE_WIDTH,initialHeight:FLOW_NODE_HEIGHT,measured:measurements.current.get(node.id),selected:selection?.type==='node'&&selection.id===node.id,className:!editor&&selected&&!neighbors.has(node.id)?'is-dimmed':''}));
+  const nodes=doc.nodes.map(node=>({...node,type:'step',width:FLOW_NODE_WIDTH,initialHeight:FLOW_NODE_HEIGHT,measured:measurements.current.get(node.id),selected:selectedIds.nodes.has(node.id),className:!editor&&selected&&!neighbors.has(node.id)?'is-dimmed':''}));
   const setCurve=(id,curve)=>change(current=>({...current,edges:current.edges.map(edge=>edge.id===id?{...edge,data:{...edge.data,curve}}:edge)}),false);
-  const edges=doc.edges.map(edge=>({...edge,type:'connection',data:{...edge.data,editable:editor,setCurve,checkpoint},selected:selection?.type==='edge'&&selection.id===edge.id,style:{stroke:edge.data.kind==='alternative'?'var(--text-dim)':'var(--accent)',strokeWidth:selection?.id===edge.id?2.5:1.5,opacity:!editor&&selected?(edge.source===selected||edge.target===selected?1:.15):.9,strokeDasharray:edge.data.kind==='return'?'5 5':undefined},markerEnd:{type:MarkerType.ArrowClosed,width:16,height:16,color:edge.data.kind==='alternative'?'var(--text-dim)':'var(--accent)'}}));
-  return <div ref={canvas} className={`wf-diagram wf-diagram-${mode}`} role={editor?undefined:'group'} tabIndex={editor?undefined:0} aria-label={editor?undefined:'Workflow diagram'} aria-describedby={editor?undefined:outlineId} data-inline-fit={inline?inlineFit:undefined} style={inline?{width:inlineFit?'100%':(maxX-minX)*.92+60,height:340}:undefined} onPointerMoveCapture={event=>{bypassSnap.current=event.altKey;}} onPointerDownCapture={event=>{bypassSnap.current=event.altKey;}}>
+  const edges=doc.edges.map(edge=>({...edge,type:'connection',data:{...edge.data,editable:editor&&!spacePan,setCurve,checkpoint},selected:selectedIds.edges.has(edge.id),style:{stroke:edge.data.kind==='alternative'?'var(--text-dim)':'var(--accent)',strokeWidth:selectedIds.edges.has(edge.id)?2.5:1.5,opacity:!editor&&selected?(edge.source===selected||edge.target===selected?1:.15):.9,strokeDasharray:edge.data.kind==='return'?'5 5':undefined},markerEnd:{type:MarkerType.ArrowClosed,width:16,height:16,color:edge.data.kind==='alternative'?'var(--text-dim)':'var(--accent)'}}));
+  return <div ref={canvas} className={`wf-diagram wf-diagram-${mode}`} role="group" tabIndex={0} aria-label={editor?'Workflow canvas':'Workflow diagram'} aria-describedby={editor?undefined:outlineId} data-panning={spacePan||undefined} data-inline-fit={inline?inlineFit:undefined} style={inline?{width:inlineFit?'100%':(maxX-minX)*.92+60,height:340}:undefined} onPointerMoveCapture={event=>{bypassSnap.current=event.altKey;}} onPointerDownCapture={event=>{bypassSnap.current=event.altKey;if(editor&&!event.target.closest('button,input,textarea,select,[contenteditable]'))canvas.current.focus({preventScroll:true});}} onBlur={event=>{if(!event.currentTarget.contains(event.relatedTarget))setSpacePan(false);}}>
     {!editor&&<Outline doc={doc} id={outlineId}/>}
     <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} connectionMode={ConnectionMode.Loose} minZoom={.001} maxZoom={2}
-      nodesDraggable={editor} nodesConnectable={editor} edgesReconnectable={editor} deleteKeyCode={null} selectionOnDrag={false}
-      panOnDrag={!inline} panOnScroll={false} zoomOnScroll={false} zoomOnPinch={!inline} zoomOnDoubleClick={false} preventScrolling={false}
+      nodesDraggable={editor&&!spacePan} nodesConnectable={editor&&!spacePan} edgesReconnectable={editor&&!spacePan} elementsSelectable={!spacePan} deleteKeyCode={null} selectionOnDrag={editor&&!spacePan} selectionMode={SelectionMode.Partial} selectionKeyCode={null} multiSelectionKeyCode={['Meta','Control','Shift']} panActivationKeyCode={null}
+      panOnDrag={editor?(spacePan?true:[1,2]):!inline} panOnScroll={false} zoomOnScroll={false} zoomOnPinch={!inline} zoomOnDoubleClick={false} preventScrolling={false}
       defaultViewport={start} onInit={instance=>{api.current=instance;if(flowRef)flowRef.current=instance;}}
-      onNodeClick={(_,node)=>setSelection({type:'node',id:node.id})} onEdgeClick={(_,edge)=>setSelection({type:'edge',id:edge.id})} onPaneClick={()=>setSelection(null)} onNodeDoubleClick={()=>editor&&onTitleFocus?.()}
-      onNodeDragStart={()=>editor&&checkpoint()} onNodeDragStop={()=>setGuides([])} onNodesChange={changes=>{changes.forEach(item=>{if(item.type==='dimensions'&&item.dimensions)measurements.current.set(item.id,item.dimensions);});if(editor){const edits=changes.filter(item=>item.type==='position').map(item=>{if(!item.position||item.dragging===undefined||!snapping||bypassSnap.current){setGuides([]);return item;}const result=snapFlowPosition(item.id,item.position,api.current.getNodes(),6/api.current.getZoom());setGuides(item.dragging?result.guides:[]);return {...item,position:result.position};});if(edits.length)change(current=>({...current,nodes:applyNodeChanges(edits,current.nodes)}),false);}}}
+      onNodeClick={(_,node)=>{if(!editor)setSelection({type:'node',id:node.id});}} onEdgeClick={(_,edge)=>{if(!editor)setSelection({type:'edge',id:edge.id});}} onPaneClick={()=>{if(!spacePan)setSelection(null);}} onNodeDoubleClick={()=>editor&&!spacePan&&onTitleFocus?.()}
+      onNodeDragStart={()=>editor&&checkpoint()} onSelectionDragStart={()=>editor&&checkpoint()} onSelectionDragStop={()=>setGuides([])} onNodeDragStop={()=>setGuides([])} onEdgesChange={changes=>selectChanges(changes,'edges')} onNodesChange={changes=>{changes.forEach(item=>{if(item.type==='dimensions'&&item.dimensions)measurements.current.set(item.id,item.dimensions);});selectChanges(changes,'nodes');if(editor){const edits=changes.filter(item=>item.type==='position');if(!edits.length)return;const result=snapping&&!bypassSnap.current&&edits.some(item=>item.dragging!==undefined)?snapFlowChanges(edits,api.current.getNodes(),6/api.current.getZoom()):{changes:edits,guides:[]};setGuides(edits.some(item=>item.dragging)?result.guides:[]);change(current=>({...current,nodes:applyNodeChanges(result.changes,current.nodes)}),false);}}}
       onConnect={connection=>{if(editor)change(current=>({...current,edges:addEdge({...connection,id:crypto.randomUUID(),data:{kind:'alternative',route:'elbow'}},current.edges)}));}}
       onReconnectStart={()=>editor&&checkpoint()} onReconnect={(oldEdge,connection)=>editor&&change(current=>({...current,edges:reconnectEdge(oldEdge,connection,current.edges)}),false)}
       onConnectEnd={(event,state)=>{
@@ -106,8 +120,8 @@ function Diagram({doc,mode='web',selection,setSelection,change,checkpoint,flowRe
         change(current=>({...current,nodes:[...current.nodes,flowNode(id,'New step',point.x,point.y-FLOW_NODE_HEIGHT/2)],edges:[...current.edges,{...flowEdge(state.fromNode.id,id,state.fromHandle.id,'l','alternative'),id:crypto.randomUUID()}]}));
         setSelection({type:'node',id});onTitleFocus?.();
       }}>
-      {editor&&<Background variant={BackgroundVariant.Dots} gap={22} size={1} color="var(--line)"/>}
-      {editor&&guides.length>0&&<ViewportPortal><svg className="wf-snap-guides" width="1" height="1" aria-hidden="true">{guides.map(guide=><line key={guide.axis} x1={guide.axis==='x'?guide.line:guide.start} y1={guide.axis==='y'?guide.line:guide.start} x2={guide.axis==='x'?guide.line:guide.end} y2={guide.axis==='y'?guide.line:guide.end} vectorEffect="non-scaling-stroke"/>)}</svg></ViewportPortal>}
+      {editor&&<Background variant={BackgroundVariant.Dots} gap={FLOW_GRID_SIZE} size={1} color="var(--line)"/>}
+      {editor&&guides.length>0&&<ViewportPortal><svg className="wf-snap-guides" width="1" height="1" aria-hidden="true">{guides.map(guide=>guide.kind==='spacing'?<g key={guide.axis} className="wf-spacing-guide">{guide.segments.map(([start,end],index)=>{const horizontal=guide.axis==='x';return <g key={index}><path d={horizontal?`M${start},${guide.line-4}v8m0,-4H${end}m0,-4v8`:`M${guide.line-4},${start}h8m-4,0V${end}m-4,0h8`} vectorEffect="non-scaling-stroke"/><text x={horizontal?(start+end)/2:guide.line-6} y={horizontal?guide.line-6:(start+end)/2} textAnchor={horizontal?'middle':'end'}>{Math.round((end-start)*10)/10}</text></g>;})}</g>:<line key={guide.axis} x1={guide.axis==='x'?guide.line:guide.start} y1={guide.axis==='y'?guide.line:guide.start} x2={guide.axis==='x'?guide.line:guide.end} y2={guide.axis==='y'?guide.line:guide.end} vectorEffect="non-scaling-stroke"/>)}</svg></ViewportPortal>}
       <Viewport canvas={canvas} inline={inline} fitted={inlineFit} start={start}/>
       {!inline&&<GraphControls canvas={canvas} start={start}/>}
       {(editor||mode==='expanded')&&<MiniMap pannable zoomable position="bottom-right" nodeColor="var(--text-dim)" maskColor="var(--wf-map-mask)" ariaLabel="Diagram overview"/>}
@@ -116,6 +130,7 @@ function Diagram({doc,mode='web',selection,setSelection,change,checkpoint,flowRe
 }
 function Summary({doc,selection}){
   const selected=doc.nodes.find(node=>selection?.type==='node'&&node.id===selection.id);
+  if(selection?.type==='multiple')return <span>{selection.nodeIds.length} steps / {selection.edgeIds.length} connections selected</span>;
   return <span>{selected?<><strong>{selected.data.title||'Untitled step'}</strong><span className="wf-separator">/</span>{doc.edges.filter(edge=>edge.target===selected.id).length} in / {doc.edges.filter(edge=>edge.source===selected.id).length} out</>:<>{doc.nodes.length} steps / {doc.edges.length} connections</>}</span>;
 }
 function Outline({doc,id}){
@@ -174,7 +189,7 @@ function Editor({doc,change,checkpoint,selection,setSelection,undo,redo,canUndo,
   const selectedNode=doc.nodes.find(node=>selection?.type==='node'&&node.id===selection.id),selectedEdge=doc.edges.find(edge=>selection?.type==='edge'&&edge.id===selection.id);
   const focusTitle=()=>requestAnimationFrame(()=>{title.current?.focus();title.current?.select();});
   const add=()=>{if(!flow.current)return;const box=canvas.current.querySelector('.wf-diagram').getBoundingClientRect(),point=flow.current.screenToFlowPosition({x:box.left+box.width/2,y:box.top+box.height/2}),id=crypto.randomUUID();change(current=>({...current,nodes:[...current.nodes,flowNode(id,'New step',point.x,point.y)]}));setSelection({type:'node',id});focusTitle();};
-  const remove=()=>{if(!selection)return;change(current=>selection.type==='node'?{...current,nodes:current.nodes.filter(node=>node.id!==selection.id),edges:current.edges.filter(edge=>edge.source!==selection.id&&edge.target!==selection.id)}:{...current,edges:current.edges.filter(edge=>edge.id!==selection.id)});setSelection(null);};
+  const remove=()=>{if(!selection)return;const ids=selectionIds(selection);change(current=>({...current,nodes:current.nodes.filter(node=>!ids.nodes.has(node.id)),edges:current.edges.filter(edge=>!ids.edges.has(edge.id)&&!ids.nodes.has(edge.source)&&!ids.nodes.has(edge.target))}));setSelection(null);};
   const fieldStart=()=>{if(!editing.current){checkpoint();editing.current=true;}};
   const finish=()=>{editing.current=false;};
   const updateNode=patch=>{fieldStart();change(current=>({...current,nodes:current.nodes.map(node=>node.id===selectedNode.id?{...node,data:{...node.data,...patch}}:node)}),false);};
@@ -185,9 +200,9 @@ function Editor({doc,change,checkpoint,selection,setSelection,undo,redo,canUndo,
     if(event.key==='Delete'||event.key==='Backspace'){event.preventDefault();remove();}
     if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'){event.preventDefault();event.shiftKey?redo():undo();}
   }}>
-    <div className="wf-toolbar"><div className="wf-actions"><IconButton label="Undo" disabled={!canUndo} onClick={undo}><Undo2 size={18}/></IconButton><IconButton label="Redo" disabled={!canRedo} onClick={redo}><Redo2 size={18}/></IconButton><span className="wf-divider"/><button type="button" className="wf-command" onClick={add}><Plus size={17}/>Add step</button><IconButton label="Delete selection" disabled={!selection} onClick={remove}><Trash2 size={17}/></IconButton><span className="wf-divider"/><IconButton label="Snap to steps" title="Snap to steps (hold Alt to bypass)" aria-pressed={snapping} onClick={()=>setSnapping(!snapping)}><Magnet size={18}/></IconButton></div></div>
+    <div className="wf-toolbar"><div className="wf-actions"><IconButton label="Undo" disabled={!canUndo} onClick={undo}><Undo2 size={18}/></IconButton><IconButton label="Redo" disabled={!canRedo} onClick={redo}><Redo2 size={18}/></IconButton><span className="wf-divider"/><button type="button" className="wf-command" onClick={add}><Plus size={17}/>Add step</button><IconButton label="Delete selection" disabled={!selection} onClick={remove}><Trash2 size={17}/></IconButton><span className="wf-divider"/><IconButton label="Snap to steps" title="Snap to alignment, equal spacing and grid (hold Alt to bypass)" aria-pressed={snapping} onClick={()=>setSnapping(!snapping)}><Magnet size={18}/></IconButton></div></div>
     <div className="wf-workspace"><ReactFlowProvider><Diagram doc={doc} mode="editor" selection={selection} setSelection={setSelection} change={change} checkpoint={checkpoint} flowRef={flow} onTitleFocus={focusTitle} snapping={snapping}/></ReactFlowProvider>
-      <aside className="wf-inspector"><h2>{selectedNode?'Step':selectedEdge?'Connection':'Flow'}</h2>
+      <aside className="wf-inspector"><h2>{selectedNode?'Step':selectedEdge?'Connection':selection?.type==='multiple'?'Selection':'Flow'}</h2>
         {selectedNode?<>
           <label>Title<textarea ref={title} aria-label="Step title" rows={3} value={selectedNode.data.title} onChange={event=>updateNode({title:event.target.value})} onBlur={finish}/></label>
           <label>Label<input type="text" aria-label="Step label" value={selectedNode.data.number} onChange={event=>updateNode({number:event.target.value})} onBlur={finish}/></label>
@@ -201,7 +216,7 @@ function Editor({doc,change,checkpoint,selection,setSelection,undo,redo,canUndo,
           <label>Connector<select aria-label="Connector shape" value={selectedEdge.data.route} onChange={event=>{updateEdge({data:{...selectedEdge.data,route:event.target.value}});finish();}}><option value="elbow">Rounded elbow</option><option value="curved">Curved</option></select></label>
           {selectedEdge.data.route==='curved'&&<IconButton label="Reset curve" disabled={!selectedEdge.data.curve} onClick={()=>{updateEdge({data:{...selectedEdge.data,curve:undefined}});finish();}}><RotateCcw size={18}/></IconButton>}
           {['source','target'].map(field=><React.Fragment key={field}><label>{field==='source'?'From':'To'}<select aria-label={field==='source'?'Connection from':'Connection to'} value={selectedEdge[field]} onChange={event=>{updateEdge({[field]:event.target.value});finish();}}>{doc.nodes.map(node=><option key={node.id} value={node.id}>{node.data.title||'Untitled step'}</option>)}</select></label><label>{field==='source'?'From side':'To side'}<select aria-label={field==='source'?'Connection from side':'Connection to side'} value={selectedEdge[`${field}Handle`]} onChange={event=>{updateEdge({[`${field}Handle`]:event.target.value});finish();}}>{Object.entries(portNames).map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label></React.Fragment>)}
-        </>:<>{doc.nodes.map(node=><button type="button" className="wf-row" key={node.id} onClick={()=>{setSelection({type:'node',id:node.id});flow.current?.setCenter(node.position.x+75,node.position.y+46,{zoom:1,duration:motion()});}}><span>{node.data.number||'--'}</span>{node.data.title||'Untitled step'}</button>)}</>}
+        </>:<>{doc.nodes.filter(node=>selection?.type!=='multiple'||selection.nodeIds.includes(node.id)).map(node=><button type="button" className="wf-row" key={node.id} onClick={()=>{setSelection({type:'node',id:node.id});flow.current?.setCenter(node.position.x+75,node.position.y+46,{zoom:1,duration:motion()});}}><span>{node.data.number||'--'}</span>{node.data.title||'Untitled step'}</button>)}</>}
       </aside>
     </div>
     <footer className="wf-footer"><Summary doc={doc} selection={selection}/></footer>

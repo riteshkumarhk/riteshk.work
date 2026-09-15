@@ -3,8 +3,8 @@ export function loadWorkflow() {
   if (window.RKWorkflow) return Promise.resolve(window.RKWorkflow);
   if (pending) return pending;
   pending = Promise.all([
-    ['link','/js/workflow.css?v=1.2'],
-    ['script','/js/workflow.js?v=1.2']
+    ['link','/js/workflow.css?v=1.3'],
+    ['script','/js/workflow.js?v=1.3']
   ].map(([tag,url])=>new Promise((resolve,reject)=>{
     const element=document.createElement(tag);
     if(tag==='link'){element.rel='stylesheet';element.href=url;}else element.src=url;

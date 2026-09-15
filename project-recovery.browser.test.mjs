@@ -522,6 +522,69 @@ test('Workflow snapping and Bezier handles preserve history, cancellation and sa
   }finally{await browser.close();}
 });
 
+test('Workflow marquee groups, Space pan and unified snapping preserve graph history', {skip:!baseURL,timeout:90000},async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try{
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce',hasTouch:true}),errors=[];
+    page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(10000);
+    const published=await siteFixture(page,async()=>false);
+    const original={type:'workflow',heading:'Group review',caption:'Keep caption',graph:{version:1,nodes:[flowNode('first','First',0,0),flowNode('second','Second',300,0),flowNode('third','Third',650,150)],edges:[flowEdge('first','second'),flowEdge('second','third')]}};
+    published.work[0].study.blocks[0]=original;
+    const protectedBlock=structuredClone(published.work[0].study.blocks[1]);
+    await page.addInitScript(()=>localStorage.setItem('rk:dev:stub','1'));
+    await page.goto(baseURL+'/studio/?devstub=1');await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    await page.locator('.adm__tab[data-tab="work"]').click();await page.locator('[data-act="study-toggle"][data-index="0"]').click();await page.locator('[data-l2tab="story"]').click();await page.locator('[data-act="study-blocktoggle"][data-bindex="0"]').click();
+    const edit=page.getByRole('button',{name:'Edit flow',exact:true});await edit.click();
+    const dialog=page.getByRole('dialog',{name:'Flow editor',exact:true}),canvas=dialog.getByRole('group',{name:'Workflow canvas',exact:true}),snap=dialog.getByRole('button',{name:'Snap to steps',exact:true});
+    const settle=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    const positions=()=>dialog.locator('.react-flow__node').evaluateAll(nodes=>Object.fromEntries(nodes.map(node=>{const matrix=new DOMMatrix(getComputedStyle(node).transform);return [node.dataset.id,{x:matrix.m41,y:matrix.m42}];})));
+    const node=id=>dialog.locator(`.react-flow__node[data-id="${id}"]`);
+    const marquee=async()=>{const first=await node('first').boundingBox(),second=await node('second').boundingBox();await page.mouse.move(first.x-12,first.y-12);await page.mouse.down();await page.mouse.move(second.x+second.width+12,second.y+second.height+12,{steps:15});await page.mouse.up();await settle();};
+    await dialog.getByRole('button',{name:'Readable size',exact:true}).click();await settle();
+    const before=await positions();await marquee();
+    assert.equal(await dialog.locator('.react-flow__node.selected').count(),2);
+    assert.deepEqual(await positions(),before,'Marquee does not pan or move steps');
+    const selected=await dialog.locator('.react-flow__nodesselection-rect').boundingBox();
+    await page.mouse.move(selected.x+selected.width/2,selected.y+selected.height/2);await page.mouse.down();await page.mouse.move(selected.x+selected.width/2+57,selected.y+selected.height/2+45,{steps:12});await page.mouse.up();await settle();
+    const moved=await positions();assert.notDeepEqual(moved.first,before.first);
+    assert.equal(moved.second.x-moved.first.x,300);assert.equal(moved.second.y-moved.first.y,0);assert.deepEqual(moved.third,before.third);
+    await dialog.getByRole('button',{name:'Undo',exact:true}).click();assert.deepEqual(await positions(),before);
+    await dialog.getByRole('button',{name:'Redo',exact:true}).click();assert.deepEqual(await positions(),moved);
+    await dialog.getByRole('button',{name:'Undo',exact:true}).click();await marquee();
+    await dialog.getByRole('button',{name:'Delete selection',exact:true}).click();assert.deepEqual(Object.keys(await positions()),['third']);assert.equal(await dialog.locator('.react-flow__edge').count(),0);
+    await dialog.getByRole('button',{name:'Undo',exact:true}).click();assert.deepEqual(await positions(),before);await dialog.locator('.react-flow__edge').nth(1).waitFor({state:'attached'});assert.equal(await dialog.locator('.react-flow__edge').count(),2);
+    await canvas.focus();const viewport=dialog.locator('.react-flow__viewport'),beforePan=await viewport.getAttribute('style');
+    await page.keyboard.down('Space');await page.waitForFunction(()=>!!document.querySelector('.wf-diagram-editor[data-panning]'));
+    assert.equal(await dialog.locator('.react-flow__pane').evaluate(element=>getComputedStyle(element).cursor),'grab');
+    const first=await node('first').boundingBox();await page.mouse.move(first.x+first.width/2,first.y+first.height/2);await page.mouse.down();await page.mouse.move(first.x+first.width/2+85,first.y+first.height/2+65,{steps:12});await page.mouse.up();
+    assert.notEqual(await viewport.getAttribute('style'),beforePan);assert.deepEqual(await positions(),before,'Space pans over a step without moving it');
+    await page.keyboard.up('Space');assert.equal(await canvas.getAttribute('data-panning'),null);
+    await canvas.focus();await page.keyboard.down('Space');await page.evaluate(()=>window.dispatchEvent(new Event('blur')));assert.equal(await canvas.getAttribute('data-panning'),null);await page.keyboard.up('Space');
+    await dialog.getByRole('button',{name:'Readable size',exact:true}).click();await settle();
+    await node('first').click();const title=dialog.getByRole('textbox',{name:'Step title',exact:true});await title.fill('First');await title.press('End');await title.press('Space');assert.equal(await title.inputValue(),'First ');assert.equal(await canvas.getAttribute('data-panning'),null);await title.fill('First');await canvas.focus();
+    const dragTo=async(id,target)=>{const box=await node(id).boundingBox(),point=(await positions())[id],zoom=await viewport.evaluate(element=>new DOMMatrix(getComputedStyle(element).transform).a);await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+4,box.y+box.height/2);await page.mouse.move(box.x+box.width/2+(target.x-point.x)*zoom+4,box.y+box.height/2+(target.y-point.y)*zoom,{steps:15});await settle();};
+    await dragTo('third',{x:600,y:0});await dialog.locator('.wf-spacing-guide').waitFor({state:'attached'});
+    assert.deepEqual(await dialog.locator('.wf-spacing-guide text').allTextContents(),['150','150']);
+    await page.screenshot({path:join(tmpdir(),'rk-workflow-equal-spacing-1440.png')});await page.mouse.up();await settle();
+    assert.equal((await positions()).third.x,600);assert.equal((await positions()).third.y,0);
+    await dragTo('third',{x:700,y:200});await page.mouse.up();await settle();const gridded=(await positions()).third;assert.equal(gridded.x%22,0);assert.equal(gridded.y%22,0);
+    await snap.click();await dragTo('third',{x:705,y:205});await page.mouse.up();await settle();assert.ok((await positions()).third.x%22!==0);assert.equal(await dialog.locator('.wf-snap-guides').count(),0);
+    await snap.click();await page.keyboard.down('Alt');await dragTo('third',{x:713,y:213});await page.mouse.up();await page.keyboard.up('Alt');await settle();assert.ok((await positions()).third.x%22!==0);
+    const retained=await positions();await page.setViewportSize({width:390,height:844});await settle();await dialog.getByRole('button',{name:'Fit diagram',exact:true}).click();await settle();await marquee();assert.equal(await dialog.locator('.react-flow__node.selected').count(),2);
+    const touch=await page.context().newCDPSession(page),touchBox=await dialog.locator('.react-flow__nodesselection-rect').boundingBox(),touchX=touchBox.x+touchBox.width/2,touchY=touchBox.y+touchBox.height/2;
+    await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:touchX,y:touchY}]});
+    for(let step=1;step<=6;step++)await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:touchX+step*4,y:touchY+step*3}]});
+    await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await touch.detach();await settle();const touched=await positions();assert.notDeepEqual(touched.first,retained.first);assert.equal(touched.second.x-touched.first.x,300);assert.equal(touched.second.y-touched.first.y,0);
+    await dialog.getByRole('button',{name:'Undo',exact:true}).click();assert.deepEqual(await positions(),retained);assert.ok(await dialog.evaluate(element=>element.scrollWidth<=element.clientWidth+1));await marquee();await page.screenshot({path:join(tmpdir(),'rk-workflow-selection-390.png')});
+    await dialog.getByRole('button',{name:'Apply flow',exact:true}).click();const saved=await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]);for(const item of saved.graph.nodes)for(const axis of ['x','y'])assert.ok(Math.abs(item.position[axis]-retained[item.id][axis])<.001,'Saved coordinates retain full precision beyond CSS serialization');assert.equal(saved.caption,original.caption);
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[1]),protectedBlock);
+    await edit.click();await dialog.getByRole('button',{name:'Cancel',exact:true}).click();assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]),saved);
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem('rk:content:draft')||'null')?.work?.[0]?.study?.blocks?.[0]?.graph?.nodes?.[2]?.position?.y>200);
+    await page.reload();await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]),saved);
+    assert.deepEqual(errors,[]);
+  }finally{await browser.close();}
+});
+
 test("Media columns Studio adds, reorders and persists nested cells", { skip: !baseURL, timeout: 90000 }, async () => {
   const browser = await chromium.launch(launchOptions);
   try {

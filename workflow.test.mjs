@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
-import {flowNode,flowEdge,normalizeFlow,graphFromWorkflow,workflowItems,snapFlowPosition,flowCurve} from './src/js/workflow-core.mjs';
+import {flowNode,flowEdge,normalizeFlow,graphFromWorkflow,workflowItems,snapFlowPosition,snapFlowChanges,flowCurve} from './src/js/workflow-core.mjs';
 import {getBezierPath,Position} from '@xyflow/react';
 
 test('Workflow alignment snaps measured edges and centres within screen-scaled tolerance without mutating neighbors',()=>{
@@ -17,6 +17,34 @@ test('Workflow alignment snaps measured edges and centres within screen-scaled t
   assert.equal(snapFlowPosition('moving',{x:290,y:400},nodes,6/.5).position.x,300);
   assert.equal(snapFlowPosition('moving',{x:600,y:400},nodes).guides.length,0);
   assert.deepEqual(nodes,before);
+});
+
+test('Workflow equal-gap snapping uses measured edges between and beyond neighbors on both axes',()=>{
+  const nodes=[flowNode('moving','Moving',0,0),flowNode('first','First',0,0),{...flowNode('second','Second',250,0),measured:{width:200,height:92}}];
+  for(const [raw,expected] of [[{x:553,y:0},550],[{x:-247,y:0},-250]]){
+    const result=snapFlowPosition('moving',raw,nodes);
+    assert.equal(result.position.x,expected);
+    assert.equal(result.guides.find(guide=>guide.axis==='x').kind,'spacing');
+    assert.deepEqual(result.guides.find(guide=>guide.axis==='x').segments.map(([start,end])=>end-start),[100,100]);
+  }
+  nodes[2].position.x=650;
+  assert.equal(snapFlowPosition('moving',{x:329,y:0},nodes).position.x,325);
+  const column=[flowNode('moving','Moving',0,0),{...flowNode('first','Tall',0,0),measured:{width:150,height:140}},flowNode('second','Second',0,240)];
+  assert.equal(snapFlowPosition('moving',{x:0,y:430},column).position.y,432);
+  assert.equal(snapFlowPosition('moving',{x:1000,y:430},column).position.y,430,'Unrelated columns do not create spacing guides');
+  assert.equal(snapFlowPosition('moving',{x:329,y:0},nodes,2).position.x,329);
+  assert.equal(snapFlowPosition('moving',{x:329,y:0},nodes.map(node=>node.id==='second'?{...node,hidden:true}:node)).position.x,329);
+});
+
+test('Workflow group snapping preserves relative positions and prefers nearby geometry over grid',()=>{
+  const nodes=[flowNode('first','First',0,0),flowNode('second','Second',230,31),flowNode('anchor','Anchor',500,500)];
+  const changes=[{id:'first',type:'position',position:{x:105,y:111},dragging:true},{id:'second',type:'position',position:{x:335,y:142},dragging:true}];
+  const before=structuredClone({nodes,changes}),result=snapFlowChanges(changes,nodes);
+  assert.deepEqual(result.changes.map(change=>change.position),[{x:110,y:110},{x:340,y:141}]);
+  assert.deepEqual({nodes,changes},before);
+  assert.equal(snapFlowChanges([{id:'first',position:{x:497,y:200}}],nodes).changes[0].position.x,500,'Alignment wins over grid484');
+  assert.deepEqual(snapFlowChanges(changes,nodes,6,0).changes,changes,'Grid can be bypassed independently by callers');
+  assert.deepEqual(snapFlowChanges([],nodes),{changes:[],guides:[]});
 });
 
 test('Workflow curves preserve automatic React Flow geometry and persist endpoint-relative control points',()=>{
