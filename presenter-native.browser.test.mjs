@@ -114,6 +114,47 @@ test("native bridge keeps notes off audience and laser yields to interactive con
   } finally { await browser.close(); }
 });
 
+test("native section keyboard navigation respects controls and expansion lifecycle", async () => {
+  const browser = await chromium.launch({ executablePath, headless: true });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  try {
+    await page.addInitScript(() => {
+      window.__RK_NATIVE_PRESENTER = true;
+      window.chrome.webview = new EventTarget();
+      window.chrome.webview.postMessage = () => {};
+    });
+    await page.goto(baseURL + "/tools/studio-presenter/fixture.html");
+    await page.click("#start");
+    await page.evaluate(() => {
+      const section = document.createElement("iframe");
+      section.id = "keyboard-section";
+      section.srcdoc = '<button id="navigate">Slide navigation</button><input id="range" type="range" value="50"><button id="consume">Local action</button>';
+      document.querySelector("[data-pjp-frame]").append(section);
+    });
+    const section = page.frameLocator("#keyboard-section");
+    await section.locator("#consume").evaluate(element => element.addEventListener("keydown", event => event.preventDefault()));
+    await section.locator("#consume").press("ArrowRight");
+    assert.equal(await page.locator("[data-pjp-count]").textContent(), "1 / 2");
+    await section.locator("#range").press("ArrowRight");
+    assert.equal(await section.locator("#range").inputValue(), "51");
+    await section.locator("#navigate").press("Control+ArrowRight");
+    assert.equal(await page.locator("[data-pjp-count]").textContent(), "1 / 2");
+    await section.locator("#navigate").press("ArrowRight");
+    await page.waitForFunction(() => document.querySelector("[data-pjp-count]").textContent === "2 / 2");
+    await page.locator("#action").press("ArrowLeft");
+    await page.waitForFunction(() => document.querySelector("[data-pjp-count]").textContent === "1 / 2");
+    await page.evaluate(() => window.RK.expandSlideMedia(document.querySelector("#media")));
+    await page.locator(".pjp__expanded").waitFor();
+    assert.equal(await page.evaluate(() => window.RK.dismissSlideMedia()), true);
+    assert.equal(await page.locator(".pjp__expanded").count(), 0);
+    assert.equal(await page.locator(".pjp").count(), 1);
+    assert.equal(await page.evaluate(() => window.RK.dismissSlideMedia()), false);
+    await page.getByRole("button", { name: "Exit presentation", exact: true }).click();
+    await page.locator(".pjp").waitFor({ state: "detached" });
+    assert.equal(await page.evaluate(() => typeof window.RK.dismissSlideMedia), "undefined");
+  } finally { await browser.close(); }
+});
+
 test("ordinary presenter uses laser over slide and system cursor over controls", async () => {
   const browser=await chromium.launch({executablePath,headless:true});
   const page=await browser.newPage({viewport:{width:1280,height:800},reducedMotion:"reduce"});

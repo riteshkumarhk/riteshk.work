@@ -7420,7 +7420,7 @@ import { createRefreshGate } from "./studio-refresh.mjs";
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.26";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.27";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
@@ -9812,10 +9812,10 @@ import { createRefreshGate } from "./studio-refresh.mjs";
         '<div class="adm__ext" data-presenter-capture-test>' +
           '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("doc") + '</span><div><b>Studio Presenter</b><span>Windows 10 (2004+) / 11, x64 - portable preview release</span></div></div>' +
           '<p class="adm__ext-lead">Your live slides, speaker notes and controls in an always-on-top companion. Point with the laser, play media and interact with sections directly from its live preview.</p>' +
-          '<div class="imgblk__row"><a class="btn btn--primary" href="https://github.com/riteshkumarhk/riteshk.work/releases/download/studio-presenter-v0.3.0/StudioPresenter.exe" target="_blank" rel="noopener noreferrer">' + extIcon("dl", 15) + ' Download app (.exe)</a></div>' +
+          '<div class="imgblk__row"><a class="btn btn--primary" href="https://github.com/riteshkumarhk/riteshk.work/releases/download/studio-presenter-v0.3.1/StudioPresenter.exe" target="_blank" rel="noopener noreferrer">' + extIcon("dl", 15) + ' Download app (.exe)</a></div>' +
           '<ol class="adm__ext-steps">' +
             '<li>Download on your presenting PC and open <b>StudioPresenter.exe</b>. It needs Microsoft Edge WebView2 Runtime, normally already installed on Windows. No separate .NET installation is needed.</li>' +
-            '<li>Sign in inside the app. Open your deck in <b>Content Studio</b>, or choose <b>Open &gt; Slide Studio</b>. The app has its own local profile: publish browser edits first, or export and import your Slide Studio deck.</li>' +
+            '<li>Sign in inside the app. Open your saved deck in <b>Content Studio</b>, or choose <b>Open &gt; Slide Studio</b>. The app has its own local profile; browser drafts are not copied automatically. Slide Studio supports deck export/import. Do not publish private or unreviewed work just to transfer it.</li>' +
             '<li>Choose <b>Slide Show</b>. Slides fill the audience window and the protected notes companion opens automatically. Keep the audience window open and not minimized.</li>' +
             '<li>Point or click inside the companion preview. The laser appears on the live slides; interactive controls use an arrow. Media, sections, keyboard input, slide navigation and the timer control the same presentation.</li>' +
             '<li>Before presenting private notes, verify from another participant during <b>entire-display sharing</b>: only the slides should appear, with no companion and no black rectangle. Recheck recordings and other displays when used.</li>' +

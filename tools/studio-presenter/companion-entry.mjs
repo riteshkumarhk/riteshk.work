@@ -57,7 +57,7 @@ preview.addEventListener('pointercancel',event=>{send({...pointer(event,'mouseRe
 preview.addEventListener('pointerleave',()=>{flush();send({type:'command',command:'pointer-leave'});});
 window.addEventListener('blur',()=>send({type:'command',command:'pointer-leave'}));
 preview.addEventListener('wheel',event=>{event.preventDefault();send(pointer(event,'mouseWheel'));},{passive:false});
-for(const type of ['keydown','keyup'])preview.addEventListener(type,event=>{if(event.key==='Tab')return;event.preventDefault();send({type:'input',kind:type==='keydown'?'keyDown':'keyUp',key:event.key,code:event.code,keyCode:event.keyCode});});
+for(const type of ['keydown','keyup'])preview.addEventListener(type,event=>{event.preventDefault();send({type:'input',kind:type==='keydown'?'keyDown':'keyUp',key:event.key,code:event.code,keyCode:event.keyCode,modifiers:(event.altKey?1:0)|(event.ctrlKey?2:0)|(event.metaKey?4:0)|(event.shiftKey?8:0),repeat:event.repeat,location:event.location});});
 new ResizeObserver(place).observe(preview);
 new MutationObserver(place).observe(document.querySelector('[data-pp-overview]'),{attributes:true,attributeFilter:['open']});
 setInterval(tick,250);

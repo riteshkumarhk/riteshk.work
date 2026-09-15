@@ -106,6 +106,7 @@ internal sealed class AudienceWindow : Form
             await Browser.EnsureCoreWebView2Async(Environment);
             Browser.CoreWebView2.Settings.AreDevToolsEnabled = Testing;
             Browser.CoreWebView2.Settings.IsStatusBarEnabled = false;
+            if (Testing) await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.setCacheDisabled", "{\"cacheDisabled\":true}");
             Browser.CoreWebView2.NavigationStarting += (_, eventArgs) =>
             {
                 if (!Trusted(eventArgs.Uri, Testing)) { eventArgs.Cancel = true; return; }
@@ -320,9 +321,13 @@ internal sealed class CompanionWindow : Form
             {
                 var key = message.GetProperty("key").GetString() ?? "";
                 if (key.Length > 30) return;
+                var modifiers = message.TryGetProperty("modifiers", out var keyModifiers) ? keyModifiers.GetInt32() & 15 : 0;
+                if (kind == "keyDown" && key == "Escape" && modifiers == 0 && await audience.Browser.CoreWebView2.ExecuteScriptAsync("window.RK?.dismissSlideMedia?.() === true") == "true") return;
                 var code = message.GetProperty("code").GetString() ?? "";
                 var virtualKey = Math.Clamp(message.GetProperty("keyCode").GetInt32(), 0, 255);
-                await audience.Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchKeyEvent", JsonSerializer.Serialize(new { type = kind, key, code, windowsVirtualKeyCode = virtualKey, text = kind == "keyDown" && key.Length == 1 ? key : "" }));
+                var location = message.TryGetProperty("location", out var keyLocation) ? Math.Clamp(keyLocation.GetInt32(), 0, 3) : 0;
+                var repeat = message.TryGetProperty("repeat", out var keyRepeat) && keyRepeat.GetBoolean();
+                await audience.Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchKeyEvent", JsonSerializer.Serialize(new { type = kind, key, code, windowsVirtualKeyCode = virtualKey, modifiers, location = Math.Min(location, 2), isKeypad = location == 3, autoRepeat = repeat, text = kind == "keyDown" && key.Length == 1 && (modifiers & 7) == 0 ? key : "" }));
                 return;
             }
             var normalizedX = message.GetProperty("x").GetDouble();

@@ -1,5 +1,5 @@
 import { installPresenterPointer } from "./presenter-pointer.mjs";
-import { isPresenterInput, presentationSurface } from "./presenter-interaction.mjs";
+import { isPresenterInput, observePresentationDocuments, presentationSurface } from "./presenter-interaction.mjs";
 import { installWebPresenterPreview, requestPresenterCapture } from "./presenter-web-preview.mjs";
 import { createPresenterClock } from "./presenter-clock.mjs";
 import { installSlideExpansion } from "./presenter-expansion.mjs";
@@ -41,6 +41,11 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   var nativeHost = !opts.audienceOnly && !opts.presenterWindow && window.__RK_NATIVE_PRESENTER === true && !!window.chrome?.webview;
   var pointer = installPresenterPointer(stage, frame, nativeHost);
   var expansion = installSlideExpansion(frame);
+  var stopNativeKeys = nativeHost ? observePresentationDocuments(frame, function (doc) {
+    if (doc === document) return;
+    doc.addEventListener("keydown", onKey);
+    return function () { doc.removeEventListener("keydown", onKey); };
+  }) : function () {};
   stage.classList.toggle("pjp--native", nativeHost);
   var notesEl = stage.querySelector("[data-pjp-notes]"), nextEl = stage.querySelector("[data-pjp-next]"), presenting = false;
   var nextThumb = stage.querySelector("[data-pjp-nextthumb]"), timerEl = stage.querySelector("[data-pjp-timer]"), clockEl = stage.querySelector("[data-pjp-clock]"), startT = Date.now(), presenterWin = null;
@@ -315,9 +320,9 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     presenterRefresh = setTimeout(syncPresenter, 60); syncPresenter();
     if (opts.autoStart && !opts.presenterWindow) webPreview.connect();
   }
-    function exit() { if (exited) return; expansion.dispose(); exited = true; launchCapture?.cancel(); launchCapture = null; var closing = presenterWin; onPresenterClosed(); if (ownsFullscreen && document.fullscreenElement === stage) document.exitFullscreen().catch(function () {}); pointer.dispose(); if (nativeHost) { window.chrome.webview.removeEventListener("message", onNative); window.removeEventListener("resize", syncNative); window.chrome.webview.postMessage({ channel: "rk-presenter", type: "end" }); } clearInterval(clockTimer); clearTimeout(transTimer); if (closing && !closing.closed && !opts.presenterWindow) { try { closing.close(); } catch (e) {} } window.removeEventListener("pagehide", exit); document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { if (dispose) dispose(); stage.remove(); pjpStage = null; inactiveSiblings.forEach(function (element) { element.inert = false; }); if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true }); if (opts.onClose) opts.onClose(); }, 240); }
+    function exit() { if (exited) return; stopNativeKeys(); expansion.dispose(); exited = true; launchCapture?.cancel(); launchCapture = null; var closing = presenterWin; onPresenterClosed(); if (ownsFullscreen && document.fullscreenElement === stage) document.exitFullscreen().catch(function () {}); pointer.dispose(); if (nativeHost) { window.chrome.webview.removeEventListener("message", onNative); window.removeEventListener("resize", syncNative); window.chrome.webview.postMessage({ channel: "rk-presenter", type: "end" }); } clearInterval(clockTimer); clearTimeout(transTimer); if (closing && !closing.closed && !opts.presenterWindow) { try { closing.close(); } catch (e) {} } window.removeEventListener("pagehide", exit); document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { if (dispose) dispose(); stage.remove(); pjpStage = null; inactiveSiblings.forEach(function (element) { element.inert = false; }); if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true }); if (opts.onClose) opts.onClose(); }, 240); }
   function onKey(e) {
-    if (isPresenterInput(e)) return;
+    if (isPresenterInput(e) || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === "Tab" && e.currentTarget === document) {
       var controls = Array.prototype.filter.call(stage.querySelectorAll('button:not(:disabled), a[href], video[controls], iframe, [tabindex="0"]'), function (element) { return element.getClientRects().length && getComputedStyle(element).visibility !== "hidden" && (!element.closest("[data-pjp-panel]") || presenting); });
       if (!controls.length) { e.preventDefault(); stage.focus(); return; }

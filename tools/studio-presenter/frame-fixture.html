@@ -1,1 +1,6 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Embedded control</title></head><body><button id="embedded" onclick="this.textContent='Embedded clicked';parent.postMessage('embedded-clicked','http://127.0.0.1:5510')">Embedded control</button></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Embedded control</title></head><body><button id="embedded" onclick="this.textContent='Embedded clicked';parent.postMessage('embedded-clicked','http://127.0.0.1:5510')">Embedded control</button><script>
+for (const type of ['keydown','keyup']) window.addEventListener(type,event=>{
+	parent.postMessage({type:'embedded-key',event:type,key:event.key,code:event.code,ctrl:event.ctrlKey,alt:event.altKey,shift:event.shiftKey,meta:event.metaKey,trusted:event.isTrusted},'http://127.0.0.1:5510');
+	if(event.key!=='Escape')event.preventDefault();
+});
+</script></body></html>

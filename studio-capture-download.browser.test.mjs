@@ -32,10 +32,12 @@ test("More offers the native companion and safe web fallback instructions", { sk
     const card = page.locator("[data-presenter-capture-test]");
     await card.waitFor();
     const link = card.getByRole("link", { name: /Download app/ });
-    assert.equal(await link.getAttribute("href"), "https://github.com/riteshkumarhk/riteshk.work/releases/download/studio-presenter-v0.3.0/StudioPresenter.exe");
+    assert.equal(await link.getAttribute("href"), "https://github.com/riteshkumarhk/riteshk.work/releases/download/studio-presenter-v0.3.1/StudioPresenter.exe");
     assert.equal(await link.getAttribute("rel"), "noopener noreferrer");
     assert.equal(await card.locator("ol li").count(), 5);
     assert.match(await card.textContent(), /app has its own local profile/);
+    assert.match(await card.textContent(), /browser drafts are not copied automatically/);
+    assert.match(await card.textContent(), /Do not publish private or unreviewed work just to transfer it/);
     assert.match(await card.textContent(), /Do not disable Windows security/);
     assert.match(await card.locator("[data-presenter-web-fallback]").textContent(), /only that audience tab or window/);
     assert.match(await card.locator("[data-presenter-web-fallback]").textContent(), /YouTube must be controlled in the audience window/);

@@ -5,14 +5,14 @@ Portable Windows x64 companion for riteshk.work. Opens Content Studio or Slide S
 ## Use
 
 1. Download StudioPresenter.exe from Studio > More on the actual presenting PC. Requires Windows 10 2004+ or Windows 11 and Microsoft Edge WebView2 Runtime. The self-contained executable needs no separate .NET install and does not request administrator access.
-2. Sign in within the app. It has its own persistent profile, separate from Edge/Chrome: publish Content Studio browser edits first, or export/import a Slide Studio deck. Use Open > Slide Studio for that editor.
+2. Sign in within the app. It has its own persistent profile, separate from Edge/Chrome, and does not inherit unsaved browser drafts. Open existing saved work or export/import a Slide Studio deck. Do not publish private or unreviewed work just to transfer it. Use Open > Slide Studio for that editor.
 3. Start Present/Rehearse. Keep the audience window open and not minimized. Place it on the display you share. Move or resize the companion as needed.
 4. The companion preview is a live DWM mirror of the slide itself, not a second renderer. Mouse motion shows a laser; controls/media/embedded content show an arrow. Click, drag, wheel and keyboard input target the live WebView2 presentation. Leave the preview to use the normal cursor on notes and controls.
 5. Verify the outgoing feed with another participant before using private notes. Share the whole display: the companion should be absent, with slides normally visible underneath. Also verify recordings and each display/capture configuration you use.
 
 Unsigned preview build: do not disable Windows security to run it. Report any block. The app does not attach to a presentation already open in another browser. Browser presenter windows remain ordinary, capturable windows.
 
-## Presenter DJ Pad (0.3.0)
+## Presenter DJ Pad (0.3.1)
 
 The web and Windows presenter share the same panel components and design tokens. The Windows shell remains WinForms/WebView2; this release does not migrate to WinUI 3.
 
@@ -21,6 +21,13 @@ The web and Windows presenter share the same panel components and design tokens.
 - Notes and slide-minute budgets save to the corresponding deck draft when launched from an editor. Slide content remains read-only. Slide Studio's Prepare mode permits these metadata edits, including the timing button on each slide.
 - Click the count for the private thumbnail overview. In Windows the DWM mirror hides while the overview is open. Notes size and pane split persist in the app profile.
 - End closes the pad and exits the audience presentation. Browser capture loss leaves static thumbnails and an explicit reconnect action.
+
+### Live Interaction and Keyboard
+
+- The Windows current-slide preview mirrors the actual audience window, including Workflow expansion/panning, image and embedded-media zoom, comparison dragging, and the moved comparison grip. It needs no browser-tab capture permission.
+- With the preview focused, prototype keys such as R, custom keys, arrows, modifier combinations, key-up events and Tab reach the focused embedded content. Unhandled Left/Right keys outside the prototype navigate slides; editable fields and controls retain their own keys.
+- Escape closes the surrounding expanded-media view, even after focus enters a cross-origin prototype. The iframe instance is retained. Workflow uses its own Escape dismissal without ending the slideshow.
+- Windows-reserved shortcuts remain OS-controlled. Actual authenticated Figma behavior and each meeting app's outgoing feed/recordings still require acceptance on the presenting PC; synthetic cross-origin tests do not prove these.
 
 ## Protection and Boundaries
 

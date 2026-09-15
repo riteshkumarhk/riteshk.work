@@ -4,6 +4,14 @@ import { presenterIcon } from "./presenter-panel.mjs";
 export function installSlideExpansion(frame) {
   const rootDocument = frame.ownerDocument;
   let active = null;
+  const rootApi = rootDocument.defaultView.RK ||= {};
+  const previousDismiss = rootApi.dismissSlideMedia;
+  const dismiss = () => {
+    if (!active || active.overlay) return false;
+    restore();
+    return true;
+  };
+  rootApi.dismissSlideMedia = dismiss;
   function restore() {
     if (!active) return;
     const previous = active;
@@ -136,5 +144,5 @@ export function installSlideExpansion(frame) {
     }
     restore();
   }
-  return { reset, dispose() { reset(); stop(); } };
+  return { reset, dispose() { reset(); stop(); if (rootApi.dismissSlideMedia === dismiss) { if (previousDismiss) rootApi.dismissSlideMedia = previousDismiss; else delete rootApi.dismissSlideMedia; } } };
 }
