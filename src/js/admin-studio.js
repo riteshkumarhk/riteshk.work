@@ -48,6 +48,8 @@ import { notesHtml } from "./slide-rich-text.mjs";
 import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief.mjs";
 import { retainResumeSource, readResumeSource, resumeSourceForSync, restoreResumeSource } from "./prepare-resume.mjs";
 import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResponse, applyCaseProposal, importFigmaSources, caseWorkspace, protectedSection } from "./case-study-authoring.mjs";
+import { graphFromWorkflow, workflowItems } from "./workflow-core.mjs";
+import { loadWorkflow } from "./workflow-loader.mjs";
 
 (function () {
   "use strict";
@@ -130,7 +132,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     { type: "statement", name: "Statement", tag: "Pull-quote", desc: "One bold line that stands on its own, with an optional sub-line.", best: "A thesis \u00b7 a principle \u00b7 a takeaway" },
     { type: "metrics", name: "Metrics", tag: "Impact", desc: "A row of big numbers, each with a small label.", best: "Results \u2014 users, growth, ratings, revenue" },
     { type: "steps", name: "Steps", tag: "Process", desc: "A numbered sequence of titled steps.", best: "Your approach, method or timeline" },
-    { type: "workflow", name: "Workflow", tag: "Flow", desc: "A process as a left-to-right flow or a repeating loop \u2014 split a step with // to fork into parallel branches that merge back.", best: "Pipelines \u00b7 review cycles \u00b7 fork / merge" },
+    { type: "workflow", name: "Workflow", tag: "Flow", desc: "Connected steps with independent branches, merges and return loops.", best: "Pipelines \u00b7 review cycles \u00b7 fork / merge" },
     { type: "media", name: "Media", tag: "Visuals", desc: "Images, video, Figma, PDF or slides with captions.", best: "Screens \u00b7 prototypes \u00b7 before/after shots" },
     { type: "split", name: "Before / after", tag: "Compare", desc: "Two labelled columns placed side by side.", best: "Before vs after \u00b7 problem vs solution" },
     { type: "faq", name: "FAQ", tag: "Q & A", desc: "A list of question-and-answer pairs.", best: "Objections \u00b7 context \u00b7 scope \u00b7 details" },
@@ -5311,7 +5313,11 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     }
     else if (b.type === "figure") body = sfInput(i, j, "heading", "Heading") + richBlock(i, j, "body", "Body") + mediaInputBlock(i, j, "src", "Image / video / embed URL") + sfInput(i, j, "caption", "Caption") + '<label class="chk" style="margin-top:.2rem"><input type="checkbox" data-sblock="' + i + '" data-bindex="' + j + '" data-bfield="flip"' + (b.flip ? " checked" : "") + " /> Image on the left</label>";
     else if (b.type === "columns" || b.type === "rows" || b.type === "mediacolumns") body = sfInput(i, j, "heading", "Heading") + itemRepeater(i, j, b);
-    else if (b.type === "workflow") { var wfCycle = b.flow === "cycle"; var stepOpts = (b.items || []).map(function (it, k) { var t = it && it.label ? String(it.label).split("//")[0].trim() : ""; return [String(k + 1), (k + 1) + (t ? ". " + t.slice(0, 22) : "")]; }); if (!stepOpts.length) stepOpts = [["1", "1"]]; var loopCtl = wfCycle ? ('<div class="af__row">' + sfSelect(i, j, "loopFrom", "Loop from step", stepOpts, "") + sfSelect(i, j, "loopTo", "Loop to step", stepOpts, "") + "</div>") : ""; body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "flow", "Layout", [["linear", "Linear \u2014 left to right"], ["loop", "Loop \u2014 a repeating cycle"], ["cycle", "Cycle \u2014 loop a range of steps"]], "How the steps connect.") + loopCtl + itemRepeater(i, j, b) + sfInput(i, j, "caption", "Caption") + '<div class="af__hint">' + (wfCycle ? "Cycle keeps the steps in a line and arcs a return loop over the range you pick. Leave it at the full span for a classic \u201cthe whole thing repeats\u201d cycle, or narrow it (e.g. 2 \u2192 3) to loop just those steps." : "Steps flow left to right with arrows. Split a step with <b>//</b> to fork into parallel branches that merge back \u2014 e.g. <em>Design // Eng // Legal</em>.") + "</div>"; }
+    else if (b.type === "workflow") {
+      var wfSummary = 'Diagram unavailable';
+      try { var wfGraph = graphFromWorkflow(b); wfSummary = wfGraph.nodes.length + ' steps / ' + wfGraph.edges.length + ' connections'; } catch (error) {}
+      body = sfInput(i, j, "heading", "Heading") + '<div class="af"><div class="af__label">Flow</div><div class="af__hint">' + wfSummary + '</div><button type="button" class="btn btn--ghost" data-act="workflow-edit" data-index="' + i + '" data-bindex="' + j + '">Edit flow</button></div>' + sfInput(i, j, "caption", "Caption");
+    }
     else if (b.type === "stickies") body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "stickySize", "Note size", [["natural", "Natural \u2014 physical sticky shape (squarish)"], ["uniform", "Uniform \u2014 all notes match the tallest"], ["none", "None \u2014 each note fits its content"]], "Uniform gives every note the tallest note\u2019s height; natural keeps a squarish physical-sticky shape; none lets each note size to its content.") + itemRepeater(i, j, b) + '<div class="af__hint">Cards stagger up and down automatically and lift on hover. Give each a short label (e.g. 01), a heading, a line or two, and an optional image.</div>';
     else if (b.type === "voices") body = sfInput(i, j, "heading", "Heading") + sfSelect(i, j, "mode", "Style", [["verbatim", "Verbatim \u2014 sharp quote bubble"], ["thought", "Thought \u2014 soft bubble"], ["chat", "Chat \u2014 a two-way conversation"]], "Verbatim is a sharp quote bubble, thought a soft one, chat the tighter two-way style. Each voice can sit left or right below.") + sfSelect(i, j, "vsize", "Verbatim heading size", [["", "Standard"], ["lg", "Large"]]) + itemRepeater(i, j, b) + '<div class="af__hint">Side puts each bubble on the left or right \u2014 in Chat, the sides alternate automatically until you set them yourself. Heading only shows on Verbatim. Attribution is the small label under the bubble (e.g. \u201cWhat clients actually said\u201d).</div>';
     else if (b.type === "compare") body = sfInput(i, j, "heading", "Heading") + '<div class="af__row">' + mediaInputBlock(i, j, "beforeSrc", "Before image") + mediaInputBlock(i, j, "afterSrc", "After image") + "</div>" + '<div class="af__row">' + sfInput(i, j, "beforeLabel", "Before label") + sfInput(i, j, "afterLabel", "After label") + "</div>" + richBlock(i, j, "body", "Description below \u2014 what changed", "Both images should be the same size. Visitors drag the divider to compare.");
@@ -5321,6 +5327,27 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     var sizeCtl = (b.type === "statement") ? sfSelect(i, j, "hsize", "Statement size", [["", "Standard"], ["sm", "Compact \u2014 easier to read"], ["lg", "Large \u2014 display"]], "Shrink it if the standard size feels too big for the copy.") : "";
     return '<div class="card study__block' + (open ? " is-open" : "") + (b.locked ? " is-locked" : "") + (b.off ? " is-off" : "") + '">' + head +
       '<div class="study__block-body"><div class="study__block-tools">' + sepTool + offTool + lockTool + '</div>' + common + body + sizeCtl + "</div></div>";
+  }
+  async function editWorkflow(i, j, trigger) {
+    const work = data.work[i], block = work && work.study && work.study.blocks[j];
+    if (!block || block.type !== 'workflow' || block.encStub || block.vaultBlock || (block.locked && !studySectionAccess(work.id).unlocked)) return;
+    const revision = JSON.stringify(block);
+    const current = () => data.work[i] === work && work.study.blocks[j] === block && JSON.stringify(block) === revision && (!block.locked || studySectionAccess(work.id).unlocked);
+    trigger.disabled = true;
+    try {
+      const editor = await loadWorkflow();
+      if (!current() || !trigger.isConnected) return;
+      const graph = await editor.open({block:clone(block),title:block.heading || 'Workflow',host:root});
+      if (!graph) return;
+      if (!current()) { status('This section changed while the flow editor was open. Reopen it before applying changes.', false); return; }
+      histPush();
+      block.graph = graph;
+      block.items = workflowItems(block);
+      apply(true); renderL2(); refreshL2Preview();
+      status(draftFull ? 'Flow updated, but this device could not save the draft. Download a backup before closing.' : 'Flow updated in your draft.', !draftFull);
+      requestAnimationFrame(function () { var button = root && root.querySelector('[data-act="workflow-edit"][data-index="' + i + '"][data-bindex="' + j + '"]'); if (button) button.focus(); });
+    } catch (error) { status(error.message || 'Could not open this flow.', false); }
+    finally { if (trigger.isConnected) trigger.disabled = false; }
   }
   function smeta(i, field, label, hint, ph) {
     var st = data.work[i].study;
@@ -11901,6 +11928,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
     if (!b) return;
     if (b.dataset.act === "md-fmt") { mdFmt(b); return; }
     const act = b.dataset.act, list = b.dataset.list, i = +b.dataset.index;
+    if (act === 'workflow-edit') { editWorkflow(i, +b.dataset.bindex, b); return; }
     if (act === "depth-open") { var _dp = root.querySelector('[data-depth-panel="' + i + '"]'); if (_dp) { _dp.hidden = !_dp.hidden; b.classList.toggle("is-on", !_dp.hidden); if (!_dp.hidden) depthPreviewLoad(_dp); } return; }
     if (act === "depth-preview-card") { openDepthCardPreview(i); return; }
     if (act === "depth-gen") { depthGenerate(i, b); return; }

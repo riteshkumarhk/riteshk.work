@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
+    "@xyflow/react": "^12.11.6",
     "dompurify": "3.4.15",
     "figma-squircle": "1.1.0",
     "lucide-react": "^1.38.0",

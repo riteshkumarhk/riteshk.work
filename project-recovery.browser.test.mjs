@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { chromium } from "playwright-core";
 import { build } from "esbuild";
 import { createServer } from "node:http";
+import { flowNode, flowEdge } from './src/js/workflow-core.mjs';
 
 const source = readFileSync(new URL("./src/js/project.js", import.meta.url), "utf8");
 const baseURL = process.env.SLIDE_LAB_URL;
@@ -247,6 +248,153 @@ async function siteFixture(page, routeRequest) {
   });
   return published;
 }
+
+test('Workflow visitor keeps complete graphs inline on phones and preserves the React view during preview updates', {skip:!baseURL,timeout:90000}, async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try{
+    const page=await browser.newPage({viewport:{width:1440,height:960},hasTouch:true});
+    const errors=[];page.on('pageerror',error=>errors.push(error.message));
+    await siteFixture(page,async()=>false);
+    await page.goto(baseURL+'/');
+    await page.waitForFunction(()=>window.__siteRendered&&window.RK?.renderStudyBlock);
+    const graph={version:1,nodes:Array.from({length:12},(_,index)=>flowNode(`step-${index}`,`Step ${index+1}`,Math.floor(index/3)*480-240,(index%3)*170-90,String(index+1),'Original note')),edges:[]};
+    for(let index=0;index<11;index++)graph.edges.push(flowEdge(`step-${index}`,`step-${index+1}`));
+    graph.edges.push(flowEdge('step-0','step-3','r','l','alternative','Branch'),flowEdge('step-2','step-4','r','l','alternative','Merge'),flowEdge('step-8','step-1','b','b','return','Repeat'),flowEdge('step-11','step-11','r','t','return','Retry'));
+    graph.nodes[0].data.title='<img src=x onerror=alert(1)>Plain text';
+    graph.nodes[2].data.outcome=true;
+    const block={type:'workflow',heading:'Connected process',caption:'Original caption',graph};
+    await page.evaluate(value=>{document.body.innerHTML='<main id="workflow-fixture" style="max-width:1120px;margin:auto;padding:16px"></main>';window.flowBlock=value;const host=document.querySelector('#workflow-fixture');host.innerHTML=RK.renderStudyBlock(value);RK.enhanceBlocks(host);},block);
+    await page.waitForFunction(()=>document.querySelectorAll('rk-workflow .react-flow__edge').length===15);
+    await page.evaluate(()=>document.fonts.ready);
+    await page.waitForFunction(()=>{
+      const host=document.querySelector('.wf-diagram-web'),box=host.getBoundingClientRect();
+      return [...host.querySelectorAll('.react-flow__node,.react-flow__edge-path')].every(element=>{const rect=element.getBoundingClientRect();return rect.left>=box.left-1&&rect.right<=box.right+1&&rect.top>=box.top-1&&rect.bottom<=box.bottom+1;});
+    });
+    assert.equal(await page.locator('rk-workflow img').count(),0);
+    assert.equal(await page.locator('rk-workflow .react-flow__node.draggable').count(),0);
+    const palette=await page.locator('rk-workflow').evaluate(host=>{
+      const color=selector=>getComputedStyle(host.querySelector(selector));
+      return {gold:color('.wf-number').color,grey:color('.wf-footer').color,main:color('[data-id="step-0:r-step-1:l"] .react-flow__edge-path').stroke,alternative:color('[data-id="step-0:r-step-3:l"] .react-flow__edge-path').stroke,return:color('[data-id="step-8:b-step-1:b"] .react-flow__edge-path').stroke,legend:[...host.querySelectorAll('.wf-legend i')].map(element=>getComputedStyle(element).borderTopColor)};
+    });
+    assert.equal(palette.main,palette.gold);assert.equal(palette.alternative,palette.grey);assert.equal(palette.return,palette.gold);assert.deepEqual(palette.legend,[palette.gold,palette.grey,palette.gold]);
+    const outcome=await page.locator('.wf-step.is-outcome').evaluate(element=>{
+      const before=element.getBoundingClientRect(),border=getComputedStyle(element).borderTopWidth;
+      element.classList.remove('is-outcome');const after=element.getBoundingClientRect();element.classList.add('is-outcome');
+      return {border,widthDifference:before.width-after.width,heightDifference:before.height-after.height};
+    });
+    assert.deepEqual(outcome,{border:'2px',widthDifference:0,heightDifference:0});
+    await page.evaluate(code=>{window.morphFlowFixture=new Function('container','html','var RUNTIME_CLASS=/^is-/;'+code+';morphInto(container,html);');},['morphInto','morphChildren','morphNode','morphAttrs','mergeClass','disposeEmbedRecovery'].map(sourceFunction).join('\n'));
+    await page.evaluate(()=>{window.originalFlowNode=document.querySelector('rk-workflow .react-flow__node');window.flowBlock.heading='Updated nearby heading';window.morphFlowFixture(document.querySelector('#workflow-fixture'),RK.renderStudyBlock(window.flowBlock));});
+    await page.waitForFunction(()=>document.querySelectorAll('rk-workflow .react-flow__edge').length===15);
+    assert.equal(await page.evaluate(()=>window.originalFlowNode===document.querySelector('rk-workflow .react-flow__node')),true);
+    await page.screenshot({path:join(tmpdir(),'rk-workflow-web-1440.png')});
+    for(const width of [390,320]){
+      await page.setViewportSize({width,height:844});
+      await page.locator('.wf-inline-scroll').waitFor();
+      await page.getByRole('button',{name:'Next part of diagram',exact:true}).click();
+      await page.waitForFunction(()=>document.querySelector('.wf-inline-scroll').scrollLeft>100);
+      const scroll=await page.locator('.wf-inline-scroll').evaluate(element=>element.scrollLeft);
+      await page.getByRole('button',{name:'Fit diagram',exact:true}).click();
+      await page.waitForFunction(()=>{
+        const host=document.querySelector('.wf-inline-scroll'),box=host.getBoundingClientRect();
+        return host.scrollWidth<=host.clientWidth+1&&[...host.querySelectorAll('.react-flow__node,.react-flow__edge-path')].every(element=>{const rect=element.getBoundingClientRect();return rect.left>=box.left-1&&rect.right<=box.right+1&&rect.top>=box.top-1&&rect.bottom<=box.bottom+1;});
+      });
+      assert.equal(await page.locator('dialog[open]').count(),0);
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+      assert.deepEqual(await page.evaluate(()=>window.flowBlock.graph),graph);
+      await page.screenshot({path:join(tmpdir(),`rk-workflow-mobile-fit-${width}.png`)});
+      await page.getByRole('button',{name:'Readable size',exact:true}).click();
+      await page.waitForFunction(previous=>Math.abs(document.querySelector('.wf-inline-scroll').scrollLeft-previous)<2,scroll);
+      await page.getByRole('button',{name:'Expand diagram',exact:true}).click();
+      const expanded=page.getByRole('dialog',{name:'Expanded flow diagram'});
+      await expanded.getByRole('button',{name:'Fit diagram',exact:true}).click();
+      await page.keyboard.press('Escape');
+      await expanded.waitFor({state:'detached'});
+      assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'Expand diagram');
+    }
+    await page.getByText('Flow outline',{exact:true}).click();
+    await page.setViewportSize({width:390,height:844});
+    await page.evaluate(()=>{document.querySelector('#workflow-fixture').style.paddingBottom='800px';window.scrollTo(0,0);document.querySelector('.wf-inline-scroll').scrollLeft=0;});
+    const touch=await page.context().newCDPSession(page),bounds=await page.locator('.wf-inline-scroll').boundingBox();
+    await page.mouse.move(270,bounds.y+270);await page.mouse.down();await page.mouse.move(140,bounds.y+270,{steps:8});await page.mouse.up();
+    assert.ok(await page.locator('.wf-inline-scroll').evaluate(element=>element.scrollLeft)>100);
+    assert.deepEqual(await page.evaluate(()=>window.flowBlock.graph),graph);
+    for(const surface of ['canvas','node']){
+      await page.locator('.wf-inline-scroll').evaluate(element=>element.scrollLeft=0);
+      const node=await page.locator('.wf-diagram-inline .react-flow__node').first().boundingBox();
+      const point=surface==='node'?{x:node.x+node.width-16,y:node.y+30}:{x:270,y:bounds.y+270};
+      await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
+      for(let step=1;step<=6;step++)await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:point.x-step*15,y:point.y}]});
+      await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      await page.waitForFunction(()=>document.querySelector('.wf-inline-scroll').scrollLeft>35);
+    }
+    await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:180,y:bounds.y+200}]});
+    for(let step=1;step<=6;step++)await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:180,y:bounds.y+200-step*20}]});
+    await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    await page.waitForFunction(()=>window.scrollY>30);
+    await page.evaluate(()=>{document.querySelector('#workflow-fixture').style.paddingBottom='16px';window.scrollTo(0,0);});
+    await touch.detach();
+    assert.ok((await page.locator('.wf-outline').innerText()).includes('Repeat: Return to Step 2'));
+    await page.evaluate(()=>document.documentElement.setAttribute('data-theme','day'));
+    await page.screenshot({path:join(tmpdir(),'rk-workflow-mobile-light.png')});
+    assert.deepEqual(errors,[]);
+  }finally{await browser.close();}
+});
+
+test('Workflow Studio edits branches with history, Cancel, Apply and reload while retaining protected sections', {skip:!baseURL,timeout:90000},async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try{
+    const page=await browser.newPage({viewport:{width:1440,height:1000}});
+    page.setDefaultTimeout(12000);
+    const published=await siteFixture(page,async()=>false);
+    const legacy={type:'workflow',heading:'Review process',flow:'cycle',loopFrom:'1',loopTo:'3',caption:'Keep caption',editorName:'My process',items:[{label:'Start',note:'Keep note'},{label:'Review // Refine'},{label:'Ship'}]};
+    published.work[0].study.blocks[0]=legacy;
+    const protectedBlock=structuredClone(published.work[0].study.blocks[1]);
+    await page.addInitScript(()=>localStorage.setItem('rk:dev:stub','1'));
+    await page.goto(baseURL+'/studio/?devstub=1');
+    await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    const open=async()=>{await page.locator('.adm__tab[data-tab="work"]').click();await page.locator('[data-act="study-toggle"][data-index="0"]').click();await page.locator('[data-l2tab="story"]').click();await page.locator('[data-act="study-blocktoggle"][data-bindex="0"]').click();};
+    await open();
+    const edit=page.getByRole('button',{name:'Edit flow',exact:true});
+    await edit.click();
+    const dialog=page.getByRole('dialog',{name:'Flow editor',exact:true});
+    await dialog.locator('.wf-inspector .wf-row').first().click();
+    await dialog.getByRole('textbox',{name:'Step title',exact:true}).fill('Discard this change');
+    await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]),legacy);
+    await edit.click();
+    await dialog.locator('.wf-inspector .wf-row').first().click();
+    await dialog.getByRole('textbox',{name:'Step title',exact:true}).fill('Reviewed start');
+    await dialog.getByRole('textbox',{name:'Step title',exact:true}).blur();
+    await dialog.getByRole('button',{name:'Undo',exact:true}).click();
+    assert.equal(await dialog.locator('[data-id="step-1-1"] .wf-title').innerText(),'Start');
+    await dialog.getByRole('button',{name:'Redo',exact:true}).click();
+    await dialog.locator('.wf-inspector .wf-row').first().click();
+    const handle=await dialog.locator('[data-id="step-1-1"] [data-handleid="r"]').boundingBox(),canvas=await dialog.locator('.wf-diagram').boundingBox();
+    await page.mouse.move(handle.x+handle.width/2,handle.y+handle.height/2);await page.mouse.down();await page.mouse.move(canvas.x+canvas.width*.7,canvas.y+canvas.height*.85,{steps:12});await page.mouse.up();
+    await page.waitForFunction(()=>document.querySelectorAll('.wf-editor-dialog .react-flow__node').length===5);
+    await dialog.getByRole('textbox',{name:'Step title',exact:true}).fill('New branch');
+    await dialog.getByRole('combobox',{name:'Connect to step',exact:true}).selectOption('step-1-1');
+    await dialog.getByRole('button',{name:'Connect',exact:true}).click();
+    await dialog.getByRole('combobox',{name:'Connection path',exact:true}).selectOption('return');
+    await dialog.getByRole('textbox',{name:'Connection label',exact:true}).fill('Repeat review');
+    await dialog.getByRole('tab',{name:'Web',exact:true}).click();
+    await dialog.locator('.wf-title').filter({hasText:'New branch'}).waitFor();
+    assert.equal(await dialog.locator('.react-flow__node.draggable').count(),0);
+    await page.setViewportSize({width:390,height:844});
+    await dialog.getByRole('tab',{name:'Mobile',exact:true}).click();
+    await dialog.getByRole('button',{name:'Fit diagram',exact:true}).click();
+    await page.screenshot({path:join(tmpdir(),'rk-workflow-studio-mobile.png')});
+    await dialog.getByRole('button',{name:'Apply flow',exact:true}).click();
+    await page.waitForFunction(()=>window.__RKStudio.getDraft().work[0].study.blocks[0].graph?.nodes.length===5);
+    const saved=await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]);
+    assert.equal(saved.graph.edges.length,7);assert.equal(saved.graph.nodes[0].data.title,'Reviewed start');assert.equal(saved.graph.nodes[0].data.note,'Keep note');assert.equal(saved.caption,legacy.caption);assert.equal(saved.editorName,legacy.editorName);
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[1]),protectedBlock);
+    assert.equal(await page.locator('[data-act="workflow-edit"][data-bindex="1"]').count(),0);
+    await page.reload();await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]),saved);
+  }finally{await browser.close();}
+});
 
 test("Media columns Studio adds, reorders and persists nested cells", { skip: !baseURL, timeout: 90000 }, async () => {
   const browser = await chromium.launch(launchOptions);

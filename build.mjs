@@ -21,7 +21,7 @@ const ENTRIES = ["render", "main", "gensection", "project", "journey", "admin", 
 
 /** @type {import("esbuild").BuildOptions} */
 const options = {
-  entryPoints: ENTRIES.map((name) => ({ in: `src/js/${name}.js`, out: name })),
+  entryPoints: [...ENTRIES.map((name) => ({ in: `src/js/${name}.js`, out: name })), { in: 'src/js/workflow.jsx', out: 'workflow' }],
   outdir: "js",
   bundle: true,
   // Safe minification: esbuild renames LOCALS + strips whitespace/dead code only.

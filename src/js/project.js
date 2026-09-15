@@ -7,6 +7,8 @@ import { sanitizeRichHtml } from "./rich-html.mjs";
 import { normalizeSectionReference } from "./slide-merge-section-component.mjs";
 import { connectSectionAccess } from "./slide-studio-source.mjs";
 import { embedDescriptor, embedAspectRatio, EMBED_SANDBOX } from "./slide-merge-embeds.mjs";
+import { graphFromWorkflow } from "./workflow-core.mjs";
+import { enhanceWorkflows } from "./workflow-loader.mjs";
 
 /* =================================================================
    RITESH KUMAR — Project case study (L2)
@@ -857,6 +859,18 @@ import { embedDescriptor, embedAspectRatio, EMBED_SANDBOX } from "./slide-merge-
   // loop (e.g. Task → Confirmation ⇄ Verification → Goal). Default range = every step
   // (a classic "the whole thing repeats"). Reflows to a labelled group on mobile.
   function workflowBlock(b) {
+    try {
+      var graph = graphFromWorkflow(b);
+      var fallback = '<ol class="pjb__flow-fallback">' + graph.nodes.map(function (node) {
+        return '<li><strong>' + esc(node.data.title) + '</strong>' + (node.data.note ? '<p>' + esc(node.data.note) + '</p>' : '') + '<ul>' + graph.edges.filter(function (edge) { return edge.source === node.id; }).map(function (edge) {
+          var target = graph.nodes.find(function (item) { return item.id === edge.target; });
+          return '<li>' + (edge.label ? esc(edge.label) + ': ' : '') + (edge.data.kind === 'return' ? 'Return to ' : 'To ') + esc(target.data.title) + '</li>';
+        }).join('') + '</ul></li>';
+      }).join('') + '</ol>';
+      return kicker(b.kicker) + heading(b.heading) + '<rk-workflow class="rk-flow" data-flow="' + attr(JSON.stringify({graph:graph,heading:b.heading || ''})) + '">' + fallback + '</rk-workflow>' + (b.caption ? '<figcaption class="pjb__cap">' + esc(b.caption) + '</figcaption>' : '');
+    } catch (error) { return legacyWorkflowBlock(b); }
+  }
+  function legacyWorkflowBlock(b) {
     var flow = b.flow === "loop" ? "loop" : (b.flow === "cycle" ? "cycle" : "linear");
     var items = b.items || [], n = items.length;
     var branchesOf = function (label) { return String(label || "").split("//").map(function (s) { return s.trim(); }).filter(Boolean); };
@@ -2282,7 +2296,7 @@ import { embedDescriptor, embedAspectRatio, EMBED_SANDBOX } from "./slide-merge-
       if (activeId !== w.id || contentEl.getAttribute("data-wid") !== String(w.id)) return;
       lastSpyId = null;
       updateSpy(); coverParallax(); isoParallax(); normalizeGalleries(contentEl); isoEnhance(contentEl); focusEnhance(contentEl); graphWire(contentEl); galleryNav(contentEl); initStage(contentEl);
-      hydrateEmbedRecovery(contentEl);
+      hydrateEmbedRecovery(contentEl); enhanceWorkflows(contentEl);
       resolveVaultMedia(contentEl); // swap vault placeholders for signed URLs (authorised viewers only)
       autoResolveVaultBlocks(w);    // fetch vault-hosted locked sections if the viewer is already authorised
       if (window.RKGen && RKGen.hydrate) RKGen.hydrate(contentEl); // wire drag/zoom on generated fx nodes
@@ -2349,6 +2363,10 @@ import { embedDescriptor, embedAspectRatio, EMBED_SANDBOX } from "./slide-merge-
     if (node.querySelectorAll) node.querySelectorAll("iframe").forEach(function (frame) { if (frame.__rkRecovery) frame.__rkRecovery.dispose(); });
   }
   function morphNode(o, n) {
+    if (o.nodeType === 1 && o.tagName === 'RK-WORKFLOW' && n.tagName === 'RK-WORKFLOW') {
+      if (o.getAttribute('data-flow') !== n.getAttribute('data-flow')) o.setAttribute('data-flow', n.getAttribute('data-flow'));
+      return;
+    }
     if (o.nodeType === 3 || o.nodeType === 8) { if (o.nodeValue !== n.nodeValue) o.nodeValue = n.nodeValue; return; }
     if (o.nodeType !== 1) return;
     if (o.hasAttribute("data-stage")) {
@@ -2941,6 +2959,7 @@ import { embedDescriptor, embedAspectRatio, EMBED_SANDBOX } from "./slide-merge-
     function enhanceStudyBlocks(root) {
       if (!root) return;
       hydrateEmbedRecovery(root);
+      enhanceWorkflows(root);
       try { normalizeGalleries(root); } catch (e) {}
       try { galleryNav(root); } catch (e) {}
       try { isoEnhance(root); } catch (e) {}
