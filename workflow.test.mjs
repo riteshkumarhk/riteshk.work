@@ -2,7 +2,41 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
-import {flowNode,flowEdge,normalizeFlow,graphFromWorkflow,workflowItems} from './src/js/workflow-core.mjs';
+import {flowNode,flowEdge,normalizeFlow,graphFromWorkflow,workflowItems,snapFlowPosition,flowCurve} from './src/js/workflow-core.mjs';
+import {getBezierPath,Position} from '@xyflow/react';
+
+test('Workflow alignment snaps measured edges and centres within screen-scaled tolerance without mutating neighbors',()=>{
+  const nodes=[{...flowNode('moving','Tall',0,0),measured:{width:150,height:140}},flowNode('anchor','Anchor',300,100)];
+  const before=structuredClone(nodes);
+  assert.equal(snapFlowPosition('moving',{x:295,y:400},nodes).position.x,300);
+  const centre=snapFlowPosition('moving',{x:0,y:80},nodes);
+  assert.equal(centre.position.y,76);
+  assert.equal(centre.guides[0].line,146);
+  assert.equal(snapFlowPosition('moving',{x:0,y:54},nodes).position.y,52);
+  assert.equal(snapFlowPosition('moving',{x:290,y:400},nodes,6/2).position.x,290);
+  assert.equal(snapFlowPosition('moving',{x:290,y:400},nodes,6/.5).position.x,300);
+  assert.equal(snapFlowPosition('moving',{x:600,y:400},nodes).guides.length,0);
+  assert.deepEqual(nodes,before);
+});
+
+test('Workflow curves preserve automatic React Flow geometry and persist endpoint-relative control points',()=>{
+  const ports={l:Position.Left,r:Position.Right,t:Position.Top,b:Position.Bottom};
+  for(const sourcePort of Object.keys(ports)) for(const targetPort of Object.keys(ports)){
+    const result=flowCurve({x:150,y:46},{x:330,y:140},sourcePort,targetPort);
+    const [path]=getBezierPath({sourceX:150,sourceY:46,targetX:330,targetY:140,sourcePosition:ports[sourcePort],targetPosition:ports[targetPort],curvature:.4});
+    assert.deepEqual(result.path.match(/-?\d+(?:\.\d+)?/g).map(Number),path.match(/-?\d+(?:\.\d+)?/g).map(Number));
+  }
+  const curve={source:{x:80,y:-100},target:{x:-40,y:90}};
+  const graph={version:1,nodes:[flowNode('a','Start',0,0),flowNode('b','End',300,0)],edges:[{...flowEdge('a','b','r','l','main','','curved'),data:{route:'curved',kind:'main',curve}}]};
+  const saved=normalizeFlow(graph);
+  assert.deepEqual(saved.edges[0].data.curve,curve);
+  assert.notEqual(saved.edges[0].data.curve,curve);
+  const original=flowCurve({x:150,y:46},{x:300,y:46},'r','l',curve),moved=flowCurve({x:170,y:76},{x:300,y:46},'r','l',curve);
+  assert.deepEqual(moved.controls.source,{x:250,y:-24});
+  assert.deepEqual(moved.controls.target,original.controls.target);
+  assert.equal(flowCurve({x:0,y:0},{x:0,y:0},'b','b',null,true).controls.source.y,110);
+  assert.throws(()=>normalizeFlow({...graph,edges:[{...graph.edges[0],data:{curve:{source:{x:Infinity,y:0},target:{x:0,y:0}}}}]}),/Invalid flow curve/);
+});
 
 test('Workflow fallback styles do not invalidate the shared presenter import',()=>{
   const stylesheet=readFileSync(new URL('./css/project.css',import.meta.url),'utf8');

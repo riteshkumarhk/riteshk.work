@@ -440,6 +440,84 @@ test('Workflow Studio edits branches with history, Cancel, Apply and reload whil
   }finally{await browser.close();}
 });
 
+test('Workflow snapping and Bezier handles preserve history, cancellation and saved visitor geometry', {skip:!baseURL,timeout:90000},async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try{
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}),errors=[];
+    page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(10000);
+    const published=await siteFixture(page,async()=>false);
+    const {flowNode,flowEdge}=await import('./src/js/workflow-core.mjs');
+    const original={type:'workflow',heading:'Alignment review',caption:'Keep caption',graph:{version:1,nodes:[flowNode('start','Start',0,0),flowNode('finish','Finish',300,130)],edges:[flowEdge('start','finish','r','l','main','Continue','curved')]}};
+    published.work[0].study.blocks[0]=original;
+    const protectedBlock=structuredClone(published.work[0].study.blocks[1]);
+    await page.addInitScript(()=>localStorage.setItem('rk:dev:stub','1'));
+    await page.goto(baseURL+'/studio/?devstub=1');await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    await page.locator('.adm__tab[data-tab="work"]').click();await page.locator('[data-act="study-toggle"][data-index="0"]').click();await page.locator('[data-l2tab="story"]').click();await page.locator('[data-act="study-blocktoggle"][data-bindex="0"]').click();
+    const edit=page.getByRole('button',{name:'Edit flow',exact:true});await edit.click();
+    const dialog=page.getByRole('dialog',{name:'Flow editor',exact:true});
+    const point=async id=>dialog.locator(`.react-flow__node[data-id="${id}"]`).evaluate(node=>{const matrix=new DOMMatrix(getComputedStyle(node).transform);return {x:matrix.m41,y:matrix.m42};});
+    const settle=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    await dialog.getByRole('button',{name:'Readable size',exact:true}).click();await settle();
+    const start=await dialog.locator('.react-flow__node[data-id="start"]').boundingBox(),finish=await dialog.locator('.react-flow__node[data-id="finish"]').boundingBox();
+    await page.mouse.move(finish.x+finish.width/2,finish.y+finish.height/2);await page.mouse.down();await page.mouse.move(finish.x+finish.width/2,start.y+finish.height/2+4,{steps:12});
+    const moving=await dialog.locator('.react-flow__node[data-id="finish"]').boundingBox();
+    await page.mouse.move(finish.x+finish.width/2,start.y+finish.height/2+4+start.y+4-moving.y);
+    await dialog.locator('.wf-snap-guides line').first().waitFor({state:'attached'});await page.mouse.up();await settle();
+    assert.equal((await point('finish')).y,(await point('start')).y,'Snap survives pointer release');
+    assert.equal(await dialog.locator('.wf-snap-guides').count(),0);
+    await dialog.getByRole('button',{name:'Undo',exact:true}).click();assert.equal((await point('finish')).y,130);
+    await dialog.getByRole('button',{name:'Redo',exact:true}).click();assert.equal((await point('finish')).y,0);
+    await dialog.getByRole('button',{name:'Snap to steps',exact:true}).click();
+    const free=await dialog.locator('.react-flow__node[data-id="finish"]').boundingBox();
+    await page.mouse.move(free.x+free.width/2,free.y+free.height/2);await page.mouse.down();await page.mouse.move(free.x+free.width/2,free.y+free.height/2+4);await page.mouse.move(free.x+free.width/2,free.y+free.height/2+9);await page.mouse.up();await settle();
+    assert.ok((await point('finish')).y>3,'Toggle permits free placement');
+    await dialog.getByRole('button',{name:'Undo',exact:true}).click();
+    await dialog.getByRole('button',{name:'Snap to steps',exact:true}).click();
+    await page.keyboard.down('Alt');await page.mouse.move(free.x+free.width/2,free.y+free.height/2);await page.mouse.down();await page.mouse.move(free.x+free.width/2,free.y+free.height/2+4);await page.mouse.move(free.x+free.width/2,free.y+free.height/2+9);await page.mouse.up();await page.keyboard.up('Alt');await settle();
+    assert.ok((await point('finish')).y>3,'Alt temporarily bypasses snapping');
+    await dialog.getByRole('button',{name:'Undo',exact:true}).click();
+    await dialog.locator('.react-flow__node[data-id="start"]').click();await dialog.locator('.wf-inspector .wf-row').first().click();
+    const path=dialog.locator('.react-flow__edge-path'),initialPath=await path.getAttribute('d');
+    const handle=dialog.getByRole('button',{name:'Curve start handle',exact:true}),endHandle=dialog.getByRole('button',{name:'Curve end handle',exact:true});
+    const handleBox=await handle.boundingBox();assert.equal(Math.round(handleBox.width),28);
+    await page.mouse.move(handleBox.x+14,handleBox.y+14);await page.mouse.down();await page.mouse.move(handleBox.x+64,handleBox.y+94,{steps:10});await page.mouse.up();
+    const curvedPath=await path.getAttribute('d');assert.notEqual(curvedPath,initialPath);
+    await dialog.getByRole('button',{name:'Undo',exact:true}).click();assert.equal(await path.getAttribute('d'),initialPath);
+    await dialog.getByRole('button',{name:'Redo',exact:true}).click();assert.equal(await path.getAttribute('d'),curvedPath);
+    await dialog.locator('.react-flow__node[data-id="start"]').click();await dialog.locator('.wf-inspector .wf-row').first().click();
+    await endHandle.focus();await page.keyboard.press('Shift+ArrowDown');assert.notEqual(await path.getAttribute('d'),curvedPath);
+    await dialog.getByRole('button',{name:'Zoom out',exact:true}).click();await settle();assert.equal(Math.round((await handle.boundingBox()).width),28);
+    const beforeCancel=await path.getAttribute('d'),cancelBox=await handle.boundingBox();
+    await page.mouse.move(cancelBox.x+14,cancelBox.y+14);await page.mouse.down();await page.mouse.move(cancelBox.x+54,cancelBox.y+54,{steps:5});await page.keyboard.press('Escape');await page.mouse.up();
+    assert.equal(await path.getAttribute('d'),beforeCancel);assert.equal(await dialog.isVisible(),true);
+    await dialog.getByRole('button',{name:'Reset curve',exact:true}).click();assert.equal(await path.getAttribute('d'),initialPath);
+    await dialog.getByRole('button',{name:'Undo',exact:true}).click();assert.equal(await path.getAttribute('d'),beforeCancel);
+    await dialog.locator('.react-flow__node[data-id="start"]').click();await dialog.locator('.wf-inspector .wf-row').first().click();
+    await page.screenshot({path:join(tmpdir(),'rk-workflow-bezier-desktop.png')});
+    await dialog.getByRole('tab',{name:'Web',exact:true}).click();await settle();assert.equal(await dialog.locator('.wf-curve-handle').count(),0);assert.equal(await dialog.locator('.react-flow__edge-path').getAttribute('d'),beforeCancel);
+    await page.setViewportSize({width:390,height:844});await dialog.getByRole('tab',{name:'Editor',exact:true}).click();await settle();
+    await dialog.locator('.react-flow__node[data-id="start"]').click();await dialog.locator('.wf-inspector .wf-row').first().click();
+    await handle.focus();await page.keyboard.press('ArrowRight');
+    assert.equal(await handle.evaluate(element=>getComputedStyle(element).touchAction),'none');
+    const touch=await page.context().newCDPSession(page),touchBox=await endHandle.boundingBox(),beforeTouch=await path.getAttribute('d');
+    await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:touchBox.x+14,y:touchBox.y+14}]});
+    for(let step=1;step<=5;step++)await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:touchBox.x+14+step*4,y:touchBox.y+14+step*6}]});
+    await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await touch.detach();
+    assert.notEqual(await path.getAttribute('d'),beforeTouch,'Touch drags the curve without scrolling the editor');
+    await page.screenshot({path:join(tmpdir(),'rk-workflow-bezier-mobile.png')});
+    assert.ok(await dialog.evaluate(element=>element.scrollWidth<=element.clientWidth+1));
+    await dialog.getByRole('button',{name:'Apply flow',exact:true}).click();
+    const saved=await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]);
+    assert.ok(saved.graph.edges[0].data.curve);assert.equal(saved.graph.nodes[1].position.y,0);assert.equal(saved.caption,original.caption);
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[1]),protectedBlock);
+    await edit.click();await dialog.locator('.wf-inspector .wf-row').first().click();await dialog.getByRole('textbox',{name:'Step title',exact:true}).fill('Cancel this');await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]),saved);
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem('rk:content:draft')||'null')?.work?.[0]?.study?.blocks?.[0]?.graph?.edges?.[0]?.data?.curve);
+    await page.reload();await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks[0]),saved);
+    assert.deepEqual(errors,[]);
+  }finally{await browser.close();}
+});
+
 test("Media columns Studio adds, reorders and persists nested cells", { skip: !baseURL, timeout: 90000 }, async () => {
   const browser = await chromium.launch(launchOptions);
   try {

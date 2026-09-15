@@ -1,8 +1,8 @@
 import React,{useEffect,useRef,useState,useReducer} from 'react';
 import {createRoot} from 'react-dom/client';
-import {ReactFlow,ReactFlowProvider,Handle,Position,ConnectionMode,MarkerType,MiniMap,Background,BackgroundVariant,BaseEdge,getBezierPath,getSmoothStepPath,getViewportForBounds,applyNodeChanges,addEdge,reconnectEdge,useReactFlow,useStore} from '@xyflow/react';
-import {Monitor,Smartphone,MousePointer2,Maximize2,ZoomIn,ZoomOut,LocateFixed,Scan,X,ChevronLeft,ChevronRight,Plus,Undo2,Redo2,Trash2,Link} from 'lucide-react';
-import {FLOW_NODE_WIDTH,FLOW_NODE_HEIGHT,flowNode,flowEdge,normalizeFlow,graphFromWorkflow} from './workflow-core.mjs';
+import {ReactFlow,ReactFlowProvider,Handle,Position,ConnectionMode,MarkerType,MiniMap,Background,BackgroundVariant,BaseEdge,EdgeLabelRenderer,ViewportPortal,getSmoothStepPath,getViewportForBounds,applyNodeChanges,addEdge,reconnectEdge,useReactFlow,useStore} from '@xyflow/react';
+import {Monitor,Smartphone,MousePointer2,Maximize2,ZoomIn,ZoomOut,LocateFixed,Scan,X,ChevronLeft,ChevronRight,Plus,Undo2,Redo2,Trash2,Link,Magnet,RotateCcw} from 'lucide-react';
+import {FLOW_NODE_WIDTH,FLOW_NODE_HEIGHT,flowNode,flowEdge,normalizeFlow,graphFromWorkflow,snapFlowPosition,flowCurve} from './workflow-core.mjs';
 import '@xyflow/react/dist/style.css';
 import '../../css/workflow.css';
 
@@ -22,12 +22,25 @@ function StepNode({data}){
   </div>;
 }
 function Connection(props){
-  let [path,labelX,labelY]=props.data.route==='curved'?getBezierPath({...props,curvature:.4}):getSmoothStepPath({...props,borderRadius:22,offset:30});
-  if(props.source===props.target){
-    path=`M ${props.sourceX} ${props.sourceY} C ${props.sourceX+100} ${props.sourceY+110}, ${props.targetX-100} ${props.targetY+110}, ${props.targetX} ${props.targetY}`;
-    labelX=(props.sourceX+props.targetX)/2;labelY=Math.max(props.sourceY,props.targetY)+85;
-  }
-  return <BaseEdge id={props.id} path={path} markerEnd={props.markerEnd} style={props.style} label={props.label} labelX={labelX} labelY={labelY} labelStyle={{fill:'var(--text-dim)',fontFamily:'var(--sans)',fontSize:12}} labelBgStyle={{fill:'var(--bg)'}} labelBgPadding={[7,4]} labelBgBorderRadius={3}/>;
+  const flow=useReactFlow(),zoom=useStore(state=>state.transform[2]),drag=useRef(null);
+  const endpoints={source:{x:props.sourceX,y:props.sourceY},target:{x:props.targetX,y:props.targetY}};
+  const curve=flowCurve(endpoints.source,endpoints.target,props.sourceHandleId,props.targetHandleId,props.data.curve,props.source===props.target);
+  const automaticLoop=props.source===props.target&&!props.data.curve;
+  const [path,labelX,labelY]=props.data.route==='curved'||props.source===props.target?[curve.path,curve.middle.x,automaticLoop?Math.max(props.sourceY,props.targetY)+85:curve.middle.y]:getSmoothStepPath({...props,borderRadius:22,offset:30});
+  const offsets=()=>Object.fromEntries(['source','target'].map(end=>[end,{x:curve.controls[end].x-endpoints[end].x,y:curve.controls[end].y-endpoints[end].y}]));
+  const finish=(event,cancel=false)=>{const current=drag.current;if(!current)return;drag.current=null;if(cancel)props.data.setCurve(props.id,current.original);if(event.currentTarget.hasPointerCapture(current.pointerId))event.currentTarget.releasePointerCapture(current.pointerId);};
+  const handles=props.selected&&props.data.editable&&props.data.route==='curved';
+  return <>
+    <BaseEdge id={props.id} path={path} markerEnd={props.markerEnd} style={props.style} label={props.label} labelX={labelX} labelY={labelY} labelStyle={{fill:'var(--text-dim)',fontFamily:'var(--sans)',fontSize:12}} labelBgStyle={{fill:'var(--bg)'}} labelBgPadding={[7,4]} labelBgBorderRadius={3}/>
+    {handles&&<>
+      <g className="wf-curve-guides">{['source','target'].map(end=><line key={end} x1={endpoints[end].x} y1={endpoints[end].y} x2={curve.controls[end].x} y2={curve.controls[end].y} vectorEffect="non-scaling-stroke"/>)}</g>
+      <EdgeLabelRenderer>{['source','target'].map(end=><button key={end} type="button" className="wf-curve-handle nodrag nopan" aria-label={`Curve ${end==='source'?'start':'end'} handle`} title={`Curve ${end==='source'?'start':'end'} handle`} style={{transform:`translate(-50%,-50%) translate(${curve.controls[end].x}px,${curve.controls[end].y}px) scale(${1/zoom})`}}
+        onPointerDown={event=>{if(event.button!==0)return;event.preventDefault();event.stopPropagation();event.currentTarget.focus({preventScroll:true});const point=flow.screenToFlowPosition({x:event.clientX,y:event.clientY});drag.current={pointerId:event.pointerId,original:props.data.curve,offsets:offsets(),endpoint:endpoints[end],grab:{x:point.x-curve.controls[end].x,y:point.y-curve.controls[end].y}};props.data.checkpoint();event.currentTarget.setPointerCapture(event.pointerId);}}
+        onPointerMove={event=>{const current=drag.current;if(!current||current.cancelled||current.pointerId!==event.pointerId)return;event.stopPropagation();const point=flow.screenToFlowPosition({x:event.clientX,y:event.clientY});props.data.setCurve(props.id,{...current.offsets,[end]:{x:Math.round((point.x-current.grab.x-current.endpoint.x)*10)/10,y:Math.round((point.y-current.grab.y-current.endpoint.y)*10)/10}});}}
+        onPointerUp={event=>finish(event)} onPointerCancel={event=>finish(event,true)} onLostPointerCapture={event=>finish(event,true)} onClick={event=>event.stopPropagation()}
+        onKeyDown={event=>{if(event.key==='Escape'&&drag.current){event.preventDefault();event.stopPropagation();props.data.setCurve(props.id,drag.current.original);drag.current.cancelled=true;return;}const direction={ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0},ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1}}[event.key];if(!direction)return;event.preventDefault();event.stopPropagation();const next=offsets(),distance=event.shiftKey?10:1;if(!event.repeat)props.data.checkpoint();next[end]={x:next[end].x+direction.x*distance,y:next[end].y+direction.y*distance};props.data.setCurve(props.id,next);}}/>)}</EdgeLabelRenderer>
+    </>}
+  </>;
 }
 const nodeTypes={step:StepNode},edgeTypes={connection:Connection};
 function fitDiagram(flow,host){
@@ -67,21 +80,22 @@ function GraphControls({canvas,start}){
     <IconButton label="Readable size" onClick={()=>flow.setViewport(start,{duration:motion()})}><LocateFixed size={18}/></IconButton>
   </div>;
 }
-function Diagram({doc,mode='web',selection,setSelection,change,checkpoint,flowRef,onTitleFocus,inlineFit=false}){
-  const editor=mode==='editor',inline=mode==='inline',canvas=useRef(null),api=useRef(null);
+function Diagram({doc,mode='web',selection,setSelection,change,checkpoint,flowRef,onTitleFocus,inlineFit=false,snapping=true}){
+  const editor=mode==='editor',inline=mode==='inline',canvas=useRef(null),api=useRef(null),[guides,setGuides]=useState([]),bypassSnap=useRef(false),measurements=useRef(new Map());
   const minX=Math.min(0,...doc.nodes.map(node=>node.position.x)),maxX=Math.max(300,...doc.nodes.map(node=>node.position.x+FLOW_NODE_WIDTH));
   const start={x:24-minX*.92,y:26-(doc.nodes[0]?.position.y||0)*.92,zoom:.92};
   const selected=selection?.type==='node'?selection.id:null;
   const neighbors=new Set(selected?doc.edges.filter(edge=>edge.source===selected||edge.target===selected).flatMap(edge=>[edge.source,edge.target]):[]);
-  const nodes=doc.nodes.map(node=>({...node,type:'step',width:FLOW_NODE_WIDTH,initialHeight:FLOW_NODE_HEIGHT,selected:selection?.type==='node'&&selection.id===node.id,className:!editor&&selected&&!neighbors.has(node.id)?'is-dimmed':''}));
-  const edges=doc.edges.map(edge=>({...edge,type:'connection',selected:selection?.type==='edge'&&selection.id===edge.id,style:{stroke:edge.data.kind==='alternative'?'var(--text-dim)':'var(--accent)',strokeWidth:selection?.id===edge.id?2.5:1.5,opacity:!editor&&selected?(edge.source===selected||edge.target===selected?1:.15):.9,strokeDasharray:edge.data.kind==='return'?'5 5':undefined},markerEnd:{type:MarkerType.ArrowClosed,width:16,height:16,color:edge.data.kind==='alternative'?'var(--text-dim)':'var(--accent)'}}));
-  return <div ref={canvas} className={`wf-diagram wf-diagram-${mode}`} data-inline-fit={inline?inlineFit:undefined} style={inline?{width:inlineFit?'100%':(maxX-minX)*.92+60,height:340}:undefined}>
+  const nodes=doc.nodes.map(node=>({...node,type:'step',width:FLOW_NODE_WIDTH,initialHeight:FLOW_NODE_HEIGHT,measured:measurements.current.get(node.id),selected:selection?.type==='node'&&selection.id===node.id,className:!editor&&selected&&!neighbors.has(node.id)?'is-dimmed':''}));
+  const setCurve=(id,curve)=>change(current=>({...current,edges:current.edges.map(edge=>edge.id===id?{...edge,data:{...edge.data,curve}}:edge)}),false);
+  const edges=doc.edges.map(edge=>({...edge,type:'connection',data:{...edge.data,editable:editor,setCurve,checkpoint},selected:selection?.type==='edge'&&selection.id===edge.id,style:{stroke:edge.data.kind==='alternative'?'var(--text-dim)':'var(--accent)',strokeWidth:selection?.id===edge.id?2.5:1.5,opacity:!editor&&selected?(edge.source===selected||edge.target===selected?1:.15):.9,strokeDasharray:edge.data.kind==='return'?'5 5':undefined},markerEnd:{type:MarkerType.ArrowClosed,width:16,height:16,color:edge.data.kind==='alternative'?'var(--text-dim)':'var(--accent)'}}));
+  return <div ref={canvas} className={`wf-diagram wf-diagram-${mode}`} data-inline-fit={inline?inlineFit:undefined} style={inline?{width:inlineFit?'100%':(maxX-minX)*.92+60,height:340}:undefined} onPointerMoveCapture={event=>{bypassSnap.current=event.altKey;}} onPointerDownCapture={event=>{bypassSnap.current=event.altKey;}}>
     <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} connectionMode={ConnectionMode.Loose} minZoom={.001} maxZoom={2}
       nodesDraggable={editor} nodesConnectable={editor} edgesReconnectable={editor} deleteKeyCode={null} selectionOnDrag={false}
       panOnDrag={!inline} panOnScroll={false} zoomOnScroll={false} zoomOnPinch={!inline} zoomOnDoubleClick={false} preventScrolling={false}
       defaultViewport={start} onInit={instance=>{api.current=instance;if(flowRef)flowRef.current=instance;}}
       onNodeClick={(_,node)=>setSelection({type:'node',id:node.id})} onEdgeClick={(_,edge)=>setSelection({type:'edge',id:edge.id})} onPaneClick={()=>setSelection(null)} onNodeDoubleClick={()=>editor&&onTitleFocus?.()}
-      onNodeDragStart={()=>editor&&checkpoint()} onNodesChange={changes=>{if(editor){const edits=changes.filter(item=>item.type==='position');if(edits.length)change(current=>({...current,nodes:applyNodeChanges(edits,current.nodes)}),false);}}}
+      onNodeDragStart={()=>editor&&checkpoint()} onNodeDragStop={()=>setGuides([])} onNodesChange={changes=>{changes.forEach(item=>{if(item.type==='dimensions'&&item.dimensions)measurements.current.set(item.id,item.dimensions);});if(editor){const edits=changes.filter(item=>item.type==='position').map(item=>{if(!item.position||item.dragging===undefined||!snapping||bypassSnap.current){setGuides([]);return item;}const result=snapFlowPosition(item.id,item.position,api.current.getNodes(),6/api.current.getZoom());setGuides(item.dragging?result.guides:[]);return {...item,position:result.position};});if(edits.length)change(current=>({...current,nodes:applyNodeChanges(edits,current.nodes)}),false);}}}
       onConnect={connection=>{if(editor)change(current=>({...current,edges:addEdge({...connection,id:crypto.randomUUID(),data:{kind:'alternative',route:'elbow'}},current.edges)}));}}
       onReconnectStart={()=>editor&&checkpoint()} onReconnect={(oldEdge,connection)=>editor&&change(current=>({...current,edges:reconnectEdge(oldEdge,connection,current.edges)}),false)}
       onConnectEnd={(event,state)=>{
@@ -91,6 +105,7 @@ function Diagram({doc,mode='web',selection,setSelection,change,checkpoint,flowRe
         setSelection({type:'node',id});onTitleFocus?.();
       }}>
       {editor&&<Background variant={BackgroundVariant.Dots} gap={22} size={1} color="var(--line)"/>}
+      {editor&&guides.length>0&&<ViewportPortal><svg className="wf-snap-guides" width="1" height="1" aria-hidden="true">{guides.map(guide=><line key={guide.axis} x1={guide.axis==='x'?guide.line:guide.start} y1={guide.axis==='y'?guide.line:guide.start} x2={guide.axis==='x'?guide.line:guide.end} y2={guide.axis==='y'?guide.line:guide.end} vectorEffect="non-scaling-stroke"/>)}</svg></ViewportPortal>}
       <Viewport canvas={canvas} inline={inline} fitted={inlineFit} start={start}/>
       {!inline&&<GraphControls canvas={canvas} start={start}/>}
       {(editor||mode==='expanded')&&<MiniMap pannable zoomable position="bottom-right" nodeColor="var(--text-dim)" maskColor="var(--wf-map-mask)" ariaLabel="Diagram overview"/>}
@@ -154,7 +169,7 @@ function editReducer(state,action){
   return state;
 }
 function Editor({doc,change,checkpoint,selection,setSelection,undo,redo,canUndo,canRedo}){
-  const flow=useRef(null),title=useRef(null),canvas=useRef(null),editing=useRef(false),[connectTo,setConnectTo]=useState('');
+  const flow=useRef(null),title=useRef(null),canvas=useRef(null),editing=useRef(false),[connectTo,setConnectTo]=useState(''),[snapping,setSnapping]=useState(true);
   const selectedNode=doc.nodes.find(node=>selection?.type==='node'&&node.id===selection.id),selectedEdge=doc.edges.find(edge=>selection?.type==='edge'&&edge.id===selection.id);
   const focusTitle=()=>requestAnimationFrame(()=>{title.current?.focus();title.current?.select();});
   const add=()=>{if(!flow.current)return;const box=canvas.current.querySelector('.wf-diagram').getBoundingClientRect(),point=flow.current.screenToFlowPosition({x:box.left+box.width/2,y:box.top+box.height/2}),id=crypto.randomUUID();change(current=>({...current,nodes:[...current.nodes,flowNode(id,'New step',point.x,point.y)]}));setSelection({type:'node',id});focusTitle();};
@@ -169,8 +184,8 @@ function Editor({doc,change,checkpoint,selection,setSelection,undo,redo,canUndo,
     if(event.key==='Delete'||event.key==='Backspace'){event.preventDefault();remove();}
     if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'){event.preventDefault();event.shiftKey?redo():undo();}
   }}>
-    <div className="wf-toolbar"><div className="wf-actions"><IconButton label="Undo" disabled={!canUndo} onClick={undo}><Undo2 size={18}/></IconButton><IconButton label="Redo" disabled={!canRedo} onClick={redo}><Redo2 size={18}/></IconButton><span className="wf-divider"/><button type="button" className="wf-command" onClick={add}><Plus size={17}/>Add step</button><IconButton label="Delete selection" disabled={!selection} onClick={remove}><Trash2 size={17}/></IconButton></div></div>
-    <div className="wf-workspace"><ReactFlowProvider><Diagram doc={doc} mode="editor" selection={selection} setSelection={setSelection} change={change} checkpoint={checkpoint} flowRef={flow} onTitleFocus={focusTitle}/></ReactFlowProvider>
+    <div className="wf-toolbar"><div className="wf-actions"><IconButton label="Undo" disabled={!canUndo} onClick={undo}><Undo2 size={18}/></IconButton><IconButton label="Redo" disabled={!canRedo} onClick={redo}><Redo2 size={18}/></IconButton><span className="wf-divider"/><button type="button" className="wf-command" onClick={add}><Plus size={17}/>Add step</button><IconButton label="Delete selection" disabled={!selection} onClick={remove}><Trash2 size={17}/></IconButton><span className="wf-divider"/><IconButton label="Snap to steps" title="Snap to steps (hold Alt to bypass)" aria-pressed={snapping} onClick={()=>setSnapping(!snapping)}><Magnet size={18}/></IconButton></div></div>
+    <div className="wf-workspace"><ReactFlowProvider><Diagram doc={doc} mode="editor" selection={selection} setSelection={setSelection} change={change} checkpoint={checkpoint} flowRef={flow} onTitleFocus={focusTitle} snapping={snapping}/></ReactFlowProvider>
       <aside className="wf-inspector"><h2>{selectedNode?'Step':selectedEdge?'Connection':'Flow'}</h2>
         {selectedNode?<>
           <label>Title<textarea ref={title} aria-label="Step title" rows={3} value={selectedNode.data.title} onChange={event=>updateNode({title:event.target.value})} onBlur={finish}/></label>
@@ -183,6 +198,7 @@ function Editor({doc,change,checkpoint,selection,setSelection,undo,redo,canUndo,
           <label>Label<input type="text" aria-label="Connection label" value={selectedEdge.label} onChange={event=>updateEdge({label:event.target.value})} onBlur={finish}/></label>
           <label>Path<select aria-label="Connection path" value={selectedEdge.data.kind} onChange={event=>{updateEdge({data:{...selectedEdge.data,kind:event.target.value}});finish();}}><option value="main">Main</option><option value="alternative">Alternative</option><option value="return">Return</option></select></label>
           <label>Connector<select aria-label="Connector shape" value={selectedEdge.data.route} onChange={event=>{updateEdge({data:{...selectedEdge.data,route:event.target.value}});finish();}}><option value="elbow">Rounded elbow</option><option value="curved">Curved</option></select></label>
+          {selectedEdge.data.route==='curved'&&<IconButton label="Reset curve" disabled={!selectedEdge.data.curve} onClick={()=>{updateEdge({data:{...selectedEdge.data,curve:undefined}});finish();}}><RotateCcw size={18}/></IconButton>}
           {['source','target'].map(field=><React.Fragment key={field}><label>{field==='source'?'From':'To'}<select aria-label={field==='source'?'Connection from':'Connection to'} value={selectedEdge[field]} onChange={event=>{updateEdge({[field]:event.target.value});finish();}}>{doc.nodes.map(node=><option key={node.id} value={node.id}>{node.data.title||'Untitled step'}</option>)}</select></label><label>{field==='source'?'From side':'To side'}<select aria-label={field==='source'?'Connection from side':'Connection to side'} value={selectedEdge[`${field}Handle`]} onChange={event=>{updateEdge({[`${field}Handle`]:event.target.value});finish();}}>{Object.entries(portNames).map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label></React.Fragment>)}
         </>:<>{doc.nodes.map(node=><button type="button" className="wf-row" key={node.id} onClick={()=>{setSelection({type:'node',id:node.id});flow.current?.setCenter(node.position.x+75,node.position.y+46,{zoom:1,duration:motion()});}}><span>{node.data.number||'--'}</span>{node.data.title||'Untitled step'}</button>)}</>}
       </aside>

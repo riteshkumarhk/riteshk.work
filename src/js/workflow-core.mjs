@@ -1,6 +1,40 @@
 export const FLOW_NODE_WIDTH = 150;
 export const FLOW_NODE_HEIGHT = 92;
 
+export function snapFlowPosition(id, position, nodes, tolerance = 6) {
+  const moving = nodes.find(node => node.id === id);
+  if (!moving) return {position, guides:[]};
+  const size = node => ({x:node.measured?.width || FLOW_NODE_WIDTH,y:node.measured?.height || FLOW_NODE_HEIGHT});
+  const movingSize = size(moving), snapped = {...position}, guides = [];
+  for (const axis of ['x','y']) {
+    const across = axis === 'x' ? 'y' : 'x';
+    let nearest;
+    for (const node of nodes) {
+      if (node.id === id || node.dragging || node.hidden) continue;
+      const nodeSize = size(node);
+      for (const fraction of [0,.5,1]) {
+        const line = node.position[axis] + nodeSize[axis] * fraction;
+        const delta = line - (position[axis] + movingSize[axis] * fraction);
+        if (Math.abs(delta) <= tolerance && (!nearest || Math.abs(delta) < Math.abs(nearest.delta))) nearest = {delta,axis,line,position:line-movingSize[axis]*fraction,start:Math.min(position[across],node.position[across])-16,end:Math.max(position[across]+movingSize[across],node.position[across]+nodeSize[across])+16};
+      }
+    }
+    if (nearest) { snapped[axis] = nearest.position; guides.push(nearest); }
+  }
+  return {position:snapped,guides};
+}
+
+export function flowCurve(source, target, sourcePort = 'r', targetPort = 'l', offsets, self = false) {
+  const control = (point, other, port) => {
+    const axis = port === 'l' || port === 'r' ? 'x' : 'y', direction = port === 'l' || port === 't' ? -1 : 1;
+    const distance = (other[axis]-point[axis])*direction;
+    const reach = distance >= 0 ? distance/2 : 10*Math.sqrt(-distance);
+    return {...point,[axis]:point[axis]+direction*reach};
+  };
+  const controls = offsets ? {source:{x:source.x+offsets.source.x,y:source.y+offsets.source.y},target:{x:target.x+offsets.target.x,y:target.y+offsets.target.y}} : self ? {source:{x:source.x+100,y:source.y+110},target:{x:target.x-100,y:target.y+110}} : {source:control(source,target,sourcePort),target:control(target,source,targetPort)};
+  const middle = {x:(source.x+3*controls.source.x+3*controls.target.x+target.x)/8,y:(source.y+3*controls.source.y+3*controls.target.y+target.y)/8};
+  return {controls,middle,path:`M ${source.x},${source.y} C ${controls.source.x},${controls.source.y} ${controls.target.x},${controls.target.y} ${target.x},${target.y}`};
+}
+
 export function flowNode(id, title, x, y, number = '', note = '') {
   return {id, position:{x,y}, data:{title,number,note,outcome:false}};
 }
@@ -22,7 +56,12 @@ export function normalizeFlow(graph) {
     if (!edge || typeof edge.id !== 'string' || !edge.id || edgeIds.has(edge.id) || !ids.has(edge.source) || !ids.has(edge.target)) throw new Error('Invalid flow connection.');
     edgeIds.add(edge.id);
     const port = (value, fallback) => ['l','r','t','b'].includes(value) ? value : fallback;
-    return {id:edge.id,source:edge.source,target:edge.target,sourceHandle:port(edge.sourceHandle,'r'),targetHandle:port(edge.targetHandle,'l'),label:text(edge.label),data:{kind:['main','alternative','return'].includes(edge.data?.kind) ? edge.data.kind : 'main',route:edge.data?.route === 'curved' ? 'curved' : 'elbow'}};
+    let curve;
+    if (edge.data?.curve != null) {
+      if (!['source','target'].every(end => Number.isFinite(edge.data.curve[end]?.x) && Number.isFinite(edge.data.curve[end]?.y))) throw new Error('Invalid flow curve.');
+      curve = Object.fromEntries(['source','target'].map(end => [end,{x:edge.data.curve[end].x,y:edge.data.curve[end].y}]));
+    }
+    return {id:edge.id,source:edge.source,target:edge.target,sourceHandle:port(edge.sourceHandle,'r'),targetHandle:port(edge.targetHandle,'l'),label:text(edge.label),data:{kind:['main','alternative','return'].includes(edge.data?.kind) ? edge.data.kind : 'main',route:edge.data?.route === 'curved' ? 'curved' : 'elbow',...(curve?{curve}:{})}};
   });
   return {version:1,nodes,edges};
 }
